@@ -14,6 +14,27 @@ impl JavaClient {
             return;
         }
 
+        let lines = vec![
+            sign_data.line_1.to_string(),
+            sign_data.line_2.to_string(),
+            sign_data.line_3.to_string(),
+            sign_data.line_4.to_string(),
+        ];
+
+        if let Some(player_arc) = world.get_player_by_uuid(player.gameprofile.id) {
+            let mut event = crate::plugin::api::events::block::sign_change::SignChangeEvent::new(
+                player_arc,
+                sign_data.location,
+                lines.clone(),
+            );
+            if let Some(server) = world.server.upgrade() {
+                server.plugin_manager.fire(&server, &mut event).await;
+            }
+            if event.cancelled {
+                return;
+            }
+        }
+
         let text = if sign_data.is_front_text {
             &sign_entity.front_text
         } else {

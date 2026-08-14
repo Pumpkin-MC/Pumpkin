@@ -33,6 +33,7 @@ use crate::{
 };
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::{
+    Enchantment,
     data_component_impl::{EquipmentSlot, EquipmentType, EquippableImpl},
     screen::WindowType,
     statistic::StatisticCategory,
@@ -203,6 +204,29 @@ pub trait InventoryPlayer: Send + Sync {
         stat_id: i32,
         amount: i32,
     ) -> PlayerFuture<'_, ()>;
+
+    /// Fires a prepare item enchant event. Returns true if cancelled.
+    fn fire_prepare_item_enchant_event<'a>(
+        &'a self,
+        _item: &'a ItemStack,
+        _level_requirements: &'a mut [i32; 3],
+        _enchantment_id: &'a mut [i32; 3],
+        _enchantment_level: &'a mut [i32; 3],
+        _bookshelf_count: i32,
+    ) -> PlayerFuture<'a, bool> {
+        Box::pin(async move { false })
+    }
+
+    /// Fires an enchant item event. Returns true if cancelled.
+    fn fire_enchant_item_event<'a>(
+        &'a self,
+        _item: &'a ItemStack,
+        _option: i32,
+        _exp_level_cost: i32,
+        _enchantments_to_add: &'a mut Vec<(&'static Enchantment, i32)>,
+    ) -> PlayerFuture<'a, bool> {
+        Box::pin(async move { false })
+    }
 }
 
 /// Gives a stack to the player or drops it if inventory is full.

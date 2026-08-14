@@ -10,6 +10,7 @@ use std::sync::atomic::{AtomicBool, AtomicI8, AtomicI32, AtomicU8, AtomicU32, Or
 use std::sync::{Arc, Weak};
 use std::time::{Duration, Instant};
 
+use crate::plugin::api::events::enchantment::{EnchantItemEvent, PrepareItemEnchantEvent};
 use crate::world::scoreboard::{BedrockScoreboard, Scoreboard};
 use advancement::PlayerAdvancement;
 use arc_swap::ArcSwap;
@@ -3416,7 +3417,22 @@ impl Player {
         if self.abilities.lock().await.invulnerable {
             return;
         }
-        self.hunger_manager.add_exhaustion(exhaustion);
+        let mut exhaustion_event =
+            crate::plugin::api::events::entity::entity_exhaustion::EntityExhaustionEvent::new(
+                self.entity_id(),
+                exhaustion,
+            );
+        if let Some(server) = self.world().server.upgrade() {
+            server
+                .plugin_manager
+                .fire(&server, &mut exhaustion_event)
+                .await;
+        }
+        if exhaustion_event.cancelled {
+            return;
+        }
+        self.hunger_manager
+            .add_exhaustion(exhaustion_event.exhaustion);
     }
 
     pub async fn heal(&self, additional_health: f32) {
@@ -3563,7 +3579,18 @@ impl Player {
     }
 
     pub async fn set_food_level(&self, food_level: u8) {
-        self.hunger_manager.set_level(food_level);
+        let mut food_event =
+            crate::plugin::api::events::entity::food_level_change::FoodLevelChangeEvent::new(
+                self.living_entity.entity.entity_id,
+                food_level,
+            );
+        if let Some(server) = self.world().server.upgrade() {
+            server.plugin_manager.fire(&server, &mut food_event).await;
+        }
+        if food_event.cancelled {
+            return;
+        }
+        self.hunger_manager.set_level(food_event.food_level);
         self.send_health().await;
     }
 
@@ -4535,6 +4562,20 @@ impl Player {
 
     pub async fn on_rename_item(self: &Arc<Self>, packet: SRenameItem<'_>) {
         self.update_last_action_time();
+
+        let mut prepare_event =
+            crate::plugin::api::events::inventory::prepare_anvil::PrepareAnvilEvent::new(
+                self.clone(),
+                packet.item_name.to_string(),
+                1,
+            );
+        if let Some(server) = self.world().server.upgrade() {
+            server
+                .plugin_manager
+                .fire(&server, &mut prepare_event)
+                .await;
+        }
+
         let screen_handler_arc = self.current_screen_handler.lock().await.clone();
         let mut screen_handler = screen_handler_arc.lock().await;
 
@@ -4809,7 +4850,7 @@ impl Player {
                 click_type,
                 slot,
                 raw_slot,
-                clicked_item,
+                clicked_item.clone(),
                 cursor_item,
                 i32::from(hotbar_button),
             );
@@ -4819,6 +4860,38 @@ impl Player {
                 return;
             }
         }}
+
+        if slot == 0
+            && let Some(ref stack) = clicked_item
+            && !stack.is_empty()
+        {
+            let mut craft_event =
+                crate::plugin::api::events::inventory::craft_item::CraftItemEvent::new(
+                    self.clone(),
+                    stack.item.registry_key.to_string(),
+                );
+            if let Some(server) = self.world().server.upgrade() {
+                server.plugin_manager.fire(&server, &mut craft_event).await;
+            }
+            if craft_event.cancelled {
+                screen_handler.cancel().await;
+                return;
+            }
+        }
+
+        if packet.mode == SlotActionType::QuickCraft {
+            let mut drag_event =
+                crate::plugin::api::events::inventory::inventory_drag::InventoryDragEvent::new(
+                    self.clone(),
+                );
+            if let Some(server) = self.world().server.upgrade() {
+                server.plugin_manager.fire(&server, &mut drag_event).await;
+            }
+            if drag_event.cancelled {
+                screen_handler.cancel().await;
+                return;
+            }
+        }
 
         // Enforce flags
         let is_container_slot = slot >= 0 && i32::from(slot) < container_slots as i32;
@@ -6269,6 +6342,70 @@ impl InventoryPlayer for Player {
     ) -> PlayerFuture<'_, ()> {
         Box::pin(async move {
             self.increment_stat(category, stat_id, amount).await;
+        })
+    }
+
+    fn fire_prepare_item_enchant_event<'a>(
+        &'a self,
+        item: &'a ItemStack,
+        level_requirements: &'a mut [i32; 3],
+        enchantment_id: &'a mut [i32; 3],
+        enchantment_level: &'a mut [i32; 3],
+        bookshelf_count: i32,
+    ) -> PlayerFuture<'a, bool> {
+        Box::pin(async move {
+            let Some(player_arc) = self.world().get_player_by_uuid(self.gameprofile.id) else {
+                return false;
+            };
+            let Some(server) = self.world().server.upgrade() else {
+                return false;
+            };
+            let mut event = PrepareItemEnchantEvent::new(
+                player_arc,
+                item.clone(),
+                *level_requirements,
+                *enchantment_id,
+                *enchantment_level,
+                bookshelf_count,
+            );
+            server.plugin_manager.fire(&server, &mut event).await;
+            if event.cancelled {
+                return true;
+            }
+            *level_requirements = event.level_requirements;
+            *enchantment_id = event.enchantment_id;
+            *enchantment_level = event.enchantment_level;
+            false
+        })
+    }
+
+    fn fire_enchant_item_event<'a>(
+        &'a self,
+        item: &'a ItemStack,
+        option: i32,
+        exp_level_cost: i32,
+        enchantments_to_add: &'a mut Vec<(&'static pumpkin_data::Enchantment, i32)>,
+    ) -> PlayerFuture<'a, bool> {
+        Box::pin(async move {
+            let Some(player_arc) = self.world().get_player_by_uuid(self.gameprofile.id) else {
+                return false;
+            };
+            let Some(server) = self.world().server.upgrade() else {
+                return false;
+            };
+            let mut event = EnchantItemEvent::new(
+                player_arc,
+                item.clone(),
+                option,
+                exp_level_cost,
+                enchantments_to_add.clone(),
+            );
+            server.plugin_manager.fire(&server, &mut event).await;
+            if event.cancelled {
+                return true;
+            }
+            *enchantments_to_add = event.enchantments_to_add;
+            false
         })
     }
 }

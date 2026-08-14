@@ -89,6 +89,18 @@ impl BlockBehaviour for FarmlandBlock {
                         .get_block(&args.position.up())
                         .has_tag(&tag::Block::MINECRAFT_MAINTAINS_FARMLAND)
                     {
+                        let mut event =
+                            crate::plugin::api::events::block::block_fade::BlockFadeEvent::new(
+                                *args.position,
+                                &Block::DIRT,
+                            );
+                        if let Some(server) = args.world.server.upgrade() {
+                            server.plugin_manager.fire(&server, &mut event).await;
+                        }
+                        if event.cancelled {
+                            return;
+                        }
+
                         //TODO push entities up
                         args.world
                             .set_block_state(

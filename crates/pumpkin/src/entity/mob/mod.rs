@@ -572,7 +572,20 @@ pub trait Mob: EntityBase + Send + Sync {
     /// Set or clear the mob's target. Override to add side effects when targeting changes.
     fn set_mob_target(&self, target: Option<Arc<dyn EntityBase>>) -> EntityBaseFuture<'_, ()> {
         Box::pin(async move {
-            let mut mob_target = self.get_mob_entity().target.lock().await;
+            let target_id = target.as_ref().map(|t| t.get_entity().entity_id);
+            let mob = self.get_mob_entity();
+            let mut event =
+                crate::plugin::api::events::entity::entity_target::EntityTargetEvent::new(
+                    mob.living_entity.entity.entity_id,
+                    target_id,
+                );
+            if let Some(server) = mob.living_entity.entity.world.load().server.upgrade() {
+                server.plugin_manager.fire(&server, &mut event).await;
+            }
+            if event.cancelled {
+                return;
+            }
+            let mut mob_target = mob.target.lock().await;
             *mob_target = target;
         })
     }
@@ -583,6 +596,138 @@ pub trait Mob: EntityBase + Send + Sync {
         item_stack: &'a mut ItemStack,
     ) -> EntityBaseFuture<'a, bool> {
         Box::pin(async move { self.get_mob_entity().mob_interact(player, item_stack).await })
+    }
+
+    fn tame<'a>(&'a self, player: &'a Arc<Player>) -> EntityBaseFuture<'a, ()> {
+        Box::pin(async move {
+            let mob = self.get_mob_entity();
+            let mut event = crate::plugin::api::events::entity::entity_tame::EntityTameEvent::new(
+                mob.living_entity.entity.entity_id,
+                player.clone(),
+            );
+            if let Some(server) = mob.living_entity.entity.world.load().server.upgrade() {
+                server.plugin_manager.fire(&server, &mut event).await;
+            }
+        })
+    }
+
+    fn breed(&self, father_id: i32, mother_id: i32, child_id: i32) -> EntityBaseFuture<'_, ()> {
+        Box::pin(async move {
+            let mob = self.get_mob_entity();
+            let mut event = crate::plugin::api::events::entity::entity_breed::EntityBreedEvent::new(
+                father_id, mother_id, child_id,
+            );
+            if let Some(server) = mob.living_entity.entity.world.load().server.upgrade() {
+                server.plugin_manager.fire(&server, &mut event).await;
+            }
+        })
+    }
+
+    fn dye<'a>(
+        &'a self,
+        color: crate::plugin::api::events::entity::entity_dye::DyeColor,
+        player: Option<&'a Arc<Player>>,
+    ) -> EntityBaseFuture<'a, ()> {
+        Box::pin(async move {
+            let mob = self.get_mob_entity();
+            let mut event = crate::plugin::api::events::entity::entity_dye::EntityDyeEvent::new(
+                mob.living_entity.entity.entity_id,
+                color,
+                player.cloned(),
+            );
+            if let Some(server) = mob.living_entity.entity.world.load().server.upgrade() {
+                server.plugin_manager.fire(&server, &mut event).await;
+            }
+        })
+    }
+
+    fn enter_love_mode(
+        &self,
+        human_entity_id: Option<i32>,
+        ticks_in_love: i32,
+    ) -> EntityBaseFuture<'_, ()> {
+        Box::pin(async move {
+            let mob = self.get_mob_entity();
+            let mut event = crate::plugin::api::events::entity::entity_enter_love_mode::EntityEnterLoveModeEvent::new(
+                mob.living_entity.entity.entity_id,
+                human_entity_id,
+                ticks_in_love,
+            );
+            if let Some(server) = mob.living_entity.entity.world.load().server.upgrade() {
+                server.plugin_manager.fire(&server, &mut event).await;
+            }
+        })
+    }
+
+    fn transform(&self, new_entity_id: i32, transform_reason: String) -> EntityBaseFuture<'_, ()> {
+        Box::pin(async move {
+            let mob = self.get_mob_entity();
+            let mut event =
+                crate::plugin::api::events::entity::entity_transform::EntityTransformEvent::new(
+                    mob.living_entity.entity.entity_id,
+                    new_entity_id,
+                    transform_reason,
+                );
+            if let Some(server) = mob.living_entity.entity.world.load().server.upgrade() {
+                server.plugin_manager.fire(&server, &mut event).await;
+            }
+        })
+    }
+
+    fn break_door(&self, block_pos: BlockPos) -> EntityBaseFuture<'_, ()> {
+        Box::pin(async move {
+            let mob = self.get_mob_entity();
+            let mut event =
+                crate::plugin::api::events::entity::entity_break_door::EntityBreakDoorEvent::new(
+                    mob.living_entity.entity.entity_id,
+                    block_pos,
+                );
+            if let Some(server) = mob.living_entity.entity.world.load().server.upgrade() {
+                server.plugin_manager.fire(&server, &mut event).await;
+            }
+        })
+    }
+
+    fn enter_block(&self, block_pos: BlockPos) -> EntityBaseFuture<'_, ()> {
+        Box::pin(async move {
+            let mob = self.get_mob_entity();
+            let mut event =
+                crate::plugin::api::events::entity::entity_enter_block::EntityEnterBlockEvent::new(
+                    mob.living_entity.entity.entity_id,
+                    block_pos,
+                );
+            if let Some(server) = mob.living_entity.entity.world.load().server.upgrade() {
+                server.plugin_manager.fire(&server, &mut event).await;
+            }
+        })
+    }
+
+    fn interact(&self, block_pos: BlockPos) -> EntityBaseFuture<'_, ()> {
+        Box::pin(async move {
+            let mob = self.get_mob_entity();
+            let mut event =
+                crate::plugin::api::events::entity::entity_interact::EntityInteractEvent::new(
+                    mob.living_entity.entity.entity_id,
+                    block_pos,
+                );
+            if let Some(server) = mob.living_entity.entity.world.load().server.upgrade() {
+                server.plugin_manager.fire(&server, &mut event).await;
+            }
+        })
+    }
+
+    fn place_block(&self, block_pos: BlockPos, block_name: String) -> EntityBaseFuture<'_, ()> {
+        Box::pin(async move {
+            let mob = self.get_mob_entity();
+            let mut event = crate::plugin::api::events::entity::entity_place::EntityPlaceEvent::new(
+                mob.living_entity.entity.entity_id,
+                block_pos,
+                block_name,
+            );
+            if let Some(server) = mob.living_entity.entity.world.load().server.upgrade() {
+                server.plugin_manager.fire(&server, &mut event).await;
+            }
+        })
     }
 
     fn mob_player_collision<'a>(&'a self, _player: &'a Arc<Player>) -> EntityBaseFuture<'a, ()> {

@@ -241,8 +241,25 @@ impl LivingEntity {
         }
     }
 
-    /// Picks up and Item entity or XP Orb
+    /// Picks up an Item entity or XP Orb
     pub fn pickup(&self, item: &Entity, stack_amount: u32) {
+        let mut pickup_event =
+            crate::plugin::api::events::entity::entity_pickup_item::EntityPickupItemEvent::new(
+                self.entity.entity_id,
+                item.entity_type.id.to_string(),
+                stack_amount as u8,
+            );
+        if let Some(server) = self.entity.world.load().server.upgrade() {
+            tokio::task::block_in_place(|| {
+                tokio::runtime::Handle::current().block_on(async {
+                    server.plugin_manager.fire(&server, &mut pickup_event).await;
+                });
+            });
+            if pickup_event.cancelled {
+                return;
+            }
+        }
+
         let chunk_pos = self.entity.chunk_pos.load();
         self.entity.world.load().broadcast_to_chunk_editioned_sync(
             chunk_pos,
@@ -335,6 +352,21 @@ impl LivingEntity {
 
     pub fn heal(&self, additional_health: f32) {
         assert!(additional_health > 0.0);
+        let mut event =
+            crate::plugin::api::events::entity::entity_regain_health::EntityRegainHealthEvent::new(
+                self.entity.entity_id,
+                additional_health,
+            );
+        if let Some(server) = self.entity.world.load().server.upgrade() {
+            tokio::task::block_in_place(|| {
+                tokio::runtime::Handle::current().block_on(async {
+                    server.plugin_manager.fire(&server, &mut event).await;
+                });
+            });
+            if event.cancelled {
+                return;
+            }
+        }
         self.set_health(self.health.load() + additional_health);
     }
 
@@ -529,6 +561,20 @@ impl LivingEntity {
 
     #[expect(clippy::too_many_lines)]
     pub async fn add_effect(&self, effect: Effect) {
+        let mut effect_event =
+            crate::plugin::api::events::entity::entity_potion_effect::EntityPotionEffectEvent::new(
+                self.entity.entity_id,
+                effect.effect_type.translation_key.to_string(),
+                effect.duration,
+                effect.amplifier,
+            );
+        if let Some(server) = self.entity.world.load().server.upgrade() {
+            server.plugin_manager.fire(&server, &mut effect_event).await;
+        }
+        if effect_event.cancelled {
+            return;
+        }
+
         // Apply instant effects immediately before storing
         if effect.effect_type == &StatusEffect::INSTANT_HEALTH {
             let heal_amount = 4.0 * (1 << effect.amplifier) as f32;
@@ -1800,6 +1846,20 @@ impl LivingEntity {
 
             // Clear the stack and use the totem of undying
             if stack.get_data_component::<DeathProtectionImpl>().is_some() {
+                let mut resurrect_event =
+                    crate::plugin::api::events::entity::entity_resurrect::EntityResurrectEvent::new(
+                        self.entity.entity_id,
+                    );
+                if let Some(server) = self.entity.world.load().server.upgrade() {
+                    server
+                        .plugin_manager
+                        .fire(&server, &mut resurrect_event)
+                        .await;
+                }
+                if resurrect_event.cancelled {
+                    return false;
+                }
+
                 stack.clear();
                 let slot = match hand {
                     Hand::Right => EquipmentSlot::MAIN_HAND,
@@ -2196,6 +2256,20 @@ impl EntityBase for LivingEntity {
             if amount < 0.0 {
                 return false;
             }
+
+            let mut damage_event =
+                crate::plugin::api::events::entity::entity_damage::EntityDamageEvent::new(
+                    self.entity.entity_id,
+                    damage_type.id.to_string(),
+                    amount,
+                );
+            if let Some(server) = self.entity.world.load().server.upgrade() {
+                server.plugin_manager.fire(&server, &mut damage_event).await;
+            }
+            if damage_event.cancelled {
+                return false;
+            }
+            amount = damage_event.damage;
 
             let world = self.entity.world.load();
             let is_fire_damage = damage_type == DamageType::IN_FIRE
@@ -2616,6 +2690,31 @@ impl EntityBase for LivingEntity {
             if clamped_health <= 0.0
                 && (bypasses_cooldown_protection || !self.try_use_death_protector(caller).await)
             {
+                let mut death_event =
+                    crate::plugin::api::events::entity::entity_death::EntityDeathEvent::new(
+                        self.entity.entity_id,
+                        0,
+                    );
+                if let Some(server) = world.server.upgrade() {
+                    server.plugin_manager.fire(&server, &mut death_event).await;
+                }
+                if let Some(player) = caller.get_player()
+                    && let Some(player_arc) = world.get_player_by_uuid(player.gameprofile.id)
+                {
+                    let mut player_death_event =
+                        crate::plugin::api::events::entity::entity_death::PlayerDeathEvent::new(
+                            player_arc,
+                            pumpkin_util::text::TextComponent::text("Died"),
+                            0,
+                        );
+                    if let Some(server) = world.server.upgrade() {
+                        server
+                            .plugin_manager
+                            .fire(&server, &mut player_death_event)
+                            .await;
+                    }
+                }
+
                 self.on_death(damage_type, source, cause).await;
             }
 

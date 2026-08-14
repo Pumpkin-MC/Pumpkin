@@ -177,6 +177,17 @@ impl BrewingStandBlockEntity {
             }
         }
 
+        let mut event = crate::plugin::api::events::inventory::brew::BrewEvent::new(
+            self.position,
+            self.fuel.load(std::sync::atomic::Ordering::Relaxed) as u8,
+        );
+        if let Some(server) = world.server.upgrade() {
+            server.plugin_manager.fire(&server, &mut event).await;
+        }
+        if event.cancelled {
+            return;
+        }
+
         // Consume ingredient
         let mut items = self.items.write().await;
         items[3].decrement(1);

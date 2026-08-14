@@ -3593,6 +3593,16 @@ impl World {
         position: Vector3<f64>,
         power: f32,
     ) {
+        let mut event = crate::plugin::api::events::entity::entity_explode::EntityExplodeEvent::new(
+            0, position, power,
+        );
+        if let Some(server) = self.server.upgrade() {
+            server.plugin_manager.fire(&server, &mut event).await;
+        }
+        if event.cancelled {
+            return;
+        }
+
         let block_count = explosion.explode(self).await;
         let particle = if power < 2.0 {
             Particle::Explosion
@@ -4470,7 +4480,20 @@ impl World {
         });
     }
 
-    pub async fn spawn_entity(&self, entity: Arc<dyn EntityBase>) {
+    pub async fn spawn_entity(self: &Arc<Self>, entity: Arc<dyn EntityBase>) {
+        let mut event = crate::plugin::api::events::entity::entity_spawn::EntitySpawnEvent::new(
+            entity.get_entity().entity_id,
+            entity.get_entity().entity_type.id.to_string(),
+            entity.get_entity().pos.load(),
+            self.clone(),
+        );
+        if let Some(server) = self.server.upgrade() {
+            server.plugin_manager.fire(&server, &mut event).await;
+        }
+        if event.cancelled {
+            return;
+        }
+
         self.broadcast_entity_spawn(&entity);
         entity.init_data_tracker().await;
         self.add_entity_silent(entity).await;
@@ -5023,6 +5046,18 @@ impl World {
         };
 
         let entity = Entity::new(self.clone(), spawn_pos, &EntityType::ITEM);
+        let mut item_event = crate::plugin::api::events::entity::item_spawn::ItemSpawnEvent::new(
+            entity.entity_id,
+            spawn_pos,
+            stack.item.registry_key.to_string(),
+        );
+        if let Some(server) = self.server.upgrade() {
+            server.plugin_manager.fire(&server, &mut item_event).await;
+        }
+        if item_event.cancelled {
+            return;
+        }
+
         let item_entity = Arc::new(ItemEntity::new(entity, stack));
         self.spawn_entity(item_entity).await;
     }
@@ -5310,6 +5345,18 @@ impl World {
             let neighbor_pos = block_pos.offset(direction.to_offset());
             let (neighbor_block, neighbor_fluid) = self.get_block_and_fluid(&neighbor_pos);
 
+            let mut event =
+                crate::plugin::api::events::block::block_physics::BlockPhysicsEvent::new(
+                    neighbor_pos,
+                    *block_pos,
+                );
+            if let Some(server) = self.server.upgrade() {
+                server.plugin_manager.fire(&server, &mut event).await;
+            }
+            if event.cancelled {
+                continue;
+            }
+
             if let Some(neighbor_pumpkin_block) =
                 self.block_registry.get_pumpkin_block(neighbor_block.id)
             {
@@ -5340,6 +5387,17 @@ impl World {
         source_block: &Block,
     ) {
         let neighbor_block = self.get_block(neighbor_block_pos);
+
+        let mut event = crate::plugin::api::events::block::block_physics::BlockPhysicsEvent::new(
+            *neighbor_block_pos,
+            *neighbor_block_pos,
+        );
+        if let Some(server) = self.server.upgrade() {
+            server.plugin_manager.fire(&server, &mut event).await;
+        }
+        if event.cancelled {
+            return;
+        }
 
         if let Some(neighbor_pumpkin_block) =
             self.block_registry.get_pumpkin_block(neighbor_block.id)
@@ -5946,6 +6004,122 @@ impl World {
 
         for recipient in bedrock_recipients {
             recipient.enqueue_packet(be_packet).await;
+        }
+    }
+
+    pub async fn emit_game_event(&self, event_key: impl Into<String>, position: Vector3<f64>) {
+        let mut event = crate::plugin::api::events::world::generic_game::GenericGameEvent::new(
+            event_key.into(),
+            position,
+        );
+        if let Some(server) = self.server.upgrade() {
+            server.plugin_manager.fire(&server, &mut event).await;
+        }
+    }
+
+    pub async fn unload(self: &Arc<Self>) {
+        let mut event =
+            crate::plugin::api::events::world::world_load::WorldUnloadEvent::new(self.clone());
+        if let Some(server) = self.server.upgrade() {
+            server.plugin_manager.fire(&server, &mut event).await;
+        }
+    }
+
+    pub async fn save(&self) {
+        let mut save_event = crate::plugin::api::events::world::world_save::WorldSaveEvent::new(
+            format!("{:?}", self.dimension),
+        );
+        if let Some(server) = self.server.upgrade() {
+            server.plugin_manager.fire(&server, &mut save_event).await;
+        }
+    }
+
+    pub async fn populate_chunk(&self, chunk_pos: Vector2<i32>) {
+        let mut populate_event =
+            crate::plugin::api::events::world::chunk_populate::ChunkPopulateEvent::new(chunk_pos);
+        if let Some(server) = self.server.upgrade() {
+            server
+                .plugin_manager
+                .fire(&server, &mut populate_event)
+                .await;
+        }
+    }
+
+    pub async fn unload_chunk(&self, chunk_pos: Vector2<i32>) {
+        let mut unload_event =
+            crate::plugin::api::events::world::chunk_unload::ChunkUnloadEvent::new(chunk_pos);
+        if let Some(server) = self.server.upgrade() {
+            server.plugin_manager.fire(&server, &mut unload_event).await;
+        }
+    }
+
+    pub async fn load_entities(&self, chunk_pos: Vector2<i32>, entity_count: usize) {
+        let mut load_event =
+            crate::plugin::api::events::world::entities_load::EntitiesLoadEvent::new(
+                chunk_pos,
+                entity_count,
+            );
+        if let Some(server) = self.server.upgrade() {
+            server.plugin_manager.fire(&server, &mut load_event).await;
+        }
+    }
+
+    pub async fn unload_entities(&self, chunk_pos: Vector2<i32>, entity_count: usize) {
+        let mut unload_event =
+            crate::plugin::api::events::world::entities_unload::EntitiesUnloadEvent::new(
+                chunk_pos,
+                entity_count,
+            );
+        if let Some(server) = self.server.upgrade() {
+            server.plugin_manager.fire(&server, &mut unload_event).await;
+        }
+    }
+
+    pub async fn generate_loot(&self, loot_table: String) {
+        let mut loot_event =
+            crate::plugin::api::events::world::loot_generate::LootGenerateEvent::new(loot_table);
+        if let Some(server) = self.server.upgrade() {
+            server.plugin_manager.fire(&server, &mut loot_event).await;
+        }
+    }
+
+    pub async fn skip_time(&self, skip_amount: i64) {
+        let mut time_event =
+            crate::plugin::api::events::world::time_skip::TimeSkipEvent::new(skip_amount);
+        if let Some(server) = self.server.upgrade() {
+            server.plugin_manager.fire(&server, &mut time_event).await;
+        }
+    }
+
+    pub async fn trigger_raid(&self, pos: BlockPos) {
+        let mut raid_event =
+            crate::plugin::api::events::raid::raid_trigger::RaidTriggerEvent::new(pos);
+        if let Some(server) = self.server.upgrade() {
+            server.plugin_manager.fire(&server, &mut raid_event).await;
+        }
+    }
+
+    pub async fn spawn_raid_wave(&self, wave: u32, pos: BlockPos) {
+        let mut wave_event =
+            crate::plugin::api::events::raid::raid_spawn_wave::RaidSpawnWaveEvent::new(wave, pos);
+        if let Some(server) = self.server.upgrade() {
+            server.plugin_manager.fire(&server, &mut wave_event).await;
+        }
+    }
+
+    pub async fn finish_raid(&self, victory: bool) {
+        let mut raid_event =
+            crate::plugin::api::events::raid::raid_finish::RaidFinishEvent::new(victory);
+        if let Some(server) = self.server.upgrade() {
+            server.plugin_manager.fire(&server, &mut raid_event).await;
+        }
+    }
+
+    pub async fn stop_raid(&self, reason: String) {
+        let mut raid_event =
+            crate::plugin::api::events::raid::raid_stop::RaidStopEvent::new(reason);
+        if let Some(server) = self.server.upgrade() {
+            server.plugin_manager.fire(&server, &mut raid_event).await;
         }
     }
 }
