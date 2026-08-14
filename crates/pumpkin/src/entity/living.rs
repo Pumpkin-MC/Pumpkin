@@ -38,7 +38,7 @@ use crossbeam::atomic::AtomicCell;
 use pumpkin_data::attributes::Attributes;
 use pumpkin_data::damage::DeathMessageType;
 use pumpkin_data::data_component_impl::Operation;
-use pumpkin_data::data_component_impl::food::{ConsumableImpl, ConsumeEffect};
+use pumpkin_data::data_component_impl::food::{ConsumableImpl, ConsumeAnimation, ConsumeEffect};
 use pumpkin_data::data_component_impl::{
     AttributeModifiersImpl, BlocksAttacksImpl, DeathProtectionImpl, EnchantmentsImpl,
     EquipmentSlot, EquippableImpl, FoodImpl,
@@ -2819,6 +2819,21 @@ impl EntityBase for LivingEntity {
             {
                 let item_in_use = self.item_in_use.lock().await.clone();
                 if let Some(item) = item_in_use.as_ref()
+                    && item
+                        .get_data_component::<ConsumableImpl>()
+                        .is_some_and(|consumable| consumable.animation == ConsumeAnimation::Eat)
+                    && should_play_item_use_sound(
+                        self.item_use_time.load(Ordering::Relaxed),
+                        item.get_max_use_time(),
+                    )
+                {
+                    self.entity.world.load().play_bedrock_level_sound(
+                        "eat",
+                        &self.entity.pos.load(),
+                        -1,
+                    );
+                }
+                if let Some(item) = item_in_use.as_ref()
                     && self.item_use_time.fetch_sub(1, Ordering::Relaxed) <= 0
                 {
                     // Consume item
@@ -2926,6 +2941,17 @@ impl EntityBase for LivingEntity {
                                 .start_cooldown(group, (cooldown.seconds * 20.0) as i32)
                                 .await;
                         }
+                    }
+
+                    if item
+                        .get_data_component::<ConsumableImpl>()
+                        .is_some_and(|consumable| consumable.animation == ConsumeAnimation::Eat)
+                    {
+                        self.entity.world.load().play_bedrock_level_sound(
+                            "burp",
+                            &self.entity.pos.load(),
+                            -1,
+                        );
                     }
 
                     self.clear_active_hand().await;
@@ -3114,6 +3140,10 @@ pub(crate) const fn bypasses_armor_durability(damage_type: &DamageType) -> bool 
     (damage_type.id < 64) && ((BYPASS_MASK >> damage_type.id) & 1 == 1)
 }
 
+const fn should_play_item_use_sound(remaining_ticks: i32, use_duration: i32) -> bool {
+    remaining_ticks <= use_duration - 7 && remaining_ticks % 4 == 0
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -3229,5 +3259,15 @@ mod tests {
             LivingEntity::hurt_sound_for_entity(&EntityType::CREEPER),
             Sound::EntityGenericHurt
         );
+    }
+
+    #[test]
+    fn item_use_sound_uses_vanilla_cadence() {
+        let sound_ticks: Vec<_> = (0..=32)
+            .rev()
+            .filter(|remaining| should_play_item_use_sound(*remaining, 32))
+            .collect();
+
+        assert_eq!(sound_ticks, [24, 20, 16, 12, 8, 4, 0]);
     }
 }
