@@ -15,6 +15,7 @@ use crate::entity::{
     Entity, EntityBase, EntityBaseFuture, NBTStorage, NbtFuture,
     ai::goal::{
         Controls, Goal, GoalFuture, active_target::ActiveTargetGoal,
+        avoid_entity::AvoidEntityGoal,
         look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal, swim::SwimGoal,
         wander_around::WanderAroundGoal,
     },
@@ -80,6 +81,14 @@ impl EvokerEntity {
 
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
             goal_selector.add_goal(1, Box::new(EvokerCastingSpellGoal::new(mob_weak.clone())));
+            goal_selector.add_goal(
+                2,
+                Box::new(AvoidEntityGoal::new(&EntityType::PLAYER, 8.0, 0.6, 1.0)),
+            );
+            goal_selector.add_goal(
+                3,
+                Box::new(AvoidEntityGoal::new(&EntityType::CREAKING, 8.0, 0.6, 1.0)),
+            );
             goal_selector.add_goal(4, Box::new(EvokerSummonSpellGoal::new(mob_weak.clone())));
             goal_selector.add_goal(5, Box::new(EvokerAttackSpellGoal::new(mob_weak.clone())));
             goal_selector.add_goal(6, Box::new(EvokerWololoSpellGoal::new(mob_weak)));
