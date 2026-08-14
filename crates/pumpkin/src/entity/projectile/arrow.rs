@@ -116,7 +116,18 @@ impl ArrowEntity {
         let mut owner_pos = shooter.pos.load();
         owner_pos.y = owner_pos.y + f64::from(shooter.entity_dimension.load().eye_height) - 0.1;
         entity.pos.store(owner_pos);
-        entity.set_velocity(Vector3::new(0.0, 0.1, 0.0));
+        let mut launch_event =
+            crate::plugin::api::events::entity::projectile_launch::ProjectileLaunchEvent::new(
+                entity.entity_id,
+                Some(shooter.entity_id),
+            );
+        if let Some(server) = entity.world.load().server.upgrade() {
+            tokio::task::block_in_place(|| {
+                tokio::runtime::Handle::current().block_on(async {
+                    server.plugin_manager.fire(&server, &mut launch_event).await;
+                });
+            });
+        }
 
         Self {
             entity,
@@ -443,6 +454,27 @@ impl EntityBase for ArrowEntity {
     #[allow(clippy::too_many_lines)]
     fn on_hit(&self, hit: ProjectileHit) -> EntityBaseFuture<'_, ()> {
         Box::pin(async move {
+            let (hit_pos, hit_entity) = match hit {
+                ProjectileHit::Block { hit_pos, .. } => (hit_pos, None),
+                ProjectileHit::Entity {
+                    ref entity,
+                    hit_pos,
+                    ..
+                } => (hit_pos, Some(entity.get_entity().entity_id)),
+            };
+            let mut hit_event =
+                crate::plugin::api::events::entity::projectile_hit::ProjectileHitEvent::new(
+                    self.entity.entity_id,
+                    hit_pos,
+                    hit_entity,
+                );
+            if let Some(server) = self.entity.world.load().server.upgrade() {
+                server.plugin_manager.fire(&server, &mut hit_event).await;
+            }
+            if hit_event.cancelled {
+                return;
+            }
+
             let entity = self.get_entity();
             let world = entity.world.load();
 

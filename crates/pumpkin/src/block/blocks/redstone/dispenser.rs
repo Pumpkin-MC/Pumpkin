@@ -255,6 +255,19 @@ impl DispenserBlock {
         dispenser: &DispenserBlockEntity,
         item: &mut ItemStack,
     ) {
+        let mut event = crate::plugin::api::events::block::block_dispense::BlockDispenseEvent::new(
+            *ctx.position,
+            item.item.registry_key.to_string(),
+        );
+        if let Some(server) = ctx.world.server.upgrade() {
+            server.plugin_manager.fire(&server, &mut event).await;
+        }
+        if event.cancelled {
+            ctx.world
+                .sync_world_event(WorldEvent::SoundDispenserFail, *ctx.position, 0);
+            return;
+        }
+
         // Still missing some specific dispenser behavior that you can find here:
         // https://minecraft.wiki/w/Dispenser#Usage
         let arrows = [

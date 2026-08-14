@@ -240,6 +240,7 @@ impl PluginHostState {
     }
 }
 
+#[allow(clippy::too_many_lines)]
 async fn register_entity_event(
     resource: &ContextResource,
     handler: &Arc<WasmPluginEventHandler>,
@@ -248,11 +249,27 @@ async fn register_entity_event(
     event_type: EventType,
 ) {
     use crate::plugin::entity::{
+        entity_air_change::EntityAirChangeEvent,
+        entity_breed::EntityBreedEvent,
         entity_combust::EntityCombustEvent,
         entity_damage::EntityDamageEvent,
         entity_death::{EntityDeathEvent, PlayerDeathEvent},
+        entity_dismount::EntityDismountEvent,
+        entity_dye::EntityDyeEvent,
+        entity_enter_love_mode::EntityEnterLoveModeEvent,
+        entity_explode::EntityExplodeEvent,
+        entity_mount::EntityMountEvent,
+        entity_pickup_item::EntityPickupItemEvent,
+        entity_portal::EntityPortalEvent,
         entity_regain_health::EntityRegainHealthEvent,
+        entity_resurrect::EntityResurrectEvent,
+        entity_shoot_bow::EntityShootBowEvent,
         entity_spawn::EntitySpawnEvent,
+        entity_tame::EntityTameEvent,
+        entity_target::EntityTargetEvent,
+        entity_teleport::EntityTeleportEvent,
+        entity_toggle_glide::EntityToggleGlideEvent,
+        entity_transform::EntityTransformEvent,
     };
 
     match event_type {
@@ -273,6 +290,63 @@ async fn register_entity_event(
         }
         EventType::EntityRegainHealthEvent => {
             register_typed_event::<EntityRegainHealthEvent>(resource, handler, priority, blocking)
+                .await;
+        }
+        EventType::EntityAirChangeEvent => {
+            register_typed_event::<EntityAirChangeEvent>(resource, handler, priority, blocking)
+                .await;
+        }
+        EventType::EntityBreedEvent => {
+            register_typed_event::<EntityBreedEvent>(resource, handler, priority, blocking).await;
+        }
+        EventType::EntityDismountEvent => {
+            register_typed_event::<EntityDismountEvent>(resource, handler, priority, blocking)
+                .await;
+        }
+        EventType::EntityDyeEvent => {
+            register_typed_event::<EntityDyeEvent>(resource, handler, priority, blocking).await;
+        }
+        EventType::EntityEnterLoveModeEvent => {
+            register_typed_event::<EntityEnterLoveModeEvent>(resource, handler, priority, blocking)
+                .await;
+        }
+        EventType::EntityExplodeEvent => {
+            register_typed_event::<EntityExplodeEvent>(resource, handler, priority, blocking).await;
+        }
+        EventType::EntityMountEvent => {
+            register_typed_event::<EntityMountEvent>(resource, handler, priority, blocking).await;
+        }
+        EventType::EntityPickupItemEvent => {
+            register_typed_event::<EntityPickupItemEvent>(resource, handler, priority, blocking)
+                .await;
+        }
+        EventType::EntityPortalEvent => {
+            register_typed_event::<EntityPortalEvent>(resource, handler, priority, blocking).await;
+        }
+        EventType::EntityResurrectEvent => {
+            register_typed_event::<EntityResurrectEvent>(resource, handler, priority, blocking)
+                .await;
+        }
+        EventType::EntityShootBowEvent => {
+            register_typed_event::<EntityShootBowEvent>(resource, handler, priority, blocking)
+                .await;
+        }
+        EventType::EntityTameEvent => {
+            register_typed_event::<EntityTameEvent>(resource, handler, priority, blocking).await;
+        }
+        EventType::EntityTargetEvent => {
+            register_typed_event::<EntityTargetEvent>(resource, handler, priority, blocking).await;
+        }
+        EventType::EntityTeleportEvent => {
+            register_typed_event::<EntityTeleportEvent>(resource, handler, priority, blocking)
+                .await;
+        }
+        EventType::EntityToggleGlideEvent => {
+            register_typed_event::<EntityToggleGlideEvent>(resource, handler, priority, blocking)
+                .await;
+        }
+        EventType::EntityTransformEvent => {
+            register_typed_event::<EntityTransformEvent>(resource, handler, priority, blocking)
                 .await;
         }
         _ => {
@@ -308,6 +382,33 @@ async fn register_inventory_event(
         }
         _ => {
             tracing::error!("non-inventory event should not be routed to register_inventory_event");
+        }
+    }
+}
+
+async fn register_enchantment_event(
+    resource: &ContextResource,
+    handler: &Arc<WasmPluginEventHandler>,
+    priority: crate::plugin::EventPriority,
+    blocking: bool,
+    event_type: EventType,
+) {
+    use crate::plugin::enchantment::{
+        enchant_item::EnchantItemEvent, prepare_item_enchant::PrepareItemEnchantEvent,
+    };
+
+    match event_type {
+        EventType::PrepareItemEnchantEvent => {
+            register_typed_event::<PrepareItemEnchantEvent>(resource, handler, priority, blocking)
+                .await;
+        }
+        EventType::EnchantItemEvent => {
+            register_typed_event::<EnchantItemEvent>(resource, handler, priority, blocking).await;
+        }
+        _ => {
+            tracing::error!(
+                "non-enchantment event should not be routed to register_enchantment_event"
+            );
         }
     }
 }
@@ -367,6 +468,7 @@ async fn register_world_event(
     }
 }
 
+#[allow(clippy::too_many_lines)]
 async fn register_block_event(
     resource: &ContextResource,
     handler: &Arc<WasmPluginEventHandler>,
@@ -425,6 +527,60 @@ async fn register_block_event(
         }
         EventType::BlockFadeEvent => {
             register_typed_event::<crate::plugin::api::events::block::block_fade::BlockFadeEvent>(
+                resource, handler, priority, blocking,
+            )
+            .await;
+        }
+        EventType::BlockDispenseEvent => {
+            register_typed_event::<
+                crate::plugin::api::events::block::block_dispense::BlockDispenseEvent,
+            >(resource, handler, priority, blocking)
+            .await;
+        }
+        EventType::BlockExplodeEvent => {
+            register_typed_event::<
+                crate::plugin::api::events::block::block_explode::BlockExplodeEvent,
+            >(resource, handler, priority, blocking)
+            .await;
+        }
+        EventType::BlockPhysicsEvent => {
+            register_typed_event::<
+                crate::plugin::api::events::block::block_physics::BlockPhysicsEvent,
+            >(resource, handler, priority, blocking)
+            .await;
+        }
+        EventType::BlockPistonExtendEvent => {
+            register_typed_event::<
+                crate::plugin::api::events::block::block_piston::BlockPistonExtendEvent,
+            >(resource, handler, priority, blocking)
+            .await;
+        }
+        EventType::BlockPistonRetractEvent => {
+            register_typed_event::<
+                crate::plugin::api::events::block::block_piston::BlockPistonRetractEvent,
+            >(resource, handler, priority, blocking)
+            .await;
+        }
+        EventType::NotePlayEvent => {
+            register_typed_event::<crate::plugin::api::events::block::note_play::NotePlayEvent>(
+                resource, handler, priority, blocking,
+            )
+            .await;
+        }
+        EventType::SignChangeEvent => {
+            register_typed_event::<
+                crate::plugin::api::events::block::sign_change::SignChangeEvent,
+            >(resource, handler, priority, blocking)
+            .await;
+        }
+        EventType::SpongeAbsorbEvent => {
+            register_typed_event::<
+                crate::plugin::api::events::block::sponge_absorb::SpongeAbsorbEvent,
+            >(resource, handler, priority, blocking)
+            .await;
+        }
+        EventType::TntPrimeEvent => {
+            register_typed_event::<crate::plugin::api::events::block::tnt_prime::TNTPrimeEvent>(
                 resource, handler, priority, blocking,
             )
             .await;
@@ -571,7 +727,23 @@ impl pumpkin::plugin::context::HostContext for PluginHostState {
             | EventType::PlayerDeathEvent
             | EventType::EntitySpawnEvent
             | EventType::EntityCombustEvent
-            | EventType::EntityRegainHealthEvent) => {
+            | EventType::EntityRegainHealthEvent
+            | EventType::EntityAirChangeEvent
+            | EventType::EntityBreedEvent
+            | EventType::EntityDismountEvent
+            | EventType::EntityDyeEvent
+            | EventType::EntityEnterLoveModeEvent
+            | EventType::EntityExplodeEvent
+            | EventType::EntityMountEvent
+            | EventType::EntityPickupItemEvent
+            | EventType::EntityPortalEvent
+            | EventType::EntityResurrectEvent
+            | EventType::EntityShootBowEvent
+            | EventType::EntityTameEvent
+            | EventType::EntityTargetEvent
+            | EventType::EntityTeleportEvent
+            | EventType::EntityToggleGlideEvent
+            | EventType::EntityTransformEvent) => {
                 register_entity_event(resource, &handler, priority, blocking, event_type).await;
             }
             event_type @ (EventType::BlockRedstoneEvent
@@ -584,7 +756,16 @@ impl pumpkin::plugin::context::HostContext for PluginHostState {
             | EventType::BlockIgniteEvent
             | EventType::BlockFromToEvent
             | EventType::BlockFormEvent
-            | EventType::BlockFadeEvent) => {
+            | EventType::BlockFadeEvent
+            | EventType::BlockDispenseEvent
+            | EventType::BlockExplodeEvent
+            | EventType::BlockPhysicsEvent
+            | EventType::BlockPistonExtendEvent
+            | EventType::BlockPistonRetractEvent
+            | EventType::NotePlayEvent
+            | EventType::SignChangeEvent
+            | EventType::SpongeAbsorbEvent
+            | EventType::TntPrimeEvent) => {
                 register_block_event(resource, &handler, priority, blocking, event_type).await;
             }
             event_type @ (EventType::InventoryOpenEvent
@@ -592,6 +773,10 @@ impl pumpkin::plugin::context::HostContext for PluginHostState {
             | EventType::CraftItemEvent
             | EventType::FurnaceSmeltEvent) => {
                 register_inventory_event(resource, &handler, priority, blocking, event_type).await;
+            }
+            event_type @ (EventType::PrepareItemEnchantEvent | EventType::EnchantItemEvent) => {
+                register_enchantment_event(resource, &handler, priority, blocking, event_type)
+                    .await;
             }
             event_type => {
                 register_player_event(resource, &handler, priority, blocking, event_type).await;

@@ -48,7 +48,14 @@ impl JavaClient {
             Action::StartFlyingElytra => {
                 let fall_flying = entity.check_fall_flying();
                 if entity.is_fall_flying() != fall_flying {
-                    entity.set_fall_flying(fall_flying).await;
+                    let mut event = crate::plugin::api::events::entity::entity_toggle_glide::EntityToggleGlideEvent::new(
+                        entity.entity_id,
+                        fall_flying,
+                    );
+                    server.plugin_manager.fire(server, &mut event).await;
+                    if !event.cancelled {
+                        entity.set_fall_flying(event.is_gliding).await;
+                    }
                 }
             }
             // <= 1.21.5
