@@ -3677,7 +3677,7 @@ impl World {
                     ),
                     spawn_yaw,
                     spawn_pitch,
-                    self.dimension.clone(),
+                    Dimension::OVERWORLD,
                 )
             };
 
