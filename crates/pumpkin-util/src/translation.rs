@@ -16,7 +16,7 @@ use crate::text::{TextComponentBase, TextContent, style::Style};
 
 static VANILLA_EN_US_JSON: &str = include_str!("../../../assets/en_us_java.json");
 static VANILLA_ADVANCEMENT_TITLES_JSON: &str =
-    include_str!("../../../assets/advancement_titles.json");
+    include_str!("../../../assets/bedrock/advancement_titles.json");
 static PUMPKIN_EN_US_JSON: &str = include_str!("../../../assets/translations/en_us.json");
 static PUMPKIN_BRB_JSON: &str = include_str!("../../../assets/translations/brb.json");
 static PUMPKIN_DE_DE_JSON: &str = include_str!("../../../assets/translations/de_de.json");
@@ -703,6 +703,7 @@ mod tests {
 
         assert_eq!(get_translation(key, Locale::DeDe), "Steinzeit");
         assert_eq!(get_translation(key, Locale::ZhCn), "石器时代");
+        assert_eq!(get_translation(key, Locale::AfZa), "Stone Age");
         assert_eq!(Locale::from_str("nb_NO"), Ok(Locale::NoNo));
     }
 }
