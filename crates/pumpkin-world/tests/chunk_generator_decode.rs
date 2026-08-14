@@ -14,7 +14,7 @@ use pumpkin_world::{
     ProtoChunk,
     chunk_system::generation_cache::Cache,
     generation::generator::{
-        ChunkGenerator, ChunkGeneratorDecode, ChunkGeneratorType,
+        ChunkGenerator, ChunkGeneratorDecode, ChunkGeneratorType, VanillaGenerator,
         flat::{FlatGenerator as RuntimeFlatGenerator, FlatGeneratorConfig},
     },
     world::WorldPortalExt,
@@ -141,6 +141,13 @@ impl ChunkGeneratorDecode for FlatGenerator {
     }
 }
 
+fn init_registries() {
+    BOOTSTRAP.get_or_init(BootstrapManager::new);
+    ROOT.get_or_init(|| {
+        RegistryBuilder::<Arc<dyn Registry>>::frozen(&Identifier::vanilla_static("root")).unwrap()
+    });
+}
+
 #[test]
 fn generator_type_decodes_from_json_ops() {
     let generator_type = ChunkGeneratorType::new::<NoiseGenerator>();
@@ -167,10 +174,7 @@ fn same_generator_type_decodes_from_nbt_ops() {
 
 #[test]
 fn flat_generator_config_decodes_structure_overrides() {
-    let _ = BOOTSTRAP.set(BootstrapManager::new());
-    ROOT.get_or_init(|| {
-        RegistryBuilder::<Arc<dyn Registry>>::frozen(&Identifier::vanilla_static("root")).unwrap()
-    });
+    init_registries();
 
     let settings = json!({
         "biome": "minecraft:plains",
@@ -218,6 +222,76 @@ fn flat_generator_config_decodes_structure_overrides() {
     assert!(resolved_salts.contains(&strongholds.placement.salt));
     assert!(resolved_salts.contains(&villages.placement.salt));
     assert_eq!(generator.structure_overrides.len(), 2);
+}
+
+#[test]
+fn vanilla_noise_generator_decodes_overworld_config() {
+    init_registries();
+    let generator_type = ChunkGeneratorType::new::<VanillaGenerator>();
+    let generator = generator_type
+        .decode(
+            json!({
+                "settings": "minecraft:overworld",
+                "biome_source": {
+                    "type": "minecraft:multi_noise",
+                    "preset": "minecraft:overworld"
+                }
+            }),
+            &JsonOps,
+            Seed(1234),
+            Dimension::OVERWORLD,
+        )
+        .into_result()
+        .unwrap();
+
+    assert_eq!(generator.seed(), 1234);
+    assert_eq!(generator.dimension(), &Dimension::OVERWORLD);
+}
+
+#[test]
+fn vanilla_noise_generator_decodes_amplified_config() {
+    init_registries();
+    let generator_type = ChunkGeneratorType::new::<VanillaGenerator>();
+    let generator = generator_type
+        .decode(
+            json!({
+                "settings": "minecraft:amplified",
+                "biome_source": {
+                    "type": "minecraft:multi_noise",
+                    "preset": "minecraft:overworld"
+                }
+            }),
+            &JsonOps,
+            Seed(7),
+            Dimension::OVERWORLD,
+        )
+        .into_result()
+        .unwrap();
+
+    assert_eq!(generator.seed(), 7);
+}
+
+#[test]
+fn vanilla_noise_generator_decodes_fixed_biome_source() {
+    init_registries();
+    let generator_type = ChunkGeneratorType::new::<VanillaGenerator>();
+    let generator = generator_type
+        .decode(
+            json!({
+                "settings": "minecraft:overworld",
+                "biome_source": {
+                    "type": "minecraft:fixed",
+                    "biome": "minecraft:plains"
+                }
+            }),
+            &JsonOps,
+            Seed(99),
+            Dimension::OVERWORLD,
+        )
+        .into_result()
+        .unwrap();
+
+    assert_eq!(generator.seed(), 99);
 }
 
 #[test]

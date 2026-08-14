@@ -130,7 +130,8 @@ pub fn carve(chunk: &mut ProtoChunk, generator: &VanillaGenerator) {
 
     let start_x = crate::generation::positions::chunk_pos::start_block_x(chunk_x);
     let start_z = crate::generation::positions::chunk_pos::start_block_z(chunk_z);
-    let generation_shape = &generator.settings.shape;
+    let settings = generator.settings();
+    let generation_shape = &settings.shape;
     let horizontal_cell_count = 16 / generation_shape.horizontal_cell_block_count();
 
     let horizontal_biome_end = crate::generation::biome_coords::from_block(
@@ -148,13 +149,13 @@ pub fn carve(chunk: &mut ProtoChunk, generator: &VanillaGenerator) {
         &generator.base_router.surface_estimator,
         &surface_config,
     );
-    let carver_aquifer = generator.settings.aquifers_enabled.then(|| {
+    let carver_aquifer = settings.aquifers_enabled.then(|| {
         CarverAquiferSampler::new(
             chunk_x,
             chunk_z,
             &generator.base_router,
             &generator.random_config,
-            generator.settings,
+            &settings,
         )
     });
 
@@ -165,8 +166,8 @@ pub fn carve(chunk: &mut ProtoChunk, generator: &VanillaGenerator) {
         surface_noise: &generator.terrain_cache.surface_noise,
         secondary_noise: &generator.terrain_cache.secondary_noise,
         terrain_builder: &generator.terrain_cache.terrain_builder,
-        sea_level: generator.settings.sea_level,
-        surface_rule: &generator.settings.surface_rule,
+        sea_level: settings.sea_level,
+        surface_rule: &settings.surface_rule,
         surface_height_sampler,
         carver_aquifer,
     };
@@ -194,8 +195,7 @@ pub fn carve(chunk: &mut ProtoChunk, generator: &VanillaGenerator) {
                     carver_x,
                     carver_z,
                 );
-                let mut carver_random =
-                    new_carver_random(seed, generator.settings.legacy_random_source);
+                let mut carver_random = new_carver_random(seed, settings.legacy_random_source);
 
                 if should_carve(config, &mut carver_random) {
                     match config.additional {
@@ -206,7 +206,7 @@ pub fn carve(chunk: &mut ProtoChunk, generator: &VanillaGenerator) {
                                 &mut carver_random,
                                 &chunk_pos,
                                 &carver_chunk_pos,
-                                generator.settings.legacy_random_source,
+                                settings.legacy_random_source,
                             );
                         }
                         CarverAdditionalConfig::Canyon(_) => {
@@ -216,7 +216,7 @@ pub fn carve(chunk: &mut ProtoChunk, generator: &VanillaGenerator) {
                                 &mut carver_random,
                                 &chunk_pos,
                                 &carver_chunk_pos,
-                                generator.settings.legacy_random_source,
+                                settings.legacy_random_source,
                             );
                         }
                     }
@@ -377,7 +377,8 @@ fn with_carve_run_options<F>(
 
     let start_x = crate::generation::positions::chunk_pos::start_block_x(chunk.x);
     let start_z = crate::generation::positions::chunk_pos::start_block_z(chunk.z);
-    let generation_shape = &generator.settings.shape;
+    let settings = generator.settings();
+    let generation_shape = &settings.shape;
     let horizontal_cell_count = 16 / generation_shape.horizontal_cell_block_count();
     let horizontal_biome_end = crate::generation::biome_coords::from_block(
         horizontal_cell_count as i32 * generation_shape.horizontal_cell_block_count() as i32,
@@ -400,7 +401,7 @@ fn with_carve_run_options<F>(
             chunk.z,
             &generator.base_router,
             &generator.random_config,
-            generator.settings,
+            &settings,
         )
     });
     let mut context = CarvingContext {
@@ -410,8 +411,8 @@ fn with_carve_run_options<F>(
         surface_noise: &generator.terrain_cache.surface_noise,
         secondary_noise: &generator.terrain_cache.secondary_noise,
         terrain_builder: &generator.terrain_cache.terrain_builder,
-        sea_level: generator.settings.sea_level,
-        surface_rule: surface_rule.unwrap_or(&generator.settings.surface_rule),
+        sea_level: settings.sea_level,
+        surface_rule: surface_rule.unwrap_or(&settings.surface_rule),
         surface_height_sampler,
         carver_aquifer,
     };

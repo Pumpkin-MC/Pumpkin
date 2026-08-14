@@ -377,9 +377,7 @@ impl Cache {
             StagedChunkEnum::Empty => panic!("empty stage"),
             StagedChunkEnum::StructureStart => match generator {
                 generator::WorldGenerator::Noise(noise_gen) => {
-                    self.chunks[index]
-                        .get_proto_chunk_mut()
-                        .set_structure_starts(noise_gen);
+                    noise_gen.step_to_structure_start(self, index, block_registry);
                 }
                 generator::WorldGenerator::Flat(flat_gen) => {
                     flat_gen.step_to_structure_start(self, index, block_registry);
@@ -387,9 +385,7 @@ impl Cache {
             },
             StagedChunkEnum::StructureReferences => match generator {
                 generator::WorldGenerator::Noise(noise_gen) => {
-                    self.chunks[index]
-                        .get_proto_chunk_mut()
-                        .set_structure_references(noise_gen);
+                    noise_gen.step_to_structure_references(self, index, block_registry);
                 }
                 generator::WorldGenerator::Flat(flat_gen) => {
                     flat_gen.step_to_structure_references(self, index, block_registry);
@@ -397,9 +393,7 @@ impl Cache {
             },
             StagedChunkEnum::Biomes => match generator {
                 generator::WorldGenerator::Noise(noise_gen) => {
-                    self.chunks[index]
-                        .get_proto_chunk_mut()
-                        .step_to_biomes(noise_gen);
+                    noise_gen.step_to_biomes(self.chunks[index].get_proto_chunk_mut());
                 }
                 generator::WorldGenerator::Flat(flat_gen) => {
                     flat_gen.step_to_biomes(self.chunks[index].get_proto_chunk_mut());
@@ -435,9 +429,7 @@ impl Cache {
             StagedChunkEnum::Empty => panic!("empty stage"),
             StagedChunkEnum::StructureStart => match generator {
                 generator::WorldGenerator::Noise(noise_gen) => {
-                    self.chunks[mid]
-                        .get_proto_chunk_mut()
-                        .set_structure_starts(noise_gen);
+                    noise_gen.step_to_structure_start(self, mid, block_registry);
                 }
                 generator::WorldGenerator::Flat(flat_gen) => {
                     flat_gen.step_to_structure_start(self, mid, block_registry);
@@ -445,9 +437,7 @@ impl Cache {
             },
             StagedChunkEnum::StructureReferences => match generator {
                 generator::WorldGenerator::Noise(noise_gen) => {
-                    self.chunks[mid]
-                        .get_proto_chunk_mut()
-                        .set_structure_references(noise_gen);
+                    noise_gen.step_to_structure_references(self, mid, block_registry);
                 }
                 generator::WorldGenerator::Flat(flat_gen) => {
                     flat_gen.step_to_structure_references(self, mid, block_registry);
@@ -455,9 +445,7 @@ impl Cache {
             },
             StagedChunkEnum::Biomes => match generator {
                 generator::WorldGenerator::Noise(noise_gen) => {
-                    self.chunks[mid]
-                        .get_proto_chunk_mut()
-                        .step_to_biomes(noise_gen);
+                    noise_gen.step_to_biomes(self.chunks[mid].get_proto_chunk_mut());
                 }
                 generator::WorldGenerator::Flat(flat_gen) => {
                     flat_gen.step_to_biomes(self.chunks[mid].get_proto_chunk_mut());
@@ -465,9 +453,7 @@ impl Cache {
             },
             StagedChunkEnum::Noise => match generator {
                 generator::WorldGenerator::Noise(noise_gen) => {
-                    self.chunks[mid]
-                        .get_proto_chunk_mut()
-                        .step_to_noise(noise_gen);
+                    noise_gen.step_to_noise(self.chunks[mid].get_proto_chunk_mut());
                 }
                 generator::WorldGenerator::Flat(flat_gen) => {
                     flat_gen.step_to_noise(self.chunks[mid].get_proto_chunk_mut());
@@ -475,9 +461,7 @@ impl Cache {
             },
             StagedChunkEnum::Surface => match generator {
                 generator::WorldGenerator::Noise(noise_gen) => {
-                    self.chunks[mid]
-                        .get_proto_chunk_mut()
-                        .step_to_surface(noise_gen);
+                    noise_gen.step_to_surface(self.chunks[mid].get_proto_chunk_mut());
                 }
                 generator::WorldGenerator::Flat(flat_gen) => {
                     flat_gen.step_to_surface(self.chunks[mid].get_proto_chunk_mut());
@@ -485,9 +469,7 @@ impl Cache {
             },
             StagedChunkEnum::Carvers => match generator {
                 generator::WorldGenerator::Noise(noise_gen) => {
-                    self.chunks[mid]
-                        .get_proto_chunk_mut()
-                        .step_to_carvers(noise_gen);
+                    noise_gen.step_to_carvers(self.chunks[mid].get_proto_chunk_mut());
                 }
                 generator::WorldGenerator::Flat(flat_gen) => {
                     flat_gen.step_to_carvers(self.chunks[mid].get_proto_chunk_mut());
@@ -495,11 +477,7 @@ impl Cache {
             },
             StagedChunkEnum::Features => match generator {
                 generator::WorldGenerator::Noise(noise_gen) => {
-                    ProtoChunk::generate_features_and_structure(
-                        self,
-                        block_registry,
-                        &noise_gen.random_config,
-                    );
+                    noise_gen.step_to_features(self, mid, block_registry);
                 }
                 generator::WorldGenerator::Flat(flat_gen) => {
                     flat_gen.step_to_features(self, mid, block_registry);

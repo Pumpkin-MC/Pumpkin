@@ -79,7 +79,7 @@ pub fn bench_create_and_populate_noise(
     let mut chunk = ProtoChunk::new(0, 0, &world_gen);
 
     // Create noise sampler and other required components
-    let settings = generator.settings;
+    let settings = generator.settings();
     let generation_shape = &settings.shape;
     let horizontal_cell_count = CHUNK_DIM / generation_shape.horizontal_cell_block_count();
     let sampler = StandardChunkFluidLevelSampler::new(
@@ -206,7 +206,7 @@ pub fn bench_create_and_populate_noise_with_surface(
     let mut chunk = ProtoChunk::new(0, 0, &world_gen);
 
     // Create all required components
-    let settings = generator.settings;
+    let settings = generator.settings();
     let generation_shape = &settings.shape;
     let horizontal_cell_count = CHUNK_DIM / generation_shape.horizontal_cell_block_count();
     let start_x = chunk_pos::start_block_x(0);

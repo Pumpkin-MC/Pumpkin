@@ -1,5 +1,5 @@
 use pumpkin_codecs::{DataResult, Decode, DynamicOps};
-use pumpkin_data::dimension::Dimension;
+use pumpkin_data::{Block, BlockState, dimension::Dimension};
 use pumpkin_nbt::{nbt_ops::NbtOps, tag::NbtTag};
 use pumpkin_util::world_seed::Seed;
 
@@ -9,6 +9,18 @@ pub trait ChunkGenerator: Send + Sync {
     fn dimension(&self) -> &Dimension;
 
     fn seed(&self) -> u64;
+
+    fn generation_bounds(&self) -> (u16, i8) {
+        (self.dimension().height as u16, self.dimension().min_y as i8)
+    }
+
+    fn default_block(&self) -> &'static BlockState {
+        Block::AIR.default_state
+    }
+
+    fn biome_mixer_seed(&self) -> i64 {
+        crate::biome::hash_seed(self.seed())
+    }
 
     fn step_to_biomes(&self, chunk: &mut ProtoChunk);
 

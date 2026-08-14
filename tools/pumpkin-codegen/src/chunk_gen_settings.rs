@@ -39,6 +39,9 @@ pub struct GenerationSettingsStruct {
     pub shape: GenerationShapeConfigStruct,
     /// Hierarchical surface material rule determining which block is placed at each surface point.
     pub surface_rule: MaterialRuleStruct,
+    /// Name of the generated base noise router associated with this settings entry.
+    #[serde(skip)]
+    pub base_router: String,
 }
 
 /// Deserialized noise-shape configuration controlling terrain cell dimensions.
@@ -249,6 +252,10 @@ impl ToTokens for GenerationSettingsStruct {
         let block = &self.default_block;
         let shape = &self.shape;
         let rule = &self.surface_rule;
+        let base_router = format_ident!(
+            "{}_BASE_NOISE_ROUTER",
+            self.base_router.to_shouty_snake_case()
+        );
 
         tokens.extend(quote!(
             GenerationSettings {
@@ -260,6 +267,7 @@ impl ToTokens for GenerationSettingsStruct {
                 shape: #shape,
                 surface_rule: #rule,
                 default_block: #block,
+                base_router: &crate::noise_router::#base_router,
             }
         ));
     }
@@ -466,9 +474,13 @@ impl ToTokens for MaterialRuleStruct {
 
 /// Reads `chunk_gen_settings.json` and emits the complete chunk generation settings `TokenStream`.
 pub fn build() -> TokenStream {
-    let json: BTreeMap<String, GenerationSettingsStruct> =
+    let mut json: BTreeMap<String, GenerationSettingsStruct> =
         serde_json::from_str(&fs::read_to_string("../../assets/chunk_gen_settings.json").unwrap())
             .expect("Failed to parse settings.json");
+
+    for (name, settings) in &mut json {
+        settings.base_router.clone_from(name);
+    }
 
     let mut const_defs = TokenStream::new();
     let mut static_entries = TokenStream::new();
@@ -523,6 +535,7 @@ pub fn build() -> TokenStream {
             pub shape: GenerationShapeConfig,
             pub surface_rule: MaterialRule,
             pub default_block: &'static BlockState,
+            pub base_router: &'static crate::noise_router::BaseNoiseRouters,
         }
 
         pub struct GenerationShapeConfig {

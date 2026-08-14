@@ -7,13 +7,16 @@ use crate::generation::noise::router::multi_noise_sampler::MultiNoiseSampler;
 pub mod end;
 pub mod multi_noise;
 pub mod position_finder;
+pub mod source;
+
+pub use source::{BiomeSourceConfig, BiomeSourceType, FixedBiomeSupplier};
 
 thread_local! {
     /// A shortcut; check if last used biome is what we should use
     static LAST_RESULT_NODE: RefCell<Option<&'static BiomeTree>> = const {RefCell::new(None) };
 }
 
-pub trait BiomeSupplier {
+pub trait BiomeSupplier: Send + Sync {
     fn biome(&self, x: i32, y: i32, z: i32, noise: &mut MultiNoiseSampler<'_>) -> &'static Biome;
 }
 
