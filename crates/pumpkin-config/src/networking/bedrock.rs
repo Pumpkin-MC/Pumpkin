@@ -1,6 +1,6 @@
 use crate::CompressionConfig;
 use serde::{Deserialize, Serialize};
-use std::net::SocketAddr;
+use std::net::{IpAddr, SocketAddr};
 use std::num::NonZeroU8;
 use std::path::PathBuf;
 
@@ -24,11 +24,13 @@ pub struct BedrockAuthenticationConfig {
 pub struct NetherNetConfig {
     /// Whether clients may connect using `NetherNet`.
     pub enabled: bool,
-    /// HTTP signaling address. WebRTC uses separately allocated UDP ports for game traffic.
+    /// TCP signaling and shared UDP status/ICE address.
     pub address: SocketAddr,
+    /// Optional public IP advertised when the ICE address is behind NAT.
+    pub external_ip: Option<IpAddr>,
     /// PKCS#8 P-384 identity key retained across restarts for Trust On First Use.
     pub identity_key: PathBuf,
-    /// Optional STUN server URLs used to gather a public ICE candidate behind NAT.
+    /// Optional ICE server URLs. Use `external_ip` for NAT with the single-port UDP mux.
     pub stun_servers: Vec<String>,
 }
 
@@ -40,6 +42,7 @@ impl Default for NetherNetConfig {
         Self {
             enabled: true,
             address,
+            external_ip: None,
             identity_key: "nethernet-key.der".into(),
             stun_servers: Vec::new(),
         }
@@ -79,6 +82,8 @@ pub struct BedrockConfig {
     pub authentication: BedrockAuthenticationConfig,
     /// Bedrock `NetherNet` transport settings.
     pub nethernet: NetherNetConfig,
+    /// Whether Bedrock client chunk blob caching is enabled.
+    pub chunk_caching: bool,
 }
 
 impl Default for BedrockConfig {
@@ -95,6 +100,7 @@ impl Default for BedrockConfig {
             motd: "A blazingly fast Pumpkin server!".to_string(),
             authentication: BedrockAuthenticationConfig::default(),
             nethernet: NetherNetConfig::default(),
+            chunk_caching: true,
         }
     }
 }

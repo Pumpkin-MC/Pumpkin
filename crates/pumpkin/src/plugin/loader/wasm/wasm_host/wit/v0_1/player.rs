@@ -1059,21 +1059,13 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         relative: bool,
     ) -> wasmtime::Result<()> {
         let player = player_from_resource(self, &player)?;
-        player
-            .set_player_time(
-                &player.living_entity.entity.world.load_full(),
-                time,
-                relative,
-            )
-            .await;
+        player.set_player_time(time, relative).await;
         Ok(())
     }
 
     async fn reset_player_time(&mut self, player: Resource<Player>) -> wasmtime::Result<()> {
         let player = player_from_resource(self, &player)?;
-        player
-            .reset_player_time(&player.living_entity.entity.world.load_full())
-            .await;
+        player.reset_player_time().await;
         Ok(())
     }
 
@@ -1220,6 +1212,55 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         let player = player_from_resource(self, &player)?;
         let other = player_from_resource(self, &other)?;
         Ok(player.can_see(&other.gameprofile.id).await)
+    }
+
+    async fn can_see_player(
+        &mut self,
+        player: Resource<Player>,
+        other: Resource<Player>,
+    ) -> wasmtime::Result<bool> {
+        let player = player_from_resource(self, &player)?;
+        let other = player_from_resource(self, &other)?;
+        Ok(player.can_see(&other.gameprofile.id).await)
+    }
+
+    async fn set_tab_list_ping(
+        &mut self,
+        player: Resource<Player>,
+        latency_ms: i32,
+    ) -> wasmtime::Result<()> {
+        let player = player_from_resource(self, &player)?;
+        player.set_tab_list_ping(latency_ms);
+        Ok(())
+    }
+
+    async fn set_item_cooldown(
+        &mut self,
+        player: Resource<Player>,
+        item_id: String,
+        ticks: i32,
+    ) -> wasmtime::Result<()> {
+        let player = player_from_resource(self, &player)?;
+        player.set_item_cooldown(&item_id, ticks).await;
+        Ok(())
+    }
+
+    async fn get_item_cooldown(
+        &mut self,
+        player: Resource<Player>,
+        item_id: String,
+    ) -> wasmtime::Result<Option<i32>> {
+        let player = player_from_resource(self, &player)?;
+        Ok(player.get_item_cooldown(&item_id).await)
+    }
+
+    async fn has_item_cooldown(
+        &mut self,
+        player: Resource<Player>,
+        item_id: String,
+    ) -> wasmtime::Result<bool> {
+        let player = player_from_resource(self, &player)?;
+        Ok(player.has_item_cooldown(&item_id).await)
     }
 
     async fn get_target_block(
@@ -2198,6 +2239,39 @@ impl pumpkin::plugin::player::HostJavaPlayer for PluginHostState {
         Ok(())
     }
 
+    async fn get_scoreboard(
+        &mut self,
+        player_res: Resource<pumpkin::plugin::player::JavaPlayer>,
+    ) -> wasmtime::Result<Resource<pumpkin::plugin::scoreboard::Scoreboard>> {
+        let player = self
+            .resource_table
+            .get::<crate::plugin::loader::wasm::wasm_host::state::JavaPlayerResource>(
+                &Resource::new_own(player_res.rep()),
+            )
+            .map_err(|_| wasmtime::Error::msg("invalid java-player resource handle"))?
+            .provider
+            .clone();
+        self.add_scoreboard(
+            crate::plugin::loader::wasm::wasm_host::state::ScoreboardProvider::Player(player),
+        )
+    }
+
+    async fn reset_scoreboard(
+        &mut self,
+        player_res: Resource<pumpkin::plugin::player::JavaPlayer>,
+    ) -> wasmtime::Result<()> {
+        let player = self
+            .resource_table
+            .get::<crate::plugin::loader::wasm::wasm_host::state::JavaPlayerResource>(
+                &Resource::new_own(player_res.rep()),
+            )
+            .map_err(|_| wasmtime::Error::msg("invalid java-player resource handle"))?
+            .provider
+            .clone();
+        player.reset_scoreboard().await;
+        Ok(())
+    }
+
     async fn drop(
         &mut self,
         rep: Resource<pumpkin::plugin::player::JavaPlayer>,
@@ -2541,6 +2615,37 @@ impl pumpkin::plugin::player::HostBedrockPlayer for PluginHostState {
         } else {
             Ok(0)
         }
+    }
+
+    async fn get_scoreboard(
+        &mut self,
+        player_res: Resource<pumpkin::plugin::player::BedrockPlayer>,
+    ) -> wasmtime::Result<Resource<pumpkin::plugin::scoreboard::BedrockScoreboard>> {
+        let player = self
+            .resource_table
+            .get::<crate::plugin::loader::wasm::wasm_host::state::BedrockPlayerResource>(
+                &Resource::new_own(player_res.rep()),
+            )
+            .map_err(|_| wasmtime::Error::msg("invalid bedrock-player resource handle"))?
+            .provider
+            .clone();
+        self.add_bedrock_scoreboard(player)
+    }
+
+    async fn reset_scoreboard(
+        &mut self,
+        player_res: Resource<pumpkin::plugin::player::BedrockPlayer>,
+    ) -> wasmtime::Result<()> {
+        let player = self
+            .resource_table
+            .get::<crate::plugin::loader::wasm::wasm_host::state::BedrockPlayerResource>(
+                &Resource::new_own(player_res.rep()),
+            )
+            .map_err(|_| wasmtime::Error::msg("invalid bedrock-player resource handle"))?
+            .provider
+            .clone();
+        player.reset_scoreboard().await;
+        Ok(())
     }
 
     async fn drop(

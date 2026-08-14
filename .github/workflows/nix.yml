@@ -1,0 +1,41 @@
+name: Nix Flake
+
+on:
+  push:
+    paths:
+      - "**.nix"
+      - "flake.lock"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "crates/**"
+      - ".github/workflows/nix.yml"
+  pull_request:
+    paths:
+      - "**.nix"
+      - "flake.lock"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "crates/**"
+      - ".github/workflows/nix.yml"
+  workflow_dispatch:
+
+jobs:
+  check-flake:
+    name: Validate Flake & Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@v16
+
+      - name: Magic Nix Cache
+        uses: DeterminateSystems/magic-nix-cache-action@v9
+
+      - name: Check flake formatting and evaluation
+        run: nix flake check
+
+      - name: Build default package
+        run: nix build .#default

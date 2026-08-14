@@ -1,10 +1,9 @@
-use std::io::{Error, Write};
-
 use pumpkin_macros::packet;
 use pumpkin_util::math::position::BlockPos;
 
 use crate::{codec::var_uint::VarUInt, serial::PacketWrite};
 
+#[derive(PacketWrite)]
 #[packet(21)]
 pub struct CUpdateBlock {
     pub position: BlockPos,
@@ -22,15 +21,5 @@ impl CUpdateBlock {
             flags: VarUInt(0x3), // neighbors | network
             layer: VarUInt(0),
         }
-    }
-}
-
-impl PacketWrite for CUpdateBlock {
-    fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
-        self.position.write(writer)?;
-        self.block_runtime_id.write(writer)?;
-        self.flags.write(writer)?;
-        self.layer.write(writer)?;
-        Ok(())
     }
 }

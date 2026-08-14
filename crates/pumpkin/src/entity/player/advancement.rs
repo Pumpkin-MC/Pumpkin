@@ -9,7 +9,10 @@ use pumpkin_data::advancement_data::{
     AdvancementNode, AdvancementProgressData, AdvancementRequirement, AdvancementReward, Criteria,
 };
 use pumpkin_data::{ADVANCEMENT_TREE, Advancement, translation};
-use pumpkin_protocol::java::client::play::{CSelectAdvancementsTab, CUpdateAdvancements};
+use pumpkin_protocol::bedrock::server::text::SText;
+use pumpkin_protocol::java::client::play::{
+    CSelectAdvancementsTab, CSystemChatMessage, CUpdateAdvancements,
+};
 use pumpkin_util::identifier::Identifier;
 use pumpkin_util::text::TextComponent;
 use serde::ser::SerializeMap;
@@ -441,15 +444,25 @@ impl PlayerAdvancement {
                         .show_advancement_messages
                 {
                     tokio::spawn(async move {
-                        let component = TextComponent::translate_cross(
+                        let player_name = player.get_display_name().await;
+                        let je_component = TextComponent::translate(
                             display.frame_type.get_translation(),
-                            translation::bedrock::CHAT_TYPE_ACHIEVEMENT,
-                            [player.get_display_name().await, advancement.name()],
+                            [player_name.clone(), advancement.name()],
                         );
+                        let je_packet = CSystemChatMessage::new(&je_component, false);
+
+                        let be_packet = SText::translation(
+                            translation::bedrock::CHAT_TYPE_ACHIEVEMENT.to_string(),
+                            vec![
+                                player_name.0.to_bedrock_string(),
+                                display.get_title().0.to_bedrock_string(),
+                            ],
+                        );
+
                         player
                             .world()
-                            .broadcast_system_message(&component, false)
-                            .await; //send translate component for the event
+                            .broadcast_editioned(&je_packet, &be_packet)
+                            .await;
                     });
                 }
             }

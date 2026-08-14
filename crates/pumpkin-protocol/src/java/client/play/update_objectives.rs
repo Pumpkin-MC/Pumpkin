@@ -75,7 +75,7 @@ pub enum Mode {
     Update,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum RenderType {
     Integer,
     Hearts,

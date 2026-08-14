@@ -71,7 +71,8 @@ impl BreathManager {
             let new_air = (prev - AIR_DEPLETION_RATE).max(0);
             if new_air != prev {
                 self.air_supply.store(new_air, Ordering::Relaxed);
-                if let Some(server) = player.world().server.upgrade() {
+                let server = player.world().server.upgrade();
+                if let Some(server) = server {
                     let mut event = crate::plugin::api::events::entity::entity_air_change::EntityAirChangeEvent::new(
                         player.entity_id(),
                         new_air,

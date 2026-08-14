@@ -8,7 +8,7 @@ use std::{
     net::SocketAddr,
     sync::{
         Arc,
-        atomic::{AtomicBool, AtomicU32},
+        atomic::{AtomicBool, AtomicU32, Ordering},
     },
 };
 
@@ -20,11 +20,16 @@ use pumpkin_protocol::{
     BClientPacket, PacketDecodeError, RawPacket,
     bedrock::{
         BEDROCK_GAME_PACKET, SubClient,
-        client::{disconnect_player::CDisconnectPlayer, level_chunk::CLevelChunk},
+        client::{
+            client_cache_miss_response::{CClientCacheMissResponse, CacheBlob},
+            disconnect_player::CDisconnectPlayer,
+            level_chunk::CLevelChunk,
+        },
         packet_decoder::BedrockBatchDecoder,
         packet_encoder::BedrockBatchEncoder,
         server::{
             animate::SAnimate, block_pick_request::SBlockPickRequest,
+            client_cache_blob_status::SClientCacheBlobStatus,
             client_cache_status::SClientCacheStatus, command_request::SCommandRequest,
             container_close::SContainerClose, emote::SEmote, emote_list::SEmoteList,
             interaction::SInteraction, inventory_transaction::SInventoryTransaction,
@@ -33,7 +38,7 @@ use pumpkin_protocol::{
             player_auth_input::SPlayerAuthInput, request_ability::SRequestAbility,
             request_chunk_radius::SRequestChunkRadius,
             request_network_settings::SRequestNetworkSettings,
-            resource_pack_response::SResourcePackResponse,
+            resource_pack_response::SResourcePackResponse, respawn::SRespawn,
             set_local_player_as_initialized::SSetLocalPlayerAsInitialized,
             set_player_inventory_options::SSetPlayerInventoryOptions, text::SText,
         },
@@ -111,6 +116,8 @@ pub struct BedrockClient {
     /// The next form ID to use for custom forms.
     pub next_form_id: AtomicU32,
     pub inventory_opened: AtomicBool,
+    pub client_cache_supported: AtomicBool,
+    pub blob_cache: Mutex<HashMap<u64, Vec<u8>>>,
     /// An notifier that is triggered when this client is closed.
     close_token: CancellationToken,
     last_seen: Arc<AtomicCell<std::time::Instant>>,
@@ -146,6 +153,8 @@ impl BedrockClient {
             outgoing_packet_priority_recv: Mutex::new(Some(priority_recv)),
             next_form_id: AtomicU32::new(0),
             inventory_opened: AtomicBool::new(false),
+            client_cache_supported: AtomicBool::new(false),
+            blob_cache: Mutex::new(HashMap::new()),
             close_token: CancellationToken::new(),
             last_seen: Arc::new(AtomicCell::new(std::time::Instant::now())),
             incoming_game_packet_send: incoming_send,
@@ -240,7 +249,7 @@ impl BedrockClient {
         }
     }
 
-    pub fn nethernet_public_key(&self) -> &pumpkin_util::p384::PublicKey {
+    pub fn nethernet_public_key(&self) -> Option<&pumpkin_util::p384::PublicKey> {
         self.session.client_public_key()
     }
 
@@ -288,27 +297,43 @@ impl BedrockClient {
             return;
         }
 
+        let bedrock_dimension =
+            if player.world().dimension == pumpkin_data::dimension::Dimension::THE_NETHER {
+                1
+            } else if player.world().dimension == pumpkin_data::dimension::Dimension::THE_END {
+                2
+            } else {
+                0
+            };
+
+        let cache_enabled = server.advanced_config.networking.bedrock.chunk_caching
+            && self.client_cache_supported.load(Ordering::Relaxed);
+
         let mut serialize_tasks = Vec::with_capacity(valid_chunks.len());
         for chunk in valid_chunks {
+            let block_actors = player.world().bedrock_chunk_block_actors(&chunk);
             serialize_tasks.push(tokio::task::spawn_blocking(move || {
-                let mut packet_payload = Vec::new();
-                let packet = CLevelChunk {
-                    dimension: 0,
-                    cache_enabled: false,
-                    chunk: &chunk,
-                };
-                packet
-                    .write_packet(&mut packet_payload)
-                    .map(|()| packet_payload)
+                CLevelChunk::encode_chunk(&chunk, bedrock_dimension, cache_enabled, &block_actors)
             }));
         }
 
         let mut encoded_payloads = Vec::with_capacity(serialize_tasks.len());
+        let mut new_blobs = Vec::new();
         for task in serialize_tasks {
             match task.await {
-                Ok(Ok(payload)) => encoded_payloads.push(payload),
+                Ok(Ok((payload, blobs))) => {
+                    encoded_payloads.push(payload);
+                    new_blobs.extend(blobs);
+                }
                 Ok(Err(e)) => error!("Failed to serialize Bedrock chunk: {:?}", e),
                 Err(e) => error!("Join error in Bedrock chunk serialization: {:?}", e),
+            }
+        }
+
+        if !new_blobs.is_empty() {
+            let mut cache = self.blob_cache.lock().await;
+            for (hash, payload) in new_blobs {
+                cache.insert(hash, payload);
             }
         }
 
@@ -344,14 +369,14 @@ impl BedrockClient {
             Ok(()) => {
                 let payload = Bytes::from(packet_buf);
                 let player = self.player.load_full();
-                let cancelled = if let Some(player) = player.as_ref() {
-                    player
-                        .fire_packet_sent_no_obj(P::PACKET_ID, payload.clone())
-                        .await
+                if let Some(player) = player.as_ref() {
+                    let event = player
+                        .fire_packet_sent_event_no_obj(P::PACKET_ID, payload)
+                        .await;
+                    if !event.cancelled {
+                        self.enqueue_packet_data(event.payload).await;
+                    }
                 } else {
-                    false
-                };
-                if !cancelled {
                     self.enqueue_packet_data(payload).await;
                 }
             }
@@ -469,16 +494,17 @@ impl BedrockClient {
             Ok(()) => {
                 let payload = Bytes::from(packet_buf);
                 let player = self.player.load_full();
-                let cancelled = if let Some(player) = player.as_ref() {
-                    player
-                        .fire_packet_sent_no_obj(P::PACKET_ID, payload.clone())
-                        .await
+                let payload = if let Some(player) = player.as_ref() {
+                    let event = player
+                        .fire_packet_sent_event_no_obj(P::PACKET_ID, payload)
+                        .await;
+                    if event.cancelled {
+                        return;
+                    }
+                    event.payload
                 } else {
-                    false
+                    payload
                 };
-                if cancelled {
-                    return;
-                }
                 let (tx, rx) = oneshot::channel();
                 if let Err(err) = self
                     .outgoing_packet_priority_send
@@ -635,7 +661,13 @@ impl BedrockClient {
         let reader = &mut &payload[..];
         match packet.id {
             SClientCacheStatus::PACKET_ID => {
-                // TODO
+                let packet = SClientCacheStatus::read(reader)?;
+                self.client_cache_supported
+                    .store(packet.cache_supported, Ordering::Relaxed);
+            }
+            SClientCacheBlobStatus::PACKET_ID => {
+                self.handle_client_cache_blob_status(SClientCacheBlobStatus::read(reader)?)
+                    .await;
             }
             SResourcePackResponse::PACKET_ID => {
                 self.handle_resource_pack_response(SResourcePackResponse::read(reader)?, server)
@@ -684,6 +716,9 @@ impl BedrockClient {
             SPlayerAction::PACKET_ID => {
                 self.handle_player_action(player, server, SPlayerAction::read(reader)?)
                     .await;
+            }
+            SRespawn::PACKET_ID => {
+                self.handle_respawn(player, SRespawn::read(reader)?).await;
             }
             SAnimate::PACKET_ID => {
                 self.handle_animate(player, server, &SAnimate::read(reader)?).await;
@@ -734,6 +769,30 @@ impl BedrockClient {
             }
         }
         Ok(())
+    }
+
+    pub async fn handle_client_cache_blob_status(&self, packet: SClientCacheBlobStatus) {
+        if packet.miss_hashes.is_empty() {
+            return;
+        }
+        let cache = self.blob_cache.lock().await;
+        let mut missing_blobs = Vec::with_capacity(packet.miss_hashes.len());
+        for hash in packet.miss_hashes {
+            if let Some(payload) = cache.get(&hash) {
+                missing_blobs.push(CacheBlob {
+                    hash,
+                    payload: payload.clone(),
+                });
+            } else {
+                warn!("Client requested missing blob {hash:#x} not found in server cache");
+            }
+        }
+        if !missing_blobs.is_empty() {
+            self.send_game_packet(&CClientCacheMissResponse {
+                blobs: &missing_blobs,
+            })
+            .await;
+        }
     }
 
     pub async fn await_close_interrupt(&self) {

@@ -2,10 +2,13 @@ use std::any::Any;
 use std::sync::Arc;
 
 pub mod block;
+pub mod enchantment;
 pub mod entity;
 pub mod inventory;
 pub mod player;
+pub mod raid;
 pub mod server;
+pub mod vehicle;
 pub mod world;
 
 /// A trait representing an event in the system.

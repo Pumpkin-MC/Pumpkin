@@ -81,7 +81,7 @@ impl BlockBehaviour for NetherPortalBlock {
                 return;
             }
 
-            tracing::info!(
+            tracing::debug!(
                 "Nether portal collision at {:?}, targeting world {:?}",
                 args.position,
                 target_world.dimension.minecraft_name

@@ -15,6 +15,8 @@ use std::sync::Arc;
 
 use crate::item::items::ignite::ignition::Ignition;
 
+use crate::plugin::api::events::world::portal_create::{PortalCreateEvent, PortalType};
+
 pub struct FlintAndSteelItem;
 
 impl ItemMetadata for FlintAndSteelItem {
@@ -35,8 +37,10 @@ impl ItemBehaviour for FlintAndSteelItem {
         _server: &'a Server,
     ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
         Box::pin(async move {
-            if let Some(server_ref) = player.world().server.upgrade() {
-                let player_arc = player.world().get_player_by_uuid(player.gameprofile.id);
+            let world = player.world();
+            let server_ref = world.server.upgrade();
+            if let Some(server_ref) = server_ref {
+                let player_arc = world.get_player_by_uuid(player.gameprofile.id);
                 let mut event =
                     crate::plugin::api::events::block::block_ignite::BlockIgniteEvent::new(
                         location,
@@ -47,7 +51,12 @@ impl ItemBehaviour for FlintAndSteelItem {
                     .plugin_manager
                     .fire(&server_ref, &mut event)
                     .await;
-                if event.cancelled {
+                let mut portal_event = PortalCreateEvent::new(location, PortalType::Nether);
+                server_ref
+                    .plugin_manager
+                    .fire(&server_ref, &mut portal_event)
+                    .await;
+                if event.cancelled || portal_event.cancelled {
                     return;
                 }
             }
@@ -58,9 +67,9 @@ impl ItemBehaviour for FlintAndSteelItem {
                         .set_block_state(&pos, new_state_id, BlockFlags::NOTIFY_ALL)
                         .await;
                 },
-                player,
+                &world,
                 location,
-                face,
+                location.offset(face.to_offset()),
                 block,
             )
             .await;

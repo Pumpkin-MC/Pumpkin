@@ -385,7 +385,7 @@ impl KnownPack<'_> {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum NumberFormat {
     /// Show nothing.
     Blank,
