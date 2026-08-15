@@ -2,6 +2,7 @@ use pumpkin_codecs::{DataResult, Decode, DynamicOps, Encode, json_ops::JsonOps};
 use pumpkin_util::{identifier::Identifier, text::TextComponent};
 use serde_json::{Map, Value};
 
+#[allow(clippy::needless_pass_by_value)]
 fn encode_json<O: DynamicOps>(
     value: Value,
     ops: &'static O,
@@ -31,7 +32,7 @@ fn parse_identifier(value: &Value) -> Result<Identifier, String> {
     Identifier::parse(value).map_err(|error| error.to_string())
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ParticleOptions {
     pub particle_type: Identifier,
     /// Particle-type-specific fields. The schema depends on `particle_type`.
@@ -154,7 +155,7 @@ pub struct SoundEvent {
 
 impl SoundEvent {
     #[must_use]
-    pub fn new(id: Identifier) -> Self {
+    pub const fn new(id: Identifier) -> Self {
         Self {
             id,
             fixed_range: None,
@@ -312,6 +313,7 @@ impl BedCondition {
         }
     }
 
+    #[allow(clippy::needless_pass_by_value)]
     fn from_json(value: Value) -> Result<Self, String> {
         match value.as_str() {
             Some("always") => Ok(Self::Always),
@@ -322,7 +324,7 @@ impl BedCondition {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BedRule {
     pub can_sleep: BedCondition,
     pub can_set_spawn: BedCondition,

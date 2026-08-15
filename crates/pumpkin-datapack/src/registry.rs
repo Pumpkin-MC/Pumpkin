@@ -1,8 +1,6 @@
 use crate::damage_type::DamageTypeFile;
 use pumpkin_registry::{
-    Registry, RegistryBuilder, ReloadableRegistry,
-    bootstrap::RegistryEntry,
-    bootstrap_provider,
+    Registry, RegistryBuilder, ReloadableRegistry, bootstrap::RegistryEntry, bootstrap_provider,
     error::BootstrapError,
 };
 use pumpkin_util::identifier::Identifier;
@@ -30,17 +28,20 @@ fn damage_type_registry() -> Result<Arc<ReloadableRegistry<DamageTypeFile>>, Boo
         .ok_or(BootstrapError::Uninitialized)
 }
 
-bootstrap_provider! {
-    DATAPACK_DAMAGE_TYPE_REGISTRY: Arc<dyn Registry> => "minecraft:root",
-    || {
-        let registry: Arc<dyn Registry> = damage_type_registry()
+fn init_register() -> Vec<RegistryEntry<Arc<dyn Registry>>> {
+    #![allow(clippy::panic)]
+    let registry: Arc<dyn Registry> = damage_type_registry()
             .unwrap_or_else(|error| panic!("failed to bootstrap damage type registry: {error}"));
 
         vec![RegistryEntry::new(
             Identifier::vanilla_static("damage_type"),
             registry,
         )]
-    }
+}
+
+bootstrap_provider! {
+    DATAPACK_DAMAGE_TYPE_REGISTRY: Arc<dyn Registry> => "minecraft:root",
+    init_register
 }
 
 pub struct DatapackRegistries {
@@ -71,7 +72,7 @@ impl DatapackRegistries {
         *self.pending_damage_types.write().await = entries.clone();
 
         if let Some(registry) = DAMAGE_TYPE_REGISTRY.get() {
-            registry.replace_entries(entries).await?;
+            registry.overlay_entries(entries).await?;
         }
 
         Ok(())
@@ -83,11 +84,11 @@ impl DatapackRegistries {
     /// so registry data is staged until the root registry creates its reloadable children.
     pub async fn apply_pending(&self) -> Result<(), BootstrapError> {
         let entries = self.pending_damage_types.read().await.clone();
-        damage_type_registry()?.replace_entries(entries).await
+        damage_type_registry()?.overlay_entries(entries).await
     }
 
     #[must_use]
-    pub fn damage_types() -> Option<Arc<ReloadableRegistry<DamageTypeFile>>> {
+    pub fn damage_types(&self) -> Option<Arc<ReloadableRegistry<DamageTypeFile>>> {
         DAMAGE_TYPE_REGISTRY.get().map(Arc::clone)
     }
 }
@@ -96,7 +97,9 @@ impl DatapackRegistries {
 mod tests {
     use super::DatapackRegistries;
     use crate::damage_type::DamageTypeFile;
-    use pumpkin_registry::{AsyncTypedRegistry, Registry, error::BootstrapError};
+    use pumpkin_registry::{
+        AsyncTypedRegistry, BOOTSTRAP, Registry, bootstrap::BootstrapManager, error::BootstrapError,
+    };
     use pumpkin_util::identifier::Identifier;
 
     fn damage_type(id: Identifier, message_id: &str) -> DamageTypeFile {
@@ -108,6 +111,8 @@ mod tests {
 
     #[tokio::test]
     async fn reload_damage_types_sorts_and_populates_registry() -> Result<(), BootstrapError> {
+        BOOTSTRAP.get_or_init(BootstrapManager::new);
+
         let registries = DatapackRegistries::new();
         let alpha = Identifier::parse_static("test:alpha");
         let zeta = Identifier::parse_static("test:zeta");
@@ -120,7 +125,9 @@ mod tests {
             .await?;
 
         registries.apply_pending().await?;
-        let damage_types = registries.damage_types().ok_or(BootstrapError::Uninitialized)?;
+        let damage_types = registries
+            .damage_types()
+            .ok_or(BootstrapError::Uninitialized)?;
 
         assert_eq!(
             Registry::get_id_async(damage_types.as_ref(), &alpha).await,

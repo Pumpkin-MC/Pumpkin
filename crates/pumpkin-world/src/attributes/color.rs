@@ -107,7 +107,7 @@ impl Decode for RgbColor {
             }
         }
 
-        if let Some(iter) = ops.get_iter(input.clone()).into_result() {
+        if let Some(iter) = ops.get_iter(input).into_result() {
             let values: Vec<f32> = iter
                 .filter_map(|value| ops.get_number(&value).into_result().map(Into::into))
                 .collect();
@@ -150,7 +150,7 @@ impl Decode for ArgbColor {
             }
         }
 
-        if let Some(iter) = ops.get_iter(input.clone()).into_result() {
+        if let Some(iter) = ops.get_iter(input).into_result() {
             let values: Vec<f32> = iter
                 .filter_map(|value| ops.get_number(&value).into_result().map(Into::into))
                 .collect();

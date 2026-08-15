@@ -885,7 +885,7 @@ impl Server {
                         }
                     }
 
-                    Some((player, world.clone()))
+                    Some((player.clone(), world.clone()))
                 } else {
                     None
                 }

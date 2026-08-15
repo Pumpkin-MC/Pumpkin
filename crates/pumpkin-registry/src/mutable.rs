@@ -5,7 +5,7 @@ use crate::{
     value::{DynIterator, ErasedRegistryRef, LockedIterator},
 };
 use pumpkin_util::identifier::Identifier;
-use rustc_hash::{FxBuildHasher, FxHashMap};
+use rustc_hash::{FxHashMap, FxHashSet};
 use std::any::{Any, TypeId, type_name};
 use tokio::sync::{RwLock, RwLockReadGuard};
 
@@ -45,27 +45,34 @@ impl<T: Send + Sync + 'static> ReloadableRegistry<T> {
         *self.inner.blocking_write() = new_inner;
         Ok(())
     }
-    /// Atomically replaces all entries while preserving caller-provided order.
+
+    /// Rebuilds the registry from bootstrap providers and overlays caller-provided entries.
     ///
-    /// If validation fails, the existing registry remains unchanged.
-    pub async fn replace_entries<I>(&self, entries: I) -> Result<(), BootstrapError>
+    /// Existing bootstrap identifiers keep their numeric IDs when overridden. New entries are
+    /// appended after the bootstrap entries. Duplicate identifiers in `entries` are rejected.
+    pub async fn overlay_entries<I>(&self, entries: I) -> Result<(), BootstrapError>
     where
         I: IntoIterator<Item = (Identifier, T)>,
     {
         let entries: Vec<_> = entries.into_iter().collect();
-        let (added_entries, added_mapping) = BOOTSTRAP
+        let (mut values, mut mapping) = BOOTSTRAP
             .get()
             .ok_or(BootstrapError::Uninitialized)
-            .and_then(|m| m.populate::<T>(&self.name))?;
+            .and_then(|manager| manager.populate::<T>(&self.name))?;
 
-        let mut values = added_entries;
-        let mut mapping = added_mapping;
-        mapping.reserve(entries.len());
         values.reserve(entries.len());
+        mapping.reserve(entries.len());
+        let mut seen = FxHashSet::default();
 
         for (identifier, value) in entries {
+            if !seen.insert(identifier.clone()) {
+                return Err(BootstrapError::DuplicateEntry {
+                    registry: self.name.clone(),
+                    identifier,
+                });
+            }
+
             if let Some(&id) = mapping.get(&identifier) {
-                // Datapacks override bootstrap-provided values without changing their numeric ID.
                 values[id] = value;
             } else {
                 let id = values.len();
@@ -75,9 +82,7 @@ impl<T: Send + Sync + 'static> ReloadableRegistry<T> {
         }
 
         let replacement = FrozenRegistry::new(values.into_boxed_slice(), mapping);
-
         *self.inner.write().await = replacement;
-
         Ok(())
     }
 }

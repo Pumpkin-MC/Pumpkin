@@ -81,20 +81,18 @@ async fn replaces_reloadable_registry_entries() {
     let registry = RegistryBuilder::<Block>::reloadable(&BLOCK_REGISTRY).unwrap();
 
     registry
-        .replace_entries([
-            (Identifier::parse_static("test:new_one"), Block(10)),
-            (Identifier::parse_static("test:new_two"), Block(20)),
+        .overlay_entries([
+            (Identifier::parse_static("test:one"), Block(10)),
+            (Identifier::parse_static("test:two"), Block(20)),
         ])
         .await
         .unwrap();
 
-    let new_one = Identifier::parse_static("test:new_one");
-    let old_one = Identifier::parse_static("test:one");
+    let id = Identifier::parse_static("test:one");
     assert_eq!(
-        *AsyncTypedRegistry::get(&registry, &new_one).await.unwrap(),
+        *AsyncTypedRegistry::get(&registry, &id).await.unwrap(),
         Block(10),
     );
-    assert!(AsyncTypedRegistry::get(&registry, &old_one).await.is_none());
 }
 
 #[tokio::test]
@@ -105,7 +103,7 @@ async fn failed_replacement_preserves_existing_entries() {
     let duplicate = Identifier::parse_static("test:duplicate");
 
     let result = registry
-        .replace_entries([(duplicate.clone(), Block(10)), (duplicate, Block(20))])
+        .overlay_entries([(duplicate.clone(), Block(10)), (duplicate, Block(20))])
         .await;
 
     assert!(result.is_err());

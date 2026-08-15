@@ -129,19 +129,19 @@ impl<T: Encode + Decode + 'static> EnvAttributeBuilder<T> {
     }
 
     #[must_use]
-    pub fn syncable(mut self) -> Self {
+    pub const fn syncable(mut self) -> Self {
         self.is_syncable = true;
         self
     }
 
     #[must_use]
-    pub fn not_positional(mut self) -> Self {
+    pub const fn not_positional(mut self) -> Self {
         self.is_positional = false;
         self
     }
 
     #[must_use]
-    pub fn spatially_interpolated(mut self) -> Self {
+    pub const fn spatially_interpolated(mut self) -> Self {
         self.is_spatially_interpolated = true;
         self
     }

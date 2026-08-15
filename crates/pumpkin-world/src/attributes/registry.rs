@@ -94,6 +94,7 @@ fn typed_attribute<T: Encode + Decode + Send + Sync + 'static>(
     build_attribute(builder)
 }
 
+#[allow(clippy::trivially_copy_pass_by_ref)]
 fn ranged_float_attribute(
     default_value: f32,
     range: &'static FloatRange,
