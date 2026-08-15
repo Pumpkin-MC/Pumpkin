@@ -114,6 +114,7 @@ pub async fn default_dispatcher(
     dispatcher.register(effect::init_command_tree(), "minecraft:command.effect");
     dispatcher.register(teleport::init_command_tree(), "minecraft:command.teleport");
     dispatcher.register(time::init_command_tree(), "minecraft:command.time");
+    dispatcher.register(waypoint::init_command_tree(), "minecraft:command.waypoint");
     dispatcher.register(give::init_command_tree(), "minecraft:command.give");
     dispatcher.register(item::init_command_tree(), "minecraft:command.item");
     dispatcher.register(enchant::init_command_tree(), "minecraft:command.enchant");
