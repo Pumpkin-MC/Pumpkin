@@ -4215,6 +4215,87 @@ impl World {
         }
     }
 
+    pub(crate) fn despawn_dead_java_player_for_bedrock(&self, subject: &Entity) {
+        let Some(player) = self.get_player_by_id(subject.entity_id) else {
+            return;
+        };
+        if matches!(player.client.as_ref(), ClientPlatform::Java(_)) {
+            self.broadcast_to_chunk_bedrock(
+                subject.chunk_pos.load(),
+                &CRemoveActor::new(VarLong(subject.entity_id.into())),
+            );
+        }
+    }
+
+    async fn refresh_java_player_for_bedrock(&self, subject: &Player) {
+        if !matches!(subject.client.as_ref(), ClientPlatform::Java(_)) {
+            return;
+        }
+
+        let entity = subject.get_entity();
+        let entity_id = subject.entity_id();
+        let position = entity.pos.load();
+        let velocity = entity.velocity.load();
+        let player_list = CPlayerList {
+            action: CPlayerList::ACTION_ADD,
+            entries: vec![PlayerListEntry {
+                uuid: subject.gameprofile.id,
+                entity_unique_id: VarLong(entity_id.into()),
+                username: subject.gameprofile.name.clone(),
+                xuid: String::new(),
+                platform_chat_id: String::new(),
+                build_platform: BuildPlatform::Unknown,
+                skin: (**subject.bedrock_skin.load()).clone(),
+                is_teacher: false,
+                is_host: false,
+                is_sub_client: false,
+                player_color: [0; 4],
+            }],
+        };
+        let add_player = CAddPlayer {
+            uuid: subject.gameprofile.id,
+            player_name: subject.gameprofile.name.clone(),
+            target_runtime_id: VarULong(entity_id as u64),
+            platform_chat_id: String::new(),
+            position: Vector3::new(position.x as f32, position.y as f32, position.z as f32),
+            velocity: Vector3::new(velocity.x as f32, velocity.y as f32, velocity.z as f32),
+            rotation: Vector2::new(entity.pitch.load(), entity.yaw.load()),
+            y_head_rotation: entity.head_yaw.load(),
+            carried_item: NetworkItemStackDescriptor::default(),
+            player_game_type: subject.gamemode.load().into(),
+            entity_data: entity.bedrock_metadata(),
+            synced_properties: PropertySyncData::default(),
+            abilities_data: pumpkin_protocol::bedrock::client::SerializedAbilitiesData {
+                target_player_raw_id: entity_id as i64,
+                player_permissions:
+                    pumpkin_protocol::bedrock::client::PlayerPermissionLevel::Visitor,
+                command_permissions: pumpkin_protocol::bedrock::client::CommandPermissionLevel::Any,
+                layers: vec![
+                    pumpkin_protocol::bedrock::client::SerializedAbilitiesDataSerializedLayer {
+                        serialized_layer: 0,
+                        abilities_set: 0,
+                        ability_value: 0,
+                        fly_speed: 0.05,
+                        vertical_fly_speed: 0.05,
+                        walk_speed: 0.1,
+                    },
+                ],
+            },
+            actor_links: Vec::new(),
+            device_id: String::new(),
+            build_platform: BuildPlatform::Unknown,
+        };
+        let remove = CRemoveActor::new(VarLong(entity_id.into()));
+
+        for recipient in self.players.load().iter() {
+            if let ClientPlatform::Bedrock(client) = recipient.client.as_ref() {
+                client.send_packet(&remove).await;
+                client.send_packet(&player_list).await;
+                client.send_packet(&add_player).await;
+            }
+        }
+    }
+
     #[allow(clippy::too_many_lines)]
     pub async fn respawn_player(self: &Arc<Self>, player: &Arc<Player>, alive: bool) {
         let last_pos = player.get_entity().last_pos.load();
@@ -4501,6 +4582,8 @@ impl World {
 
         // Send teleport packet after at least the center chunk was delivered
         player.request_teleport(position, yaw, pitch);
+
+        target_world.refresh_java_player_for_bedrock(player).await;
     }
 
     /// Returns true if enough players are sleeping and we should skip the night.
