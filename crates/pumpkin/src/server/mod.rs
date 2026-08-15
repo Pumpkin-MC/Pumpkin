@@ -472,6 +472,12 @@ impl Server {
         ROOT.set(RegistryBuilder::frozen(&Identifier::vanilla_static("root")).unwrap())
             .map_err(|_| RootInitError)
             .unwrap();
+
+        if let Err(error) = self.datapack_manager.registries.apply_pending().await {
+            error!("Failed to populate datapack registries: {error}");
+            std::process::exit(1);
+        }
+
         let root = ROOT.get().unwrap_or_else(|| {
             error!("Root registry was not initialized");
             std::process::exit(1);
@@ -889,8 +895,7 @@ impl Server {
                 player.kick(DisconnectReason::Kicked, event.kick_message).await;
                 None
             }
-        }};
-        Some((player, world.clone()))
+        }}
     }
 
     pub async fn remove_player(&self, player: &Player) {

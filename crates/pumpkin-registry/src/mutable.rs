@@ -5,7 +5,7 @@ use crate::{
     value::{DynIterator, ErasedRegistryRef, LockedIterator},
 };
 use pumpkin_util::identifier::Identifier;
-use rustc_hash::{FxBuildHasher, FxHashMap};
+use rustc_hash::FxHashMap;
 use std::any::{Any, TypeId, type_name};
 use tokio::sync::{RwLock, RwLockReadGuard};
 
@@ -58,35 +58,21 @@ impl<T: Send + Sync + 'static> ReloadableRegistry<T> {
             .ok_or(BootstrapError::Uninitialized)
             .and_then(|m| m.populate::<T>(&self.name))?;
 
-        let mut values = Vec::with_capacity(entries.len() + added_entries.len());
-        let mut mapping =
-            FxHashMap::with_capacity_and_hasher(entries.len() + added_entries.len(), FxBuildHasher);
+        let mut values = added_entries;
+        let mut mapping = added_mapping;
+        mapping.reserve(entries.len());
+        values.reserve(entries.len());
 
-        for (id, value) in entries {
-            let len = values.len();
-
-            if mapping.insert(id.clone(), len).is_some() {
-                return Err(BootstrapError::DuplicateEntry {
-                    registry: self.name.clone(),
-                    identifier: id,
-                });
-            }
-
-            values.push(value);
-        }
-
-        let offset = values.len();
-
-        for (id, index) in added_mapping.into_iter() {
-            if mapping.insert(id.clone(), index + offset).is_some() {
-                return Err(BootstrapError::DuplicateEntry {
-                    registry: self.name.clone(),
-                    identifier: id,
-                });
+        for (identifier, value) in entries {
+            if let Some(&id) = mapping.get(&identifier) {
+                // Datapacks override bootstrap-provided values without changing their numeric ID.
+                values[id] = value;
+            } else {
+                let id = values.len();
+                mapping.insert(identifier, id);
+                values.push(value);
             }
         }
-
-        values.extend(added_entries);
 
         let replacement = FrozenRegistry::new(values.into_boxed_slice(), mapping);
 
