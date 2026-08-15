@@ -3511,11 +3511,8 @@ dependencies = [
 name = "pumpkin-fuzzer"
 version = "0.1.0-dev+26.2-26.40"
 dependencies = [
- "bytes",
  "clap",
  "colored",
- "pumpkin-protocol",
- "pumpkin-util",
  "rand 0.9.5",
  "tokio",
 ]
