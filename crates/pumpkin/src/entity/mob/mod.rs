@@ -496,6 +496,23 @@ pub trait Mob: EntityBase + Send + Sync {
 
     fn get_mob_entity(&self) -> &MobEntity;
 
+    /// Vanilla `Mob.setPersistenceRequired`.
+    fn set_persistence_required(&self) {
+        self.get_entity().persistence_required.store(true, Relaxed);
+    }
+
+    /// Vanilla `Mob.isPersistenceRequired`.
+    fn is_persistence_required(&self) -> bool {
+        self.get_entity().persistence_required.load(Relaxed)
+    }
+
+    /// Vanilla `Mob.requiresCustomPersistence` for passengers and leashes.
+    fn requires_custom_persistence_cached(&self) -> bool {
+        let entity = self.get_entity();
+        entity.vehicle_persistence_required.load(Relaxed)
+            || entity.leash_persistence_required.load(Relaxed)
+    }
+
     fn get_job_site(&self) -> Option<BlockPos> {
         None
     }

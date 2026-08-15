@@ -848,6 +848,13 @@ pub struct Entity {
     pub vehicle: Mutex<Option<Arc<dyn EntityBase>>>,
     /// The entity this entity is attached/leashed to (if any)
     pub leashed_to: Mutex<Option<Arc<dyn EntityBase>>>,
+    /// Vanilla `Mob.persistenceRequired`, shared by all mob implementations.
+    pub persistence_required: AtomicBool,
+    /// Cached vanilla `Mob.requiresCustomPersistence` state for vehicle and
+    /// leash relationships. The sources stay separate so one ending cannot
+    /// clear the other.
+    pub vehicle_persistence_required: AtomicBool,
+    pub leash_persistence_required: AtomicBool,
     /// Cooldown before entity can mount again after dismounting
     pub riding_cooldown: AtomicI32,
     /// The age of the entity in ticks. Negative values indicate a baby.
@@ -994,6 +1001,9 @@ impl Entity {
             passengers: Mutex::new(Vec::new()),
             vehicle: Mutex::new(None),
             leashed_to: Mutex::new(None),
+            persistence_required: AtomicBool::new(false),
+            vehicle_persistence_required: AtomicBool::new(false),
+            leash_persistence_required: AtomicBool::new(false),
 
             riding_cooldown: AtomicI32::new(0),
             age: AtomicI32::new(0),
@@ -3190,6 +3200,7 @@ impl Entity {
     pub async fn leash_to(&self, holder: Arc<dyn EntityBase>) {
         let holder_entity = holder.get_entity();
         *self.leashed_to.lock().await = Some(holder.clone());
+        self.leash_persistence_required.store(true, Relaxed);
 
         let je_packet = pumpkin_protocol::java::client::play::CSetEntityLink::new(
             self.entity_id,
@@ -3215,11 +3226,12 @@ impl Entity {
         );
     }
 
-    pub async fn unleash(&self) {
+    pub async fn unleash(&self) -> bool {
         let old_holder = self.leashed_to.lock().await.take();
         if old_holder.is_none() {
-            return;
+            return false;
         }
+        self.leash_persistence_required.store(false, Relaxed);
 
         let je_packet =
             pumpkin_protocol::java::client::play::CSetEntityLink::new(self.entity_id, -1);
@@ -3239,13 +3251,49 @@ impl Entity {
             &je_packet,
             &be_packet,
         );
+        true
+    }
+
+    pub async fn unleash_if_holder(&self, holder_uuid: Uuid) -> bool {
+        let removed = {
+            let mut leash = self.leashed_to.lock().await;
+            if leash
+                .as_ref()
+                .is_some_and(|holder| holder.get_entity().entity_uuid == holder_uuid)
+            {
+                leash.take();
+                self.leash_persistence_required.store(false, Relaxed);
+                true
+            } else {
+                false
+            }
+        };
+        if !removed {
+            return false;
+        }
+
+        let je_packet =
+            pumpkin_protocol::java::client::play::CSetEntityLink::new(self.entity_id, -1);
+        let be_packet = pumpkin_protocol::bedrock::client::CSetActorLink {
+            link: pumpkin_protocol::bedrock::client::common::EntityLink {
+                ridden_unique_id: pumpkin_protocol::codec::var_long::VarLong(self.entity_id as i64),
+                rider_unique_id: pumpkin_protocol::codec::var_long::VarLong(-1),
+                link_type: 0,
+                immediate: true,
+                rider_initiated: false,
+                vehicle_angular_velocity: 0.0,
+            },
+        };
+        self.world.load().broadcast_to_chunk_editioned_sync(
+            self.chunk_pos.load(),
+            &je_packet,
+            &be_packet,
+        );
+        true
     }
 
     pub async fn tick_leash(&self) {
-        let holder = {
-            let guard = self.leashed_to.lock().await;
-            guard.clone()
-        };
+        let holder = self.leashed_to.lock().await.clone();
 
         if let Some(holder) = holder {
             let holder_entity = holder.get_entity();
@@ -3263,13 +3311,18 @@ impl Entity {
 
             if distance > Self::LEASH_SNAP_DISTANCE {
                 // Too far: snap/break leash and drop lead item
-                self.unleash().await;
-                let lead_item =
-                    pumpkin_data::item_stack::ItemStack::new(1, &pumpkin_data::item::Item::LEAD);
-                self.world
-                    .load()
-                    .drop_stack(&self.block_pos.load(), lead_item)
-                    .await;
+                if self.unleash_if_holder(holder_entity.entity_uuid).await
+                    && self.world.load().level_info.load().game_rules.entity_drops
+                {
+                    let lead_item = pumpkin_data::item_stack::ItemStack::new(
+                        1,
+                        &pumpkin_data::item::Item::LEAD,
+                    );
+                    self.world
+                        .load()
+                        .drop_stack(&self.block_pos.load(), lead_item)
+                        .await;
+                }
             } else if distance > Self::LEASH_ELASTIC_DISTANCE {
                 // Elastic pull force towards leash holder
                 let dir = (holder_pos - self_pos).normalize();
@@ -3322,10 +3375,23 @@ impl Entity {
         }
 
         let passenger_entity = passenger.get_entity();
-        *passenger_entity.vehicle.lock().await = Some(vehicle);
+        passenger_entity
+            .vehicle_persistence_required
+            .store(true, Relaxed);
+        let previous_vehicle = passenger_entity.vehicle.lock().await.replace(vehicle);
+        if let Some(previous_vehicle) = previous_vehicle {
+            let mut previous_passengers = previous_vehicle.get_entity().passengers.lock().await;
+            previous_passengers
+                .retain(|entry| entry.get_entity().entity_uuid != passenger_entity.entity_uuid);
+        }
 
         let mut passengers = self.passengers.lock().await;
-        passengers.push(passenger);
+        if !passengers
+            .iter()
+            .any(|entry| entry.get_entity().entity_uuid == passenger_entity.entity_uuid)
+        {
+            passengers.push(passenger);
+        }
 
         let passenger_ids: Vec<VarInt> = passengers
             .iter()
@@ -3347,7 +3413,11 @@ impl Entity {
             .position(|passenger| passenger.get_entity().entity_id == passenger_id)
         {
             let passenger = passengers.remove(index);
-            *passenger.get_entity().vehicle.lock().await = None;
+            let passenger_entity = passenger.get_entity();
+            *passenger_entity.vehicle.lock().await = None;
+            passenger_entity
+                .vehicle_persistence_required
+                .store(false, Relaxed);
         }
 
         let passenger_ids: Vec<VarInt> = passengers
@@ -3391,7 +3461,11 @@ impl Entity {
             .position(|p| p.get_entity().entity_id == passenger_id)
         {
             let passenger = passengers.remove(idx);
-            *passenger.get_entity().vehicle.lock().await = None;
+            let passenger_entity = passenger.get_entity();
+            *passenger_entity.vehicle.lock().await = None;
+            passenger_entity
+                .vehicle_persistence_required
+                .store(false, Relaxed);
             Some(passenger)
         } else {
             None
@@ -3710,6 +3784,12 @@ impl NBTStorage for Entity {
                 "id",
                 format!("minecraft:{}", self.entity_type.resource_name),
             );
+            if self.entity_type.mob {
+                nbt.put_bool(
+                    "PersistenceRequired",
+                    self.persistence_required.load(Relaxed),
+                );
+            }
             nbt.put_uuid("UUID", self.entity_uuid);
             nbt.put(
                 "Pos",
@@ -3802,6 +3882,12 @@ impl NBTStorage for Entity {
                 .store(nbt.get_bool("OnGround").unwrap_or(false), Relaxed);
             self.invulnerable
                 .store(nbt.get_bool("Invulnerable").unwrap_or(false), Relaxed);
+            if self.entity_type.mob {
+                self.persistence_required.store(
+                    nbt.get_bool("PersistenceRequired").unwrap_or(false),
+                    Relaxed,
+                );
+            }
             self.portal_cooldown
                 .store(nbt.get_int("PortalCooldown").unwrap_or(0) as u32, Relaxed);
             self.has_visual_fire

@@ -1922,7 +1922,9 @@ impl World {
             is_thundering,
         );
         for entity in entities {
-            self.spawn_entity(entity).await;
+            if !self.spawn_entity(entity.clone()).await {
+                spawn_state.remove_entity(self, entity.as_ref());
+            }
         }
     }
 
@@ -4430,6 +4432,8 @@ impl World {
             let uuid = player.gameprofile.id;
             let entity_id = player.entity_id();
 
+            self.clear_leashes_to(uuid).await;
+
             let bedrock_remove_player = CPlayerList {
                 action: CPlayerList::ACTION_REMOVE,
                 entries: vec![PlayerListEntry {
@@ -4480,6 +4484,27 @@ impl World {
         removed_player
     }
 
+    async fn clear_leashes_to(&self, holder_uuid: Uuid) {
+        for other in self.entities.load().iter() {
+            let other_entity = other.get_entity();
+            if other_entity.entity_uuid == holder_uuid {
+                continue;
+            }
+            if other_entity.unleash_if_holder(holder_uuid).await {
+                if !other_entity.is_removed()
+                    && self
+                        .entities
+                        .load()
+                        .iter()
+                        .any(|entity| entity.get_entity().entity_uuid == other_entity.entity_uuid)
+                {
+                    self.spawn_state.load().remove_entity(self, other.as_ref());
+                    self.spawn_state.load().add_entity(self, other.as_ref());
+                }
+            }
+        }
+    }
+
     pub fn spawn_entity_non_save(&self, entity: &Arc<dyn EntityBase>) {
         let _base_entity = entity.get_entity();
         self.broadcast_entity_spawn(entity);
@@ -4492,7 +4517,7 @@ impl World {
         });
     }
 
-    pub async fn spawn_entity(self: &Arc<Self>, entity: Arc<dyn EntityBase>) {
+    pub async fn spawn_entity(self: &Arc<Self>, entity: Arc<dyn EntityBase>) -> bool {
         let mut event = crate::plugin::api::events::entity::entity_spawn::EntitySpawnEvent::new(
             entity.get_entity().entity_id,
             entity.get_entity().entity_type.id.to_string(),
@@ -4503,12 +4528,12 @@ impl World {
             server.plugin_manager.fire(&server, &mut event).await;
         }
         if event.cancelled {
-            return;
+            return false;
         }
 
         self.broadcast_entity_spawn(&entity);
         entity.init_data_tracker().await;
-        self.add_entity_silent(entity).await;
+        self.add_entity_silent(entity).await
     }
 
     pub fn broadcast_entity_spawn(&self, entity: &Arc<dyn EntityBase>) {
@@ -4527,7 +4552,7 @@ impl World {
     }
 
     #[allow(clippy::unused_async)]
-    pub async fn add_entity_silent(&self, entity: Arc<dyn EntityBase>) {
+    pub async fn add_entity_silent(&self, entity: Arc<dyn EntityBase>) -> bool {
         let base_entity = entity.get_entity();
 
         // Guard against duplicate entities with the same UUID.
@@ -4539,7 +4564,7 @@ impl World {
             .iter()
             .any(|e| e.get_entity().entity_uuid == base_entity.entity_uuid);
         if already_exists {
-            return;
+            return false;
         }
 
         // The entity stays live-only: it is written to its chunk's saved data on
@@ -4552,6 +4577,7 @@ impl World {
             new_entities.push(entity.clone());
             new_entities
         });
+        true
     }
 
     #[allow(clippy::unused_async)]
@@ -4565,6 +4591,35 @@ impl World {
             return;
         }
         base_entity.removed.store(true, Ordering::Release);
+
+        // Detach relationships before removing the entity. Vanilla does not
+        // leave passengers or leashes pointing at a discarded entity.
+        let vehicle = base_entity.vehicle.lock().await.take();
+        if let Some(vehicle) = vehicle {
+            let mut passengers = vehicle.get_entity().passengers.lock().await;
+            passengers
+                .retain(|passenger| passenger.get_entity().entity_uuid != base_entity.entity_uuid);
+            base_entity
+                .vehicle_persistence_required
+                .store(false, Relaxed);
+        }
+        self.clear_leashes_to(base_entity.entity_uuid).await;
+        let passengers = base_entity
+            .passengers
+            .lock()
+            .await
+            .drain(..)
+            .collect::<Vec<_>>();
+        for passenger in passengers {
+            let passenger_entity = passenger.get_entity();
+            *passenger_entity.vehicle.lock().await = None;
+            passenger_entity
+                .vehicle_persistence_required
+                .store(false, Relaxed);
+        }
+        if base_entity.leashed_to.lock().await.take().is_some() {
+            base_entity.leash_persistence_required.store(false, Relaxed);
+        }
 
         self.spawn_state.load().remove_entity(self, entity);
         self.entities.rcu(|current_entities| {
@@ -4589,26 +4644,17 @@ impl World {
         if chunks_set.is_empty() {
             return;
         }
-        let mut entities_to_remove = Vec::new();
-
-        self.entities.rcu(|current_entities| {
-            let mut new_entities = (**current_entities).clone();
-            new_entities.retain(|entity| {
-                let base_entity = entity.get_entity();
-                let pos = base_entity.chunk_pos.load();
-                if chunks_set.contains(&pos) {
-                    entities_to_remove.push(entity.clone());
-                    false
-                } else {
-                    true
-                }
-            });
-            new_entities
-        });
+        let entities_to_remove: Vec<_> = self
+            .entities
+            .load()
+            .iter()
+            .filter(|entity| chunks_set.contains(&entity.get_entity().chunk_pos.load()))
+            .cloned()
+            .collect();
 
         for entity in entities_to_remove {
             self.save_entity(&entity).await;
-            self.spawn_state.load().remove_entity(self, entity.as_ref());
+            self.remove_entity(entity.as_ref()).await;
         }
 
         for chunk_pos in &chunks_set {

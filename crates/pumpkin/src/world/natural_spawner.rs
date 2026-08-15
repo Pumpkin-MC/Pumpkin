@@ -28,7 +28,20 @@ use uuid::Uuid;
 
 const MAGIC_NUMBER: i32 = 17 * 17;
 
-use dashmap::DashMap;
+fn counts_for_spawn_caps(entity: &dyn EntityBase) -> bool {
+    let base_entity = entity.get_entity();
+    if base_entity.entity_type.category == &MobCategory::MISC {
+        return false;
+    }
+
+    let Some(mob) = entity.get_mob() else {
+        return true;
+    };
+
+    !mob.is_persistence_required() && !mob.requires_custom_persistence_cached()
+}
+
+use dashmap::{DashMap, DashSet};
 use std::sync::atomic::{AtomicI32, Ordering::Relaxed};
 
 pub struct MobCounts([AtomicI32; 8]);
@@ -248,6 +261,7 @@ pub struct SpawnState {
     pub mob_category_counts: MobCounts,
     spawn_potential: PotentialCalculator,
     local_mob_cap_calculator: LocalMobCapCalculator,
+    counted_entities: DashSet<Uuid>,
     // unmodifiable_mob_category_counts: MobCounts, seems only for debug
     last_checked: AtomicCell<Option<(BlockPos, &'static EntityType, f64)>>,
 }
@@ -259,6 +273,7 @@ impl Clone for SpawnState {
             mob_category_counts: self.mob_category_counts.clone(),
             spawn_potential: self.spawn_potential.clone(),
             local_mob_cap_calculator: self.local_mob_cap_calculator.clone(),
+            counted_entities: self.counted_entities.clone(),
             last_checked: AtomicCell::new(self.last_checked.load()),
         }
     }
@@ -284,6 +299,7 @@ impl SpawnState {
             mob_category_counts: MobCounts::default(),
             spawn_potential: PotentialCalculator::default(),
             local_mob_cap_calculator: LocalMobCapCalculator::default(),
+            counted_entities: DashSet::new(),
             last_checked: AtomicCell::new(None),
         }
     }
@@ -293,11 +309,24 @@ impl SpawnState {
     }
 
     pub fn add_entity(&self, world: &World, entity: &dyn EntityBase) {
-        let base_entity = entity.get_entity();
-        let entity_type = base_entity.entity_type;
-        if !entity_type.mob || entity_type.category == &MobCategory::MISC {
+        if entity.get_entity().is_removed() {
             return;
         }
+        if !counts_for_spawn_caps(entity) {
+            return;
+        }
+        let base_entity = entity.get_entity();
+        if !world
+            .active_chunks
+            .load()
+            .contains(&base_entity.chunk_pos.load())
+        {
+            return;
+        }
+        if !self.counted_entities.insert(base_entity.entity_uuid) {
+            return;
+        }
+        let entity_type = base_entity.entity_type;
         let entity_pos = base_entity.block_pos.load();
         let biome = base_entity.current_biome.load();
         if let Some(cost) = biome.spawn_costs.get(entity_type.resource_name) {
@@ -309,16 +338,20 @@ impl SpawnState {
                 world,
                 entity_type.category,
             );
-            self.mob_category_counts.add(entity_type.category);
         }
+        self.mob_category_counts.add(entity_type.category);
     }
 
     pub fn remove_entity(&self, world: &World, entity: &dyn EntityBase) {
         let base_entity = entity.get_entity();
-        let entity_type = base_entity.entity_type;
-        if !entity_type.mob || entity_type.category == &MobCategory::MISC {
+        if !self
+            .counted_entities
+            .remove(&base_entity.entity_uuid)
+            .is_some()
+        {
             return;
         }
+        let entity_type = base_entity.entity_type;
         let entity_pos = base_entity.block_pos.load();
         let biome = base_entity.current_biome.load();
         if let Some(cost) = biome.spawn_costs.get(entity_type.resource_name) {
@@ -330,8 +363,8 @@ impl SpawnState {
                 world,
                 entity_type.category,
             );
-            self.mob_category_counts.remove(entity_type.category);
         }
+        self.mob_category_counts.remove(entity_type.category);
     }
 
     pub fn new(
@@ -342,18 +375,19 @@ impl SpawnState {
         let potential = PotentialCalculator::default();
         let local_mob_cap = LocalMobCapCalculator::default();
         let counter = MobCounts::default();
+        let counted_entities = DashSet::new();
         let active_chunks = world.active_chunks.load();
         for entity in entities.load().iter() {
-            let entity = entity.get_entity();
-            let entity_type = entity.entity_type;
-            if !entity_type.mob || entity_type.category == &MobCategory::MISC {
-                // TODO (mob.isPersistenceRequired() || mob.requiresCustomPersistence())
+            if !counts_for_spawn_caps(entity.as_ref()) {
                 continue;
             }
+            let entity = entity.get_entity();
+            let entity_type = entity.entity_type;
             let chunk_pos = entity.chunk_pos.load();
             if !active_chunks.contains(&chunk_pos) {
                 continue;
             }
+            counted_entities.insert(entity.entity_uuid);
             let entity_pos = entity.block_pos.load();
             let biome = entity.current_biome.load();
             if let Some(cost) = biome.spawn_costs.get(entity_type.resource_name) {
@@ -369,6 +403,7 @@ impl SpawnState {
             mob_category_counts: counter,
             spawn_potential: potential,
             local_mob_cap_calculator: local_mob_cap,
+            counted_entities,
             last_checked: AtomicCell::new(None),
         }
     }
@@ -415,6 +450,7 @@ impl SpawnState {
         &self,
         entity_type: &'static EntityType,
         pos: &BlockPos,
+        entity_uuid: Uuid,
         world: &Arc<World>,
     ) {
         let charge = if let Some((l_pos, l_type, l_charge)) = self.last_checked.load()
@@ -435,6 +471,9 @@ impl SpawnState {
                 .map_or(0., |cost| cost.charge)
         });
 
+        if !self.counted_entities.insert(entity_uuid) {
+            return;
+        }
         self.spawn_potential.add_charge(pos, charge);
         self.mob_category_counts.add(entity_type.category);
         self.local_mob_cap_calculator.add_mob(
@@ -719,10 +758,11 @@ pub fn spawn_category_for_position(
             entity
                 .get_entity()
                 .set_rotation(rng().random::<f32>() * 360., 0.);
+            let entity_uuid = entity.get_entity().entity_uuid;
 
             spawn_cluster_size += 1;
             batch_buffer.push(entity);
-            spawn_state.after_spawn(entity_type, &new_pos, world);
+            spawn_state.after_spawn(entity_type, &new_pos, entity_uuid, world);
             if spawn_cluster_size >= entity_type.limit_per_chunk {
                 break 'group_loop;
             }

@@ -28,8 +28,10 @@ impl ItemBehaviour for NameTagItem {
             if entity.entity_type.saveable
                 && let Some(name) = item.get_data_component::<CustomNameImpl>()
             {
-                // TODO
                 entity.set_custom_name(name.name.clone());
+                if let Some(mob) = entity.get_mob() {
+                    mob.set_persistence_required();
+                }
                 item.decrement_unless_creative(player.gamemode.load(), 1);
             }
         })
