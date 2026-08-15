@@ -210,6 +210,8 @@ pub struct ChunkManager {
     entity_chunk_queue: VecDeque<(Vector2<i32>, Weak<ChunkEntityData>)>,
     batches_sent_since_ack: u8,
     last_chunk_batch_sent_at: Instant,
+    /// The (view, simulation) chunk loading ticket levels currently held at `center`.
+    held_tickets: Option<(i8, i8)>,
     /// The current world for chunk loading. Updated on dimension change.
     world: Arc<World>,
 }
@@ -234,6 +236,7 @@ impl ChunkManager {
             entity_chunk_queue: VecDeque::new(),
             batches_sent_since_ack: 0,
             last_chunk_batch_sent_at: Instant::now(),
+            held_tickets: None,
             world,
         }
     }
@@ -295,7 +298,6 @@ impl ChunkManager {
     ) {
         view_distance += 1; // Margin for loading
         let old_center = self.center;
-        let old_view_distance = self.view_distance;
 
         {
             let mut lock = level
@@ -311,11 +313,13 @@ impl ChunkManager {
             let sim_level = ChunkLoading::get_level_from_simulation_distance(sim_dist);
             lock.add_ticket(center, sim_level);
 
-            if (old_center != center || old_view_distance != view_distance) && old_view_distance > 0
-            {
-                let old_level = ChunkLoading::get_level_from_view_distance(old_view_distance);
-                lock.remove_ticket(old_center, old_level);
-                lock.remove_ticket(old_center, sim_level);
+            // Drop exactly the pair we last added rather than recomputing it. The
+            // simulation level is derived from live config and the view level from the
+            // previous view distance, so recomputing them can release a ticket we never
+            // took and strand the one we did.
+            if let Some((held_view, held_sim)) = self.held_tickets.replace((new_level, sim_level)) {
+                lock.remove_ticket(old_center, held_view);
+                lock.remove_ticket(old_center, held_sim);
             }
             lock.send_change();
         };
@@ -364,10 +368,10 @@ impl ChunkManager {
             .chunk_loading
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        lock.remove_ticket(
-            self.center,
-            ChunkLoading::get_level_from_view_distance(self.view_distance),
-        );
+        if let Some((view_level, sim_level)) = self.held_tickets.take() {
+            lock.remove_ticket(self.center, view_level);
+            lock.remove_ticket(self.center, sim_level);
+        }
         lock.send_change();
         let (_rx, tx) = crossbeam::channel::unbounded();
         // drop old channel
@@ -386,10 +390,10 @@ impl ChunkManager {
             .chunk_loading
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        lock.remove_ticket(
-            self.center,
-            ChunkLoading::get_level_from_view_distance(self.view_distance),
-        );
+        if let Some((view_level, sim_level)) = self.held_tickets.take() {
+            lock.remove_ticket(self.center, view_level);
+            lock.remove_ticket(self.center, sim_level);
+        }
         lock.send_change();
         drop(lock);
         self.chunk_listener = new_world.level.chunk_listener.add_global_chunk_listener();
