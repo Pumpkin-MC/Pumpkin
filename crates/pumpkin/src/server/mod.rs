@@ -895,8 +895,7 @@ impl Server {
                 player.kick(DisconnectReason::Kicked, event.kick_message).await;
                 None
             }
-        }};
-        Some((player, world.clone()))
+        }}
     }
 
     pub async fn remove_player(&self, player: &Player) {

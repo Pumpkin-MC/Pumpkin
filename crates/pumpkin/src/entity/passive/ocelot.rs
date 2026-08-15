@@ -10,7 +10,7 @@ use pumpkin_data::meta_data_type::MetaDataType;
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_data::tracked_data::TrackedData;
 use pumpkin_nbt::compound::NbtCompound;
-use pumpkin_protocol::bedrock::client::actor_event::ActorEventType;
+use pumpkin_protocol::bedrock::server::actor_event::ActorEventType;
 use pumpkin_protocol::java::client::play::Metadata;
 use rand::RngExt;
 

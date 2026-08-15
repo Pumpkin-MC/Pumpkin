@@ -171,21 +171,25 @@ impl ToFromWasmEvent for ServerBroadcastEvent {
 }
 
 impl ToFromWasmEvent for ServerListPingEvent {
-    fn to_wasm_event(&self, _state: &mut PluginHostState) -> Event {
+    fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
+        let motd = state
+            .add_text_component(self.motd.clone())
+            .expect("failed to add text-component resource");
+
         Event::ServerListPingEvent(ServerListPingEventData {
             hostname: self.hostname().to_string(),
             address: ServerListPingAddress {
                 host: self.address().host().to_string(),
                 port: self.address().port(),
             },
-            motd: self.motd.clone(),
+            motd,
             max_players: self.max_players,
             num_players: self.num_players,
             favicon: self.favicon.clone(),
         })
     }
 
-    fn from_wasm_event(event: Event, _state: &mut PluginHostState) -> Self {
+    fn from_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
         match event {
             Event::ServerListPingEvent(data) => Self {
                 hostname: data.hostname,
@@ -193,7 +197,7 @@ impl ToFromWasmEvent for ServerListPingEvent {
                     data.address.host,
                     data.address.port,
                 ),
-                motd: data.motd,
+                motd: consume_text_component(state, &data.motd),
                 max_players: data.max_players,
                 num_players: data.num_players,
                 favicon: data.favicon,
@@ -202,10 +206,10 @@ impl ToFromWasmEvent for ServerListPingEvent {
         }
     }
 
-    fn apply_wasm_event(&mut self, event: Event, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
         match event {
             Event::ServerListPingEvent(data) => {
-                self.motd = data.motd;
+                self.motd = consume_text_component(state, &data.motd);
                 self.max_players = data.max_players;
                 self.num_players = data.num_players;
                 self.favicon = data.favicon;

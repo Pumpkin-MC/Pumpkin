@@ -212,3 +212,27 @@ impl DyeColor {
         }
     }
 }
+impl From<DyeColor> for String {
+    fn from(value: DyeColor) -> Self {
+        value.name().to_string()
+    }
+}
+impl From<&str> for DyeColor {
+    fn from(s: &str) -> Self {
+        DyeColor::by_name(s).unwrap_or_default()
+    }
+}
+impl From<i8> for DyeColor {
+    fn from(s: i8) -> Self {
+        if s >= 0 {
+            DyeColor::by_id(s as u8).unwrap_or_default()
+        } else {
+            DyeColor::default()
+        }
+    }
+}
+impl From<u8> for DyeColor {
+    fn from(s: u8) -> Self {
+        DyeColor::by_id(s).unwrap_or_default()
+    }
+}
