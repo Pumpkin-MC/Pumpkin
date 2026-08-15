@@ -6,6 +6,7 @@ pub mod loot;
 pub mod pack;
 pub mod predicate;
 pub mod recipe;
+pub mod registry;
 pub mod reload;
 pub mod resource;
 pub mod tag;
@@ -23,6 +24,8 @@ use reload::manager::ReloadManager;
 use tag::registry::TagRegistry;
 
 pub use loot::LootTable as DynamicLootTable;
+
+use crate::registry::DatapackRegistries;
 
 /// Error type for datapack operations.
 #[derive(Debug, thiserror::Error)]
@@ -45,6 +48,8 @@ pub enum DatapackError {
     Function(String),
     #[error("Invalid identifier: {0}")]
     Identifier(#[from] pumpkin_util::identifier::IdentifierError),
+    #[error("Registry error: {0}")]
+    Registry(#[from] pumpkin_registry::error::BootstrapError),
 }
 
 /// Top-level orchestrator for all datapack lifecycle operations.
@@ -58,8 +63,8 @@ pub struct DataPackManager {
     pub predicates: RwLock<HashMap<Identifier, predicate::Predicate>>,
     pub item_modifiers: RwLock<HashMap<Identifier, predicate::ItemModifier>>,
     pub advancements: RwLock<HashMap<Identifier, advancement::AdvancementFile>>,
-    pub damage_types: RwLock<HashMap<Identifier, damage_type::DamageTypeFile>>,
     pub reload_manager: ReloadManager,
+    pub registries: DatapackRegistries,
 }
 
 impl DataPackManager {
@@ -77,8 +82,8 @@ impl DataPackManager {
             predicates: RwLock::new(HashMap::new()),
             item_modifiers: RwLock::new(HashMap::new()),
             advancements: RwLock::new(HashMap::new()),
-            damage_types: RwLock::new(HashMap::new()),
             reload_manager: ReloadManager::new(),
+            registries: DatapackRegistries::new(),
         }
     }
 
@@ -100,6 +105,8 @@ impl DataPackManager {
         let item_modifiers = predicate::load_item_modifiers(&manager)?;
         let advancements = advancement::load_advancements(&manager)?;
         let damage_types = damage_type::load_damage_types(&manager)?;
+
+        self.registries.reload_damage_types(damage_types).await?;
 
         // TODO(datapack parity): Merge DP enchantments, entity types, biomes, etc.
         // into their respective static registries here once loaders are added.
@@ -123,7 +130,6 @@ impl DataPackManager {
         *self.predicates.write().await = predicates;
         *self.item_modifiers.write().await = item_modifiers;
         *self.advancements.write().await = advancements;
-        *self.damage_types.write().await = damage_types;
 
         // Set tick/load functions based on resolved tags
         self.functions
