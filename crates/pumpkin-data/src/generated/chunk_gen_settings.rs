@@ -2,6 +2,7 @@
 use crate::BlockState;
 use crate::biome::Biome;
 use crate::chunk::DoublePerlinNoiseParameters;
+use crate::dimension::Dimension;
 use pumpkin_registry::{Registry, RegistryBuilder, bootstrap::RegistryEntry, bootstrap_provider};
 use pumpkin_util::identifier::Identifier;
 use pumpkin_util::random::RandomDeriver;

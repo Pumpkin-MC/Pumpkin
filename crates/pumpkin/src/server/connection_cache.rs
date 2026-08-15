@@ -7,6 +7,7 @@ use pumpkin_protocol::{
     Players, Sample, StatusResponse, Version,
     java::client::{config::CPluginMessage, status::CStatusResponse},
 };
+use pumpkin_util::text::TextComponent;
 use std::{fs, path::Path};
 use tracing::{debug, info, warn};
 use uuid::Uuid;
@@ -210,7 +211,7 @@ impl CachedStatus {
                 online: 0,
                 sample: vec![],
             }),
-            description: motd.to_string(),
+            description: TextComponent::text(motd.to_string()),
             favicon,
             // This should stay true even when reports are disabled.
             // It prevents the annoying popup when joining the server.

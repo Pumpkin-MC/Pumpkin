@@ -113,3 +113,36 @@ pub use debug_subscription_request::*;
 
 mod debug_sample_subscription;
 pub use debug_sample_subscription::*;
+
+mod block_entity_tag_query;
+pub use block_entity_tag_query::*;
+
+mod configuration_acknowledged;
+pub use configuration_acknowledged::*;
+
+mod container_slot_state_changed;
+pub use container_slot_state_changed::*;
+
+mod entity_tag_query;
+pub use entity_tag_query::*;
+
+mod lock_difficulty;
+pub use lock_difficulty::*;
+
+mod pong;
+pub use pong::*;
+
+mod resource_pack_response;
+pub use resource_pack_response::*;
+
+mod set_command_minecart;
+pub use set_command_minecart::*;
+
+mod set_game_rule;
+pub use set_game_rule::*;
+
+mod set_structure_block;
+pub use set_structure_block::*;
+
+mod spectate_entity;
+pub use spectate_entity::*;

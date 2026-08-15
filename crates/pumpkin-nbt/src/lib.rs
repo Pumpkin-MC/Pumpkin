@@ -63,7 +63,9 @@ pub const INT_ARRAY_ID: u8 = 0x0B;
 pub const LONG_ARRAY_ID: u8 = 0x0C;
 
 /// Maximum number of elements accepted when decoding a list or array.
-pub const MAX_ARRAY_LENGTH: usize = 2_000_000;
+pub const MAX_ARRAY_LENGTH: usize = 512_000;
+/// Maximum nesting depth allowed when decoding NBT compound or list tags.
+pub const MAX_NBT_DEPTH: usize = 512;
 
 /// Errors produced while reading, writing, or converting NBT data.
 #[derive(Error, Debug)]
@@ -101,6 +103,12 @@ pub enum Error {
     /// A Bedrock variable-length long exceeded its maximum encoded size.
     #[error("Failed to decode varlong - value too large")]
     VarLongTooLarge,
+    /// NBT nesting depth exceeded the maximum allowed limit.
+    #[error("NBT depth exceeded maximum allowed limit")]
+    MaxDepthExceeded,
+    /// A list tag specified an invalid element tag type.
+    #[error("Invalid element tag type for list: {0}")]
+    InvalidListTag(u8),
 }
 
 /// A complete NBT document containing a named root compound.

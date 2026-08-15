@@ -59,7 +59,8 @@ impl<T: Send + Sync + 'static> ReloadableRegistry<T> {
             .and_then(|m| m.populate::<T>(&self.name))?;
 
         let mut values = Vec::with_capacity(entries.len() + added_entries.len());
-        let mut mapping = FxHashMap::with_capacity_and_hasher(entries.len() + added_entries.len(), FxBuildHasher);
+        let mut mapping =
+            FxHashMap::with_capacity_and_hasher(entries.len() + added_entries.len(), FxBuildHasher);
 
         for (id, value) in entries {
             let len = values.len();

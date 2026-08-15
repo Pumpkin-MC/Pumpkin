@@ -811,7 +811,7 @@ impl BedrockClient {
                     Ok(packet) => Some(packet),
                     Err(err) => {
                         if !matches!(err, PacketDecodeError::ConnectionClosed) {
-                            warn!("Failed to decode packet from client: {err}");
+                            debug!("Failed to decode packet from client: {err}");
                             let text = format!("Error while reading incoming packet {err}");
                             self.kick(DisconnectReason::BadPacket, text).await;
                         }
