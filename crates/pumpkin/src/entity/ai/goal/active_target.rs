@@ -172,32 +172,47 @@ impl ActiveTargetGoal {
         let mut search_pos = mob.living_entity.entity.pos.load();
         search_pos.y += mob.living_entity.entity.entity_dimension.load().eye_height as f64;
 
-        if self.target_type == Some(&EntityType::PLAYER) && self.target_types.is_none() {
-            let potential_player = world
-                .get_closest_player(search_pos, follow_range)
-                .map(|p: Arc<Player>| p as Arc<dyn EntityBase>);
-
-            if let Some(potential_entity) = potential_player
-                && let Some(living) = potential_entity.get_living_entity()
-                && self
-                    .target_predicate
-                    .test(&world, Some(&mob.living_entity), living)
-                    .await
-            {
-                self.target = Some(potential_entity);
-                return;
-            }
-        } else {
-            let potential_entity = if let Some(target_types) = self.target_types {
-                world.get_closest_entity(search_pos, follow_range, Some(target_types))
+        let mut candidates: Vec<Arc<dyn EntityBase>> =
+            if self.target_type == Some(&EntityType::PLAYER) && self.target_types.is_none() {
+                world
+                    .get_nearby_players(search_pos, follow_range)
+                    .into_iter()
+                    .map(|player: Arc<Player>| player as Arc<dyn EntityBase>)
+                    .collect()
+            } else if let Some(target_types) = self.target_types {
+                world
+                    .get_nearby_entities(search_pos, follow_range)
+                    .into_values()
+                    .filter(|entity| target_types.contains(&entity.get_entity().entity_type))
+                    .collect()
             } else if let Some(target_type) = self.target_type {
-                world.get_closest_entity(search_pos, follow_range, Some(&[target_type]))
+                world
+                    .get_nearby_entities(search_pos, follow_range)
+                    .into_values()
+                    .filter(|entity| entity.get_entity().entity_type == target_type)
+                    .collect()
             } else {
-                None
+                world
+                    .get_nearby_entities(search_pos, follow_range)
+                    .into_values()
+                    .collect()
             };
 
-            if let Some(potential_entity) = potential_entity
-                && let Some(living) = potential_entity.get_living_entity()
+        candidates.sort_by(|a, b| {
+            a.get_entity()
+                .pos
+                .load()
+                .squared_distance_to_vec(&search_pos)
+                .total_cmp(
+                    &b.get_entity()
+                        .pos
+                        .load()
+                        .squared_distance_to_vec(&search_pos),
+                )
+        });
+
+        for potential_entity in candidates {
+            if let Some(living) = potential_entity.get_living_entity()
                 && self
                     .target_predicate
                     .test(&world, Some(&mob.living_entity), living)
