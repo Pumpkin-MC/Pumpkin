@@ -739,6 +739,23 @@ impl GenerationSchedule {
         }
     }
 
+    /// Release a holder's `occupied_by` chain.
+    ///
+    /// These edges only record which tasks were waiting on this chunk's data; unlike the
+    /// edges reachable from `Node::edge` they carry no `in_degree`, so dropping them
+    /// cannot unblock anything. Nothing freed them when a holder was unloaded, which
+    /// leaked the whole chain every time - tens of thousands of edges per second while a
+    /// player travels fast enough to churn the loaded set.
+    fn free_occupied_by(&mut self, head: EdgeKey) {
+        let mut edge = head;
+        while !edge.is_null() {
+            let Some(removed) = self.graph.edges.remove(edge) else {
+                break;
+            };
+            edge = removed.next;
+        }
+    }
+
     fn process_unload_queue(&mut self) {
         if self.unload_chunks.is_empty() {
             return;
@@ -767,6 +784,9 @@ impl GenerationSchedule {
                     }
                 }
             }
+
+            self.free_occupied_by(holder.occupied_by);
+            holder.occupied_by = EdgeKey::null();
 
             if holder.public {
                 self.public_chunk_map.remove(&pos);
