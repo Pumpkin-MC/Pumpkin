@@ -86,6 +86,7 @@ impl From<ConfigTree> for ConfigVal {
     /// Convert from a `ConfigTree` to a `ConfigVal`.
     /// # Panics
     /// Panics if the provided `ConfigTree` is invalid.
+    #[expect(clippy::expect_used)]
     fn from(value: ConfigTree) -> Self {
         /// A node is `Some(...)` if it has not been seen before, otherwise `None`.
         fn try_from_inner(

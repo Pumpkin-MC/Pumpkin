@@ -10,6 +10,7 @@ use crate::plugin::loader::wasm::wasm_host::{
             self,
             plugin::{
                 command::Command,
+                config::Config,
                 context::Context,
                 event::{EventPriority, EventType},
                 permission::{Permission, PermissionDefault, PermissionLevel},
