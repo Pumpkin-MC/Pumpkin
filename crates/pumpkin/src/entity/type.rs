@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use pumpkin_data::entity::EntityType;
+use pumpkin_data::tag::{self, Taggable};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use uuid::Uuid;
@@ -345,6 +346,35 @@ pub fn check_spawn_rules(
     is_thundering: bool,
 ) -> bool {
     let id = entity_type.id;
+
+    // `Fox.checkFoxSpawnRules`: the dedicated ground tag and daylight are
+    // still required even though foxes use unrestricted placement.
+    if id == EntityType::FOX.id {
+        return world
+            .get_block(&pos.down())
+            .has_tag(&tag::Block::MINECRAFT_FOXES_SPAWNABLE_ON)
+            && world.get_max_local_raw_brightness(pos) > 8;
+    }
+
+    // `Piglin.checkPiglinSpawnRules`, with the global peaceful difficulty gate
+    // applied by `SpawnPlacements.checkSpawnRules`.
+    if id == EntityType::PIGLIN.id {
+        return world.level_info.load().difficulty != pumpkin_util::Difficulty::Peaceful
+            && world.get_block(&pos.down()) != &Block::NETHER_WART_BLOCK;
+    }
+
+    // `Strider.checkStriderSpawnRules`: after the lava placement check, walk
+    // upward through lava and require the first non-lava block to be air.
+    if id == EntityType::STRIDER.id {
+        let mut check_pos = pos.up();
+        while world
+            .get_fluid(&check_pos)
+            .has_tag(&tag::Fluid::MINECRAFT_LAVA)
+        {
+            check_pos = check_pos.up();
+        }
+        return world.get_block_state(&check_pos).is_air();
+    }
 
     if id == EntityType::BOGGED.id
         || id == EntityType::CAVE_SPIDER.id
