@@ -446,6 +446,16 @@ macro_rules! impl_block_entity_for_cooking {
                          }
 
                          if self.is_burning() && can_accept_output {
+                             if self.get_cooking_time_spent() == 0 {
+                                 let mut start_event = $crate::plugin::api::events::inventory::furnace_start_smelt::FurnaceStartSmeltEvent::new(
+                                     self.position,
+                                     top_item.item.registry_key.to_string(),
+                                     self.get_cooking_total_time() as u32,
+                                 );
+                                 if let Some(server) = world.server.upgrade() {
+                                     server.plugin_manager.fire(&server, &mut start_event).await;
+                                 }
+                             }
                              self.cooking_time_spent.fetch_add(1, Ordering::Relaxed);
 
                              if self.get_cooking_time_spent() == self.get_cooking_total_time() {

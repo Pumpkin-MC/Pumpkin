@@ -12,12 +12,19 @@ use tracing::{debug, error, info};
 use crate::command::CommandSender;
 use crate::{SHOULD_STOP, STOP_INTERRUPT, server::Server};
 
-pub mod packet;
+pub use pumpkin_protocol::rcon as packet;
 
 pub struct RCONServer;
 
 impl RCONServer {
     pub async fn run(config: &RCONConfig, server: Arc<Server>) {
+        if config.password.trim().is_empty() {
+            error!(
+                "RCON is enabled but password is empty! Refusing to start RCON server for security."
+            );
+            return;
+        }
+
         let listener = match tokio::net::TcpListener::bind(config.address).await {
             Ok(l) => l,
             Err(e) => {
@@ -109,7 +116,7 @@ impl RCONClient {
         let config = &server.advanced_config.networking.rcon;
         match packet.get_type() {
             ServerboundPacket::Auth => {
-                if packet.get_body() == password {
+                if !password.is_empty() && packet.get_body() == password {
                     self.send(ClientboundPacket::AuthResponse, packet.get_id(), "")
                         .await?;
                     if config.logging.logged_successfully {

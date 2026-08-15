@@ -29,6 +29,7 @@ pub mod java;
 pub mod packet;
 #[cfg(feature = "query")]
 pub mod query;
+pub mod rcon;
 pub mod ser;
 pub mod serial;
 
@@ -313,7 +314,7 @@ pub struct StatusResponse {
     /// Information about currently connected players. (Optional)
     pub players: Option<Players>,
     /// The description displayed, also called MOTD (Message of the Day). (Optional)
-    pub description: String,
+    pub description: TextComponent,
     /// The icon displayed. (Optional)
     pub favicon: Option<String>,
     /// Whether players are forced to use secure chat.

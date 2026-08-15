@@ -1,3 +1,4 @@
+pub mod actor_event;
 pub mod animate;
 pub mod block_pick_request;
 pub mod client_cache_blob_status;

@@ -21,11 +21,19 @@ impl<'a> ServerPacket<'a> for SPlayerSession {
         let session_id = read.get_uuid()?;
         let expires_at = read.get_i64_be()?;
 
-        let public_key_length = read.get_var_int()?.0 as usize;
+        let public_key_length = usize::try_from(read.get_var_int()?.0)
+            .map_err(|_| ReadingError::Message("Negative public key length".into()))?;
+        if public_key_length > 2048 {
+            return Err(ReadingError::TooLarge("Public key too long".into()));
+        }
         let mut public_key = vec![0u8; public_key_length];
         read.read_bytes_to_buf(&mut public_key)?;
 
-        let key_signature_length = read.get_var_int()?.0 as usize;
+        let key_signature_length = usize::try_from(read.get_var_int()?.0)
+            .map_err(|_| ReadingError::Message("Negative key signature length".into()))?;
+        if key_signature_length > 4096 {
+            return Err(ReadingError::TooLarge("Key signature too long".into()));
+        }
         let mut key_signature = vec![0u8; key_signature_length];
         read.read_bytes_to_buf(&mut key_signature)?;
 

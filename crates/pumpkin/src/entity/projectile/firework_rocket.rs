@@ -4,7 +4,7 @@ use crate::{
     world::World,
 };
 use pumpkin_data::{entity::EntityStatus, meta_data_type::MetaDataType, tracked_data::TrackedData};
-use pumpkin_protocol::bedrock::client::actor_event::ActorEventType;
+use pumpkin_protocol::bedrock::server::actor_event::ActorEventType;
 use pumpkin_protocol::{codec::optional_int::OptionalInt, java::client::play::Metadata};
 use pumpkin_util::{
     math::vector3::Vector3,

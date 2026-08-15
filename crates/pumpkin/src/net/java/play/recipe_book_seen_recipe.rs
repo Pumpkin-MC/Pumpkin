@@ -2,12 +2,16 @@
 use super::*;
 
 impl JavaClient {
-    #[allow(clippy::unused_async)]
     pub async fn handle_recipe_book_seen_recipe(
         &self,
-        _player: &Arc<Player>,
-        _packet: SRecipeBookSeenRecipe,
+        server: &Arc<Server>,
+        player: &Arc<Player>,
+        packet: SRecipeBookSeenRecipe,
     ) {
-        // Client acknowledged a recipe display; no server action needed.
+        let mut event = crate::plugin::api::events::player::player_recipe_discover::PlayerRecipeDiscoverEvent::new(
+            player.clone(),
+            format!("display_{}", packet.recipe_display_id.0),
+        );
+        server.plugin_manager.fire(server, &mut event).await;
     }
 }

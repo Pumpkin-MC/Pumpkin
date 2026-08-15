@@ -183,6 +183,18 @@ impl ItemEntity {
                 (other, other_stack, self, self_stack)
             };
 
+        let mut event = crate::plugin::api::events::entity::item_merge::ItemMergeEvent {
+            entity_id: target.entity.entity_id,
+            target_id: source.entity.entity_id,
+            cancelled: false,
+        };
+        if let Some(server) = self.entity.world.load().server.upgrade() {
+            server.plugin_manager.fire(&server, &mut event).await;
+        }
+        if event.cancelled {
+            return;
+        }
+
         // Vanilla code adds a .min(64). Not needed with Vanilla item data
 
         let max_size = stack1.get_max_stack_size();
