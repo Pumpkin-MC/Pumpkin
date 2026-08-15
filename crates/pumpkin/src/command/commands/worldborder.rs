@@ -146,7 +146,7 @@ impl CommandExecutor for SetTimeExecutor {
             let Ok(time) = time_consumer().find_arg_default_name(args)? else {
                 return Err(CommandError::CommandFailed(TextComponent::text(format!(
                     "{} is out of bounds.",
-                    distance_consumer().default_name()
+                    time_consumer().default_name()
                 ))));
             };
 
@@ -271,7 +271,7 @@ impl CommandExecutor for AddTimeExecutor {
             let Ok(time) = time_consumer().find_arg_default_name(args)? else {
                 return Err(CommandError::CommandFailed(TextComponent::text(format!(
                     "{} is out of bounds.",
-                    distance_consumer().default_name()
+                    time_consumer().default_name()
                 ))));
             };
 
