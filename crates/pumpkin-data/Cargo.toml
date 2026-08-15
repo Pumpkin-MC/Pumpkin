@@ -25,7 +25,6 @@ default = [
     "game_event",
     "game_rules",
     "entity",
-    "dimension",
     "enchantment",
     "world",
     "world_preset",
@@ -80,7 +79,6 @@ chunk = ["noise_parameter", "biome", "chunk_status"]
 game_event = []
 game_rules = []
 entity = ["entity_pose", "entity_status", "entity_type", "spawn_egg"]
-dimension = []
 enchantment = []
 world = ["world_event", "message_type"]
 world_preset = []

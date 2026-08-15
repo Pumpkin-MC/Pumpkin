@@ -15,6 +15,7 @@ pub(crate) fn build() -> TokenStream {
     load_recipes(&mut entries);
     load_advancements(&mut entries);
     load_loot_tables(&mut entries);
+    load_registry_data(&mut entries);
 
     // Sort for deterministic output
     entries.sort_by(|a, b| (a.1.as_str(), a.0.as_str()).cmp(&(b.1.as_str(), b.0.as_str())));
@@ -31,7 +32,7 @@ pub(crate) fn build() -> TokenStream {
     }
 
     // Write the blob file
-    let blob_path = Path::new(crate::OUT_DIR).join("embedded_data.bin");
+    let blob_path = Path::new(crate::DATAPACK_OUT_DIR).join("embedded_data.bin");
     if let Err(e) = fs::write(&blob_path, &blob) {
         eprintln!("Warning: Could not write embedded data blob: {e}");
     }
@@ -122,7 +123,7 @@ pub(crate) fn build() -> TokenStream {
 }
 
 fn load_tags(entries: &mut Vec<(String, String, Vec<u8>)>) {
-    let tag_file = Path::new("../assets/tags/26_1_tags.json");
+    let tag_file = Path::new("../../assets/tags/26_1_tags.json");
     let Ok(data) = fs::read_to_string(tag_file) else {
         eprintln!("Warning: Could not read tags file, skipping tag embedding");
         return;
@@ -166,7 +167,7 @@ fn load_tags(entries: &mut Vec<(String, String, Vec<u8>)>) {
 }
 
 fn load_recipes(entries: &mut Vec<(String, String, Vec<u8>)>) {
-    let recipe_file = Path::new("../assets/recipes.json");
+    let recipe_file = Path::new("../../assets/recipes.json");
     let Ok(data) = fs::read_to_string(recipe_file) else {
         eprintln!("Warning: Could not read recipes file");
         return;
@@ -189,7 +190,7 @@ fn load_recipes(entries: &mut Vec<(String, String, Vec<u8>)>) {
 }
 
 fn load_advancements(entries: &mut Vec<(String, String, Vec<u8>)>) {
-    let adv_file = Path::new("../assets/advancements.json");
+    let adv_file = Path::new("../../assets/advancements.json");
     let Ok(data) = fs::read_to_string(adv_file) else {
         eprintln!("Warning: Could not read advancements file");
         return;
@@ -212,8 +213,96 @@ fn load_advancements(entries: &mut Vec<(String, String, Vec<u8>)>) {
     }
 }
 
+fn load_registry_data(entries: &mut Vec<(String, String, Vec<u8>)>) {
+    const MAPS: &[(&str, &str)] = &[
+        ("../../assets/damage_type.json", "damage_type"),
+        ("../../assets/dimension.json", "dimension_type"),
+        ("../../assets/enchantments.json", "enchantment"),
+        ("../../assets/jukebox_song.json", "jukebox_song"),
+        ("../../assets/biome.json", "worldgen/biome"),
+        ("../../assets/carver.json", "worldgen/configured_carver"),
+        (
+            "../../assets/configured_features.json",
+            "worldgen/configured_feature",
+        ),
+        ("../../assets/noise_parameters.json", "worldgen/noise"),
+        (
+            "../../assets/chunk_gen_settings.json",
+            "worldgen/noise_settings",
+        ),
+        (
+            "../../assets/placed_feature.json",
+            "worldgen/placed_feature",
+        ),
+        ("../../assets/structures.json", "worldgen/structure"),
+        ("../../assets/structure_set.json", "worldgen/structure_set"),
+    ];
+
+    for (source, datapack_dir) in MAPS {
+        load_registry_map(Path::new(source), datapack_dir, entries);
+    }
+
+    const WORLD_PRESETS: &[(&str, &str)] = &[
+        ("default", "normal"),
+        ("super_flat", "flat"),
+        ("large_biomes", "large_biomes"),
+        ("amplified", "amplified"),
+        ("single_biome", "single_biome_surface"),
+    ];
+
+    for (source_name, registry_name) in WORLD_PRESETS {
+        let source = Path::new("../../assets/world_preset").join(format!("{source_name}.json"));
+        let Ok(data) = fs::read(source) else {
+            eprintln!("Warning: Could not read world preset {source_name}");
+            continue;
+        };
+
+        entries.push((
+            "minecraft".to_string(),
+            format!("worldgen/world_preset/{registry_name}.json"),
+            data,
+        ));
+    }
+}
+
+fn load_registry_map(
+    source: &Path,
+    datapack_dir: &str,
+    entries: &mut Vec<(String, String, Vec<u8>)>,
+) {
+    let Ok(data) = fs::read_to_string(source) else {
+        eprintln!(
+            "Warning: Could not read registry source {}",
+            source.display()
+        );
+        return;
+    };
+    let Ok(values): Result<BTreeMap<String, serde_json::Value>, _> = serde_json::from_str(&data)
+    else {
+        eprintln!(
+            "Warning: Could not parse registry source {}",
+            source.display()
+        );
+        return;
+    };
+
+    for (identifier, value) in values {
+        let (namespace, path) = identifier
+            .split_once(':')
+            .map_or(("minecraft", identifier.as_str()), |(namespace, path)| {
+                (namespace, path)
+            });
+        let bytes = serde_json::to_vec(&value).unwrap_or_default();
+        entries.push((
+            namespace.to_string(),
+            format!("{datapack_dir}/{path}.json"),
+            bytes,
+        ));
+    }
+}
+
 fn load_loot_tables(entries: &mut Vec<(String, String, Vec<u8>)>) {
-    let loot_dir = Path::new("../assets/loot_table/chests");
+    let loot_dir = Path::new("../../assets/loot_table/chests");
     collect_loot_files(loot_dir, loot_dir, entries);
 }
 

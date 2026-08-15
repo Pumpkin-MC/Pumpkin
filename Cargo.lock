@@ -3550,6 +3550,7 @@ name = "pumpkin-datapack"
 version = "0.1.0-dev+26.2-26.40"
 dependencies = [
  "futures",
+ "pumpkin-codecs",
  "pumpkin-data",
  "pumpkin-protocol",
  "pumpkin-registry",
