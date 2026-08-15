@@ -65,6 +65,11 @@ pub(crate) fn bounce_entity_after_fall(entity: &dyn EntityBase, bounce_multiplie
 }
 
 pub trait BlockBehaviour: Send + Sync {
+    /// Called when a player starts punching this block (`BlockBehaviour.attack` in vanilla).
+    fn attack<'a>(&'a self, _args: AttackArgs<'a>) -> BlockFuture<'a, ()> {
+        Box::pin(async {})
+    }
+
     fn is_valid_bonemeal_target(&self, _args: BonemealArgs<'_>) -> bool {
         false
     }
@@ -273,6 +278,14 @@ pub struct UseWithItemArgs<'a> {
 pub struct BlockHitResult<'a> {
     pub face: &'a BlockDirection,
     pub cursor_pos: &'a Vector3<f32>,
+}
+
+pub struct AttackArgs<'a> {
+    pub world: &'a Arc<World>,
+    pub block: &'a Block,
+    pub state: &'a BlockState,
+    pub position: &'a BlockPos,
+    pub player: &'a Arc<Player>,
 }
 
 pub struct OnEntityCollisionArgs<'a> {

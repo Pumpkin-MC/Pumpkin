@@ -47,22 +47,6 @@ impl JavaClient {
                         }
                     }
 
-                    if block == &pumpkin_data::Block::NOTE_BLOCK {
-                        let props =
-                            pumpkin_data::block_properties::NoteBlockLikeProperties::from_state_id(
-                                state.id, block,
-                            );
-                        crate::block::blocks::note::NoteBlock::play_note(&props, &world, &position)
-                            .await;
-                        player
-                            .increment_stat(
-                                StatisticCategory::Custom,
-                                CustomStatistic::PlayNoteblock as i32,
-                                1,
-                            )
-                            .await;
-                    }
-
                     let inventory = player.inventory();
                     let held = inventory.held_item().await;
                     if !server.item_registry.can_mine(held.item, player) {
@@ -95,6 +79,16 @@ impl JavaClient {
                         self.sync_block_state_to_client(&world, position).await;
                         self.update_sequence(player, player_action.sequence.0);
                         return;
+                    }
+                    // Vanilla passes the state captured immediately before attack. Re-read it
+                    // after the async plugin and inventory checks so a concurrent block change
+                    // cannot make the callback act on stale state.
+                    let (block, state) = world.get_block_and_state(&position);
+                    if !state.is_air() {
+                        server
+                            .block_registry
+                            .attack(&world, block, state, &position, player)
+                            .await;
                     }
                     player.start_mining_time.store(
                         player.tick_counter.load(Ordering::Relaxed),

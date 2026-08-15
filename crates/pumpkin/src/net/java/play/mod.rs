@@ -15,7 +15,7 @@ use crate::block::registry::BlockActionResult;
 use crate::block::{self};
 use crate::entity::EntityBase;
 use crate::entity::equipment_break_status;
-use crate::entity::player::statistics::{CustomStatistic, StatisticCategory};
+use crate::entity::player::statistics::StatisticCategory;
 use crate::entity::player::{ChatMode, ChatSession, MINE_BLOCK_EXHAUSTION, Player};
 use crate::error::PumpkinError;
 use crate::log_at_level;

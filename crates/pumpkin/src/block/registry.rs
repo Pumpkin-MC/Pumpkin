@@ -151,7 +151,7 @@ use crate::block::blocks::wither_skull::WitherSkeletonSkullBlock;
 use crate::block::fluid::lava::FlowingLava;
 use crate::block::fluid::water::FlowingWater;
 use crate::block::{
-    BlockBehaviour, BlockHitResult, BlockMetadata, BonemealArgs, FluidMetadata,
+    AttackArgs, BlockBehaviour, BlockHitResult, BlockMetadata, BonemealArgs, FluidMetadata,
     GetInsideCollisionShapeArgs, OnEntityCollisionArgs, OnLandedUponArgs,
     UpdateEntityMovementAfterFallOnArgs, stop_vertical_movement_after_fall,
 };
@@ -840,6 +840,27 @@ impl BlockRegistry {
                 .await;
         }
         BlockActionResult::Pass
+    }
+
+    pub async fn attack(
+        &self,
+        world: &Arc<World>,
+        block: &Block,
+        state: &BlockState,
+        position: &BlockPos,
+        player: &Arc<Player>,
+    ) {
+        if let Some(pumpkin_block) = self.get_pumpkin_block(block.id) {
+            pumpkin_block
+                .attack(AttackArgs {
+                    world,
+                    block,
+                    state,
+                    position,
+                    player,
+                })
+                .await;
+        }
     }
 
     pub async fn explode(&self, block: &Block, world: &Arc<World>, position: &BlockPos) {

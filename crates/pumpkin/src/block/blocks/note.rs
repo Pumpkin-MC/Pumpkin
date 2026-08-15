@@ -1,7 +1,7 @@
 use crate::block::registry::BlockActionResult;
 use crate::block::{
-    BlockFuture, GetStateForNeighborUpdateArgs, NormalUseArgs, OnNeighborUpdateArgs, OnPlaceArgs,
-    UseWithItemArgs,
+    AttackArgs, BlockFuture, GetStateForNeighborUpdateArgs, NormalUseArgs, OnNeighborUpdateArgs,
+    OnPlaceArgs, UseWithItemArgs,
 };
 use pumpkin_data::BlockStateId;
 use pumpkin_data::block_properties::{Axis, NoteblockInstrument};
@@ -70,6 +70,20 @@ impl NoteBlock {
 }
 
 impl BlockBehaviour for NoteBlock {
+    fn attack<'a>(&'a self, args: AttackArgs<'a>) -> BlockFuture<'a, ()> {
+        Box::pin(async move {
+            let props = NoteBlockLikeProperties::from_state_id(args.state.id, args.block);
+            Self::play_note(&props, args.world, args.position).await;
+            args.player
+                .increment_stat(
+                    pumpkin_data::statistic::StatisticCategory::Custom,
+                    pumpkin_data::statistic::CustomStatistic::PlayNoteblock as i32,
+                    1,
+                )
+                .await;
+        })
+    }
+
     fn on_neighbor_update<'a>(&'a self, args: OnNeighborUpdateArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
             let block_state = args.world.get_block_state(args.position);

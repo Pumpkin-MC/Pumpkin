@@ -2204,6 +2204,27 @@ impl Player {
         ));
     }
 
+    pub fn spawn_particle_with_data(
+        &self,
+        position: Vector3<f64>,
+        offset: Vector3<f32>,
+        max_speed: f32,
+        particle_count: i32,
+        particle: Particle,
+        data: &[u8],
+    ) {
+        self.client.try_enqueue_packet(&CParticle::new(
+            false,
+            false,
+            position,
+            offset,
+            max_speed,
+            particle_count,
+            VarInt(particle as i32),
+            data,
+        ));
+    }
+
     pub async fn play_sound(
         &self,
         sound_id: u16,
