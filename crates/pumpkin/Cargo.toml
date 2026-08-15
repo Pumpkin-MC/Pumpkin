@@ -112,6 +112,7 @@ wasmtime-wasi-http = { workspace = true }
 hyper = { workspace = true }
 axum.workspace = true
 webrtc.workspace = true
+async-trait.workspace = true
 
 ordered-float.workspace = true
 

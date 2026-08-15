@@ -24,6 +24,29 @@ impl BlockMetadata for CauldronBlock {
     }
 }
 
+async fn fire_cauldron_change(
+    world: &std::sync::Arc<crate::world::World>,
+    pos: pumpkin_util::math::position::BlockPos,
+    old_level: i32,
+    new_level: i32,
+    reason: crate::plugin::block::cauldron_level_change::CauldronChangeReason,
+    entity: Option<std::sync::Arc<dyn crate::entity::EntityBase>>,
+) -> bool {
+    let mut event = crate::plugin::block::cauldron_level_change::CauldronLevelChangeEvent {
+        block_pos: pos,
+        world: world.clone(),
+        old_level,
+        new_level,
+        reason,
+        entity,
+        cancelled: false,
+    };
+    if let Some(server) = world.server.upgrade() {
+        server.plugin_manager.fire(&server, &mut event).await;
+    }
+    !event.cancelled
+}
+
 impl BlockBehaviour for CauldronBlock {
     #[allow(clippy::too_many_lines)]
     fn use_with_item<'a>(
@@ -38,6 +61,18 @@ impl BlockBehaviour for CauldronBlock {
             // Filling empty cauldron with buckets
             if block_id == BlockId::CAULDRON {
                 if item_id == Item::WATER_BUCKET.id {
+                    if !fire_cauldron_change(
+                        args.world,
+                        *args.position,
+                        0,
+                        3,
+                        crate::plugin::block::cauldron_level_change::CauldronChangeReason::BucketEmpty,
+                        Some(args.player.clone()),
+                    )
+                    .await
+                    {
+                        return BlockActionResult::Pass;
+                    }
                     let state_id = Block::WATER_CAULDRON
                         .from_properties(&[("level", "3")])
                         .to_state_id(&Block::WATER_CAULDRON);

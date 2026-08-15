@@ -39,6 +39,8 @@ pub enum ActorEventType {
     StartOfferFlower = 19,
     StopOfferFlower = 20,
     LoveHearts = 21,
+    TrustingFailed = 40,
+    TrustingSucceeded = 41,
     VillagerAngry = 22,
     VillagerHappy = 23,
     WitchHatMagic = 24,

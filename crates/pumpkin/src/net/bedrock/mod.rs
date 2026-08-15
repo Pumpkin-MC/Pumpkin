@@ -38,7 +38,7 @@ use pumpkin_protocol::{
             player_auth_input::SPlayerAuthInput, request_ability::SRequestAbility,
             request_chunk_radius::SRequestChunkRadius,
             request_network_settings::SRequestNetworkSettings,
-            resource_pack_response::SResourcePackResponse,
+            resource_pack_response::SResourcePackResponse, respawn::SRespawn,
             set_local_player_as_initialized::SSetLocalPlayerAsInitialized,
             set_player_inventory_options::SSetPlayerInventoryOptions, text::SText,
         },
@@ -311,8 +311,9 @@ impl BedrockClient {
 
         let mut serialize_tasks = Vec::with_capacity(valid_chunks.len());
         for chunk in valid_chunks {
+            let block_actors = player.world().bedrock_chunk_block_actors(&chunk);
             serialize_tasks.push(tokio::task::spawn_blocking(move || {
-                CLevelChunk::encode_chunk(&chunk, bedrock_dimension, cache_enabled)
+                CLevelChunk::encode_chunk(&chunk, bedrock_dimension, cache_enabled, &block_actors)
             }));
         }
 
@@ -368,14 +369,14 @@ impl BedrockClient {
             Ok(()) => {
                 let payload = Bytes::from(packet_buf);
                 let player = self.player.load_full();
-                let cancelled = if let Some(player) = player.as_ref() {
-                    player
-                        .fire_packet_sent_no_obj(P::PACKET_ID, payload.clone())
-                        .await
+                if let Some(player) = player.as_ref() {
+                    let event = player
+                        .fire_packet_sent_event_no_obj(P::PACKET_ID, payload)
+                        .await;
+                    if !event.cancelled {
+                        self.enqueue_packet_data(event.payload).await;
+                    }
                 } else {
-                    false
-                };
-                if !cancelled {
                     self.enqueue_packet_data(payload).await;
                 }
             }
@@ -493,16 +494,17 @@ impl BedrockClient {
             Ok(()) => {
                 let payload = Bytes::from(packet_buf);
                 let player = self.player.load_full();
-                let cancelled = if let Some(player) = player.as_ref() {
-                    player
-                        .fire_packet_sent_no_obj(P::PACKET_ID, payload.clone())
-                        .await
+                let payload = if let Some(player) = player.as_ref() {
+                    let event = player
+                        .fire_packet_sent_event_no_obj(P::PACKET_ID, payload)
+                        .await;
+                    if event.cancelled {
+                        return;
+                    }
+                    event.payload
                 } else {
-                    false
+                    payload
                 };
-                if cancelled {
-                    return;
-                }
                 let (tx, rx) = oneshot::channel();
                 if let Err(err) = self
                     .outgoing_packet_priority_send
@@ -714,6 +716,9 @@ impl BedrockClient {
             SPlayerAction::PACKET_ID => {
                 self.handle_player_action(player, server, SPlayerAction::read(reader)?)
                     .await;
+            }
+            SRespawn::PACKET_ID => {
+                self.handle_respawn(player, SRespawn::read(reader)?).await;
             }
             SAnimate::PACKET_ID => {
                 self.handle_animate(player, server, &SAnimate::read(reader)?).await;

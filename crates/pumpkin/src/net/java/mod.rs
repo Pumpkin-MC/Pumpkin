@@ -213,13 +213,6 @@ impl JavaClient {
                     self.last_keep_alive_time.store(Instant::now());
                     let packet = pumpkin_protocol::java::client::play::CKeepAlive::new(keep_alive_id);
                     self.enqueue_packet(&packet).await;
-
-                    let seq = self.packet_sequence.swap(-1, Ordering::Relaxed);
-                    if seq != -1 {
-                        self
-                            .send_packet_now(&CAcknowledgeBlockChange::new(seq.into()))
-                            .await;
-                    }
                 }
 
                 // INCOMING PACKETS
@@ -248,6 +241,15 @@ impl JavaClient {
                                 e
                             );
                         }
+                    }
+
+                    // ServerGamePacketListenerImpl acknowledges the sequence at the end of the
+                    // packet that carried it. Until we do, the client keeps predicting the block
+                    // it interacted with and drops our updates for that position
+                    let seq = self.packet_sequence.swap(-1, Ordering::Relaxed);
+                    if seq != -1 {
+                        self.send_packet_now(&CAcknowledgeBlockChange::new(seq.into()))
+                            .await;
                     }
                 }
             }
@@ -323,14 +325,14 @@ impl JavaClient {
         let payload = Bytes::from(buf);
 
         let player = self.player.load_full();
-        let cancelled = if let Some(player) = player.as_ref() {
-            player
-                .fire_packet_sent_no_obj(P::to_id(self.version.load()), payload.clone())
-                .await
+        if let Some(player) = player.as_ref() {
+            let event = player
+                .fire_packet_sent_event_no_obj(P::to_id(self.version.load()), payload)
+                .await;
+            if !event.cancelled {
+                self.enqueue_packet_data(event.payload).await;
+            }
         } else {
-            false
-        };
-        if !cancelled {
             self.enqueue_packet_data(payload).await;
         }
     }
@@ -450,15 +452,14 @@ impl JavaClient {
         let payload = Bytes::from(packet_buf);
 
         let player = self.player.load_full();
-        let cancelled = if let Some(player) = player.as_ref() {
-            player
-                .fire_packet_sent_no_obj(P::to_id(self.version.load()), payload.clone())
-                .await
+        if let Some(player) = player.as_ref() {
+            let event = player
+                .fire_packet_sent_event_no_obj(P::to_id(self.version.load()), payload)
+                .await;
+            if !event.cancelled {
+                self.send_packet_now_data(event.payload).await;
+            }
         } else {
-            false
-        };
-
-        if !cancelled {
             self.send_packet_now_data(payload).await;
         }
     }
@@ -645,7 +646,6 @@ impl JavaClient {
         server: &Arc<Server>,
         packet: &RawPacket,
     ) -> Result<(), Box<dyn PumpkinError>> {
-        let mut payload = &packet.payload[..];
         let version = self.version.load();
 
         let mut event = crate::plugin::server::packet::PacketReceivedEvent::new(
@@ -658,7 +658,9 @@ impl JavaClient {
             return Ok(());
         }
 
-        match packet.id {
+        let mut payload = &event.payload[..];
+
+        match event.packet_id {
             id if id == SConfirmTeleport::to_id(version) => {
                 self.handle_confirm_teleport(
                     player,
@@ -949,6 +951,7 @@ impl JavaClient {
             }
             id if id == SRecipeBookChangeSettings::to_id(version) => {
                 self.handle_recipe_book_change_settings(
+                    server,
                     player,
                     SRecipeBookChangeSettings::read(&mut payload, &version)?,
                 )
@@ -956,6 +959,7 @@ impl JavaClient {
             }
             id if id == SRecipeBookSeenRecipe::to_id(version) => {
                 self.handle_recipe_book_seen_recipe(
+                    server,
                     player,
                     SRecipeBookSeenRecipe::read(&mut payload, &version)?,
                 )
@@ -996,7 +1000,7 @@ impl JavaClient {
                 .await;
             }
             _ => {
-                warn!("Failed to handle player packet id {}", packet.id);
+                warn!("Failed to handle player packet id {}", event.packet_id);
             }
         }
         Ok(())

@@ -372,6 +372,18 @@ pub trait FlowingFluid: Send + Sync {
                 }
             }
 
+            let mut event = crate::plugin::api::events::block::block_from_to::BlockFromToEvent::new(
+                *pos,
+                *pos,
+                &pumpkin_data::Block::WATER,
+            );
+            if let Some(server) = world.server.upgrade() {
+                server.plugin_manager.fire(&server, &mut event).await;
+            }
+            if event.cancelled {
+                return;
+            }
+
             world
                 .set_block_state(pos, state_id, BlockFlags::NOTIFY_ALL)
                 .await;

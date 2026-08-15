@@ -1,11 +1,10 @@
 use std::{
-    future::Future,
-    io::{Cursor, Error, ErrorKind},
+    io::{Cursor, Error},
     net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr},
-    pin::Pin,
     sync::Arc,
 };
 
+use crate::server::Server;
 use bytes::Bytes;
 use pumpkin_protocol::{
     BClientPacket,
@@ -21,14 +20,7 @@ use tokio::{
     net::UdpSocket,
     sync::{Mutex, mpsc},
 };
-use tracing::{trace, warn};
-use webrtc::util::{Conn, Error as WebRtcError};
-
-use crate::server::Server;
-
-// `webrtc::util::Conn` uses `async-trait`. Spell out its object-safe future ABI so
-// Pumpkin does not need a direct dependency on the proc macro.
-type ConnFuture<'a, T> = Pin<Box<dyn Future<Output = Result<T, WebRtcError>> + Send + 'a>>;
+use tracing::trace;
 
 pub struct StatusResponder {
     ipv4: Arc<UdpSocket>,
@@ -147,119 +139,18 @@ impl IceSocket {
     pub fn local_addr(&self) -> Result<SocketAddr, Error> {
         self.socket.local_addr()
     }
-}
 
-impl Conn for IceSocket {
-    fn connect<'a, 'async_trait>(&'a self, _address: SocketAddr) -> ConnFuture<'async_trait, ()>
-    where
-        'a: 'async_trait,
-        Self: 'async_trait,
-    {
-        Box::pin(async {
-            Err(Error::new(
-                ErrorKind::Unsupported,
-                "the shared Bedrock UDP socket cannot be connected",
-            )
-            .into())
-        })
+    pub async fn recv_from(&self, buffer: &mut [u8]) -> Result<(usize, SocketAddr), Error> {
+        let (packet, address) = self.packets.lock().await.recv().await.ok_or_else(|| {
+            Error::new(std::io::ErrorKind::BrokenPipe, "Bedrock UDP socket closed")
+        })?;
+        let length = buffer.len().min(packet.len());
+        buffer[..length].copy_from_slice(&packet[..length]);
+        Ok((length, address))
     }
 
-    fn recv<'a, 'b, 'async_trait>(&'a self, buffer: &'b mut [u8]) -> ConnFuture<'async_trait, usize>
-    where
-        'a: 'async_trait,
-        'b: 'async_trait,
-        Self: 'async_trait,
-    {
-        Box::pin(async move { self.recv_from(buffer).await.map(|(length, _)| length) })
-    }
-
-    fn recv_from<'a, 'b, 'async_trait>(
-        &'a self,
-        buffer: &'b mut [u8],
-    ) -> ConnFuture<'async_trait, (usize, SocketAddr)>
-    where
-        'a: 'async_trait,
-        'b: 'async_trait,
-        Self: 'async_trait,
-    {
-        Box::pin(async move {
-            let (packet, address) =
-                self.packets.lock().await.recv().await.ok_or_else(|| {
-                    Error::new(ErrorKind::BrokenPipe, "Bedrock UDP socket closed")
-                })?;
-            let length = buffer.len().min(packet.len());
-            buffer[..length].copy_from_slice(&packet[..length]);
-            Ok((length, address))
-        })
-    }
-
-    fn send<'a, 'b, 'async_trait>(&'a self, _buffer: &'b [u8]) -> ConnFuture<'async_trait, usize>
-    where
-        'a: 'async_trait,
-        'b: 'async_trait,
-        Self: 'async_trait,
-    {
-        Box::pin(async {
-            Err(Error::new(
-                ErrorKind::NotConnected,
-                "the shared Bedrock UDP socket has no default peer",
-            )
-            .into())
-        })
-    }
-
-    fn send_to<'a, 'b, 'async_trait>(
-        &'a self,
-        buffer: &'b [u8],
-        target: SocketAddr,
-    ) -> ConnFuture<'async_trait, usize>
-    where
-        'a: 'async_trait,
-        'b: 'async_trait,
-        Self: 'async_trait,
-    {
-        Box::pin(async move {
-            match self.socket.send_to(buffer, target).await {
-                Ok(length) => {
-                    trace!(
-                        %target,
-                        length,
-                        kind = ice_packet_kind(buffer),
-                        "Sent Bedrock ICE datagram"
-                    );
-                    Ok(length)
-                }
-                Err(error) => {
-                    warn!(
-                        %target,
-                        kind = ice_packet_kind(buffer),
-                        %error,
-                        "Failed to send Bedrock ICE datagram"
-                    );
-                    Err(error.into())
-                }
-            }
-        })
-    }
-
-    fn local_addr(&self) -> Result<SocketAddr, WebRtcError> {
-        Ok(self.socket.local_addr()?)
-    }
-
-    fn remote_addr(&self) -> Option<SocketAddr> {
-        None
-    }
-
-    fn close<'a, 'async_trait>(&'a self) -> ConnFuture<'async_trait, ()>
-    where
-        'a: 'async_trait,
-        Self: 'async_trait,
-    {
-        Box::pin(async { Ok(()) })
-    }
-
-    fn as_any(&self) -> &(dyn std::any::Any + Send + Sync) {
-        self
+    pub async fn send_to(&self, buffer: &[u8], target: SocketAddr) -> Result<usize, Error> {
+        self.socket.send_to(buffer, target).await
     }
 }
 
@@ -357,11 +248,11 @@ mod tests {
             .unwrap();
 
         let mut request = [0; 16];
-        let (length, address) = Conn::recv_from(&ice, &mut request).await.unwrap();
+        let (length, address) = ice.recv_from(&mut request).await.unwrap();
         assert_eq!(&request[..length], b"request");
         assert_eq!(address, client.local_addr().unwrap());
 
-        Conn::send_to(&ice, b"response", client.local_addr().unwrap())
+        ice.send_to(b"response", client.local_addr().unwrap())
             .await
             .unwrap();
         let mut response = [0; 16];

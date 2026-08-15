@@ -1,4 +1,4 @@
-/* This file is generated. Do not edit manually. */
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum ScoreboardDisplaySlot {
     List,
     Sidebar,
