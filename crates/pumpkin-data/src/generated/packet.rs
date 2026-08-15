@@ -190,8 +190,8 @@ pub mod serverbound {
         v1_21_7: 0i32,
         v1_21_9: 0i32,
         v1_21_11: 0i32,
-        v26_1: -1i32,
-        v26_2: -1i32,
+        v26_1: 0i32,
+        v26_2: 0i32,
     };
     pub const LOGIN_COOKIE_RESPONSE: super::PacketId = super::PacketId {
         v1_20_5: 4i32,
