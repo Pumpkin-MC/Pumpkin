@@ -31,12 +31,12 @@ fn damage_type_registry() -> Result<Arc<ReloadableRegistry<DamageTypeFile>>, Boo
 fn init_register() -> Vec<RegistryEntry<Arc<dyn Registry>>> {
     #![allow(clippy::panic)]
     let registry: Arc<dyn Registry> = damage_type_registry()
-            .unwrap_or_else(|error| panic!("failed to bootstrap damage type registry: {error}"));
+        .unwrap_or_else(|error| panic!("failed to bootstrap damage type registry: {error}"));
 
-        vec![RegistryEntry::new(
-            Identifier::vanilla_static("damage_type"),
-            registry,
-        )]
+    vec![RegistryEntry::new(
+        Identifier::vanilla_static("damage_type"),
+        registry,
+    )]
 }
 
 bootstrap_provider! {

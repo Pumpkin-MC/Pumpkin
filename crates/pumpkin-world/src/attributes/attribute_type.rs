@@ -48,7 +48,9 @@ impl<T: Encode + Decode + 'static> AttributeType<T> {
     }
 
     #[must_use]
-    pub const fn modifier_library(&self) -> &FxHashMap<AttributeOperation, ErasedAttributeModifier<T>> {
+    pub const fn modifier_library(
+        &self,
+    ) -> &FxHashMap<AttributeOperation, ErasedAttributeModifier<T>> {
         &self.modifier_library
     }
 
