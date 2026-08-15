@@ -156,7 +156,10 @@ impl LivingEntity {
                     if attr.id == Attributes::MAX_HEALTH.id {
                         max_health = *base as f32;
                     }
-                    m.insert(attr.id, AttributeInstance::new(*base));
+                    m.insert(
+                        attr.id,
+                        AttributeInstance::new(*base, attr.min_value, attr.max_value),
+                    );
                 }
                 std::sync::RwLock::new(m)
             },
@@ -499,7 +502,7 @@ impl LivingEntity {
                     },
                     |a| a.1,
                 );
-            AttributeInstance::new(base)
+            AttributeInstance::new(base, attribute.min_value, attribute.max_value)
         });
 
         f(inst);
@@ -548,7 +551,7 @@ impl LivingEntity {
             inst.base_value = new_base;
             inst.dirty.store(true, Ordering::Relaxed);
         } else {
-            let ai = AttributeInstance::new(new_base);
+            let ai = AttributeInstance::new(new_base, attribute.min_value, attribute.max_value);
             ai.dirty.store(true, Ordering::Relaxed);
             map.insert(attribute.id, ai);
         }

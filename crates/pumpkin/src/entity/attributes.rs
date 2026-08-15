@@ -24,6 +24,8 @@ pub struct Modifier {
 #[derive(Debug)]
 pub struct AttributeInstance {
     pub base_value: f64,
+    pub min_value: f64,
+    pub max_value: f64,
     pub modifiers: Vec<Modifier>,
     pub cached_value: AtomicU64,
     pub dirty: AtomicBool,
@@ -31,12 +33,14 @@ pub struct AttributeInstance {
 
 impl AttributeInstance {
     #[must_use]
-    pub const fn new(base_value: f64) -> Self {
+    pub fn new(base_value: f64, min_value: f64, max_value: f64) -> Self {
         Self {
             base_value,
+            min_value,
+            max_value,
             modifiers: Vec::new(),
             cached_value: AtomicU64::new(base_value.to_bits()),
-            dirty: AtomicBool::new(false),
+            dirty: AtomicBool::new(true),
         }
     }
 
@@ -48,23 +52,27 @@ impl AttributeInstance {
         let mut value = self.base_value;
 
         let mut add_sum = 0.0;
-        let mut mul_base = 0.0;
         let mut mul_total = 1.0;
         for m in &self.modifiers {
             match m.operation {
                 ModifierOperation::Add => add_sum += m.amount,
-                ModifierOperation::MultiplyBase => mul_base += m.amount,
+                ModifierOperation::MultiplyBase => {}
                 ModifierOperation::MultiplyTotal => mul_total *= 1.0 + m.amount,
             }
         }
 
         value += add_sum;
-        value *= 1.0 + mul_base;
+        let base = value;
+        for modifier in self
+            .modifiers
+            .iter()
+            .filter(|modifier| matches!(modifier.operation, ModifierOperation::MultiplyBase))
+        {
+            value += base * modifier.amount;
+        }
         value *= mul_total;
 
-        if value.is_nan() || value.is_infinite() {
-            value = self.base_value;
-        }
+        value = sanitize_value(value, self.min_value, self.max_value);
 
         self.cached_value.store(value.to_bits(), Ordering::Relaxed);
         self.dirty.store(false, Ordering::Relaxed);
@@ -184,10 +192,54 @@ impl Clone for AttributeInstance {
     fn clone(&self) -> Self {
         Self {
             base_value: self.base_value,
+            min_value: self.min_value,
+            max_value: self.max_value,
             modifiers: self.modifiers.clone(),
             cached_value: AtomicU64::new(self.cached_value.load(Ordering::Relaxed)),
             dirty: AtomicBool::new(self.dirty.load(Ordering::Relaxed)),
         }
+    }
+}
+
+pub(crate) const fn sanitize_value(value: f64, min_value: f64, max_value: f64) -> f64 {
+    if value.is_nan() {
+        min_value
+    } else {
+        value.clamp(min_value, max_value)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{AttributeInstance, Modifier, ModifierOperation};
+
+    #[test]
+    fn ranged_values_match_vanilla_sanitization() {
+        let mut instance = AttributeInstance::new(100.0, 0.0, 30.0);
+        assert_eq!(instance.base_value, 100.0);
+        assert_eq!(instance.value(), 30.0);
+
+        instance.add_or_replace_modifier(Modifier {
+            id: "over-max".to_string(),
+            amount: 100.0,
+            operation: ModifierOperation::Add,
+        });
+        assert_eq!(instance.value(), 30.0);
+
+        let nan = AttributeInstance::new(f64::NAN, 0.0, 30.0);
+        assert!(nan.base_value.is_nan());
+        assert_eq!(nan.value(), 0.0);
+
+        let negative = AttributeInstance::new(-1.0, -2.0, 1.0);
+        assert_eq!(negative.value(), -1.0);
+
+        let mut non_finite = AttributeInstance::new(f64::INFINITY, 0.0, 30.0);
+        non_finite.add_or_replace_modifier(Modifier {
+            id: "zero-multiplier".to_string(),
+            amount: 0.0,
+            operation: ModifierOperation::MultiplyBase,
+        });
+        assert_eq!(non_finite.value(), 0.0);
     }
 }
 
