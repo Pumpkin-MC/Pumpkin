@@ -27,5 +27,8 @@ tracing.workspace = true
 tokio.workspace = true
 thiserror.workspace = true
 
+[dev-dependencies]
+futures.workspace = true
+
 [lints]
 workspace = true

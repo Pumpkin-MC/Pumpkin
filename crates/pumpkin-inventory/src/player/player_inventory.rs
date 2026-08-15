@@ -188,15 +188,7 @@ impl PlayerInventory {
     /// Returns the number of items that couldn't fit.
     async fn add_stack_to_slot(&self, slot: usize, stack: ItemStack) -> usize {
         if slot >= Self::MAIN_SIZE {
-            if let Some(slot_type) = self.equipment_slots.get(&slot) {
-                let mut equipment = self.entity_equipment.lock().await;
-                let current = equipment.get(slot_type);
-                if current.is_empty() {
-                    equipment.put(slot_type, stack);
-                    return 0;
-                }
-            }
-            return stack.item_count as usize;
+            return self.add_stack_to_equipment_slot(slot, stack).await;
         }
 
         let mut inv = self.main_inventory.write().await;
@@ -215,6 +207,39 @@ impl PlayerInventory {
             self_stack.increment(count_min);
         }
         stack_count as usize
+    }
+
+    /// Adds a stack to an equipment slot (armor or off-hand).
+    ///
+    /// Mirrors [`Self::add_stack_to_slot`]: an empty slot takes the whole stack,
+    /// and a slot already holding a compatible stack is topped up.
+    ///
+    /// Returns the number of items that couldn't fit.
+    async fn add_stack_to_equipment_slot(&self, slot: usize, stack: ItemStack) -> usize {
+        let Some(slot_type) = self.equipment_slots.get(&slot) else {
+            return stack.item_count as usize;
+        };
+
+        let mut equipment = self.entity_equipment.lock().await;
+        let mut current = equipment.get(slot_type);
+
+        if current.is_empty() {
+            equipment.put(slot_type, stack);
+            return 0;
+        }
+
+        // Same predicate `get_occupied_slot_with_room_for_stack` used to pick this
+        // slot, so a slot it deemed stackable is never rejected here.
+        if !Self::can_stack_add_more(&current, &stack) {
+            return stack.item_count as usize;
+        }
+
+        let count_left = current.get_max_stack_size() - current.item_count;
+        let count_min = stack.item_count.min(count_left);
+        current.increment(count_min);
+        equipment.put(slot_type, current);
+
+        (stack.item_count - count_min) as usize
     }
 
     /// Finds an empty slot in the inventory.
@@ -526,5 +551,98 @@ impl PlayerInventory {
     /// Gets the currently selected hotbar slot index.
     pub fn get_selected_slot(&self) -> u8 {
         self.selected_slot.load(Ordering::Relaxed)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::build_equipment_slots;
+    use futures::executor::block_on;
+
+    fn empty_inventory() -> (PlayerInventory, Arc<Mutex<EntityEquipment>>) {
+        let equipment = Arc::new(Mutex::new(EntityEquipment::new()));
+        let inventory = PlayerInventory::new(equipment.clone(), Arc::new(build_equipment_slots()));
+        (inventory, equipment)
+    }
+
+    fn off_hand(equipment: &Arc<Mutex<EntityEquipment>>) -> ItemStack {
+        block_on(equipment.lock()).get(&EquipmentSlot::OFF_HAND)
+    }
+
+    fn set_off_hand(equipment: &Arc<Mutex<EntityEquipment>>, stack: ItemStack) {
+        block_on(equipment.lock()).put(&EquipmentSlot::OFF_HAND, stack);
+    }
+
+    /// A partially filled off-hand used to block every pickup: the slot was picked as
+    /// the destination and then refused, with no fallback to the main inventory.
+    #[test]
+    fn picks_up_into_a_partially_filled_off_hand() {
+        let (inventory, equipment) = empty_inventory();
+        set_off_hand(&equipment, ItemStack::new(1, &Item::TORCH));
+
+        let mut picked_up = ItemStack::new(1, &Item::TORCH);
+        assert!(block_on(inventory.insert_stack_anywhere(&mut picked_up)));
+
+        assert!(picked_up.is_empty(), "the whole stack should be taken");
+        assert_eq!(
+            off_hand(&equipment).item_count,
+            2,
+            "off-hand should stack up"
+        );
+    }
+
+    #[test]
+    fn picks_up_into_an_empty_off_hand_inventory() {
+        let (inventory, _equipment) = empty_inventory();
+
+        let mut picked_up = ItemStack::new(1, &Item::TORCH);
+        assert!(block_on(inventory.insert_stack_anywhere(&mut picked_up)));
+        assert!(picked_up.is_empty());
+    }
+
+    /// A different item in the off-hand must not interfere with the pickup.
+    #[test]
+    fn off_hand_holding_another_item_does_not_block_pickup() {
+        let (inventory, equipment) = empty_inventory();
+        set_off_hand(&equipment, ItemStack::new(1, &Item::TORCH));
+
+        let mut picked_up = ItemStack::new(1, &Item::STONE);
+        assert!(block_on(inventory.insert_stack_anywhere(&mut picked_up)));
+
+        assert!(picked_up.is_empty());
+        assert_eq!(off_hand(&equipment).item_count, 1, "off-hand is untouched");
+    }
+
+    /// A full off-hand is never chosen as a destination, so the stack lands in the
+    /// main inventory instead.
+    #[test]
+    fn full_off_hand_falls_back_to_the_main_inventory() {
+        let (inventory, equipment) = empty_inventory();
+        let max = ItemStack::new(1, &Item::TORCH).get_max_stack_size();
+        set_off_hand(&equipment, ItemStack::new(max, &Item::TORCH));
+
+        let mut picked_up = ItemStack::new(1, &Item::TORCH);
+        assert!(block_on(inventory.insert_stack_anywhere(&mut picked_up)));
+
+        assert!(picked_up.is_empty());
+        assert_eq!(off_hand(&equipment).item_count, max, "off-hand stays full");
+    }
+
+    /// Only what fits goes into the off-hand; the rest must not be silently dropped.
+    #[test]
+    fn overflow_beyond_the_off_hand_is_kept() {
+        let (inventory, equipment) = empty_inventory();
+        let max = ItemStack::new(1, &Item::TORCH).get_max_stack_size();
+        set_off_hand(&equipment, ItemStack::new(max - 1, &Item::TORCH));
+
+        let mut picked_up = ItemStack::new(5, &Item::TORCH);
+        assert!(block_on(inventory.insert_stack_anywhere(&mut picked_up)));
+
+        assert_eq!(off_hand(&equipment).item_count, max, "off-hand tops up");
+        assert!(
+            picked_up.is_empty(),
+            "the remaining 4 belong in the main inventory, not lost"
+        );
     }
 }
