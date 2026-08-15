@@ -35,7 +35,6 @@ pub enum ClientboundPacket {
 impl ClientboundPacket {
     #[must_use]
     pub fn write_buf(self, id: i32, body: &str) -> BytesMut {
-        // let len = outgoing.len() as u64;
         let mut buf = BytesMut::new();
         // 10 is for 4 bytes ty, 4 bytes id, and 2 terminating nul bytes.
         buf.put_i32_le(10 + body.len() as i32);
@@ -53,9 +52,9 @@ impl ClientboundPacket {
 pub enum PacketError {
     #[error("Invalid length")]
     InvalidLength,
-    #[error("Dailed to send packet")]
+    #[error("Failed to send packet")]
     FailedSend(std::io::Error),
-    #[error("Missing packet lull terminator")]
+    #[error("Missing packet null terminator")]
     MissingNullTerminator,
     #[error("Invalid packet string body")]
     InvalidBody(std::str::Utf8Error),

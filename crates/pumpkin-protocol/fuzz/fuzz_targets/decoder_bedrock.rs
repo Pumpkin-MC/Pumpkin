@@ -2,18 +2,14 @@
 use libfuzzer_sys::fuzz_target;
 use pumpkin_protocol::bedrock::packet_decoder::BedrockBatchDecoder;
 use pumpkin_protocol::bedrock::server::{
-    client_cache_status::SClientCacheStatus,
-    command_request::SCommandRequest,
-    container_close::SContainerClose,
-    interaction::SInteraction,
-    loading_screen::SLoadingScreen,
-    login::SLogin,
-    player_auth_input::SPlayerAuthInput,
-    request_chunk_radius::SRequestChunkRadius,
-    request_network_settings::SRequestNetworkSettings,
-    text::SText,
+    SAnimate, SBlockPickRequest, SClientCacheBlobStatus, SClientCacheStatus, SCommandRequest,
+    SContainerClose, SEmote, SEmoteList, SInteraction, SInventoryTransaction, SItemStackRequest,
+    SLoadingScreen, SLogin, SMobEquipment, SModalFormResponse, SPacketViolationWarning,
+    SPlayerAction, SPlayerAuthInput, SPlayerHotbar, SRequestAbility, SRequestChunkRadius,
+    SRequestNetworkSettings, SResourcePackResponse, SRespawn, SSetLocalPlayerAsInitialized,
+    SSetPlayerInventoryOptions, SText,
 };
-use pumpkin_protocol::serial::PacketRead;
+use pumpkin_protocol::serial::{PacketRead, PacketReadSlice};
 use std::io::Cursor;
 
 // ---------------------------------------------------------------------------
@@ -26,25 +22,53 @@ fn fuzz_serverbound_packets(payload: &[u8]) {
         ($($packet:ty),* $(,)?) => {
             $(
                 cursor.set_position(0);
-                // Attempt to read as a standard Game Packet (with version)
                 let _ = <$packet>::read(&mut cursor);
             )*
         };
     }
 
-    // Standard Bedrock Serverbound Packets
+    macro_rules! run_read_slice {
+        ($($packet:ty),* $(,)?) => {
+            $(
+                let mut slice = payload;
+                let _ = <$packet>::read_slice(&mut slice);
+            )*
+        };
+    }
+
+    // Standard Bedrock Serverbound Packets (PacketRead)
     run_read!(
+        SAnimate,
+        SBlockPickRequest,
+        SClientCacheBlobStatus,
         SClientCacheStatus,
         SCommandRequest,
         SContainerClose,
+        SEmote,
+        SEmoteList,
         SInteraction,
+        SInventoryTransaction,
+        SItemStackRequest,
         SLoadingScreen,
         SLogin,
+        SMobEquipment,
+        SModalFormResponse,
+        SPacketViolationWarning,
+        SPlayerAction,
         SPlayerAuthInput,
+        SPlayerHotbar,
+        SRequestAbility,
         SRequestChunkRadius,
         SRequestNetworkSettings,
+        SResourcePackResponse,
+        SRespawn,
+        SSetLocalPlayerAsInitialized,
+        SSetPlayerInventoryOptions,
         SText,
     );
+
+    // Bedrock Serverbound Packets supporting zero-copy PacketReadSlice
+    run_read_slice!(SCommandRequest, SEmote, SModalFormResponse, SText,);
 }
 
 // ---------------------------------------------------------------------------
@@ -67,8 +91,8 @@ fuzz_target!(|data: &[u8]| {
         decoder.set_compression((threshold_raw as u32).try_into().unwrap());
     }
     // 1. Fuzz the Decoder (Framing/VarInts/Bitmasks)
-    let decoder_cursor = Cursor::new(stream_data.to_vec());
-    if let Ok(raw_packet) = decoder.get_game_packet(decoder_cursor) {
+    let mut decoder_cursor = Cursor::new(stream_data.to_vec());
+    if let Ok(raw_packet) = decoder.get_game_packet(&mut decoder_cursor) {
         // If framed correctly, fuzz the internal payload
         fuzz_serverbound_packets(&raw_packet.payload);
     }

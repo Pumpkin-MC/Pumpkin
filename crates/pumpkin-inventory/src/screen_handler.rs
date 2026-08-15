@@ -940,15 +940,20 @@ pub trait ScreenHandler: Send + Sync {
 
                     let mut cursor_stack = behaviour.cursor_stack.lock().await;
                     let initial_count = cursor_stack.item_count;
+                    let slots_count = behaviour.drag_slots.len();
                     for slot_index in &behaviour.drag_slots {
-                        let slot = behaviour.slots[*slot_index as usize].clone();
+                        let Some(slot) = behaviour.slots.get(*slot_index as usize).cloned() else {
+                            continue;
+                        };
                         let stack = slot.get_stack().await;
 
                         if (stack.are_items_and_components_equal(&cursor_stack) || stack.is_empty())
                             && slot.can_insert(&cursor_stack).await
                         {
                             let mut inserting_count = match drag_button {
-                                0 => initial_count / behaviour.drag_slots.len() as u8,
+                                0 => (initial_count as usize)
+                                    .checked_div(slots_count)
+                                    .map_or(0, |c| c as u8),
                                 1 => 1,
                                 2 => {
                                     cursor_stack.item_count = cursor_stack.get_max_stack_size();

@@ -1,4 +1,4 @@
-use std::io::{Error, Read, Write};
+use std::io::{Error, ErrorKind, Read, Write};
 use std::num::NonZeroI32;
 
 use pumpkin_data::item::{BedrockItem, JavaToBedrockItemMapping};
@@ -47,8 +47,14 @@ impl PacketRead for NetworkItemDescriptor {
 
         let block_runtime_id = VarInt(VarUInt::read(buf)?.0 as i32);
 
-        let user_data_len = VarUInt::read(buf)?.0;
-        let mut user_data = vec![0u8; user_data_len as usize];
+        let user_data_len = VarUInt::read(buf)?.0 as usize;
+        if user_data_len > 1_048_576 {
+            return Err(Error::new(
+                ErrorKind::InvalidData,
+                "user_data_len exceeds 1MB limit",
+            ));
+        }
+        let mut user_data = vec![0u8; user_data_len];
         buf.read_exact(&mut user_data)?;
 
         let (nbt_data, place_on_blocks, destroy_blocks, shield_blocking_tick) =
@@ -193,8 +199,14 @@ impl PacketRead for ItemStackWrapper {
 
         let block_runtime_id = VarInt(VarUInt::read(buf)?.0 as i32);
 
-        let user_data_len = VarUInt::read(buf)?.0;
-        let mut user_data = vec![0u8; user_data_len as usize];
+        let user_data_len = VarUInt::read(buf)?.0 as usize;
+        if user_data_len > 1_048_576 {
+            return Err(Error::new(
+                ErrorKind::InvalidData,
+                "user_data_len exceeds 1MB limit",
+            ));
+        }
+        let mut user_data = vec![0u8; user_data_len];
         buf.read_exact(&mut user_data)?;
 
         let (nbt_data, place_on_blocks, destroy_blocks, shield_blocking_tick) =
@@ -285,8 +297,14 @@ impl PacketRead for NetworkItemStackDescriptor {
 
         let block_runtime_id = VarUInt::read(buf)?;
 
-        let extra_data_len = VarUInt::read(buf)?.0;
-        let mut extra_data = vec![0u8; extra_data_len as usize];
+        let extra_data_len = VarUInt::read(buf)?.0 as usize;
+        if extra_data_len > 1_048_576 {
+            return Err(Error::new(
+                ErrorKind::InvalidData,
+                "extra_data_len exceeds 1MB limit",
+            ));
+        }
+        let mut extra_data = vec![0u8; extra_data_len];
         buf.read_exact(&mut extra_data)?;
 
         Ok(Self {
@@ -513,8 +531,14 @@ impl PacketRead for NetworkItemStack {
         let aux_value = VarUInt::read(buf)?;
         let block_runtime_id = VarInt::read(buf)?;
 
-        let extra_data_len = VarUInt::read(buf)?.0;
-        let mut extra_data = vec![0u8; extra_data_len as usize];
+        let extra_data_len = VarUInt::read(buf)?.0 as usize;
+        if extra_data_len > 1_048_576 {
+            return Err(Error::new(
+                ErrorKind::InvalidData,
+                "extra_data_len exceeds 1MB limit",
+            ));
+        }
+        let mut extra_data = vec![0u8; extra_data_len];
         buf.read_exact(&mut extra_data)?;
 
         Ok(Self {
@@ -541,17 +565,24 @@ fn write_user_data_strings<W: Write>(writer: &mut W, values: &[String]) -> Resul
 
 fn read_user_data_strings<R: Read>(reader: &mut R) -> Result<Vec<String>, Error> {
     let len = i32::read(reader)?;
-    if len < 0 {
+    if !(0..=1024).contains(&len) {
         return Err(Error::new(
             std::io::ErrorKind::InvalidData,
-            "negative item string array length",
+            "item string array length out of bounds",
         ));
     }
-    let mut values = Vec::with_capacity(len as usize);
+    let mut values = Vec::with_capacity((len as usize).min(32));
     for _ in 0..len {
         let mut length = [0; 2];
         reader.read_exact(&mut length)?;
-        let mut bytes = vec![0; usize::from(u16::from_be_bytes(length))];
+        let str_len = usize::from(u16::from_be_bytes(length));
+        if str_len > 32767 {
+            return Err(Error::new(
+                std::io::ErrorKind::InvalidData,
+                "item string too long",
+            ));
+        }
+        let mut bytes = vec![0; str_len];
         reader.read_exact(&mut bytes)?;
         values.push(
             String::from_utf8(bytes)

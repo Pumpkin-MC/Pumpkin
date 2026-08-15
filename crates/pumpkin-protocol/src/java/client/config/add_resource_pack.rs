@@ -46,9 +46,9 @@ impl ClientPacket for CConfigAddResourcePack<'_> {
         write.write_string(self.url)?;
         write.write_string(self.hash)?;
         write.write_bool(self.forced)?;
-        if let Some(_prompt) = &self.prompt_message {
+        if let Some(prompt) = &self.prompt_message {
             write.write_bool(true)?;
-            // TODO
+            write.write_slice(&prompt.encode())?;
         } else {
             write.write_bool(false)?;
         }

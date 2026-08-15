@@ -53,6 +53,12 @@ impl PacketRead for StackRequestItem {
         let count = i16::read(reader)? as u16;
         let block_runtime_id = VarUInt::read(reader)?;
         let data_len = VarUInt::read(reader)?.0 as usize;
+        if data_len > 1_048_576 {
+            return Err(Error::new(
+                ErrorKind::InvalidData,
+                "extra_data length exceeds limit",
+            ));
+        }
         let mut extra_data = vec![0; data_len];
         reader.read_exact(&mut extra_data)?;
         Ok(Self {

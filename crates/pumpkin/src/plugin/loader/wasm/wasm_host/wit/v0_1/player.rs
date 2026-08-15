@@ -2272,6 +2272,91 @@ impl pumpkin::plugin::player::HostJavaPlayer for PluginHostState {
         Ok(())
     }
 
+    async fn send_resource_pack(
+        &mut self,
+        player_res: Resource<pumpkin::plugin::player::JavaPlayer>,
+        pack: pumpkin::plugin::player::JavaResourcePack,
+    ) -> wasmtime::Result<()> {
+        let player = self
+            .resource_table
+            .get::<crate::plugin::loader::wasm::wasm_host::state::JavaPlayerResource>(
+                &Resource::new_own(player_res.rep()),
+            )
+            .map_err(|_| wasmtime::Error::msg("invalid java-player resource handle"))?
+            .provider
+            .clone();
+
+        let uuid = Uuid::from_wit(&pack.id);
+        let prompt_message = pack
+            .prompt_message
+            .as_ref()
+            .map(|p| text_component_from_resource(self, p));
+
+        if let crate::net::ClientPlatform::Java(client) = player.client.as_ref() {
+            client
+                .send_packet_now(
+                    &pumpkin_protocol::java::client::play::CAddResourcePack::new(
+                        &uuid,
+                        &pack.url,
+                        &pack.hash,
+                        pack.forced,
+                        prompt_message,
+                    ),
+                )
+                .await;
+        }
+        Ok(())
+    }
+
+    async fn remove_resource_pack(
+        &mut self,
+        player_res: Resource<pumpkin::plugin::player::JavaPlayer>,
+        id: pumpkin::plugin::uuid::Uuid,
+    ) -> wasmtime::Result<()> {
+        let player = self
+            .resource_table
+            .get::<crate::plugin::loader::wasm::wasm_host::state::JavaPlayerResource>(
+                &Resource::new_own(player_res.rep()),
+            )
+            .map_err(|_| wasmtime::Error::msg("invalid java-player resource handle"))?
+            .provider
+            .clone();
+
+        let uuid = Uuid::from_wit(&id);
+
+        if let crate::net::ClientPlatform::Java(client) = player.client.as_ref() {
+            client
+                .send_packet_now(
+                    &pumpkin_protocol::java::client::play::CRemoveResourcePack::new(Some(&uuid)),
+                )
+                .await;
+        }
+        Ok(())
+    }
+
+    async fn clear_resource_packs(
+        &mut self,
+        player_res: Resource<pumpkin::plugin::player::JavaPlayer>,
+    ) -> wasmtime::Result<()> {
+        let player = self
+            .resource_table
+            .get::<crate::plugin::loader::wasm::wasm_host::state::JavaPlayerResource>(
+                &Resource::new_own(player_res.rep()),
+            )
+            .map_err(|_| wasmtime::Error::msg("invalid java-player resource handle"))?
+            .provider
+            .clone();
+
+        if let crate::net::ClientPlatform::Java(client) = player.client.as_ref() {
+            client
+                .send_packet_now(
+                    &pumpkin_protocol::java::client::play::CRemoveResourcePack::new(None),
+                )
+                .await;
+        }
+        Ok(())
+    }
+
     async fn drop(
         &mut self,
         rep: Resource<pumpkin::plugin::player::JavaPlayer>,
@@ -2645,6 +2730,60 @@ impl pumpkin::plugin::player::HostBedrockPlayer for PluginHostState {
             .provider
             .clone();
         player.reset_scoreboard().await;
+        Ok(())
+    }
+
+    async fn send_resource_packs_info(
+        &mut self,
+        player_res: Resource<pumpkin::plugin::player::BedrockPlayer>,
+        info: pumpkin::plugin::player::BedrockResourcePacksInfo,
+    ) -> wasmtime::Result<()> {
+        let player = self
+            .resource_table
+            .get::<crate::plugin::loader::wasm::wasm_host::state::BedrockPlayerResource>(
+                &Resource::new_own(player_res.rep()),
+            )
+            .map_err(|_| wasmtime::Error::msg("invalid bedrock-player resource handle"))?
+            .provider
+            .clone();
+
+        if let crate::net::ClientPlatform::Bedrock(client) = player.client.as_ref() {
+            let entries = info
+                .packs
+                .into_iter()
+                .map(|p| {
+                    pumpkin_protocol::bedrock::client::resource_packs_info::ResourcePackEntry {
+                        uuid: Uuid::from_wit(&p.id),
+                        version: p.version,
+                        size: p.size,
+                        download_url: p.download_url,
+                        content_key: p.content_key.unwrap_or_default(),
+                        sub_pack_name: p.sub_pack_name.unwrap_or_default(),
+                        content_id: p.content_id.unwrap_or_default(),
+                        has_scripts: p.has_scripts,
+                        addon_pack: p.addon_pack,
+                        rtx_enabled: p.rtx_enabled,
+                    }
+                })
+                .collect();
+
+            let world_template_id = info
+                .world_template_id
+                .map_or_else(uuid::Uuid::nil, |id| Uuid::from_wit(&id));
+
+            let packs_info =
+                pumpkin_protocol::bedrock::client::resource_packs_info::CResourcePacksInfo {
+                    resource_pack_required: info.required,
+                    has_addon_packs: info.has_addon_packs,
+                    has_scripts: info.has_scripts,
+                    is_vibrant_visuals_force_disabled: info.is_vibrant_visuals_force_disabled,
+                    world_template_id,
+                    world_template_version: info.world_template_version.unwrap_or_default(),
+                    resource_packs: entries,
+                };
+
+            client.send_game_packet(&packs_info).await;
+        }
         Ok(())
     }
 
