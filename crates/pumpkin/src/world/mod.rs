@@ -4490,17 +4490,16 @@ impl World {
             if other_entity.entity_uuid == holder_uuid {
                 continue;
             }
-            if other_entity.unleash_if_holder(holder_uuid).await {
-                if !other_entity.is_removed()
-                    && self
-                        .entities
-                        .load()
-                        .iter()
-                        .any(|entity| entity.get_entity().entity_uuid == other_entity.entity_uuid)
-                {
-                    self.spawn_state.load().remove_entity(self, other.as_ref());
-                    self.spawn_state.load().add_entity(self, other.as_ref());
-                }
+            if other_entity.unleash_if_holder(holder_uuid).await
+                && !other_entity.is_removed()
+                && self
+                    .entities
+                    .load()
+                    .iter()
+                    .any(|entity| entity.get_entity().entity_uuid == other_entity.entity_uuid)
+            {
+                self.spawn_state.load().remove_entity(self, other.as_ref());
+                self.spawn_state.load().add_entity(self, other.as_ref());
             }
         }
     }

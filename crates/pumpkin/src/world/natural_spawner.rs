@@ -286,6 +286,7 @@ impl fmt::Debug for SpawnState {
             .field("mob_category_counts", &self.mob_category_counts)
             .field("spawn_potential", &self.spawn_potential)
             .field("local_mob_cap_calculator", &self.local_mob_cap_calculator)
+            .field("counted_entities", &self.counted_entities)
             .field("last_checked", &self.last_checked)
             .finish()
     }
@@ -344,10 +345,10 @@ impl SpawnState {
 
     pub fn remove_entity(&self, world: &World, entity: &dyn EntityBase) {
         let base_entity = entity.get_entity();
-        if !self
+        if self
             .counted_entities
             .remove(&base_entity.entity_uuid)
-            .is_some()
+            .is_none()
         {
             return;
         }
