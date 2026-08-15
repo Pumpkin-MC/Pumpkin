@@ -1,6 +1,9 @@
 use std::sync::Arc;
 
+use pumpkin_data::Block;
 use pumpkin_data::entity::EntityType;
+use pumpkin_data::tag::{self, Taggable};
+use pumpkin_util::math::boundingbox::{BoundingBox, EntityDimensions};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use uuid::Uuid;
@@ -122,7 +125,6 @@ use crate::entity::vehicle::boat::BoatEntity;
 use crate::entity::vehicle::minecart::MinecartEntity;
 use crate::entity::{Entity, EntityBase, mob};
 use crate::world::World;
-use pumpkin_data::Block;
 use std::sync::atomic::AtomicBool;
 
 #[expect(clippy::too_many_lines)]
@@ -346,6 +348,11 @@ pub fn check_spawn_rules(
 ) -> bool {
     let id = entity_type.id;
 
+    // Vanilla `Ocelot.checkOcelotSpawnRules`: two successful rolls out of three.
+    if id == EntityType::OCELOT.id {
+        return rand::random_range(0u8..3) != 0;
+    }
+
     if id == EntityType::BOGGED.id
         || id == EntityType::CAVE_SPIDER.id
         || id == EntityType::CREEPER.id
@@ -378,4 +385,60 @@ pub fn check_spawn_rules(
 
     // TODO
     true
+}
+
+/// Vanilla `Ocelot.checkSpawnObstruction`.
+pub fn check_spawn_obstruction(
+    entity_type: &'static EntityType,
+    world: &Arc<World>,
+    pos: &BlockPos,
+) -> bool {
+    if entity_type.id != EntityType::OCELOT.id {
+        return true;
+    }
+
+    let bounding_box = BoundingBox::new_from_pos(
+        f64::from(pos.0.x) + 0.5,
+        f64::from(pos.0.y),
+        f64::from(pos.0.z) + 0.5,
+        &EntityDimensions {
+            width: entity_type.dimension[0],
+            height: entity_type.dimension[1],
+            eye_height: entity_type.eye_height,
+        },
+    );
+    if !world.is_space_empty(bounding_box)
+        || world
+            .get_all_at_box(&bounding_box.expand_all(1.0e-7))
+            .iter()
+            .any(|entity| !entity.is_spectator() && entity.is_collidable(None))
+        || contains_any_liquid(world, bounding_box)
+    {
+        return false;
+    }
+
+    if pos.0.y < world.sea_level {
+        return false;
+    }
+
+    let below = world.get_block_state(&pos.down());
+    let below_block = Block::from_state_id(below.id);
+    below_block == &Block::GRASS_BLOCK || below_block.has_tag(&tag::Block::MINECRAFT_LEAVES)
+}
+
+fn contains_any_liquid(world: &World, bounding_box: BoundingBox) -> bool {
+    for x in bounding_box.min.x.floor() as i32..bounding_box.max.x.ceil() as i32 {
+        for y in bounding_box.min.y.floor() as i32..bounding_box.max.y.ceil() as i32 {
+            for z in bounding_box.min.z.floor() as i32..bounding_box.max.z.ceil() as i32 {
+                if !world
+                    .get_fluid_and_fluid_state(&BlockPos::new(x, y, z))
+                    .1
+                    .is_empty
+                {
+                    return true;
+                }
+            }
+        }
+    }
+    false
 }
