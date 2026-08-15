@@ -688,21 +688,21 @@ fn setup_stdin_console(server: Arc<Server>) {
         }
     });
     tokio::spawn(async move {
-        while !SHOULD_STOP.load(Ordering::Relaxed) {
-            if let Some(command) = rx.recv().await {
-                let mut event = ServerCommandEvent::new(command.clone());
-                server.plugin_manager.fire(&server, &mut event).await;
-                if !event.cancelled {
-                    server
-                        .command_dispatcher
-                        .read()
-                        .await
-                        .handle_command(
-                            &command::CommandSender::Console.into_source(&server).await,
-                            command.as_str(),
-                        )
-                        .await;
-                }
+        while !SHOULD_STOP.load(Ordering::Relaxed)
+            && let Some(command) = rx.recv().await
+        {
+            let mut event = ServerCommandEvent::new(command.clone());
+            server.plugin_manager.fire(&server, &mut event).await;
+            if !event.cancelled {
+                server
+                    .command_dispatcher
+                    .read()
+                    .await
+                    .handle_command(
+                        &command::CommandSender::Console.into_source(&server).await,
+                        command.as_str(),
+                    )
+                    .await;
             }
         }
     });

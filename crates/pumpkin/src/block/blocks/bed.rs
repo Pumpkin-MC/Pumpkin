@@ -20,7 +20,7 @@ use crate::block::bounce_entity_after_fall;
 use crate::block::registry::BlockActionResult;
 use crate::block::{
     BlockBehaviour, BrokenArgs, CanPlaceAtArgs, NormalUseArgs, OnPlaceArgs, OnStateReplacedArgs,
-    PlacedArgs,
+    PlacedArgs, PlayerPlacedArgs,
 };
 use crate::entity::{Entity, EntityBase};
 use crate::world::World;
@@ -132,6 +132,16 @@ impl BlockBehaviour for BedBlock {
 
             let bed_head_entity = BedBlockEntity::new(bed_head_pos);
             args.world.add_block_entity(Arc::new(bed_head_entity));
+        })
+    }
+
+    fn player_placed<'a>(&'a self, args: PlayerPlacedArgs<'a>) -> BlockFuture<'a, ()> {
+        Box::pin(async move {
+            args.world.play_bedrock_level_sound(
+                "place",
+                &args.position.to_centered_f64(),
+                i32::from(pumpkin_data::BlockState::to_be_network_id(args.state_id)),
+            );
         })
     }
 

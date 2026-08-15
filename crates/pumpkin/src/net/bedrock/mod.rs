@@ -38,7 +38,7 @@ use pumpkin_protocol::{
             player_auth_input::SPlayerAuthInput, request_ability::SRequestAbility,
             request_chunk_radius::SRequestChunkRadius,
             request_network_settings::SRequestNetworkSettings,
-            resource_pack_response::SResourcePackResponse,
+            resource_pack_response::SResourcePackResponse, respawn::SRespawn,
             set_local_player_as_initialized::SSetLocalPlayerAsInitialized,
             set_player_inventory_options::SSetPlayerInventoryOptions, text::SText,
         },
@@ -271,6 +271,26 @@ impl BedrockClient {
         self.close().await;
     }
 
+    pub async fn kick_explicit(
+        &self,
+        reason: DisconnectReason,
+        message: String,
+        skip_message: bool,
+        filtered_message: String,
+        send_packet: bool,
+    ) {
+        if send_packet {
+            self.send_game_packet(&CDisconnectPlayer {
+                reason: pumpkin_protocol::codec::var_int::VarInt(reason as i32),
+                skip_message,
+                message,
+                filtered_message,
+            })
+            .await;
+        }
+        self.close().await;
+    }
+
     pub async fn send_chunks(&self, chunks: &[SyncChunk]) {
         let player = self.player.load_full();
         let Some(player) = player.as_ref() else {
@@ -311,8 +331,9 @@ impl BedrockClient {
 
         let mut serialize_tasks = Vec::with_capacity(valid_chunks.len());
         for chunk in valid_chunks {
+            let block_actors = player.world().bedrock_chunk_block_actors(&chunk);
             serialize_tasks.push(tokio::task::spawn_blocking(move || {
-                CLevelChunk::encode_chunk(&chunk, bedrock_dimension, cache_enabled)
+                CLevelChunk::encode_chunk(&chunk, bedrock_dimension, cache_enabled, &block_actors)
             }));
         }
 
@@ -716,6 +737,9 @@ impl BedrockClient {
                 self.handle_player_action(player, server, SPlayerAction::read(reader)?)
                     .await;
             }
+            SRespawn::PACKET_ID => {
+                self.handle_respawn(player, SRespawn::read(reader)?).await;
+            }
             SAnimate::PACKET_ID => {
                 self.handle_animate(player, server, &SAnimate::read(reader)?).await;
             }
@@ -807,7 +831,7 @@ impl BedrockClient {
                     Ok(packet) => Some(packet),
                     Err(err) => {
                         if !matches!(err, PacketDecodeError::ConnectionClosed) {
-                            warn!("Failed to decode packet from client: {err}");
+                            debug!("Failed to decode packet from client: {err}");
                             let text = format!("Error while reading incoming packet {err}");
                             self.kick(DisconnectReason::BadPacket, text).await;
                         }

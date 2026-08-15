@@ -1,4 +1,5 @@
 #![allow(
+    unused,
     clippy::all,
     clippy::pedantic,
     clippy::nursery,
@@ -371,3 +372,18 @@ pub mod villager;
 #[rustfmt::skip]
 #[path = "generated/slot_ranges.rs"]
 pub mod slot_ranges;
+
+#[cfg(feature = "map_color")]
+#[rustfmt::skip]
+#[path = "generated/map_color.rs"]
+pub mod map_color;
+
+#[cfg(feature = "map_decoration")]
+#[rustfmt::skip]
+#[path = "generated/map_decoration.rs"]
+pub mod map_decoration;
+
+#[cfg(feature = "dye_color")]
+#[rustfmt::skip]
+#[path = "generated/dye_color.rs"]
+pub mod dye_color;

@@ -91,9 +91,12 @@ pub mod effect;
 pub mod experience_orb;
 pub mod falling;
 pub mod hunger;
+pub mod interaction;
 pub mod item;
 pub mod item_steerable;
+pub mod lightning;
 pub mod living;
+pub mod marker;
 pub mod mob;
 pub mod passive;
 pub mod player;
@@ -102,6 +105,8 @@ pub mod projectile_deflection;
 pub mod tnt;
 pub mod r#type;
 pub mod vehicle;
+
+pub use lightning::LightningBoltEntity;
 
 mod combat;
 pub mod predicate;
@@ -253,6 +258,28 @@ pub trait EntityBase: Send + Sync + NBTStorage + std::any::Any {
         })
     }
 
+    fn on_lightning_strike<'a>(
+        &'a self,
+        caller: &'a dyn EntityBase,
+        lightning: &'a lightning::LightningBoltEntity,
+    ) -> EntityBaseFuture<'a, ()> {
+        Box::pin(async move {
+            if self.get_living_entity().is_some() {
+                self.set_on_fire_for(8.0);
+                let cause = lightning.get_cause().await;
+                self.damage_with_context(
+                    caller,
+                    5.0,
+                    DamageType::LIGHTNING_BOLT,
+                    None,
+                    Some(lightning),
+                    cause.as_deref().map(|p| p as &dyn EntityBase),
+                )
+                .await;
+            }
+        })
+    }
+
     fn is_spectator(&self) -> bool {
         false
     }
@@ -351,6 +378,20 @@ pub trait EntityBase: Send + Sync + NBTStorage + std::any::Any {
 
     fn set_on_fire_for_ticks(&self, ticks: u32) {
         let entity = self.get_entity();
+        let mut event = crate::plugin::api::events::entity::entity_combust::EntityCombustEvent::new(
+            entity.entity_id,
+            ticks as f32 / 20.0,
+        );
+        if let Some(server) = entity.world.load().server.upgrade() {
+            tokio::task::block_in_place(|| {
+                tokio::runtime::Handle::current().block_on(async {
+                    server.plugin_manager.fire(&server, &mut event).await;
+                });
+            });
+            if event.cancelled {
+                return;
+            }
+        }
         if entity.fire_ticks.load(Ordering::Relaxed) < ticks as i32 {
             entity.fire_ticks.store(ticks as i32, Ordering::Relaxed);
         }
@@ -2391,6 +2432,18 @@ impl Entity {
         portal_world: Arc<World>,
         pos: BlockPos,
     ) {
+        let mut portal_event =
+            crate::plugin::api::events::entity::entity_portal::EntityPortalEvent::new(
+                self.entity_id,
+                pos,
+            );
+        if let Some(server) = self.world.load().server.upgrade() {
+            server.plugin_manager.fire(&server, &mut portal_event).await;
+        }
+        if portal_event.cancelled {
+            return;
+        }
+
         // Passengers don't teleport independently - they wait for their vehicle
         if self.has_vehicle().await {
             return;
@@ -2629,10 +2682,21 @@ impl Entity {
         self.sneaking.load(Ordering::Relaxed)
     }
 
-    pub async fn set_swimming(&self, invisible: bool) {
-        if self.swimming.load(Ordering::Relaxed) != invisible {
-            self.swimming.store(invisible, Relaxed);
-            self.set_flag(Flag::Swimming, invisible).await;
+    pub async fn set_swimming(&self, swimming: bool) {
+        if self.swimming.load(Ordering::Relaxed) != swimming {
+            let mut event =
+                crate::plugin::api::events::entity::entity_toggle_swim::EntityToggleSwimEvent::new(
+                    self.entity_id,
+                    swimming,
+                );
+            if let Some(server) = self.world.load().server.upgrade() {
+                server.plugin_manager.fire(&server, &mut event).await;
+            }
+            if event.cancelled {
+                return;
+            }
+            self.swimming.store(event.is_swimming, Relaxed);
+            self.set_flag(Flag::Swimming, event.is_swimming).await;
         }
     }
 
@@ -2922,6 +2986,22 @@ impl Entity {
     }
 
     pub fn set_pose(&self, pose: EntityPose) {
+        let mut pose_event =
+            crate::plugin::api::events::entity::entity_pose_change::EntityPoseChangeEvent::new(
+                self.entity_id,
+                (pose as u8).to_string(),
+            );
+        if let Some(server) = self.world.load().server.upgrade() {
+            tokio::task::block_in_place(|| {
+                tokio::runtime::Handle::current().block_on(async {
+                    server.plugin_manager.fire(&server, &mut pose_event).await;
+                });
+            });
+            if pose_event.cancelled {
+                return;
+            }
+        }
+
         let dimension = Self::get_entity_dimensions(pose);
         let position = self.pos.load();
         let aabb = BoundingBox::new_from_pos(position.x, position.y, position.z, &dimension);
@@ -3008,7 +3088,7 @@ impl Entity {
                 for z in blockpos.0.z..=blockpos1.0.z {
                     let pos = BlockPos::new(x, y, z);
                     let (block, state) = world.get_block_and_state(&pos);
-                    let block_outlines = state.get_block_outline_shapes();
+                    let block_outlines = state.get_block_outline_shapes_at(&pos);
 
                     if state.outline_shapes.is_empty() {
                         world
@@ -3210,11 +3290,37 @@ impl Entity {
         vehicle.is_some()
     }
 
+    pub async fn is_leashed(&self) -> bool {
+        let leashed_to = self.leashed_to.lock().await;
+        leashed_to.is_some()
+    }
+
     pub async fn add_passenger(
         &self,
         vehicle: Arc<dyn EntityBase>,
         passenger: Arc<dyn EntityBase>,
     ) {
+        let mut mount_event =
+            crate::plugin::api::events::entity::entity_mount::EntityMountEvent::new(
+                passenger.get_entity().entity_id,
+                self.entity_id,
+            );
+        let mut vehicle_enter =
+            crate::plugin::api::events::vehicle::vehicle_enter::VehicleEnterEvent::new(
+                self.entity_id,
+                passenger.get_entity().entity_id,
+            );
+        if let Some(server) = self.world.load().server.upgrade() {
+            server.plugin_manager.fire(&server, &mut mount_event).await;
+            server
+                .plugin_manager
+                .fire(&server, &mut vehicle_enter)
+                .await;
+        }
+        if mount_event.cancelled || vehicle_enter.cancelled {
+            return;
+        }
+
         let passenger_entity = passenger.get_entity();
         *passenger_entity.vehicle.lock().await = Some(vehicle);
 
@@ -3258,6 +3364,27 @@ impl Entity {
 
     #[allow(clippy::too_many_lines)]
     pub async fn remove_passenger(&self, passenger_id: i32) {
+        let mut dismount_event =
+            crate::plugin::api::events::entity::entity_dismount::EntityDismountEvent::new(
+                passenger_id,
+                self.entity_id,
+            );
+        let mut vehicle_exit =
+            crate::plugin::api::events::vehicle::vehicle_exit::VehicleExitEvent::new(
+                self.entity_id,
+                passenger_id,
+            );
+        if let Some(server) = self.world.load().server.upgrade() {
+            server
+                .plugin_manager
+                .fire(&server, &mut dismount_event)
+                .await;
+            server.plugin_manager.fire(&server, &mut vehicle_exit).await;
+        }
+        if dismount_event.cancelled || vehicle_exit.cancelled {
+            return;
+        }
+
         let mut passengers = self.passengers.lock().await;
         let removed_passenger = if let Some(idx) = passengers
             .iter()

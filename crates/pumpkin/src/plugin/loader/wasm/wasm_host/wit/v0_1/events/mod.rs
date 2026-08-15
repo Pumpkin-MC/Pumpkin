@@ -24,10 +24,14 @@ use crate::{
 };
 
 pub mod block;
+pub mod enchantment;
 pub mod entity;
+pub mod hanging;
 pub mod inventory;
 pub mod player;
+pub mod raid;
 pub mod server;
+pub mod vehicle;
 pub mod world;
 
 impl pumpkin::plugin::event::Host for PluginHostState {}

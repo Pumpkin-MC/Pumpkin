@@ -4,6 +4,7 @@ use std::{
 };
 
 use pumpkin_macros::Event;
+use pumpkin_util::text::TextComponent;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ServerListPingAddress {
@@ -64,7 +65,7 @@ pub struct ServerListPingEvent {
     pub(crate) address: ServerListPingAddress,
 
     /// The MOTD shown in the server list.
-    pub motd: String,
+    pub motd: TextComponent,
 
     /// The maximum player count.
     pub max_players: u32,
@@ -82,7 +83,7 @@ impl ServerListPingEvent {
     pub fn new(
         hostname: String,
         address: SocketAddr,
-        motd: String,
+        motd: TextComponent,
         max_players: u32,
         num_players: u32,
         favicon: Option<String>,

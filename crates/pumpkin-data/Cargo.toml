@@ -49,9 +49,15 @@ default = [
     "configured_feature",
     "slot_ranges",
     "bedrock_creative",
-    "bedrock_biome"
+    "bedrock_biome",
+    "map_color",
+    "map_decoration",
+    "dye_color"
 ]
 
+map_color = []
+map_decoration = []
+dye_color = []
 advancement = []
 bedrock_creative = []
 bedrock_biome = []

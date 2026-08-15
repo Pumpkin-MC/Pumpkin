@@ -5,7 +5,9 @@ use pumpkin_data::chunk::Biome;
 use pumpkin_data::item::{BedrockItem, BedrockItemVersion};
 use pumpkin_protocol::bedrock::client::item_registry::{CItemRegistry, ItemDefinition};
 use pumpkin_protocol::bedrock::client::level_event::{CLevelEvent, LevelEvent};
-use pumpkin_protocol::bedrock::client::{CBiomeDefinitionList, EntityProperties};
+use pumpkin_protocol::bedrock::client::{
+    CBiomeDefinitionList, EntityProperties, block_actor_data::CBlockActorData,
+};
 use pumpkin_protocol::bedrock::network_item::{NetworkItemDescriptor, NetworkItemStackDescriptor};
 use pumpkin_protocol::codec::data_component::data_to_proto_sound;
 use pumpkin_world::generation::proto_chunk::GenerationCache;
@@ -71,7 +73,12 @@ use pumpkin_data::{
     sound_id_remap::remap_sound_id_for_version,
     world::{RAW, WorldEvent},
 };
-use pumpkin_data::{BlockDirection, BlockState, HorizontalFacingExt, translation};
+use pumpkin_data::{
+    BlockDirection, BlockState, HorizontalFacingExt,
+    block_properties::{BlockProperties, ChestLikeProperties, ChestType},
+    tag::Taggable,
+    translation,
+};
 use pumpkin_inventory::crafting::recipe_provider::RecipeProvider;
 use pumpkin_inventory::screen_handler::InventoryPlayer;
 use pumpkin_nbt::compound::NbtCompound;
@@ -90,9 +97,11 @@ use pumpkin_protocol::{
     bedrock::{
         client::{
             add_player::CAddPlayer,
+            block_event::CBlockEvent as CBedrockBlockEvent,
             common::BuildPlatform,
             creative_content::{CCreativeContent, CreativeCategory, Entry, Group},
             gamerules_changed::GameRules,
+            level_sound_event::CLevelSoundEvent,
             player_list::{CPlayerList, PlayerListEntry, Skin},
             remove_actor::CRemoveActor,
             start_game::{Experiments, GamePublishSetting, LevelSettings},
@@ -165,6 +174,41 @@ use weather::Weather;
 type FlowingFluidProperties = pumpkin_data::fluid::FlowingWaterLikeFluidProperties;
 
 const MAX_LIGHT_LEVEL: u8 = 15;
+
+fn bedrock_chest_block_actor(state_id: BlockStateId, position: BlockPos) -> Option<NbtCompound> {
+    let (block, _) = BlockState::from_id_with_block(state_id);
+    if !block.has_tag(&pumpkin_data::tag::Block::C_CHESTS_WOODEN)
+        && !block.has_tag(&pumpkin_data::tag::Block::MINECRAFT_COPPER_CHESTS)
+    {
+        return None;
+    }
+
+    // Block actor tags describe the chest itself. Container contents are synchronized
+    // through inventory packets and must not be exposed in chunk data.
+    let mut nbt = NbtCompound::new();
+    nbt.put_string("id", "Chest".to_string());
+    nbt.put_int("x", position.0.x);
+    nbt.put_int("y", position.0.y);
+    nbt.put_int("z", position.0.z);
+    nbt.put_bool("isMovable", true);
+
+    let properties = ChestLikeProperties::from_state_id(state_id, block);
+    if properties.r#type != ChestType::Single {
+        let direction = if properties.r#type == ChestType::Left {
+            properties.facing.rotate_clockwise()
+        } else {
+            properties.facing.rotate_counter_clockwise()
+        };
+        let pair = position.offset(direction.to_offset());
+        nbt.put_int("pairx", pair.0.x);
+        nbt.put_int("pairz", pair.0.z);
+        if properties.r#type == ChestType::Right {
+            nbt.put_bool("pairlead", true);
+        }
+    }
+
+    Some(nbt)
+}
 
 use rustc_hash::{FxHashMap, FxHashSet};
 
@@ -466,14 +510,23 @@ impl World {
 
     pub fn send_remove_mob_effect(&self, entity: &Entity, effect_type: &'static StatusEffect) {
         let chunk_pos = entity.chunk_pos.load();
-        self.broadcast_to_chunk(
-            chunk_pos,
-            &CRemoveMobEffect::new(entity.entity_id.into(), VarInt(i32::from(effect_type.id))),
+        let je_packet =
+            CRemoveMobEffect::new(entity.entity_id.into(), VarInt(i32::from(effect_type.id)));
+        let be_packet = pumpkin_protocol::bedrock::client::CMobEffect::new(
+            VarULong(entity.entity_id as u64),
+            pumpkin_protocol::bedrock::client::CMobEffect::EVENT_REMOVE,
+            VarInt(effect_type.to_bedrock_id()),
+            VarInt(0),
+            false,
+            VarInt(0),
+            VarULong(0),
+            false,
         );
+        self.broadcast_to_chunk_editioned_sync(chunk_pos, &je_packet, &be_packet);
     }
 
     pub fn send_add_mob_effect(&self, entity: &Entity, effect: &pumpkin_data::potion::Effect) {
-        // TODO: only nearby
+        let chunk_pos = entity.chunk_pos.load();
         let mut flags: i8 = 0;
         if effect.ambient {
             flags |= 0x01;
@@ -485,13 +538,25 @@ impl World {
             flags |= 0x04;
         }
 
-        self.broadcast_packet_all(&CUpdateMobEffect::new(
+        let je_packet = CUpdateMobEffect::new(
             VarInt(entity.entity_id),
             VarInt(i32::from(effect.effect_type.id)),
             VarInt(i32::from(effect.amplifier)),
             VarInt(effect.duration),
             flags,
-        ));
+        );
+        let be_packet = pumpkin_protocol::bedrock::client::CMobEffect::new(
+            VarULong(entity.entity_id as u64),
+            pumpkin_protocol::bedrock::client::CMobEffect::EVENT_ADD,
+            VarInt(effect.effect_type.to_bedrock_id()),
+            VarInt(i32::from(effect.amplifier)),
+            effect.show_particles,
+            VarInt(effect.duration),
+            VarULong(0),
+            effect.ambient,
+        );
+
+        self.broadcast_to_chunk_editioned_sync(chunk_pos, &je_packet, &be_packet);
     }
 
     pub fn set_difficulty(&self, difficulty: Difficulty) {
@@ -524,7 +589,7 @@ impl World {
                 continue;
             }
             let chunk_pos = event.pos.chunk_position();
-            self.broadcast_to_chunk(
+            self.broadcast_to_chunk_editioned_sync(
                 chunk_pos,
                 &CBlockEvent::new(
                     event.pos,
@@ -532,6 +597,7 @@ impl World {
                     event.data,
                     VarInt(block.id.as_u16() as i32),
                 ),
+                &CBedrockBlockEvent::new(event.pos, i32::from(event.r#type), i32::from(event.data)),
             );
         }
     }
@@ -880,6 +946,34 @@ impl World {
         self.play_sound_raw(sound as u16, category, position, volume, pitch);
     }
 
+    /// Plays a Bedrock level sound for players close enough to hear it.
+    pub fn play_bedrock_level_sound(
+        &self,
+        sound_id: &str,
+        position: &Vector3<f64>,
+        extra_data: i32,
+    ) {
+        let packet = CLevelSoundEvent {
+            sound_id: sound_id.to_string(),
+            position: Vector3::new(position.x as f32, position.y as f32, position.z as f32),
+            extra_data: VarInt(extra_data),
+            entity_type: String::new(),
+            is_baby_mob: false,
+            is_global: false,
+            actor_unique_id: 0,
+            fire_at_position: None,
+        };
+        let chunk_pos = BlockPos::floored_v(*position).chunk_position();
+
+        for player in self.players.load().iter() {
+            if is_within_view_distance(chunk_pos, player.get_entity().chunk_pos.load(), 1)
+                && let ClientPlatform::Bedrock(client) = player.client.as_ref()
+            {
+                client.try_enqueue_packet(&packet);
+            }
+        }
+    }
+
     pub fn play_sound_expect(
         &self,
         player: &Player,
@@ -1023,6 +1117,7 @@ impl World {
         let entity_count = entities_to_tick.len();
         let server_for_entities = server.clone();
         let active_chunks = self.active_chunks.load();
+        let level_for_entities = self.level.clone();
 
         let entity_future = async move {
             let t = tokio::time::Instant::now();
@@ -1040,6 +1135,14 @@ impl World {
                     get_section_cord(entity_pos.z.floor() as i32),
                 );
                 if !active_chunks.contains(&entity_chunk) {
+                    continue;
+                }
+
+                // A chunk stays active while it is still being generated. Mobs spawned by the
+                // generator are added to the world before their chunk is published, and every
+                // block read in a missing chunk reports air, so ticking them here would let
+                // them fall through the terrain that is about to appear.
+                if !level_for_entities.is_chunk_loaded(&entity_chunk) {
                     continue;
                 }
 
@@ -1188,6 +1291,12 @@ impl World {
                         be_block_id as u32,
                     ),
                 );
+                if let Some(data) = self.bedrock_block_entity_data(block_state_id, block_pos) {
+                    self.broadcast_to_chunk_bedrock(
+                        chunk_pos,
+                        &CBlockActorData::new(block_pos, data),
+                    );
+                }
             } else {
                 let players = self.players.load();
                 let mut java_recipients = Vec::new();
@@ -1210,6 +1319,13 @@ impl World {
                                         be_block_id as u32,
                                     ),
                                 );
+                                if let Some(data) =
+                                    self.bedrock_block_entity_data(*block_state_id, *block_pos)
+                                {
+                                    be_client.try_enqueue_packet(&CBlockActorData::new(
+                                        *block_pos, data,
+                                    ));
+                                }
                             }
                         }
                     }
@@ -1592,7 +1708,7 @@ impl World {
         }
 
         let mut inside = false;
-        'shapes: for shape in state.get_block_outline_shapes() {
+        'shapes: for shape in state.get_block_outline_shapes_at(&pos) {
             let outline_shape = shape.at_pos(pos);
 
             if outline_shape.intersects(bounding_box) {
@@ -1624,7 +1740,7 @@ impl World {
         }
 
         let mut shapes = state
-            .get_block_collision_shapes()
+            .get_block_collision_shapes_at(&pos)
             .map(|shape| shape.at_pos(pos));
 
         if use_collision_shape {
@@ -1678,7 +1794,7 @@ impl World {
                     }
                 }
             } else {
-                for shape in state.get_block_collision_shapes() {
+                for shape in state.get_block_collision_shapes_at(&pos) {
                     let shape = shape.at_pos(pos);
                     if shape.intersects(&bounding_box) {
                         collided = true;
@@ -1716,7 +1832,7 @@ impl World {
     pub fn get_dismount_height(&self, pos: &BlockPos) -> f64 {
         let state = self.get_block_state(pos);
         let max_y = state
-            .get_block_collision_shapes()
+            .get_block_collision_shapes_at(pos)
             .map(|s| s.max.y)
             .fold(f64::NEG_INFINITY, f64::max);
         if max_y != f64::NEG_INFINITY {
@@ -1726,7 +1842,7 @@ impl World {
         let below = BlockPos(Vector3::new(pos.0.x, pos.0.y - 1, pos.0.z));
         let below_state = self.get_block_state(&below);
         let below_max_y = below_state
-            .get_block_collision_shapes()
+            .get_block_collision_shapes_at(&below)
             .map(|s| s.max.y)
             .fold(f64::NEG_INFINITY, f64::max);
         if below_max_y >= 1.0 {
@@ -1954,7 +2070,6 @@ impl World {
         let level_info = server.level_info.load();
         let weather = self.weather.lock().await;
         let runtime_id = player.entity_id() as u64;
-
         let (position, yaw, pitch) = if player.has_played_before.load(Ordering::Relaxed) {
             let position = player.position();
             let yaw = player.get_entity().yaw.load(); //info.spawn_angle;
@@ -2306,7 +2421,7 @@ impl World {
                                 height: VarInt(height),
                                 input,
                                 output: vec![output_descriptor],
-                                uuid: [0; 16],
+                                uuid: Uuid::nil(),
                                 block: "crafting_table".to_string(),
                                 priority: VarInt(1),
                                 assume_symmetry: true,
@@ -2344,7 +2459,7 @@ impl World {
                                 recipe_id: format!("pumpkin:recipe_{network_id_counter}"),
                                 input,
                                 output: vec![output_descriptor],
-                                uuid: [0; 16],
+                                uuid: Uuid::nil(),
                                 block: "crafting_table".to_string(),
                                 priority: VarInt(1),
                                 unlock_requirement: RecipeUnlockRequirement { context: 1 },
@@ -2443,7 +2558,7 @@ impl World {
                     Attribute {
                         min_value: 0.0,
                         max_value: 20.0,
-                        current_value: 20.0,
+                        current_value: player.living_entity.health.load(),
                         default_min_value: 0.0,
                         default_max_value: 20.0,
                         default_value: 20.0,
@@ -2453,7 +2568,7 @@ impl World {
                     Attribute {
                         min_value: 0.0,
                         max_value: 20.0,
-                        current_value: 20.0,
+                        current_value: player.hunger_manager.level.load().into(),
                         default_min_value: 0.0,
                         default_max_value: 20.0,
                         default_value: 20.0,
@@ -3294,6 +3409,9 @@ impl World {
         // Sends initial time
         player.send_time(self).await;
 
+        // Sends initial scoreboard state
+        player.send_scoreboard().await;
+
         let (spawn_block_pos, yaw, pitch) = {
             let level_info_lock = self.level_info.load();
             (
@@ -3477,6 +3595,16 @@ impl World {
         position: Vector3<f64>,
         power: f32,
     ) {
+        let mut event = crate::plugin::api::events::entity::entity_explode::EntityExplodeEvent::new(
+            0, position, power,
+        );
+        if let Some(server) = self.server.upgrade() {
+            server.plugin_manager.fire(&server, &mut event).await;
+        }
+        if event.cancelled {
+            return;
+        }
+
         let block_count = explosion.explode(self).await;
         let particle = if power < 2.0 {
             Particle::Explosion
@@ -3564,6 +3692,18 @@ impl World {
                     self.dimension.clone(),
                 )
             };
+
+        let mut spawn_loc_event = crate::plugin::api::events::player::player_spawn_location::PlayerSpawnLocationEvent::new(
+            player.clone(),
+            position,
+        );
+        if let Some(server) = self.server.upgrade() {
+            server
+                .plugin_manager
+                .fire(&server, &mut spawn_loc_event)
+                .await;
+        }
+        let position = spawn_loc_event.spawn_pos;
 
         // Candidate destination world for a cross-dimension respawn.
         let candidate_world = if respawn_dimension == self.dimension {
@@ -4354,7 +4494,20 @@ impl World {
         });
     }
 
-    pub async fn spawn_entity(&self, entity: Arc<dyn EntityBase>) {
+    pub async fn spawn_entity(self: &Arc<Self>, entity: Arc<dyn EntityBase>) {
+        let mut event = crate::plugin::api::events::entity::entity_spawn::EntitySpawnEvent::new(
+            entity.get_entity().entity_id,
+            entity.get_entity().entity_type.id.to_string(),
+            entity.get_entity().pos.load(),
+            self.clone(),
+        );
+        if let Some(server) = self.server.upgrade() {
+            server.plugin_manager.fire(&server, &mut event).await;
+        }
+        if event.cancelled {
+            return;
+        }
+
         self.broadcast_entity_spawn(&entity);
         entity.init_data_tracker().await;
         self.add_entity_silent(entity).await;
@@ -4907,19 +5060,56 @@ impl World {
         };
 
         let entity = Entity::new(self.clone(), spawn_pos, &EntityType::ITEM);
+        let mut item_event = crate::plugin::api::events::entity::item_spawn::ItemSpawnEvent::new(
+            entity.entity_id,
+            spawn_pos,
+            stack.item.registry_key.to_string(),
+        );
+        if let Some(server) = self.server.upgrade() {
+            server.plugin_manager.fire(&server, &mut item_event).await;
+        }
+        if item_event.cancelled {
+            return;
+        }
+
         let item_entity = Arc::new(ItemEntity::new(entity, stack));
         self.spawn_entity(item_entity).await;
     }
 
-    pub async fn strike_lightning(self: &Arc<Self>, pos: Vector3<f64>, _effect_only: bool) {
+    pub async fn strike_lightning(self: &Arc<Self>, pos: Vector3<f64>, effect_only: bool) {
         use pumpkin_data::entity::EntityType;
         use uuid::Uuid;
+
+        let server_ref = self.server.upgrade();
+        if let Some(server_ref) = server_ref {
+            let mut event =
+                crate::plugin::api::events::world::lightning_strike::LightningStrikeEvent::new(
+                    pos,
+                    effect_only,
+                );
+            server_ref
+                .plugin_manager
+                .fire(&server_ref, &mut event)
+                .await;
+            if event.cancelled {
+                return;
+            }
+        }
+
         let lightning = crate::entity::r#type::from_type(
             &EntityType::LIGHTNING_BOLT,
             pos,
             self,
             Uuid::new_v4(),
         );
+
+        if let Some(bolt) = lightning
+            .cast_any()
+            .downcast_ref::<crate::entity::lightning::LightningBoltEntity>()
+        {
+            bolt.set_visual_only(effect_only);
+        }
+
         self.spawn_entity(lightning).await;
     }
 
@@ -5169,6 +5359,18 @@ impl World {
             let neighbor_pos = block_pos.offset(direction.to_offset());
             let (neighbor_block, neighbor_fluid) = self.get_block_and_fluid(&neighbor_pos);
 
+            let mut event =
+                crate::plugin::api::events::block::block_physics::BlockPhysicsEvent::new(
+                    neighbor_pos,
+                    *block_pos,
+                );
+            if let Some(server) = self.server.upgrade() {
+                server.plugin_manager.fire(&server, &mut event).await;
+            }
+            if event.cancelled {
+                continue;
+            }
+
             if let Some(neighbor_pumpkin_block) =
                 self.block_registry.get_pumpkin_block(neighbor_block.id)
             {
@@ -5199,6 +5401,17 @@ impl World {
         source_block: &Block,
     ) {
         let neighbor_block = self.get_block(neighbor_block_pos);
+
+        let mut event = crate::plugin::api::events::block::block_physics::BlockPhysicsEvent::new(
+            *neighbor_block_pos,
+            *neighbor_block_pos,
+        );
+        if let Some(server) = self.server.upgrade() {
+            server.plugin_manager.fire(&server, &mut event).await;
+        }
+        if event.cancelled {
+            return;
+        }
 
         if let Some(neighbor_pumpkin_block) =
             self.block_registry.get_pumpkin_block(neighbor_block.id)
@@ -5291,10 +5504,12 @@ impl World {
 
     pub fn get_block_entity(&self, block_pos: &BlockPos) -> Option<Arc<dyn BlockEntity>> {
         let chunk_pos = block_pos.chunk_position();
-        if let Some(chunk_block_entities) = self.block_entities.get(&chunk_pos)
-            && let Some(entity) = chunk_block_entities.get(block_pos)
+        if let Some(entity) = self
+            .block_entities
+            .get(&chunk_pos)
+            .and_then(|m| m.get(block_pos).cloned())
         {
-            return Some(entity.clone());
+            return Some(entity);
         }
 
         let nbt = self
@@ -5313,6 +5528,64 @@ impl World {
             .or_default()
             .insert(*block_pos, entity.clone());
         Some(entity)
+    }
+
+    fn bedrock_block_entity_data(
+        &self,
+        state_id: BlockStateId,
+        position: BlockPos,
+    ) -> Option<NbtCompound> {
+        self.get_block_entity(&position)?
+            .bedrock_block_actor_data(state_id)
+    }
+
+    /// Builds Bedrock block actor tags that are not represented by Java block states alone.
+    pub fn bedrock_chunk_block_actors(&self, chunk: &ChunkData) -> Vec<NbtCompound> {
+        let chunk_pos = Vector2::new(chunk.x, chunk.z);
+        let live_entities: FxHashMap<_, _> = self
+            .block_entities
+            .get(&chunk_pos)
+            .map(|entities| {
+                entities
+                    .iter()
+                    .map(|(position, entity)| (*position, entity.clone()))
+                    .collect()
+            })
+            .unwrap_or_default();
+        let pending = chunk
+            .pending_block_entities
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+
+        live_entities
+            .iter()
+            .filter_map(|(position, entity)| {
+                let relative = position.chunk_relative_position();
+                chunk
+                    .section
+                    .get_block_absolute_y(relative.x as usize, relative.y, relative.z as usize)
+                    .and_then(|state_id| {
+                        bedrock_chest_block_actor(state_id, *position)
+                            .or_else(|| entity.bedrock_block_actor_data(state_id))
+                    })
+            })
+            .chain(
+                pending
+                    .iter()
+                    .filter(|(position, _)| !live_entities.contains_key(position))
+                    .filter_map(|(position, nbt)| {
+                        let relative = position.chunk_relative_position();
+                        let state_id = chunk.section.get_block_absolute_y(
+                            relative.x as usize,
+                            relative.y,
+                            relative.z as usize,
+                        )?;
+                        bedrock_chest_block_actor(state_id, *position).or_else(|| {
+                            block_entity_from_nbt(nbt)?.bedrock_block_actor_data(state_id)
+                        })
+                    }),
+            )
+            .collect()
     }
 
     pub fn add_block_entity(&self, block_entity: Arc<dyn BlockEntity>) {
@@ -5505,7 +5778,7 @@ impl World {
             return (true, None);
         }
 
-        let bounding_boxes = state.get_block_outline_shapes();
+        let bounding_boxes = state.get_block_outline_shapes_at(block_pos);
 
         for shape in bounding_boxes {
             let world_min = shape.min.add(&block_pos.0.to_f64());
@@ -5648,6 +5921,19 @@ impl World {
         Self::broadcast_java_grouped(packet, recipients_by_version);
     }
 
+    fn broadcast_to_chunk_bedrock<P: BClientPacket>(&self, chunk_pos: Vector2<i32>, packet: &P) {
+        let players = self.players.load();
+        for player in players.iter().filter(|player| {
+            let center = player.get_entity().chunk_pos.load();
+            let view_distance = get_view_distance(player).get() as i32;
+            is_within_view_distance(chunk_pos, center, view_distance)
+        }) {
+            if let ClientPlatform::Bedrock(client) = player.client.as_ref() {
+                client.try_enqueue_packet(packet);
+            }
+        }
+    }
+
     pub fn broadcast_to_chunk_editioned_sync<J: ClientPacket, B: BClientPacket>(
         &self,
         chunk_pos: Vector2<i32>,
@@ -5732,6 +6018,155 @@ impl World {
 
         for recipient in bedrock_recipients {
             recipient.enqueue_packet(be_packet).await;
+        }
+    }
+
+    pub async fn emit_game_event(&self, event_key: impl Into<String>, position: Vector3<f64>) {
+        let mut event = crate::plugin::api::events::world::generic_game::GenericGameEvent::new(
+            event_key.into(),
+            position,
+        );
+        if let Some(server) = self.server.upgrade() {
+            server.plugin_manager.fire(&server, &mut event).await;
+        }
+    }
+
+    pub async fn unload(self: &Arc<Self>) {
+        let mut event =
+            crate::plugin::api::events::world::world_load::WorldUnloadEvent::new(self.clone());
+        if let Some(server) = self.server.upgrade() {
+            server.plugin_manager.fire(&server, &mut event).await;
+        }
+    }
+
+    pub async fn save(&self) {
+        let mut save_event = crate::plugin::api::events::world::world_save::WorldSaveEvent::new(
+            format!("{:?}", self.dimension),
+        );
+        if let Some(server) = self.server.upgrade() {
+            server.plugin_manager.fire(&server, &mut save_event).await;
+        }
+    }
+
+    pub async fn populate_chunk(&self, chunk_pos: Vector2<i32>) {
+        let mut populate_event =
+            crate::plugin::api::events::world::chunk_populate::ChunkPopulateEvent::new(chunk_pos);
+        if let Some(server) = self.server.upgrade() {
+            server
+                .plugin_manager
+                .fire(&server, &mut populate_event)
+                .await;
+        }
+    }
+
+    pub async fn unload_chunk(&self, chunk_pos: Vector2<i32>) {
+        let mut unload_event =
+            crate::plugin::api::events::world::chunk_unload::ChunkUnloadEvent::new(chunk_pos);
+        if let Some(server) = self.server.upgrade() {
+            server.plugin_manager.fire(&server, &mut unload_event).await;
+        }
+    }
+
+    pub async fn load_entities(&self, chunk_pos: Vector2<i32>, entity_count: usize) {
+        let mut load_event =
+            crate::plugin::api::events::world::entities_load::EntitiesLoadEvent::new(
+                chunk_pos,
+                entity_count,
+            );
+        if let Some(server) = self.server.upgrade() {
+            server.plugin_manager.fire(&server, &mut load_event).await;
+        }
+    }
+
+    pub async fn unload_entities(&self, chunk_pos: Vector2<i32>, entity_count: usize) {
+        let mut unload_event =
+            crate::plugin::api::events::world::entities_unload::EntitiesUnloadEvent::new(
+                chunk_pos,
+                entity_count,
+            );
+        if let Some(server) = self.server.upgrade() {
+            server.plugin_manager.fire(&server, &mut unload_event).await;
+        }
+    }
+
+    pub async fn generate_loot(&self, loot_table: String) {
+        let mut loot_event =
+            crate::plugin::api::events::world::loot_generate::LootGenerateEvent::new(loot_table);
+        if let Some(server) = self.server.upgrade() {
+            server.plugin_manager.fire(&server, &mut loot_event).await;
+        }
+    }
+
+    pub async fn skip_time(&self, skip_amount: i64) {
+        let mut time_event =
+            crate::plugin::api::events::world::time_skip::TimeSkipEvent::new(skip_amount);
+        if let Some(server) = self.server.upgrade() {
+            server.plugin_manager.fire(&server, &mut time_event).await;
+        }
+    }
+
+    pub async fn trigger_raid(&self, pos: BlockPos) {
+        let mut raid_event =
+            crate::plugin::api::events::raid::raid_trigger::RaidTriggerEvent::new(pos);
+        if let Some(server) = self.server.upgrade() {
+            server.plugin_manager.fire(&server, &mut raid_event).await;
+        }
+    }
+
+    pub async fn spawn_raid_wave(&self, wave: u32, pos: BlockPos) {
+        let mut wave_event =
+            crate::plugin::api::events::raid::raid_spawn_wave::RaidSpawnWaveEvent::new(wave, pos);
+        if let Some(server) = self.server.upgrade() {
+            server.plugin_manager.fire(&server, &mut wave_event).await;
+        }
+    }
+
+    pub async fn finish_raid(&self, victory: bool) {
+        let mut raid_event =
+            crate::plugin::api::events::raid::raid_finish::RaidFinishEvent::new(victory);
+        if let Some(server) = self.server.upgrade() {
+            server.plugin_manager.fire(&server, &mut raid_event).await;
+        }
+    }
+
+    pub async fn stop_raid(&self, reason: String) {
+        let mut raid_event =
+            crate::plugin::api::events::raid::raid_stop::RaidStopEvent::new(reason);
+        if let Some(server) = self.server.upgrade() {
+            server.plugin_manager.fire(&server, &mut raid_event).await;
+        }
+    }
+
+    pub async fn async_structure_generate(
+        &self,
+        world_name: String,
+        structure_name: String,
+        pos: BlockPos,
+    ) {
+        let mut event = crate::plugin::api::events::world::async_structure_generate::AsyncStructureGenerateEvent::new(
+            world_name,
+            structure_name,
+            pos,
+        );
+        if let Some(server) = self.server.upgrade() {
+            server.plugin_manager.fire(&server, &mut event).await;
+        }
+    }
+
+    pub async fn async_structure_spawn(
+        &self,
+        world_name: String,
+        structure_name: String,
+        pos: BlockPos,
+    ) {
+        let mut event =
+            crate::plugin::api::events::world::async_structure_spawn::AsyncStructureSpawnEvent::new(
+                world_name,
+                structure_name,
+                pos,
+            );
+        if let Some(server) = self.server.upgrade() {
+            server.plugin_manager.fire(&server, &mut event).await;
         }
     }
 }
@@ -5842,12 +6277,34 @@ impl WorldPortalExt for WorldPortal {
 
 #[cfg(test)]
 mod tests {
-    use super::bedrock_block_breaking_rate;
+    use pumpkin_data::{
+        Block,
+        block_properties::{BlockProperties, ChestLikeProperties, ChestType, HorizontalFacing},
+    };
+    use pumpkin_util::math::position::BlockPos;
+
+    use super::{bedrock_block_breaking_rate, bedrock_chest_block_actor};
 
     #[test]
     fn bedrock_block_breaking_rate_uses_progress_per_tick() {
         assert_eq!(bedrock_block_breaking_rate(0.0), 0);
         assert_eq!(bedrock_block_breaking_rate(1.0 / 30.0), 2_184);
         assert_eq!(bedrock_block_breaking_rate(1.0), 65_535);
+    }
+
+    #[test]
+    fn bedrock_double_chest_block_actor_identifies_pair_and_lead() {
+        let position = BlockPos::new(5, 64, 7);
+        let properties = ChestLikeProperties {
+            facing: HorizontalFacing::North,
+            r#type: ChestType::Right,
+            waterlogged: false,
+        };
+        let actor =
+            bedrock_chest_block_actor(properties.to_state_id(&Block::CHEST), position).unwrap();
+
+        assert_eq!(actor.get_int("pairx"), Some(4));
+        assert_eq!(actor.get_int("pairz"), Some(7));
+        assert_eq!(actor.get_bool("pairlead"), Some(true));
     }
 }

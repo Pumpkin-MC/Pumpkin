@@ -6,15 +6,17 @@ use crate::plugin::{
             events::{ToFromWasmEvent, consume_text_component},
             generated_packets,
             pumpkin::plugin::event::{
-                ClientboundPacket, Event, PacketReceivedEventData, PacketSentEventData,
-                ServerBroadcastEventData, ServerCommandEventData, ServerListPingAddress,
-                ServerListPingEventData, ServerLoadEventData, ServerLoadType,
-                ServerTickEndEventData, ServerTickStartEventData, ServerboundPacket,
+                ClientboundPacket, Event, MapInitializeEventData, PacketReceivedEventData,
+                PacketSentEventData, ServerBroadcastEventData, ServerCommandEventData,
+                ServerListPingAddress, ServerListPingEventData, ServerLoadEventData,
+                ServerLoadType, ServerTickEndEventData, ServerTickStartEventData,
+                ServerboundPacket,
             },
         },
     },
     server::{
         list_ping::ServerListPingEvent,
+        map_initialize::MapInitializeEvent,
         packet::{PacketReceivedEvent, PacketSentEvent},
         server_broadcast::ServerBroadcastEvent,
         server_command::ServerCommandEvent,
@@ -58,6 +60,13 @@ impl ToFromWasmEvent for PacketReceivedEvent {
         })
     }
 
+    fn apply_wasm_event(&mut self, event: Event, _state: &mut PluginHostState) {
+        if let Event::PacketReceivedEvent(data) = event {
+            self.packet_id = data.packet_id;
+            self.payload = data.raw_payload.into();
+            self.cancelled = data.cancelled;
+        }
+    }
     fn from_wasm_event(event: Event, _state: &mut PluginHostState) -> Self {
         match event {
             Event::PacketReceivedEvent(_) => {
@@ -162,21 +171,25 @@ impl ToFromWasmEvent for ServerBroadcastEvent {
 }
 
 impl ToFromWasmEvent for ServerListPingEvent {
-    fn to_wasm_event(&self, _state: &mut PluginHostState) -> Event {
+    fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
+        let motd = state
+            .add_text_component(self.motd.clone())
+            .expect("failed to add text-component resource");
+
         Event::ServerListPingEvent(ServerListPingEventData {
             hostname: self.hostname().to_string(),
             address: ServerListPingAddress {
                 host: self.address().host().to_string(),
                 port: self.address().port(),
             },
-            motd: self.motd.clone(),
+            motd,
             max_players: self.max_players,
             num_players: self.num_players,
             favicon: self.favicon.clone(),
         })
     }
 
-    fn from_wasm_event(event: Event, _state: &mut PluginHostState) -> Self {
+    fn from_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
         match event {
             Event::ServerListPingEvent(data) => Self {
                 hostname: data.hostname,
@@ -184,7 +197,7 @@ impl ToFromWasmEvent for ServerListPingEvent {
                     data.address.host,
                     data.address.port,
                 ),
-                motd: data.motd,
+                motd: consume_text_component(state, &data.motd),
                 max_players: data.max_players,
                 num_players: data.num_players,
                 favicon: data.favicon,
@@ -193,10 +206,10 @@ impl ToFromWasmEvent for ServerListPingEvent {
         }
     }
 
-    fn apply_wasm_event(&mut self, event: Event, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
         match event {
             Event::ServerListPingEvent(data) => {
-                self.motd = data.motd;
+                self.motd = consume_text_component(state, &data.motd);
                 self.max_players = data.max_players;
                 self.num_players = data.num_players;
                 self.favicon = data.favicon;
@@ -256,6 +269,23 @@ impl ToFromWasmEvent for ServerTickStartEvent {
     fn from_wasm_event(event: Event, _state: &mut PluginHostState) -> Self {
         match event {
             Event::ServerTickStartEvent(data) => Self { tick: data.tick },
+            _ => panic!("unexpected event type"),
+        }
+    }
+}
+
+impl ToFromWasmEvent for MapInitializeEvent {
+    fn to_wasm_event(&self, _state: &mut PluginHostState) -> Event {
+        Event::MapInitializeEvent(MapInitializeEventData {
+            map_id: self.map_id,
+        })
+    }
+
+    fn from_wasm_event(event: Event, _state: &mut PluginHostState) -> Self {
+        match event {
+            Event::MapInitializeEvent(data) => Self {
+                map_id: data.map_id,
+            },
             _ => panic!("unexpected event type"),
         }
     }

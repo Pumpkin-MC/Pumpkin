@@ -509,8 +509,18 @@ pub fn derive_serialize(input: TokenStream) -> TokenStream {
             .into();
     };
 
+    let type_generic = match input.generics.params.len() {
+        0 => quote! {},
+        1 => quote! { <'_> },
+        _ => {
+            return syn::Error::new(name.span(), "Only up to one lifetime parameter is supported.")
+            .to_compile_error()
+            .into();
+        }
+    };
+
     let expanded = quote! {
-        impl PacketWrite for #name {
+        impl PacketWrite for #name #type_generic {
             fn write<W: std::io::Write>(&self, writer: &mut W) -> Result<(), std::io::Error> {
                 #(#fields)*
                 Ok(())
@@ -537,26 +547,19 @@ pub fn derive_deserialize(input: TokenStream) -> TokenStream {
             let (is_big_endian, no_prefix) = check_serial_attributes(&f.attrs);
             let is_vec = is_vec(&f.ty);
 
-            if is_vec && !no_prefix {
-                // Vec with prefix: read VarUInt length, then data
+            if is_vec && no_prefix {
+                return syn::Error::new(name.span(), "Cannot handle non-prefixed vecs")
+                    .to_compile_error();
+            }
+
+            // Non-Vec or Vec without no_prefix: read directly
+            if is_big_endian {
                 quote! {
-                    #ident: {
-                        let len = crate::codec::var_uint::VarUInt::read(reader)?.0 as usize;
-                        let mut buf = vec![0u8; len];
-                        reader.read_exact(&mut buf)?;
-                        buf
-                    }
+                    #ident: PacketRead::read_be(reader)?
                 }
             } else {
-                // Non-Vec or Vec with no_prefix: read directly
-                if is_big_endian {
-                    quote! {
-                        #ident: PacketRead::read_be(reader)?
-                    }
-                } else {
-                    quote! {
-                        #ident: PacketRead::read(reader)?
-                    }
+                quote! {
+                    #ident: PacketRead::read(reader)?
                 }
             }
         })
@@ -566,9 +569,70 @@ pub fn derive_deserialize(input: TokenStream) -> TokenStream {
             .into();
     };
 
+
+    let type_generic = match input.generics.params.len() {
+        0 => quote! {},
+        1 => quote! { <'static> },
+        _ => {
+            return syn::Error::new(name.span(), "Only up to one lifetime parameter is supported.")
+            .to_compile_error()
+            .into();
+        }
+    };
+
     let expanded = quote! {
-        impl PacketRead for #name {
+        impl PacketRead for #name #type_generic {
             fn read<R: std::io::Read>(reader: &mut R) -> std::io::Result<Self> {
+                Ok(Self {
+                    #(#fields),*
+                })
+            }
+        }
+    };
+
+    expanded.into()
+}
+
+/// Derives the `PacketReadSlice` trait for a struct, enabling deserialization from a slice.
+///
+/// # Arguments
+/// - `input` – The input `TokenStream` representing the struct to derive `PacketReadSlice` for.
+#[rustfmt::skip]
+#[proc_macro_derive(PacketReadSlice, attributes(serial))]
+pub fn derive_deserialize_from_slice(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as DeriveInput);
+    let name = &input.ident;
+
+    let fields = if let syn::Data::Struct(data) = &input.data {
+        data.fields.iter().map(|f| {
+            let ident = f.ident.as_ref().unwrap();
+            let (is_big_endian, no_prefix) = check_serial_attributes(&f.attrs);
+            let is_vec = is_vec(&f.ty);
+
+            if is_vec && no_prefix {
+                return syn::Error::new(name.span(), "Cannot handle non-prefixed vecs.")
+                    .to_compile_error();
+            }
+
+            // Non-Vec or Vec without no_prefix: read directly
+            if is_big_endian {
+                return syn::Error::new(name.span(), "Cannot handle big-endian encoded fields")
+                    .to_compile_error();
+            }
+
+            quote! {
+                #ident: PacketReadSlice::read_slice(buf)?
+            }
+        })
+    } else {
+        return syn::Error::new(name.span(), "Only structs are supported")
+            .to_compile_error()
+            .into();
+    };
+
+    let expanded = quote! {
+        impl<'a> PacketReadSlice<'a> for #name<'a> {
+            fn read_slice(buf: &mut &'a [u8]) -> std::io::Result<Self> {
                 Ok(Self {
                     #(#fields),*
                 })

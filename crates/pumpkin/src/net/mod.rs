@@ -387,7 +387,7 @@ fn is_valid_player_name(name: &str) -> bool {
     !name.chars().any(|c| c.is_control() || c == ' ')
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub enum DisconnectReason {
     Unknown = 0,
     CantConnectNoInternet = 1,

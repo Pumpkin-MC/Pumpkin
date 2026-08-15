@@ -1,7 +1,10 @@
 use crate::block::{
     BlockBehaviour, BlockFuture, BlockMetadata, CanPlaceAtArgs, GetStateForNeighborUpdateArgs,
     RandomTickArgs,
-    blocks::plant::{PlantBlockBase, crop::get_available_moisture},
+    blocks::plant::{
+        PlantBlockBase,
+        crop::{CropBlockBase, get_available_moisture},
+    },
 };
 use pumpkin_data::{
     Block, BlockDirection, BlockId, BlockStateId,
@@ -56,6 +59,28 @@ impl StemBlock {
 }
 
 impl BlockBehaviour for StemBlock {
+    fn is_valid_bonemeal_target(&self, args: crate::block::BonemealArgs<'_>) -> bool {
+        <Self as CropBlockBase>::is_valid_bonemeal_target(self, args.world, args.position)
+    }
+
+    fn perform_bonemeal<'a>(&'a self, args: crate::block::BonemealArgs<'a>) -> BlockFuture<'a, ()> {
+        Box::pin(async move {
+            <Self as CropBlockBase>::perform_bonemeal(self, args.world, args.position).await;
+            let (_, state) = args.world.get_block_and_state_id(args.position);
+            if StemProperties::from_state_id(state, args.block).age == 7 {
+                BlockBehaviour::random_tick(
+                    self,
+                    RandomTickArgs {
+                        world: args.world,
+                        block: args.block,
+                        position: args.position,
+                    },
+                )
+                .await;
+            }
+        })
+    }
+
     fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
         <Self as PlantBlockBase>::can_place_at(self, args.block_accessor, args.position)
     }
@@ -135,3 +160,5 @@ impl PlantBlockBase for StemBlock {
         }
     }
 }
+
+impl CropBlockBase for StemBlock {}

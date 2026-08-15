@@ -92,16 +92,19 @@ impl SyncHandler {
     ) {
         if let Some(player) = self.player.lock().await.as_ref() {
             player
-                .enqueue_inventory_packet(&CSetContainerContent::new(
-                    VarInt(screen_handler.sync_id.into()),
-                    VarInt(next_revision as i32),
-                    stacks
-                        .iter()
-                        .map(|stack| ItemStackSerializer::from(stack.clone()))
-                        .collect::<Vec<_>>()
-                        .as_slice(),
-                    &ItemStackSerializer::from(cursor_stack.clone()),
-                ))
+                .enqueue_inventory_packet(
+                    &CSetContainerContent::new(
+                        VarInt(screen_handler.sync_id.into()),
+                        VarInt(next_revision as i32),
+                        stacks
+                            .iter()
+                            .map(|stack| ItemStackSerializer::from(stack.clone()))
+                            .collect::<Vec<_>>()
+                            .as_slice(),
+                        &ItemStackSerializer::from(cursor_stack.clone()),
+                    ),
+                    screen_handler.window_type,
+                )
                 .await;
 
             for (i, property) in properties.iter().enumerate() {

@@ -183,6 +183,18 @@ impl ItemEntity {
                 (other, other_stack, self, self_stack)
             };
 
+        let mut event = crate::plugin::api::events::entity::item_merge::ItemMergeEvent {
+            entity_id: target.entity.entity_id,
+            target_id: source.entity.entity_id,
+            cancelled: false,
+        };
+        if let Some(server) = self.entity.world.load().server.upgrade() {
+            server.plugin_manager.fire(&server, &mut event).await;
+        }
+        if event.cancelled {
+            return;
+        }
+
         // Vanilla code adds a .min(64). Not needed with Vanilla item data
 
         let max_size = stack1.get_max_stack_size();
@@ -345,8 +357,20 @@ impl ItemEntity {
         let age = self.item_age.fetch_add(1, Ordering::Relaxed) + 1;
 
         if age >= 6000 {
-            entity.remove().await;
-            return false;
+            let mut despawn_event =
+                crate::plugin::api::events::entity::item_despawn::ItemDespawnEvent::new(
+                    entity.entity_id,
+                );
+            if let Some(server) = entity.world.load().server.upgrade() {
+                server
+                    .plugin_manager
+                    .fire(&server, &mut despawn_event)
+                    .await;
+            }
+            if !despawn_event.cancelled {
+                entity.remove().await;
+                return false;
+            }
         }
 
         let n = if entity

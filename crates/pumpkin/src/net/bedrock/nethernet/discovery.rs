@@ -17,7 +17,7 @@ use tokio::{
     sync::{Mutex, mpsc},
 };
 use tracing::{debug, trace, warn};
-use webrtc::ice_transport::ice_candidate::RTCIceCandidateInit;
+use webrtc::peer_connection::RTCIceCandidateInit;
 
 use super::{NetherNetListener, negotiate};
 use crate::server::Server;
@@ -169,16 +169,22 @@ impl NetherNetDiscovery {
                 let offer = data.to_owned();
                 let network_id = self.network_id;
                 tokio::spawn(async move {
-                    let signal =
-                        match negotiate(&state, address, &offer, Some(candidate_receiver)).await {
-                            Ok((answer, _session)) => {
-                                format!("CONNECTRESPONSE {connection_id} {answer}")
-                            }
-                            Err(error) => {
-                                warn!("NetherNet LAN negotiation with {address} failed: {error}");
-                                format!("CONNECTERROR {connection_id} 11")
-                            }
-                        };
+                    let signal = match Box::pin(negotiate(
+                        &state,
+                        address,
+                        &offer,
+                        Some(candidate_receiver),
+                    ))
+                    .await
+                    {
+                        Ok((answer, _session)) => {
+                            format!("CONNECTRESPONSE {connection_id} {answer}")
+                        }
+                        Err(error) => {
+                            warn!("NetherNet LAN negotiation with {address} failed: {error}");
+                            format!("CONNECTERROR {connection_id} 11")
+                        }
+                    };
                     match encode_message(network_id, sender_id, &signal) {
                         Ok(response) => {
                             if let Err(error) = socket.send_to(&response, address).await {

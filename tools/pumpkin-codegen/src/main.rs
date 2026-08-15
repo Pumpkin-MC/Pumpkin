@@ -42,6 +42,7 @@ mod configured_feature;
 mod damage_type;
 mod data_component;
 mod dimension;
+mod dye_color;
 mod effect;
 mod enchantments;
 mod entity_pose;
@@ -55,6 +56,8 @@ mod game_rules;
 mod item;
 mod jukebox_song;
 pub mod loot;
+mod map_color;
+mod map_decoration;
 mod message_type;
 mod meta_data_type;
 mod noise_parameter;
@@ -160,6 +163,9 @@ pub fn main() {
         ),
         (carver::build, "carver.rs"),
         (chest_loot::build, "chest_loot.rs"),
+        (map_color::build, "map_color.rs"),
+        (map_decoration::build, "map_decoration.rs"),
+        (dye_color::build, "dye_color.rs"),
     ];
     build_functions.extend(remap::build());
 

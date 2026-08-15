@@ -13,12 +13,22 @@ pub struct SResourcePackResponse {
 impl PacketRead for SResourcePackResponse {
     fn read<R: Read>(reader: &mut R) -> Result<Self, Error> {
         let encoded_status = VarUInt::read(reader)?.0;
-        let response = u8::try_from(encoded_status + 1)
-            .map_err(|_| Error::new(ErrorKind::InvalidData, "resource pack status is too large"))?;
+        let response = encoded_status
+            .checked_add(1)
+            .and_then(|v| u8::try_from(v).ok())
+            .ok_or_else(|| {
+                Error::new(ErrorKind::InvalidData, "resource pack status is too large")
+            })?;
         let _status_name = String::read(reader)?;
 
         let pack_ids = if response == Self::STATUS_SEND_PACKS {
             let count = VarUInt::read(reader)?.0;
+            if count > 1024 {
+                return Err(Error::new(
+                    ErrorKind::InvalidData,
+                    "too many resource pack identifiers",
+                ));
+            }
             (0..count)
                 .map(|_| String::read(reader))
                 .collect::<Result<Vec<_>, _>>()?
