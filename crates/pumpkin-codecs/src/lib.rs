@@ -21,8 +21,7 @@ pub use crate::list_builder::ListBuilder;
 pub use crate::map_like::MapLike;
 pub use number::Number;
 
-pub use crate::codec::Decode;
-pub use crate::codec::Encode;
+pub use crate::codec::{Decode, Encode};
 
 pub use crate::codec::either::Either;
 pub use crate::codec::primitive::ByteBuffer;

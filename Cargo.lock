@@ -3566,6 +3566,7 @@ dependencies = [
  "pumpkin-codecs",
  "pumpkin-config",
  "pumpkin-data",
+ "pumpkin-macros",
  "pumpkin-nbt",
  "pumpkin-registry",
  "pumpkin-util",

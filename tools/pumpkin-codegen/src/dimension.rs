@@ -6,18 +6,6 @@ use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use serde::Deserialize;
 
-/// Parses a CSS-style hex color string (e.g. `"#78a7ff"`) into a signed 32-bit integer.
-///
-/// # Returns
-/// The color as an `i32`, or `None` if the input is not a valid hex color.
-fn parse_hex_color(s: &str) -> Option<i32> {
-    if let Some(stripped) = s.strip_prefix('#') {
-        i32::from_str_radix(stripped, 16).ok()
-    } else {
-        None
-    }
-}
-
 /// Raw deserialization shape for a single dimension entry from `dimension.json`.
 #[derive(Deserialize)]
 pub struct Dimension {
@@ -39,15 +27,27 @@ pub struct Dimension {
     pub infiniburn: String,
     pub monster_spawn_light_level: serde_json::Value,
     pub monster_spawn_block_light_limit: u8,
-    /// Fixed day-time value in this dimension, or `None` if time progresses normally.
-    #[serde(rename = "fixed_time")]
-    pub fixed_time: Option<i64>,
-    /// Optional bedrock-style visual attributes map (sky color, fog color, etc.).
+    /// Environment Attribute values supplied by this dimension.
     #[serde(default)]
-    pub attributes: Option<serde_json::Value>,
-    /// Optional timeline resource key controlling day/night progression.
+    pub attributes: BTreeMap<String, serde_json::Value>,
+    /// Whether time-based behaviors should behave as though time is fixed.
     #[serde(default)]
-    pub timelines: Option<String>,
+    pub has_fixed_time: bool,
+    /// Whether an Ender Dragon fight can exist in this dimension.
+    #[serde(default)]
+    pub has_ender_dragon_fight: bool,
+    /// Skybox rendering type (`overworld`, `end`, or `none`).
+    #[serde(default)]
+    pub skybox: Option<String>,
+    /// Cardinal lighting mode (`default` or `nether`).
+    #[serde(default)]
+    pub cardinal_light: Option<String>,
+    /// Timeline ID, list of IDs, or timeline tag active in this dimension.
+    #[serde(default)]
+    pub timelines: Option<serde_json::Value>,
+    /// Default world clock used by time commands and time markers.
+    #[serde(default)]
+    pub default_clock: Option<String>,
 }
 
 /// Generates the `TokenStream` for the `Dimension` struct, its constants, and `from_name` lookup.
@@ -72,30 +72,30 @@ pub fn build() -> TokenStream {
                 .to_shouty_snake_case()
         );
 
-        // convert optional hex colors from attributes into ints
-        let sky_color = dim
-            .attributes
-            .as_ref()
-            .and_then(|a| a.get("minecraft:visual/sky_color"))
-            .and_then(|v| v.as_str())
-            .and_then(parse_hex_color);
-        let fog_color = dim
-            .attributes
-            .as_ref()
-            .and_then(|a| a.get("minecraft:visual/fog_color"))
-            .and_then(|v| v.as_str())
-            .and_then(parse_hex_color);
-        let cloud_color = dim
-            .attributes
-            .as_ref()
-            .and_then(|a| a.get("minecraft:visual/cloud_color"))
-            .and_then(|v| v.as_str())
-            .and_then(parse_hex_color);
+        let attributes = dim.attributes.iter().map(|(identifier, value)| {
+            let value =
+                serde_json::to_string(value).expect("Failed to serialize environment attribute");
+            quote! {
+                EnvironmentAttribute {
+                    identifier: #identifier,
+                    value: #value,
+                },
+            }
+        });
 
-        let fixed_time = if let Some(t) = dim.fixed_time {
-            quote! { Some(#t) }
-        } else {
-            quote! { None }
+        let timelines: Vec<String> = match dim.timelines.as_ref() {
+            None => Vec::new(),
+            Some(serde_json::Value::String(value)) => vec![value.clone()],
+            Some(serde_json::Value::Array(values)) => values
+                .iter()
+                .map(|value| {
+                    value
+                        .as_str()
+                        .expect("Dimension timelines must contain string IDs")
+                        .to_string()
+                })
+                .collect(),
+            Some(_) => panic!("Dimension timelines must be an ID, tag, or list of IDs"),
         };
 
         let monster_spawn_light_level = value_to_int_provider(&dim.monster_spawn_light_level);
@@ -114,13 +114,11 @@ pub fn build() -> TokenStream {
         } else {
             format!("minecraft:{}", dim.infiniburn)
         };
-        let timelines = dim.timelines.map(|t| {
-            if t.contains(':') {
-                t
-            } else {
-                format!("minecraft:{}", t)
-            }
-        });
+        let has_fixed_time = dim.has_fixed_time;
+        let has_ender_dragon_fight = dim.has_ender_dragon_fight;
+        let skybox = dim.skybox;
+        let cardinal_light = dim.cardinal_light;
+        let default_clock = dim.default_clock;
 
         let minecraft_name = if name.contains(':') {
             name.clone()
@@ -128,32 +126,16 @@ pub fn build() -> TokenStream {
             format!("minecraft:{name}")
         };
 
-        let sky_color_literal = if let Some(c) = sky_color {
-            quote! { Some(#c) }
-        } else {
-            quote! { None }
-        };
-        let fog_color_literal = if let Some(c) = fog_color {
-            quote! { Some(#c) }
-        } else {
-            quote! { None }
-        };
-        let cloud_color_literal = if let Some(c) = cloud_color {
-            quote! { Some(#c) }
-        } else {
-            quote! { None }
-        };
-        let timelines_literal = if let Some(t) = timelines.clone() {
-            quote! { Some(#t) }
-        } else {
-            quote! { None }
-        };
+        let skybox = skybox.map_or_else(|| quote! { None }, |value| quote! { Some(#value) });
+        let cardinal_light =
+            cardinal_light.map_or_else(|| quote! { None }, |value| quote! { Some(#value) });
+        let default_clock =
+            default_clock.map_or_else(|| quote! { None }, |value| quote! { Some(#value) });
 
         variants.extend(quote! {
             pub const #format_name: Self = Self {
                 id: #id,
                 minecraft_name: #minecraft_name,
-                fixed_time: #fixed_time,
                 has_skylight: #has_skylight,
                 has_ceiling: #has_ceiling,
                 coordinate_scale: #coordinate_scale,
@@ -164,10 +146,13 @@ pub fn build() -> TokenStream {
                 ambient_light: #ambient_light,
                 monster_spawn_light_level: #monster_spawn_light_level,
                 monster_spawn_block_light_limit: #monster_spawn_block_light_limit,
-                sky_color: #sky_color_literal,
-                fog_color: #fog_color_literal,
-                cloud_color: #cloud_color_literal,
-                timelines: #timelines_literal,
+                attributes: &[#(#attributes)*],
+                has_fixed_time: #has_fixed_time,
+                has_ender_dragon_fight: #has_ender_dragon_fight,
+                skybox: #skybox,
+                cardinal_light: #cardinal_light,
+                timelines: &[#(#timelines),*],
+                default_clock: #default_clock,
             };
         });
 
@@ -191,11 +176,17 @@ pub fn build() -> TokenStream {
             Registry, RegistryBuilder, bootstrap::RegistryEntry, bootstrap_provider,
         };
 
+        #[derive(Debug, Clone, Copy)]
+        pub struct EnvironmentAttribute {
+            pub identifier: &'static str,
+            /// JSON representation of the Environment Attribute value or modifier.
+            pub value: &'static str,
+        }
+
         #[derive(Debug, Clone)]
         pub struct Dimension {
             pub id: u8,
             pub minecraft_name: &'static str,
-            pub fixed_time: Option<i64>,
             pub has_skylight: bool,
             pub has_ceiling: bool,
             pub coordinate_scale: f64,
@@ -206,10 +197,13 @@ pub fn build() -> TokenStream {
             pub ambient_light: f32,
             pub monster_spawn_light_level: IntProvider,
             pub monster_spawn_block_light_limit: u8,
-            pub sky_color: Option<i32>,
-            pub fog_color: Option<i32>,
-            pub cloud_color: Option<i32>,
-            pub timelines: Option<&'static str>,
+            pub attributes: &'static [EnvironmentAttribute],
+            pub has_fixed_time: bool,
+            pub has_ender_dragon_fight: bool,
+            pub skybox: Option<&'static str>,
+            pub cardinal_light: Option<&'static str>,
+            pub timelines: &'static [&'static str],
+            pub default_clock: Option<&'static str>,
         }
 
         impl Dimension {

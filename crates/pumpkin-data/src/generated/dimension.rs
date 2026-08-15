@@ -9,11 +9,16 @@ use pumpkin_util::{
     },
 };
 use std::sync::Arc;
+#[derive(Debug, Clone, Copy)]
+pub struct EnvironmentAttribute {
+    pub identifier: &'static str,
+    #[doc = r" JSON representation of the Environment Attribute value or modifier."]
+    pub value: &'static str,
+}
 #[derive(Debug, Clone)]
 pub struct Dimension {
     pub id: u8,
     pub minecraft_name: &'static str,
-    pub fixed_time: Option<i64>,
     pub has_skylight: bool,
     pub has_ceiling: bool,
     pub coordinate_scale: f64,
@@ -24,16 +29,18 @@ pub struct Dimension {
     pub ambient_light: f32,
     pub monster_spawn_light_level: IntProvider,
     pub monster_spawn_block_light_limit: u8,
-    pub sky_color: Option<i32>,
-    pub fog_color: Option<i32>,
-    pub cloud_color: Option<i32>,
-    pub timelines: Option<&'static str>,
+    pub attributes: &'static [EnvironmentAttribute],
+    pub has_fixed_time: bool,
+    pub has_ender_dragon_fight: bool,
+    pub skybox: Option<&'static str>,
+    pub cardinal_light: Option<&'static str>,
+    pub timelines: &'static [&'static str],
+    pub default_clock: Option<&'static str>,
 }
 impl Dimension {
     pub const OVERWORLD: Self = Self {
         id: 0u8,
         minecraft_name: "minecraft:overworld",
-        fixed_time: None,
         has_skylight: true,
         has_ceiling: false,
         coordinate_scale: 1f64,
@@ -49,15 +56,58 @@ impl Dimension {
             },
         )),
         monster_spawn_block_light_limit: 0u8,
-        sky_color: Some(7907327i32),
-        fog_color: Some(12638463i32),
-        cloud_color: None,
-        timelines: Some("#minecraft:in_overworld"),
+        attributes: &[
+            EnvironmentAttribute {
+                identifier: "minecraft:audio/ambient_sounds",
+                value: "{\"mood\":{\"sound\":\"minecraft:ambient.cave\",\"tick_delay\":6000,\"block_search_extent\":8,\"offset\":2.0}}",
+            },
+            EnvironmentAttribute {
+                identifier: "minecraft:audio/background_music",
+                value: "{\"default\":{\"sound\":\"minecraft:music.game\",\"min_delay\":12000,\"max_delay\":24000},\"creative\":{\"sound\":\"minecraft:music.creative\",\"min_delay\":12000,\"max_delay\":24000}}",
+            },
+            EnvironmentAttribute {
+                identifier: "minecraft:gameplay/bed_rule",
+                value: "{\"can_sleep\":\"when_dark\",\"can_set_spawn\":\"always\",\"error_message\":{\"translate\":\"block.minecraft.bed.no_sleep\"}}",
+            },
+            EnvironmentAttribute {
+                identifier: "minecraft:gameplay/nether_portal_spawns_piglin",
+                value: "true",
+            },
+            EnvironmentAttribute {
+                identifier: "minecraft:gameplay/respawn_anchor_works",
+                value: "false",
+            },
+            EnvironmentAttribute {
+                identifier: "minecraft:visual/ambient_light_color",
+                value: "\"#0a0a0a\"",
+            },
+            EnvironmentAttribute {
+                identifier: "minecraft:visual/cloud_color",
+                value: "\"#ccffffff\"",
+            },
+            EnvironmentAttribute {
+                identifier: "minecraft:visual/cloud_height",
+                value: "192.33",
+            },
+            EnvironmentAttribute {
+                identifier: "minecraft:visual/fog_color",
+                value: "\"#c0d8ff\"",
+            },
+            EnvironmentAttribute {
+                identifier: "minecraft:visual/sky_color",
+                value: "\"#78a7ff\"",
+            },
+        ],
+        has_fixed_time: false,
+        has_ender_dragon_fight: false,
+        skybox: None,
+        cardinal_light: None,
+        timelines: &["#minecraft:in_overworld"],
+        default_clock: Some("minecraft:overworld"),
     };
     pub const OVERWORLD_CAVES: Self = Self {
         id: 1u8,
         minecraft_name: "minecraft:overworld_caves",
-        fixed_time: None,
         has_skylight: true,
         has_ceiling: true,
         coordinate_scale: 1f64,
@@ -73,15 +123,58 @@ impl Dimension {
             },
         )),
         monster_spawn_block_light_limit: 0u8,
-        sky_color: Some(7907327i32),
-        fog_color: Some(12638463i32),
-        cloud_color: None,
-        timelines: Some("#minecraft:in_overworld"),
+        attributes: &[
+            EnvironmentAttribute {
+                identifier: "minecraft:audio/ambient_sounds",
+                value: "{\"mood\":{\"sound\":\"minecraft:ambient.cave\",\"tick_delay\":6000,\"block_search_extent\":8,\"offset\":2.0}}",
+            },
+            EnvironmentAttribute {
+                identifier: "minecraft:audio/background_music",
+                value: "{\"default\":{\"sound\":\"minecraft:music.game\",\"min_delay\":12000,\"max_delay\":24000},\"creative\":{\"sound\":\"minecraft:music.creative\",\"min_delay\":12000,\"max_delay\":24000}}",
+            },
+            EnvironmentAttribute {
+                identifier: "minecraft:gameplay/bed_rule",
+                value: "{\"can_sleep\":\"when_dark\",\"can_set_spawn\":\"always\",\"error_message\":{\"translate\":\"block.minecraft.bed.no_sleep\"}}",
+            },
+            EnvironmentAttribute {
+                identifier: "minecraft:gameplay/nether_portal_spawns_piglin",
+                value: "true",
+            },
+            EnvironmentAttribute {
+                identifier: "minecraft:gameplay/respawn_anchor_works",
+                value: "false",
+            },
+            EnvironmentAttribute {
+                identifier: "minecraft:visual/ambient_light_color",
+                value: "\"#0a0a0a\"",
+            },
+            EnvironmentAttribute {
+                identifier: "minecraft:visual/cloud_color",
+                value: "\"#ccffffff\"",
+            },
+            EnvironmentAttribute {
+                identifier: "minecraft:visual/cloud_height",
+                value: "192.33",
+            },
+            EnvironmentAttribute {
+                identifier: "minecraft:visual/fog_color",
+                value: "\"#c0d8ff\"",
+            },
+            EnvironmentAttribute {
+                identifier: "minecraft:visual/sky_color",
+                value: "\"#78a7ff\"",
+            },
+        ],
+        has_fixed_time: false,
+        has_ender_dragon_fight: false,
+        skybox: None,
+        cardinal_light: None,
+        timelines: &["#minecraft:in_overworld"],
+        default_clock: Some("minecraft:overworld"),
     };
     pub const THE_END: Self = Self {
         id: 2u8,
         minecraft_name: "minecraft:the_end",
-        fixed_time: None,
         has_skylight: true,
         has_ceiling: false,
         coordinate_scale: 1f64,
@@ -92,15 +185,54 @@ impl Dimension {
         ambient_light: 0.25f32,
         monster_spawn_light_level: IntProvider::Constant(15i32),
         monster_spawn_block_light_limit: 0u8,
-        sky_color: Some(0i32),
-        fog_color: Some(1577752i32),
-        cloud_color: None,
-        timelines: Some("#minecraft:in_end"),
+        attributes: &[
+            EnvironmentAttribute {
+                identifier: "minecraft:audio/ambient_sounds",
+                value: "{\"mood\":{\"sound\":\"minecraft:ambient.cave\",\"tick_delay\":6000,\"block_search_extent\":8,\"offset\":2.0}}",
+            },
+            EnvironmentAttribute {
+                identifier: "minecraft:audio/background_music",
+                value: "{\"default\":{\"sound\":\"minecraft:music.end\",\"min_delay\":6000,\"max_delay\":24000,\"replace_current_music\":true}}",
+            },
+            EnvironmentAttribute {
+                identifier: "minecraft:gameplay/bed_rule",
+                value: "{\"can_sleep\":\"never\",\"can_set_spawn\":\"never\",\"explodes\":true}",
+            },
+            EnvironmentAttribute {
+                identifier: "minecraft:gameplay/respawn_anchor_works",
+                value: "false",
+            },
+            EnvironmentAttribute {
+                identifier: "minecraft:visual/ambient_light_color",
+                value: "\"#3f473f\"",
+            },
+            EnvironmentAttribute {
+                identifier: "minecraft:visual/fog_color",
+                value: "\"#181318\"",
+            },
+            EnvironmentAttribute {
+                identifier: "minecraft:visual/sky_color",
+                value: "\"#000000\"",
+            },
+            EnvironmentAttribute {
+                identifier: "minecraft:visual/sky_light_color",
+                value: "\"#ac60cd\"",
+            },
+            EnvironmentAttribute {
+                identifier: "minecraft:visual/sky_light_factor",
+                value: "0.0",
+            },
+        ],
+        has_fixed_time: true,
+        has_ender_dragon_fight: true,
+        skybox: Some("end"),
+        cardinal_light: None,
+        timelines: &["#minecraft:in_end"],
+        default_clock: Some("minecraft:the_end"),
     };
     pub const THE_NETHER: Self = Self {
         id: 3u8,
         minecraft_name: "minecraft:the_nether",
-        fixed_time: None,
         has_skylight: false,
         has_ceiling: true,
         coordinate_scale: 8f64,
@@ -111,10 +243,70 @@ impl Dimension {
         ambient_light: 0.1f32,
         monster_spawn_light_level: IntProvider::Constant(7i32),
         monster_spawn_block_light_limit: 15u8,
-        sky_color: None,
-        fog_color: None,
-        cloud_color: None,
-        timelines: Some("#minecraft:in_nether"),
+        attributes: &[
+            EnvironmentAttribute {
+                identifier: "minecraft:gameplay/bed_rule",
+                value: "{\"can_sleep\":\"never\",\"can_set_spawn\":\"never\",\"explodes\":true}",
+            },
+            EnvironmentAttribute {
+                identifier: "minecraft:gameplay/can_start_raid",
+                value: "false",
+            },
+            EnvironmentAttribute {
+                identifier: "minecraft:gameplay/fast_lava",
+                value: "true",
+            },
+            EnvironmentAttribute {
+                identifier: "minecraft:gameplay/piglins_zombify",
+                value: "false",
+            },
+            EnvironmentAttribute {
+                identifier: "minecraft:gameplay/respawn_anchor_works",
+                value: "true",
+            },
+            EnvironmentAttribute {
+                identifier: "minecraft:gameplay/sky_light_level",
+                value: "4.0",
+            },
+            EnvironmentAttribute {
+                identifier: "minecraft:gameplay/snow_golem_melts",
+                value: "true",
+            },
+            EnvironmentAttribute {
+                identifier: "minecraft:gameplay/water_evaporates",
+                value: "true",
+            },
+            EnvironmentAttribute {
+                identifier: "minecraft:visual/ambient_light_color",
+                value: "\"#302821\"",
+            },
+            EnvironmentAttribute {
+                identifier: "minecraft:visual/default_dripstone_particle",
+                value: "{\"type\":\"minecraft:dripping_dripstone_lava\"}",
+            },
+            EnvironmentAttribute {
+                identifier: "minecraft:visual/fog_end_distance",
+                value: "96.0",
+            },
+            EnvironmentAttribute {
+                identifier: "minecraft:visual/fog_start_distance",
+                value: "10.0",
+            },
+            EnvironmentAttribute {
+                identifier: "minecraft:visual/sky_light_color",
+                value: "\"#7a7aff\"",
+            },
+            EnvironmentAttribute {
+                identifier: "minecraft:visual/sky_light_factor",
+                value: "0.0",
+            },
+        ],
+        has_fixed_time: true,
+        has_ender_dragon_fight: false,
+        skybox: Some("none"),
+        cardinal_light: Some("nether"),
+        timelines: &["#minecraft:in_nether"],
+        default_clock: None,
     };
 }
 const STATIC_ENTRIES: [Dimension; 4usize] = [
