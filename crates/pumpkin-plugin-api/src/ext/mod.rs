@@ -1,7 +1,7 @@
 //! WIT-generated plugin type extensions belong in here. For example [Display](std::fmt::Display) implementations.
 
-mod config_value;
 mod attributes;
+mod config_value;
 mod player;
 mod server_list_ping;
 mod uuid;
