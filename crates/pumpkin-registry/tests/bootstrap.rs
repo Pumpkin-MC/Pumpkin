@@ -1,7 +1,7 @@
 #![allow(clippy::unwrap_used)]
 
 use pumpkin_registry::{
-    BOOTSTRAP,
+    AsyncTypedRegistry, BOOTSTRAP, RegistryBuilder,
     bootstrap::{BootstrapManager, RegistryEntry},
     bootstrap_provider,
 };
@@ -72,4 +72,46 @@ fn populates_all_linker_section_providers() {
     let id = mapping.get(&Identifier::parse_static("test:four"));
     assert!(id.is_some());
     assert_eq!(entries[*id.unwrap()], Block(4));
+}
+
+#[tokio::test]
+async fn replaces_reloadable_registry_entries() {
+    let _ = BOOTSTRAP.set(BootstrapManager::new());
+
+    let registry = RegistryBuilder::<Block>::reloadable(&BLOCK_REGISTRY).unwrap();
+
+    registry
+        .replace_entries([
+            (Identifier::parse_static("test:new_one"), Block(10)),
+            (Identifier::parse_static("test:new_two"), Block(20)),
+        ])
+        .await
+        .unwrap();
+
+    let new_one = Identifier::parse_static("test:new_one");
+    let old_one = Identifier::parse_static("test:one");
+    assert_eq!(
+        *AsyncTypedRegistry::get(&registry, &new_one).await.unwrap(),
+        Block(10),
+    );
+    assert!(AsyncTypedRegistry::get(&registry, &old_one).await.is_none());
+}
+
+#[tokio::test]
+async fn failed_replacement_preserves_existing_entries() {
+    let _ = BOOTSTRAP.set(BootstrapManager::new());
+
+    let registry = RegistryBuilder::<Block>::reloadable(&BLOCK_REGISTRY).unwrap();
+    let duplicate = Identifier::parse_static("test:duplicate");
+
+    let result = registry
+        .replace_entries([(duplicate.clone(), Block(10)), (duplicate, Block(20))])
+        .await;
+
+    assert!(result.is_err());
+    let original = Identifier::parse_static("test:one");
+    assert_eq!(
+        *AsyncTypedRegistry::get(&registry, &original).await.unwrap(),
+        Block(1),
+    );
 }

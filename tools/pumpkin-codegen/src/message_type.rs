@@ -1,3 +1,5 @@
+// TODO(datapack parity): Load chat_type definitions from data/minecraft/chat_type/
+// and regenerate the registry NBT blobs dynamically instead of at compile time.
 use std::{collections::BTreeMap, fs};
 
 use proc_macro2::TokenStream;

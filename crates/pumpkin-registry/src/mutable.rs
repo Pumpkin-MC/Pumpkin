@@ -5,7 +5,7 @@ use crate::{
     value::{DynIterator, ErasedRegistryRef, LockedIterator},
 };
 use pumpkin_util::identifier::Identifier;
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxBuildHasher, FxHashMap};
 use std::any::{Any, TypeId, type_name};
 use tokio::sync::{RwLock, RwLockReadGuard};
 
@@ -45,8 +45,54 @@ impl<T: Send + Sync + 'static> ReloadableRegistry<T> {
         *self.inner.blocking_write() = new_inner;
         Ok(())
     }
+    /// Atomically replaces all entries while preserving caller-provided order.
+    ///
+    /// If validation fails, the existing registry remains unchanged.
+    pub async fn replace_entries<I>(&self, entries: I) -> Result<(), BootstrapError>
+    where
+        I: IntoIterator<Item = (Identifier, T)>,
+    {
+        let entries: Vec<_> = entries.into_iter().collect();
+        let (added_entries, added_mapping) = BOOTSTRAP
+            .get()
+            .ok_or(BootstrapError::Uninitialized)
+            .and_then(|m| m.populate::<T>(&self.name))?;
 
-    // some way to swap out the FrozenRegistry for datapack reloads
+        let mut values = Vec::with_capacity(entries.len() + added_entries.len());
+        let mut mapping = FxHashMap::with_capacity_and_hasher(entries.len() + added_entries.len(), FxBuildHasher);
+
+        for (id, value) in entries {
+            let len = values.len();
+
+            if mapping.insert(id.clone(), len).is_some() {
+                return Err(BootstrapError::DuplicateEntry {
+                    registry: self.name.clone(),
+                    identifier: id,
+                });
+            }
+
+            values.push(value);
+        }
+
+        let offset = values.len();
+
+        for (id, index) in added_mapping.into_iter() {
+            if mapping.insert(id.clone(), index + offset).is_some() {
+                return Err(BootstrapError::DuplicateEntry {
+                    registry: self.name.clone(),
+                    identifier: id,
+                });
+            }
+        }
+
+        values.extend(added_entries);
+
+        let replacement = FrozenRegistry::new(values.into_boxed_slice(), mapping);
+
+        *self.inner.write().await = replacement;
+
+        Ok(())
+    }
 }
 
 impl<T: Send + Sync + 'static> Registry for ReloadableRegistry<T> {

@@ -1,3 +1,5 @@
+// TODO(datapack parity): Load noise params from data/minecraft/worldgen/noise/
+// at runtime for datapack-provided noise definitions.
 use std::{collections::BTreeMap, fs};
 
 use proc_macro2::TokenStream;

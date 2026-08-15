@@ -79,11 +79,16 @@ impl VehicleEntity {
     }
 
     pub async fn collide_entity(&self, collided_entity_id: i32) {
+        let mut base_event =
+            crate::plugin::api::events::vehicle::vehicle_collision::VehicleCollisionEvent::new(
+                self.entity.entity_id,
+            );
         let mut collide_event = crate::plugin::api::events::vehicle::vehicle_entity_collision::VehicleEntityCollisionEvent::new(
             self.entity.entity_id,
             collided_entity_id,
         );
         if let Some(server) = self.entity.world.load().server.upgrade() {
+            server.plugin_manager.fire(&server, &mut base_event).await;
             server
                 .plugin_manager
                 .fire(&server, &mut collide_event)
@@ -92,11 +97,16 @@ impl VehicleEntity {
     }
 
     pub async fn collide_block(&self, block_pos: pumpkin_util::math::position::BlockPos) {
+        let mut base_event =
+            crate::plugin::api::events::vehicle::vehicle_collision::VehicleCollisionEvent::new(
+                self.entity.entity_id,
+            );
         let mut collide_event = crate::plugin::api::events::vehicle::vehicle_block_collision::VehicleBlockCollisionEvent::new(
             self.entity.entity_id,
             block_pos,
         );
         if let Some(server) = self.entity.world.load().server.upgrade() {
+            server.plugin_manager.fire(&server, &mut base_event).await;
             server
                 .plugin_manager
                 .fire(&server, &mut collide_event)

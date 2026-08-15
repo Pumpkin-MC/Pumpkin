@@ -1,3 +1,5 @@
+use pumpkin_data::data_component::DataComponent;
+use pumpkin_data::data_component_impl::DataComponentImpl;
 use pumpkin_data::recipes::RecipeCategoryTypes;
 
 use pumpkin_data::item::Item;
@@ -27,11 +29,24 @@ impl OwnedRecipeIngredient {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct OwnedRecipeResult {
     pub item_id: String,
     pub count: u8,
-    // TODO: Add components/enchantments if needed for the display result
+    /// Result data components parsed from the recipe's `components` field.
+    pub components: Vec<(DataComponent, Box<dyn DataComponentImpl>)>,
+}
+
+impl std::fmt::Debug for OwnedRecipeResult {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let component_names: Vec<&str> =
+            self.components.iter().map(|(id, _)| id.to_name()).collect();
+        f.debug_struct("OwnedRecipeResult")
+            .field("item_id", &self.item_id)
+            .field("count", &self.count)
+            .field("components", &component_names)
+            .finish()
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -75,4 +90,6 @@ pub enum OwnedCookingRecipeType {
 pub enum DynamicRecipe {
     Crafting(OwnedCraftingRecipe),
     Cooking(OwnedCookingRecipeType),
+    // TODO(datapack parity): Add SmithingTransform, SmithingTrim, Stonecutting variants
+    // and their protocol serialization. These require new Owned* structs.
 }

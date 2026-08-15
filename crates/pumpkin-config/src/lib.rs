@@ -13,8 +13,10 @@ use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
 use std::path::PathBuf;
 use std::{fs, num::NonZeroU8, path::Path};
-use tracing::{debug, error, warn};
 
+use tracing::{debug, error, warn};
+/// Datapack loading configuration options.
+pub mod datapack;
 /// Fun and experimental configuration options.
 pub mod fun;
 /// Server logging configuration options.
@@ -61,6 +63,7 @@ pub mod whitelist;
 pub mod world;
 
 use advancement::AdvancementConfig;
+use datapack::DatapackConfig;
 use networking::NetworkingConfig;
 use player_data::PlayerDataConfig;
 use resource_pack::ResourcePackConfig;
@@ -161,6 +164,8 @@ pub struct AdvancedConfiguration {
     pub plugins: PluginsConfig,
     /// Advancement configuration
     pub advancement: AdvancementConfig,
+    /// Datapack configuration
+    pub datapack: DatapackConfig,
 }
 
 /// Basic configuration for core server settings.

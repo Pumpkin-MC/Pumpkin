@@ -287,7 +287,13 @@ impl BlockId {
     #[inline]
     #[must_use]
     pub fn has_tag(self, tag: Tag) -> bool {
-        tag.1.contains(&self.0)
+        // Static check
+        if tag.1.contains(&self.0) {
+            return true;
+        }
+        // Dynamic (datapack) check via global bridge
+        crate::dynamic_tag_bridge::check_dynamic_tag("block", self.to_block().registry_key(), tag.2)
+            .unwrap_or(false)
     }
 }
 

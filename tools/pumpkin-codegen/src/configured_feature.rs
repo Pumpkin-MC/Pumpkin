@@ -1,3 +1,5 @@
+// TODO(datapack parity): Load configured_feature from data/minecraft/worldgen/configured_feature/
+// at runtime so datapacks can add custom features.
 use heck::ToPascalCase;
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};

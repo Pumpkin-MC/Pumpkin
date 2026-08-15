@@ -328,7 +328,7 @@ impl PlayerAdvancement {
     fn update_tree_visibility(
         &mut self,
         root: &AdvancementNode,
-        added: &mut Vec<&'static Advancement>,
+        added: &mut Vec<pumpkin_protocol::java::client::play::AdvancementEntry>,
         removed: &mut Vec<Identifier>,
     ) {
         visibility_evaluator::evaluate_visibility(
@@ -344,7 +344,11 @@ impl PlayerAdvancement {
                 let advancement = node.value;
                 if should_be_visible {
                     if player_advancement.visible.insert(advancement) {
-                        added.push(advancement);
+                        added.push(
+                            pumpkin_protocol::java::client::play::AdvancementEntry::Static(
+                                advancement,
+                            ),
+                        );
                         if player_advancement.progress.map.contains_key(advancement) {
                             player_advancement.progress_changed.insert(advancement);
                         }
@@ -360,12 +364,37 @@ impl PlayerAdvancement {
     pub fn flush_dirty(&mut self, player: &Arc<Player>, show_advancement: bool) {
         if self.is_first_packet || !self.roots_to_update.is_empty() {
             let mut progress: HashMap<Identifier, &AdvancementProgress> = HashMap::new();
-            let mut added: Vec<&Advancement> = Vec::new();
+            let mut added: Vec<pumpkin_protocol::java::client::play::AdvancementEntry> = Vec::new();
             let mut removed: Vec<Identifier> = Vec::new();
             for root in self.roots_to_update.clone() {
                 self.update_tree_visibility(root, &mut added, &mut removed);
             }
             self.roots_to_update.clear();
+
+            // Include datapack advancements on first packet
+            if self.is_first_packet
+                && let Some(ref dp) = self.manager.datapack_manager
+                && let Ok(advs) = dp.advancements.try_read()
+            {
+                for file in advs.values() {
+                    if let Some(entry) = advancement_file_to_entry(file) {
+                        // Deduplicate against already-added built-in advancements
+                        let id_str = file.id.to_string();
+                        if !added.iter().any(|a| match a {
+                            pumpkin_protocol::java::client::play::AdvancementEntry::Static(s) => {
+                                s.id.to_string() == id_str
+                            }
+                            pumpkin_protocol::java::client::play::AdvancementEntry::Dynamic {
+                                id,
+                                ..
+                            } => id.to_string() == id_str,
+                        }) {
+                            added.push(entry);
+                        }
+                    }
+                }
+            }
+
             for advancement in &self.progress_changed {
                 if self.visible.contains(advancement) {
                     progress.insert(advancement.id.clone(), &self.progress.map[advancement]);
@@ -512,6 +541,101 @@ impl PlayerAdvancement {
                 .await;
         }
     }
+}
+
+/// Convert a datapack `AdvancementFile` into a packet `AdvancementEntry` for client sync.
+#[allow(clippy::unnecessary_wraps)]
+fn advancement_file_to_entry(
+    file: &pumpkin_datapack::advancement::AdvancementFile,
+) -> Option<pumpkin_protocol::java::client::play::AdvancementEntry> {
+    use pumpkin_protocol::java::client::play::AdvancementEntry;
+
+    let id = file.id.clone();
+
+    let parent = file
+        .data
+        .get("parent")
+        .and_then(|v| v.as_str())
+        .and_then(|p| pumpkin_util::identifier::Identifier::parse(p).ok());
+
+    let display = file.data.get("display").and_then(|d| {
+        let icon_item = d.get("icon")?.get("id")?.as_str()?;
+        let icon_item_key = icon_item.strip_prefix("minecraft:").unwrap_or(icon_item);
+        let item = pumpkin_data::item::Item::from_registry_key(icon_item_key)?;
+        let icon = pumpkin_data::item_stack::ItemStack::new(1, item);
+
+        let title_raw = d.get("title")?;
+        let description_raw = d.get("description")?;
+        let title_component: TextComponent = serde_json::from_value(title_raw.clone()).ok()?;
+        let description_component: TextComponent =
+            serde_json::from_value(description_raw.clone()).ok()?;
+        let title_bytes = title_component.encode().to_vec();
+        let description_bytes = description_component.encode().to_vec();
+
+        let frame = match d.get("frame").and_then(|v| v.as_str()) {
+            Some("goal") => 1i32,
+            Some("challenge") => 2i32,
+            _ => 0i32, // task
+        };
+        let show_toast = d
+            .get("show_toast")
+            .and_then(serde_json::Value::as_bool)
+            .unwrap_or(true);
+        let hidden = d
+            .get("hidden")
+            .and_then(serde_json::Value::as_bool)
+            .unwrap_or(false);
+        let background = d
+            .get("background")
+            .and_then(|v| v.as_str())
+            .map(String::from);
+
+        Some(
+            pumpkin_protocol::java::client::play::DynAdvancementDisplay {
+                title: title_bytes,
+                description: description_bytes,
+                icon: Some(icon),
+                frame_type: frame,
+                show_toast,
+                hidden,
+                background_texture: background,
+                x: 0.0,
+                y: 0.0,
+            },
+        )
+    });
+
+    let send_telemetry = file
+        .data
+        .get("sends_telemetry_event")
+        .and_then(serde_json::Value::as_bool)
+        .unwrap_or(false);
+
+    let requirements: Vec<Vec<String>> = file
+        .data
+        .get("requirements")
+        .and_then(|v| v.as_array())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|req| {
+                    req.as_array().map(|inner| {
+                        inner
+                            .iter()
+                            .filter_map(|r| r.as_str().map(String::from))
+                            .collect()
+                    })
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+
+    Some(AdvancementEntry::Dynamic {
+        id,
+        parent,
+        display,
+        requirements,
+        send_telemetry,
+    })
 }
 
 impl Serialize for PlayerAdvancement {

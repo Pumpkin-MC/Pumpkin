@@ -1,3 +1,5 @@
+// TODO(datapack parity): Load chunk gen settings from data/minecraft/worldgen/noise_settings/
+// at runtime for datapack-provided dimension noise configs.
 use heck::ToShoutySnakeCase;
 use proc_macro2::TokenStream;
 use quote::{ToTokens, format_ident, quote};

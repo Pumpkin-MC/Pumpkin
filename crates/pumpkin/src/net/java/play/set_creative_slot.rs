@@ -4,7 +4,7 @@ use super::*;
 impl JavaClient {
     pub async fn handle_set_creative_slot(
         &self,
-        player: &Player,
+        player: &Arc<Player>,
         packet: SSetCreativeSlot,
     ) -> Result<(), InventoryError> {
         if player.gamemode.load() != GameMode::Creative {
@@ -15,6 +15,23 @@ impl JavaClient {
         let item_stack = packet
             .clicked_item
             .to_stack_for_version(&self.version.load());
+        let mut creative_event =
+            crate::plugin::api::events::inventory::inventory_creative::InventoryCreativeEvent::new(
+                player.clone(),
+                packet.slot,
+                item_stack.item.registry_key.to_string(),
+                item_stack.item_count,
+            );
+        if let Some(server) = player.world().server.upgrade() {
+            server
+                .plugin_manager
+                .fire(&server, &mut creative_event)
+                .await;
+        }
+        if creative_event.cancelled {
+            return Ok(());
+        }
+
         let is_legal =
             item_stack.is_empty() || item_stack.item_count <= item_stack.get_max_stack_size();
 

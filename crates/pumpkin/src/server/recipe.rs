@@ -26,6 +26,12 @@ impl RecipeManager {
         recipes.push(recipe);
     }
 
+    /// Replace all recipes (used during datapack reload).
+    pub async fn set_recipes(&self, recipes: Vec<DynamicRecipe>) {
+        let mut current = self.dynamic_recipes.write().await;
+        *current = recipes;
+    }
+
     pub async fn get_dynamic_recipes_internal(&self) -> Vec<DynamicRecipe> {
         self.dynamic_recipes.read().await.clone()
     }

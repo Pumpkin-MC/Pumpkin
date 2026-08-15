@@ -18,6 +18,7 @@ mod clear;
 mod clone;
 mod damage;
 mod data;
+mod datapack;
 pub mod defaultgamemode;
 mod deop;
 mod dialog;
@@ -30,6 +31,7 @@ mod fetchprofile;
 mod fill;
 mod fillbiome;
 mod forceload;
+mod function_cmd;
 mod gamemode;
 mod gamerule;
 mod give;
@@ -52,6 +54,7 @@ mod plugins;
 mod pumpkin;
 mod random;
 mod recipe;
+mod reload;
 mod ride;
 mod rotate;
 mod saveall;
@@ -155,7 +158,12 @@ pub async fn default_dispatcher(
     );
     dispatcher.register(spectate::init_command_tree(), "minecraft:command.spectate");
     dispatcher.register(data::init_command_tree(), "minecraft:command.data");
-    dispatcher.register(waypoint::init_command_tree(), "minecraft:command.waypoint");
+    dispatcher.register(datapack::init_command_tree(), "minecraft:command.datapack");
+    dispatcher.register(
+        function_cmd::init_command_tree(),
+        "minecraft:command.function",
+    );
+    dispatcher.register(reload::init_command_tree(), "minecraft:command.reload");
     // Three
     dispatcher.register(deop::init_command_tree(), "minecraft:command.deop");
     dispatcher.register(kick::init_command_tree(), "minecraft:command.kick");
@@ -543,6 +551,27 @@ fn register_level_2_permissions(registry: &mut PermissionRegistry) {
         .register_permission(Permission::new(
             "minecraft:command.data",
             "Query and modify data of entities and blocks",
+            PermissionDefault::Op(PermissionLvl::Two),
+        ))
+        .expect("Permission already registered");
+    registry
+        .register_permission(Permission::new(
+            "minecraft:command.datapack",
+            "Manages datapacks",
+            PermissionDefault::Op(PermissionLvl::Two),
+        ))
+        .expect("Permission already registered");
+    registry
+        .register_permission(Permission::new(
+            "minecraft:command.function",
+            "Executes functions",
+            PermissionDefault::Op(PermissionLvl::Two),
+        ))
+        .expect("Permission already registered");
+    registry
+        .register_permission(Permission::new(
+            "minecraft:command.reload",
+            "Reloads datapacks and server data",
             PermissionDefault::Op(PermissionLvl::Two),
         ))
         .expect("Permission already registered");

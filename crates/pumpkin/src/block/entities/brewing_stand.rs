@@ -436,9 +436,21 @@ impl crate::block::entities::BlockEntity for BrewingStandBlockEntity {
                         .get_item()
                         .has_tag(&tag::Item::MINECRAFT_BREWING_FUEL)
                 {
-                    self.fuel.store(20, Ordering::Relaxed);
-                    items[4].decrement(1);
-                    true
+                    let mut fuel_event = crate::plugin::api::events::inventory::brewing_stand_fuel::BrewingStandFuelEvent::new(
+                        self.position,
+                        20,
+                    );
+                    if let Some(server) = world.server.upgrade() {
+                        server.plugin_manager.fire(&server, &mut fuel_event).await;
+                    }
+                    if fuel_event.cancelled {
+                        false
+                    } else {
+                        self.fuel
+                            .store(fuel_event.fuel_power as i32, Ordering::Relaxed);
+                        items[4].decrement(1);
+                        true
+                    }
                 } else {
                     false
                 }
