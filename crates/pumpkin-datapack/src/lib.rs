@@ -123,7 +123,10 @@ impl DataPackManager {
             .map(<[_]>::to_vec)
             .unwrap_or_default();
 
-        self.tags.write().unwrap().replace_with(tags);
+        self.tags
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .replace_with(tags);
         self.functions.write().await.replace_with(functions);
         *self.recipes.write().await = recipes;
         *self.loot_tables.write().await = loot_tables;
@@ -190,7 +193,7 @@ impl DataPackManager {
     ) -> bool {
         self.tags
             .read()
-            .unwrap()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
             .is_tagged_bridge(registry, element_key, tag_name, static_check)
     }
 }

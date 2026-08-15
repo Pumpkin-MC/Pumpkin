@@ -164,6 +164,9 @@ pub fn main() {
         ),
         (carver::build, "carver.rs"),
         (chest_loot::build, "chest_loot.rs"),
+        (map_color::build, "map_color.rs"),
+        (map_decoration::build, "map_decoration.rs"),
+        (dye_color::build, "dye_color.rs"),
         (
             embedded_vanilla_datapack::build,
             "embedded_vanilla_datapack.rs",

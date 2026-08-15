@@ -63,7 +63,10 @@ impl PackResources for PathPackResources {
 
     fn get_resource(&self, namespace: &str, path: &str) -> Option<Vec<u8>> {
         // Check overlay directories first (in order)
-        let overlays = self.overlays.lock().unwrap();
+        let overlays = self
+            .overlays
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         for overlay in overlays.iter() {
             let full = self.overlay_data_path(overlay, namespace, path);
             if let Ok(data) = std::fs::read(&full) {
@@ -85,7 +88,10 @@ impl PackResources for PathPackResources {
         };
 
         // Collect from overlay directories first
-        let overlays = self.overlays.lock().unwrap();
+        let overlays = self
+            .overlays
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         for overlay in overlays.iter() {
             let overlay_dir = self
                 .root
@@ -115,7 +121,10 @@ impl PackResources for PathPackResources {
     fn get_namespaces(&self) -> Vec<String> {
         let mut namespaces: Vec<String> = Vec::new();
         // Collect from overlay directories
-        let overlays = self.overlays.lock().unwrap();
+        let overlays = self
+            .overlays
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         for overlay in overlays.iter() {
             let overlay_data = self.root.join(overlay).join("data");
             if let Ok(dir) = std::fs::read_dir(&overlay_data) {
@@ -153,7 +162,10 @@ impl PackResources for PathPackResources {
     }
 
     fn set_overlays(&self, overlays: Vec<String>) {
-        *self.overlays.lock().unwrap() = overlays;
+        *self
+            .overlays
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = overlays;
     }
 }
 
@@ -229,7 +241,10 @@ impl PackResources for ZipPackResources {
 
     fn get_resource(&self, namespace: &str, path: &str) -> Option<Vec<u8>> {
         // Check overlay directories first (in order)
-        let overlays = self.overlays.lock().unwrap();
+        let overlays = self
+            .overlays
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         for overlay in overlays.iter() {
             let overlay_path = format!("{overlay}/data/{namespace}/{path}");
             if let Some(data) = self.files.get(&overlay_path) {
@@ -262,7 +277,10 @@ impl PackResources for ZipPackResources {
         };
 
         // Collect from overlay directories first
-        let overlays = self.overlays.lock().unwrap();
+        let overlays = self
+            .overlays
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         for overlay in overlays.iter() {
             let overlay_strip = if prefix.is_empty() {
                 format!("{overlay}/data/{namespace}/")
@@ -293,7 +311,10 @@ impl PackResources for ZipPackResources {
         let mut namespaces: Vec<String> = Vec::new();
 
         // Collect from overlay directories
-        let overlays = self.overlays.lock().unwrap();
+        let overlays = self
+            .overlays
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         for overlay in overlays.iter() {
             let overlay_prefix = format!("{overlay}/data/");
             for key in self.files.keys() {
@@ -327,7 +348,10 @@ impl PackResources for ZipPackResources {
     }
 
     fn set_overlays(&self, overlays: Vec<String>) {
-        *self.overlays.lock().unwrap() = overlays;
+        *self
+            .overlays
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = overlays;
     }
 }
 

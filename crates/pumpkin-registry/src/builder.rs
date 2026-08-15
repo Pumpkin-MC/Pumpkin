@@ -106,16 +106,17 @@ mod tests {
                 .is_none()
         );
 
-        registry
-            .replace_entries([(entry_name.clone(), Entry(1))])
-            .await
-            .unwrap();
-
-        assert_eq!(
-            *AsyncTypedRegistry::get(&registry, &entry_name)
+        assert!(
+            registry
+                .replace_entries([(entry_name.clone(), Entry(1))])
                 .await
-                .unwrap(),
-            Entry(1),
+                .is_ok()
+        );
+
+        assert!(
+            AsyncTypedRegistry::get(&registry, &entry_name)
+                .await
+                .is_some_and(|entry| *entry == Entry(1))
         );
     }
 }

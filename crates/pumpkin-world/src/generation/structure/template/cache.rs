@@ -41,12 +41,18 @@ impl TemplateCache {
 
     /// Set search paths for datapack structure files.
     pub fn set_datapack_paths(&self, paths: Vec<PathBuf>) {
-        *self.datapack_search_paths.write().unwrap() = paths;
+        *self
+            .datapack_search_paths
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = paths;
     }
 
     /// Try to load a structure .nbt file from datapack search paths.
     fn load_datapack_bytes(&self, name: &str) -> Option<Vec<u8>> {
-        let paths = self.datapack_search_paths.read().unwrap();
+        let paths = self
+            .datapack_search_paths
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         for base in paths.iter() {
             // Try: <base>/data/<namespace>/structure/<name>.nbt
             // Handle both "namespace:path" and bare "path" forms

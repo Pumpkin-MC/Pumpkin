@@ -349,7 +349,11 @@ impl Server {
                 let adv_count = datapack_manager.advancements.read().await.len();
                 let pred_count = datapack_manager.predicates.read().await.len();
                 let func_count = datapack_manager.functions.read().await.function_count();
-                let tag_count = datapack_manager.tags.read().unwrap().tag_count();
+                let tag_count = datapack_manager
+                    .tags
+                    .read()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .tag_count();
 
                 if !packs_info.is_empty() {
                     for name in &packs_info {
@@ -371,12 +375,12 @@ impl Server {
         let dp = datapack_manager.clone();
         pumpkin_data::dynamic_tag_bridge::set_dynamic_tag_checker(Box::new(
             move |registry, element_key, tag_name| {
-                Some(dp.tags.read().unwrap().is_tagged_bridge(
-                    registry,
-                    element_key,
-                    tag_name,
-                    |_| None,
-                ))
+                Some(
+                    dp.tags
+                        .read()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner)
+                        .is_tagged_bridge(registry, element_key, tag_name, |_| None),
+                )
             },
         ));
 

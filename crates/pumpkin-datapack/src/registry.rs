@@ -7,6 +7,12 @@ pub struct DatapackRegistries {
     pub damage_types: Arc<ReloadableRegistry<DamageTypeFile>>,
 }
 
+impl Default for DatapackRegistries {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl DatapackRegistries {
     #[must_use]
     pub fn new() -> Self {

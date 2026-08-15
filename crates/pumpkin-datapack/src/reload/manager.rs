@@ -53,16 +53,10 @@ impl ReloadManager {
             futures::future::join_all(futures).await;
 
         // Phase 2: Apply sequentially on "main thread"
-        for (name, prepare_result) in &results {
+        for (listener, (_, prepare_result)) in self.listeners.iter().zip(&results) {
             match prepare_result {
                 Ok(()) => {
-                    if let Err(apply_errs) = self
-                        .listeners
-                        .iter()
-                        .find(|l| l.name() == name)
-                        .unwrap()
-                        .apply(&manager)
-                    {
+                    if let Err(apply_errs) = listener.apply(&manager) {
                         errors.extend(apply_errs);
                     }
                 }
