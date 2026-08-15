@@ -9,6 +9,7 @@ use pumpkin_protocol::{
     java::{
         client::config::CConfigDisconnect,
         client::login::CLoginDisconnect,
+        client::play::CPlayDisconnect,
         packet_decoder::TCPNetworkDecoder,
         packet_encoder::TCPNetworkEncoder,
         server::config::{
@@ -124,7 +125,7 @@ impl PendingConnection {
             Ok(packet) => Some(packet),
             Err(err) => {
                 if !matches!(err, PacketDecodeError::ConnectionClosed) {
-                    warn!("Failed to decode packet from client {}: {}", self.id, err);
+                    debug!("Failed to decode packet from client {}: {}", self.id, err);
                     let text = format!("Error while reading incoming packet {err}");
                     self.kick(TextComponent::text(text)).await;
                 }
@@ -159,6 +160,9 @@ impl PendingConnection {
             ConnectionState::Config => {
                 self.send_packet_now(&CConfigDisconnect::new(&reason.get_text()))
                     .await;
+            }
+            ConnectionState::Play => {
+                self.send_packet_now(&CPlayDisconnect::new(&reason)).await;
             }
             _ => {}
         }
@@ -357,11 +361,11 @@ impl PendingConnection {
                     return Ok(Some(PacketHandlerResult::Stop));
                 };
                 let config = self.config.clone().unwrap_or_default();
+                self.connection_state.store(ConnectionState::Play);
                 if let Some(reason) = can_not_join(&profile, &self.address, server).await {
                     self.kick(reason).await;
                     Ok(Some(PacketHandlerResult::Stop))
                 } else {
-                    self.connection_state.store(ConnectionState::Play);
                     Ok(Some(PacketHandlerResult::ReadyToPlay(profile, config)))
                 }
             }

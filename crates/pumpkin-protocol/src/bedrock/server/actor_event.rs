@@ -8,7 +8,7 @@ use crate::codec::var_int::VarInt;
 
 #[derive(Debug, PacketWrite)]
 #[packet(27)]
-pub struct CActorEvent {
+pub struct SActorEvent {
     pub entity_runtime_id: VarULong,
     pub event_type: ActorEventType,
     pub event_data: VarInt,
