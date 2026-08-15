@@ -60,6 +60,8 @@ bytes.workspace = true
 
 rand.workspace = true
 
+mimalloc.workspace = true
+
 num-bigint.workspace = true
 
 # Console line reading

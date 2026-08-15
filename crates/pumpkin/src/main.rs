@@ -6,6 +6,12 @@
 #[cfg(target_os = "wasi")]
 compile_error!("Compiling for WASI targets is not supported!");
 
+/// Chunk streaming frees everything it allocates - the live heap sits around 100 MB while
+/// a player travels - but the system allocator keeps the freed buffers instead of handing
+/// them back, so resident memory climbs for the whole session. mimalloc returns them.
+#[global_allocator]
+static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
+
 use pumpkin_data::packet::CURRENT_MC_VERSION;
 use pumpkin_world::{CURRENT_BEDROCK_MC_PROTOCOL, CURRENT_BEDROCK_MC_VERSION};
 use std::{
