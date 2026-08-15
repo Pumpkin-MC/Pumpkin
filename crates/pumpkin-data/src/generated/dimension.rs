@@ -309,19 +309,8 @@ impl Dimension {
         default_clock: None,
     };
 }
-const STATIC_ENTRIES: [Dimension; 4usize] = [
-    Dimension::OVERWORLD,
-    Dimension::OVERWORLD_CAVES,
-    Dimension::THE_END,
-    Dimension::THE_NETHER,
-];
-const STATIC_IDENTIFIERS: [Identifier; 4usize] = [
-    Identifier::parse_static("minecraft:overworld"),
-    Identifier::parse_static("minecraft:overworld_caves"),
-    Identifier::parse_static("minecraft:the_end"),
-    Identifier::parse_static("minecraft:the_nether"),
-];
-bootstrap_provider! { DIMENSION_TYPE_REGISTRY : Arc < dyn Registry > => "minecraft:root" , || { vec ! [RegistryEntry :: new (Identifier :: vanilla_static ("dimension_type") , RegistryBuilder :: < Dimension > :: new_static (& Identifier :: vanilla_static ("dimension_type") , & STATIC_ENTRIES , & STATIC_IDENTIFIERS ,) . unwrap () . arc_dyn () ,)] } }
+bootstrap_provider! { DIMENSION_TYPES : Dimension => "minecraft:dimension_type" , || { vec ! [RegistryEntry :: new (Identifier :: parse_static ("minecraft:overworld") , Dimension :: OVERWORLD ,) , RegistryEntry :: new (Identifier :: parse_static ("minecraft:overworld_caves") , Dimension :: OVERWORLD_CAVES ,) , RegistryEntry :: new (Identifier :: parse_static ("minecraft:the_end") , Dimension :: THE_END ,) , RegistryEntry :: new (Identifier :: parse_static ("minecraft:the_nether") , Dimension :: THE_NETHER ,) ,] } }
+bootstrap_provider! { DIMENSION_TYPE_REGISTRY : Arc < dyn Registry > => "minecraft:root" , || { vec ! [RegistryEntry :: new (Identifier :: vanilla_static ("dimension_type") , RegistryBuilder :: < Dimension > :: reloadable (& Identifier :: vanilla_static ("dimension_type") ,) . unwrap () . arc_dyn () ,)] } }
 impl PartialEq for Dimension {
     fn eq(&self, other: &Self) -> bool {
         self.id == other.id

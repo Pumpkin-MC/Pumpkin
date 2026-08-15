@@ -58,9 +58,7 @@ pub fn build() -> TokenStream {
     .expect("Failed to parse dimension.json");
 
     let mut variants = TokenStream::new();
-    let mut static_entries = TokenStream::new();
-    let mut identifiers = TokenStream::new();
-    let len = dimensions.len();
+    let mut registry_entries = TokenStream::new();
 
     // Iterate with index to generate a unique numeric ID
     for (id, (name, dim)) in dimensions.into_iter().enumerate() {
@@ -156,12 +154,11 @@ pub fn build() -> TokenStream {
             };
         });
 
-        static_entries.extend(quote! {
-            Dimension::#format_name,
-        });
-
-        identifiers.extend(quote! {
-            Identifier::parse_static(#minecraft_name),
+        registry_entries.extend(quote! {
+            RegistryEntry::new(
+                Identifier::parse_static(#minecraft_name),
+                Dimension::#format_name,
+            ),
         });
     }
 
@@ -210,23 +207,22 @@ pub fn build() -> TokenStream {
             #variants
         }
 
-        const STATIC_ENTRIES: [Dimension; #len] = [
-            #static_entries
-        ];
-
-        const STATIC_IDENTIFIERS: [Identifier; #len] = [
-            #identifiers
-        ];
+        bootstrap_provider! {
+            DIMENSION_TYPES: Dimension => "minecraft:dimension_type",
+            || {
+                vec![
+                    #registry_entries
+                ]
+            }
+        }
 
         bootstrap_provider! {
             DIMENSION_TYPE_REGISTRY: Arc<dyn Registry> => "minecraft:root",
             || {
                 vec![RegistryEntry::new(
                     Identifier::vanilla_static("dimension_type"),
-                    RegistryBuilder::<Dimension>::new_static(
+                    RegistryBuilder::<Dimension>::reloadable(
                         &Identifier::vanilla_static("dimension_type"),
-                        &STATIC_ENTRIES,
-                        &STATIC_IDENTIFIERS,
                     )
                     .unwrap()
                     .arc_dyn(),
