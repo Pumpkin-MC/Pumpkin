@@ -222,8 +222,8 @@ use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
 use pumpkin_protocol::IdOr;
 use pumpkin_protocol::SoundEvent;
-use pumpkin_protocol::bedrock::client::actor_event::{ActorEventType, CActorEvent};
 use pumpkin_protocol::bedrock::client::container_open::CContainerOpen;
+use pumpkin_protocol::bedrock::server::actor_event::{ActorEventType, SActorEvent};
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::codec::var_long::VarLong;
 use pumpkin_protocol::codec::var_ulong::VarULong;
@@ -3654,25 +3654,45 @@ impl Player {
     }
 
     pub async fn ban(&self, server: &Server, reason: Option<TextComponent>) {
-        let mut banned_players = server.data.banned_player_list.write().await;
+        self.ban_explicit(server, reason, None, None, true, true)
+            .await;
+    }
+
+    pub async fn ban_explicit(
+        &self,
+        server: &Server,
+        reason: Option<TextComponent>,
+        source: Option<String>,
+        expires: Option<time::OffsetDateTime>,
+        kick_if_online: bool,
+        log_to_console: bool,
+    ) {
         let string_reason = reason.clone().map_or_else(
             || "Banned by an operator.".to_string(),
             pumpkin_util::text::TextComponent::get_text,
         );
+        let source_str = source.unwrap_or_else(|| "Plugin".to_string());
 
-        if banned_players
-            .banned_players
-            .iter()
-            .any(|entry| entry.uuid == self.gameprofile.id)
-        {
-            return;
+        if log_to_console {
+            tracing::info!(
+                "Banning player {} ({}) by {}: {}",
+                self.gameprofile.name,
+                self.gameprofile.id,
+                source_str,
+                string_reason
+            );
         }
+
+        let mut banned_players = server.data.banned_player_list.write().await;
+        banned_players
+            .banned_players
+            .retain(|entry| entry.uuid != self.gameprofile.id);
 
         banned_players.banned_players.push(
             crate::data::banlist_serializer::BannedPlayerEntry::new(
                 &self.gameprofile,
-                "Plugin".to_string(),
-                None,
+                source_str,
+                expires,
                 string_reason,
             ),
         );
@@ -3680,54 +3700,79 @@ impl Player {
         banned_players.save();
         drop(banned_players);
 
-        let kick_reason = reason.unwrap_or_else(|| {
-            TextComponent::translate_cross(
-                translation::java::MULTIPLAYER_DISCONNECT_BANNED,
-                translation::bedrock::DISCONNECTIONSCREEN_TITLE_BANNEDBYHOST,
-                [],
-            )
-        });
+        if kick_if_online {
+            let kick_reason = reason.unwrap_or_else(|| {
+                TextComponent::translate_cross(
+                    translation::java::MULTIPLAYER_DISCONNECT_BANNED,
+                    translation::bedrock::DISCONNECTIONSCREEN_TITLE_BANNEDBYHOST,
+                    [],
+                )
+            });
 
-        self.kick(DisconnectReason::Kicked, kick_reason).await;
+            self.kick(DisconnectReason::Kicked, kick_reason).await;
+        }
     }
 
     pub async fn ban_ip(&self, server: &Server, reason: Option<TextComponent>) {
-        let mut banned_ips = server.data.banned_ip_list.write().await;
+        self.ban_ip_explicit(server, reason, None, None, true, true)
+            .await;
+    }
+
+    pub async fn ban_ip_explicit(
+        &self,
+        server: &Server,
+        reason: Option<TextComponent>,
+        source: Option<String>,
+        expires: Option<time::OffsetDateTime>,
+        kick_matching_players: bool,
+        log_to_console: bool,
+    ) {
         let string_reason = reason.clone().map_or_else(
             || "Banned by an operator.".to_string(),
             pumpkin_util::text::TextComponent::get_text,
         );
+        let source_str = source.unwrap_or_else(|| "Plugin".to_string());
         let target_ip = self.client.address().ip();
 
-        if banned_ips.get_entry(&target_ip).is_some() {
-            return;
+        if log_to_console {
+            tracing::info!(
+                "Banning IP {} by {}: {}",
+                target_ip,
+                source_str,
+                string_reason
+            );
         }
+
+        let mut banned_ips = server.data.banned_ip_list.write().await;
+        banned_ips.banned_ips.retain(|entry| entry.ip != target_ip);
 
         banned_ips
             .banned_ips
             .push(crate::data::banlist_serializer::BannedIpEntry::new(
                 target_ip,
-                "Plugin".to_string(),
-                None,
+                source_str,
+                expires,
                 string_reason,
             ));
 
         banned_ips.save();
         drop(banned_ips);
 
-        let kick_reason = reason.unwrap_or_else(|| {
-            TextComponent::translate_cross(
-                translation::java::MULTIPLAYER_DISCONNECT_IP_BANNED,
-                translation::java::MULTIPLAYER_DISCONNECT_IP_BANNED,
-                [],
-            )
-        });
+        if kick_matching_players {
+            let kick_reason = reason.unwrap_or_else(|| {
+                TextComponent::translate_cross(
+                    translation::java::MULTIPLAYER_DISCONNECT_IP_BANNED,
+                    translation::java::MULTIPLAYER_DISCONNECT_IP_BANNED,
+                    [],
+                )
+            });
 
-        let affected = server.get_players_by_ip(target_ip);
-        for target in affected {
-            target
-                .kick(DisconnectReason::Kicked, kick_reason.clone())
-                .await;
+            let affected = server.get_players_by_ip(target_ip);
+            for target in affected {
+                target
+                    .kick(DisconnectReason::Kicked, kick_reason.clone())
+                    .await;
+            }
         }
     }
 
@@ -3767,7 +3812,7 @@ impl Player {
         self.client
             .send_packet_now_editioned(
                 &CCombatDeath::new(self.entity_id().into(), &death_msg),
-                &CActorEvent {
+                &SActorEvent {
                     entity_runtime_id: VarULong(self.entity_id() as u64),
                     event_type: ActorEventType::Death,
                     event_data: VarInt(0),

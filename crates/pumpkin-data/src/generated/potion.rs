@@ -1,5 +1,6 @@
 /* This file is generated. Do not edit manually. */
 use crate::effect::StatusEffect;
+use std::hash::Hash;
 pub struct Potion {
     pub id: u8,
     pub name: &'static str,

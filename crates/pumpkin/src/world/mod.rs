@@ -96,7 +96,6 @@ use pumpkin_protocol::{
     BClientPacket, ClientPacket, IdOr, SoundEvent,
     bedrock::{
         client::{
-            actor_event::{ActorEventType, CActorEvent},
             add_player::CAddPlayer,
             block_event::CBlockEvent as CBedrockBlockEvent,
             common::BuildPlatform,
@@ -108,7 +107,10 @@ use pumpkin_protocol::{
             start_game::{Experiments, GamePublishSetting, LevelSettings},
             update_attributes::{Attribute, CUpdateAttributes},
         },
-        server::text::SText,
+        server::{
+            actor_event::{ActorEventType, SActorEvent},
+            text::SText,
+        },
     },
     codec::{var_int::VarInt, var_long::VarLong, var_uint::VarUInt, var_ulong::VarULong},
     java::{
@@ -494,7 +496,7 @@ impl World {
         let chunk_pos = entity.chunk_pos.load();
         let je_packet = CEntityStatus::new(entity.entity_id, java_status as i8);
         if let Some(be_event) = bedrock_status {
-            let be_packet = CActorEvent {
+            let be_packet = SActorEvent {
                 entity_runtime_id: VarULong(entity.entity_id as u64),
                 event_type: be_event,
                 event_data: VarInt(0),
