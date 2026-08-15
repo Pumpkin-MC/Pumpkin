@@ -46,14 +46,8 @@ impl AvoidEntityGoal {
 
         if self.flee_type == &EntityType::PLAYER {
             world
-                .get_closest_player_where(pos, self.flee_distance, |player| {
-                    player.living_entity.is_part_of_game()
-                        && !player.is_creative()
-                        && self
-                            .extra_predicate
-                            .as_ref()
-                            .is_none_or(|p| p(player as &dyn EntityBase))
-                })
+                .get_closest_player(pos, self.flee_distance)
+                .filter(|player| player.living_entity.is_part_of_game() && !player.is_creative())
                 .map(|p| p as Arc<dyn EntityBase>)
         } else {
             world.get_closest_entity(pos, self.flee_distance, Some(&[self.flee_type]))

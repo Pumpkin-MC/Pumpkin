@@ -50,7 +50,8 @@ impl ActiveTargetGoal {
             track_target_goal,
             target: None,
             reciprocal_chance: to_goal_ticks(reciprocal_chance),
-            target_type,
+            target_type: Some(target_type),
+            target_types: None,
             target_predicate,
         }
     }
@@ -187,10 +188,13 @@ impl ActiveTargetGoal {
                 return;
             }
         } else {
-            let target_types = self
-                .target_types
-                .or_else(|| self.target_type.map(std::slice::from_ref));
-            let potential_entity = world.get_closest_entity(search_pos, follow_range, target_types);
+            let potential_entity = if let Some(target_types) = self.target_types {
+                world.get_closest_entity(search_pos, follow_range, Some(target_types))
+            } else if let Some(target_type) = self.target_type {
+                world.get_closest_entity(search_pos, follow_range, Some(&[target_type]))
+            } else {
+                None
+            };
 
             if let Some(potential_entity) = potential_entity
                 && let Some(living) = potential_entity.get_living_entity()
