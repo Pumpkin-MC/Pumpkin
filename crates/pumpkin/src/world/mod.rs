@@ -167,7 +167,9 @@ pub mod weather;
 use crate::world::natural_spawner::{SpawnState, spawn_for_chunk};
 use pumpkin_config::lighting::LightingEngineConfig;
 use pumpkin_data::effect::StatusEffect;
+use pumpkin_world::biome::position_finder::find_climate_spawn_position;
 use pumpkin_world::chunk::ChunkHeightmapType::{self, MotionBlocking};
+use pumpkin_world::generation::generator::WorldGenerator;
 use uuid::Uuid;
 use weather::Weather;
 
@@ -292,6 +294,10 @@ impl PartialEq for World {
 impl Eq for World {}
 
 impl World {
+    /// How far from the world spawn a player may be placed when the spawn itself has
+    /// become unusable. Matches the default `spawnRadius` game rule.
+    const SPAWN_SEARCH_RADIUS: i32 = 10;
+
     pub async fn get_block_state_id_async(&self, position: &BlockPos) -> BlockStateId {
         if !self.is_in_build_limit(*position) {
             return Block::AIR.default_state.id;
@@ -2053,6 +2059,201 @@ impl World {
             .unwrap_or(self.min_y)
     }
 
+    /// Finds a standing position in the column at `x`/`z` that is not inside a fluid.
+    ///
+    /// Walks down from the top of the column and returns the position directly above
+    /// the first block with a solid upper face, provided the player also fits there.
+    /// Returns `None` as soon as a fluid is met, so a caller never places a player
+    /// inside water or lava.
+    ///
+    /// The chunk must already be loaded; use [`Self::get_or_fetch_chunk`] first.
+    // PlayerRespawnLogic.getOverworldRespawnPos
+    pub async fn get_safe_spawn_pos_in_column(&self, x: i32, z: i32) -> Option<BlockPos> {
+        let min_y = self.dimension.min_y;
+        let max_y = min_y + self.dimension.height;
+
+        // Start one block above the heightmap so a block placed on the spawn, or a
+        // stale heightmap, cannot hide the real surface from the walk below.
+        let top = self.get_heightmap_height(MotionBlocking, x, z) + 2;
+        if top < min_y || top > max_y {
+            return None;
+        }
+
+        for y in (min_y..=top).rev() {
+            let state = self.get_block_state_async(&BlockPos::new(x, y, z)).await;
+
+            // Vanilla stops at the first fluid rather than digging under an ocean.
+            if state.is_liquid() {
+                return None;
+            }
+
+            if state.is_side_solid(BlockDirection::Up) {
+                let stand = BlockPos::new(x, y + 1, z);
+                return self.fits_standing(&stand).await.then_some(stand);
+            }
+        }
+
+        None
+    }
+
+    /// Whether a player standing at `pos` would be free of blocks.
+    ///
+    /// Checks the two blocks a player occupies. Without this, spawning under a tree
+    /// puts the player inside the leaves, and a block placed on the spawn point
+    /// suffocates them on respawn.
+    async fn fits_standing(&self, pos: &BlockPos) -> bool {
+        for offset in 0..2 {
+            let at = BlockPos::new(pos.0.x, pos.0.y + offset, pos.0.z);
+            let state = self.get_block_state_async(&at).await;
+            if state.is_solid() || state.is_liquid() {
+                return false;
+            }
+        }
+        true
+    }
+
+    /// Where a player should appear when they spawn at the world spawn.
+    ///
+    /// Prefers the stored spawn point, which was validated when the world was
+    /// created, and only re-derives a position when the terrain no longer allows
+    /// standing there. Callers must not recompute this from the surface height:
+    /// `WORLD_SURFACE` counts water and leaves as ground.
+    pub async fn world_spawn_position(&self) -> Vector3<f64> {
+        let (spawn_x, spawn_y, spawn_z) = {
+            let info = self.level_info.load();
+            (info.spawn_x, info.spawn_y, info.spawn_z)
+        };
+
+        let chunk_pos = Vector2::new(spawn_x >> 4, spawn_z >> 4);
+        self.level.get_or_fetch_chunk(chunk_pos, |_| ()).await;
+
+        let stored = BlockPos::new(spawn_x, spawn_y, spawn_z);
+        if self.fits_standing(&stored).await {
+            return Vector3::new(
+                f64::from(spawn_x) + 0.5,
+                f64::from(spawn_y),
+                f64::from(spawn_z) + 0.5,
+            );
+        }
+
+        // The spawn was built over, flooded or covered in lava since it was picked.
+        // Looking only at this column is not enough: it can be impassable all the way
+        // down, so widen the search the way vanilla spreads players around the spawn.
+        if let Some(safe) = self
+            .find_standable_near(spawn_x, spawn_z, Self::SPAWN_SEARCH_RADIUS)
+            .await
+        {
+            return Vector3::new(
+                f64::from(safe.0.x) + 0.5,
+                f64::from(safe.0.y),
+                f64::from(safe.0.z) + 0.5,
+            );
+        }
+
+        warn!("No standable ground near the world spawn; using the surface height");
+        Vector3::new(
+            f64::from(spawn_x) + 0.5,
+            f64::from(self.get_top_block(Vector2::new(spawn_x, spawn_z)) + 1),
+            f64::from(spawn_z) + 0.5,
+        )
+    }
+
+    /// Searches outwards from `x`/`z` for a column a player can stand in.
+    ///
+    /// Walks square rings of growing radius so the closest usable spot wins. Loads
+    /// each chunk it reaches, since the search can cross chunk borders.
+    async fn find_standable_near(&self, x: i32, z: i32, radius: i32) -> Option<BlockPos> {
+        for ring in 0..=radius {
+            for dx in -ring..=ring {
+                for dz in -ring..=ring {
+                    // Only the edge of the ring; the inside was covered already.
+                    if ring > 0 && dx.abs() != ring && dz.abs() != ring {
+                        continue;
+                    }
+
+                    let (cx, cz) = (x + dx, z + dz);
+                    self.level
+                        .get_or_fetch_chunk(Vector2::new(cx >> 4, cz >> 4), |_| ())
+                        .await;
+
+                    if let Some(pos) = self.get_safe_spawn_pos_in_column(cx, cz).await {
+                        return Some(pos);
+                    }
+                }
+            }
+        }
+
+        None
+    }
+
+    /// Finds a safe standing position anywhere in the given chunk.
+    ///
+    /// Scans the chunk column by column and returns the first position that
+    /// [`Self::get_safe_spawn_pos_in_column`] accepts, or `None` for a chunk that is
+    /// entirely covered by fluid or air.
+    // PlayerRespawnLogic.getSpawnPosInChunk
+    pub async fn get_safe_spawn_pos_in_chunk(&self, chunk_pos: Vector2<i32>) -> Option<BlockPos> {
+        self.level.get_or_fetch_chunk(chunk_pos, |_| ()).await;
+
+        let min_x = chunk_pos.x << 4;
+        let min_z = chunk_pos.y << 4;
+
+        for x in min_x..min_x + 16 {
+            for z in min_z..min_z + 16 {
+                if let Some(pos) = self.get_safe_spawn_pos_in_column(x, z).await {
+                    return Some(pos);
+                }
+            }
+        }
+
+        None
+    }
+
+    /// Chooses where a brand new world puts its spawn point.
+    ///
+    /// Picks the climatically fitting region, then spirals over the 11x11 chunks
+    /// around it looking for solid ground. Falls back to the centre of that region
+    /// when every candidate chunk is water, which keeps the old behaviour rather
+    /// than failing world creation.
+    // MinecraftServer.setInitialSpawn
+    pub async fn find_initial_spawn_pos(&self) -> BlockPos {
+        let WorldGenerator::Noise(generator) = &*self.level.world_gen else {
+            // Flat worlds have no climate to sample; the origin is as good as anywhere.
+            return BlockPos::new(0, self.get_top_block(Vector2::new(0, 0)) + 1, 0);
+        };
+
+        let climate_pos = find_climate_spawn_position(generator);
+        let chunk_pos = Vector2::new(climate_pos.x >> 4, climate_pos.y >> 4);
+
+        // Spiral outwards, clamped to the 11x11 chunks vanilla considers.
+        let (mut dx, mut dz) = (0i32, 0i32);
+        let (mut step_x, mut step_z) = (0i32, -1i32);
+
+        for _ in 0..11 * 11 {
+            if (-5..=5).contains(&dx) && (-5..=5).contains(&dz) {
+                let candidate = Vector2::new(chunk_pos.x + dx, chunk_pos.y + dz);
+                if let Some(pos) = self.get_safe_spawn_pos_in_chunk(candidate).await {
+                    return pos;
+                }
+            }
+
+            if dx == dz || (dx < 0 && dx == -dz) || (dx > 0 && dx == 1 - dz) {
+                std::mem::swap(&mut step_x, &mut step_z);
+                step_x = -step_x;
+            }
+
+            dx += step_x;
+            dz += step_z;
+        }
+
+        let center_x = (chunk_pos.x << 4) + 8;
+        let center_z = (chunk_pos.y << 4) + 8;
+        self.level.get_or_fetch_chunk(chunk_pos, |_| ()).await;
+        let y = self.get_top_block(Vector2::new(center_x, center_z)) + 1;
+
+        BlockPos::new(center_x, y, center_z)
+    }
+
     #[allow(clippy::too_many_lines)]
     pub async fn spawn_bedrock_player(
         &self,
@@ -2077,16 +2278,7 @@ impl World {
 
             (position, yaw, pitch)
         } else {
-            let spawn_position = Vector2::new(level_info.spawn_x, level_info.spawn_z);
-            let chunk_pos = Vector2::new(level_info.spawn_x >> 4, level_info.spawn_z >> 4);
-            self.level.get_or_fetch_chunk(chunk_pos, |_| ()).await;
-            let pos_y = self.get_top_block(spawn_position) + 1; // +1 to spawn on top of the block
-
-            let position = Vector3::new(
-                f64::from(level_info.spawn_x) + 0.5,
-                f64::from(pos_y),
-                f64::from(level_info.spawn_z) + 0.5,
-            );
+            let position = self.world_spawn_position().await;
             (position, level_info.spawn_yaw, level_info.spawn_pitch)
         };
 
@@ -2910,17 +3102,8 @@ impl World {
 
             (position, yaw, pitch)
         } else {
+            let position = self.world_spawn_position().await;
             let info = &self.level_info.load();
-            let spawn_position = Vector2::new(info.spawn_x, info.spawn_z);
-            let chunk_pos = Vector2::new(info.spawn_x >> 4, info.spawn_z >> 4);
-            self.level.get_or_fetch_chunk(chunk_pos, |_| ()).await;
-            let pos_y = self.get_top_block(spawn_position) + 1; // +1 to spawn on top of the block
-
-            let position = Vector3::new(
-                f64::from(info.spawn_x) + 0.5,
-                f64::from(pos_y),
-                f64::from(info.spawn_z) + 0.5,
-            );
             (position, info.spawn_yaw, info.spawn_pitch)
         };
 
@@ -3647,11 +3830,9 @@ impl World {
         let data_kept = u8::from(alive);
 
         // Copy spawn info from level_info to avoid holding lock across await
-        let (spawn_x, spawn_z, spawn_yaw, spawn_pitch, keep_inventory) = {
+        let (spawn_yaw, spawn_pitch, keep_inventory) = {
             let info = self.level_info.load();
             (
-                info.spawn_x,
-                info.spawn_z,
                 info.spawn_yaw,
                 info.spawn_pitch,
                 info.game_rules.keep_inventory,
@@ -3674,23 +3855,9 @@ impl World {
                     .send_packet_now(&CGameEvent::new(GameEvent::NoRespawnBlockAvailable, 0.0))
                     .await;
 
-                // FIXME: This spawn position calculation is incorrect. Should use vanilla's
-                // proper spawn position calculation (see #1381). The y-level calculation
-                // needs to account for spawn radius and find a safe spawn position.
-                let chunk_pos = Vector2::new(spawn_x >> 4, spawn_z >> 4);
-                self.level.get_or_fetch_chunk(chunk_pos, |_| ()).await;
-                let top = self.get_top_block(Vector2::new(spawn_x, spawn_z));
+                let position = self.world_spawn_position().await;
 
-                (
-                    Vector3::new(
-                        f64::from(spawn_x) + 0.5,
-                        (top + 1).into(),
-                        f64::from(spawn_z) + 0.5,
-                    ),
-                    spawn_yaw,
-                    spawn_pitch,
-                    self.dimension.clone(),
-                )
+                (position, spawn_yaw, spawn_pitch, self.dimension.clone())
             };
 
         let mut spawn_loc_event = crate::plugin::api::events::player::player_spawn_location::PlayerSpawnLocationEvent::new(
@@ -3792,16 +3959,7 @@ impl World {
         let (target_world, position, yaw, pitch) = if let Some(ref new_world) = resolved_world {
             (new_world.clone(), position, yaw, pitch)
         } else if respawn_dimension != self.dimension {
-            // FIXME: This spawn position calculation is incorrect. Should use vanilla's
-            // proper spawn position calculation (see #1381).
-            let chunk_pos = Vector2::new(spawn_x >> 4, spawn_z >> 4);
-            self.level.get_or_fetch_chunk(chunk_pos, |_| ()).await;
-            let top = self.get_top_block(Vector2::new(spawn_x, spawn_z));
-            let fallback_pos = Vector3::new(
-                f64::from(spawn_x) + 0.5,
-                (top + 1).into(),
-                f64::from(spawn_z) + 0.5,
-            );
+            let fallback_pos = self.world_spawn_position().await;
             (self.clone(), fallback_pos, spawn_yaw, spawn_pitch)
         } else {
             (self.clone(), position, yaw, pitch)

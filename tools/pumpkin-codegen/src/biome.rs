@@ -506,6 +506,11 @@ pub fn build() -> TokenStream {
         }
 
         impl ParameterRange {
+            #[must_use]
+            pub const fn new(min: i64, max: i64) -> Self {
+                Self { min, max }
+            }
+
             pub fn calc_distance(&self, noise: i64) -> i64 {
                 if noise > self.max {
                     noise - self.max

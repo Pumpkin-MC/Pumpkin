@@ -44,6 +44,7 @@ use rsa::RsaPublicKey;
 use std::collections::HashSet;
 use std::fs;
 use std::net::IpAddr;
+use std::path::Path;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicI32, AtomicI64, AtomicU32};
 use std::{future::Future, sync::atomic::Ordering, time::Duration};
@@ -171,6 +172,10 @@ impl Server {
 
         let block_registry = super::block::registry::default_registry();
 
+        // A brand new world still has to pick where its spawn point goes, which needs
+        // generated terrain and therefore has to wait until the worlds are loaded.
+        let mut world_is_new = false;
+
         let level_info = match AnvilLevelInfo.read_world_info(&world_path) {
             Ok(level_info) => {
                 let dat_path = world_path.join(LEVEL_DAT_FILE_NAME);
@@ -188,6 +193,7 @@ impl Server {
                     world_path.display(),
                     basic_config.seed.0 as i64
                 );
+                world_is_new = true;
                 let default_data = LevelData::default(basic_config.seed);
                 if let Err(err) = AnvilLevelInfo.write_world_info(&default_data, &world_path) {
                     error!("Failed to save level.dat: {err}");
@@ -393,6 +399,10 @@ impl Server {
 
         info!("All worlds loaded successfully.");
 
+        if world_is_new {
+            Self::pick_initial_spawn(&server, &world_path).await;
+        }
+
         if server.advanced_config.networking.bedrock.online_mode {
             server
                 .bedrock_oidc_keys
@@ -413,6 +423,33 @@ impl Server {
                 .await;
         }
         server
+    }
+
+    /// Picks the spawn point of a freshly created world and persists it.
+    ///
+    /// Runs once, right after the worlds are loaded, because choosing a spot needs
+    /// generated terrain. Without this the spawn stays at the origin, which drops
+    /// players into the ocean whenever (0, 0) happens to be water.
+    // MinecraftServer.setInitialSpawn
+    async fn pick_initial_spawn(server: &Arc<Self>, world_path: &Path) {
+        let world = server.get_world_from_dimension(&Dimension::OVERWORLD);
+        let spawn = world.find_initial_spawn_pos().await;
+
+        let mut info = (**server.level_info.load()).clone();
+        info.spawn_x = spawn.0.x;
+        info.spawn_y = spawn.0.y;
+        info.spawn_z = spawn.0.z;
+
+        info!(
+            "World spawn set to {}, {}, {}",
+            spawn.0.x, spawn.0.y, spawn.0.z
+        );
+
+        if let Err(err) = AnvilLevelInfo.write_world_info(&info, world_path) {
+            error!("Failed to save the world spawn: {err}");
+        }
+
+        server.level_info.store(Arc::new(info));
     }
 
     /// Spawns a task associated with this server. All tasks spawned with this method are awaited
