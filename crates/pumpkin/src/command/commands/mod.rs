@@ -55,6 +55,7 @@ mod plugins;
 mod pumpkin;
 mod random;
 mod recipe;
+mod reload;
 mod ride;
 mod rotate;
 mod saveall;
@@ -187,6 +188,7 @@ pub fn default_dispatcher(
     forceload::register(&mut dispatcher, registry);
     ride::register(&mut dispatcher, registry);
     recipe::register(&mut dispatcher, registry);
+    reload::register(&mut dispatcher, registry);
     help::register(&mut dispatcher, registry);
     kill::register(&mut dispatcher, registry);
     op::register(&mut dispatcher, registry);
