@@ -628,6 +628,10 @@ impl Level {
             self.chunk_watchers.shrink_to_fit();
         }
 
+        if self.loaded_chunks.capacity() - self.loaded_chunks.len() >= 4096 {
+            self.loaded_chunks.shrink_to_fit();
+        }
+
         if self.loaded_entity_chunks.capacity() - self.loaded_entity_chunks.len() >= 4096 {
             self.loaded_entity_chunks.shrink_to_fit();
         }

@@ -38,7 +38,10 @@ fn needs_relighting(chunk: &crate::chunk::ChunkData, config: LightingEngineConfi
         return false;
     }
 
-    let engine = chunk.light_engine.lock().expect("Mutex poisoned");
+    let engine = chunk
+        .light_engine
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
 
     // Scan for any complex lighting data
     let has_complex_light = engine.sky_light.iter().any(|lc| match lc {
@@ -237,7 +240,14 @@ pub fn run_generation(
     _settings: &GenerationSettings,
 ) -> RecvChunk {
     let portal = level.world_portal.load_full();
-    let portal_ref = portal.as_deref().expect("Portal should be initialized");
+    let Some(portal_ref) = portal.as_deref() else {
+        error!("Chunk generation FAILED at {pos:?} ({stage:?}): World portal is not initialized");
+        return RecvChunk::GenerationFailure {
+            pos,
+            stage,
+            error: "World portal is not initialized".to_string(),
+        };
+    };
     // Run generation with panic catching
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         cache.advance(stage, &level.world_gen, portal_ref, &level.lighting_config);

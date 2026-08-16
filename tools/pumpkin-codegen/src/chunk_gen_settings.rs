@@ -486,7 +486,7 @@ pub fn build() -> TokenStream {
         use crate::chunk::DoublePerlinNoiseParameters;
         use crate::BlockState;
 
-        use std::{cell::RefCell, num::NonZeroUsize};
+        use std::cell::RefCell;
         use pumpkin_util::random::RandomDeriver;
         use pumpkin_util::y_offset::YOffset;
         use crate::biome::Biome;

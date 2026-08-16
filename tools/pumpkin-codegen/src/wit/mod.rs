@@ -1,3 +1,4 @@
+pub mod attribute;
 pub mod bedrock_packet;
 pub mod biome;
 pub mod data_component;
@@ -32,6 +33,7 @@ pub fn main() {
         (data_component::build, "data-components.wit"),
         (enchantment::build, "enchantments.wit"),
         (biome::build, "biomes.wit"),
+        (attribute::build, "attributes.wit"),
     ];
 
     for (build_fn, file) in build_functions {

@@ -12,7 +12,7 @@ use recipe::RecipeConfig;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
 use std::path::PathBuf;
-use std::{fs, num::NonZeroU8, path::Path};
+use std::{fs, num::NonZero, path::Path};
 use tracing::{debug, error, warn};
 
 /// Fun and experimental configuration options.
@@ -87,8 +87,8 @@ impl LoadConfiguration for PumpkinConfig {
         self.basic.validate();
         self.advanced.validate();
 
-        let min_vd = NonZeroU8::MIN;
-        let Some(max_vd) = NonZeroU8::new(64) else {
+        let min_vd = NonZero::<u8>::MIN;
+        let Some(max_vd) = NonZero::new(64) else {
             return;
         };
 

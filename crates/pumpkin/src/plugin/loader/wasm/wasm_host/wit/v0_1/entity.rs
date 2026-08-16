@@ -10,14 +10,20 @@ use crate::plugin::loader::wasm::wasm_host::{
     state::{EntityResource, PluginHostState},
     wit::v0_1::events::to_wasm_position,
     wit::v0_1::pumpkin::plugin::{
+        attributes::{
+            Attribute, AttributeModifier as WitAttributeModifier,
+            ModifierOperation as WitModifierOperation,
+        },
         common::{EntityPose, Position},
         entity::Host,
         entity_types,
+        item_stack::ItemStack as WitHostItemStack,
         text::TextComponent,
         uuid::Uuid,
         world::{
-            BlockPos as WitBlockPos, BoundingBox as WitBoundingBox, Entity, HostEntity,
-            RaycastResult as WitRaycastResult, World,
+            BlockPos as WitBlockPos, BoundingBox as WitBoundingBox, Entity,
+            EquipmentSlot as WitEquipmentSlot, HostEntity, RaycastResult as WitRaycastResult,
+            World,
         },
     },
     wit::v0_1::uuid::UuidExt,
@@ -59,6 +65,100 @@ const fn map_entity_pose(pose: InternalEntityPose) -> EntityPose {
         InternalEntityPose::Sliding => EntityPose::Sliding,
         InternalEntityPose::Shooting => EntityPose::Shooting,
         InternalEntityPose::Inhaling => EntityPose::Inhaling,
+    }
+}
+
+#[must_use]
+pub const fn from_wit_attribute(attr: Attribute) -> &'static pumpkin_data::attributes::Attributes {
+    use pumpkin_data::attributes::Attributes;
+    match attr {
+        Attribute::AirDragModifier => &Attributes::AIR_DRAG_MODIFIER,
+        Attribute::Armor => &Attributes::ARMOR,
+        Attribute::ArmorToughness => &Attributes::ARMOR_TOUGHNESS,
+        Attribute::AttackDamage => &Attributes::ATTACK_DAMAGE,
+        Attribute::AttackKnockback => &Attributes::ATTACK_KNOCKBACK,
+        Attribute::AttackSpeed => &Attributes::ATTACK_SPEED,
+        Attribute::BelowNameDistance => &Attributes::BELOW_NAME_DISTANCE,
+        Attribute::BlockBreakSpeed => &Attributes::BLOCK_BREAK_SPEED,
+        Attribute::BlockInteractionRange => &Attributes::BLOCK_INTERACTION_RANGE,
+        Attribute::Bounciness => &Attributes::BOUNCINESS,
+        Attribute::BurningTime => &Attributes::BURNING_TIME,
+        Attribute::CameraDistance => &Attributes::CAMERA_DISTANCE,
+        Attribute::ExplosionKnockbackResistance => &Attributes::EXPLOSION_KNOCKBACK_RESISTANCE,
+        Attribute::EntityInteractionRange => &Attributes::ENTITY_INTERACTION_RANGE,
+        Attribute::FallDamageMultiplier => &Attributes::FALL_DAMAGE_MULTIPLIER,
+        Attribute::FlyingSpeed => &Attributes::FLYING_SPEED,
+        Attribute::FollowRange => &Attributes::FOLLOW_RANGE,
+        Attribute::FrictionModifier => &Attributes::FRICTION_MODIFIER,
+        Attribute::Gravity => &Attributes::GRAVITY,
+        Attribute::JumpStrength => &Attributes::JUMP_STRENGTH,
+        Attribute::KnockbackResistance => &Attributes::KNOCKBACK_RESISTANCE,
+        Attribute::Luck => &Attributes::LUCK,
+        Attribute::MaxAbsorption => &Attributes::MAX_ABSORPTION,
+        Attribute::MaxHealth => &Attributes::MAX_HEALTH,
+        Attribute::MiningEfficiency => &Attributes::MINING_EFFICIENCY,
+        Attribute::MovementEfficiency => &Attributes::MOVEMENT_EFFICIENCY,
+        Attribute::MovementSpeed => &Attributes::MOVEMENT_SPEED,
+        Attribute::NameTagDistance => &Attributes::NAME_TAG_DISTANCE,
+        Attribute::OxygenBonus => &Attributes::OXYGEN_BONUS,
+        Attribute::SafeFallDistance => &Attributes::SAFE_FALL_DISTANCE,
+        Attribute::Scale => &Attributes::SCALE,
+        Attribute::SneakingSpeed => &Attributes::SNEAKING_SPEED,
+        Attribute::SpawnReinforcements => &Attributes::SPAWN_REINFORCEMENTS,
+        Attribute::StepHeight => &Attributes::STEP_HEIGHT,
+        Attribute::SubmergedMiningSpeed => &Attributes::SUBMERGED_MINING_SPEED,
+        Attribute::SweepingDamageRatio => &Attributes::SWEEPING_DAMAGE_RATIO,
+        Attribute::TemptRange => &Attributes::TEMPT_RANGE,
+        Attribute::WaterMovementEfficiency => &Attributes::WATER_MOVEMENT_EFFICIENCY,
+        Attribute::WaypointTransmitRange => &Attributes::WAYPOINT_TRANSMIT_RANGE,
+        Attribute::WaypointReceiveRange => &Attributes::WAYPOINT_RECEIVE_RANGE,
+    }
+}
+
+#[must_use]
+pub const fn from_wit_modifier_op(
+    op: WitModifierOperation,
+) -> crate::entity::attributes::ModifierOperation {
+    match op {
+        WitModifierOperation::Add => crate::entity::attributes::ModifierOperation::Add,
+        WitModifierOperation::MultiplyBase => {
+            crate::entity::attributes::ModifierOperation::MultiplyBase
+        }
+        WitModifierOperation::MultiplyTotal => {
+            crate::entity::attributes::ModifierOperation::MultiplyTotal
+        }
+    }
+}
+
+#[must_use]
+pub const fn to_wit_modifier_op(
+    op: crate::entity::attributes::ModifierOperation,
+) -> WitModifierOperation {
+    match op {
+        crate::entity::attributes::ModifierOperation::Add => WitModifierOperation::Add,
+        crate::entity::attributes::ModifierOperation::MultiplyBase => {
+            WitModifierOperation::MultiplyBase
+        }
+        crate::entity::attributes::ModifierOperation::MultiplyTotal => {
+            WitModifierOperation::MultiplyTotal
+        }
+    }
+}
+
+#[must_use]
+pub const fn from_wit_equipment_slot(
+    slot: WitEquipmentSlot,
+) -> pumpkin_data::data_component_impl::EquipmentSlot {
+    use pumpkin_data::data_component_impl::EquipmentSlot;
+    match slot {
+        WitEquipmentSlot::MainHand => EquipmentSlot::MAIN_HAND,
+        WitEquipmentSlot::OffHand => EquipmentSlot::OFF_HAND,
+        WitEquipmentSlot::Feet => EquipmentSlot::FEET,
+        WitEquipmentSlot::Legs => EquipmentSlot::LEGS,
+        WitEquipmentSlot::Chest => EquipmentSlot::CHEST,
+        WitEquipmentSlot::Head => EquipmentSlot::HEAD,
+        WitEquipmentSlot::Body => EquipmentSlot::BODY,
+        WitEquipmentSlot::Saddle => EquipmentSlot::SADDLE,
     }
 }
 
@@ -464,6 +564,218 @@ impl HostEntity for PluginHostState {
         let entity = entity_from_resource(self, &entity)?;
         if let Some(living) = entity.get_living_entity() {
             living.absorption.store(amount);
+        }
+        Ok(())
+    }
+
+    async fn get_attribute_value(
+        &mut self,
+        entity: Resource<Entity>,
+        attr: Attribute,
+    ) -> wasmtime::Result<f64> {
+        let entity = entity_from_resource(self, &entity)?;
+        let attribute = from_wit_attribute(attr);
+        Ok(entity
+            .get_living_entity()
+            .map_or(attribute.default_value, |living| {
+                living.get_attribute_value(attribute)
+            }))
+    }
+
+    async fn get_attribute_base(
+        &mut self,
+        entity: Resource<Entity>,
+        attr: Attribute,
+    ) -> wasmtime::Result<f64> {
+        let entity = entity_from_resource(self, &entity)?;
+        let attribute = from_wit_attribute(attr);
+        Ok(entity
+            .get_living_entity()
+            .map_or(attribute.default_value, |living| {
+                living.get_attribute_base(attribute)
+            }))
+    }
+
+    async fn set_attribute_base(
+        &mut self,
+        entity: Resource<Entity>,
+        attr: Attribute,
+        value: f64,
+    ) -> wasmtime::Result<()> {
+        let entity = entity_from_resource(self, &entity)?;
+        let attribute = from_wit_attribute(attr);
+        if let Some(living) = entity.get_living_entity() {
+            living.set_attribute_base(attribute, value);
+            crate::entity::attributes::send_attribute_updates_for_living(
+                living,
+                vec![attribute.clone()],
+            )
+            .await;
+        }
+        Ok(())
+    }
+
+    async fn add_attribute_modifier(
+        &mut self,
+        entity: Resource<Entity>,
+        attr: Attribute,
+        modifier: WitAttributeModifier,
+    ) -> wasmtime::Result<()> {
+        let entity = entity_from_resource(self, &entity)?;
+        let attribute = from_wit_attribute(attr);
+        if let Some(living) = entity.get_living_entity() {
+            let internal_mod = crate::entity::attributes::Modifier {
+                id: modifier.id,
+                amount: modifier.amount,
+                operation: from_wit_modifier_op(modifier.operation),
+            };
+            living.update_attribute(attribute, |inst| inst.add_or_replace_modifier(internal_mod));
+            crate::entity::attributes::send_attribute_updates_for_living(
+                living,
+                vec![attribute.clone()],
+            )
+            .await;
+        }
+        Ok(())
+    }
+
+    async fn remove_attribute_modifier(
+        &mut self,
+        entity: Resource<Entity>,
+        attr: Attribute,
+        id: String,
+    ) -> wasmtime::Result<()> {
+        let entity = entity_from_resource(self, &entity)?;
+        let attribute = from_wit_attribute(attr);
+        if let Some(living) = entity.get_living_entity() {
+            living.update_attribute(attribute, |inst| inst.remove_modifier(&id));
+            crate::entity::attributes::send_attribute_updates_for_living(
+                living,
+                vec![attribute.clone()],
+            )
+            .await;
+        }
+        Ok(())
+    }
+
+    async fn get_attribute_modifiers(
+        &mut self,
+        entity: Resource<Entity>,
+        attr: Attribute,
+    ) -> wasmtime::Result<Vec<WitAttributeModifier>> {
+        let entity = entity_from_resource(self, &entity)?;
+        let attribute = from_wit_attribute(attr);
+        if let Some(living) = entity.get_living_entity() {
+            let map = living
+                .attributes
+                .read()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            if let Some(inst) = map.get(&attribute.id) {
+                return Ok(inst
+                    .modifiers
+                    .iter()
+                    .map(|m| WitAttributeModifier {
+                        id: m.id.clone(),
+                        amount: m.amount,
+                        operation: to_wit_modifier_op(m.operation),
+                    })
+                    .collect());
+            }
+        }
+        Ok(Vec::new())
+    }
+
+    async fn reset_attribute(
+        &mut self,
+        entity: Resource<Entity>,
+        attr: Attribute,
+    ) -> wasmtime::Result<()> {
+        let entity = entity_from_resource(self, &entity)?;
+        let attribute = from_wit_attribute(attr);
+        if let Some(living) = entity.get_living_entity() {
+            {
+                let mut map = living
+                    .attributes
+                    .write()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                map.remove(&attribute.id);
+            };
+            crate::entity::attributes::send_attribute_updates_for_living(
+                living,
+                vec![attribute.clone()],
+            )
+            .await;
+        }
+        Ok(())
+    }
+
+    async fn reset_all_attributes(&mut self, entity: Resource<Entity>) -> wasmtime::Result<()> {
+        let entity = entity_from_resource(self, &entity)?;
+        if let Some(living) = entity.get_living_entity() {
+            living.reset_effects_and_attributes().await;
+        }
+        Ok(())
+    }
+
+    async fn get_equipment(
+        &mut self,
+        entity: Resource<Entity>,
+        slot: WitEquipmentSlot,
+    ) -> wasmtime::Result<Option<Resource<WitHostItemStack>>> {
+        let entity = entity_from_resource(self, &entity)?;
+        if let Some(living) = entity.get_living_entity() {
+            let slot = from_wit_equipment_slot(slot);
+            let equipment = living.entity_equipment.lock().await;
+            let stack = equipment.get(&slot);
+            if !stack.is_empty() {
+                return Ok(Some(
+                    self.add_item_stack(Arc::new(tokio::sync::Mutex::new(stack)))?,
+                ));
+            }
+        }
+        Ok(None)
+    }
+
+    async fn set_equipment(
+        &mut self,
+        entity: Resource<Entity>,
+        slot: WitEquipmentSlot,
+        stack: Option<Resource<WitHostItemStack>>,
+    ) -> wasmtime::Result<()> {
+        let entity = entity_from_resource(self, &entity)?;
+        if let Some(living) = entity.get_living_entity() {
+            let slot = from_wit_equipment_slot(slot);
+            let item_stack = if let Some(stack_res) = stack {
+                self.get_item_stack(&stack_res)?.lock().await.clone()
+            } else {
+                pumpkin_data::item_stack::ItemStack::EMPTY.clone()
+            };
+
+            {
+                let mut equipment = living.entity_equipment.lock().await;
+                equipment.put(&slot, item_stack.clone());
+            };
+
+            living.send_equipment_changes(&[(slot, item_stack)]);
+        }
+        Ok(())
+    }
+
+    async fn clear_equipment(&mut self, entity: Resource<Entity>) -> wasmtime::Result<()> {
+        let entity = entity_from_resource(self, &entity)?;
+        if let Some(living) = entity.get_living_entity() {
+            let mut equipment = living.entity_equipment.lock().await;
+            let slots_to_clear: Vec<(
+                pumpkin_data::data_component_impl::EquipmentSlot,
+                pumpkin_data::item_stack::ItemStack,
+            )> = equipment
+                .equipment
+                .drain()
+                .map(|(slot, _)| (slot, pumpkin_data::item_stack::ItemStack::EMPTY.clone()))
+                .collect();
+            drop(equipment);
+
+            living.send_equipment_changes(&slots_to_clear);
         }
         Ok(())
     }
