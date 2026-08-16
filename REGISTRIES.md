@@ -1,110 +1,158 @@
 # Registry migration overview
 
-This document tracks Pumpkin's migration to `pumpkin-registry` on the `data-migration` branch.
+This table tracks the Java Edition registries and Pumpkin's migration to `pumpkin-registry`.
 
-## Legend
+- **Datapack registry** means the registry has a corresponding data-pack definition folder.
+- **Done** means Pumpkin currently has a typed registry implementation for that registry. The checkbox is the migration tracker.
+- Registry IDs are shown exactly as Minecraft defines them. `DIMENSION` and `LEVEL_STEM` intentionally share `minecraft:dimension`.
 
-| Kind | Meaning |
-|---|---|
-| **Static** | `StaticRegistry<T>`: compile-time entries with a fixed identifier/id mapping. |
-| **Frozen** | `FrozenRegistry<T>`: assembled from bootstrap providers and immutable after construction. |
-| **Reloadable** | `ReloadableRegistry<T>`: a registry whose frozen backing data can be replaced. |
-| **—** | Not represented by `pumpkin-registry` yet. |
-
-For **Ported**:
-
-- **Yes** means the registry is represented by a typed `pumpkin-registry` registry and normal runtime lookup uses it.
-- **No** means it still uses the legacy/generated representation.
-- The generated client registry-sync tables in `generated/registry.rs` are a separate serialization concern. For an unported registry their current item representation is encoded NBT (`StaticRegistryEntry { data: &'static [u8] }`), not a typed `pumpkin-registry` item.
-
-There are currently **no production `ReloadableRegistry<T>` instances**. The type and builder support exist in `pumpkin-registry`, but no game registry has been migrated to it yet.
-
-## Current registry tree
-
-```text
-minecraft:root                                      Frozen<Arc<dyn Registry>>
-├── minecraft:dimension_type                       Static<Dimension>
-└── minecraft:worldgen                             Frozen<Arc<dyn Registry>>
-    ├── minecraft:noise_settings                   Static<GenerationSettings>
-    ├── minecraft:structure_set                    Static<StructureSet>
-    ├── minecraft:world_preset                     Static<WorldPreset>
-    ├── minecraft:biome_source_type                Frozen<BiomeSourceType>
-    └── minecraft:chunk_generator_type             Frozen<ChunkGeneratorType>
-```
-
-`minecraft:worldgen/biome` is **not** in the typed tree yet. Biomes still use the generated `Biome` data/lookup code and the legacy registry-sync representation.
-
-## Ported `pumpkin-registry` registries
-
-| Registry | Kind | Item type | Ported | Notes |
-|---|---|---|---|---|
-| `minecraft:root` | Frozen | `Arc<dyn Registry>` | Yes | Root/container registry. Built after bootstrap providers have been registered. |
-| `minecraft:dimension_type` | Static | `Dimension` | Yes | Generated vanilla dimension types. |
-| `minecraft:worldgen` | Frozen | `Arc<dyn Registry>` | Yes | Container for world-generation registries. |
-| `minecraft:worldgen/noise_settings` | Static | `GenerationSettings` | Yes | Noise-generation settings, including the noise router. |
-| `minecraft:worldgen/structure_set` | Static | `StructureSet` | Yes | Structure sets and their placements. Runtime generation resolves these through the registry. |
-| `minecraft:worldgen/world_preset` | Static | `WorldPreset` | Yes | Generated vanilla world presets and generator-settings metadata. |
-| `minecraft:worldgen/biome_source_type` | Frozen | `BiomeSourceType` | Yes | Extensible decoder/dispatch registry (`fixed`, `multi_noise`, `the_end`, ...). |
-| `minecraft:worldgen/chunk_generator_type` | Frozen | `ChunkGeneratorType` | Yes | Extensible decoder/dispatch registry (`noise`, `flat`, ...). |
-
-### Why the extension registries are Frozen
-
-`BiomeSourceType` and `ChunkGeneratorType` are assembled from bootstrap providers instead of generated as one fixed static slice. This leaves room for plugins to contribute additional implementations before the root registry is frozen.
-
-## Vanilla/client registry-sync registries
-
-These are the registries currently present in `crates/pumpkin-data/src/generated/registry.rs`.
-
-For rows marked **No**, the current registry-sync item is an encoded NBT payload (`&'static [u8]`). The **Item type** column gives the typed runtime representation where one has already been migrated; otherwise it shows the current legacy representation.
-
-| Registry | Kind | Item type | Ported | Notes |
-|---|---|---|---|---|
-| `minecraft:banner_pattern` | — | Encoded NBT (`StaticRegistryEntry`) | No | Legacy registry-sync table only. |
-| `minecraft:cat_sound_variant` | — | Encoded NBT (`StaticRegistryEntry`) | No | Legacy registry-sync table only. |
-| `minecraft:cat_variant` | — | Encoded NBT (`StaticRegistryEntry`) | No | Legacy registry-sync table only. |
-| `minecraft:chat_type` | — | Encoded NBT (`StaticRegistryEntry`) | No | Legacy registry-sync table only. |
-| `minecraft:chicken_sound_variant` | — | Encoded NBT (`StaticRegistryEntry`) | No | Legacy registry-sync table only. |
-| `minecraft:chicken_variant` | — | Encoded NBT (`StaticRegistryEntry`) | No | Legacy registry-sync table only. |
-| `minecraft:cow_sound_variant` | — | Encoded NBT (`StaticRegistryEntry`) | No | Legacy registry-sync table only. |
-| `minecraft:cow_variant` | — | Encoded NBT (`StaticRegistryEntry`) | No | Legacy registry-sync table only. |
-| `minecraft:damage_type` | — | Encoded NBT (`StaticRegistryEntryEntry`) | No | Legacy registry-sync table only. |
-| `minecraft:dialog` | — | Encoded NBT (`StaticRegistryEntry`) | No | Legacy registry-sync table only. |
-| `minecraft:dimension_type` | Static | `Dimension` | Yes | Typed registry exists; generated registry-sync payload still exists for protocol serialization. |
-| `minecraft:enchantment` | — | Encoded NBT (`StaticRegistryEntry`) | No | Legacy registry-sync table only. |
-| `minecraft:frog_variant` | — | Encoded NBT (`StaticRegistryEntry`) | No | Legacy registry-sync table only. |
-| `minecraft:instrument` | — | Encoded NBT (`StaticRegistryEntry`) | No | Legacy registry-sync table only. |
-| `minecraft:jukebox_song` | — | Encoded NBT (`StaticRegistryEntry`) | No | Legacy registry-sync table only. |
-| `minecraft:painting_variant` | — | Encoded NBT (`StaticRegistryEntry`) | No | Legacy registry-sync table only. |
-| `minecraft:pig_sound_variant` | — | Encoded NBT (`StaticRegistryEntry`) | No | Legacy registry-sync table only. |
-| `minecraft:pig_variant` | — | Encoded NBT (`StaticRegistryEntry`) | No | Legacy registry-sync table only. |
-| `minecraft:sulfur_cube_archetype` | — | Encoded NBT (`StaticRegistryEntry`) | No | Legacy registry-sync table only. |
-| `minecraft:test_environment` | — | Encoded NBT (`StaticRegistryEntryEntry`) | No | Legacy registry-sync table only. |
-| `minecraft:test_instance` | — | Encoded NBT (`StaticRegistryEntry`) | No | Legacy registry-sync table only. |
-| `minecraft:timeline` | — | Encoded NBT (`StaticRegistryEntry`) | No | Legacy registry-sync table only. |
-| `minecraft:trim_material` | — | Encoded NBT (`StaticRegistryEntry`) | No | Legacy registry-sync table only. |
-| `minecraft:trim_pattern` | — | Encoded NBT (`StaticRegistryEntry`) | No | Legacy registry-sync table only. |
-| `minecraft:wolf_sound_variant` | — | Encoded NBT (`StaticRegistryEntry`) | No | Legacy registry-sync table only. |
-| `minecraft:wolf_variant` | — | Encoded NBT (`StaticRegistryEntry`) | No | Legacy registry-sync table only. |
-| `minecraft:world_clock` | — | Encoded NBT (`StaticRegistryEntry`) | No | Legacy registry-sync table only. |
-| `minecraft:worldgen/biome` | — | Generated `Biome` / encoded NBT for sync | No | Biome data is strongly typed in generated code, but lookup has not been moved to `pumpkin-registry`. |
-| `minecraft:zombie_nautilus_variant` | — | Encoded NBT (`StaticRegistryEntry`) | No | Legacy registry-sync table only. |
-
-## Typed worldgen registries not present in the registry-sync table
-
-These registries are Pumpkin runtime/worldgen registries and do not correspond to rows in the generated client registry-sync table above.
-
-|Registry | Kind | Item type | Ported |
-|---|---|---|---|
-| `minecraft:worldgen/noise_settings` | Static | `GenerationSettings` | Yes |
-| `minecraft:worldgen/structure_set` | Static | `StructureSet` | Yes |
-| `minecraft:worldgen/world_preset` | Static | `WorldPreset` | Yes |
-| `minecraft:worldgen/biome_source_type` | Frozen | `BiomeSourceType` | Yes |
-| `minecraft:worldgen/chunk_generator_type` | Frozen | `ChunkGeneratorType` | Yes |
-
-## Migration notes
-
-- Prefer `DataKey<T>`/typed registry lookup over generated `from_name`, direct constant lookup, or bespoke registry maps when migrating a registry.
-- Vanilla data that is immutable for the life of the process is a good fit for **Static** when it can be emitted directly by codegen.
-- Registries whose entries are contributed by bootstrap providers/plugins are a good fit for **Frozen**.
-- Datapack-backed registries that must change during a reload are expected to use **Reloadable**, but none have been wired up yet.
-- The legacy `StaticRegistry`/`StaticRegistryEntry` names in `pumpkin-data::generated::registry` are protocol registry-sync data structures. They are **not** `pumpkin_registry::StaticRegistry<T>` and should not be confused with the new registry kind.
+| Java constant | Registry ID | Datapack registry | Done |
+|---|---|:---:|:---:|
+| `ACTIVITY` | `minecraft:activity` | No | - [ ] |
+| `ATTRIBUTE` | `minecraft:attribute` | No | - [ ] |
+| `BIOME_SOURCE` | `minecraft:worldgen/biome_source` | No | - [ ] |
+| `BLOCK_ENTITY_TYPE` | `minecraft:block_entity_type` | No | - [ ] |
+| `BLOCK_PREDICATE_TYPE` | `minecraft:block_predicate_type` | No | - [ ] |
+| `BLOCK_STATE_PROVIDER_TYPE` | `minecraft:worldgen/block_state_provider_type` | No | - [ ] |
+| `BLOCK_TYPE` | `minecraft:block_type` | No | - [ ] |
+| `BLOCK` | `minecraft:block` | No | - [ ] |
+| `CARVER` | `minecraft:worldgen/carver` | No | - [ ] |
+| `CHUNK_GENERATOR` | `minecraft:worldgen/chunk_generator` | No | - [ ] |
+| `CHUNK_STATUS` | `minecraft:chunk_status` | No | - [ ] |
+| `COMMAND_ARGUMENT_TYPE` | `minecraft:command_argument_type` | No | - [ ] |
+| `CONSUME_EFFECT_TYPE` | `minecraft:consume_effect_type` | No | - [ ] |
+| `CREATIVE_MODE_TAB` | `minecraft:creative_mode_tab` | No | - [ ] |
+| `CUSTOM_STAT` | `minecraft:custom_stat` | No | - [ ] |
+| `DATA_COMPONENT_PREDICATE_TYPE` | `minecraft:data_component_predicate_type` | No | - [ ] |
+| `DATA_COMPONENT_TYPE` | `minecraft:data_component_type` | No | - [ ] |
+| `GAME_RULE` | `minecraft:game_rule` | No | - [ ] |
+| `DEBUG_SUBSCRIPTION` | `minecraft:debug_subscription` | No | - [ ] |
+| `DECORATED_POT_PATTERN` | `minecraft:decorated_pot_pattern` | No | - [ ] |
+| `DENSITY_FUNCTION_TYPE` | `minecraft:worldgen/density_function_type` | No | - [ ] |
+| `DIALOG_BODY_TYPE` | `minecraft:dialog_body_type` | No | - [ ] |
+| `DIALOG_TYPE` | `minecraft:dialog_type` | No | - [ ] |
+| `ENCHANTMENT_EFFECT_COMPONENT_TYPE` | `minecraft:enchantment_effect_component_type` | No | - [ ] |
+| `ENCHANTMENT_ENTITY_EFFECT_TYPE` | `minecraft:enchantment_entity_effect_type` | No | - [ ] |
+| `ENCHANTMENT_LEVEL_BASED_VALUE_TYPE` | `minecraft:enchantment_level_based_value_type` | No | - [ ] |
+| `ENCHANTMENT_LOCATION_BASED_EFFECT_TYPE` | `minecraft:enchantment_location_based_effect_type` | No | - [ ] |
+| `ENCHANTMENT_PROVIDER_TYPE` | `minecraft:enchantment_provider_type` | No | - [ ] |
+| `ENCHANTMENT_VALUE_EFFECT_TYPE` | `minecraft:enchantment_value_effect_type` | No | - [ ] |
+| `ENTITY_SUB_PREDICATE_TYPE` | `minecraft:entity_sub_predicate_type` | No | - [ ] |
+| `ENTITY_TYPE` | `minecraft:entity_type` | No | - [ ] |
+| `ENVIRONMENT_ATTRIBUTE` | `minecraft:environment_attribute` | No | - [ ] |
+| `ATTRIBUTE_TYPE` | `minecraft:attribute_type` | No | - [ ] |
+| `FEATURE_SIZE_TYPE` | `minecraft:worldgen/feature_size_type` | No | - [ ] |
+| `FEATURE` | `minecraft:worldgen/feature` | No | - [ ] |
+| `FLOAT_PROVIDER_TYPE` | `minecraft:float_provider_type` | No | - [ ] |
+| `FLUID` | `minecraft:fluid` | No | - [ ] |
+| `FOLIAGE_PLACER_TYPE` | `minecraft:worldgen/foliage_placer_type` | No | - [ ] |
+| `GAME_EVENT` | `minecraft:game_event` | No | - [ ] |
+| `HEIGHT_PROVIDER_TYPE` | `minecraft:height_provider_type` | No | - [ ] |
+| `INPUT_CONTROL_TYPE` | `minecraft:input_control_type` | No | - [ ] |
+| `INT_PROVIDER_TYPE` | `minecraft:int_provider_type` | No | - [x] |
+| `ITEM` | `minecraft:item` | No | - [ ] |
+| `SLOT_SOURCE_TYPE` | `minecraft:slot_source_type` | No | - [ ] |
+| `LOOT_CONDITION_TYPE` | `minecraft:loot_condition_type` | No | - [ ] |
+| `LOOT_FUNCTION_TYPE` | `minecraft:loot_function_type` | No | - [ ] |
+| `LOOT_NBT_PROVIDER_TYPE` | `minecraft:loot_nbt_provider_type` | No | - [ ] |
+| `LOOT_NUMBER_PROVIDER_TYPE` | `minecraft:loot_number_provider_type` | No | - [ ] |
+| `LOOT_POOL_ENTRY_TYPE` | `minecraft:loot_pool_entry_type` | No | - [ ] |
+| `LOOT_SCORE_PROVIDER_TYPE` | `minecraft:loot_score_provider_type` | No | - [ ] |
+| `MAP_DECORATION_TYPE` | `minecraft:map_decoration_type` | No | - [ ] |
+| `MATERIAL_CONDITION` | `minecraft:worldgen/material_condition` | No | - [ ] |
+| `MATERIAL_RULE` | `minecraft:worldgen/material_rule` | No | - [ ] |
+| `MEMORY_MODULE_TYPE` | `minecraft:memory_module_type` | No | - [ ] |
+| `MENU` | `minecraft:menu` | No | - [ ] |
+| `MOB_EFFECT` | `minecraft:mob_effect` | No | - [ ] |
+| `NUMBER_FORMAT_TYPE` | `minecraft:number_format_type` | No | - [ ] |
+| `PARTICLE_TYPE` | `minecraft:particle_type` | No | - [ ] |
+| `PLACEMENT_MODIFIER_TYPE` | `minecraft:worldgen/placement_modifier_type` | No | - [ ] |
+| `POINT_OF_INTEREST_TYPE` | `minecraft:point_of_interest_type` | No | - [ ] |
+| `POOL_ALIAS_BINDING` | `minecraft:worldgen/pool_alias_binding` | No | - [ ] |
+| `POSITION_SOURCE_TYPE` | `minecraft:position_source_type` | No | - [ ] |
+| `POS_RULE_TEST` | `minecraft:pos_rule_test` | No | - [ ] |
+| `POTION` | `minecraft:potion` | No | - [ ] |
+| `RECIPE_BOOK_CATEGORY` | `minecraft:recipe_book_category` | No | - [ ] |
+| `RECIPE_DISPLAY` | `minecraft:recipe_display` | No | - [ ] |
+| `RECIPE_SERIALIZER` | `minecraft:recipe_serializer` | No | - [ ] |
+| `RECIPE_TYPE` | `minecraft:recipe_type` | No | - [ ] |
+| `ROOT_PLACER_TYPE` | `minecraft:worldgen/root_placer_type` | No | - [ ] |
+| `RULE_BLOCK_ENTITY_MODIFIER` | `minecraft:rule_block_entity_modifier` | No | - [ ] |
+| `RULE_TEST` | `minecraft:rule_test` | No | - [ ] |
+| `SENSOR_TYPE` | `minecraft:sensor_type` | No | - [ ] |
+| `SLOT_DISPLAY` | `minecraft:slot_display` | No | - [ ] |
+| `SOUND_EVENT` | `minecraft:sound_event` | No | - [ ] |
+| `SPAWN_CONDITION_TYPE` | `minecraft:spawn_condition_type` | No | - [ ] |
+| `STAT_TYPE` | `minecraft:stat_type` | No | - [ ] |
+| `STRUCTURE_PIECE` | `minecraft:worldgen/structure_piece` | No | - [ ] |
+| `STRUCTURE_PLACEMENT` | `minecraft:worldgen/structure_placement` | No | - [ ] |
+| `STRUCTURE_POOL_ELEMENT` | `minecraft:worldgen/structure_pool_element` | No | - [ ] |
+| `STRUCTURE_PROCESSOR` | `minecraft:worldgen/structure_processor` | No | - [ ] |
+| `STRUCTURE_TYPE` | `minecraft:worldgen/structure_type` | No | - [ ] |
+| `DIALOG_ACTION_TYPE` | `minecraft:dialog_action_type` | No | - [ ] |
+| `TEST_ENVIRONMENT_DEFINITION_TYPE` | `minecraft:test_environment_definition_type` | No | - [ ] |
+| `TEST_FUNCTION` | `minecraft:test_function` | No | - [ ] |
+| `TEST_INSTANCE_TYPE` | `minecraft:test_instance_type` | No | - [ ] |
+| `TICKET_TYPE` | `minecraft:ticket_type` | No | - [ ] |
+| `TREE_DECORATOR_TYPE` | `minecraft:worldgen/tree_decorator_type` | No | - [ ] |
+| `TRUNK_PLACER_TYPE` | `minecraft:worldgen/trunk_placer_type` | No | - [ ] |
+| `VILLAGER_PROFESSION` | `minecraft:villager_profession` | No | - [ ] |
+| `VILLAGER_TYPE` | `minecraft:villager_type` | No | - [ ] |
+| `INCOMING_RPC_METHOD` | `minecraft:incoming_rpc_methods` | No | - [ ] |
+| `OUTGOING_RPC_METHOD` | `minecraft:outgoing_rpc_methods` | No | - [ ] |
+| `PERMISSION_TYPE` | `minecraft:permission_type` | No | - [ ] |
+| `PERMISSION_CHECK_TYPE` | `minecraft:permission_check_type` | No | - [ ] |
+| `BANNER_PATTERN` | `minecraft:banner_pattern` | Yes | - [ ] |
+| `BIOME` | `minecraft:worldgen/biome` | Yes | - [ ] |
+| `CAT_SOUND_VARIANT` | `minecraft:cat_sound_variant` | Yes | - [ ] |
+| `CAT_VARIANT` | `minecraft:cat_variant` | Yes | - [ ] |
+| `CHAT_TYPE` | `minecraft:chat_type` | Yes | - [ ] |
+| `CHICKEN_SOUND_VARIANT` | `minecraft:chicken_sound_variant` | Yes | - [ ] |
+| `CHICKEN_VARIANT` | `minecraft:chicken_variant` | Yes | - [ ] |
+| `ZOMBIE_NAUTILUS_VARIANT` | `minecraft:zombie_nautilus_variant` | Yes | - [ ] |
+| `CONFIGURED_CARVER` | `minecraft:worldgen/configured_carver` | Yes | - [ ] |
+| `CONFIGURED_FEATURE` | `minecraft:worldgen/configured_feature` | Yes | - [ ] |
+| `COW_SOUND_VARIANT` | `minecraft:cow_sound_variant` | Yes | - [ ] |
+| `COW_VARIANT` | `minecraft:cow_variant` | Yes | - [ ] |
+| `DAMAGE_TYPE` | `minecraft:damage_type` | Yes | - [ ] |
+| `DENSITY_FUNCTION` | `minecraft:worldgen/density_function` | Yes | - [ ] |
+| `DIALOG` | `minecraft:dialog` | Yes | - [ ] |
+| `DIMENSION_TYPE` | `minecraft:dimension_type` | Yes | - [ ] |
+| `ENCHANTMENT_PROVIDER` | `minecraft:enchantment_provider` | Yes | - [ ] |
+| `ENCHANTMENT` | `minecraft:enchantment` | Yes | - [ ] |
+| `FLAT_LEVEL_GENERATOR_PRESET` | `minecraft:worldgen/flat_level_generator_preset` | Yes | - [ ] |
+| `FROG_VARIANT` | `minecraft:frog_variant` | Yes | - [ ] |
+| `INSTRUMENT` | `minecraft:instrument` | Yes | - [ ] |
+| `JUKEBOX_SONG` | `minecraft:jukebox_song` | Yes | - [ ] |
+| `MULTI_NOISE_BIOME_SOURCE_PARAMETER_LIST` | `minecraft:worldgen/multi_noise_biome_source_parameter_list` | Yes | - [ ] |
+| `NOISE_SETTINGS` | `minecraft:worldgen/noise_settings` | Yes | - [ ] |
+| `NOISE` | `minecraft:worldgen/noise` | Yes | - [ ] |
+| `PAINTING_VARIANT` | `minecraft:painting_variant` | Yes | - [ ] |
+| `PIG_SOUND_VARIANT` | `minecraft:pig_sound_variant` | Yes | - [ ] |
+| `PIG_VARIANT` | `minecraft:pig_variant` | Yes | - [ ] |
+| `PLACED_FEATURE` | `minecraft:worldgen/placed_feature` | Yes | - [ ] |
+| `PROCESSOR_LIST` | `minecraft:worldgen/processor_list` | Yes | - [ ] |
+| `STRUCTURE_SET` | `minecraft:worldgen/structure_set` | Yes | - [ ] |
+| `STRUCTURE` | `minecraft:worldgen/structure` | Yes | - [ ] |
+| `SULFUR_CUBE_ARCHETYPE` | `minecraft:sulfur_cube_archetype` | Yes | - [ ] |
+| `TEMPLATE_POOL` | `minecraft:worldgen/template_pool` | Yes | - [ ] |
+| `TEST_ENVIRONMENT` | `minecraft:test_environment` | Yes | - [ ] |
+| `TEST_INSTANCE` | `minecraft:test_instance` | Yes | - [ ] |
+| `TIMELINE` | `minecraft:timeline` | Yes | - [ ] |
+| `TRADE_SET` | `minecraft:trade_set` | Yes | - [ ] |
+| `TRIAL_SPAWNER_CONFIG` | `minecraft:trial_spawner` | Yes | - [ ] |
+| `TRIGGER_TYPE` | `minecraft:trigger_type` | No | - [ ] |
+| `TRIM_MATERIAL` | `minecraft:trim_material` | Yes | - [ ] |
+| `TRIM_PATTERN` | `minecraft:trim_pattern` | Yes | - [ ] |
+| `VILLAGER_TRADE` | `minecraft:villager_trade` | Yes | - [ ] |
+| `WOLF_VARIANT` | `minecraft:wolf_variant` | Yes | - [ ] |
+| `WOLF_SOUND_VARIANT` | `minecraft:wolf_sound_variant` | Yes | - [ ] |
+| `WORLD_CLOCK` | `minecraft:world_clock` | Yes | - [ ] |
+| `WORLD_PRESET` | `minecraft:worldgen/world_preset` | Yes | - [ ] |
+| `DIMENSION` | `minecraft:dimension` | Yes | - [ ] |
+| `LEVEL_STEM` | `minecraft:dimension` | Yes | - [ ] |
+| `LOOT_TABLE` | `minecraft:loot_table` | Yes | - [ ] |
+| `ITEM_MODIFIER` | `minecraft:item_modifier` | Yes | - [ ] |
+| `PREDICATE` | `minecraft:predicate` | Yes | - [ ] |
+| `ADVANCEMENT` | `minecraft:advancement` | Yes | - [ ] |
+| `RECIPE` | `minecraft:recipe` | Yes | - [ ] |
