@@ -66,11 +66,6 @@ pub const SYS_INFO_RAM: &str = "sys.info.ram";
 
 /// Allows the plugin to read OS information.
 pub const SYS_INFO_OS: &str = "sys.info.os";
-
-/// Allows the plugin to receive plugin load events.
-pub const EVENTS_PLUGIN_LOAD: &str = "event.plugin-load";
-
-#[must_use]
 pub fn get_permission_description(permission: &str) -> Option<&'static str> {
     match permission {
         NETWORK_DNS => Some(
@@ -109,8 +104,6 @@ Even without `fs.read.data`, this will allow the plugin to list directory conten
         SYS_INFO => Some("Allows the plugin to read system information (CPU, Memory, OS)."),
         SYS_INFO_CPU => Some("Allows the plugin to read CPU information."),
         SYS_INFO_RAM => Some("Allows the plugin to read RAM information."),
-        SYS_INFO_OS => Some("Allows the plugin to read OS information."),
-        EVENTS_PLUGIN_LOAD => Some("Allows the plugin to receive plugin load events."),
         p if p.starts_with(SYS_ENV_PREFIX) => {
             Some("Allows the plugin to read specific environment variables.")
         }

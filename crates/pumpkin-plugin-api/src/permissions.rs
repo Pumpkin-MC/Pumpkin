@@ -62,6 +62,3 @@ pub const SYS_INFO_RAM: &str = "sys.info.ram";
 
 /// Allows the plugin to read OS information.
 pub const SYS_INFO_OS: &str = "sys.info.os";
-
-/// Allows the plugin to receive plugin load events.
-pub const EVENTS_PLUGIN_LOAD: &str = "event.plugin-load";

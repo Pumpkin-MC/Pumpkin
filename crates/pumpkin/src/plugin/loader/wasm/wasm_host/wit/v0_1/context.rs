@@ -19,7 +19,6 @@ use crate::plugin::{
             },
         },
     },
-    permissions,
 };
 
 macro_rules! register_host_event {
@@ -1680,14 +1679,6 @@ impl pumpkin::plugin::context::HostContext for PluginHostState {
         event_priority: EventPriority,
         blocking: bool,
     ) -> wasmtime::Result<Result<(), String>> {
-        let has_perm = |p: &str| self.permissions.iter().any(|perm| perm == p);
-
-        // Guard sensitive lifecycle events behind explicit permissions.
-        if event_type == EventType::PluginLoadEvent && !has_perm(permissions::EVENTS_PLUGIN_LOAD) {
-            return Ok(Err(
-                "plugin is missing permission event.plugin-load".to_string()
-            ));
-        }
 
         // Updated return type
         let priority = match event_priority {
