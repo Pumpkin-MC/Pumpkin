@@ -1,21 +1,19 @@
 use std::{collections::HashMap, sync::Arc};
 use wasmtime::component::Resource;
 
-use crate::plugin::{
-    loader::wasm::wasm_host::{
-        DowncastResourceExt,
-        state::{CommandResource, ContextResource, PluginHostState},
-        wit::v0_1::{
-            events::{ToFromWasmEvent, WasmPluginEventHandler},
-            pumpkin::{
-                self,
-                plugin::{
-                    command::Command,
-                    context::Context,
-                    event::{EventPriority, EventType},
-                    permission::{Permission, PermissionDefault, PermissionLevel},
-                    server::Server,
-                },
+use crate::plugin::loader::wasm::wasm_host::{
+    DowncastResourceExt,
+    state::{CommandResource, ContextResource, PluginHostState},
+    wit::v0_1::{
+        events::{ToFromWasmEvent, WasmPluginEventHandler},
+        pumpkin::{
+            self,
+            plugin::{
+                command::Command,
+                context::Context,
+                event::{EventPriority, EventType},
+                permission::{Permission, PermissionDefault, PermissionLevel},
+                server::Server,
             },
         },
     },
@@ -1679,7 +1677,6 @@ impl pumpkin::plugin::context::HostContext for PluginHostState {
         event_priority: EventPriority,
         blocking: bool,
     ) -> wasmtime::Result<Result<(), String>> {
-
         // Updated return type
         let priority = match event_priority {
             EventPriority::Highest => crate::plugin::EventPriority::Highest,
