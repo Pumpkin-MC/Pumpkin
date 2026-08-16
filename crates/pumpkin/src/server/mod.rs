@@ -1047,9 +1047,7 @@ impl Server {
                 .map_or_else(Vec::new, |player| vec![player]),
         };
 
-        let Some(player_type) = EntityType::from_name("player") else {
-            return Vec::new();
-        };
+        let player_type = &EntityType::PLAYER;
         let type_included = target_selector
             .conditions
             .iter()

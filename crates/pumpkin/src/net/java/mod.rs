@@ -12,17 +12,19 @@ use crossbeam::atomic::AtomicCell;
 use pumpkin_data::packet::CURRENT_MC_VERSION;
 use pumpkin_data::translation;
 use pumpkin_protocol::java::server::play::{
-    SAttack, SBundleItemSelected, SChangeGameMode, SChatCommand, SChatMessage, SChunkBatch,
-    SClickSlot, SClientCommand, SClientInformationPlay, SClientTickEnd, SCloseContainer,
-    SCommandSuggestion, SConfirmTeleport, SContainerButtonClick,
-    SCookieResponse as SPCookieResponse, SCustomPayload, SDebugSampleSubscription,
-    SDebugSubscriptionRequest, SEditBook, SInteract, SJigsawGenerate, SMoveVehicle, SPaddleBoat,
-    SPickItemFromBlock, SPlaceRecipe, SPlayPingRequest, SPlayerAbilities, SPlayerAction,
-    SPlayerCommand, SPlayerInput, SPlayerLoaded, SPlayerPosition, SPlayerPositionRotation,
-    SPlayerRotation, SPlayerSession, SRecipeBookChangeSettings, SRecipeBookSeenRecipe, SRenameItem,
-    SSeenAdvancement, SSelectTrade, SSetCommandBlock, SSetCreativeSlot, SSetHeldItem,
-    SSetJigsawBlock, SSetPlayerGround, SSetTestBlock, SSwingArm, STeleportToEntity,
-    STestInstanceBlockAction, SUpdateSign, SUseItem, SUseItemOn,
+    SAttack, SBlockEntityTagQuery, SBundleItemSelected, SChangeGameMode, SChatCommand,
+    SChatMessage, SChunkBatch, SClickSlot, SClientCommand, SClientInformationPlay, SClientTickEnd,
+    SCloseContainer, SCommandSuggestion, SConfigurationAcknowledged, SConfirmTeleport,
+    SContainerButtonClick, SContainerSlotStateChanged, SCookieResponse as SPCookieResponse,
+    SCustomPayload, SDebugSampleSubscription, SDebugSubscriptionRequest, SEditBook,
+    SEntityTagQuery, SInteract, SJigsawGenerate, SLockDifficulty, SMoveVehicle, SPaddleBoat,
+    SPickItemFromBlock, SPlaceRecipe, SPlayPingRequest, SPlayPong, SPlayResourcePack,
+    SPlayerAbilities, SPlayerAction, SPlayerCommand, SPlayerInput, SPlayerLoaded, SPlayerPosition,
+    SPlayerPositionRotation, SPlayerRotation, SPlayerSession, SRecipeBookChangeSettings,
+    SRecipeBookSeenRecipe, SRenameItem, SSeenAdvancement, SSelectTrade, SSetCommandBlock,
+    SSetCommandMinecart, SSetCreativeSlot, SSetGameRule, SSetHeldItem, SSetJigsawBlock,
+    SSetPlayerGround, SSetStructureBlock, SSetTestBlock, SSpectateEntity, SSwingArm,
+    STeleportToEntity, STestInstanceBlockAction, SUpdateSign, SUseItem, SUseItemOn,
 };
 use pumpkin_protocol::packet::MultiVersionJavaPacket;
 use pumpkin_protocol::{
@@ -423,20 +425,26 @@ impl JavaClient {
     }
 
     pub async fn kick(&self, reason: TextComponent) {
-        match self.connection_state.load() {
-            ConnectionState::Login => {
-                // TextComponent implements Serialize and writes in bytes instead of String, that's the reasib we only use content
-                self.send_packet_now(&CLoginDisconnect::new(
-                    serde_json::to_string(&reason.0).unwrap_or_else(|_| String::new()),
-                ))
-                .await;
-            }
-            ConnectionState::Config => {
-                self.send_packet_now(&CConfigDisconnect::new(&reason.get_text()))
+        self.kick_explicit(&reason, true).await;
+    }
+
+    pub async fn kick_explicit(&self, reason: &TextComponent, send_packet: bool) {
+        if send_packet {
+            match self.connection_state.load() {
+                ConnectionState::Login => {
+                    // TextComponent implements Serialize and writes in bytes instead of String, that's the reason we only use content
+                    self.send_packet_now(&CLoginDisconnect::new(
+                        serde_json::to_string(&reason.0).unwrap_or_else(|_| String::new()),
+                    ))
                     .await;
+                }
+                ConnectionState::Config => {
+                    self.send_packet_now(&CConfigDisconnect::new(&reason.clone().get_text()))
+                        .await;
+                }
+                ConnectionState::Play => self.send_packet_now(&CPlayDisconnect::new(reason)).await,
+                _ => {}
             }
-            ConnectionState::Play => self.send_packet_now(&CPlayDisconnect::new(&reason)).await,
-            _ => {}
         }
         debug!("Closing connection for {}", self.id);
         self.close();
@@ -998,6 +1006,70 @@ impl JavaClient {
                     SSeenAdvancement::read(&mut payload, &version)?,
                 )
                 .await;
+            }
+            id if id == SPlayResourcePack::to_id(version) => {
+                self.handle_play_resource_pack_response(
+                    server,
+                    player,
+                    SPlayResourcePack::read(&mut payload, &version)?,
+                )
+                .await;
+            }
+            id if id == SPlayPong::to_id(version) => {
+                self.handle_play_pong(player, &SPlayPong::read(&mut payload, &version)?);
+            }
+            id if id == SLockDifficulty::to_id(version) => {
+                self.handle_lock_difficulty(
+                    server,
+                    player,
+                    &SLockDifficulty::read(&mut payload, &version)?,
+                );
+            }
+            id if id == SContainerSlotStateChanged::to_id(version) => {
+                self.handle_container_slot_state_changed(
+                    player,
+                    &SContainerSlotStateChanged::read(&mut payload, &version)?,
+                );
+            }
+            id if id == SSpectateEntity::to_id(version) => {
+                self.handle_spectate_entity(
+                    player,
+                    server,
+                    SSpectateEntity::read(&mut payload, &version)?,
+                )
+                .await;
+            }
+            id if id == SSetCommandMinecart::to_id(version) => {
+                self.handle_set_command_minecart(
+                    player,
+                    &SSetCommandMinecart::read(&mut payload, &version)?,
+                );
+            }
+            id if id == SSetStructureBlock::to_id(version) => {
+                self.handle_set_structure_block(
+                    player,
+                    &SSetStructureBlock::read(&mut payload, &version)?,
+                );
+            }
+            id if id == SSetGameRule::to_id(version) => {
+                self.handle_set_game_rule(player, &SSetGameRule::read(&mut payload, &version)?);
+            }
+            id if id == SBlockEntityTagQuery::to_id(version) => {
+                self.handle_block_entity_tag_query(
+                    player,
+                    SBlockEntityTagQuery::read(&mut payload, &version)?,
+                )
+                .await;
+            }
+            id if id == SEntityTagQuery::to_id(version) => {
+                self.handle_entity_tag_query(
+                    player,
+                    SEntityTagQuery::read(&mut payload, &version)?,
+                )
+                .await;
+            }
+            id if id == SConfigurationAcknowledged::to_id(version) => {
+                self.handle_configuration_acknowledged(player);
             }
             _ => {
                 warn!("Failed to handle player packet id {}", event.packet_id);

@@ -1,5 +1,5 @@
 use std::{
-    num::{NonZero, NonZeroI32},
+    num::NonZero,
     sync::{Arc, atomic::Ordering},
 };
 

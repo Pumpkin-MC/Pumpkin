@@ -15,7 +15,7 @@ use pumpkin_util::GameMode;
 use rand;
 use std::borrow::Cow;
 use std::cmp::{max, min};
-use std::num::NonZeroI32;
+use std::num::NonZero;
 use std::sync::atomic::{AtomicU32, Ordering};
 
 mod categories;
@@ -42,7 +42,7 @@ pub struct ItemStack {
 
     // unique ID for Bedrock network; don't serialize
     // Should always be a positive value for non-empty stacks
-    pub uid: NonZeroI32,
+    pub uid: NonZero<i32>,
 }
 
 // impl Hash for ItemStack {
@@ -71,14 +71,14 @@ impl ItemStackIdGenerator {
         }
     }
 
-    pub fn next_id(&self) -> NonZeroI32 {
+    pub fn next_id(&self) -> NonZero<i32> {
         // Wraps on overflow, which is what we want.
         let value = self.counter.fetch_add(1, Ordering::Relaxed);
 
         // Negative values are invalid; cycle through the positives
         let masked = value & 0x7FFFFFFF;
 
-        if let Some(id) = NonZeroI32::new(masked as i32) {
+        if let Some(id) = NonZero::new(masked as i32) {
             id
         } else {
             // If we fetched 0 or 0x80000000, that's masked out as 0
@@ -133,7 +133,7 @@ impl ItemStack {
             item,
             patch: Vec::new(),
 
-            uid: match NonZeroI32::new(1) {
+            uid: match NonZero::new(1) {
                 Some(v) => v,
                 None => panic!("1 is non-zero"),
             },
@@ -211,7 +211,7 @@ impl ItemStack {
         item: &Item::AIR,
         patch: Vec::new(),
 
-        uid: NonZeroI32::MIN, // white lie - Bedrock `uid` is never sent if the stack is empty
+        uid: NonZero::<i32>::MIN, // white lie - Bedrock `uid` is never sent if the stack is empty
     };
 
     #[must_use]

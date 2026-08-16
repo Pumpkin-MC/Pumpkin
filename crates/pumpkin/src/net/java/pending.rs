@@ -1,4 +1,4 @@
-use std::{net::SocketAddr, num::NonZeroU8, sync::Arc};
+use std::{net::SocketAddr, num::NonZero, sync::Arc};
 
 use bytes::Bytes;
 use crossbeam::atomic::AtomicCell;
@@ -13,8 +13,8 @@ use pumpkin_protocol::{
         packet_decoder::TCPNetworkDecoder,
         packet_encoder::TCPNetworkEncoder,
         server::config::{
-            SAcknowledgeFinishConfig, SClientInformationConfig, SConfigCookieResponse,
-            SConfigResourcePack, SKnownPacks, SPluginMessage,
+            SAcceptCodeOfConduct, SAcknowledgeFinishConfig, SClientInformationConfig,
+            SConfigCookieResponse, SConfigPong, SConfigResourcePack, SKnownPacks, SPluginMessage,
         },
     },
     packet::MultiVersionJavaPacket,
@@ -389,6 +389,14 @@ impl PendingConnection {
                 )?);
                 Ok(None)
             }
+            id if id == SConfigPong::to_id(version) => {
+                let _pong = SConfigPong::read(&mut payload, &version)?;
+                Ok(None)
+            }
+            id if id == SAcceptCodeOfConduct::to_id(version) => {
+                let _accept = SAcceptCodeOfConduct::read(&mut payload, &version)?;
+                Ok(None)
+            }
             _ => Err(ReadingError::Message(format!(
                 "Failed to handle packet id {} in Config State",
                 packet.id
@@ -415,8 +423,8 @@ impl PendingConnection {
         ) {
             self.config = Some(PlayerConfig {
                 locale: client_information.locale.to_string(),
-                view_distance: NonZeroU8::new(client_information.view_distance as u8)
-                    .unwrap_or(NonZeroU8::MIN),
+                view_distance: NonZero::new(client_information.view_distance as u8)
+                    .unwrap_or(NonZero::<u8>::MIN),
                 chat_mode,
                 chat_colors: client_information.chat_colors,
                 skin_parts: client_information.skin_parts,

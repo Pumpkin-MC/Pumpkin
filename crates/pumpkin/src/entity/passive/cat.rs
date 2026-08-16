@@ -196,7 +196,7 @@ impl CatEntity {
         let entity = self.get_entity();
         entity.send_meta_data(
             &[Metadata::new(
-                TrackedData::COLLAR_COLOR,
+                TrackedData::CAT_COLLAR_COLOR,
                 MetaDataType::INT,
                 VarInt(color as i32),
             )],
@@ -443,7 +443,7 @@ impl Mob for CatEntity {
             );
             entity.send_meta_data(
                 &[Metadata::new(
-                    TrackedData::COLLAR_COLOR,
+                    TrackedData::CAT_COLLAR_COLOR,
                     MetaDataType::INT,
                     VarInt(self.collar_color.load(Ordering::Relaxed) as i32),
                 )],

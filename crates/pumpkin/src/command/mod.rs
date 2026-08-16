@@ -117,7 +117,7 @@ impl CommandSender {
                 let format = time::macros::format_description!("[hour]:[minute]:[second]");
                 let timestamp = now
                     .format(&format)
-                    .expect("Failed to format timestamp for command block output");
+                    .unwrap_or_else(|_| "00:00:00".to_string());
 
                 *last_output = format!("[{}] {}", timestamp, text.get_text());
             }

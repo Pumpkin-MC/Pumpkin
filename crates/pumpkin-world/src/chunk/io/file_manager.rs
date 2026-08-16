@@ -225,22 +225,40 @@ where
                 .map(|c| P::file_path(folder, &S::get_chunk_key(c)))
                 .collect();
 
-            let mut watchers = self.watchers.write().await;
-            for path in paths {
-                if let std::collections::btree_map::Entry::Occupied(mut e) = watchers.entry(path) {
-                    let count = e.get_mut();
-                    *count = count.saturating_sub(1);
-                    if *count == 0 {
-                        e.remove();
+            let mut paths_to_evict = Vec::new();
+            {
+                let mut watchers = self.watchers.write().await;
+                for path in paths {
+                    if let std::collections::btree_map::Entry::Occupied(mut e) =
+                        watchers.entry(path)
+                    {
+                        let count = e.get_mut();
+                        *count = count.saturating_sub(1);
+                        if *count == 0 {
+                            let (path, _) = e.remove_entry();
+                            paths_to_evict.push(path);
+                        }
                     }
                 }
+            }
+
+            for path in paths_to_evict {
+                self.maybe_evict(&path).await;
             }
         })
     }
 
     fn clear_watched_chunks(&self) -> BoxFuture<'_, ()> {
         Box::pin(async move {
-            self.watchers.write().await.clear();
+            let paths: Vec<PathBuf> = {
+                let mut watchers = self.watchers.write().await;
+                let keys: Vec<_> = watchers.keys().cloned().collect();
+                watchers.clear();
+                keys
+            };
+            for path in paths {
+                self.maybe_evict(&path).await;
+            }
         })
     }
 
@@ -301,6 +319,9 @@ where
                     };
 
                     join!(forward, read);
+
+                    // Evict if not watched and references are dropped
+                    self.maybe_evict(&path).await;
                 }
             });
 

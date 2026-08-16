@@ -95,7 +95,7 @@ pub(super) fn to_wasm_block_name(block: &'static Block) -> String {
 
 pub(super) fn from_wasm_block_name(block_name: &str) -> &'static Block {
     Block::from_registry_key(block_name.strip_prefix("minecraft:").unwrap_or(block_name))
-        .expect("invalid block name")
+        .unwrap_or(&Block::AIR)
 }
 
 pub(super) fn to_wasm_entity_type(entity_type: &'static EntityType) -> String {
@@ -103,7 +103,12 @@ pub(super) fn to_wasm_entity_type(entity_type: &'static EntityType) -> String {
 }
 
 pub(super) fn from_wasm_entity_type(entity_type: &str) -> &'static EntityType {
-    EntityType::from_name(entity_type).expect("invalid entity type")
+    EntityType::from_name(
+        entity_type
+            .strip_prefix("minecraft:")
+            .unwrap_or(entity_type),
+    )
+    .unwrap_or(&EntityType::PLAYER)
 }
 
 pub(super) const fn to_wasm_hand(hand: Hand) -> pumpkin::plugin::common::Hand {
@@ -228,10 +233,9 @@ impl<E: Payload + ToFromWasmEvent> EventHandler<E> for WasmPluginEventHandler {
             let event = event.to_wasm_event(store.data_mut());
             match self.plugin.plugin_instance {
                 PluginInstance::V0_1(ref plugin) => {
-                    let server = store
-                        .data_mut()
-                        .add_server(server.clone())
-                        .expect("valid server");
+                    let Ok(server) = store.data_mut().add_server(server.clone()) else {
+                        return;
+                    };
                     let _ = plugin
                         .call_handle_event(&mut *store, self.handler_id, server, &event)
                         .await;
@@ -250,10 +254,9 @@ impl<E: Payload + ToFromWasmEvent> EventHandler<E> for WasmPluginEventHandler {
             let wasm_event = event.to_wasm_event(store.data_mut());
             match self.plugin.plugin_instance {
                 PluginInstance::V0_1(ref plugin) => {
-                    let server = store
-                        .data_mut()
-                        .add_server(server.clone())
-                        .expect("valid server");
+                    let Ok(server) = store.data_mut().add_server(server.clone()) else {
+                        return;
+                    };
                     if let Ok(returned_event) = plugin
                         .call_handle_event(&mut *store, self.handler_id, server, &wasm_event)
                         .await

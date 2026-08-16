@@ -42,7 +42,7 @@ impl ArgumentType for AttributeArgumentType {
 
     fn client_side_parser(&'_ self) -> JavaClientArgumentType {
         JavaClientArgumentType::Resource {
-            identifier: Identifier::vanilla("attribute").expect("valid identifier"),
+            identifier: Identifier::vanilla_static("attribute"),
         }
     }
 

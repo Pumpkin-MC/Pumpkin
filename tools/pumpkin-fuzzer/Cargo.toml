@@ -6,13 +6,10 @@ rust-version.workspace = true
 license.workspace = true
 
 [dependencies]
-pumpkin-protocol.workspace = true
-pumpkin-util.workspace = true
 tokio = { workspace = true, features = ["full"] }
 clap = { version = "4", features = ["derive"] }
 colored.workspace = true
-bytes.workspace = true
-rand = "0.9"
+rand.workspace = true
 
 [lints.clippy]
 expect_used = "allow"

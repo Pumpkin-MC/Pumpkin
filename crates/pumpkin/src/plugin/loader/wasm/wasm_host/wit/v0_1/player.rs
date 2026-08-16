@@ -480,7 +480,7 @@ fn world_from_resource(
         .clone()
 }
 
-const fn to_wit_permission_level(
+pub(crate) const fn to_wit_permission_level(
     level: PermissionLvl,
 ) -> pumpkin::plugin::permission::PermissionLevel {
     match level {
@@ -492,7 +492,7 @@ const fn to_wit_permission_level(
     }
 }
 
-const fn from_wit_permission_level(
+pub(crate) const fn from_wit_permission_level(
     level: pumpkin::plugin::permission::PermissionLevel,
 ) -> PermissionLvl {
     match level {
@@ -501,6 +501,469 @@ const fn from_wit_permission_level(
         pumpkin::plugin::permission::PermissionLevel::Two => PermissionLvl::Two,
         pumpkin::plugin::permission::PermissionLevel::Three => PermissionLvl::Three,
         pumpkin::plugin::permission::PermissionLevel::Four => PermissionLvl::Four,
+    }
+}
+
+pub(crate) fn parse_ban_expiry(
+    expires_at_utc: Option<String>,
+    duration_seconds: Option<u64>,
+) -> Option<time::OffsetDateTime> {
+    if let Some(dur) = duration_seconds {
+        let seconds = i64::try_from(dur).unwrap_or(i64::MAX);
+        return Some(time::OffsetDateTime::now_utc() + time::Duration::seconds(seconds));
+    }
+    if let Some(s) = expires_at_utc {
+        if s.eq_ignore_ascii_case("forever") || s.is_empty() {
+            return None;
+        }
+        if let Ok(parsed) =
+            time::OffsetDateTime::parse(&s, &time::format_description::well_known::Rfc3339)
+        {
+            return Some(parsed);
+        }
+        if let Ok(parsed) = time::OffsetDateTime::parse(
+            &s,
+            time::macros::format_description!(
+                "[year]-[month]-[day] [hour]:[minute]:[second][offset_hour sign:mandatory]:[offset_minute]"
+            ),
+        ) {
+            return Some(parsed);
+        }
+    }
+    None
+}
+
+#[allow(clippy::too_many_lines)]
+const fn from_wasm_bedrock_disconnect_reason(
+    reason: pumpkin::plugin::player::BedrockDisconnectReason,
+) -> DisconnectReason {
+    match reason {
+        pumpkin::plugin::player::BedrockDisconnectReason::Unknown => DisconnectReason::Unknown,
+        pumpkin::plugin::player::BedrockDisconnectReason::CantConnectNoInternet => {
+            DisconnectReason::CantConnectNoInternet
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::NoPermissions => {
+            DisconnectReason::NoPermissions
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::UnrecoverableError => {
+            DisconnectReason::UnrecoverableError
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::ThirdPartyBlocked => {
+            DisconnectReason::ThirdPartyBlocked
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::ThirdPartyNoInternet => {
+            DisconnectReason::ThirdPartyNoInternet
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::ThirdPartyBadIp => {
+            DisconnectReason::ThirdPartyBadIP
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::ThirdPartyNoServerOrServerLocked => {
+            DisconnectReason::ThirdPartyNoServerOrServerLocked
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::VersionMismatch => {
+            DisconnectReason::VersionMismatch
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::SkinIssue => DisconnectReason::SkinIssue,
+        pumpkin::plugin::player::BedrockDisconnectReason::InviteSessionNotFound => {
+            DisconnectReason::InviteSessionNotFound
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::EduLevelSettingsMissing => {
+            DisconnectReason::EduLevelSettingsMissing
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::LocalServerNotFound => {
+            DisconnectReason::LocalServerNotFound
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::LegacyDisconnect => {
+            DisconnectReason::LegacyDisconnect
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::UserLeaveGameAttempted => {
+            DisconnectReason::UserLeaveGameAttempted
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::PlatformLockedSkinsError => {
+            DisconnectReason::PlatformLockedSkinsError
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::RealmsWorldUnassigned => {
+            DisconnectReason::RealmsWorldUnassigned
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::RealmsServerCantConnect => {
+            DisconnectReason::RealmsServerCantConnect
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::RealmsServerHidden => {
+            DisconnectReason::RealmsServerHidden
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::RealmsServerDisabledBeta => {
+            DisconnectReason::RealmsServerDisabledBeta
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::RealmsServerDisabled => {
+            DisconnectReason::RealmsServerDisabled
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::CrossPlatformDisabled => {
+            DisconnectReason::CrossPlatformDisabled
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::CantConnect => {
+            DisconnectReason::CantConnect
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::SessionNotFound => {
+            DisconnectReason::SessionNotFound
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::ClientSettingsIncompatibleWithServer => {
+            DisconnectReason::ClientSettingsIncompatibleWithServer
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::ServerFull => {
+            DisconnectReason::ServerFull
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::InvalidPlatformSkin => {
+            DisconnectReason::InvalidPlatformSkin
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::EditionVersionMismatch => {
+            DisconnectReason::EditionVersionMismatch
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::EditionMismatch => {
+            DisconnectReason::EditionMismatch
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::LevelNewerThanExeVersion => {
+            DisconnectReason::LevelNewerThanExeVersion
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::NoFailOccurred => {
+            DisconnectReason::NoFailOccurred
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::BannedSkin => {
+            DisconnectReason::BannedSkin
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::Timeout => DisconnectReason::Timeout,
+        pumpkin::plugin::player::BedrockDisconnectReason::ServerNotFound => {
+            DisconnectReason::ServerNotFound
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::OutdatedServer => {
+            DisconnectReason::OutdatedServer
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::OutdatedClient => {
+            DisconnectReason::OutdatedClient
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::NoPremiumPlatform => {
+            DisconnectReason::NoPremiumPlatform
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::MultiplayerDisabled => {
+            DisconnectReason::MultiplayerDisabled
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::NoWifi => DisconnectReason::NoWiFi,
+        pumpkin::plugin::player::BedrockDisconnectReason::WorldCorruption => {
+            DisconnectReason::WorldCorruption
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::NoReason => DisconnectReason::NoReason,
+        pumpkin::plugin::player::BedrockDisconnectReason::Disconnected => {
+            DisconnectReason::Disconnected
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::InvalidPlayer => {
+            DisconnectReason::InvalidPlayer
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::LoggedInOtherLocation => {
+            DisconnectReason::LoggedInOtherLocation
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::ServerIdConflict => {
+            DisconnectReason::ServerIdConflict
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::NotAllowed => {
+            DisconnectReason::NotAllowed
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::NotAuthenticated => {
+            DisconnectReason::NotAuthenticated
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::InvalidTenant => {
+            DisconnectReason::InvalidTenant
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::UnknownPacket => {
+            DisconnectReason::UnknownPacket
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::UnexpectedPacket => {
+            DisconnectReason::UnexpectedPacket
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::InvalidCommandRequestPacket => {
+            DisconnectReason::InvalidCommandRequestPacket
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::HostSuspended => {
+            DisconnectReason::HostSuspended
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::LoginPacketNoRequest => {
+            DisconnectReason::LoginPacketNoRequest
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::LoginPacketNoCert => {
+            DisconnectReason::LoginPacketNoCert
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::MissingClient => {
+            DisconnectReason::MissingClient
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::Kicked => DisconnectReason::Kicked,
+        pumpkin::plugin::player::BedrockDisconnectReason::KickedForExploit => {
+            DisconnectReason::KickedForExploit
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::KickedForIdle => {
+            DisconnectReason::KickedForIdle
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::ResourcePackProblem => {
+            DisconnectReason::ResourcePackProblem
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::IncompatiblePack => {
+            DisconnectReason::IncompatiblePack
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::OutOfStorage => {
+            DisconnectReason::OutOfStorage
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::InvalidLevel => {
+            DisconnectReason::InvalidLevel
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::DisconnectPacket => {
+            DisconnectReason::DisconnectPacket
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::BlockMismatch => {
+            DisconnectReason::BlockMismatch
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::InvalidHeights => {
+            DisconnectReason::InvalidHeights
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::InvalidWidths => {
+            DisconnectReason::InvalidWidths
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::ConnectionLost => {
+            DisconnectReason::ConnectionLost
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::ZombieConnection => {
+            DisconnectReason::ZombieConnection
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::Shutdown => DisconnectReason::Shutdown,
+        pumpkin::plugin::player::BedrockDisconnectReason::ReasonNotSet => {
+            DisconnectReason::ReasonNotSet
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::LoadingStateTimeout => {
+            DisconnectReason::LoadingStateTimeout
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::ResourcePackLoadingFailed => {
+            DisconnectReason::ResourcePackLoadingFailed
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::SearchingForSessionLoadingScreenFailed => {
+            DisconnectReason::SearchingForSessionLoadingScreenFailed
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::NetherNetProtocolVersion => {
+            DisconnectReason::NetherNetProtocolVersion
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::SubsystemStatusError => {
+            DisconnectReason::SubsystemStatusError
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::EmptyAuthFromDiscovery => {
+            DisconnectReason::EmptyAuthFromDiscovery
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::EmptyUrlFromDiscovery => {
+            DisconnectReason::EmptyUrlFromDiscovery
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::ExpiredAuthFromDiscovery => {
+            DisconnectReason::ExpiredAuthFromDiscovery
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::UnknownSignalServiceSignInFailure => {
+            DisconnectReason::UnknownSignalServiceSignInFailure
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::XblJoinLobbyFailure => {
+            DisconnectReason::XBLJoinLobbyFailure
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::UnspecifiedClientInstanceDisconnection => {
+            DisconnectReason::UnspecifiedClientInstanceDisconnection
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::NetherNetSessionNotFound => {
+            DisconnectReason::NetherNetSessionNotFound
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::NetherNetCreatePeerConnection => {
+            DisconnectReason::NetherNetCreatePeerConnection
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::NetherNetIce => {
+            DisconnectReason::NetherNetICE
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::NetherNetConnectRequest => {
+            DisconnectReason::NetherNetConnectRequest
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::NetherNetConnectResponse => {
+            DisconnectReason::NetherNetConnectResponse
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::NetherNetNegotiationTimeout => {
+            DisconnectReason::NetherNetNegotiationTimeout
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::NetherNetInactivityTimeout => {
+            DisconnectReason::NetherNetInactivityTimeout
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::StaleConnectionBeingReplaced => {
+            DisconnectReason::StaleConnectionBeingReplaced
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::RealmsSessionNotFound => {
+            DisconnectReason::RealmsSessionNotFound
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::BadPacket => DisconnectReason::BadPacket,
+        pumpkin::plugin::player::BedrockDisconnectReason::NetherNetFailedToCreateOffer => {
+            DisconnectReason::NetherNetFailedToCreateOffer
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::NetherNetFailedToCreateAnswer => {
+            DisconnectReason::NetherNetFailedToCreateAnswer
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::NetherNetFailedToSetLocalDescription => {
+            DisconnectReason::NetherNetFailedToSetLocalDescription
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::NetherNetFailedToSetRemoteDescription => {
+            DisconnectReason::NetherNetFailedToSetRemoteDescription
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::NetherNetNegotiationTimeoutWaitingForResponse => {
+            DisconnectReason::NetherNetNegotiationTimeoutWaitingForResponse
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::NetherNetNegotiationTimeoutWaitingForAccept => {
+            DisconnectReason::NetherNetNegotiationTimeoutWaitingForAccept
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::NetherNetIncomingConnectionIgnored => {
+            DisconnectReason::NetherNetIncomingConnectionIgnored
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::NetherNetSignalingParsingFailure => {
+            DisconnectReason::NetherNetSignalingParsingFailure
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::NetherNetSignalingUnknownError => {
+            DisconnectReason::NetherNetSignalingUnknownError
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::NetherNetSignalingUnicastDeliveryFailed => {
+            DisconnectReason::NetherNetSignalingUnicastDeliveryFailed
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::NetherNetSignalingBroadcastDeliveryFailed => {
+            DisconnectReason::NetherNetSignalingBroadcastDeliveryFailed
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::NetherNetSignalingGenericDeliveryFailed => {
+            DisconnectReason::NetherNetSignalingGenericDeliveryFailed
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::EditorMismatchEditorWorld => {
+            DisconnectReason::EditorMismatchEditorWorld
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::EditorMismatchVanillaWorld => {
+            DisconnectReason::EditorMismatchVanillaWorld
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::WorldTransferNotPrimaryClient => {
+            DisconnectReason::WorldTransferNotPrimaryClient
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::RequestServerShutdown => {
+            DisconnectReason::RequestServerShutdown
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::ClientGameSetupCancelled => {
+            DisconnectReason::ClientGameSetupCancelled
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::ClientGameSetupFailed => {
+            DisconnectReason::ClientGameSetupFailed
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::NoVenue => DisconnectReason::NoVenue,
+        pumpkin::plugin::player::BedrockDisconnectReason::NetherNetSignalingSigninFailed => {
+            DisconnectReason::NetherNetSignalingSigninFailed
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::SessionAccessDenied => {
+            DisconnectReason::SessionAccessDenied
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::ServiceSigninIssue => {
+            DisconnectReason::ServiceSigninIssue
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::NetherNetNoSignalingChannel => {
+            DisconnectReason::NetherNetNoSignalingChannel
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::NetherNetNotLoggedIn => {
+            DisconnectReason::NetherNetNotLoggedIn
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::NetherNetClientSignalingError => {
+            DisconnectReason::NetherNetClientSignalingError
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::SubClientLoginDisabled => {
+            DisconnectReason::SubClientLoginDisabled
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::DeepLinkTryingToOpenDemoWorldWhileSignedIn => {
+            DisconnectReason::DeepLinkTryingToOpenDemoWorldWhileSignedIn
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::AsyncJoinTaskDenied => {
+            DisconnectReason::AsyncJoinTaskDenied
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::RealmsTimelineRequired => {
+            DisconnectReason::RealmsTimelineRequired
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::GuestWithoutHost => {
+            DisconnectReason::GuestWithoutHost
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::FailedToJoinExperience => {
+            DisconnectReason::FailedToJoinExperience
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::NetherNetDataChannelClosed => {
+            DisconnectReason::NetherNetDataChannelClosed
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::DiscoveryEnvironmentMismatch => {
+            DisconnectReason::DiscoveryEnvironmentMismatch
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::HostWithoutKeys => {
+            DisconnectReason::HostWithoutKeys
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::HostSignedOut => {
+            DisconnectReason::HostSignedOut
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::ScriptWatchdogException => {
+            DisconnectReason::ScriptWatchdogException
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::ScriptMemoryLimitExceeded => {
+            DisconnectReason::ScriptMemoryLimitExceeded
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::StorageLowDuringGameplay => {
+            DisconnectReason::StorageLowDuringGameplay
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::StorageFullDuringGameplay => {
+            DisconnectReason::StorageFullDuringGameplay
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::LevelStorageCorruption => {
+            DisconnectReason::LevelStorageCorruption
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::EditionMismatchVanillaToEdu => {
+            DisconnectReason::EditionMismatchVanillaToEdu
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::EditionMismatchEduToVanilla => {
+            DisconnectReason::EditionMismatchEduToVanilla
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::EditorMismatchEditorToVanilla => {
+            DisconnectReason::EditorMismatchEditorToVanilla
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::EditorMismatchVanillaToEditor => {
+            DisconnectReason::EditorMismatchVanillaToEditor
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::DenyListed => {
+            DisconnectReason::DenyListed
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::NonceMissing => {
+            DisconnectReason::NonceMissing
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::NonceNotFound => {
+            DisconnectReason::NonceNotFound
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::NonceExpired => {
+            DisconnectReason::NonceExpired
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::NonceNotValid => {
+            DisconnectReason::NonceNotValid
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::HostDisconnected => {
+            DisconnectReason::HostDisconnected
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::EditorJoinIntentPolicyFailure => {
+            DisconnectReason::EditorJoinIntentPolicyFailure
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::NetherNetIdentityNotAllowed => {
+            DisconnectReason::NetherNetIdentityNotAllowed
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::InvalidName => {
+            DisconnectReason::InvalidName
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::ExpiredToken => {
+            DisconnectReason::ExpiredToken
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::HostAcceptsNoTypeOfAuth => {
+            DisconnectReason::HostAcceptsNoTypeOfAuth
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::NotAuthenticatedFastFail => {
+            DisconnectReason::NotAuthenticatedFastFail
+        }
+        pumpkin::plugin::player::BedrockDisconnectReason::EditorNotAllowed => {
+            DisconnectReason::EditorNotAllowed
+        }
     }
 }
 
@@ -1423,17 +1886,6 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         Ok(())
     }
 
-    async fn kick(
-        &mut self,
-        player: Resource<Player>,
-        message: wasmtime::component::Resource<pumpkin::plugin::text::TextComponent>,
-    ) -> wasmtime::Result<()> {
-        let component = text_component_from_resource(self, &message);
-        let player = player_from_resource(self, &player)?;
-        player.kick(DisconnectReason::Kicked, component).await;
-        Ok(())
-    }
-
     async fn respawn(&mut self, player: Resource<Player>) -> wasmtime::Result<()> {
         let player = player_from_resource(self, &player)?;
         player.respawn().await;
@@ -1471,24 +1923,50 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
     async fn ban(
         &mut self,
         player: Resource<Player>,
-        reason: Option<Resource<pumpkin::plugin::text::TextComponent>>,
+        options: pumpkin::plugin::player::BanPlayerOptions,
     ) -> wasmtime::Result<()> {
+        let reason = options
+            .reason
+            .as_ref()
+            .map(|r| text_component_from_resource(self, r));
+        let expires = parse_ban_expiry(options.expires_at_utc, options.duration_seconds);
         let player = player_from_resource(self, &player)?;
         let server = self.server.as_ref().expect("server not available");
-        let reason = reason.map(|r| text_component_from_resource(self, &r));
-        player.ban(server, reason).await;
+        player
+            .ban_explicit(
+                server,
+                reason,
+                options.source,
+                expires,
+                options.kick_if_online,
+                options.log_to_console,
+            )
+            .await;
         Ok(())
     }
 
     async fn ban_ip(
         &mut self,
         player: Resource<Player>,
-        reason: Option<Resource<pumpkin::plugin::text::TextComponent>>,
+        options: pumpkin::plugin::player::BanIpOptions,
     ) -> wasmtime::Result<()> {
+        let reason = options
+            .reason
+            .as_ref()
+            .map(|r| text_component_from_resource(self, r));
+        let expires = parse_ban_expiry(options.expires_at_utc, options.duration_seconds);
         let player = player_from_resource(self, &player)?;
         let server = self.server.as_ref().expect("server not available");
-        let reason = reason.map(|r| text_component_from_resource(self, &r));
-        player.ban_ip(server, reason).await;
+        player
+            .ban_ip_explicit(
+                server,
+                reason,
+                options.source,
+                expires,
+                options.kick_matching_players,
+                options.log_to_console,
+            )
+            .await;
         Ok(())
     }
 
@@ -2272,6 +2750,137 @@ impl pumpkin::plugin::player::HostJavaPlayer for PluginHostState {
         Ok(())
     }
 
+    async fn send_resource_pack(
+        &mut self,
+        player_res: Resource<pumpkin::plugin::player::JavaPlayer>,
+        pack: pumpkin::plugin::player::JavaResourcePack,
+    ) -> wasmtime::Result<()> {
+        let player = self
+            .resource_table
+            .get::<crate::plugin::loader::wasm::wasm_host::state::JavaPlayerResource>(
+                &Resource::new_own(player_res.rep()),
+            )
+            .map_err(|_| wasmtime::Error::msg("invalid java-player resource handle"))?
+            .provider
+            .clone();
+
+        let uuid = Uuid::from_wit(&pack.id);
+        let prompt_message = pack
+            .prompt_message
+            .as_ref()
+            .map(|p| text_component_from_resource(self, p));
+
+        if let crate::net::ClientPlatform::Java(client) = player.client.as_ref() {
+            client
+                .send_packet_now(
+                    &pumpkin_protocol::java::client::play::CAddResourcePack::new(
+                        &uuid,
+                        &pack.url,
+                        &pack.hash,
+                        pack.forced,
+                        prompt_message,
+                    ),
+                )
+                .await;
+        }
+        Ok(())
+    }
+
+    async fn remove_resource_pack(
+        &mut self,
+        player_res: Resource<pumpkin::plugin::player::JavaPlayer>,
+        id: pumpkin::plugin::uuid::Uuid,
+    ) -> wasmtime::Result<()> {
+        let player = self
+            .resource_table
+            .get::<crate::plugin::loader::wasm::wasm_host::state::JavaPlayerResource>(
+                &Resource::new_own(player_res.rep()),
+            )
+            .map_err(|_| wasmtime::Error::msg("invalid java-player resource handle"))?
+            .provider
+            .clone();
+
+        let uuid = Uuid::from_wit(&id);
+
+        if let crate::net::ClientPlatform::Java(client) = player.client.as_ref() {
+            client
+                .send_packet_now(
+                    &pumpkin_protocol::java::client::play::CRemoveResourcePack::new(Some(&uuid)),
+                )
+                .await;
+        }
+        Ok(())
+    }
+
+    async fn clear_resource_packs(
+        &mut self,
+        player_res: Resource<pumpkin::plugin::player::JavaPlayer>,
+    ) -> wasmtime::Result<()> {
+        let player = self
+            .resource_table
+            .get::<crate::plugin::loader::wasm::wasm_host::state::JavaPlayerResource>(
+                &Resource::new_own(player_res.rep()),
+            )
+            .map_err(|_| wasmtime::Error::msg("invalid java-player resource handle"))?
+            .provider
+            .clone();
+
+        if let crate::net::ClientPlatform::Java(client) = player.client.as_ref() {
+            client
+                .send_packet_now(
+                    &pumpkin_protocol::java::client::play::CRemoveResourcePack::new(None),
+                )
+                .await;
+        }
+        Ok(())
+    }
+
+    async fn kick(
+        &mut self,
+        player: Resource<pumpkin::plugin::player::JavaPlayer>,
+        options: pumpkin::plugin::player::JavaKickOptions,
+    ) -> wasmtime::Result<()> {
+        let player = self
+            .resource_table
+            .get::<crate::plugin::loader::wasm::wasm_host::state::JavaPlayerResource>(
+                &Resource::new_own(player.rep()),
+            )
+            .map_err(|_| wasmtime::Error::msg("invalid java-player resource handle"))?
+            .provider
+            .clone();
+
+        let reason = text_component_from_resource(self, &options.reason);
+        if options.log_to_console {
+            tracing::info!(
+                "Kicking Java player {} ({}): {}",
+                player.gameprofile.name,
+                player.gameprofile.id,
+                reason.clone().to_pretty_console()
+            );
+        }
+
+        if let Some(server) = player.world().server.upgrade()
+            && let Some(player_arc) = player.world().get_player_by_uuid(player.gameprofile.id)
+        {
+            let mut event = crate::plugin::api::events::player::player_kick::PlayerKickEvent::new(
+                player_arc,
+                reason.clone().to_pretty_console(),
+            );
+            server.plugin_manager.fire(&server, &mut event).await;
+            if event.cancelled {
+                return Ok(());
+            }
+        }
+
+        let send_packet = options.teardown_policy
+            != pumpkin::plugin::player::SocketTeardownPolicy::DropConnection;
+        if let crate::net::ClientPlatform::Java(java) = player.client.as_ref() {
+            java.kick_explicit(&reason, send_packet).await;
+        }
+
+        Ok(())
+    }
+
     async fn drop(
         &mut self,
         rep: Resource<pumpkin::plugin::player::JavaPlayer>,
@@ -2645,6 +3254,115 @@ impl pumpkin::plugin::player::HostBedrockPlayer for PluginHostState {
             .provider
             .clone();
         player.reset_scoreboard().await;
+        Ok(())
+    }
+
+    async fn send_resource_packs_info(
+        &mut self,
+        player_res: Resource<pumpkin::plugin::player::BedrockPlayer>,
+        info: pumpkin::plugin::player::BedrockResourcePacksInfo,
+    ) -> wasmtime::Result<()> {
+        let player = self
+            .resource_table
+            .get::<crate::plugin::loader::wasm::wasm_host::state::BedrockPlayerResource>(
+                &Resource::new_own(player_res.rep()),
+            )
+            .map_err(|_| wasmtime::Error::msg("invalid bedrock-player resource handle"))?
+            .provider
+            .clone();
+
+        if let crate::net::ClientPlatform::Bedrock(client) = player.client.as_ref() {
+            let entries = info
+                .packs
+                .into_iter()
+                .map(|p| {
+                    pumpkin_protocol::bedrock::client::resource_packs_info::ResourcePackEntry {
+                        uuid: Uuid::from_wit(&p.id),
+                        version: p.version,
+                        size: p.size,
+                        download_url: p.download_url,
+                        content_key: p.content_key.unwrap_or_default(),
+                        sub_pack_name: p.sub_pack_name.unwrap_or_default(),
+                        content_id: p.content_id.unwrap_or_default(),
+                        has_scripts: p.has_scripts,
+                        addon_pack: p.addon_pack,
+                        rtx_enabled: p.rtx_enabled,
+                    }
+                })
+                .collect();
+
+            let world_template_id = info
+                .world_template_id
+                .map_or_else(uuid::Uuid::nil, |id| Uuid::from_wit(&id));
+
+            let packs_info =
+                pumpkin_protocol::bedrock::client::resource_packs_info::CResourcePacksInfo {
+                    resource_pack_required: info.required,
+                    has_addon_packs: info.has_addon_packs,
+                    has_scripts: info.has_scripts,
+                    is_vibrant_visuals_force_disabled: info.is_vibrant_visuals_force_disabled,
+                    world_template_id,
+                    world_template_version: info.world_template_version.unwrap_or_default(),
+                    resource_packs: entries,
+                };
+
+            client.send_game_packet(&packs_info).await;
+        }
+        Ok(())
+    }
+
+    async fn kick(
+        &mut self,
+        player: Resource<pumpkin::plugin::player::BedrockPlayer>,
+        options: pumpkin::plugin::player::BedrockKickOptions,
+    ) -> wasmtime::Result<()> {
+        let player = self
+            .resource_table
+            .get::<crate::plugin::loader::wasm::wasm_host::state::BedrockPlayerResource>(
+                &Resource::new_own(player.rep()),
+            )
+            .map_err(|_| wasmtime::Error::msg("invalid bedrock-player resource handle"))?
+            .provider
+            .clone();
+
+        let disconnect_reason = from_wasm_bedrock_disconnect_reason(options.reason);
+        if options.log_to_console {
+            tracing::info!(
+                "Kicking Bedrock player {} ({}) [Reason: {:?}]: {}",
+                player.gameprofile.name,
+                player.gameprofile.id,
+                disconnect_reason,
+                options.message
+            );
+        }
+
+        if let Some(server) = player.world().server.upgrade()
+            && let Some(player_arc) = player.world().get_player_by_uuid(player.gameprofile.id)
+        {
+            let mut event = crate::plugin::api::events::player::player_kick::PlayerKickEvent::new(
+                player_arc,
+                options.message.clone(),
+            );
+            server.plugin_manager.fire(&server, &mut event).await;
+            if event.cancelled {
+                return Ok(());
+            }
+        }
+
+        let send_packet = options.teardown_policy
+            != pumpkin::plugin::player::SocketTeardownPolicy::DropConnection;
+        if let crate::net::ClientPlatform::Bedrock(bedrock) = player.client.as_ref() {
+            bedrock
+                .kick_explicit(
+                    disconnect_reason,
+                    options.message,
+                    options.skip_message,
+                    options.filtered_message,
+                    send_packet,
+                )
+                .await;
+        }
+
         Ok(())
     }
 

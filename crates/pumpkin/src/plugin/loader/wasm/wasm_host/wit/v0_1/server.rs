@@ -5,15 +5,23 @@ use crate::command::CommandSender;
 use crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::recipe::RecipeManager as WitRecipeManager;
 use pumpkin::plugin::server::CommandSender as WasmCommandSender;
 
-use super::player::text_component_from_resource;
+use super::player::{
+    from_wit_permission_level, parse_ban_expiry, text_component_from_resource,
+    to_wit_permission_level,
+};
+use crate::data::SaveJSONConfiguration;
 use crate::plugin::{
     loader::wasm::wasm_host::{
         state::{PluginHostState, ServerResource},
         wit::v0_1::pumpkin::{
             self,
             plugin::{
-                player::Player,
-                server::{Difficulty, Dimension, Server, SysInfo},
+                player::{BanIpOptions, BanPlayerOptions, Player},
+                server::{
+                    BanManager as WitBanManager, BannedIpEntry, BannedPlayerEntry, Difficulty,
+                    Dimension, OpEntry, OpManager as WitOpManager, Server, SysInfo,
+                    WhitelistEntry as WitWhitelistEntry, WhitelistManager as WitWhitelistManager,
+                },
                 uuid::Uuid as WitUuid,
             },
         },
@@ -397,10 +405,674 @@ impl pumpkin::plugin::server::HostServer for PluginHostState {
         self.add_recipe_manager(server.recipe_manager.clone())
     }
 
+    async fn get_op_manager(
+        &mut self,
+        _rep: Resource<Server>,
+    ) -> wasmtime::Result<Resource<WitOpManager>> {
+        let server = self
+            .server
+            .as_ref()
+            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+        self.add_op_manager(server.clone())
+    }
+
+    async fn get_ban_manager(
+        &mut self,
+        _rep: Resource<Server>,
+    ) -> wasmtime::Result<Resource<WitBanManager>> {
+        let server = self
+            .server
+            .as_ref()
+            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+        self.add_ban_manager(server.clone())
+    }
+
+    async fn get_whitelist_manager(
+        &mut self,
+        _rep: Resource<Server>,
+    ) -> wasmtime::Result<Resource<WitWhitelistManager>> {
+        let server = self
+            .server
+            .as_ref()
+            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+        self.add_whitelist_manager(server.clone())
+    }
+
     async fn drop(&mut self, rep: Resource<Server>) -> wasmtime::Result<()> {
         self.resource_table
             .delete::<ServerResource>(Resource::new_own(rep.rep()))
             .map_err(wasmtime::Error::from)?;
+        Ok(())
+    }
+}
+
+impl pumpkin::plugin::server::HostOpManager for PluginHostState {
+    async fn is_op(&mut self, _res: Resource<WitOpManager>, id: WitUuid) -> wasmtime::Result<bool> {
+        let server = self
+            .server
+            .as_ref()
+            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+        let uuid = WitUuid::from_wit(&id);
+        let ops = server.data.operator_config.read().await;
+        Ok(ops.get_entry(&uuid).is_some())
+    }
+
+    async fn get_op(
+        &mut self,
+        _res: Resource<WitOpManager>,
+        id: WitUuid,
+    ) -> wasmtime::Result<Option<OpEntry>> {
+        let server = self
+            .server
+            .as_ref()
+            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+        let uuid = WitUuid::from_wit(&id);
+        let ops = server.data.operator_config.read().await;
+        Ok(ops.get_entry(&uuid).map(|entry| OpEntry {
+            uuid: WitUuid::to_wit(&entry.uuid),
+            name: entry.name.clone(),
+            level: to_wit_permission_level(entry.level),
+            bypasses_player_limit: entry.bypasses_player_limit,
+        }))
+    }
+
+    async fn get_permission_level(
+        &mut self,
+        _res: Resource<WitOpManager>,
+        id: WitUuid,
+    ) -> wasmtime::Result<pumpkin::plugin::permission::PermissionLevel> {
+        let server = self
+            .server
+            .as_ref()
+            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+        let uuid = WitUuid::from_wit(&id);
+        let ops = server.data.operator_config.read().await;
+        Ok(ops.get_entry(&uuid).map_or(
+            pumpkin::plugin::permission::PermissionLevel::Zero,
+            |entry| to_wit_permission_level(entry.level),
+        ))
+    }
+
+    async fn op_player(
+        &mut self,
+        _res: Resource<WitOpManager>,
+        name: String,
+        id: WitUuid,
+        level: pumpkin::plugin::permission::PermissionLevel,
+        bypasses_player_limit: bool,
+    ) -> wasmtime::Result<()> {
+        let server = self
+            .server
+            .as_ref()
+            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+        let uuid = WitUuid::from_wit(&id);
+        let internal_level = from_wit_permission_level(level);
+
+        let mut config = server.data.operator_config.write().await;
+        if let Some(existing) = config.ops.iter_mut().find(|o| o.uuid == uuid) {
+            existing.level = internal_level;
+            existing.name.clone_from(&name);
+            existing.bypasses_player_limit = bypasses_player_limit;
+        } else {
+            let op_entry = pumpkin_config::op::Op::new(
+                uuid,
+                name.clone(),
+                internal_level,
+                bypasses_player_limit,
+            );
+            config.ops.push(op_entry);
+        }
+        config.save();
+        drop(config);
+
+        if let Some(player) = server.get_player_by_uuid(uuid) {
+            let command_dispatcher = server.command_dispatcher.read().await;
+            player
+                .set_permission_lvl(server, internal_level, &command_dispatcher)
+                .await;
+        }
+
+        Ok(())
+    }
+
+    async fn deop_player(
+        &mut self,
+        _res: Resource<WitOpManager>,
+        id: WitUuid,
+    ) -> wasmtime::Result<bool> {
+        let server = self
+            .server
+            .as_ref()
+            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+        let uuid = WitUuid::from_wit(&id);
+
+        let mut config = server.data.operator_config.write().await;
+        if let Some(op_index) = config.ops.iter().position(|o| o.uuid == uuid) {
+            config.ops.remove(op_index);
+            config.save();
+            drop(config);
+
+            if let Some(player) = server.get_player_by_uuid(uuid) {
+                let command_dispatcher = server.command_dispatcher.read().await;
+                player
+                    .set_permission_lvl(
+                        server,
+                        pumpkin_util::PermissionLvl::Zero,
+                        &command_dispatcher,
+                    )
+                    .await;
+            }
+
+            Ok(true)
+        } else {
+            Ok(false)
+        }
+    }
+
+    async fn list_ops(&mut self, _res: Resource<WitOpManager>) -> wasmtime::Result<Vec<OpEntry>> {
+        let server = self
+            .server
+            .as_ref()
+            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+        let config = server.data.operator_config.read().await;
+        Ok(config
+            .ops
+            .iter()
+            .map(|entry| OpEntry {
+                uuid: WitUuid::to_wit(&entry.uuid),
+                name: entry.name.clone(),
+                level: to_wit_permission_level(entry.level),
+                bypasses_player_limit: entry.bypasses_player_limit,
+            })
+            .collect())
+    }
+
+    async fn drop(&mut self, rep: Resource<WitOpManager>) -> wasmtime::Result<()> {
+        let _ = self
+            .resource_table
+            .delete::<crate::plugin::loader::wasm::wasm_host::state::OpManagerResource>(
+                Resource::new_own(rep.rep()),
+            );
+        Ok(())
+    }
+}
+
+impl pumpkin::plugin::server::HostBanManager for PluginHostState {
+    async fn is_player_banned(
+        &mut self,
+        _res: Resource<WitBanManager>,
+        id: WitUuid,
+    ) -> wasmtime::Result<bool> {
+        let server = self
+            .server
+            .as_ref()
+            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+        let uuid = WitUuid::from_wit(&id);
+        let now = time::OffsetDateTime::now_utc();
+        let mut list = server.data.banned_player_list.write().await;
+        list.banned_players
+            .retain(|entry| entry.expires.is_none_or(|expires| expires > now));
+        list.save();
+        Ok(list.banned_players.iter().any(|e| e.uuid == uuid))
+    }
+
+    async fn get_player_ban(
+        &mut self,
+        _res: Resource<WitBanManager>,
+        id: WitUuid,
+    ) -> wasmtime::Result<Option<BannedPlayerEntry>> {
+        let server = self
+            .server
+            .as_ref()
+            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+        let uuid = WitUuid::from_wit(&id);
+        let now = time::OffsetDateTime::now_utc();
+        let mut list = server.data.banned_player_list.write().await;
+        list.banned_players
+            .retain(|entry| entry.expires.is_none_or(|expires| expires > now));
+        list.save();
+        Ok(list
+            .banned_players
+            .iter()
+            .find(|e| e.uuid == uuid)
+            .map(|e| BannedPlayerEntry {
+                uuid: WitUuid::to_wit(&e.uuid),
+                name: e.name.clone(),
+                created: e
+                    .created
+                    .format(&time::format_description::well_known::Rfc3339)
+                    .unwrap_or_default(),
+                source: e.source.clone(),
+                expires: e.expires.and_then(|exp| {
+                    exp.format(&time::format_description::well_known::Rfc3339)
+                        .ok()
+                }),
+                reason: e.reason.clone(),
+            }))
+    }
+
+    async fn ban_player(
+        &mut self,
+        _res: Resource<WitBanManager>,
+        name: String,
+        id: WitUuid,
+        options: BanPlayerOptions,
+    ) -> wasmtime::Result<()> {
+        let server = self
+            .server
+            .as_ref()
+            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+        let uuid = WitUuid::from_wit(&id);
+        let reason_text = options
+            .reason
+            .as_ref()
+            .map(|res| text_component_from_resource(self, res))
+            .map_or_else(
+                || "Banned by plugin.".to_string(),
+                pumpkin_util::text::TextComponent::to_pretty_console,
+            );
+        let source_name = options.source.unwrap_or_else(|| "Plugin".to_string());
+        let expires = parse_ban_expiry(options.expires_at_utc, options.duration_seconds);
+
+        let mut list = server.data.banned_player_list.write().await;
+        if let Some(existing) = list.banned_players.iter_mut().find(|e| e.uuid == uuid) {
+            existing.name.clone_from(&name);
+            existing.source = source_name;
+            existing.expires = expires;
+            existing.reason.clone_from(&reason_text);
+        } else {
+            let entry = crate::data::banlist_serializer::BannedPlayerEntry {
+                uuid,
+                name: name.clone(),
+                created: time::OffsetDateTime::now_utc(),
+                source: source_name,
+                expires,
+                reason: reason_text.clone(),
+            };
+            list.banned_players.push(entry);
+        }
+        list.save();
+        drop(list);
+
+        if options.kick_if_online
+            && let Some(player) = server.get_player_by_uuid(uuid)
+        {
+            player
+                .kick(
+                    crate::net::DisconnectReason::Kicked,
+                    pumpkin_util::text::TextComponent::text(reason_text.clone()),
+                )
+                .await;
+        }
+
+        if options.log_to_console {
+            tracing::info!("Banned player {} ({}): {}", name, uuid, reason_text);
+        }
+        Ok(())
+    }
+
+    async fn unban_player(
+        &mut self,
+        _res: Resource<WitBanManager>,
+        id: WitUuid,
+    ) -> wasmtime::Result<bool> {
+        let server = self
+            .server
+            .as_ref()
+            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+        let uuid = WitUuid::from_wit(&id);
+        let mut list = server.data.banned_player_list.write().await;
+        Ok(list
+            .banned_players
+            .iter()
+            .position(|e| e.uuid == uuid)
+            .is_some_and(|pos| {
+                list.banned_players.remove(pos);
+                list.save();
+                true
+            }))
+    }
+
+    async fn list_player_bans(
+        &mut self,
+        _res: Resource<WitBanManager>,
+    ) -> wasmtime::Result<Vec<BannedPlayerEntry>> {
+        let server = self
+            .server
+            .as_ref()
+            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+        let now = time::OffsetDateTime::now_utc();
+        let mut list = server.data.banned_player_list.write().await;
+        list.banned_players
+            .retain(|entry| entry.expires.is_none_or(|expires| expires > now));
+        list.save();
+        Ok(list
+            .banned_players
+            .iter()
+            .map(|e| BannedPlayerEntry {
+                uuid: WitUuid::to_wit(&e.uuid),
+                name: e.name.clone(),
+                created: e
+                    .created
+                    .format(&time::format_description::well_known::Rfc3339)
+                    .unwrap_or_default(),
+                source: e.source.clone(),
+                expires: e.expires.and_then(|exp| {
+                    exp.format(&time::format_description::well_known::Rfc3339)
+                        .ok()
+                }),
+                reason: e.reason.clone(),
+            })
+            .collect())
+    }
+
+    async fn is_ip_banned(
+        &mut self,
+        _res: Resource<WitBanManager>,
+        ip: String,
+    ) -> wasmtime::Result<bool> {
+        let server = self
+            .server
+            .as_ref()
+            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+        let ip_addr: std::net::IpAddr = ip
+            .parse()
+            .map_err(|_| wasmtime::Error::msg("Invalid IP address"))?;
+        let now = time::OffsetDateTime::now_utc();
+        let mut list = server.data.banned_ip_list.write().await;
+        list.banned_ips
+            .retain(|entry| entry.expires.is_none_or(|expires| expires > now));
+        list.save();
+        Ok(list.banned_ips.iter().any(|e| e.ip == ip_addr))
+    }
+
+    async fn get_ip_ban(
+        &mut self,
+        _res: Resource<WitBanManager>,
+        ip: String,
+    ) -> wasmtime::Result<Option<BannedIpEntry>> {
+        let server = self
+            .server
+            .as_ref()
+            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+        let ip_addr: std::net::IpAddr = ip
+            .parse()
+            .map_err(|_| wasmtime::Error::msg("Invalid IP address"))?;
+        let now = time::OffsetDateTime::now_utc();
+        let mut list = server.data.banned_ip_list.write().await;
+        list.banned_ips
+            .retain(|entry| entry.expires.is_none_or(|expires| expires > now));
+        list.save();
+        Ok(list
+            .banned_ips
+            .iter()
+            .find(|e| e.ip == ip_addr)
+            .map(|e| BannedIpEntry {
+                ip: e.ip.to_string(),
+                created: e
+                    .created
+                    .format(&time::format_description::well_known::Rfc3339)
+                    .unwrap_or_default(),
+                source: e.source.clone(),
+                expires: e.expires.and_then(|exp| {
+                    exp.format(&time::format_description::well_known::Rfc3339)
+                        .ok()
+                }),
+                reason: e.reason.clone(),
+            }))
+    }
+
+    async fn ban_ip(
+        &mut self,
+        _res: Resource<WitBanManager>,
+        ip: String,
+        options: BanIpOptions,
+    ) -> wasmtime::Result<()> {
+        let server = self
+            .server
+            .as_ref()
+            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+        let ip_addr: std::net::IpAddr = ip
+            .parse()
+            .map_err(|_| wasmtime::Error::msg("Invalid IP address"))?;
+        let reason_text = options
+            .reason
+            .as_ref()
+            .map(|res| text_component_from_resource(self, res))
+            .map_or_else(
+                || "Banned by plugin.".to_string(),
+                pumpkin_util::text::TextComponent::to_pretty_console,
+            );
+        let source_name = options.source.unwrap_or_else(|| "Plugin".to_string());
+        let expires = parse_ban_expiry(options.expires_at_utc, options.duration_seconds);
+
+        let mut list = server.data.banned_ip_list.write().await;
+        if let Some(existing) = list.banned_ips.iter_mut().find(|e| e.ip == ip_addr) {
+            existing.source = source_name;
+            existing.expires = expires;
+            existing.reason.clone_from(&reason_text);
+        } else {
+            let entry = crate::data::banlist_serializer::BannedIpEntry {
+                ip: ip_addr,
+                created: time::OffsetDateTime::now_utc(),
+                source: source_name,
+                expires,
+                reason: reason_text.clone(),
+            };
+            list.banned_ips.push(entry);
+        }
+        list.save();
+        drop(list);
+
+        if options.kick_matching_players {
+            for player in server.get_all_players() {
+                if player.client.address().ip() == ip_addr {
+                    player
+                        .kick(
+                            crate::net::DisconnectReason::Kicked,
+                            pumpkin_util::text::TextComponent::text(reason_text.clone()),
+                        )
+                        .await;
+                }
+            }
+        }
+
+        if options.log_to_console {
+            tracing::info!("Banned IP {}: {}", ip_addr, reason_text);
+        }
+        Ok(())
+    }
+
+    async fn unban_ip(
+        &mut self,
+        _res: Resource<WitBanManager>,
+        ip: String,
+    ) -> wasmtime::Result<bool> {
+        let server = self
+            .server
+            .as_ref()
+            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+        let ip_addr: std::net::IpAddr = ip
+            .parse()
+            .map_err(|_| wasmtime::Error::msg("Invalid IP address"))?;
+        let mut list = server.data.banned_ip_list.write().await;
+        Ok(list
+            .banned_ips
+            .iter()
+            .position(|e| e.ip == ip_addr)
+            .is_some_and(|pos| {
+                list.banned_ips.remove(pos);
+                list.save();
+                true
+            }))
+    }
+
+    async fn list_ip_bans(
+        &mut self,
+        _res: Resource<WitBanManager>,
+    ) -> wasmtime::Result<Vec<BannedIpEntry>> {
+        let server = self
+            .server
+            .as_ref()
+            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+        let now = time::OffsetDateTime::now_utc();
+        let mut list = server.data.banned_ip_list.write().await;
+        list.banned_ips
+            .retain(|entry| entry.expires.is_none_or(|expires| expires > now));
+        list.save();
+        Ok(list
+            .banned_ips
+            .iter()
+            .map(|e| BannedIpEntry {
+                ip: e.ip.to_string(),
+                created: e
+                    .created
+                    .format(&time::format_description::well_known::Rfc3339)
+                    .unwrap_or_default(),
+                source: e.source.clone(),
+                expires: e.expires.and_then(|exp| {
+                    exp.format(&time::format_description::well_known::Rfc3339)
+                        .ok()
+                }),
+                reason: e.reason.clone(),
+            })
+            .collect())
+    }
+
+    async fn drop(&mut self, rep: Resource<WitBanManager>) -> wasmtime::Result<()> {
+        let _ = self
+            .resource_table
+            .delete::<crate::plugin::loader::wasm::wasm_host::state::BanManagerResource>(
+            Resource::new_own(rep.rep()),
+        );
+        Ok(())
+    }
+}
+
+impl pumpkin::plugin::server::HostWhitelistManager for PluginHostState {
+    async fn is_enabled(&mut self, _res: Resource<WitWhitelistManager>) -> wasmtime::Result<bool> {
+        let server = self
+            .server
+            .as_ref()
+            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+        Ok(server.white_list.load(std::sync::atomic::Ordering::Relaxed))
+    }
+
+    async fn set_enabled(
+        &mut self,
+        _res: Resource<WitWhitelistManager>,
+        enabled: bool,
+    ) -> wasmtime::Result<()> {
+        let server = self
+            .server
+            .as_ref()
+            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+        server
+            .white_list
+            .store(enabled, std::sync::atomic::Ordering::Relaxed);
+        if enabled && server.basic_config.enforce_whitelist {
+            let whitelist = server.data.whitelist_config.read().await;
+            for player in server.get_all_players() {
+                if !whitelist.is_whitelisted(&player.gameprofile) {
+                    player
+                        .kick(
+                            crate::net::DisconnectReason::Kicked,
+                            pumpkin_macros::translate_cross!(
+                                pumpkin_data::translation::java::MULTIPLAYER_DISCONNECT_NOT_WHITELISTED,
+                                pumpkin_data::translation::bedrock::DISCONNECT_KICKED
+                            ),
+                        )
+                        .await;
+                }
+            }
+        }
+        Ok(())
+    }
+
+    async fn is_whitelisted(
+        &mut self,
+        _res: Resource<WitWhitelistManager>,
+        id: WitUuid,
+    ) -> wasmtime::Result<bool> {
+        let server = self
+            .server
+            .as_ref()
+            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+        let uuid = WitUuid::from_wit(&id);
+        let whitelist = server.data.whitelist_config.read().await;
+        Ok(whitelist.whitelist.iter().any(|e| e.uuid == uuid))
+    }
+
+    async fn add_player(
+        &mut self,
+        _res: Resource<WitWhitelistManager>,
+        name: String,
+        id: WitUuid,
+    ) -> wasmtime::Result<bool> {
+        let server = self
+            .server
+            .as_ref()
+            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+        let uuid = WitUuid::from_wit(&id);
+        let mut config = server.data.whitelist_config.write().await;
+        if config.whitelist.iter().any(|e| e.uuid == uuid) {
+            Ok(false)
+        } else {
+            config
+                .whitelist
+                .push(pumpkin_config::whitelist::WhitelistEntry::new(uuid, name));
+            config.save();
+            Ok(true)
+        }
+    }
+
+    async fn remove_player(
+        &mut self,
+        _res: Resource<WitWhitelistManager>,
+        id: WitUuid,
+    ) -> wasmtime::Result<bool> {
+        let server = self
+            .server
+            .as_ref()
+            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+        let uuid = WitUuid::from_wit(&id);
+        let mut config = server.data.whitelist_config.write().await;
+        Ok(config
+            .whitelist
+            .iter()
+            .position(|e| e.uuid == uuid)
+            .is_some_and(|pos| {
+                config.whitelist.remove(pos);
+                config.save();
+                true
+            }))
+    }
+
+    async fn list_entries(
+        &mut self,
+        _res: Resource<WitWhitelistManager>,
+    ) -> wasmtime::Result<Vec<WitWhitelistEntry>> {
+        let server = self
+            .server
+            .as_ref()
+            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+        let config = server.data.whitelist_config.read().await;
+        Ok(config
+            .whitelist
+            .iter()
+            .map(|e| WitWhitelistEntry {
+                uuid: WitUuid::to_wit(&e.uuid),
+                name: e.name.clone(),
+            })
+            .collect())
+    }
+
+    async fn drop(&mut self, rep: Resource<WitWhitelistManager>) -> wasmtime::Result<()> {
+        let _ = self
+            .resource_table
+            .delete::<crate::plugin::loader::wasm::wasm_host::state::WhitelistManagerResource>(
+            Resource::new_own(rep.rep()),
+        );
         Ok(())
     }
 }

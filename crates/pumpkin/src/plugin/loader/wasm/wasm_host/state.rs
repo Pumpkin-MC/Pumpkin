@@ -65,6 +65,9 @@ pub type ConsumedArgsResource = WasmResource<OwnedConsumedArgs>;
 pub type CommandNodeResource = WasmResource<NonLeafNodeBuilder>;
 pub type ItemStackResource = WasmResource<Arc<Mutex<pumpkin_data::item_stack::ItemStack>>>;
 pub type RecipeManagerResource = WasmResource<Arc<RecipeManager>>;
+pub type OpManagerResource = WasmResource<Arc<Server>>;
+pub type BanManagerResource = WasmResource<Arc<Server>>;
+pub type WhitelistManagerResource = WasmResource<Arc<Server>>;
 pub type BlockEntityResource = WasmResource<Arc<dyn crate::block::entities::BlockEntity>>;
 
 #[derive(Clone)]
@@ -291,6 +294,32 @@ impl PluginHostState {
         let resource = self
             .resource_table
             .push(RecipeManagerResource { provider })?;
+        Ok(wasmtime::component::Resource::new_own(resource.rep()))
+    }
+
+    pub fn add_op_manager<T>(
+        &mut self,
+        provider: Arc<Server>,
+    ) -> wasmtime::Result<wasmtime::component::Resource<T>> {
+        let resource = self.resource_table.push(OpManagerResource { provider })?;
+        Ok(wasmtime::component::Resource::new_own(resource.rep()))
+    }
+
+    pub fn add_ban_manager<T>(
+        &mut self,
+        provider: Arc<Server>,
+    ) -> wasmtime::Result<wasmtime::component::Resource<T>> {
+        let resource = self.resource_table.push(BanManagerResource { provider })?;
+        Ok(wasmtime::component::Resource::new_own(resource.rep()))
+    }
+
+    pub fn add_whitelist_manager<T>(
+        &mut self,
+        provider: Arc<Server>,
+    ) -> wasmtime::Result<wasmtime::component::Resource<T>> {
+        let resource = self
+            .resource_table
+            .push(WhitelistManagerResource { provider })?;
         Ok(wasmtime::component::Resource::new_own(resource.rep()))
     }
 

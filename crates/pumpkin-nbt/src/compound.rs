@@ -279,6 +279,12 @@ impl NbtCompound {
         self.get(name).and_then(|tag| tag.extract_compound())
     }
 
+    /// Returns the named byte array, or `None` if the tag is absent or has another type.
+    #[must_use]
+    pub fn get_byte_array(&self, name: &str) -> Option<&[i8]> {
+        self.get(name).and_then(|tag| tag.extract_byte_array())
+    }
+
     /// Returns the named integer array, or `None` if the tag is absent or has another type.
     #[must_use]
     pub fn get_int_array(&self, name: &str) -> Option<&[i32]> {

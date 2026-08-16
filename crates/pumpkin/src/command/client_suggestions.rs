@@ -82,14 +82,13 @@ pub async fn send_c_commands_packet(
             .values()
             .copied()
             .map(|id| resolve_node_id(id, node_id_offset, root_node_index))
-            .map(|i| i.try_into().expect("i32 limit reached for ids"))
+            .map(|i| VarInt(i as i32))
             .collect();
 
         let redirect_target = node
             .redirect()
             .and_then(|redirection| dispatcher.tree.resolve(redirection))
-            .map(|id| resolve_node_id(id, node_id_offset, root_node_index))
-            .map(|i| i.try_into().expect("i32 limit reached for ids"));
+            .map(|id| resolve_node_id(id, node_id_offset, root_node_index) as i32);
 
         let satisfies_requirements = true;
 
@@ -117,7 +116,7 @@ pub async fn send_c_commands_packet(
                         !disabled
                     })
                     .map(|id| resolve_node_id(id, node_id_offset, root_node_index))
-                    .map(|i| i.try_into().expect("i32 limit reached for ids"))
+                    .map(|i| VarInt(i as i32))
                     .collect();
             }
             AttachedNode::Literal(literal_attached_node) => {
@@ -205,11 +204,7 @@ impl<'a> ProtoNodeBuilder<'a> {
         let children: Box<[VarInt]> = self
             .child_nodes
             .into_iter()
-            .map(|node| {
-                node.build(buffer)
-                    .try_into()
-                    .expect("Buffer index exceeded i32 bounds")
-            })
+            .map(|node| VarInt(node.build(buffer) as i32))
             .collect();
 
         let i = buffer.len();
@@ -589,15 +584,14 @@ fn collect_overloads_from_attached(
 }
 
 fn ensure_enum_value(enum_values: &mut Vec<String>, value: &str) -> u32 {
-    enum_values
+    let index = enum_values
         .iter()
         .position(|v| v == value)
         .unwrap_or_else(|| {
             enum_values.push(value.to_string());
             enum_values.len() - 1
-        })
-        .try_into()
-        .unwrap()
+        });
+    index as u32
 }
 
 fn ensure_command_enum(

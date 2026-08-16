@@ -2,6 +2,10 @@ mod award_stats;
 pub use award_stats::*;
 mod acknowledge_block;
 mod actionbar;
+mod add_resource_pack;
+pub use add_resource_pack::*;
+mod remove_resource_pack;
+pub use remove_resource_pack::*;
 mod block_destroy_stage;
 mod block_entity_data;
 mod block_event;
@@ -226,3 +230,57 @@ pub use waypoint::*;
 
 mod debug_sample;
 pub use debug_sample::*;
+
+mod bundle_delimiter;
+pub use bundle_delimiter::*;
+
+mod chunks_biomes;
+pub use chunks_biomes::*;
+
+mod combat_event;
+pub use combat_event::*;
+
+mod custom_chat_completions;
+pub use custom_chat_completions::*;
+
+mod custom_report_details;
+pub use custom_report_details::*;
+
+mod delete_chat;
+pub use delete_chat::*;
+
+mod game_rule_values;
+pub use game_rule_values::*;
+
+mod low_disk_space_warning;
+pub use low_disk_space_warning::*;
+
+mod move_minecart_along_track;
+pub use move_minecart_along_track::*;
+
+mod open_mount_screen;
+pub use open_mount_screen::*;
+
+mod ping;
+pub use ping::*;
+
+mod place_ghost_recipe;
+pub use place_ghost_recipe::*;
+
+mod player_look_at;
+pub use player_look_at::*;
+
+mod player_rotation;
+pub use player_rotation::*;
+
+mod projectile_power;
+pub use projectile_power::*;
+
+mod server_data;
+pub use server_data::*;
+
+mod start_configuration;
+pub use start_configuration::*;
+
+mod tag_query;
+pub use tag_query::*;
