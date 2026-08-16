@@ -3657,9 +3657,11 @@ name = "pumpkin-registry"
 version = "0.1.0-dev+26.2-26.40"
 dependencies = [
  "linkme",
+ "pumpkin-codecs",
  "pumpkin-util",
  "rayon",
  "rustc-hash",
+ "serde_json",
  "thiserror 2.0.20",
  "tokio",
 ]
