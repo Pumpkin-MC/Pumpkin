@@ -1,0 +1,36 @@
+[package]
+name = "pumpkin-codegen"
+version = "0.1.0-dev+26.1"
+edition = "2024"
+rust-version = "1.89"
+
+[dependencies]
+indexmap = { version = "2.14", features = ["serde"] }
+heck = "0.5"
+
+# For random pre calc
+md5 = "0.8"
+
+serde = { version = "1.0", features = ["derive"] }
+serde_repr = { version = "0.1" }
+serde_json = { version = "1.0", features = ["preserve_order"] }
+serde_json5 = "0.2"
+
+wit-encoder = "0.256.0"
+semver = "1.0"
+rayon = "1.12.0"
+
+proc-macro2 = "1.0"
+quote = "1.0"
+syn = { version = "3.0", features = ["full", "extra-traits"] }
+
+pumpkin-util = { path = "../../crates/pumpkin-util", features = ["codegen"] }
+pumpkin-nbt = { path = "../../crates/pumpkin-nbt" }
+
+[lints.clippy]
+expect_used = "allow"
+unwrap_used = "allow"
+panic = "allow"
+indexing_slicing = "allow"
+pedantic = { level = "allow", priority = -1 }
+all = { level = "allow", priority = -1 }
