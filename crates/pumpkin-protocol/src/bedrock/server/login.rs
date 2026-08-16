@@ -7,6 +7,7 @@ use crate::{MAX_PACKET_DATA_SIZE, codec::var_uint::VarUInt, serial::PacketRead};
 #[packet(1)]
 pub struct SLogin {
     // https://mojang.github.io/bedrock-protocol-docs/html/LoginPacket.html
+    //#[serial(big_endian)]
     pub protocol_version: i32,
 
     // https://mojang.github.io/bedrock-protocol-docs/html/connectionRequest.html

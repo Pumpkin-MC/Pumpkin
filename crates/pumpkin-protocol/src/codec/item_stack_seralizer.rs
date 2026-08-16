@@ -109,6 +109,9 @@ fn read_length_prefixed_component(
     let byte_len: usize = byte_len
         .try_into()
         .map_err(|_| ReadingError::Message("Negative component data length".into()))?;
+    if byte_len > crate::MAX_PACKET_DATA_SIZE {
+        return Err(ReadingError::TooLarge("Component data too large".into()));
+    }
 
     let component_impl = if byte_len <= 256 {
         let mut stack_buf = [0u8; 256];

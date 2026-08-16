@@ -1,10 +1,10 @@
 use pumpkin_data::packet::clientbound::PLAY_SET_CAMERA;
+use pumpkin_macros::java_packet;
+
+use crate::{ClientPacket, codec::var_int::VarInt, ser::NetworkWriteExt};
 use pumpkin_util::version::JavaMinecraftVersion;
 
-use crate::ClientPacket;
-use crate::ser::NetworkWriteExt;
-use crate::{VarInt, packet::MultiVersionJavaPacket};
-
+#[java_packet(PLAY_SET_CAMERA)]
 pub struct CSetCamera {
     pub camera_id: VarInt,
 }
@@ -24,11 +24,5 @@ impl ClientPacket for CSetCamera {
     ) -> Result<(), crate::ser::WritingError> {
         write.write_var_int(&self.camera_id)?;
         Ok(())
-    }
-}
-
-impl MultiVersionJavaPacket for CSetCamera {
-    fn to_id(version: JavaMinecraftVersion) -> i32 {
-        PLAY_SET_CAMERA.to_id(version)
     }
 }

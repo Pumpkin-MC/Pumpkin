@@ -47,7 +47,7 @@ pub struct MojangPublicKeys {
 }
 
 const MOJANG_AUTHENTICATION_URL: &str = "https://sessionserver.mojang.com/session/minecraft/hasJoined?username={username}&serverId={server_hash}";
-const MOJANG_PREVENT_PROXY_AUTHENTICATION_URL: &str = "https://sessionserver.mojang.com/session/minecraft/hasJoined?username={username}&serverId={server_hash}";
+const MOJANG_PREVENT_PROXY_AUTHENTICATION_URL: &str = "https://sessionserver.mojang.com/session/minecraft/hasJoined?username={username}&serverId={server_hash}&ip={ip}";
 const MOJANG_SERVICES_URL: &str = "https://api.minecraftservices.com/";
 const MOJANG_PROFILE_BY_NAME_URL: &str =
     "https://api.mojang.com/users/profiles/minecraft/{username}";

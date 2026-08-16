@@ -107,7 +107,11 @@ impl NBTStorage for PigEntity {
 
 impl super::animal::Animal for PigEntity {
     fn is_food(&self, item_stack: &ItemStack) -> bool {
-        PIG_FOOD.iter().any(|i| i.id == item_stack.item.id)
+        use pumpkin_data::tag::Taggable;
+        item_stack
+            .item
+            .has_tag(&pumpkin_data::tag::Item::MINECRAFT_PIG_FOOD)
+            || PIG_FOOD.iter().any(|i| i.id == item_stack.item.id)
     }
 }
 

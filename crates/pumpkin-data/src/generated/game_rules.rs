@@ -883,7 +883,7 @@ fn default_water_source_conversion() -> bool {
     GameRuleRegistry::default().water_source_conversion
 }
 mod as_string {
-    use serde::{Deserialize, Deserializer, Serializer};
+    use serde::{Deserialize, Deserializer, Serialize, Serializer};
     use std::{fmt::Display, str::FromStr};
     pub fn serialize<T: Display, S: Serializer>(
         value: &T,

@@ -1,7 +1,6 @@
 use pumpkin_data::{
     Block, BlockDirection, BlockStateId,
     block_properties::{BambooLeaves, BambooLikeProperties, BlockProperties},
-    item::Item,
     tag::Taggable,
 };
 use pumpkin_macros::pumpkin_block;
@@ -11,41 +10,28 @@ use rand::RngExt;
 
 use crate::block::{
     BlockBehaviour, BlockFuture, CanPlaceAtArgs, GetStateForNeighborUpdateArgs,
-    OnNeighborUpdateArgs, UseWithItemArgs, blocks::plant::PlantBlockBase,
-    registry::BlockActionResult,
+    OnNeighborUpdateArgs, blocks::plant::PlantBlockBase,
 };
 
 #[pumpkin_block("minecraft:bamboo_sapling")]
 pub struct BambooSaplingBlock;
 
 impl BlockBehaviour for BambooSaplingBlock {
-    fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
-        <Self as PlantBlockBase>::can_place_at(self, args.block_accessor, &args.position.down())
+    fn is_valid_bonemeal_target(&self, args: crate::block::BonemealArgs<'_>) -> bool {
+        let above = args.position.up();
+        args.world.is_in_height_limit(above.0.y)
+            && args.world.is_loaded(&above)
+            && args.world.get_block_state(&above).is_air()
     }
 
-    fn use_with_item<'a>(
-        &'a self,
-        args: UseWithItemArgs<'a>,
-    ) -> BlockFuture<'a, BlockActionResult> {
+    fn perform_bonemeal<'a>(&'a self, args: crate::block::BonemealArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
-            let lock = &args.item_stack;
-            if lock.get_item() == &Item::BONE_MEAL {
-                let mut props_new = BambooLikeProperties::from_state_id(
-                    Block::BAMBOO.default_state.id,
-                    &Block::BAMBOO,
-                );
-                props_new.leaves = BambooLeaves::Small;
-                args.world
-                    .set_block_state(
-                        &args.position.up(),
-                        props_new.to_state_id(&Block::BAMBOO),
-                        BlockFlags::NOTIFY_ALL,
-                    )
-                    .await;
-                return BlockActionResult::Success;
-            }
-            BlockActionResult::Pass
+            grow_bamboo(args.world, args.position).await;
         })
+    }
+
+    fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
+        <Self as PlantBlockBase>::can_place_at(self, args.block_accessor, args.position)
     }
 
     fn on_neighbor_update<'a>(&'a self, args: OnNeighborUpdateArgs<'a>) -> BlockFuture<'a, ()> {
@@ -87,18 +73,22 @@ impl BlockBehaviour for BambooSaplingBlock {
             if !state_above.is_air() || rand::rng().random_range(0..3) > 0 {
                 return;
             }
-            let mut props_new =
-                BambooLikeProperties::from_state_id(Block::BAMBOO.default_state.id, &Block::BAMBOO);
-            props_new.leaves = BambooLeaves::Small;
-            args.world
-                .set_block_state(
-                    &args.position.up(),
-                    props_new.to_state_id(&Block::BAMBOO),
-                    BlockFlags::NOTIFY_ALL,
-                )
-                .await;
+            grow_bamboo(args.world, args.position).await;
         })
     }
+}
+
+async fn grow_bamboo(world: &std::sync::Arc<crate::world::World>, position: &BlockPos) {
+    let mut props =
+        BambooLikeProperties::from_state_id(Block::BAMBOO.default_state.id, &Block::BAMBOO);
+    props.leaves = BambooLeaves::Small;
+    world
+        .set_block_state(
+            &position.up(),
+            props.to_state_id(&Block::BAMBOO),
+            BlockFlags::NOTIFY_ALL,
+        )
+        .await;
 }
 
 impl PlantBlockBase for BambooSaplingBlock {

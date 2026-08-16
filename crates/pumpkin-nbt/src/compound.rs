@@ -51,6 +51,18 @@ impl NbtCompound {
 
     /// Advances a reader past a compound's payload without allocating its tags.
     pub fn skip_content<'a, R: NbtReadHelper<'a>>(reader: &mut R) -> Result<(), Error> {
+        Self::skip_content_depth(reader, 0)
+    }
+
+    /// Advances a reader past a compound's payload with depth tracking.
+    pub fn skip_content_depth<'a, R: NbtReadHelper<'a>>(
+        reader: &mut R,
+        depth: usize,
+    ) -> Result<(), Error> {
+        if depth > crate::MAX_NBT_DEPTH {
+            return Err(Error::MaxDepthExceeded);
+        }
+
         loop {
             let tag_id = match reader.get_u8() {
                 Ok(id) => id,
@@ -65,7 +77,7 @@ impl NbtCompound {
             reader.skip_string()?;
 
             // Skip Value
-            NbtTag::skip_data(reader, tag_id)?;
+            NbtTag::skip_data_depth(reader, tag_id, depth + 1)?;
         }
 
         Ok(())
@@ -73,6 +85,18 @@ impl NbtCompound {
 
     /// Deserializes a compound payload, starting after the compound's name.
     pub fn deserialize_content<'a, R: NbtReadHelper<'a>>(reader: &mut R) -> Result<Self, Error> {
+        Self::deserialize_content_depth(reader, 0)
+    }
+
+    /// Deserializes a compound payload with depth tracking.
+    pub fn deserialize_content_depth<'a, R: NbtReadHelper<'a>>(
+        reader: &mut R,
+        depth: usize,
+    ) -> Result<Self, Error> {
+        if depth > crate::MAX_NBT_DEPTH {
+            return Err(Error::MaxDepthExceeded);
+        }
+
         let mut compound = Self::new();
 
         loop {
@@ -87,7 +111,7 @@ impl NbtCompound {
             }
 
             let name = reader.get_string()?;
-            let tag = NbtTag::deserialize_data(reader, tag_id)?;
+            let tag = NbtTag::deserialize_data_depth(reader, tag_id, depth + 1)?;
 
             compound.child_tags.insert(name.into(), tag);
         }
@@ -253,6 +277,12 @@ impl NbtCompound {
     #[must_use]
     pub fn get_compound(&self, name: &str) -> Option<&Self> {
         self.get(name).and_then(|tag| tag.extract_compound())
+    }
+
+    /// Returns the named byte array, or `None` if the tag is absent or has another type.
+    #[must_use]
+    pub fn get_byte_array(&self, name: &str) -> Option<&[i8]> {
+        self.get(name).and_then(|tag| tag.extract_byte_array())
     }
 
     /// Returns the named integer array, or `None` if the tag is absent or has another type.

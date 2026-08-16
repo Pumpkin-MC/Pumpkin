@@ -121,7 +121,7 @@ pub mod overworld_noise_evaluator {
         pos: &pumpkin_util::math::vector3::Vector3<i32>,
         ctx: &mut C,
     ) -> f64 {
-        -overworld_node_5(pos, ctx)
+        overworld_node_5(pos, ctx) * -1f64
     }
     #[inline(always)]
     pub fn overworld_node_7<C: NoiseEvaluationContext>(
@@ -1299,7 +1299,7 @@ pub mod overworld_noise_evaluator {
         pos: &pumpkin_util::math::vector3::Vector3<i32>,
         ctx: &mut C,
     ) -> f64 {
-        -overworld_node_142(pos, ctx)
+        overworld_node_142(pos, ctx) * -1f64
     }
     #[inline(always)]
     pub fn overworld_node_144<C: NoiseEvaluationContext>(
@@ -1377,7 +1377,7 @@ pub mod overworld_noise_evaluator {
         ctx: &mut C,
     ) -> f64 {
         let val = overworld_node_151(pos, ctx);
-        if (-1000000f64..0.03f64).contains(&val) {
+        if val >= -1000000f64 && val < 0.03f64 {
             overworld_node_152(pos, ctx)
         } else {
             overworld_node_151(pos, ctx)
@@ -1396,7 +1396,7 @@ pub mod overworld_noise_evaluator {
         ctx: &mut C,
     ) -> f64 {
         let val = overworld_node_54(pos, ctx);
-        if (-1000000f64..1.5625f64).contains(&val) {
+        if val >= -1000000f64 && val < 1.5625f64 {
             overworld_node_97(pos, ctx)
         } else {
             overworld_node_154(pos, ctx)
@@ -1516,7 +1516,7 @@ pub mod overworld_noise_evaluator {
         ctx: &mut C,
     ) -> f64 {
         let val = overworld_node_166(pos, ctx);
-        if (-60f64..321f64).contains(&val) {
+        if val >= -60f64 && val < 321f64 {
             overworld_node_167(pos, ctx)
         } else {
             overworld_node_168(pos, ctx)
@@ -1574,7 +1574,7 @@ pub mod overworld_noise_evaluator {
         ctx: &mut C,
     ) -> f64 {
         let val = overworld_node_166(pos, ctx);
-        if (-60f64..321f64).contains(&val) {
+        if val >= -60f64 && val < 321f64 {
             overworld_node_174(pos, ctx)
         } else {
             overworld_node_12(pos, ctx)
@@ -1610,7 +1610,7 @@ pub mod overworld_noise_evaluator {
         ctx: &mut C,
     ) -> f64 {
         let val = overworld_node_166(pos, ctx);
-        if (-60f64..321f64).contains(&val) {
+        if val >= -60f64 && val < 321f64 {
             overworld_node_177(pos, ctx)
         } else {
             overworld_node_12(pos, ctx)
@@ -1653,7 +1653,7 @@ pub mod overworld_noise_evaluator {
         ctx: &mut C,
     ) -> f64 {
         let val = overworld_node_166(pos, ctx);
-        if (-60f64..321f64).contains(&val) {
+        if val >= -60f64 && val < 321f64 {
             overworld_node_181(pos, ctx)
         } else {
             overworld_node_12(pos, ctx)
@@ -1705,7 +1705,7 @@ pub mod overworld_noise_evaluator {
         ctx: &mut C,
     ) -> f64 {
         let val = overworld_node_170(pos, ctx);
-        if (-1000000f64..0f64).contains(&val) {
+        if val >= -1000000f64 && val < 0f64 {
             overworld_node_171(pos, ctx)
         } else {
             overworld_node_187(pos, ctx)
@@ -1805,7 +1805,7 @@ pub mod overworld_noise_evaluator {
         ctx: &mut C,
     ) -> f64 {
         let val = overworld_node_166(pos, ctx);
-        if (-60f64..51f64).contains(&val) {
+        if val >= -60f64 && val < 51f64 {
             overworld_node_197(pos, ctx)
         } else {
             overworld_node_12(pos, ctx)
@@ -1841,7 +1841,7 @@ pub mod overworld_noise_evaluator {
         ctx: &mut C,
     ) -> f64 {
         let val = overworld_node_166(pos, ctx);
-        if (-60f64..51f64).contains(&val) {
+        if val >= -60f64 && val < 51f64 {
             overworld_node_200(pos, ctx)
         } else {
             overworld_node_12(pos, ctx)
@@ -1884,7 +1884,7 @@ pub mod overworld_noise_evaluator {
         ctx: &mut C,
     ) -> f64 {
         let val = overworld_node_166(pos, ctx);
-        if (-60f64..51f64).contains(&val) {
+        if val >= -60f64 && val < 51f64 {
             overworld_node_204(pos, ctx)
         } else {
             overworld_node_12(pos, ctx)

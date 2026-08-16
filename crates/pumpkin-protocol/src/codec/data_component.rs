@@ -578,22 +578,32 @@ impl DataComponentCodec<Self> for PotionContentsImpl {
     }
 }
 
-/// Helper to skip hidden effect parameters recursively
+/// Helper to skip hidden effect parameters iteratively with a depth cap
 fn skip_effect_parameters(seq: &mut impl NetworkReadExt) -> Result<(), ReadingError> {
-    // amplifier
-    seq.get_var_int()?;
-    // duration
-    seq.get_var_int()?;
-    // ambient
-    seq.get_bool()?;
-    // show_particles
-    seq.get_bool()?;
-    // show_icon
-    seq.get_bool()?;
-    // has_hidden (recursive)
-    let has_hidden = seq.get_bool()?;
-    if has_hidden {
-        skip_effect_parameters(seq)?;
+    const MAX_EFFECT_DEPTH: usize = 32;
+    let mut depth = 0;
+    loop {
+        // amplifier
+        seq.get_var_int()?;
+        // duration
+        seq.get_var_int()?;
+        // ambient
+        seq.get_bool()?;
+        // show_particles
+        seq.get_bool()?;
+        // show_icon
+        seq.get_bool()?;
+        // has_hidden
+        let has_hidden = seq.get_bool()?;
+        if !has_hidden {
+            break;
+        }
+        depth += 1;
+        if depth > MAX_EFFECT_DEPTH {
+            return Err(ReadingError::TooLarge(
+                "Potion effect hidden depth exceeded".into(),
+            ));
+        }
     }
     Ok(())
 }

@@ -283,6 +283,24 @@ impl MetadataSerializer for crate::codec::optional_int::OptionalInt {
     }
 }
 
+impl MetadataSerializer for uuid::Uuid {
+    fn write_metadata(&self, writer: &mut impl std::io::Write) -> Result<(), WritingError> {
+        writer.write_uuid(self)
+    }
+}
+
+impl MetadataSerializer for Option<uuid::Uuid> {
+    fn write_metadata(&self, writer: &mut impl std::io::Write) -> Result<(), WritingError> {
+        if let Some(uuid) = self {
+            writer.write_bool(true)?;
+            writer.write_uuid(uuid)?;
+        } else {
+            writer.write_bool(false)?;
+        }
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::io::{Cursor, Read};

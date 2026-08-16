@@ -65,6 +65,18 @@ pub(crate) fn bounce_entity_after_fall(entity: &dyn EntityBase, bounce_multiplie
 }
 
 pub trait BlockBehaviour: Send + Sync {
+    fn is_valid_bonemeal_target(&self, _args: BonemealArgs<'_>) -> bool {
+        false
+    }
+
+    fn is_bonemeal_success(&self, _args: BonemealArgs<'_>) -> bool {
+        true
+    }
+
+    fn perform_bonemeal<'a>(&'a self, _args: BonemealArgs<'a>) -> BlockFuture<'a, ()> {
+        Box::pin(async {})
+    }
+
     fn normal_use<'a>(&'a self, _args: NormalUseArgs<'a>) -> BlockFuture<'a, BlockActionResult> {
         Box::pin(async move { BlockActionResult::Pass })
     }
@@ -228,6 +240,14 @@ pub trait BlockBehaviour: Send + Sync {
     ) -> &'static BlockState {
         block.rotate(state_id, rotation)
     }
+}
+
+#[derive(Clone, Copy)]
+pub struct BonemealArgs<'a> {
+    pub world: &'a Arc<World>,
+    pub block: &'a Block,
+    pub position: &'a BlockPos,
+    pub state_id: BlockStateId,
 }
 
 pub struct NormalUseArgs<'a> {
@@ -446,8 +466,23 @@ pub async fn drop_loot(
     params: LootContextParameters,
 ) {
     if let Some(loot_table) = &block.loot_table {
-        for stack in loot_table.get_loot(params) {
-            world.drop_stack(pos, stack).await;
+        let items = loot_table.get_loot(params);
+        if !items.is_empty() {
+            let mut event = crate::plugin::block::block_drop_item::BlockDropItemEvent {
+                block_pos: *pos,
+                world: world.clone(),
+                player: None,
+                items,
+                cancelled: false,
+            };
+            if let Some(server) = world.server.upgrade() {
+                server.plugin_manager.fire(&server, &mut event).await;
+            }
+            if !event.cancelled {
+                for stack in event.items {
+                    world.drop_stack(pos, stack).await;
+                }
+            }
         }
     }
 
@@ -456,7 +491,17 @@ pub async fn drop_loot(
         let amount = experience.experience.get(&mut random);
         // TODO: Silk touch gives no exp
         if amount > 0 {
-            ExperienceOrbEntity::spawn(world, pos.to_f64(), amount as u32).await;
+            let mut event = crate::plugin::block::block_exp::BlockExpEvent {
+                block_pos: *pos,
+                world: world.clone(),
+                exp: amount,
+            };
+            if let Some(server) = world.server.upgrade() {
+                server.plugin_manager.fire(&server, &mut event).await;
+            }
+            if event.exp > 0 {
+                ExperienceOrbEntity::spawn(world, pos.to_f64(), event.exp as u32).await;
+            }
         }
     }
 }

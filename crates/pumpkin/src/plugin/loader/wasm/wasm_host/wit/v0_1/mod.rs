@@ -46,6 +46,7 @@ impl pumpkin::plugin::bedrock_packets::Host for PluginHostState {}
 impl pumpkin::plugin::data_components::Host for PluginHostState {}
 impl pumpkin::plugin::enchantments::Host for PluginHostState {}
 impl pumpkin::plugin::biomes::Host for PluginHostState {}
+impl pumpkin::plugin::attributes::Host for PluginHostState {}
 
 pub fn add_to_linker(linker: &mut Linker<PluginHostState>) -> wasmtime::Result<()> {
     Plugin::add_to_linker::<_, HasSelf<_>>(linker, |state: &mut PluginHostState| state)?;

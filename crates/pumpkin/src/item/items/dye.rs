@@ -39,7 +39,7 @@ impl DyeItem {
         text: &Text,
         color_name: &str,
     ) -> BlockActionResult {
-        let dye_color = DyeColor::from(color_name);
+        let dye_color = DyeColor::by_name(color_name).unwrap_or_default();
 
         text.set_color(dye_color);
 

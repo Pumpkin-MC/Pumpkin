@@ -8,11 +8,57 @@ use pumpkin_world::world::BlockFlags;
 use std::sync::Arc;
 use wasmtime::component::Resource;
 
+use crate::block::entities::banner::BannerBlockEntity as InternalBannerBlockEntity;
+use crate::block::entities::barrel::BarrelBlockEntity as InternalBarrelBlockEntity;
+use crate::block::entities::beacon::BeaconBlockEntity as InternalBeaconBlockEntity;
+use crate::block::entities::bed::BedBlockEntity as InternalBedBlockEntity;
+use crate::block::entities::beehive::BeehiveBlockEntity as InternalBeehiveBlockEntity;
+use crate::block::entities::bell::BellBlockEntity as InternalBellBlockEntity;
+use crate::block::entities::blasting_furnace::BlastingFurnaceBlockEntity as InternalBlastingFurnaceBlockEntity;
+use crate::block::entities::brewing_stand::BrewingStandBlockEntity as InternalBrewingStandBlockEntity;
+use crate::block::entities::brushable_block::BrushableBlockBlockEntity as InternalBrushableBlockBlockEntity;
+use crate::block::entities::calibrated_sculk_sensor::CalibratedSculkSensorBlockEntity as InternalCalibratedSculkSensorBlockEntity;
+use crate::block::entities::campfire::CampfireBlockEntity as InternalCampfireBlockEntity;
 use crate::block::entities::chest::ChestBlockEntity as InternalChestBlockEntity;
+use crate::block::entities::chiseled_bookshelf::ChiseledBookshelfBlockEntity as InternalChiseledBookshelfBlockEntity;
 use crate::block::entities::command_block::CommandBlockEntity as InternalCommandBlockEntity;
+use crate::block::entities::comparator::ComparatorBlockEntity as InternalComparatorBlockEntity;
+use crate::block::entities::conduit::ConduitBlockEntity as InternalConduitBlockEntity;
+use crate::block::entities::copper_golem_statue::CopperGolemStatueBlockEntity as InternalCopperGolemStatueBlockEntity;
+use crate::block::entities::crafter::CrafterBlockEntity as InternalCrafterBlockEntity;
+use crate::block::entities::creaking_heart::CreakingHeartBlockEntity as InternalCreakingHeartBlockEntity;
+use crate::block::entities::daylight_detector::DaylightDetectorBlockEntity as InternalDaylightDetectorBlockEntity;
+use crate::block::entities::decorated_pot::DecoratedPotBlockEntity as InternalDecoratedPotBlockEntity;
+use crate::block::entities::dispenser::DispenserBlockEntity as InternalDispenserBlockEntity;
+use crate::block::entities::dropper::DropperBlockEntity as InternalDropperBlockEntity;
+use crate::block::entities::enchanting_table::EnchantingTableBlockEntity as InternalEnchantingTableBlockEntity;
+use crate::block::entities::end_gateway::EndGatewayBlockEntity as InternalEndGatewayBlockEntity;
+use crate::block::entities::end_portal::EndPortalBlockEntity as InternalEndPortalBlockEntity;
+use crate::block::entities::ender_chest::EnderChestBlockEntity as InternalEnderChestBlockEntity;
+use crate::block::entities::furnace::FurnaceBlockEntity as InternalFurnaceBlockEntity;
+use crate::block::entities::hanging_sign::HangingSignBlockEntity as InternalHangingSignBlockEntity;
+use crate::block::entities::hopper::HopperBlockEntity as InternalHopperBlockEntity;
+use crate::block::entities::jigsaw_block::JigsawBlockEntity as InternalJigsawBlockEntity;
 use crate::block::entities::jukebox::JukeboxBlockEntity as InternalJukeboxBlockEntity;
+use crate::block::entities::lectern::LecternBlockEntity as InternalLecternBlockEntity;
+use crate::block::entities::map::MapBlockEntity as InternalMapBlockEntity;
 use crate::block::entities::mob_spawner::MobSpawnerBlockEntity as InternalMobSpawnerBlockEntity;
+use crate::block::entities::piston::PistonBlockEntity as InternalPistonBlockEntity;
+use crate::block::entities::potent_sulfur::PotentSulfurBlockEntity as InternalPotentSulfurBlockEntity;
+use crate::block::entities::sculk_catalyst::SculkCatalystBlockEntity as InternalSculkCatalystBlockEntity;
+use crate::block::entities::sculk_sensor::SculkSensorBlockEntity as InternalSculkSensorBlockEntity;
+use crate::block::entities::sculk_shrieker::SculkShriekerBlockEntity as InternalSculkShriekerBlockEntity;
+use crate::block::entities::shelf::ShelfBlockEntity as InternalShelfBlockEntity;
+use crate::block::entities::shulker_box::ShulkerBoxBlockEntity as InternalShulkerBoxBlockEntity;
 use crate::block::entities::sign::SignBlockEntity as InternalSignBlockEntity;
+use crate::block::entities::skull::SkullBlockEntity as InternalSkullBlockEntity;
+use crate::block::entities::smoker::SmokerBlockEntity as InternalSmokerBlockEntity;
+use crate::block::entities::structure_block::StructureBlockBlockEntity as InternalStructureBlockBlockEntity;
+use crate::block::entities::test_block::TestBlockBlockEntity as InternalTestBlockBlockEntity;
+use crate::block::entities::test_instance_block::TestInstanceBlockBlockEntity as InternalTestInstanceBlockBlockEntity;
+use crate::block::entities::trapped_chest::TrappedChestBlockEntity as InternalTrappedChestBlockEntity;
+use crate::block::entities::trial_spawner::TrialSpawnerBlockEntity as InternalTrialSpawnerBlockEntity;
+use crate::block::entities::vault::VaultBlockEntity as InternalVaultBlockEntity;
 use crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::common::Position as WitPosition;
 use crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::world::{
     BlockDirection as WitBlockDirection, BlockEntity, BlockEntityType, BlockFlags as WitBlockFlags,
@@ -143,54 +189,72 @@ impl PluginHostState {
         block_entity: Arc<dyn crate::block::entities::BlockEntity>,
     ) -> wasmtime::Result<Option<BlockEntityType>> {
         let be = block_entity;
-        if be
-            .as_any()
-            .downcast_ref::<InternalCommandBlockEntity>()
-            .is_some()
-        {
-            let res: Resource<BlockEntity> = self.add_block_entity(be)?;
-            Ok(Some(BlockEntityType::CommandBlockEntity(
-                Resource::new_own(res.rep()),
-            )))
-        } else if be
-            .as_any()
-            .downcast_ref::<InternalSignBlockEntity>()
-            .is_some()
-        {
-            let res: Resource<BlockEntity> = self.add_block_entity(be)?;
-            Ok(Some(BlockEntityType::SignBlockEntity(Resource::new_own(
-                res.rep(),
-            ))))
-        } else if be
-            .as_any()
-            .downcast_ref::<InternalJukeboxBlockEntity>()
-            .is_some()
-        {
-            let res: Resource<BlockEntity> = self.add_block_entity(be)?;
-            Ok(Some(BlockEntityType::JukeboxBlockEntity(
-                Resource::new_own(res.rep()),
-            )))
-        } else if be
-            .as_any()
-            .downcast_ref::<InternalChestBlockEntity>()
-            .is_some()
-        {
-            let res: Resource<BlockEntity> = self.add_block_entity(be)?;
-            Ok(Some(BlockEntityType::ChestBlockEntity(Resource::new_own(
-                res.rep(),
-            ))))
-        } else if be
-            .as_any()
-            .downcast_ref::<InternalMobSpawnerBlockEntity>()
-            .is_some()
-        {
-            let res: Resource<BlockEntity> = self.add_block_entity(be)?;
-            Ok(Some(BlockEntityType::MobSpawnerBlockEntity(
-                Resource::new_own(res.rep()),
-            )))
-        } else {
-            Ok(None)
+        macro_rules! match_be {
+            ($( $internal_type:ty => $variant:ident ),* $(,)?) => {
+                $(
+                    if be.as_any().downcast_ref::<$internal_type>().is_some() {
+                        let res: Resource<BlockEntity> = self.add_block_entity(be)?;
+                        return Ok(Some(BlockEntityType::$variant(Resource::new_own(res.rep()))));
+                    }
+                )*
+            };
         }
+
+        match_be! {
+            InternalCommandBlockEntity => CommandBlockEntity,
+            InternalSignBlockEntity => SignBlockEntity,
+            InternalHangingSignBlockEntity => HangingSignBlockEntity,
+            InternalJukeboxBlockEntity => JukeboxBlockEntity,
+            InternalChestBlockEntity => ChestBlockEntity,
+            InternalTrappedChestBlockEntity => TrappedChestBlockEntity,
+            InternalMobSpawnerBlockEntity => MobSpawnerBlockEntity,
+            InternalMapBlockEntity => MapBlockEntity,
+            InternalBannerBlockEntity => BannerBlockEntity,
+            InternalBarrelBlockEntity => BarrelBlockEntity,
+            InternalBeaconBlockEntity => BeaconBlockEntity,
+            InternalBedBlockEntity => BedBlockEntity,
+            InternalBeehiveBlockEntity => BeehiveBlockEntity,
+            InternalBellBlockEntity => BellBlockEntity,
+            InternalBlastingFurnaceBlockEntity => BlastingFurnaceBlockEntity,
+            InternalBrewingStandBlockEntity => BrewingStandBlockEntity,
+            InternalBrushableBlockBlockEntity => BrushableBlockBlockEntity,
+            InternalCalibratedSculkSensorBlockEntity => CalibratedSculkSensorBlockEntity,
+            InternalCampfireBlockEntity => CampfireBlockEntity,
+            InternalChiseledBookshelfBlockEntity => ChiseledBookshelfBlockEntity,
+            InternalComparatorBlockEntity => ComparatorBlockEntity,
+            InternalConduitBlockEntity => ConduitBlockEntity,
+            InternalCopperGolemStatueBlockEntity => CopperGolemStatueBlockEntity,
+            InternalCrafterBlockEntity => CrafterBlockEntity,
+            InternalCreakingHeartBlockEntity => CreakingHeartBlockEntity,
+            InternalDaylightDetectorBlockEntity => DaylightDetectorBlockEntity,
+            InternalDecoratedPotBlockEntity => DecoratedPotBlockEntity,
+            InternalDispenserBlockEntity => DispenserBlockEntity,
+            InternalDropperBlockEntity => DropperBlockEntity,
+            InternalEnchantingTableBlockEntity => EnchantingTableBlockEntity,
+            InternalEndGatewayBlockEntity => EndGatewayBlockEntity,
+            InternalEndPortalBlockEntity => EndPortalBlockEntity,
+            InternalEnderChestBlockEntity => EnderChestBlockEntity,
+            InternalFurnaceBlockEntity => FurnaceBlockEntity,
+            InternalHopperBlockEntity => HopperBlockEntity,
+            InternalJigsawBlockEntity => JigsawBlockEntity,
+            InternalLecternBlockEntity => LecternBlockEntity,
+            InternalPistonBlockEntity => PistonBlockEntity,
+            InternalPotentSulfurBlockEntity => PotentSulfurBlockEntity,
+            InternalSculkCatalystBlockEntity => SculkCatalystBlockEntity,
+            InternalSculkSensorBlockEntity => SculkSensorBlockEntity,
+            InternalSculkShriekerBlockEntity => SculkShriekerBlockEntity,
+            InternalShelfBlockEntity => ShelfBlockEntity,
+            InternalShulkerBoxBlockEntity => ShulkerBoxBlockEntity,
+            InternalSkullBlockEntity => SkullBlockEntity,
+            InternalSmokerBlockEntity => SmokerBlockEntity,
+            InternalStructureBlockBlockEntity => StructureBlockBlockEntity,
+            InternalTestBlockBlockEntity => TestBlockBlockEntity,
+            InternalTestInstanceBlockBlockEntity => TestInstanceBlockBlockEntity,
+            InternalTrialSpawnerBlockEntity => TrialSpawnerBlockEntity,
+            InternalVaultBlockEntity => VaultBlockEntity,
+        }
+
+        Ok(None)
     }
 }
 
@@ -333,11 +397,11 @@ impl pumpkin::plugin::world::HostWorld for PluginHostState {
             block_entity_type: state.block_entity_type,
             instrument: to_wit_noteblock_instrument(state.instrument),
             collision_shapes: state
-                .get_block_collision_shapes()
+                .get_block_collision_shapes_at(&internal_pos)
                 .map(to_wit_bounding_box)
                 .collect(),
             outline_shapes: state
-                .get_block_outline_shapes()
+                .get_block_outline_shapes_at(&internal_pos)
                 .map(to_wit_bounding_box)
                 .collect(),
             down_side_solid: state.is_side_solid(InternalBlockDirection::Down),
@@ -495,7 +559,11 @@ impl pumpkin::plugin::world::HostWorld for PluginHostState {
         world: Resource<World>,
     ) -> wasmtime::Result<Resource<pumpkin::plugin::scoreboard::Scoreboard>> {
         let world_provider = self.get_world_res(&world)?.provider.clone();
-        self.add_scoreboard(world_provider)
+        self.add_scoreboard(
+            crate::plugin::loader::wasm::wasm_host::state::ScoreboardProvider::World(
+                world_provider,
+            ),
+        )
     }
 
     async fn play_sound(
@@ -883,6 +951,7 @@ impl pumpkin::plugin::world::HostChunk for PluginHostState {
             .get_block_absolute_y(pos.x as usize, pos.y, pos.z as usize)
             .unwrap_or(BlockStateId::AIR);
         let state = id.to_state();
+        let world_pos = BlockPos::new(chunk_data.x * 16 + pos.x, pos.y, chunk_data.z * 16 + pos.z);
 
         Ok(WitBlockState {
             id: id.as_u16(),
@@ -909,11 +978,11 @@ impl pumpkin::plugin::world::HostChunk for PluginHostState {
             block_entity_type: state.block_entity_type,
             instrument: to_wit_noteblock_instrument(state.instrument),
             collision_shapes: state
-                .get_block_collision_shapes()
+                .get_block_collision_shapes_at(&world_pos)
                 .map(to_wit_bounding_box)
                 .collect(),
             outline_shapes: state
-                .get_block_outline_shapes()
+                .get_block_outline_shapes_at(&world_pos)
                 .map(to_wit_bounding_box)
                 .collect(),
             down_side_solid: state.is_side_solid(InternalBlockDirection::Down),

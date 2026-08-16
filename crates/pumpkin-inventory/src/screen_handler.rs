@@ -33,6 +33,7 @@ use crate::{
 };
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::{
+    Enchantment,
     data_component_impl::{EquipmentSlot, EquipmentType, EquippableImpl},
     screen::WindowType,
     statistic::StatisticCategory,
@@ -154,6 +155,7 @@ pub trait InventoryPlayer: Send + Sync {
     fn enqueue_inventory_packet<'a>(
         &'a self,
         packet: &'a CSetContainerContent,
+        window_type: Option<WindowType>,
     ) -> PlayerFuture<'a, ()>;
 
     /// Sends a single slot update packet.
@@ -202,6 +204,29 @@ pub trait InventoryPlayer: Send + Sync {
         stat_id: i32,
         amount: i32,
     ) -> PlayerFuture<'_, ()>;
+
+    /// Fires a prepare item enchant event. Returns true if cancelled.
+    fn fire_prepare_item_enchant_event<'a>(
+        &'a self,
+        _item: &'a ItemStack,
+        _level_requirements: &'a mut [i32; 3],
+        _enchantment_id: &'a mut [i32; 3],
+        _enchantment_level: &'a mut [i32; 3],
+        _bookshelf_count: i32,
+    ) -> PlayerFuture<'a, bool> {
+        Box::pin(async move { false })
+    }
+
+    /// Fires an enchant item event. Returns true if cancelled.
+    fn fire_enchant_item_event<'a>(
+        &'a self,
+        _item: &'a ItemStack,
+        _option: i32,
+        _exp_level_cost: i32,
+        _enchantments_to_add: &'a mut Vec<(&'static Enchantment, i32)>,
+    ) -> PlayerFuture<'a, bool> {
+        Box::pin(async move { false })
+    }
 }
 
 /// Gives a stack to the player or drops it if inventory is full.
@@ -915,15 +940,20 @@ pub trait ScreenHandler: Send + Sync {
 
                     let mut cursor_stack = behaviour.cursor_stack.lock().await;
                     let initial_count = cursor_stack.item_count;
+                    let slots_count = behaviour.drag_slots.len();
                     for slot_index in &behaviour.drag_slots {
-                        let slot = behaviour.slots[*slot_index as usize].clone();
+                        let Some(slot) = behaviour.slots.get(*slot_index as usize).cloned() else {
+                            continue;
+                        };
                         let stack = slot.get_stack().await;
 
                         if (stack.are_items_and_components_equal(&cursor_stack) || stack.is_empty())
                             && slot.can_insert(&cursor_stack).await
                         {
                             let mut inserting_count = match drag_button {
-                                0 => initial_count / behaviour.drag_slots.len() as u8,
+                                0 => (initial_count as usize)
+                                    .checked_div(slots_count)
+                                    .map_or(0, |c| c as u8),
                                 1 => 1,
                                 2 => {
                                     cursor_stack.item_count = cursor_stack.get_max_stack_size();

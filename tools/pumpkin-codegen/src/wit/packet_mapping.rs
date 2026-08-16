@@ -230,14 +230,37 @@ fn convert_value(
     let expr = match type_ident {
         "String" | "str" => match mode {
             MappingMode::Serialize => {
-                if is_ref {
+                if is_slice {
+                    let tmp = dst.unwrap_or("slice");
+                    if is_ref {
+                        prep.push_str(&format!(
+                            "{}let vec_{}: Vec<&str> = {}.iter().map(|s| s.as_str()).collect();\n",
+                            prep_prefix, tmp, src
+                        ));
+                        format!("&vec_{}", tmp)
+                    } else {
+                        format!("{}.clone()", src)
+                    }
+                } else if is_ref {
                     format!("&{}", src)
                 } else {
                     format!("{}.clone()", src)
                 }
             }
-            MappingMode::Deserialize => format!("{}.into()", src),
-            MappingMode::ToWit => format!("{}.to_string()", src),
+            MappingMode::Deserialize => {
+                if is_slice {
+                    format!("{}.iter().map(|s| s.to_string()).collect()", src)
+                } else {
+                    format!("{}.into()", src)
+                }
+            }
+            MappingMode::ToWit => {
+                if is_slice {
+                    format!("{}.iter().map(|s| s.to_string()).collect()", src)
+                } else {
+                    format!("{}.to_string()", src)
+                }
+            }
             MappingMode::Downcast => String::new(),
         },
         "Identifier" => match mode {

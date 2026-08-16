@@ -1,4 +1,5 @@
 #![allow(
+    unused,
     clippy::all,
     clippy::pedantic,
     clippy::nursery,
@@ -274,6 +275,11 @@ pub mod particle_id_remap;
 #[path = "generated/bedrock_creative.rs"]
 pub mod bedrock_creative;
 
+#[cfg(feature = "bedrock_biome")]
+#[rustfmt::skip]
+#[path = "generated/bedrock_biome.rs"]
+pub mod bedrock_biome;
+
 #[cfg(feature = "tag")]
 #[rustfmt::skip]
 #[path = "generated/tag.rs"]
@@ -366,3 +372,18 @@ pub mod villager;
 #[rustfmt::skip]
 #[path = "generated/slot_ranges.rs"]
 pub mod slot_ranges;
+
+#[cfg(feature = "map_color")]
+#[rustfmt::skip]
+#[path = "generated/map_color.rs"]
+pub mod map_color;
+
+#[cfg(feature = "map_decoration")]
+#[rustfmt::skip]
+#[path = "generated/map_decoration.rs"]
+pub mod map_decoration;
+
+#[cfg(feature = "dye_color")]
+#[rustfmt::skip]
+#[path = "generated/dye_color.rs"]
+pub mod dye_color;
