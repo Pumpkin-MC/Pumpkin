@@ -2,13 +2,14 @@
 
 use criterion::{Criterion, criterion_group, criterion_main};
 use pumpkin_data::BlockStateId;
-use pumpkin_data::dimension::Dimension;
 use pumpkin_util::world_seed::Seed;
 use pumpkin_world::chunk_system::{StagedChunkEnum, generate_single_chunk};
 use pumpkin_world::generation::{generator::ChunkGenerator, get_world_gen};
 use pumpkin_world::world::WorldPortalExt;
 use std::hint::black_box;
 use std::sync::Arc;
+
+mod support;
 use std::time::Instant;
 
 const SEED: Seed = Seed(42);
@@ -67,7 +68,7 @@ fn bench_concurrent_chunk_generation(c: &mut Criterion) {
 
     let world_gen: Arc<dyn ChunkGenerator> = Arc::from(get_world_gen(
         SEED,
-        Dimension::OVERWORLD,
+        support::overworld(),
         false,
         Vec::new(),
         String::new(),
@@ -96,7 +97,7 @@ fn bench_concurrent_chunk_generation(c: &mut Criterion) {
                             let br = br.clone();
                             s.spawn(move |_| {
                                 black_box(generate_single_chunk(
-                                    &Dimension::OVERWORLD,
+                                    &support::overworld(),
                                     0,
                                     wg.as_ref(),
                                     br.as_ref(),

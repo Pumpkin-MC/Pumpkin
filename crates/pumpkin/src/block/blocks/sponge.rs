@@ -4,7 +4,7 @@ use std::collections::{HashSet, VecDeque};
 use std::sync::Arc;
 
 use crate::block::{BlockBehaviour, BlockFuture, OnNeighborUpdateArgs, PlacedArgs};
-use pumpkin_data::dimension::Dimension;
+
 use pumpkin_data::particle::Particle;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::{Block, BlockStateId};
@@ -121,7 +121,7 @@ impl BlockBehaviour for WetSpongeBlock {
     fn placed<'a>(&'a self, args: PlacedArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
             // Check if placed in Nether, if so, dry out
-            if args.world.dimension == Dimension::THE_NETHER {
+            if args.world.dimension.is_nether_like() {
                 args.world
                     .set_block_state(
                         args.position,

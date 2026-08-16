@@ -16,7 +16,7 @@ use std::hash::{Hash, Hasher};
 /// This struct contains the base properties shared by all instances of a block
 /// Data-driven attributes like `hardness` and `blast_resistance` are defined here,
 /// while specific orientations or variations are stored in the associated `BlockState`.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub struct Block {
     /// The numeric ID used for internal registry mapping.
     pub id: BlockId,
@@ -44,7 +44,7 @@ pub struct Block {
     /// Defines the items dropped when this block is destroyed.
     pub loot_table: Option<LootTable>,
     /// Defines the amount of XP dropped when the block is mined (e.g., Coal or Diamond).
-    pub experience: Option<Experience>,
+    pub experience: Option<&'static Experience>,
 }
 
 /// Helper struct to ensure the validity of BlockIds parsed from external sources.
@@ -323,7 +323,7 @@ impl std::fmt::Display for BlockId {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 pub struct Flammable {
     pub spread_chance: u8,
     pub burn_chance: u8,

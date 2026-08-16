@@ -513,7 +513,7 @@ pub fn build() -> TokenStream {
     }
 
     quote!(
-        use crate::chunk::DoublePerlinNoiseParameters;
+        use crate::noise_parameter::DoublePerlinNoiseParameters;
         use crate::BlockState;
 
         use std::{cell::RefCell, num::NonZeroUsize, sync::Arc};

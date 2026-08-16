@@ -19,13 +19,23 @@ impl JavaClient {
     }
 }
 
-pub(crate) fn build_dimension_nbt(dim: &pumpkin_data::dimension::Dimension) -> Vec<u8> {
+pub(crate) fn build_dimension_nbt(dim: &pumpkin_world::dimension_type::DimensionType) -> Vec<u8> {
     let mut compound = pumpkin_nbt::compound::NbtCompound::new();
     compound.put_float("ambient_light", dim.ambient_light);
     compound.put_int("height", dim.height);
     compound.put_int("logical_height", dim.logical_height);
     compound.put_int("min_y", dim.min_y);
-    compound.put_string("infiniburn", dim.infiniburn.to_string());
+    let infiniburn = dim
+        .infiniburn
+        .as_tag()
+        .map(|identifier| format!("#{identifier}"))
+        .or_else(|| {
+            dim.infiniburn
+                .as_single()
+                .map(|value| value.identifier().to_string())
+        })
+        .unwrap_or_else(|| "#minecraft:infiniburn_overworld".to_string());
+    compound.put_string("infiniburn", infiniburn);
     compound.put_int(
         "monster_spawn_block_light_limit",
         dim.monster_spawn_block_light_limit as i32,
@@ -33,13 +43,25 @@ pub(crate) fn build_dimension_nbt(dim: &pumpkin_data::dimension::Dimension) -> V
     compound.put_double("coordinate_scale", dim.coordinate_scale);
     compound.put_byte("has_skylight", i8::from(dim.has_skylight));
     compound.put_byte("has_ceiling", i8::from(dim.has_ceiling));
-    compound.put_byte("ultrawarm", i8::from(dim.id == 3));
-    compound.put_byte("natural", i8::from(dim.id == 0 || dim.id == 1));
-    compound.put_byte("piglin_safe", i8::from(dim.id == 3));
-    compound.put_byte("respawn_anchor_works", i8::from(dim.id == 3));
-    compound.put_byte("bed_works", i8::from(dim.id == 0 || dim.id == 1));
-    compound.put_byte("has_raids", i8::from(dim.id == 0 || dim.id == 1));
-    compound.put_string("effects", dim.minecraft_name.to_string());
+    let nether_like = dim.is_nether_like();
+    let overworld_like = dim.is_overworld_like();
+    compound.put_byte("ultrawarm", i8::from(nether_like));
+    compound.put_byte("natural", i8::from(overworld_like));
+    compound.put_byte("piglin_safe", i8::from(nether_like));
+    compound.put_byte("respawn_anchor_works", i8::from(nether_like));
+    compound.put_byte("bed_works", i8::from(overworld_like));
+    compound.put_byte("has_raids", i8::from(overworld_like));
+    compound.put_string(
+        "effects",
+        if nether_like {
+            "minecraft:the_nether"
+        } else if dim.is_end_like() {
+            "minecraft:the_end"
+        } else {
+            "minecraft:overworld"
+        }
+        .to_string(),
+    );
 
     let mut monster_spawn = pumpkin_nbt::compound::NbtCompound::new();
     monster_spawn.put_string("type", "minecraft:uniform".to_string());

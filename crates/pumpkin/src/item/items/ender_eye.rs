@@ -157,7 +157,7 @@ fn find_stronghold(world: &Arc<World>, origin: BlockPos) -> Option<BlockPos> {
     let strongholds = DataKey::<StructureSet>::new(
         "minecraft:worldgen/minecraft:structure_set/minecraft:strongholds",
     )
-    .get_blocking(root)
+    .get(root)
     .ok()?;
 
     find_nearest_structure(

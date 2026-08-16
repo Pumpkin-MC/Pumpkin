@@ -2,8 +2,8 @@
 mod test {
     #![allow(clippy::print_stdout, clippy::needless_pass_by_value)]
     use crate::chunk_system::chunk_state::StagedChunkEnum;
+    use crate::dimension_type::DimensionType as Dimension;
     use crate::generation::{generator::VanillaGenerator, proto_chunk::ProtoChunk};
-    use pumpkin_data::dimension::Dimension;
     use pumpkin_util::world_seed::Seed;
 
     #[test]
@@ -14,7 +14,7 @@ mod test {
 
         crate::init_test_registries();
         let seed = Seed(1_782_124_772_053_846_960);
-        let generator = VanillaGenerator::new(seed, Dimension::OVERWORLD);
+        let generator = VanillaGenerator::new(seed, crate::test_support::dimension("overworld"));
 
         // This chunk contains the far edge of a monument starting at (-553, 173).
         let mut proto = ProtoChunk::new(-553, 174, &generator);
@@ -24,7 +24,10 @@ mod test {
         assert!(proto.has_structure(StructureKeys::Monument));
 
         let mut staged = Chunk::Proto(Box::new(proto));
-        staged.upgrade_to_level_chunk(&Dimension::OVERWORLD, &LightingEngineConfig::Default);
+        staged.upgrade_to_level_chunk(
+            &crate::test_support::dimension("overworld"),
+            &LightingEngineConfig::Default,
+        );
         let Chunk::Level(chunk_data) = staged else {
             unreachable!()
         };
@@ -45,7 +48,7 @@ mod test {
         crate::init_test_registries();
         let seed = Seed(1779920288596261407);
         let (cx, cz) = (67i32, 63i32);
-        let generator = VanillaGenerator::new(seed, Dimension::OVERWORLD);
+        let generator = VanillaGenerator::new(seed, crate::test_support::dimension("overworld"));
 
         let mut proto = ProtoChunk::new(cx, cz, &generator);
         generator.step_to_biomes(&mut proto);
@@ -61,7 +64,10 @@ mod test {
         }
 
         let mut staged = Chunk::Proto(Box::new(proto));
-        staged.upgrade_to_level_chunk(&Dimension::OVERWORLD, &LightingEngineConfig::Default);
+        staged.upgrade_to_level_chunk(
+            &crate::test_support::dimension("overworld"),
+            &LightingEngineConfig::Default,
+        );
         let Chunk::Level(chunk_data) = staged else {
             unreachable!()
         };
@@ -234,7 +240,7 @@ mod test {
         );
         verify_chunk_noise(
             0,
-            Dimension::OVERWORLD,
+            crate::test_support::dimension("overworld"),
             0,
             0,
             &expected,
@@ -249,7 +255,7 @@ mod test {
         );
         verify_chunk_noise(
             0,
-            Dimension::OVERWORLD,
+            crate::test_support::dimension("overworld"),
             7,
             4,
             &expected,
@@ -264,7 +270,7 @@ mod test {
         );
         verify_chunk_noise(
             0,
-            Dimension::OVERWORLD,
+            crate::test_support::dimension("overworld"),
             0,
             0,
             &expected,
@@ -279,7 +285,7 @@ mod test {
         );
         verify_chunk_noise(
             0,
-            Dimension::OVERWORLD,
+            crate::test_support::dimension("overworld"),
             -595,
             544,
             &expected,
@@ -294,7 +300,7 @@ mod test {
         );
         verify_chunk_noise(
             0,
-            Dimension::OVERWORLD,
+            crate::test_support::dimension("overworld"),
             -119,
             183,
             &expected,
@@ -309,7 +315,7 @@ mod test {
         );
         verify_chunk_noise(
             13579,
-            Dimension::OVERWORLD,
+            crate::test_support::dimension("overworld"),
             -6,
             11,
             &expected,
@@ -324,7 +330,7 @@ mod test {
         );
         verify_chunk_noise(
             13579,
-            Dimension::OVERWORLD,
+            crate::test_support::dimension("overworld"),
             -2,
             15,
             &expected,
@@ -339,7 +345,7 @@ mod test {
         );
         verify_chunk_noise(
             13579,
-            Dimension::OVERWORLD,
+            crate::test_support::dimension("overworld"),
             -7,
             9,
             &expected,
@@ -354,7 +360,7 @@ mod test {
         );
         verify_chunk_noise(
             0,
-            Dimension::THE_NETHER,
+            crate::test_support::dimension("the_nether"),
             0,
             0,
             &expected,
@@ -369,7 +375,7 @@ mod test {
         );
         verify_chunk_noise(
             0,
-            Dimension::THE_NETHER,
+            crate::test_support::dimension("the_nether"),
             7,
             4,
             &expected,
@@ -384,7 +390,7 @@ mod test {
         );
         verify_chunk_noise(
             0,
-            Dimension::THE_END,
+            crate::test_support::dimension("the_end"),
             0,
             0,
             &expected,
@@ -399,7 +405,7 @@ mod test {
         );
         verify_chunk_noise(
             0,
-            Dimension::THE_END,
+            crate::test_support::dimension("the_end"),
             7,
             4,
             &expected,
@@ -414,7 +420,7 @@ mod test {
         );
         verify_chunk_surface(
             0,
-            Dimension::OVERWORLD,
+            crate::test_support::dimension("overworld"),
             0,
             0,
             &expected,
@@ -429,7 +435,7 @@ mod test {
         );
         verify_chunk_surface(
             0,
-            Dimension::OVERWORLD,
+            crate::test_support::dimension("overworld"),
             -595,
             544,
             &expected,
@@ -444,7 +450,7 @@ mod test {
         );
         verify_chunk_surface(
             0,
-            Dimension::OVERWORLD,
+            crate::test_support::dimension("overworld"),
             -119,
             183,
             &expected,
@@ -459,7 +465,7 @@ mod test {
         );
         verify_chunk_surface(
             0,
-            Dimension::THE_NETHER,
+            crate::test_support::dimension("the_nether"),
             0,
             0,
             &expected,
@@ -474,7 +480,7 @@ mod test {
         );
         verify_chunk_surface(
             0,
-            Dimension::THE_NETHER,
+            crate::test_support::dimension("the_nether"),
             7,
             4,
             &expected,
@@ -489,7 +495,7 @@ mod test {
         );
         verify_chunk_surface(
             0,
-            Dimension::THE_END,
+            crate::test_support::dimension("the_end"),
             0,
             0,
             &expected,
@@ -504,7 +510,7 @@ mod test {
         );
         verify_chunk_surface(
             0,
-            Dimension::THE_END,
+            crate::test_support::dimension("the_end"),
             7,
             4,
             &expected,

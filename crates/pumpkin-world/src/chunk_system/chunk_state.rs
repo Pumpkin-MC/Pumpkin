@@ -2,10 +2,10 @@ use crate::chunk::{
     ChunkData, ChunkHeightmapType, ChunkHeightmaps, ChunkLight, ChunkSections,
     palette::{BiomePalette, BlockPalette},
 };
+use crate::dimension_type::DimensionType as Dimension;
 use crate::generation::biome_coords;
 use crate::tick::scheduler::ChunkTickScheduler;
 use pumpkin_config::lighting::LightingEngineConfig;
-use pumpkin_data::dimension::Dimension;
 use rustc_hash::FxHashMap;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64};

@@ -1,9 +1,6 @@
-use pumpkin_data::{Block, BlockState};
 use pumpkin_data::int_provider::IntProviderValue;
-use pumpkin_util::{
-    math::position::BlockPos,
-    random::RandomGenerator,
-};
+use pumpkin_data::{Block, BlockState};
+use pumpkin_util::{math::position::BlockPos, random::RandomGenerator};
 
 use crate::generation::proto_chunk::GenerationCache;
 use crate::world::WorldPortalExt;

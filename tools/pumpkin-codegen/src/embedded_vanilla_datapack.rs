@@ -74,6 +74,12 @@ pub(crate) fn build() -> TokenStream {
         .collect();
 
     quote! {
+        #![allow(
+            clippy::large_stack_arrays,
+            clippy::missing_const_for_fn,
+            clippy::too_many_lines
+        )]
+
         /// Raw embedded data blob.
         static DATA: &[u8] = include_bytes!("embedded_data.bin");
 

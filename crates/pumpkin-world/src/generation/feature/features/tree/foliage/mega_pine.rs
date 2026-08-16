@@ -1,9 +1,6 @@
 use pumpkin_data::BlockState;
 use pumpkin_data::int_provider::IntProviderValue;
-use pumpkin_util::{
-    math::position::BlockPos,
-    random::RandomGenerator,
-};
+use pumpkin_util::{math::position::BlockPos, random::RandomGenerator};
 
 use super::{FoliagePlacer, LeaveValidator};
 use crate::generation::feature::features::tree::TreeNode;

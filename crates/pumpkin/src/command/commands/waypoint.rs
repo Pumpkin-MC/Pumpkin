@@ -32,7 +32,7 @@ impl CommandExecutor for ListExecutor {
             let world = worlds
                 .first()
                 .expect("There should always be at least one world");
-            let dimension = world.dimension.minecraft_name.to_string();
+            let dimension = world.level.world_key.to_string();
 
             sender
                 .send_message(pumpkin_macros::translate_cross!(

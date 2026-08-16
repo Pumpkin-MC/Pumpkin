@@ -27,7 +27,7 @@ impl BlockBehaviour for EndPortalBlock {
             tracing::info!(
                 "End portal collision at {:?}, targeting world {:?}",
                 args.position,
-                target_world.dimension.minecraft_name
+                target_world.level.world_key
             );
             args.entity
                 .get_entity()

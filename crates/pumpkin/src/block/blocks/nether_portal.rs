@@ -85,7 +85,7 @@ impl BlockBehaviour for NetherPortalBlock {
             tracing::debug!(
                 "Nether portal collision at {:?}, targeting world {:?}",
                 args.position,
-                target_world.dimension.minecraft_name
+                target_world.level.world_key
             );
             let portal_delay = Self::get_portal_time(args.world, args.entity);
 

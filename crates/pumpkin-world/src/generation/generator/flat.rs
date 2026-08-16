@@ -1,10 +1,10 @@
+use crate::dimension_type::DimensionType as Dimension;
 use pumpkin_codecs::codec::FieldDecode;
 use pumpkin_codecs::{DataResult, Decode, DynamicOps};
 use pumpkin_data::structures::{Structure, StructurePlacementType};
 use pumpkin_data::tag::{RegistryKey, get_tag_ids};
 use pumpkin_data::{
     Block,
-    dimension::Dimension,
     structures::{StructurePlacementCalculator, StructureSet},
 };
 
@@ -143,7 +143,7 @@ impl FlatGenerator {
             let key = DataKey::<StructureSet>::owned(format!(
                 "minecraft:worldgen/minecraft:structure_set/{identifier}"
             ));
-            let set = key.get_blocking(root).map_err(|error| {
+            let set = key.get(root).map_err(|error| {
                 format!("Failed to resolve structure set {identifier}: {error}")
             })?;
 
@@ -227,7 +227,7 @@ impl FlatGenerator {
             .iter()
             .zip(&self.structure_allowed_biomes)
         {
-            let Ok(set) = key.get_blocking(root) else {
+            let Ok(set) = key.get(root) else {
                 continue;
             };
 
@@ -324,7 +324,7 @@ impl FlatGenerator {
             .iter()
             .zip(&self.structure_allowed_biomes)
         {
-            let Ok(set) = key.get_blocking(root) else {
+            let Ok(set) = key.get(root) else {
                 continue;
             };
             let mut candidate_chunks = Vec::new();

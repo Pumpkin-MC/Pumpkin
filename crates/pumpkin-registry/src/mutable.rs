@@ -6,7 +6,7 @@ use crate::{
 };
 use arc_swap::ArcSwap;
 use pumpkin_util::identifier::Identifier;
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 use std::{
     any::{TypeId, type_name},
     marker::PhantomData,
@@ -36,6 +36,46 @@ impl<T: Send + Sync + 'static> ReloadableRegistry<T> {
             .ok_or(BootstrapError::Uninitialized)
             .and_then(|manager| manager.populate::<T>(&self.name))?;
         let replacement = FrozenRegistry::new(entries.into_boxed_slice(), mapping);
+        self.inner.store(Arc::new(replacement));
+        Ok(())
+    }
+
+    /// Rebuilds the registry from bootstrap providers and overlays caller-provided entries.
+    ///
+    /// Existing bootstrap identifiers keep their numeric IDs when overridden. New entries are
+    /// appended after the bootstrap entries. Duplicate identifiers in `entries` are rejected.
+    pub fn overlay_entries<I>(&self, entries: I) -> Result<(), BootstrapError>
+    where
+        I: IntoIterator<Item = (Identifier, T)>,
+    {
+        let entries: Vec<_> = entries.into_iter().collect();
+        let (mut values, mut mapping) = BOOTSTRAP
+            .get()
+            .ok_or(BootstrapError::Uninitialized)
+            .and_then(|manager| manager.populate::<T>(&self.name))?;
+
+        values.reserve(entries.len());
+        mapping.reserve(entries.len());
+        let mut seen = FxHashSet::default();
+
+        for (identifier, value) in entries {
+            if !seen.insert(identifier.clone()) {
+                return Err(BootstrapError::DuplicateEntry {
+                    registry: self.name.clone(),
+                    identifier,
+                });
+            }
+
+            if let Some(&id) = mapping.get(&identifier) {
+                values[id] = value;
+            } else {
+                let id = values.len();
+                mapping.insert(identifier, id);
+                values.push(value);
+            }
+        }
+
+        let replacement = FrozenRegistry::new(values.into_boxed_slice(), mapping);
         self.inner.store(Arc::new(replacement));
         Ok(())
     }

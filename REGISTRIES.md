@@ -39,8 +39,8 @@ This table tracks the Java Edition registries and Pumpkin's migration to `pumpki
 | `ENCHANTMENT_VALUE_EFFECT_TYPE` | `minecraft:enchantment_value_effect_type` | No | - [ ] |
 | `ENTITY_SUB_PREDICATE_TYPE` | `minecraft:entity_sub_predicate_type` | No | - [ ] |
 | `ENTITY_TYPE` | `minecraft:entity_type` | No | - [ ] |
-| `ENVIRONMENT_ATTRIBUTE` | `minecraft:environment_attribute` | No | - [ ] |
-| `ATTRIBUTE_TYPE` | `minecraft:attribute_type` | No | - [ ] |
+| `ENVIRONMENT_ATTRIBUTE` | `minecraft:environment_attribute` | No | - [x] |
+| `ATTRIBUTE_TYPE` | `minecraft:attribute_type` | No | - [x] |
 | `FEATURE_SIZE_TYPE` | `minecraft:worldgen/feature_size_type` | No | - [ ] |
 | `FEATURE` | `minecraft:worldgen/feature` | No | - [ ] |
 | `FLOAT_PROVIDER_TYPE` | `minecraft:float_provider_type` | No | - [ ] |
@@ -117,7 +117,7 @@ This table tracks the Java Edition registries and Pumpkin's migration to `pumpki
 | `DAMAGE_TYPE` | `minecraft:damage_type` | Yes | - [ ] |
 | `DENSITY_FUNCTION` | `minecraft:worldgen/density_function` | Yes | - [ ] |
 | `DIALOG` | `minecraft:dialog` | Yes | - [ ] |
-| `DIMENSION_TYPE` | `minecraft:dimension_type` | Yes | - [ ] |
+| `DIMENSION_TYPE` | `minecraft:dimension_type` | Yes | - [x] |
 | `ENCHANTMENT_PROVIDER` | `minecraft:enchantment_provider` | Yes | - [ ] |
 | `ENCHANTMENT` | `minecraft:enchantment` | Yes | - [ ] |
 | `FLAT_LEVEL_GENERATOR_PRESET` | `minecraft:worldgen/flat_level_generator_preset` | Yes | - [ ] |

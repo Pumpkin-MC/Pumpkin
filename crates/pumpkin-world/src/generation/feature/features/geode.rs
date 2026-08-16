@@ -1,11 +1,8 @@
 use std::collections::{HashMap, HashSet};
 
-use pumpkin_data::{Block, BlockDirection, BlockId, BlockState, BlockStateId};
 use pumpkin_data::int_provider::IntProviderValue;
-use pumpkin_util::{
-    math::position::BlockPos,
-    random::RandomGenerator,
-};
+use pumpkin_data::{Block, BlockDirection, BlockId, BlockState, BlockStateId};
+use pumpkin_util::{math::position::BlockPos, random::RandomGenerator};
 
 use crate::generation::feature::features::spring_feature::BlockWrapper;
 use crate::{

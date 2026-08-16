@@ -469,7 +469,7 @@ impl NetherPortal {
     ) -> Option<PortalSearchResult> {
         tracing::debug!(
             "Searching for portal in {:?} around {:?}",
-            world.dimension.minecraft_name,
+            world.level.world_key,
             target_pos
         );
         let min_y = world.min_y;
@@ -552,7 +552,7 @@ impl NetherPortal {
     ) -> Option<(BlockPos, HorizontalAxis, bool)> {
         tracing::debug!(
             "Finding safe location for portal in {:?} around {:?}",
-            world.dimension.minecraft_name,
+            world.level.world_key,
             target_pos
         );
         let min_y = world.min_y;

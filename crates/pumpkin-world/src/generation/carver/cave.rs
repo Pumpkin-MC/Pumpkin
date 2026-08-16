@@ -431,13 +431,13 @@ pub fn get_height(p: &HeightProvider, random: &mut RandomGenerator, min_y: i8, h
 mod tests {
     use super::*;
     use pumpkin_data::carver::CAVE;
-    use pumpkin_data::{Block, BlockStateId, dimension::Dimension};
+    use pumpkin_data::{Block, BlockStateId};
 
     type Run<'a, 'b> = super::super::CarveRun<'a, 'b>;
 
     #[test]
     fn carves_at_world_y() {
-        super::super::with_carve_run(Dimension::OVERWORLD, |run| {
+        super::super::with_carve_run(crate::test_support::dimension("overworld"), |run| {
             let expected = super::super::overworld_carve_state(run, &CAVE, 5, 20, 6)
                 .expect("test position should carve")
                 .0
@@ -449,7 +449,7 @@ mod tests {
 
     #[test]
     fn uses_aquifer_state() {
-        super::super::with_carve_run(Dimension::OVERWORLD, |run| {
+        super::super::with_carve_run(crate::test_support::dimension("overworld"), |run| {
             let (x, y, z, expected_state) =
                 find_aquifer_carve_state(run, |state, _| state.id != Block::AIR.default_state.id)
                     .expect("expected non-air aquifer carve state in test chunk");

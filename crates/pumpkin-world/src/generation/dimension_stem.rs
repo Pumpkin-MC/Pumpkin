@@ -1,5 +1,5 @@
+use crate::dimension_type::DimensionType as Dimension;
 use pumpkin_codecs::{DataResult, Decode, DynamicOps, MapLike, codec::FieldDecode};
-use pumpkin_data::dimension::Dimension;
 use pumpkin_nbt::{nbt_ops::NbtOps, tag::NbtTag};
 use pumpkin_registry::DataKey;
 

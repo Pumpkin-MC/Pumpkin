@@ -13,7 +13,7 @@ use crate::command::{
 };
 use crate::plugin::world::spawn_change::SpawnChangeEvent;
 use crate::server::Server;
-use pumpkin_data::dimension::Dimension;
+
 use pumpkin_data::translation;
 use pumpkin_util::{math::position::BlockPos, text::TextComponent};
 
@@ -107,7 +107,7 @@ async fn setworldspawn(
             "Failed to get world.",
         )));
     };
-    if world.dimension != Dimension::OVERWORLD && world.dimension != Dimension::OVERWORLD_CAVES {
+    if !world.dimension.is_overworld_like() {
         return Err(CommandError::CommandFailed(TextComponent::translate_cross(
             translation::java::COMMANDS_SETWORLDSPAWN_FAILURE_NOT_OVERWORLD,
             translation::java::COMMANDS_SETWORLDSPAWN_FAILURE_NOT_OVERWORLD,
@@ -165,7 +165,7 @@ async fn setworldspawn(
                 TextComponent::text(new_position.0.z.to_string()),
                 TextComponent::text(new_yaw.to_string()),
                 TextComponent::text(new_pitch.to_string()),
-                TextComponent::text(world.dimension.minecraft_name),
+                TextComponent::text(world.level.world_key.to_string()),
             ],
         ))
         .await;

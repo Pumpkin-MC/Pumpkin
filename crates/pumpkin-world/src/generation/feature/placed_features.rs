@@ -5,8 +5,8 @@ use std::collections::HashMap;
 use std::iter;
 use std::sync::LazyLock;
 
-use pumpkin_util::biome::FOLIAGE_NOISE;
 use pumpkin_data::int_provider::IntProviderValue;
+use pumpkin_util::biome::FOLIAGE_NOISE;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::random::{RandomGenerator, RandomImpl};

@@ -1,7 +1,7 @@
+use crate::dimension_type::DimensionType as Dimension;
 use pumpkin_codecs::DataResult;
 use pumpkin_data::{
-    BlockState, chunk_gen_settings::GenerationSettings, dimension::Dimension,
-    structures::StructurePlacementCalculator,
+    BlockState, chunk_gen_settings::GenerationSettings, structures::StructurePlacementCalculator,
 };
 use pumpkin_registry::{DataKey, DataKeyRef, ROOT, Registry};
 use pumpkin_util::world_seed::Seed;
@@ -90,13 +90,13 @@ impl VanillaGenerator {
 
         let settings = config
             .settings
-            .get_blocking(root)
+            .get(root)
             .map_err(|error| format!("Failed to resolve noise settings: {error}"))?;
 
         let source_type = config
             .biome_source
             .source_type
-            .get_blocking(root)
+            .get(root)
             .map_err(|error| format!("Failed to resolve biome source type: {error}"))?;
 
         let biome_source = source_type
@@ -124,7 +124,7 @@ impl VanillaGenerator {
             .get()
             .expect("VanillaGenerator decoded only after the root registry is initialized");
         STRUCTURE_SETS
-            .get_blocking(root)
+            .get(root)
             .expect("Structure set registry must exist for vanilla world generation")
     }
 
@@ -140,7 +140,7 @@ impl VanillaGenerator {
             .expect("VanillaGenerator decoded only after the root registry is initialized");
         let settings = self
             .settings
-            .get_blocking(root)
+            .get(root)
             .expect("VanillaGenerator noise settings were resolved during construction");
         GenerationSettingsRef::Registry(settings)
     }
@@ -151,13 +151,13 @@ impl VanillaGenerator {
             &'static str,
             &'static GenerationSettings,
             Box<dyn BiomeSupplier>,
-        ) = if dimension == Dimension::THE_NETHER {
+        ) = if dimension.is_nether_like() {
             (
                 "nether",
                 &GenerationSettings::NETHER,
                 Box::new(crate::biome::MultiNoiseBiomeSupplier::NETHER),
             )
-        } else if dimension == Dimension::THE_END {
+        } else if dimension.is_end_like() {
             (
                 "end",
                 &GenerationSettings::END,

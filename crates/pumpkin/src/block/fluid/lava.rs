@@ -8,7 +8,6 @@ use pumpkin_data::{
     Block, BlockDirection, BlockState, BlockStateId,
     block_properties::blocks_movement,
     damage::DamageType,
-    dimension::Dimension,
     fluid::{Falling, Fluid, FluidProperties, Level},
     world::WorldEvent,
 };
@@ -286,7 +285,7 @@ impl FluidBehaviour for FlowingLava {
 impl FlowingFluid for FlowingLava {
     fn get_level_decrease_per_block(&self, world: &World) -> i32 {
         // Ultrawarm logic
-        if world.dimension == Dimension::THE_NETHER {
+        if world.dimension.is_nether_like() {
             1
         } else {
             2
@@ -295,7 +294,7 @@ impl FlowingFluid for FlowingLava {
 
     fn get_flow_speed(&self, world: &World) -> u8 {
         // Ultrawarm logic - lava flows faster in the Nether
-        if world.dimension == Dimension::THE_NETHER {
+        if world.dimension.is_nether_like() {
             LAVA_FLOW_SPEED_NETHER
         } else {
             LAVA_FLOW_SPEED_SLOW
@@ -304,7 +303,7 @@ impl FlowingFluid for FlowingLava {
 
     fn get_max_flow_distance(&self, world: &World) -> i32 {
         // Ultrawarm logic
-        if world.dimension == Dimension::THE_NETHER {
+        if world.dimension.is_nether_like() {
             5
         } else {
             3

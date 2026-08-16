@@ -1,4 +1,4 @@
-use crate::damage_type::DamageTypeFile;
+use crate::{DatapackError, damage_type::DamageTypeFile, dimension_type::DimensionType};
 use pumpkin_registry::{
     Registry, RegistryBuilder, ReloadableRegistry, bootstrap::RegistryEntry, bootstrap_provider,
     error::BootstrapError,
@@ -8,6 +8,7 @@ use std::sync::{Arc, OnceLock};
 use tokio::sync::RwLock;
 
 static DAMAGE_TYPE_REGISTRY: OnceLock<Arc<ReloadableRegistry<DamageTypeFile>>> = OnceLock::new();
+static DIMENSION_TYPE_REGISTRY: OnceLock<Arc<ReloadableRegistry<DimensionType>>> = OnceLock::new();
 
 fn damage_type_registry() -> Result<Arc<ReloadableRegistry<DamageTypeFile>>, BootstrapError> {
     if let Some(registry) = DAMAGE_TYPE_REGISTRY.get() {
@@ -28,15 +29,35 @@ fn damage_type_registry() -> Result<Arc<ReloadableRegistry<DamageTypeFile>>, Boo
         .ok_or(BootstrapError::Uninitialized)
 }
 
+fn dimension_type_registry() -> Result<Arc<ReloadableRegistry<DimensionType>>, BootstrapError> {
+    if let Some(registry) = DIMENSION_TYPE_REGISTRY.get() {
+        return Ok(Arc::clone(registry));
+    }
+
+    let registry = Arc::new(RegistryBuilder::reloadable(&Identifier::vanilla_static(
+        "dimension_type",
+    ))?);
+    if DIMENSION_TYPE_REGISTRY.set(Arc::clone(&registry)).is_ok() {
+        return Ok(registry);
+    }
+
+    DIMENSION_TYPE_REGISTRY
+        .get()
+        .map(Arc::clone)
+        .ok_or(BootstrapError::Uninitialized)
+}
+
 fn init_register() -> Vec<RegistryEntry<Arc<dyn Registry>>> {
     #![allow(clippy::panic)]
-    let registry: Arc<dyn Registry> = damage_type_registry()
+    let damage_type: Arc<dyn Registry> = damage_type_registry()
         .unwrap_or_else(|error| panic!("failed to bootstrap damage type registry: {error}"));
+    let dimension_type: Arc<dyn Registry> = dimension_type_registry()
+        .unwrap_or_else(|error| panic!("failed to bootstrap dimension type registry: {error}"));
 
-    vec![RegistryEntry::new(
-        Identifier::vanilla_static("damage_type"),
-        registry,
-    )]
+    vec![
+        RegistryEntry::new(Identifier::vanilla_static("damage_type"), damage_type),
+        RegistryEntry::new(Identifier::vanilla_static("dimension_type"), dimension_type),
+    ]
 }
 
 bootstrap_provider! {
@@ -46,6 +67,7 @@ bootstrap_provider! {
 
 pub struct DatapackRegistries {
     pending_damage_types: RwLock<Vec<(Identifier, DamageTypeFile)>>,
+    pending_dimension_types: RwLock<Vec<(Identifier, DimensionType)>>,
 }
 
 impl Default for DatapackRegistries {
@@ -59,6 +81,7 @@ impl DatapackRegistries {
     pub fn new() -> Self {
         Self {
             pending_damage_types: RwLock::new(Vec::new()),
+            pending_dimension_types: RwLock::new(Vec::new()),
         }
     }
 
@@ -72,7 +95,22 @@ impl DatapackRegistries {
         *self.pending_damage_types.write().await = entries.clone();
 
         if let Some(registry) = DAMAGE_TYPE_REGISTRY.get() {
-            registry.overlay_entries(entries).await?;
+            registry.overlay_entries(entries)?;
+        }
+
+        Ok(())
+    }
+
+    pub async fn reload_dimension_types<I>(&self, entries: I) -> Result<(), DatapackError>
+    where
+        I: IntoIterator<Item = (Identifier, DimensionType)>,
+    {
+        let mut entries: Vec<_> = entries.into_iter().collect();
+        entries.sort_unstable_by(|(left_id, _), (right_id, _)| left_id.cmp(right_id));
+        *self.pending_dimension_types.write().await = entries.clone();
+
+        if let Some(registry) = DIMENSION_TYPE_REGISTRY.get() {
+            registry.overlay_entries(entries)?;
         }
 
         Ok(())
@@ -82,23 +120,32 @@ impl DatapackRegistries {
     ///
     /// The initial datapack reload happens before plugin registry providers are finalized,
     /// so registry data is staged until the root registry creates its reloadable children.
-    pub async fn apply_pending(&self) -> Result<(), BootstrapError> {
-        let entries = self.pending_damage_types.read().await.clone();
-        damage_type_registry()?.overlay_entries(entries).await
+    pub async fn apply_pending(&self) -> Result<(), DatapackError> {
+        let damage_types = self.pending_damage_types.read().await.clone();
+        damage_type_registry()?.overlay_entries(damage_types)?;
+
+        let dimension_types = self.pending_dimension_types.read().await.clone();
+        dimension_type_registry()?.overlay_entries(dimension_types)?;
+        Ok(())
     }
 
     #[must_use]
     pub fn damage_types(&self) -> Option<Arc<ReloadableRegistry<DamageTypeFile>>> {
         DAMAGE_TYPE_REGISTRY.get().map(Arc::clone)
     }
+
+    #[must_use]
+    pub fn dimension_types(&self) -> Option<Arc<ReloadableRegistry<DimensionType>>> {
+        DIMENSION_TYPE_REGISTRY.get().map(Arc::clone)
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::DatapackRegistries;
-    use crate::damage_type::DamageTypeFile;
+    use crate::{DatapackError, damage_type::DamageTypeFile};
     use pumpkin_registry::{
-        AsyncTypedRegistry, BOOTSTRAP, Registry, bootstrap::BootstrapManager, error::BootstrapError,
+        BOOTSTRAP, Registry, TypedRegistry, bootstrap::BootstrapManager, error::BootstrapError,
     };
     use pumpkin_util::identifier::Identifier;
 
@@ -110,7 +157,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn reload_damage_types_sorts_and_populates_registry() -> Result<(), BootstrapError> {
+    async fn reload_damage_types_sorts_and_populates_registry() -> Result<(), DatapackError> {
         BOOTSTRAP.get_or_init(BootstrapManager::new);
 
         let registries = DatapackRegistries::new();
@@ -129,16 +176,10 @@ mod tests {
             .damage_types()
             .ok_or(BootstrapError::Uninitialized)?;
 
-        assert_eq!(
-            Registry::get_id_async(damage_types.as_ref(), &alpha).await,
-            Some(0),
-        );
-        assert_eq!(
-            Registry::get_id_async(damage_types.as_ref(), &zeta).await,
-            Some(1),
-        );
+        assert_eq!(Registry::get_id(damage_types.as_ref(), &alpha), Some(0),);
+        assert_eq!(Registry::get_id(damage_types.as_ref(), &zeta), Some(1),);
 
-        let alpha_entry = AsyncTypedRegistry::get(damage_types.as_ref(), &alpha).await;
+        let alpha_entry = TypedRegistry::get(damage_types.as_ref(), &alpha);
         assert_eq!(
             alpha_entry.as_deref().map(DamageTypeFile::message_id),
             Some("alpha"),

@@ -16,7 +16,6 @@ use advancement::PlayerAdvancement;
 use arc_swap::ArcSwap;
 use crossbeam::atomic::AtomicCell;
 use crossbeam::channel::Receiver;
-use pumpkin_data::dimension::Dimension;
 use pumpkin_data::meta_data_type::MetaDataType;
 use pumpkin_data::tracked_data::TrackedData;
 use pumpkin_inventory::player::ender_chest_inventory::EnderChestInventory;
@@ -32,8 +31,7 @@ use pumpkin_protocol::bedrock::client::{
 use pumpkin_protocol::bedrock::respawn::RespawnState;
 use pumpkin_protocol::bedrock::server::text::SText;
 use pumpkin_protocol::codec::item_stack_seralizer::ItemStackSerializer;
-use pumpkin_registry::{DataKey, ROOT};
-use pumpkin_util::translation::Locale;
+use pumpkin_util::{identifier::Identifier, translation::Locale};
 use pumpkin_world::chunk::{ChunkData, ChunkEntityData};
 use pumpkin_world::inventory::Inventory;
 use tokio::sync::Mutex;
@@ -1636,7 +1634,7 @@ impl Player {
 
     pub async fn set_respawn_point(
         &self,
-        dimension: Dimension,
+        dimension: Identifier,
         block_pos: BlockPos,
         yaw: f32,
         pitch: f32,
@@ -1650,19 +1648,14 @@ impl Player {
             return false;
         }
 
-        let bedrock_dimension = match dimension.minecraft_name {
-            "minecraft:the_nether" => 1,
-            "minecraft:the_end" => 2,
+        let bedrock_dimension = match dimension.path() {
+            "the_nether" => 1,
+            "the_end" => 2,
             _ => 0,
         };
         self.client
             .send_packet_now_editioned(
-                &CPlayerSpawnPosition::new(
-                    block_pos,
-                    yaw,
-                    pitch,
-                    dimension.minecraft_name.to_owned(),
-                ),
+                &CPlayerSpawnPosition::new(block_pos, yaw, pitch, dimension.to_string()),
                 &pumpkin_protocol::bedrock::client::CSetSpawnPosition::new(
                     0, // Player spawn
                     block_pos,
@@ -3171,7 +3164,7 @@ impl Player {
     }
 
     /// Teleports the player to a different world or dimension with an optional position, yaw, and pitch.
-    #[expect(clippy::too_many_lines)]
+    //#[expect(clippy::too_many_lines)]
     pub async fn teleport_world(
         self: &Arc<Self>,
         new_world: Arc<World>,
@@ -3220,18 +3213,18 @@ impl Player {
                 self.chunk_manager.lock().await.change_world(&current_world.level, new_world.clone());
                 self.living_entity.entity.set_world(new_world.clone());
 
-                if new_world.dimension == pumpkin_data::dimension::Dimension::THE_NETHER {
+                if new_world.dimension.is_nether_like() {
                     self.trigger_advancement(crate::entity::player::advancement::trigger::AdvancementTrigger::EnterDimension {
                         dimension: "the_nether".to_string(),
                     }).await;
-                } else if new_world.dimension == pumpkin_data::dimension::Dimension::THE_END {
+                } else if new_world.dimension.is_end_like() {
                     self.trigger_advancement(crate::entity::player::advancement::trigger::AdvancementTrigger::EnterDimension {
                         dimension: "the_end".to_string(),
                     }).await;
                 }
 
                 let last_pos = self.living_entity.entity.last_pos.load();
-                let death_dimension = ResourceLocation::from(self.world().dimension.minecraft_name);
+                let death_dimension = ResourceLocation::from(self.world().level.world_key.to_string());
                 let death_location = BlockPos(Vector3::new(
                     last_pos.x.round() as i32,
                     last_pos.y.round() as i32,
@@ -3241,7 +3234,8 @@ impl Player {
                     ClientPlatform::Java(java) => {
                         java.send_packet_now(&CRespawn::new(
                             PlayerSpawnData::new(
-                                new_world.dimension.clone(),
+                                VarInt(i32::from(new_world.dimension_type_id)),
+                                new_world.dimension_type_name.to_string(),
                                 biome::hash_seed(new_world.level.seed.0), // seed
                                 self.gamemode.load() as u8,
                                 self.previous_gamemode.load().unwrap_or(self.gamemode.load()) as i8,
@@ -3255,11 +3249,9 @@ impl Player {
                         )).await;
                     }
                     ClientPlatform::Bedrock(bedrock) => {
-                        let bedrock_dimension = if new_world.dimension == Dimension::OVERWORLD {
-                            0
-                        } else if new_world.dimension == Dimension::THE_NETHER {
+                        let bedrock_dimension = if new_world.dimension.is_nether_like() {
                             1
-                        } else if new_world.dimension == Dimension::THE_END {
+                        } else if new_world.dimension.is_end_like() {
                             2
                         } else {
                             0
@@ -5396,19 +5388,13 @@ impl NBTStorage for Player {
                     .clamp(0, super::breath::DROWNING_INTERVAL - 1),
             );
 
-            nbt.put_string(
-                "Dimension",
-                self.world().dimension.minecraft_name.to_string(),
-            );
+            nbt.put_string("Dimension", self.world().level.world_key.to_string());
 
             if let Some(respawn) = self.respawn_point.lock().await.as_ref() {
                 nbt.put_int("SpawnX", respawn.position.0.x);
                 nbt.put_int("SpawnY", respawn.position.0.y);
                 nbt.put_int("SpawnZ", respawn.position.0.z);
-                nbt.put_string(
-                    "SpawnDimension",
-                    respawn.dimension.minecraft_name.to_owned(),
-                );
+                nbt.put_string("SpawnDimension", respawn.dimension.to_string());
                 nbt.put_bool("SpawnForced", respawn.force);
             }
             nbt.put_int("XpSeed", self.enchantment_seed.load(Ordering::Relaxed));
@@ -5480,14 +5466,8 @@ impl NBTStorage for Player {
             ) {
                 let dim = nbt
                     .get_string("SpawnDimension")
-                    .and_then(|name| {
-                        let root = ROOT.get()?;
-                        DataKey::<Dimension>::owned(format!("minecraft:dimension_type/{name}"))
-                            .get_blocking(root)
-                            .ok()
-                            .map(|dimension| dimension.clone())
-                    })
-                    .unwrap_or_else(|| self.world().dimension.clone());
+                    .and_then(|name| Identifier::parse(name).ok())
+                    .unwrap_or_else(|| self.world().level.world_key.clone());
                 let force = nbt.get_bool("SpawnForced").unwrap_or(false);
                 *self.respawn_point.lock().await = Some(RespawnPoint {
                     dimension: dim,
@@ -5920,7 +5900,7 @@ impl Abilities {
 /// Represents the player's stored respawn point (bed/anchor/forced).
 #[derive(Debug, Clone, PartialEq)]
 pub struct RespawnPoint {
-    pub dimension: Dimension,
+    pub dimension: Identifier,
     pub position: BlockPos,
     pub yaw: f32,
     pub force: bool,
@@ -5934,7 +5914,7 @@ pub struct CalculatedRespawnPoint {
     /// The pitch rotation.
     pub pitch: f32,
     /// The dimension to spawn in.
-    pub dimension: Dimension,
+    pub dimension: Identifier,
 }
 
 /// Represents the player's chat mode settings.

@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use pumpkin_data::dimension::Dimension;
 use pumpkin_data::tag::Taggable;
 use pumpkin_data::world::WorldEvent;
 use pumpkin_data::{Block, BlockDirection, tag};
@@ -86,7 +85,7 @@ impl FireBlockBase {
         direction: BlockDirection,
     ) -> bool {
         let dimension = &world.dimension;
-        if dimension != &Dimension::OVERWORLD && dimension != &Dimension::THE_NETHER {
+        if dimension.is_end_like() {
             return false;
         }
         let mut found = false;

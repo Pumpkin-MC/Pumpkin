@@ -1,8 +1,7 @@
 #![allow(clippy::unwrap_used, clippy::panic)]
 
 use pumpkin_data::{
-    chunk_gen_settings::GenerationSettings, dimension::Dimension, structures::StructureSet,
-    world_preset::WorldPreset,
+    chunk_gen_settings::GenerationSettings, structures::StructureSet, world_preset::WorldPreset,
 };
 use pumpkin_registry::{
     BOOTSTRAP, DataKey, Registry, RegistryBuilder, bootstrap::BootstrapManager,
@@ -16,35 +15,6 @@ fn root() -> Arc<dyn Registry> {
     RegistryBuilder::<Arc<dyn Registry>>::frozen(&Identifier::vanilla_static("root"))
         .unwrap()
         .arc_dyn()
-}
-
-#[test]
-fn dimension_type_registry_contains_vanilla_data() {
-    let root = root();
-
-    let cases = [
-        (
-            DataKey::<Dimension>::new("minecraft:dimension_type/minecraft:overworld"),
-            &Dimension::OVERWORLD,
-        ),
-        (
-            DataKey::<Dimension>::new("minecraft:dimension_type/minecraft:overworld_caves"),
-            &Dimension::OVERWORLD_CAVES,
-        ),
-        (
-            DataKey::<Dimension>::new("minecraft:dimension_type/minecraft:the_end"),
-            &Dimension::THE_END,
-        ),
-        (
-            DataKey::<Dimension>::new("minecraft:dimension_type/minecraft:the_nether"),
-            &Dimension::THE_NETHER,
-        ),
-    ];
-
-    for (key, expected) in cases {
-        let actual = key.get_blocking(root.as_ref()).unwrap();
-        assert_eq!(*actual, *expected);
-    }
 }
 
 #[test]
@@ -97,7 +67,7 @@ fn noise_settings_registry_contains_vanilla_data() {
     ];
 
     for (key, expected) in cases {
-        let actual = key.get_blocking(root.as_ref()).unwrap();
+        let actual = key.get(root.as_ref()).unwrap();
 
         assert_eq!(actual.sea_level, expected.sea_level);
         assert_eq!(actual.shape.min_y, expected.shape.min_y);
@@ -115,7 +85,7 @@ fn structure_set_registry_contains_vanilla_data() {
     let key = DataKey::<StructureSet>::new(
         "minecraft:worldgen/minecraft:structure_set/minecraft:strongholds",
     );
-    let set = key.get_blocking(root.as_ref()).unwrap();
+    let set = key.get(root.as_ref()).unwrap();
 
     assert_eq!(set.placement.salt, StructureSet::STRONGHOLDS.placement.salt);
     assert_eq!(
@@ -144,7 +114,7 @@ fn world_preset_registry_contains_vanilla_presets() {
         let key = DataKey::<WorldPreset>::owned(format!(
             "minecraft:worldgen/minecraft:world_preset/minecraft:{name}"
         ));
-        let preset = key.get_blocking(root.as_ref()).unwrap();
+        let preset = key.get(root.as_ref()).unwrap();
         assert_eq!(preset.dimensions.len(), 3);
 
         match (preset.generator_settings.as_ref(), generator_settings) {
@@ -163,7 +133,7 @@ fn flat_world_preset_preserves_generator_settings() {
     let root = root();
     let key =
         DataKey::<WorldPreset>::new("minecraft:worldgen/minecraft:world_preset/minecraft:flat");
-    let preset = key.get_blocking(root.as_ref()).unwrap();
+    let preset = key.get(root.as_ref()).unwrap();
     let overworld = preset
         .dimensions
         .iter()

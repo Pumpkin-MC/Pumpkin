@@ -57,7 +57,6 @@ use pumpkin_config::BasicConfiguration;
 use pumpkin_data::block_properties::{blocks_movement, is_air};
 use pumpkin_data::block_rotation::{Mirror, Rotation};
 use pumpkin_data::data_component_impl::EquipmentSlot;
-use pumpkin_data::dimension::Dimension;
 use pumpkin_data::entity::MobCategory;
 use pumpkin_data::fluid::{Falling, FluidProperties, FluidState};
 use pumpkin_data::meta_data_type::MetaDataType;
@@ -140,6 +139,7 @@ use pumpkin_util::{
     math::{get_section_cord, position::chunk_section_from_pos, vector2::Vector2},
     random::{RandomImpl, get_seed, xoroshiro128::Xoroshiro},
 };
+use pumpkin_world::dimension_type::DimensionType as Dimension;
 use pumpkin_world::inventory::Clearable;
 use pumpkin_world::world::{GetBlockError, WorldPortalExt};
 use pumpkin_world::{
@@ -254,6 +254,10 @@ pub struct World {
     pub level_time: Mutex<LevelTime>,
     /// The type of dimension the world is in.
     pub dimension: Dimension,
+    /// Registry key of the dimension type backing this world.
+    pub dimension_type_name: Identifier,
+    /// Numeric ID of the dimension type in the synchronized registry.
+    pub dimension_type_id: u8,
     pub sea_level: i32,
     pub min_y: i32,
     /// The world's weather, including rain and thunder levels.
@@ -336,6 +340,8 @@ impl World {
         level: Arc<Level>,
         level_info: Arc<ArcSwap<LevelData>>,
         dimension: Dimension,
+        dimension_type_name: Identifier,
+        dimension_type_id: u8,
         block_registry: Arc<BlockRegistry>,
         server: Weak<Server>,
     ) -> Self {
@@ -355,6 +361,8 @@ impl World {
             worldborder: Mutex::new(Worldborder::new(0.0, 0.0, 5.999_996_8E7, 0, 5, 300)),
             level_time: Mutex::new(LevelTime::new()),
             dimension,
+            dimension_type_name,
+            dimension_type_id,
             weather: Mutex::new(Weather::new()),
             block_registry,
             sea_level,
@@ -2874,7 +2882,8 @@ impl World {
                 true,
                 false,
                 PlayerSpawnData::new(
-                    self.dimension.clone(),
+                    VarInt(i32::from(self.dimension_type_id)),
+                    self.dimension_type_name.to_string(),
                     biome::hash_seed(self.level.seed.0), // seed
                     gamemode as u8,
                     player
@@ -3435,7 +3444,7 @@ impl World {
                 spawn_block_pos,
                 yaw,
                 pitch,
-                self.dimension.minecraft_name.to_owned(),
+                self.level.world_key.to_string(),
             ))
             .await;
 
@@ -3642,7 +3651,7 @@ impl World {
     #[allow(clippy::too_many_lines)]
     pub async fn respawn_player(self: &Arc<Self>, player: &Arc<Player>, alive: bool) {
         let last_pos = player.get_entity().last_pos.load();
-        let death_dimension = ResourceLocation::from(player.world().dimension.minecraft_name);
+        let death_dimension = ResourceLocation::from(player.world().level.world_key.to_string());
         let death_location = BlockPos(Vector3::new(
             last_pos.x.round() as i32,
             last_pos.y.round() as i32,
@@ -3694,7 +3703,7 @@ impl World {
                     ),
                     spawn_yaw,
                     spawn_pitch,
-                    self.dimension.clone(),
+                    self.level.world_key.clone(),
                 )
             };
 
@@ -3711,7 +3720,7 @@ impl World {
         let position = spawn_loc_event.spawn_pos;
 
         // Candidate destination world for a cross-dimension respawn.
-        let candidate_world = if respawn_dimension == self.dimension {
+        let candidate_world = if respawn_dimension == self.level.world_key {
             None
         } else {
             self.server.upgrade().map_or_else(
@@ -3723,7 +3732,7 @@ impl World {
                     let worlds = server.worlds.load();
                     worlds
                         .iter()
-                        .find(|w| w.dimension == respawn_dimension)
+                        .find(|w| w.level.world_key == respawn_dimension)
                         .cloned()
                 },
             )
@@ -3756,7 +3765,7 @@ impl World {
                     if destination.uuid != self.uuid {
                         debug!(
                             "Cross-dimension respawn: {} -> {}",
-                            self.dimension.minecraft_name, destination.dimension.minecraft_name
+                            self.level.world_key, destination.level.world_key
                         );
 
                         // Detach from the old world before publishing into the new one, so no
@@ -3783,10 +3792,10 @@ impl World {
                 (None, position, yaw, pitch)
             }
         } else {
-            if respawn_dimension != self.dimension {
+            if respawn_dimension != self.level.world_key {
                 warn!(
                     "Target world {:?} not found, using world spawn in {:?}",
-                    respawn_dimension, self.dimension
+                    respawn_dimension, self.level.world_key
                 );
             }
             (None, position, yaw, pitch)
@@ -3796,7 +3805,7 @@ impl World {
         // world's spawn below; otherwise the resolved values from the event apply.
         let (target_world, position, yaw, pitch) = if let Some(ref new_world) = resolved_world {
             (new_world.clone(), position, yaw, pitch)
-        } else if respawn_dimension != self.dimension {
+        } else if respawn_dimension != self.level.world_key {
             // FIXME: This spawn position calculation is incorrect. Should use vanilla's
             // proper spawn position calculation (see #1381).
             let chunk_pos = Vector2::new(spawn_x >> 4, spawn_z >> 4);
@@ -3836,7 +3845,8 @@ impl World {
             .client
             .send_packet_now(&CRespawn::new(
                 PlayerSpawnData::new(
-                    target_world.dimension.clone(),
+                    VarInt(i32::from(target_world.dimension_type_id)),
+                    target_world.dimension_type_name.to_string(),
                     biome::hash_seed(target_world.level.seed.0),
                     player.gamemode.load() as u8,
                     player.gamemode.load() as i8,
@@ -3858,10 +3868,12 @@ impl World {
             position.y.round() as i32,
             position.z.round() as i32,
         ));
-        let bedrock_dimension = match target_world.dimension.minecraft_name {
-            "minecraft:the_nether" => 1,
-            "minecraft:the_end" => 2,
-            _ => 0,
+        let bedrock_dimension = if target_world.dimension.is_nether_like() {
+            1
+        } else if target_world.dimension.is_end_like() {
+            2
+        } else {
+            0
         };
         player
             .client
@@ -3870,7 +3882,7 @@ impl World {
                     spawn_block_pos,
                     yaw,
                     pitch,
-                    target_world.dimension.minecraft_name.to_string(),
+                    target_world.level.world_key.to_string(),
                 ),
                 &pumpkin_protocol::bedrock::client::CSetSpawnPosition::new(
                     1, // World spawn

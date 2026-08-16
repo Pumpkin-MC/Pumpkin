@@ -17,7 +17,7 @@ use pumpkin_data::BlockState;
 use pumpkin_data::biome::Biome;
 use pumpkin_data::block_properties::blocks_movement;
 use pumpkin_data::data_component_impl::EquipmentSlot;
-use pumpkin_data::dimension::Dimension;
+
 use pumpkin_data::entity::EntityStatus;
 use pumpkin_data::fluid::Fluid;
 use pumpkin_data::item_stack::ItemStack;
@@ -2020,7 +2020,7 @@ impl Entity {
                 .await;
         }
 
-        let lava_speed = if world.dimension == Dimension::THE_NETHER {
+        let lava_speed = if world.dimension.is_nether_like() {
             0.007
         } else {
             0.002_333_333
@@ -2459,8 +2459,8 @@ impl Entity {
             return;
         };
 
-        if (portal_world.dimension == Dimension::THE_NETHER && !server.basic_config.allow_nether)
-            || (portal_world.dimension == Dimension::THE_END && !server.basic_config.allow_end)
+        if (portal_world.dimension.is_nether_like() && !server.basic_config.allow_nether)
+            || (portal_world.dimension.is_end_like() && !server.basic_config.allow_end)
         {
             return;
         }
@@ -2468,8 +2468,8 @@ impl Entity {
         let mut manager = self.portal_manager.lock().await;
         let world = self.world.load();
         if manager.is_none() {
-            let portal_type = if portal_world.dimension == Dimension::THE_END
-                || self.world.load().dimension == Dimension::THE_END
+            let portal_type = if portal_world.dimension.is_end_like()
+                || self.world.load().dimension.is_end_like()
             {
                 PortalType::End
             } else {

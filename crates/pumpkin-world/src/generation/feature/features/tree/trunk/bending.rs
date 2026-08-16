@@ -1,5 +1,5 @@
-use pumpkin_data::{BlockDirection, BlockState};
 use pumpkin_data::int_provider::IntProviderValue;
+use pumpkin_data::{BlockDirection, BlockState};
 use pumpkin_util::{
     math::position::BlockPos,
     random::{RandomGenerator, RandomImpl},

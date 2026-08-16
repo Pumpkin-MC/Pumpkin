@@ -296,8 +296,11 @@ impl MobEntity {
         };
 
         // TODO
+        let Some(light_level) = dimension.monster_spawn_light_level.resolve().into_result() else {
+            return false;
+        };
         let mut random = RandomGenerator::Xoroshiro(Xoroshiro::from_seed(get_seed()));
-        current_brightness <= dimension.monster_spawn_light_level.get(&mut random) as u8
+        current_brightness <= light_level.get(&mut random) as u8
     }
 
     pub fn check_monster_spawn_rules(world: &World, pos: &BlockPos, is_thundering: bool) -> bool {

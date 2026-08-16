@@ -1,7 +1,7 @@
 use crate::entity::player::Player;
 use dashmap::DashMap;
-use pumpkin_data::dimension::Dimension;
 use pumpkin_util::math::{position::BlockPos, vector2::Vector2};
+use pumpkin_world::dimension_type::DimensionType as Dimension;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 

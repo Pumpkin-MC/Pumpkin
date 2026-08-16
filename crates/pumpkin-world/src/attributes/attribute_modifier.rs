@@ -4,7 +4,8 @@ use std::{
     sync::Arc,
 };
 
-use pumpkin_codecs::{Decode, Encode};
+use pumpkin_codecs::{DataResult, Decode, DynamicOps, Encode};
+use pumpkin_nbt::{nbt_ops::NbtOps, tag::NbtTag};
 
 use crate::attributes::{
     color::{ArgbColor, RgbColor},
@@ -28,6 +29,9 @@ pub struct ErasedAttributeModifier<T: Encode + Decode + 'static> {
     operation: AttributeOperation,
     argument_type_id: TypeId,
     modifier: Arc<dyn Any + Send + Sync>,
+    validate_argument: fn(NbtTag) -> DataResult<()>,
+    encode_argument: fn(&dyn Any) -> DataResult<NbtTag>,
+    apply: fn(&dyn Any, T, NbtTag) -> DataResult<T>,
     marker: PhantomData<fn(T) -> T>,
 }
 
@@ -37,6 +41,9 @@ impl<T: Encode + Decode + 'static> Clone for ErasedAttributeModifier<T> {
             operation: self.operation,
             argument_type_id: self.argument_type_id,
             modifier: Arc::clone(&self.modifier),
+            validate_argument: self.validate_argument,
+            encode_argument: self.encode_argument,
+            apply: self.apply,
             marker: PhantomData,
         }
     }
@@ -52,6 +59,9 @@ impl<T: Encode + Decode + 'static> ErasedAttributeModifier<T> {
             operation,
             argument_type_id: TypeId::of::<A>(),
             modifier: Arc::new(modifier),
+            validate_argument: validate_argument::<A>,
+            encode_argument: encode_argument::<A>,
+            apply: apply::<T, A, M>,
             marker: PhantomData,
         }
     }
@@ -72,6 +82,40 @@ impl<T: Encode + Decode + 'static> ErasedAttributeModifier<T> {
             .then(|| self.modifier.downcast_ref::<M>())
             .flatten()
     }
+
+    pub fn validate_argument(&self, input: NbtTag) -> DataResult<()> {
+        (self.validate_argument)(input)
+    }
+
+    pub fn encode_argument(&self, argument: &dyn Any) -> DataResult<NbtTag> {
+        (self.encode_argument)(argument)
+    }
+
+    pub fn apply(&self, target: T, input: NbtTag) -> DataResult<T> {
+        (self.apply)(self.modifier.as_ref(), target, input)
+    }
+}
+
+fn validate_argument<A: Decode + 'static>(input: NbtTag) -> DataResult<()> {
+    A::parse(input, &NbtOps).map(drop)
+}
+
+fn encode_argument<A: Encode + 'static>(argument: &dyn Any) -> DataResult<NbtTag> {
+    let Some(argument) = argument.downcast_ref::<A>() else {
+        return DataResult::new_error("attribute modifier argument type mismatch");
+    };
+    argument.encode_start(&NbtOps)
+}
+
+fn apply<T: Encode + Decode + 'static, A: Encode + Decode + 'static, M: AttributeModifier<T, A>>(
+    modifier: &dyn Any,
+    target: T,
+    input: NbtTag,
+) -> DataResult<T> {
+    let Some(modifier) = modifier.downcast_ref::<M>() else {
+        return DataResult::new_error("attribute modifier type mismatch");
+    };
+    A::parse(input, &NbtOps).map(|argument| modifier.modify(target, argument))
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -119,6 +163,44 @@ impl AttributeOperation {
             Self::Xor => "xor",
             Self::Xnor => "xnor",
         }
+    }
+
+    #[must_use]
+    pub fn from_name(value: &str) -> Option<Self> {
+        match value {
+            "override" => Some(Self::Override),
+            "alpha_blend" => Some(Self::AlphaBlend),
+            "add" => Some(Self::Add),
+            "subtract" => Some(Self::Subtract),
+            "multiply" => Some(Self::Multiply),
+            "blend_to_gray" => Some(Self::BlendToGray),
+            "minimum" => Some(Self::Minimum),
+            "maximum" => Some(Self::Maximum),
+            "and" => Some(Self::And),
+            "nand" => Some(Self::Nand),
+            "or" => Some(Self::Or),
+            "nor" => Some(Self::Nor),
+            "xor" => Some(Self::Xor),
+            "xnor" => Some(Self::Xnor),
+            _ => None,
+        }
+    }
+}
+
+impl Encode for AttributeOperation {
+    fn encode<O: DynamicOps>(&self, ops: &'static O, prefix: O::Value) -> DataResult<O::Value> {
+        self.as_str().to_string().encode(ops, prefix)
+    }
+}
+
+impl Decode for AttributeOperation {
+    fn decode<O: DynamicOps>(input: O::Value, ops: &'static O) -> DataResult<(Self, O::Value)> {
+        String::decode(input, ops).flat_map(|(value, remaining)| {
+            Self::from_name(&value).map_or_else(
+                || DataResult::new_error(format!("unknown attribute modifier: {value}")),
+                |operation| DataResult::new_success((operation, remaining)),
+            )
+        })
     }
 }
 

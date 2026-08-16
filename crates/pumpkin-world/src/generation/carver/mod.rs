@@ -3,6 +3,7 @@ pub mod cave;
 pub mod mask;
 
 use crate::ProtoChunk;
+use crate::dimension_type::DimensionType as Dimension;
 use crate::generation::GlobalRandomConfig;
 use crate::generation::generator::VanillaGenerator;
 use crate::generation::noise::aquifer_sampler::CarverAquiferSampler;
@@ -17,7 +18,6 @@ use pumpkin_data::block_state::BlockState;
 use pumpkin_data::carver::{CANYON, CAVE, CAVE_EXTRA_UNDERGROUND, NETHER_CAVE};
 use pumpkin_data::carver::{CarverAdditionalConfig, CarverConfig};
 use pumpkin_data::chunk_gen_settings::MaterialRule;
-use pumpkin_data::dimension::Dimension;
 use pumpkin_data::fluid::Fluid;
 use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::math::vector3::Vector3;
@@ -43,7 +43,7 @@ impl Default for CarverBlockIds {
 
 impl CarverBlockIds {
     #[must_use]
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
             air: pumpkin_data::Block::AIR.default_state,
             cave_air: pumpkin_data::Block::CAVE_AIR.default_state,
@@ -253,12 +253,12 @@ const fn new_carver_random(seed: u64, non_vanilla_random: bool) -> RandomGenerat
 }
 
 fn carvers_for_dimension(dimension: &Dimension) -> &'static [&'static CarverConfig] {
-    if dimension == &Dimension::OVERWORLD {
-        &OVERWORLD_CARVERS
-    } else if dimension == &Dimension::THE_NETHER {
+    if dimension.is_nether_like() {
         &NETHER_CARVERS
-    } else {
+    } else if dimension.is_end_like() {
         &[]
+    } else {
+        &OVERWORLD_CARVERS
     }
 }
 
@@ -456,66 +456,76 @@ mod tests {
 
     #[test]
     fn overworld_has_aquifer() {
-        with_carve_run(Dimension::OVERWORLD, |run| {
+        with_carve_run(crate::test_support::dimension("overworld"), |run| {
             assert!(run.ctx.carver_aquifer.is_some());
         });
     }
 
     #[test]
     fn restores_surface() {
-        with_carve_run_options(Dimension::OVERWORLD, Some(&PODZOL_RULE), false, |run| {
-            let x = 4;
-            let y = 70;
-            let z = 5;
-            run.chunk
-                .set_block_state(x, y - 1, z, Block::DIRT.default_state);
+        with_carve_run_options(
+            crate::test_support::dimension("overworld"),
+            Some(&PODZOL_RULE),
+            false,
+            |run| {
+                let x = 4;
+                let y = 70;
+                let z = 5;
+                run.chunk
+                    .set_block_state(x, y - 1, z, Block::DIRT.default_state);
 
-            carve_top_material(run, x, y, z, Block::AIR.default_state, true, true);
+                carve_top_material(run, x, y, z, Block::AIR.default_state, true, true);
 
-            assert_eq!(
-                run.chunk.get_block_state(&Vector3::new(x, y - 1, z)),
-                Block::PODZOL.default_state.id,
-            );
-        });
+                assert_eq!(
+                    run.chunk.get_block_state(&Vector3::new(x, y - 1, z)),
+                    Block::PODZOL.default_state.id,
+                );
+            },
+        );
     }
 
     #[test]
     fn skips_surface_restore() {
-        with_carve_run_options(Dimension::OVERWORLD, Some(&PODZOL_RULE), false, |run| {
-            let x = 4;
-            let y = 70;
-            let z = 5;
+        with_carve_run_options(
+            crate::test_support::dimension("overworld"),
+            Some(&PODZOL_RULE),
+            false,
+            |run| {
+                let x = 4;
+                let y = 70;
+                let z = 5;
 
-            run.chunk
-                .set_block_state(x, y - 1, z, Block::DIRT.default_state);
-            carve_top_material(run, x, y, z, Block::AIR.default_state, false, true);
-            assert_eq!(
-                run.chunk.get_block_state(&Vector3::new(x, y - 1, z)),
-                Block::DIRT.default_state.id,
-            );
+                run.chunk
+                    .set_block_state(x, y - 1, z, Block::DIRT.default_state);
+                carve_top_material(run, x, y, z, Block::AIR.default_state, false, true);
+                assert_eq!(
+                    run.chunk.get_block_state(&Vector3::new(x, y - 1, z)),
+                    Block::DIRT.default_state.id,
+                );
 
-            run.chunk
-                .set_block_state(x, y - 1, z, Block::STONE.default_state);
-            carve_top_material(run, x, y, z, Block::AIR.default_state, true, true);
-            assert_eq!(
-                run.chunk.get_block_state(&Vector3::new(x, y - 1, z)),
-                Block::STONE.default_state.id,
-            );
+                run.chunk
+                    .set_block_state(x, y - 1, z, Block::STONE.default_state);
+                carve_top_material(run, x, y, z, Block::AIR.default_state, true, true);
+                assert_eq!(
+                    run.chunk.get_block_state(&Vector3::new(x, y - 1, z)),
+                    Block::STONE.default_state.id,
+                );
 
-            run.chunk
-                .set_block_state(x, y - 1, z, Block::DIRT.default_state);
-            carve_top_material(run, x, y, z, Block::AIR.default_state, true, false);
-            assert_eq!(
-                run.chunk.get_block_state(&Vector3::new(x, y - 1, z)),
-                Block::DIRT.default_state.id,
-            );
-        });
+                run.chunk
+                    .set_block_state(x, y - 1, z, Block::DIRT.default_state);
+                carve_top_material(run, x, y, z, Block::AIR.default_state, true, false);
+                assert_eq!(
+                    run.chunk.get_block_state(&Vector3::new(x, y - 1, z)),
+                    Block::DIRT.default_state.id,
+                );
+            },
+        );
     }
 
     #[test]
     fn passes_fluid_to_rule() {
         with_carve_run_options(
-            Dimension::OVERWORLD,
+            crate::test_support::dimension("overworld"),
             Some(&WATER_SENSITIVE_RULE),
             false,
             |run| {
@@ -540,7 +550,7 @@ mod tests {
 
     #[test]
     fn steep_matches_vanilla() {
-        with_carve_run(Dimension::OVERWORLD, |run| {
+        with_carve_run(crate::test_support::dimension("overworld"), |run| {
             let x = 5;
             let z = 5;
 

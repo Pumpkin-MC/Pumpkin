@@ -482,8 +482,8 @@ impl pumpkin::plugin::world::HostWorld for PluginHostState {
         Ok(self
             .get_world_res(&world)?
             .provider
-            .dimension
-            .minecraft_name
+            .level
+            .world_key
             .to_string())
     }
 

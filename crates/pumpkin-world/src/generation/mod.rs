@@ -18,8 +18,8 @@ pub mod rule;
 pub mod structure;
 mod surface;
 
+use crate::dimension_type::DimensionType as Dimension;
 use generator::{ChunkGenerator, VanillaGenerator};
-use pumpkin_data::dimension::Dimension;
 use pumpkin_util::{
     random::xoroshiro128::{Xoroshiro, XoroshiroSplitter},
     world_seed::Seed,

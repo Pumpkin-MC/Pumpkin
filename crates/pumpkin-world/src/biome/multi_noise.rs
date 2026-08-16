@@ -32,7 +32,6 @@ impl NoiseValuePoint {
 
 #[cfg(test)]
 mod test {
-    use pumpkin_data::dimension::Dimension;
     use pumpkin_util::read_data_from_file;
 
     use crate::ProtoChunk;
@@ -54,7 +53,10 @@ mod test {
         let chunk_x = 0;
         let chunk_z = 0;
 
-        let generator = VanillaGenerator::new(Seed(seed as u64), Dimension::OVERWORLD);
+        let generator = VanillaGenerator::new(
+            Seed(seed as u64),
+            crate::test_support::dimension("overworld"),
+        );
 
         let _chunk = ProtoChunk::new(chunk_x, chunk_z, &generator);
 
@@ -89,7 +91,7 @@ mod test {
     //         read_data_from_file!("../../../assets/multi_noise_biome_source_test.json");
 
     //     let seed = 0;
-    //     let generator = VanillaGenerator::new(Seed(seed as u64), Dimension::OVERWORLD);
+    //     let generator = VanillaGenerator::new(Seed(seed as u64), crate::test_support::dimension("overworld"));
 
     //     let mut sampler = MultiNoiseSampler::generate(
     //         &generator.base_router.multi_noise,

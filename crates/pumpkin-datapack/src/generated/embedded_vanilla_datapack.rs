@@ -1,4 +1,9 @@
 /* This file is generated. Do not edit manually. */
+#![allow(
+    clippy::large_stack_arrays,
+    clippy::missing_const_for_fn,
+    clippy::too_many_lines
+)]
 #[doc = r" Raw embedded data blob."]
 static DATA: &[u8] = include_bytes!("embedded_data.bin");
 #[doc = r" A single entry in the sorted resource index."]

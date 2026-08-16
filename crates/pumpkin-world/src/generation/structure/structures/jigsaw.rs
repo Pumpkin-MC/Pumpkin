@@ -878,7 +878,7 @@ mod tests {
         const SEED: i64 = 1_782_124_772_053_846_960;
         let world_gen = crate::generation::generator::VanillaGenerator::new(
             pumpkin_util::world_seed::Seed(SEED as u64),
-            pumpkin_data::dimension::Dimension::OVERWORLD,
+            crate::test_support::dimension("overworld"),
         );
         let mut height_sampler =
             crate::generation::structure::height_sampler::NoiseHeightSampler::new(

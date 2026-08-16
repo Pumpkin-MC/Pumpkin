@@ -1,5 +1,6 @@
 #[allow(clippy::wildcard_imports)]
 use super::*;
+use pumpkin_registry::TypedRegistry as _;
 
 impl JavaClient {
     pub async fn handle_known_packs(
@@ -23,19 +24,22 @@ impl JavaClient {
                     .await;
             }
             if !sent_dimension_type {
-                let dims = [
-                    &pumpkin_data::dimension::Dimension::OVERWORLD,
-                    &pumpkin_data::dimension::Dimension::OVERWORLD_CAVES,
-                    &pumpkin_data::dimension::Dimension::THE_END,
-                    &pumpkin_data::dimension::Dimension::THE_NETHER,
-                ];
-                let dim_entries: Vec<pumpkin_data::registry::RegistryEntryData> = dims
-                    .iter()
-                    .map(|dim| pumpkin_data::registry::RegistryEntryData {
-                        entry_id: dim.minecraft_name.to_string(),
-                        data: Some(build_dimension_nbt(dim).into_boxed_slice()),
+                let dim_entries: Vec<pumpkin_data::registry::RegistryEntryData> = server
+                    .datapack_manager
+                    .registries
+                    .dimension_types()
+                    .map(|registry| {
+                        registry
+                            .iter()
+                            .map(
+                                |(identifier, dim)| pumpkin_data::registry::RegistryEntryData {
+                                    entry_id: identifier.to_string(),
+                                    data: Some(build_dimension_nbt(&dim).into_boxed_slice()),
+                                },
+                            )
+                            .collect()
                     })
-                    .collect();
+                    .unwrap_or_default();
                 self.send_packet_now(&CRegistryData::new(
                     &"minecraft:dimension_type".to_string(),
                     &dim_entries,

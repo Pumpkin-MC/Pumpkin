@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use pumpkin_data::Block;
 use pumpkin_data::block_properties::HorizontalAxis;
-use pumpkin_data::dimension::Dimension;
+
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::world::BlockFlags;
@@ -78,11 +78,11 @@ impl PortalType {
     ) -> Option<TeleportTransition> {
         match self {
             Self::End => {
-                let is_end_portal = dest_world.dimension == Dimension::THE_END
-                    || current_level.dimension == Dimension::THE_END;
+                let is_end_portal =
+                    dest_world.dimension.is_end_like() || current_level.dimension.is_end_like();
 
                 if is_end_portal {
-                    if dest_world.dimension == Dimension::THE_END {
+                    if dest_world.dimension.is_end_like() {
                         // Entering the End: spawn on the obsidian platform at (100, 49, 0) for players, or (100, 50, 0) for other entities
                         let is_player = caller
                             .get_living_entity()

@@ -1,4 +1,4 @@
-use pumpkin_data::dimension::Dimension;
+use crate::dimension_type::DimensionType as Dimension;
 
 use crate::ProtoChunk;
 use crate::world::WorldPortalExt;
@@ -106,7 +106,6 @@ mod tests {
     use crate::generation::get_world_gen;
     use crate::world::WorldPortalExt;
     use pumpkin_data::BlockStateId;
-    use pumpkin_data::dimension::Dimension;
     use pumpkin_util::world_seed::Seed;
     use std::sync::Arc;
 
@@ -155,11 +154,11 @@ mod tests {
         crate::init_test_registries();
         for (dimension, terrain_state) in [
             (
-                Dimension::THE_NETHER,
+                crate::test_support::dimension("the_nether"),
                 pumpkin_data::Block::NETHERRACK.default_state.id,
             ),
             (
-                Dimension::THE_END,
+                crate::test_support::dimension("the_end"),
                 pumpkin_data::Block::END_STONE.default_state.id,
             ),
         ] {
@@ -199,7 +198,7 @@ mod tests {
     #[test]
     fn generate_chunk_should_return() {
         crate::init_test_registries();
-        let dimension = Dimension::OVERWORLD;
+        let dimension = crate::test_support::dimension("overworld");
         let seed = Seed(42);
         let block_registry = Arc::new(BlockRegistry);
         let world_gen = get_world_gen(seed, dimension.clone(), false, Vec::new(), String::new());
@@ -238,7 +237,7 @@ mod tests {
     #[test]
     fn configured_seed_generates_vanilla_ancient_city_chunk() {
         crate::init_test_registries();
-        let dimension = Dimension::OVERWORLD;
+        let dimension = crate::test_support::dimension("overworld");
         let seed = Seed(1_782_124_772_053_846_960);
         let block_registry = Arc::new(BlockRegistry);
         let world_gen = get_world_gen(seed, dimension.clone(), false, Vec::new(), String::new());
@@ -292,7 +291,7 @@ mod tests {
     #[test]
     fn seed_zero_generates_the_vanilla_pillager_outpost_chunk() {
         crate::init_test_registries();
-        let dimension = Dimension::OVERWORLD;
+        let dimension = crate::test_support::dimension("overworld");
         let seed = Seed(1_782_124_772_053_846_960);
         let block_registry = Arc::new(BlockRegistry);
         let world_gen = get_world_gen(seed, dimension.clone(), false, Vec::new(), String::new());
@@ -346,7 +345,7 @@ mod tests {
     fn fixed_seed_generates_vanilla_end_ship_chunk() {
         crate::init_test_registries();
         // Vanilla 26.2 places this seed's ship in chunk (-306, -275).
-        let dimension = Dimension::THE_END;
+        let dimension = crate::test_support::dimension("the_end");
         let seed = Seed(12_345);
         let block_registry = Arc::new(BlockRegistry);
         let world_gen = get_world_gen(seed, dimension.clone(), false, Vec::new(), String::new());
@@ -400,7 +399,7 @@ mod tests {
     #[test]
     fn pillager_outpost_features_shape_ground_at_vanilla_height() {
         crate::init_test_registries();
-        let dimension = Dimension::OVERWORLD;
+        let dimension = crate::test_support::dimension("overworld");
         let seed = Seed(1_782_124_772_053_846_960);
         let block_registry = Arc::new(BlockRegistry);
         let world_gen = get_world_gen(seed, dimension.clone(), false, Vec::new(), String::new());

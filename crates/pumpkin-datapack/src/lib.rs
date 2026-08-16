@@ -1,6 +1,12 @@
+#![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used, clippy::panic))]
+
 pub mod advancement;
 pub mod command;
 pub mod damage_type;
+pub mod dimension_type;
+#[rustfmt::skip]
+#[path = "generated/embedded_vanilla_datapack.rs"]
+pub mod embedded_vanilla_datapack;
 pub mod function;
 pub mod loot;
 pub mod pack;
@@ -50,6 +56,8 @@ pub enum DatapackError {
     Identifier(#[from] pumpkin_util::identifier::IdentifierError),
     #[error("Registry error: {0}")]
     Registry(#[from] pumpkin_registry::error::BootstrapError),
+    #[error("Codec error: {0}")]
+    Codec(String),
 }
 
 /// Top-level orchestrator for all datapack lifecycle operations.
@@ -105,11 +113,14 @@ impl DataPackManager {
         let item_modifiers = predicate::load_item_modifiers(&manager)?;
         let advancements = advancement::load_advancements(&manager)?;
         let damage_types = damage_type::load_damage_types(&manager)?;
+        let dimension_types = dimension_type::load_dimension_types(&manager)?;
 
         self.registries.reload_damage_types(damage_types).await?;
+        self.registries
+            .reload_dimension_types(dimension_types)
+            .await?;
 
-        // TODO(datapack parity): Merge DP enchantments, entity types, biomes, etc.
-        // into their respective static registries here once loaders are added.
+        // TODO(datapack parity): Load the remaining datapack-backed registries here.
 
         // Populate tick/load functions from tag registry
         let tick_tag = Identifier::parse("minecraft:tick")?;

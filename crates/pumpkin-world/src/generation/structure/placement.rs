@@ -209,7 +209,7 @@ pub fn should_generate_structure(
             "minecraft:worldgen/minecraft:structure_set/{}",
             zone.other_set
         ));
-        key.get_blocking(root).ok().is_some_and(|set| {
+        key.get(root).ok().is_some_and(|set| {
             let allowed_biomes = ProtoChunk::get_allowed_biomes(&set);
             (chunk_x - zone.chunk_count..=chunk_x + zone.chunk_count).any(|x| {
                 (chunk_z - zone.chunk_count..=chunk_z + zone.chunk_count).any(|z| {
@@ -356,9 +356,8 @@ fn is_start_chunk_random_spread(
 }
 #[cfg(test)]
 mod tests {
-    use pumpkin_data::{
-        dimension::Dimension,
-        structures::{RandomSpreadStructurePlacement, StructurePlacementCalculator, StructureSet},
+    use pumpkin_data::structures::{
+        RandomSpreadStructurePlacement, StructurePlacementCalculator, StructureSet,
     };
     use pumpkin_util::random::{
         RandomGenerator, RandomImpl, get_region_seed, legacy_rand::LegacyRand,
@@ -403,7 +402,7 @@ mod tests {
         let cache = GlobalStructureCache::new();
         let generator = get_world_gen(
             Seed(seed as u64),
-            Dimension::OVERWORLD,
+            crate::test_support::dimension("overworld"),
             false,
             Vec::new(),
             String::new(),

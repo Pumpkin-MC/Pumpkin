@@ -3,12 +3,14 @@ use std::{
     sync::Arc,
 };
 
-use pumpkin_codecs::{Decode, Encode};
+use pumpkin_codecs::{DataResult, Decode, Encode};
+use pumpkin_nbt::{nbt_ops::NbtOps, tag::NbtTag};
 use pumpkin_registry::{Registry, RegistryBuilder, bootstrap::RegistryEntry, bootstrap_provider};
 use pumpkin_util::identifier::Identifier;
 
 use crate::attributes::{
     ArgbColor, EnvAttribute, EnvAttributeBuilder, FloatRange, RgbColor,
+    attribute_modifier::AttributeOperation,
     builtin_types::{
         AttributeTypeEntry, activity_type, ambient_particles_type, ambient_sounds_type, angle_type,
         argb_type, background_music_type, bed_rule_type, boolean_type, float_type, moon_phase_type,
@@ -23,10 +25,28 @@ use crate::attributes::{
 static UNIT_FLOAT_RANGE: FloatRange = FloatRange::UNIT;
 static NON_NEGATIVE_FLOAT_RANGE: FloatRange = FloatRange::NON_NEGATIVE;
 
+pub(crate) struct DecodedEnvironmentAttributeEntry {
+    pub(crate) operation: AttributeOperation,
+    pub(crate) argument: NbtTag,
+}
+
+type DecodeMapEntry = fn(&dyn Any, NbtTag) -> DataResult<DecodedEnvironmentAttributeEntry>;
+type ApplyMapEntry =
+    fn(&dyn Any, DecodedEnvironmentAttributeEntry, Box<dyn Any>) -> DataResult<Box<dyn Any>>;
+type EncodeModifierArgument = fn(&dyn Any, AttributeOperation, &dyn Any) -> DataResult<NbtTag>;
+type EncodeEnvironmentValue = fn(&dyn Any, &dyn Any) -> DataResult<NbtTag>;
+type EnvironmentAttributeFlag = fn(&dyn Any) -> bool;
+
 pub struct EnvironmentAttributeEntry {
     value_type_id: TypeId,
     value_type_name: &'static str,
     value: Arc<dyn Any + Send + Sync>,
+    decode_map_entry: DecodeMapEntry,
+    apply_map_entry: ApplyMapEntry,
+    encode_modifier_argument: EncodeModifierArgument,
+    encode_value: EncodeEnvironmentValue,
+    is_syncable: EnvironmentAttributeFlag,
+    is_positional: EnvironmentAttributeFlag,
 }
 
 impl std::fmt::Debug for EnvironmentAttributeEntry {
@@ -44,6 +64,12 @@ impl EnvironmentAttributeEntry {
             value_type_id: TypeId::of::<T>(),
             value_type_name: type_name::<T>(),
             value,
+            decode_map_entry: decode_map_entry::<T>,
+            apply_map_entry: apply_map_entry::<T>,
+            encode_modifier_argument: encode_modifier_argument::<T>,
+            encode_value: encode_value::<T>,
+            is_syncable: is_syncable::<T>,
+            is_positional: is_positional::<T>,
         }
     }
 
@@ -63,6 +89,156 @@ impl EnvironmentAttributeEntry {
             .then(|| self.value.downcast_ref::<EnvAttribute<T>>())
             .flatten()
     }
+
+    #[must_use]
+    pub fn is_syncable(&self) -> bool {
+        (self.is_syncable)(self.value.as_ref())
+    }
+
+    #[must_use]
+    pub fn is_positional(&self) -> bool {
+        (self.is_positional)(self.value.as_ref())
+    }
+
+    pub(crate) fn decode_map_entry(
+        &self,
+        input: NbtTag,
+    ) -> DataResult<DecodedEnvironmentAttributeEntry> {
+        (self.decode_map_entry)(self.value.as_ref(), input)
+    }
+
+    pub(crate) fn apply_map_entry<T: 'static>(
+        &self,
+        entry: DecodedEnvironmentAttributeEntry,
+        target: T,
+    ) -> DataResult<T> {
+        (self.apply_map_entry)(self.value.as_ref(), entry, Box::new(target)).flat_map(|value| {
+            value.downcast::<T>().map_or_else(
+                |_| DataResult::new_error("environment attribute result type mismatch"),
+                |value| DataResult::new_success(*value),
+            )
+        })
+    }
+
+    pub(crate) fn encode_modifier_argument(
+        &self,
+        operation: AttributeOperation,
+        argument: &dyn Any,
+    ) -> DataResult<NbtTag> {
+        (self.encode_modifier_argument)(self.value.as_ref(), operation, argument)
+    }
+
+    pub(crate) fn encode_value(&self, value: &dyn Any) -> DataResult<NbtTag> {
+        (self.encode_value)(self.value.as_ref(), value)
+    }
+}
+
+fn decode_map_entry<T: Encode + Decode + Send + Sync + 'static>(
+    attribute: &dyn Any,
+    input: NbtTag,
+) -> DataResult<DecodedEnvironmentAttributeEntry> {
+    let Some(attribute) = attribute.downcast_ref::<EnvAttribute<T>>() else {
+        return DataResult::new_error("environment attribute type mismatch");
+    };
+
+    if attribute
+        .parse(input.clone(), &NbtOps)
+        .into_result()
+        .is_some()
+    {
+        return DataResult::new_success(DecodedEnvironmentAttributeEntry {
+            operation: AttributeOperation::Override,
+            argument: input,
+        });
+    }
+
+    let NbtTag::Compound(compound) = &input else {
+        return DataResult::new_error("invalid environment attribute map entry");
+    };
+    let Some(modifier_tag) = compound.get("modifier").cloned() else {
+        return DataResult::new_error("missing environment attribute modifier");
+    };
+    let Some(argument) = compound.get("argument").cloned() else {
+        return DataResult::new_error("missing environment attribute modifier argument");
+    };
+    AttributeOperation::parse(modifier_tag, &NbtOps).flat_map(|operation| {
+        let Some(modifier) = attribute.value_type().modifier(operation) else {
+            return DataResult::new_error(format!(
+                "modifier {} is not valid for environment attribute value type",
+                operation.as_str()
+            ));
+        };
+        modifier
+            .validate_argument(argument.clone())
+            .map(|()| DecodedEnvironmentAttributeEntry {
+                operation,
+                argument,
+            })
+    })
+}
+
+fn apply_map_entry<T: Encode + Decode + Send + Sync + 'static>(
+    attribute: &dyn Any,
+    entry: DecodedEnvironmentAttributeEntry,
+    target: Box<dyn Any>,
+) -> DataResult<Box<dyn Any>> {
+    let Some(attribute) = attribute.downcast_ref::<EnvAttribute<T>>() else {
+        return DataResult::new_error("environment attribute type mismatch");
+    };
+    let Ok(target) = target.downcast::<T>() else {
+        return DataResult::new_error("environment attribute target type mismatch");
+    };
+    let Some(modifier) = attribute.value_type().modifier(entry.operation) else {
+        return DataResult::new_error(format!(
+            "modifier {} is not valid for environment attribute value type",
+            entry.operation.as_str()
+        ));
+    };
+    modifier
+        .apply(*target, entry.argument)
+        .map(|value| Box::new(value) as Box<dyn Any>)
+}
+
+fn encode_modifier_argument<T: Encode + Decode + Send + Sync + 'static>(
+    attribute: &dyn Any,
+    operation: AttributeOperation,
+    argument: &dyn Any,
+) -> DataResult<NbtTag> {
+    let Some(attribute) = attribute.downcast_ref::<EnvAttribute<T>>() else {
+        return DataResult::new_error("environment attribute type mismatch");
+    };
+    let Some(modifier) = attribute.value_type().modifier(operation) else {
+        return DataResult::new_error(format!(
+            "modifier {} is not valid for environment attribute value type",
+            operation.as_str()
+        ));
+    };
+    modifier.encode_argument(argument)
+}
+
+fn encode_value<T: Encode + Decode + Send + Sync + 'static>(
+    attribute: &dyn Any,
+    value: &dyn Any,
+) -> DataResult<NbtTag> {
+    let Some(attribute) = attribute.downcast_ref::<EnvAttribute<T>>() else {
+        return DataResult::new_error("environment attribute type mismatch");
+    };
+    let Some(value) = value.downcast_ref::<T>() else {
+        return DataResult::new_error("environment attribute value type mismatch");
+    };
+    attribute.encode_start(value, &NbtOps)
+}
+
+fn is_syncable<T: Encode + Decode + Send + Sync + 'static>(attribute: &dyn Any) -> bool {
+    attribute
+        .downcast_ref::<EnvAttribute<T>>()
+        .is_some_and(EnvAttribute::is_syncable)
+}
+
+fn is_positional<T: Encode + Decode + Send + Sync + 'static>(attribute: &dyn Any) -> bool {
+    attribute
+        .downcast_ref::<EnvAttribute<T>>()
+        .is_some_and(EnvAttribute::is_positional)
 }
 
 fn build_attribute<T: Encode + Decode + Send + Sync + 'static>(

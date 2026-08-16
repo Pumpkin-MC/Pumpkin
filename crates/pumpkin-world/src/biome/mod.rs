@@ -53,7 +53,7 @@ pub fn hash_seed(seed: u64) -> i64 {
 
 #[cfg(test)]
 mod test {
-    use pumpkin_data::{chunk::Biome, dimension::Dimension};
+    use pumpkin_data::chunk::Biome;
     use pumpkin_util::read_data_from_file;
     use serde::Deserialize;
 
@@ -72,7 +72,10 @@ mod test {
         use crate::generation::generator::VanillaGenerator;
         use pumpkin_util::world_seed::Seed;
         let seed = 13579;
-        let generator = VanillaGenerator::new(Seed(seed as u64), Dimension::OVERWORLD);
+        let generator = VanillaGenerator::new(
+            Seed(seed as u64),
+            crate::test_support::dimension("overworld"),
+        );
         let multi_noise_config = MultiNoiseSamplerBuilderOptions::new(1, 1, 1);
         let mut sampler =
             MultiNoiseSampler::generate(&generator.base_router.multi_noise, &multi_noise_config);
@@ -99,7 +102,10 @@ mod test {
             read_data_from_file!("../../../../assets/tests/biome_no_blend_no_beard_0.json");
 
         let seed = 0;
-        let generator = VanillaGenerator::new(Seed(seed as u64), Dimension::OVERWORLD);
+        let generator = VanillaGenerator::new(
+            Seed(seed as u64),
+            crate::test_support::dimension("overworld"),
+        );
 
         for data in expected_data {
             let chunk_x = data.x;

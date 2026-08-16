@@ -3,7 +3,6 @@
 use criterion::{BatchSize, Criterion, criterion_group, criterion_main};
 use pumpkin_config::lighting::LightingEngineConfig;
 use pumpkin_data::BlockStateId;
-use pumpkin_data::dimension::Dimension;
 use pumpkin_util::world_seed::Seed;
 use pumpkin_world::ProtoChunk;
 use pumpkin_world::chunk_system::{Cache, Chunk, StagedChunkEnum, generate_single_chunk};
@@ -12,6 +11,8 @@ use pumpkin_world::generation::get_world_gen;
 use pumpkin_world::world::WorldPortalExt;
 use std::hint::black_box;
 use std::sync::Arc;
+
+mod support;
 
 const SEED: Seed = Seed(42);
 
@@ -57,7 +58,7 @@ impl WorldPortalExt for BlockRegistry {
 
 #[allow(clippy::unnecessary_box_returns)]
 fn make_world_gen() -> Box<dyn ChunkGenerator> {
-    get_world_gen(SEED, Dimension::OVERWORLD, false, Vec::new(), String::new())
+    get_world_gen(SEED, support::overworld(), false, Vec::new(), String::new())
 }
 
 fn setup_cache(
@@ -103,7 +104,7 @@ fn setup_cache(
 }
 
 fn bench_full_chunk_generation(c: &mut Criterion) {
-    let dimension = Dimension::OVERWORLD;
+    let dimension = support::overworld();
     let world_gen = make_world_gen();
     let block_registry = Arc::new(BlockRegistry);
 

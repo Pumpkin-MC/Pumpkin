@@ -23,10 +23,10 @@ use key_store::KeyStore;
 use pumpkin_codecs::{Decode, json_ops::JsonOps};
 use pumpkin_config::{AdvancedConfiguration, BasicConfiguration};
 use pumpkin_data::entity::EntityType;
-use pumpkin_data::{dimension::Dimension, world_preset::WorldPreset};
+use pumpkin_data::world_preset::WorldPreset;
 use pumpkin_nbt::nbt_ops::NbtOps;
 use pumpkin_registry::error::RootInitError;
-use pumpkin_registry::{DataKey, ROOT, RegistryBuilder};
+use pumpkin_registry::{DataKey, ROOT, Registry, RegistryBuilder};
 use pumpkin_util::permission::{PermissionManager, PermissionRegistry};
 use pumpkin_util::text::color::NamedColor;
 use pumpkin_util::{identifier::Identifier, world_seed::Seed};
@@ -495,7 +495,7 @@ impl Server {
             let preset_key = DataKey::<WorldPreset>::owned(format!(
                 "minecraft:worldgen/minecraft:world_preset/{preset_id}"
             ));
-            let preset = preset_key.get_blocking(root).unwrap_or_else(|error| {
+            let preset = preset_key.get(root).unwrap_or_else(|error| {
                 error!("Failed to resolve world preset {preset_id}: {error}");
                 std::process::exit(1);
             });
@@ -547,6 +547,26 @@ impl Server {
         info!("Starting parallel world load...");
         let mut world_futures = Vec::with_capacity(world_gen_settings.dimensions.len());
         for (world_key, saved_dimension) in world_gen_settings.dimensions {
+            let dimension_type_name = saved_dimension.dimension_type.clone();
+            let dimension_type_id =
+                self.datapack_manager
+                    .registries
+                    .dimension_types()
+                    .map_or_else(
+                        || {
+                            error!("Dimension type registry is not initialized");
+                            std::process::exit(1);
+                        },
+                        |registry| {
+                            registry
+                    .get_id(&dimension_type_name)
+                    .and_then(|id| u8::try_from(id).ok())
+                    .unwrap_or_else(|| {
+                        error!("Missing dimension type registry ID for {dimension_type_name}");
+                        std::process::exit(1);
+                    })
+                        },
+                    );
             let input = serde_json::to_value(saved_dimension).unwrap_or_else(|error| {
                 error!("Failed to encode saved dimension {world_key}: {error}");
                 std::process::exit(1);
@@ -559,7 +579,7 @@ impl Server {
                 });
             let dimension = stem
                 .dimension_type
-                .get_blocking(root)
+                .get(root)
                 .unwrap_or_else(|error| {
                     error!("Failed to resolve dimension type for {world_key}: {error}");
                     std::process::exit(1);
@@ -568,7 +588,7 @@ impl Server {
             let generator_type = stem
                 .generator
                 .generator_type
-                .get_blocking(root)
+                .get(root)
                 .unwrap_or_else(|error| {
                     error!("Failed to resolve generator type for {world_key}: {error}");
                     std::process::exit(1);
@@ -607,6 +627,8 @@ impl Server {
                     level.clone(),
                     l_info,
                     dimension,
+                    dimension_type_name,
+                    dimension_type_id,
                     registry,
                     weak,
                 ));
@@ -662,12 +684,18 @@ impl Server {
     }
 
     #[allow(clippy::too_many_lines)]
-    pub async fn create_world(self: &Arc<Self>, name: String, dimension: Dimension) -> Arc<World> {
+    pub async fn create_world(
+        self: &Arc<Self>,
+        name: String,
+        dimension_type_name: Identifier,
+    ) -> Arc<World> {
         {
             let worlds = self.worlds.load();
             let world = worlds
                 .iter()
-                .find(|w| w.get_world_name() == name && w.dimension == dimension)
+                .find(|w| {
+                    w.get_world_name() == name && w.dimension_type_name == dimension_type_name
+                })
                 .cloned();
             if let Some(world) = world {
                 return world;
@@ -687,23 +715,15 @@ impl Server {
                 std::process::exit(1);
             });
             let world_gen_settings = server.level_info.load().world_gen_settings.clone();
-            let dimension_type =
-                Identifier::parse(dimension.minecraft_name).unwrap_or_else(|error| {
-                    error!(
-                        "Invalid dimension type {}: {error}",
-                        dimension.minecraft_name
-                    );
-                    std::process::exit(1);
-                });
             let saved_dimension = world_gen_settings
                 .dimensions
                 .values()
-                .find(|saved| saved.dimension_type == dimension_type)
+                .find(|saved| saved.dimension_type == dimension_type_name)
                 .cloned()
                 .unwrap_or_else(|| {
                     error!(
                         "No saved generator configuration exists for {}",
-                        dimension.minecraft_name
+                        dimension_type_name
                     );
                     std::process::exit(1);
                 });
@@ -717,9 +737,29 @@ impl Server {
                     error!("Failed to decode saved dimension configuration");
                     std::process::exit(1);
                 });
+            let dimension_type_id =
+                server
+                    .datapack_manager
+                    .registries
+                    .dimension_types()
+                    .map_or_else(
+                        || {
+                            error!("Dimension type registry is not initialized");
+                            std::process::exit(1);
+                        },
+                        |registry| {
+                            registry
+                    .get_id(&dimension_type_name)
+                    .and_then(|id| u8::try_from(id).ok())
+                    .unwrap_or_else(|| {
+                        error!("Missing dimension type registry ID for {dimension_type_name}");
+                        std::process::exit(1);
+                    })
+                        },
+                    );
             let resolved_dimension = stem
                 .dimension_type
-                .get_blocking(root)
+                .get(root)
                 .unwrap_or_else(|error| {
                     error!("Failed to resolve dimension type: {error}");
                     std::process::exit(1);
@@ -728,7 +768,7 @@ impl Server {
             let generator_type = stem
                 .generator
                 .generator_type
-                .get_blocking(root)
+                .get(root)
                 .unwrap_or_else(|error| {
                     error!("Failed to resolve generator type: {error}");
                     std::process::exit(1);
@@ -756,8 +796,15 @@ impl Server {
             let level = pumpkin_world::dimension::into_level(
                 world_key, generator, &config, world_path, None,
             );
-            let world: World =
-                World::load(level.clone(), l_info, resolved_dimension, registry, weak);
+            let world: World = World::load(
+                level.clone(),
+                l_info,
+                resolved_dimension,
+                dimension_type_name,
+                dimension_type_id,
+                registry,
+                weak,
+            );
             let world = Arc::new(world);
             let portal: Arc<dyn WorldPortalExt> = Arc::new(WorldPortal(world.clone()));
             level.world_portal.store(Arc::new(Some(portal)));

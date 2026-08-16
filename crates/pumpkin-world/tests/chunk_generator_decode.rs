@@ -1,10 +1,11 @@
 #![allow(clippy::unwrap_used)]
 
 use pumpkin_codecs::{DataResult, Decode, DynamicOps, json_ops::JsonOps};
-use pumpkin_data::{dimension::Dimension, structures::StructureSet};
+use pumpkin_data::structures::StructureSet;
 use pumpkin_nbt::{nbt_ops::NbtOps, tag::NbtTag};
 use pumpkin_util::world_seed::Seed;
-use std::sync::Arc;
+use pumpkin_world::dimension_type::DimensionType as Dimension;
+use std::sync::{Arc, LazyLock};
 
 use pumpkin_registry::{
     BOOTSTRAP, DataKey, ROOT, Registry, RegistryBuilder, bootstrap::BootstrapManager,
@@ -24,13 +25,39 @@ use pumpkin_world::{
 };
 use serde_json::json;
 
+static OVERWORLD: LazyLock<Dimension> = LazyLock::new(|| {
+    Dimension::parse(
+        json!({
+            "ambient_light": 0.0,
+            "attributes": {},
+            "coordinate_scale": 1.0,
+            "has_ceiling": false,
+            "has_ender_dragon_fight": false,
+            "has_skylight": true,
+            "height": 384,
+            "infiniburn": "#minecraft:infiniburn_overworld",
+            "logical_height": 384,
+            "min_y": -64,
+            "monster_spawn_block_light_limit": 0,
+            "monster_spawn_light_level": 7
+        }),
+        &JsonOps,
+    )
+    .into_result()
+    .unwrap()
+});
+
+fn overworld() -> Dimension {
+    (*OVERWORLD).clone()
+}
+
 struct NoiseGenerator {
     seed: u64,
 }
 
 impl ChunkGenerator for NoiseGenerator {
     fn dimension(&self) -> &Dimension {
-        &Dimension::OVERWORLD
+        &OVERWORLD
     }
 
     fn seed(&self) -> u64 {
@@ -98,7 +125,7 @@ struct FlatGenerator {
 
 impl ChunkGenerator for FlatGenerator {
     fn dimension(&self) -> &Dimension {
-        &Dimension::OVERWORLD
+        &OVERWORLD
     }
 
     fn seed(&self) -> u64 {
@@ -175,7 +202,7 @@ fn builtin_generator_type_resolves_from_registry() {
     let generator_type = DataKey::<ChunkGeneratorType>::new(
         "minecraft:worldgen/minecraft:chunk_generator_type/minecraft:noise",
     )
-    .get_blocking(root)
+    .get(root)
     .unwrap();
 
     let generator = generator_type
@@ -189,7 +216,7 @@ fn builtin_generator_type_resolves_from_registry() {
             }),
             &JsonOps,
             Seed(1234),
-            Dimension::OVERWORLD,
+            overworld(),
         )
         .into_result()
         .unwrap();
@@ -219,8 +246,8 @@ fn dimension_stem_resolves_registry_backed_generator() {
     .unwrap();
 
     let root = ROOT.get().unwrap();
-    let dimension = stem.dimension_type.get_blocking(root).unwrap();
-    let generator_type = stem.generator.generator_type.get_blocking(root).unwrap();
+    let dimension = stem.dimension_type.get(root).unwrap();
+    let generator_type = stem.generator.generator_type.get(root).unwrap();
     let generator = generator_type
         .decode(
             stem.generator.input,
@@ -232,7 +259,7 @@ fn dimension_stem_resolves_registry_backed_generator() {
         .unwrap();
 
     assert_eq!(generator.seed(), 1234);
-    assert_eq!(generator.dimension().minecraft_name, "minecraft:overworld");
+    assert!(generator.dimension().is_overworld_like());
 }
 
 #[test]
@@ -240,7 +267,7 @@ fn generator_type_decodes_from_json_ops() {
     let generator_type = ChunkGeneratorType::new::<NoiseGenerator>();
 
     let generator = generator_type
-        .decode(json!(42), &JsonOps, Seed(42), Dimension::OVERWORLD)
+        .decode(json!(42), &JsonOps, Seed(42), overworld())
         .into_result()
         .unwrap();
 
@@ -252,7 +279,7 @@ fn same_generator_type_decodes_from_nbt_ops() {
     let generator_type = ChunkGeneratorType::new::<NoiseGenerator>();
 
     let generator = generator_type
-        .decode(NbtTag::Long(42), &NbtOps, Seed(42), Dimension::OVERWORLD)
+        .decode(NbtTag::Long(42), &NbtOps, Seed(42), overworld())
         .into_result()
         .unwrap();
 
@@ -285,25 +312,24 @@ fn flat_generator_config_decodes_structure_overrides() {
     assert_eq!(config.layers.len(), 3);
     assert_eq!(config.structure_overrides.len(), 2);
 
-    let generator =
-        RuntimeFlatGenerator::from_config(Seed(42), Dimension::OVERWORLD, config).unwrap();
+    let generator = RuntimeFlatGenerator::from_config(Seed(42), overworld(), config).unwrap();
 
     let root = ROOT.get().unwrap();
     let strongholds = DataKey::<StructureSet>::new(
         "minecraft:worldgen/minecraft:structure_set/minecraft:strongholds",
     )
-    .get_blocking(root)
+    .get(root)
     .unwrap();
     let villages = DataKey::<StructureSet>::new(
         "minecraft:worldgen/minecraft:structure_set/minecraft:villages",
     )
-    .get_blocking(root)
+    .get(root)
     .unwrap();
 
     let resolved_salts: Vec<_> = generator
         .structure_overrides
         .iter()
-        .map(|key| key.get_blocking(root).unwrap().placement.salt)
+        .map(|key| key.get(root).unwrap().placement.salt)
         .collect();
 
     assert!(resolved_salts.contains(&strongholds.placement.salt));
@@ -326,13 +352,13 @@ fn vanilla_noise_generator_decodes_overworld_config() {
             }),
             &JsonOps,
             Seed(1234),
-            Dimension::OVERWORLD,
+            overworld(),
         )
         .into_result()
         .unwrap();
 
     assert_eq!(generator.seed(), 1234);
-    assert_eq!(generator.dimension(), &Dimension::OVERWORLD);
+    assert!(generator.dimension().is_overworld_like());
 }
 
 #[test]
@@ -350,7 +376,7 @@ fn vanilla_noise_generator_decodes_amplified_config() {
             }),
             &JsonOps,
             Seed(7),
-            Dimension::OVERWORLD,
+            overworld(),
         )
         .into_result()
         .unwrap();
@@ -373,7 +399,7 @@ fn vanilla_noise_generator_decodes_fixed_biome_source() {
             }),
             &JsonOps,
             Seed(99),
-            Dimension::OVERWORLD,
+            overworld(),
         )
         .into_result()
         .unwrap();
@@ -398,7 +424,7 @@ fn generator_types_can_live_in_one_dispatch_table() {
         .unwrap();
 
     let generator = generator_type
-        .decode(json!(9001), &JsonOps, Seed(9001), Dimension::OVERWORLD)
+        .decode(json!(9001), &JsonOps, Seed(9001), overworld())
         .into_result()
         .unwrap();
 

@@ -1,7 +1,8 @@
 use std::sync::Arc;
 
+use crate::dimension_type::DimensionType as Dimension;
 use pumpkin_codecs::{DataResult, Decode, DynamicOps};
-use pumpkin_data::{Block, BlockState, dimension::Dimension};
+use pumpkin_data::{Block, BlockState};
 use pumpkin_nbt::{nbt_ops::NbtOps, tag::NbtTag};
 use pumpkin_registry::{Registry, RegistryBuilder, bootstrap::RegistryEntry, bootstrap_provider};
 use pumpkin_util::{identifier::Identifier, world_seed::Seed};

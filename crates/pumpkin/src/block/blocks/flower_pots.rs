@@ -1,6 +1,6 @@
 use crate::block::registry::BlockActionResult;
 use crate::block::{BlockBehaviour, BlockFuture, RandomTickArgs, UseWithItemArgs};
-use pumpkin_data::dimension::Dimension;
+
 use pumpkin_data::flower_pot_transformations::get_potted_item;
 use pumpkin_data::{Block, BlockId};
 use pumpkin_macros::pumpkin_block_from_tag;
@@ -48,8 +48,7 @@ impl BlockBehaviour for FlowerPotBlock {
 
     fn random_tick<'a>(&'a self, args: RandomTickArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
-            if (args.world.dimension.eq(&Dimension::OVERWORLD)
-                || args.world.dimension.eq(&Dimension::OVERWORLD_CAVES))
+            if args.world.dimension.is_overworld_like()
                 && args.block.eq(&Block::POTTED_CLOSED_EYEBLOSSOM)
                 && args.world.level_time.lock().await.time_of_day % 24000 > 14500
             {

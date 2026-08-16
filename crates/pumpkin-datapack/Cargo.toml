@@ -12,6 +12,8 @@ pumpkin-protocol.workspace = true
 pumpkin-util.workspace = true
 pumpkin-registry.workspace = true
 pumpkin-codecs.workspace = true
+pumpkin-nbt.workspace = true
+pumpkin-world.workspace = true
 
 serde.workspace = true
 serde_json.workspace = true
@@ -21,6 +23,9 @@ tokio.workspace = true
 futures.workspace = true
 rand.workspace = true
 zip = { version = "2.4", default-features = false, features = ["deflate"] }
+
+[dev-dependencies]
+tempfile.workspace = true
 
 [lints]
 workspace = true

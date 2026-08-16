@@ -188,7 +188,7 @@ impl pumpkin::plugin::server::HostServer for PluginHostState {
             .worlds
             .load()
             .iter()
-            .find(|world| world.dimension.minecraft_name == name)
+            .find(|world| world.level.world_key.to_string() == name)
             .map(|world| {
                 self.add_world(world.clone())
                     .expect("failed to add world resource")
@@ -207,9 +207,11 @@ impl pumpkin::plugin::server::HostServer for PluginHostState {
             .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
 
         let internal_dim = match dimension {
-            Dimension::Overworld => pumpkin_data::dimension::Dimension::OVERWORLD,
-            Dimension::Nether => pumpkin_data::dimension::Dimension::THE_NETHER,
-            Dimension::End => pumpkin_data::dimension::Dimension::THE_END,
+            Dimension::Overworld => {
+                pumpkin_util::identifier::Identifier::vanilla_static("overworld")
+            }
+            Dimension::Nether => pumpkin_util::identifier::Identifier::vanilla_static("the_nether"),
+            Dimension::End => pumpkin_util::identifier::Identifier::vanilla_static("the_end"),
         };
 
         let world = server.create_world(name, internal_dim).await;

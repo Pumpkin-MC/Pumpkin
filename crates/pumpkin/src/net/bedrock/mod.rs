@@ -297,14 +297,13 @@ impl BedrockClient {
             return;
         }
 
-        let bedrock_dimension =
-            if player.world().dimension == pumpkin_data::dimension::Dimension::THE_NETHER {
-                1
-            } else if player.world().dimension == pumpkin_data::dimension::Dimension::THE_END {
-                2
-            } else {
-                0
-            };
+        let bedrock_dimension = if player.world().dimension.is_nether_like() {
+            1
+        } else if player.world().dimension.is_end_like() {
+            2
+        } else {
+            0
+        };
 
         let cache_enabled = server.advanced_config.networking.bedrock.chunk_caching
             && self.client_cache_supported.load(Ordering::Relaxed);
