@@ -22,7 +22,6 @@ pub struct TrackTargetGoal {
     target_predicate: TargetPredicate,
 }
 
-#[expect(dead_code)]
 impl TrackTargetGoal {
     #[must_use]
     pub fn new(check_visibility: bool, check_can_navigate: bool) -> Self {

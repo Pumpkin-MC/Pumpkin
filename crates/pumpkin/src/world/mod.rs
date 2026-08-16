@@ -1064,7 +1064,6 @@ impl World {
         self.play_sound_expect(player, sound, category, &new_vec);
     }
 
-    #[expect(clippy::too_many_lines)]
     pub async fn tick(self: &Arc<Self>, server: Arc<Server>) {
         let start = tokio::time::Instant::now();
 
@@ -1402,7 +1401,6 @@ impl World {
         }
     }
 
-    #[expect(clippy::too_many_lines)]
     pub async fn tick_chunks(self: &Arc<Self>) {
         let active_chunks = self.active_chunks.load();
         let tick_data = self.level.get_tick_data(&active_chunks);
@@ -2814,7 +2812,6 @@ impl World {
         }
     }
 
-    #[expect(clippy::too_many_lines)]
     pub async fn spawn_java_player(
         &self,
         base_config: &BasicConfiguration,
@@ -4677,7 +4674,6 @@ impl World {
     }
 
     /// Sets a block and returns the old block id
-    #[expect(clippy::too_many_lines)]
     pub async fn set_block_state(
         self: &Arc<Self>,
         position: &BlockPos,
