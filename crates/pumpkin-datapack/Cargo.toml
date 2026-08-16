@@ -12,7 +12,6 @@ pumpkin-protocol.workspace = true
 pumpkin-util.workspace = true
 pumpkin-registry.workspace = true
 pumpkin-codecs.workspace = true
-pumpkin-nbt.workspace = true
 pumpkin-world.workspace = true
 
 serde.workspace = true
