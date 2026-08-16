@@ -2,11 +2,13 @@
 
 use std::sync::Arc;
 
+use pumpkin_codecs::{Decode, Encode, json_ops::JsonOps};
 use pumpkin_registry::{
     BOOTSTRAP, Registry, RegistryBuilder, RegistryResolvable, RegistryResolvableSet,
     bootstrap::BootstrapManager, bootstrap_provider, error::DataKeyGetError,
 };
 use pumpkin_util::identifier::Identifier;
+use serde_json::json;
 
 const fn id(value: &'static str) -> Identifier {
     Identifier::parse_static(value)
@@ -55,6 +57,36 @@ fn registry_resolvable_reports_missing_identifier() {
         Err(DataKeyGetError::MissingIdentifier { identifier })
             if identifier == id("test:missing")
     ));
+}
+
+#[test]
+fn registry_resolvable_set_codecs_preserve_entry_tag_and_list() {
+    let entry = RegistryResolvableSet::<u32>::parse(json!("test:one"), &JsonOps)
+        .into_result()
+        .unwrap();
+    assert_eq!(entry.as_single().unwrap().identifier(), &id("test:one"));
+    assert_eq!(
+        entry.encode_start(&JsonOps).into_result().unwrap(),
+        json!("test:one")
+    );
+
+    let tag = RegistryResolvableSet::<u32>::parse(json!("#test:numbers"), &JsonOps)
+        .into_result()
+        .unwrap();
+    assert_eq!(tag.as_tag(), Some(&id("test:numbers")));
+    assert_eq!(
+        tag.encode_start(&JsonOps).into_result().unwrap(),
+        json!("#test:numbers")
+    );
+
+    let list = RegistryResolvableSet::<u32>::parse(json!(["test:one", "test:two"]), &JsonOps)
+        .into_result()
+        .unwrap();
+    assert_eq!(list.as_list().unwrap().len(), 2);
+    assert_eq!(
+        list.encode_start(&JsonOps).into_result().unwrap(),
+        json!(["test:one", "test:two"])
+    );
 }
 
 #[test]

@@ -5,6 +5,7 @@ use std::{
     marker::PhantomData,
 };
 
+use pumpkin_codecs::{DataResult, Decode, DynamicOps, Either, Encode};
 use pumpkin_util::identifier::Identifier;
 
 use crate::{Registry, error::DataKeyGetError, value::DataKeyRef};
@@ -45,6 +46,19 @@ impl<T: Send + Sync + 'static> Eq for RegistryResolvable<T> {}
 impl<T: Send + Sync + 'static> Hash for RegistryResolvable<T> {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.identifier.hash(state);
+    }
+}
+
+impl<T: Send + Sync + 'static> Encode for RegistryResolvable<T> {
+    fn encode<O: DynamicOps>(&self, ops: &'static O, prefix: O::Value) -> DataResult<O::Value> {
+        self.identifier.encode(ops, prefix)
+    }
+}
+
+impl<T: Send + Sync + 'static> Decode for RegistryResolvable<T> {
+    fn decode<O: DynamicOps>(input: O::Value, ops: &'static O) -> DataResult<(Self, O::Value)> {
+        Identifier::decode(input, ops)
+            .map(|(identifier, remaining)| (Self::new(identifier), remaining))
     }
 }
 
@@ -173,6 +187,54 @@ impl<T: Send + Sync + 'static> Hash for RegistryResolvableSet<T> {
             Self::Tag(identifier) => identifier.hash(state),
             Self::List(values) => values.hash(state),
         }
+    }
+}
+
+impl<T: Send + Sync + 'static> Encode for RegistryResolvableSet<T> {
+    fn encode<O: DynamicOps>(&self, ops: &'static O, prefix: O::Value) -> DataResult<O::Value> {
+        match self {
+            Self::Single(value) => value.encode(ops, prefix),
+            Self::Tag(identifier) => format!("#{identifier}").encode(ops, prefix),
+            Self::List(values) => values
+                .iter()
+                .map(RegistryResolvable::identifier)
+                .cloned()
+                .collect::<Vec<_>>()
+                .encode(ops, prefix),
+        }
+    }
+}
+
+impl<T: Send + Sync + 'static> Decode for RegistryResolvableSet<T> {
+    fn decode<O: DynamicOps>(input: O::Value, ops: &'static O) -> DataResult<(Self, O::Value)> {
+        Either::<String, Vec<Identifier>>::decode(input, ops).flat_map(|(value, remaining)| {
+            match value {
+                Either::Left(value) => {
+                    if let Some(tag) = value.strip_prefix('#') {
+                        Identifier::parse(tag).map_or_else(
+                            |error| DataResult::new_error(error.to_string()),
+                            |identifier| {
+                                DataResult::new_success((Self::Tag(identifier), remaining))
+                            },
+                        )
+                    } else {
+                        Identifier::parse(&value).map_or_else(
+                            |error| DataResult::new_error(error.to_string()),
+                            |identifier| {
+                                DataResult::new_success((
+                                    Self::Single(RegistryResolvable::new(identifier)),
+                                    remaining,
+                                ))
+                            },
+                        )
+                    }
+                }
+                Either::Right(values) => DataResult::new_success((
+                    Self::list(values.into_iter().map(RegistryResolvable::new)),
+                    remaining,
+                )),
+            }
+        })
     }
 }
 
