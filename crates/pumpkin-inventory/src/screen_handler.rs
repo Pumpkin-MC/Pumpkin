@@ -53,9 +53,9 @@ use pumpkin_world::{
     block::entities::PropertyDelegate,
     inventory::{ComparableInventory, Inventory},
 };
+use std::pin::Pin;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::{any::Any, collections::HashMap, sync::Arc};
-use std::{cmp::max, pin::Pin};
 use tokio::sync::Mutex;
 use tracing::warn;
 
@@ -875,7 +875,9 @@ pub trait ScreenHandler: Send + Sync {
             if action_type == SlotActionType::PickupAll && button == 0 {
                 let behavior = self.get_behaviour_mut();
                 let mut cursor_stack = behavior.cursor_stack.lock().await;
-                let mut to_pick_up = cursor_stack.get_max_stack_size() - cursor_stack.item_count;
+                let mut to_pick_up = cursor_stack
+                    .get_max_stack_size()
+                    .saturating_sub(cursor_stack.item_count);
 
                 for slot in &behavior.slots {
                     if to_pick_up == 0 {
@@ -894,7 +896,9 @@ pub trait ScreenHandler: Send + Sync {
                     let taken_stack = slot
                         .safe_take(
                             item_stack.item_count.min(to_pick_up),
-                            cursor_stack.get_max_stack_size() - cursor_stack.item_count,
+                            cursor_stack
+                                .get_max_stack_size()
+                                .saturating_sub(cursor_stack.item_count),
                             player,
                         )
                         .await;
@@ -966,12 +970,15 @@ pub trait ScreenHandler: Send + Sync {
                                 }
                                 _ => 0,
                             };
+                            // `max(0, ..)` did nothing here: the subtraction is
+                            // on `u8`, so it had already wrapped by the time
+                            // `max` saw it.
                             inserting_count = inserting_count
-                                .min(max(
-                                    0,
-                                    slot.get_max_item_count_for_stack(&stack).await
-                                        - stack.item_count,
-                                ))
+                                .min(
+                                    slot.get_max_item_count_for_stack(&stack)
+                                        .await
+                                        .saturating_sub(stack.item_count),
+                                )
                                 .min(cursor_stack.item_count);
                             if inserting_count > 0 {
                                 let mut new_stack = stack.clone();
@@ -1410,9 +1417,132 @@ impl ScreenHandlerBehaviour {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::entity_equipment::EntityEquipment;
     use crate::slot::NormalSlot;
     use pumpkin_data::item::Item;
     use pumpkin_world::inventory::SimpleInventory;
+    use std::collections::HashMap;
+
+    /// A player that answers every question the click path asks and sends
+    /// nothing anywhere.
+    struct TestPlayer {
+        inventory: Arc<PlayerInventory>,
+    }
+
+    impl TestPlayer {
+        fn new() -> Self {
+            Self {
+                inventory: Arc::new(PlayerInventory::new(
+                    Arc::new(Mutex::new(EntityEquipment::default())),
+                    Arc::new(HashMap::new()),
+                )),
+            }
+        }
+    }
+
+    impl InventoryPlayer for TestPlayer {
+        fn as_any(&self) -> &dyn Any {
+            self
+        }
+
+        fn drop_item(&self, _item: ItemStack, _retain_ownership: bool) -> PlayerFuture<'_, ()> {
+            Box::pin(async {})
+        }
+
+        fn get_inventory(&self) -> Arc<PlayerInventory> {
+            self.inventory.clone()
+        }
+
+        fn has_infinite_materials(&self) -> bool {
+            false
+        }
+
+        fn is_creative(&self) -> bool {
+            false
+        }
+
+        fn experience_level(&self) -> i32 {
+            0
+        }
+
+        fn add_experience_levels(&self, _levels: i32) -> PlayerFuture<'_, ()> {
+            Box::pin(async {})
+        }
+
+        fn enchantment_seed(&self) -> i32 {
+            0
+        }
+
+        fn set_enchantment_seed(&self, _seed: i32) -> PlayerFuture<'_, ()> {
+            Box::pin(async {})
+        }
+
+        fn enqueue_inventory_packet<'a>(
+            &'a self,
+            _packet: &'a CSetContainerContent,
+            _window_type: Option<WindowType>,
+        ) -> PlayerFuture<'a, ()> {
+            Box::pin(async {})
+        }
+
+        fn enqueue_slot_packet<'a>(
+            &'a self,
+            _packet: &'a CSetContainerSlot,
+            _window_type: Option<WindowType>,
+            _total_slots: usize,
+        ) -> PlayerFuture<'a, ()> {
+            Box::pin(async {})
+        }
+
+        fn enqueue_cursor_packet<'a>(
+            &'a self,
+            _packet: &'a CSetCursorItem,
+        ) -> PlayerFuture<'a, ()> {
+            Box::pin(async {})
+        }
+
+        fn enqueue_property_packet<'a>(
+            &'a self,
+            _packet: &'a CSetContainerProperty,
+        ) -> PlayerFuture<'a, ()> {
+            Box::pin(async {})
+        }
+
+        fn enqueue_slot_set_packet<'a>(
+            &'a self,
+            _packet: &'a CSetPlayerInventory,
+        ) -> PlayerFuture<'a, ()> {
+            Box::pin(async {})
+        }
+
+        fn enqueue_set_held_item_packet<'a>(
+            &'a self,
+            _packet: &'a CSetSelectedSlot,
+        ) -> PlayerFuture<'a, ()> {
+            Box::pin(async {})
+        }
+
+        fn enqueue_equipment_change<'a>(
+            &'a self,
+            _slot: &'a EquipmentSlot,
+            _stack: &'a ItemStack,
+        ) -> PlayerFuture<'a, ()> {
+            Box::pin(async {})
+        }
+
+        fn award_experience(&self, _amount: i32) -> PlayerFuture<'_, ()> {
+            Box::pin(async {})
+        }
+
+        fn increment_stat(
+            &self,
+            _category: StatisticCategory,
+            _stat_id: i32,
+            _amount: i32,
+        ) -> PlayerFuture<'_, ()> {
+            Box::pin(async {})
+        }
+    }
 
     /// The smallest thing `insert_item` needs: somewhere to keep the slots.
     struct TestScreenHandler {
@@ -1438,6 +1568,14 @@ mod tests {
 
         async fn count(&self, index: usize) -> u8 {
             self.behaviour.slots[index].get_stack().await.item_count
+        }
+
+        async fn set_cursor(&self, stack: ItemStack) {
+            *self.behaviour.cursor_stack.lock().await = stack;
+        }
+
+        async fn cursor_count(&self) -> u8 {
+            self.behaviour.cursor_stack.lock().await.item_count
         }
     }
 
@@ -1513,5 +1651,26 @@ mod tests {
                 + u16::from(incoming.item_count),
             300
         );
+    }
+
+    /// The cursor can end up holding more than its own limit — a slot can be
+    /// filled past it and the swap further down this function hands that stack
+    /// to the cursor — so the headroom left on it has to survive going below
+    /// zero. Left wrapping, the cursor picks up more on top of being full.
+    #[tokio::test]
+    async fn pickup_all_does_not_underflow_the_cursor_headroom() {
+        let mut handler = TestScreenHandler::with_slots(2);
+        let player = TestPlayer::new();
+        handler.set_cursor(ItemStack::new(200, &Item::STONE)).await;
+        handler.set(0, ItemStack::new(10, &Item::STONE)).await;
+
+        handler
+            .internal_on_slot_click(0, 0, SlotActionType::PickupAll, &player)
+            .await;
+
+        // There is no room left on the cursor, so the double-click must pull
+        // nothing in.
+        assert_eq!(handler.cursor_count().await, 200);
+        assert_eq!(handler.count(0).await, 10);
     }
 }
