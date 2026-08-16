@@ -3,7 +3,7 @@ use crate::identifier::Identifier;
 /// A registry-scoped resource key identifying an element within a specific registry.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ResourceKey {
-    registry_name: Identifier,
+    pub registry_name: Identifier,
     /// The unique identifier of the resource.
     pub identifier: Identifier,
 }
@@ -22,5 +22,16 @@ impl ResourceKey {
     #[must_use]
     pub fn cast(&self, registry: &Identifier) -> Option<&Self> {
         (self.registry_name == *registry).then_some(self)
+    }
+}
+
+pub struct Reference<T: 'static + ?Sized> {
+    pub value: &'static T,
+    pub key: ResourceKey,
+}
+
+impl<T> Reference<T> {
+    pub const fn new(value: &'static T, key: ResourceKey) -> Self {
+        Self { value, key }
     }
 }
