@@ -9,6 +9,7 @@ use pumpkin_util::{
     random::{RandomGenerator, RandomImpl},
 };
 
+#[derive(Clone)]
 pub struct HugeFungusFeature;
 
 impl HugeFungusFeature {
@@ -68,17 +69,26 @@ impl HugeFungusFeature {
         } else {
             Block::CRIMSON_STEM.default_state
         };
-        let wart_state = if is_warped {
+        let hat_state = if is_warped {
             Block::WARPED_WART_BLOCK.default_state
         } else {
             Block::NETHER_WART_BLOCK.default_state
         };
         let is_huge = random.next_f32() < 0.06;
 
+        // Pack them into a config struct.
+        let context = HugeFungusContext {
+            hat_state,
+            stem_state,
+            total_height,
+            is_huge,
+            planted: false,
+        };
+
         // Start the main generation logic.
         chunk.set_block_state(&pos.0, Block::AIR.default_state);
-        self.generate_stem(chunk, pos, stem_state, total_height, random, is_huge, false);
-        self.generate_hat(chunk, pos, wart_state, total_height, random, is_huge, false);
+        self.generate_stem(chunk, pos, random, &context);
+        self.generate_hat(chunk, pos, random, &context);
 
         true
     }
@@ -109,39 +119,37 @@ impl HugeFungusFeature {
 
     /// Generate the stem of this current fungus.
     #[allow(clippy::unused_self)]
-    #[allow(clippy::too_many_arguments)]
     fn generate_stem<T: GenerationCache>(
         &self,
         chunk: &mut T,
         pos: BlockPos,
-        stem_state: &BlockState,
-        total_height: i32,
         random: &mut RandomGenerator,
-        is_huge: bool,
-        planted: bool,
+        ctx: &HugeFungusContext,
     ) {
-        let stem_radius = i32::from(is_huge);
+        let stem_radius = i32::from(ctx.is_huge);
 
         for dx in -stem_radius..=stem_radius {
             for dz in -stem_radius..=stem_radius {
                 let corner_of_huge_stem =
-                    is_huge && dx.abs() == stem_radius && dz.abs() == stem_radius;
-                for dy in 0..total_height {
+                    ctx.is_huge && dx.abs() == stem_radius && dz.abs() == stem_radius;
+                for dy in 0..ctx.total_height {
                     let block_pos = pos.offset(Vector3::new(dx, dy, dz));
-                    if self.is_replaceable(chunk, &block_pos, true) {
-                        if planted {
-                            if !chunk.is_air(&block_pos.down().0) {
-                                chunk.set_block_state(&block_pos.0, Block::AIR.default_state);
-                            }
+                    if !self.is_replaceable(chunk, &block_pos, true) {
+                        continue;
+                    }
 
-                            chunk.set_block_state(&block_pos.0, stem_state);
-                        } else if corner_of_huge_stem {
-                            if random.next_f32() < 0.1 {
-                                chunk.set_block_state(&block_pos.0, stem_state);
-                            }
-                        } else {
-                            chunk.set_block_state(&block_pos.0, stem_state);
+                    if ctx.planted {
+                        if !chunk.is_air(&block_pos.down().0) {
+                            chunk.set_block_state(&block_pos.0, Block::AIR.default_state);
                         }
+
+                        chunk.set_block_state(&block_pos.0, ctx.stem_state);
+                    } else if corner_of_huge_stem {
+                        if random.next_f32() < 0.1 {
+                            chunk.set_block_state(&block_pos.0, ctx.stem_state);
+                        }
+                    } else {
+                        chunk.set_block_state(&block_pos.0, ctx.stem_state);
                     }
                 }
             }
@@ -150,92 +158,58 @@ impl HugeFungusFeature {
 
     /// Generate the hat of this current fungus.
     #[allow(clippy::unused_self)]
-    #[allow(clippy::too_many_arguments)]
     fn generate_hat<T: GenerationCache>(
         &self,
         chunk: &mut T,
         pos: BlockPos,
-        hat_state: &BlockState,
-        total_height: i32,
         random: &mut RandomGenerator,
-        is_huge: bool,
-        planted: bool,
+        ctx: &HugeFungusContext,
     ) {
-        let place_vines = hat_state == Block::NETHER_WART_BLOCK.default_state;
-        let hat_height = (random.next_bounded_i32(1 + total_height / 3) + 5).min(total_height);
-        let hat_start_y = total_height - hat_height;
+        let place_vines = ctx.hat_state == Block::NETHER_WART_BLOCK.default_state;
+        let hat_height =
+            (random.next_bounded_i32(1 + ctx.total_height / 3) + 5).min(ctx.total_height);
+        let hat_start_y = ctx.total_height - hat_height;
 
-        for y in hat_start_y..=total_height {
+        for y in hat_start_y..=ctx.total_height {
             let mut r = if hat_height > 8 && y < hat_start_y + 4 {
                 3
-            } else if y < total_height - random.next_bounded_i32(3) {
+            } else if y < ctx.total_height - random.next_bounded_i32(3) {
                 2
             } else {
                 1
             };
 
-            if is_huge {
+            if ctx.is_huge {
                 r += 1;
             }
 
             for x in -r..=r {
                 for z in -r..=r {
-                    let edge_x = x == -r || x == r;
-                    let edge_z = z == -r || z == r;
-                    let inner = !edge_x && !edge_z && y != total_height;
-                    let corner = edge_x && edge_z;
-                    let bottom = y < hat_start_y + 3;
-                    let block_pos = pos.offset(Vector3::new(x, y, z));
-                    if self.is_replaceable(chunk, &block_pos, true) {
-                        if planted && !chunk.is_air(&block_pos.down().0) {
-                            chunk.set_block_state(&block_pos.0, Block::AIR.default_state);
-                        }
+                    let offset = Vector3::new(x, y, z);
+                    let conditions = HatPlaceCond::from_pos(
+                        &offset,
+                        r,
+                        ctx.total_height,
+                        hat_start_y,
+                        place_vines,
+                    );
+                    let block_pos = pos.offset(offset);
 
-                        if bottom {
-                            if !inner {
-                                self.generate_hat_drop_block(
-                                    chunk,
-                                    random,
-                                    block_pos,
-                                    hat_state,
-                                    place_vines,
-                                );
-                            }
-                        } else {
-                            // Basic config
-                            let base = match (inner, corner) {
-                                (true, _) => HatProbConfig {
-                                    decor: 0.1,
-                                    hat: 0.2,
-                                    vine: 0.0,
-                                },
-                                (false, true) => HatProbConfig {
-                                    decor: 0.01,
-                                    hat: 0.7,
-                                    vine: 0.0,
-                                },
-                                (false, false) => HatProbConfig {
-                                    decor: 5.0e-4,
-                                    hat: 0.98,
-                                    vine: 0.0,
-                                },
-                            };
+                    // Check: Is the block replaceable?
+                    if !self.is_replaceable(chunk, &block_pos, true) {
+                        continue;
+                    }
 
-                            let prob_cfg = if place_vines {
-                                match (inner, corner) {
-                                    (true, _) => HatProbConfig { vine: 0.1, ..base },
-                                    (false, true) => HatProbConfig {
-                                        vine: 0.083,
-                                        ..base
-                                    },
-                                    (false, false) => HatProbConfig { vine: 0.07, ..base },
-                                }
-                            } else {
-                                base
-                            };
+                    if ctx.planted && !chunk.is_air(&block_pos.down().0) {
+                        chunk.set_block_state(&block_pos.0, Block::AIR.default_state);
+                    }
 
-                            self.generate_hat_block(chunk, random, block_pos, hat_state, prob_cfg);
-                        }
+                    if conditions.bottom && !conditions.inner {
+                        self.generate_hat_drop_block(chunk, random, block_pos, ctx, place_vines);
+                    } else {
+                        // Basic config
+                        let prob_cfg = HatProbConfig::from_conditions(&conditions);
+                        self.generate_hat_block(chunk, random, block_pos, ctx, prob_cfg);
                     }
                 }
             }
@@ -243,13 +217,12 @@ impl HugeFungusFeature {
     }
 
     #[allow(clippy::unused_self)]
-    #[allow(clippy::too_many_arguments)]
     fn generate_hat_block<T: GenerationCache>(
         &self,
         chunk: &mut T,
         random: &mut RandomGenerator,
         pos: BlockPos,
-        hat_state: &BlockState,
+        ctx: &HugeFungusContext,
         prob_config: HatProbConfig,
     ) {
         let HatProbConfig {
@@ -262,9 +235,9 @@ impl HugeFungusFeature {
         if random.next_f32() < decor_prob {
             chunk.set_block_state(&pos.0, Block::SHROOMLIGHT.default_state);
         } else if random.next_f32() < hat_prob {
-            chunk.set_block_state(&pos.0, hat_state);
+            chunk.set_block_state(&pos.0, ctx.hat_state);
             if random.next_f32() < vine_prob {
-                Self::try_place_weeping_vines(pos, chunk, random);
+                self.try_place_weeping_vines(pos, chunk, random);
             }
         }
     }
@@ -275,22 +248,23 @@ impl HugeFungusFeature {
         chunk: &mut T,
         random: &mut RandomGenerator,
         pos: BlockPos,
-        hat_state: &BlockState,
+        ctx: &HugeFungusContext,
         place_vines: bool,
     ) {
         let block_below = GenerationCache::get_block_state(chunk, &pos.down().0);
-        if block_below == hat_state.id {
-            chunk.set_block_state(&pos.0, hat_state);
+        if block_below == ctx.hat_state.id {
+            chunk.set_block_state(&pos.0, ctx.hat_state);
         } else if random.next_f32() < 0.15 {
-            chunk.set_block_state(&pos.0, hat_state);
+            chunk.set_block_state(&pos.0, ctx.hat_state);
             if place_vines && random.next_bounded_i32(11) == 0 {
-                Self::try_place_weeping_vines(pos, chunk, random);
+                self.try_place_weeping_vines(pos, chunk, random);
             }
         }
     }
 
     #[allow(clippy::unused_self)]
     fn try_place_weeping_vines<T: GenerationCache>(
+        &self,
         hat_block_pos: BlockPos,
         chunk: &mut T,
         random: &mut RandomGenerator,
@@ -327,9 +301,73 @@ impl HugeFungusFeature {
     }
 }
 
+/// Configurations of the huge fungus feature.
+struct HugeFungusContext {
+    /// The block state of the hat.
+    pub hat_state: &'static BlockState,
+
+    /// The block state of the stem.
+    pub stem_state: &'static BlockState,
+
+    /// The total height of the fungus.
+    pub total_height: i32,
+
+    /// Whether is this a huge fungus.
+    pub is_huge: bool,
+
+    /// Whether the hat block is planted by player.
+    pub planted: bool,
+}
+
+/// Conditions of the hat block placement.
+struct HatPlaceCond {
+    /// Whether the hat block is placed in the edge of x-axis.
+    pub edge_x: bool,
+
+    /// Whether the hat block is placed in the edge of z-axis.
+    pub edge_z: bool,
+
+    /// Whether the hat block is placed in the inner corner.
+    pub inner: bool,
+
+    /// Whether the hat block is placed in the corner.
+    pub corner: bool,
+
+    /// Whether is the bottom block.
+    pub bottom: bool,
+
+    /// Whether the hat should place weeping vines.
+    pub place_vines: bool,
+}
+
+impl HatPlaceCond {
+    /// Create this conditions through x, y, z, and radius.
+    pub const fn from_pos(
+        pos: &Vector3<i32>,
+        radius: i32,
+        total_height: i32,
+        hat_start_y: i32,
+        place_vines: bool,
+    ) -> Self {
+        let edge_x = pos.x == -radius || pos.x == radius;
+        let edge_z = pos.z == -radius || pos.z == radius;
+        let inner = !edge_x && !edge_z && pos.y != total_height;
+        let corner = edge_x && edge_z;
+        let bottom = pos.y < hat_start_y + 3;
+        Self {
+            edge_x,
+            edge_z,
+            inner,
+            corner,
+            bottom,
+            place_vines,
+        }
+    }
+}
+
 /// Configuration of the probability of the hat.
 #[derive(Debug, Clone, Copy)]
-pub struct HatProbConfig {
+struct HatProbConfig {
     /// Probability of placing a decor block.
     pub decor: f32,
 
@@ -338,4 +376,75 @@ pub struct HatProbConfig {
 
     /// Probability of placing weeping vines.
     pub vine: f32,
+}
+
+impl HatProbConfig {
+    // Constants (from vanilla source code)
+    /* Inner corner */
+    /// Base probability of placing a decor block in the inner corner.
+    const INNER_DECOR_PROB: f32 = 0.1;
+    /// Base probability of placing a hat block in the inner corner.
+    const INNER_HAT_PROB: f32 = 0.2;
+
+    /* Corner */
+    /// Base probability of placing a decor block in the corner.
+    const CORNER_DECOR_PROB: f32 = 0.01;
+    /// Base probability of placing a hat block in the corner.
+    const CORNER_HAT_PROB: f32 = 0.7;
+
+    /* Outer corner */
+    /// Base probability of placing a decor block in the outer corner.
+    const OUTER_DECOR_PROB: f32 = 5.0e-4;
+    /// Base probability of placing a hat block in the outer corner.
+    const OUTER_HAT_PROB: f32 = 0.98;
+
+    /* Weeping vines */
+    /// Probability of placing weeping vines in generic.
+    const VINE_PROB: f32 = 0.0;
+    /// Probability of placing weeping vines in the inner corner.
+    const INNER_VINE_PROB: f32 = 0.1;
+    /// Probability of placing weeping vines in the corner.
+    const CORNER_VINE_PROB: f32 = 0.083;
+    /// Probability of placing weeping vines in the outer corner.
+    const OUTER_VINE_PROB: f32 = 0.07;
+
+    /// Create this configuration through conditions.
+    pub const fn from_conditions(conditions: &HatPlaceCond) -> Self {
+        let base = match (conditions.inner, conditions.corner) {
+            (true, _) => Self {
+                decor: Self::INNER_DECOR_PROB,
+                hat: Self::INNER_HAT_PROB,
+                vine: Self::VINE_PROB,
+            },
+            (false, true) => Self {
+                decor: Self::CORNER_DECOR_PROB,
+                hat: Self::CORNER_HAT_PROB,
+                vine: Self::VINE_PROB,
+            },
+            (false, false) => Self {
+                decor: Self::OUTER_DECOR_PROB,
+                hat: Self::OUTER_HAT_PROB,
+                vine: Self::VINE_PROB,
+            },
+        };
+
+        if conditions.place_vines {
+            match (conditions.inner, conditions.corner) {
+                (true, _) => Self {
+                    vine: Self::INNER_VINE_PROB,
+                    ..base
+                },
+                (false, true) => Self {
+                    vine: Self::CORNER_VINE_PROB,
+                    ..base
+                },
+                (false, false) => Self {
+                    vine: Self::OUTER_VINE_PROB,
+                    ..base
+                },
+            }
+        } else {
+            base
+        }
+    }
 }
