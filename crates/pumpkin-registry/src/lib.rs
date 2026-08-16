@@ -7,6 +7,7 @@ use std::sync::{Arc, OnceLock};
 mod builder;
 mod immutable;
 mod mutable;
+mod resolvable;
 mod r#static;
 
 mod key;
@@ -17,6 +18,7 @@ pub mod error;
 pub use crate::immutable::FrozenRegistry;
 pub use crate::key::DataKey;
 pub use crate::mutable::ReloadableRegistry;
+pub use crate::resolvable::{RegistryResolvable, RegistryResolvableSet};
 pub use crate::r#static::StaticRegistry;
 pub use crate::value::{DataKeyRef, ErasedRegistryRef};
 pub use builder::RegistryBuilder;
