@@ -28,11 +28,11 @@ pub enum PlacedFeatureWrapper {
 }
 
 impl PlacedFeatureWrapper {
-    #[allow(clippy::expect_used)]
-    pub fn get(&self) -> &PlacedFeature {
+    #[must_use]
+    pub fn get(&self) -> Option<&PlacedFeature> {
         match self {
-            Self::Named(name) => PLACED_FEATURES.get(name).expect("Unknown placed feature"),
-            Self::Direct(feature) => feature,
+            Self::Named(name) => PLACED_FEATURES.get(name),
+            Self::Direct(feature) => Some(feature),
         }
     }
 }

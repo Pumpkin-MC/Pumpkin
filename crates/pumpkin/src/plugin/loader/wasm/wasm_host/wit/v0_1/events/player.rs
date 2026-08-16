@@ -1199,10 +1199,12 @@ impl ToFromWasmEvent for AsyncPlayerPreLoginEvent {
             Event::AsyncPlayerPreLoginEvent(data) => Self {
                 player_name: data.player_name,
                 player_uuid: data.player_uuid.parse().unwrap_or_default(),
-                ip_address: data
-                    .ip_address
-                    .parse()
-                    .unwrap_or_else(|_| "127.0.0.1:0".parse().unwrap()),
+                ip_address: data.ip_address.parse().unwrap_or_else(|_| {
+                    std::net::SocketAddr::new(
+                        std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
+                        0,
+                    )
+                }),
                 kick_message: consume_text_component(state, &data.kick_message),
                 cancelled: data.cancelled,
             },
@@ -1912,10 +1914,12 @@ impl ToFromWasmEvent for PlayerPreLoginEvent {
             Event::PlayerPreLoginEvent(data) => Self {
                 player_name: data.player_name,
                 player_uuid: data.player_uuid.parse().unwrap_or_default(),
-                ip_address: data
-                    .ip_address
-                    .parse()
-                    .unwrap_or_else(|_| "127.0.0.1:0".parse().unwrap()),
+                ip_address: data.ip_address.parse().unwrap_or_else(|_| {
+                    std::net::SocketAddr::new(
+                        std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
+                        0,
+                    )
+                }),
                 kick_message: consume_text_component(state, &data.kick_message),
                 cancelled: data.cancelled,
             },

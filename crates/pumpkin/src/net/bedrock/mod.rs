@@ -271,6 +271,26 @@ impl BedrockClient {
         self.close().await;
     }
 
+    pub async fn kick_explicit(
+        &self,
+        reason: DisconnectReason,
+        message: String,
+        skip_message: bool,
+        filtered_message: String,
+        send_packet: bool,
+    ) {
+        if send_packet {
+            self.send_game_packet(&CDisconnectPlayer {
+                reason: pumpkin_protocol::codec::var_int::VarInt(reason as i32),
+                skip_message,
+                message,
+                filtered_message,
+            })
+            .await;
+        }
+        self.close().await;
+    }
+
     pub async fn send_chunks(&self, chunks: &[SyncChunk]) {
         let player = self.player.load_full();
         let Some(player) = player.as_ref() else {

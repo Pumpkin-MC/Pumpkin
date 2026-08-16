@@ -1,4 +1,4 @@
-use std::num::NonZeroU32;
+use std::num::NonZero;
 
 use pumpkin_util::{
     random::{RandomGenerator, RandomImpl},
@@ -25,7 +25,7 @@ impl HeightProvider {
 pub struct VeryBiasedToBottomHeightProvider {
     pub min_inclusive: YOffset,
     pub max_inclusive: YOffset,
-    pub inner: Option<NonZeroU32>,
+    pub inner: Option<NonZero<u32>>,
 }
 
 impl VeryBiasedToBottomHeightProvider {

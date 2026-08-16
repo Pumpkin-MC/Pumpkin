@@ -44,6 +44,67 @@ pub(crate) fn build() -> TokenStream {
             parsed.insert("WOLF_VARIANT_ID".to_owned(), id);
         }
 
+        let cat_variant_id = match ver {
+            JavaMinecraftVersion::V_26_1 | JavaMinecraftVersion::V_26_2 => Some(20),
+            _ => parsed.get("CAT_VARIANT").copied().or(Some(19)),
+        };
+        if let Some(id) = cat_variant_id {
+            parsed.insert("CAT_VARIANT".to_owned(), id);
+            parsed.insert("CAT_VARIANT_ID".to_owned(), id);
+        }
+
+        let cat_collar_color_id = match ver {
+            JavaMinecraftVersion::V_26_1 | JavaMinecraftVersion::V_26_2 => Some(23),
+            _ => Some(22),
+        };
+        if let Some(id) = cat_collar_color_id {
+            parsed.insert("CAT_COLLAR_COLOR".to_owned(), id);
+            parsed.insert("CAT_COLLAR_COLOR_ID".to_owned(), id);
+        }
+
+        let wolf_collar_color_id = match ver {
+            JavaMinecraftVersion::V_26_1 | JavaMinecraftVersion::V_26_2 => Some(21),
+            _ => Some(20),
+        };
+        if let Some(id) = wolf_collar_color_id {
+            parsed.insert("WOLF_COLLAR_COLOR".to_owned(), id);
+            parsed.insert("WOLF_COLLAR_COLOR_ID".to_owned(), id);
+        }
+
+        let sound_variant_id = match ver {
+            JavaMinecraftVersion::V_26_1 | JavaMinecraftVersion::V_26_2 => Some(24),
+            JavaMinecraftVersion::V_1_21_5
+            | JavaMinecraftVersion::V_1_21_6
+            | JavaMinecraftVersion::V_1_21_7
+            | JavaMinecraftVersion::V_1_21_9
+            | JavaMinecraftVersion::V_1_21_11 => Some(23),
+            _ => None,
+        };
+        if let Some(id) = sound_variant_id {
+            parsed.insert("SOUND_VARIANT".to_owned(), id);
+            parsed.insert("SOUND_VARIANT_ID".to_owned(), id);
+            parsed.insert("CAT_SOUND_VARIANT_ID".to_owned(), id);
+            parsed.insert("WOLF_SOUND_VARIANT_ID".to_owned(), id);
+        }
+
+        let is_lying_id = match ver {
+            JavaMinecraftVersion::V_26_1 | JavaMinecraftVersion::V_26_2 => Some(21),
+            _ => Some(20),
+        };
+        if let Some(id) = is_lying_id {
+            parsed.insert("IS_LYING".to_owned(), id);
+            parsed.insert("IN_SLEEPING_POSE".to_owned(), id);
+        }
+
+        let relax_state_one_id = match ver {
+            JavaMinecraftVersion::V_26_1 | JavaMinecraftVersion::V_26_2 => Some(22),
+            _ => Some(21),
+        };
+        if let Some(id) = relax_state_one_id {
+            parsed.insert("RELAX_STATE_ONE".to_owned(), id);
+            parsed.insert("HEAD_DOWN".to_owned(), id);
+        }
+
         versions.insert(ver, parsed);
     }
 
@@ -122,10 +183,15 @@ fn generate_consts(versions: &BTreeMap<JavaMinecraftVersion, BTreeMap<String, u8
         // Some versions prefix keys with DATA_ (Bedrock), others don't (Java)
         // Try both forms so every version resolves correctly
         let prefixed = format!("DATA_{final_name}");
-        let aliases: &[&str] = if final_name == "CUSTOM_NAME_VISIBLE" {
-            &["NAME_VISIBLE"]
-        } else {
-            &[]
+        let aliases: &[&str] = match final_name.as_str() {
+            "CUSTOM_NAME_VISIBLE" => &["NAME_VISIBLE"],
+            "IS_LYING" => &["IN_SLEEPING_POSE"],
+            "IN_SLEEPING_POSE" => &["IS_LYING"],
+            "RELAX_STATE_ONE" => &["HEAD_DOWN"],
+            "HEAD_DOWN" => &["RELAX_STATE_ONE"],
+            "SOUND_VARIANT" => &["SOUND_VARIANT_ID", "DATA_SOUND_VARIANT_ID"],
+            "SOUND_VARIANT_ID" => &["SOUND_VARIANT", "DATA_SOUND_VARIANT_ID"],
+            _ => &[],
         };
 
         let mut fields = TokenStream::new();
@@ -182,6 +248,51 @@ mod tests {
             .expect("wolf tracker constant");
         assert!(wolf.contains("v1_21_11 : 20u8"));
         assert!(wolf.contains("v26_2 : 23u8"));
+    }
+
+    #[test]
+    fn cat_trackers_keep_their_entity_specific_tracker_ids() {
+        let generated = build().to_string();
+
+        assert!(generated.contains("CAT_VARIANT"));
+        let cat_variant = generated
+            .split("CAT_VARIANT")
+            .nth(1)
+            .expect("cat variant constant");
+        assert!(cat_variant.contains("v1_21_11 : 19u8"));
+        assert!(cat_variant.contains("v26_2 : 20u8"));
+
+        assert!(generated.contains("IS_LYING"));
+        let is_lying = generated
+            .split("IS_LYING")
+            .nth(1)
+            .expect("is lying constant");
+        assert!(is_lying.contains("v1_21_11 : 20u8"));
+        assert!(is_lying.contains("v26_2 : 21u8"));
+
+        assert!(generated.contains("RELAX_STATE_ONE"));
+        let relax = generated
+            .split("RELAX_STATE_ONE")
+            .nth(1)
+            .expect("relax state one constant");
+        assert!(relax.contains("v1_21_11 : 21u8"));
+        assert!(relax.contains("v26_2 : 22u8"));
+
+        assert!(generated.contains("CAT_COLLAR_COLOR"));
+        let collar = generated
+            .split("CAT_COLLAR_COLOR")
+            .nth(1)
+            .expect("cat collar color constant");
+        assert!(collar.contains("v1_21_11 : 22u8"));
+        assert!(collar.contains("v26_2 : 23u8"));
+
+        assert!(generated.contains("SOUND_VARIANT"));
+        let sound = generated
+            .split("SOUND_VARIANT")
+            .nth(1)
+            .expect("sound variant constant");
+        assert!(sound.contains("v1_21_11 : 23u8"));
+        assert!(sound.contains("v26_2 : 24u8"));
     }
 
     #[test]

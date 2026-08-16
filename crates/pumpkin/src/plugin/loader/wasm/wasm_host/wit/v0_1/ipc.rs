@@ -12,12 +12,15 @@ impl pumpkin::plugin::ipc::Host for PluginHostState {
         recipient: PluginId,
         message: IpcMessage,
     ) -> wasmtime::Result<Result<Result<IpcMessage, String>, ()>> {
-        Ok(self
-            .server
-            .as_ref()
-            .unwrap()
+        let Some(server) = &self.server else {
+            return Err(wasmtime::Error::msg("Server not available"));
+        };
+        let Some(name) = &self.name else {
+            return Err(wasmtime::Error::msg("Plugin name not available"));
+        };
+        Ok(server
             .plugin_manager
-            .send_message(self.name.as_ref().unwrap(), &recipient, &message)
+            .send_message(name, &recipient, &message)
             .await)
     }
 }

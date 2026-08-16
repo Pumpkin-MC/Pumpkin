@@ -666,7 +666,10 @@ impl CommandDispatcher {
         let mut names = tree.names.iter();
         let permission = permission.into();
 
-        let primary_name = names.next().expect("at least one name must be provided");
+        let Some(primary_name) = names.next() else {
+            tracing::warn!("Command registration skipped: command tree has no names");
+            return;
+        };
 
         for name in names {
             self.commands
