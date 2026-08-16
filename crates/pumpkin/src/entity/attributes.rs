@@ -33,7 +33,7 @@ pub struct AttributeInstance {
 
 impl AttributeInstance {
     #[must_use]
-    pub fn new(base_value: f64, min_value: f64, max_value: f64) -> Self {
+    pub const fn new(base_value: f64, min_value: f64, max_value: f64) -> Self {
         Self {
             base_value,
             min_value,
