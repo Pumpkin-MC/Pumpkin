@@ -36,17 +36,6 @@ fn registry_resolvable_resolves_against_selected_registry() {
     assert_eq!(*resolvable.resolve(registry.as_ref()).unwrap(), 20);
 }
 
-#[tokio::test]
-async fn registry_resolvable_resolves_async() {
-    let registry = numbers();
-    let resolvable = RegistryResolvable::<u32>::new(id("test:one"));
-
-    assert_eq!(
-        *resolvable.resolve_async(registry.as_ref()).await.unwrap(),
-        10
-    );
-}
-
 #[test]
 fn registry_resolvable_reports_missing_identifier() {
     let registry = numbers();

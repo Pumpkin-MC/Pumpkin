@@ -3656,6 +3656,7 @@ dependencies = [
 name = "pumpkin-registry"
 version = "0.1.0-dev+26.2-26.40"
 dependencies = [
+ "arc-swap",
  "linkme",
  "pumpkin-codecs",
  "pumpkin-util",
@@ -3663,7 +3664,6 @@ dependencies = [
  "rustc-hash",
  "serde_json",
  "thiserror 2.0.20",
- "tokio",
 ]
 
 [[package]]

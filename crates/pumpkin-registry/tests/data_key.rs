@@ -84,41 +84,41 @@ fn deeply_nested_root() -> Arc<dyn Registry> {
         .arc_dyn()
 }
 
-#[tokio::test]
-async fn data_key_resolves_value() {
+#[test]
+fn data_key_resolves_value() {
     let _ = BOOTSTRAP.set(BootstrapManager::new());
     let root = nested_root();
     let key = DataKey::<u32>::new("test:numbers/test:two");
 
-    assert_eq!(*key.get(root.as_ref()).await.unwrap(), 20);
+    assert_eq!(*key.get(root.as_ref()).unwrap(), 20);
 }
 
-#[tokio::test]
-async fn data_key_can_be_reused_after_initial_resolution() {
+#[test]
+fn data_key_can_be_reused_after_initial_resolution() {
     let _ = BOOTSTRAP.set(BootstrapManager::new());
     let root = nested_root();
     let key = DataKey::<u32>::new("test:numbers/test:two");
 
-    assert_eq!(*key.get(root.as_ref()).await.unwrap(), 20);
-    assert_eq!(*key.get(root.as_ref()).await.unwrap(), 20);
+    assert_eq!(*key.get(root.as_ref()).unwrap(), 20);
+    assert_eq!(*key.get(root.as_ref()).unwrap(), 20);
 }
 
-#[tokio::test]
-async fn data_key_walks_multiple_nested_registry_levels() {
+#[test]
+fn data_key_walks_multiple_nested_registry_levels() {
     let _ = BOOTSTRAP.set(BootstrapManager::new());
     let root = deeply_nested_root();
     let key = DataKey::<u32>::new("test:branch/test:numbers/test:value");
 
-    assert_eq!(*key.get(root.as_ref()).await.unwrap(), 99);
+    assert_eq!(*key.get(root.as_ref()).unwrap(), 99);
 }
 
-#[tokio::test]
-async fn get_reports_missing_registry_identifier() {
+#[test]
+fn get_reports_missing_registry_identifier() {
     let _ = BOOTSTRAP.set(BootstrapManager::new());
     let root = nested_root();
     let key = DataKey::<u32>::new("test:missing/test:value");
 
-    let result = key.get(root.as_ref()).await;
+    let result = key.get(root.as_ref());
 
     assert!(matches!(
         result,
@@ -127,8 +127,8 @@ async fn get_reports_missing_registry_identifier() {
     ));
 }
 
-#[tokio::test]
-async fn get_reports_non_registry_path_entry() {
+#[test]
+fn get_reports_non_registry_path_entry() {
     let _ = BOOTSTRAP.set(BootstrapManager::new());
     let root = RegistryBuilder::<u32>::frozen(&id("test:non_registry_root"))
         .unwrap()
@@ -136,7 +136,7 @@ async fn get_reports_non_registry_path_entry() {
 
     let key = DataKey::<u32>::new("test:not_a_registry/test:value");
 
-    let result = key.get(root.as_ref()).await;
+    let result = key.get(root.as_ref());
 
     assert!(matches!(
         result,
@@ -144,13 +144,13 @@ async fn get_reports_non_registry_path_entry() {
     ));
 }
 
-#[tokio::test]
-async fn get_reports_missing_value_identifier() {
+#[test]
+fn get_reports_missing_value_identifier() {
     let _ = BOOTSTRAP.set(BootstrapManager::new());
     let root = nested_root();
     let key = DataKey::<u32>::new("test:numbers/test:missing_value");
 
-    let result = key.get(root.as_ref()).await;
+    let result = key.get(root.as_ref());
 
     assert!(matches!(
         result,
@@ -159,14 +159,14 @@ async fn get_reports_missing_value_identifier() {
     ));
 }
 
-#[tokio::test]
-async fn get_reports_value_type_mismatch() {
+#[test]
+fn get_reports_value_type_mismatch() {
     let _ = BOOTSTRAP.set(BootstrapManager::new());
     let root = nested_root();
     let key = DataKey::<u64>::new("test:numbers/test:one");
 
     assert!(matches!(
-        key.get(root.as_ref()).await,
+        key.get(root.as_ref()),
         Err(DataKeyGetError::TypeMismatch { expected, actual })
             if expected == type_name::<u64>()
                 && actual == type_name::<u32>()
@@ -174,31 +174,31 @@ async fn get_reports_value_type_mismatch() {
 }
 
 #[test]
-fn blocking_data_key_resolves_value_without_runtime() {
+fn data_key_resolves_value_without_runtime() {
     let _ = BOOTSTRAP.set(BootstrapManager::new());
     let root = nested_root();
     let key = DataKey::<u32>::new("test:numbers/test:two");
 
-    assert_eq!(*key.get_blocking(root.as_ref()).unwrap(), 20);
+    assert_eq!(*key.get(root.as_ref()).unwrap(), 20);
 }
 
 #[test]
-fn blocking_data_key_can_be_reused_after_initial_resolution() {
+fn data_key_can_be_reused_after_initial_resolution_sync() {
     let _ = BOOTSTRAP.set(BootstrapManager::new());
     let root = nested_root();
     let key = DataKey::<u32>::new("test:numbers/test:one");
 
-    assert_eq!(*key.get_blocking(root.as_ref()).unwrap(), 10);
-    assert_eq!(*key.get_blocking(root.as_ref()).unwrap(), 10);
+    assert_eq!(*key.get(root.as_ref()).unwrap(), 10);
+    assert_eq!(*key.get(root.as_ref()).unwrap(), 10);
 }
 
 #[test]
-fn blocking_get_reports_missing_registry_identifier() {
+fn get_reports_missing_registry_identifier_sync() {
     let _ = BOOTSTRAP.set(BootstrapManager::new());
     let root = nested_root();
     let key = DataKey::<u32>::new("test:missing_registry/test:value");
 
-    let result = key.get_blocking(root.as_ref());
+    let result = key.get(root.as_ref());
 
     assert!(matches!(
         result,
@@ -208,12 +208,12 @@ fn blocking_get_reports_missing_registry_identifier() {
 }
 
 #[test]
-fn blocking_get_reports_missing_value_identifier() {
+fn get_reports_missing_value_identifier_sync() {
     let _ = BOOTSTRAP.set(BootstrapManager::new());
     let root = nested_root();
     let key = DataKey::<u32>::new("test:numbers/test:missing_value");
 
-    let result = key.get_blocking(root.as_ref());
+    let result = key.get(root.as_ref());
 
     assert!(matches!(
         result,

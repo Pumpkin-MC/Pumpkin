@@ -103,36 +103,6 @@ impl<T: Send + Sync + 'static> RegistryResolvable<T> {
             marker: PhantomData,
         })
     }
-
-    pub async fn resolve_async<'a>(
-        &self,
-        registry: &'a dyn Registry,
-    ) -> Result<DataKeyRef<'a, T>, DataKeyGetError> {
-        let id = registry
-            .get_id_async(&self.identifier)
-            .await
-            .ok_or_else(|| DataKeyGetError::MissingIdentifier {
-                identifier: self.identifier.clone(),
-            })?;
-
-        let value = registry
-            .by_id_erased_async(id)
-            .await
-            .ok_or(DataKeyGetError::MissingValue { id })?;
-        let typed = value
-            .downcast_ref::<T>()
-            .ok_or(DataKeyGetError::TypeMismatch {
-                expected: type_name::<T>(),
-                actual: registry.item_type_name(),
-            })?;
-
-        Ok(DataKeyRef {
-            value: std::ptr::from_ref(typed),
-            _guards: vec![value],
-            _registry: None,
-            marker: PhantomData,
-        })
-    }
 }
 
 /// A set of typed registry entries or a registry tag.

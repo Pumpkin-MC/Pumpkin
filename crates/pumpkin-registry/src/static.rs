@@ -1,5 +1,5 @@
 use crate::{
-    BoxFuture, ErasedRegistryIterator, Identifier, Registry, TypedRegistry,
+    ErasedRegistryIterator, Identifier, Registry, TypedRegistry,
     value::{DynIterator, ErasedRegistryRef},
 };
 use rustc_hash::FxHashMap;
@@ -45,10 +45,6 @@ impl<T: Send + Sync + 'static> Registry for StaticRegistry<T> {
         self.mapping.get(identifier).copied()
     }
 
-    fn get_id_async<'a>(&'a self, identifier: &'a Identifier) -> BoxFuture<'a, Option<usize>> {
-        Box::pin(async move { self.get_id(identifier) })
-    }
-
     fn by_id_erased(&self, id: usize) -> Option<ErasedRegistryRef<'_>> {
         {
             if id < self.static_entries.len() {
@@ -58,10 +54,6 @@ impl<T: Send + Sync + 'static> Registry for StaticRegistry<T> {
             }
         }
         .map(|value| ErasedRegistryRef::Borrowed(value))
-    }
-
-    fn by_id_erased_async(&self, id: usize) -> BoxFuture<'_, Option<ErasedRegistryRef<'_>>> {
-        Box::pin(async move { self.by_id_erased(id) })
     }
 
     fn iter_erased(&self) -> ErasedRegistryIterator<'_> {

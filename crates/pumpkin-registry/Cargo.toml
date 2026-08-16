@@ -9,15 +9,14 @@ license.workspace = true
 [dependencies]
 pumpkin-util.workspace = true
 pumpkin-codecs.workspace = true
-tokio.workspace = true
 rayon.workspace = true
 thiserror.workspace = true
 rustc-hash.workspace = true
+arc-swap.workspace = true
 linkme.workspace = true
 
 [dev-dependencies]
 # Validate correctness
-tokio = {workspace = true, features = ["macros", "rt-multi-thread"]}
 serde_json.workspace = true
 
 [lints]
