@@ -758,9 +758,14 @@ pub trait ScreenHandler: Send + Sync {
                     let mut slot_stack = slot.get_stack().await;
 
                     if !slot_stack.is_empty() && slot_stack.are_items_and_components_equal(stack) {
-                        let combined_count = slot_stack.item_count + stack.item_count;
+                        // A count past `u8::MAX` cannot fit a slot anyway, so `None`
+                        // falls through to the partial-fill arm below like any other
+                        // combination too large to merge outright.
+                        let combined_count = slot_stack.item_count.checked_add(stack.item_count);
                         let max_slot_count = slot.get_max_item_count_for_stack(&slot_stack).await;
-                        if combined_count <= max_slot_count {
+                        if let Some(combined_count) = combined_count
+                            && combined_count <= max_slot_count
+                        {
                             stack.set_count(0);
                             slot_stack.set_count(combined_count);
                             slot.set_stack(slot_stack).await;
@@ -1399,5 +1404,114 @@ impl ScreenHandlerBehaviour {
     pub fn next_revision(&self) -> u32 {
         self.revision.fetch_add(1, Ordering::Relaxed);
         self.revision.fetch_and(32767, Ordering::Relaxed) & 32767
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::slot::NormalSlot;
+    use pumpkin_data::item::Item;
+    use pumpkin_world::inventory::SimpleInventory;
+
+    /// The smallest thing `insert_item` needs: somewhere to keep the slots.
+    struct TestScreenHandler {
+        behaviour: ScreenHandlerBehaviour,
+    }
+
+    impl TestScreenHandler {
+        /// Builds a handler over one inventory, one slot per inventory slot.
+        fn with_slots(size: usize) -> Self {
+            let inventory: Arc<dyn Inventory> = Arc::new(SimpleInventory::new(size));
+            let mut behaviour = ScreenHandlerBehaviour::new(0, None);
+            for index in 0..size {
+                behaviour
+                    .slots
+                    .push(Arc::new(NormalSlot::new(inventory.clone(), index)));
+            }
+            Self { behaviour }
+        }
+
+        async fn set(&self, index: usize, stack: ItemStack) {
+            self.behaviour.slots[index].set_stack(stack).await;
+        }
+
+        async fn count(&self, index: usize) -> u8 {
+            self.behaviour.slots[index].get_stack().await.item_count
+        }
+    }
+
+    impl ScreenHandler for TestScreenHandler {
+        fn as_any(&self) -> &dyn Any {
+            self
+        }
+
+        fn as_any_mut(&mut self) -> &mut dyn Any {
+            self
+        }
+
+        fn get_behaviour(&self) -> &ScreenHandlerBehaviour {
+            &self.behaviour
+        }
+
+        fn get_behaviour_mut(&mut self) -> &mut ScreenHandlerBehaviour {
+            &mut self.behaviour
+        }
+
+        fn quick_move<'a>(
+            &'a mut self,
+            _player: &'a dyn InventoryPlayer,
+            _slot_index: i32,
+        ) -> ItemStackFuture<'a> {
+            Box::pin(async { ItemStack::EMPTY.clone() })
+        }
+    }
+
+    #[tokio::test]
+    async fn insert_item_tops_up_a_matching_stack() {
+        let mut handler = TestScreenHandler::with_slots(2);
+        handler.set(0, ItemStack::new(32, &Item::STONE)).await;
+
+        let mut incoming = ItemStack::new(16, &Item::STONE);
+        assert!(handler.insert_item(&mut incoming, 0, 2, false).await);
+
+        assert_eq!(handler.count(0).await, 48);
+        assert!(incoming.is_empty());
+    }
+
+    #[tokio::test]
+    async fn insert_item_fills_to_the_limit_and_carries_the_rest_over() {
+        let mut handler = TestScreenHandler::with_slots(2);
+        handler.set(0, ItemStack::new(60, &Item::STONE)).await;
+
+        let mut incoming = ItemStack::new(10, &Item::STONE);
+        assert!(handler.insert_item(&mut incoming, 0, 2, false).await);
+
+        // Stone caps at 64, so slot 0 takes 4 and the remaining 6 go to slot 1.
+        assert_eq!(handler.count(0).await, 64);
+        assert_eq!(handler.count(1).await, 6);
+        assert!(incoming.is_empty());
+    }
+
+    /// Counts above 127 do reach here: the plugin API's `item-stack.new` and
+    /// `set-count` take a raw `u8` and clamp nothing, so two stacks can sum
+    /// past `u8::MAX`.
+    #[tokio::test]
+    async fn insert_item_does_not_overflow_the_count() {
+        let mut handler = TestScreenHandler::with_slots(2);
+        handler.set(0, ItemStack::new(200, &Item::STONE)).await;
+
+        let mut incoming = ItemStack::new(100, &Item::STONE);
+        handler.insert_item(&mut incoming, 0, 2, false).await;
+
+        // Slot 0 already holds more than it can take, so it is left alone and
+        // nothing is lost on the way past it.
+        assert_eq!(handler.count(0).await, 200);
+        assert_eq!(
+            u16::from(handler.count(0).await)
+                + u16::from(handler.count(1).await)
+                + u16::from(incoming.item_count),
+            300
+        );
     }
 }
