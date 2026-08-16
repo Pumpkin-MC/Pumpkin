@@ -1,6 +1,7 @@
 use pumpkin_data::BlockState;
+use pumpkin_data::int_provider::IntProviderValue;
 use pumpkin_util::{
-    math::{int_provider::IntProvider, position::BlockPos},
+    math::position::BlockPos,
     random::RandomGenerator,
 };
 
@@ -9,7 +10,7 @@ use crate::generation::feature::features::tree::TreeNode;
 use crate::generation::proto_chunk::GenerationCache;
 
 pub struct MegaPineFoliagePlacer {
-    pub crown_height: IntProvider,
+    pub crown_height: IntProviderValue,
 }
 
 impl MegaPineFoliagePlacer {

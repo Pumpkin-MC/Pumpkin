@@ -1,9 +1,8 @@
-use pumpkin_data::{Block, BlockState};
+use pumpkin_data::{Block, BlockState, int_provider::IntProviderValue};
 use pumpkin_util::{
     DoublePerlinNoiseParametersCodec,
     math::{
         clamped_map,
-        int_provider::IntProvider,
         pool::{Pool, Weighted},
         position::BlockPos,
     },
@@ -136,7 +135,7 @@ pub struct BlockStateRule {
 pub struct RandomizedIntBlockStateProvider {
     pub source: Box<BlockStateProvider>,
     pub property: String,
-    pub values: IntProvider,
+    pub values: IntProviderValue,
 }
 
 impl RandomizedIntBlockStateProvider {

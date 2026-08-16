@@ -1,6 +1,6 @@
 use pumpkin_data::BlockState;
 use pumpkin_data::block_properties::HorizontalFacing;
-use pumpkin_util::math::int_provider::IntProvider;
+use pumpkin_data::int_provider::IntProviderValue;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::random::{RandomGenerator, RandomImpl};
 
@@ -12,9 +12,9 @@ use crate::world::WorldPortalExt;
 use pumpkin_data::BlockDirection;
 
 pub struct UpwardsBranchingTrunkPlacer {
-    pub extra_branch_steps: IntProvider,
+    pub extra_branch_steps: IntProviderValue,
     pub place_branch_per_log_probability: f32,
-    pub extra_branch_length: IntProvider,
+    pub extra_branch_length: IntProviderValue,
     pub can_grow_through: &'static [u16],
 }
 

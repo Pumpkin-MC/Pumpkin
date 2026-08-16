@@ -1,7 +1,12 @@
 use heck::{ToShoutySnakeCase, ToUpperCamelCase};
 use proc_macro2::{Span, TokenStream};
+use pumpkin_codecs::{Decode, json_ops::JsonOps};
+use pumpkin_data::{
+    experience::Experience,
+    int_provider::{ConstantIntProvider, UniformIntProvider},
+};
 use pumpkin_nbt::deserializer::{NbtReadHelper, NbtReadHelperBedrock};
-use pumpkin_util::math::{experience::Experience, vector3::Vector3};
+use pumpkin_util::math::vector3::Vector3;
 use quote::{ToTokens, format_ident, quote};
 use serde::Deserialize;
 use std::{
@@ -680,7 +685,7 @@ pub struct Block {
     /// All possible states for this block in state-ID order.
     pub states: Vec<BlockState>,
     /// Experience points dropped when the block is mined, if any.
-    pub experience: Option<Experience>,
+    pub experience: Option<serde_json::Value>,
     /// Position-derived shape offset applied by vanilla, if any.
     shape_offset: Option<BlockShapeOffset>,
 }
@@ -699,8 +704,29 @@ impl ToTokens for Block {
         let velocity_multiplier = &self.velocity_multiplier;
         let jump_velocity_multiplier = &self.jump_velocity_multiplier;
         let experience = if let Some(exp) = &self.experience {
-            let exp_tokens = exp.to_token_stream();
-            quote! { Some(#exp_tokens) }
+            let decoded = Experience::parse(exp.clone(), &JsonOps)
+                .into_result()
+                .unwrap_or_else(|| {
+                    panic!("Failed to decode block experience through codec: {exp:?}")
+                });
+            let provider = if let Some(provider) =
+                decoded.experience.downcast_ref::<ConstantIntProvider>()
+            {
+                let value = provider.value;
+                quote! { &ConstantIntProvider { value: #value } }
+            } else if let Some(provider) = decoded.experience.downcast_ref::<UniformIntProvider>() {
+                let min = provider.min_inclusive;
+                let max = provider.max_inclusive;
+                quote! {
+                    &UniformIntProvider {
+                        min_inclusive: #min,
+                        max_inclusive: #max,
+                    }
+                }
+            } else {
+                panic!("Block experience contains a non-const int provider: {decoded:?}");
+            };
+            quote! { Some(StaticExperience { experience: #provider }) }
         } else {
             quote! { None }
         };
@@ -1153,9 +1179,9 @@ pub fn build() -> TokenStream {
             blocks::{Flammable, ShapeOffset, ShapeOffsetType},
         };
         use crate::block_state::PistonBehavior;
-        use pumpkin_util::math::int_provider::{UniformIntProvider, IntProvider, NormalIntProvider};
+        use crate::int_provider::{ConstantIntProvider, UniformIntProvider};
         use pumpkin_util::loot_table::*;
-        use pumpkin_util::math::experience::Experience;
+        use crate::experience::StaticExperience;
         use pumpkin_util::math::vector3::Vector3;
         use std::collections::BTreeMap;
 

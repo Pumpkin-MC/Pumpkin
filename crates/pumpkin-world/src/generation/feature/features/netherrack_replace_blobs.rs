@@ -1,6 +1,7 @@
 use pumpkin_data::{Block, BlockState};
+use pumpkin_data::int_provider::IntProviderValue;
 use pumpkin_util::{
-    math::{int_provider::IntProvider, position::BlockPos},
+    math::position::BlockPos,
     random::RandomGenerator,
 };
 
@@ -10,7 +11,7 @@ use crate::world::WorldPortalExt;
 pub struct ReplaceBlobsFeature {
     pub target: &'static BlockState,
     pub state: &'static BlockState,
-    pub radius: IntProvider,
+    pub radius: IntProviderValue,
 }
 
 impl ReplaceBlobsFeature {

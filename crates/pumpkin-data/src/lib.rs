@@ -12,6 +12,9 @@
     unused_imports
 )]
 
+pub mod experience;
+pub mod int_provider;
+
 #[rustfmt::skip]
 #[path = "generated/chunk_view_lut.rs"]
 pub mod chunk_view_lut;

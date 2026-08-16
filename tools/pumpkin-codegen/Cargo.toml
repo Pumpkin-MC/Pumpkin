@@ -25,6 +25,8 @@ quote = "1.0"
 syn = { version = "3.0", features = ["full", "extra-traits"] }
 
 pumpkin-util = { path = "../../crates/pumpkin-util", features = ["codegen"] }
+pumpkin-codecs = { path = "../../crates/pumpkin-codecs" }
+pumpkin-data = { path = "../../crates/pumpkin-data", default-features = false }
 pumpkin-nbt = { path = "../../crates/pumpkin-nbt" }
 
 [lints.clippy]

@@ -14,13 +14,13 @@ fn build_placed_features()
         HeightProvider, TrapezoidHeightProvider, UniformHeightProvider,
         VeryBiasedToBottomHeightProvider,
     };
+    use pumpkin_data::int_provider::{
+        BiasedToBottomIntProvider, ClampedIntProvider, ClampedNormalIntProvider,
+        ConstantIntProvider, IntProviderValue, TrapezoidIntProvider, UniformIntProvider,
+        WeightedEntry, WeightedListIntProvider,
+    };
     use pumpkin_data::{Block, BlockDirection};
     use pumpkin_util::HeightMap;
-    use pumpkin_util::math::int_provider::{
-        BiasedToBottomIntProvider, ClampedIntProvider, ClampedNormalIntProvider,
-        ConstantIntProvider, IntProvider, NormalIntProvider, TrapezoidIntProvider,
-        UniformIntProvider, WeightedEntry, WeightedListIntProvider,
-    };
     use pumpkin_util::math::vector3::Vector3;
     use pumpkin_util::y_offset::{AboveBottom, Absolute, BelowTop, YOffset};
     let mut map = std::collections::HashMap::new();
@@ -129,20 +129,18 @@ fn build_placed_features()
             ),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Object(NormalIntProvider::WeightedList(
-                        WeightedListIntProvider {
-                            distribution: vec![
-                                WeightedEntry {
-                                    data: IntProvider::Constant(30i32),
-                                    weight: 9i32,
-                                },
-                                WeightedEntry {
-                                    data: IntProvider::Constant(31i32),
-                                    weight: 1i32,
-                                },
-                            ],
-                        },
-                    )),
+                    count: IntProviderValue::new(WeightedListIntProvider {
+                        distribution: vec![
+                            WeightedEntry {
+                                data: IntProviderValue::constant(30i32),
+                                weight: 9i32,
+                            },
+                            WeightedEntry {
+                                data: IntProviderValue::constant(31i32),
+                                weight: 1i32,
+                            },
+                        ],
+                    }),
                 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
                 PlacementModifier::SurfaceWaterDepthFilter(
@@ -165,7 +163,7 @@ fn build_placed_features()
             ),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(75i32),
+                    count: IntProviderValue::constant(75i32),
                 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
                 PlacementModifier::HeightRange(HeightRangePlacementModifier {
@@ -186,7 +184,7 @@ fn build_placed_features()
             ),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(10i32),
+                    count: IntProviderValue::constant(10i32),
                 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
                 PlacementModifier::HeightRange(HeightRangePlacementModifier {
@@ -318,20 +316,18 @@ fn build_placed_features()
             feature: Feature::Named(pumpkin_data::configured_feature::ConfiguredFeature::BirchTall),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Object(NormalIntProvider::WeightedList(
-                        WeightedListIntProvider {
-                            distribution: vec![
-                                WeightedEntry {
-                                    data: IntProvider::Constant(10i32),
-                                    weight: 9i32,
-                                },
-                                WeightedEntry {
-                                    data: IntProvider::Constant(11i32),
-                                    weight: 1i32,
-                                },
-                            ],
-                        },
-                    )),
+                    count: IntProviderValue::new(WeightedListIntProvider {
+                        distribution: vec![
+                            WeightedEntry {
+                                data: IntProviderValue::constant(10i32),
+                                weight: 9i32,
+                            },
+                            WeightedEntry {
+                                data: IntProviderValue::constant(11i32),
+                                weight: 1i32,
+                            },
+                        ],
+                    }),
                 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
                 PlacementModifier::SurfaceWaterDepthFilter(
@@ -354,7 +350,7 @@ fn build_placed_features()
             ),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(25i32),
+                    count: IntProviderValue::constant(25i32),
                 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
                 PlacementModifier::HeightRange(HeightRangePlacementModifier {
@@ -373,10 +369,10 @@ fn build_placed_features()
             feature: Feature::Named(pumpkin_data::configured_feature::ConfiguredFeature::BlueIce),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Object(NormalIntProvider::Uniform(UniformIntProvider {
+                    count: IntProviderValue::new(UniformIntProvider {
                         min_inclusive: 0i32,
                         max_inclusive: 19i32,
-                    })),
+                    }),
                 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
                 PlacementModifier::HeightRange(HeightRangePlacementModifier {
@@ -406,23 +402,19 @@ fn build_placed_features()
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(96i32),
+                    count: IntProviderValue::constant(96i32),
                 }),
                 PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -7i32,
-                            max_inclusive: 7i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -3i32,
-                            max_inclusive: 3i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                    xz_spread: IntProviderValue::new(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    }),
+                    y_spread: IntProviderValue::new(TrapezoidIntProvider {
+                        min_inclusive: -3i32,
+                        max_inclusive: 3i32,
+                        plateau: 0i32,
+                    }),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
@@ -447,23 +439,19 @@ fn build_placed_features()
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(96i32),
+                    count: IntProviderValue::constant(96i32),
                 }),
                 PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -7i32,
-                            max_inclusive: 7i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -3i32,
-                            max_inclusive: 3i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                    xz_spread: IntProviderValue::new(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    }),
+                    y_spread: IntProviderValue::new(TrapezoidIntProvider {
+                        min_inclusive: -3i32,
+                        max_inclusive: 3i32,
+                        plateau: 0i32,
+                    }),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
@@ -482,7 +470,7 @@ fn build_placed_features()
             ),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(3i32),
+                    count: IntProviderValue::constant(3i32),
                 }),
                 PlacementModifier::RarityFilter(RarityFilterPlacementModifier { chance: 4u32 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
@@ -491,23 +479,19 @@ fn build_placed_features()
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(96i32),
+                    count: IntProviderValue::constant(96i32),
                 }),
                 PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -7i32,
-                            max_inclusive: 7i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -3i32,
-                            max_inclusive: 3i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                    xz_spread: IntProviderValue::new(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    }),
+                    y_spread: IntProviderValue::new(TrapezoidIntProvider {
+                        min_inclusive: -3i32,
+                        max_inclusive: 3i32,
+                        plateau: 0i32,
+                    }),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
@@ -526,7 +510,7 @@ fn build_placed_features()
             ),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(2i32),
+                    count: IntProviderValue::constant(2i32),
                 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
                 PlacementModifier::Heightmap(HeightmapPlacementModifier {
@@ -534,23 +518,19 @@ fn build_placed_features()
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(96i32),
+                    count: IntProviderValue::constant(96i32),
                 }),
                 PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -7i32,
-                            max_inclusive: 7i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -3i32,
-                            max_inclusive: 3i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                    xz_spread: IntProviderValue::new(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    }),
+                    y_spread: IntProviderValue::new(TrapezoidIntProvider {
+                        min_inclusive: -3i32,
+                        max_inclusive: 3i32,
+                        plateau: 0i32,
+                    }),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
@@ -575,23 +555,19 @@ fn build_placed_features()
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(96i32),
+                    count: IntProviderValue::constant(96i32),
                 }),
                 PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -7i32,
-                            max_inclusive: 7i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -3i32,
-                            max_inclusive: 3i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                    xz_spread: IntProviderValue::new(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    }),
+                    y_spread: IntProviderValue::new(TrapezoidIntProvider {
+                        min_inclusive: -3i32,
+                        max_inclusive: 3i32,
+                        plateau: 0i32,
+                    }),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
@@ -608,7 +584,7 @@ fn build_placed_features()
             feature: Feature::Named(pumpkin_data::configured_feature::ConfiguredFeature::CaveVine),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(188i32),
+                    count: IntProviderValue::constant(188i32),
                 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
                 PlacementModifier::HeightRange(HeightRangePlacementModifier {
@@ -632,8 +608,8 @@ fn build_placed_features()
                     max_steps: 12i32,
                 }),
                 PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Constant(0i32),
-                    y_spread: IntProvider::Constant(-1i32),
+                    xz_spread: IntProviderValue::constant(0i32),
+                    y_spread: IntProviderValue::constant(-1i32),
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
             ],
@@ -691,10 +667,10 @@ fn build_placed_features()
             ),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Object(NormalIntProvider::Uniform(UniformIntProvider {
+                    count: IntProviderValue::new(UniformIntProvider {
                         min_inclusive: 0i32,
                         max_inclusive: 4i32,
-                    })),
+                    }),
                 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
                 PlacementModifier::Heightmap(HeightmapPlacementModifier {
@@ -710,7 +686,7 @@ fn build_placed_features()
             feature: Feature::Named(pumpkin_data::configured_feature::ConfiguredFeature::Vines),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(256i32),
+                    count: IntProviderValue::constant(256i32),
                 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
                 PlacementModifier::HeightRange(HeightRangePlacementModifier {
@@ -731,7 +707,7 @@ fn build_placed_features()
             ),
             placement: vec![
                 PlacementModifier::CountOnEveryLayer(CountOnEveryLayerPlacementModifier {
-                    count: IntProvider::Constant(6i32),
+                    count: IntProviderValue::constant(6i32),
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
             ],
@@ -745,7 +721,7 @@ fn build_placed_features()
             ),
             placement: vec![
                 PlacementModifier::CountOnEveryLayer(CountOnEveryLayerPlacementModifier {
-                    count: IntProvider::Constant(8i32),
+                    count: IntProviderValue::constant(8i32),
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
             ],
@@ -759,7 +735,7 @@ fn build_placed_features()
             ),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(16i32),
+                    count: IntProviderValue::constant(16i32),
                 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
                 PlacementModifier::SurfaceWaterDepthFilter(
@@ -824,7 +800,7 @@ fn build_placed_features()
             feature: Feature::Named(pumpkin_data::configured_feature::ConfiguredFeature::Delta),
             placement: vec![
                 PlacementModifier::CountOnEveryLayer(CountOnEveryLayerPlacementModifier {
-                    count: IntProvider::Constant(40i32),
+                    count: IntProviderValue::constant(40i32),
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
             ],
@@ -871,15 +847,15 @@ fn build_placed_features()
             feature: Feature::Named(pumpkin_data::configured_feature::ConfiguredFeature::DiskGrass),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(1i32),
+                    count: IntProviderValue::constant(1i32),
                 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
                 PlacementModifier::Heightmap(HeightmapPlacementModifier {
                     heightmap: HeightMap::OceanFloorWg,
                 }),
                 PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Constant(0i32),
-                    y_spread: IntProvider::Constant(-1i32),
+                    xz_spread: IntProviderValue::constant(0i32),
+                    y_spread: IntProviderValue::constant(-1i32),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::MatchingBlocks(MatchingBlocksBlockPredicate {
@@ -918,7 +894,7 @@ fn build_placed_features()
             feature: Feature::Named(pumpkin_data::configured_feature::ConfiguredFeature::DiskSand),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(3i32),
+                    count: IntProviderValue::constant(3i32),
                 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
                 PlacementModifier::Heightmap(HeightmapPlacementModifier {
@@ -942,10 +918,10 @@ fn build_placed_features()
             ),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Object(NormalIntProvider::Uniform(UniformIntProvider {
+                    count: IntProviderValue::new(UniformIntProvider {
                         min_inclusive: 48i32,
                         max_inclusive: 96i32,
-                    })),
+                    }),
                 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
                 PlacementModifier::HeightRange(HeightRangePlacementModifier {
@@ -971,11 +947,11 @@ fn build_placed_features()
                     heightmap: HeightMap::MotionBlocking,
                 }),
                 PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Constant(0i32),
-                    y_spread: IntProvider::Object(NormalIntProvider::Uniform(UniformIntProvider {
+                    xz_spread: IntProviderValue::constant(0i32),
+                    y_spread: IntProviderValue::new(UniformIntProvider {
                         min_inclusive: 3i32,
                         max_inclusive: 9i32,
-                    })),
+                    }),
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
             ],
@@ -988,20 +964,18 @@ fn build_placed_features()
             placement: vec![
                 PlacementModifier::RarityFilter(RarityFilterPlacementModifier { chance: 14u32 }),
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Object(NormalIntProvider::WeightedList(
-                        WeightedListIntProvider {
-                            distribution: vec![
-                                WeightedEntry {
-                                    data: IntProvider::Constant(1i32),
-                                    weight: 3i32,
-                                },
-                                WeightedEntry {
-                                    data: IntProvider::Constant(2i32),
-                                    weight: 1i32,
-                                },
-                            ],
-                        },
-                    )),
+                    count: IntProviderValue::new(WeightedListIntProvider {
+                        distribution: vec![
+                            WeightedEntry {
+                                data: IntProviderValue::constant(1i32),
+                                weight: 3i32,
+                            },
+                            WeightedEntry {
+                                data: IntProviderValue::constant(2i32),
+                                weight: 1i32,
+                            },
+                        ],
+                    }),
                 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
                 PlacementModifier::HeightRange(HeightRangePlacementModifier {
@@ -1279,23 +1253,19 @@ fn build_placed_features()
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(96i32),
+                    count: IntProviderValue::constant(96i32),
                 }),
                 PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -6i32,
-                            max_inclusive: 6i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -2i32,
-                            max_inclusive: 2i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                    xz_spread: IntProviderValue::new(TrapezoidIntProvider {
+                        min_inclusive: -6i32,
+                        max_inclusive: 6i32,
+                        plateau: 0i32,
+                    }),
+                    y_spread: IntProviderValue::new(TrapezoidIntProvider {
+                        min_inclusive: -2i32,
+                        max_inclusive: 2i32,
+                        plateau: 0i32,
+                    }),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
@@ -1320,23 +1290,19 @@ fn build_placed_features()
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(64i32),
+                    count: IntProviderValue::constant(64i32),
                 }),
                 PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -7i32,
-                            max_inclusive: 7i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -3i32,
-                            max_inclusive: 3i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                    xz_spread: IntProviderValue::new(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    }),
+                    y_spread: IntProviderValue::new(TrapezoidIntProvider {
+                        min_inclusive: -3i32,
+                        max_inclusive: 3i32,
+                        plateau: 0i32,
+                    }),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
@@ -1355,7 +1321,7 @@ fn build_placed_features()
             ),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(3i32),
+                    count: IntProviderValue::constant(3i32),
                 }),
                 PlacementModifier::RarityFilter(RarityFilterPlacementModifier { chance: 2u32 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
@@ -1364,23 +1330,19 @@ fn build_placed_features()
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(96i32),
+                    count: IntProviderValue::constant(96i32),
                 }),
                 PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -6i32,
-                            max_inclusive: 6i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -2i32,
-                            max_inclusive: 2i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                    xz_spread: IntProviderValue::new(TrapezoidIntProvider {
+                        min_inclusive: -6i32,
+                        max_inclusive: 6i32,
+                        plateau: 0i32,
+                    }),
+                    y_spread: IntProviderValue::new(TrapezoidIntProvider {
+                        min_inclusive: -2i32,
+                        max_inclusive: 2i32,
+                        plateau: 0i32,
+                    }),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
@@ -1404,16 +1366,14 @@ fn build_placed_features()
                     heightmap: HeightMap::MotionBlocking,
                 }),
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Object(NormalIntProvider::Clamped(ClampedIntProvider {
-                        source: Box::new(IntProvider::Object(NormalIntProvider::Uniform(
-                            UniformIntProvider {
-                                min_inclusive: -1i32,
-                                max_inclusive: 3i32,
-                            },
-                        ))),
+                    count: IntProviderValue::new(ClampedIntProvider {
+                        source: IntProviderValue::new(UniformIntProvider {
+                            min_inclusive: -1i32,
+                            max_inclusive: 3i32,
+                        }),
                         min_inclusive: 0i32,
                         max_inclusive: 3i32,
-                    })),
+                    }),
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
             ],
@@ -1432,23 +1392,19 @@ fn build_placed_features()
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(96i32),
+                    count: IntProviderValue::constant(96i32),
                 }),
                 PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -6i32,
-                            max_inclusive: 6i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -2i32,
-                            max_inclusive: 2i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                    xz_spread: IntProviderValue::new(TrapezoidIntProvider {
+                        min_inclusive: -6i32,
+                        max_inclusive: 6i32,
+                        plateau: 0i32,
+                    }),
+                    y_spread: IntProviderValue::new(TrapezoidIntProvider {
+                        min_inclusive: -2i32,
+                        max_inclusive: 2i32,
+                        plateau: 0i32,
+                    }),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
@@ -1483,23 +1439,19 @@ fn build_placed_features()
             ),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(64i32),
+                    count: IntProviderValue::constant(64i32),
                 }),
                 PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -6i32,
-                            max_inclusive: 6i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -2i32,
-                            max_inclusive: 2i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                    xz_spread: IntProviderValue::new(TrapezoidIntProvider {
+                        min_inclusive: -6i32,
+                        max_inclusive: 6i32,
+                        plateau: 0i32,
+                    }),
+                    y_spread: IntProviderValue::new(TrapezoidIntProvider {
+                        min_inclusive: -2i32,
+                        max_inclusive: 2i32,
+                        plateau: 0i32,
+                    }),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
@@ -1529,23 +1481,19 @@ fn build_placed_features()
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(64i32),
+                    count: IntProviderValue::constant(64i32),
                 }),
                 PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -6i32,
-                            max_inclusive: 6i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -2i32,
-                            max_inclusive: 2i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                    xz_spread: IntProviderValue::new(TrapezoidIntProvider {
+                        min_inclusive: -6i32,
+                        max_inclusive: 6i32,
+                        plateau: 0i32,
+                    }),
+                    y_spread: IntProviderValue::new(TrapezoidIntProvider {
+                        min_inclusive: -2i32,
+                        max_inclusive: 2i32,
+                        plateau: 0i32,
+                    }),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
@@ -1570,23 +1518,19 @@ fn build_placed_features()
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(64i32),
+                    count: IntProviderValue::constant(64i32),
                 }),
                 PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -6i32,
-                            max_inclusive: 6i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -2i32,
-                            max_inclusive: 2i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                    xz_spread: IntProviderValue::new(TrapezoidIntProvider {
+                        min_inclusive: -6i32,
+                        max_inclusive: 6i32,
+                        plateau: 0i32,
+                    }),
+                    y_spread: IntProviderValue::new(TrapezoidIntProvider {
+                        min_inclusive: -2i32,
+                        max_inclusive: 2i32,
+                        plateau: 0i32,
+                    }),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
@@ -1611,23 +1555,19 @@ fn build_placed_features()
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(64i32),
+                    count: IntProviderValue::constant(64i32),
                 }),
                 PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -7i32,
-                            max_inclusive: 7i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -3i32,
-                            max_inclusive: 3i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                    xz_spread: IntProviderValue::new(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    }),
+                    y_spread: IntProviderValue::new(TrapezoidIntProvider {
+                        min_inclusive: -3i32,
+                        max_inclusive: 3i32,
+                        plateau: 0i32,
+                    }),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
@@ -1651,16 +1591,14 @@ fn build_placed_features()
                     heightmap: HeightMap::MotionBlocking,
                 }),
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Object(NormalIntProvider::Clamped(ClampedIntProvider {
-                        source: Box::new(IntProvider::Object(NormalIntProvider::Uniform(
-                            UniformIntProvider {
-                                min_inclusive: -3i32,
-                                max_inclusive: 1i32,
-                            },
-                        ))),
+                    count: IntProviderValue::new(ClampedIntProvider {
+                        source: IntProviderValue::new(UniformIntProvider {
+                            min_inclusive: -3i32,
+                            max_inclusive: 1i32,
+                        }),
                         min_inclusive: 0i32,
                         max_inclusive: 1i32,
-                    })),
+                    }),
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
             ],
@@ -1674,7 +1612,7 @@ fn build_placed_features()
             ),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(2i32),
+                    count: IntProviderValue::constant(2i32),
                 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
                 PlacementModifier::Heightmap(HeightmapPlacementModifier {
@@ -1739,10 +1677,10 @@ fn build_placed_features()
             ),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Object(NormalIntProvider::Uniform(UniformIntProvider {
+                    count: IntProviderValue::new(UniformIntProvider {
                         min_inclusive: 104i32,
                         max_inclusive: 157i32,
-                    })),
+                    }),
                 }),
                 PlacementModifier::HeightRange(HeightRangePlacementModifier {
                     height: HeightProvider::Uniform(UniformHeightProvider {
@@ -1770,7 +1708,7 @@ fn build_placed_features()
             ),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(10i32),
+                    count: IntProviderValue::constant(10i32),
                 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
                 PlacementModifier::HeightRange(HeightRangePlacementModifier {
@@ -1791,12 +1729,10 @@ fn build_placed_features()
             ),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Object(NormalIntProvider::BiasedToBottom(
-                        BiasedToBottomIntProvider {
-                            min_inclusive: 0i32,
-                            max_inclusive: 9i32,
-                        },
-                    )),
+                    count: IntProviderValue::new(BiasedToBottomIntProvider {
+                        min_inclusive: 0i32,
+                        max_inclusive: 9i32,
+                    }),
                 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
                 PlacementModifier::HeightRange(HeightRangePlacementModifier {
@@ -1829,15 +1765,15 @@ fn build_placed_features()
             feature: Feature::Named(pumpkin_data::configured_feature::ConfiguredFeature::IcePatch),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(2i32),
+                    count: IntProviderValue::constant(2i32),
                 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
                 PlacementModifier::Heightmap(HeightmapPlacementModifier {
                     heightmap: HeightMap::MotionBlocking,
                 }),
                 PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Constant(0i32),
-                    y_spread: IntProvider::Constant(-1i32),
+                    xz_spread: IntProviderValue::constant(0i32),
+                    y_spread: IntProviderValue::constant(-1i32),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::MatchingBlocks(MatchingBlocksBlockPredicate {
@@ -1855,7 +1791,7 @@ fn build_placed_features()
             feature: Feature::Named(pumpkin_data::configured_feature::ConfiguredFeature::IceSpike),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(3i32),
+                    count: IntProviderValue::constant(3i32),
                 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
                 PlacementModifier::Heightmap(HeightmapPlacementModifier {
@@ -2039,7 +1975,7 @@ fn build_placed_features()
             ),
             placement: vec![
                 PlacementModifier::CountOnEveryLayer(CountOnEveryLayerPlacementModifier {
-                    count: IntProvider::Constant(2i32),
+                    count: IntProviderValue::constant(2i32),
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
             ],
@@ -2053,10 +1989,10 @@ fn build_placed_features()
             ),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Object(NormalIntProvider::Uniform(UniformIntProvider {
+                    count: IntProviderValue::new(UniformIntProvider {
                         min_inclusive: 10i32,
                         max_inclusive: 48i32,
-                    })),
+                    }),
                 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
                 PlacementModifier::HeightRange(HeightRangePlacementModifier {
@@ -2077,7 +2013,7 @@ fn build_placed_features()
             ),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(125i32),
+                    count: IntProviderValue::constant(125i32),
                 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
                 PlacementModifier::HeightRange(HeightRangePlacementModifier {
@@ -2100,8 +2036,8 @@ fn build_placed_features()
                     max_steps: 12i32,
                 }),
                 PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Constant(0i32),
-                    y_spread: IntProvider::Constant(-1i32),
+                    xz_spread: IntProviderValue::constant(0i32),
+                    y_spread: IntProviderValue::constant(-1i32),
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
             ],
@@ -2115,7 +2051,7 @@ fn build_placed_features()
             ),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(62i32),
+                    count: IntProviderValue::constant(62i32),
                 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
                 PlacementModifier::HeightRange(HeightRangePlacementModifier {
@@ -2138,8 +2074,8 @@ fn build_placed_features()
                     max_steps: 12i32,
                 }),
                 PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Constant(0i32),
-                    y_spread: IntProvider::Constant(1i32),
+                    xz_spread: IntProviderValue::constant(0i32),
+                    y_spread: IntProviderValue::constant(1i32),
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
             ],
@@ -2151,7 +2087,7 @@ fn build_placed_features()
             feature: Feature::Named(pumpkin_data::configured_feature::ConfiguredFeature::MossPatch),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(125i32),
+                    count: IntProviderValue::constant(125i32),
                 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
                 PlacementModifier::HeightRange(HeightRangePlacementModifier {
@@ -2174,8 +2110,8 @@ fn build_placed_features()
                     max_steps: 12i32,
                 }),
                 PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Constant(0i32),
-                    y_spread: IntProvider::Constant(1i32),
+                    xz_spread: IntProviderValue::constant(0i32),
+                    y_spread: IntProviderValue::constant(1i32),
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
             ],
@@ -2280,7 +2216,7 @@ fn build_placed_features()
             ),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(10i32),
+                    count: IntProviderValue::constant(10i32),
                 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
                 PlacementModifier::HeightRange(HeightRangePlacementModifier {
@@ -2301,7 +2237,7 @@ fn build_placed_features()
             ),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(4i32),
+                    count: IntProviderValue::constant(4i32),
                 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
                 PlacementModifier::HeightRange(HeightRangePlacementModifier {
@@ -2337,7 +2273,7 @@ fn build_placed_features()
             ),
             placement: vec![
                 PlacementModifier::CountOnEveryLayer(CountOnEveryLayerPlacementModifier {
-                    count: IntProvider::Constant(4i32),
+                    count: IntProviderValue::constant(4i32),
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
             ],
@@ -2481,7 +2417,7 @@ fn build_placed_features()
             ),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(2i32),
+                    count: IntProviderValue::constant(2i32),
                 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
                 PlacementModifier::HeightRange(HeightRangePlacementModifier {
@@ -2521,7 +2457,7 @@ fn build_placed_features()
             ),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(2i32),
+                    count: IntProviderValue::constant(2i32),
                 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
                 PlacementModifier::HeightRange(HeightRangePlacementModifier {
@@ -2540,7 +2476,7 @@ fn build_placed_features()
             feature: Feature::Named(pumpkin_data::configured_feature::ConfiguredFeature::OreClay),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(46i32),
+                    count: IntProviderValue::constant(46i32),
                 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
                 PlacementModifier::HeightRange(HeightRangePlacementModifier {
@@ -2561,7 +2497,7 @@ fn build_placed_features()
             ),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(20i32),
+                    count: IntProviderValue::constant(20i32),
                 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
                 PlacementModifier::HeightRange(HeightRangePlacementModifier {
@@ -2581,7 +2517,7 @@ fn build_placed_features()
             feature: Feature::Named(pumpkin_data::configured_feature::ConfiguredFeature::OreCoal),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(30i32),
+                    count: IntProviderValue::constant(30i32),
                 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
                 PlacementModifier::HeightRange(HeightRangePlacementModifier {
@@ -2602,7 +2538,7 @@ fn build_placed_features()
             ),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(16i32),
+                    count: IntProviderValue::constant(16i32),
                 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
                 PlacementModifier::HeightRange(HeightRangePlacementModifier {
@@ -2624,7 +2560,7 @@ fn build_placed_features()
             ),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(16i32),
+                    count: IntProviderValue::constant(16i32),
                 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
                 PlacementModifier::HeightRange(HeightRangePlacementModifier {
@@ -2664,7 +2600,7 @@ fn build_placed_features()
             ),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(7i32),
+                    count: IntProviderValue::constant(7i32),
                 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
                 PlacementModifier::HeightRange(HeightRangePlacementModifier {
@@ -2688,7 +2624,7 @@ fn build_placed_features()
             ),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(4i32),
+                    count: IntProviderValue::constant(4i32),
                 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
                 PlacementModifier::HeightRange(HeightRangePlacementModifier {
@@ -2734,7 +2670,7 @@ fn build_placed_features()
             ),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(2i32),
+                    count: IntProviderValue::constant(2i32),
                 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
                 PlacementModifier::HeightRange(HeightRangePlacementModifier {
@@ -2755,7 +2691,7 @@ fn build_placed_features()
             ),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(2i32),
+                    count: IntProviderValue::constant(2i32),
                 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
                 PlacementModifier::HeightRange(HeightRangePlacementModifier {
@@ -2793,7 +2729,7 @@ fn build_placed_features()
             feature: Feature::Named(pumpkin_data::configured_feature::ConfiguredFeature::OreDirt),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(7i32),
+                    count: IntProviderValue::constant(7i32),
                 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
                 PlacementModifier::HeightRange(HeightRangePlacementModifier {
@@ -2814,7 +2750,7 @@ fn build_placed_features()
             ),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(100i32),
+                    count: IntProviderValue::constant(100i32),
                 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
                 PlacementModifier::HeightRange(HeightRangePlacementModifier {
@@ -2836,7 +2772,7 @@ fn build_placed_features()
             ),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(4i32),
+                    count: IntProviderValue::constant(4i32),
                 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
                 PlacementModifier::HeightRange(HeightRangePlacementModifier {
@@ -2858,7 +2794,7 @@ fn build_placed_features()
             ),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(20i32),
+                    count: IntProviderValue::constant(20i32),
                 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
                 PlacementModifier::HeightRange(HeightRangePlacementModifier {
@@ -2877,7 +2813,7 @@ fn build_placed_features()
             feature: Feature::Named(pumpkin_data::configured_feature::ConfiguredFeature::OreGold),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(50i32),
+                    count: IntProviderValue::constant(50i32),
                 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
                 PlacementModifier::HeightRange(HeightRangePlacementModifier {
@@ -2898,10 +2834,10 @@ fn build_placed_features()
             ),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Object(NormalIntProvider::Uniform(UniformIntProvider {
+                    count: IntProviderValue::new(UniformIntProvider {
                         min_inclusive: 0i32,
                         max_inclusive: 1i32,
-                    })),
+                    }),
                 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
                 PlacementModifier::HeightRange(HeightRangePlacementModifier {
@@ -2922,7 +2858,7 @@ fn build_placed_features()
             ),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(10i32),
+                    count: IntProviderValue::constant(10i32),
                 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
                 PlacementModifier::HeightRange(HeightRangePlacementModifier {
@@ -2943,7 +2879,7 @@ fn build_placed_features()
             ),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(2i32),
+                    count: IntProviderValue::constant(2i32),
                 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
                 PlacementModifier::HeightRange(HeightRangePlacementModifier {
@@ -2981,7 +2917,7 @@ fn build_placed_features()
             feature: Feature::Named(pumpkin_data::configured_feature::ConfiguredFeature::OreGravel),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(14i32),
+                    count: IntProviderValue::constant(14i32),
                 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
                 PlacementModifier::HeightRange(HeightRangePlacementModifier {
@@ -3002,7 +2938,7 @@ fn build_placed_features()
             ),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(2i32),
+                    count: IntProviderValue::constant(2i32),
                 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
                 PlacementModifier::HeightRange(HeightRangePlacementModifier {
@@ -3023,7 +2959,7 @@ fn build_placed_features()
             ),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(14i32),
+                    count: IntProviderValue::constant(14i32),
                 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
                 PlacementModifier::HeightRange(HeightRangePlacementModifier {
@@ -3042,7 +2978,7 @@ fn build_placed_features()
             feature: Feature::Named(pumpkin_data::configured_feature::ConfiguredFeature::OreIron),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(10i32),
+                    count: IntProviderValue::constant(10i32),
                 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
                 PlacementModifier::HeightRange(HeightRangePlacementModifier {
@@ -3064,7 +3000,7 @@ fn build_placed_features()
             ),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(10i32),
+                    count: IntProviderValue::constant(10i32),
                 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
                 PlacementModifier::HeightRange(HeightRangePlacementModifier {
@@ -3083,7 +3019,7 @@ fn build_placed_features()
             feature: Feature::Named(pumpkin_data::configured_feature::ConfiguredFeature::OreIron),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(90i32),
+                    count: IntProviderValue::constant(90i32),
                 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
                 PlacementModifier::HeightRange(HeightRangePlacementModifier {
@@ -3103,7 +3039,7 @@ fn build_placed_features()
             feature: Feature::Named(pumpkin_data::configured_feature::ConfiguredFeature::OreLapis),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(2i32),
+                    count: IntProviderValue::constant(2i32),
                 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
                 PlacementModifier::HeightRange(HeightRangePlacementModifier {
@@ -3125,7 +3061,7 @@ fn build_placed_features()
             ),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(4i32),
+                    count: IntProviderValue::constant(4i32),
                 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
                 PlacementModifier::HeightRange(HeightRangePlacementModifier {
@@ -3144,7 +3080,7 @@ fn build_placed_features()
             feature: Feature::Named(pumpkin_data::configured_feature::ConfiguredFeature::OreMagma),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(4i32),
+                    count: IntProviderValue::constant(4i32),
                 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
                 PlacementModifier::HeightRange(HeightRangePlacementModifier {
@@ -3163,7 +3099,7 @@ fn build_placed_features()
             feature: Feature::Named(pumpkin_data::configured_feature::ConfiguredFeature::OreQuartz),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(32i32),
+                    count: IntProviderValue::constant(32i32),
                 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
                 PlacementModifier::HeightRange(HeightRangePlacementModifier {
@@ -3182,7 +3118,7 @@ fn build_placed_features()
             feature: Feature::Named(pumpkin_data::configured_feature::ConfiguredFeature::OreQuartz),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(16i32),
+                    count: IntProviderValue::constant(16i32),
                 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
                 PlacementModifier::HeightRange(HeightRangePlacementModifier {
@@ -3203,7 +3139,7 @@ fn build_placed_features()
             ),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(4i32),
+                    count: IntProviderValue::constant(4i32),
                 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
                 PlacementModifier::HeightRange(HeightRangePlacementModifier {
@@ -3224,7 +3160,7 @@ fn build_placed_features()
             ),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(8i32),
+                    count: IntProviderValue::constant(8i32),
                 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
                 PlacementModifier::HeightRange(HeightRangePlacementModifier {
@@ -3248,7 +3184,7 @@ fn build_placed_features()
             ),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(12i32),
+                    count: IntProviderValue::constant(12i32),
                 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
                 PlacementModifier::HeightRange(HeightRangePlacementModifier {
@@ -3267,7 +3203,7 @@ fn build_placed_features()
             feature: Feature::Named(pumpkin_data::configured_feature::ConfiguredFeature::OreTuff),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(2i32),
+                    count: IntProviderValue::constant(2i32),
                 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
                 PlacementModifier::HeightRange(HeightRangePlacementModifier {
@@ -3294,23 +3230,19 @@ fn build_placed_features()
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(96i32),
+                    count: IntProviderValue::constant(96i32),
                 }),
                 PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -7i32,
-                            max_inclusive: 7i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -3i32,
-                            max_inclusive: 3i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                    xz_spread: IntProviderValue::new(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    }),
+                    y_spread: IntProviderValue::new(TrapezoidIntProvider {
+                        min_inclusive: -3i32,
+                        max_inclusive: 3i32,
+                        plateau: 0i32,
+                    }),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
@@ -3329,7 +3261,7 @@ fn build_placed_features()
             ),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(16i32),
+                    count: IntProviderValue::constant(16i32),
                 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
                 PlacementModifier::SurfaceWaterDepthFilter(
@@ -3352,7 +3284,7 @@ fn build_placed_features()
             ),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(1i32),
+                    count: IntProviderValue::constant(1i32),
                 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
                 PlacementModifier::Heightmap(HeightmapPlacementModifier {
@@ -3412,23 +3344,19 @@ fn build_placed_features()
             feature: Feature::Named(pumpkin_data::configured_feature::ConfiguredFeature::BerryBush),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(96i32),
+                    count: IntProviderValue::constant(96i32),
                 }),
                 PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -7i32,
-                            max_inclusive: 7i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -3i32,
-                            max_inclusive: 3i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                    xz_spread: IntProviderValue::new(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    }),
+                    y_spread: IntProviderValue::new(TrapezoidIntProvider {
+                        min_inclusive: -3i32,
+                        max_inclusive: 3i32,
+                        plateau: 0i32,
+                    }),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::AllOf(AllOfBlockPredicate {
@@ -3463,23 +3391,19 @@ fn build_placed_features()
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(96i32),
+                    count: IntProviderValue::constant(96i32),
                 }),
                 PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -7i32,
-                            max_inclusive: 7i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -3i32,
-                            max_inclusive: 3i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                    xz_spread: IntProviderValue::new(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    }),
+                    y_spread: IntProviderValue::new(TrapezoidIntProvider {
+                        min_inclusive: -3i32,
+                        max_inclusive: 3i32,
+                        plateau: 0i32,
+                    }),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::AllOf(AllOfBlockPredicate {
@@ -3514,23 +3438,19 @@ fn build_placed_features()
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(96i32),
+                    count: IntProviderValue::constant(96i32),
                 }),
                 PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -7i32,
-                            max_inclusive: 7i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -3i32,
-                            max_inclusive: 3i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                    xz_spread: IntProviderValue::new(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    }),
+                    y_spread: IntProviderValue::new(TrapezoidIntProvider {
+                        min_inclusive: -3i32,
+                        max_inclusive: 3i32,
+                        plateau: 0i32,
+                    }),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::AllOf(AllOfBlockPredicate {
@@ -3565,23 +3485,19 @@ fn build_placed_features()
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(24i32),
+                    count: IntProviderValue::constant(24i32),
                 }),
                 PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -5i32,
-                            max_inclusive: 5i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -3i32,
-                            max_inclusive: 3i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                    xz_spread: IntProviderValue::new(TrapezoidIntProvider {
+                        min_inclusive: -5i32,
+                        max_inclusive: 5i32,
+                        plateau: 0i32,
+                    }),
+                    y_spread: IntProviderValue::new(TrapezoidIntProvider {
+                        min_inclusive: -3i32,
+                        max_inclusive: 3i32,
+                        plateau: 0i32,
+                    }),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
@@ -3598,23 +3514,19 @@ fn build_placed_features()
             feature: Feature::Named(pumpkin_data::configured_feature::ConfiguredFeature::Cactus),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(10i32),
+                    count: IntProviderValue::constant(10i32),
                 }),
                 PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -7i32,
-                            max_inclusive: 7i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -3i32,
-                            max_inclusive: 3i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                    xz_spread: IntProviderValue::new(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    }),
+                    y_spread: IntProviderValue::new(TrapezoidIntProvider {
+                        min_inclusive: -3i32,
+                        max_inclusive: 3i32,
+                        plateau: 0i32,
+                    }),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::AllOf(AllOfBlockPredicate {
@@ -3652,23 +3564,19 @@ fn build_placed_features()
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(10i32),
+                    count: IntProviderValue::constant(10i32),
                 }),
                 PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -7i32,
-                            max_inclusive: 7i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -3i32,
-                            max_inclusive: 3i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                    xz_spread: IntProviderValue::new(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    }),
+                    y_spread: IntProviderValue::new(TrapezoidIntProvider {
+                        min_inclusive: -3i32,
+                        max_inclusive: 3i32,
+                        plateau: 0i32,
+                    }),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::AllOf(AllOfBlockPredicate {
@@ -3706,23 +3614,19 @@ fn build_placed_features()
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(10i32),
+                    count: IntProviderValue::constant(10i32),
                 }),
                 PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -7i32,
-                            max_inclusive: 7i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -3i32,
-                            max_inclusive: 3i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                    xz_spread: IntProviderValue::new(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    }),
+                    y_spread: IntProviderValue::new(TrapezoidIntProvider {
+                        min_inclusive: -3i32,
+                        max_inclusive: 3i32,
+                        plateau: 0i32,
+                    }),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::AllOf(AllOfBlockPredicate {
@@ -3763,23 +3667,19 @@ fn build_placed_features()
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(96i32),
+                    count: IntProviderValue::constant(96i32),
                 }),
                 PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -7i32,
-                            max_inclusive: 7i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -3i32,
-                            max_inclusive: 3i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                    xz_spread: IntProviderValue::new(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    }),
+                    y_spread: IntProviderValue::new(TrapezoidIntProvider {
+                        min_inclusive: -3i32,
+                        max_inclusive: 3i32,
+                        plateau: 0i32,
+                    }),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
@@ -3801,23 +3701,19 @@ fn build_placed_features()
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(4i32),
+                    count: IntProviderValue::constant(4i32),
                 }),
                 PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -7i32,
-                            max_inclusive: 7i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -3i32,
-                            max_inclusive: 3i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                    xz_spread: IntProviderValue::new(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    }),
+                    y_spread: IntProviderValue::new(TrapezoidIntProvider {
+                        min_inclusive: -3i32,
+                        max_inclusive: 3i32,
+                        plateau: 0i32,
+                    }),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
@@ -3834,7 +3730,7 @@ fn build_placed_features()
             feature: Feature::Named(pumpkin_data::configured_feature::ConfiguredFeature::DeadBush),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(2i32),
+                    count: IntProviderValue::constant(2i32),
                 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
                 PlacementModifier::Heightmap(HeightmapPlacementModifier {
@@ -3842,23 +3738,19 @@ fn build_placed_features()
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(4i32),
+                    count: IntProviderValue::constant(4i32),
                 }),
                 PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -7i32,
-                            max_inclusive: 7i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -3i32,
-                            max_inclusive: 3i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                    xz_spread: IntProviderValue::new(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    }),
+                    y_spread: IntProviderValue::new(TrapezoidIntProvider {
+                        min_inclusive: -3i32,
+                        max_inclusive: 3i32,
+                        plateau: 0i32,
+                    }),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
@@ -3875,7 +3767,7 @@ fn build_placed_features()
             feature: Feature::Named(pumpkin_data::configured_feature::ConfiguredFeature::DeadBush),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(20i32),
+                    count: IntProviderValue::constant(20i32),
                 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
                 PlacementModifier::Heightmap(HeightmapPlacementModifier {
@@ -3883,23 +3775,19 @@ fn build_placed_features()
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(4i32),
+                    count: IntProviderValue::constant(4i32),
                 }),
                 PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -7i32,
-                            max_inclusive: 7i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -3i32,
-                            max_inclusive: 3i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                    xz_spread: IntProviderValue::new(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    }),
+                    y_spread: IntProviderValue::new(TrapezoidIntProvider {
+                        min_inclusive: -3i32,
+                        max_inclusive: 3i32,
+                        plateau: 0i32,
+                    }),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
@@ -3922,23 +3810,19 @@ fn build_placed_features()
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(64i32),
+                    count: IntProviderValue::constant(64i32),
                 }),
                 PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -7i32,
-                            max_inclusive: 7i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -3i32,
-                            max_inclusive: 3i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                    xz_spread: IntProviderValue::new(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    }),
+                    y_spread: IntProviderValue::new(TrapezoidIntProvider {
+                        min_inclusive: -3i32,
+                        max_inclusive: 3i32,
+                        plateau: 0i32,
+                    }),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
@@ -3961,23 +3845,19 @@ fn build_placed_features()
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(64i32),
+                    count: IntProviderValue::constant(64i32),
                 }),
                 PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -7i32,
-                            max_inclusive: 7i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -3i32,
-                            max_inclusive: 3i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                    xz_spread: IntProviderValue::new(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    }),
+                    y_spread: IntProviderValue::new(TrapezoidIntProvider {
+                        min_inclusive: -3i32,
+                        max_inclusive: 3i32,
+                        plateau: 0i32,
+                    }),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
@@ -3994,10 +3874,10 @@ fn build_placed_features()
             feature: Feature::Named(pumpkin_data::configured_feature::ConfiguredFeature::PatchFire),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Object(NormalIntProvider::Uniform(UniformIntProvider {
+                    count: IntProviderValue::new(UniformIntProvider {
                         min_inclusive: 0i32,
                         max_inclusive: 5i32,
-                    })),
+                    }),
                 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
                 PlacementModifier::HeightRange(HeightRangePlacementModifier {
@@ -4008,23 +3888,19 @@ fn build_placed_features()
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(96i32),
+                    count: IntProviderValue::constant(96i32),
                 }),
                 PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -7i32,
-                            max_inclusive: 7i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -3i32,
-                            max_inclusive: 3i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                    xz_spread: IntProviderValue::new(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    }),
+                    y_spread: IntProviderValue::new(TrapezoidIntProvider {
+                        min_inclusive: -3i32,
+                        max_inclusive: 3i32,
+                        plateau: 0i32,
+                    }),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::AllOf(AllOfBlockPredicate {
@@ -4055,7 +3931,7 @@ fn build_placed_features()
             ),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(2i32),
+                    count: IntProviderValue::constant(2i32),
                 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
                 PlacementModifier::Heightmap(HeightmapPlacementModifier {
@@ -4120,23 +3996,19 @@ fn build_placed_features()
                     }),
                 }),
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(20i32),
+                    count: IntProviderValue::constant(20i32),
                 }),
                 PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -4i32,
-                            max_inclusive: 4i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -3i32,
-                            max_inclusive: 3i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                    xz_spread: IntProviderValue::new(TrapezoidIntProvider {
+                        min_inclusive: -4i32,
+                        max_inclusive: 4i32,
+                        plateau: 0i32,
+                    }),
+                    y_spread: IntProviderValue::new(TrapezoidIntProvider {
+                        min_inclusive: -3i32,
+                        max_inclusive: 3i32,
+                        plateau: 0i32,
+                    }),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
@@ -4155,7 +4027,7 @@ fn build_placed_features()
             ),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(3i32),
+                    count: IntProviderValue::constant(3i32),
                 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
                 PlacementModifier::Heightmap(HeightmapPlacementModifier {
@@ -4220,23 +4092,19 @@ fn build_placed_features()
                     }),
                 }),
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(20i32),
+                    count: IntProviderValue::constant(20i32),
                 }),
                 PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -4i32,
-                            max_inclusive: 4i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -3i32,
-                            max_inclusive: 3i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                    xz_spread: IntProviderValue::new(TrapezoidIntProvider {
+                        min_inclusive: -4i32,
+                        max_inclusive: 4i32,
+                        plateau: 0i32,
+                    }),
+                    y_spread: IntProviderValue::new(TrapezoidIntProvider {
+                        min_inclusive: -3i32,
+                        max_inclusive: 3i32,
+                        plateau: 0i32,
+                    }),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
@@ -4261,23 +4129,19 @@ fn build_placed_features()
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(20i32),
+                    count: IntProviderValue::constant(20i32),
                 }),
                 PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -4i32,
-                            max_inclusive: 4i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -3i32,
-                            max_inclusive: 3i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                    xz_spread: IntProviderValue::new(TrapezoidIntProvider {
+                        min_inclusive: -4i32,
+                        max_inclusive: 4i32,
+                        plateau: 0i32,
+                    }),
+                    y_spread: IntProviderValue::new(TrapezoidIntProvider {
+                        min_inclusive: -3i32,
+                        max_inclusive: 3i32,
+                        plateau: 0i32,
+                    }),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
@@ -4299,23 +4163,19 @@ fn build_placed_features()
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(32i32),
+                    count: IntProviderValue::constant(32i32),
                 }),
                 PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -7i32,
-                            max_inclusive: 7i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -3i32,
-                            max_inclusive: 3i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                    xz_spread: IntProviderValue::new(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    }),
+                    y_spread: IntProviderValue::new(TrapezoidIntProvider {
+                        min_inclusive: -3i32,
+                        max_inclusive: 3i32,
+                        plateau: 0i32,
+                    }),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
@@ -4332,7 +4192,7 @@ fn build_placed_features()
             feature: Feature::Named(pumpkin_data::configured_feature::ConfiguredFeature::Grass),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(2i32),
+                    count: IntProviderValue::constant(2i32),
                 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
                 PlacementModifier::Heightmap(HeightmapPlacementModifier {
@@ -4340,23 +4200,19 @@ fn build_placed_features()
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(32i32),
+                    count: IntProviderValue::constant(32i32),
                 }),
                 PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -7i32,
-                            max_inclusive: 7i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -3i32,
-                            max_inclusive: 3i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                    xz_spread: IntProviderValue::new(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    }),
+                    y_spread: IntProviderValue::new(TrapezoidIntProvider {
+                        min_inclusive: -3i32,
+                        max_inclusive: 3i32,
+                        plateau: 0i32,
+                    }),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
@@ -4375,7 +4231,7 @@ fn build_placed_features()
             ),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(25i32),
+                    count: IntProviderValue::constant(25i32),
                 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
                 PlacementModifier::Heightmap(HeightmapPlacementModifier {
@@ -4383,23 +4239,19 @@ fn build_placed_features()
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(32i32),
+                    count: IntProviderValue::constant(32i32),
                 }),
                 PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -7i32,
-                            max_inclusive: 7i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -3i32,
-                            max_inclusive: 3i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                    xz_spread: IntProviderValue::new(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    }),
+                    y_spread: IntProviderValue::new(TrapezoidIntProvider {
+                        min_inclusive: -3i32,
+                        max_inclusive: 3i32,
+                        plateau: 0i32,
+                    }),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::AllOf(AllOfBlockPredicate {
@@ -4442,23 +4294,19 @@ fn build_placed_features()
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(16i32),
+                    count: IntProviderValue::constant(16i32),
                 }),
                 PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -7i32,
-                            max_inclusive: 7i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -3i32,
-                            max_inclusive: 3i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                    xz_spread: IntProviderValue::new(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    }),
+                    y_spread: IntProviderValue::new(TrapezoidIntProvider {
+                        min_inclusive: -3i32,
+                        max_inclusive: 3i32,
+                        plateau: 0i32,
+                    }),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
@@ -4475,7 +4323,7 @@ fn build_placed_features()
             feature: Feature::Named(pumpkin_data::configured_feature::ConfiguredFeature::Grass),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(5i32),
+                    count: IntProviderValue::constant(5i32),
                 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
                 PlacementModifier::Heightmap(HeightmapPlacementModifier {
@@ -4483,23 +4331,19 @@ fn build_placed_features()
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(32i32),
+                    count: IntProviderValue::constant(32i32),
                 }),
                 PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -7i32,
-                            max_inclusive: 7i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -3i32,
-                            max_inclusive: 3i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                    xz_spread: IntProviderValue::new(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    }),
+                    y_spread: IntProviderValue::new(TrapezoidIntProvider {
+                        min_inclusive: -3i32,
+                        max_inclusive: 3i32,
+                        plateau: 0i32,
+                    }),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
@@ -4526,23 +4370,19 @@ fn build_placed_features()
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(32i32),
+                    count: IntProviderValue::constant(32i32),
                 }),
                 PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -7i32,
-                            max_inclusive: 7i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -3i32,
-                            max_inclusive: 3i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                    xz_spread: IntProviderValue::new(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    }),
+                    y_spread: IntProviderValue::new(TrapezoidIntProvider {
+                        min_inclusive: -3i32,
+                        max_inclusive: 3i32,
+                        plateau: 0i32,
+                    }),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
@@ -4559,7 +4399,7 @@ fn build_placed_features()
             feature: Feature::Named(pumpkin_data::configured_feature::ConfiguredFeature::Grass),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(20i32),
+                    count: IntProviderValue::constant(20i32),
                 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
                 PlacementModifier::Heightmap(HeightmapPlacementModifier {
@@ -4567,23 +4407,19 @@ fn build_placed_features()
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(32i32),
+                    count: IntProviderValue::constant(32i32),
                 }),
                 PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -7i32,
-                            max_inclusive: 7i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -3i32,
-                            max_inclusive: 3i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                    xz_spread: IntProviderValue::new(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    }),
+                    y_spread: IntProviderValue::new(TrapezoidIntProvider {
+                        min_inclusive: -3i32,
+                        max_inclusive: 3i32,
+                        plateau: 0i32,
+                    }),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
@@ -4602,7 +4438,7 @@ fn build_placed_features()
             ),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(7i32),
+                    count: IntProviderValue::constant(7i32),
                 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
                 PlacementModifier::Heightmap(HeightmapPlacementModifier {
@@ -4610,23 +4446,19 @@ fn build_placed_features()
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(32i32),
+                    count: IntProviderValue::constant(32i32),
                 }),
                 PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -7i32,
-                            max_inclusive: 7i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -3i32,
-                            max_inclusive: 3i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                    xz_spread: IntProviderValue::new(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    }),
+                    y_spread: IntProviderValue::new(TrapezoidIntProvider {
+                        min_inclusive: -3i32,
+                        max_inclusive: 3i32,
+                        plateau: 0i32,
+                    }),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
@@ -4650,23 +4482,19 @@ fn build_placed_features()
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(32i32),
+                    count: IntProviderValue::constant(32i32),
                 }),
                 PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -7i32,
-                            max_inclusive: 7i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -3i32,
-                            max_inclusive: 3i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                    xz_spread: IntProviderValue::new(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    }),
+                    y_spread: IntProviderValue::new(TrapezoidIntProvider {
+                        min_inclusive: -3i32,
+                        max_inclusive: 3i32,
+                        plateau: 0i32,
+                    }),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
@@ -4689,23 +4517,19 @@ fn build_placed_features()
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(96i32),
+                    count: IntProviderValue::constant(96i32),
                 }),
                 PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -7i32,
-                            max_inclusive: 7i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -3i32,
-                            max_inclusive: 3i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                    xz_spread: IntProviderValue::new(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    }),
+                    y_spread: IntProviderValue::new(TrapezoidIntProvider {
+                        min_inclusive: -3i32,
+                        max_inclusive: 3i32,
+                        plateau: 0i32,
+                    }),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
@@ -4724,7 +4548,7 @@ fn build_placed_features()
             ),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(2i32),
+                    count: IntProviderValue::constant(2i32),
                 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
                 PlacementModifier::Heightmap(HeightmapPlacementModifier {
@@ -4732,23 +4556,19 @@ fn build_placed_features()
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(32i32),
+                    count: IntProviderValue::constant(32i32),
                 }),
                 PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -7i32,
-                            max_inclusive: 7i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -3i32,
-                            max_inclusive: 3i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                    xz_spread: IntProviderValue::new(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    }),
+                    y_spread: IntProviderValue::new(TrapezoidIntProvider {
+                        min_inclusive: -3i32,
+                        max_inclusive: 3i32,
+                        plateau: 0i32,
+                    }),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::AllOf(AllOfBlockPredicate {
@@ -4783,23 +4603,19 @@ fn build_placed_features()
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(64i32),
+                    count: IntProviderValue::constant(64i32),
                 }),
                 PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -7i32,
-                            max_inclusive: 7i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -3i32,
-                            max_inclusive: 3i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                    xz_spread: IntProviderValue::new(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    }),
+                    y_spread: IntProviderValue::new(TrapezoidIntProvider {
+                        min_inclusive: -3i32,
+                        max_inclusive: 3i32,
+                        plateau: 0i32,
+                    }),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::AllOf(AllOfBlockPredicate {
@@ -4839,23 +4655,19 @@ fn build_placed_features()
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(64i32),
+                    count: IntProviderValue::constant(64i32),
                 }),
                 PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -7i32,
-                            max_inclusive: 7i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -3i32,
-                            max_inclusive: 3i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                    xz_spread: IntProviderValue::new(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    }),
+                    y_spread: IntProviderValue::new(TrapezoidIntProvider {
+                        min_inclusive: -3i32,
+                        max_inclusive: 3i32,
+                        plateau: 0i32,
+                    }),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::AllOf(AllOfBlockPredicate {
@@ -4895,23 +4707,19 @@ fn build_placed_features()
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(96i32),
+                    count: IntProviderValue::constant(96i32),
                 }),
                 PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -7i32,
-                            max_inclusive: 7i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -3i32,
-                            max_inclusive: 3i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                    xz_spread: IntProviderValue::new(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    }),
+                    y_spread: IntProviderValue::new(TrapezoidIntProvider {
+                        min_inclusive: -3i32,
+                        max_inclusive: 3i32,
+                        plateau: 0i32,
+                    }),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::AllOf(AllOfBlockPredicate {
@@ -4942,10 +4750,10 @@ fn build_placed_features()
             ),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Object(NormalIntProvider::Uniform(UniformIntProvider {
+                    count: IntProviderValue::new(UniformIntProvider {
                         min_inclusive: 0i32,
                         max_inclusive: 5i32,
-                    })),
+                    }),
                 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
                 PlacementModifier::HeightRange(HeightRangePlacementModifier {
@@ -4956,23 +4764,19 @@ fn build_placed_features()
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(96i32),
+                    count: IntProviderValue::constant(96i32),
                 }),
                 PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -7i32,
-                            max_inclusive: 7i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -3i32,
-                            max_inclusive: 3i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                    xz_spread: IntProviderValue::new(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    }),
+                    y_spread: IntProviderValue::new(TrapezoidIntProvider {
+                        min_inclusive: -3i32,
+                        max_inclusive: 3i32,
+                        plateau: 0i32,
+                    }),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::AllOf(AllOfBlockPredicate {
@@ -5007,23 +4811,19 @@ fn build_placed_features()
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(20i32),
+                    count: IntProviderValue::constant(20i32),
                 }),
                 PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -4i32,
-                            max_inclusive: 4i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: 0i32,
-                            max_inclusive: 0i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                    xz_spread: IntProviderValue::new(TrapezoidIntProvider {
+                        min_inclusive: -4i32,
+                        max_inclusive: 4i32,
+                        plateau: 0i32,
+                    }),
+                    y_spread: IntProviderValue::new(TrapezoidIntProvider {
+                        min_inclusive: 0i32,
+                        max_inclusive: 0i32,
+                        plateau: 0i32,
+                    }),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::AllOf(AllOfBlockPredicate {
@@ -5101,23 +4901,19 @@ fn build_placed_features()
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(20i32),
+                    count: IntProviderValue::constant(20i32),
                 }),
                 PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -4i32,
-                            max_inclusive: 4i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: 0i32,
-                            max_inclusive: 0i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                    xz_spread: IntProviderValue::new(TrapezoidIntProvider {
+                        min_inclusive: -4i32,
+                        max_inclusive: 4i32,
+                        plateau: 0i32,
+                    }),
+                    y_spread: IntProviderValue::new(TrapezoidIntProvider {
+                        min_inclusive: 0i32,
+                        max_inclusive: 0i32,
+                        plateau: 0i32,
+                    }),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::AllOf(AllOfBlockPredicate {
@@ -5194,23 +4990,19 @@ fn build_placed_features()
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(20i32),
+                    count: IntProviderValue::constant(20i32),
                 }),
                 PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -4i32,
-                            max_inclusive: 4i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: 0i32,
-                            max_inclusive: 0i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                    xz_spread: IntProviderValue::new(TrapezoidIntProvider {
+                        min_inclusive: -4i32,
+                        max_inclusive: 4i32,
+                        plateau: 0i32,
+                    }),
+                    y_spread: IntProviderValue::new(TrapezoidIntProvider {
+                        min_inclusive: 0i32,
+                        max_inclusive: 0i32,
+                        plateau: 0i32,
+                    }),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::AllOf(AllOfBlockPredicate {
@@ -5288,23 +5080,19 @@ fn build_placed_features()
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(20i32),
+                    count: IntProviderValue::constant(20i32),
                 }),
                 PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -4i32,
-                            max_inclusive: 4i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: 0i32,
-                            max_inclusive: 0i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                    xz_spread: IntProviderValue::new(TrapezoidIntProvider {
+                        min_inclusive: -4i32,
+                        max_inclusive: 4i32,
+                        plateau: 0i32,
+                    }),
+                    y_spread: IntProviderValue::new(TrapezoidIntProvider {
+                        min_inclusive: 0i32,
+                        max_inclusive: 0i32,
+                        plateau: 0i32,
+                    }),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::AllOf(AllOfBlockPredicate {
@@ -5382,23 +5170,19 @@ fn build_placed_features()
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(96i32),
+                    count: IntProviderValue::constant(96i32),
                 }),
                 PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -7i32,
-                            max_inclusive: 7i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -3i32,
-                            max_inclusive: 3i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                    xz_spread: IntProviderValue::new(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    }),
+                    y_spread: IntProviderValue::new(TrapezoidIntProvider {
+                        min_inclusive: -3i32,
+                        max_inclusive: 3i32,
+                        plateau: 0i32,
+                    }),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
@@ -5417,23 +5201,19 @@ fn build_placed_features()
             ),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(32i32),
+                    count: IntProviderValue::constant(32i32),
                 }),
                 PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -7i32,
-                            max_inclusive: 7i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -3i32,
-                            max_inclusive: 3i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                    xz_spread: IntProviderValue::new(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    }),
+                    y_spread: IntProviderValue::new(TrapezoidIntProvider {
+                        min_inclusive: -3i32,
+                        max_inclusive: 3i32,
+                        plateau: 0i32,
+                    }),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
@@ -5456,23 +5236,19 @@ fn build_placed_features()
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(96i32),
+                    count: IntProviderValue::constant(96i32),
                 }),
                 PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -7i32,
-                            max_inclusive: 7i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -3i32,
-                            max_inclusive: 3i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                    xz_spread: IntProviderValue::new(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    }),
+                    y_spread: IntProviderValue::new(TrapezoidIntProvider {
+                        min_inclusive: -3i32,
+                        max_inclusive: 3i32,
+                        plateau: 0i32,
+                    }),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
@@ -5500,23 +5276,19 @@ fn build_placed_features()
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(96i32),
+                    count: IntProviderValue::constant(96i32),
                 }),
                 PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -7i32,
-                            max_inclusive: 7i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -3i32,
-                            max_inclusive: 3i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                    xz_spread: IntProviderValue::new(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    }),
+                    y_spread: IntProviderValue::new(TrapezoidIntProvider {
+                        min_inclusive: -3i32,
+                        max_inclusive: 3i32,
+                        plateau: 0i32,
+                    }),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
@@ -5533,7 +5305,7 @@ fn build_placed_features()
             feature: Feature::Named(pumpkin_data::configured_feature::ConfiguredFeature::Waterlily),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(4i32),
+                    count: IntProviderValue::constant(4i32),
                 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
                 PlacementModifier::Heightmap(HeightmapPlacementModifier {
@@ -5541,23 +5313,19 @@ fn build_placed_features()
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(10i32),
+                    count: IntProviderValue::constant(10i32),
                 }),
                 PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -7i32,
-                            max_inclusive: 7i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -3i32,
-                            max_inclusive: 3i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                    xz_spread: IntProviderValue::new(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    }),
+                    y_spread: IntProviderValue::new(TrapezoidIntProvider {
+                        min_inclusive: -3i32,
+                        max_inclusive: 3i32,
+                        plateau: 0i32,
+                    }),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
@@ -5689,10 +5457,10 @@ fn build_placed_features()
             ),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Object(NormalIntProvider::Uniform(UniformIntProvider {
+                    count: IntProviderValue::new(UniformIntProvider {
                         min_inclusive: 192i32,
                         max_inclusive: 256i32,
-                    })),
+                    }),
                 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
                 PlacementModifier::HeightRange(HeightRangePlacementModifier {
@@ -5702,28 +5470,24 @@ fn build_placed_features()
                     }),
                 }),
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Object(NormalIntProvider::Uniform(UniformIntProvider {
+                    count: IntProviderValue::new(UniformIntProvider {
                         min_inclusive: 1i32,
                         max_inclusive: 5i32,
-                    })),
+                    }),
                 }),
                 PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::ClampedNormal(
-                        ClampedNormalIntProvider {
-                            mean: 0f32,
-                            deviation: 3f32,
-                            min_inclusive: -10i32,
-                            max_inclusive: 10i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::ClampedNormal(
-                        ClampedNormalIntProvider {
-                            mean: 0f32,
-                            deviation: 0.6f32,
-                            min_inclusive: -2i32,
-                            max_inclusive: 2i32,
-                        },
-                    )),
+                    xz_spread: IntProviderValue::new(ClampedNormalIntProvider {
+                        mean: 0f32,
+                        deviation: 3f32,
+                        min_inclusive: -10i32,
+                        max_inclusive: 10i32,
+                    }),
+                    y_spread: IntProviderValue::new(ClampedNormalIntProvider {
+                        mean: 0f32,
+                        deviation: 0.6f32,
+                        min_inclusive: -2i32,
+                        max_inclusive: 2i32,
+                    }),
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
             ],
@@ -5746,23 +5510,19 @@ fn build_placed_features()
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(96i32),
+                    count: IntProviderValue::constant(96i32),
                 }),
                 PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -7i32,
-                            max_inclusive: 7i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -3i32,
-                            max_inclusive: 3i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                    xz_spread: IntProviderValue::new(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    }),
+                    y_spread: IntProviderValue::new(TrapezoidIntProvider {
+                        min_inclusive: -3i32,
+                        max_inclusive: 3i32,
+                        plateau: 0i32,
+                    }),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
@@ -5787,23 +5547,19 @@ fn build_placed_features()
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(96i32),
+                    count: IntProviderValue::constant(96i32),
                 }),
                 PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -7i32,
-                            max_inclusive: 7i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -3i32,
-                            max_inclusive: 3i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                    xz_spread: IntProviderValue::new(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    }),
+                    y_spread: IntProviderValue::new(TrapezoidIntProvider {
+                        min_inclusive: -3i32,
+                        max_inclusive: 3i32,
+                        plateau: 0i32,
+                    }),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
@@ -5828,23 +5584,19 @@ fn build_placed_features()
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(96i32),
+                    count: IntProviderValue::constant(96i32),
                 }),
                 PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -7i32,
-                            max_inclusive: 7i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -3i32,
-                            max_inclusive: 3i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                    xz_spread: IntProviderValue::new(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    }),
+                    y_spread: IntProviderValue::new(TrapezoidIntProvider {
+                        min_inclusive: -3i32,
+                        max_inclusive: 3i32,
+                        plateau: 0i32,
+                    }),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
@@ -5869,23 +5621,19 @@ fn build_placed_features()
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(96i32),
+                    count: IntProviderValue::constant(96i32),
                 }),
                 PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -7i32,
-                            max_inclusive: 7i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -3i32,
-                            max_inclusive: 3i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                    xz_spread: IntProviderValue::new(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    }),
+                    y_spread: IntProviderValue::new(TrapezoidIntProvider {
+                        min_inclusive: -3i32,
+                        max_inclusive: 3i32,
+                        plateau: 0i32,
+                    }),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
@@ -5910,23 +5658,19 @@ fn build_placed_features()
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(96i32),
+                    count: IntProviderValue::constant(96i32),
                 }),
                 PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -7i32,
-                            max_inclusive: 7i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -3i32,
-                            max_inclusive: 3i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                    xz_spread: IntProviderValue::new(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    }),
+                    y_spread: IntProviderValue::new(TrapezoidIntProvider {
+                        min_inclusive: -3i32,
+                        max_inclusive: 3i32,
+                        plateau: 0i32,
+                    }),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
@@ -5945,10 +5689,10 @@ fn build_placed_features()
             ),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Object(NormalIntProvider::Uniform(UniformIntProvider {
+                    count: IntProviderValue::new(UniformIntProvider {
                         min_inclusive: 1i32,
                         max_inclusive: 2i32,
-                    })),
+                    }),
                 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
                 PlacementModifier::HeightRange(HeightRangePlacementModifier {
@@ -5971,8 +5715,8 @@ fn build_placed_features()
                     max_steps: 12i32,
                 }),
                 PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Constant(0i32),
-                    y_spread: IntProvider::Constant(-1i32),
+                    xz_spread: IntProviderValue::constant(0i32),
+                    y_spread: IntProviderValue::constant(-1i32),
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
             ],
@@ -5986,10 +5730,10 @@ fn build_placed_features()
             ),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Object(NormalIntProvider::Uniform(UniformIntProvider {
+                    count: IntProviderValue::new(UniformIntProvider {
                         min_inclusive: 1i32,
                         max_inclusive: 2i32,
-                    })),
+                    }),
                 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
                 PlacementModifier::HeightRange(HeightRangePlacementModifier {
@@ -6012,8 +5756,8 @@ fn build_placed_features()
                     max_steps: 12i32,
                 }),
                 PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Constant(0i32),
-                    y_spread: IntProvider::Constant(-1i32),
+                    xz_spread: IntProviderValue::constant(0i32),
+                    y_spread: IntProviderValue::constant(-1i32),
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
             ],
@@ -6036,7 +5780,7 @@ fn build_placed_features()
             ),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(256i32),
+                    count: IntProviderValue::constant(256i32),
                 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
                 PlacementModifier::HeightRange(HeightRangePlacementModifier {
@@ -6055,10 +5799,10 @@ fn build_placed_features()
             feature: Feature::Named(pumpkin_data::configured_feature::ConfiguredFeature::SculkVein),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Object(NormalIntProvider::Uniform(UniformIntProvider {
+                    count: IntProviderValue::new(UniformIntProvider {
                         min_inclusive: 204i32,
                         max_inclusive: 250i32,
-                    })),
+                    }),
                 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
                 PlacementModifier::HeightRange(HeightRangePlacementModifier {
@@ -6097,7 +5841,7 @@ fn build_placed_features()
                     heightmap: HeightMap::OceanFloorWg,
                 }),
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(32i32),
+                    count: IntProviderValue::constant(32i32),
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
             ],
@@ -6115,7 +5859,7 @@ fn build_placed_features()
                     heightmap: HeightMap::OceanFloorWg,
                 }),
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(48i32),
+                    count: IntProviderValue::constant(48i32),
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
             ],
@@ -6133,7 +5877,7 @@ fn build_placed_features()
                     heightmap: HeightMap::OceanFloorWg,
                 }),
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(40i32),
+                    count: IntProviderValue::constant(40i32),
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
             ],
@@ -6151,7 +5895,7 @@ fn build_placed_features()
                     heightmap: HeightMap::OceanFloorWg,
                 }),
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(80i32),
+                    count: IntProviderValue::constant(80i32),
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
             ],
@@ -6169,7 +5913,7 @@ fn build_placed_features()
                     heightmap: HeightMap::OceanFloorWg,
                 }),
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(48i32),
+                    count: IntProviderValue::constant(48i32),
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
             ],
@@ -6187,7 +5931,7 @@ fn build_placed_features()
                     heightmap: HeightMap::OceanFloorWg,
                 }),
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(48i32),
+                    count: IntProviderValue::constant(48i32),
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
             ],
@@ -6205,7 +5949,7 @@ fn build_placed_features()
                     heightmap: HeightMap::OceanFloorWg,
                 }),
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(64i32),
+                    count: IntProviderValue::constant(64i32),
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
             ],
@@ -6223,7 +5967,7 @@ fn build_placed_features()
                     heightmap: HeightMap::OceanFloorWg,
                 }),
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(80i32),
+                    count: IntProviderValue::constant(80i32),
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
             ],
@@ -6237,7 +5981,7 @@ fn build_placed_features()
             ),
             placement: vec![
                 PlacementModifier::CountOnEveryLayer(CountOnEveryLayerPlacementModifier {
-                    count: IntProvider::Constant(4i32),
+                    count: IntProviderValue::constant(4i32),
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
             ],
@@ -6251,7 +5995,7 @@ fn build_placed_features()
             ),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(25i32),
+                    count: IntProviderValue::constant(25i32),
                 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
                 PlacementModifier::HeightRange(HeightRangePlacementModifier {
@@ -6274,8 +6018,8 @@ fn build_placed_features()
                     max_steps: 12i32,
                 }),
                 PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Constant(0i32),
-                    y_spread: IntProvider::Constant(-1i32),
+                    xz_spread: IntProviderValue::constant(0i32),
+                    y_spread: IntProviderValue::constant(-1i32),
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
             ],
@@ -6289,7 +6033,7 @@ fn build_placed_features()
             ),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(16i32),
+                    count: IntProviderValue::constant(16i32),
                 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
                 PlacementModifier::HeightRange(HeightRangePlacementModifier {
@@ -6310,7 +6054,7 @@ fn build_placed_features()
             ),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(32i32),
+                    count: IntProviderValue::constant(32i32),
                 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
                 PlacementModifier::HeightRange(HeightRangePlacementModifier {
@@ -6331,7 +6075,7 @@ fn build_placed_features()
             ),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(16i32),
+                    count: IntProviderValue::constant(16i32),
                 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
                 PlacementModifier::HeightRange(HeightRangePlacementModifier {
@@ -6352,7 +6096,7 @@ fn build_placed_features()
             ),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(20i32),
+                    count: IntProviderValue::constant(20i32),
                 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
                 PlacementModifier::HeightRange(HeightRangePlacementModifier {
@@ -6374,7 +6118,7 @@ fn build_placed_features()
             ),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(20i32),
+                    count: IntProviderValue::constant(20i32),
                 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
                 PlacementModifier::HeightRange(HeightRangePlacementModifier {
@@ -6396,7 +6140,7 @@ fn build_placed_features()
             ),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(8i32),
+                    count: IntProviderValue::constant(8i32),
                 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
                 PlacementModifier::HeightRange(HeightRangePlacementModifier {
@@ -6417,7 +6161,7 @@ fn build_placed_features()
             ),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(25i32),
+                    count: IntProviderValue::constant(25i32),
                 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
                 PlacementModifier::HeightRange(HeightRangePlacementModifier {
@@ -6514,7 +6258,7 @@ fn build_placed_features()
             ),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(256i32),
+                    count: IntProviderValue::constant(256i32),
                 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
                 PlacementModifier::HeightRange(HeightRangePlacementModifier {
@@ -6538,8 +6282,8 @@ fn build_placed_features()
                     max_steps: 32i32,
                 }),
                 PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Constant(0i32),
-                    y_spread: IntProvider::Constant(-1i32),
+                    xz_spread: IntProviderValue::constant(0i32),
+                    y_spread: IntProviderValue::constant(-1i32),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::MatchingBlocks(MatchingBlocksBlockPredicate {
@@ -6559,10 +6303,10 @@ fn build_placed_features()
             ),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Object(NormalIntProvider::Uniform(UniformIntProvider {
+                    count: IntProviderValue::new(UniformIntProvider {
                         min_inclusive: 192i32,
                         max_inclusive: 256i32,
-                    })),
+                    }),
                 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
                 PlacementModifier::HeightRange(HeightRangePlacementModifier {
@@ -6572,28 +6316,24 @@ fn build_placed_features()
                     }),
                 }),
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Object(NormalIntProvider::Uniform(UniformIntProvider {
+                    count: IntProviderValue::new(UniformIntProvider {
                         min_inclusive: 1i32,
                         max_inclusive: 5i32,
-                    })),
+                    }),
                 }),
                 PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::ClampedNormal(
-                        ClampedNormalIntProvider {
-                            mean: 0f32,
-                            deviation: 3f32,
-                            min_inclusive: -10i32,
-                            max_inclusive: 10i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::ClampedNormal(
-                        ClampedNormalIntProvider {
-                            mean: 0f32,
-                            deviation: 0.6f32,
-                            min_inclusive: -2i32,
-                            max_inclusive: 2i32,
-                        },
-                    )),
+                    xz_spread: IntProviderValue::new(ClampedNormalIntProvider {
+                        mean: 0f32,
+                        deviation: 3f32,
+                        min_inclusive: -10i32,
+                        max_inclusive: 10i32,
+                    }),
+                    y_spread: IntProviderValue::new(ClampedNormalIntProvider {
+                        mean: 0f32,
+                        deviation: 0.6f32,
+                        min_inclusive: -2i32,
+                        max_inclusive: 2i32,
+                    }),
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
             ],
@@ -6607,10 +6347,10 @@ fn build_placed_features()
             ),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Object(NormalIntProvider::Uniform(UniformIntProvider {
+                    count: IntProviderValue::new(UniformIntProvider {
                         min_inclusive: 48i32,
                         max_inclusive: 96i32,
-                    })),
+                    }),
                 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
                 PlacementModifier::HeightRange(HeightRangePlacementModifier {
@@ -6703,20 +6443,18 @@ fn build_placed_features()
             ),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Object(NormalIntProvider::WeightedList(
-                        WeightedListIntProvider {
-                            distribution: vec![
-                                WeightedEntry {
-                                    data: IntProvider::Constant(5i32),
-                                    weight: 9i32,
-                                },
-                                WeightedEntry {
-                                    data: IntProvider::Constant(6i32),
-                                    weight: 1i32,
-                                },
-                            ],
-                        },
-                    )),
+                    count: IntProviderValue::new(WeightedListIntProvider {
+                        distribution: vec![
+                            WeightedEntry {
+                                data: IntProviderValue::constant(5i32),
+                                weight: 9i32,
+                            },
+                            WeightedEntry {
+                                data: IntProviderValue::constant(6i32),
+                                weight: 1i32,
+                            },
+                        ],
+                    }),
                 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
                 PlacementModifier::SurfaceWaterDepthFilter(
@@ -6752,20 +6490,18 @@ fn build_placed_features()
             ),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Object(NormalIntProvider::WeightedList(
-                        WeightedListIntProvider {
-                            distribution: vec![
-                                WeightedEntry {
-                                    data: IntProvider::Constant(10i32),
-                                    weight: 9i32,
-                                },
-                                WeightedEntry {
-                                    data: IntProvider::Constant(11i32),
-                                    weight: 1i32,
-                                },
-                            ],
-                        },
-                    )),
+                    count: IntProviderValue::new(WeightedListIntProvider {
+                        distribution: vec![
+                            WeightedEntry {
+                                data: IntProviderValue::constant(10i32),
+                                weight: 9i32,
+                            },
+                            WeightedEntry {
+                                data: IntProviderValue::constant(11i32),
+                                weight: 1i32,
+                            },
+                        ],
+                    }),
                 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
                 PlacementModifier::SurfaceWaterDepthFilter(
@@ -6801,20 +6537,18 @@ fn build_placed_features()
             ),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Object(NormalIntProvider::WeightedList(
-                        WeightedListIntProvider {
-                            distribution: vec![
-                                WeightedEntry {
-                                    data: IntProvider::Constant(10i32),
-                                    weight: 9i32,
-                                },
-                                WeightedEntry {
-                                    data: IntProvider::Constant(11i32),
-                                    weight: 1i32,
-                                },
-                            ],
-                        },
-                    )),
+                    count: IntProviderValue::new(WeightedListIntProvider {
+                        distribution: vec![
+                            WeightedEntry {
+                                data: IntProviderValue::constant(10i32),
+                                weight: 9i32,
+                            },
+                            WeightedEntry {
+                                data: IntProviderValue::constant(11i32),
+                                weight: 1i32,
+                            },
+                        ],
+                    }),
                 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
                 PlacementModifier::SurfaceWaterDepthFilter(
@@ -6837,20 +6571,18 @@ fn build_placed_features()
             ),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Object(NormalIntProvider::WeightedList(
-                        WeightedListIntProvider {
-                            distribution: vec![
-                                WeightedEntry {
-                                    data: IntProvider::Constant(10i32),
-                                    weight: 9i32,
-                                },
-                                WeightedEntry {
-                                    data: IntProvider::Constant(11i32),
-                                    weight: 1i32,
-                                },
-                            ],
-                        },
-                    )),
+                    count: IntProviderValue::new(WeightedListIntProvider {
+                        distribution: vec![
+                            WeightedEntry {
+                                data: IntProviderValue::constant(10i32),
+                                weight: 9i32,
+                            },
+                            WeightedEntry {
+                                data: IntProviderValue::constant(11i32),
+                                weight: 1i32,
+                            },
+                        ],
+                    }),
                 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
                 PlacementModifier::SurfaceWaterDepthFilter(
@@ -6886,20 +6618,18 @@ fn build_placed_features()
             ),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Object(NormalIntProvider::WeightedList(
-                        WeightedListIntProvider {
-                            distribution: vec![
-                                WeightedEntry {
-                                    data: IntProvider::Constant(6i32),
-                                    weight: 9i32,
-                                },
-                                WeightedEntry {
-                                    data: IntProvider::Constant(7i32),
-                                    weight: 1i32,
-                                },
-                            ],
-                        },
-                    )),
+                    count: IntProviderValue::new(WeightedListIntProvider {
+                        distribution: vec![
+                            WeightedEntry {
+                                data: IntProviderValue::constant(6i32),
+                                weight: 9i32,
+                            },
+                            WeightedEntry {
+                                data: IntProviderValue::constant(7i32),
+                                weight: 1i32,
+                            },
+                        ],
+                    }),
                 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
                 PlacementModifier::SurfaceWaterDepthFilter(
@@ -6922,20 +6652,18 @@ fn build_placed_features()
             ),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Object(NormalIntProvider::WeightedList(
-                        WeightedListIntProvider {
-                            distribution: vec![
-                                WeightedEntry {
-                                    data: IntProvider::Constant(10i32),
-                                    weight: 9i32,
-                                },
-                                WeightedEntry {
-                                    data: IntProvider::Constant(11i32),
-                                    weight: 1i32,
-                                },
-                            ],
-                        },
-                    )),
+                    count: IntProviderValue::new(WeightedListIntProvider {
+                        distribution: vec![
+                            WeightedEntry {
+                                data: IntProviderValue::constant(10i32),
+                                weight: 9i32,
+                            },
+                            WeightedEntry {
+                                data: IntProviderValue::constant(11i32),
+                                weight: 1i32,
+                            },
+                        ],
+                    }),
                 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
                 PlacementModifier::SurfaceWaterDepthFilter(
@@ -6958,20 +6686,18 @@ fn build_placed_features()
             ),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Object(NormalIntProvider::WeightedList(
-                        WeightedListIntProvider {
-                            distribution: vec![
-                                WeightedEntry {
-                                    data: IntProvider::Constant(50i32),
-                                    weight: 9i32,
-                                },
-                                WeightedEntry {
-                                    data: IntProvider::Constant(51i32),
-                                    weight: 1i32,
-                                },
-                            ],
-                        },
-                    )),
+                    count: IntProviderValue::new(WeightedListIntProvider {
+                        distribution: vec![
+                            WeightedEntry {
+                                data: IntProviderValue::constant(50i32),
+                                weight: 9i32,
+                            },
+                            WeightedEntry {
+                                data: IntProviderValue::constant(51i32),
+                                weight: 1i32,
+                            },
+                        ],
+                    }),
                 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
                 PlacementModifier::SurfaceWaterDepthFilter(
@@ -6994,7 +6720,7 @@ fn build_placed_features()
             ),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(25i32),
+                    count: IntProviderValue::constant(25i32),
                 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
                 PlacementModifier::SurfaceWaterDepthFilter(
@@ -7038,20 +6764,18 @@ fn build_placed_features()
             ),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Object(NormalIntProvider::WeightedList(
-                        WeightedListIntProvider {
-                            distribution: vec![
-                                WeightedEntry {
-                                    data: IntProvider::Constant(10i32),
-                                    weight: 9i32,
-                                },
-                                WeightedEntry {
-                                    data: IntProvider::Constant(11i32),
-                                    weight: 1i32,
-                                },
-                            ],
-                        },
-                    )),
+                    count: IntProviderValue::new(WeightedListIntProvider {
+                        distribution: vec![
+                            WeightedEntry {
+                                data: IntProviderValue::constant(10i32),
+                                weight: 9i32,
+                            },
+                            WeightedEntry {
+                                data: IntProviderValue::constant(11i32),
+                                weight: 1i32,
+                            },
+                        ],
+                    }),
                 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
                 PlacementModifier::SurfaceWaterDepthFilter(
@@ -7074,20 +6798,18 @@ fn build_placed_features()
             ),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Object(NormalIntProvider::WeightedList(
-                        WeightedListIntProvider {
-                            distribution: vec![
-                                WeightedEntry {
-                                    data: IntProvider::Constant(10i32),
-                                    weight: 9i32,
-                                },
-                                WeightedEntry {
-                                    data: IntProvider::Constant(11i32),
-                                    weight: 1i32,
-                                },
-                            ],
-                        },
-                    )),
+                    count: IntProviderValue::new(WeightedListIntProvider {
+                        distribution: vec![
+                            WeightedEntry {
+                                data: IntProviderValue::constant(10i32),
+                                weight: 9i32,
+                            },
+                            WeightedEntry {
+                                data: IntProviderValue::constant(11i32),
+                                weight: 1i32,
+                            },
+                        ],
+                    }),
                 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
                 PlacementModifier::SurfaceWaterDepthFilter(
@@ -7110,20 +6832,18 @@ fn build_placed_features()
             ),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Object(NormalIntProvider::WeightedList(
-                        WeightedListIntProvider {
-                            distribution: vec![
-                                WeightedEntry {
-                                    data: IntProvider::Constant(0i32),
-                                    weight: 19i32,
-                                },
-                                WeightedEntry {
-                                    data: IntProvider::Constant(1i32),
-                                    weight: 1i32,
-                                },
-                            ],
-                        },
-                    )),
+                    count: IntProviderValue::new(WeightedListIntProvider {
+                        distribution: vec![
+                            WeightedEntry {
+                                data: IntProviderValue::constant(0i32),
+                                weight: 19i32,
+                            },
+                            WeightedEntry {
+                                data: IntProviderValue::constant(1i32),
+                                weight: 1i32,
+                            },
+                        ],
+                    }),
                 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
                 PlacementModifier::SurfaceWaterDepthFilter(
@@ -7159,20 +6879,18 @@ fn build_placed_features()
             ),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Object(NormalIntProvider::WeightedList(
-                        WeightedListIntProvider {
-                            distribution: vec![
-                                WeightedEntry {
-                                    data: IntProvider::Constant(1i32),
-                                    weight: 9i32,
-                                },
-                                WeightedEntry {
-                                    data: IntProvider::Constant(2i32),
-                                    weight: 1i32,
-                                },
-                            ],
-                        },
-                    )),
+                    count: IntProviderValue::new(WeightedListIntProvider {
+                        distribution: vec![
+                            WeightedEntry {
+                                data: IntProviderValue::constant(1i32),
+                                weight: 9i32,
+                            },
+                            WeightedEntry {
+                                data: IntProviderValue::constant(2i32),
+                                weight: 1i32,
+                            },
+                        ],
+                    }),
                 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
                 PlacementModifier::SurfaceWaterDepthFilter(
@@ -7195,20 +6913,18 @@ fn build_placed_features()
             ),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Object(NormalIntProvider::WeightedList(
-                        WeightedListIntProvider {
-                            distribution: vec![
-                                WeightedEntry {
-                                    data: IntProvider::Constant(0i32),
-                                    weight: 9i32,
-                                },
-                                WeightedEntry {
-                                    data: IntProvider::Constant(1i32),
-                                    weight: 1i32,
-                                },
-                            ],
-                        },
-                    )),
+                    count: IntProviderValue::new(WeightedListIntProvider {
+                        distribution: vec![
+                            WeightedEntry {
+                                data: IntProviderValue::constant(0i32),
+                                weight: 9i32,
+                            },
+                            WeightedEntry {
+                                data: IntProviderValue::constant(1i32),
+                                weight: 1i32,
+                            },
+                        ],
+                    }),
                 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
                 PlacementModifier::SurfaceWaterDepthFilter(
@@ -7244,20 +6960,18 @@ fn build_placed_features()
             ),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Object(NormalIntProvider::WeightedList(
-                        WeightedListIntProvider {
-                            distribution: vec![
-                                WeightedEntry {
-                                    data: IntProvider::Constant(2i32),
-                                    weight: 9i32,
-                                },
-                                WeightedEntry {
-                                    data: IntProvider::Constant(3i32),
-                                    weight: 1i32,
-                                },
-                            ],
-                        },
-                    )),
+                    count: IntProviderValue::new(WeightedListIntProvider {
+                        distribution: vec![
+                            WeightedEntry {
+                                data: IntProviderValue::constant(2i32),
+                                weight: 9i32,
+                            },
+                            WeightedEntry {
+                                data: IntProviderValue::constant(3i32),
+                                weight: 1i32,
+                            },
+                        ],
+                    }),
                 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
                 PlacementModifier::SurfaceWaterDepthFilter(
@@ -7278,20 +6992,18 @@ fn build_placed_features()
             feature: Feature::Named(pumpkin_data::configured_feature::ConfiguredFeature::SwampOak),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Object(NormalIntProvider::WeightedList(
-                        WeightedListIntProvider {
-                            distribution: vec![
-                                WeightedEntry {
-                                    data: IntProvider::Constant(2i32),
-                                    weight: 9i32,
-                                },
-                                WeightedEntry {
-                                    data: IntProvider::Constant(3i32),
-                                    weight: 1i32,
-                                },
-                            ],
-                        },
-                    )),
+                    count: IntProviderValue::new(WeightedListIntProvider {
+                        distribution: vec![
+                            WeightedEntry {
+                                data: IntProviderValue::constant(2i32),
+                                weight: 9i32,
+                            },
+                            WeightedEntry {
+                                data: IntProviderValue::constant(3i32),
+                                weight: 1i32,
+                            },
+                        ],
+                    }),
                 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
                 PlacementModifier::SurfaceWaterDepthFilter(
@@ -7327,20 +7039,18 @@ fn build_placed_features()
             ),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Object(NormalIntProvider::WeightedList(
-                        WeightedListIntProvider {
-                            distribution: vec![
-                                WeightedEntry {
-                                    data: IntProvider::Constant(10i32),
-                                    weight: 9i32,
-                                },
-                                WeightedEntry {
-                                    data: IntProvider::Constant(11i32),
-                                    weight: 1i32,
-                                },
-                            ],
-                        },
-                    )),
+                    count: IntProviderValue::new(WeightedListIntProvider {
+                        distribution: vec![
+                            WeightedEntry {
+                                data: IntProviderValue::constant(10i32),
+                                weight: 9i32,
+                            },
+                            WeightedEntry {
+                                data: IntProviderValue::constant(11i32),
+                                weight: 1i32,
+                            },
+                        ],
+                    }),
                 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
                 PlacementModifier::SurfaceWaterDepthFilter(
@@ -7363,20 +7073,18 @@ fn build_placed_features()
             ),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Object(NormalIntProvider::WeightedList(
-                        WeightedListIntProvider {
-                            distribution: vec![
-                                WeightedEntry {
-                                    data: IntProvider::Constant(0i32),
-                                    weight: 9i32,
-                                },
-                                WeightedEntry {
-                                    data: IntProvider::Constant(1i32),
-                                    weight: 1i32,
-                                },
-                            ],
-                        },
-                    )),
+                    count: IntProviderValue::new(WeightedListIntProvider {
+                        distribution: vec![
+                            WeightedEntry {
+                                data: IntProviderValue::constant(0i32),
+                                weight: 9i32,
+                            },
+                            WeightedEntry {
+                                data: IntProviderValue::constant(1i32),
+                                weight: 1i32,
+                            },
+                        ],
+                    }),
                 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
                 PlacementModifier::SurfaceWaterDepthFilter(
@@ -7399,20 +7107,18 @@ fn build_placed_features()
             ),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Object(NormalIntProvider::WeightedList(
-                        WeightedListIntProvider {
-                            distribution: vec![
-                                WeightedEntry {
-                                    data: IntProvider::Constant(3i32),
-                                    weight: 9i32,
-                                },
-                                WeightedEntry {
-                                    data: IntProvider::Constant(4i32),
-                                    weight: 1i32,
-                                },
-                            ],
-                        },
-                    )),
+                    count: IntProviderValue::new(WeightedListIntProvider {
+                        distribution: vec![
+                            WeightedEntry {
+                                data: IntProviderValue::constant(3i32),
+                                weight: 9i32,
+                            },
+                            WeightedEntry {
+                                data: IntProviderValue::constant(4i32),
+                                weight: 1i32,
+                            },
+                        ],
+                    }),
                 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
                 PlacementModifier::SurfaceWaterDepthFilter(
@@ -7435,20 +7141,18 @@ fn build_placed_features()
             ),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Object(NormalIntProvider::WeightedList(
-                        WeightedListIntProvider {
-                            distribution: vec![
-                                WeightedEntry {
-                                    data: IntProvider::Constant(0i32),
-                                    weight: 9i32,
-                                },
-                                WeightedEntry {
-                                    data: IntProvider::Constant(1i32),
-                                    weight: 1i32,
-                                },
-                            ],
-                        },
-                    )),
+                    count: IntProviderValue::new(WeightedListIntProvider {
+                        distribution: vec![
+                            WeightedEntry {
+                                data: IntProviderValue::constant(0i32),
+                                weight: 9i32,
+                            },
+                            WeightedEntry {
+                                data: IntProviderValue::constant(1i32),
+                                weight: 1i32,
+                            },
+                        ],
+                    }),
                 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
                 PlacementModifier::SurfaceWaterDepthFilter(
@@ -7471,20 +7175,18 @@ fn build_placed_features()
             ),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Object(NormalIntProvider::WeightedList(
-                        WeightedListIntProvider {
-                            distribution: vec![
-                                WeightedEntry {
-                                    data: IntProvider::Constant(2i32),
-                                    weight: 9i32,
-                                },
-                                WeightedEntry {
-                                    data: IntProvider::Constant(3i32),
-                                    weight: 1i32,
-                                },
-                            ],
-                        },
-                    )),
+                    count: IntProviderValue::new(WeightedListIntProvider {
+                        distribution: vec![
+                            WeightedEntry {
+                                data: IntProviderValue::constant(2i32),
+                                weight: 9i32,
+                            },
+                            WeightedEntry {
+                                data: IntProviderValue::constant(3i32),
+                                weight: 1i32,
+                            },
+                        ],
+                    }),
                 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
                 PlacementModifier::SurfaceWaterDepthFilter(
@@ -7507,7 +7209,7 @@ fn build_placed_features()
             ),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(10i32),
+                    count: IntProviderValue::constant(10i32),
                 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
                 PlacementModifier::HeightRange(HeightRangePlacementModifier {
@@ -7528,10 +7230,10 @@ fn build_placed_features()
             ),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Object(NormalIntProvider::Uniform(UniformIntProvider {
+                    count: IntProviderValue::new(UniformIntProvider {
                         min_inclusive: 44i32,
                         max_inclusive: 52i32,
-                    })),
+                    }),
                 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
                 PlacementModifier::HeightRange(HeightRangePlacementModifier {
@@ -7557,7 +7259,7 @@ fn build_placed_features()
             feature: Feature::Named(pumpkin_data::configured_feature::ConfiguredFeature::Vines),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(127i32),
+                    count: IntProviderValue::constant(127i32),
                 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
                 PlacementModifier::HeightRange(HeightRangePlacementModifier {
@@ -7607,7 +7309,7 @@ fn build_placed_features()
             ),
             placement: vec![
                 PlacementModifier::CountOnEveryLayer(CountOnEveryLayerPlacementModifier {
-                    count: IntProvider::Constant(5i32),
+                    count: IntProviderValue::constant(5i32),
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
             ],
@@ -7621,7 +7323,7 @@ fn build_placed_features()
             ),
             placement: vec![
                 PlacementModifier::CountOnEveryLayer(CountOnEveryLayerPlacementModifier {
-                    count: IntProvider::Constant(8i32),
+                    count: IntProviderValue::constant(8i32),
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
             ],
@@ -7635,7 +7337,7 @@ fn build_placed_features()
             ),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(10i32),
+                    count: IntProviderValue::constant(10i32),
                 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
                 PlacementModifier::HeightRange(HeightRangePlacementModifier {
@@ -7656,7 +7358,7 @@ fn build_placed_features()
             ),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(3i32),
+                    count: IntProviderValue::constant(3i32),
                 }),
                 PlacementModifier::RarityFilter(RarityFilterPlacementModifier { chance: 2u32 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
@@ -7665,23 +7367,19 @@ fn build_placed_features()
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(64i32),
+                    count: IntProviderValue::constant(64i32),
                 }),
                 PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -6i32,
-                            max_inclusive: 6i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -2i32,
-                            max_inclusive: 2i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                    xz_spread: IntProviderValue::new(TrapezoidIntProvider {
+                        min_inclusive: -6i32,
+                        max_inclusive: 6i32,
+                        plateau: 0i32,
+                    }),
+                    y_spread: IntProviderValue::new(TrapezoidIntProvider {
+                        min_inclusive: -2i32,
+                        max_inclusive: 2i32,
+                        plateau: 0i32,
+                    }),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
@@ -7710,23 +7408,19 @@ fn build_placed_features()
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
                 PlacementModifier::Count(CountPlacementModifier {
-                    count: IntProvider::Constant(8i32),
+                    count: IntProviderValue::constant(8i32),
                 }),
                 PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -6i32,
-                            max_inclusive: 6i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -2i32,
-                            max_inclusive: 2i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                    xz_spread: IntProviderValue::new(TrapezoidIntProvider {
+                        min_inclusive: -6i32,
+                        max_inclusive: 6i32,
+                        plateau: 0i32,
+                    }),
+                    y_spread: IntProviderValue::new(TrapezoidIntProvider {
+                        min_inclusive: -2i32,
+                        max_inclusive: 2i32,
+                        plateau: 0i32,
+                    }),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {

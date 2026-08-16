@@ -1,6 +1,7 @@
 use pumpkin_data::{BlockDirection, BlockState};
+use pumpkin_data::int_provider::IntProviderValue;
 use pumpkin_util::{
-    math::{int_provider::IntProvider, position::BlockPos},
+    math::position::BlockPos,
     random::{RandomGenerator, RandomImpl},
 };
 
@@ -15,7 +16,7 @@ use crate::{
 
 pub struct BendingTrunkPlacer {
     pub min_height_for_leaves: u32,
-    pub bend_length: IntProvider,
+    pub bend_length: IntProviderValue,
 }
 
 impl BendingTrunkPlacer {

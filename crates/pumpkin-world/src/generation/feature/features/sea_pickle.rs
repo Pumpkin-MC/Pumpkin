@@ -3,13 +3,14 @@ use pumpkin_data::{
     Block, BlockState,
     block_properties::{BlockProperties, SeaPickleLikeProperties},
 };
+use pumpkin_data::int_provider::IntProviderValue;
 use pumpkin_util::{
-    math::{int_provider::IntProvider, position::BlockPos},
+    math::position::BlockPos,
     random::{RandomGenerator, RandomImpl},
 };
 
 pub struct SeaPickleFeature {
-    pub count: IntProvider,
+    pub count: IntProviderValue,
 }
 
 impl SeaPickleFeature {

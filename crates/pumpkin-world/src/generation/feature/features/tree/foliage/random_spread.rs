@@ -1,6 +1,7 @@
 use pumpkin_data::BlockState;
+use pumpkin_data::int_provider::IntProviderValue;
 use pumpkin_util::{
-    math::{int_provider::IntProvider, position::BlockPos, vector3::Vector3},
+    math::{position::BlockPos, vector3::Vector3},
     random::{RandomGenerator, RandomImpl},
 };
 
@@ -9,7 +10,7 @@ use crate::generation::feature::features::tree::TreeNode;
 use crate::generation::proto_chunk::GenerationCache;
 
 pub struct RandomSpreadFoliagePlacer {
-    pub foliage_height: IntProvider,
+    pub foliage_height: IntProviderValue,
     pub leaf_placement_attempts: i32,
 }
 

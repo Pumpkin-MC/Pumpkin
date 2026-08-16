@@ -6,7 +6,7 @@ use std::iter;
 use std::sync::LazyLock;
 
 use pumpkin_util::biome::FOLIAGE_NOISE;
-use pumpkin_util::math::int_provider::IntProvider;
+use pumpkin_data::int_provider::IntProviderValue;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::random::{RandomGenerator, RandomImpl};
@@ -276,8 +276,8 @@ impl EnvironmentScanPlacementModifier {
 }
 
 pub struct RandomOffsetPlacementModifier {
-    pub xz_spread: IntProvider,
-    pub y_spread: IntProvider,
+    pub xz_spread: IntProviderValue,
+    pub y_spread: IntProviderValue,
 }
 
 impl RandomOffsetPlacementModifier {
@@ -294,7 +294,7 @@ impl RandomOffsetPlacementModifier {
 }
 
 pub struct CountOnEveryLayerPlacementModifier {
-    pub count: IntProvider,
+    pub count: IntProviderValue,
 }
 
 impl CountOnEveryLayerPlacementModifier {
@@ -430,7 +430,7 @@ impl SquarePlacementModifier {
 }
 
 pub struct CountPlacementModifier {
-    pub count: IntProvider,
+    pub count: IntProviderValue,
 }
 
 impl CountPlacementModifierBase for CountPlacementModifier {

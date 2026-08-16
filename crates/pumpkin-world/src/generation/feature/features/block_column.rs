@@ -1,6 +1,7 @@
 use pumpkin_data::BlockDirection;
+use pumpkin_data::int_provider::IntProviderValue;
 use pumpkin_util::{
-    math::{int_provider::IntProvider, position::BlockPos},
+    math::position::BlockPos,
     random::RandomGenerator,
 };
 
@@ -18,7 +19,7 @@ pub struct BlockColumnFeature {
 }
 
 pub struct Layer {
-    pub height: IntProvider,
+    pub height: IntProviderValue,
     pub provider: BlockStateProvider,
 }
 

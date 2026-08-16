@@ -1,6 +1,7 @@
 use pumpkin_data::{BlockDirection, BlockState, block_properties::HorizontalFacing, fluid::Fluid};
+use pumpkin_data::int_provider::IntProviderValue;
 use pumpkin_util::{
-    math::{int_provider::IntProvider, position::BlockPos},
+    math::position::BlockPos,
     random::{RandomGenerator, RandomImpl},
 };
 
@@ -23,7 +24,7 @@ pub struct MangroveRootPlacement {
 }
 
 pub struct MangroveRootPlacer {
-    pub trunk_offset_y: IntProvider,
+    pub trunk_offset_y: IntProviderValue,
     pub root_provider: BlockStateProvider,
     pub above_root_placement: Option<AboveRootPlacement>,
     pub mangrove_root_placement: MangroveRootPlacement,

@@ -1,4 +1,5 @@
-use pumpkin_util::math::{int_provider::IntProvider, position::BlockPos};
+use pumpkin_data::int_provider::IntProviderValue;
+use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::random::RandomGenerator;
 
 use crate::generation::{
@@ -10,7 +11,7 @@ use crate::world::WorldPortalExt;
 pub struct DiskFeature {
     pub state_provider: BlockStateProvider,
     pub target: BlockPredicate,
-    pub radius: IntProvider,
+    pub radius: IntProviderValue,
     pub half_height: i32,
 }
 

@@ -15,11 +15,11 @@ pub struct VegetationPatchFeature {
     pub ground_state: BlockStateProvider,
     pub vegetation_feature: Box<crate::generation::feature::placed_features::PlacedFeature>,
     pub surface: VerticalSurfaceType,
-    pub depth: pumpkin_util::math::int_provider::IntProvider,
+    pub depth: pumpkin_data::int_provider::IntProviderValue,
     pub extra_bottom_block_chance: f32,
     pub vertical_range: i32,
     pub vegetation_chance: f32,
-    pub xz_radius: pumpkin_util::math::int_provider::IntProvider,
+    pub xz_radius: pumpkin_data::int_provider::IntProviderValue,
     pub extra_edge_column_chance: f32,
 }
 

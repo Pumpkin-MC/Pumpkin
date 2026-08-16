@@ -98,9 +98,9 @@ pub fn build() -> TokenStream {
                 VeryBiasedToBottomHeightProvider,
             };
             use pumpkin_util::y_offset::{AboveBottom, Absolute, BelowTop, YOffset};
-            use pumpkin_util::math::int_provider::{
+            use pumpkin_data::int_provider::{
                 BiasedToBottomIntProvider, ClampedIntProvider, TrapezoidIntProvider, ClampedNormalIntProvider,
-                ConstantIntProvider, IntProvider, NormalIntProvider, UniformIntProvider,
+                ConstantIntProvider, IntProviderValue, UniformIntProvider,
                 WeightedEntry, WeightedListIntProvider,
             };
             use crate::block::BlockStateCodec;

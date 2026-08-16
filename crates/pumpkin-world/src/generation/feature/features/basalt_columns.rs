@@ -1,6 +1,6 @@
-use pumpkin_data::{Block, BlockId, block_properties::is_air};
+use pumpkin_data::{Block, BlockId, block_properties::is_air, int_provider::IntProviderValue};
 use pumpkin_util::{
-    math::{int_provider::IntProvider, position::BlockPos},
+    math::position::BlockPos,
     random::{RandomGenerator, RandomImpl},
 };
 
@@ -13,8 +13,8 @@ const CLUSTERED_SIZE: i32 = 50;
 const UNCLUSTERED_SIZE: i32 = 15;
 
 pub struct BasaltColumnsFeature {
-    pub height: IntProvider,
-    pub reach: IntProvider,
+    pub height: IntProviderValue,
+    pub reach: IntProviderValue,
 }
 
 impl BasaltColumnsFeature {

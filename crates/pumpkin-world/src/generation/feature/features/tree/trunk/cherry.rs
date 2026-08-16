@@ -1,5 +1,5 @@
 use pumpkin_data::{Block, BlockState};
-use pumpkin_util::math::int_provider::{IntProvider, UniformIntProvider};
+use pumpkin_data::int_provider::{IntProviderValue, UniformIntProvider};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::random::{RandomGenerator, RandomImpl};
 
@@ -11,10 +11,10 @@ use crate::world::WorldPortalExt;
 use pumpkin_data::block_properties::Axis;
 
 pub struct CherryTrunkPlacer {
-    pub count: IntProvider,
-    pub horizontal_length: IntProvider,
+    pub count: IntProviderValue,
+    pub horizontal_length: IntProviderValue,
     pub start_offset_from_top: UniformIntProvider,
-    pub end_offset_from_top: IntProvider,
+    pub end_offset_from_top: IntProviderValue,
 }
 
 impl CherryTrunkPlacer {
