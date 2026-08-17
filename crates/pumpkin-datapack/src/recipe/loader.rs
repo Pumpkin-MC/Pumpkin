@@ -36,7 +36,15 @@ pub fn load_recipes(
             let Some(data) = manager.get_resource(ns, path) else {
                 continue;
             };
-            match parse_recipe_json(&data) {
+            let recipe_path = path
+                .strip_prefix("recipe/")
+                .or_else(|| path.strip_prefix("recipes/"))
+                .unwrap_or(path)
+                .strip_suffix(".json")
+                .unwrap_or(path);
+            let recipe_id = format!("{ns}:{recipe_path}");
+
+            match parse_recipe_json(&data, &recipe_id) {
                 Ok(Some(recipe)) => recipes.push(recipe),
                 Ok(None) => {} // unknown type, skip
                 Err(e) => {
@@ -76,7 +84,10 @@ struct RawRecipeJson {
 }
 
 /// Parse a single recipe JSON into a `DynamicRecipe`.
-fn parse_recipe_json(data: &[u8]) -> Result<Option<DynamicRecipe>, serde_json::Error> {
+fn parse_recipe_json(
+    data: &[u8],
+    recipe_id: &str,
+) -> Result<Option<DynamicRecipe>, serde_json::Error> {
     let raw: RawRecipeJson = serde_json::from_slice(data)?;
 
     let recipe_type = raw
@@ -103,6 +114,7 @@ fn parse_recipe_json(data: &[u8]) -> Result<Option<DynamicRecipe>, serde_json::E
             let result = parse_result(raw.result.as_ref());
 
             Some(DynamicRecipe::Crafting(OwnedCraftingRecipe::Shaped {
+                recipe_id: Some(recipe_id.to_string()),
                 category,
                 group,
                 show_notification,
@@ -118,6 +130,7 @@ fn parse_recipe_json(data: &[u8]) -> Result<Option<DynamicRecipe>, serde_json::E
             let result = parse_result(raw.result.as_ref());
 
             Some(DynamicRecipe::Crafting(OwnedCraftingRecipe::Shapeless {
+                recipe_id: Some(recipe_id.to_string()),
                 category,
                 group,
                 ingredients,
@@ -125,16 +138,16 @@ fn parse_recipe_json(data: &[u8]) -> Result<Option<DynamicRecipe>, serde_json::E
             }))
         }
         "smelting" => Some(DynamicRecipe::Cooking(OwnedCookingRecipeType::Smelting(
-            make_owned_cooking(&raw),
+            make_owned_cooking(&raw, recipe_id),
         ))),
         "blasting" => Some(DynamicRecipe::Cooking(OwnedCookingRecipeType::Blasting(
-            make_owned_cooking(&raw),
+            make_owned_cooking(&raw, recipe_id),
         ))),
         "smoking" => Some(DynamicRecipe::Cooking(OwnedCookingRecipeType::Smoking(
-            make_owned_cooking(&raw),
+            make_owned_cooking(&raw, recipe_id),
         ))),
         "campfire_cooking" => Some(DynamicRecipe::Cooking(
-            OwnedCookingRecipeType::CampfireCooking(make_owned_cooking(&raw)),
+            OwnedCookingRecipeType::CampfireCooking(make_owned_cooking(&raw, recipe_id)),
         )),
         "stonecutting" | "smithing_transform" | "smithing_trim" => {
             // TODO - Placeholder: parse but don't send as recipe for now
@@ -418,7 +431,7 @@ fn parse_enchantments(value: &serde_json::Value) -> Option<Vec<(&'static Enchant
     Some(out)
 }
 
-fn make_owned_cooking(raw: &RawRecipeJson) -> OwnedCookingRecipe {
+fn make_owned_cooking(raw: &RawRecipeJson, recipe_id: &str) -> OwnedCookingRecipe {
     let ingredient = raw.ingredient.as_ref().map_or(
         OwnedRecipeIngredient::Simple("minecraft:air".to_string()),
         parse_ingredient,
@@ -426,7 +439,7 @@ fn make_owned_cooking(raw: &RawRecipeJson) -> OwnedCookingRecipe {
     let result = parse_result(raw.result.as_ref());
 
     OwnedCookingRecipe {
-        recipe_id: String::new(),
+        recipe_id: recipe_id.to_string(),
         category: parse_category(raw.category.as_deref()),
         group: raw.group.clone(),
         ingredient,

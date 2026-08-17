@@ -148,6 +148,9 @@ impl Decode for ArgbColor {
             if let Ok(value) = u32::try_from(value) {
                 return DataResult::new_success((Self::new(value), ops.empty()));
             }
+            if let Ok(value) = i32::try_from(value) {
+                return DataResult::new_success((Self::new(value as u32), ops.empty()));
+            }
         }
 
         if let Some(iter) = ops.get_iter(input).into_result() {
@@ -168,5 +171,34 @@ impl Decode for ArgbColor {
         }
 
         DataResult::new_error("Invalid ARGB color")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use pumpkin_codecs::{Decode, json_ops::JsonOps};
+
+    use super::ArgbColor;
+
+    #[test]
+    fn argb_accepts_java_signed_int_representation() {
+        let white = ArgbColor::parse(serde_json::json!(-1), &JsonOps)
+            .into_result()
+            .expect("-1 must decode as packed ARGB");
+        let dark = ArgbColor::parse(serde_json::json!(-15_132_378), &JsonOps)
+            .into_result()
+            .expect("negative Java int must decode as packed ARGB");
+
+        assert_eq!(white.0, 0xFFFF_FFFF);
+        assert_eq!(dark.0, (-15132378i32) as u32);
+    }
+
+    #[test]
+    fn argb_rejects_integer_outside_32_bit_packed_range() {
+        assert!(
+            ArgbColor::parse(serde_json::json!(i64::from(i32::MIN) - 1), &JsonOps)
+                .into_result()
+                .is_none()
+        );
     }
 }

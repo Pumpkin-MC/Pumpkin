@@ -566,7 +566,7 @@ impl CommandExecutor for PlaceFeatureExecutor {
                     BlockPos::new(p.x as i32, p.y as i32, p.z as i32)
                 });
 
-            let world_gen = context.world().level.world_gen.clone();
+            let world_gen = context.world().level.world_gen();
             let cx = block_pos.0.x >> 4;
             let cz = block_pos.0.z >> 4;
             let mut chunk = ProtoChunk::new(cx, cz, world_gen.as_ref());

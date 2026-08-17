@@ -65,6 +65,8 @@ pub type ConsumedArgsResource = WasmResource<OwnedConsumedArgs>;
 pub type CommandNodeResource = WasmResource<NonLeafNodeBuilder>;
 pub type ItemStackResource = WasmResource<Arc<Mutex<pumpkin_data::item_stack::ItemStack>>>;
 pub type RecipeManagerResource = WasmResource<Arc<RecipeManager>>;
+pub type EnchantmentManagerResource =
+    WasmResource<Arc<crate::server::enchantment::EnchantmentManager>>;
 pub type OpManagerResource = WasmResource<Arc<Server>>;
 pub type BanManagerResource = WasmResource<Arc<Server>>;
 pub type WhitelistManagerResource = WasmResource<Arc<Server>>;
@@ -78,6 +80,28 @@ pub struct ContainerBlockEntity {
 
 pub type ContainerBlockEntityResource = WasmResource<ContainerBlockEntity>;
 
+pub type DisplayEntityResource = WasmResource<Arc<dyn EntityBase>>;
+pub type BlockDisplayEntityResource = WasmResource<Arc<dyn EntityBase>>;
+pub type ItemDisplayEntityResource = WasmResource<Arc<dyn EntityBase>>;
+pub type TextDisplayEntityResource = WasmResource<Arc<dyn EntityBase>>;
+pub type InteractionEntityResource = WasmResource<Arc<dyn EntityBase>>;
+
+#[derive(Clone, Copy)]
+pub struct ChunkBuffer {
+    pub x: i32,
+    pub z: i32,
+    pub min_y: i32,
+    pub height: u32,
+    pub proto_chunk: *mut pumpkin_world::ProtoChunk,
+}
+
+// SAFETY: `ChunkBuffer` encapsulates a raw pointer to a proto chunk that is uniquely accessed during custom world generation phases.
+unsafe impl Send for ChunkBuffer {}
+// SAFETY: `ChunkBuffer` encapsulates a raw pointer to a proto chunk that is uniquely accessed during custom world generation phases.
+unsafe impl Sync for ChunkBuffer {}
+
+pub type ChunkBufferResource = WasmResource<ChunkBuffer>;
+
 pub type OwnedConsumedArgs = HashMap<String, OwnedArg>;
 
 pub struct PluginHostState {
@@ -85,6 +109,7 @@ pub struct PluginHostState {
     pub wasi_http_ctx: WasiHttpCtx,
     pub wasi_http_hooks: PluginHttpHooks,
     pub resource_table: ResourceTable,
+    pub limits: wasmtime::StoreLimits,
     pub plugin: Option<Weak<WasmPlugin>>,
     pub server: Option<Arc<Server>>,
     pub permissions: Vec<String>,
@@ -109,6 +134,7 @@ impl PluginHostState {
             wasi_http_ctx: WasiHttpCtx::new(),
             wasi_http_hooks: PluginHttpHooks::new(),
             resource_table,
+            limits: wasmtime::StoreLimitsBuilder::new().build(),
             plugin: None,
             server: None,
             permissions: Vec::new(),
@@ -297,6 +323,16 @@ impl PluginHostState {
         Ok(wasmtime::component::Resource::new_own(resource.rep()))
     }
 
+    pub fn add_enchantment_manager<T>(
+        &mut self,
+        provider: Arc<crate::server::enchantment::EnchantmentManager>,
+    ) -> wasmtime::Result<wasmtime::component::Resource<T>> {
+        let resource = self
+            .resource_table
+            .push(EnchantmentManagerResource { provider })?;
+        Ok(wasmtime::component::Resource::new_own(resource.rep()))
+    }
+
     pub fn add_op_manager<T>(
         &mut self,
         provider: Arc<Server>,
@@ -344,6 +380,118 @@ impl PluginHostState {
         })?;
         Ok(wasmtime::component::Resource::new_own(resource.rep()))
     }
+
+    pub fn add_display_entity<T>(
+        &mut self,
+        provider: Arc<dyn EntityBase>,
+    ) -> wasmtime::Result<wasmtime::component::Resource<T>> {
+        let resource = self
+            .resource_table
+            .push(DisplayEntityResource { provider })?;
+        Ok(wasmtime::component::Resource::new_own(resource.rep()))
+    }
+
+    pub fn get_display_entity_res<T>(
+        &self,
+        resource: &wasmtime::component::Resource<T>,
+    ) -> wasmtime::Result<&DisplayEntityResource> {
+        Ok(self
+            .resource_table
+            .get(&wasmtime::component::Resource::new_borrow(resource.rep()))?)
+    }
+
+    pub fn add_block_display_entity<T>(
+        &mut self,
+        provider: Arc<dyn EntityBase>,
+    ) -> wasmtime::Result<wasmtime::component::Resource<T>> {
+        let resource = self
+            .resource_table
+            .push(BlockDisplayEntityResource { provider })?;
+        Ok(wasmtime::component::Resource::new_own(resource.rep()))
+    }
+
+    pub fn get_block_display_entity_res<T>(
+        &self,
+        resource: &wasmtime::component::Resource<T>,
+    ) -> wasmtime::Result<&BlockDisplayEntityResource> {
+        Ok(self
+            .resource_table
+            .get(&wasmtime::component::Resource::new_borrow(resource.rep()))?)
+    }
+
+    pub fn add_item_display_entity<T>(
+        &mut self,
+        provider: Arc<dyn EntityBase>,
+    ) -> wasmtime::Result<wasmtime::component::Resource<T>> {
+        let resource = self
+            .resource_table
+            .push(ItemDisplayEntityResource { provider })?;
+        Ok(wasmtime::component::Resource::new_own(resource.rep()))
+    }
+
+    pub fn get_item_display_entity_res<T>(
+        &self,
+        resource: &wasmtime::component::Resource<T>,
+    ) -> wasmtime::Result<&ItemDisplayEntityResource> {
+        Ok(self
+            .resource_table
+            .get(&wasmtime::component::Resource::new_borrow(resource.rep()))?)
+    }
+
+    pub fn add_text_display_entity<T>(
+        &mut self,
+        provider: Arc<dyn EntityBase>,
+    ) -> wasmtime::Result<wasmtime::component::Resource<T>> {
+        let resource = self
+            .resource_table
+            .push(TextDisplayEntityResource { provider })?;
+        Ok(wasmtime::component::Resource::new_own(resource.rep()))
+    }
+
+    pub fn get_text_display_entity_res<T>(
+        &self,
+        resource: &wasmtime::component::Resource<T>,
+    ) -> wasmtime::Result<&TextDisplayEntityResource> {
+        Ok(self
+            .resource_table
+            .get(&wasmtime::component::Resource::new_borrow(resource.rep()))?)
+    }
+
+    pub fn add_interaction_entity<T>(
+        &mut self,
+        provider: Arc<dyn EntityBase>,
+    ) -> wasmtime::Result<wasmtime::component::Resource<T>> {
+        let resource = self
+            .resource_table
+            .push(InteractionEntityResource { provider })?;
+        Ok(wasmtime::component::Resource::new_own(resource.rep()))
+    }
+
+    pub fn get_interaction_entity_res<T>(
+        &self,
+        resource: &wasmtime::component::Resource<T>,
+    ) -> wasmtime::Result<&InteractionEntityResource> {
+        Ok(self
+            .resource_table
+            .get(&wasmtime::component::Resource::new_borrow(resource.rep()))?)
+    }
+
+    pub fn add_chunk_buffer<T>(
+        &mut self,
+        provider: ChunkBuffer,
+    ) -> wasmtime::Result<wasmtime::component::Resource<T>> {
+        let resource = self.resource_table.push(ChunkBufferResource { provider })?;
+        Ok(wasmtime::component::Resource::new_own(resource.rep()))
+    }
+
+    pub fn get_chunk_buffer_res<T>(
+        &self,
+        resource: &wasmtime::component::Resource<T>,
+    ) -> wasmtime::Result<&ChunkBufferResource> {
+        Ok(self
+            .resource_table
+            .get(&wasmtime::component::Resource::new_borrow(resource.rep()))?)
+    }
 }
 
 pub struct PluginHttpHooks {
@@ -379,6 +527,8 @@ impl WasiHttpHooks for PluginHttpHooks {
     }
 }
 
+impl wasmtime_wasi_http::p3::WasiHttpHooks for PluginHttpHooks {}
+
 impl WasiView for PluginHostState {
     fn ctx(&mut self) -> WasiCtxView<'_> {
         WasiCtxView {
@@ -391,6 +541,16 @@ impl WasiView for PluginHostState {
 impl WasiHttpView for PluginHostState {
     fn http(&mut self) -> WasiHttpCtxView<'_> {
         WasiHttpCtxView {
+            ctx: &mut self.wasi_http_ctx,
+            table: &mut self.resource_table,
+            hooks: &mut self.wasi_http_hooks,
+        }
+    }
+}
+
+impl wasmtime_wasi_http::p3::WasiHttpView for PluginHostState {
+    fn http(&mut self) -> wasmtime_wasi_http::p3::WasiHttpCtxView<'_> {
+        wasmtime_wasi_http::p3::WasiHttpCtxView {
             ctx: &mut self.wasi_http_ctx,
             table: &mut self.resource_table,
             hooks: &mut self.wasi_http_hooks,

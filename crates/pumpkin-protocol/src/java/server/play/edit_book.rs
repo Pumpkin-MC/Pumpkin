@@ -33,3 +33,25 @@ impl<'a> ServerPacket<'a> for SEditBook<'a> {
         Ok(Self { slot, pages, title })
     }
 }
+
+impl crate::ClientPacket for SEditBook<'_> {
+    fn write_packet_data(
+        &self,
+        mut write: impl std::io::Write,
+        _version: &JavaMinecraftVersion,
+    ) -> Result<(), crate::ser::WritingError> {
+        use crate::ser::NetworkWriteExt;
+        write.write_var_int(&self.slot)?;
+        write.write_var_int(&VarInt(self.pages.len() as i32))?;
+        for page in &self.pages {
+            write.write_string_bounded(page, 1024)?;
+        }
+        if let Some(title) = self.title {
+            write.write_bool(true)?;
+            write.write_string_bounded(title, 128)?;
+        } else {
+            write.write_bool(false)?;
+        }
+        Ok(())
+    }
+}

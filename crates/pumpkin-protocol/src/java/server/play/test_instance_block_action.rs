@@ -28,6 +28,20 @@ impl<'a> ServerPacket<'a> for STestInstanceBlockAction<'a> {
     }
 }
 
+impl crate::ClientPacket for STestInstanceBlockAction<'_> {
+    fn write_packet_data(
+        &self,
+        mut write: impl std::io::Write,
+        _version: &JavaMinecraftVersion,
+    ) -> Result<(), crate::ser::WritingError> {
+        use crate::ser::NetworkWriteExt;
+        write.write_block_pos(&self.pos)?;
+        self.action.write(&mut write)?;
+        self.data.write(&mut write)?;
+        Ok(())
+    }
+}
+
 #[derive(Clone, Copy, Debug)]
 pub enum TestInstanceBlockAction {
     Init,
@@ -54,6 +68,22 @@ impl TestInstanceBlockAction {
             )),
         }
     }
+
+    fn write(
+        self,
+        write: &mut impl crate::ser::NetworkWriteExt,
+    ) -> Result<(), crate::ser::WritingError> {
+        let val = match self {
+            Self::Init => 0,
+            Self::Query => 1,
+            Self::Set => 2,
+            Self::Reset => 3,
+            Self::Save => 4,
+            Self::Export => 5,
+            Self::Run => 6,
+        };
+        write.write_var_int(&VarInt(val))
+    }
 }
 
 pub struct VarIntVector3 {
@@ -69,6 +99,16 @@ impl VarIntVector3 {
             y: bytebuf.get_var_int()?,
             z: bytebuf.get_var_int()?,
         })
+    }
+
+    fn write(
+        &self,
+        write: &mut impl crate::ser::NetworkWriteExt,
+    ) -> Result<(), crate::ser::WritingError> {
+        write.write_var_int(&self.x)?;
+        write.write_var_int(&self.y)?;
+        write.write_var_int(&self.z)?;
+        Ok(())
     }
 }
 
@@ -115,6 +155,31 @@ impl<'a> TestInstanceBlockData<'a> {
             status,
             error_message,
         })
+    }
+
+    fn write(
+        &self,
+        write: &mut impl crate::ser::NetworkWriteExt,
+    ) -> Result<(), crate::ser::WritingError> {
+        write.write_option(&self.test, |w, t| w.write_string(t))?;
+        self.size.write(write)?;
+        let rot_val = match self.rotation {
+            pumpkin_data::block_rotation::Rotation::None => 0,
+            pumpkin_data::block_rotation::Rotation::Clockwise90 => 1,
+            pumpkin_data::block_rotation::Rotation::Rotate180 => 2,
+            pumpkin_data::block_rotation::Rotation::CounterClockwise90 => 3,
+        };
+        write.write_var_int(&VarInt(rot_val))?;
+        write.write_bool(self.ignore_entities)?;
+        let status_val = match self.status {
+            TestInstanceBlockStatus::Cleared => 0,
+            TestInstanceBlockStatus::Running => 1,
+            TestInstanceBlockStatus::Success => 2,
+            TestInstanceBlockStatus::Failed => 3,
+        };
+        write.write_var_int(&VarInt(status_val))?;
+        write.write_option(&self.error_message, |w, msg| w.write_string(msg))?;
+        Ok(())
     }
 }
 

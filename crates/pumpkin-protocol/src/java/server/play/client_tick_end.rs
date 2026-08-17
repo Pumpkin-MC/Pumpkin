@@ -14,3 +14,13 @@ impl<'a> ServerPacket<'a> for SClientTickEnd {
         Ok(Self)
     }
 }
+
+impl crate::ClientPacket for SClientTickEnd {
+    fn write_packet_data(
+        &self,
+        _write: impl std::io::Write,
+        _version: &JavaMinecraftVersion,
+    ) -> Result<(), crate::ser::WritingError> {
+        Ok(())
+    }
+}

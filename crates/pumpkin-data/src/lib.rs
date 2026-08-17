@@ -180,7 +180,7 @@ mod spawn_egg;
 #[cfg(feature = "enchantment")]
 #[rustfmt::skip]
 #[path = "generated/enchantment.rs"]
-mod enchantment;
+pub mod enchantment;
 
 #[cfg(feature = "enchantment")]
 pub use enchantment::*;

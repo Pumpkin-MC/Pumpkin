@@ -18,3 +18,15 @@ impl<'a> ServerPacket<'a> for SSetPlayerGround {
         })
     }
 }
+
+impl crate::ClientPacket for SSetPlayerGround {
+    fn write_packet_data(
+        &self,
+        mut write: impl std::io::Write,
+        _version: &JavaMinecraftVersion,
+    ) -> Result<(), crate::ser::WritingError> {
+        use crate::ser::NetworkWriteExt;
+        write.write_bool(self.on_ground)?;
+        Ok(())
+    }
+}

@@ -415,7 +415,8 @@ impl ItemStack {
         }
     }
 
-    fn custom_data_compound(&self) -> Option<&NbtCompound> {
+    #[must_use]
+    pub fn custom_data_compound(&self) -> Option<&NbtCompound> {
         self.get_data_component::<CustomDataImpl>()
             .map(|custom_data| &custom_data.data)
     }

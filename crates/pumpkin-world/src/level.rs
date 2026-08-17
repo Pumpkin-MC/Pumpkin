@@ -247,6 +247,11 @@ impl Level {
         level_ref
     }
 
+    #[must_use]
+    pub fn world_gen(&self) -> Arc<dyn ChunkGenerator> {
+        self.world_gen.clone()
+    }
+
     pub fn spawn_entity_generation(self: &Arc<Self>, pos: Vector2<i32>) {
         let level = self.clone();
         if let Some(pool) = &self.gen_pool {

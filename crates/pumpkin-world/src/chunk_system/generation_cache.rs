@@ -396,6 +396,7 @@ impl Cache {
             chunks: Vec::with_capacity((size * size) as usize),
         }
     }
+    #[allow(clippy::too_many_lines)]
     pub fn advance(
         &mut self,
         stage: StagedChunkEnum,

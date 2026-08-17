@@ -32,3 +32,23 @@ impl<'a> ServerPacket<'a> for SSeenAdvancement {
         }
     }
 }
+
+impl crate::ClientPacket for SSeenAdvancement {
+    fn write_packet_data(
+        &self,
+        mut write: impl std::io::Write,
+        _version: &JavaMinecraftVersion,
+    ) -> Result<(), crate::ser::WritingError> {
+        use crate::{VarInt, ser::NetworkWriteExt};
+        match self {
+            Self::OpenTab(id) => {
+                write.write_var_int(&VarInt(0))?;
+                write.write_string(&id.to_string())?;
+            }
+            Self::CloseTab => {
+                write.write_var_int(&VarInt(1))?;
+            }
+        }
+        Ok(())
+    }
+}

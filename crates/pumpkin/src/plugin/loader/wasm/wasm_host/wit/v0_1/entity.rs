@@ -14,7 +14,8 @@ use crate::plugin::loader::wasm::wasm_host::{
             Attribute, AttributeModifier as WitAttributeModifier,
             ModifierOperation as WitModifierOperation,
         },
-        common::{EntityPose, Position},
+        common::{EntityPose, NbtTree as WitNbtTree, Position},
+        damage_types::DamageType as WitDamageType,
         entity::Host,
         entity_types,
         item_stack::ItemStack as WitHostItemStack,
@@ -160,6 +161,18 @@ pub const fn from_wit_equipment_slot(
         WitEquipmentSlot::Body => EquipmentSlot::BODY,
         WitEquipmentSlot::Saddle => EquipmentSlot::SADDLE,
     }
+}
+
+#[must_use]
+pub const fn to_wit_damage_type(damage_type: &pumpkin_data::damage::DamageType) -> WitDamageType {
+    // SAFETY: WIT enum is generated in the same order as the internal enum / id
+    unsafe { std::mem::transmute(damage_type.id) }
+}
+
+#[must_use]
+pub fn from_wit_damage_type(wit: WitDamageType) -> pumpkin_data::damage::DamageType {
+    pumpkin_data::damage::DamageType::from_id(wit as u8)
+        .unwrap_or(pumpkin_data::damage::DamageType::GENERIC)
 }
 
 impl HostEntity for PluginHostState {
@@ -533,10 +546,15 @@ impl HostEntity for PluginHostState {
             .map_or(0.0, crate::entity::living::LivingEntity::get_max_health))
     }
 
-    async fn damage(&mut self, entity: Resource<Entity>, amount: f32) -> wasmtime::Result<()> {
+    async fn damage(
+        &mut self,
+        entity: Resource<Entity>,
+        amount: f32,
+        damage_type: WitDamageType,
+    ) -> wasmtime::Result<()> {
         let entity = entity_from_resource(self, &entity)?;
         entity
-            .damage(&*entity, amount, pumpkin_data::damage::DamageType::GENERIC)
+            .damage(&*entity, amount, from_wit_damage_type(damage_type))
             .await;
         Ok(())
     }
@@ -1296,6 +1314,55 @@ impl HostEntity for PluginHostState {
         }))
     }
 
+    async fn set_custom_data(
+        &mut self,
+        this: Resource<Entity>,
+        namespace: String,
+        key: String,
+        value: WitNbtTree,
+    ) -> wasmtime::Result<()> {
+        let entity = entity_from_resource(self, &this)?;
+        let base_entity = entity.get_entity();
+        let tag = super::common::from_wit_nbt_tree(&value).map_err(wasmtime::Error::msg)?;
+        base_entity.set_custom_data(&namespace, &key, tag).await;
+        Ok(())
+    }
+
+    async fn get_custom_data(
+        &mut self,
+        this: Resource<Entity>,
+        namespace: String,
+        key: String,
+    ) -> wasmtime::Result<Option<WitNbtTree>> {
+        let entity = entity_from_resource(self, &this)?;
+        let base_entity = entity.get_entity();
+        let tag = base_entity.get_custom_data(&namespace, &key).await;
+        Ok(tag.map(super::common::to_wit_nbt_tree))
+    }
+
+    async fn remove_custom_data(
+        &mut self,
+        this: Resource<Entity>,
+        namespace: String,
+        key: String,
+    ) -> wasmtime::Result<()> {
+        let entity = entity_from_resource(self, &this)?;
+        let base_entity = entity.get_entity();
+        base_entity.remove_custom_data(&namespace, &key).await;
+        Ok(())
+    }
+
+    async fn has_custom_data(
+        &mut self,
+        this: Resource<Entity>,
+        namespace: String,
+        key: String,
+    ) -> wasmtime::Result<bool> {
+        let entity = entity_from_resource(self, &this)?;
+        let base_entity = entity.get_entity();
+        Ok(base_entity.has_custom_data(&namespace, &key).await)
+    }
+
     async fn drop(&mut self, rep: Resource<Entity>) -> wasmtime::Result<()> {
         let _ = self
             .resource_table
@@ -1328,9 +1395,17 @@ impl Goal for CustomWasmGoal {
                             return false;
                         };
                         let Ok(entity_res) = store.data_mut().add_entity(entity_arc) else {
+                            let _ = store
+                                .data_mut()
+                                .resource_table
+                                .delete::<crate::plugin::loader::wasm::wasm_host::state::ServerResource>(
+                                    wasmtime::component::Resource::new_own(server_res.rep()),
+                                );
                             return false;
                         };
-                        plugin
+                        let server_rep = server_res.rep();
+                        let entity_rep = entity_res.rep();
+                        let result = plugin
                             .call_handle_ai_goal_can_start(
                                 &mut *store,
                                 self.goal_id,
@@ -1338,7 +1413,20 @@ impl Goal for CustomWasmGoal {
                                 entity_res,
                             )
                             .await
-                            .unwrap_or(false)
+                            .unwrap_or(false);
+                        let _ = store
+                            .data_mut()
+                            .resource_table
+                            .delete::<crate::plugin::loader::wasm::wasm_host::state::ServerResource>(
+                                wasmtime::component::Resource::new_own(server_rep),
+                            );
+                        let _ = store
+                            .data_mut()
+                            .resource_table
+                            .delete::<crate::plugin::loader::wasm::wasm_host::state::EntityResource>(
+                                wasmtime::component::Resource::new_own(entity_rep),
+                            );
+                        result
                     }
                 }
             } else {
@@ -1360,9 +1448,17 @@ impl Goal for CustomWasmGoal {
                             return false;
                         };
                         let Ok(entity_res) = store.data_mut().add_entity(entity_arc) else {
+                            let _ = store
+                                .data_mut()
+                                .resource_table
+                                .delete::<crate::plugin::loader::wasm::wasm_host::state::ServerResource>(
+                                    wasmtime::component::Resource::new_own(server_res.rep()),
+                                );
                             return false;
                         };
-                        plugin
+                        let server_rep = server_res.rep();
+                        let entity_rep = entity_res.rep();
+                        let result = plugin
                             .call_handle_ai_goal_should_continue(
                                 &mut *store,
                                 self.goal_id,
@@ -1370,7 +1466,20 @@ impl Goal for CustomWasmGoal {
                                 entity_res,
                             )
                             .await
-                            .unwrap_or(false)
+                            .unwrap_or(false);
+                        let _ = store
+                            .data_mut()
+                            .resource_table
+                            .delete::<crate::plugin::loader::wasm::wasm_host::state::ServerResource>(
+                                wasmtime::component::Resource::new_own(server_rep),
+                            );
+                        let _ = store
+                            .data_mut()
+                            .resource_table
+                            .delete::<crate::plugin::loader::wasm::wasm_host::state::EntityResource>(
+                                wasmtime::component::Resource::new_own(entity_rep),
+                            );
+                        result
                     }
                 }
             } else {
@@ -1392,8 +1501,16 @@ impl Goal for CustomWasmGoal {
                             return;
                         };
                         let Ok(entity_res) = store.data_mut().add_entity(entity_arc) else {
+                            let _ = store
+                                .data_mut()
+                                .resource_table
+                                .delete::<crate::plugin::loader::wasm::wasm_host::state::ServerResource>(
+                                    wasmtime::component::Resource::new_own(server_res.rep()),
+                                );
                             return;
                         };
+                        let server_rep = server_res.rep();
+                        let entity_rep = entity_res.rep();
                         let _ = plugin
                             .call_handle_ai_goal_start(
                                 &mut *store,
@@ -1402,6 +1519,18 @@ impl Goal for CustomWasmGoal {
                                 entity_res,
                             )
                             .await;
+                        let _ = store
+                            .data_mut()
+                            .resource_table
+                            .delete::<crate::plugin::loader::wasm::wasm_host::state::ServerResource>(
+                                wasmtime::component::Resource::new_own(server_rep),
+                            );
+                        let _ = store
+                            .data_mut()
+                            .resource_table
+                            .delete::<crate::plugin::loader::wasm::wasm_host::state::EntityResource>(
+                                wasmtime::component::Resource::new_own(entity_rep),
+                            );
                     }
                 }
             }
@@ -1421,8 +1550,16 @@ impl Goal for CustomWasmGoal {
                             return;
                         };
                         let Ok(entity_res) = store.data_mut().add_entity(entity_arc) else {
+                            let _ = store
+                                .data_mut()
+                                .resource_table
+                                .delete::<crate::plugin::loader::wasm::wasm_host::state::ServerResource>(
+                                    wasmtime::component::Resource::new_own(server_res.rep()),
+                                );
                             return;
                         };
+                        let server_rep = server_res.rep();
+                        let entity_rep = entity_res.rep();
                         let _ = plugin
                             .call_handle_ai_goal_tick(
                                 &mut *store,
@@ -1431,6 +1568,18 @@ impl Goal for CustomWasmGoal {
                                 entity_res,
                             )
                             .await;
+                        let _ = store
+                            .data_mut()
+                            .resource_table
+                            .delete::<crate::plugin::loader::wasm::wasm_host::state::ServerResource>(
+                                wasmtime::component::Resource::new_own(server_rep),
+                            );
+                        let _ = store
+                            .data_mut()
+                            .resource_table
+                            .delete::<crate::plugin::loader::wasm::wasm_host::state::EntityResource>(
+                                wasmtime::component::Resource::new_own(entity_rep),
+                            );
                     }
                 }
             }
@@ -1450,8 +1599,16 @@ impl Goal for CustomWasmGoal {
                             return;
                         };
                         let Ok(entity_res) = store.data_mut().add_entity(entity_arc) else {
+                            let _ = store
+                                .data_mut()
+                                .resource_table
+                                .delete::<crate::plugin::loader::wasm::wasm_host::state::ServerResource>(
+                                    wasmtime::component::Resource::new_own(server_res.rep()),
+                                );
                             return;
                         };
+                        let server_rep = server_res.rep();
+                        let entity_rep = entity_res.rep();
                         let _ = plugin
                             .call_handle_ai_goal_stop(
                                 &mut *store,
@@ -1460,6 +1617,18 @@ impl Goal for CustomWasmGoal {
                                 entity_res,
                             )
                             .await;
+                        let _ = store
+                            .data_mut()
+                            .resource_table
+                            .delete::<crate::plugin::loader::wasm::wasm_host::state::ServerResource>(
+                                wasmtime::component::Resource::new_own(server_rep),
+                            );
+                        let _ = store
+                            .data_mut()
+                            .resource_table
+                            .delete::<crate::plugin::loader::wasm::wasm_host::state::EntityResource>(
+                                wasmtime::component::Resource::new_own(entity_rep),
+                            );
                     }
                 }
             }

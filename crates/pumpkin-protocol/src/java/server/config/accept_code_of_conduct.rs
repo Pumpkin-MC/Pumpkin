@@ -15,3 +15,13 @@ impl<'a> ServerPacket<'a> for SAcceptCodeOfConduct {
         Ok(Self)
     }
 }
+
+impl crate::ClientPacket for SAcceptCodeOfConduct {
+    fn write_packet_data(
+        &self,
+        _write: impl std::io::Write,
+        _version: &JavaMinecraftVersion,
+    ) -> Result<(), crate::ser::WritingError> {
+        Ok(())
+    }
+}
