@@ -16,6 +16,8 @@ pub mod registry;
 pub mod reload;
 pub mod resource;
 pub mod tag;
+pub mod timeline;
+pub mod world_clock;
 
 pub use pumpkin_util::identifier::Identifier;
 
@@ -113,9 +115,13 @@ impl DataPackManager {
         let item_modifiers = predicate::load_item_modifiers(&manager)?;
         let advancements = advancement::load_advancements(&manager)?;
         let damage_types = damage_type::load_damage_types(&manager)?;
+        let world_clocks = world_clock::load_world_clocks(&manager)?;
+        let timelines = timeline::load_timelines(&manager)?;
         let dimension_types = dimension_type::load_dimension_types(&manager)?;
 
         self.registries.reload_damage_types(damage_types).await?;
+        self.registries.reload_world_clocks(world_clocks).await?;
+        self.registries.reload_timelines(timelines).await?;
         self.registries
             .reload_dimension_types(dimension_types)
             .await?;

@@ -248,6 +248,10 @@ fn load_registry_data(entries: &mut Vec<(String, String, Vec<u8>)>) {
         load_registry_map(Path::new(source), datapack_dir, entries);
     }
 
+    let synced_registries = Path::new("../../assets/registry/26_2_synced_registries.json");
+    load_synced_registry_map(synced_registries, "timeline", "timeline", entries);
+    load_synced_registry_map(synced_registries, "world_clock", "world_clock", entries);
+
     const WORLD_PRESETS: &[(&str, &str)] = &[
         ("default", "normal"),
         ("super_flat", "flat"),
@@ -267,6 +271,53 @@ fn load_registry_data(entries: &mut Vec<(String, String, Vec<u8>)>) {
             "minecraft".to_string(),
             format!("worldgen/world_preset/{registry_name}.json"),
             data,
+        ));
+    }
+}
+
+fn load_synced_registry_map(
+    source: &Path,
+    registry_name: &str,
+    datapack_dir: &str,
+    entries: &mut Vec<(String, String, Vec<u8>)>,
+) {
+    let Ok(data) = fs::read_to_string(source) else {
+        eprintln!(
+            "Warning: Could not read synced registry source {}",
+            source.display()
+        );
+        return;
+    };
+    let Ok(root): Result<BTreeMap<String, serde_json::Value>, _> = serde_json::from_str(&data)
+    else {
+        eprintln!(
+            "Warning: Could not parse synced registry source {}",
+            source.display()
+        );
+        return;
+    };
+    let Some(registry) = root
+        .get(registry_name)
+        .and_then(serde_json::Value::as_object)
+    else {
+        eprintln!(
+            "Warning: Synced registry source {} has no {registry_name} registry",
+            source.display()
+        );
+        return;
+    };
+
+    for (identifier, value) in registry {
+        let (namespace, path) = identifier
+            .split_once(':')
+            .map_or(("minecraft", identifier.as_str()), |(namespace, path)| {
+                (namespace, path)
+            });
+        let bytes = serde_json::to_vec(value).unwrap_or_default();
+        entries.push((
+            namespace.to_string(),
+            format!("{datapack_dir}/{path}.json"),
+            bytes,
         ));
     }
 }

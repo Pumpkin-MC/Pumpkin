@@ -138,7 +138,7 @@ This table tracks the Java Edition registries and Pumpkin's migration to `pumpki
 | `TEMPLATE_POOL` | `minecraft:worldgen/template_pool` | Yes | - [ ] |
 | `TEST_ENVIRONMENT` | `minecraft:test_environment` | Yes | - [ ] |
 | `TEST_INSTANCE` | `minecraft:test_instance` | Yes | - [ ] |
-| `TIMELINE` | `minecraft:timeline` | Yes | - [ ] |
+| `TIMELINE` | `minecraft:timeline` | Yes | - [x] |
 | `TRADE_SET` | `minecraft:trade_set` | Yes | - [ ] |
 | `TRIAL_SPAWNER_CONFIG` | `minecraft:trial_spawner` | Yes | - [ ] |
 | `TRIGGER_TYPE` | `minecraft:trigger_type` | No | - [ ] |
@@ -147,7 +147,7 @@ This table tracks the Java Edition registries and Pumpkin's migration to `pumpki
 | `VILLAGER_TRADE` | `minecraft:villager_trade` | Yes | - [ ] |
 | `WOLF_VARIANT` | `minecraft:wolf_variant` | Yes | - [ ] |
 | `WOLF_SOUND_VARIANT` | `minecraft:wolf_sound_variant` | Yes | - [ ] |
-| `WORLD_CLOCK` | `minecraft:world_clock` | Yes | - [ ] |
+| `WORLD_CLOCK` | `minecraft:world_clock` | Yes | - [x] |
 | `WORLD_PRESET` | `minecraft:worldgen/world_preset` | Yes | - [ ] |
 | `DIMENSION` | `minecraft:dimension` | Yes | - [ ] |
 | `LEVEL_STEM` | `minecraft:dimension` | Yes | - [ ] |

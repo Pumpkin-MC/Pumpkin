@@ -14,14 +14,14 @@ use crate::attributes::{
 };
 
 /// Applies a modifier argument to an environment attribute value.
-pub trait AttributeModifier<T: Encode + Decode + 'static, A: Encode + Decode + 'static>:
+pub trait TypedAttributeModifier<T: Encode + Decode + 'static, A: Encode + Decode + 'static>:
     Send + Sync + 'static
 {
     fn modify(&self, target: T, argument: A) -> T;
     fn lerp(&self, attribute: &EnvAttribute<T>) -> &'static dyn Lerp<A>;
 }
 
-/// Type-erased storage for an [`AttributeModifier<T, A>`].
+/// Type-erased storage for a [`TypedAttributeModifier<T, A>`].
 ///
 /// Only the argument type is erased. The environment attribute value type `T`
 /// remains statically known by [`AttributeType`](crate::attributes::AttributeType).
@@ -32,6 +32,7 @@ pub struct ErasedAttributeModifier<T: Encode + Decode + 'static> {
     validate_argument: fn(NbtTag) -> DataResult<()>,
     encode_argument: fn(&dyn Any) -> DataResult<NbtTag>,
     apply: fn(&dyn Any, T, NbtTag) -> DataResult<T>,
+    interpolate: fn(&dyn Any, &EnvAttribute<T>, f32, NbtTag, NbtTag) -> DataResult<NbtTag>,
     marker: PhantomData<fn(T) -> T>,
 }
 
@@ -44,6 +45,7 @@ impl<T: Encode + Decode + 'static> Clone for ErasedAttributeModifier<T> {
             validate_argument: self.validate_argument,
             encode_argument: self.encode_argument,
             apply: self.apply,
+            interpolate: self.interpolate,
             marker: PhantomData,
         }
     }
@@ -51,7 +53,7 @@ impl<T: Encode + Decode + 'static> Clone for ErasedAttributeModifier<T> {
 
 impl<T: Encode + Decode + 'static> ErasedAttributeModifier<T> {
     #[must_use]
-    pub fn new<A: Encode + Decode + 'static, M: AttributeModifier<T, A>>(
+    pub fn new<A: Encode + Decode + 'static, M: TypedAttributeModifier<T, A>>(
         operation: AttributeOperation,
         modifier: M,
     ) -> Self {
@@ -62,6 +64,7 @@ impl<T: Encode + Decode + 'static> ErasedAttributeModifier<T> {
             validate_argument: validate_argument::<A>,
             encode_argument: encode_argument::<A>,
             apply: apply::<T, A, M>,
+            interpolate: interpolate::<T, A, M>,
             marker: PhantomData,
         }
     }
@@ -77,7 +80,9 @@ impl<T: Encode + Decode + 'static> ErasedAttributeModifier<T> {
     }
 
     #[must_use]
-    pub fn downcast<A: Encode + Decode + 'static, M: AttributeModifier<T, A>>(&self) -> Option<&M> {
+    pub fn downcast<A: Encode + Decode + 'static, M: TypedAttributeModifier<T, A>>(
+        &self,
+    ) -> Option<&M> {
         (self.argument_type_id == TypeId::of::<A>())
             .then(|| self.modifier.downcast_ref::<M>())
             .flatten()
@@ -94,6 +99,16 @@ impl<T: Encode + Decode + 'static> ErasedAttributeModifier<T> {
     pub fn apply(&self, target: T, input: NbtTag) -> DataResult<T> {
         (self.apply)(self.modifier.as_ref(), target, input)
     }
+
+    pub fn interpolate(
+        &self,
+        attribute: &EnvAttribute<T>,
+        t: f32,
+        from: NbtTag,
+        to: NbtTag,
+    ) -> DataResult<NbtTag> {
+        (self.interpolate)(self.modifier.as_ref(), attribute, t, from, to)
+    }
 }
 
 fn validate_argument<A: Decode + 'static>(input: NbtTag) -> DataResult<()> {
@@ -107,7 +122,11 @@ fn encode_argument<A: Encode + 'static>(argument: &dyn Any) -> DataResult<NbtTag
     argument.encode_start(&NbtOps)
 }
 
-fn apply<T: Encode + Decode + 'static, A: Encode + Decode + 'static, M: AttributeModifier<T, A>>(
+fn apply<
+    T: Encode + Decode + 'static,
+    A: Encode + Decode + 'static,
+    M: TypedAttributeModifier<T, A>,
+>(
     modifier: &dyn Any,
     target: T,
     input: NbtTag,
@@ -116,6 +135,87 @@ fn apply<T: Encode + Decode + 'static, A: Encode + Decode + 'static, M: Attribut
         return DataResult::new_error("attribute modifier type mismatch");
     };
     A::parse(input, &NbtOps).map(|argument| modifier.modify(target, argument))
+}
+
+fn interpolate<
+    T: Encode + Decode + 'static,
+    A: Encode + Decode + 'static,
+    M: TypedAttributeModifier<T, A>,
+>(
+    modifier: &dyn Any,
+    attribute: &EnvAttribute<T>,
+    t: f32,
+    from: NbtTag,
+    to: NbtTag,
+) -> DataResult<NbtTag> {
+    let Some(modifier) = modifier.downcast_ref::<M>() else {
+        return DataResult::new_error("attribute modifier type mismatch");
+    };
+    A::parse(from, &NbtOps)
+        .apply_2(
+            |from, to| modifier.lerp(attribute).lerp(t, from, to),
+            A::parse(to, &NbtOps),
+        )
+        .flat_map(|value| value.encode_start(&NbtOps))
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct AttributeModifier {
+    operation: AttributeOperation,
+}
+
+impl AttributeModifier {
+    #[must_use]
+    pub const fn new(operation: AttributeOperation) -> Self {
+        Self { operation }
+    }
+
+    #[must_use]
+    pub const fn operation(self) -> AttributeOperation {
+        self.operation
+    }
+
+    #[must_use]
+    pub const fn is_override(self) -> bool {
+        matches!(self.operation, AttributeOperation::Override)
+    }
+
+    pub fn validate_argument(
+        self,
+        attribute: &crate::attributes::registry::EnvironmentAttributeEntry,
+        argument: NbtTag,
+    ) -> DataResult<()> {
+        attribute.validate_modifier_argument(self.operation, argument)
+    }
+
+    pub fn interpolate_argument(
+        self,
+        attribute: &crate::attributes::registry::EnvironmentAttributeEntry,
+        t: f32,
+        from: NbtTag,
+        to: NbtTag,
+    ) -> DataResult<NbtTag> {
+        attribute.interpolate_modifier_argument(self.operation, t, from, to)
+    }
+}
+
+impl Default for AttributeModifier {
+    fn default() -> Self {
+        Self::new(AttributeOperation::Override)
+    }
+}
+
+impl Encode for AttributeModifier {
+    fn encode<O: DynamicOps>(&self, ops: &'static O, prefix: O::Value) -> DataResult<O::Value> {
+        self.operation.encode(ops, prefix)
+    }
+}
+
+impl Decode for AttributeModifier {
+    fn decode<O: DynamicOps>(input: O::Value, ops: &'static O) -> DataResult<(Self, O::Value)> {
+        AttributeOperation::decode(input, ops)
+            .map(|(operation, remaining)| (Self::new(operation), remaining))
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -207,7 +307,7 @@ impl Decode for AttributeOperation {
 #[derive(Debug, Clone, Copy, Default)]
 pub struct Override;
 
-impl<T: Encode + Decode + 'static> AttributeModifier<T, T> for Override {
+impl<T: Encode + Decode + 'static> TypedAttributeModifier<T, T> for Override {
     fn modify(&self, _target: T, argument: T) -> T {
         argument
     }
@@ -222,7 +322,7 @@ macro_rules! same_type_modifier {
         #[derive(Debug, Clone, Copy, Default)]
         pub struct $name;
 
-        impl AttributeModifier<$ty, $ty> for $name {
+        impl TypedAttributeModifier<$ty, $ty> for $name {
             fn modify(&self, target: $ty, argument: $ty) -> $ty {
                 ($body)(target, argument)
             }
@@ -320,7 +420,7 @@ static FLOAT_WITH_ALPHA_LERP: crate::attributes::lerp::FnLerp<FloatWithAlpha> =
 #[derive(Debug, Clone, Copy, Default)]
 pub struct AlphaBlend;
 
-impl AttributeModifier<f32, FloatWithAlpha> for AlphaBlend {
+impl TypedAttributeModifier<f32, FloatWithAlpha> for AlphaBlend {
     fn modify(&self, target: f32, argument: FloatWithAlpha) -> f32 {
         target + (argument.value - target) * argument.alpha
     }
@@ -338,7 +438,7 @@ fn multiply_channel(left: u8, right: u8) -> u8 {
     ((u16::from(left) * u16::from(right) + 127) / 255) as u8
 }
 
-impl AttributeModifier<RgbColor, RgbColor> for Add {
+impl TypedAttributeModifier<RgbColor, RgbColor> for Add {
     fn modify(&self, target: RgbColor, argument: RgbColor) -> RgbColor {
         RgbColor::from_rgb(
             clamp_channel(i16::from(target.r()) + i16::from(argument.r())),
@@ -352,7 +452,7 @@ impl AttributeModifier<RgbColor, RgbColor> for Add {
     }
 }
 
-impl AttributeModifier<RgbColor, RgbColor> for Subtract {
+impl TypedAttributeModifier<RgbColor, RgbColor> for Subtract {
     fn modify(&self, target: RgbColor, argument: RgbColor) -> RgbColor {
         RgbColor::from_rgb(
             clamp_channel(i16::from(target.r()) - i16::from(argument.r())),
@@ -366,7 +466,7 @@ impl AttributeModifier<RgbColor, RgbColor> for Subtract {
     }
 }
 
-impl AttributeModifier<RgbColor, RgbColor> for Multiply {
+impl TypedAttributeModifier<RgbColor, RgbColor> for Multiply {
     fn modify(&self, target: RgbColor, argument: RgbColor) -> RgbColor {
         RgbColor::from_rgb(
             multiply_channel(target.r(), argument.r()),
@@ -392,7 +492,7 @@ fn alpha_blend_rgb(target: RgbColor, argument: ArgbColor) -> RgbColor {
     )
 }
 
-impl AttributeModifier<RgbColor, ArgbColor> for AlphaBlend {
+impl TypedAttributeModifier<RgbColor, ArgbColor> for AlphaBlend {
     fn modify(&self, target: RgbColor, argument: ArgbColor) -> RgbColor {
         alpha_blend_rgb(target, argument)
     }
@@ -402,7 +502,7 @@ impl AttributeModifier<RgbColor, ArgbColor> for AlphaBlend {
     }
 }
 
-impl AttributeModifier<ArgbColor, RgbColor> for Add {
+impl TypedAttributeModifier<ArgbColor, RgbColor> for Add {
     fn modify(&self, target: ArgbColor, argument: RgbColor) -> ArgbColor {
         ArgbColor::from_argb(
             target.a(),
@@ -417,7 +517,7 @@ impl AttributeModifier<ArgbColor, RgbColor> for Add {
     }
 }
 
-impl AttributeModifier<ArgbColor, RgbColor> for Subtract {
+impl TypedAttributeModifier<ArgbColor, RgbColor> for Subtract {
     fn modify(&self, target: ArgbColor, argument: RgbColor) -> ArgbColor {
         ArgbColor::from_argb(
             target.a(),
@@ -489,7 +589,7 @@ fn lerp_argb_multiply_argument(
 static ARGB_MULTIPLY_ARGUMENT_LERP: crate::attributes::lerp::FnLerp<ArgbMultiplyArgument> =
     crate::attributes::lerp::FnLerp::new(lerp_argb_multiply_argument);
 
-impl AttributeModifier<ArgbColor, ArgbMultiplyArgument> for Multiply {
+impl TypedAttributeModifier<ArgbColor, ArgbMultiplyArgument> for Multiply {
     fn modify(&self, target: ArgbColor, argument: ArgbMultiplyArgument) -> ArgbColor {
         match argument {
             ArgbMultiplyArgument::Rgb(argument) => ArgbColor::from_argb(
@@ -515,7 +615,7 @@ impl AttributeModifier<ArgbColor, ArgbMultiplyArgument> for Multiply {
     }
 }
 
-impl AttributeModifier<ArgbColor, ArgbColor> for AlphaBlend {
+impl TypedAttributeModifier<ArgbColor, ArgbColor> for AlphaBlend {
     fn modify(&self, target: ArgbColor, argument: ArgbColor) -> ArgbColor {
         let alpha = f32::from(argument.a()) / 255.0;
         let blend = |from: u8, to: u8| -> u8 {
@@ -597,7 +697,7 @@ fn gray_rgb(color: RgbColor, argument: GrayBlend) -> RgbColor {
     RgbColor::from_rgb(blend(color.r()), blend(color.g()), blend(color.b()))
 }
 
-impl AttributeModifier<RgbColor, GrayBlend> for BlendToGray {
+impl TypedAttributeModifier<RgbColor, GrayBlend> for BlendToGray {
     fn modify(&self, target: RgbColor, argument: GrayBlend) -> RgbColor {
         gray_rgb(target, argument)
     }
@@ -607,7 +707,7 @@ impl AttributeModifier<RgbColor, GrayBlend> for BlendToGray {
     }
 }
 
-impl AttributeModifier<ArgbColor, GrayBlend> for BlendToGray {
+impl TypedAttributeModifier<ArgbColor, GrayBlend> for BlendToGray {
     fn modify(&self, target: ArgbColor, argument: GrayBlend) -> ArgbColor {
         let rgb = gray_rgb(target.rgb(), argument);
         ArgbColor::from_argb(target.a(), rgb.r(), rgb.g(), rgb.b())

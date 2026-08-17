@@ -1,8 +1,14 @@
-use pumpkin_registry::RegistryResolvable;
+mod easing;
+mod time_marker;
+mod timeline;
+mod track;
+mod world_clock;
 
-pub struct WorldClock;
+#[cfg(test)]
+mod tests;
 
-pub struct Timeline {
-    clock: RegistryResolvable<WorldClock>,
-    period: Option<u32>,
-}
+pub use easing::Easing;
+pub use time_marker::TimeMarker;
+pub use timeline::Timeline;
+pub use track::{AttributeTrack, KeyFrame};
+pub use world_clock::WorldClock;
