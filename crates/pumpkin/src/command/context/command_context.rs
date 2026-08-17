@@ -218,6 +218,9 @@ impl<'a> ContextChain<'a> {
         let mut modifiers = Vec::new();
         let mut current = root;
 
+        if !matches!(root.modifier, RedirectModifier::KeepSource) {
+            modifiers.push(Arc::new(current.clone()));
+        }
         loop {
             if let Some(child) = current.get_child() {
                 modifiers.push(child.clone());
