@@ -200,7 +200,7 @@ impl CommandExecutor for PlaceJigsawExecutor {
             let (_piece_count, placer) = {
                 let seed = hash_block_pos(block_pos.0.x, block_pos.0.y, block_pos.0.z) as u64;
                 let random = RandomGenerator::Legacy(LegacyRand::from_seed(seed));
-                let world_gen = &context.world().level.world_gen;
+                let world_gen = context.world().level.world_gen();
                 let settings = GenerationSettings::from_dimension(world_gen.dimension());
                 let mut structure_context = StructureGeneratorContext {
                     seed: seed as i64,
@@ -299,7 +299,7 @@ impl CommandExecutor for PlaceStructureExecutor {
             let seed = hash_block_pos(block_pos.0.x, block_pos.0.y, block_pos.0.z) as u64;
 
             let (_piece_count, placer) = {
-                let world_gen = context.world().level.world_gen.clone();
+                let world_gen = context.world().level.world_gen();
                 let settings = GenerationSettings::from_dimension(world_gen.dimension());
 
                 if structure.structure_type == StructureType::Jigsaw {
@@ -569,7 +569,7 @@ impl CommandExecutor for PlaceFeatureExecutor {
                     BlockPos::new(p.x as i32, p.y as i32, p.z as i32)
                 });
 
-            let world_gen = context.world().level.world_gen.clone();
+            let world_gen = context.world().level.world_gen();
             let cx = block_pos.0.x >> 4;
             let cz = block_pos.0.z >> 4;
             let mut chunk = ProtoChunk::new(cx, cz, &world_gen);

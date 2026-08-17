@@ -386,13 +386,28 @@ impl PumpkinServer {
     }
 
     pub async fn init_plugins(&self) -> std::time::Duration {
-        match self.server.plugin_manager.load_plugins(&self.server).await {
+        if !self.server.advanced_config.plugins.enabled {
+            info!("Plugin system is disabled in configuration.");
+            return std::time::Duration::ZERO;
+        }
+
+        let duration = match self.server.plugin_manager.load_plugins(&self.server).await {
             Ok(duration) => duration,
             Err(err) => {
                 error!("{err}");
                 std::time::Duration::ZERO
             }
+        };
+
+        if self.server.advanced_config.plugins.hot_reload {
+            if let Err(err) = self.server.plugin_manager.start_watcher(&self.server).await {
+                error!("Failed to start plugin hot-reloading watcher: {err}");
+            } else {
+                info!("Plugin hot-reloading watcher started from configuration.");
+            }
         }
+
+        duration
     }
 
     pub async fn unload_plugins(&self) {

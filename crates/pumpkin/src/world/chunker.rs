@@ -1,5 +1,5 @@
 use pumpkin_util::math::vector2::Vector2;
-use std::{num::NonZeroU8, sync::Arc};
+use std::{num::NonZero, sync::Arc};
 
 use pumpkin_protocol::{
     bedrock::client::network_chunk_publisher_update::CNetworkChunkPublisherUpdate,
@@ -12,8 +12,8 @@ use crate::{
     net::ClientPlatform,
 };
 
-pub fn get_view_distance(player: &Player) -> NonZeroU8 {
-    let fallback = NonZeroU8::new(2).unwrap_or(NonZeroU8::MIN);
+pub fn get_view_distance(player: &Player) -> NonZero<u8> {
+    let fallback = NonZero::new(2).unwrap_or(NonZero::<u8>::MIN);
     let Some(server) = player.world().server.upgrade() else {
         return fallback;
     };

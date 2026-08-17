@@ -3,11 +3,14 @@ use pumpkin_protocol::java::client::play::{ArgumentType, SuggestionProviders};
 use crate::command::{
     CommandSender,
     args::{
-        Arg, ArgumentConsumer, ConsumeResult, DefaultNameArgConsumer, FindArg,
-        GetClientSideArgParser,
+        Arg, ArgumentConsumer, ConsumeResult, ConsumeResultWithSyntax, DefaultNameArgConsumer,
+        FindArg, GetClientSideArgParser,
     },
+    argument_types::{argument_type::ArgumentType as _, time::TimeArgumentType},
     dispatcher::CommandError,
-    tree::RawArgs,
+    errors::command_syntax_error::{CommandSyntaxError, CommandSyntaxErrorContext},
+    string_reader::StringReader,
+    tree::{RawArg, RawArgs},
 };
 use crate::server::Server;
 
@@ -34,6 +37,23 @@ impl TimeArgumentConsumer {
     }
 }
 
+fn map_local_syntax_error(error: CommandSyntaxError, raw_arg: RawArg<'_>) -> CommandSyntaxError {
+    let local_cursor = error.context.map_or(0, |context| context.cursor);
+    let mut clamped_local_cursor = local_cursor.min(raw_arg.value.len());
+    while clamped_local_cursor > 0 && !raw_arg.value.is_char_boundary(clamped_local_cursor) {
+        clamped_local_cursor -= 1;
+    }
+
+    CommandSyntaxError {
+        error_type: error.error_type,
+        message: error.message,
+        context: Some(CommandSyntaxErrorContext {
+            input: raw_arg.input.to_string(),
+            cursor: raw_arg.start + clamped_local_cursor,
+        }),
+    }
+}
+
 impl GetClientSideArgParser for TimeArgumentConsumer {
     fn get_client_side_parser(&self) -> ArgumentType {
         ArgumentType::Time { min: self.min }
@@ -54,27 +74,30 @@ impl ArgumentConsumer for TimeArgumentConsumer {
         let s_opt: Option<&'a str> = args.pop().map(|arg| arg.value);
 
         let result: Option<Arg<'a>> = s_opt.and_then(|s| {
-            let (num_str, unit) = s
-                .find(|c: char| c.is_alphabetic() && c != '-')
-                .map_or((s, "t"), |pos| (&s[..pos], &s[pos..]));
-
-            let number = num_str.parse::<f32>().ok()?;
-
-            let factor = match unit {
-                "d" => 24000.0,
-                "s" => 20.0,
-                "t" | "" => 1.0,
-                _ => return None,
-            };
-
-            let ticks = (number * factor).round() as i32;
-
-            if ticks < self.min {
-                return None;
-            }
-
-            Some(Arg::Time(ticks))
+            let mut reader = StringReader::new(s);
+            let parser = TimeArgumentType::new(self.min);
+            parser.parse(&mut reader).ok().map(Arg::Time)
         });
+
+        Box::pin(async move { result })
+    }
+
+    fn consume_with_syntax<'a>(
+        &'a self,
+        _sender: &'a CommandSender,
+        _server: &'a Server,
+        args: &mut RawArgs<'a>,
+    ) -> ConsumeResultWithSyntax<'a> {
+        let Some(raw_arg) = args.pop() else {
+            return Box::pin(async { Ok(None) });
+        };
+
+        let mut reader = StringReader::new(raw_arg.value);
+        let parser = TimeArgumentType::new(self.min);
+        let result = parser
+            .parse(&mut reader)
+            .map(|ticks| Some(Arg::Time(ticks)))
+            .map_err(|error| map_local_syntax_error(error, raw_arg));
 
         Box::pin(async move { result })
     }

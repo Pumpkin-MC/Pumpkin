@@ -1,6 +1,6 @@
 use std::{
     io::{Error, ErrorKind, Read, Write},
-    num::NonZeroUsize,
+    num::NonZero,
 };
 
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
@@ -19,9 +19,7 @@ pub type VarUIntType = u32;
 pub struct VarUInt(pub VarUIntType);
 
 impl VarUInt {
-    /// The maximum number of bytes a `VarUInt` can occupy.
-    #[allow(clippy::unwrap_used)]
-    pub const MAX_SIZE: NonZeroUsize = NonZeroUsize::new(5).unwrap();
+    pub const MAX_SIZE: NonZero<usize> = NonZero::new(5).expect("5 is non-zero");
 
     #[must_use]
     #[inline]

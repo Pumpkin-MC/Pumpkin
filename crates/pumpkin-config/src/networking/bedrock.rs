@@ -1,7 +1,7 @@
 use crate::CompressionConfig;
 use serde::{Deserialize, Serialize};
 use std::net::{IpAddr, SocketAddr};
-use std::num::NonZeroU8;
+use std::num::NonZero;
 use std::path::PathBuf;
 
 /// Configuration for Bedrock authentication.
@@ -71,9 +71,9 @@ pub struct BedrockConfig {
     /// The maximum number of players allowed on the server. Specifying `0` disables the limit.
     pub max_players: u32,
     /// The maximum view distance for players.
-    pub view_distance: NonZeroU8,
+    pub view_distance: NonZero<u8>,
     /// The maximum simulated view distance.
-    pub simulation_distance: NonZeroU8,
+    pub simulation_distance: NonZero<u8>,
     /// Bedrock Edition packet compression settings.
     pub compression: CompressionConfig,
     /// Message of the Day; the server's description displayed on the status screen.
@@ -88,8 +88,8 @@ pub struct BedrockConfig {
 
 impl Default for BedrockConfig {
     fn default() -> Self {
-        let view_distance = NonZeroU8::new(16).unwrap_or(NonZeroU8::MIN);
-        let simulation_distance = NonZeroU8::new(10).unwrap_or(NonZeroU8::MIN);
+        let view_distance = NonZero::new(16).unwrap_or(NonZero::<u8>::MIN);
+        let simulation_distance = NonZero::new(10).unwrap_or(NonZero::<u8>::MIN);
         Self {
             enabled: true,
             online_mode: true,

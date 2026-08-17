@@ -147,9 +147,16 @@ impl TaskScheduler {
                 match plugin.plugin_instance {
                     crate::plugin::loader::wasm::wasm_host::PluginInstance::V0_1(ref instance) => {
                         if let Ok(server_res) = store.data_mut().add_server(server_clone) {
+                            let server_rep = server_res.rep();
                             let _ = instance
                                 .call_handle_task(&mut *store, handler_id, server_res)
                                 .await;
+                            let _ = store
+                                .data_mut()
+                                .resource_table
+                                .delete::<crate::plugin::loader::wasm::wasm_host::state::ServerResource>(
+                                    wasmtime::component::Resource::new_own(server_rep),
+                                );
                         }
                     }
                 }

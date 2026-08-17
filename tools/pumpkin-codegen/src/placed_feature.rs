@@ -506,7 +506,7 @@ pub fn value_to_height_provider(v: &Value) -> TokenStream {
                 quote! { None }
             } else {
                 let n = v["inner"].as_u64().unwrap_or(1) as u32;
-                quote! { std::num::NonZeroU32::new(#n) }
+                quote! { std::num::NonZero::new(#n) }
             };
             quote! {
                 HeightProvider::VeryBiasedToBottom(VeryBiasedToBottomHeightProvider {

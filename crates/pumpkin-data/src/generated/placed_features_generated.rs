@@ -6359,7 +6359,7 @@ fn build_placed_features()
                     height: HeightProvider::VeryBiasedToBottom(VeryBiasedToBottomHeightProvider {
                         min_inclusive: YOffset::AboveBottom(AboveBottom { above_bottom: 0i8 }),
                         max_inclusive: YOffset::BelowTop(BelowTop { below_top: 8i8 }),
-                        inner: std::num::NonZeroU32::new(8u32),
+                        inner: std::num::NonZero::new(8u32),
                     }),
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
@@ -6381,7 +6381,7 @@ fn build_placed_features()
                     height: HeightProvider::VeryBiasedToBottom(VeryBiasedToBottomHeightProvider {
                         min_inclusive: YOffset::AboveBottom(AboveBottom { above_bottom: 0i8 }),
                         max_inclusive: YOffset::BelowTop(BelowTop { below_top: 8i8 }),
-                        inner: std::num::NonZeroU32::new(8u32),
+                        inner: std::num::NonZero::new(8u32),
                     }),
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),

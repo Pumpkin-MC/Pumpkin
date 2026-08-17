@@ -4,8 +4,8 @@ use pumpkin_util::{math::vector2::Vector2, text::TextComponent};
 use crate::command::{
     CommandError, CommandExecutor, CommandResult, CommandSender,
     args::{
-        ConsumedArgs, DefaultNameArgConsumer, FindArgDefaultName,
-        bounded_num::BoundedNumArgumentConsumer, position_2d::Position2DArgumentConsumer,
+        ConsumedArgs, FindArgDefaultName, bounded_num::BoundedNumArgumentConsumer,
+        position_2d::Position2DArgumentConsumer,
     },
     tree::{
         CommandTree,
@@ -51,9 +51,7 @@ impl CommandExecutor for GetExecutor {
         Box::pin(async move {
             // TODO: Maybe ask player for world, or get the current world
             let worlds = server.worlds.load();
-            let world = worlds
-                .first()
-                .expect("There should always be at least one world");
+            let world = worlds.first().ok_or(CommandError::InvalidRequirement)?;
             let border = world.worldborder.lock().await;
 
             let diameter = border.new_diameter.round() as i32;
@@ -82,17 +80,10 @@ impl CommandExecutor for SetExecutor {
         Box::pin(async move {
             // TODO: Maybe ask player for world, or get the current world
             let worlds = server.worlds.load();
-            let world = worlds
-                .first()
-                .expect("There should always be at least one world");
+            let world = worlds.first().ok_or(CommandError::InvalidRequirement)?;
             let mut border = world.worldborder.lock().await;
 
-            let Ok(distance) = distance_consumer().find_arg_default_name(args)? else {
-                return Err(CommandError::CommandFailed(TextComponent::text(format!(
-                    "{} is out of bounds.",
-                    distance_consumer().default_name()
-                ))));
-            };
+            let distance = distance_consumer().find_arg_default_name(args)??;
 
             if (distance - border.new_diameter).abs() < f64::EPSILON {
                 return Err(CommandError::CommandFailed(
@@ -132,23 +123,11 @@ impl CommandExecutor for SetTimeExecutor {
         Box::pin(async move {
             // TODO: Maybe ask player for world, or get the current world
             let worlds = server.worlds.load();
-            let world = worlds
-                .first()
-                .expect("There should always be at least one world");
+            let world = worlds.first().ok_or(CommandError::InvalidRequirement)?;
             let mut border = world.worldborder.lock().await;
 
-            let Ok(distance) = distance_consumer().find_arg_default_name(args)? else {
-                return Err(CommandError::CommandFailed(TextComponent::text(format!(
-                    "{} is out of bounds.",
-                    distance_consumer().default_name()
-                ))));
-            };
-            let Ok(time) = time_consumer().find_arg_default_name(args)? else {
-                return Err(CommandError::CommandFailed(TextComponent::text(format!(
-                    "{} is out of bounds.",
-                    distance_consumer().default_name()
-                ))));
-            };
+            let distance = distance_consumer().find_arg_default_name(args)??;
+            let time = time_consumer().find_arg_default_name(args)??;
 
             let old_dist = format!("{:.1}", border.new_diameter);
             match distance.total_cmp(&border.new_diameter) {
@@ -206,17 +185,10 @@ impl CommandExecutor for AddExecutor {
         Box::pin(async move {
             // TODO: Maybe ask player for world, or get the current world
             let worlds = server.worlds.load();
-            let world = worlds
-                .first()
-                .expect("There should always be at least one world");
+            let world = worlds.first().ok_or(CommandError::InvalidRequirement)?;
             let mut border = world.worldborder.lock().await;
 
-            let Ok(distance_add) = distance_consumer().find_arg_default_name(args)? else {
-                return Err(CommandError::CommandFailed(TextComponent::text(format!(
-                    "{} is out of bounds.",
-                    distance_consumer().default_name()
-                ))));
-            };
+            let distance_add = distance_consumer().find_arg_default_name(args)??;
 
             if distance_add == 0.0 {
                 return Err(CommandError::CommandFailed(
@@ -257,33 +229,23 @@ impl CommandExecutor for AddTimeExecutor {
         Box::pin(async move {
             // TODO: Maybe ask player for world, or get the current world
             let worlds = server.worlds.load();
-            let world = worlds
-                .first()
-                .expect("There should always be at least one world");
+            let world = worlds.first().ok_or(CommandError::InvalidRequirement)?;
             let mut border = world.worldborder.lock().await;
 
-            let Ok(distance_add) = distance_consumer().find_arg_default_name(args)? else {
-                return Err(CommandError::CommandFailed(TextComponent::text(format!(
-                    "{} is out of bounds.",
-                    distance_consumer().default_name()
-                ))));
-            };
-            let Ok(time) = time_consumer().find_arg_default_name(args)? else {
-                return Err(CommandError::CommandFailed(TextComponent::text(format!(
-                    "{} is out of bounds.",
-                    distance_consumer().default_name()
-                ))));
-            };
+            let distance_add = distance_consumer().find_arg_default_name(args)??;
+            let time = time_consumer().find_arg_default_name(args)??;
 
             let distance = distance_add + border.new_diameter;
 
             let old_dist = format!("{:.1}", border.new_diameter);
             match distance.total_cmp(&border.new_diameter) {
                 std::cmp::Ordering::Equal => {
-                    return Err(CommandError::CommandFailed(TextComponent::text(format!(
-                        "{} is out of bounds.",
-                        distance_consumer().default_name()
-                    ))));
+                    return Err(CommandError::CommandFailed(
+                        pumpkin_macros::translate_cross!(
+                            translation::java::COMMANDS_WORLDBORDER_SET_FAILED_NOCHANGE,
+                            translation::bedrock::COMMANDS_WORLDBORDER_SET_SUCCESS
+                        ),
+                    ));
                 }
                 std::cmp::Ordering::Less => {
                     let dist = format!("{distance:.1}");
@@ -330,9 +292,7 @@ impl CommandExecutor for CenterExecutor {
         Box::pin(async move {
             // TODO: Maybe ask player for world, or get the current world
             let worlds = server.worlds.load();
-            let world = worlds
-                .first()
-                .expect("There should always be at least one world");
+            let world = worlds.first().ok_or(CommandError::InvalidRequirement)?;
             let mut border = world.worldborder.lock().await;
 
             let Vector2 { x, y } = Position2DArgumentConsumer.find_arg_default_name(args)?;
@@ -363,18 +323,10 @@ impl CommandExecutor for DamageAmountExecutor {
         Box::pin(async move {
             // TODO: Maybe ask player for world, or get the current world
             let worlds = server.worlds.load();
-            let world = worlds
-                .first()
-                .expect("There should always be at least one world");
+            let world = worlds.first().ok_or(CommandError::InvalidRequirement)?;
             let mut border = world.worldborder.lock().await;
 
-            let Ok(damage_per_block) = damage_per_block_consumer().find_arg_default_name(args)?
-            else {
-                return Err(CommandError::CommandFailed(TextComponent::text(format!(
-                    "{} is out of bounds.",
-                    distance_consumer().default_name()
-                ))));
-            };
+            let damage_per_block = damage_per_block_consumer().find_arg_default_name(args)??;
 
             if (damage_per_block - border.damage_per_block).abs() < f32::EPSILON {
                 return Err(CommandError::CommandFailed(
@@ -413,17 +365,10 @@ impl CommandExecutor for DamageBufferExecutor {
         Box::pin(async move {
             // TODO: Maybe ask player for world, or get the current world
             let worlds = server.worlds.load();
-            let world = worlds
-                .first()
-                .expect("There should always be at least one world");
+            let world = worlds.first().ok_or(CommandError::InvalidRequirement)?;
             let mut border = world.worldborder.lock().await;
 
-            let Ok(buffer) = damage_buffer_consumer().find_arg_default_name(args)? else {
-                return Err(CommandError::CommandFailed(TextComponent::text(format!(
-                    "{} is out of bounds.",
-                    distance_consumer().default_name()
-                ))));
-            };
+            let buffer = damage_buffer_consumer().find_arg_default_name(args)??;
 
             if (buffer - border.buffer).abs() < f32::EPSILON {
                 return Err(CommandError::CommandFailed(
@@ -462,17 +407,10 @@ impl CommandExecutor for WarningDistanceExecutor {
         Box::pin(async move {
             // TODO: Maybe ask player for world, or get the current world
             let worlds = server.worlds.load();
-            let world = worlds
-                .first()
-                .expect("There should always be at least one world");
+            let world = worlds.first().ok_or(CommandError::InvalidRequirement)?;
             let mut border = world.worldborder.lock().await;
 
-            let Ok(distance) = warning_distance_consumer().find_arg_default_name(args)? else {
-                return Err(CommandError::CommandFailed(TextComponent::text(format!(
-                    "{} is out of bounds.",
-                    distance_consumer().default_name()
-                ))));
-            };
+            let distance = warning_distance_consumer().find_arg_default_name(args)??;
 
             if distance == border.warning_blocks {
                 return Err(CommandError::CommandFailed(
@@ -509,17 +447,10 @@ impl CommandExecutor for WarningTimeExecutor {
         Box::pin(async move {
             // TODO: Maybe ask player for world, or get the current world
             let worlds = server.worlds.load();
-            let world = worlds
-                .first()
-                .expect("There should always be at least one world");
+            let world = worlds.first().ok_or(CommandError::InvalidRequirement)?;
             let mut border = world.worldborder.lock().await;
 
-            let Ok(time) = time_consumer().find_arg_default_name(args)? else {
-                return Err(CommandError::CommandFailed(TextComponent::text(format!(
-                    "{} is out of bounds.",
-                    distance_consumer().default_name()
-                ))));
-            };
+            let time = time_consumer().find_arg_default_name(args)??;
 
             if time == border.warning_time {
                 return Err(CommandError::CommandFailed(
