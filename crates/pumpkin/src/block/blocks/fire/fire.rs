@@ -1,7 +1,6 @@
 use pumpkin_data::BlockStateId;
 use pumpkin_data::biome::Biome;
 use pumpkin_data::block_properties::{BlockProperties, HorizontalAxis};
-use pumpkin_data::dimension::Dimension;
 use pumpkin_data::fluid::Fluid;
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_data::{Block, BlockDirection, BlockState};
@@ -128,7 +127,7 @@ impl FireBlock {
 
     fn is_increased_burnout_biome(world: &World, pos: &BlockPos) -> bool {
         // Fire burnout increases in the Nether
-        if world.dimension == Dimension::THE_NETHER {
+        if world.dimension.is_nether_like() {
             return true;
         }
 
@@ -202,7 +201,7 @@ impl BlockBehaviour for FireBlock {
 
             let dimension = &args.world.dimension;
             // First lets check if we are in OverWorld or Nether, its not possible to place an Nether portal in other dimensions in Vanilla
-            if (dimension == &Dimension::OVERWORLD || dimension == &Dimension::THE_NETHER)
+            if !dimension.is_end_like()
                 && let Some(portal) =
                     NetherPortal::get_new_portal(args.world, args.position, HorizontalAxis::X)
             {
@@ -297,17 +296,12 @@ impl BlockBehaviour for FireBlock {
             let block_below = world.get_block(&pos.down());
 
             // Check for infiniburn blocks (depending on dimension)
-            let infiniburn = match world.dimension.id {
-                id if id == Dimension::OVERWORLD.id => {
-                    block_below.has_tag(&tag::Block::MINECRAFT_INFINIBURN_OVERWORLD)
-                }
-                id if id == Dimension::THE_NETHER.id => {
-                    block_below.has_tag(&tag::Block::MINECRAFT_INFINIBURN_NETHER)
-                }
-                id if id == Dimension::THE_END.id => {
-                    block_below.has_tag(&tag::Block::MINECRAFT_INFINIBURN_END)
-                }
-                _ => false,
+            let infiniburn = if world.dimension.is_nether_like() {
+                block_below.has_tag(&tag::Block::MINECRAFT_INFINIBURN_NETHER)
+            } else if world.dimension.is_end_like() {
+                block_below.has_tag(&tag::Block::MINECRAFT_INFINIBURN_END)
+            } else {
+                block_below.has_tag(&tag::Block::MINECRAFT_INFINIBURN_OVERWORLD)
             };
 
             let mut fire_props = FireProperties::from_state_id(block_state.id, &Block::FIRE);

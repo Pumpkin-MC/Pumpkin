@@ -7,6 +7,8 @@ use crate::command::errors::error_types::CommandErrorType;
 use crate::command::node::dispatcher::CommandDispatcher;
 use crate::command::node::{CommandExecutor, CommandExecutorResult};
 use crate::world::loot::LootTableExt;
+use pumpkin_data::item::Item;
+use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::translation;
 use pumpkin_util::PermissionLvl;
 use pumpkin_util::permission::{Permission, PermissionDefault, PermissionRegistry};
@@ -101,15 +103,50 @@ impl CommandExecutor for LootExecutor {
                         format!("minecraft:{loot_table_str}")
                     };
 
+                    // First, check compiled-in chest loot tables
                     let chest_table =
                         pumpkin_data::chest_loot_table::get_chest_loot_table(&formatted_key);
                     if let Some(table) = chest_table {
                         let seed: i64 = rand::random();
                         stacks = crate::world::loot::generate_chest_loot(table, seed);
                     } else {
-                        return Err(ERROR_INVALID_LOOT_TABLE.create_without_context(
-                            TextComponent::text(loot_table_str.to_string()),
-                        ));
+                        // Fallback: check datapack loot tables
+                        let server = context.server();
+                        let dp_tables = server.datapack_manager.loot_tables.read().await;
+                        let dp_id =
+                            pumpkin_datapack::Identifier::parse(&formatted_key).map_err(|_| {
+                                ERROR_INVALID_LOOT_TABLE.create_without_context(
+                                    TextComponent::text(loot_table_str.to_string()),
+                                )
+                            })?;
+                        if let Some(dp_table) = dp_tables.get(&dp_id) {
+                            let dp_predicates = server.datapack_manager.predicates.read().await;
+                            let ctx = pumpkin_datapack::loot::evaluate::LootEvalContext {
+                                world_time: context.world().level_info.load().day_time as u64,
+                                luck: 0.0,
+                                all_loot_tables: Some(dp_tables.clone()),
+                                predicates: Some(dp_predicates.clone().into_iter().collect()),
+                                ..Default::default()
+                            };
+                            let dp_results = pumpkin_datapack::loot::evaluate::evaluate_loot_table(
+                                dp_table, &ctx,
+                            );
+                            stacks = dp_results
+                                .into_iter()
+                                .filter_map(|dp_item| {
+                                    let key = dp_item
+                                        .item_id
+                                        .strip_prefix("minecraft:")
+                                        .unwrap_or(&dp_item.item_id);
+                                    Item::from_registry_key(key)
+                                        .map(|item| ItemStack::new(dp_item.count, item))
+                                })
+                                .collect();
+                        } else {
+                            return Err(ERROR_INVALID_LOOT_TABLE.create_without_context(
+                                TextComponent::text(loot_table_str.to_string()),
+                            ));
+                        }
                     }
                 }
                 Source::Kill => {

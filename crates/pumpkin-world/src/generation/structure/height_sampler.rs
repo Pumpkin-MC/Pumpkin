@@ -26,7 +26,8 @@ pub struct NoiseHeightSampler<'a> {
 
 impl<'a> NoiseHeightSampler<'a> {
     pub fn new(generator: &'a VanillaGenerator, start_x: i32, start_z: i32) -> Self {
-        let shape = &generator.settings.shape;
+        let settings = generator.settings();
+        let shape = &settings.shape;
         let horizontal_biome_end = biome_coords::from_block(16) as usize;
         let preliminary = SurfaceHeightEstimateSampler::generate(
             &generator.base_router.surface_estimator,
@@ -48,7 +49,7 @@ impl<'a> NoiseHeightSampler<'a> {
     }
 
     fn sample_column(&mut self, x: i32, z: i32, ocean_floor: bool) -> i32 {
-        let settings = self.generator.settings;
+        let settings = self.generator.settings();
         let shape = &settings.shape;
         let horizontal = i32::from(shape.horizontal_cell_block_count());
         let vertical = i32::from(shape.vertical_cell_block_count());

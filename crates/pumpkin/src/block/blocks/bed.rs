@@ -5,7 +5,7 @@ use pumpkin_data::Block;
 use pumpkin_data::BlockStateId;
 use pumpkin_data::block_properties::BedPart;
 use pumpkin_data::block_properties::BlockProperties;
-use pumpkin_data::dimension::Dimension;
+
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::translation;
 use pumpkin_macros::pumpkin_block_from_tag;
@@ -235,7 +235,7 @@ impl BlockBehaviour for BedBlock {
             };
 
             // Explode if not in the overworld
-            if args.world.dimension != Dimension::OVERWORLD {
+            if !args.world.dimension.is_overworld_like() {
                 args.world
                     .break_block(&bed_head_pos, None, BlockFlags::SKIP_DROPS)
                     .await;
@@ -308,7 +308,7 @@ impl BlockBehaviour for BedBlock {
             if args
                 .player
                 .set_respawn_point(
-                    args.world.dimension.clone(),
+                    args.world.level.world_key.clone(),
                     bed_head_pos,
                     args.player.get_entity().yaw.load(),
                     args.player.get_entity().pitch.load(),

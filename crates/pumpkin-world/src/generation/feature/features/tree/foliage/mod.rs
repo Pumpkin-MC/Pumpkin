@@ -9,8 +9,9 @@ use mega_pine::MegaPineFoliagePlacer;
 use pine::PineFoliagePlacer;
 use pumpkin_data::BlockDirection;
 use pumpkin_data::BlockState;
+use pumpkin_data::int_provider::IntProviderValue;
 use pumpkin_util::{
-    math::{int_provider::IntProvider, position::BlockPos, vector3::Vector3},
+    math::{position::BlockPos, vector3::Vector3},
     random::{RandomGenerator, RandomImpl},
 };
 use random_spread::RandomSpreadFoliagePlacer;
@@ -33,8 +34,8 @@ pub mod random_spread;
 pub mod spruce;
 
 pub struct FoliagePlacer {
-    pub radius: IntProvider,
-    pub offset: IntProvider,
+    pub radius: IntProviderValue,
+    pub offset: IntProviderValue,
     pub r#type: FoliageType,
 }
 

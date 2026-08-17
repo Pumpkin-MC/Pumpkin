@@ -1,3 +1,5 @@
+// TODO(datapack parity): Make enchantments data-driven from data/minecraft/enchantment/
+// instead of purely codegen.
 use std::{collections::BTreeMap, fs};
 
 use heck::ToShoutySnakeCase;

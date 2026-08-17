@@ -507,8 +507,8 @@ impl pumpkin::plugin::world::HostWorld for PluginHostState {
         Ok(self
             .get_world_res(&world)?
             .provider
-            .dimension
-            .minecraft_name
+            .level
+            .world_key
             .to_string())
     }
 
@@ -919,28 +919,12 @@ impl pumpkin::plugin::world::HostWorld for PluginHostState {
 
     async fn set_chunk_generator(
         &mut self,
-        world: Resource<World>,
-        generator_id: u32,
+        _world: Resource<World>,
+        _generator_id: u32,
     ) -> wasmtime::Result<()> {
-        let world_ref = self.get_world_res(&world)?.provider.clone();
-        let Some(plugin_weak) = self.plugin.as_ref() else {
-            return Ok(());
-        };
-        let Some(plugin) = plugin_weak.upgrade() else {
-            return Ok(());
-        };
-
-        let wasm_gen = Arc::new(WasmChunkGenerator {
-            generator_id,
-            plugin,
-            dimension: world_ref.dimension.clone(),
-            seed: world_ref.level.seed.0,
-        });
-
-        world_ref.level.set_world_gen(Arc::new(
-            pumpkin_world::generation::generator::WorldGenerator::Custom(wasm_gen),
-        ));
-        Ok(())
+        Err(wasmtime::Error::msg(
+            "Runtime chunk generator replacement is no longer supported; register generators through the registry system",
+        ))
     }
 
     async fn get_name(&mut self, world: Resource<World>) -> wasmtime::Result<String> {
@@ -1663,96 +1647,5 @@ impl pumpkin::plugin::world::HostChunkBuffer for PluginHostState {
             )
             .map_err(wasmtime::Error::from)?;
         Ok(())
-    }
-}
-
-pub struct WasmChunkGenerator {
-    pub generator_id: u32,
-    pub plugin: Arc<crate::plugin::loader::wasm::wasm_host::WasmPlugin>,
-    pub dimension: pumpkin_data::dimension::Dimension,
-    pub seed: u64,
-}
-
-impl WasmChunkGenerator {
-    fn invoke_phase(
-        &self,
-        phase: pumpkin::plugin::world::GenerationPhase,
-        proto_chunk: &mut pumpkin_world::ProtoChunk,
-    ) {
-        let chunk_buffer = crate::plugin::loader::wasm::wasm_host::state::ChunkBuffer {
-            x: proto_chunk.x,
-            z: proto_chunk.z,
-            min_y: proto_chunk.bottom_y() as i32,
-            height: proto_chunk.height() as u32,
-            proto_chunk,
-        };
-
-        futures::executor::block_on(async {
-            let mut store = self.plugin.store.lock().await;
-            let Ok(buffer_res) = store.data_mut().add_chunk_buffer(chunk_buffer) else {
-                return;
-            };
-            let buffer_rep = buffer_res.rep();
-
-            match self.plugin.plugin_instance {
-                crate::plugin::loader::wasm::wasm_host::PluginInstance::V0_1(ref plugin) => {
-                    let _ = plugin
-                        .call_handle_generate_phase(
-                            &mut *store,
-                            self.generator_id,
-                            phase,
-                            buffer_res,
-                        )
-                        .await;
-
-                    let _ = store
-                        .data_mut()
-                        .resource_table
-                        .delete::<crate::plugin::loader::wasm::wasm_host::state::ChunkBufferResource>(
-                            wasmtime::component::Resource::new_own(buffer_rep),
-                        );
-                }
-            }
-        });
-    }
-}
-
-impl pumpkin_world::generation::generator::CustomChunkGenerator for WasmChunkGenerator {
-    fn dimension(&self) -> &pumpkin_data::dimension::Dimension {
-        &self.dimension
-    }
-
-    fn seed(&self) -> u64 {
-        self.seed
-    }
-
-    fn step_to_biomes(&self, chunk: &mut pumpkin_world::ProtoChunk) {
-        self.invoke_phase(pumpkin::plugin::world::GenerationPhase::Biomes, chunk);
-        chunk.stage = pumpkin_world::chunk_system::StagedChunkEnum::Biomes;
-    }
-
-    fn step_to_noise(&self, chunk: &mut pumpkin_world::ProtoChunk) {
-        self.invoke_phase(pumpkin::plugin::world::GenerationPhase::Noise, chunk);
-        chunk.stage = pumpkin_world::chunk_system::StagedChunkEnum::Noise;
-    }
-
-    fn step_to_surface(&self, chunk: &mut pumpkin_world::ProtoChunk) {
-        self.invoke_phase(pumpkin::plugin::world::GenerationPhase::Surface, chunk);
-        chunk.stage = pumpkin_world::chunk_system::StagedChunkEnum::Surface;
-    }
-
-    fn step_to_carvers(&self, chunk: &mut pumpkin_world::ProtoChunk) {
-        chunk.stage = pumpkin_world::chunk_system::StagedChunkEnum::Carvers;
-    }
-
-    fn step_to_features(
-        &self,
-        cache: &mut pumpkin_world::chunk_system::generation_cache::Cache,
-        _block_registry: &dyn pumpkin_world::world::WorldPortalExt,
-    ) {
-        let mid = ((cache.size * cache.size) >> 1) as usize;
-        let chunk = cache.chunks[mid].get_proto_chunk_mut();
-        self.invoke_phase(pumpkin::plugin::world::GenerationPhase::Features, chunk);
-        chunk.stage = pumpkin_world::chunk_system::StagedChunkEnum::Features;
     }
 }

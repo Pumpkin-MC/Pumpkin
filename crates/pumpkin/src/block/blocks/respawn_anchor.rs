@@ -1,5 +1,5 @@
 use pumpkin_data::block_properties::{BlockProperties, RespawnAnchorLikeProperties};
-use pumpkin_data::dimension::Dimension;
+
 use pumpkin_data::item::Item;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::translation;
@@ -57,7 +57,7 @@ impl BlockBehaviour for RespawnAnchorBlock {
             let state_id = args.world.get_block_state_id(args.position);
             let mut props = RespawnAnchorLikeProperties::from_state_id(state_id, args.block);
 
-            if args.world.dimension != Dimension::THE_NETHER {
+            if !args.world.dimension.is_nether_like() {
                 args.world
                     .break_block(args.position, None, BlockFlags::SKIP_DROPS)
                     .await;
@@ -80,7 +80,7 @@ impl BlockBehaviour for RespawnAnchorBlock {
             if args
                 .player
                 .set_respawn_point(
-                    args.world.dimension.clone(),
+                    args.world.level.world_key.clone(),
                     *args.position,
                     args.player.get_entity().yaw.load(),
                     args.player.get_entity().pitch.load(),

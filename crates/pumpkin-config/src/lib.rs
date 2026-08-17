@@ -13,8 +13,10 @@ use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
 use std::path::PathBuf;
 use std::{fs, num::NonZero, path::Path};
-use tracing::{debug, error, warn};
 
+use tracing::{debug, error, warn};
+/// Datapack loading configuration options.
+pub mod datapack;
 /// Fun and experimental configuration options.
 pub mod fun;
 /// Server logging configuration options.
@@ -61,6 +63,7 @@ pub mod whitelist;
 pub mod world;
 
 use advancement::AdvancementConfig;
+use datapack::DatapackConfig;
 use networking::NetworkingConfig;
 use player_data::PlayerDataConfig;
 use resource_pack::ResourcePackConfig;
@@ -161,6 +164,8 @@ pub struct AdvancedConfiguration {
     pub plugins: PluginsConfig,
     /// Advancement configuration
     pub advancement: AdvancementConfig,
+    /// Datapack configuration
+    pub datapack: DatapackConfig,
 }
 
 /// Basic configuration for core server settings.
@@ -179,6 +184,12 @@ pub struct BasicConfiguration {
     pub allow_nether: bool,
     /// Whether the End dimension is enabled.
     pub allow_end: bool,
+    /// World preset used when creating a new world.
+    pub world_preset: String,
+    /// JSON generator settings applied to the selected preset's Overworld generator.
+    ///
+    /// An empty string keeps the generator settings from the preset unchanged.
+    pub generator_settings: String,
     /// Whether the server is in hardcore mode.
     pub hardcore: bool,
     /// The server's ticks per second.
@@ -211,6 +222,8 @@ impl Default for BasicConfiguration {
             op_permission_level: PermissionLvl::Four,
             allow_nether: true,
             allow_end: true,
+            world_preset: "minecraft:normal".to_string(),
+            generator_settings: String::new(),
             hardcore: false,
             tps: 20.0,
             default_gamemode: GameMode::Survival,

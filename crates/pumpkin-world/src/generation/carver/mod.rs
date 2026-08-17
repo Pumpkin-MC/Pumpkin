@@ -3,6 +3,7 @@ pub mod cave;
 pub mod mask;
 
 use crate::ProtoChunk;
+use crate::dimension_type::DimensionType as Dimension;
 use crate::generation::GlobalRandomConfig;
 use crate::generation::generator::VanillaGenerator;
 use crate::generation::noise::aquifer_sampler::CarverAquiferSampler;
@@ -17,7 +18,6 @@ use pumpkin_data::block_state::BlockState;
 use pumpkin_data::carver::{CANYON, CAVE, CAVE_EXTRA_UNDERGROUND, NETHER_CAVE};
 use pumpkin_data::carver::{CarverAdditionalConfig, CarverConfig};
 use pumpkin_data::chunk_gen_settings::MaterialRule;
-use pumpkin_data::dimension::Dimension;
 use pumpkin_data::fluid::Fluid;
 use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::math::vector3::Vector3;
@@ -43,7 +43,7 @@ impl Default for CarverBlockIds {
 
 impl CarverBlockIds {
     #[must_use]
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
             air: pumpkin_data::Block::AIR.default_state,
             cave_air: pumpkin_data::Block::CAVE_AIR.default_state,
@@ -130,7 +130,8 @@ pub fn carve(chunk: &mut ProtoChunk, generator: &VanillaGenerator) {
 
     let start_x = crate::generation::positions::chunk_pos::start_block_x(chunk_x);
     let start_z = crate::generation::positions::chunk_pos::start_block_z(chunk_z);
-    let generation_shape = &generator.settings.shape;
+    let settings = generator.settings();
+    let generation_shape = &settings.shape;
     let horizontal_cell_count = 16 / generation_shape.horizontal_cell_block_count();
 
     let horizontal_biome_end = crate::generation::biome_coords::from_block(
@@ -148,13 +149,13 @@ pub fn carve(chunk: &mut ProtoChunk, generator: &VanillaGenerator) {
         &generator.base_router.surface_estimator,
         &surface_config,
     );
-    let carver_aquifer = generator.settings.aquifers_enabled.then(|| {
+    let carver_aquifer = settings.aquifers_enabled.then(|| {
         CarverAquiferSampler::new(
             chunk_x,
             chunk_z,
             &generator.base_router,
             &generator.random_config,
-            generator.settings,
+            &settings,
         )
     });
 
@@ -165,8 +166,8 @@ pub fn carve(chunk: &mut ProtoChunk, generator: &VanillaGenerator) {
         surface_noise: &generator.terrain_cache.surface_noise,
         secondary_noise: &generator.terrain_cache.secondary_noise,
         terrain_builder: &generator.terrain_cache.terrain_builder,
-        sea_level: generator.settings.sea_level,
-        surface_rule: &generator.settings.surface_rule,
+        sea_level: settings.sea_level,
+        surface_rule: &settings.surface_rule,
         surface_height_sampler,
         carver_aquifer,
     };
@@ -194,8 +195,7 @@ pub fn carve(chunk: &mut ProtoChunk, generator: &VanillaGenerator) {
                     carver_x,
                     carver_z,
                 );
-                let mut carver_random =
-                    new_carver_random(seed, generator.settings.legacy_random_source);
+                let mut carver_random = new_carver_random(seed, settings.legacy_random_source);
 
                 if should_carve(config, &mut carver_random) {
                     match config.additional {
@@ -206,7 +206,7 @@ pub fn carve(chunk: &mut ProtoChunk, generator: &VanillaGenerator) {
                                 &mut carver_random,
                                 &chunk_pos,
                                 &carver_chunk_pos,
-                                generator.settings.legacy_random_source,
+                                settings.legacy_random_source,
                             );
                         }
                         CarverAdditionalConfig::Canyon(_) => {
@@ -216,7 +216,7 @@ pub fn carve(chunk: &mut ProtoChunk, generator: &VanillaGenerator) {
                                 &mut carver_random,
                                 &chunk_pos,
                                 &carver_chunk_pos,
-                                generator.settings.legacy_random_source,
+                                settings.legacy_random_source,
                             );
                         }
                     }
@@ -253,12 +253,12 @@ const fn new_carver_random(seed: u64, non_vanilla_random: bool) -> RandomGenerat
 }
 
 fn carvers_for_dimension(dimension: &Dimension) -> &'static [&'static CarverConfig] {
-    if dimension == &Dimension::OVERWORLD {
-        &OVERWORLD_CARVERS
-    } else if dimension == &Dimension::THE_NETHER {
+    if dimension.is_nether_like() {
         &NETHER_CARVERS
-    } else {
+    } else if dimension.is_end_like() {
         &[]
+    } else {
+        &OVERWORLD_CARVERS
     }
 }
 
@@ -366,18 +366,16 @@ fn with_carve_run_options<F>(
 ) where
     F: FnOnce(&mut CarveRun<'_, '_>),
 {
-    use crate::generation::generator::{GeneratorInit, VanillaGenerator, WorldGenerator};
+    use crate::generation::generator::VanillaGenerator;
     use pumpkin_util::world_seed::Seed;
 
-    let world_gen = WorldGenerator::Noise(Box::new(VanillaGenerator::new(Seed(42), dimension)));
-    let WorldGenerator::Noise(generator) = &world_gen else {
-        unreachable!()
-    };
-    let mut chunk = ProtoChunk::new(0, 0, &world_gen);
+    let generator = VanillaGenerator::new(Seed(42), dimension);
+    let mut chunk = ProtoChunk::new(0, 0, &generator);
 
     let start_x = crate::generation::positions::chunk_pos::start_block_x(chunk.x);
     let start_z = crate::generation::positions::chunk_pos::start_block_z(chunk.z);
-    let generation_shape = &generator.settings.shape;
+    let settings = generator.settings();
+    let generation_shape = &settings.shape;
     let horizontal_cell_count = 16 / generation_shape.horizontal_cell_block_count();
     let horizontal_biome_end = crate::generation::biome_coords::from_block(
         horizontal_cell_count as i32 * generation_shape.horizontal_cell_block_count() as i32,
@@ -400,7 +398,7 @@ fn with_carve_run_options<F>(
             chunk.z,
             &generator.base_router,
             &generator.random_config,
-            generator.settings,
+            &settings,
         )
     });
     let mut context = CarvingContext {
@@ -410,8 +408,8 @@ fn with_carve_run_options<F>(
         surface_noise: &generator.terrain_cache.surface_noise,
         secondary_noise: &generator.terrain_cache.secondary_noise,
         terrain_builder: &generator.terrain_cache.terrain_builder,
-        sea_level: generator.settings.sea_level,
-        surface_rule: surface_rule.unwrap_or(&generator.settings.surface_rule),
+        sea_level: settings.sea_level,
+        surface_rule: surface_rule.unwrap_or(&settings.surface_rule),
         surface_height_sampler,
         carver_aquifer,
     };
@@ -458,66 +456,76 @@ mod tests {
 
     #[test]
     fn overworld_has_aquifer() {
-        with_carve_run(Dimension::OVERWORLD, |run| {
+        with_carve_run(crate::test_support::dimension("overworld"), |run| {
             assert!(run.ctx.carver_aquifer.is_some());
         });
     }
 
     #[test]
     fn restores_surface() {
-        with_carve_run_options(Dimension::OVERWORLD, Some(&PODZOL_RULE), false, |run| {
-            let x = 4;
-            let y = 70;
-            let z = 5;
-            run.chunk
-                .set_block_state(x, y - 1, z, Block::DIRT.default_state);
+        with_carve_run_options(
+            crate::test_support::dimension("overworld"),
+            Some(&PODZOL_RULE),
+            false,
+            |run| {
+                let x = 4;
+                let y = 70;
+                let z = 5;
+                run.chunk
+                    .set_block_state(x, y - 1, z, Block::DIRT.default_state);
 
-            carve_top_material(run, x, y, z, Block::AIR.default_state, true, true);
+                carve_top_material(run, x, y, z, Block::AIR.default_state, true, true);
 
-            assert_eq!(
-                run.chunk.get_block_state(&Vector3::new(x, y - 1, z)),
-                Block::PODZOL.default_state.id,
-            );
-        });
+                assert_eq!(
+                    run.chunk.get_block_state(&Vector3::new(x, y - 1, z)),
+                    Block::PODZOL.default_state.id,
+                );
+            },
+        );
     }
 
     #[test]
     fn skips_surface_restore() {
-        with_carve_run_options(Dimension::OVERWORLD, Some(&PODZOL_RULE), false, |run| {
-            let x = 4;
-            let y = 70;
-            let z = 5;
+        with_carve_run_options(
+            crate::test_support::dimension("overworld"),
+            Some(&PODZOL_RULE),
+            false,
+            |run| {
+                let x = 4;
+                let y = 70;
+                let z = 5;
 
-            run.chunk
-                .set_block_state(x, y - 1, z, Block::DIRT.default_state);
-            carve_top_material(run, x, y, z, Block::AIR.default_state, false, true);
-            assert_eq!(
-                run.chunk.get_block_state(&Vector3::new(x, y - 1, z)),
-                Block::DIRT.default_state.id,
-            );
+                run.chunk
+                    .set_block_state(x, y - 1, z, Block::DIRT.default_state);
+                carve_top_material(run, x, y, z, Block::AIR.default_state, false, true);
+                assert_eq!(
+                    run.chunk.get_block_state(&Vector3::new(x, y - 1, z)),
+                    Block::DIRT.default_state.id,
+                );
 
-            run.chunk
-                .set_block_state(x, y - 1, z, Block::STONE.default_state);
-            carve_top_material(run, x, y, z, Block::AIR.default_state, true, true);
-            assert_eq!(
-                run.chunk.get_block_state(&Vector3::new(x, y - 1, z)),
-                Block::STONE.default_state.id,
-            );
+                run.chunk
+                    .set_block_state(x, y - 1, z, Block::STONE.default_state);
+                carve_top_material(run, x, y, z, Block::AIR.default_state, true, true);
+                assert_eq!(
+                    run.chunk.get_block_state(&Vector3::new(x, y - 1, z)),
+                    Block::STONE.default_state.id,
+                );
 
-            run.chunk
-                .set_block_state(x, y - 1, z, Block::DIRT.default_state);
-            carve_top_material(run, x, y, z, Block::AIR.default_state, true, false);
-            assert_eq!(
-                run.chunk.get_block_state(&Vector3::new(x, y - 1, z)),
-                Block::DIRT.default_state.id,
-            );
-        });
+                run.chunk
+                    .set_block_state(x, y - 1, z, Block::DIRT.default_state);
+                carve_top_material(run, x, y, z, Block::AIR.default_state, true, false);
+                assert_eq!(
+                    run.chunk.get_block_state(&Vector3::new(x, y - 1, z)),
+                    Block::DIRT.default_state.id,
+                );
+            },
+        );
     }
 
     #[test]
     fn passes_fluid_to_rule() {
         with_carve_run_options(
-            Dimension::OVERWORLD,
+            crate::test_support::dimension("overworld"),
             Some(&WATER_SENSITIVE_RULE),
             false,
             |run| {
@@ -542,7 +550,7 @@ mod tests {
 
     #[test]
     fn steep_matches_vanilla() {
-        with_carve_run(Dimension::OVERWORLD, |run| {
+        with_carve_run(crate::test_support::dimension("overworld"), |run| {
             let x = 5;
             let z = 5;
 

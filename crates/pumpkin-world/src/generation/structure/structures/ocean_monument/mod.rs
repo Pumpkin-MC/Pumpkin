@@ -504,7 +504,7 @@ fn box_from_corners(first: Vector3<i32>, second: Vector3<i32>) -> BlockBox {
 
 #[cfg(test)]
 mod tests {
-    use pumpkin_data::{Block, dimension::Dimension};
+    use pumpkin_data::Block;
     use pumpkin_util::{
         BlockDirection,
         math::block_box::BlockBox,
@@ -597,7 +597,7 @@ mod tests {
     fn every_orientation_places_the_complete_treasure_core() {
         let world_gen = get_world_gen(
             Seed(0),
-            Dimension::OVERWORLD,
+            crate::test_support::dimension("overworld"),
             false,
             Vec::new(),
             String::new(),
@@ -616,7 +616,7 @@ mod tests {
 
             for chunk_x in bounds.min.x.div_euclid(16)..=bounds.max.x.div_euclid(16) {
                 for chunk_z in bounds.min.z.div_euclid(16)..=bounds.max.z.div_euclid(16) {
-                    let mut chunk = ProtoChunk::new(chunk_x, chunk_z, &world_gen);
+                    let mut chunk = ProtoChunk::new(chunk_x, chunk_z, world_gen.as_ref());
                     let chunk_box = BlockBox::new(
                         start_block_x(chunk_x),
                         chunk.bottom_y() as i32,

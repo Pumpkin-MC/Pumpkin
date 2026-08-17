@@ -1,10 +1,8 @@
 use std::collections::{HashMap, HashSet};
 
+use pumpkin_data::int_provider::IntProviderValue;
 use pumpkin_data::{Block, BlockDirection, BlockId, BlockState, BlockStateId};
-use pumpkin_util::{
-    math::{int_provider::IntProvider, position::BlockPos},
-    random::RandomGenerator,
-};
+use pumpkin_util::{math::position::BlockPos, random::RandomGenerator};
 
 use crate::generation::feature::features::spring_feature::BlockWrapper;
 use crate::{
@@ -63,9 +61,9 @@ pub struct GeodeFeature {
     pub use_potential_placements_chance: f64,
     pub use_alternate_layer0_chance: f64,
     pub placements_require_layer0_alternate: bool,
-    pub outer_wall_distance: IntProvider,
-    pub distribution_points: IntProvider,
-    pub point_offset: IntProvider,
+    pub outer_wall_distance: IntProviderValue,
+    pub distribution_points: IntProviderValue,
+    pub point_offset: IntProviderValue,
     pub min_gen_offset: i32,
     pub max_gen_offset: i32,
     pub noise_multiplier: f64,

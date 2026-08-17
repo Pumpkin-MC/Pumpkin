@@ -29,7 +29,9 @@ pumpkin-world.workspace = true
 pumpkin-data = { workspace = true, features = ["default"] }
 pumpkin-protocol = { workspace = true, features = ["default"] }
 pumpkin-macros.workspace = true
+pumpkin-registry.workspace = true
 pumpkin-codecs.workspace = true
+pumpkin-datapack.workspace = true
 
 dashmap.workspace = true
 crossbeam.workspace = true

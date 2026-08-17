@@ -69,7 +69,7 @@ impl CommandExecutor for RideMountExecutor {
 
             for target in &targets {
                 let target_world = target.get_entity().world.load();
-                if target_world.dimension.minecraft_name != vehicle_world.dimension.minecraft_name {
+                if target_world.level.world_key != vehicle_world.level.world_key {
                     last_error = Some(ERROR_WRONG_DIMENSION.create_without_context());
                     continue;
                 }

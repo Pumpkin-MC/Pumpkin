@@ -465,23 +465,81 @@ pub async fn drop_loot(
     experience: bool,
     params: LootContextParameters,
 ) {
-    if let Some(loot_table) = &block.loot_table {
-        let items = loot_table.get_loot(params);
-        if !items.is_empty() {
-            let mut event = crate::plugin::block::block_drop_item::BlockDropItemEvent {
-                block_pos: *pos,
-                world: world.clone(),
-                player: None,
-                items,
-                cancelled: false,
+    let loot_key = format!("minecraft:blocks/{}", block.name);
+    let Some(dp_id) = pumpkin_datapack::Identifier::parse(&loot_key).ok() else {
+        return;
+    };
+
+    // Datapack loot tables override static ones entirely (vanilla behaviour).
+    let items = if let Some(server) = world.server.upgrade() {
+        let dp_tables = server.datapack_manager.loot_tables.read().await;
+        if let Some(dp_table) = dp_tables.get(&dp_id) {
+            let dp_predicates = server.datapack_manager.predicates.read().await;
+            let block_state = params.block_state;
+            let tool_enchantments = build_tool_enchantments(&params.tool);
+            let ctx = pumpkin_datapack::loot::evaluate::LootEvalContext {
+                explosion_radius: params.explosion_radius,
+                killed_by_player: params.killed_by_player,
+                luck: params.luck,
+                this_entity_type: None,
+                killer_entity_type: None,
+                direct_killer_entity_type: None,
+                position_x: params.position.map(|p| p.x),
+                position_y: params.position.map(|p| p.y),
+                position_z: params.position.map(|p| p.z),
+                world_time: params.world_time,
+                tool_item_id: params
+                    .tool
+                    .as_ref()
+                    .map(|t| format!("minecraft:{}", t.item.registry_key)),
+                tool_enchantments,
+                is_raining: params.is_raining,
+                is_thundering: params.is_thundering,
+                is_on_fire: params.is_on_fire,
+                block_state_id: block_state.map(|s| s.id.as_u16()),
+                all_loot_tables: None,
+                predicates: Some(dp_predicates.clone().into_iter().collect()),
             };
-            if let Some(server) = world.server.upgrade() {
-                server.plugin_manager.fire(&server, &mut event).await;
-            }
-            if !event.cancelled {
-                for stack in event.items {
-                    world.drop_stack(pos, stack).await;
-                }
+            pumpkin_datapack::loot::evaluate::evaluate_loot_table(dp_table, &ctx)
+                .into_iter()
+                .filter_map(|dp_item| {
+                    let key = dp_item
+                        .item_id
+                        .strip_prefix("minecraft:")
+                        .unwrap_or(&dp_item.item_id);
+                    let item = pumpkin_data::item::Item::from_registry_key(key)?;
+                    let mut stack = pumpkin_data::item_stack::ItemStack::new(dp_item.count, item);
+                    apply_dp_components(&mut stack, &dp_item.components);
+                    Some(stack)
+                })
+                .collect()
+        } else {
+            block
+                .loot_table
+                .as_ref()
+                .map_or_else(Vec::new, |loot_table| loot_table.get_loot(params.clone()))
+        }
+    } else {
+        block
+            .loot_table
+            .as_ref()
+            .map_or_else(Vec::new, |loot_table| loot_table.get_loot(params.clone()))
+    };
+
+    if !items.is_empty() {
+        let mut event = crate::plugin::block::block_drop_item::BlockDropItemEvent {
+            block_pos: *pos,
+            world: world.clone(),
+            player: None,
+            items,
+            cancelled: false,
+        };
+        if let Some(server) = world.server.upgrade() {
+            server.plugin_manager.fire(&server, &mut event).await;
+        }
+        if !event.cancelled {
+            for stack in event.items {
+                world.drop_stack(pos, stack).await;
             }
         }
     }
@@ -504,6 +562,76 @@ pub async fn drop_loot(
             }
         }
     }
+}
+
+/// Apply component data from a datapack loot evaluation to an `ItemStack`.
+/// Supports `minecraft:profile` (player head skins).
+#[allow(clippy::implicit_hasher)]
+pub fn apply_dp_components(
+    stack: &mut pumpkin_data::item_stack::ItemStack,
+    components: &std::collections::HashMap<String, serde_json::Value>,
+) {
+    use pumpkin_data::data_component::DataComponent;
+    use pumpkin_data::data_component_impl::ProfileImpl;
+
+    if let Some(profile_val) = components.get("minecraft:profile") {
+        let mut profile = ProfileImpl::default();
+        if let Some(obj) = profile_val.as_object() {
+            if let Some(name) = obj.get("name").and_then(|v| v.as_str()) {
+                profile.name = Some(name.to_string());
+            }
+            if let Some(properties) = obj.get("properties").and_then(|v| v.as_array()) {
+                for prop in properties {
+                    if let Some(p_obj) = prop.as_object() {
+                        let p_name = p_obj
+                            .get("name")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("")
+                            .to_string();
+                        let p_value = p_obj
+                            .get("value")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("")
+                            .to_string();
+                        let p_signature = p_obj
+                            .get("signature")
+                            .and_then(|v| v.as_str())
+                            .map(String::from);
+                        if p_name == "textures" {
+                            profile.texture = Some(p_value.clone());
+                        }
+                        profile.properties.push(
+                            pumpkin_data::data_component_impl::ProfileProperty {
+                                name: p_name,
+                                value: p_value,
+                                signature: p_signature,
+                            },
+                        );
+                    }
+                }
+            }
+        }
+        stack
+            .patch
+            .push((DataComponent::Profile, Some(Box::new(profile))));
+    }
+}
+
+/// Build a map of enchantment ID -> level from a tool `ItemStack`.
+#[must_use]
+pub fn build_tool_enchantments(
+    tool: &Option<pumpkin_data::item_stack::ItemStack>,
+) -> std::collections::HashMap<String, i32> {
+    use pumpkin_data::data_component_impl::EnchantmentsImpl;
+    let mut map = std::collections::HashMap::new();
+    if let Some(tool) = tool
+        && let Some(ench) = tool.get_data_component::<EnchantmentsImpl>()
+    {
+        for &(ench_def, level) in ench.enchantment.iter() {
+            map.insert(format!("minecraft:{}", ench_def.name), level);
+        }
+    }
+    map
 }
 
 pub async fn calc_block_breaking(

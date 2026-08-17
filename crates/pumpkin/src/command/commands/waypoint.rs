@@ -30,7 +30,7 @@ impl CommandExecutor for ListExecutor {
         Box::pin(async move {
             let worlds = server.worlds.load();
             let world = worlds.first().ok_or(CommandError::InvalidRequirement)?;
-            let dimension = world.dimension.minecraft_name.to_string();
+            let dimension = world.level.world_key.to_string();
 
             sender
                 .send_message(pumpkin_macros::translate_cross!(

@@ -1,4 +1,3 @@
-use pumpkin_data::dimension::Dimension;
 use pumpkin_util::{
     math::position::BlockPos, resource_location::ResourceLocation, version::JavaMinecraftVersion,
 };
@@ -9,8 +8,10 @@ use crate::{
 };
 
 pub struct PlayerSpawnData {
-    /// The Dimension for the current dimension's properties (lighting, sky color).
-    pub dimension: Dimension,
+    /// Numeric ID of the current dimension type in the synchronized dimension type registry.
+    pub dimension_type_id: VarInt,
+    /// Registry key of the current dimension/world.
+    pub dimension_name: ResourceLocation,
     /// Used by the client to seed local biome noise and decoration algorithms.
     pub hashed_seed: i64,
     pub game_mode: u8,
@@ -31,7 +32,8 @@ impl PlayerSpawnData {
     #[expect(clippy::too_many_arguments)]
     #[must_use]
     pub const fn new(
-        dimension: Dimension,
+        dimension_type_id: VarInt,
+        dimension_name: ResourceLocation,
         hashed_seed: i64,
         game_mode: u8,
         previous_gamemode: i8,
@@ -42,7 +44,8 @@ impl PlayerSpawnData {
         sealevel: VarInt,
     ) -> Self {
         Self {
-            dimension,
+            dimension_type_id,
+            dimension_name,
             hashed_seed,
             game_mode,
             previous_gamemode,
@@ -60,15 +63,26 @@ impl PlayerSpawnData {
         version: &JavaMinecraftVersion,
     ) -> Result<(), WritingError> {
         if version >= &JavaMinecraftVersion::V_1_21_2 {
-            write.write_var_int(&VarInt(self.dimension.id as i32))?;
+            write.write_var_int(&self.dimension_type_id)?;
         } else if version >= &JavaMinecraftVersion::V_1_16 {
-            write.write_string(self.dimension.minecraft_name)?;
-        } else if version >= &JavaMinecraftVersion::V_1_9 {
-            write.write_i32_be(self.dimension.id as i32)?;
+            write.write_string(&self.dimension_name)?;
         } else {
-            write.write_i8(self.dimension.id as i8)?;
+            let legacy_id = match self
+                .dimension_name
+                .strip_prefix("minecraft:")
+                .unwrap_or(&self.dimension_name)
+            {
+                "the_nether" => -1,
+                "the_end" => 1,
+                _ => 0,
+            };
+            if version >= &JavaMinecraftVersion::V_1_9 {
+                write.write_i32_be(legacy_id)?;
+            } else {
+                write.write_i8(legacy_id as i8)?;
+            }
         }
-        write.write_string(self.dimension.minecraft_name)?;
+        write.write_string(&self.dimension_name)?;
         write.write_i64_be(self.hashed_seed)?;
         write.write_u8(self.game_mode)?;
         write.write_i8(self.previous_gamemode)?;

@@ -12,7 +12,6 @@ use crate::chunk::io::Dirtiable;
 use crate::level::{Level, SyncChunk};
 use dashmap::DashMap;
 use pumpkin_config::lighting::LightingEngineConfig;
-use pumpkin_data::chunk_gen_settings::GenerationSettings;
 use pumpkin_util::math::vector2::Vector2;
 use slotmap::Key;
 use std::cmp::{Ordering, max};
@@ -1430,13 +1429,9 @@ impl GenerationSchedule {
                             let stage = node.stage;
                             let send_chunk = self.send_chunk.clone();
                             let level = level.clone();
-                            let settings = GenerationSettings::from_dimension(
-                                level.world_gen.load().dimension(),
-                            );
-
                             pool.spawn(move || {
                                 let result = crate::chunk_system::worker_logic::run_generation(
-                                    pos, cache, stage, &level, settings,
+                                    pos, cache, stage, &level,
                                 );
                                 let _ = send_chunk.send((pos, result));
                             });

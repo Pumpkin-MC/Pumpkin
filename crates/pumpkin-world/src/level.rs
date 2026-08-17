@@ -1,7 +1,7 @@
 use crate::chunk::format::linear::LinearV2File;
 use crate::chunk::format::pump::PumpFile;
 use crate::chunk_system::{ChunkListener, ChunkLoading, GenerationSchedule, LevelChannel};
-use crate::generation::generator::WorldGenerator;
+use crate::generation::generator::ChunkGenerator;
 use crate::lighting::DynamicLightEngine;
 use crate::{
     chunk::{
@@ -13,7 +13,6 @@ use crate::{
         },
         palette::has_random_ticking_fluid,
     },
-    generation::get_world_gen,
     tick::{OrderedTick, ScheduledTick, TickPriority},
     world::WorldPortalExt,
 };
@@ -21,8 +20,8 @@ use arc_swap::ArcSwap;
 use dashmap::{DashMap, Entry};
 use pumpkin_config::{chunk::ChunkConfig, lighting::LightingEngineConfig, world::LevelConfig};
 use pumpkin_data::biome::Biome;
-use pumpkin_data::dimension::Dimension;
 use pumpkin_data::{Block, BlockStateId, block_properties::has_random_ticks, fluid::Fluid};
+use pumpkin_util::identifier::Identifier;
 use pumpkin_util::math::{position::BlockPos, vector2::Vector2};
 use pumpkin_util::world_seed::Seed;
 use rustc_hash::FxHashSet;
@@ -65,11 +64,12 @@ pub type EntitySaver = LevelFileIO<
 ///
 /// - **Chunk Loading:** Efficiently loads chunks from disk.
 /// - **Chunk Caching:** Stores accessed chunks in memory for faster access.
-/// - **Chunk Generation:** Generates new chunks on-demand using a specified `WorldGenerator`.
+/// - **Chunk Generation:** Generates new chunks on-demand using a registered `ChunkGenerator`.
 ///
-/// For more details on world generation, refer to the `WorldGenerator` module.
+/// World generation is dispatched through the `ChunkGenerator` trait.
 pub struct Level {
     pub seed: Seed,
+    pub world_key: Identifier,
     pub world_portal: ArcSwap<Option<Arc<dyn WorldPortalExt>>>,
     pub level_folder: Arc<LevelFolder>,
     pub lighting_config: LightingEngineConfig,
@@ -89,7 +89,7 @@ pub struct Level {
     pub chunk_saver: Arc<ChunkSaver>,
     entity_saver: Arc<EntitySaver>,
 
-    pub world_gen: ArcSwap<WorldGenerator>,
+    pub world_gen: Arc<dyn ChunkGenerator>,
 
     /// Handles runtime lighting updates
     pub light_engine: DynamicLightEngine,
@@ -140,25 +140,18 @@ pub struct LevelFolder {
 
 impl Level {
     #[must_use]
-    #[expect(clippy::too_many_lines)]
     pub fn from_root_folder(
         level_config: &LevelConfig,
         root_folder: PathBuf,
-        seed: i64,
-        dimension: Dimension,
+        world_key: Identifier,
+        world_gen: Arc<dyn ChunkGenerator>,
         gen_pool: Option<Arc<rayon::ThreadPool>>,
     ) -> Arc<Self> {
-        let dim_folder = if dimension.minecraft_name == Dimension::OVERWORLD.minecraft_name
-            || dimension.minecraft_name == Dimension::THE_NETHER.minecraft_name
-            || dimension.minecraft_name == Dimension::THE_END.minecraft_name
-        {
-            root_folder.clone()
-        } else {
-            let (namespace, name) = match dimension.minecraft_name.split_once(':') {
-                Some((ns, n)) => (ns, n),
-                None => ("minecraft", dimension.minecraft_name),
-            };
-            root_folder.join("dimensions").join(namespace).join(name)
+        let dim_folder = match (world_key.namespace(), world_key.path()) {
+            ("minecraft", "overworld") => root_folder.clone(),
+            ("minecraft", "the_nether") => root_folder.join("DIM-1"),
+            ("minecraft", "the_end") => root_folder.join("DIM1"),
+            (namespace, path) => root_folder.join("dimensions").join(namespace).join(path),
         };
 
         let region_folder = dim_folder.join("region");
@@ -177,56 +170,7 @@ impl Level {
             poi_folder,
         });
 
-        let main_folder = if dimension.minecraft_name == Dimension::OVERWORLD.minecraft_name {
-            level_folder.root_folder.clone()
-        } else {
-            level_folder
-                .root_folder
-                .parent()
-                .unwrap_or(&level_folder.root_folder)
-                .to_path_buf()
-        };
-
-        let mut is_flat = false;
-        let mut flat_layers = Vec::new();
-        let mut flat_biome = "minecraft:plains".to_string();
-
-        if let Some(wgs) = crate::world_info::data_files::read_world_gen_settings(&main_folder)
-            && let Some(dim_settings) = wgs.dimensions.get(dimension.minecraft_name)
-            && dim_settings.generator.generator_type == "minecraft:flat"
-        {
-            is_flat = true;
-            if let Some(crate::world_info::GeneratorSettings::Compound(val)) =
-                &dim_settings.generator.settings
-            {
-                if let Some(b) = val.get("biome").and_then(|v| v.as_str()) {
-                    flat_biome = b.to_string();
-                }
-                if let Some(list) = val.get("layers").and_then(|v| v.as_array()) {
-                    for layer in list {
-                        let block = layer
-                            .get("block")
-                            .and_then(|v| v.as_str())
-                            .unwrap_or("minecraft:air")
-                            .to_string();
-                        let height = layer
-                            .get("height")
-                            .and_then(serde_json::Value::as_i64)
-                            .unwrap_or(1) as i32;
-                        flat_layers.push(crate::generation::generator::FlatLayer { block, height });
-                    }
-                }
-            }
-        }
-
-        let seed = Seed(seed as u64);
-        let world_gen: Arc<WorldGenerator> = Arc::from(get_world_gen(
-            seed,
-            dimension,
-            is_flat,
-            flat_layers,
-            flat_biome,
-        ));
+        let seed = Seed(world_gen.seed());
 
         let chunk_saver = match &level_config.chunk {
             ChunkConfig::Linear => Arc::new(ChunkSaver::Linear(ChunkFileManager::new(()))),
@@ -250,8 +194,9 @@ impl Level {
 
         let level_ref = Arc::new(Self {
             seed,
+            world_key,
             world_portal: ArcSwap::new(Arc::new(None)),
-            world_gen: ArcSwap::new(world_gen),
+            world_gen,
             level_folder,
             lighting_config: level_config.lighting,
             light_engine: DynamicLightEngine::new(),
@@ -302,13 +247,9 @@ impl Level {
         level_ref
     }
 
-    pub fn set_world_gen(&self, generator: Arc<WorldGenerator>) {
-        self.world_gen.store(generator);
-    }
-
     #[must_use]
-    pub fn world_gen(&self) -> Arc<WorldGenerator> {
-        self.world_gen.load_full()
+    pub fn world_gen(&self) -> Arc<dyn ChunkGenerator> {
+        self.world_gen.clone()
     }
 
     pub fn spawn_entity_generation(self: &Arc<Self>, pos: Vector2<i32>) {

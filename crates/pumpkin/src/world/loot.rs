@@ -30,6 +30,15 @@ pub struct LootContextParameters {
     /// Whether the killed entity was on fire at death time.
     /// Computed from `Entity.fire_ticks > 0`.
     pub is_on_fire: Option<bool>,
+    /// Datapack predicates for resolving loot condition references.
+    pub datapack_predicates: Option<
+        std::sync::Arc<
+            std::collections::HashMap<
+                pumpkin_datapack::Identifier,
+                pumpkin_datapack::predicate::Predicate,
+            >,
+        >,
+    >,
 }
 
 pub trait LootTableExt {
@@ -93,6 +102,111 @@ impl LootTableExt for LootTable {
             }
         }
         stacks
+    }
+}
+
+/// Basic predicate JSON evaluator.
+/// Parses a `condition` field from the datapack predicate JSON and checks it
+/// against the loot context. Supports common condition types.
+fn evaluate_predicate_json(data: &serde_json::Value, params: &LootContextParameters) -> bool {
+    // A predicate can be a single condition object or an array of conditions (AND)
+    match data {
+        serde_json::Value::Array(arr) => arr.iter().all(|c| evaluate_single_condition(c, params)),
+        _ => evaluate_single_condition(data, params),
+    }
+}
+
+/// Evaluate a single condition JSON object.
+fn evaluate_single_condition(data: &serde_json::Value, params: &LootContextParameters) -> bool {
+    let Some(condition) = data.get("condition").and_then(serde_json::Value::as_str) else {
+        return true;
+    };
+
+    match condition {
+        "minecraft:entity_properties" => {
+            // Check entity type matches
+            let expected = data.pointer("/predicate/type").and_then(|v| v.as_str());
+            if let Some(expected_type) = expected {
+                let entity = data.get("entity").and_then(|v| v.as_str());
+                let target = match entity {
+                    Some("this") => params.this_entity,
+                    Some("killer" | "attacker") => params.killer_entity,
+                    Some("direct_killer" | "direct_attacker") => params.direct_killer_entity,
+                    _ => None,
+                };
+                if let Some(t) = target {
+                    let cleaned = expected_type
+                        .strip_prefix("minecraft:")
+                        .unwrap_or(expected_type);
+                    if t.resource_name != cleaned {
+                        return false;
+                    }
+                }
+            }
+            // Check flags (e.g., is_on_fire)
+            if data
+                .pointer("/predicate/flags/is_on_fire")
+                .and_then(serde_json::Value::as_bool)
+                == Some(true)
+                && !params.is_on_fire.unwrap_or(false)
+            {
+                return false;
+            }
+            true
+        }
+        "minecraft:killed_by_player" => params.killed_by_player.unwrap_or(false),
+        "minecraft:inverted" => data
+            .get("term")
+            .is_none_or(|t| !evaluate_predicate_json(t, params)),
+        "minecraft:alternative" => data
+            .get("terms")
+            .and_then(|v| v.as_array())
+            .is_none_or(|terms| terms.iter().any(|t| evaluate_predicate_json(t, params))),
+        "minecraft:table_bonus" => {
+            // Simplified: check enchantment level on tool
+            let _enchantment = data.get("enchantment").and_then(|v| v.as_str());
+            // For now, pass through
+            true
+        }
+        "minecraft:weather_check" => {
+            let raining = data.get("raining").and_then(serde_json::Value::as_bool);
+            let thundering = data.get("thundering").and_then(serde_json::Value::as_bool);
+            if let Some(r) = raining
+                && params.is_raining.unwrap_or(false) != r
+            {
+                return false;
+            }
+            if let Some(t) = thundering
+                && params.is_thundering.unwrap_or(false) != t
+            {
+                return false;
+            }
+            true
+        }
+        "minecraft:random_chance" => {
+            let chance = data
+                .get("chance")
+                .and_then(serde_json::Value::as_f64)
+                .unwrap_or(1.0);
+            rand::random::<f64>() < chance
+        }
+        "minecraft:survives_explosion" => params
+            .explosion_radius
+            .is_none_or(|radius| rand::random::<f32>() <= 1.0 / radius),
+        "minecraft:match_tool" => {
+            // TODO(datapack parity): Implement proper match_tool with item predicate
+            // (items, count, durability, enchantments, potions, nbt, etc.)
+            params.tool.is_some()
+        }
+        "minecraft:damage_source_properties" => {
+            // TODO(datapack parity): Implement damage_source_properties with actual
+            // damage type matching, is_projectile, is_explosion, etc.
+            true
+        }
+        _ => {
+            tracing::debug!("Unknown loot condition type: {condition}");
+            true
+        }
     }
 }
 
@@ -672,8 +786,19 @@ impl LootConditionExt for LootCondition {
                 false
             }
             Self::Reference { name } => {
-                tracing::warn!("Loot condition reference not supported: {}", name);
-                false
+                // Look up the predicate from datapacks. If found, evaluate it by
+                // checking the condition type against the loot context.
+                if let Some(ref pred_map) = params.datapack_predicates {
+                    let Some(pred_id) = pumpkin_datapack::Identifier::parse(name).ok() else {
+                        return true;
+                    };
+                    if let Some(pred) = pred_map.get(&pred_id) {
+                        return evaluate_predicate_json(&pred.data, params);
+                    }
+                }
+                // Predicate not found in datapacks; return true to avoid silently
+                // dropping loot from pools with referenced conditions.
+                true
             }
             Self::EnchantmentActiveCheck { active } => {
                 params.tool.as_ref().map_or(!*active, |tool| {

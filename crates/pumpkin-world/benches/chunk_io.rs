@@ -1,7 +1,7 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use criterion::{Criterion, criterion_group, criterion_main};
-use pumpkin_data::{BlockStateId, dimension::Dimension};
+use pumpkin_data::BlockStateId;
 use pumpkin_util::{math::vector2::Vector2, world_seed::Seed};
 use pumpkin_world::{
     chunk::{ChunkData, format::anvil::SingleChunkDataSerializer},
@@ -10,6 +10,8 @@ use pumpkin_world::{
     world::WorldPortalExt,
 };
 use std::hint::black_box;
+
+mod support;
 
 struct BlockRegistry;
 
@@ -53,7 +55,7 @@ impl WorldPortalExt for BlockRegistry {
 }
 
 fn bench_chunk_deserialization(c: &mut Criterion) {
-    let dimension = Dimension::OVERWORLD;
+    let dimension = support::overworld();
     let world_gen = get_world_gen(
         Seed(42),
         dimension.clone(),
@@ -64,7 +66,7 @@ fn bench_chunk_deserialization(c: &mut Criterion) {
     let chunk = generate_single_chunk(
         &dimension,
         0,
-        &world_gen,
+        world_gen.as_ref(),
         &BlockRegistry,
         0,
         0,

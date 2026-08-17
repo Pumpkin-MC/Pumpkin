@@ -6,8 +6,9 @@ use pumpkin_data::{
     block_properties::{BlockProperties, GlowLichenLikeProperties, SculkShriekerLikeProperties},
 };
 
+use pumpkin_data::int_provider::IntProviderValue;
 use pumpkin_util::{
-    math::{int_provider::IntProvider, position::BlockPos, vector3::Vector3},
+    math::{position::BlockPos, vector3::Vector3},
     random::{RandomGenerator, RandomImpl},
 };
 
@@ -20,7 +21,7 @@ pub struct SculkPatchFeature {
     pub spread_attempts: i32,
     pub growth_rounds: i32,
     pub spread_rounds: i32,
-    pub extra_rare_growths: IntProvider,
+    pub extra_rare_growths: IntProviderValue,
     pub catalyst_chance: f32,
 }
 

@@ -12,11 +12,11 @@ use pumpkin_data::data_component_impl::{
     FireworkExplosionShape, FireworksImpl, FoxVariantImpl, FrogVariantImpl, HorseVariantImpl,
     IDSet, IDSetContent, IdOr, ItemModelImpl, LlamaVariantImpl, MapIdImpl, MaxStackSizeImpl,
     MooshroomVariantImpl, PaintingVariantImpl, ParrotVariantImpl, PigSoundVariantImpl,
-    PigVariantImpl, PotionContentsImpl, RabbitVariantImpl, SalmonSizeImpl, SheepColorImpl,
-    ShulkerColorImpl, SoundEvent, StatusEffectInstance, StoredEnchantmentsImpl,
-    TropicalFishBaseColorImpl, TropicalFishPatternColorImpl, TropicalFishPatternImpl,
-    UnbreakableImpl, UseCooldownImpl, VillagerVariantImpl, WolfCollarImpl, WolfSoundVariantImpl,
-    WolfVariantImpl, ZombieNautilusVariantImpl, get,
+    PigVariantImpl, PotionContentsImpl, ProfileImpl, ProfileProperty, RabbitVariantImpl,
+    SalmonSizeImpl, SheepColorImpl, ShulkerColorImpl, SoundEvent, StatusEffectInstance,
+    StoredEnchantmentsImpl, TropicalFishBaseColorImpl, TropicalFishPatternColorImpl,
+    TropicalFishPatternImpl, UnbreakableImpl, UseCooldownImpl, VillagerVariantImpl, WolfCollarImpl,
+    WolfSoundVariantImpl, WolfVariantImpl, ZombieNautilusVariantImpl, get,
 };
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::entity::EntityType;
@@ -188,10 +188,6 @@ fn deserialize_consume_effect(
             Ok(ConsumeEffect::TeleportRandomly(diameter))
         }
         4 => {
-            // Need to read IdOr<SoundEvent> manually. This depends on how it is serialized.
-            // In vanilla, it's either an id (0) or a sound event (1) ... but wait, `crate::IdOr<crate::SoundEvent>` doesn't have a `NetworkReadExt` method.
-            // Let's defer this and assume it implements `read` for now or wait, `IdOr` does implement `PacketRead` or something?
-            // Actually, we can just use `IdOr::read` if we impl it, but let's change it to:
             let proto_sound_event = crate::IdOr::<crate::SoundEvent>::read(seq, |r| {
                 let sound_name = r.get_str()?.into();
                 let range = r.get_option(NetworkReadExt::get_f32)?;
@@ -787,7 +783,8 @@ pub fn deserialize(
         DataComponent::UseCooldown => Ok(UseCooldownImpl::deserialize(seq)?.to_dyn()),
         DataComponent::MapId => Ok(MapIdImpl::deserialize(seq)?.to_dyn()),
         DataComponent::BundleContents => Ok(BundleContentsImpl::deserialize(seq)?.to_dyn()),
-        _ => Err(ReadingError::Message(format!("component_id_{} (TODO)", id.to_id()))),
+        DataComponent::Profile => Ok(ProfileImpl::deserialize(seq)?.to_dyn()),
+        _ => Err(ReadingError::Message(format!("data component {} (TODO)", id.to_id()))),
     }
 }
 pub fn serialize(
@@ -812,6 +809,7 @@ pub fn serialize(
         DataComponent::UseCooldown => get::<UseCooldownImpl>(value).serialize(seq),
         DataComponent::MapId => get::<MapIdImpl>(value).serialize(seq),
         DataComponent::BundleContents => get::<BundleContentsImpl>(value).serialize(seq),
+        DataComponent::Profile => get::<ProfileImpl>(value).serialize(seq),
         _ => Err(WritingError::Message(format!(
             "{} not yet implemented",
             id.to_name()
@@ -827,6 +825,107 @@ impl DataComponentCodec<Self> for MapIdImpl {
     fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
         let id = seq.get_var_int()?.0;
         Ok(Self { id })
+    }
+}
+
+impl DataComponentCodec<Self> for ProfileImpl {
+    /// Vanilla format (`ResolvableProfile`):
+    /// 1. `Either<GameProfile, Partial>` discriminator:
+    ///    - `true`  = `GameProfile` (left) - UUID (2×i64) + name + properties
+    ///    - `false` = `Partial` (right)    - Optional name + Optional UUID + properties
+    /// 2. `PlayerSkin.Patch` - 4 optional fields (body, cape, elytra, model)
+    fn serialize(&self, seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
+        // Always write as Partial (right) - simpler, matches mob heads data
+        seq.write_bool(false)?; // discriminator: false = right/Partial
+
+        // Partial: name (Optional, max 16)
+        seq.write_option(&self.name, |seq, name| seq.write_string_bounded(name, 16))?;
+        // Partial: id (Optional, UUID as 2×i64)
+        seq.write_option(&self.id, |seq, id| {
+            seq.write_i64(i64::from(id[0]) << 32 | (id[1] as u32 as i64))?;
+            seq.write_i64(i64::from(id[2]) << 32 | (id[3] as u32 as i64))?;
+            Ok(())
+        })?;
+        // Partial: properties (VarInt count)
+        seq.write_var_int(&VarInt(self.properties.len() as i32))?;
+        for prop in &self.properties {
+            seq.write_string_bounded(&prop.name, 64)?;
+            seq.write_string_bounded(&prop.value, 32767)?;
+            seq.write_option(&prop.signature, |seq, sig| {
+                seq.write_string_bounded(sig, 1024)
+            })?;
+        }
+        // PlayerSkin.Patch - 4 empty optional fields
+        seq.write_bool(false)?; // body
+        seq.write_bool(false)?; // cape
+        seq.write_bool(false)?; // elytra
+        seq.write_bool(false)?; // model
+        Ok(())
+    }
+
+    fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
+        let is_left = seq.get_bool()?; // true = GameProfile, false = Partial
+        let (name, id, properties) = if is_left {
+            // GameProfile: UUID (2×i64), name (max 16), properties
+            let hi = seq.get_i64()?;
+            let lo = seq.get_i64()?;
+            let uuid = [(hi >> 32) as i32, hi as i32, (lo >> 32) as i32, lo as i32];
+            let name = seq.get_str_bounded(16)?.to_string();
+            let prop_count = seq.get_var_int()?.0 as usize;
+            let mut properties = Vec::with_capacity(prop_count);
+            for _ in 0..prop_count {
+                let p_name = seq.get_str_bounded(64)?.to_string();
+                let p_value = seq.get_str_bounded(32767)?.to_string();
+                let p_sig: Option<String> =
+                    seq.get_option(|s| s.get_str_bounded(1024).map(|s| s.to_string()))?;
+                properties.push(ProfileProperty {
+                    name: p_name,
+                    value: p_value,
+                    signature: p_sig,
+                });
+            }
+            (Some(name), Some(uuid), properties)
+        } else {
+            // Partial: Optional name + Optional UUID + properties
+            let name: Option<String> =
+                seq.get_option(|s| s.get_str_bounded(16).map(|s| s.to_string()))?;
+            let id: Option<[i32; 4]> = seq.get_option(|s| {
+                let hi = s.get_i64()?;
+                let lo = s.get_i64()?;
+                Ok([(hi >> 32) as i32, hi as i32, (lo >> 32) as i32, lo as i32])
+            })?;
+            let prop_count = seq.get_var_int()?.0 as usize;
+            let mut properties = Vec::with_capacity(prop_count);
+            for _ in 0..prop_count {
+                let p_name = seq.get_str_bounded(64)?.to_string();
+                let p_value = seq.get_str_bounded(32767)?.to_string();
+                let p_sig: Option<String> =
+                    seq.get_option(|s| s.get_str_bounded(1024).map(|s| s.to_string()))?;
+                properties.push(ProfileProperty {
+                    name: p_name,
+                    value: p_value,
+                    signature: p_sig,
+                });
+            }
+            (name, id, properties)
+        };
+        // Skip 4 optional PlayerSkin.Patch fields (body, cape, elytra, model)
+        // Each is Optional<ClientAsset.ResourceTexture> which is a string ID
+        for _ in 0..4 {
+            if seq.get_bool()? {
+                let _texture_id = seq.get_str_bounded(32767)?;
+            }
+        }
+
+        Ok(Self {
+            name,
+            id,
+            properties,
+            texture: None,
+            cape: None,
+            elytra: None,
+            model: None,
+        })
     }
 }
 

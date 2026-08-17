@@ -1,10 +1,11 @@
+use crate::experience::Experience;
 use crate::{
     BlockState, BlockStateId,
     tag::{RegistryKey, Tag, Taggable},
 };
 use pumpkin_util::{
     loot_table::LootTable,
-    math::{experience::Experience, position::BlockPos, vector3::Vector3},
+    math::{position::BlockPos, vector3::Vector3},
     random::hash_block_pos,
     resource_location::{FromResourceLocation, ResourceLocation, ToResourceLocation},
 };
@@ -15,7 +16,7 @@ use std::hash::{Hash, Hasher};
 /// This struct contains the base properties shared by all instances of a block
 /// Data-driven attributes like `hardness` and `blast_resistance` are defined here,
 /// while specific orientations or variations are stored in the associated `BlockState`.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub struct Block {
     /// The numeric ID used for internal registry mapping.
     pub id: BlockId,
@@ -43,7 +44,7 @@ pub struct Block {
     /// Defines the items dropped when this block is destroyed.
     pub loot_table: Option<LootTable>,
     /// Defines the amount of XP dropped when the block is mined (e.g., Coal or Diamond).
-    pub experience: Option<Experience>,
+    pub experience: Option<&'static Experience>,
 }
 
 /// Helper struct to ensure the validity of BlockIds parsed from external sources.
@@ -287,7 +288,13 @@ impl BlockId {
     #[inline]
     #[must_use]
     pub fn has_tag(self, tag: Tag) -> bool {
-        tag.1.contains(&self.0)
+        // Static check
+        if tag.1.contains(&self.0) {
+            return true;
+        }
+        // Dynamic (datapack) check via global bridge
+        crate::dynamic_tag_bridge::check_dynamic_tag("block", self.to_block().registry_key(), tag.2)
+            .unwrap_or(false)
     }
 }
 
@@ -316,7 +323,7 @@ impl std::fmt::Display for BlockId {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 pub struct Flammable {
     pub spread_chance: u8,
     pub burn_chance: u8,

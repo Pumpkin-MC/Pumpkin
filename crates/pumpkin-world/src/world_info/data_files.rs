@@ -4,8 +4,11 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use pumpkin_codecs::{DynamicOps, json_ops::JsonOps};
 use pumpkin_data::game_rules::{GameRule, GameRuleRegistry, GameRuleValue};
-use pumpkin_nbt::{compound::NbtCompound, nbt_compress::read_gzip_compound_tag, tag::NbtTag};
+use pumpkin_nbt::{
+    compound::NbtCompound, nbt_compress::read_gzip_compound_tag, nbt_ops::NbtOps, tag::NbtTag,
+};
 use serde::{Deserialize, Serialize};
 use tracing::warn;
 
@@ -171,6 +174,27 @@ pub fn write_weather(level_folder: &Path, data: &WeatherData) -> Result<(), Worl
         .map_err(|e| WorldInfoError::SerializationError(e.to_string()))
 }
 
+pub(crate) fn world_gen_settings_from_nbt(
+    compound: NbtCompound,
+) -> Result<WorldGenSettings, WorldInfoError> {
+    let json = NbtOps.convert_to(&JsonOps, NbtTag::Compound(compound));
+    serde_json::from_value(json)
+        .map_err(|error| WorldInfoError::DeserializationError(error.to_string()))
+}
+
+pub(crate) fn world_gen_settings_to_nbt(
+    settings: &WorldGenSettings,
+) -> Result<NbtCompound, WorldInfoError> {
+    let json = serde_json::to_value(settings)
+        .map_err(|error| WorldInfoError::SerializationError(error.to_string()))?;
+    match JsonOps.convert_to(&NbtOps, json) {
+        NbtTag::Compound(compound) => Ok(compound),
+        _ => Err(WorldInfoError::SerializationError(
+            "WorldGenSettings did not encode to an NBT compound".to_string(),
+        )),
+    }
+}
+
 pub fn read_world_gen_settings(level_folder: &Path) -> Option<WorldGenSettings> {
     let path = minecraft_data_dir(level_folder).join("world_gen_settings.dat");
     if !path.exists() {
@@ -178,18 +202,10 @@ pub fn read_world_gen_settings(level_folder: &Path) -> Option<WorldGenSettings> 
     }
     match File::open(&path) {
         Ok(f) => match read_gzip_compound_tag(f) {
-            Ok(compound) => {
-                let seed = compound
-                    .get_compound("data")
-                    .and_then(|c| c.get_long("seed"));
-                if seed.is_none() {
-                    warn!("world_gen_settings.dat has no seed");
-                }
-                seed.map(|seed| WorldGenSettings {
-                    seed,
-                    dimensions: std::collections::HashMap::new(),
-                })
-            }
+            Ok(compound) => compound
+                .get_compound("data")
+                .cloned()
+                .and_then(|data| world_gen_settings_from_nbt(data).ok()),
             Err(e) => {
                 warn!("Failed to deserialize world_gen_settings.dat: {e}");
                 None
@@ -210,9 +226,8 @@ pub fn write_world_gen_settings(
     let dir = ensure_minecraft_data_dir(level_folder)?;
     let path = dir.join("world_gen_settings.dat");
     let file = File::create(&path)?;
-    let mut inner = NbtCompound::new();
+    let mut inner = world_gen_settings_to_nbt(settings)?;
     inner.put_int("DataVersion", data_version);
-    inner.put_long("seed", settings.seed);
 
     let mut root = NbtCompound::new();
     root.put_compound("data", inner);

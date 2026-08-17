@@ -13,6 +13,8 @@ use uuid::Uuid;
 pub struct AdvancementManager {
     pub advancement_path: PathBuf,
     pub save_enabled: bool,
+    /// Reference to the datapack manager for datapack advancement IDs.
+    pub datapack_manager: Option<Arc<pumpkin_datapack::DataPackManager>>,
 }
 
 impl AdvancementManager {
@@ -30,14 +32,30 @@ impl AdvancementManager {
         Self {
             advancement_path: path,
             save_enabled,
+            datapack_manager: None,
         }
     }
 
-    /// Retrieves the list of all available advancements in the game.
+    /// Set the datapack manager reference for datapack advancement lookups.
+    /// Called during `Server::new()` after all managers are initialized.
+    pub fn set_datapack_manager(&mut self, dp: &Arc<pumpkin_datapack::DataPackManager>) {
+        self.datapack_manager = Some(dp.clone());
+    }
+
+    /// Retrieves the list of all available advancements in the game,
+    /// including datapack advancements.
     #[must_use]
-    #[inline]
     pub fn get_advancements(&self) -> Vec<Identifier> {
-        Advancement::get_identifier_list().to_vec()
+        let mut ids: Vec<Identifier> = Advancement::get_identifier_list().to_vec();
+        // Append datapack advancement IDs if available
+        if let Some(ref dp) = self.datapack_manager
+            && let Ok(advancements) = dp.advancements.try_read()
+        {
+            for id in advancements.keys() {
+                ids.push(id.clone());
+            }
+        }
+        ids
     }
 
     /// Creates and returns a new instance of `PlayerAdvancement` with the configured path.

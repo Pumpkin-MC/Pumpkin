@@ -1,0 +1,23 @@
+[package]
+name = "pumpkin-registry"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[features]
+[dependencies]
+pumpkin-util.workspace = true
+pumpkin-codecs.workspace = true
+rayon.workspace = true
+thiserror.workspace = true
+rustc-hash.workspace = true
+arc-swap.workspace = true
+linkme.workspace = true
+
+[dev-dependencies]
+# Validate correctness
+serde_json.workspace = true
+
+[lints]
+workspace = true

@@ -1572,6 +1572,8 @@ struct NoiseRouterReprs {
     overworld_amplified: NoiseRouterRepr,
     /// Nether dimension noise router.
     nether: NoiseRouterRepr,
+    /// Cave noise router.
+    caves: NoiseRouterRepr,
     /// End dimension noise router.
     end: NoiseRouterRepr,
     /// Floating-islands (End) noise router variant.
@@ -1881,14 +1883,25 @@ pub fn build() -> TokenStream {
     fix_final_density!(reprs.overworld_amplified);
     fix_final_density!(reprs.overworld_large_biomes);
     fix_final_density!(reprs.nether);
+    fix_final_density!(reprs.caves);
 
     let _ = reprs.end;
     let _ = reprs.end_islands;
 
     let (overworld_router, overworld_compiled) =
         reprs.overworld.into_token_stream_compiled("overworld");
+    let (amplified_router, _) = reprs
+        .overworld_amplified
+        .into_token_stream_compiled("overworld_amplified");
+    let (large_biomes_router, _) = reprs
+        .overworld_large_biomes
+        .into_token_stream_compiled("overworld_large_biomes");
     let (nether_router, nether_compiled) = reprs.nether.into_token_stream_compiled("nether");
+    let (caves_router, _) = reprs.caves.into_token_stream_compiled("caves");
     let (end_router, end_compiled) = reprs.end.into_token_stream_compiled("end");
+    let (floating_islands_router, _) = reprs
+        .end_islands
+        .into_token_stream_compiled("floating_islands");
 
     quote! {
         use crate::chunk::DoublePerlinNoiseParameters;
@@ -2206,7 +2219,11 @@ pub fn build() -> TokenStream {
         }
 
         pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = #overworld_router;
+        pub const AMPLIFIED_BASE_NOISE_ROUTER: BaseNoiseRouters = #amplified_router;
+        pub const LARGE_BIOMES_BASE_NOISE_ROUTER: BaseNoiseRouters = #large_biomes_router;
         pub const NETHER_BASE_NOISE_ROUTER: BaseNoiseRouters = #nether_router;
+        pub const CAVES_BASE_NOISE_ROUTER: BaseNoiseRouters = #caves_router;
         pub const END_BASE_NOISE_ROUTER: BaseNoiseRouters = #end_router;
+        pub const FLOATING_ISLANDS_BASE_NOISE_ROUTER: BaseNoiseRouters = #floating_islands_router;
     }
 }

@@ -3,15 +3,16 @@
 use criterion::{BatchSize, Criterion, criterion_group, criterion_main};
 use pumpkin_config::lighting::LightingEngineConfig;
 use pumpkin_data::BlockStateId;
-use pumpkin_data::dimension::Dimension;
 use pumpkin_util::world_seed::Seed;
 use pumpkin_world::ProtoChunk;
 use pumpkin_world::chunk_system::{Cache, Chunk, StagedChunkEnum, generate_single_chunk};
-use pumpkin_world::generation::generator::WorldGenerator;
+use pumpkin_world::generation::generator::ChunkGenerator;
 use pumpkin_world::generation::get_world_gen;
 use pumpkin_world::world::WorldPortalExt;
 use std::hint::black_box;
 use std::sync::Arc;
+
+mod support;
 
 const SEED: Seed = Seed(42);
 
@@ -55,13 +56,14 @@ impl WorldPortalExt for BlockRegistry {
     }
 }
 
-fn make_world_gen() -> Box<WorldGenerator> {
-    get_world_gen(SEED, Dimension::OVERWORLD, false, Vec::new(), String::new())
+#[allow(clippy::unnecessary_box_returns)]
+fn make_world_gen() -> Box<dyn ChunkGenerator> {
+    get_world_gen(SEED, support::overworld(), false, Vec::new(), String::new())
 }
 
 fn setup_cache(
     target_stage: StagedChunkEnum,
-    world_gen: &WorldGenerator,
+    world_gen: &dyn ChunkGenerator,
     block_registry: &dyn WorldPortalExt,
 ) -> Cache {
     let radius = target_stage.get_direct_radius();
@@ -102,7 +104,7 @@ fn setup_cache(
 }
 
 fn bench_full_chunk_generation(c: &mut Criterion) {
-    let dimension = Dimension::OVERWORLD;
+    let dimension = support::overworld();
     let world_gen = make_world_gen();
     let block_registry = Arc::new(BlockRegistry);
 
@@ -111,7 +113,7 @@ fn bench_full_chunk_generation(c: &mut Criterion) {
             black_box(generate_single_chunk(
                 &dimension,
                 0,
-                &world_gen,
+                world_gen.as_ref(),
                 block_registry.as_ref(),
                 black_box(0),
                 black_box(0),
@@ -127,11 +129,17 @@ fn bench_biomes_generation(c: &mut Criterion) {
 
     c.bench_function("biomes_generation", |b| {
         b.iter_batched(
-            || setup_cache(StagedChunkEnum::Biomes, &world_gen, block_registry.as_ref()),
+            || {
+                setup_cache(
+                    StagedChunkEnum::Biomes,
+                    world_gen.as_ref(),
+                    block_registry.as_ref(),
+                )
+            },
             |mut cache| {
                 cache.advance(
                     StagedChunkEnum::Biomes,
-                    &world_gen,
+                    world_gen.as_ref(),
                     block_registry.as_ref(),
                     &LightingEngineConfig::Default,
                 );
@@ -151,14 +159,14 @@ fn bench_structure_starts_generation(c: &mut Criterion) {
             || {
                 setup_cache(
                     StagedChunkEnum::StructureStart,
-                    &world_gen,
+                    world_gen.as_ref(),
                     block_registry.as_ref(),
                 )
             },
             |mut cache| {
                 cache.advance(
                     StagedChunkEnum::StructureStart,
-                    &world_gen,
+                    world_gen.as_ref(),
                     block_registry.as_ref(),
                     &LightingEngineConfig::Default,
                 );
@@ -178,14 +186,14 @@ fn bench_structure_references_generation(c: &mut Criterion) {
             || {
                 setup_cache(
                     StagedChunkEnum::StructureReferences,
-                    &world_gen,
+                    world_gen.as_ref(),
                     block_registry.as_ref(),
                 )
             },
             |mut cache| {
                 cache.advance(
                     StagedChunkEnum::StructureReferences,
-                    &world_gen,
+                    world_gen.as_ref(),
                     block_registry.as_ref(),
                     &LightingEngineConfig::Default,
                 );
@@ -202,11 +210,17 @@ fn bench_noise_generation(c: &mut Criterion) {
 
     c.bench_function("noise_generation", |b| {
         b.iter_batched(
-            || setup_cache(StagedChunkEnum::Noise, &world_gen, block_registry.as_ref()),
+            || {
+                setup_cache(
+                    StagedChunkEnum::Noise,
+                    world_gen.as_ref(),
+                    block_registry.as_ref(),
+                )
+            },
             |mut cache| {
                 cache.advance(
                     StagedChunkEnum::Noise,
-                    &world_gen,
+                    world_gen.as_ref(),
                     block_registry.as_ref(),
                     &LightingEngineConfig::Default,
                 );
@@ -226,14 +240,14 @@ fn bench_surface_generation(c: &mut Criterion) {
             || {
                 setup_cache(
                     StagedChunkEnum::Surface,
-                    &world_gen,
+                    world_gen.as_ref(),
                     block_registry.as_ref(),
                 )
             },
             |mut cache| {
                 cache.advance(
                     StagedChunkEnum::Surface,
-                    &world_gen,
+                    world_gen.as_ref(),
                     block_registry.as_ref(),
                     &LightingEngineConfig::Default,
                 );
@@ -253,14 +267,14 @@ fn bench_carvers_generation(c: &mut Criterion) {
             || {
                 setup_cache(
                     StagedChunkEnum::Carvers,
-                    &world_gen,
+                    world_gen.as_ref(),
                     block_registry.as_ref(),
                 )
             },
             |mut cache| {
                 cache.advance(
                     StagedChunkEnum::Carvers,
-                    &world_gen,
+                    world_gen.as_ref(),
                     block_registry.as_ref(),
                     &LightingEngineConfig::Default,
                 );
@@ -280,14 +294,14 @@ fn bench_features_generation(c: &mut Criterion) {
             || {
                 setup_cache(
                     StagedChunkEnum::Features,
-                    &world_gen,
+                    world_gen.as_ref(),
                     block_registry.as_ref(),
                 )
             },
             |mut cache| {
                 cache.advance(
                     StagedChunkEnum::Features,
-                    &world_gen,
+                    world_gen.as_ref(),
                     block_registry.as_ref(),
                     &LightingEngineConfig::Default,
                 );
@@ -307,14 +321,14 @@ fn bench_lighting_generation(c: &mut Criterion) {
             || {
                 setup_cache(
                     StagedChunkEnum::Lighting,
-                    &world_gen,
+                    world_gen.as_ref(),
                     block_registry.as_ref(),
                 )
             },
             |mut cache| {
                 cache.advance(
                     StagedChunkEnum::Lighting,
-                    &world_gen,
+                    world_gen.as_ref(),
                     block_registry.as_ref(),
                     &LightingEngineConfig::Default,
                 );
@@ -331,11 +345,17 @@ fn bench_level_chunk_conversion(c: &mut Criterion) {
 
     c.bench_function("level_chunk_conversion", |b| {
         b.iter_batched(
-            || setup_cache(StagedChunkEnum::Full, &world_gen, block_registry.as_ref()),
+            || {
+                setup_cache(
+                    StagedChunkEnum::Full,
+                    world_gen.as_ref(),
+                    block_registry.as_ref(),
+                )
+            },
             |mut cache| {
                 cache.advance(
                     StagedChunkEnum::Full,
-                    &world_gen,
+                    world_gen.as_ref(),
                     block_registry.as_ref(),
                     &LightingEngineConfig::Default,
                 );

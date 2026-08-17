@@ -6,7 +6,6 @@ use crate::{
 };
 use pumpkin_data::{
     Block, BlockDirection, BlockStateId,
-    dimension::Dimension,
     fluid::Fluid,
     item::Item,
     item_stack::ItemStack,
@@ -208,7 +207,7 @@ async fn try_pickup_bucket_item(
 pub(crate) fn should_evaporate_in_nether(item: &Item, world: &World) -> bool {
     item.id != Item::LAVA_BUCKET.id
         && item.id != Item::POWDER_SNOW_BUCKET.id
-        && world.dimension == Dimension::THE_NETHER
+        && world.dimension.is_nether_like()
 }
 
 pub(crate) fn play_bucket_evaporation(world: &Arc<World>, position: &Vector3<f64>) {

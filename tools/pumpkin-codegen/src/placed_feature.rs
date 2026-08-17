@@ -1,5 +1,12 @@
+// TODO(datapack parity): Load placed_feature from data/minecraft/worldgen/placed_feature/
+// at runtime so datapacks can add custom placed features.
 use heck::ToPascalCase;
 use proc_macro2::TokenStream;
+use pumpkin_codecs::{Decode, json_ops::JsonOps};
+use pumpkin_data::int_provider::{
+    BiasedToBottomIntProvider, ClampedIntProvider, ClampedNormalIntProvider, ConstantIntProvider,
+    IntProviderValue, TrapezoidIntProvider, UniformIntProvider, WeightedListIntProvider,
+};
 use quote::{format_ident, quote};
 use serde_json::Value;
 use std::fs;
@@ -101,9 +108,9 @@ pub fn build() -> TokenStream {
                 VeryBiasedToBottomHeightProvider,
             };
             use pumpkin_util::y_offset::{AboveBottom, Absolute, BelowTop, YOffset};
-            use pumpkin_util::math::int_provider::{
+            use pumpkin_data::int_provider::{
                 BiasedToBottomIntProvider, ClampedIntProvider, TrapezoidIntProvider, ClampedNormalIntProvider,
-                ConstantIntProvider, IntProvider, NormalIntProvider, UniformIntProvider,
+                ConstantIntProvider, IntProviderValue, UniformIntProvider,
                 WeightedEntry, WeightedListIntProvider,
             };
             use crate::block::BlockStateCodec;
@@ -556,86 +563,62 @@ pub fn value_to_y_offset(v: &Value) -> TokenStream {
     }
 }
 
-/// Converts an integer-provider JSON value into its corresponding `IntProvider` token stream.
-///
-/// # Arguments
-/// - `v` – Either a bare JSON number (constant) or an object with a `"type"` discriminant.
-///
-/// # Returns
-/// An `IntProvider` variant token stream; defaults to `IntProvider::Constant(0)` when unrecognized.
+/// Decodes an integer provider through its runtime codec and emits its generated-data form.
 pub fn value_to_int_provider(v: &Value) -> TokenStream {
-    match v {
-        Value::Null => {
-            quote! { IntProvider::Constant(0) }
-        }
-        Value::Number(n) => {
-            let val = n.as_i64().unwrap_or(0) as i32;
-            quote! { IntProvider::Constant(#val) }
-        }
-        Value::Object(_) => {
-            let type_str = v["type"].as_str().unwrap_or("");
-            match type_str {
-                "minecraft:constant" => {
-                    let val = v["value"].as_i64().unwrap_or(0) as i32;
-                    quote! { IntProvider::Object(NormalIntProvider::Constant(ConstantIntProvider { value: #val })) }
-                }
-                "minecraft:uniform" => {
-                    let min = v["min_inclusive"].as_i64().unwrap_or(0) as i32;
-                    let max = v["max_inclusive"].as_i64().unwrap_or(0) as i32;
-                    quote! { IntProvider::Object(NormalIntProvider::Uniform(UniformIntProvider { min_inclusive: #min, max_inclusive: #max })) }
-                }
-                "minecraft:biased_to_bottom" => {
-                    let min = v["min_inclusive"].as_i64().unwrap_or(0) as i32;
-                    let max = v["max_inclusive"].as_i64().unwrap_or(0) as i32;
-                    quote! { IntProvider::Object(NormalIntProvider::BiasedToBottom(BiasedToBottomIntProvider { min_inclusive: #min, max_inclusive: #max })) }
-                }
-                "minecraft:clamped" => {
-                    let min = v["min_inclusive"].as_i64().unwrap_or(0) as i32;
-                    let max = v["max_inclusive"].as_i64().unwrap_or(0) as i32;
-                    let src = value_to_int_provider(&v["source"]);
-                    quote! { IntProvider::Object(NormalIntProvider::Clamped(ClampedIntProvider { source: Box::new(#src), min_inclusive: #min, max_inclusive: #max })) }
-                }
-                "minecraft:trapezoid" => {
-                    let min = v["min"].as_i64().unwrap_or(0) as i32;
-                    let max = v["max"].as_i64().unwrap_or(0) as i32;
-                    let plateau = v["plateau"].as_i64().unwrap_or(0) as i32;
-                    quote! { IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider { min_inclusive: #min, max_inclusive: #max, plateau: #plateau })) }
-                }
-                "minecraft:clamped_normal" => {
-                    let mean = v["mean"].as_f64().unwrap_or(0.0) as f32;
-                    let dev = v["deviation"].as_f64().unwrap_or(1.0) as f32;
-                    let min = v["min_inclusive"].as_i64().unwrap_or(0) as i32;
-                    let max = v["max_inclusive"].as_i64().unwrap_or(0) as i32;
-                    quote! { IntProvider::Object(NormalIntProvider::ClampedNormal(ClampedNormalIntProvider { mean: #mean, deviation: #dev, min_inclusive: #min, max_inclusive: #max })) }
-                }
-                "minecraft:weighted_list" => {
-                    let entries: Vec<TokenStream> = v["distribution"]
-                        .as_array()
-                        .map(|arr| {
-                            arr.iter()
-                                .map(|e| {
-                                    let data = value_to_int_provider(&e["data"]);
-                                    let weight = e["weight"].as_i64().unwrap_or(1) as i32;
-                                    quote! { WeightedEntry { data: #data, weight: #weight } }
-                                })
-                                .collect()
-                        })
-                        .unwrap_or_default();
-                    quote! { IntProvider::Object(NormalIntProvider::WeightedList(WeightedListIntProvider { distribution: vec![#(#entries),*] })) }
-                }
-                _ => {
-                    panic!(
-                        "Unknown Int Provider, Seems like Mojang added a new one: {:?}",
-                        v
-                    )
-                }
-            }
-        }
-        _ => panic!(
-            "Unknown Int Provider, Seems like Mojang added a new one: {:?}",
-            v
-        ),
+    if v.is_null() {
+        return quote! { IntProviderValue::constant(0) };
     }
+
+    let provider = IntProviderValue::parse(v.clone(), &JsonOps)
+        .into_result()
+        .unwrap_or_else(|| panic!("Failed to decode int provider through codec: {v:?}"));
+    int_provider_to_tokens(&provider)
+}
+
+pub(crate) fn int_provider_to_tokens(provider: &IntProviderValue) -> TokenStream {
+    if let Some(provider) = provider.downcast_ref::<ConstantIntProvider>() {
+        let value = provider.value;
+        return quote! { IntProviderValue::constant(#value) };
+    }
+    if let Some(provider) = provider.downcast_ref::<UniformIntProvider>() {
+        let min = provider.min_inclusive;
+        let max = provider.max_inclusive;
+        return quote! { IntProviderValue::new(UniformIntProvider { min_inclusive: #min, max_inclusive: #max }) };
+    }
+    if let Some(provider) = provider.downcast_ref::<BiasedToBottomIntProvider>() {
+        let min = provider.min_inclusive;
+        let max = provider.max_inclusive;
+        return quote! { IntProviderValue::new(BiasedToBottomIntProvider { min_inclusive: #min, max_inclusive: #max }) };
+    }
+    if let Some(provider) = provider.downcast_ref::<ClampedIntProvider>() {
+        let source = int_provider_to_tokens(&provider.source);
+        let min = provider.min_inclusive;
+        let max = provider.max_inclusive;
+        return quote! { IntProviderValue::new(ClampedIntProvider { source: #source, min_inclusive: #min, max_inclusive: #max }) };
+    }
+    if let Some(provider) = provider.downcast_ref::<TrapezoidIntProvider>() {
+        let min = provider.min_inclusive;
+        let max = provider.max_inclusive;
+        let plateau = provider.plateau;
+        return quote! { IntProviderValue::new(TrapezoidIntProvider { min_inclusive: #min, max_inclusive: #max, plateau: #plateau }) };
+    }
+    if let Some(provider) = provider.downcast_ref::<ClampedNormalIntProvider>() {
+        let mean = provider.mean;
+        let deviation = provider.deviation;
+        let min = provider.min_inclusive;
+        let max = provider.max_inclusive;
+        return quote! { IntProviderValue::new(ClampedNormalIntProvider { mean: #mean, deviation: #deviation, min_inclusive: #min, max_inclusive: #max }) };
+    }
+    if let Some(provider) = provider.downcast_ref::<WeightedListIntProvider>() {
+        let entries = provider.distribution.iter().map(|entry| {
+            let data = int_provider_to_tokens(&entry.data);
+            let weight = entry.weight;
+            quote! { WeightedEntry { data: #data, weight: #weight } }
+        });
+        return quote! { IntProviderValue::new(WeightedListIntProvider { distribution: vec![#(#entries),*] }) };
+    }
+
+    panic!("No codegen renderer for decoded int provider: {provider:?}");
 }
 
 /// Converts a SCREAMING_SNAKE_CASE heightmap name into its `HeightMap` token stream.

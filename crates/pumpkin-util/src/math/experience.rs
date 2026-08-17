@@ -1,28 +1,3 @@
-#[cfg(feature = "codegen")]
-use proc_macro2::TokenStream;
-#[cfg(feature = "codegen")]
-use quote::{ToTokens, quote};
-use serde::Deserialize;
-
-use super::int_provider::IntProvider;
-
-#[derive(Deserialize, Clone, Debug)]
-pub struct Experience {
-    /// The experience points, represented as an `IntProvider`.
-    pub experience: IntProvider,
-}
-
-#[cfg(feature = "codegen")]
-impl ToTokens for Experience {
-    fn to_tokens(&self, tokens: &mut TokenStream) {
-        let experience = self.experience.to_token_stream();
-
-        tokens.extend(quote! {
-            Experience { experience: #experience }
-        });
-    }
-}
-
 /// Returns the number of points required to progress within a specific level.
 ///
 /// # Arguments

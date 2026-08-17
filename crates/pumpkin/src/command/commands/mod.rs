@@ -18,6 +18,7 @@ mod clear;
 mod clone;
 mod damage;
 mod data;
+mod datapack;
 pub mod defaultgamemode;
 mod deop;
 mod dialog;
@@ -30,6 +31,7 @@ mod fetchprofile;
 mod fill;
 mod fillbiome;
 mod forceload;
+mod function_cmd;
 mod gamemode;
 mod gamerule;
 mod give;
@@ -52,6 +54,7 @@ mod plugins;
 mod pumpkin;
 mod random;
 mod recipe;
+mod reload;
 mod ride;
 mod rotate;
 mod saveall;
@@ -111,6 +114,7 @@ pub async fn default_dispatcher(
     dispatcher.register(effect::init_command_tree(), "minecraft:command.effect");
     dispatcher.register(teleport::init_command_tree(), "minecraft:command.teleport");
     dispatcher.register(time::init_command_tree(), "minecraft:command.time");
+    dispatcher.register(waypoint::init_command_tree(), "minecraft:command.waypoint");
     dispatcher.register(give::init_command_tree(), "minecraft:command.give");
     dispatcher.register(item::init_command_tree(), "minecraft:command.item");
     dispatcher.register(enchant::init_command_tree(), "minecraft:command.enchant");
@@ -155,7 +159,12 @@ pub async fn default_dispatcher(
     );
     dispatcher.register(spectate::init_command_tree(), "minecraft:command.spectate");
     dispatcher.register(data::init_command_tree(), "minecraft:command.data");
-    dispatcher.register(waypoint::init_command_tree(), "minecraft:command.waypoint");
+    dispatcher.register(datapack::init_command_tree(), "minecraft:command.datapack");
+    dispatcher.register(
+        function_cmd::init_command_tree(),
+        "minecraft:command.function",
+    );
+    dispatcher.register(reload::init_command_tree(), "minecraft:command.reload");
     // Three
     dispatcher.register(deop::init_command_tree(), "minecraft:command.deop");
     dispatcher.register(kick::init_command_tree(), "minecraft:command.kick");
@@ -546,6 +555,27 @@ fn register_level_2_permissions(registry: &mut PermissionRegistry) {
             PermissionDefault::Op(PermissionLvl::Two),
         ))
         .unwrap_or_else(|e| tracing::warn!("{e}"));
+    registry
+        .register_permission(Permission::new(
+            "minecraft:command.datapack",
+            "Manages datapacks",
+            PermissionDefault::Op(PermissionLvl::Two),
+        ))
+        .expect("Permission already registered");
+    registry
+        .register_permission(Permission::new(
+            "minecraft:command.function",
+            "Executes functions",
+            PermissionDefault::Op(PermissionLvl::Two),
+        ))
+        .expect("Permission already registered");
+    registry
+        .register_permission(Permission::new(
+            "minecraft:command.reload",
+            "Reloads datapacks and server data",
+            PermissionDefault::Op(PermissionLvl::Two),
+        ))
+        .expect("Permission already registered");
     registry
         .register_permission(Permission::new(
             "minecraft:command.enchant",

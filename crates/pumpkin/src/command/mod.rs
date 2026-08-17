@@ -19,13 +19,12 @@ use dispatcher::CommandError;
 use pumpkin_data::{
     Block,
     block_properties::{BlockProperties, CommandBlockLikeProperties, Facing},
-    dimension::Dimension,
 };
-use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::permission::{PermissionDefault, PermissionLvl};
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::translation::Locale;
+use pumpkin_util::{identifier::Identifier, math::vector2::Vector2};
 
 pub mod args;
 pub mod argument_builder;
@@ -379,7 +378,7 @@ impl CommandSender {
     }
 
     fn get_world_and_spawn_point(server: &Arc<Server>) -> (Arc<World>, Vector3<f64>) {
-        let world = server.get_world_from_dimension(&Dimension::OVERWORLD);
+        let world = server.get_world_by_key(&Identifier::vanilla_static("overworld"));
         let spawn_point = {
             let level_data = world.level_info.load();
 

@@ -94,7 +94,7 @@ fn execute_in_modifier<'a>(
         let worlds = server.worlds.load();
         let target_world = worlds
             .iter()
-            .find(|w| w.dimension.minecraft_name == dimension_name);
+            .find(|w| w.level.world_key.to_string() == dimension_name);
 
         target_world.map_or_else(
             || {
@@ -354,7 +354,7 @@ fn execute_if_dimension_modifier<'a>(
         let dimension_name = dimension_key.identifier.to_string();
 
         if let Some(ref world) = context.source.world
-            && world.dimension.minecraft_name == dimension_name
+            && world.level.world_key.to_string() == dimension_name
         {
             return Ok(vec![context.source.clone()]);
         }
@@ -375,7 +375,7 @@ fn execute_unless_dimension_modifier<'a>(
         let dimension_name = dimension_key.identifier.to_string();
 
         if let Some(ref world) = context.source.world {
-            if world.dimension.minecraft_name != dimension_name {
+            if world.level.world_key.to_string() != dimension_name {
                 return Ok(vec![context.source.clone()]);
             }
         } else {

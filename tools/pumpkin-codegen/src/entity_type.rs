@@ -1,3 +1,5 @@
+// TODO(datapack parity): Load entity_type definitions from data/minecraft/entity_type/
+// at runtime, merging with compile-time defaults.
 use std::{collections::BTreeMap, fs};
 
 use heck::ToPascalCase;

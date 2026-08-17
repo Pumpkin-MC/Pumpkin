@@ -45,7 +45,7 @@ impl ItemBehaviour for CompassItem {
                 let mut lodestone_compass = ItemStack::new(1, &Item::COMPASS);
                 let tracker = LodestoneTrackerImpl {
                     target: Some(LodestoneTarget {
-                        dimension: world.dimension.minecraft_name.to_string(),
+                        dimension: world.level.world_key.to_string(),
                         x: location.0.x,
                         y: location.0.y,
                         z: location.0.z,

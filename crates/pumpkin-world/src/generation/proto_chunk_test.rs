@@ -2,8 +2,8 @@
 mod test {
     #![allow(clippy::print_stdout, clippy::needless_pass_by_value)]
     use crate::chunk_system::chunk_state::StagedChunkEnum;
-    use crate::generation::{generator::WorldGenerator, get_world_gen, proto_chunk::ProtoChunk};
-    use pumpkin_data::dimension::Dimension;
+    use crate::dimension_type::DimensionType as Dimension;
+    use crate::generation::{generator::VanillaGenerator, proto_chunk::ProtoChunk};
     use pumpkin_util::world_seed::Seed;
 
     #[test]
@@ -12,26 +12,27 @@ mod test {
         use pumpkin_config::lighting::LightingEngineConfig;
         use pumpkin_data::structures::StructureKeys;
 
+        crate::init_test_registries();
         let seed = Seed(1_782_124_772_053_846_960);
-        let world_gen = get_world_gen(seed, Dimension::OVERWORLD, false, Vec::new(), String::new());
-        let WorldGenerator::Noise(generator) = &*world_gen else {
-            unreachable!()
-        };
+        let generator = VanillaGenerator::new(seed, crate::test_support::dimension("overworld"));
 
         // This chunk contains the far edge of a monument starting at (-553, 173).
-        let mut proto = ProtoChunk::new(-553, 174, &world_gen);
-        proto.step_to_biomes(generator);
-        proto.set_structure_starts(generator);
-        proto.set_structure_references(generator);
+        let mut proto = ProtoChunk::new(-553, 174, &generator);
+        generator.step_to_biomes(&mut proto);
+        generator.set_structure_starts(&mut proto);
+        generator.set_structure_references(&mut proto);
         assert!(proto.has_structure(StructureKeys::Monument));
 
         let mut staged = Chunk::Proto(Box::new(proto));
-        staged.upgrade_to_level_chunk(&Dimension::OVERWORLD, &LightingEngineConfig::Default);
+        staged.upgrade_to_level_chunk(
+            &crate::test_support::dimension("overworld"),
+            &LightingEngineConfig::Default,
+        );
         let Chunk::Level(chunk_data) = staged else {
             unreachable!()
         };
 
-        let resumed = ProtoChunk::from_chunk_data(&chunk_data, &world_gen);
+        let resumed = ProtoChunk::from_chunk_data(&chunk_data, &generator);
         assert_eq!(resumed.stage, StagedChunkEnum::StructureReferences);
         assert!(resumed.has_structure(StructureKeys::Monument));
     }
@@ -44,18 +45,16 @@ mod test {
         use pumpkin_config::lighting::LightingEngineConfig;
         use pumpkin_util::math::vector3::Vector3;
 
+        crate::init_test_registries();
         let seed = Seed(1779920288596261407);
         let (cx, cz) = (67i32, 63i32);
-        let world_gen = get_world_gen(seed, Dimension::OVERWORLD, false, Vec::new(), String::new());
-        let WorldGenerator::Noise(generator) = &*world_gen else {
-            unreachable!()
-        };
+        let generator = VanillaGenerator::new(seed, crate::test_support::dimension("overworld"));
 
-        let mut proto = ProtoChunk::new(cx, cz, &world_gen);
-        proto.step_to_biomes(generator);
-        proto.set_structure_starts(generator);
-        proto.set_structure_references(generator);
-        proto.step_to_noise(generator);
+        let mut proto = ProtoChunk::new(cx, cz, &generator);
+        generator.step_to_biomes(&mut proto);
+        generator.set_structure_starts(&mut proto);
+        generator.set_structure_references(&mut proto);
+        generator.step_to_noise(&mut proto);
 
         let mut expected_heights = [[0i32; 16]; 16];
         for z in 0..16i32 {
@@ -65,13 +64,16 @@ mod test {
         }
 
         let mut staged = Chunk::Proto(Box::new(proto));
-        staged.upgrade_to_level_chunk(&Dimension::OVERWORLD, &LightingEngineConfig::Default);
+        staged.upgrade_to_level_chunk(
+            &crate::test_support::dimension("overworld"),
+            &LightingEngineConfig::Default,
+        );
         let Chunk::Level(chunk_data) = staged else {
             unreachable!()
         };
         assert_eq!(chunk_data.status, pumpkin_data::chunk::ChunkStatus::Noise);
 
-        let mut resumed = ProtoChunk::from_chunk_data(&chunk_data, &world_gen);
+        let mut resumed = ProtoChunk::from_chunk_data(&chunk_data, &generator);
         assert_eq!(resumed.stage, StagedChunkEnum::Noise);
 
         let mut height_mismatches = 0;
@@ -89,14 +91,14 @@ mod test {
             "heightmap corrupted by save/load roundtrip (transposed or lost)"
         );
 
-        resumed.step_to_surface(generator);
+        generator.step_to_surface(&mut resumed);
 
-        let mut fresh = ProtoChunk::new(cx, cz, &world_gen);
-        fresh.step_to_biomes(generator);
-        fresh.set_structure_starts(generator);
-        fresh.set_structure_references(generator);
-        fresh.step_to_noise(generator);
-        fresh.step_to_surface(generator);
+        let mut fresh = ProtoChunk::new(cx, cz, &generator);
+        generator.step_to_biomes(&mut fresh);
+        generator.set_structure_starts(&mut fresh);
+        generator.set_structure_references(&mut fresh);
+        generator.step_to_noise(&mut fresh);
+        generator.step_to_surface(&mut fresh);
 
         let bottom = fresh.bottom_y() as i32;
         let top = bottom + fresh.height() as i32;
@@ -132,15 +134,12 @@ mod test {
         test_name: &str,
     ) {
         let seed = Seed(seed);
-        let world_gen = get_world_gen(seed, dimension, false, Vec::new(), String::new());
-        let mut chunk = ProtoChunk::new(chunk_x, chunk_z, &world_gen);
-        let WorldGenerator::Noise(generator) = &*world_gen else {
-            unreachable!()
-        };
+        let generator = VanillaGenerator::new(seed, dimension);
+        let mut chunk = ProtoChunk::new(chunk_x, chunk_z, &generator);
 
-        chunk.step_to_biomes(generator);
+        generator.step_to_biomes(&mut chunk);
         chunk.stage = StagedChunkEnum::StructureReferences;
-        chunk.step_to_noise(generator);
+        generator.step_to_noise(&mut chunk);
 
         let mismatches = count_dump_mismatches(&chunk, expected_data, test_name);
         assert_air_above_dumped_window(&chunk, expected_data, test_name);
@@ -217,16 +216,13 @@ mod test {
         test_name: &str,
     ) {
         let seed = Seed(seed);
-        let world_gen = get_world_gen(seed, dimension, false, Vec::new(), String::new());
-        let mut chunk = ProtoChunk::new(chunk_x, chunk_z, &world_gen);
-        let WorldGenerator::Noise(generator) = &*world_gen else {
-            unreachable!()
-        };
+        let generator = VanillaGenerator::new(seed, dimension);
+        let mut chunk = ProtoChunk::new(chunk_x, chunk_z, &generator);
 
-        chunk.step_to_biomes(generator);
+        generator.step_to_biomes(&mut chunk);
         chunk.stage = StagedChunkEnum::StructureReferences;
-        chunk.step_to_noise(generator);
-        chunk.step_to_surface(generator);
+        generator.step_to_noise(&mut chunk);
+        generator.step_to_surface(&mut chunk);
 
         let mismatches = count_dump_mismatches(&chunk, expected_data, test_name);
         assert_air_above_dumped_window(&chunk, expected_data, test_name);
@@ -244,7 +240,7 @@ mod test {
         );
         verify_chunk_noise(
             0,
-            Dimension::OVERWORLD,
+            crate::test_support::dimension("overworld"),
             0,
             0,
             &expected,
@@ -259,7 +255,7 @@ mod test {
         );
         verify_chunk_noise(
             0,
-            Dimension::OVERWORLD,
+            crate::test_support::dimension("overworld"),
             7,
             4,
             &expected,
@@ -274,7 +270,7 @@ mod test {
         );
         verify_chunk_noise(
             0,
-            Dimension::OVERWORLD,
+            crate::test_support::dimension("overworld"),
             0,
             0,
             &expected,
@@ -289,7 +285,7 @@ mod test {
         );
         verify_chunk_noise(
             0,
-            Dimension::OVERWORLD,
+            crate::test_support::dimension("overworld"),
             -595,
             544,
             &expected,
@@ -304,7 +300,7 @@ mod test {
         );
         verify_chunk_noise(
             0,
-            Dimension::OVERWORLD,
+            crate::test_support::dimension("overworld"),
             -119,
             183,
             &expected,
@@ -319,7 +315,7 @@ mod test {
         );
         verify_chunk_noise(
             13579,
-            Dimension::OVERWORLD,
+            crate::test_support::dimension("overworld"),
             -6,
             11,
             &expected,
@@ -334,7 +330,7 @@ mod test {
         );
         verify_chunk_noise(
             13579,
-            Dimension::OVERWORLD,
+            crate::test_support::dimension("overworld"),
             -2,
             15,
             &expected,
@@ -349,7 +345,7 @@ mod test {
         );
         verify_chunk_noise(
             13579,
-            Dimension::OVERWORLD,
+            crate::test_support::dimension("overworld"),
             -7,
             9,
             &expected,
@@ -364,7 +360,7 @@ mod test {
         );
         verify_chunk_noise(
             0,
-            Dimension::THE_NETHER,
+            crate::test_support::dimension("the_nether"),
             0,
             0,
             &expected,
@@ -379,7 +375,7 @@ mod test {
         );
         verify_chunk_noise(
             0,
-            Dimension::THE_NETHER,
+            crate::test_support::dimension("the_nether"),
             7,
             4,
             &expected,
@@ -394,7 +390,7 @@ mod test {
         );
         verify_chunk_noise(
             0,
-            Dimension::THE_END,
+            crate::test_support::dimension("the_end"),
             0,
             0,
             &expected,
@@ -409,7 +405,7 @@ mod test {
         );
         verify_chunk_noise(
             0,
-            Dimension::THE_END,
+            crate::test_support::dimension("the_end"),
             7,
             4,
             &expected,
@@ -424,7 +420,7 @@ mod test {
         );
         verify_chunk_surface(
             0,
-            Dimension::OVERWORLD,
+            crate::test_support::dimension("overworld"),
             0,
             0,
             &expected,
@@ -439,7 +435,7 @@ mod test {
         );
         verify_chunk_surface(
             0,
-            Dimension::OVERWORLD,
+            crate::test_support::dimension("overworld"),
             -595,
             544,
             &expected,
@@ -454,7 +450,7 @@ mod test {
         );
         verify_chunk_surface(
             0,
-            Dimension::OVERWORLD,
+            crate::test_support::dimension("overworld"),
             -119,
             183,
             &expected,
@@ -469,7 +465,7 @@ mod test {
         );
         verify_chunk_surface(
             0,
-            Dimension::THE_NETHER,
+            crate::test_support::dimension("the_nether"),
             0,
             0,
             &expected,
@@ -484,7 +480,7 @@ mod test {
         );
         verify_chunk_surface(
             0,
-            Dimension::THE_NETHER,
+            crate::test_support::dimension("the_nether"),
             7,
             4,
             &expected,
@@ -499,7 +495,7 @@ mod test {
         );
         verify_chunk_surface(
             0,
-            Dimension::THE_END,
+            crate::test_support::dimension("the_end"),
             0,
             0,
             &expected,
@@ -514,7 +510,7 @@ mod test {
         );
         verify_chunk_surface(
             0,
-            Dimension::THE_END,
+            crate::test_support::dimension("the_end"),
             7,
             4,
             &expected,

@@ -1,7 +1,6 @@
-use pumpkin_data::dimension::Dimension;
+use crate::dimension_type::DimensionType as Dimension;
 
 use crate::ProtoChunk;
-use crate::generation::generator::WorldGenerator;
 use crate::world::WorldPortalExt;
 use pumpkin_config::lighting::LightingEngineConfig;
 
@@ -10,7 +9,7 @@ use super::{Cache, Chunk, StagedChunkEnum};
 pub fn generate_single_chunk(
     dimension: &Dimension,
     biome_mixer_seed: i64,
-    generator: &WorldGenerator,
+    generator: &dyn crate::generation::generator::ChunkGenerator,
     block_registry: &dyn WorldPortalExt,
     chunk_x: i32,
     chunk_z: i32,
@@ -32,7 +31,7 @@ pub fn generate_single_chunk(
 pub fn generate_single_chunk_with_radius(
     _dimension: &Dimension,
     _biome_mixer_seed: i64,
-    generator: &WorldGenerator,
+    generator: &dyn crate::generation::generator::ChunkGenerator,
     block_registry: &dyn WorldPortalExt,
     chunk_x: i32,
     chunk_z: i32,
@@ -107,7 +106,6 @@ mod tests {
     use crate::generation::get_world_gen;
     use crate::world::WorldPortalExt;
     use pumpkin_data::BlockStateId;
-    use pumpkin_data::dimension::Dimension;
     use pumpkin_util::world_seed::Seed;
     use std::sync::Arc;
 
@@ -153,13 +151,14 @@ mod tests {
 
     #[test]
     fn dimensions_taller_than_their_noise_settings_generate_all_sections() {
+        crate::init_test_registries();
         for (dimension, terrain_state) in [
             (
-                Dimension::THE_NETHER,
+                crate::test_support::dimension("the_nether"),
                 pumpkin_data::Block::NETHERRACK.default_state.id,
             ),
             (
-                Dimension::THE_END,
+                crate::test_support::dimension("the_end"),
                 pumpkin_data::Block::END_STONE.default_state.id,
             ),
         ] {
@@ -172,7 +171,7 @@ mod tests {
             let chunk = generate_single_chunk(
                 &dimension,
                 biome_mixer_seed,
-                &world_gen,
+                world_gen.as_ref(),
                 block_registry.as_ref(),
                 0,
                 0,
@@ -198,7 +197,8 @@ mod tests {
 
     #[test]
     fn generate_chunk_should_return() {
-        let dimension = Dimension::OVERWORLD;
+        crate::init_test_registries();
+        let dimension = crate::test_support::dimension("overworld");
         let seed = Seed(42);
         let block_registry = Arc::new(BlockRegistry);
         let world_gen = get_world_gen(seed, dimension.clone(), false, Vec::new(), String::new());
@@ -207,7 +207,7 @@ mod tests {
         let chunk = generate_single_chunk(
             &dimension,
             biome_mixer_seed,
-            &world_gen,
+            world_gen.as_ref(),
             block_registry.as_ref(),
             0,
             0,
@@ -236,7 +236,8 @@ mod tests {
 
     #[test]
     fn configured_seed_generates_vanilla_ancient_city_chunk() {
-        let dimension = Dimension::OVERWORLD;
+        crate::init_test_registries();
+        let dimension = crate::test_support::dimension("overworld");
         let seed = Seed(1_782_124_772_053_846_960);
         let block_registry = Arc::new(BlockRegistry);
         let world_gen = get_world_gen(seed, dimension.clone(), false, Vec::new(), String::new());
@@ -245,7 +246,7 @@ mod tests {
         let chunk = generate_single_chunk(
             &dimension,
             biome_mixer_seed,
-            &world_gen,
+            world_gen.as_ref(),
             block_registry.as_ref(),
             31,
             -12,
@@ -289,7 +290,8 @@ mod tests {
 
     #[test]
     fn seed_zero_generates_the_vanilla_pillager_outpost_chunk() {
-        let dimension = Dimension::OVERWORLD;
+        crate::init_test_registries();
+        let dimension = crate::test_support::dimension("overworld");
         let seed = Seed(1_782_124_772_053_846_960);
         let block_registry = Arc::new(BlockRegistry);
         let world_gen = get_world_gen(seed, dimension.clone(), false, Vec::new(), String::new());
@@ -298,7 +300,7 @@ mod tests {
         let chunk = generate_single_chunk_with_radius(
             &dimension,
             biome_mixer_seed,
-            &world_gen,
+            world_gen.as_ref(),
             block_registry.as_ref(),
             73,
             -82,
@@ -341,8 +343,9 @@ mod tests {
 
     #[test]
     fn fixed_seed_generates_vanilla_end_ship_chunk() {
+        crate::init_test_registries();
         // Vanilla 26.2 places this seed's ship in chunk (-306, -275).
-        let dimension = Dimension::THE_END;
+        let dimension = crate::test_support::dimension("the_end");
         let seed = Seed(12_345);
         let block_registry = Arc::new(BlockRegistry);
         let world_gen = get_world_gen(seed, dimension.clone(), false, Vec::new(), String::new());
@@ -350,7 +353,7 @@ mod tests {
         let chunk = generate_single_chunk_with_radius(
             &dimension,
             biome_mixer_seed,
-            &world_gen,
+            world_gen.as_ref(),
             block_registry.as_ref(),
             -306,
             -275,
@@ -395,7 +398,8 @@ mod tests {
 
     #[test]
     fn pillager_outpost_features_shape_ground_at_vanilla_height() {
-        let dimension = Dimension::OVERWORLD;
+        crate::init_test_registries();
+        let dimension = crate::test_support::dimension("overworld");
         let seed = Seed(1_782_124_772_053_846_960);
         let block_registry = Arc::new(BlockRegistry);
         let world_gen = get_world_gen(seed, dimension.clone(), false, Vec::new(), String::new());
@@ -404,7 +408,7 @@ mod tests {
         let chunk = generate_single_chunk(
             &dimension,
             biome_mixer_seed,
-            &world_gen,
+            world_gen.as_ref(),
             block_registry.as_ref(),
             73,
             -82,
@@ -422,7 +426,7 @@ mod tests {
         let cage_chunk = generate_single_chunk(
             &dimension,
             biome_mixer_seed,
-            &world_gen,
+            world_gen.as_ref(),
             block_registry.as_ref(),
             73,
             -84,

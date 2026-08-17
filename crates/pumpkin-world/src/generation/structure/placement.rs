@@ -3,6 +3,7 @@ use pumpkin_data::structures::{
     SpreadType, StructurePlacement, StructurePlacementCalculator, StructurePlacementType,
     StructureSet,
 };
+use pumpkin_registry::{DataKey, ROOT};
 use pumpkin_util::{
     math::floor_div,
     random::{
@@ -201,12 +202,15 @@ pub fn should_generate_structure(
         placement.salt,
         placement.frequency.unwrap_or(1.0),
     ) && !placement.exclusion_zone.as_ref().is_some_and(|zone| {
-        let set_name = zone
-            .other_set
-            .strip_prefix("minecraft:")
-            .unwrap_or(zone.other_set);
-        StructureSet::get(set_name).is_some_and(|set| {
-            let allowed_biomes = ProtoChunk::get_allowed_biomes(set);
+        let Some(root) = ROOT.get() else {
+            return false;
+        };
+        let key = DataKey::<StructureSet>::owned(format!(
+            "minecraft:worldgen/minecraft:structure_set/{}",
+            zone.other_set
+        ));
+        key.get(root).ok().is_some_and(|set| {
+            let allowed_biomes = ProtoChunk::get_allowed_biomes(&set);
             (chunk_x - zone.chunk_count..=chunk_x + zone.chunk_count).any(|x| {
                 (chunk_z - zone.chunk_count..=chunk_z + zone.chunk_count).any(|z| {
                     should_generate_structure(
@@ -352,9 +356,8 @@ fn is_start_chunk_random_spread(
 }
 #[cfg(test)]
 mod tests {
-    use pumpkin_data::{
-        dimension::Dimension,
-        structures::{RandomSpreadStructurePlacement, StructurePlacementCalculator, StructureSet},
+    use pumpkin_data::structures::{
+        RandomSpreadStructurePlacement, StructurePlacementCalculator, StructureSet,
     };
     use pumpkin_util::random::{
         RandomGenerator, RandomImpl, get_region_seed, legacy_rand::LegacyRand,
@@ -393,17 +396,18 @@ mod tests {
 
     #[test]
     fn pillager_outposts_respect_the_village_exclusion_zone() {
+        crate::init_test_registries();
         let seed = 0;
         let calculator = StructurePlacementCalculator::new(seed);
         let cache = GlobalStructureCache::new();
         let generator = get_world_gen(
             Seed(seed as u64),
-            Dimension::OVERWORLD,
+            crate::test_support::dimension("overworld"),
             false,
             Vec::new(),
             String::new(),
         );
-        let chunk = ProtoChunk::new(0, 0, &generator);
+        let chunk = ProtoChunk::new(0, 0, generator.as_ref());
         let outposts = &StructureSet::PILLAGER_OUTPOSTS;
         let villages = &StructureSet::VILLAGES;
         let excluded = (-1002, -595);

@@ -19,9 +19,10 @@ use crate::world_info::{
     MINIMUM_SUPPORTED_LEVEL_VERSION, MINIMUM_SUPPORTED_WORLD_DATA_VERSION, WorldVersion,
     data_files::{
         minecraft_data_dir, read_game_rules, read_wandering_trader, read_weather,
-        read_world_clocks, read_world_gen_settings, write_custom_boss_events_stub,
-        write_game_rules, write_scheduled_events_stub, write_wandering_trader, write_weather,
-        write_world_clocks, write_world_gen_settings,
+        read_world_clocks, read_world_gen_settings, world_gen_settings_from_nbt,
+        world_gen_settings_to_nbt, write_custom_boss_events_stub, write_game_rules,
+        write_scheduled_events_stub, write_wandering_trader, write_weather, write_world_clocks,
+        write_world_gen_settings,
     },
     default_data_packs,
 };
@@ -140,22 +141,31 @@ fn data_packs_to_nbt(packs: &DataPacks) -> NbtCompound {
     compound
 }
 
-fn stored_world_seed(level_folder: &Path, data: &NbtCompound) -> Option<i64> {
-    read_world_gen_settings(level_folder)
-        .map(|settings| settings.seed)
-        .or_else(|| {
-            data.get_compound(WORLD_GEN_SETTINGS_TAG)
-                .and_then(|settings| settings.get_long("seed"))
-        })
+fn stored_world_gen_settings(
+    level_folder: &Path,
+    data: &NbtCompound,
+) -> Option<crate::world_info::WorldGenSettings> {
+    let settings = read_world_gen_settings(level_folder).or_else(|| {
+        data.get_compound(WORLD_GEN_SETTINGS_TAG)
+            .cloned()
+            .and_then(|compound| world_gen_settings_from_nbt(compound).ok())
+    })?;
+
+    if settings.dimensions.is_empty() {
+        Some(crate::world_info::WorldGenSettings::new(Seed(
+            settings.seed as u64,
+        )))
+    } else {
+        Some(settings)
+    }
 }
 
-fn put_world_gen_settings_seed(data: &mut NbtCompound, seed: i64) {
-    let mut world_gen_settings = data
-        .get_compound(WORLD_GEN_SETTINGS_TAG)
-        .cloned()
-        .unwrap_or_default();
-    world_gen_settings.put_long("seed", seed);
-    data.put_compound(WORLD_GEN_SETTINGS_TAG, world_gen_settings);
+fn put_world_gen_settings(
+    data: &mut NbtCompound,
+    settings: &crate::world_info::WorldGenSettings,
+) -> Result<(), WorldInfoError> {
+    data.put_compound(WORLD_GEN_SETTINGS_TAG, world_gen_settings_to_nbt(settings)?);
+    Ok(())
 }
 
 fn update_world_border_from_nbt(level_data: &mut LevelData, data: &NbtCompound) {
@@ -255,7 +265,7 @@ fn level_data_from_nbt(data: &NbtCompound, seed: i64) -> LevelData {
     level_data
 }
 
-fn level_data_to_nbt(info: &LevelData, data: &mut NbtCompound) {
+fn level_data_to_nbt(info: &LevelData, data: &mut NbtCompound) -> Result<(), WorldInfoError> {
     data.put_bool("allowCommands", info.allow_commands);
     data.put_double("BorderCenterX", info.border_center_x);
     data.put_double("BorderCenterZ", info.border_center_z);
@@ -280,7 +290,8 @@ fn level_data_to_nbt(info: &LevelData, data: &mut NbtCompound) {
     data.put_compound("Version", world_version_to_nbt(&info.world_version));
     data.put_int("version", info.level_version);
     data.put_int("map_id", info.map_id);
-    put_world_gen_settings_seed(data, info.world_gen_settings.seed);
+    put_world_gen_settings(data, &info.world_gen_settings)?;
+    Ok(())
 }
 
 fn stamp_current_version(level_data: &mut LevelData) {
@@ -312,11 +323,12 @@ impl WorldInfoReader for AnvilLevelInfo {
         check_data_version(data)?;
         check_level_version(data)?;
 
-        let Some(seed) = stored_world_seed(level_folder, data) else {
+        let Some(world_gen_settings) = stored_world_gen_settings(level_folder, data) else {
             return Err(WorldInfoError::MissingWorldSeed);
         };
 
-        let mut level_data = level_data_from_nbt(data, seed);
+        let mut level_data = level_data_from_nbt(data, world_gen_settings.seed);
+        level_data.world_gen_settings = world_gen_settings;
 
         // game_rules.dat – prefer the new file; fall back to level.dat values
         if minecraft_data_dir(level_folder)
@@ -369,7 +381,7 @@ impl WorldInfoWriter for AnvilLevelInfo {
             .get_compound(LEVEL_DATA_TAG)
             .cloned()
             .unwrap_or_default();
-        level_data_to_nbt(&level_data, &mut data_comp);
+        level_data_to_nbt(&level_data, &mut data_comp)?;
         root.put_compound(LEVEL_DATA_TAG, data_comp);
 
         write_gzip_compound_tag(root, File::create(path)?)

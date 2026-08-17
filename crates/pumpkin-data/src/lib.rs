@@ -8,8 +8,12 @@
     clippy::if_then_some_else_none,
     clippy::unwrap_used,
     clippy::expect_used,
-    clippy::panic
+    clippy::panic,
+    unused_imports
 )]
+
+pub mod experience;
+pub mod int_provider;
 
 #[rustfmt::skip]
 #[path = "generated/chunk_view_lut.rs"]
@@ -173,11 +177,6 @@ mod entity_type;
 #[path = "generated/spawn_egg.rs"]
 mod spawn_egg;
 
-#[cfg(feature = "dimension")]
-#[rustfmt::skip]
-#[path = "generated/dimension.rs"]
-pub mod dimension;
-
 #[cfg(feature = "enchantment")]
 #[rustfmt::skip]
 #[path = "generated/enchantment.rs"]
@@ -202,6 +201,11 @@ pub mod entity {
 #[rustfmt::skip]
 #[path = "generated/world_event.rs"]
 mod world_event;
+
+#[cfg(feature = "world_preset")]
+#[rustfmt::skip]
+#[path = "generated/world_preset.rs"]
+pub mod world_preset;
 
 #[cfg(feature = "message_type")]
 #[rustfmt::skip]
@@ -285,6 +289,9 @@ pub mod bedrock_biome;
 #[path = "generated/tag.rs"]
 pub mod tag;
 
+#[cfg(feature = "tag")]
+pub mod dynamic_tag_bridge;
+
 #[cfg(feature = "noise_router")]
 #[rustfmt::skip]
 #[path = "generated/noise_router.rs"]
@@ -357,6 +364,9 @@ pub use blocks::{Block, BlockId};
 #[rustfmt::skip]
 #[path = "generated/chunk_gen_settings.rs"]
 pub mod chunk_gen_settings;
+
+#[cfg(feature = "chunk_gen_settings")]
+pub mod worldgen;
 
 #[cfg(feature = "carver")]
 #[rustfmt::skip]

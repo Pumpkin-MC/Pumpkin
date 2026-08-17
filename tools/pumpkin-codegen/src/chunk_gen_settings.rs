@@ -1,3 +1,5 @@
+// TODO(datapack parity): Load chunk gen settings from data/minecraft/worldgen/noise_settings/
+// at runtime for datapack-provided dimension noise configs.
 use heck::ToShoutySnakeCase;
 use proc_macro2::TokenStream;
 use quote::{ToTokens, format_ident, quote};
@@ -39,6 +41,9 @@ pub struct GenerationSettingsStruct {
     pub shape: GenerationShapeConfigStruct,
     /// Hierarchical surface material rule determining which block is placed at each surface point.
     pub surface_rule: MaterialRuleStruct,
+    /// Name of the generated base noise router associated with this settings entry.
+    #[serde(skip)]
+    pub base_router: String,
 }
 
 /// Deserialized noise-shape configuration controlling terrain cell dimensions.
@@ -249,6 +254,10 @@ impl ToTokens for GenerationSettingsStruct {
         let block = &self.default_block;
         let shape = &self.shape;
         let rule = &self.surface_rule;
+        let base_router = format_ident!(
+            "{}_BASE_NOISE_ROUTER",
+            self.base_router.to_shouty_snake_case()
+        );
 
         tokens.extend(quote!(
             GenerationSettings {
@@ -260,6 +269,7 @@ impl ToTokens for GenerationSettingsStruct {
                 shape: #shape,
                 surface_rule: #rule,
                 default_block: #block,
+                base_router: &crate::noise_router::#base_router,
             }
         ));
     }
@@ -466,31 +476,56 @@ impl ToTokens for MaterialRuleStruct {
 
 /// Reads `chunk_gen_settings.json` and emits the complete chunk generation settings `TokenStream`.
 pub fn build() -> TokenStream {
-    let json: BTreeMap<String, GenerationSettingsStruct> =
+    let mut json: BTreeMap<String, GenerationSettingsStruct> =
         serde_json::from_str(&fs::read_to_string("../../assets/chunk_gen_settings.json").unwrap())
             .expect("Failed to parse settings.json");
 
+    for (name, settings) in &mut json {
+        settings.base_router.clone_from(name);
+    }
+
     let mut const_defs = TokenStream::new();
+    let mut static_entries = TokenStream::new();
+    let mut identifiers = TokenStream::new();
+    let len = json.len();
 
     for (name, settings) in &json {
-        let upper_name = name.to_uppercase();
-        let const_name = format_ident!("{}", upper_name);
+        let lower_name = name.to_lowercase();
+        let const_name = format_ident!("{}", name.to_shouty_snake_case());
 
-        const_defs.extend(quote!(
+        let minecraft_name = if lower_name.contains(':') {
+            lower_name.clone()
+        } else {
+            format!("minecraft:{lower_name}")
+        };
+
+        const_defs.extend(quote! {
             pub const #const_name: GenerationSettings = #settings;
-        ));
+        });
+
+        static_entries.extend(quote! {
+            GenerationSettings::#const_name,
+        });
+
+        identifiers.extend(quote! {
+            Identifier::parse_static(#minecraft_name),
+        });
     }
 
     quote!(
-        use crate::dimension::Dimension;
-        use crate::chunk::DoublePerlinNoiseParameters;
+        use crate::noise_parameter::DoublePerlinNoiseParameters;
         use crate::BlockState;
 
-        use std::cell::RefCell;
+        use std::{cell::RefCell, num::NonZeroUsize, sync::Arc};
         use pumpkin_util::random::RandomDeriver;
         use pumpkin_util::y_offset::YOffset;
         use crate::biome::Biome;
         use pumpkin_util::y_offset::Absolute;
+
+        use pumpkin_registry::{
+            Registry, RegistryBuilder, bootstrap::RegistryEntry, bootstrap_provider,
+        };
+        use pumpkin_util::identifier::Identifier;
 
         pub struct GenerationSettings {
             pub aquifers_enabled: bool,
@@ -501,6 +536,7 @@ pub fn build() -> TokenStream {
             pub shape: GenerationShapeConfig,
             pub surface_rule: MaterialRule,
             pub default_block: &'static BlockState,
+            pub base_router: &'static crate::noise_router::BaseNoiseRouters,
         }
 
         pub struct GenerationShapeConfig {
@@ -635,16 +671,29 @@ pub fn build() -> TokenStream {
 
         impl GenerationSettings {
             #const_defs
+        }
 
-            #[must_use]
-            pub fn from_dimension(dimension: &Dimension) -> &'static Self {
-                if dimension == &Dimension::OVERWORLD {
-                    &Self::OVERWORLD
-                } else if dimension == &Dimension::THE_NETHER {
-                    &Self::NETHER
-                } else {
-                    &Self::END
-                }
+        const STATIC_ENTRIES: [GenerationSettings; #len] = [
+            #static_entries
+        ];
+
+        const STATIC_IDENTIFIERS: [Identifier; #len] = [
+            #identifiers
+        ];
+
+        bootstrap_provider! {
+            NOISE_SETTINGS_REGISTRY: Arc<dyn Registry> => "minecraft:worldgen",
+            || {
+                vec![RegistryEntry::new(
+                    Identifier::vanilla_static("noise_settings"),
+                    RegistryBuilder::<GenerationSettings>::new_static(
+                        &Identifier::parse_static("minecraft:worldgen/noise_settings"),
+                        &STATIC_ENTRIES,
+                        &STATIC_IDENTIFIERS,
+                    )
+                    .unwrap()
+                    .arc_dyn(),
+                )]
             }
         }
     )

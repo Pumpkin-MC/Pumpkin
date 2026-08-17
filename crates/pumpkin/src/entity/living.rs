@@ -1705,7 +1705,72 @@ impl LivingEntity {
     }
 
     async fn drop_loot(&self, params: LootContextParameters) {
-        if let Some(loot_table) = &self.get_entity().entity_type.loot_table {
+        let entity_type = &self.get_entity().entity_type;
+        let loot_key = format!("minecraft:entities/{}", entity_type.resource_name);
+        let Some(dp_id) = pumpkin_datapack::Identifier::parse(&loot_key).ok() else {
+            return;
+        };
+
+        // Datapack loot tables override the static ones entirely (vanilla behaviour).
+        // Check first if a datapack provides a loot table for this entity type.
+        let world = self.entity.world.load();
+        let datapack_handled = if let Some(server) = world.server.upgrade() {
+            let dp_tables = server.datapack_manager.loot_tables.read().await;
+            if let Some(dp_table) = dp_tables.get(&dp_id) {
+                let dp_predicates = server.datapack_manager.predicates.read().await;
+                let tool_enchantments = crate::block::build_tool_enchantments(&params.tool);
+                let ctx = pumpkin_datapack::loot::evaluate::LootEvalContext {
+                    explosion_radius: params.explosion_radius,
+                    killed_by_player: params.killed_by_player,
+                    luck: params.luck,
+                    this_entity_type: Some(format!("minecraft:{}", entity_type.resource_name)),
+                    killer_entity_type: params
+                        .killer_entity
+                        .map(|e| format!("minecraft:{}", e.resource_name)),
+                    direct_killer_entity_type: params
+                        .direct_killer_entity
+                        .map(|e| format!("minecraft:{}", e.resource_name)),
+                    position_x: params.position.map(|p| p.x),
+                    position_y: params.position.map(|p| p.y),
+                    position_z: params.position.map(|p| p.z),
+                    world_time: params.world_time,
+                    tool_item_id: params
+                        .tool
+                        .as_ref()
+                        .map(|t| format!("minecraft:{}", t.item.registry_key)),
+                    tool_enchantments,
+                    is_raining: params.is_raining,
+                    is_thundering: params.is_thundering,
+                    is_on_fire: params.is_on_fire,
+                    block_state_id: None,
+                    all_loot_tables: Some(dp_tables.clone()),
+                    predicates: Some(dp_predicates.clone().into_iter().collect()),
+                };
+                let dp_results =
+                    pumpkin_datapack::loot::evaluate::evaluate_loot_table(dp_table, &ctx);
+                let pos = self.entity.block_pos.load();
+                for dp_item in dp_results {
+                    let key = dp_item
+                        .item_id
+                        .strip_prefix("minecraft:")
+                        .unwrap_or(&dp_item.item_id);
+                    if let Some(item) = pumpkin_data::item::Item::from_registry_key(key) {
+                        let mut stack =
+                            pumpkin_data::item_stack::ItemStack::new(dp_item.count, item);
+                        crate::block::apply_dp_components(&mut stack, &dp_item.components);
+                        self.entity.world.load().drop_stack(&pos, stack).await;
+                    }
+                }
+                true
+            } else {
+                false
+            }
+        } else {
+            false
+        };
+
+        // Fall back to the static compiled-in loot table when no datapack override exists
+        if !datapack_handled && let Some(loot_table) = &entity_type.loot_table {
             let pos = self.entity.block_pos.load();
             for stack in loot_table.get_loot(params) {
                 self.entity.world.load().drop_stack(&pos, stack).await;

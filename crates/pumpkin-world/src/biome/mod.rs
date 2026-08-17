@@ -7,13 +7,16 @@ use crate::generation::noise::router::multi_noise_sampler::MultiNoiseSampler;
 pub mod end;
 pub mod multi_noise;
 pub mod position_finder;
+pub mod source;
+
+pub use source::{BiomeSourceConfig, BiomeSourceType, FixedBiomeSupplier};
 
 thread_local! {
     /// A shortcut; check if last used biome is what we should use
     static LAST_RESULT_NODE: RefCell<Option<&'static BiomeTree>> = const {RefCell::new(None) };
 }
 
-pub trait BiomeSupplier {
+pub trait BiomeSupplier: Send + Sync {
     fn biome(&self, x: i32, y: i32, z: i32, noise: &mut MultiNoiseSampler<'_>) -> &'static Biome;
 }
 
@@ -50,7 +53,7 @@ pub fn hash_seed(seed: u64) -> i64 {
 
 #[cfg(test)]
 mod test {
-    use pumpkin_data::{chunk::Biome, dimension::Dimension};
+    use pumpkin_data::chunk::Biome;
     use pumpkin_util::read_data_from_file;
     use serde::Deserialize;
 
@@ -66,10 +69,13 @@ mod test {
 
     #[test]
     fn biome_desert() {
-        use crate::generation::generator::{GeneratorInit, VanillaGenerator};
+        use crate::generation::generator::VanillaGenerator;
         use pumpkin_util::world_seed::Seed;
         let seed = 13579;
-        let generator = VanillaGenerator::new(Seed(seed as u64), Dimension::OVERWORLD);
+        let generator = VanillaGenerator::new(
+            Seed(seed as u64),
+            crate::test_support::dimension("overworld"),
+        );
         let multi_noise_config = MultiNoiseSamplerBuilderOptions::new(1, 1, 1);
         let mut sampler =
             MultiNoiseSampler::generate(&generator.base_router.multi_noise, &multi_noise_config);
@@ -79,7 +85,7 @@ mod test {
 
     #[test]
     fn wide_area_surface() {
-        use crate::generation::generator::{GeneratorInit, VanillaGenerator, WorldGenerator};
+        use crate::generation::generator::VanillaGenerator;
         use crate::generation::noise::router::multi_noise_sampler::{
             MultiNoiseSampler, MultiNoiseSamplerBuilderOptions,
         };
@@ -96,19 +102,16 @@ mod test {
             read_data_from_file!("../../../../assets/tests/biome_no_blend_no_beard_0.json");
 
         let seed = 0;
-        let world_gen = WorldGenerator::Noise(Box::new(VanillaGenerator::new(
+        let generator = VanillaGenerator::new(
             Seed(seed as u64),
-            Dimension::OVERWORLD,
-        )));
-        let WorldGenerator::Noise(generator) = &world_gen else {
-            unreachable!()
-        };
+            crate::test_support::dimension("overworld"),
+        );
 
         for data in expected_data {
             let chunk_x = data.x;
             let chunk_z = data.z;
 
-            let mut chunk = ProtoChunk::new(chunk_x, chunk_z, &world_gen);
+            let mut chunk = ProtoChunk::new(chunk_x, chunk_z, &generator);
 
             // Create MultiNoiseSampler for populate_biomes
 
@@ -126,7 +129,7 @@ mod test {
                 &multi_noise_config,
             );
 
-            chunk.populate_biomes(generator, &mut multi_noise_sampler);
+            generator.populate_biomes(&mut chunk, &mut multi_noise_sampler);
 
             for (biome_x, biome_y, biome_z, biome_id) in data.data {
                 let calculated_biome = chunk.get_biome(biome_x, biome_y, biome_z);

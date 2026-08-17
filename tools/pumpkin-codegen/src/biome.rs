@@ -1,3 +1,5 @@
+// TODO(datapack parity): Load biome definitions from data/minecraft/worldgen/biome/
+// for datapack-provided custom biomes.
 use heck::ToPascalCase;
 use std::{collections::BTreeMap, fs};
 

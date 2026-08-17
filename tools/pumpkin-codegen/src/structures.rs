@@ -458,9 +458,10 @@ pub fn build() -> TokenStream {
         structure_all_names.push(stripped_name.to_string());
     }
 
+    let structure_set_len = structure_sets_json.len();
     let mut structure_set_const_defs = TokenStream::new();
-    let mut structure_set_lookup_arms = TokenStream::new();
     let mut all_structure_set_idents = Vec::new();
+    let mut structure_set_identifiers = Vec::new();
 
     for (name, structure_set) in &structure_sets_json {
         let stripped_name = name.strip_prefix("minecraft:").unwrap_or(name);
@@ -471,11 +472,14 @@ pub fn build() -> TokenStream {
             pub const #const_name: Self = #structure_set;
         ));
 
-        structure_set_lookup_arms.extend(quote!(
-            #stripped_name => Some(&Self::#const_name),
-        ));
+        let identifier = if name.contains(':') {
+            name.clone()
+        } else {
+            format!("minecraft:{name}")
+        };
 
         all_structure_set_idents.push(const_name);
+        structure_set_identifiers.push(identifier);
     }
 
     let structure_all_names_tokens: Vec<TokenStream> = structure_all_names
@@ -487,6 +491,14 @@ pub fn build() -> TokenStream {
         .collect();
 
     quote!(
+        use std::sync::Arc;
+
+        use pumpkin_registry::{
+            Registry, RegistryBuilder,
+            bootstrap::RegistryEntry,
+            bootstrap_provider,
+        };
+        use pumpkin_util::identifier::Identifier;
         use pumpkin_util::math::floor_div;
         use pumpkin_util::random::{
             RandomGenerator, RandomImpl, get_carver_seed, get_region_seed,
@@ -717,13 +729,25 @@ pub fn build() -> TokenStream {
             pub const ALL: &'static [StructureSet] = &[
                 #(Self::#all_structure_set_idents),*
             ];
+        }
 
-            #[must_use]
-            pub fn get(name: &str) -> Option<&'static Self> {
-                match name {
-                    #structure_set_lookup_arms
-                    _ => None,
-                }
+        const STRUCTURE_SET_IDENTIFIERS: [Identifier; #structure_set_len] = [
+            #(Identifier::parse_static(#structure_set_identifiers)),*
+        ];
+
+        bootstrap_provider! {
+            STRUCTURE_SET_REGISTRY: Arc<dyn Registry> => "minecraft:worldgen",
+            || {
+                vec![RegistryEntry::new(
+                    Identifier::vanilla_static("structure_set"),
+                    RegistryBuilder::<StructureSet>::new_static(
+                        &Identifier::parse_static("minecraft:worldgen/structure_set"),
+                        StructureSet::ALL,
+                        &STRUCTURE_SET_IDENTIFIERS,
+                    )
+                    .unwrap()
+                    .arc_dyn(),
+                )]
             }
         }
     )

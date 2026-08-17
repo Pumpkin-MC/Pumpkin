@@ -1,3 +1,5 @@
+// TODO(datapack parity): Load carvers from data/minecraft/worldgen/configured_carver/
+// at runtime for datapack-provided carvers.
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use serde_json::Value;

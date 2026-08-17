@@ -1,9 +1,17 @@
 use heck::{ToShoutySnakeCase, ToUpperCamelCase};
 use proc_macro2::{Span, TokenStream};
+use pumpkin_codecs::{Decode, json_ops::JsonOps};
+use pumpkin_data::{
+    experience::Experience,
+    int_provider::{ConstantIntProvider, IntProviderValue, UniformIntProvider},
+};
 use pumpkin_nbt::deserializer::{NbtReadHelper, NbtReadHelperBedrock};
-use pumpkin_util::math::{experience::Experience, vector3::Vector3};
+use pumpkin_registry::{BOOTSTRAP, ROOT, Registry, RegistryBuilder, bootstrap::BootstrapManager};
+use pumpkin_util::identifier::Identifier;
+use pumpkin_util::math::vector3::Vector3;
 use quote::{ToTokens, format_ident, quote};
 use serde::Deserialize;
+use std::sync::Arc;
 use std::{
     collections::{BTreeMap, HashSet},
     fs,
@@ -680,7 +688,7 @@ pub struct Block {
     /// All possible states for this block in state-ID order.
     pub states: Vec<BlockState>,
     /// Experience points dropped when the block is mined, if any.
-    pub experience: Option<Experience>,
+    pub experience: Option<serde_json::Value>,
     /// Position-derived shape offset applied by vanilla, if any.
     shape_offset: Option<BlockShapeOffset>,
 }
@@ -699,8 +707,33 @@ impl ToTokens for Block {
         let velocity_multiplier = &self.velocity_multiplier;
         let jump_velocity_multiplier = &self.jump_velocity_multiplier;
         let experience = if let Some(exp) = &self.experience {
-            let exp_tokens = exp.to_token_stream();
-            quote! { Some(#exp_tokens) }
+            let decoded = Experience::parse(exp.clone(), &JsonOps)
+                .into_result()
+                .unwrap_or_else(|| {
+                    panic!("Failed to decode block experience through codec: {exp:?}")
+                });
+            let provider = if let Some(provider) =
+                decoded.experience.downcast_ref::<ConstantIntProvider>()
+            {
+                let value = provider.value;
+                quote! { &ConstantIntProvider { value: #value } }
+            } else if let Some(provider) = decoded.experience.downcast_ref::<UniformIntProvider>() {
+                let min = provider.min_inclusive;
+                let max = provider.max_inclusive;
+                quote! {
+                    &UniformIntProvider {
+                        min_inclusive: #min,
+                        max_inclusive: #max,
+                    }
+                }
+            } else {
+                panic!("Block experience contains a non-const int provider: {decoded:?}");
+            };
+            quote! {
+                Some(&Experience {
+                    experience: IntProviderValue::from_static(#provider),
+                })
+            }
         } else {
             quote! { None }
         };
@@ -856,6 +889,12 @@ enum BlockShapeOffsetType {
 
 /// Reads all block assets and generates the complete block registry `TokenStream`.
 pub fn build() -> TokenStream {
+    BOOTSTRAP.get_or_init(BootstrapManager::new);
+    ROOT.get_or_init(|| {
+        RegistryBuilder::<Arc<dyn Registry>>::frozen(&Identifier::vanilla_static("root"))
+            .expect("root registry must bootstrap for block codegen")
+    });
+
     let be_blocks_data = fs::read("../../assets/bedrock/block_states.nbt").unwrap();
     let mut be_blocks_cursor = Cursor::new(be_blocks_data);
     let be_blocks = get_be_data_from_nbt(&mut be_blocks_cursor);
@@ -1153,9 +1192,9 @@ pub fn build() -> TokenStream {
             blocks::{Flammable, ShapeOffset, ShapeOffsetType},
         };
         use crate::block_state::PistonBehavior;
-        use pumpkin_util::math::int_provider::{UniformIntProvider, IntProvider, NormalIntProvider};
+        use crate::int_provider::{ConstantIntProvider, IntProviderValue, UniformIntProvider};
         use pumpkin_util::loot_table::*;
-        use pumpkin_util::math::experience::Experience;
+        use crate::experience::Experience;
         use pumpkin_util::math::vector3::Vector3;
         use std::collections::BTreeMap;
 
@@ -1340,7 +1379,7 @@ pub fn build() -> TokenStream {
 
             #[doc = r" Try to parse a block from an item id."]
             #[must_use]
-            pub const fn from_item_id(id: u16) -> Option<&'static Self> {
+            pub fn from_item_id(id: u16) -> Option<&'static Self> {
                 #[allow(unreachable_patterns)]
                 match id {
                     #(#block_from_item_id_arms)*

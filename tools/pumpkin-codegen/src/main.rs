@@ -41,9 +41,9 @@ mod composter_increase_chance;
 mod configured_feature;
 mod damage_type;
 mod data_component;
-mod dimension;
 mod dye_color;
 mod effect;
+mod embedded_vanilla_datapack;
 mod enchantments;
 mod entity_pose;
 mod entity_status;
@@ -85,9 +85,11 @@ mod version;
 mod villager;
 mod wit;
 mod world_event;
+mod world_preset;
 
 /// Output directory where all generated Rust source files are written.
 pub const OUT_DIR: &str = "../../crates/pumpkin-data/src/generated";
+pub const DATAPACK_OUT_DIR: &str = "../../crates/pumpkin-datapack/src/generated";
 
 /// Entry point for the code generator. Runs all registered builder functions in parallel
 /// and writes their output to [`OUT_DIR`].
@@ -98,6 +100,7 @@ pub fn main() {
     type BuilderFn = fn() -> TokenStream;
 
     fs::create_dir_all(OUT_DIR).expect("Failed to create output directory");
+    fs::create_dir_all(DATAPACK_OUT_DIR).expect("Failed to create datapack output directory");
 
     let mut build_functions: Vec<(BuilderFn, &str)> = vec![
         (advancement::build, "advancement.rs"),
@@ -114,13 +117,13 @@ pub fn main() {
         (game_event::build, "game_event.rs"),
         (game_rules::build, "game_rules.rs"),
         (registry::build, "registry.rs"),
-        (dimension::build, "dimension.rs"),
         (translations::build, "translation.rs"),
         (jukebox_song::build, "jukebox_song.rs"),
         (sound_category::build, "sound_category.rs"),
         (entity_pose::build, "entity_pose.rs"),
         (scoreboard_slot::build, "scoreboard_slot.rs"),
         (world_event::build, "world_event.rs"),
+        (world_preset::build, "world_preset.rs"),
         (entity_type::build, "entity_type.rs"),
         (statistic::build, "statistic.rs"),
         (noise_parameter::build, "noise_parameter.rs"),
@@ -166,6 +169,10 @@ pub fn main() {
         (map_color::build, "map_color.rs"),
         (map_decoration::build, "map_decoration.rs"),
         (dye_color::build, "dye_color.rs"),
+        (
+            embedded_vanilla_datapack::build,
+            "embedded_vanilla_datapack.rs",
+        ),
     ];
     build_functions.extend(remap::build());
 
@@ -225,7 +232,12 @@ pub fn array_to_tokenstream(array: &[String]) -> TokenStream {
 /// - `new_code` – The formatted source code string to write.
 /// - `out_file` – The filename (relative to [`OUT_DIR`]) to write into.
 pub fn write_generated_file(new_code: &str, out_file: &str) {
-    let path = Path::new(OUT_DIR).join(out_file);
+    let out_dir = if out_file == "embedded_vanilla_datapack.rs" {
+        DATAPACK_OUT_DIR
+    } else {
+        OUT_DIR
+    };
+    let path = Path::new(out_dir).join(out_file);
 
     if path.exists()
         && let Ok(existing_code) = fs::read_to_string(&path)
