@@ -25,6 +25,7 @@ zip = { version = "2.4", default-features = false, features = ["deflate"] }
 
 [dev-dependencies]
 tempfile.workspace = true
+pumpkin-nbt.workspace = true
 
 [lints]
 workspace = true

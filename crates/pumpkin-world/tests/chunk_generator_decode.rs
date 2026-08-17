@@ -14,12 +14,9 @@ use pumpkin_util::identifier::Identifier;
 use pumpkin_world::{
     ProtoChunk,
     chunk_system::generation_cache::Cache,
-    generation::{
-        dimension_stem::DimensionStem,
-        generator::{
-            ChunkGenerator, ChunkGeneratorDecode, ChunkGeneratorType, VanillaGenerator,
-            flat::{FlatGenerator as RuntimeFlatGenerator, FlatGeneratorConfig},
-        },
+    generation::generator::{
+        ChunkGenerator, ChunkGeneratorDecode, ChunkGeneratorType, VanillaGenerator,
+        flat::{FlatGenerator as RuntimeFlatGenerator, FlatGeneratorConfig},
     },
     world::WorldPortalExt,
 };
@@ -222,44 +219,6 @@ fn builtin_generator_type_resolves_from_registry() {
         .unwrap();
 
     assert_eq!(generator.seed(), 1234);
-}
-
-#[test]
-fn dimension_stem_resolves_registry_backed_generator() {
-    init_registries();
-
-    let stem = DimensionStem::parse(
-        json!({
-            "type": "minecraft:overworld",
-            "generator": {
-                "type": "minecraft:noise",
-                "settings": "minecraft:amplified",
-                "biome_source": {
-                    "type": "minecraft:multi_noise",
-                    "preset": "minecraft:overworld"
-                }
-            }
-        }),
-        &JsonOps,
-    )
-    .into_result()
-    .unwrap();
-
-    let root = ROOT.get().unwrap();
-    let dimension = stem.dimension_type.get(root).unwrap();
-    let generator_type = stem.generator.generator_type.get(root).unwrap();
-    let generator = generator_type
-        .decode(
-            stem.generator.input,
-            &NbtOps,
-            Seed(1234),
-            (*dimension).clone(),
-        )
-        .into_result()
-        .unwrap();
-
-    assert_eq!(generator.seed(), 1234);
-    assert!(generator.dimension().is_overworld_like());
 }
 
 #[test]

@@ -3536,6 +3536,7 @@ dependencies = [
  "futures",
  "pumpkin-codecs",
  "pumpkin-data",
+ "pumpkin-nbt",
  "pumpkin-protocol",
  "pumpkin-registry",
  "pumpkin-util",

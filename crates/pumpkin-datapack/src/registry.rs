@@ -238,6 +238,75 @@ mod tests {
         }
     }
 
+    #[tokio::test]
+    async fn dimension_stem_resolves_registry_backed_generator() {
+        use pumpkin_codecs::{Decode, json_ops::JsonOps};
+        use pumpkin_nbt::nbt_ops::NbtOps;
+        use pumpkin_util::world_seed::Seed;
+        use pumpkin_world::generation::dimension_stem::DimensionStem;
+
+        BOOTSTRAP.get_or_init(BootstrapManager::new);
+        ROOT.get_or_init(|| {
+            RegistryBuilder::<Arc<dyn Registry>>::frozen(&Identifier::vanilla_static("root"))
+                .expect("test root registry must initialize")
+        });
+
+        let temp = tempfile::tempdir().expect("temporary world directory must be created");
+        let manager = crate::DataPackManager::new(temp.path().to_path_buf());
+        let packs = {
+            let mut repository = manager.repository.write().await;
+            repository.reload();
+            repository.open_all_selected()
+        };
+        let resources = crate::resource::manager::MultiPackResourceManager::new(&packs);
+        let dimension_types = crate::dimension_type::load_dimension_types(&resources)
+            .expect("vanilla dimension types must load");
+        manager
+            .registries
+            .reload_dimension_types(dimension_types)
+            .expect("dimension type registry must reload");
+
+        let stem = DimensionStem::parse(
+            serde_json::json!({
+                "type": "minecraft:overworld",
+                "generator": {
+                    "type": "minecraft:noise",
+                    "settings": "minecraft:amplified",
+                    "biome_source": {
+                        "type": "minecraft:multi_noise",
+                        "preset": "minecraft:overworld"
+                    }
+                }
+            }),
+            &JsonOps,
+        )
+        .into_result()
+        .expect("dimension stem must decode");
+
+        let root = ROOT.get().expect("root registry must be initialized");
+        let dimension = stem
+            .dimension_type
+            .get(root)
+            .expect("dimension type must resolve from datapack registry");
+        let generator_type = stem
+            .generator
+            .generator_type
+            .get(root)
+            .expect("generator type must resolve from registry");
+        let generator = generator_type
+            .decode(
+                stem.generator.input,
+                &NbtOps,
+                Seed(1234),
+                (*dimension).clone(),
+            )
+            .into_result()
+            .expect("generator must decode");
+
+        assert_eq!(generator.seed(), 1234);
+        assert!(generator.dimension().is_overworld_like());
+    }
+
     #[test]
     fn reload_damage_types_sorts_and_populates_registry() -> Result<(), DatapackError> {
         BOOTSTRAP.get_or_init(BootstrapManager::new);
