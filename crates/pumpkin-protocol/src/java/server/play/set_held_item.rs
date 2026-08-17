@@ -18,3 +18,15 @@ impl<'a> ServerPacket<'a> for SSetHeldItem {
         })
     }
 }
+
+impl crate::ClientPacket for SSetHeldItem {
+    fn write_packet_data(
+        &self,
+        mut write: impl std::io::Write,
+        _version: &JavaMinecraftVersion,
+    ) -> Result<(), crate::ser::WritingError> {
+        use crate::ser::NetworkWriteExt;
+        write.write_i16_be(self.slot)?;
+        Ok(())
+    }
+}

@@ -29,3 +29,19 @@ impl<'a> ServerPacket<'a> for SMoveVehicle {
         })
     }
 }
+
+impl crate::ClientPacket for SMoveVehicle {
+    fn write_packet_data(
+        &self,
+        mut write: impl std::io::Write,
+        _version: &JavaMinecraftVersion,
+    ) -> Result<(), crate::ser::WritingError> {
+        use crate::ser::NetworkWriteExt;
+        write.write_f64_be(self.x)?;
+        write.write_f64_be(self.y)?;
+        write.write_f64_be(self.z)?;
+        write.write_f32_be(self.yaw)?;
+        write.write_f32_be(self.pitch)?;
+        Ok(())
+    }
+}

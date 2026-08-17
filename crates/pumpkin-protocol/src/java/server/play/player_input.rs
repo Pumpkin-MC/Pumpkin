@@ -56,3 +56,38 @@ impl<'a> ServerPacket<'a> for SPlayerInput {
         }
     }
 }
+
+impl crate::ClientPacket for SPlayerInput {
+    fn write_packet_data(
+        &self,
+        mut write: impl std::io::Write,
+        version: &JavaMinecraftVersion,
+    ) -> Result<(), crate::ser::WritingError> {
+        use crate::ser::NetworkWriteExt;
+        if version >= &JavaMinecraftVersion::V_1_21_2 {
+            write.write_i8(self.input)?;
+        } else {
+            let mut sideways: f32 = 0.0;
+            let mut forward: f32 = 0.0;
+            if (self.input & Self::FORWARD) != 0 {
+                forward += 1.0;
+            }
+            if (self.input & Self::BACKWARD) != 0 {
+                forward -= 1.0;
+            }
+            if (self.input & Self::LEFT) != 0 {
+                sideways += 1.0;
+            }
+            if (self.input & Self::RIGHT) != 0 {
+                sideways -= 1.0;
+            }
+            let jumping = (self.input & Self::JUMP) != 0;
+            let sneaking = (self.input & Self::SNEAK) != 0;
+            write.write_f32_be(sideways)?;
+            write.write_f32_be(forward)?;
+            write.write_bool(jumping)?;
+            write.write_bool(sneaking)?;
+        }
+        Ok(())
+    }
+}
