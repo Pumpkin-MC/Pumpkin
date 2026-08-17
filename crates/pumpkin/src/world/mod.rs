@@ -1206,12 +1206,28 @@ impl World {
                 let p_cache = players_cache.clone();
 
                 tasks.spawn(async move {
-                    e_clone.get_entity().age.fetch_add(1, Relaxed);
+                    let first_tick = e_clone.get_entity().age.fetch_add(1, Relaxed) == 0;
                     e_clone.tick(&e_clone, &s_clone).await;
 
                     let entity_inner = e_clone.get_entity();
                     let entity_pos = entity_inner.pos.load();
                     let entity_bb = entity_inner.bounding_box.load();
+
+                    if first_tick
+                        && crate::entity::projectile::is_projectile(entity_inner.entity_type)
+                    {
+                        entity_inner
+                            .world
+                            .load()
+                            .game_event(
+                                pumpkin_data::game_event::GameEvent::ProjectileShoot,
+                                entity_pos,
+                                &crate::world::game_event::vibration::GameEventContext::of_entity(
+                                    &e_clone,
+                                ),
+                            )
+                            .await;
+                    }
 
                     for (player, player_pos, player_bb) in p_cache.iter() {
                         if (player_pos.x - entity_pos.x).abs() < 5.0
@@ -3661,6 +3677,12 @@ impl World {
         }
 
         let block_count = explosion.explode(self).await;
+        self.game_event(
+            pumpkin_data::game_event::GameEvent::Explode,
+            position,
+            &crate::world::game_event::vibration::GameEventContext::default(),
+        )
+        .await;
         let particle = if power < 2.0 {
             Particle::Explosion
         } else {
@@ -5013,6 +5035,20 @@ impl World {
             };
 
             let broken_state_id = self.set_block_state(position, new_state_id, flags).await;
+
+            let context = cause.as_ref().map_or_else(
+                crate::world::game_event::vibration::GameEventContext::default,
+                |player| {
+                    let source_entity: Arc<dyn EntityBase> = player.clone();
+                    crate::world::game_event::vibration::GameEventContext::of_entity(&source_entity)
+                },
+            );
+            self.game_event(
+                pumpkin_data::game_event::GameEvent::BlockDestroy,
+                position.to_centered_f64(),
+                &context.with_affected_state(broken_state_id),
+            )
+            .await;
 
             // Close container screens for any players viewing this block
             self.close_container_screens_at(position).await;

@@ -287,6 +287,12 @@ use super::{Entity, EntityBase, NBTStorage, NBTStorageInit};
 use pumpkin_data::potion::Effect;
 use pumpkin_world::chunk_system::ChunkLoading;
 const MAX_CACHED_SIGNATURES: u8 = 128; // Vanilla: 128
+
+fn emits_container_game_events(block: &Block) -> bool {
+    block.has_tag(&tag::Block::C_CHESTS)
+        || block.has_tag(&tag::Block::C_BARRELS)
+        || block.has_tag(&tag::Block::MINECRAFT_SHULKER_BOXES)
+}
 const MAX_PREVIOUS_MESSAGES: u8 = 20; // Vanilla: 20
 
 fn write_root_vehicle(nbt: &mut NbtCompound, uuid: Uuid) {
@@ -4656,6 +4662,7 @@ impl Player {
     pub async fn on_handled_screen_closed(self: &Arc<Self>) {
         let current_screen_handler: Arc<Mutex<dyn ScreenHandler>> =
             self.current_screen_handler.lock().await.clone();
+        let container_pos = self.open_container_pos.load();
 
         let window_type = {
             let mut handler = current_screen_handler.lock().await;
@@ -4663,6 +4670,19 @@ impl Player {
             handler.on_closed(self.as_ref()).await;
             wt
         };
+
+        if let Some(pos) = container_pos
+            && emits_container_game_events(self.world().get_block(&pos))
+        {
+            let source: Arc<dyn EntityBase> = self.clone();
+            self.world()
+                .game_event(
+                    pumpkin_data::game_event::GameEvent::ContainerClose,
+                    pos.to_centered_f64(),
+                    &crate::world::game_event::vibration::GameEventContext::of_entity(&source),
+                )
+                .await;
+        }
 
         let server = self.living_entity.entity.world.load().server.upgrade();
         if let Some(server) = server {
@@ -4810,6 +4830,18 @@ impl Player {
             self.on_screen_handler_opened(screen_handler.clone()).await;
             *self.current_screen_handler.lock().await = screen_handler;
             self.open_container_pos.store(block_pos);
+            if let Some(pos) = block_pos
+                && emits_container_game_events(self.world().get_block(&pos))
+            {
+                let source: Arc<dyn EntityBase> = self.clone();
+                self.world()
+                    .game_event(
+                        pumpkin_data::game_event::GameEvent::ContainerOpen,
+                        pos.to_centered_f64(),
+                        &crate::world::game_event::vibration::GameEventContext::of_entity(&source),
+                    )
+                    .await;
+            }
             Some(self.screen_handler_sync_id.load(Ordering::Relaxed))
         } else {
             //TODO: Send message if spectator

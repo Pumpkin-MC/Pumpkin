@@ -284,6 +284,10 @@ pub trait EntityBase: Send + Sync + NBTStorage + std::any::Any {
         false
     }
 
+    fn dampens_vibrations(&self) -> bool {
+        false
+    }
+
     fn is_collidable(&self, _entity: Option<Box<dyn EntityBase>>) -> bool {
         false
     }

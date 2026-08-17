@@ -287,6 +287,7 @@ impl EntityBase for TridentEntity {
             if let Some(h) = hit
                 && !self.has_hit.swap(true, Ordering::SeqCst)
             {
+                super::emit_projectile_land(caller, &h).await;
                 caller.on_hit(h).await;
             }
         })
