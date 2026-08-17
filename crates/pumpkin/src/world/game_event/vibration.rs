@@ -388,7 +388,12 @@ impl VibrationListener {
         if d_sq > f64::from(r * r) {
             return false;
         }
-        if self.data.lock().unwrap().has_current_vibration() {
+        if self
+            .data
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .has_current_vibration()
+        {
             return false;
         }
         if !is_valid_vibration(event, context)
@@ -407,8 +412,11 @@ impl VibrationListener {
         }
 
         let distance = d_sq.sqrt() as f32;
-        let world_tick = world.game_time.load(Ordering::Relaxed);
-        let mut data = self.data.lock().unwrap();
+        let world_tick = world.get_world_age().await;
+        let mut data = self
+            .data
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         if data.has_current_vibration() {
             return false;
         }
@@ -422,7 +430,7 @@ impl VibrationListener {
         });
         drop(data);
         if let Some(block_entity) = world.get_block_entity(&self.position) {
-            world.persist_block_entity(&block_entity);
+            world.update_block_entity(&block_entity);
         }
         true
     }
@@ -487,7 +495,7 @@ pub async fn vibration_tick(
     listener: &VibrationListener,
     user: &dyn VibrationUser,
 ) {
-    let world_tick = world.game_time.load(Ordering::Relaxed);
+    let world_tick = world.get_world_age().await;
     let listener_chunk = listener.position.chunk_position();
     let active_chunks = world.active_chunks.load();
     let adjacent_chunks_ticking = (-1..=1).all(|x| {
@@ -500,7 +508,10 @@ pub async fn vibration_tick(
         })
     });
     let (particle, vib, should_persist) = {
-        let mut data = listener.data.lock().unwrap();
+        let mut data = listener
+            .data
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let particle = data
             .try_select_and_schedule(world_tick, user)
             .or_else(|| data.reload_particle(listener.position.to_centered_f64(), user));
@@ -514,7 +525,7 @@ pub async fn vibration_tick(
     };
 
     if should_persist && let Some(block_entity) = world.get_block_entity(&listener.position) {
-        world.persist_block_entity(&block_entity);
+        world.update_block_entity(&block_entity);
     }
 
     if let Some((origin, arrival_in_ticks)) = particle {
@@ -561,9 +572,9 @@ fn vibration_particle_data(destination: BlockPos, arrival_in_ticks: i32) -> Vec<
     let mut data = Vec::with_capacity(9 + arrival_in_ticks.written_size());
     data.push(0); // minecraft:block position source
     data.extend_from_slice(&destination.as_long().to_be_bytes());
-    arrival_in_ticks
-        .encode(&mut data)
-        .expect("writing a VarInt to Vec cannot fail");
+    if arrival_in_ticks.encode(&mut data).is_err() {
+        return Vec::new();
+    }
     data
 }
 

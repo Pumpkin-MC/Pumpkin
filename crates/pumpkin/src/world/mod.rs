@@ -161,6 +161,7 @@ pub mod bossbar;
 pub mod custom_bossbar;
 pub mod dragon_fight;
 pub mod end_podium;
+pub mod game_event;
 pub mod natural_spawner;
 pub mod scoreboard;
 pub mod weather;
@@ -5767,6 +5768,54 @@ impl World {
         self.level.read_chunk_sync(&chunk_pos, |chunk| {
             chunk.mark_dirty(true);
         });
+    }
+
+    /// Dispatches a game event to Sculk Sensors in nearby loaded chunks.
+    pub async fn game_event(
+        self: &Arc<Self>,
+        event: pumpkin_data::game_event::GameEvent,
+        source_position: Vector3<f64>,
+        context: &crate::world::game_event::vibration::GameEventContext,
+    ) {
+        use crate::block::entities::calibrated_sculk_sensor::CalibratedSculkSensorBlockEntity;
+        use crate::block::entities::sculk_sensor::SculkSensorBlockEntity;
+        use crate::world::game_event::vibration::SculkSensorVibrationUser;
+
+        let source_chunk = BlockPos::floored_v(source_position).chunk_position();
+        let active_chunks = self.active_chunks.load();
+
+        for x in -1..=1 {
+            for z in -1..=1 {
+                let chunk_pos = Vector2::new(source_chunk.x + x, source_chunk.y + z);
+                if !active_chunks.contains(&chunk_pos) {
+                    continue;
+                }
+
+                let Some(block_entities) = self.block_entities.get(&chunk_pos) else {
+                    continue;
+                };
+                for (sensor_pos, block_entity) in block_entities.iter() {
+                    let (listener, radius) = if let Some(sensor) = block_entity
+                        .as_any()
+                        .downcast_ref::<SculkSensorBlockEntity>(
+                    ) {
+                        (&sensor.listener, 8)
+                    } else if let Some(sensor) = block_entity
+                        .as_any()
+                        .downcast_ref::<CalibratedSculkSensorBlockEntity>()
+                    {
+                        (&sensor.listener, 16)
+                    } else {
+                        continue;
+                    };
+
+                    let user = SculkSensorVibrationUser::new(*sensor_pos, radius);
+                    listener
+                        .handle_game_event(self, event, context, &source_position, &user)
+                        .await;
+                }
+            }
+        }
     }
 
     fn intersects_aabb_with_direction(

@@ -1,15 +1,22 @@
 use super::BlockEntity;
+use crate::world::World;
+use crate::world::game_event::vibration::{
+    SculkSensorVibrationUser, VibrationListener, vibration_tick,
+};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
-use std::pin::Pin;
-use tokio::sync::Mutex;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicI32, Ordering};
 
-pub struct SculkSensorBlockEntity {
+pub type SculkSensorBlockEntity = SculkSensorBlockEntityImpl<false>;
+
+pub struct SculkSensorBlockEntityImpl<const CALIBRATED: bool> {
     pub position: BlockPos,
-    pub last_vibration_frequency: Mutex<i32>,
+    pub last_vibration_frequency: AtomicI32,
+    pub listener: VibrationListener,
 }
 
-impl BlockEntity for SculkSensorBlockEntity {
+impl<const CALIBRATED: bool> BlockEntity for SculkSensorBlockEntityImpl<CALIBRATED> {
     fn resource_location(&self) -> &'static str {
         Self::ID
     }
@@ -25,43 +32,72 @@ impl BlockEntity for SculkSensorBlockEntity {
         let last_vibration_frequency = nbt.get_int("last_vibration_frequency").unwrap_or(0);
         Self {
             position,
-            last_vibration_frequency: Mutex::new(last_vibration_frequency),
+            last_vibration_frequency: AtomicI32::new(last_vibration_frequency),
+            listener: nbt.get_compound("listener").map_or_else(
+                || VibrationListener::new(position),
+                |listener| VibrationListener::from_nbt(position, listener),
+            ),
         }
     }
 
     fn write_nbt<'a>(
         &'a self,
         nbt: &'a mut NbtCompound,
-    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
+    ) -> std::pin::Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
         Box::pin(async move {
             nbt.put_int(
                 "last_vibration_frequency",
-                *self.last_vibration_frequency.lock().await,
+                self.last_vibration_frequency.load(Ordering::Relaxed),
+            );
+            nbt.put_compound(
+                "listener",
+                self.listener
+                    .data
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .to_nbt(),
             );
         })
     }
-
     fn chunk_data_nbt(&self) -> Option<NbtCompound> {
         let mut nbt = NbtCompound::new();
-        nbt.put_int(
-            "last_vibration_frequency",
-            *self.last_vibration_frequency.try_lock().ok()?,
-        );
+        // write_internal is async only for trait compatibility; our write_nbt
+        // body is now purely synchronous (atomic load), so block_on is safe.
+        futures::executor::block_on(async {
+            self.write_internal(&mut nbt).await;
+        });
         Some(nbt)
     }
 
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
+
+    fn tick<'a>(
+        &'a self,
+        world: &'a Arc<World>,
+    ) -> std::pin::Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
+        Box::pin(async move {
+            let radius = if CALIBRATED { 16 } else { 8 };
+            let user = SculkSensorVibrationUser::new(self.position, radius);
+            vibration_tick(world, &self.listener, &user).await;
+        })
+    }
 }
 
-impl SculkSensorBlockEntity {
-    pub const ID: &'static str = "minecraft:sculk_sensor";
+impl<const CALIBRATED: bool> SculkSensorBlockEntityImpl<CALIBRATED> {
+    pub const ID: &'static str = if CALIBRATED {
+        "minecraft:calibrated_sculk_sensor"
+    } else {
+        "minecraft:sculk_sensor"
+    };
+
     #[must_use]
-    pub fn new(position: BlockPos) -> Self {
+    pub const fn new(position: BlockPos) -> Self {
         Self {
             position,
-            last_vibration_frequency: Mutex::new(0),
+            last_vibration_frequency: AtomicI32::new(0),
+            listener: VibrationListener::new(position),
         }
     }
 }
