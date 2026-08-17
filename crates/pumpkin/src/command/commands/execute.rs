@@ -13,7 +13,7 @@ use crate::command::errors::error_types::CommandErrorType;
 use crate::command::node::attached::{CommandNodeId, NodeId};
 use crate::command::node::dispatcher::CommandDispatcher;
 use crate::command::node::tree::Tree;
-use crate::command::node::{CommandExecutor, CommandExecutorResult, RedirectModifier, Redirection};
+use crate::command::node::{RedirectModifier, Redirection};
 use crate::entity::r#type::from_type;
 use pumpkin_util::PermissionLvl;
 use pumpkin_util::identifier::Identifier;
@@ -30,21 +30,6 @@ static ERROR_INVALID_DIMENSION: CommandErrorType<1> =
     CommandErrorType::new("argument.dimension.invalid", "argument.dimension.invalid");
 
 static DIMENSION_REGISTRY: &Identifier = &Identifier::vanilla_static("dimension");
-
-struct ExecuteRunExecutor;
-
-impl CommandExecutor for ExecuteRunExecutor {
-    fn execute<'a>(&'a self, context: &'a CommandContext) -> CommandExecutorResult<'a> {
-        Box::pin(async move {
-            let command_str = StringArgumentType::get(context, "command")?;
-            let dispatcher = context.server().command_dispatcher.read().await;
-            let result = dispatcher
-                .execute_input(command_str, &context.source)
-                .await?;
-            Ok(result)
-        })
-    }
-}
 
 fn execute_as_modifier<'a>(
     context: &'a CommandContext,
@@ -417,9 +402,7 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &mut PermissionReg
 
     let builder = command("execute", DESCRIPTION)
         .requires(PERMISSION)
-        .then(literal("run").then(
-            argument("command", StringArgumentType::GreedyPhrase).executes(ExecuteRunExecutor),
-        ))
+        .then(literal("run").redirect(Redirection::Root))
         .then(
             literal("as").then(argument("targets", EntityArgumentType::Entities).fork(
                 Redirection::Root,
@@ -583,6 +566,7 @@ fn set_redirects_to_execute(tree: &mut Tree, parent: NodeId, execute_id: Command
     for child_id in tree.get_children(parent) {
         if let Some(redirect) = tree[child_id].redirect()
             && matches!(redirect, Redirection::Root)
+            && tree[child_id].name() != "run"
         {
             tree[child_id].set_redirect(Some(Redirection::Local(NodeId::from(execute_id))));
         }

@@ -24,14 +24,3 @@ impl ResourceKey {
         (self.registry_name == *registry).then_some(self)
     }
 }
-
-pub struct Reference<T: 'static + ?Sized> {
-    pub value: &'static T,
-    pub key: ResourceKey,
-}
-
-impl<T> Reference<T> {
-    pub const fn new(value: &'static T, key: ResourceKey) -> Self {
-        Self { value, key }
-    }
-}

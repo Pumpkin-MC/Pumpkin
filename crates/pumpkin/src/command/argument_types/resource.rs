@@ -2,13 +2,13 @@ use crate::command::argument_types::FromStringReader;
 use crate::command::argument_types::argument_type::{ArgumentType, JavaClientArgumentType};
 use crate::command::context::command_context::CommandContext;
 use crate::command::errors::command_syntax_error::CommandSyntaxError;
-use crate::command::errors::error_types::CommandErrorType;
+use crate::command::errors::error_types::{CommandErrorType, DISPATCHER_PARSE_EXCEPTION};
+use crate::command::node::attached::AttachedNode;
 use crate::command::string_reader::StringReader;
 use crate::command::suggestion::suggestions::{Suggestions, SuggestionsBuilder};
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::translation;
 use pumpkin_util::identifier::Identifier;
-use pumpkin_util::resource::{Reference, ResourceKey};
 use pumpkin_util::text::TextComponent;
 use std::any::Any;
 use std::iter::Iterator;
@@ -30,24 +30,19 @@ static ERROR_NOT_SUMMONABLE_ENTITY: CommandErrorType<1> = CommandErrorType::new(
     translation::java::ENTITY_NOT_SUMMONABLE,
 );
 
-pub static ENTITY_TYPE_ARGUMENT: ResourceArgument<EntityType> =
+pub static ENTITY_TYPE_ARGUMENT: ResourceArgument =
     ResourceArgument(ENTITY_TYPE_REGISTRY, &|id: Identifier| {
-        EntityType::from_name(id.path()).map(|entity_type| {
-            Reference::new(
-                entity_type,
-                ResourceKey::new(ENTITY_TYPE_REGISTRY.clone(), id.clone()),
-            )
-        })
+        EntityType::from_name(id.path()).map(|value| value as &'static (dyn Any + Send + Sync))
     });
 
 #[derive(Clone)]
-pub struct ResourceArgument<T: 'static>(
+pub struct ResourceArgument(
     pub &'static Identifier,
-    pub &'static (dyn Fn(Identifier) -> Option<Reference<T>> + Send + Sync),
+    pub &'static (dyn Fn(Identifier) -> Option<&'static (dyn Any + Send + Sync)> + Send + Sync),
 );
 
-impl<T: 'static + Sync + Send> ArgumentType for ResourceArgument<T> {
-    type Item = Reference<T>;
+impl ArgumentType for ResourceArgument {
+    type Item = &'static (dyn Any + Send + Sync);
 
     fn parse(&self, reader: &mut StringReader) -> Result<Self::Item, CommandSyntaxError> {
         let identifier = Identifier::from_reader(reader)?;
@@ -86,28 +81,61 @@ impl<T: 'static + Sync + Send> ArgumentType for ResourceArgument<T> {
     }
 }
 
-impl<T: 'static> ResourceArgument<T> {
-    pub fn get_resource(
+impl ResourceArgument {
+    pub fn get_resource<T: 'static>(
         context: &CommandContext,
         name: &str,
         registry_key: &Identifier,
     ) -> Result<&'static T, CommandSyntaxError> {
-        let argument = context.get_argument::<Reference<dyn Any + Send + Sync>>(name)?;
-        let key = &argument.key;
+        let missing_argument = DISPATCHER_PARSE_EXCEPTION.create_without_context(
+            TextComponent::text(format!("Could not find argument with name '{name}'")),
+        );
+        let node = context
+            .tree
+            .iter()
+            .find_map(|node| {
+                if let AttachedNode::Argument(cur) = node
+                    && cur.meta.name == name
+                {
+                    Some(cur)
+                } else {
+                    None
+                }
+            })
+            .ok_or(missing_argument.clone())?;
+        let invalid_argument =
+            DISPATCHER_PARSE_EXCEPTION.create_without_context(TextComponent::text(format!(
+                "argument with name '{name}' isn't a ResourceArgument"
+            )));
+        let result_argument = node
+            .meta
+            .argument_type
+            .as_any()
+            .downcast_ref::<Self>()
+            .ok_or(invalid_argument)?;
+        let registry_name = result_argument.0;
+        let identifier = context
+            .arguments
+            .get(name)
+            .ok_or(missing_argument)?
+            .range
+            .substring_slice(context.input.as_str())
+            .to_string();
         let err = ERROR_INVALID_RESOURCE_TYPE.create_without_context(
-            TextComponent::text(key.identifier.to_string()),
-            TextComponent::text(key.registry_name.to_string()),
+            TextComponent::text(identifier),
+            TextComponent::text(registry_name.to_string()),
             TextComponent::text(registry_key.to_string()),
         );
-        if &key.registry_name == registry_key {
-            argument.value.downcast_ref::<T>().ok_or(err)
+        if registry_name == registry_key {
+            context
+                .get_argument::<&'static (dyn Any + Send + Sync)>(name)?
+                .downcast_ref::<T>()
+                .ok_or(err)
         } else {
             Err(err)
         }
     }
-}
 
-impl ResourceArgument<EntityType> {
     pub fn get_entity_type(
         context: &CommandContext,
         name: &str,
@@ -119,7 +147,7 @@ impl ResourceArgument<EntityType> {
         context: &CommandContext,
         name: &str,
     ) -> Result<&'static EntityType, CommandSyntaxError> {
-        let val: &EntityType = Self::get_resource(context, name, ENTITY_TYPE_REGISTRY)?;
+        let val: &'static EntityType = Self::get_resource(context, name, ENTITY_TYPE_REGISTRY)?;
         if val.summonable {
             Ok(val)
         } else {
