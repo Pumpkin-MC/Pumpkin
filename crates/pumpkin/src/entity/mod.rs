@@ -892,6 +892,8 @@ pub struct Entity {
     pub last_sent_pos: AtomicCell<Vector3<f64>>,
     /// Cache for the last sent head yaw byte
     pub last_sent_head_yaw: AtomicU8,
+    /// Persistent custom data container for plugins (matching Bukkit's `PersistentDataHolder`)
+    pub custom_data: Mutex<NbtCompound>,
 }
 
 impl Entity {
@@ -1014,6 +1016,7 @@ impl Entity {
             last_sent_pitch: AtomicU8::new(0),
             last_sent_head_yaw: AtomicU8::new(0),
             last_sent_pos: AtomicCell::new(position),
+            custom_data: Mutex::new(NbtCompound::new()),
         }
     }
 
@@ -3700,6 +3703,53 @@ impl Entity {
         }
         self.movement_multiplier.store(multiplier);
     }
+
+    pub async fn set_custom_data(&self, namespace: &str, key: &str, value: NbtTag) {
+        let mut custom_data = self.custom_data.lock().await;
+
+        let mut namespace_data = custom_data
+            .child_tags
+            .remove(namespace)
+            .and_then(|tag| match tag {
+                NbtTag::Compound(compound) => Some(compound),
+                _ => None,
+            })
+            .unwrap_or_default();
+
+        namespace_data.child_tags.insert(key.into(), value);
+        custom_data
+            .child_tags
+            .insert(namespace.into(), NbtTag::Compound(namespace_data));
+    }
+
+    pub async fn get_custom_data(&self, namespace: &str, key: &str) -> Option<NbtTag> {
+        let custom_data = self.custom_data.lock().await;
+        custom_data
+            .get(namespace)?
+            .extract_compound()?
+            .get(key)
+            .cloned()
+    }
+
+    pub async fn remove_custom_data(&self, namespace: &str, key: &str) {
+        let mut custom_data = self.custom_data.lock().await;
+
+        let Some(NbtTag::Compound(mut namespace_data)) = custom_data.child_tags.remove(namespace)
+        else {
+            return;
+        };
+
+        namespace_data.child_tags.remove(key);
+        if !namespace_data.is_empty() {
+            custom_data
+                .child_tags
+                .insert(namespace.into(), NbtTag::Compound(namespace_data));
+        }
+    }
+
+    pub async fn has_custom_data(&self, namespace: &str, key: &str) -> bool {
+        self.get_custom_data(namespace, key).await.is_some()
+    }
 }
 
 impl NBTStorage for Entity {
@@ -3757,6 +3807,11 @@ impl NBTStorage for Entity {
                             .collect(),
                     ),
                 );
+            }
+
+            let custom_data = self.custom_data.lock().await;
+            if !custom_data.is_empty() {
+                nbt.put_compound("PumpkinCustomData", custom_data.clone());
             }
 
             // todo more...
@@ -3825,6 +3880,14 @@ impl NBTStorage for Entity {
                         .filter_map(|tag| tag.extract_string().map(str::to_owned))
                         .take(MAX_SCOREBOARD_TAGS),
                 );
+            }
+
+            if let Some(custom_data) = nbt
+                .get_compound("PumpkinCustomData")
+                .or_else(|| nbt.get_compound("BukkitValues"))
+            {
+                let mut data = self.custom_data.lock().await;
+                *data = custom_data.clone();
             }
 
             // todo more...

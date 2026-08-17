@@ -8,7 +8,7 @@ use bytes::Bytes;
 use pumpkin_world::level::SyncChunk;
 use std::{
     net::SocketAddr,
-    num::NonZeroU8,
+    num::NonZero,
     sync::{Arc, atomic::Ordering},
 };
 
@@ -79,7 +79,7 @@ pub struct PlayerConfig {
     /// The player's preferred language.
     pub locale: String, // 16
     /// The maximum distance at which chunks are rendered.
-    pub view_distance: NonZeroU8,
+    pub view_distance: NonZero<u8>,
     /// The player's chat mode settings
     pub chat_mode: ChatMode,
     /// Whether chat colors are enabled.
@@ -98,7 +98,7 @@ impl Default for PlayerConfig {
     fn default() -> Self {
         Self {
             locale: "en_us".to_string(),
-            view_distance: NonZeroU8::new(8).unwrap_or(NonZeroU8::MIN),
+            view_distance: NonZero::new(8).unwrap_or(NonZero::<u8>::MIN),
             chat_mode: ChatMode::Enabled,
             chat_colors: true,
             skin_parts: 0x7F,
@@ -387,7 +387,7 @@ fn is_valid_player_name(name: &str) -> bool {
     !name.chars().any(|c| c.is_control() || c == ' ')
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub enum DisconnectReason {
     Unknown = 0,
     CantConnectNoInternet = 1,

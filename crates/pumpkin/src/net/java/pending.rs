@@ -1,4 +1,4 @@
-use std::{net::SocketAddr, num::NonZeroU8, sync::Arc};
+use std::{net::SocketAddr, num::NonZero, sync::Arc};
 
 use bytes::Bytes;
 use crossbeam::atomic::AtomicCell;
@@ -423,8 +423,8 @@ impl PendingConnection {
         ) {
             self.config = Some(PlayerConfig {
                 locale: client_information.locale.to_string(),
-                view_distance: NonZeroU8::new(client_information.view_distance as u8)
-                    .unwrap_or(NonZeroU8::MIN),
+                view_distance: NonZero::new(client_information.view_distance as u8)
+                    .unwrap_or(NonZero::<u8>::MIN),
                 chat_mode,
                 chat_colors: client_information.chat_colors,
                 skin_parts: client_information.skin_parts,

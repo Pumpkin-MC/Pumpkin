@@ -48,6 +48,7 @@ pub struct DisplayEntity {
     pub entity: Entity,
     pub interpolation_start_delta_ticks: AtomicI32,
     pub interpolation_duration: AtomicI32,
+    pub teleport_duration: AtomicI32,
     pub view_range: Mutex<f32>,
     pub shadow_radius: Mutex<f32>,
     pub shadow_strength: Mutex<f32>,
@@ -69,6 +70,7 @@ impl DisplayEntity {
             entity,
             interpolation_start_delta_ticks: AtomicI32::new(0),
             interpolation_duration: AtomicI32::new(0),
+            teleport_duration: AtomicI32::new(0),
             view_range: Mutex::new(1.0),
             shadow_radius: Mutex::new(0.0),
             shadow_strength: Mutex::new(1.0),
@@ -82,6 +84,258 @@ impl DisplayEntity {
             left_rotation: Mutex::new([0.0, 0.0, 0.0, 1.0]),
             right_rotation: Mutex::new([0.0, 0.0, 0.0, 1.0]),
         }
+    }
+
+    pub fn get_interpolation_start_delta_ticks(&self) -> i32 {
+        self.interpolation_start_delta_ticks.load(Ordering::Relaxed)
+    }
+
+    pub fn set_interpolation_start_delta_ticks(&self, ticks: i32) {
+        self.interpolation_start_delta_ticks
+            .store(ticks, Ordering::Relaxed);
+        self.entity.send_meta_data(
+            &[Metadata::new(
+                TrackedData::START_INTERPOLATION,
+                MetaDataType::INT,
+                VarInt(ticks),
+            )],
+            None,
+        );
+    }
+
+    pub fn get_interpolation_duration(&self) -> i32 {
+        self.interpolation_duration.load(Ordering::Relaxed)
+    }
+
+    pub fn set_interpolation_duration(&self, duration: i32) {
+        self.interpolation_duration
+            .store(duration, Ordering::Relaxed);
+        self.entity.send_meta_data(
+            &[Metadata::new(
+                TrackedData::INTERPOLATION_DURATION,
+                MetaDataType::INT,
+                VarInt(duration),
+            )],
+            None,
+        );
+    }
+
+    pub fn get_teleport_duration(&self) -> i32 {
+        self.teleport_duration.load(Ordering::Relaxed)
+    }
+
+    pub fn set_teleport_duration(&self, duration: i32) {
+        self.teleport_duration.store(duration, Ordering::Relaxed);
+        self.entity.send_meta_data(
+            &[Metadata::new(
+                TrackedData::TELEPORT_DURATION,
+                MetaDataType::INT,
+                VarInt(duration),
+            )],
+            None,
+        );
+    }
+
+    pub async fn get_translation(&self) -> Vector3<f32> {
+        *self.translation.lock().await
+    }
+
+    pub async fn set_translation(&self, translation: Vector3<f32>) {
+        *self.translation.lock().await = translation;
+        self.entity.send_meta_data(
+            &[Metadata::new(
+                TrackedData::TRANSLATION,
+                MetaDataType::VECTOR_3F,
+                Vector3fSerializer(translation.x, translation.y, translation.z),
+            )],
+            None,
+        );
+    }
+
+    pub async fn get_scale(&self) -> Vector3<f32> {
+        *self.scale.lock().await
+    }
+
+    pub async fn set_scale(&self, scale: Vector3<f32>) {
+        *self.scale.lock().await = scale;
+        self.entity.send_meta_data(
+            &[Metadata::new(
+                TrackedData::SCALE,
+                MetaDataType::VECTOR_3F,
+                Vector3fSerializer(scale.x, scale.y, scale.z),
+            )],
+            None,
+        );
+    }
+
+    pub async fn get_left_rotation(&self) -> [f32; 4] {
+        *self.left_rotation.lock().await
+    }
+
+    pub async fn set_left_rotation(&self, left_rotation: [f32; 4]) {
+        *self.left_rotation.lock().await = left_rotation;
+        self.entity.send_meta_data(
+            &[Metadata::new(
+                TrackedData::LEFT_ROTATION,
+                MetaDataType::QUATERNION_F,
+                QuaternionfSerializer(
+                    left_rotation[0],
+                    left_rotation[1],
+                    left_rotation[2],
+                    left_rotation[3],
+                ),
+            )],
+            None,
+        );
+    }
+
+    pub async fn get_right_rotation(&self) -> [f32; 4] {
+        *self.right_rotation.lock().await
+    }
+
+    pub async fn set_right_rotation(&self, right_rotation: [f32; 4]) {
+        *self.right_rotation.lock().await = right_rotation;
+        self.entity.send_meta_data(
+            &[Metadata::new(
+                TrackedData::RIGHT_ROTATION,
+                MetaDataType::QUATERNION_F,
+                QuaternionfSerializer(
+                    right_rotation[0],
+                    right_rotation[1],
+                    right_rotation[2],
+                    right_rotation[3],
+                ),
+            )],
+            None,
+        );
+    }
+
+    pub fn get_billboard(&self) -> u8 {
+        self.billboard.load(Ordering::Relaxed)
+    }
+
+    pub fn set_billboard(&self, billboard: u8) {
+        self.billboard.store(billboard, Ordering::Relaxed);
+        self.entity.send_meta_data(
+            &[Metadata::new(
+                TrackedData::BILLBOARD,
+                MetaDataType::BYTE,
+                billboard,
+            )],
+            None,
+        );
+    }
+
+    pub fn get_brightness(&self) -> i32 {
+        self.brightness.load(Ordering::Relaxed)
+    }
+
+    pub fn set_brightness(&self, brightness: i32) {
+        self.brightness.store(brightness, Ordering::Relaxed);
+        self.entity.send_meta_data(
+            &[Metadata::new(
+                TrackedData::BRIGHTNESS,
+                MetaDataType::INT,
+                VarInt(brightness),
+            )],
+            None,
+        );
+    }
+
+    pub async fn get_view_range(&self) -> f32 {
+        *self.view_range.lock().await
+    }
+
+    pub async fn set_view_range(&self, view_range: f32) {
+        *self.view_range.lock().await = view_range;
+        self.entity.send_meta_data(
+            &[Metadata::new(
+                TrackedData::VIEW_RANGE,
+                MetaDataType::FLOAT,
+                view_range,
+            )],
+            None,
+        );
+    }
+
+    pub async fn get_shadow_radius(&self) -> f32 {
+        *self.shadow_radius.lock().await
+    }
+
+    pub async fn set_shadow_radius(&self, shadow_radius: f32) {
+        *self.shadow_radius.lock().await = shadow_radius;
+        self.entity.send_meta_data(
+            &[Metadata::new(
+                TrackedData::SHADOW_RADIUS,
+                MetaDataType::FLOAT,
+                shadow_radius,
+            )],
+            None,
+        );
+    }
+
+    pub async fn get_shadow_strength(&self) -> f32 {
+        *self.shadow_strength.lock().await
+    }
+
+    pub async fn set_shadow_strength(&self, shadow_strength: f32) {
+        *self.shadow_strength.lock().await = shadow_strength;
+        self.entity.send_meta_data(
+            &[Metadata::new(
+                TrackedData::SHADOW_STRENGTH,
+                MetaDataType::FLOAT,
+                shadow_strength,
+            )],
+            None,
+        );
+    }
+
+    pub async fn get_display_width(&self) -> f32 {
+        *self.width.lock().await
+    }
+
+    pub async fn set_display_width(&self, width: f32) {
+        *self.width.lock().await = width;
+        self.entity.send_meta_data(
+            &[Metadata::new(
+                TrackedData::WIDTH,
+                MetaDataType::FLOAT,
+                width,
+            )],
+            None,
+        );
+    }
+
+    pub async fn get_display_height(&self) -> f32 {
+        *self.height.lock().await
+    }
+
+    pub async fn set_display_height(&self, height: f32) {
+        *self.height.lock().await = height;
+        self.entity.send_meta_data(
+            &[Metadata::new(
+                TrackedData::HEIGHT,
+                MetaDataType::FLOAT,
+                height,
+            )],
+            None,
+        );
+    }
+
+    pub fn get_glow_color_override(&self) -> i32 {
+        self.glow_color_override.load(Ordering::Relaxed)
+    }
+
+    pub fn set_glow_color_override(&self, color: i32) {
+        self.glow_color_override.store(color, Ordering::Relaxed);
+        self.entity.send_meta_data(
+            &[Metadata::new(
+                TrackedData::GLOW_COLOR_OVERRIDE,
+                MetaDataType::INT,
+                VarInt(color),
+            )],
+            None,
+        );
     }
 
     #[allow(clippy::too_many_lines)]
@@ -207,6 +461,22 @@ impl DisplayEntity {
                 TrackedData::HEIGHT,
                 MetaDataType::FLOAT,
                 height,
+            )],
+            None,
+        );
+        self.entity.send_meta_data(
+            &[Metadata::new(
+                TrackedData::TELEPORT_DURATION,
+                MetaDataType::INT,
+                VarInt(self.teleport_duration.load(Ordering::Relaxed)),
+            )],
+            None,
+        );
+        self.entity.send_meta_data(
+            &[Metadata::new(
+                TrackedData::GLOW_COLOR_OVERRIDE,
+                MetaDataType::INT,
+                VarInt(self.glow_color_override.load(Ordering::Relaxed)),
             )],
             None,
         );
@@ -367,6 +637,22 @@ impl BlockDisplayEntity {
             block_state: AtomicI32::new(0),
         })
     }
+
+    pub fn get_block_state(&self) -> i32 {
+        self.block_state.load(Ordering::Relaxed)
+    }
+
+    pub fn set_block_state(&self, block_state: i32) {
+        self.block_state.store(block_state, Ordering::Relaxed);
+        self.display.entity.send_meta_data(
+            &[Metadata::new(
+                TrackedData::BLOCK_STATE,
+                MetaDataType::BLOCK_STATE,
+                VarInt(block_state),
+            )],
+            None,
+        );
+    }
 }
 
 impl NBTStorage for BlockDisplayEntity {
@@ -474,6 +760,38 @@ impl ItemDisplayEntity {
             item_stack: Mutex::new(ItemStack::new(0, &pumpkin_data::item::Item::AIR)),
             item_display: AtomicU8::new(0),
         })
+    }
+
+    pub async fn get_item(&self) -> ItemStack {
+        self.item_stack.lock().await.clone()
+    }
+
+    pub async fn set_item(&self, item: ItemStack) {
+        *self.item_stack.lock().await = item.clone();
+        self.display.entity.send_meta_data(
+            &[Metadata::new(
+                TrackedData::ITEM,
+                MetaDataType::ITEM_STACK,
+                ItemStackSerializer::from(item),
+            )],
+            None,
+        );
+    }
+
+    pub fn get_item_display_mode(&self) -> u8 {
+        self.item_display.load(Ordering::Relaxed)
+    }
+
+    pub fn set_item_display_mode(&self, mode: u8) {
+        self.item_display.store(mode, Ordering::Relaxed);
+        self.display.entity.send_meta_data(
+            &[Metadata::new(
+                TrackedData::ITEM_DISPLAY,
+                MetaDataType::BYTE,
+                mode,
+            )],
+            None,
+        );
     }
 }
 
@@ -618,6 +936,165 @@ impl TextDisplayEntity {
             text_opacity: AtomicI8::new(-1),
             flags: AtomicU8::new(0),
         })
+    }
+
+    pub async fn get_text(&self) -> TextComponent {
+        self.text.lock().await.clone()
+    }
+
+    pub async fn set_text(&self, text: TextComponent) {
+        *self.text.lock().await = text.clone();
+        self.display.entity.send_meta_data(
+            &[Metadata::new(
+                TrackedData::TEXT,
+                MetaDataType::COMPONENT,
+                text,
+            )],
+            None,
+        );
+    }
+
+    pub fn get_line_width(&self) -> i32 {
+        self.line_width.load(Ordering::Relaxed)
+    }
+
+    pub fn set_line_width(&self, width: i32) {
+        self.line_width.store(width, Ordering::Relaxed);
+        self.display.entity.send_meta_data(
+            &[Metadata::new(
+                TrackedData::LINE_WIDTH,
+                MetaDataType::INT,
+                VarInt(width),
+            )],
+            None,
+        );
+    }
+
+    pub fn get_background_color(&self) -> i32 {
+        self.background.load(Ordering::Relaxed)
+    }
+
+    pub fn set_background_color(&self, color: i32) {
+        self.background.store(color, Ordering::Relaxed);
+        self.display.entity.send_meta_data(
+            &[Metadata::new(
+                TrackedData::BACKGROUND,
+                MetaDataType::INT,
+                VarInt(color),
+            )],
+            None,
+        );
+    }
+
+    pub fn get_text_opacity(&self) -> i8 {
+        self.text_opacity.load(Ordering::Relaxed)
+    }
+
+    pub fn set_text_opacity(&self, opacity: i8) {
+        self.text_opacity.store(opacity, Ordering::Relaxed);
+        self.display.entity.send_meta_data(
+            &[Metadata::new(
+                TrackedData::TEXT_OPACITY,
+                MetaDataType::BYTE,
+                opacity as u8,
+            )],
+            None,
+        );
+    }
+
+    pub fn get_shadow(&self) -> bool {
+        (self.flags.load(Ordering::Relaxed) & 1) != 0
+    }
+
+    pub fn set_shadow(&self, shadow: bool) {
+        let mut flags = self.flags.load(Ordering::Relaxed);
+        if shadow {
+            flags |= 1;
+        } else {
+            flags &= !1;
+        }
+        self.flags.store(flags, Ordering::Relaxed);
+        self.display.entity.send_meta_data(
+            &[Metadata::new(
+                TrackedData::TEXT_DISPLAY_FLAGS,
+                MetaDataType::BYTE,
+                flags,
+            )],
+            None,
+        );
+    }
+
+    pub fn get_see_through(&self) -> bool {
+        (self.flags.load(Ordering::Relaxed) & 2) != 0
+    }
+
+    pub fn set_see_through(&self, see_through: bool) {
+        let mut flags = self.flags.load(Ordering::Relaxed);
+        if see_through {
+            flags |= 2;
+        } else {
+            flags &= !2;
+        }
+        self.flags.store(flags, Ordering::Relaxed);
+        self.display.entity.send_meta_data(
+            &[Metadata::new(
+                TrackedData::TEXT_DISPLAY_FLAGS,
+                MetaDataType::BYTE,
+                flags,
+            )],
+            None,
+        );
+    }
+
+    pub fn get_use_default_background(&self) -> bool {
+        (self.flags.load(Ordering::Relaxed) & 4) != 0
+    }
+
+    pub fn set_use_default_background(&self, default_bg: bool) {
+        let mut flags = self.flags.load(Ordering::Relaxed);
+        if default_bg {
+            flags |= 4;
+        } else {
+            flags &= !4;
+        }
+        self.flags.store(flags, Ordering::Relaxed);
+        self.display.entity.send_meta_data(
+            &[Metadata::new(
+                TrackedData::TEXT_DISPLAY_FLAGS,
+                MetaDataType::BYTE,
+                flags,
+            )],
+            None,
+        );
+    }
+
+    pub fn get_alignment(&self) -> u8 {
+        let flags = self.flags.load(Ordering::Relaxed);
+        if flags & 8 != 0 {
+            1
+        } else if flags & 16 != 0 {
+            2
+        } else {
+            0
+        }
+    }
+
+    pub fn set_alignment(&self, align: u8) {
+        let mut flags = self.flags.load(Ordering::Relaxed) & !0b1_1000;
+        if align == 1 {
+            flags |= 8;
+        } else if align == 2 {
+            flags |= 16;
+        }
+        self.flags.store(flags, Ordering::Relaxed);
+        self.display.entity.send_meta_data(
+            &[Metadata::new(
+                TrackedData::TEXT_DISPLAY_FLAGS,
+                MetaDataType::BYTE,
+                flags,
+            )],
+            None,
+        );
     }
 }
 

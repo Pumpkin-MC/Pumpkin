@@ -4,7 +4,7 @@ use std::{
     net::{IpAddr, SocketAddr},
     path::Path as FsPath,
     sync::{
-        Arc,
+        Arc, Mutex as StdMutex,
         atomic::{AtomicBool, AtomicU8, Ordering},
     },
     time::{Duration, SystemTime, UNIX_EPOCH},
@@ -15,7 +15,10 @@ use axum::{
     Router,
     body::Bytes,
     extract::{ConnectInfo, DefaultBodyLimit, Path, State},
-    http::{HeaderValue, StatusCode, header::CONTENT_TYPE},
+    http::{
+        HeaderMap, HeaderValue, StatusCode,
+        header::{CONTENT_TYPE, HOST},
+    },
     response::{IntoResponse, Response},
     routing::{get, post},
 };
@@ -40,9 +43,10 @@ use tracing::{debug, info, trace, warn};
 use webrtc::{
     data_channel::{DataChannel, DataChannelEvent},
     peer_connection::{
-        PeerConnection, PeerConnectionBuilder, PeerConnectionEventHandler, RTCConfigurationBuilder,
-        RTCIceCandidateInit, RTCIceConnectionState, RTCIceGatheringState, RTCIceServer,
-        RTCPeerConnectionState, RTCSessionDescription,
+        PeerConnection, PeerConnectionBuilder, PeerConnectionEventHandler, RTCConfiguration,
+        RTCConfigurationBuilder, RTCIceCandidateInit, RTCIceCandidateType, RTCIceConnectionState,
+        RTCIceGatheringState, RTCIceServer, RTCPeerConnectionState, RTCSessionDescription,
+        SettingEngine,
     },
 };
 
@@ -50,6 +54,9 @@ use crate::STOP_INTERRUPT;
 use crate::net::bedrock::status::IceSocket;
 
 pub mod discovery;
+mod ice_router;
+
+use ice_router::{IceRouter, Registration, proxy_answer, proxy_offer};
 
 const RELIABLE_CHANNEL: &str = "ReliableDataChannel";
 const UNRELIABLE_CHANNEL: &str = "UnreliableDataChannel";
@@ -78,15 +85,16 @@ struct EndpointState {
     require_client_identity: bool,
     oidc_verifier: Option<Arc<(String, Jwks)>>,
     stun_servers: Arc<[String]>,
-    #[allow(dead_code)]
     ice_local_addr: SocketAddr,
+    external_ip: Option<IpAddr>,
+    ice_router: Arc<IceRouter>,
 }
 
 impl NetherNetListener {
     pub async fn bind(
         address: SocketAddr,
         ice_socket: IceSocket,
-        _external_ip: Option<IpAddr>,
+        external_ip: Option<IpAddr>,
         identity_key: Arc<SigningKey>,
         require_client_identity: bool,
         oidc_verifier: Option<Arc<(String, Jwks)>>,
@@ -94,7 +102,8 @@ impl NetherNetListener {
     ) -> std::io::Result<Self> {
         let listener = TcpListener::bind(address).await?;
         let local_addr = listener.local_addr()?;
-        let ice_local_addr = ice_socket.local_addr()?;
+        let ice_router = Arc::new(IceRouter::bind(ice_socket).await?);
+        let ice_local_addr = ice_router.public_addr();
         let (incoming, receiver) = mpsc::channel(128);
         let state = EndpointState {
             incoming,
@@ -103,6 +112,8 @@ impl NetherNetListener {
             oidc_verifier,
             stun_servers: stun_servers.into(),
             ice_local_addr,
+            external_ip,
+            ice_router,
         };
         let router = Router::new()
             .route("/v1/join", get(ping))
@@ -193,6 +204,7 @@ async fn join(
     State(state): State<EndpointState>,
     ConnectInfo(address): ConnectInfo<SocketAddr>,
     Path(network_id): Path<String>,
+    headers: HeaderMap,
     offer: Bytes,
 ) -> Response {
     trace!(%address, %network_id, length = offer.len(), "Received NetherNet SDP offer");
@@ -205,7 +217,12 @@ async fn join(
         return (StatusCode::BAD_REQUEST, "SDP offer must be UTF-8").into_response();
     };
 
-    match Box::pin(negotiate(&state, address, &offer, None)).await {
+    let advertised_ip = headers
+        .get(HOST)
+        .and_then(|host| host.to_str().ok())
+        .and_then(|host| host.parse::<axum::http::uri::Authority>().ok())
+        .and_then(|authority| authority.host().parse().ok());
+    match Box::pin(negotiate_direct(&state, address, &offer, advertised_ip)).await {
         Ok((answer, _session)) => {
             trace!(%address, %network_id, length = answer.len(), "Returning NetherNet SDP answer");
             let mut response = (StatusCode::OK, answer).into_response();
@@ -227,7 +244,27 @@ async fn negotiate(
     offer: &str,
     candidates: Option<mpsc::UnboundedReceiver<RTCIceCandidateInit>>,
 ) -> Result<(String, Arc<NetherNetSession>), String> {
+    Box::pin(negotiate_inner(state, address, offer, candidates, None)).await
+}
+
+async fn negotiate_direct(
+    state: &EndpointState,
+    address: SocketAddr,
+    offer: &str,
+    advertised_ip: Option<IpAddr>,
+) -> Result<(String, Arc<NetherNetSession>), String> {
+    Box::pin(negotiate_inner(state, address, offer, None, advertised_ip)).await
+}
+
+async fn negotiate_inner(
+    state: &EndpointState,
+    address: SocketAddr,
+    offer: &str,
+    candidates: Option<mpsc::UnboundedReceiver<RTCIceCandidateInit>>,
+    advertised_ip: Option<IpAddr>,
+) -> Result<(String, Arc<NetherNetSession>), String> {
     let signaling = if candidates.is_some() { "LAN" } else { "HTTP" };
+    let direct_ip = candidates.is_none();
     trace!(%address, signaling, "Starting NetherNet negotiation");
     let (offer, client_public_key) = authenticate_client_offer(
         offer,
@@ -249,29 +286,21 @@ async fn negotiate(
         gathering_notify: gathering_notify.clone(),
     });
 
-    let configuration = if state.stun_servers.is_empty() {
-        RTCConfigurationBuilder::default().build()
-    } else {
-        RTCConfigurationBuilder::default()
-            .with_ice_servers(vec![RTCIceServer {
-                urls: state.stun_servers.to_vec(),
-                ..Default::default()
-            }])
-            .build()
-    };
+    let configuration = rtc_configuration(&state.stun_servers);
 
-    let ice_bind_addr = SocketAddr::new(state.ice_local_addr.ip(), 0);
-    let peer: Arc<dyn PeerConnection> = Arc::new(
-        Box::pin(
-            PeerConnectionBuilder::new()
-                .with_configuration(configuration)
-                .with_handler(handler.clone())
-                .with_udp_addrs(vec![ice_bind_addr])
-                .build(),
-        )
-        .await
-        .map_err(|error| error.to_string())?,
-    );
+    let (offer, remote_candidates) = if direct_ip {
+        proxy_offer(&offer, state.ice_router.internal_addr())
+    } else {
+        (offer, Vec::new())
+    };
+    let peer = Box::pin(build_peer(
+        state,
+        configuration,
+        handler.clone(),
+        direct_ip,
+        advertised_ip,
+    ))
+    .await?;
     let session = Arc::new(NetherNetSession::new(
         peer.clone(),
         client_public_key,
@@ -309,6 +338,18 @@ async fn negotiate(
         .await
         .ok_or_else(|| "WebRTC did not produce a local description".to_string())?;
     let answer = remove_component_two_candidates(&answer.sdp);
+    let answer = if direct_ip {
+        let (answer, ufrag, internal) =
+            proxy_answer(&answer, state.ice_router.public_addr().port())?;
+        session.set_ice_route(
+            state
+                .ice_router
+                .register(ufrag, internal, remote_candidates),
+        );
+        answer
+    } else {
+        answer
+    };
     trace!(
         %address,
         signaling,
@@ -317,6 +358,49 @@ async fn negotiate(
     );
     trace!(%address, signaling, "Completed NetherNet negotiation");
     Ok((add_server_identity(&answer, &state.identity_key)?, session))
+}
+
+async fn build_peer(
+    state: &EndpointState,
+    configuration: RTCConfiguration,
+    handler: Arc<NetherNetEventHandler>,
+    direct_ip: bool,
+    advertised_ip: Option<IpAddr>,
+) -> Result<Arc<dyn PeerConnection>, String> {
+    let ice_bind_addr = if direct_ip {
+        SocketAddr::new(IpAddr::V4(std::net::Ipv4Addr::UNSPECIFIED), 0)
+    } else {
+        SocketAddr::new(state.ice_local_addr.ip(), 0)
+    };
+    let mut setting_engine = SettingEngine::default();
+    if direct_ip && let Some(external_ip) = state.external_ip.or(advertised_ip) {
+        setting_engine.set_nat_1to1_ips(vec![external_ip.to_string()], RTCIceCandidateType::Host);
+    }
+    Ok(Arc::new(
+        Box::pin(
+            PeerConnectionBuilder::new()
+                .with_configuration(configuration)
+                .with_setting_engine(setting_engine)
+                .with_handler(handler)
+                .with_udp_addrs(vec![ice_bind_addr])
+                .build(),
+        )
+        .await
+        .map_err(|error| error.to_string())?,
+    ))
+}
+
+fn rtc_configuration(stun_servers: &[String]) -> RTCConfiguration {
+    if stun_servers.is_empty() {
+        RTCConfigurationBuilder::default().build()
+    } else {
+        RTCConfigurationBuilder::default()
+            .with_ice_servers(vec![RTCIceServer {
+                urls: stun_servers.to_vec(),
+                ..Default::default()
+            }])
+            .build()
+    }
 }
 
 struct NetherNetEventHandler {
@@ -426,6 +510,7 @@ pub struct NetherNetSession {
     client_public_key: Option<PublicKey>,
     address: SocketAddr,
     incoming: mpsc::Sender<IncomingSession>,
+    ice_route: StdMutex<Option<Registration>>,
 }
 
 impl NetherNetSession {
@@ -449,6 +534,16 @@ impl NetherNetSession {
             client_public_key,
             address,
             incoming,
+            ice_route: StdMutex::new(None),
+        }
+    }
+
+    fn set_ice_route(&self, route: Registration) {
+        if !self.closed.is_cancelled() {
+            *self
+                .ice_route
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(route);
         }
     }
 
@@ -641,6 +736,10 @@ impl NetherNetSession {
         if !self.closed.is_cancelled() {
             trace!(address = %self.address, "NetherNet session closed");
             self.closed.cancel();
+            self.ice_route
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .take();
         }
     }
 
@@ -649,6 +748,10 @@ impl NetherNetSession {
             return;
         }
         self.closed.cancel();
+        self.ice_route
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .take();
         let _ = self.peer.close().await;
     }
 }
@@ -1092,8 +1195,22 @@ mod tests {
         let offer = add_server_identity(&offer.sdp, &client_key).unwrap();
         let (incoming, mut receiver) = mpsc::channel(1);
         let server_key = Arc::new(SigningKey::from_slice(&[9; 48]).unwrap());
-        let ice_socket = UdpSocket::bind("0.0.0.0:0").await.unwrap();
-        let ice_local_addr = ice_socket.local_addr().unwrap();
+        let public_socket = Arc::new(UdpSocket::bind("127.0.0.1:0").await.unwrap());
+        let (ice_socket, ice_packets) = IceSocket::for_test(public_socket.clone());
+        let relay = tokio::spawn(async move {
+            let mut buffer = [0; 2048];
+            while let Ok((length, address)) = public_socket.recv_from(&mut buffer).await {
+                if ice_packets
+                    .send((Bytes::copy_from_slice(&buffer[..length]), address))
+                    .await
+                    .is_err()
+                {
+                    break;
+                }
+            }
+        });
+        let ice_router = Arc::new(IceRouter::bind(ice_socket).await.unwrap());
+        let ice_local_addr = ice_router.public_addr();
         let state = EndpointState {
             incoming,
             identity_key: server_key.clone(),
@@ -1101,11 +1218,17 @@ mod tests {
             oidc_verifier: None,
             stun_servers: Arc::from([]),
             ice_local_addr,
+            external_ip: Some(IpAddr::V4(std::net::Ipv4Addr::LOCALHOST)),
+            ice_router,
         };
-        let (answer, _server_session) =
-            negotiate(&state, "127.0.0.1:19132".parse().unwrap(), &offer, None)
-                .await
-                .unwrap();
+        let (answer, _server_session) = Box::pin(negotiate_direct(
+            &state,
+            "127.0.0.1:19132".parse().unwrap(),
+            &offer,
+            Some(IpAddr::V4(std::net::Ipv4Addr::LOCALHOST)),
+        ))
+        .await
+        .unwrap();
         let (answer, public_key) = verify_and_strip_identity(&answer, None).unwrap();
         assert_eq!(public_key, PublicKey::from(server_key.verifying_key()));
         client
@@ -1144,5 +1267,6 @@ mod tests {
         assert_eq!(packet, b"\0world".as_slice());
         session.close().await;
         client.close().await.unwrap();
+        relay.abort();
     }
 }

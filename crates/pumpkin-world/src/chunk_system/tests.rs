@@ -355,3 +355,64 @@ fn cancellation_path_decrements_in_degree() {
         "The waiting task should have been dropped during cancellation"
     );
 }
+
+#[test]
+fn dag_drop_edge_chain_removes_all_edges() {
+    let mut graph = DAG::default();
+    let node1 = graph
+        .nodes
+        .insert(Node::new(ChunkPos::new(0, 0), StagedChunkEnum::Empty));
+    let node2 = graph
+        .nodes
+        .insert(Node::new(ChunkPos::new(1, 0), StagedChunkEnum::Empty));
+
+    let edge1 = graph.edges.insert(crate::chunk_system::dag::Edge::new(
+        node1,
+        crate::chunk_system::dag::EdgeKey::null(),
+    ));
+    let edge2 = graph
+        .edges
+        .insert(crate::chunk_system::dag::Edge::new(node2, edge1));
+
+    assert_eq!(graph.edges.len(), 2);
+    graph.drop_edge_chain(edge2);
+    assert_eq!(graph.edges.len(), 0);
+}
+
+#[test]
+fn dag_prune_edge_chain_removes_dead_target_edges() {
+    let mut graph = DAG::default();
+    let node_alive = graph
+        .nodes
+        .insert(Node::new(ChunkPos::new(0, 0), StagedChunkEnum::Empty));
+    let node_dead = graph
+        .nodes
+        .insert(Node::new(ChunkPos::new(1, 0), StagedChunkEnum::Empty));
+
+    let edge_alive = graph.edges.insert(crate::chunk_system::dag::Edge::new(
+        node_alive,
+        crate::chunk_system::dag::EdgeKey::null(),
+    ));
+    let edge_dead = graph
+        .edges
+        .insert(crate::chunk_system::dag::Edge::new(node_dead, edge_alive));
+
+    // Remove node_dead from graph.nodes to simulate completed/dropped task
+    graph.nodes.remove(node_dead);
+
+    let mut head = edge_dead;
+    let has_valid_task = graph.prune_edge_chain(&mut head);
+
+    assert!(has_valid_task);
+    assert_eq!(head, edge_alive);
+    assert_eq!(graph.edges.len(), 1);
+    assert!(graph.edges.contains_key(edge_alive));
+    assert!(!graph.edges.contains_key(edge_dead));
+
+    // Now remove node_alive as well
+    graph.nodes.remove(node_alive);
+    let has_valid_task = graph.prune_edge_chain(&mut head);
+    assert!(!has_valid_task);
+    assert!(head.is_null());
+    assert_eq!(graph.edges.len(), 0);
+}

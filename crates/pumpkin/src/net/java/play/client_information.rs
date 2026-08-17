@@ -45,7 +45,7 @@ impl JavaClient {
 
                 // 3. Construct the new config
                 // If view_distance is 0, we exit early (safe guard)
-                let Some(new_view_distance) = NonZeroU8::new(new_view_distance_raw) else {
+                let Some(new_view_distance) = NonZero::new(new_view_distance_raw) else {
                     return;
                 };
 

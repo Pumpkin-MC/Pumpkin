@@ -4,7 +4,7 @@ pub mod statistics;
 use core::f32;
 use std::collections::{BinaryHeap, HashMap, HashSet, VecDeque};
 use std::f64::consts::TAU;
-use std::num::NonZeroU8;
+use std::num::NonZero;
 use std::str::FromStr;
 use std::sync::atomic::{AtomicBool, AtomicI8, AtomicI32, AtomicU8, AtomicU32, Ordering};
 use std::sync::{Arc, Weak};
@@ -124,6 +124,10 @@ impl BedrockPlayer<'_> {
         } else {
             None
         }
+    }
+
+    pub async fn get_team(&self) -> Option<crate::world::scoreboard::Team> {
+        self.0.get_team().await
     }
 
     #[must_use]
@@ -374,6 +378,8 @@ pub struct ChunkManager {
     entity_chunk_queue: VecDeque<(Vector2<i32>, Weak<ChunkEntityData>)>,
     batches_sent_since_ack: u8,
     last_chunk_batch_sent_at: Instant,
+    /// The (view, simulation) chunk loading ticket levels currently held at `center`.
+    held_tickets: Option<(i8, i8)>,
     /// The current world for chunk loading. Updated on dimension change.
     world: Arc<World>,
 }
@@ -398,6 +404,7 @@ impl ChunkManager {
             entity_chunk_queue: VecDeque::new(),
             batches_sent_since_ack: 0,
             last_chunk_batch_sent_at: Instant::now(),
+            held_tickets: None,
             world,
         }
     }
@@ -411,6 +418,25 @@ impl ChunkManager {
     #[must_use]
     pub fn sent_chunks_count(&self) -> usize {
         self.chunk_sent.len()
+    }
+
+    pub fn reset_sent_chunks(&mut self) {
+        self.chunk_sent.clear();
+    }
+
+    pub const fn set_view_distance(&mut self, view_distance: u8) {
+        self.view_distance = view_distance;
+    }
+
+    pub fn clean(&mut self) {
+        let (_rx, tx) = crossbeam::channel::unbounded();
+        // drop old channel
+        self.chunk_listener = tx;
+
+        // Drop any held chunk references to allow chunks to be unloaded.
+        self.chunk_sent.clear();
+        self.chunk_queue.clear();
+        self.entity_chunk_queue.clear();
     }
 
     fn should_enqueue_chunk(&mut self, position: Vector2<i32>, chunk: &SyncChunk) -> bool {
@@ -459,7 +485,6 @@ impl ChunkManager {
     ) {
         view_distance += 1; // Margin for loading
         let old_center = self.center;
-        let old_view_distance = self.view_distance;
 
         {
             let mut lock = level
@@ -475,11 +500,13 @@ impl ChunkManager {
             let sim_level = ChunkLoading::get_level_from_simulation_distance(sim_dist);
             lock.add_ticket(center, sim_level);
 
-            if (old_center != center || old_view_distance != view_distance) && old_view_distance > 0
-            {
-                let old_level = ChunkLoading::get_level_from_view_distance(old_view_distance);
-                lock.remove_ticket(old_center, old_level);
-                lock.remove_ticket(old_center, sim_level);
+            // Drop exactly the pair we last added rather than recomputing it. The
+            // simulation level is derived from live config and the view level from the
+            // previous view distance, so recomputing them can release a ticket we never
+            // took and strand the one we did.
+            if let Some((held_view, held_sim)) = self.held_tickets.replace((new_level, sim_level)) {
+                lock.remove_ticket(old_center, held_view);
+                lock.remove_ticket(old_center, held_sim);
             }
             lock.send_change();
         };
@@ -528,11 +555,13 @@ impl ChunkManager {
             .chunk_loading
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        lock.remove_ticket(
-            self.center,
-            ChunkLoading::get_level_from_view_distance(self.view_distance),
-        );
+        if let Some((view_level, sim_level)) = self.held_tickets.take() {
+            lock.remove_ticket(self.center, view_level);
+            lock.remove_ticket(self.center, sim_level);
+        }
         lock.send_change();
+        level.should_unload.store(true, Ordering::Relaxed);
+        level.level_channel.notify();
         let (_rx, tx) = crossbeam::channel::unbounded();
         // drop old channel
         self.chunk_listener = tx;
@@ -543,6 +572,7 @@ impl ChunkManager {
         self.entity_chunk_queue.clear();
         self.batches_sent_since_ack = 0;
         self.last_chunk_batch_sent_at = Instant::now();
+        self.view_distance = 0;
     }
 
     pub fn change_world(&mut self, old_level: &Arc<Level>, new_world: Arc<World>) {
@@ -550,15 +580,19 @@ impl ChunkManager {
             .chunk_loading
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        lock.remove_ticket(
-            self.center,
-            ChunkLoading::get_level_from_view_distance(self.view_distance),
-        );
+        if let Some((view_level, sim_level)) = self.held_tickets.take() {
+            lock.remove_ticket(self.center, view_level);
+            lock.remove_ticket(self.center, sim_level);
+        }
         lock.send_change();
+        old_level.should_unload.store(true, Ordering::Relaxed);
+        old_level.level_channel.notify();
         drop(lock);
         self.chunk_listener = new_world.level.chunk_listener.add_global_chunk_listener();
         self.chunk_sent.clear();
         self.chunk_queue.clear();
+        self.entity_chunk_queue.clear();
+        self.view_distance = 0;
         self.world = new_world;
         // Reset batch state so chunks can be sent immediately in the new dimension
         self.batches_sent_since_ack = 0;
@@ -953,7 +987,7 @@ impl Player {
             watched_section: AtomicCell::new(Cylindrical::new(
                 Vector2::new(0, 0),
                 // Since 1 is not possible in vanilla it is used as uninit
-                NonZeroU8::new(1).unwrap_or(NonZeroU8::MIN),
+                NonZero::new(1).unwrap_or(NonZero::<u8>::MIN),
             )),
             last_action_time: AtomicCell::new(std::time::Instant::now()),
             ping: AtomicU32::new(0),
@@ -1163,8 +1197,39 @@ impl Player {
         &self.ender_chest_inventory
     }
 
+    /// Opens the player's ender chest screen.
+    pub async fn open_ender_chest(self: &Arc<Self>) -> Option<u8> {
+        self.increment_stat(
+            pumpkin_data::statistic::StatisticCategory::Custom,
+            pumpkin_data::statistic::CustomStatistic::OpenEnderchest as i32,
+            1,
+        )
+        .await;
+        let inventory = self.ender_chest_inventory();
+        self.open_handled_screen(
+            &crate::block::blocks::ender_chest::EnderChestScreenFactory {
+                inventory: inventory.clone(),
+                tracker: None,
+            },
+            None,
+        )
+        .await
+    }
+
     /// Removes the [`Player`] out of the current [`World`].
     pub async fn remove(self: &Arc<Self>) {
+        if !self
+            .current_screen_handler
+            .lock()
+            .await
+            .lock()
+            .await
+            .as_any()
+            .is::<PlayerScreenHandler>()
+        {
+            self.on_handled_screen_closed().await;
+        }
+
         let vehicle = self.living_entity.entity.vehicle.lock().await.clone();
         if let Some(vehicle) = vehicle {
             self.root_vehicle_uuid
@@ -2752,6 +2817,25 @@ impl Player {
         self.stats.lock().await.set(category, stat, value);
     }
 
+    pub async fn get_stat(&self, category: statistics::StatisticCategory, stat: i32) -> i32 {
+        self.stats.lock().await.get(category, stat)
+    }
+
+    pub async fn get_custom_stat(&self, stat: statistics::CustomStatistic) -> i32 {
+        self.get_stat(statistics::StatisticCategory::Custom, stat as i32)
+            .await
+    }
+
+    pub async fn set_custom_stat(&self, stat: statistics::CustomStatistic, value: i32) {
+        self.set_stat(statistics::StatisticCategory::Custom, stat as i32, value)
+            .await;
+    }
+
+    pub async fn increment_custom_stat(&self, stat: statistics::CustomStatistic, amount: i32) {
+        self.increment_stat(statistics::StatisticCategory::Custom, stat as i32, amount)
+            .await;
+    }
+
     pub async fn get_movement_statistic(&self) -> statistics::CustomStatistic {
         let entity = self.get_entity();
         if entity.has_vehicle().await {
@@ -3012,6 +3096,18 @@ impl Player {
         }
     }
 
+    pub async fn get_team(&self) -> Option<crate::world::scoreboard::Team> {
+        let guard = self.custom_scoreboard.lock().await;
+        if let Some(CustomScoreboard::Java(sb)) = guard.as_ref()
+            && let Some(team) = sb.get_entity_team(&self.gameprofile.name)
+        {
+            return Some(team.clone());
+        }
+        let world = self.world();
+        let sb = world.scoreboard.lock().await;
+        sb.get_entity_team(&self.gameprofile.name).cloned()
+    }
+
     pub async fn set_compass_target(&self, pos: pumpkin_util::math::position::BlockPos) {
         use pumpkin_protocol::java::client::play::CPlayerSpawnPosition;
         self.compass_target.store(Some(pos));
@@ -3165,7 +3261,7 @@ impl Player {
 
         self.watched_section.store(Cylindrical::new(
             Vector2::new(0, 0),
-            NonZeroU8::new(1).unwrap_or(NonZeroU8::MIN),
+            NonZero::new(1).unwrap_or(NonZero::<u8>::MIN),
         ));
     }
 
@@ -3654,25 +3750,45 @@ impl Player {
     }
 
     pub async fn ban(&self, server: &Server, reason: Option<TextComponent>) {
-        let mut banned_players = server.data.banned_player_list.write().await;
+        self.ban_explicit(server, reason, None, None, true, true)
+            .await;
+    }
+
+    pub async fn ban_explicit(
+        &self,
+        server: &Server,
+        reason: Option<TextComponent>,
+        source: Option<String>,
+        expires: Option<time::OffsetDateTime>,
+        kick_if_online: bool,
+        log_to_console: bool,
+    ) {
         let string_reason = reason.clone().map_or_else(
             || "Banned by an operator.".to_string(),
             pumpkin_util::text::TextComponent::get_text,
         );
+        let source_str = source.unwrap_or_else(|| "Plugin".to_string());
 
-        if banned_players
-            .banned_players
-            .iter()
-            .any(|entry| entry.uuid == self.gameprofile.id)
-        {
-            return;
+        if log_to_console {
+            tracing::info!(
+                "Banning player {} ({}) by {}: {}",
+                self.gameprofile.name,
+                self.gameprofile.id,
+                source_str,
+                string_reason
+            );
         }
+
+        let mut banned_players = server.data.banned_player_list.write().await;
+        banned_players
+            .banned_players
+            .retain(|entry| entry.uuid != self.gameprofile.id);
 
         banned_players.banned_players.push(
             crate::data::banlist_serializer::BannedPlayerEntry::new(
                 &self.gameprofile,
-                "Plugin".to_string(),
-                None,
+                source_str,
+                expires,
                 string_reason,
             ),
         );
@@ -3680,54 +3796,79 @@ impl Player {
         banned_players.save();
         drop(banned_players);
 
-        let kick_reason = reason.unwrap_or_else(|| {
-            TextComponent::translate_cross(
-                translation::java::MULTIPLAYER_DISCONNECT_BANNED,
-                translation::bedrock::DISCONNECTIONSCREEN_TITLE_BANNEDBYHOST,
-                [],
-            )
-        });
+        if kick_if_online {
+            let kick_reason = reason.unwrap_or_else(|| {
+                TextComponent::translate_cross(
+                    translation::java::MULTIPLAYER_DISCONNECT_BANNED,
+                    translation::bedrock::DISCONNECTIONSCREEN_TITLE_BANNEDBYHOST,
+                    [],
+                )
+            });
 
-        self.kick(DisconnectReason::Kicked, kick_reason).await;
+            self.kick(DisconnectReason::Kicked, kick_reason).await;
+        }
     }
 
     pub async fn ban_ip(&self, server: &Server, reason: Option<TextComponent>) {
-        let mut banned_ips = server.data.banned_ip_list.write().await;
+        self.ban_ip_explicit(server, reason, None, None, true, true)
+            .await;
+    }
+
+    pub async fn ban_ip_explicit(
+        &self,
+        server: &Server,
+        reason: Option<TextComponent>,
+        source: Option<String>,
+        expires: Option<time::OffsetDateTime>,
+        kick_matching_players: bool,
+        log_to_console: bool,
+    ) {
         let string_reason = reason.clone().map_or_else(
             || "Banned by an operator.".to_string(),
             pumpkin_util::text::TextComponent::get_text,
         );
+        let source_str = source.unwrap_or_else(|| "Plugin".to_string());
         let target_ip = self.client.address().ip();
 
-        if banned_ips.get_entry(&target_ip).is_some() {
-            return;
+        if log_to_console {
+            tracing::info!(
+                "Banning IP {} by {}: {}",
+                target_ip,
+                source_str,
+                string_reason
+            );
         }
+
+        let mut banned_ips = server.data.banned_ip_list.write().await;
+        banned_ips.banned_ips.retain(|entry| entry.ip != target_ip);
 
         banned_ips
             .banned_ips
             .push(crate::data::banlist_serializer::BannedIpEntry::new(
                 target_ip,
-                "Plugin".to_string(),
-                None,
+                source_str,
+                expires,
                 string_reason,
             ));
 
         banned_ips.save();
         drop(banned_ips);
 
-        let kick_reason = reason.unwrap_or_else(|| {
-            TextComponent::translate_cross(
-                translation::java::MULTIPLAYER_DISCONNECT_IP_BANNED,
-                translation::java::MULTIPLAYER_DISCONNECT_IP_BANNED,
-                [],
-            )
-        });
+        if kick_matching_players {
+            let kick_reason = reason.unwrap_or_else(|| {
+                TextComponent::translate_cross(
+                    translation::java::MULTIPLAYER_DISCONNECT_IP_BANNED,
+                    translation::java::MULTIPLAYER_DISCONNECT_IP_BANNED,
+                    [],
+                )
+            });
 
-        let affected = server.get_players_by_ip(target_ip);
-        for target in affected {
-            target
-                .kick(DisconnectReason::Kicked, kick_reason.clone())
-                .await;
+            let affected = server.get_players_by_ip(target_ip);
+            for target in affected {
+                target
+                    .kick(DisconnectReason::Kicked, kick_reason.clone())
+                    .await;
+            }
         }
     }
 
@@ -5635,6 +5776,7 @@ impl NBTStorage for EnderChestInventory {
                 for tag in item_list {
                     if let Some(item_compound) = tag.extract_compound()
                         && let Some(slot_byte) = item_compound.get_byte("Slot")
+                        && (0..Self::INVENTORY_SIZE as i8).contains(&slot_byte)
                     {
                         let slot = slot_byte as usize;
                         if let Some(item_stack) = ItemStack::read_item_stack(item_compound) {

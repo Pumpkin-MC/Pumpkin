@@ -61,6 +61,7 @@ use pumpkin_data::data_component_impl::EquipmentSlot;
 use pumpkin_data::dimension::Dimension;
 use pumpkin_data::entity::MobCategory;
 use pumpkin_data::fluid::{Falling, FluidProperties, FluidState};
+use pumpkin_data::game_rules::{GameRule, GameRuleValue};
 use pumpkin_data::meta_data_type::MetaDataType;
 use pumpkin_data::tracked_data::TrackedData;
 use pumpkin_data::{
@@ -274,6 +275,10 @@ pub struct World {
     /// Block entities indexed by chunk, so ticking only visits the currently
     /// active chunks instead of scanning every loaded block entity each tick.
     pub block_entities: DashMap<Vector2<i32>, FxHashMap<BlockPos, Arc<dyn BlockEntity>>>,
+    /// Persistent custom data for the world (matching Bukkit's `PersistentDataHolder`)
+    pub custom_data: std::sync::Mutex<NbtCompound>,
+    /// Persistent custom data for block entities at specific positions
+    pub custom_block_entity_data: DashMap<BlockPos, NbtCompound>,
 }
 
 #[derive(Clone, Copy)]
@@ -346,6 +351,23 @@ impl World {
         let portal_poi = portal::PortalPoiStorage::new(level.level_folder.poi_folder.clone());
         let dragon_fight = (dimension.minecraft_name == Dimension::THE_END.minecraft_name)
             .then(|| Mutex::new(dragon_fight::DragonFight::new()));
+
+        let custom_data_path = level
+            .level_folder
+            .root_folder
+            .join("pumpkin_custom_data.nbt");
+        let custom_data = if custom_data_path.exists()
+            && let Ok(bytes) = std::fs::read(&custom_data_path)
+            && let Ok(nbt) = pumpkin_nbt::Nbt::read_unnamed(
+                &mut pumpkin_nbt::deserializer::NbtReadHelperJava::new(&mut std::io::Cursor::new(
+                    bytes,
+                )),
+            ) {
+            nbt.root_tag
+        } else {
+            NbtCompound::new()
+        };
+
         Self {
             uuid: Uuid::new_v4(),
             level,
@@ -369,6 +391,8 @@ impl World {
             forced_chunks: std::sync::Mutex::new(FxHashSet::default()),
             server,
             block_entities: DashMap::new(),
+            custom_data: std::sync::Mutex::new(custom_data),
+            custom_block_entity_data: DashMap::new(),
         }
     }
 
@@ -482,6 +506,13 @@ impl World {
         for block_entity in block_entities {
             let mut nbt = NbtCompound::new();
             block_entity.write_internal(&mut nbt).await;
+            if let Some(custom_data) = self
+                .custom_block_entity_data
+                .get(&block_entity.get_position())
+                && !custom_data.is_empty()
+            {
+                nbt.put_compound("PumpkinCustomData", custom_data.clone());
+            }
             self.add_block_entity_nbt(block_entity.get_position(), &nbt);
         }
     }
@@ -563,6 +594,29 @@ impl World {
         let current_info = self.level_info.load();
         let mut new_info = (**current_info).clone();
         new_info.difficulty = difficulty;
+        self.level_info.store(Arc::new(new_info));
+    }
+
+    pub fn get_game_rule(&self, rule: &GameRule) -> GameRuleValue<i64, bool> {
+        let level_info = self.level_info.load();
+        match level_info.game_rules.get(rule) {
+            GameRuleValue::Int(v) => GameRuleValue::Int(*v),
+            GameRuleValue::Bool(v) => GameRuleValue::Bool(*v),
+        }
+    }
+
+    pub fn set_game_rule(&self, rule: &GameRule, value: GameRuleValue<i64, bool>) {
+        let current_info = self.level_info.load();
+        let mut new_info = (**current_info).clone();
+        match (new_info.game_rules.get_mut(rule), value) {
+            (GameRuleValue::Int(target), GameRuleValue::Int(val)) => {
+                *target = val;
+            }
+            (GameRuleValue::Bool(target), GameRuleValue::Bool(val)) => {
+                *target = val;
+            }
+            _ => {}
+        }
         self.level_info.store(Arc::new(new_info));
     }
 
@@ -5522,6 +5576,13 @@ impl World {
                     .remove(block_pos)
             })
             .flatten()?;
+        if let Some(custom_data) = nbt
+            .get_compound("PumpkinCustomData")
+            .or_else(|| nbt.get_compound("BukkitValues"))
+        {
+            self.custom_block_entity_data
+                .insert(*block_pos, custom_data.clone());
+        }
         let entity = block_entity_from_nbt(&nbt)?;
         self.block_entities
             .entry(chunk_pos)
@@ -5646,6 +5707,7 @@ impl World {
                     chunk_block_entities.remove(block_pos).is_some()
                 });
         if removed {
+            self.custom_block_entity_data.remove(block_pos);
             // Drop the chunk's map once its last block entity is gone.
             self.block_entities
                 .remove_if(&chunk_pos, |_, entities| entities.is_empty());
@@ -6040,12 +6102,170 @@ impl World {
     }
 
     pub async fn save(&self) {
+        for entity in self.entities.load().iter() {
+            self.save_entity(entity).await;
+        }
+
+        let chunks: Vec<Vector2<i32>> = self
+            .block_entities
+            .iter()
+            .map(|chunk_block_entities| *chunk_block_entities.key())
+            .collect();
+        for chunk_pos in chunks {
+            self.save_block_entities(&chunk_pos).await;
+        }
+
+        if let Ok(mut portal_poi) = self.portal_poi.try_lock() {
+            let _ = portal_poi.save_all();
+        }
+
+        {
+            let custom_data = self
+                .custom_data
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            if !custom_data.is_empty() {
+                let custom_data_path = self
+                    .level
+                    .level_folder
+                    .root_folder
+                    .join("pumpkin_custom_data.nbt");
+                let nbt = pumpkin_nbt::Nbt::from(custom_data.clone());
+                let _ = std::fs::write(custom_data_path, nbt.write());
+            }
+        }
+
+        self.level
+            .should_save
+            .store(true, std::sync::atomic::Ordering::Relaxed);
+        self.level.level_channel.notify();
+
         let mut save_event = crate::plugin::api::events::world::world_save::WorldSaveEvent::new(
             format!("{:?}", self.dimension),
         );
         if let Some(server) = self.server.upgrade() {
             server.plugin_manager.fire(&server, &mut save_event).await;
         }
+    }
+
+    pub fn set_custom_data(&self, namespace: &str, key: &str, value: pumpkin_nbt::tag::NbtTag) {
+        let mut custom_data = self
+            .custom_data
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+
+        let mut namespace_data = custom_data
+            .child_tags
+            .remove(namespace)
+            .and_then(|tag| match tag {
+                pumpkin_nbt::tag::NbtTag::Compound(compound) => Some(compound),
+                _ => None,
+            })
+            .unwrap_or_default();
+
+        namespace_data.child_tags.insert(key.into(), value);
+        custom_data.child_tags.insert(
+            namespace.into(),
+            pumpkin_nbt::tag::NbtTag::Compound(namespace_data),
+        );
+    }
+
+    pub fn get_custom_data(&self, namespace: &str, key: &str) -> Option<pumpkin_nbt::tag::NbtTag> {
+        let custom_data = self
+            .custom_data
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        custom_data
+            .get(namespace)?
+            .extract_compound()?
+            .get(key)
+            .cloned()
+    }
+
+    pub fn remove_custom_data(&self, namespace: &str, key: &str) {
+        let mut custom_data = self
+            .custom_data
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+
+        let Some(pumpkin_nbt::tag::NbtTag::Compound(mut namespace_data)) =
+            custom_data.child_tags.remove(namespace)
+        else {
+            return;
+        };
+
+        namespace_data.child_tags.remove(key);
+        if !namespace_data.is_empty() {
+            custom_data.child_tags.insert(
+                namespace.into(),
+                pumpkin_nbt::tag::NbtTag::Compound(namespace_data),
+            );
+        }
+    }
+
+    pub fn has_custom_data(&self, namespace: &str, key: &str) -> bool {
+        self.get_custom_data(namespace, key).is_some()
+    }
+
+    pub fn set_block_entity_custom_data(
+        &self,
+        pos: &BlockPos,
+        namespace: &str,
+        key: &str,
+        value: pumpkin_nbt::tag::NbtTag,
+    ) {
+        let mut entry = self.custom_block_entity_data.entry(*pos).or_default();
+        let mut namespace_data = entry
+            .child_tags
+            .remove(namespace)
+            .and_then(|tag| match tag {
+                pumpkin_nbt::tag::NbtTag::Compound(compound) => Some(compound),
+                _ => None,
+            })
+            .unwrap_or_default();
+
+        namespace_data.child_tags.insert(key.into(), value);
+        entry.child_tags.insert(
+            namespace.into(),
+            pumpkin_nbt::tag::NbtTag::Compound(namespace_data),
+        );
+    }
+
+    pub fn get_block_entity_custom_data(
+        &self,
+        pos: &BlockPos,
+        namespace: &str,
+        key: &str,
+    ) -> Option<pumpkin_nbt::tag::NbtTag> {
+        self.custom_block_entity_data
+            .get(pos)?
+            .get(namespace)?
+            .extract_compound()?
+            .get(key)
+            .cloned()
+    }
+
+    pub fn remove_block_entity_custom_data(&self, pos: &BlockPos, namespace: &str, key: &str) {
+        if let Some(mut entry) = self.custom_block_entity_data.get_mut(pos) {
+            let Some(pumpkin_nbt::tag::NbtTag::Compound(mut namespace_data)) =
+                entry.child_tags.remove(namespace)
+            else {
+                return;
+            };
+
+            namespace_data.child_tags.remove(key);
+            if !namespace_data.is_empty() {
+                entry.child_tags.insert(
+                    namespace.into(),
+                    pumpkin_nbt::tag::NbtTag::Compound(namespace_data),
+                );
+            }
+        }
+    }
+
+    pub fn has_block_entity_custom_data(&self, pos: &BlockPos, namespace: &str, key: &str) -> bool {
+        self.get_block_entity_custom_data(pos, namespace, key)
+            .is_some()
     }
 
     pub async fn populate_chunk(&self, chunk_pos: Vector2<i32>) {
@@ -6306,5 +6526,41 @@ mod tests {
         assert_eq!(actor.get_int("pairx"), Some(4));
         assert_eq!(actor.get_int("pairz"), Some(7));
         assert_eq!(actor.get_bool("pairlead"), Some(true));
+    }
+
+    #[test]
+    fn game_rules_registry() {
+        use pumpkin_data::game_rules::{GameRule, GameRuleRegistry, GameRuleValue};
+
+        let mut registry = GameRuleRegistry::default();
+        match registry.get(&GameRule::KeepInventory) {
+            GameRuleValue::Bool(v) => assert!(!v),
+            GameRuleValue::Int(_) => panic!("expected bool"),
+        }
+
+        match registry.get_mut(&GameRule::KeepInventory) {
+            GameRuleValue::Bool(v) => *v = true,
+            GameRuleValue::Int(_) => panic!("expected bool"),
+        }
+
+        match registry.get(&GameRule::KeepInventory) {
+            GameRuleValue::Bool(v) => assert!(v),
+            GameRuleValue::Int(_) => panic!("expected bool"),
+        }
+
+        match registry.get(&GameRule::RandomTickSpeed) {
+            GameRuleValue::Int(v) => assert_eq!(*v, 3),
+            GameRuleValue::Bool(_) => panic!("expected int"),
+        }
+
+        match registry.get_mut(&GameRule::RandomTickSpeed) {
+            GameRuleValue::Int(v) => *v = 20,
+            GameRuleValue::Bool(_) => panic!("expected int"),
+        }
+
+        match registry.get(&GameRule::RandomTickSpeed) {
+            GameRuleValue::Int(v) => assert_eq!(*v, 20),
+            GameRuleValue::Bool(_) => panic!("expected int"),
+        }
     }
 }

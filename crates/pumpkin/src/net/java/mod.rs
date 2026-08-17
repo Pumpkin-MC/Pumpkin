@@ -425,20 +425,26 @@ impl JavaClient {
     }
 
     pub async fn kick(&self, reason: TextComponent) {
-        match self.connection_state.load() {
-            ConnectionState::Login => {
-                // TextComponent implements Serialize and writes in bytes instead of String, that's the reasib we only use content
-                self.send_packet_now(&CLoginDisconnect::new(
-                    serde_json::to_string(&reason.0).unwrap_or_else(|_| String::new()),
-                ))
-                .await;
-            }
-            ConnectionState::Config => {
-                self.send_packet_now(&CConfigDisconnect::new(&reason.get_text()))
+        self.kick_explicit(&reason, true).await;
+    }
+
+    pub async fn kick_explicit(&self, reason: &TextComponent, send_packet: bool) {
+        if send_packet {
+            match self.connection_state.load() {
+                ConnectionState::Login => {
+                    // TextComponent implements Serialize and writes in bytes instead of String, that's the reason we only use content
+                    self.send_packet_now(&CLoginDisconnect::new(
+                        serde_json::to_string(&reason.0).unwrap_or_else(|_| String::new()),
+                    ))
                     .await;
+                }
+                ConnectionState::Config => {
+                    self.send_packet_now(&CConfigDisconnect::new(&reason.clone().get_text()))
+                        .await;
+                }
+                ConnectionState::Play => self.send_packet_now(&CPlayDisconnect::new(reason)).await,
+                _ => {}
             }
-            ConnectionState::Play => self.send_packet_now(&CPlayDisconnect::new(&reason)).await,
-            _ => {}
         }
         debug!("Closing connection for {}", self.id);
         self.close();

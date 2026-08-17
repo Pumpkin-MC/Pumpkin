@@ -21,7 +21,7 @@ pub struct TrapezoidHeightProvider {
 pub struct VeryBiasedToBottomHeightProvider {
     pub min_inclusive: YOffset,
     pub max_inclusive: YOffset,
-    pub inner: Option<std::num::NonZeroU32>,
+    pub inner: Option<std::num::NonZero<u32>>,
 }
 pub struct CaveCarverConfig {
     pub horizontal_radius_multiplier: FloatProvider,

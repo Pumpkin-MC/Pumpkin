@@ -6,7 +6,7 @@ use crate::dimension::Dimension;
 use pumpkin_util::random::RandomDeriver;
 use pumpkin_util::y_offset::Absolute;
 use pumpkin_util::y_offset::YOffset;
-use std::{cell::RefCell, num::NonZeroUsize};
+use std::cell::RefCell;
 pub struct GenerationSettings {
     pub aquifers_enabled: bool,
     pub ore_veins_enabled: bool,

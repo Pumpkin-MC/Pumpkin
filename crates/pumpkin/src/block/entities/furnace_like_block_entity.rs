@@ -147,7 +147,7 @@ macro_rules! impl_cooking_block_entity_base {
                         .result
                         .id
                         .strip_prefix("minecraft:")
-                        .expect("Recipe ID should have minecraft: prefix"),
+                        .unwrap_or(&recipe.result.id),
                 ) && !is_top_items_empty
                     && recipe_output_item.id == side_item_stack.item.id
                     && side_item_stack.item_count < max_count
@@ -172,7 +172,7 @@ macro_rules! impl_cooking_block_entity_base {
                                 .result
                                 .id
                                 .strip_prefix("minecraft:")
-                                .expect("Recipe ID should have minecraft: prefix"),
+                                .unwrap_or(&recipe.result.id),
                         ) else {
                             return false;
                         };

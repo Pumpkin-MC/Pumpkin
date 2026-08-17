@@ -118,12 +118,12 @@ macro_rules! impl_block_entity_for_chest {
             }
 
             fn take_loot_table(&self) -> Option<(String, i64)> {
-                let mut guard = self.loot_table.lock().expect("Loot table mutex should not be poisoned");
+                let mut guard = self.loot_table.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
                 guard.take().map(|key| (key, self.loot_table_seed))
             }
 
             fn has_loot_table(&self) -> bool {
-                self.loot_table.lock().expect("Loot table mutex should not be poisoned").is_some()
+                self.loot_table.lock().unwrap_or_else(std::sync::PoisonError::into_inner).is_some()
             }
         }
     };
