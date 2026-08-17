@@ -288,56 +288,7 @@ impl Server {
             repo.configure(&data_packs.enabled, &data_packs.disabled, false);
         };
 
-        // Skip datapack loading entirely if disabled via config
-        if advanced_config.datapack.enabled
-        // Perform initial datapack reload (load tags, functions, recipes, loot tables, etc.)
-        {
-            if let Err(e) = datapack_manager.reload().await {
-                error!("Failed to load datapacks: {e:?}");
-            }
-
-            // Log datapack load summary if configured
-            if advanced_config.datapack.log_load_info {
-                let repo = datapack_manager.repository.read().await;
-                let selected = repo.selected_ids().to_vec();
-                let packs_info: Vec<String> = selected
-                    .iter()
-                    .filter_map(|id| {
-                        let name = repo
-                            .get_pack(id)
-                            .map_or_else(|| id.clone(), |p| p.name.clone());
-                        if id == "vanilla" {
-                            None // skip built-in pack from summary
-                        } else {
-                            Some(name)
-                        }
-                    })
-                    .collect();
-                drop(repo);
-
-                let loot_count = datapack_manager.loot_tables.read().await.len();
-                let recipe_count = datapack_manager.recipes.read().await.len();
-                let adv_count = datapack_manager.advancements.read().await.len();
-                let pred_count = datapack_manager.predicates.read().await.len();
-                let func_count = datapack_manager.functions.read().await.function_count();
-                let tag_count = datapack_manager
-                    .tags
-                    .read()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .tag_count();
-
-                if !packs_info.is_empty() {
-                    for name in &packs_info {
-                        info!("Loaded datapack: \"{name}\"");
-                    }
-                    info!(
-                        "Datapack totals: {loot_count} loot tables, {recipe_count} recipes, \
-                         {func_count} functions, {tag_count} tags, \
-                         {adv_count} advancements, {pred_count} predicates"
-                    );
-                }
-            }
-        } else {
+        if !advanced_config.datapack.enabled {
             info!("Datapack loading is disabled by config");
         }
 
@@ -473,9 +424,53 @@ impl Server {
             .map_err(|_| RootInitError)
             .unwrap();
 
-        if let Err(error) = self.datapack_manager.registries.apply_pending().await {
-            error!("Failed to populate datapack registries: {error}");
-            std::process::exit(1);
+        if self.advanced_config.datapack.enabled {
+            if let Err(error) = self.datapack_manager.reload().await {
+                error!("Failed to load datapacks: {error}");
+                std::process::exit(1);
+            }
+
+            if self.advanced_config.datapack.log_load_info {
+                let repo = self.datapack_manager.repository.read().await;
+                let packs_info: Vec<String> = repo
+                    .selected_ids()
+                    .iter()
+                    .filter(|id| id.as_str() != "vanilla")
+                    .map(|id| {
+                        repo.get_pack(id)
+                            .map_or_else(|| id.clone(), |pack| pack.name.clone())
+                    })
+                    .collect();
+                drop(repo);
+
+                let loot_count = self.datapack_manager.loot_tables.read().await.len();
+                let recipe_count = self.datapack_manager.recipes.read().await.len();
+                let adv_count = self.datapack_manager.advancements.read().await.len();
+                let pred_count = self.datapack_manager.predicates.read().await.len();
+                let func_count = self
+                    .datapack_manager
+                    .functions
+                    .read()
+                    .await
+                    .function_count();
+                let tag_count = self
+                    .datapack_manager
+                    .tags
+                    .read()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .tag_count();
+
+                for name in &packs_info {
+                    info!("Loaded datapack: \"{name}\"");
+                }
+                if !packs_info.is_empty() {
+                    info!(
+                        "Datapack totals: {loot_count} loot tables, {recipe_count} recipes, \
+                         {func_count} functions, {tag_count} tags, \
+                         {adv_count} advancements, {pred_count} predicates"
+                    );
+                }
+            }
         }
 
         let root = ROOT.get().unwrap_or_else(|| {

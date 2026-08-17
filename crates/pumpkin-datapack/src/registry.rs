@@ -8,7 +8,6 @@ use pumpkin_registry::{
 };
 use pumpkin_util::identifier::Identifier;
 use std::sync::{Arc, OnceLock};
-use tokio::sync::RwLock;
 
 static DAMAGE_TYPE_REGISTRY: OnceLock<Arc<ReloadableRegistry<DamageTypeFile>>> = OnceLock::new();
 static DIMENSION_TYPE_REGISTRY: OnceLock<Arc<ReloadableRegistry<DimensionType>>> = OnceLock::new();
@@ -112,12 +111,21 @@ bootstrap_provider! {
     init_register
 }
 
-pub struct DatapackRegistries {
-    pending_damage_types: RwLock<Vec<(Identifier, DamageTypeFile)>>,
-    pending_dimension_types: RwLock<Vec<(Identifier, DimensionType)>>,
-    pending_timelines: RwLock<Vec<(Identifier, Timeline)>>,
-    pending_world_clocks: RwLock<Vec<(Identifier, WorldClock)>>,
+fn overlay_entries<T>(
+    registry: &OnceLock<Arc<ReloadableRegistry<T>>>,
+    mut entries: Vec<(Identifier, T)>,
+) -> Result<(), BootstrapError>
+where
+    T: Send + Sync + 'static,
+{
+    entries.sort_unstable_by(|(left_id, _), (right_id, _)| left_id.cmp(right_id));
+    registry
+        .get()
+        .ok_or(BootstrapError::Uninitialized)?
+        .overlay_sorted_entries(entries)
 }
+
+pub struct DatapackRegistries;
 
 impl Default for DatapackRegistries {
     fn default() -> Self {
@@ -127,94 +135,44 @@ impl Default for DatapackRegistries {
 
 impl DatapackRegistries {
     #[must_use]
-    pub fn new() -> Self {
-        Self {
-            pending_damage_types: RwLock::new(Vec::new()),
-            pending_dimension_types: RwLock::new(Vec::new()),
-            pending_timelines: RwLock::new(Vec::new()),
-            pending_world_clocks: RwLock::new(Vec::new()),
-        }
+    pub const fn new() -> Self {
+        Self
     }
 
-    pub async fn reload_damage_types<I>(&self, entries: I) -> Result<(), BootstrapError>
-    where
-        I: IntoIterator<Item = (Identifier, DamageTypeFile)>,
-    {
-        let mut entries: Vec<_> = entries.into_iter().collect();
-        entries.sort_unstable_by(|(left_id, _), (right_id, _)| left_id.cmp(right_id));
+    pub fn reload_damage_types(
+        &self,
+        entries: Vec<(Identifier, DamageTypeFile)>,
+    ) -> Result<(), BootstrapError> {
+        overlay_entries(&DAMAGE_TYPE_REGISTRY, entries)
+    }
 
-        *self.pending_damage_types.write().await = entries.clone();
-
-        if let Some(registry) = DAMAGE_TYPE_REGISTRY.get() {
-            registry.overlay_entries(entries)?;
-        }
-
+    pub fn reload_dimension_types(
+        &self,
+        entries: Vec<(Identifier, DimensionType)>,
+    ) -> Result<(), DatapackError> {
+        overlay_entries(&DIMENSION_TYPE_REGISTRY, entries)?;
         Ok(())
     }
 
-    pub async fn reload_dimension_types<I>(&self, entries: I) -> Result<(), DatapackError>
-    where
-        I: IntoIterator<Item = (Identifier, DimensionType)>,
-    {
-        let mut entries: Vec<_> = entries.into_iter().collect();
-        entries.sort_unstable_by(|(left_id, _), (right_id, _)| left_id.cmp(right_id));
-        *self.pending_dimension_types.write().await = entries.clone();
-
-        if let Some(registry) = DIMENSION_TYPE_REGISTRY.get() {
-            registry.overlay_entries(entries)?;
-        }
-
+    pub fn reload_timelines(
+        &self,
+        entries: Vec<(Identifier, Timeline)>,
+    ) -> Result<(), DatapackError> {
+        overlay_entries(&TIMELINE_REGISTRY, entries)?;
         Ok(())
     }
 
-    pub async fn reload_timelines<I>(&self, entries: I) -> Result<(), DatapackError>
-    where
-        I: IntoIterator<Item = (Identifier, Timeline)>,
-    {
-        let mut entries: Vec<_> = entries.into_iter().collect();
-        entries.sort_unstable_by(|(left_id, _), (right_id, _)| left_id.cmp(right_id));
-        *self.pending_timelines.write().await = entries.clone();
-
-        if let Some(registry) = TIMELINE_REGISTRY.get() {
-            registry.overlay_entries(entries)?;
-        }
-
+    pub fn reload_world_clocks(
+        &self,
+        entries: Vec<(Identifier, WorldClock)>,
+    ) -> Result<(), DatapackError> {
+        overlay_entries(&WORLD_CLOCK_REGISTRY, entries)?;
         Ok(())
     }
 
-    pub async fn reload_world_clocks<I>(&self, entries: I) -> Result<(), DatapackError>
-    where
-        I: IntoIterator<Item = (Identifier, WorldClock)>,
-    {
-        let mut entries: Vec<_> = entries.into_iter().collect();
-        entries.sort_unstable_by(|(left_id, _), (right_id, _)| left_id.cmp(right_id));
-        *self.pending_world_clocks.write().await = entries.clone();
-
-        if let Some(registry) = WORLD_CLOCK_REGISTRY.get() {
-            registry.overlay_entries(entries)?;
-        }
-
-        Ok(())
-    }
-
-    /// Apply registry data loaded before the root registry was bootstrapped.
-    ///
-    /// The initial datapack reload happens before plugin registry providers are finalized,
-    /// so registry data is staged until the root registry creates its reloadable children.
-    pub async fn apply_pending(&self) -> Result<(), DatapackError> {
-        let damage_types = self.pending_damage_types.read().await.clone();
-        damage_type_registry()?.overlay_entries(damage_types)?;
-
-        let world_clocks = self.pending_world_clocks.read().await.clone();
+    pub fn validate(&self) -> Result<(), DatapackError> {
         let world_clock_registry = world_clock_registry()?;
-        world_clock_registry.overlay_entries(world_clocks)?;
-
-        let timelines = self.pending_timelines.read().await.clone();
         let timeline_registry = timeline_registry()?;
-        timeline_registry.overlay_entries(timelines)?;
-
-        let dimension_types = self.pending_dimension_types.read().await.clone();
-        dimension_type_registry()?.overlay_entries(dimension_types)?;
 
         let root = ROOT.get().ok_or(BootstrapError::Uninitialized)?;
         let environment_attribute_id = Identifier::vanilla_static("environment_attribute");
@@ -267,9 +225,11 @@ mod tests {
     use super::DatapackRegistries;
     use crate::{DatapackError, damage_type::DamageTypeFile};
     use pumpkin_registry::{
-        BOOTSTRAP, Registry, TypedRegistry, bootstrap::BootstrapManager, error::BootstrapError,
+        BOOTSTRAP, ROOT, Registry, RegistryBuilder, TypedRegistry, bootstrap::BootstrapManager,
+        error::BootstrapError,
     };
     use pumpkin_util::identifier::Identifier;
+    use std::sync::Arc;
 
     fn damage_type(id: Identifier, message_id: &str) -> DamageTypeFile {
         DamageTypeFile {
@@ -278,22 +238,24 @@ mod tests {
         }
     }
 
-    #[tokio::test]
-    async fn reload_damage_types_sorts_and_populates_registry() -> Result<(), DatapackError> {
+    #[test]
+    fn reload_damage_types_sorts_and_populates_registry() -> Result<(), DatapackError> {
         BOOTSTRAP.get_or_init(BootstrapManager::new);
+        ROOT.get_or_init(|| {
+            RegistryBuilder::<Arc<dyn Registry>>::frozen(&Identifier::vanilla_static("root"))
+                .expect("test root registry must initialize")
+        });
 
         let registries = DatapackRegistries::new();
         let alpha = Identifier::parse_static("test:alpha");
         let zeta = Identifier::parse_static("test:zeta");
 
-        registries
-            .reload_damage_types([
-                (zeta.clone(), damage_type(zeta.clone(), "zeta")),
-                (alpha.clone(), damage_type(alpha.clone(), "alpha")),
-            ])
-            .await?;
+        registries.reload_damage_types(vec![
+            (zeta.clone(), damage_type(zeta.clone(), "zeta")),
+            (alpha.clone(), damage_type(alpha.clone(), "alpha")),
+        ])?;
 
-        registries.apply_pending().await?;
+        registries.validate()?;
         let damage_types = registries
             .damage_types()
             .ok_or(BootstrapError::Uninitialized)?;

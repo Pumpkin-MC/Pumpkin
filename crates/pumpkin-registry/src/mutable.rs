@@ -49,6 +49,43 @@ impl<T: Send + Sync + 'static> ReloadableRegistry<T> {
         I: IntoIterator<Item = (Identifier, T)>,
     {
         let entries: Vec<_> = entries.into_iter().collect();
+        let mut seen = FxHashSet::default();
+
+        for (identifier, _) in &entries {
+            if !seen.insert(identifier) {
+                return Err(BootstrapError::DuplicateEntry {
+                    registry: self.name.clone(),
+                    identifier: identifier.clone(),
+                });
+            }
+        }
+
+        self.overlay_unique_entries(entries)
+    }
+
+    /// Rebuilds the registry from bootstrap providers and overlays entries sorted by identifier.
+    ///
+    /// This avoids allocating a temporary set for duplicate detection. Callers must provide the
+    /// entries in ascending identifier order.
+    pub fn overlay_sorted_entries(
+        &self,
+        entries: Vec<(Identifier, T)>,
+    ) -> Result<(), BootstrapError> {
+        if let Some(duplicate) = entries
+            .windows(2)
+            .find(|pair| pair[0].0 == pair[1].0)
+            .map(|pair| pair[1].0.clone())
+        {
+            return Err(BootstrapError::DuplicateEntry {
+                registry: self.name.clone(),
+                identifier: duplicate,
+            });
+        }
+
+        self.overlay_unique_entries(entries)
+    }
+
+    fn overlay_unique_entries(&self, entries: Vec<(Identifier, T)>) -> Result<(), BootstrapError> {
         let (mut values, mut mapping) = BOOTSTRAP
             .get()
             .ok_or(BootstrapError::Uninitialized)
@@ -56,16 +93,8 @@ impl<T: Send + Sync + 'static> ReloadableRegistry<T> {
 
         values.reserve(entries.len());
         mapping.reserve(entries.len());
-        let mut seen = FxHashSet::default();
 
         for (identifier, value) in entries {
-            if !seen.insert(identifier.clone()) {
-                return Err(BootstrapError::DuplicateEntry {
-                    registry: self.name.clone(),
-                    identifier,
-                });
-            }
-
             if let Some(&id) = mapping.get(&identifier) {
                 values[id] = value;
             } else {

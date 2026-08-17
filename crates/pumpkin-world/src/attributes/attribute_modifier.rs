@@ -32,6 +32,7 @@ pub struct ErasedAttributeModifier<T: Encode + Decode + 'static> {
     validate_argument: fn(NbtTag) -> DataResult<()>,
     encode_argument: fn(&dyn Any) -> DataResult<NbtTag>,
     apply: fn(&dyn Any, T, NbtTag) -> DataResult<T>,
+    #[allow(clippy::type_complexity)]
     interpolate: fn(&dyn Any, &EnvAttribute<T>, f32, NbtTag, NbtTag) -> DataResult<NbtTag>,
     marker: PhantomData<fn(T) -> T>,
 }

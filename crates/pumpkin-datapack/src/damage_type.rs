@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use crate::DatapackError;
 use crate::Identifier;
 use crate::resource::ResourceManager;
@@ -54,8 +52,8 @@ impl DamageTypeFile {
 /// Load all damage type JSON files from datapacks.
 pub fn load_damage_types(
     manager: &dyn ResourceManager,
-) -> Result<HashMap<Identifier, DamageTypeFile>, DatapackError> {
-    let mut types = HashMap::new();
+) -> Result<Vec<(Identifier, DamageTypeFile)>, DatapackError> {
+    let mut types = Vec::new();
 
     for ns in manager.get_namespaces() {
         let paths =
@@ -81,7 +79,7 @@ pub fn load_damage_types(
                 .unwrap_or(path.as_str());
             let id = Identifier::new(ns.clone(), type_path.to_string())?;
 
-            types.insert(id.clone(), DamageTypeFile { id, data: raw });
+            types.push((id.clone(), DamageTypeFile { id, data: raw }));
         }
     }
 

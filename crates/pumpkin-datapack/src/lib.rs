@@ -119,12 +119,11 @@ impl DataPackManager {
         let timelines = timeline::load_timelines(&manager)?;
         let dimension_types = dimension_type::load_dimension_types(&manager)?;
 
-        self.registries.reload_damage_types(damage_types).await?;
-        self.registries.reload_world_clocks(world_clocks).await?;
-        self.registries.reload_timelines(timelines).await?;
-        self.registries
-            .reload_dimension_types(dimension_types)
-            .await?;
+        self.registries.reload_damage_types(damage_types)?;
+        self.registries.reload_world_clocks(world_clocks)?;
+        self.registries.reload_timelines(timelines)?;
+        self.registries.reload_dimension_types(dimension_types)?;
+        self.registries.validate()?;
 
         // TODO(datapack parity): Load the remaining datapack-backed registries here.
 

@@ -83,11 +83,11 @@ where
     }
 
     fn is_syncable(&self) -> bool {
-        EnvAttribute::is_syncable(self)
+        Self::is_syncable(self)
     }
 
     fn is_positional(&self) -> bool {
-        EnvAttribute::is_positional(self)
+        Self::is_positional(self)
     }
 
     fn decode_map_entry(&self, input: NbtTag) -> DataResult<DecodedEnvironmentAttributeEntry> {

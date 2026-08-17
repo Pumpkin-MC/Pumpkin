@@ -4,9 +4,10 @@ use pumpkin_codecs::{
     DataResult, Decode, DynamicOps, Encode, MapLike, struct_builder::StructBuilder as _,
 };
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Default, Debug, Clone, Copy, PartialEq)]
 pub enum Easing {
     Constant,
+    #[default]
     Linear,
     InBack,
     InBounce,
@@ -41,14 +42,9 @@ pub enum Easing {
     CubicBezier([f32; 4]),
 }
 
-impl Default for Easing {
-    fn default() -> Self {
-        Self::Linear
-    }
-}
-
 impl Easing {
     #[must_use]
+    #[allow(clippy::too_many_lines)]
     pub fn apply(self, value: f32) -> f32 {
         let x = value.clamp(0.0, 1.0);
         match self {
@@ -97,14 +93,14 @@ impl Easing {
                 if x == 0.0 {
                     0.0
                 } else {
-                    2.0_f32.powf(10.0 * x - 10.0)
+                    2.0f32.powf(10.0 * x - 10.0)
                 }
             }
             Self::OutExpo => {
                 if x == 1.0 {
                     1.0
                 } else {
-                    1.0 - 2.0_f32.powf(-10.0 * x)
+                    1.0 - 2.0f32.powf(-10.0 * x)
                 }
             }
             Self::InOutExpo => {
@@ -113,9 +109,9 @@ impl Easing {
                 } else if x == 1.0 {
                     1.0
                 } else if x < 0.5 {
-                    2.0_f32.powf(20.0 * x - 10.0) / 2.0
+                    2.0f32.powf(20.0 * x - 10.0) / 2.0
                 } else {
-                    (2.0 - 2.0_f32.powf(-20.0 * x + 10.0)) / 2.0
+                    (2.0 - 2.0f32.powf(-20.0 * x + 10.0)) / 2.0
                 }
             }
             Self::InCirc => 1.0 - (1.0 - x * x).sqrt(),
@@ -124,7 +120,7 @@ impl Easing {
                 if x < 0.5 {
                     (1.0 - (1.0 - (2.0 * x).powi(2)).sqrt()) / 2.0
                 } else {
-                    ((1.0 - (-2.0 * x + 2.0).powi(2)).sqrt() + 1.0) / 2.0
+                    f32::midpoint((1.0 - (-2.0 * x + 2.0).powi(2)).sqrt(), 1.0)
                 }
             }
             Self::InBack => {
@@ -143,7 +139,10 @@ impl Easing {
                 if x < 0.5 {
                     (2.0 * x).powi(2) * ((c2 + 1.0) * 2.0 * x - c2) / 2.0
                 } else {
-                    ((2.0 * x - 2.0).powi(2) * ((c2 + 1.0) * (x * 2.0 - 2.0) + c2) + 2.0) / 2.0
+                    f32::midpoint(
+                        (2.0 * x - 2.0).powi(2) * ((c2 + 1.0) * (x * 2.0 - 2.0) + c2),
+                        2.0,
+                    )
                 }
             }
             Self::OutBounce => out_bounce(x),
@@ -152,7 +151,7 @@ impl Easing {
                 if x < 0.5 {
                     (1.0 - out_bounce(1.0 - 2.0 * x)) / 2.0
                 } else {
-                    (1.0 + out_bounce(2.0 * x - 1.0)) / 2.0
+                    f32::midpoint(1.0, out_bounce(2.0 * x - 1.0))
                 }
             }
             Self::InElastic => in_elastic(x),
@@ -200,7 +199,7 @@ impl Easing {
         })
     }
 
-    fn name(self) -> Option<&'static str> {
+    const fn name(self) -> Option<&'static str> {
         Some(match self {
             Self::Constant => "constant",
             Self::Linear => "linear",
@@ -310,7 +309,7 @@ fn in_elastic(x: f32) -> f32 {
         return x;
     }
     let c4 = 2.0 * PI / 3.0;
-    -(2.0_f32.powf(10.0 * x - 10.0)) * ((x * 10.0 - 10.75) * c4).sin()
+    -(2.0f32.powf(10.0 * x - 10.0)) * ((x * 10.0 - 10.75) * c4).sin()
 }
 
 fn out_elastic(x: f32) -> f32 {
@@ -318,7 +317,7 @@ fn out_elastic(x: f32) -> f32 {
         return x;
     }
     let c4 = 2.0 * PI / 3.0;
-    2.0_f32.powf(-10.0 * x) * ((x * 10.0 - 0.75) * c4).sin() + 1.0
+    2.0f32.powf(-10.0 * x) * ((x * 10.0 - 0.75) * c4).sin() + 1.0
 }
 
 fn in_out_elastic(x: f32) -> f32 {
@@ -327,9 +326,9 @@ fn in_out_elastic(x: f32) -> f32 {
     }
     let c5 = 2.0 * PI / 4.5;
     if x < 0.5 {
-        -(2.0_f32.powf(20.0 * x - 10.0) * ((20.0 * x - 11.125) * c5).sin()) / 2.0
+        -(2.0f32.powf(20.0 * x - 10.0) * ((20.0 * x - 11.125) * c5).sin()) / 2.0
     } else {
-        (2.0_f32.powf(-20.0 * x + 10.0) * ((20.0 * x - 11.125) * c5).sin()) / 2.0 + 1.0
+        (2.0f32.powf(-20.0 * x + 10.0) * ((20.0 * x - 11.125) * c5).sin()) / 2.0 + 1.0
     }
 }
 

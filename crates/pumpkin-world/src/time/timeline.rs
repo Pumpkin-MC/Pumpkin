@@ -157,15 +157,15 @@ fn decode_optional_identifier_map_field<O: DynamicOps, V: Decode>(
 ) -> DataResult<FxHashMap<Identifier, V>> {
     map.get(&ops.create_string(name)).map_or_else(
         || DataResult::new_success(FxHashMap::default()),
-        |value| decode_identifier_map(value.clone(), ops),
+        |value| decode_identifier_map(value, ops),
     )
 }
 
 fn decode_identifier_map<O: DynamicOps, V: Decode>(
-    input: O::Value,
+    input: &O::Value,
     ops: &'static O,
 ) -> DataResult<FxHashMap<Identifier, V>> {
-    ops.get_map(&input).flat_map(|map| {
+    ops.get_map(input).flat_map(|map| {
         let mut values = FxHashMap::default();
         let mut result = DataResult::new_success(());
         for (key, value) in map.iter() {
