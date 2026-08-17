@@ -17,12 +17,18 @@ use crate::{
             GuiResource, PlayerResource, PluginHostState, TextComponentResource, WorldResource,
         },
         wit::v0_1::{
+            entity::from_wit_damage_type,
             events::{
                 from_wasm_game_mode, from_wasm_position, to_wasm_game_mode, to_wasm_position,
             },
             pumpkin::{
                 self,
+                plugin::damage_types::DamageType as WitDamageType,
                 plugin::player::{Player, PlayerSkin, SkinParts},
+                plugin::statistics::{
+                    CustomStatistic as WitCustomStatistic,
+                    StatisticCategory as WitStatisticCategory,
+                },
                 plugin::uuid::Uuid,
                 plugin::world::World,
             },
@@ -131,6 +137,56 @@ const fn to_wasm_chat_mode(
         }
         crate::entity::player::ChatMode::Hidden => pumpkin::plugin::player::ChatMode::Hidden,
     }
+}
+
+#[must_use]
+pub const fn to_wit_statistic_category(
+    category: pumpkin_data::statistic::StatisticCategory,
+) -> WitStatisticCategory {
+    match category {
+        pumpkin_data::statistic::StatisticCategory::Mined => WitStatisticCategory::Mined,
+        pumpkin_data::statistic::StatisticCategory::Crafted => WitStatisticCategory::Crafted,
+        pumpkin_data::statistic::StatisticCategory::Used => WitStatisticCategory::Used,
+        pumpkin_data::statistic::StatisticCategory::Broken => WitStatisticCategory::Broken,
+        pumpkin_data::statistic::StatisticCategory::PickedUp => WitStatisticCategory::PickedUp,
+        pumpkin_data::statistic::StatisticCategory::Dropped => WitStatisticCategory::Dropped,
+        pumpkin_data::statistic::StatisticCategory::Killed => WitStatisticCategory::Killed,
+        pumpkin_data::statistic::StatisticCategory::KilledBy => WitStatisticCategory::KilledBy,
+        pumpkin_data::statistic::StatisticCategory::Custom => WitStatisticCategory::Custom,
+    }
+}
+
+#[must_use]
+pub const fn from_wit_statistic_category(
+    wit: WitStatisticCategory,
+) -> pumpkin_data::statistic::StatisticCategory {
+    match wit {
+        WitStatisticCategory::Mined => pumpkin_data::statistic::StatisticCategory::Mined,
+        WitStatisticCategory::Crafted => pumpkin_data::statistic::StatisticCategory::Crafted,
+        WitStatisticCategory::Used => pumpkin_data::statistic::StatisticCategory::Used,
+        WitStatisticCategory::Broken => pumpkin_data::statistic::StatisticCategory::Broken,
+        WitStatisticCategory::PickedUp => pumpkin_data::statistic::StatisticCategory::PickedUp,
+        WitStatisticCategory::Dropped => pumpkin_data::statistic::StatisticCategory::Dropped,
+        WitStatisticCategory::Killed => pumpkin_data::statistic::StatisticCategory::Killed,
+        WitStatisticCategory::KilledBy => pumpkin_data::statistic::StatisticCategory::KilledBy,
+        WitStatisticCategory::Custom => pumpkin_data::statistic::StatisticCategory::Custom,
+    }
+}
+
+#[must_use]
+pub const fn to_wit_custom_statistic(
+    stat: pumpkin_data::statistic::CustomStatistic,
+) -> WitCustomStatistic {
+    // SAFETY: WitCustomStatistic is generated in the same numerical order as CustomStatistic
+    unsafe { std::mem::transmute(stat as u8) }
+}
+
+#[must_use]
+pub fn from_wit_custom_statistic(
+    wit: WitCustomStatistic,
+) -> pumpkin_data::statistic::CustomStatistic {
+    pumpkin_data::statistic::CustomStatistic::from_i32(wit as i32)
+        .unwrap_or(pumpkin_data::statistic::CustomStatistic::PlayTime)
 }
 
 const fn to_wasm_bedrock_device_os(os: i32) -> pumpkin::plugin::player::BedrockDeviceOs {
@@ -1024,9 +1080,11 @@ impl pumpkin::plugin::player::Host for PluginHostState {
     }
 }
 use crate::plugin::loader::wasm::wasm_host::wit::v0_1::events::from_wasm_hand;
+use pumpkin_inventory::generic_container_screen_handler::GenericContainerScreenHandler;
+use pumpkin_inventory::player::ender_chest_inventory::EnderChestInventory;
 use pumpkin_protocol::codec::item_stack_seralizer::ItemStackSerializer;
 use pumpkin_protocol::java::client::play::CSetContainerSlot;
-use pumpkin_world::inventory::Inventory;
+use pumpkin_world::inventory::{Clearable, Inventory};
 
 use crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::item_stack::ItemStack as WitHostItemStack;
 
@@ -1100,6 +1158,88 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
                 tokio::sync::Mutex::new(stack),
             ))?))
         }
+    }
+
+    async fn get_ender_chest_item(
+        &mut self,
+        player: Resource<Player>,
+        slot: u8,
+    ) -> wasmtime::Result<Option<Resource<WitHostItemStack>>> {
+        let player = player_from_resource(self, &player)?;
+        let ec = player.ender_chest_inventory();
+        let stack = ec.get_stack(slot as usize).await;
+        if stack.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(self.add_item_stack(Arc::new(
+                tokio::sync::Mutex::new(stack),
+            ))?))
+        }
+    }
+
+    async fn set_ender_chest_item(
+        &mut self,
+        player: Resource<Player>,
+        slot: u8,
+        stack: Option<Resource<WitHostItemStack>>,
+    ) -> wasmtime::Result<()> {
+        let player = player_from_resource(self, &player)?;
+        let stack = if let Some(stack_res) = stack {
+            self.get_item_stack(&stack_res)?.lock().await.clone()
+        } else {
+            pumpkin_data::item_stack::ItemStack::EMPTY.clone()
+        };
+
+        let ec = player.ender_chest_inventory();
+        ec.set_stack(slot as usize, stack.clone()).await;
+
+        // If the player currently has their ender chest screen open, sync slot
+        let screen_handler_arc = player.current_screen_handler.lock().await.clone();
+        let handler = screen_handler_arc.lock().await;
+        if let Some(generic) = handler
+            .as_any()
+            .downcast_ref::<GenericContainerScreenHandler>()
+            && generic.inventory.as_any().is::<EnderChestInventory>()
+        {
+            let sync_id = handler.sync_id();
+            let stack_serializer = ItemStackSerializer::from(stack);
+            let packet = CSetContainerSlot::new(sync_id as i8, 0, slot as i16, &stack_serializer);
+            player.client.enqueue_packet(&packet).await;
+        }
+
+        Ok(())
+    }
+
+    async fn clear_ender_chest(&mut self, player: Resource<Player>) -> wasmtime::Result<()> {
+        let player = player_from_resource(self, &player)?;
+        let ec = player.ender_chest_inventory();
+        ec.clear().await;
+
+        // If the player currently has their ender chest screen open, sync all slots
+        let screen_handler_arc = player.current_screen_handler.lock().await.clone();
+        let handler = screen_handler_arc.lock().await;
+        if let Some(generic) = handler
+            .as_any()
+            .downcast_ref::<GenericContainerScreenHandler>()
+            && generic.inventory.as_any().is::<EnderChestInventory>()
+        {
+            let sync_id = handler.sync_id();
+            let empty_serializer =
+                ItemStackSerializer::from(pumpkin_data::item_stack::ItemStack::EMPTY.clone());
+            for slot in 0..27 {
+                let packet =
+                    CSetContainerSlot::new(sync_id as i8, 0, slot as i16, &empty_serializer);
+                player.client.enqueue_packet(&packet).await;
+            }
+        }
+
+        Ok(())
+    }
+
+    async fn open_ender_chest(&mut self, player: Resource<Player>) -> wasmtime::Result<()> {
+        let player = player_from_resource(self, &player)?;
+        player.open_ender_chest().await;
+        Ok(())
     }
 
     async fn get_item_in_hand(
@@ -1434,9 +1574,16 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         Ok(())
     }
 
-    async fn damage(&mut self, player: Resource<Player>, amount: f32) -> wasmtime::Result<()> {
+    async fn damage(
+        &mut self,
+        player: Resource<Player>,
+        amount: f32,
+        damage_type: WitDamageType,
+    ) -> wasmtime::Result<()> {
         let player = player_from_resource(self, &player)?;
-        player.damage_generic(amount).await;
+        player
+            .damage(&*player, amount, from_wit_damage_type(damage_type))
+            .await;
         Ok(())
     }
 
@@ -1444,6 +1591,95 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         let player = player_from_resource(self, &player)?;
         player.kill().await;
         Ok(())
+    }
+
+    async fn get_statistic(
+        &mut self,
+        player: Resource<Player>,
+        category: WitStatisticCategory,
+        stat_id: i32,
+    ) -> wasmtime::Result<i32> {
+        let player = player_from_resource(self, &player)?;
+        Ok(player
+            .get_stat(from_wit_statistic_category(category), stat_id)
+            .await)
+    }
+
+    async fn set_statistic(
+        &mut self,
+        player: Resource<Player>,
+        category: WitStatisticCategory,
+        stat_id: i32,
+        value: i32,
+    ) -> wasmtime::Result<()> {
+        let player = player_from_resource(self, &player)?;
+        player
+            .set_stat(from_wit_statistic_category(category), stat_id, value)
+            .await;
+        Ok(())
+    }
+
+    async fn increment_statistic(
+        &mut self,
+        player: Resource<Player>,
+        category: WitStatisticCategory,
+        stat_id: i32,
+        amount: i32,
+    ) -> wasmtime::Result<()> {
+        let player = player_from_resource(self, &player)?;
+        player
+            .increment_stat(from_wit_statistic_category(category), stat_id, amount)
+            .await;
+        Ok(())
+    }
+
+    async fn get_custom_statistic(
+        &mut self,
+        player: Resource<Player>,
+        stat: WitCustomStatistic,
+    ) -> wasmtime::Result<i32> {
+        let player = player_from_resource(self, &player)?;
+        Ok(player
+            .get_custom_stat(from_wit_custom_statistic(stat))
+            .await)
+    }
+
+    async fn set_custom_statistic(
+        &mut self,
+        player: Resource<Player>,
+        stat: WitCustomStatistic,
+        value: i32,
+    ) -> wasmtime::Result<()> {
+        let player = player_from_resource(self, &player)?;
+        player
+            .set_custom_stat(from_wit_custom_statistic(stat), value)
+            .await;
+        Ok(())
+    }
+
+    async fn increment_custom_statistic(
+        &mut self,
+        player: Resource<Player>,
+        stat: WitCustomStatistic,
+        amount: i32,
+    ) -> wasmtime::Result<()> {
+        let player = player_from_resource(self, &player)?;
+        player
+            .increment_custom_stat(from_wit_custom_statistic(stat), amount)
+            .await;
+        Ok(())
+    }
+
+    async fn send_stats(&mut self, player: Resource<Player>) -> wasmtime::Result<()> {
+        let player = player_from_resource(self, &player)?;
+        player.send_stats().await;
+        Ok(())
+    }
+
+    async fn get_team(&mut self, player: Resource<Player>) -> wasmtime::Result<Option<String>> {
+        let player = player_from_resource(self, &player)?;
+        let team = player.get_team().await;
+        Ok(team.map(|t| t.name))
     }
 
     async fn start_cooldown(
@@ -2310,6 +2546,214 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
             player.config.store(Arc::new(config));
         };
         player.send_client_information();
+        Ok(())
+    }
+
+    async fn get_advancement_progress(
+        &mut self,
+        player: Resource<Player>,
+        advancement_id: String,
+    ) -> wasmtime::Result<Option<pumpkin::plugin::advancement::AdvancementProgress>> {
+        let player = player_from_resource(self, &player)?;
+        let Some(advancement) =
+            crate::plugin::loader::wasm::wasm_host::wit::v0_1::advancement::find_advancement(
+                &advancement_id,
+            )
+        else {
+            return Ok(None);
+        };
+        let guard = player.advancements.lock().await;
+        let progress = guard.progress.map.get(advancement).map_or_else(
+            || pumpkin::plugin::advancement::AdvancementProgress {
+                advancement_id: advancement.id.to_string(),
+                done: false,
+                awarded_criteria: Vec::new(),
+                remaining_criteria: advancement
+                    .criteria
+                    .iter()
+                    .map(ToString::to_string)
+                    .collect(),
+            },
+            |progress| pumpkin::plugin::advancement::AdvancementProgress {
+                advancement_id: advancement.id.to_string(),
+                done: progress.is_done(),
+                awarded_criteria: progress
+                    .get_completed_criteria()
+                    .map(|s| s.to_string())
+                    .collect(),
+                remaining_criteria: progress
+                    .get_remaining_criteria()
+                    .map(|s| s.to_string())
+                    .collect(),
+            },
+        );
+        Ok(Some(progress))
+    }
+
+    async fn award_advancement_criterion(
+        &mut self,
+        player: Resource<Player>,
+        advancement_id: String,
+        criterion: String,
+    ) -> wasmtime::Result<bool> {
+        let player = player_from_resource(self, &player)?;
+        let Some(advancement) =
+            crate::plugin::loader::wasm::wasm_host::wit::v0_1::advancement::find_advancement(
+                &advancement_id,
+            )
+        else {
+            return Ok(false);
+        };
+        let mut guard = player.advancements.lock().await;
+        let awarded = guard.award(advancement, &criterion);
+        if awarded {
+            guard.flush_dirty(&player, true);
+        }
+        Ok(awarded)
+    }
+
+    async fn revoke_advancement_criterion(
+        &mut self,
+        player: Resource<Player>,
+        advancement_id: String,
+        criterion: String,
+    ) -> wasmtime::Result<bool> {
+        let player = player_from_resource(self, &player)?;
+        let Some(advancement) =
+            crate::plugin::loader::wasm::wasm_host::wit::v0_1::advancement::find_advancement(
+                &advancement_id,
+            )
+        else {
+            return Ok(false);
+        };
+        let mut guard = player.advancements.lock().await;
+        let revoked = guard.revoke(advancement, &criterion);
+        if revoked {
+            guard.flush_dirty(&player, true);
+        }
+        Ok(revoked)
+    }
+
+    async fn award_advancement(
+        &mut self,
+        player: Resource<Player>,
+        advancement_id: String,
+    ) -> wasmtime::Result<bool> {
+        let player = player_from_resource(self, &player)?;
+        let Some(advancement) =
+            crate::plugin::loader::wasm::wasm_host::wit::v0_1::advancement::find_advancement(
+                &advancement_id,
+            )
+        else {
+            return Ok(false);
+        };
+        let mut guard = player.advancements.lock().await;
+        let progress = guard.progress.get_mut_or_start_progress(advancement);
+        if progress.is_done() {
+            return Ok(false);
+        }
+        let remaining: Vec<Arc<str>> = progress.get_remaining_criteria().collect();
+        let mut any_awarded = false;
+        for criterion in remaining {
+            if guard.award(advancement, &criterion) {
+                any_awarded = true;
+            }
+        }
+        if any_awarded {
+            guard.flush_dirty(&player, true);
+        }
+        Ok(any_awarded)
+    }
+
+    async fn revoke_advancement(
+        &mut self,
+        player: Resource<Player>,
+        advancement_id: String,
+    ) -> wasmtime::Result<bool> {
+        let player = player_from_resource(self, &player)?;
+        let Some(advancement) =
+            crate::plugin::loader::wasm::wasm_host::wit::v0_1::advancement::find_advancement(
+                &advancement_id,
+            )
+        else {
+            return Ok(false);
+        };
+        let mut guard = player.advancements.lock().await;
+        let progress = guard.progress.get_mut_or_start_progress(advancement);
+        if !progress.has_progress() {
+            return Ok(false);
+        }
+        let completed: Vec<Arc<str>> = progress.get_completed_criteria().collect();
+        let mut any_revoked = false;
+        for criterion in completed {
+            if guard.revoke(advancement, &criterion) {
+                any_revoked = true;
+            }
+        }
+        if any_revoked {
+            guard.flush_dirty(&player, true);
+        }
+        Ok(any_revoked)
+    }
+
+    async fn has_advancement(
+        &mut self,
+        player: Resource<Player>,
+        advancement_id: String,
+    ) -> wasmtime::Result<bool> {
+        let player = player_from_resource(self, &player)?;
+        let Some(advancement) =
+            crate::plugin::loader::wasm::wasm_host::wit::v0_1::advancement::find_advancement(
+                &advancement_id,
+            )
+        else {
+            return Ok(false);
+        };
+        let guard = player.advancements.lock().await;
+        let done = guard
+            .progress
+            .map
+            .get(advancement)
+            .is_some_and(crate::entity::player::advancement::AdvancementProgress::is_done);
+        Ok(done)
+    }
+
+    async fn get_completed_advancements(
+        &mut self,
+        player: Resource<Player>,
+    ) -> wasmtime::Result<Vec<String>> {
+        let player = player_from_resource(self, &player)?;
+        let guard = player.advancements.lock().await;
+        let list = guard
+            .progress
+            .map
+            .iter()
+            .filter(|(_, p)| p.is_done())
+            .map(|(adv, _)| adv.id.to_string())
+            .collect();
+        Ok(list)
+    }
+
+    async fn get_selected_advancement_tab(
+        &mut self,
+        player: Resource<Player>,
+    ) -> wasmtime::Result<Option<String>> {
+        let player = player_from_resource(self, &player)?;
+        let guard = player.advancements.lock().await;
+        Ok(guard.last_selected_tab.map(|adv| adv.id.to_string()))
+    }
+
+    async fn set_selected_advancement_tab(
+        &mut self,
+        player: Resource<Player>,
+        tab_id: Option<String>,
+    ) -> wasmtime::Result<()> {
+        let player = player_from_resource(self, &player)?;
+        let target_adv = tab_id.as_deref().and_then(
+            crate::plugin::loader::wasm::wasm_host::wit::v0_1::advancement::find_advancement,
+        );
+        let mut guard = player.advancements.lock().await;
+        guard.set_selected_tab(target_adv).await;
         Ok(())
     }
 

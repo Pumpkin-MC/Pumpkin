@@ -206,6 +206,86 @@ impl HostBlockEntity for PluginHostState {
         Ok(())
     }
 
+    async fn set_custom_data(
+        &mut self,
+        res: Resource<BlockEntity>,
+        namespace: String,
+        key: String,
+        value: super::common::WitNbtTree,
+    ) -> wasmtime::Result<()> {
+        let entity = block_entity_from_resource(self, &res)?;
+        let pos = entity.get_position();
+        let tag = super::common::from_wit_nbt_tree(&value).map_err(wasmtime::Error::msg)?;
+        if let Some(server) = &self.server {
+            for world in server.worlds.load().iter() {
+                if world
+                    .block_entities
+                    .get(&pos.chunk_position())
+                    .is_some_and(|m| m.contains_key(&pos))
+                {
+                    world.set_block_entity_custom_data(&pos, &namespace, &key, tag);
+                    return Ok(());
+                }
+            }
+            if let Some(world) = server.worlds.load().first() {
+                world.set_block_entity_custom_data(&pos, &namespace, &key, tag);
+            }
+        }
+        Ok(())
+    }
+
+    async fn get_custom_data(
+        &mut self,
+        res: Resource<BlockEntity>,
+        namespace: String,
+        key: String,
+    ) -> wasmtime::Result<Option<super::common::WitNbtTree>> {
+        let entity = block_entity_from_resource(self, &res)?;
+        let pos = entity.get_position();
+        if let Some(server) = &self.server {
+            for world in server.worlds.load().iter() {
+                if let Some(tag) = world.get_block_entity_custom_data(&pos, &namespace, &key) {
+                    return Ok(Some(super::common::to_wit_nbt_tree(tag)));
+                }
+            }
+        }
+        Ok(None)
+    }
+
+    async fn remove_custom_data(
+        &mut self,
+        res: Resource<BlockEntity>,
+        namespace: String,
+        key: String,
+    ) -> wasmtime::Result<()> {
+        let entity = block_entity_from_resource(self, &res)?;
+        let pos = entity.get_position();
+        if let Some(server) = &self.server {
+            for world in server.worlds.load().iter() {
+                world.remove_block_entity_custom_data(&pos, &namespace, &key);
+            }
+        }
+        Ok(())
+    }
+
+    async fn has_custom_data(
+        &mut self,
+        res: Resource<BlockEntity>,
+        namespace: String,
+        key: String,
+    ) -> wasmtime::Result<bool> {
+        let entity = block_entity_from_resource(self, &res)?;
+        let pos = entity.get_position();
+        if let Some(server) = &self.server {
+            for world in server.worlds.load().iter() {
+                if world.has_block_entity_custom_data(&pos, &namespace, &key) {
+                    return Ok(true);
+                }
+            }
+        }
+        Ok(false)
+    }
+
     async fn drop(&mut self, rep: Resource<BlockEntity>) -> wasmtime::Result<()> {
         let _ = self
             .resource_table

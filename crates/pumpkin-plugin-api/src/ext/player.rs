@@ -1,8 +1,32 @@
+use crate::wit::pumpkin::plugin::item_stack::ItemStack;
 use crate::wit::pumpkin::plugin::player::{
     BanIpOptions, BanPlayerOptions, BedrockDisconnectReason, BedrockKickOptions, JavaKickOptions,
-    SocketTeardownPolicy,
+    Player, SocketTeardownPolicy,
 };
 use crate::wit::pumpkin::plugin::text::TextComponent;
+
+/// Extension trait providing batch access and helper utilities for player ender chest inventories.
+pub trait PlayerEnderChestExt {
+    /// Returns all 27 slots of the player's ender chest.
+    fn get_all_ender_chest_items(&self) -> Vec<Option<ItemStack>>;
+
+    /// Sets all 27 slots of the player's ender chest from an iterator.
+    fn set_all_ender_chest_items(&self, items: impl IntoIterator<Item = Option<ItemStack>>);
+}
+
+impl PlayerEnderChestExt for Player {
+    fn get_all_ender_chest_items(&self) -> Vec<Option<ItemStack>> {
+        (0..27)
+            .map(|slot| self.get_ender_chest_item(slot))
+            .collect()
+    }
+
+    fn set_all_ender_chest_items(&self, items: impl IntoIterator<Item = Option<ItemStack>>) {
+        for (slot, item) in items.into_iter().take(27).enumerate() {
+            self.set_ender_chest_item(slot as u8, item);
+        }
+    }
+}
 
 impl JavaKickOptions {
     /// Creates a new `JavaKickOptions` with the given reason and default settings.
@@ -106,5 +130,22 @@ impl BanIpOptions {
             duration_seconds: Some(duration_seconds),
             ..Default::default()
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{CustomStatistic, StatisticCategory};
+
+    #[test]
+    fn statistic_types() {
+        assert_eq!(StatisticCategory::Mined as u8, 0);
+        assert_eq!(StatisticCategory::Crafted as u8, 1);
+        assert_eq!(StatisticCategory::Custom as u8, 8);
+
+        assert_eq!(CustomStatistic::LeaveGame as u8, 0);
+        assert_eq!(CustomStatistic::PlayTime as u8, 1);
+        assert_eq!(CustomStatistic::Deaths as u8, 32);
+        assert_eq!(CustomStatistic::PlayerKills as u8, 35);
     }
 }

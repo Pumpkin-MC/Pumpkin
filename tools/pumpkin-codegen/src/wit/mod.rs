@@ -1,13 +1,17 @@
 pub mod attribute;
 pub mod bedrock_packet;
 pub mod biome;
+pub mod damage_type;
 pub mod data_component;
 pub mod enchantment;
 pub mod entity_type;
+pub mod game_rules;
 pub mod java_packet;
 pub mod packet_mapping;
 pub mod particle;
+pub mod screen;
 pub mod sound;
+pub mod statistic;
 pub mod utils;
 
 use std::{
@@ -34,6 +38,10 @@ pub fn main() {
         (enchantment::build, "enchantments.wit"),
         (biome::build, "biomes.wit"),
         (attribute::build, "attributes.wit"),
+        (damage_type::build, "damage-types.wit"),
+        (screen::build, "screens.wit"),
+        (statistic::build, "statistics.wit"),
+        (game_rules::build, "game-rules.wit"),
     ];
 
     for (build_fn, file) in build_functions {

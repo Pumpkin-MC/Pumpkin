@@ -6,10 +6,74 @@ use crate::plugin::api::gui::{PluginGui, PluginInventory};
 use crate::plugin::loader::wasm::wasm_host::{
     state::{GuiResource, PluginHostState},
     wit::v0_1::pumpkin::plugin::{
-        gui::{self, Gui, GuiType},
+        gui::{self, Gui},
         item_stack::ItemStack as WitHostItemStack,
+        screens::Screen as WitScreen,
     },
 };
+use pumpkin_data::screen::WindowType;
+
+#[must_use]
+pub const fn to_wit_screen(window_type: WindowType) -> WitScreen {
+    match window_type {
+        WindowType::Generic9x1 => WitScreen::Generic9x1,
+        WindowType::Generic9x2 => WitScreen::Generic9x2,
+        WindowType::Generic9x3 => WitScreen::Generic9x3,
+        WindowType::Generic9x4 => WitScreen::Generic9x4,
+        WindowType::Generic9x5 => WitScreen::Generic9x5,
+        WindowType::Generic9x6 => WitScreen::Generic9x6,
+        WindowType::Generic3x3 => WitScreen::Generic3x3,
+        WindowType::Crafter3x3 => WitScreen::Crafter3x3,
+        WindowType::Anvil => WitScreen::Anvil,
+        WindowType::Beacon => WitScreen::Beacon,
+        WindowType::BlastFurnace => WitScreen::BlastFurnace,
+        WindowType::BrewingStand => WitScreen::BrewingStand,
+        WindowType::Crafting => WitScreen::Crafting,
+        WindowType::Enchantment => WitScreen::Enchantment,
+        WindowType::Furnace => WitScreen::Furnace,
+        WindowType::Grindstone => WitScreen::Grindstone,
+        WindowType::Hopper => WitScreen::Hopper,
+        WindowType::Lectern => WitScreen::Lectern,
+        WindowType::Loom => WitScreen::Loom,
+        WindowType::Merchant => WitScreen::Merchant,
+        WindowType::ShulkerBox => WitScreen::ShulkerBox,
+        WindowType::Smithing => WitScreen::Smithing,
+        WindowType::Smoker => WitScreen::Smoker,
+        WindowType::CartographyTable => WitScreen::CartographyTable,
+        WindowType::Stonecutter => WitScreen::Stonecutter,
+    }
+}
+
+#[must_use]
+pub const fn from_wit_screen(screen: WitScreen) -> WindowType {
+    match screen {
+        WitScreen::Generic9x1 => WindowType::Generic9x1,
+        WitScreen::Generic9x2 => WindowType::Generic9x2,
+        WitScreen::Generic9x3 => WindowType::Generic9x3,
+        WitScreen::Generic9x4 => WindowType::Generic9x4,
+        WitScreen::Generic9x5 => WindowType::Generic9x5,
+        WitScreen::Generic9x6 => WindowType::Generic9x6,
+        WitScreen::Generic3x3 => WindowType::Generic3x3,
+        WitScreen::Crafter3x3 => WindowType::Crafter3x3,
+        WitScreen::Anvil => WindowType::Anvil,
+        WitScreen::Beacon => WindowType::Beacon,
+        WitScreen::BlastFurnace => WindowType::BlastFurnace,
+        WitScreen::BrewingStand => WindowType::BrewingStand,
+        WitScreen::Crafting => WindowType::Crafting,
+        WitScreen::Enchantment => WindowType::Enchantment,
+        WitScreen::Furnace => WindowType::Furnace,
+        WitScreen::Grindstone => WindowType::Grindstone,
+        WitScreen::Hopper => WindowType::Hopper,
+        WitScreen::Lectern => WindowType::Lectern,
+        WitScreen::Loom => WindowType::Loom,
+        WitScreen::Merchant => WindowType::Merchant,
+        WitScreen::ShulkerBox => WindowType::ShulkerBox,
+        WitScreen::Smithing => WindowType::Smithing,
+        WitScreen::Smoker => WindowType::Smoker,
+        WitScreen::CartographyTable => WindowType::CartographyTable,
+        WitScreen::Stonecutter => WindowType::Stonecutter,
+    }
+}
 
 impl PluginHostState {
     fn get_gui_res(&self, res: &Resource<Gui>) -> wasmtime::Result<&GuiResource> {
@@ -24,39 +88,13 @@ impl gui::Host for PluginHostState {}
 impl gui::HostGui for PluginHostState {
     async fn new(
         &mut self,
-        gui_type: GuiType,
+        screen: WitScreen,
         title: Resource<
             crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::text::TextComponent,
         >,
     ) -> wasmtime::Result<Resource<Gui>> {
         let title = self.get_text_provider(&title)?;
-        let window_type = match gui_type {
-            GuiType::Generic9x1 => pumpkin_data::screen::WindowType::Generic9x1,
-            GuiType::Generic9x2 => pumpkin_data::screen::WindowType::Generic9x2,
-            GuiType::Generic9x3 => pumpkin_data::screen::WindowType::Generic9x3,
-            GuiType::Generic9x4 => pumpkin_data::screen::WindowType::Generic9x4,
-            GuiType::Generic9x5 => pumpkin_data::screen::WindowType::Generic9x5,
-            GuiType::Generic9x6 => pumpkin_data::screen::WindowType::Generic9x6,
-            GuiType::Generic3x3 => pumpkin_data::screen::WindowType::Generic3x3,
-            GuiType::Crafter3x3 => pumpkin_data::screen::WindowType::Crafter3x3,
-            GuiType::Anvil => pumpkin_data::screen::WindowType::Anvil,
-            GuiType::Beacon => pumpkin_data::screen::WindowType::Beacon,
-            GuiType::BlastFurnace => pumpkin_data::screen::WindowType::BlastFurnace,
-            GuiType::BrewingStand => pumpkin_data::screen::WindowType::BrewingStand,
-            GuiType::Crafting => pumpkin_data::screen::WindowType::Crafting,
-            GuiType::Enchantment => pumpkin_data::screen::WindowType::Enchantment,
-            GuiType::Furnace => pumpkin_data::screen::WindowType::Furnace,
-            GuiType::Grindstone => pumpkin_data::screen::WindowType::Grindstone,
-            GuiType::Hopper => pumpkin_data::screen::WindowType::Hopper,
-            GuiType::Lectern => pumpkin_data::screen::WindowType::Lectern,
-            GuiType::Loom => pumpkin_data::screen::WindowType::Loom,
-            GuiType::Merchant => pumpkin_data::screen::WindowType::Merchant,
-            GuiType::ShulkerBox => pumpkin_data::screen::WindowType::ShulkerBox,
-            GuiType::Smithing => pumpkin_data::screen::WindowType::Smithing,
-            GuiType::Smoker => pumpkin_data::screen::WindowType::Smoker,
-            GuiType::CartographyTable => pumpkin_data::screen::WindowType::CartographyTable,
-            GuiType::Stonecutter => pumpkin_data::screen::WindowType::Stonecutter,
-        };
+        let window_type = from_wit_screen(screen);
 
         let size = match window_type {
             pumpkin_data::screen::WindowType::Generic9x2 => 18,
@@ -123,35 +161,9 @@ impl gui::HostGui for PluginHostState {
         }
     }
 
-    async fn get_type(&mut self, res: Resource<Gui>) -> wasmtime::Result<GuiType> {
+    async fn get_type(&mut self, res: Resource<Gui>) -> wasmtime::Result<WitScreen> {
         let gui = self.get_gui_res(&res)?.provider.lock().await;
-        Ok(match gui.window_type {
-            pumpkin_data::screen::WindowType::Generic9x1 => GuiType::Generic9x1,
-            pumpkin_data::screen::WindowType::Generic9x2 => GuiType::Generic9x2,
-            pumpkin_data::screen::WindowType::Generic9x3 => GuiType::Generic9x3,
-            pumpkin_data::screen::WindowType::Generic9x4 => GuiType::Generic9x4,
-            pumpkin_data::screen::WindowType::Generic9x5 => GuiType::Generic9x5,
-            pumpkin_data::screen::WindowType::Generic9x6 => GuiType::Generic9x6,
-            pumpkin_data::screen::WindowType::Generic3x3 => GuiType::Generic3x3,
-            pumpkin_data::screen::WindowType::Crafter3x3 => GuiType::Crafter3x3,
-            pumpkin_data::screen::WindowType::Anvil => GuiType::Anvil,
-            pumpkin_data::screen::WindowType::Beacon => GuiType::Beacon,
-            pumpkin_data::screen::WindowType::BlastFurnace => GuiType::BlastFurnace,
-            pumpkin_data::screen::WindowType::BrewingStand => GuiType::BrewingStand,
-            pumpkin_data::screen::WindowType::Crafting => GuiType::Crafting,
-            pumpkin_data::screen::WindowType::Enchantment => GuiType::Enchantment,
-            pumpkin_data::screen::WindowType::Furnace => GuiType::Furnace,
-            pumpkin_data::screen::WindowType::Grindstone => GuiType::Grindstone,
-            pumpkin_data::screen::WindowType::Hopper => GuiType::Hopper,
-            pumpkin_data::screen::WindowType::Lectern => GuiType::Lectern,
-            pumpkin_data::screen::WindowType::Loom => GuiType::Loom,
-            pumpkin_data::screen::WindowType::Merchant => GuiType::Merchant,
-            pumpkin_data::screen::WindowType::ShulkerBox => GuiType::ShulkerBox,
-            pumpkin_data::screen::WindowType::Smithing => GuiType::Smithing,
-            pumpkin_data::screen::WindowType::Smoker => GuiType::Smoker,
-            pumpkin_data::screen::WindowType::CartographyTable => GuiType::CartographyTable,
-            pumpkin_data::screen::WindowType::Stonecutter => GuiType::Stonecutter,
-        })
+        Ok(to_wit_screen(gui.window_type))
     }
 
     async fn get_title(

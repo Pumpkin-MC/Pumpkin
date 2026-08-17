@@ -2,6 +2,9 @@ use pumpkin_util::text::TextComponent;
 use wasmtime::component::Resource;
 
 use crate::command::CommandSender;
+use crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::enchantments::{
+    CustomEnchantment as WitCustomEnchantment, EnchantmentManager as WitEnchantmentManager,
+};
 use crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::recipe::RecipeManager as WitRecipeManager;
 use pumpkin::plugin::server::CommandSender as WasmCommandSender;
 
@@ -196,11 +199,24 @@ impl pumpkin::plugin::server::HostServer for PluginHostState {
             .worlds
             .load()
             .iter()
-            .find(|world| world.dimension.minecraft_name == name)
+            .find(|world| world.get_world_name() == name || world.dimension.minecraft_name == name)
             .map(|world| {
                 self.add_world(world.clone())
                     .expect("failed to add world resource")
             }))
+    }
+
+    async fn has_world(&mut self, _rep: Resource<Server>, name: String) -> wasmtime::Result<bool> {
+        let server = self
+            .server
+            .as_ref()
+            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+
+        Ok(server
+            .worlds
+            .load()
+            .iter()
+            .any(|world| world.get_world_name() == name || world.dimension.minecraft_name == name))
     }
 
     async fn create_world(
@@ -223,6 +239,52 @@ impl pumpkin::plugin::server::HostServer for PluginHostState {
         let world = server.create_world(name, internal_dim).await;
         self.add_world(world)
             .map_err(|_| wasmtime::Error::msg("failed to add world resource"))
+    }
+
+    async fn unload_world(
+        &mut self,
+        _rep: Resource<Server>,
+        name: String,
+    ) -> wasmtime::Result<Result<(), String>> {
+        let server = self
+            .server
+            .as_ref()
+            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+
+        Ok(server.unload_world(&name).await)
+    }
+
+    async fn save_all(&mut self, _rep: Resource<Server>) -> wasmtime::Result<Result<(), String>> {
+        let server = self
+            .server
+            .as_ref()
+            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+
+        Ok(server.save_all().await)
+    }
+
+    async fn get_players_in_world(
+        &mut self,
+        _rep: Resource<Server>,
+        world: Resource<pumpkin::plugin::world::World>,
+    ) -> wasmtime::Result<Vec<Resource<pumpkin::plugin::player::Player>>> {
+        let world_res = self.get_world_res(&world)?;
+        let players = world_res.provider.players.load();
+        let mut player_resources = Vec::with_capacity(players.len());
+        for p in players.iter() {
+            let res = self.add_player(p.clone())?;
+            player_resources.push(res);
+        }
+        Ok(player_resources)
+    }
+
+    async fn get_player_count_in_world(
+        &mut self,
+        _rep: Resource<Server>,
+        world: Resource<pumpkin::plugin::world::World>,
+    ) -> wasmtime::Result<u32> {
+        let world_res = self.get_world_res(&world)?;
+        Ok(world_res.provider.players.load().len() as u32)
     }
 
     async fn broadcast(&mut self, _rep: Resource<Server>, message: String) -> wasmtime::Result<()> {
@@ -436,6 +498,118 @@ impl pumpkin::plugin::server::HostServer for PluginHostState {
             .as_ref()
             .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
         self.add_whitelist_manager(server.clone())
+    }
+
+    async fn get_advancement(
+        &mut self,
+        _rep: Resource<Server>,
+        id: String,
+    ) -> wasmtime::Result<Option<pumpkin::plugin::advancement::AdvancementInfo>> {
+        let Some(advancement) =
+            crate::plugin::loader::wasm::wasm_host::wit::v0_1::advancement::find_advancement(&id)
+        else {
+            return Ok(None);
+        };
+        crate::plugin::loader::wasm::wasm_host::wit::v0_1::advancement::to_wasm_advancement_info(
+            self,
+            advancement,
+        )
+        .map(Some)
+    }
+
+    async fn get_all_advancement_ids(
+        &mut self,
+        _rep: Resource<Server>,
+    ) -> wasmtime::Result<Vec<String>> {
+        let ids = pumpkin_data::Advancement::get_identifier_list()
+            .iter()
+            .map(ToString::to_string)
+            .collect();
+        Ok(ids)
+    }
+
+    async fn get_enchantment_manager(
+        &mut self,
+        _rep: Resource<Server>,
+    ) -> wasmtime::Result<Resource<WitEnchantmentManager>> {
+        let server = self
+            .server
+            .as_ref()
+            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+        self.add_enchantment_manager(server.enchantment_manager.clone())
+    }
+
+    async fn get_enchantment(
+        &mut self,
+        _rep: Resource<Server>,
+        id: String,
+    ) -> wasmtime::Result<Option<WitCustomEnchantment>> {
+        let server = self
+            .server
+            .as_ref()
+            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+
+        if let Some(entry) = server.enchantment_manager.get(&id).await {
+            let description = self.add_text_component(entry.description)?;
+            return Ok(Some(WitCustomEnchantment {
+                id: entry.id,
+                description,
+                max_level: entry.max_level,
+                anvil_cost: entry.anvil_cost,
+                supported_items: entry.supported_items,
+                weight: entry.weight,
+                slots: entry
+                    .slots
+                    .iter()
+                    .map(super::enchantment::to_wit_slot)
+                    .collect(),
+                exclusive_set: entry.exclusive_set,
+            }));
+        }
+
+        if let Some(vanilla) = super::enchantment::find_vanilla_enchantment(&id) {
+            let description =
+                self.add_text_component(TextComponent::translate(vanilla.description, []))?;
+            return Ok(Some(WitCustomEnchantment {
+                id: vanilla.name.to_string(),
+                description,
+                max_level: vanilla.max_level.max(1) as u32,
+                anvil_cost: vanilla.anvil_cost,
+                supported_items: vanilla
+                    .supported_items
+                    .0
+                    .first()
+                    .copied()
+                    .unwrap_or("")
+                    .to_string(),
+                weight: vanilla.weight.max(1) as u32,
+                slots: vanilla
+                    .slots
+                    .iter()
+                    .map(super::enchantment::to_wit_slot)
+                    .collect(),
+                exclusive_set: vanilla.exclusive_set.map_or_else(Vec::new, |tag| {
+                    tag.0.iter().map(|s| (*s).to_string()).collect()
+                }),
+            }));
+        }
+
+        Ok(None)
+    }
+
+    async fn get_all_enchantment_ids(
+        &mut self,
+        _rep: Resource<Server>,
+    ) -> wasmtime::Result<Vec<String>> {
+        let server = self
+            .server
+            .as_ref()
+            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+        let mut ids = server.enchantment_manager.get_all_ids().await;
+        for enc in pumpkin_data::enchantment::Enchantment::ALL {
+            ids.push(enc.name.to_string());
+        }
+        Ok(ids)
     }
 
     async fn drop(&mut self, rep: Resource<Server>) -> wasmtime::Result<()> {

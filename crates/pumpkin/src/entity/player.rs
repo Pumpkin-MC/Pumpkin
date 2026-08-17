@@ -126,6 +126,10 @@ impl BedrockPlayer<'_> {
         }
     }
 
+    pub async fn get_team(&self) -> Option<crate::world::scoreboard::Team> {
+        self.0.get_team().await
+    }
+
     #[must_use]
     pub fn client_data(&self) -> Option<Arc<pumpkin_protocol::bedrock::server::login::ClientData>> {
         if let ClientPlatform::Bedrock(client) = self.0.client.as_ref() {
@@ -1193,8 +1197,39 @@ impl Player {
         &self.ender_chest_inventory
     }
 
+    /// Opens the player's ender chest screen.
+    pub async fn open_ender_chest(self: &Arc<Self>) -> Option<u8> {
+        self.increment_stat(
+            pumpkin_data::statistic::StatisticCategory::Custom,
+            pumpkin_data::statistic::CustomStatistic::OpenEnderchest as i32,
+            1,
+        )
+        .await;
+        let inventory = self.ender_chest_inventory();
+        self.open_handled_screen(
+            &crate::block::blocks::ender_chest::EnderChestScreenFactory {
+                inventory: inventory.clone(),
+                tracker: None,
+            },
+            None,
+        )
+        .await
+    }
+
     /// Removes the [`Player`] out of the current [`World`].
     pub async fn remove(self: &Arc<Self>) {
+        if !self
+            .current_screen_handler
+            .lock()
+            .await
+            .lock()
+            .await
+            .as_any()
+            .is::<PlayerScreenHandler>()
+        {
+            self.on_handled_screen_closed().await;
+        }
+
         let vehicle = self.living_entity.entity.vehicle.lock().await.clone();
         if let Some(vehicle) = vehicle {
             self.root_vehicle_uuid
@@ -2782,6 +2817,25 @@ impl Player {
         self.stats.lock().await.set(category, stat, value);
     }
 
+    pub async fn get_stat(&self, category: statistics::StatisticCategory, stat: i32) -> i32 {
+        self.stats.lock().await.get(category, stat)
+    }
+
+    pub async fn get_custom_stat(&self, stat: statistics::CustomStatistic) -> i32 {
+        self.get_stat(statistics::StatisticCategory::Custom, stat as i32)
+            .await
+    }
+
+    pub async fn set_custom_stat(&self, stat: statistics::CustomStatistic, value: i32) {
+        self.set_stat(statistics::StatisticCategory::Custom, stat as i32, value)
+            .await;
+    }
+
+    pub async fn increment_custom_stat(&self, stat: statistics::CustomStatistic, amount: i32) {
+        self.increment_stat(statistics::StatisticCategory::Custom, stat as i32, amount)
+            .await;
+    }
+
     pub async fn get_movement_statistic(&self) -> statistics::CustomStatistic {
         let entity = self.get_entity();
         if entity.has_vehicle().await {
@@ -3040,6 +3094,18 @@ impl Player {
                     .await;
             }
         }
+    }
+
+    pub async fn get_team(&self) -> Option<crate::world::scoreboard::Team> {
+        let guard = self.custom_scoreboard.lock().await;
+        if let Some(CustomScoreboard::Java(sb)) = guard.as_ref()
+            && let Some(team) = sb.get_entity_team(&self.gameprofile.name)
+        {
+            return Some(team.clone());
+        }
+        let world = self.world();
+        let sb = world.scoreboard.lock().await;
+        sb.get_entity_team(&self.gameprofile.name).cloned()
     }
 
     pub async fn set_compass_target(&self, pos: pumpkin_util::math::position::BlockPos) {
@@ -5710,6 +5776,7 @@ impl NBTStorage for EnderChestInventory {
                 for tag in item_list {
                     if let Some(item_compound) = tag.extract_compound()
                         && let Some(slot_byte) = item_compound.get_byte("Slot")
+                        && (0..Self::INVENTORY_SIZE as i8).contains(&slot_byte)
                     {
                         let slot = slot_byte as usize;
                         if let Some(item_stack) = ItemStack::read_item_stack(item_compound) {

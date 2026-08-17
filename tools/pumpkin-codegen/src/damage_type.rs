@@ -67,6 +67,7 @@ pub fn build() -> TokenStream {
 
     let mut constants = Vec::new();
     let mut type_from_name = TokenStream::new();
+    let mut type_from_id = TokenStream::new();
 
     for (name, entry) in damage_types {
         let const_ident = format_ident!("{}", name.to_shouty_snake_case());
@@ -74,6 +75,11 @@ pub fn build() -> TokenStream {
 
         type_from_name.extend(quote! {
             #resource_name => Some(Self::#const_ident),
+        });
+
+        let id_lit = LitInt::new(&entry.id.to_string(), proc_macro2::Span::call_site());
+        type_from_id.extend(quote! {
+            #id_lit => Some(Self::#const_ident),
         });
 
         let data = &entry.components;
@@ -98,7 +104,6 @@ pub fn build() -> TokenStream {
             proc_macro2::Span::call_site(),
         );
         let scaling = quote! {DamageScaling::#scaling_ident};
-        let id_lit = LitInt::new(&entry.id.to_string(), proc_macro2::Span::call_site());
 
         constants.push(quote! {
             pub const #const_ident: DamageType = DamageType {
@@ -160,6 +165,13 @@ pub fn build() -> TokenStream {
                 }
             }
 
+            #[doc = r" Try to parse a damage type from a numeric registry id."]
+            pub const fn from_id(id: u8) -> Option<Self> {
+                match id {
+                    #type_from_id
+                    _ => None
+                }
+            }
         }
 
         impl Taggable for DamageType {

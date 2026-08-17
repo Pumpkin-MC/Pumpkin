@@ -89,7 +89,7 @@ pub struct Level {
     pub chunk_saver: Arc<ChunkSaver>,
     entity_saver: Arc<EntitySaver>,
 
-    pub world_gen: Arc<WorldGenerator>,
+    pub world_gen: ArcSwap<WorldGenerator>,
 
     /// Handles runtime lighting updates
     pub light_engine: DynamicLightEngine,
@@ -251,7 +251,7 @@ impl Level {
         let level_ref = Arc::new(Self {
             seed,
             world_portal: ArcSwap::new(Arc::new(None)),
-            world_gen,
+            world_gen: ArcSwap::new(world_gen),
             level_folder,
             lighting_config: level_config.lighting,
             light_engine: DynamicLightEngine::new(),
@@ -300,6 +300,15 @@ impl Level {
         );
 
         level_ref
+    }
+
+    pub fn set_world_gen(&self, generator: Arc<WorldGenerator>) {
+        self.world_gen.store(generator);
+    }
+
+    #[must_use]
+    pub fn world_gen(&self) -> Arc<WorldGenerator> {
+        self.world_gen.load_full()
     }
 
     pub fn spawn_entity_generation(self: &Arc<Self>, pos: Vector2<i32>) {

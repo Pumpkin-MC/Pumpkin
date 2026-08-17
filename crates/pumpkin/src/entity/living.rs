@@ -2271,7 +2271,7 @@ impl EntityBase for LivingEntity {
             let mut damage_event =
                 crate::plugin::api::events::entity::entity_damage::EntityDamageEvent::new(
                     self.entity.entity_id,
-                    damage_type.id.to_string(),
+                    damage_type,
                     amount,
                 );
             if let Some(server) = self.entity.world.load().server.upgrade() {
