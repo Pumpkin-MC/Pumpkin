@@ -12,7 +12,7 @@
 and customizable experience. It prioritizes performance and player enjoyment while adhering to the core mechanics of the game.
 <div align="center">
 
-![chunk loading](/assets/pumpkin_chunk_loading.webp)
+![Pumpkin Chunk Loading](./assets/pumpkin-chunk-loading.webp)
 
 </div>
 
@@ -36,7 +36,8 @@ and customizable experience. It prioritizes performance and player enjoyment whi
   - [x] Server Status/Ping
   - [x] Encryption
   - [x] Packet Compression
-  - [x] Java/Bedrock
+  - [x] Java Edition
+  - [x] Bedrock Edition (W.I.P)
   - ...
 - [Tracking: World](https://github.com/Pumpkin-MC/Pumpkin/issues/1403)
   - [x] Player Tab-list
@@ -64,7 +65,7 @@ and customizable experience. It prioritizes performance and player enjoyment whi
   - [x] Experience
   - [x] Hunger
   - [X] Off Hand
-  - [ ] Advancements
+  - [X] Advancements (W.I.P)
   - [x] Eating
   - ...
 - Entities
@@ -74,8 +75,8 @@ and customizable experience. It prioritizes performance and player enjoyment whi
   - [x] Mobs (W.I.P)
   - [x] Animals (W.I.P)
   - [Entity AI](https://github.com/Pumpkin-MC/Pumpkin/issues/1406)
-  - [x] Boss
-  - [ ] Villagers
+  - [x] Boss (W.I.P)
+  - [x] Villagers (W.I.P)
   - [X] Entity Saving
 - Server
   - [Plugins](https://github.com/Pumpkin-MC/Pumpkin/issues/1407)
@@ -111,4 +112,4 @@ Consider joining [our Discord server](https://discord.gg/wT8XjrjKkf) to stay up-
 
 ## Funding
 
-If you want to fund me and help the project, check out my [GitHub sponsors](https://github.com/sponsors/Pumpkin-MC).
+If you want to fund me and help the project, check out the [Donation Page](https://pumpkinmc.org/donate/).
