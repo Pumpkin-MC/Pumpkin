@@ -17,8 +17,6 @@ use arc_swap::ArcSwap;
 use crossbeam::atomic::AtomicCell;
 use crossbeam::channel::Receiver;
 use pumpkin_data::dimension::Dimension;
-use pumpkin_data::meta_data_type::MetaDataType;
-use pumpkin_data::tracked_data::TrackedData;
 use pumpkin_inventory::player::ender_chest_inventory::EnderChestInventory;
 use pumpkin_protocol::bedrock::client::play_status::CPlayStatus;
 use pumpkin_protocol::bedrock::client::set_time::CSetTime;
@@ -2026,8 +2024,7 @@ impl Player {
             .set_pos(bed_head_pos.to_f64().add_raw(0.5, 0.6875, 0.5));
         self.get_entity().send_meta_data(
             &[Metadata::new(
-                TrackedData::SLEEPING_POS_ID,
-                MetaDataType::OPTIONAL_BLOCK_POS,
+                pumpkin_data::tracked_data::player::SLEEPING_POS_ID,
                 Some(bed_head_pos),
             )],
             None,
@@ -2159,8 +2156,7 @@ impl Player {
         self.living_entity.entity.set_pos(self.position());
         self.living_entity.entity.send_meta_data(
             &[Metadata::new(
-                TrackedData::SLEEPING_POS_ID,
-                MetaDataType::OPTIONAL_BLOCK_POS,
+                pumpkin_data::tracked_data::player::SLEEPING_POS_ID,
                 None::<BlockPos>,
             )],
             None,
@@ -4075,24 +4071,20 @@ impl Player {
             &[
                 // v26.x
                 Metadata::new(
-                    TrackedData::PLAYER_MODE_CUSTOMISATION,
-                    MetaDataType::BYTE,
+                    pumpkin_data::tracked_data::player::PLAYER_MODE_CUSTOMISATION,
                     config.skin_parts,
                 ),
                 Metadata::new(
-                    TrackedData::PLAYER_MAIN_HAND,
-                    MetaDataType::HUMANOID_ARM,
+                    pumpkin_data::tracked_data::player::PLAYER_MAIN_HAND,
                     config.main_hand as u8,
                 ),
                 // v1.21.x
                 Metadata::new(
-                    TrackedData::PLAYER_MODE_CUSTOMIZATION_ID,
-                    MetaDataType::BYTE,
+                    pumpkin_data::tracked_data::player::PLAYER_MODE_CUSTOMIZATION_ID,
                     config.skin_parts,
                 ),
                 Metadata::new(
-                    TrackedData::MAIN_ARM_ID,
-                    MetaDataType::BYTE,
+                    pumpkin_data::tracked_data::player::MAIN_ARM_ID,
                     config.main_hand as u8,
                 ),
             ],

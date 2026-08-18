@@ -2,10 +2,8 @@ use std::sync::atomic::{AtomicI32, Ordering};
 
 use crossbeam::atomic::AtomicCell;
 use pumpkin_data::item_stack::ItemStack;
-use pumpkin_data::meta_data_type::MetaDataType;
 use pumpkin_data::particle::Particle;
 use pumpkin_data::tag::{self, Taggable};
-use pumpkin_data::tracked_data::TrackedData;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::java::client::play::Metadata;
 use pumpkin_util::math::vector3::Vector3;
@@ -32,8 +30,7 @@ impl FurnaceMinecart {
     fn set_fueled(entity: &Entity, fueled: bool) {
         entity.send_meta_data(
             &[Metadata::new(
-                TrackedData::ID_FUEL,
-                MetaDataType::BOOLEAN,
+                pumpkin_data::tracked_data::furnace_minecart::ID_FUEL,
                 fueled,
             )],
             None,

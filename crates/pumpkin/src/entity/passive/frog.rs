@@ -6,10 +6,8 @@ use std::sync::{
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
-use pumpkin_data::meta_data_type::MetaDataType;
 use pumpkin_data::sound::Sound;
 use pumpkin_data::tag::{self, Taggable};
-use pumpkin_data::tracked_data::TrackedData;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::java::client::play::Metadata;
@@ -126,8 +124,7 @@ impl FrogEntity {
         let entity = self.get_entity();
         entity.send_meta_data(
             &[Metadata::new(
-                TrackedData::VARIANT,
-                MetaDataType::FROG_VARIANT,
+                pumpkin_data::tracked_data::frog::VARIANT,
                 VarInt(variant.id()),
             )],
             None,
@@ -192,8 +189,7 @@ impl Mob for FrogEntity {
             if is_baby {
                 entity.send_meta_data(
                     &[Metadata::new(
-                        TrackedData::BABY_ID,
-                        MetaDataType::BOOLEAN,
+                        pumpkin_data::tracked_data::frog::BABY_ID,
                         true,
                     )],
                     None,
@@ -201,8 +197,7 @@ impl Mob for FrogEntity {
             }
             entity.send_meta_data(
                 &[Metadata::new(
-                    TrackedData::VARIANT,
-                    MetaDataType::FROG_VARIANT,
+                    pumpkin_data::tracked_data::frog::VARIANT,
                     VarInt(self.get_variant().id()),
                 )],
                 None,

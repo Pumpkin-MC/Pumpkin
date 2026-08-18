@@ -62,8 +62,6 @@ use pumpkin_data::dimension::Dimension;
 use pumpkin_data::entity::MobCategory;
 use pumpkin_data::fluid::{Falling, FluidProperties, FluidState};
 use pumpkin_data::game_rules::{GameRule, GameRuleValue};
-use pumpkin_data::meta_data_type::MetaDataType;
-use pumpkin_data::tracked_data::TrackedData;
 use pumpkin_data::{
     Block, BlockStateId,
     entity::{EntityStatus, EntityType},
@@ -887,13 +885,11 @@ impl World {
                     let mut buf = Vec::new();
                     for meta in [
                         Metadata::new(
-                            TrackedData::PLAYER_MODE_CUSTOMISATION,
-                            MetaDataType::BYTE,
+                            pumpkin_data::tracked_data::player::PLAYER_MODE_CUSTOMISATION,
                             skin_parts,
                         ),
                         Metadata::new(
-                            TrackedData::PLAYER_MODE_CUSTOMIZATION_ID,
-                            MetaDataType::BYTE,
+                            pumpkin_data::tracked_data::player::PLAYER_MODE_CUSTOMIZATION_ID,
                             skin_parts,
                         ),
                     ] {
@@ -3385,16 +3381,14 @@ impl World {
                 let mut buf = Vec::new();
                 {
                     let meta = Metadata::new(
-                        TrackedData::PLAYER_MODE_CUSTOMISATION,
-                        MetaDataType::BYTE,
+                        pumpkin_data::tracked_data::player::PLAYER_MODE_CUSTOMISATION,
                         config.skin_parts,
                     );
                     let _ = meta.write(&mut buf, &client.version.load());
                 };
                 {
                     let meta = Metadata::new(
-                        TrackedData::PLAYER_MODE_CUSTOMIZATION_ID,
-                        MetaDataType::BYTE,
+                        pumpkin_data::tracked_data::player::PLAYER_MODE_CUSTOMIZATION_ID,
                         config.skin_parts,
                     );
                     let _ = meta.write(&mut buf, &client.version.load());

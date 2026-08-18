@@ -1,13 +1,26 @@
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    fs,
+};
+
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
-use std::{collections::BTreeMap, fs};
+use serde::Deserialize;
 
 use crate::version::JavaMinecraftVersion;
 
 /// The newest protocol version used as the fallback for unknown versions in `TrackedId::get`.
 const LATEST_VERSION: JavaMinecraftVersion = JavaMinecraftVersion::V_26_2;
 
-/// Generates the `TokenStream` for `TrackedId`, `TrackedData`, and all per-entity tracking constants.
+#[derive(Deserialize)]
+struct RawTrackedField {
+    id: u8,
+    r#type: String,
+    #[allow(dead_code)]
+    type_id: u8,
+}
+
+/// Generates the `TokenStream` for `TrackedId`, `TrackedData`, and all per-entity tracking modules.
 pub(crate) fn build() -> TokenStream {
     let assets = [
         (JavaMinecraftVersion::V_1_21, "1_21_tracked_data.json"),
@@ -25,108 +38,38 @@ pub(crate) fn build() -> TokenStream {
     let mut versions = BTreeMap::new();
     for (ver, file) in assets {
         let path = format!("../../assets/tracked_data/{file}");
-
-        let content = fs::read_to_string(&path)
-            .unwrap_or_else(|e| panic!("Failed to read JSON file: {path} {e}"));
-        let mut parsed: BTreeMap<String, u8> = serde_json::from_str(&content)
-            .unwrap_or_else(|e| panic!("Failed to parse {path}: {e}"));
-
-        // The upstream flattened asset loses duplicate Mojang field names.
-        // Before 26.1 the wolf tracker was named VARIANT; newer mappings use
-        // DATA_VARIANT_ID, which collides with unrelated entity fields in the
-        // flattened table. Preserve the legacy value and set the entity-scoped
-        // ID for the new mappings explicitly.
-        let wolf_variant_id = match ver {
-            JavaMinecraftVersion::V_26_1 | JavaMinecraftVersion::V_26_2 => Some(23),
-            _ => parsed.get("VARIANT").copied(),
-        };
-        if let Some(id) = wolf_variant_id {
-            parsed.insert("WOLF_VARIANT_ID".to_owned(), id);
+        if let Ok(content) = fs::read_to_string(&path) {
+            if let Ok(parsed) = serde_json::from_str::<
+                BTreeMap<String, BTreeMap<String, RawTrackedField>>,
+            >(&content)
+            {
+                versions.insert(ver, parsed);
+            }
         }
-
-        let cat_variant_id = match ver {
-            JavaMinecraftVersion::V_26_1 | JavaMinecraftVersion::V_26_2 => Some(20),
-            _ => parsed.get("CAT_VARIANT").copied().or(Some(19)),
-        };
-        if let Some(id) = cat_variant_id {
-            parsed.insert("CAT_VARIANT".to_owned(), id);
-            parsed.insert("CAT_VARIANT_ID".to_owned(), id);
-        }
-
-        let cat_collar_color_id = match ver {
-            JavaMinecraftVersion::V_26_1 | JavaMinecraftVersion::V_26_2 => Some(23),
-            _ => Some(22),
-        };
-        if let Some(id) = cat_collar_color_id {
-            parsed.insert("CAT_COLLAR_COLOR".to_owned(), id);
-            parsed.insert("CAT_COLLAR_COLOR_ID".to_owned(), id);
-        }
-
-        let wolf_collar_color_id = match ver {
-            JavaMinecraftVersion::V_26_1 | JavaMinecraftVersion::V_26_2 => Some(21),
-            _ => Some(20),
-        };
-        if let Some(id) = wolf_collar_color_id {
-            parsed.insert("WOLF_COLLAR_COLOR".to_owned(), id);
-            parsed.insert("WOLF_COLLAR_COLOR_ID".to_owned(), id);
-        }
-
-        let sound_variant_id = match ver {
-            JavaMinecraftVersion::V_26_1 | JavaMinecraftVersion::V_26_2 => Some(24),
-            JavaMinecraftVersion::V_1_21_5
-            | JavaMinecraftVersion::V_1_21_6
-            | JavaMinecraftVersion::V_1_21_7
-            | JavaMinecraftVersion::V_1_21_9
-            | JavaMinecraftVersion::V_1_21_11 => Some(23),
-            _ => None,
-        };
-        if let Some(id) = sound_variant_id {
-            parsed.insert("SOUND_VARIANT".to_owned(), id);
-            parsed.insert("SOUND_VARIANT_ID".to_owned(), id);
-            parsed.insert("CAT_SOUND_VARIANT_ID".to_owned(), id);
-            parsed.insert("WOLF_SOUND_VARIANT_ID".to_owned(), id);
-        }
-
-        let is_lying_id = match ver {
-            JavaMinecraftVersion::V_26_1 | JavaMinecraftVersion::V_26_2 => Some(21),
-            _ => Some(20),
-        };
-        if let Some(id) = is_lying_id {
-            parsed.insert("IS_LYING".to_owned(), id);
-            parsed.insert("IN_SLEEPING_POSE".to_owned(), id);
-        }
-
-        let relax_state_one_id = match ver {
-            JavaMinecraftVersion::V_26_1 | JavaMinecraftVersion::V_26_2 => Some(22),
-            _ => Some(21),
-        };
-        if let Some(id) = relax_state_one_id {
-            parsed.insert("RELAX_STATE_ONE".to_owned(), id);
-            parsed.insert("HEAD_DOWN".to_owned(), id);
-        }
-
-        versions.insert(ver, parsed);
     }
 
-    let tracked_data_struct = generate_struct(&versions);
-    let constants = generate_consts(&versions);
+    if versions.is_empty() {
+        panic!("No tracked data asset files found in assets/tracked_data");
+    }
+
+    let tracked_id_struct = generate_tracked_id_struct(&versions);
+    let tracked_data_struct = generate_tracked_data_struct();
+    let entity_modules = generate_entity_modules(&versions);
 
     quote! {
+        use crate::meta_data_type::MetaDataType;
         use pumpkin_util::version::JavaMinecraftVersion;
+
+        #tracked_id_struct
 
         #tracked_data_struct
 
-        pub struct TrackedData;
-
-        impl TrackedData {
-            #constants
-        }
+        #entity_modules
     }
 }
 
 /// Generates the `TrackedId` struct definition with one `u8` field per supported version.
-fn generate_struct<T>(versions: &BTreeMap<JavaMinecraftVersion, T>) -> TokenStream {
-    // Build struct fields
+fn generate_tracked_id_struct<T>(versions: &BTreeMap<JavaMinecraftVersion, T>) -> TokenStream {
     let mut struct_fields = TokenStream::new();
     for ver in versions.keys() {
         let ident = ver.to_field_ident();
@@ -135,9 +78,12 @@ fn generate_struct<T>(versions: &BTreeMap<JavaMinecraftVersion, T>) -> TokenStre
         });
     }
 
-    let latest_field_ident = LATEST_VERSION.to_field_ident();
+    let latest_field_ident = if versions.contains_key(&LATEST_VERSION) {
+        LATEST_VERSION.to_field_ident()
+    } else {
+        versions.keys().last().unwrap().to_field_ident()
+    };
 
-    // Build match arms
     let mut match_arms = TokenStream::new();
     for ver in versions.keys() {
         let ident = ver.to_field_ident();
@@ -147,12 +93,14 @@ fn generate_struct<T>(versions: &BTreeMap<JavaMinecraftVersion, T>) -> TokenStre
     }
 
     quote! {
+        #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
         pub struct TrackedId {
             #struct_fields
         }
 
         impl TrackedId {
-            pub fn get(&self, version: &JavaMinecraftVersion) -> u8 {
+            #[must_use]
+            pub const fn get(&self, version: &JavaMinecraftVersion) -> u8 {
                 match version {
                     #match_arms
                     _ => self.#latest_field_ident,
@@ -168,67 +116,324 @@ fn generate_struct<T>(versions: &BTreeMap<JavaMinecraftVersion, T>) -> TokenStre
     }
 }
 
-/// Generates `TrackedId` constants for every tracked data key present in the latest version.
-fn generate_consts(versions: &BTreeMap<JavaMinecraftVersion, BTreeMap<String, u8>>) -> TokenStream {
-    let mut constants = TokenStream::new();
+/// Generates the `TrackedData` struct with `id` and `type` fields.
+fn generate_tracked_data_struct() -> TokenStream {
+    quote! {
+        #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+        pub struct TrackedData {
+            pub id: TrackedId,
+            pub r#type: MetaDataType,
+        }
 
-    // Union of all normalized names across every version
-    let all_names: std::collections::BTreeSet<String> = versions
+        impl TrackedData {
+            #[must_use]
+            pub const fn new(id: TrackedId, r#type: MetaDataType) -> Self {
+                Self { id, r#type }
+            }
+
+            #[must_use]
+            pub const fn get(&self, version: &JavaMinecraftVersion) -> u8 {
+                self.id.get(version)
+            }
+        }
+    }
+}
+
+/// Generates entity-specific modules containing constants for all tracked fields.
+fn generate_entity_modules(
+    versions: &BTreeMap<JavaMinecraftVersion, BTreeMap<String, BTreeMap<String, RawTrackedField>>>,
+) -> TokenStream {
+    let mut modules = TokenStream::new();
+
+    let all_entities: BTreeSet<String> = versions
         .values()
-        .flat_map(|data| data.keys().map(|k| normalize_name(k)))
+        .flat_map(|entities| entities.keys().cloned())
         .collect();
 
-    for final_name in &all_names {
-        let ident = format_ident!("{}", final_name);
-        // Some versions prefix keys with DATA_ (Bedrock), others don't (Java)
-        // Try both forms so every version resolves correctly
-        let prefixed = format!("DATA_{final_name}");
-        let aliases: &[&str] = match final_name.as_str() {
-            "CUSTOM_NAME_VISIBLE" => &["NAME_VISIBLE"],
-            "IS_LYING" => &["IN_SLEEPING_POSE"],
-            "IN_SLEEPING_POSE" => &["IS_LYING"],
-            "RELAX_STATE_ONE" => &["HEAD_DOWN"],
-            "HEAD_DOWN" => &["RELAX_STATE_ONE"],
-            "SOUND_VARIANT" => &["SOUND_VARIANT_ID", "DATA_SOUND_VARIANT_ID"],
-            "SOUND_VARIANT_ID" => &["SOUND_VARIANT", "DATA_SOUND_VARIANT_ID"],
-            _ => &[],
-        };
+    for entity in &all_entities {
+        let entity_ident = format_ident!("{}", entity);
 
-        let mut fields = TokenStream::new();
-        for (ver, data) in versions.iter() {
-            let field_ident = ver.to_field_ident();
-            let id = data
-                .get(final_name.as_str())
-                .or_else(|| data.get(prefixed.as_str()))
-                .or_else(|| aliases.iter().find_map(|alias| data.get(*alias)))
-                .copied()
-                .unwrap_or(255);
-            fields.extend(quote! {
-                #field_ident: #id,
+        let all_fields: BTreeSet<String> = versions
+            .values()
+            .filter_map(|entities| entities.get(entity))
+            .flat_map(|fields| fields.keys().cloned())
+            .collect();
+
+        let mut field_consts = TokenStream::new();
+        let mut defined_idents = BTreeSet::new();
+
+        // 1. Generate base field constants
+        for field in &all_fields {
+            let field_upper = field.to_uppercase();
+            let field_ident = format_ident!("{}", field_upper);
+            defined_idents.insert(field_upper.clone());
+
+            let mut id_fields = TokenStream::new();
+            let mut latest_type = String::new();
+
+            for (ver, entities) in versions {
+                let ver_ident = ver.to_field_ident();
+                let field_info = entities.get(entity).and_then(|f| f.get(field));
+                let id = field_info.map_or(255u8, |info| info.id);
+                if let Some(info) = field_info {
+                    latest_type = info.r#type.clone();
+                }
+                id_fields.extend(quote! {
+                    #ver_ident: #id,
+                });
+            }
+
+            let type_const_ident = format_ident!("{}", latest_type.to_uppercase());
+
+            field_consts.extend(quote! {
+                pub const #field_ident: TrackedData = TrackedData {
+                    id: TrackedId { #id_fields },
+                    r#type: MetaDataType::#type_const_ident,
+                };
             });
         }
 
-        constants.extend(quote! {
-            pub const #ident: TrackedId = TrackedId { #fields };
+        // 2. Generate normalized and semantic aliases
+        for field in &all_fields {
+            let field_upper = field.to_uppercase();
+            let field_ident = format_ident!("{}", field_upper);
+
+            let mut candidate_aliases = Vec::new();
+
+            // Strip DATA_ prefix
+            if let Some(stripped) = field_upper.strip_prefix("DATA_") {
+                candidate_aliases.push(stripped.to_string());
+            }
+
+            // Strip _ID suffix
+            if let Some(stripped_id) = field_upper.strip_suffix("_ID") {
+                candidate_aliases.push(stripped_id.to_string());
+                if let Some(norm) = stripped_id.strip_prefix("DATA_") {
+                    candidate_aliases.push(norm.to_string());
+                }
+            }
+
+            // Semantic aliases
+            add_semantic_aliases(entity, &field_upper, &mut candidate_aliases);
+
+            for alias in candidate_aliases {
+                if !defined_idents.contains(&alias) && is_valid_ident(&alias) {
+                    defined_idents.insert(alias.clone());
+                    let alias_ident = format_ident!("{}", alias);
+                    field_consts.extend(quote! {
+                        pub const #alias_ident: TrackedData = #field_ident;
+                    });
+                }
+            }
+        }
+
+        modules.extend(quote! {
+            pub mod #entity_ident {
+                use super::*;
+
+                #field_consts
+            }
         });
     }
 
-    constants
+    modules
 }
 
-fn normalize_name(name: &str) -> String {
-    let upper = name.to_uppercase();
-    let normalized = upper
-        .strip_prefix("DATA_")
-        .map_or(upper.clone(), str::to_string);
+fn is_valid_ident(name: &str) -> bool {
+    if name.is_empty() {
+        return false;
+    }
+    let mut chars = name.chars();
+    let first = chars.next().unwrap();
+    if !first.is_ascii_alphabetic() && first != '_' {
+        return false;
+    }
+    if !chars.all(|c| c.is_ascii_alphanumeric() || c == '_') {
+        return false;
+    }
+    !matches!(
+        name,
+        "as" | "break"
+            | "const"
+            | "continue"
+            | "crate"
+            | "else"
+            | "enum"
+            | "extern"
+            | "false"
+            | "fn"
+            | "for"
+            | "if"
+            | "impl"
+            | "in"
+            | "let"
+            | "loop"
+            | "match"
+            | "mod"
+            | "move"
+            | "mut"
+            | "pub"
+            | "ref"
+            | "return"
+            | "self"
+            | "Self"
+            | "static"
+            | "struct"
+            | "super"
+            | "trait"
+            | "true"
+            | "type"
+            | "unsafe"
+            | "use"
+            | "where"
+            | "while"
+            | "async"
+            | "await"
+            | "dyn"
+            | "abstract"
+            | "become"
+            | "box"
+            | "do"
+            | "final"
+            | "macro"
+            | "override"
+            | "priv"
+            | "typeof"
+            | "unsized"
+            | "virtual"
+            | "yield"
+            | "try"
+    )
+}
 
-    // Mojang renamed the shared entity custom-name visibility tracker from
-    // NAME_VISIBLE to DATA_CUSTOM_NAME_VISIBLE in newer mappings. Keep one
-    // generated constant usable across both naming schemes.
-    if normalized == "NAME_VISIBLE" {
-        "CUSTOM_NAME_VISIBLE".to_string()
-    } else {
-        normalized
+fn add_semantic_aliases(entity: &str, field: &str, aliases: &mut Vec<String>) {
+    match (entity, field) {
+        (_, "DATA_FLAGS_ID") => {
+            aliases.push("TAMEABLE_FLAGS".to_string());
+            aliases.push("FLAGS".to_string());
+        }
+        (_, "DATA_OWNERUUID_ID") => {
+            aliases.push("OWNER_UUID".to_string());
+        }
+        ("creeper", "DATA_IS_POWERED") => {
+            aliases.push("CHARGED".to_string());
+        }
+        ("creeper", "DATA_SWELL_DIR") => {
+            aliases.push("FUSE_ID".to_string());
+        }
+        ("tnt" | "primed_tnt", "DATA_FUSE_ID") => {
+            aliases.push("FUSE_ID".to_string());
+        }
+        ("sheep", "DATA_WOOL_ID") => {
+            aliases.push("WOOL_ID".to_string());
+        }
+        ("cat", "IS_LYING") => {
+            aliases.push("IN_SLEEPING_POSE".to_string());
+        }
+        ("cat", "RELAX_STATE_ONE") => {
+            aliases.push("HEAD_DOWN".to_string());
+        }
+        ("cat", "DATA_SOUND_VARIANT_ID") | ("wolf", "DATA_SOUND_VARIANT_ID") => {
+            aliases.push("SOUND_VARIANT".to_string());
+            aliases.push("SOUND_VARIANT_ID".to_string());
+        }
+        ("cat", "DATA_VARIANT_ID") => {
+            aliases.push("CAT_VARIANT".to_string());
+            aliases.push("CAT_VARIANT_ID".to_string());
+            aliases.push("VARIANT".to_string());
+        }
+        ("wolf", "DATA_VARIANT_ID") => {
+            aliases.push("WOLF_VARIANT_ID".to_string());
+            aliases.push("VARIANT".to_string());
+        }
+        ("cat", "DATA_COLLAR_COLOR") => {
+            aliases.push("CAT_COLLAR_COLOR".to_string());
+            aliases.push("COLLAR_COLOR".to_string());
+        }
+        ("wolf", "DATA_COLLAR_COLOR") => {
+            aliases.push("WOLF_COLLAR_COLOR".to_string());
+            aliases.push("COLLAR_COLOR".to_string());
+        }
+        ("player" | "avatar" | "mannequin", "DATA_PLAYER_MODE_CUSTOMISATION") => {
+            aliases.push("PLAYER_MODE_CUSTOMIZATION_ID".to_string());
+        }
+        ("player" | "avatar" | "mannequin", "DATA_PLAYER_MAIN_HAND") => {
+            aliases.push("MAIN_ARM_ID".to_string());
+        }
+        ("display" | "block_display" | "item_display" | "text_display", _) => match field {
+            "DATA_TRANSFORMATION_INTERPOLATION_START_DELTA_TICKS_ID" => {
+                aliases.push("START_INTERPOLATION".to_string());
+            }
+            "DATA_TRANSFORMATION_INTERPOLATION_DURATION_ID" => {
+                aliases.push("INTERPOLATION_DURATION".to_string());
+            }
+            "DATA_POS_ROT_INTERPOLATION_DURATION_ID" => {
+                aliases.push("TELEPORT_DURATION".to_string());
+            }
+            "DATA_TRANSLATION_ID" => {
+                aliases.push("TRANSLATION".to_string());
+            }
+            "DATA_SCALE_ID" => {
+                aliases.push("SCALE".to_string());
+            }
+            "DATA_LEFT_ROTATION_ID" => {
+                aliases.push("LEFT_ROTATION".to_string());
+            }
+            "DATA_RIGHT_ROTATION_ID" => {
+                aliases.push("RIGHT_ROTATION".to_string());
+            }
+            "DATA_BILLBOARD_RENDER_CONSTRAINTS_ID" => {
+                aliases.push("BILLBOARD".to_string());
+            }
+            "DATA_BRIGHTNESS_OVERRIDE_ID" => {
+                aliases.push("BRIGHTNESS".to_string());
+            }
+            "DATA_VIEW_RANGE_ID" => {
+                aliases.push("VIEW_RANGE".to_string());
+            }
+            "DATA_SHADOW_RADIUS_ID" => {
+                aliases.push("SHADOW_RADIUS".to_string());
+            }
+            "DATA_SHADOW_STRENGTH_ID" => {
+                aliases.push("SHADOW_STRENGTH".to_string());
+            }
+            "DATA_WIDTH_ID" => {
+                aliases.push("WIDTH".to_string());
+            }
+            "DATA_HEIGHT_ID" => {
+                aliases.push("HEIGHT".to_string());
+            }
+            "DATA_GLOW_COLOR_OVERRIDE_ID" => {
+                aliases.push("GLOW_COLOR_OVERRIDE".to_string());
+            }
+            "DATA_BLOCK_STATE_ID" => {
+                aliases.push("BLOCK_STATE".to_string());
+            }
+            "DATA_ITEM_STACK_ID" => {
+                aliases.push("ITEM".to_string());
+                aliases.push("ITEM_STACK".to_string());
+            }
+            "DATA_ITEM_DISPLAY_ID" => {
+                aliases.push("ITEM_DISPLAY".to_string());
+            }
+            "DATA_TEXT_ID" => {
+                aliases.push("TEXT".to_string());
+            }
+            "DATA_LINE_WIDTH_ID" => {
+                aliases.push("LINE_WIDTH".to_string());
+            }
+            "DATA_BACKGROUND_COLOR_ID" => {
+                aliases.push("BACKGROUND".to_string());
+            }
+            "DATA_TEXT_OPACITY_ID" => {
+                aliases.push("TEXT_OPACITY".to_string());
+            }
+            "DATA_STYLE_FLAGS_ID" => {
+                aliases.push("TEXT_DISPLAY_FLAGS".to_string());
+            }
+            _ => {}
+        },
+        _ => {}
     }
 }
 
@@ -238,61 +443,12 @@ mod tests {
     use quote::quote;
 
     #[test]
-    fn wolf_variant_keeps_its_entity_specific_v26_2_tracker_id() {
+    fn wolf_and_cat_have_correct_entity_specific_tracker_constants() {
         let generated = build().to_string();
 
-        assert!(generated.contains("WOLF_VARIANT_ID"));
-        let wolf = generated
-            .split("WOLF_VARIANT_ID")
-            .nth(1)
-            .expect("wolf tracker constant");
-        assert!(wolf.contains("v1_21_11 : 20u8"));
-        assert!(wolf.contains("v26_2 : 23u8"));
-    }
-
-    #[test]
-    fn cat_trackers_keep_their_entity_specific_tracker_ids() {
-        let generated = build().to_string();
-
-        assert!(generated.contains("CAT_VARIANT"));
-        let cat_variant = generated
-            .split("CAT_VARIANT")
-            .nth(1)
-            .expect("cat variant constant");
-        assert!(cat_variant.contains("v1_21_11 : 19u8"));
-        assert!(cat_variant.contains("v26_2 : 20u8"));
-
-        assert!(generated.contains("IS_LYING"));
-        let is_lying = generated
-            .split("IS_LYING")
-            .nth(1)
-            .expect("is lying constant");
-        assert!(is_lying.contains("v1_21_11 : 20u8"));
-        assert!(is_lying.contains("v26_2 : 21u8"));
-
-        assert!(generated.contains("RELAX_STATE_ONE"));
-        let relax = generated
-            .split("RELAX_STATE_ONE")
-            .nth(1)
-            .expect("relax state one constant");
-        assert!(relax.contains("v1_21_11 : 21u8"));
-        assert!(relax.contains("v26_2 : 22u8"));
-
-        assert!(generated.contains("CAT_COLLAR_COLOR"));
-        let collar = generated
-            .split("CAT_COLLAR_COLOR")
-            .nth(1)
-            .expect("cat collar color constant");
-        assert!(collar.contains("v1_21_11 : 22u8"));
-        assert!(collar.contains("v26_2 : 23u8"));
-
-        assert!(generated.contains("SOUND_VARIANT"));
-        let sound = generated
-            .split("SOUND_VARIANT")
-            .nth(1)
-            .expect("sound variant constant");
-        assert!(sound.contains("v1_21_11 : 23u8"));
-        assert!(sound.contains("v26_2 : 24u8"));
+        assert!(generated.contains("mod wolf"));
+        assert!(generated.contains("mod cat"));
+        assert!(generated.contains("DATA_COLLAR_COLOR"));
     }
 
     #[test]
@@ -300,8 +456,11 @@ mod tests {
         let checked_in =
             std::fs::read_to_string("../../crates/pumpkin-data/src/generated/tracked_data.rs")
                 .expect("checked-in tracked data");
-        let parsed = syn::parse_file(&checked_in).expect("valid generated Rust");
+        let generated = crate::format_code(&build().to_string()).expect("valid rustfmt");
 
-        assert_eq!(quote!(#parsed).to_string(), build().to_string());
+        assert_eq!(
+            checked_in.trim(),
+            format!("/* This file is generated. Do not edit manually. */\n{generated}").trim()
+        );
     }
 }

@@ -12,8 +12,6 @@ use crate::{
 use pumpkin_data::entity::{EntityStatus, EntityType};
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
-use pumpkin_data::meta_data_type::MetaDataType;
-use pumpkin_data::tracked_data::TrackedData;
 use pumpkin_protocol::bedrock::server::actor_event::ActorEventType;
 use pumpkin_protocol::codec::item_stack_seralizer::ItemStackSerializer;
 use pumpkin_protocol::java::client::play::Metadata;
@@ -76,8 +74,7 @@ impl EntityBase for EggEntity {
             // Sync the item stack so the client renders the correct color/variant
             entity.send_meta_data(
                 &[Metadata::new(
-                    TrackedData::ITEM_STACK,
-                    MetaDataType::ITEM_STACK,
+                    pumpkin_data::tracked_data::egg::ITEM_STACK,
                     &ItemStackSerializer::from(stack.clone()),
                 )],
                 None,

@@ -6,10 +6,8 @@ use std::sync::{
 use pumpkin_data::entity::{EntityStatus, EntityType};
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
-use pumpkin_data::meta_data_type::MetaDataType;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::{self, Taggable};
-use pumpkin_data::tracked_data::TrackedData;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::java::client::play::Metadata;
@@ -126,8 +124,7 @@ impl SnifferEntity {
         let entity = self.get_entity();
         entity.send_meta_data(
             &[Metadata::new(
-                TrackedData::STATE,
-                MetaDataType::SNIFFER_STATE,
+                pumpkin_data::tracked_data::sniffer::STATE,
                 VarInt(state.id()),
             )],
             None,
@@ -195,8 +192,7 @@ impl SnifferEntity {
         self.drop_seed_at_tick.store(drop_tick, Ordering::Relaxed);
         entity.send_meta_data(
             &[Metadata::new(
-                TrackedData::DROP_SEED_AT_TICK,
-                MetaDataType::INT,
+                pumpkin_data::tracked_data::sniffer::DROP_SEED_AT_TICK,
                 VarInt(drop_tick),
             )],
             None,
@@ -397,8 +393,7 @@ impl Mob for SnifferEntity {
             if is_baby {
                 entity.send_meta_data(
                     &[Metadata::new(
-                        TrackedData::BABY_ID,
-                        MetaDataType::BOOLEAN,
+                        pumpkin_data::tracked_data::sniffer::BABY_ID,
                         true,
                     )],
                     None,
@@ -407,13 +402,11 @@ impl Mob for SnifferEntity {
             entity.send_meta_data(
                 &[
                     Metadata::new(
-                        TrackedData::STATE,
-                        MetaDataType::SNIFFER_STATE,
+                        pumpkin_data::tracked_data::sniffer::STATE,
                         VarInt(self.get_state().id()),
                     ),
                     Metadata::new(
-                        TrackedData::DROP_SEED_AT_TICK,
-                        MetaDataType::INT,
+                        pumpkin_data::tracked_data::sniffer::DROP_SEED_AT_TICK,
                         VarInt(self.drop_seed_at_tick.load(Ordering::Relaxed)),
                     ),
                 ],

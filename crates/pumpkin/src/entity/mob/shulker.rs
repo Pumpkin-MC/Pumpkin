@@ -5,9 +5,7 @@ use crossbeam::atomic::AtomicCell;
 use pumpkin_data::BlockDirection;
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::entity::EntityType;
-use pumpkin_data::meta_data_type::MetaDataType;
 use pumpkin_data::sound::{Sound, SoundCategory};
-use pumpkin_data::tracked_data::TrackedData;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::java::client::play::{CEntityPositionSync, Metadata};
@@ -120,8 +118,7 @@ impl ShulkerEntity {
         let entity = &self.mob_entity.living_entity.entity;
         entity.send_meta_data(
             &[Metadata::new(
-                TrackedData::ATTACH_FACE_ID,
-                MetaDataType::DIRECTION,
+                pumpkin_data::tracked_data::shulker::ATTACH_FACE_ID,
                 VarInt(face as i32),
             )],
             None,
@@ -161,8 +158,7 @@ impl ShulkerEntity {
 
         entity.send_meta_data(
             &[Metadata::new(
-                TrackedData::PEEK_ID,
-                MetaDataType::BYTE,
+                pumpkin_data::tracked_data::shulker::PEEK_ID,
                 amount,
             )],
             None,

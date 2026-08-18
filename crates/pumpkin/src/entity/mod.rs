@@ -21,9 +21,8 @@ use pumpkin_data::dimension::Dimension;
 use pumpkin_data::entity::EntityStatus;
 use pumpkin_data::fluid::Fluid;
 use pumpkin_data::item_stack::ItemStack;
-use pumpkin_data::meta_data_type::MetaDataType;
 use pumpkin_data::tag::{self, Taggable};
-use pumpkin_data::tracked_data::TrackedData;
+use pumpkin_data::tracked_data;
 use pumpkin_data::{Block, BlockDirection};
 use pumpkin_data::{
     block_properties::{Facing, HorizontalFacing},
@@ -195,11 +194,7 @@ pub trait EntityBase: Send + Sync + NBTStorage + std::any::Any {
                 let mut bedrock_meta = EntityMetadata::new();
                 bedrock_meta.set_flag(entity_data_key::FLAGS, entity_data_flag::BABY as u8, true);
                 entity.send_meta_data(
-                    &[Metadata::new(
-                        TrackedData::BABY_ID,
-                        MetaDataType::BOOLEAN,
-                        true,
-                    )],
+                    &[Metadata::new(tracked_data::ageable_mob::DATA_BABY_ID, true)],
                     Some(&bedrock_meta),
                 );
             }
@@ -1130,8 +1125,7 @@ impl Entity {
         );
         self.send_meta_data(
             &[Metadata::new(
-                TrackedData::CUSTOM_NAME,
-                MetaDataType::OPTIONAL_TEXT_COMPONENT,
+                tracked_data::entity::DATA_CUSTOM_NAME,
                 Some(name),
             )],
             Some(&bedrock_meta),
@@ -1159,8 +1153,7 @@ impl Entity {
         );
         self.send_meta_data(
             &[Metadata::new(
-                TrackedData::CUSTOM_NAME_VISIBLE,
-                MetaDataType::BOOLEAN,
+                tracked_data::entity::DATA_CUSTOM_NAME_VISIBLE,
                 visible,
             )],
             Some(&bedrock_meta),
@@ -1174,11 +1167,7 @@ impl Entity {
     pub fn set_silent(&self, silent: bool) {
         self.silent.store(silent, Ordering::Relaxed);
         self.send_meta_data(
-            &[Metadata::new(
-                TrackedData::SILENT,
-                MetaDataType::BOOLEAN,
-                silent,
-            )],
+            &[Metadata::new(tracked_data::entity::DATA_SILENT, silent)],
             None,
         );
     }
@@ -1191,8 +1180,7 @@ impl Entity {
         self.has_no_gravity.store(no_gravity, Ordering::Relaxed);
         self.send_meta_data(
             &[Metadata::new(
-                TrackedData::NO_GRAVITY,
-                MetaDataType::BOOLEAN,
+                tracked_data::entity::DATA_NO_GRAVITY,
                 no_gravity,
             )],
             None,
@@ -2595,8 +2583,7 @@ impl Entity {
             );
             self.send_meta_data(
                 &[Metadata::new(
-                    TrackedData::TICKS_FROZEN,
-                    MetaDataType::INTEGER,
+                    tracked_data::entity::DATA_TICKS_FROZEN,
                     VarInt(new_frozen_ticks),
                 )],
                 Some(&bedrock_meta),
@@ -2865,8 +2852,7 @@ impl Entity {
 
         self.send_meta_data(
             &[Metadata::new(
-                TrackedData::SHARED_FLAGS_ID,
-                MetaDataType::BYTE,
+                tracked_data::entity::DATA_SHARED_FLAGS_ID,
                 new_je_flags,
             )],
             None,
@@ -3025,11 +3011,7 @@ impl Entity {
                 MetadataValue::Float(dimension.height),
             );
             self.send_meta_data(
-                &[Metadata::new(
-                    TrackedData::POSE,
-                    MetaDataType::ENTITY_POSE,
-                    VarInt(pose),
-                )],
+                &[Metadata::new(tracked_data::entity::DATA_POSE, VarInt(pose))],
                 Some(&bedrock_meta),
             );
         }
