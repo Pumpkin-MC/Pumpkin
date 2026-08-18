@@ -23,3 +23,16 @@ impl<'a> ServerPacket<'a> for SCommandSuggestion<'a> {
         })
     }
 }
+
+impl crate::ClientPacket for SCommandSuggestion<'_> {
+    fn write_packet_data(
+        &self,
+        mut write: impl std::io::Write,
+        _version: &JavaMinecraftVersion,
+    ) -> Result<(), crate::ser::WritingError> {
+        use crate::ser::NetworkWriteExt;
+        write.write_var_int(&self.id)?;
+        write.write_string(self.command)?;
+        Ok(())
+    }
+}

@@ -24,3 +24,17 @@ impl<'a> ServerPacket<'a> for SPlaceRecipe {
         })
     }
 }
+
+impl crate::ClientPacket for SPlaceRecipe {
+    fn write_packet_data(
+        &self,
+        mut write: impl std::io::Write,
+        _version: &JavaMinecraftVersion,
+    ) -> Result<(), crate::ser::WritingError> {
+        use crate::ser::NetworkWriteExt;
+        write.write_i8(self.container_id)?;
+        write.write_var_int(&self.recipe_display_id)?;
+        write.write_bool(self.use_max_items)?;
+        Ok(())
+    }
+}

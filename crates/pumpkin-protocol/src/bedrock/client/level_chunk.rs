@@ -185,17 +185,9 @@ impl PacketWrite for CLevelChunk<'_> {
 #[cfg(test)]
 mod tests {
     use std::io::Cursor;
-    use std::sync::{
-        Mutex,
-        atomic::{AtomicBool, AtomicU64},
-    };
 
-    use pumpkin_data::chunk::ChunkStatus;
     use pumpkin_nbt::{Nbt, compound::NbtCompound, deserializer::NbtReadHelperBedrock};
-    use pumpkin_world::{
-        chunk::{ChunkData, ChunkHeightmaps, ChunkLight, ChunkSections},
-        tick::scheduler::ChunkTickScheduler,
-    };
+    use pumpkin_world::chunk::ChunkData;
 
     use super::CLevelChunk;
     use crate::serial::PacketWrite;
@@ -214,21 +206,7 @@ mod tests {
     }
 
     fn empty_chunk() -> ChunkData {
-        ChunkData {
-            section: ChunkSections::new(24, -64),
-            heightmap: Mutex::new(ChunkHeightmaps::default()),
-            x: 0,
-            z: 0,
-            block_ticks: ChunkTickScheduler::default(),
-            fluid_ticks: ChunkTickScheduler::default(),
-            pending_block_entities: Mutex::default(),
-            light_engine: Mutex::new(ChunkLight::default()),
-            light_populated: AtomicBool::new(false),
-            status: ChunkStatus::Full,
-            blending_data: None,
-            dirty: AtomicBool::new(false),
-            inhabited_time: AtomicU64::new(0),
-        }
+        ChunkData::empty(0, 0)
     }
 
     #[test]

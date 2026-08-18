@@ -1,4 +1,5 @@
 #![allow(
+    unused,
     clippy::all,
     clippy::pedantic,
     clippy::nursery,
@@ -180,7 +181,7 @@ pub mod dimension;
 #[cfg(feature = "enchantment")]
 #[rustfmt::skip]
 #[path = "generated/enchantment.rs"]
-mod enchantment;
+pub mod enchantment;
 
 #[cfg(feature = "enchantment")]
 pub use enchantment::*;

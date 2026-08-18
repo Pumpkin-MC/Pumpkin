@@ -21,3 +21,15 @@ impl<'a> ServerPacket<'a> for SPlayerAbilities {
         })
     }
 }
+
+impl crate::ClientPacket for SPlayerAbilities {
+    fn write_packet_data(
+        &self,
+        mut write: impl std::io::Write,
+        _version: &JavaMinecraftVersion,
+    ) -> Result<(), crate::ser::WritingError> {
+        use crate::ser::NetworkWriteExt;
+        write.write_i8(self.flags)?;
+        Ok(())
+    }
+}

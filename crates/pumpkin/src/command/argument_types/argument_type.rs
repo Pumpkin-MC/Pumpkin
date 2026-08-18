@@ -127,12 +127,14 @@ pub trait AnyArgumentType: Sealed + Send + Sync {
     fn examples(&self) -> Vec<String> {
         Vec::new()
     }
+
+    fn as_any(&self) -> &dyn Any;
 }
 
 // Implement our private trait for all argument types.
 impl<U: ArgumentType<Item = T>, T: Send + Sync + 'static> Sealed for U {}
 
-impl<U: ArgumentType<Item = T>, T: Send + Sync + 'static> AnyArgumentType for U {
+impl<U: ArgumentType<Item = T> + 'static, T: Send + Sync + 'static> AnyArgumentType for U {
     fn parse(
         &self,
         reader: &mut StringReader,
@@ -177,5 +179,9 @@ impl<U: ArgumentType<Item = T>, T: Send + Sync + 'static> AnyArgumentType for U 
 
     fn examples(&self) -> Vec<String> {
         self.examples()
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
     }
 }

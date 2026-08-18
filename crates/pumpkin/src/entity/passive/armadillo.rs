@@ -7,10 +7,8 @@ use pumpkin_data::damage::DamageType;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
-use pumpkin_data::meta_data_type::MetaDataType;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::{self, Taggable};
-use pumpkin_data::tracked_data::TrackedData;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::java::client::play::Metadata;
@@ -175,8 +173,7 @@ impl ArmadilloEntity {
         let entity = self.get_entity();
         entity.send_meta_data(
             &[Metadata::new(
-                TrackedData::ARMADILLO_STATE,
-                MetaDataType::ARMADILLO_STATE,
+                pumpkin_data::tracked_data::armadillo::ARMADILLO_STATE,
                 VarInt(state.id()),
             )],
             None,
@@ -431,8 +428,7 @@ impl Mob for ArmadilloEntity {
             if is_baby {
                 entity.send_meta_data(
                     &[Metadata::new(
-                        TrackedData::BABY_ID,
-                        MetaDataType::BOOLEAN,
+                        pumpkin_data::tracked_data::armadillo::BABY_ID,
                         true,
                     )],
                     None,
@@ -440,8 +436,7 @@ impl Mob for ArmadilloEntity {
             }
             entity.send_meta_data(
                 &[Metadata::new(
-                    TrackedData::ARMADILLO_STATE,
-                    MetaDataType::ARMADILLO_STATE,
+                    pumpkin_data::tracked_data::armadillo::ARMADILLO_STATE,
                     VarInt(self.get_state().id()),
                 )],
                 None,

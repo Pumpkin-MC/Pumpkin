@@ -372,6 +372,12 @@ impl ChunkData {
             _ => ChunkStatus::Empty,
         };
 
+        let custom_data = root_tag
+            .get_compound("PumpkinCustomData")
+            .or_else(|| root_tag.get_compound("BukkitValues"))
+            .cloned()
+            .unwrap_or_default();
+
         Ok(Self {
             section,
             heightmap: std::sync::Mutex::new(heightmaps),
@@ -387,6 +393,7 @@ impl ChunkData {
             status,
             blending_data: None,
             inhabited_time: AtomicU64::new(root_tag.get_long("InhabitedTime").unwrap_or(0) as u64),
+            custom_data: std::sync::Mutex::new(custom_data),
         })
     }
 
@@ -556,8 +563,77 @@ impl ChunkData {
             self.inhabited_time.load(Ordering::Relaxed) as i64,
         );
 
+        let custom_data = self
+            .custom_data
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if !custom_data.is_empty() {
+            root_compound.put_compound("PumpkinCustomData", custom_data.clone());
+        }
+
         let nbt = pumpkin_nbt::Nbt::from(root_compound);
         nbt.write()
+    }
+
+    pub fn set_custom_data(&self, namespace: &str, key: &str, value: pumpkin_nbt::tag::NbtTag) {
+        let mut custom_data = self
+            .custom_data
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+
+        let mut namespace_data = custom_data
+            .child_tags
+            .remove(namespace)
+            .and_then(|tag| match tag {
+                pumpkin_nbt::tag::NbtTag::Compound(compound) => Some(compound),
+                _ => None,
+            })
+            .unwrap_or_default();
+
+        namespace_data.child_tags.insert(key.into(), value);
+        custom_data.child_tags.insert(
+            namespace.into(),
+            pumpkin_nbt::tag::NbtTag::Compound(namespace_data),
+        );
+        self.dirty.store(true, Ordering::Relaxed);
+    }
+
+    pub fn get_custom_data(&self, namespace: &str, key: &str) -> Option<pumpkin_nbt::tag::NbtTag> {
+        let custom_data = self
+            .custom_data
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        custom_data
+            .get(namespace)?
+            .extract_compound()?
+            .get(key)
+            .cloned()
+    }
+
+    pub fn remove_custom_data(&self, namespace: &str, key: &str) {
+        let mut custom_data = self
+            .custom_data
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+
+        let Some(pumpkin_nbt::tag::NbtTag::Compound(mut namespace_data)) =
+            custom_data.child_tags.remove(namespace)
+        else {
+            return;
+        };
+
+        namespace_data.child_tags.remove(key);
+        if !namespace_data.is_empty() {
+            custom_data.child_tags.insert(
+                namespace.into(),
+                pumpkin_nbt::tag::NbtTag::Compound(namespace_data),
+            );
+        }
+        self.dirty.store(true, Ordering::Relaxed);
+    }
+
+    pub fn has_custom_data(&self, namespace: &str, key: &str) -> bool {
+        self.get_custom_data(namespace, key).is_some()
     }
 }
 

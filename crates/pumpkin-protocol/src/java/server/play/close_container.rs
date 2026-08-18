@@ -20,3 +20,15 @@ impl<'a> ServerPacket<'a> for SCloseContainer {
         })
     }
 }
+
+impl crate::ClientPacket for SCloseContainer {
+    fn write_packet_data(
+        &self,
+        mut write: impl std::io::Write,
+        _version: &JavaMinecraftVersion,
+    ) -> Result<(), crate::ser::WritingError> {
+        use crate::ser::NetworkWriteExt;
+        write.write_var_int(&self.window_id)?;
+        Ok(())
+    }
+}

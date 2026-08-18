@@ -29,6 +29,20 @@ impl<'a> ServerPacket<'a> for SSetTestBlock<'a> {
     }
 }
 
+impl crate::ClientPacket for SSetTestBlock<'_> {
+    fn write_packet_data(
+        &self,
+        mut write: impl std::io::Write,
+        _version: &JavaMinecraftVersion,
+    ) -> Result<(), crate::ser::WritingError> {
+        use crate::ser::NetworkWriteExt;
+        write.write_block_pos(&self.position)?;
+        self.mode.write(&mut write)?;
+        write.write_string(self.message)?;
+        Ok(())
+    }
+}
+
 #[derive(Clone, Copy, Debug)]
 pub enum TestBlockMode {
     Start,
@@ -46,5 +60,18 @@ impl TestBlockMode {
             3 => Ok(Self::Accept),
             _ => Err(ReadingError::Message("Invalid TestBlockMode".to_string())),
         }
+    }
+
+    fn write(
+        self,
+        write: &mut impl crate::ser::NetworkWriteExt,
+    ) -> Result<(), crate::ser::WritingError> {
+        let val = match self {
+            Self::Start => 0,
+            Self::Log => 1,
+            Self::Fail => 2,
+            Self::Accept => 3,
+        };
+        write.write_var_int(&crate::VarInt(val))
     }
 }

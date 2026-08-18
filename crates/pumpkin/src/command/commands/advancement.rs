@@ -575,55 +575,45 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &mut PermissionReg
                 argument(ARG_TARGETS, EntityArgumentType::Players)
                     .then(
                         literal("only").then(
-                            argument(
-                                ARG_ADVANCEMENT,
-                                ResourceKeyArgument(ADVANCEMENT_REGISTRY.clone()),
-                            )
-                            .executes(AdvancementExecutor {
-                                action: $action,
-                                mode: Mode::Only,
-                            })
-                            .then(
-                                argument(ARG_CRITERION, StringArgumentType::GreedyPhrase)
-                                    .suggests(CriterionSuggestionProvider)
-                                    .executes(OnlyAdvancementCriterionExecutor { action: $action }),
-                            ),
+                            argument(ARG_ADVANCEMENT, ResourceKeyArgument(&ADVANCEMENT_REGISTRY))
+                                .executes(AdvancementExecutor {
+                                    action: $action,
+                                    mode: Mode::Only,
+                                })
+                                .then(
+                                    argument(ARG_CRITERION, StringArgumentType::GreedyPhrase)
+                                        .suggests(CriterionSuggestionProvider)
+                                        .executes(OnlyAdvancementCriterionExecutor {
+                                            action: $action,
+                                        }),
+                                ),
                         ),
                     )
                     .then(
                         literal("from").then(
-                            argument(
-                                ARG_ADVANCEMENT,
-                                ResourceKeyArgument(ADVANCEMENT_REGISTRY.clone()),
-                            )
-                            .executes(AdvancementExecutor {
-                                action: $action,
-                                mode: Mode::From,
-                            }),
+                            argument(ARG_ADVANCEMENT, ResourceKeyArgument(&ADVANCEMENT_REGISTRY))
+                                .executes(AdvancementExecutor {
+                                    action: $action,
+                                    mode: Mode::From,
+                                }),
                         ),
                     )
                     .then(
                         literal("until").then(
-                            argument(
-                                ARG_ADVANCEMENT,
-                                ResourceKeyArgument(ADVANCEMENT_REGISTRY.clone()),
-                            )
-                            .executes(AdvancementExecutor {
-                                action: $action,
-                                mode: Mode::Until,
-                            }),
+                            argument(ARG_ADVANCEMENT, ResourceKeyArgument(&ADVANCEMENT_REGISTRY))
+                                .executes(AdvancementExecutor {
+                                    action: $action,
+                                    mode: Mode::Until,
+                                }),
                         ),
                     )
                     .then(
                         literal("through").then(
-                            argument(
-                                ARG_ADVANCEMENT,
-                                ResourceKeyArgument(ADVANCEMENT_REGISTRY.clone()),
-                            )
-                            .executes(AdvancementExecutor {
-                                action: $action,
-                                mode: Mode::Through,
-                            }),
+                            argument(ARG_ADVANCEMENT, ResourceKeyArgument(&ADVANCEMENT_REGISTRY))
+                                .executes(AdvancementExecutor {
+                                    action: $action,
+                                    mode: Mode::Through,
+                                }),
                         ),
                     )
                     .then(

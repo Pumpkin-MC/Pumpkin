@@ -36,6 +36,12 @@ pub async fn send_c_commands_packet(
             continue;
         }
 
+        // For double-slash commands, if the single-slash alias (/set) exists, only
+        // register the single-slash literal for the Java client.
+        if key.starts_with("//") && fallback_dispatcher.commands.contains_key(&key[1..]) {
+            continue;
+        }
+
         let Ok(tree) = fallback_dispatcher.get_tree(key) else {
             continue;
         };
@@ -51,10 +57,16 @@ pub async fn send_c_commands_packet(
         let (is_executable, child_nodes) =
             nodes_to_proto_node_builders(&cmd_src, &tree.nodes, &tree.children);
 
+        let name = if key.starts_with("//") {
+            &key[1..]
+        } else {
+            key.as_str()
+        };
+
         let proto_node = ProtoNodeBuilder {
             child_nodes,
             node_type: ProtoNodeType::Literal {
-                name: key,
+                name,
                 is_executable,
                 redirect_target: None,
                 restricted: false,
@@ -82,14 +94,13 @@ pub async fn send_c_commands_packet(
             .values()
             .copied()
             .map(|id| resolve_node_id(id, node_id_offset, root_node_index))
-            .map(|i| i.try_into().expect("i32 limit reached for ids"))
+            .map(|i| VarInt(i as i32))
             .collect();
 
         let redirect_target = node
             .redirect()
             .and_then(|redirection| dispatcher.tree.resolve(redirection))
-            .map(|id| resolve_node_id(id, node_id_offset, root_node_index))
-            .map(|i| i.try_into().expect("i32 limit reached for ids"));
+            .map(|id| resolve_node_id(id, node_id_offset, root_node_index) as i32);
 
         let satisfies_requirements = true;
 
@@ -105,26 +116,39 @@ pub async fn send_c_commands_packet(
                     .values()
                     .copied()
                     .filter(|id| {
-                        let disabled = match &dispatcher.tree[*id] {
-                            AttachedNode::Literal(child) => {
-                                dispatcher.is_disabled(&child.meta.literal_lowercase)
-                            }
-                            AttachedNode::Command(child) => {
-                                dispatcher.is_disabled(&child.meta.literal_lowercase)
-                            }
-                            _ => false,
+                        let (disabled, name) = match &dispatcher.tree[*id] {
+                            AttachedNode::Literal(child) => (
+                                dispatcher.is_disabled(&child.meta.literal_lowercase),
+                                child.meta.literal.as_ref(),
+                            ),
+                            AttachedNode::Command(child) => (
+                                dispatcher.is_disabled(&child.meta.literal_lowercase),
+                                child.meta.literal.as_ref(),
+                            ),
+                            _ => (false, ""),
                         };
-                        !disabled
+                        if disabled {
+                            return false;
+                        }
+                        if name.starts_with("//") && dispatcher.tree.get(&name[1..]).is_some() {
+                            return false;
+                        }
+                        true
                     })
                     .map(|id| resolve_node_id(id, node_id_offset, root_node_index))
-                    .map(|i| i.try_into().expect("i32 limit reached for ids"))
+                    .map(|i| VarInt(i as i32))
                     .collect();
             }
             AttachedNode::Literal(literal_attached_node) => {
+                let name = if literal_attached_node.meta.literal.starts_with("//") {
+                    &literal_attached_node.meta.literal[1..]
+                } else {
+                    &literal_attached_node.meta.literal
+                };
                 let node = ProtoNode {
                     children,
                     node_type: ProtoNodeType::Literal {
-                        name: &literal_attached_node.meta.literal,
+                        name,
                         is_executable: literal_attached_node.owned.command.is_some(),
                         redirect_target,
                         restricted: !satisfies_requirements,
@@ -133,10 +157,15 @@ pub async fn send_c_commands_packet(
                 proto_nodes.push(node);
             }
             AttachedNode::Command(command_attached_node) => {
+                let name = if command_attached_node.meta.literal.starts_with("//") {
+                    &command_attached_node.meta.literal[1..]
+                } else {
+                    &command_attached_node.meta.literal
+                };
                 let node = ProtoNode {
                     children,
                     node_type: ProtoNodeType::Literal {
-                        name: &command_attached_node.meta.literal,
+                        name,
                         is_executable: command_attached_node.owned.command.is_some(),
                         redirect_target,
                         restricted: !satisfies_requirements,
@@ -205,11 +234,7 @@ impl<'a> ProtoNodeBuilder<'a> {
         let children: Box<[VarInt]> = self
             .child_nodes
             .into_iter()
-            .map(|node| {
-                node.build(buffer)
-                    .try_into()
-                    .expect("Buffer index exceeded i32 bounds")
-            })
+            .map(|node| VarInt(node.build(buffer) as i32))
             .collect();
 
         let i = buffer.len();
@@ -286,6 +311,7 @@ struct BuilderContext<'a> {
     enums: &'a mut Vec<CommandEnum>,
 }
 
+#[expect(clippy::too_many_lines)]
 pub async fn send_bedrock_commands_packet(
     player: &Arc<Player>,
     server: &Server,
@@ -300,6 +326,10 @@ pub async fn send_bedrock_commands_packet(
     let fallback_dispatcher = &dispatcher.fallback_dispatcher;
     for key in fallback_dispatcher.commands.keys() {
         if dispatcher.is_disabled(key) {
+            continue;
+        }
+
+        if key.starts_with("//") && fallback_dispatcher.commands.contains_key(&key[1..]) {
             continue;
         }
 
@@ -367,6 +397,10 @@ pub async fn send_bedrock_commands_packet(
         };
 
         if dispatcher.is_disabled(&name.to_ascii_lowercase()) {
+            continue;
+        }
+
+        if name.starts_with("//") && dispatcher.tree.get(&name[1..]).is_some() {
             continue;
         }
 
@@ -589,15 +623,14 @@ fn collect_overloads_from_attached(
 }
 
 fn ensure_enum_value(enum_values: &mut Vec<String>, value: &str) -> u32 {
-    enum_values
+    let index = enum_values
         .iter()
         .position(|v| v == value)
         .unwrap_or_else(|| {
             enum_values.push(value.to_string());
             enum_values.len() - 1
-        })
-        .try_into()
-        .unwrap()
+        });
+    index as u32
 }
 
 fn ensure_command_enum(

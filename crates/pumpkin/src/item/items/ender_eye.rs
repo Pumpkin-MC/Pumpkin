@@ -147,7 +147,7 @@ impl ItemBehaviour for EnderEyeItem {
 
 fn find_stronghold(world: &Arc<World>, origin: BlockPos) -> Option<BlockPos> {
     let level = &world.level;
-    let generator = &level.world_gen;
+    let generator = level.world_gen();
     let seed = level.seed.0;
 
     let global_cache = generator.global_structure_cache()?;

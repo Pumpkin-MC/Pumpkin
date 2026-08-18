@@ -105,7 +105,7 @@ pub trait NetworkReadExt {
     fn get_str_bounded(&mut self, bound: usize) -> Result<Box<str>, ReadingError>;
     #[inline]
     fn get_str(&mut self) -> Result<Box<str>, ReadingError> {
-        self.get_str_bounded(i32::MAX as usize)
+        self.get_str_bounded(32767)
     }
     fn get_uuid(&mut self) -> Result<uuid::Uuid, ReadingError>;
     fn get_fixed_bitset(&mut self, bits: usize) -> Result<FixedBitSet, ReadingError>;
@@ -164,7 +164,7 @@ pub trait NetworkReadSliceExt<'a> {
 
     #[inline]
     fn get_cow_str_borrowed(&mut self) -> Result<Cow<'a, str>, ReadingError> {
-        self.get_cow_str_bounded_borrowed(i32::MAX as usize)
+        self.get_cow_str_bounded_borrowed(32767)
     }
 
     #[inline]
@@ -203,7 +203,7 @@ impl<'a> NetworkReadSliceExt<'a> for &'a [u8] {
     fn get_str_bounded_borrowed(&mut self, bound: usize) -> Result<&'a str, ReadingError> {
         let bytes_len = self.get_var_uint()?.0 as usize;
 
-        let maximum_utf8_bytes = bound.saturating_mul(3);
+        let maximum_utf8_bytes = bound.saturating_mul(3).min(crate::MAX_PACKET_DATA_SIZE);
         if bytes_len > maximum_utf8_bytes {
             return Err(ReadingError::TooLarge(format!(
                 "string has too many bytes ({bytes_len} > {maximum_utf8_bytes})"
@@ -225,7 +225,7 @@ impl<'a> NetworkReadSliceExt<'a> for &'a [u8] {
 
     #[inline]
     fn get_str_borrowed(&mut self) -> Result<&'a str, ReadingError> {
-        self.get_str_bounded_borrowed(i32::MAX as usize)
+        self.get_str_bounded_borrowed(32767)
     }
 }
 
@@ -314,7 +314,7 @@ impl<R: Read> NetworkReadExt for R {
 
         // First, check if there are too many bytes to even fit in the UTF-16 bound.
         // 1 Java `char` takes a maximum of 3 bytes in UTF-8:
-        let maximum_utf8_bytes = bound.saturating_mul(3);
+        let maximum_utf8_bytes = bound.saturating_mul(3).min(crate::MAX_PACKET_DATA_SIZE);
         if bytes_len > maximum_utf8_bytes {
             return Err(ReadingError::TooLarge(format!(
                 "string has too many bytes ({bytes_len} > {maximum_utf8_bytes})"

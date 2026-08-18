@@ -70,3 +70,45 @@ impl<'a> ServerPacket<'a> for SPlayerCommand {
         })
     }
 }
+
+impl crate::ClientPacket for SPlayerCommand {
+    fn write_packet_data(
+        &self,
+        mut write: impl std::io::Write,
+        version: &JavaMinecraftVersion,
+    ) -> Result<(), crate::ser::WritingError> {
+        use crate::ser::NetworkWriteExt;
+        let action_id = if version < &JavaMinecraftVersion::V_1_21_6 {
+            match self.action {
+                Action::StartSneaking => 0,
+                Action::StopSneaking => 1,
+                Action::LeaveBed => 2,
+                Action::StartSprinting => 3,
+                Action::StopSprinting => 4,
+                Action::StartHorseJump => 5,
+                Action::StopHorseJump => 6,
+                Action::OpenVehicleInventory => 7,
+                Action::StartFlyingElytra => 8,
+            }
+        } else {
+            match self.action {
+                Action::StartSneaking | Action::StopSneaking => {
+                    return Err(crate::ser::WritingError::Message(
+                        "Sneaking action removed in 1.21.6+".into(),
+                    ));
+                }
+                Action::LeaveBed => 0,
+                Action::StartSprinting => 1,
+                Action::StopSprinting => 2,
+                Action::StartHorseJump => 3,
+                Action::StopHorseJump => 4,
+                Action::OpenVehicleInventory => 5,
+                Action::StartFlyingElytra => 6,
+            }
+        };
+        write.write_var_int(&self.entity_id)?;
+        write.write_var_int(&VarInt(action_id))?;
+        write.write_var_int(&self.jump_boost)?;
+        Ok(())
+    }
+}
