@@ -16,3 +16,13 @@ impl<'a> ServerPacket<'a> for SLoginAcknowledged {
         Ok(Self)
     }
 }
+
+impl crate::ClientPacket for SLoginAcknowledged {
+    fn write_packet_data(
+        &self,
+        _write: impl std::io::Write,
+        _version: &JavaMinecraftVersion,
+    ) -> Result<(), crate::ser::WritingError> {
+        Ok(())
+    }
+}

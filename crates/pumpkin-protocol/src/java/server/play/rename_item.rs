@@ -19,3 +19,15 @@ impl<'a> ServerPacket<'a> for SRenameItem<'a> {
         })
     }
 }
+
+impl crate::ClientPacket for SRenameItem<'_> {
+    fn write_packet_data(
+        &self,
+        mut write: impl std::io::Write,
+        _version: &JavaMinecraftVersion,
+    ) -> Result<(), crate::ser::WritingError> {
+        use crate::ser::NetworkWriteExt;
+        write.write_string_bounded(self.item_name, 32767)?;
+        Ok(())
+    }
+}
