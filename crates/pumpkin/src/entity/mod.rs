@@ -21,6 +21,7 @@ use pumpkin_data::dimension::Dimension;
 use pumpkin_data::entity::EntityStatus;
 use pumpkin_data::fluid::Fluid;
 use pumpkin_data::item_stack::ItemStack;
+use pumpkin_data::packet::CURRENT_MC_VERSION;
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_data::tracked_data;
 use pumpkin_data::{Block, BlockDirection};
@@ -2934,6 +2935,10 @@ impl Entity {
         for player in world.players.load().iter() {
             match player.client.as_ref() {
                 ClientPlatform::Java(client) => {
+                    let version = client.version.load();
+                    if version < CURRENT_MC_VERSION {
+                        continue;
+                    }
                     // Apply Chebyshev distance check
                     let center = player.get_entity().chunk_pos.load();
                     let view_distance =
@@ -2942,7 +2947,7 @@ impl Entity {
                     if is_within_view_distance(chunk_pos, center, view_distance) {
                         let mut buf = Vec::new();
                         for m in meta {
-                            let _ = m.write(&mut buf, &client.version.load());
+                            let _ = m.write(&mut buf, &version);
                         }
                         buf.put_u8(255);
                         player.client.try_enqueue_packet(&CSetEntityMetadata::new(
