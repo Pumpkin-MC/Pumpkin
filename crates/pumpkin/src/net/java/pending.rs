@@ -281,7 +281,7 @@ impl PendingConnection {
                     )?,
                 )
                 .await;
-                Ok(None)
+                Ok(())
             }
             id if id
                 == pumpkin_protocol::java::server::login::SEncryptionResponse::to_id(version) =>
@@ -294,7 +294,7 @@ impl PendingConnection {
                     )?,
                 )
                 .await;
-                Ok(None)
+                Ok(())
             }
             id if id
                 == pumpkin_protocol::java::server::login::SLoginPluginResponse::to_id(version) =>
@@ -307,7 +307,7 @@ impl PendingConnection {
                     )?,
                 )
                 .await;
-                Ok(None)
+                Ok(())
             }
             id if id
                 == pumpkin_protocol::java::server::login::SLoginCookieResponse::to_id(version) =>
@@ -318,19 +318,33 @@ impl PendingConnection {
                         &version,
                     )?,
                 );
-                Ok(None)
+                Ok(())
             }
             id if id
                 == pumpkin_protocol::java::server::login::SLoginAcknowledged::to_id(version) =>
             {
                 self.handle_login_acknowledged(server).await;
-                Ok(None)
+                Ok(())
             }
             _ => Err(ReadingError::Message(format!(
                 "Failed to handle packet id {} in Login State",
                 packet.id
             ))),
+        }?;
+
+        if self.version.load() < JavaMinecraftVersion::V_1_20_2
+            && self.connection_state.load() == ConnectionState::Play
+            && let Some(profile) = self.gameprofile.clone()
+        {
+            let config = self.config.clone().unwrap_or_default();
+            if let Some(reason) = can_not_join(&profile, &self.address, server).await {
+                self.kick(reason).await;
+                return Ok(Some(PacketHandlerResult::Stop));
+            }
+            return Ok(Some(PacketHandlerResult::ReadyToPlay(profile, config)));
         }
+
+        Ok(None)
     }
 
     async fn handle_config_packet(

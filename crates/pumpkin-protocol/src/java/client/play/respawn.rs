@@ -34,6 +34,29 @@ impl ClientPacket for CRespawn {
         mut write: impl std::io::Write,
         version: &JavaMinecraftVersion,
     ) -> Result<(), WritingError> {
+        if version < &JavaMinecraftVersion::V_1_20_2 {
+            write.write_string(self.player_spawn_info.dimension.minecraft_name)?;
+            write.write_string(self.player_spawn_info.dimension.minecraft_name)?;
+            write.write_i64_be(self.player_spawn_info.hashed_seed)?;
+            write.write_u8(self.player_spawn_info.game_mode)?;
+            write.write_i8(self.player_spawn_info.previous_gamemode)?;
+            write.write_bool(self.player_spawn_info.debug)?;
+            write.write_bool(self.player_spawn_info.is_flat)?;
+            write.write_i8(self.data_kept as i8)?;
+            write.write_option(
+                &self.player_spawn_info.death_dimension_name,
+                |write, (dim, pos)| {
+                    write.write_string(dim)?;
+                    write.write_block_pos(pos)?;
+                    Ok(())
+                },
+            )?;
+            if version >= &JavaMinecraftVersion::V_1_20 {
+                write.write_var_int(&self.player_spawn_info.portal_cooldown)?;
+            }
+            return Ok(());
+        }
+
         self.player_spawn_info
             .write_packet_data(&mut write, version)?;
         write.write_i8(self.data_kept as i8)?;

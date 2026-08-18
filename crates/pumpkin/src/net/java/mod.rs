@@ -9,7 +9,6 @@ use std::{io::Write, sync::Arc};
 
 use bytes::Bytes;
 use crossbeam::atomic::AtomicCell;
-use pumpkin_data::packet::CURRENT_MC_VERSION;
 use pumpkin_data::translation;
 use pumpkin_protocol::java::server::play::{
     SAttack, SBlockEntityTagQuery, SBundleItemSelected, SChangeGameMode, SChatCommand,
@@ -293,7 +292,9 @@ impl JavaClient {
             return;
         };
 
-        self.send_packet_now(&CChunkBatchStart).await;
+        if self.version.load() >= JavaMinecraftVersion::V_1_20_2 {
+            self.send_packet_now(&CChunkBatchStart).await;
+        }
         for chunk in chunks {
             let mut event = ChunkSend::new(player.world(), chunk.clone());
             server.plugin_manager.fire(&server, &mut event).await;
@@ -313,8 +314,10 @@ impl JavaClient {
             }
             self.send_packet_now_data(buf.into()).await;
         }
-        self.send_packet_now(&CChunkBatchEnd::new(chunks.len() as u16))
-            .await;
+        if self.version.load() >= JavaMinecraftVersion::V_1_20_2 {
+            self.send_packet_now(&CChunkBatchEnd::new(chunks.len() as u16))
+                .await;
+        }
     }
 
     pub async fn enqueue_packet<P: ClientPacket>(&self, packet: &P) {
@@ -322,6 +325,9 @@ impl JavaClient {
         let writer = &mut buf;
         if let Err(err) = self.write_packet(packet, writer) {
             error!("Failed to write packet: {err:?}");
+            return;
+        }
+        if buf.is_empty() {
             return;
         }
         let payload = Bytes::from(buf);
@@ -344,6 +350,9 @@ impl JavaClient {
         let writer = &mut buf;
         if let Err(err) = self.write_packet(packet, writer) {
             error!("Failed to write packet: {err:?}");
+            return;
+        }
+        if buf.is_empty() {
             return;
         }
         self.try_enqueue_packet_data(buf.into());
@@ -457,6 +466,9 @@ impl JavaClient {
             error!("Failed to write packet: {err:?}");
             return;
         }
+        if packet_buf.is_empty() {
+            return;
+        }
         let payload = Bytes::from(packet_buf);
 
         let player = self.player.load_full();
@@ -506,11 +518,7 @@ impl JavaClient {
     ) -> Result<(), WritingError> {
         let version_number = P::to_id(version);
         if version_number == -1 {
-            error!(
-                "Packet ID for version {} is invalid ({} at latest)",
-                version,
-                P::to_id(CURRENT_MC_VERSION),
-            );
+            return Ok(());
         }
         write.write_var_int(&VarInt(version_number))?;
         packet.write_packet_data(write, &version)

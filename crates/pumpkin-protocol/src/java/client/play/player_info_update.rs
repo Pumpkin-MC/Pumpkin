@@ -118,7 +118,13 @@ impl ClientPacket for CPlayerInfoUpdate<'_> {
                     PlayerAction::UpdateLatency(latency) => p.write_var_int(latency)?,
                     PlayerAction::UpdateDisplayName(display_name) => {
                         p.write_option(display_name, |w, text_component| {
-                            w.write_slice(&text_component.encode())
+                            if *version < JavaMinecraftVersion::V_1_20_5 {
+                                let json =
+                                    serde_json::to_string(&text_component.0).unwrap_or_default();
+                                w.write_string(&json)
+                            } else {
+                                w.write_slice(&text_component.encode())
+                            }
                         })?;
                     }
                     PlayerAction::UpdateListOrder(order) => {

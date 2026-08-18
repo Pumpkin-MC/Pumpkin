@@ -1,8 +1,8 @@
 use crate::ClientPacket;
 use crate::VarInt;
+use crate::packet::MultiVersionJavaPacket;
 use crate::ser::NetworkWriteExt;
-use pumpkin_data::packet::clientbound::PLAY_ENTITY_POSITION_SYNC;
-use pumpkin_macros::java_packet;
+use pumpkin_data::packet::clientbound::{PLAY_ENTITY_POSITION_SYNC, PLAY_TELEPORT_ENTITY};
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::version::JavaMinecraftVersion;
 
@@ -14,7 +14,6 @@ use pumpkin_util::version::JavaMinecraftVersion;
 ///
 /// Note: This packet must NOT be used for the player receiving the packet or
 /// any entity the player is currently riding.
-#[java_packet(PLAY_ENTITY_POSITION_SYNC)]
 pub struct CEntityPositionSync {
     /// The Entity ID of the entity being moved.
     pub entity_id: VarInt,
@@ -52,21 +51,36 @@ impl CEntityPositionSync {
     }
 }
 
+impl MultiVersionJavaPacket for CEntityPositionSync {
+    fn to_id(version: JavaMinecraftVersion) -> i32 {
+        if version >= JavaMinecraftVersion::V_1_21_2 {
+            PLAY_ENTITY_POSITION_SYNC.to_id(version)
+        } else {
+            PLAY_TELEPORT_ENTITY.to_id(version)
+        }
+    }
+}
+
 impl ClientPacket for CEntityPositionSync {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        _version: &JavaMinecraftVersion,
+        version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         write.write_var_int(&self.entity_id)?;
-        write.write_f64(self.position.x)?;
-        write.write_f64(self.position.y)?;
-        write.write_f64(self.position.z)?;
-        write.write_f64(self.delta.x)?;
-        write.write_f64(self.delta.y)?;
-        write.write_f64(self.delta.z)?;
-        write.write_f32(self.yaw)?;
-        write.write_f32(self.pitch)?;
+        write.write_f64_be(self.position.x)?;
+        write.write_f64_be(self.position.y)?;
+        write.write_f64_be(self.position.z)?;
+        if version >= &JavaMinecraftVersion::V_1_21_2 {
+            write.write_f64_be(self.delta.x)?;
+            write.write_f64_be(self.delta.y)?;
+            write.write_f64_be(self.delta.z)?;
+            write.write_f32_be(self.yaw)?;
+            write.write_f32_be(self.pitch)?;
+        } else {
+            write.write_u8((self.yaw.rem_euclid(360.0) * 256.0 / 360.0).floor() as u8)?;
+            write.write_u8((self.pitch.rem_euclid(360.0) * 256.0 / 360.0).floor() as u8)?;
+        }
         write.write_bool(self.on_ground)?;
         Ok(())
     }
