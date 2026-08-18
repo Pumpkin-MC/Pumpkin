@@ -143,6 +143,31 @@ impl BedrockPlayer<'_> {
         self.client_data().map(|d| d.device_os)
     }
 
+    pub async fn sync_experience(&self) {
+        let level = self.0.experience_level.load(Ordering::Relaxed).max(0);
+        let progress = self.0.experience_progress.load().clamp(0.0, 1.0);
+
+        let attribute = |name: &str, current_value, max_value| BedrockAttribute {
+            min_value: 0.0,
+            max_value,
+            current_value,
+            default_min_value: 0.0,
+            default_max_value: max_value,
+            default_value: 0.0,
+            name: name.to_string(),
+            modifiers_list_size: pumpkin_protocol::codec::var_uint::VarUInt(0),
+        };
+        self.send_packet(&CBedrockAttributes {
+            runtime_id: VarULong(self.0.entity_id() as u64),
+            attributes: vec![
+                attribute("minecraft:player.experience", progress, 1.0),
+                attribute("minecraft:player.level", level as f32, 24_791.0),
+            ],
+            player_tick: VarULong(self.0.tick_counter.load(Ordering::Relaxed).max(0) as u64),
+        })
+        .await;
+    }
+
     #[must_use]
     pub fn device_id(&self) -> Option<String> {
         self.client_data().map(|d| d.device_id.clone())
@@ -4321,6 +4346,10 @@ impl Player {
                     points.into(),
                 ))
                 .await;
+
+            if let Some(bedrock) = self.as_bedrock() {
+                bedrock.sync_experience().await;
+            }
         }
     }
 
