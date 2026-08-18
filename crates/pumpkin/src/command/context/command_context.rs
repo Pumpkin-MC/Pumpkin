@@ -216,20 +216,16 @@ impl<'a> ContextChain<'a> {
     #[must_use]
     pub fn try_flatten(root: &CommandContext<'a>) -> Option<Self> {
         let mut modifiers = Vec::new();
-        let mut current = root;
-
-        if !matches!(root.modifier, RedirectModifier::KeepSource) {
-            modifiers.push(Arc::new(current.clone()));
-        }
+        let mut current = Arc::new(root.clone());
         loop {
             if let Some(child) = current.get_child() {
-                modifiers.push(child.clone());
-                current = child;
+                modifiers.push(current);
+                current = child.clone();
             } else {
                 return current
                     .command
                     .is_some()
-                    .then(|| Self::new(modifiers, Arc::new(current.clone())));
+                    .then(|| Self::new(modifiers, current));
             }
         }
     }
