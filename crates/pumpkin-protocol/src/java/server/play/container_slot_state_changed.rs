@@ -24,3 +24,17 @@ impl<'a> ServerPacket<'a> for SContainerSlotStateChanged {
         })
     }
 }
+
+impl crate::ClientPacket for SContainerSlotStateChanged {
+    fn write_packet_data(
+        &self,
+        mut write: impl std::io::Write,
+        _version: &JavaMinecraftVersion,
+    ) -> Result<(), crate::ser::WritingError> {
+        use crate::ser::NetworkWriteExt;
+        write.write_var_int(&self.slot_id)?;
+        write.write_var_int(&self.container_id)?;
+        write.write_bool(self.new_state)?;
+        Ok(())
+    }
+}

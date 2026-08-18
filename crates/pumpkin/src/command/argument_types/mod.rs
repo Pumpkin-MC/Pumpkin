@@ -233,6 +233,7 @@ pub mod objective;
 pub mod placed_feature;
 pub mod pool;
 pub mod range;
+pub mod resource;
 pub mod resource_key;
 pub mod slot;
 pub mod structure;

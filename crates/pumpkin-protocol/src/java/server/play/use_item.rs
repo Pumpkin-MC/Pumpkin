@@ -35,3 +35,20 @@ impl<'a> ServerPacket<'a> for SUseItem {
         })
     }
 }
+
+impl crate::ClientPacket for SUseItem {
+    fn write_packet_data(
+        &self,
+        mut write: impl std::io::Write,
+        version: &JavaMinecraftVersion,
+    ) -> Result<(), crate::ser::WritingError> {
+        use crate::ser::NetworkWriteExt;
+        write.write_var_int(&self.hand)?;
+        write.write_var_int(&self.sequence)?;
+        if version >= &JavaMinecraftVersion::V_1_21_2 {
+            write.write_f32_be(self.yaw)?;
+            write.write_f32_be(self.pitch)?;
+        }
+        Ok(())
+    }
+}

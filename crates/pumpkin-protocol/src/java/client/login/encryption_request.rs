@@ -59,3 +59,50 @@ impl ClientPacket for CEncryptionRequest<'_> {
         Ok(())
     }
 }
+
+impl<'a> crate::ServerPacket<'a> for CEncryptionRequest<'a> {
+    fn read(
+        read: &mut &'a [u8],
+        version: &JavaMinecraftVersion,
+    ) -> Result<Self, crate::ReadingError> {
+        use crate::ser::{NetworkReadExt, NetworkReadSliceExt};
+        let server_id = read.get_str_bounded_borrowed(20)?;
+        let public_key_len = read.get_var_int()?.0 as usize;
+        let public_key = read.read_slice_borrowed(public_key_len)?;
+        let verify_token_len = read.get_var_int()?.0 as usize;
+        let verify_token = read.read_slice_borrowed(verify_token_len)?;
+        let should_authenticate = if version >= &JavaMinecraftVersion::V_1_19 {
+            read.get_bool()?
+        } else {
+            true
+        };
+        Ok(Self {
+            server_id,
+            public_key,
+            verify_token,
+            should_authenticate,
+        })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ServerPacket;
+
+    #[test]
+    fn encryption_request_roundtrip() {
+        let packet =
+            CEncryptionRequest::new("test_server", b"public_key_bytes", b"verify_1234", true);
+        let mut buf = Vec::new();
+        let version = JavaMinecraftVersion::V_1_21_4;
+        packet.write_packet_data(&mut buf, &version).unwrap();
+
+        let mut slice = buf.as_slice();
+        let read_packet = CEncryptionRequest::read(&mut slice, &version).unwrap();
+        assert_eq!(read_packet.server_id, packet.server_id);
+        assert_eq!(read_packet.public_key, packet.public_key);
+        assert_eq!(read_packet.verify_token, packet.verify_token);
+        assert_eq!(read_packet.should_authenticate, packet.should_authenticate);
+    }
+}

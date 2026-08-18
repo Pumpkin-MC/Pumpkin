@@ -20,3 +20,21 @@ impl<'a> ServerPacket<'a> for SCustomClickAction<'a> {
         })
     }
 }
+
+impl crate::ClientPacket for SCustomClickAction<'_> {
+    fn write_packet_data(
+        &self,
+        mut write: impl std::io::Write,
+        _version: &JavaMinecraftVersion,
+    ) -> Result<(), crate::ser::WritingError> {
+        use crate::ser::NetworkWriteExt;
+        write.write_string(self.action_id)?;
+        if let Some(payload) = self.payload {
+            write.write_bool(true)?;
+            write.write_slice(payload)?;
+        } else {
+            write.write_bool(false)?;
+        }
+        Ok(())
+    }
+}

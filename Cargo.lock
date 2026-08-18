@@ -3553,8 +3553,6 @@ dependencies = [
 name = "pumpkin-plugin-utils"
 version = "0.1.0"
 dependencies = [
- "ed25519-dalek",
- "hex",
  "pumpkin-plugin-api",
  "serde",
  "serde_json",
@@ -3562,8 +3560,6 @@ dependencies = [
  "thiserror 2.0.20",
  "tracing",
  "ureq",
- "wasm-encoder 0.256.0",
- "wasmparser 0.256.0",
 ]
 
 [[package]]

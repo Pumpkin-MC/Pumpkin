@@ -26,7 +26,6 @@ pub mod ipc;
 pub mod item_stack;
 pub mod java_dialogs;
 pub mod logging;
-pub mod marketplace;
 pub mod permission;
 pub mod player;
 pub mod recipe;

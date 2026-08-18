@@ -106,14 +106,14 @@ pub mod command {
 pub use wit::pumpkin::plugin::{
     advancement as advancement_wit, bedrock_packets, block_entity, boss_bar,
     command as command_wit, common,
-    context::{Context, Server},
+    context::{self, Context, MarketplaceMetadata, Server},
     damage_types as damage_types_wit, data_components, display as display_wit,
     enchantments as enchantments_wit, entity,
     entity_types::EntityType,
     event::{self as events_wit, EventType},
-    gui, i18n, ipc, item_stack, java_dialogs, java_packets, marketplace, particles, permission,
-    player, recipe as recipe_wit, scoreboard, screens as screens_wit, server,
-    statistics as statistics_wit, text, uuid, world,
+    gui, i18n, ipc, item_stack, java_dialogs, java_packets, particles, permission, player,
+    recipe as recipe_wit, scoreboard, screens as screens_wit, server, statistics as statistics_wit,
+    text, uuid, world,
 };
 
 // Convenience re-exports of commonly-used plugin types so plugin authors can

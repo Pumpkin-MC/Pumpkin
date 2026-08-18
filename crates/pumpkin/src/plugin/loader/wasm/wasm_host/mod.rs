@@ -92,7 +92,26 @@ impl PluginRuntime {
     ) -> Result<(Arc<WasmPlugin>, PluginMetadata), PluginInitError> {
         let wasm_bytes = std::fs::read(&path).map_err(PluginInitError::FileReadFailed)?;
 
-        signature::verify_wasm_plugin(&wasm_bytes, &path.as_ref().to_string_lossy());
+        let verification =
+            signature::verify_wasm_plugin(&wasm_bytes, &path.as_ref().to_string_lossy());
+        let marketplace_metadata = if verification.is_signed && verification.is_valid {
+            verification.metadata.map(|m| {
+                wit::v0_1::pumpkin::plugin::context::MarketplaceMetadata {
+                    marketplace_url: m.marketplace_url,
+                    plugin_id: m.plugin_id,
+                    plugin_name: m.plugin_name,
+                    version: m.version,
+                    dev_id: m.dev_id,
+                    dev_name: m.dev_name,
+                    is_paid: m.is_paid,
+                    user_id: m.user_id,
+                    license_key: m.license_key,
+                    issued_at: m.issued_at,
+                }
+            })
+        } else {
+            None
+        };
 
         let wasm_bytes = signature::strip_pumpkin_sections(&wasm_bytes).unwrap_or(wasm_bytes);
 
@@ -111,7 +130,11 @@ impl PluginRuntime {
         };
 
         let wasm_plugin = Arc::new(wasm_plugin);
-        wasm_plugin.store.lock().await.data_mut().plugin = Some(Arc::downgrade(&wasm_plugin));
+        {
+            let mut store = wasm_plugin.store.lock().await;
+            store.data_mut().plugin = Some(Arc::downgrade(&wasm_plugin));
+            store.data_mut().marketplace_metadata = marketplace_metadata;
+        };
         Ok((wasm_plugin, metadata))
     }
 }

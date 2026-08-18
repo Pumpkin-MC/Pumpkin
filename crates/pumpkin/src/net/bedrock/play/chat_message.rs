@@ -8,6 +8,10 @@ impl BedrockClient {
         player: &Arc<Player>,
         packet: SText<'_>,
     ) {
+        player.update_last_action_time();
+        if player.check_chat_spam(server).await {
+            return;
+        }
         let gameprofile = &player.gameprofile;
 
         send_cancellable! {{
