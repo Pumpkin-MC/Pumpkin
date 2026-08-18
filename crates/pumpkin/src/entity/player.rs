@@ -4090,9 +4090,10 @@ impl Player {
                     MetaDataType::BYTE,
                     config.skin_parts,
                 ),
+                // 1.21.11
                 Metadata::new(
                     TrackedData::MAIN_ARM_ID,
-                    MetaDataType::BYTE,
+                    MetaDataType::ARM,
                     config.main_hand as u8,
                 ),
             ],
