@@ -33,6 +33,21 @@ impl<'a> ServerPacket<'a> for SSetCommandBlock<'a> {
     }
 }
 
+impl crate::ClientPacket for SSetCommandBlock<'_> {
+    fn write_packet_data(
+        &self,
+        mut write: impl std::io::Write,
+        _version: &JavaMinecraftVersion,
+    ) -> Result<(), crate::ser::WritingError> {
+        use crate::ser::NetworkWriteExt;
+        write.write_block_pos(&self.pos)?;
+        write.write_string_bounded(self.command, 32767)?;
+        write.write_var_int(&self.mode)?;
+        write.write_i8(self.flags)?;
+        Ok(())
+    }
+}
+
 pub enum CommandBlockMode {
     Chain,
     Repeating,

@@ -18,3 +18,15 @@ impl<'a> ServerPacket<'a> for SChunkBatch {
         })
     }
 }
+
+impl crate::ClientPacket for SChunkBatch {
+    fn write_packet_data(
+        &self,
+        mut write: impl std::io::Write,
+        _version: &JavaMinecraftVersion,
+    ) -> Result<(), crate::ser::WritingError> {
+        use crate::ser::NetworkWriteExt;
+        write.write_f32_be(self.chunks_per_tick)?;
+        Ok(())
+    }
+}

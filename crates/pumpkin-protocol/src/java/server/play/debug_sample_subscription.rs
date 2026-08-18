@@ -18,3 +18,15 @@ impl<'a> ServerPacket<'a> for SDebugSampleSubscription {
         })
     }
 }
+
+impl crate::ClientPacket for SDebugSampleSubscription {
+    fn write_packet_data(
+        &self,
+        mut write: impl std::io::Write,
+        _version: &JavaMinecraftVersion,
+    ) -> Result<(), crate::ser::WritingError> {
+        use crate::ser::NetworkWriteExt;
+        write.write_var_int(&self.sample_type)?;
+        Ok(())
+    }
+}

@@ -9,6 +9,9 @@ impl JavaClient {
         command: &SChatCommand<'_>,
     ) {
         player.update_last_action_time();
+        if player.check_chat_spam(server).await {
+            return;
+        }
         let player_clone = player.clone();
         let server_clone = server.clone();
         send_cancellable! {{

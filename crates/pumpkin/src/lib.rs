@@ -8,7 +8,9 @@ extern crate pumpkin_macros;
 
 use crate::crash::CrashReport;
 use crate::data::VanillaData;
-use crate::logging::{GzipRollingLogger, PumpkinCommandCompleter, ReadlineLogWrapper};
+use crate::logging::{
+    ConsoleWriter, GzipRollingLogger, PumpkinCommandCompleter, ReadlineLogWrapper,
+};
 use crate::net::bedrock::{
     BedrockClient,
     nethernet::{NetherNetListener, load_or_create_identity_key},
@@ -69,7 +71,7 @@ pub type LoggerOption = Option<(ReadlineLogWrapper, LevelFilter, LoggingConfig)>
 pub static LOGGER_IMPL: LazyLock<Arc<OnceLock<LoggerOption>>> =
     LazyLock::new(|| Arc::new(OnceLock::new()));
 
-#[expect(clippy::print_stderr)]
+#[expect(clippy::print_stderr, clippy::too_many_lines)]
 pub fn init_logger(advanced_config: &AdvancedConfiguration) {
     use tracing_subscriber::EnvFilter;
     use tracing_subscriber::fmt;
@@ -107,7 +109,7 @@ pub fn init_logger(advanced_config: &AdvancedConfiguration) {
         };
 
         let (logger, rl): (
-            Box<dyn std::io::Write + Send + 'static>,
+            ConsoleWriter,
             Option<Editor<PumpkinCommandCompleter, FileHistory>>,
         ) = if advanced_config.commands.use_tty && stdin().is_terminal() {
             let rl_config = Config::builder()
@@ -120,17 +122,21 @@ pub fn init_logger(advanced_config: &AdvancedConfiguration) {
             match Editor::with_config(rl_config) {
                 Ok(mut rl) => {
                     rl.set_helper(Some(helper));
-                    (Box::new(std::io::stdout()), Some(rl))
+                    let printer = rl.create_external_printer().ok().map(|p| {
+                        let boxed: Box<dyn rustyline::ExternalPrinter + Send> = Box::new(p);
+                        boxed
+                    });
+                    (ConsoleWriter::new(printer), Some(rl))
                 }
                 Err(e) => {
                     eprintln!(
                         "Failed to initialize console input ({e}); falling back to simple logger"
                     );
-                    (Box::new(std::io::stdout()), None)
+                    (ConsoleWriter::new(None), None)
                 }
             }
         } else {
-            (Box::new(std::io::stdout()), None)
+            (ConsoleWriter::new(None), None)
         };
 
         let fmt_layer = fmt::layer()
@@ -336,15 +342,8 @@ impl PumpkinServer {
             }
         };
         let _ = server.bedrock_private_key.set(identity_key.clone());
-        let oidc_verifier = if config.online_mode && config.authentication.enabled {
-            let Some((issuer, keys)) = server.bedrock_oidc_keys.get() else {
-                error!("Bedrock OIDC keys should be initialized before binding NetherNet");
-                return None;
-            };
-            Some(Arc::new((issuer.clone(), keys.clone())))
-        } else {
-            None
-        };
+        let oidc_verifier = (config.online_mode && config.authentication.enabled)
+            .then(|| server.bedrock_oidc_keys.clone());
         match NetherNetListener::bind(
             config.nethernet.address,
             ice_socket,
@@ -791,8 +790,8 @@ fn setup_console(mut rl: Editor<PumpkinCommandCompleter, FileHistory>, server: A
                             &line,
                         )
                         .await;
-                    let _ = tx_reply.send(1).await;
                 }
+                let _ = tx_reply.send(1).await;
             } else {
                 break;
             }

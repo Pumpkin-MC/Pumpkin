@@ -50,3 +50,30 @@ impl<'a> ServerPacket<'a> for SSetStructureBlock<'a> {
         })
     }
 }
+
+impl crate::ClientPacket for SSetStructureBlock<'_> {
+    fn write_packet_data(
+        &self,
+        mut write: impl std::io::Write,
+        _version: &JavaMinecraftVersion,
+    ) -> Result<(), crate::ser::WritingError> {
+        use crate::ser::NetworkWriteExt;
+        write.write_block_pos(&self.location)?;
+        write.write_var_int(&self.action)?;
+        write.write_var_int(&self.mode)?;
+        write.write_string(self.name)?;
+        write.write_i8(self.offset_x)?;
+        write.write_i8(self.offset_y)?;
+        write.write_i8(self.offset_z)?;
+        write.write_u8(self.size_x)?;
+        write.write_u8(self.size_y)?;
+        write.write_u8(self.size_z)?;
+        write.write_var_int(&self.mirror)?;
+        write.write_var_int(&self.rotation)?;
+        write.write_string(self.metadata)?;
+        write.write_f32_be(self.integrity)?;
+        write.write_var_long(&self.seed)?;
+        write.write_u8(self.flags)?;
+        Ok(())
+    }
+}

@@ -86,7 +86,7 @@ pub struct Server {
     /// Handles cryptographic keys for secure communication.
     key_store: OnceCell<Arc<KeyStore>>,
     /// Bedrock OIDC provider keys, fetched on startup for 1.26.10+ token validation.
-    pub bedrock_oidc_keys: OnceCell<(String, pumpkin_util::jwt::Jwks)>,
+    pub bedrock_oidc_keys: Arc<OnceCell<(String, pumpkin_util::jwt::Jwks)>>,
     /// Cached Bedrock server private key (process-lifetime). Generated on first Bedrock login and reused.
     pub bedrock_private_key: OnceCell<Arc<pumpkin_util::p384::ecdsa::SigningKey>>,
     /// Manages server status information.
@@ -241,21 +241,6 @@ impl Server {
 
         let tick_rate_manager = Arc::new(ServerTickRateManager::new(basic_config.tps));
 
-        let mojang_keys_task = tokio::spawn({
-            let auth_config = advanced_config.networking.java.authentication.clone();
-            let allow_chat = basic_config.allow_chat_reports;
-            async move {
-                if allow_chat {
-                    fetch_mojang_public_keys(&auth_config).unwrap_or_else(|e| {
-                        error!("Failed to fetch Mojang keys: {e}");
-                        Vec::new()
-                    })
-                } else {
-                    Vec::new()
-                }
-            }
-        });
-
         let dimensions = {
             let mut dimensions = vec![Dimension::OVERWORLD];
             if basic_config.allow_nether {
@@ -293,7 +278,7 @@ impl Server {
             block_registry: block_registry.clone(),
             item_registry: super::item::items::default_registry(),
             key_store: OnceCell::new(),
-            bedrock_oidc_keys: OnceCell::new(),
+            bedrock_oidc_keys: Arc::new(OnceCell::new()),
             bedrock_private_key: OnceCell::new(),
             listing,
             branding: CachedBranding::new(),
@@ -328,13 +313,74 @@ impl Server {
                 }),
         );
 
+        // Fetch / generate keys in background tasks to avoid blocking startup
         let server_clone = server.clone();
         tokio::spawn(async move {
-            server_clone
-                .key_store
-                .get_or_init(|| async { Arc::new(KeyStore::new()) })
-                .await;
+            let key_store = tokio::task::spawn_blocking(|| Arc::new(KeyStore::new()))
+                .await
+                .unwrap_or_else(|_| Arc::new(KeyStore::new()));
+            let _ = server_clone.key_store.set(key_store);
         });
+
+        if server.basic_config.allow_chat_reports {
+            let server_clone = server.clone();
+            tokio::spawn(async move {
+                let auth_config = server_clone
+                    .advanced_config
+                    .networking
+                    .java
+                    .authentication
+                    .clone();
+                let keys = tokio::task::spawn_blocking(move || {
+                    fetch_mojang_public_keys(&auth_config).unwrap_or_else(|e| {
+                        error!("Failed to fetch Mojang keys: {e}");
+                        Vec::new()
+                    })
+                })
+                .await
+                .unwrap_or_default();
+                server_clone.mojang_public_keys.store(Arc::new(keys));
+            });
+        }
+
+        if server.advanced_config.networking.bedrock.online_mode
+            && server
+                .advanced_config
+                .networking
+                .bedrock
+                .authentication
+                .enabled
+        {
+            let server_clone = server.clone();
+            tokio::spawn(async move {
+                let auth = server_clone
+                    .advanced_config
+                    .networking
+                    .bedrock
+                    .authentication
+                    .clone();
+                let keys = match tokio::task::spawn_blocking(move || {
+                    pumpkin_util::jwt::fetch_oidc_jwks(
+                        auth.url.as_deref(),
+                        auth.connect_timeout,
+                        auth.read_timeout,
+                    )
+                })
+                .await
+                {
+                    Ok(Ok(keys)) => keys,
+                    Ok(Err(error)) => {
+                        error!("Failed to fetch Bedrock OIDC keys: {error}");
+                        (String::new(), pumpkin_util::jwt::Jwks { keys: Vec::new() })
+                    }
+                    Err(join_err) => {
+                        error!("Bedrock OIDC key task failed: {join_err}");
+                        (String::new(), pumpkin_util::jwt::Jwks { keys: Vec::new() })
+                    }
+                };
+                let _ = server_clone.bedrock_oidc_keys.set(keys);
+            });
+        }
 
         let world_loader = |dim: Dimension| {
             let path = world_path.clone();
@@ -365,8 +411,7 @@ impl Server {
             world_futures.push(world_loader(dim.clone()));
         }
 
-        let (worlds_results, keys) =
-            tokio::join!(futures::future::join_all(world_futures), mojang_keys_task);
+        let worlds_results = futures::future::join_all(world_futures).await;
 
         let mut worlds_vec = Vec::new();
         for world in worlds_results.into_iter().flatten() {
@@ -390,31 +435,8 @@ impl Server {
         }
 
         server.worlds.store(Arc::new(worlds_vec));
-        if let Ok(k) = keys {
-            server.mojang_public_keys.store(Arc::new(k));
-        }
 
         info!("All worlds loaded successfully.");
-
-        if server.advanced_config.networking.bedrock.online_mode {
-            server
-                .bedrock_oidc_keys
-                .get_or_init(|| async {
-                    tokio::task::block_in_place(|| {
-                        let auth = &server.advanced_config.networking.bedrock.authentication;
-                        pumpkin_util::jwt::fetch_oidc_jwks(
-                            auth.url.as_deref(),
-                            auth.connect_timeout,
-                            auth.read_timeout,
-                        )
-                    })
-                    .unwrap_or_else(|error| {
-                        error!("Failed to fetch Bedrock OIDC keys: {error}");
-                        (String::new(), pumpkin_util::jwt::Jwks { keys: Vec::new() })
-                    })
-                })
-                .await;
-        }
         server
     }
 

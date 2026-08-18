@@ -3,7 +3,7 @@ use crate::identifier::Identifier;
 /// A registry-scoped resource key identifying an element within a specific registry.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ResourceKey {
-    registry_name: Identifier,
+    pub registry_name: Identifier,
     /// The unique identifier of the resource.
     pub identifier: Identifier,
 }

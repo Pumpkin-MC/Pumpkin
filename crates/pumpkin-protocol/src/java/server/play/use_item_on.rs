@@ -49,3 +49,25 @@ impl<'a> ServerPacket<'a> for SUseItemOn {
         })
     }
 }
+
+impl crate::ClientPacket for SUseItemOn {
+    fn write_packet_data(
+        &self,
+        mut write: impl std::io::Write,
+        version: &JavaMinecraftVersion,
+    ) -> Result<(), crate::ser::WritingError> {
+        use crate::ser::NetworkWriteExt;
+        write.write_var_int(&self.hand)?;
+        write.write_block_pos(&self.position)?;
+        write.write_var_int(&self.face)?;
+        write.write_f32_be(self.cursor_pos.x)?;
+        write.write_f32_be(self.cursor_pos.y)?;
+        write.write_f32_be(self.cursor_pos.z)?;
+        write.write_bool(self.inside_block)?;
+        if version >= &JavaMinecraftVersion::V_1_21_5 {
+            write.write_bool(self.is_against_world_border)?;
+        }
+        write.write_var_int(&self.sequence)?;
+        Ok(())
+    }
+}
