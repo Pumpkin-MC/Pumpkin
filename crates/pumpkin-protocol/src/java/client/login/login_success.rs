@@ -66,11 +66,11 @@ impl ClientPacket for CLoginSuccess<'_> {
         if version >= &JavaMinecraftVersion::V_1_19 {
             write.write_list(self.properties, |write, property| property.write(write))?;
         }
-        if version >= &JavaMinecraftVersion::V_1_20_2 && version < &JavaMinecraftVersion::V_1_21_2 {
-            write.write_bool(self.strict_error_handling)?;
-        }
         if version >= &JavaMinecraftVersion::V_26_2 {
             write.write_uuid(&self.session_id)?;
+        }
+        if version >= &JavaMinecraftVersion::V_1_20_5 && version < &JavaMinecraftVersion::V_1_21_2 {
+            write.write_bool(self.strict_error_handling)?;
         }
         Ok(())
     }

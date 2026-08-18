@@ -29,9 +29,7 @@ impl ClientPacket for CSetSelectedSlot {
 
 impl MultiVersionJavaPacket for CSetSelectedSlot {
     fn to_id(version: JavaMinecraftVersion) -> i32 {
-        if version >= JavaMinecraftVersion::V_1_21_2 {
-            PLAY_SET_HELD_SLOT.to_id(version)
-        } else if version == JavaMinecraftVersion::V_1_21 {
+        if version == JavaMinecraftVersion::V_1_21 {
             PLAY_SET_CARRIED_ITEM.to_id(version)
         } else {
             PLAY_SET_HELD_SLOT.to_id(version)

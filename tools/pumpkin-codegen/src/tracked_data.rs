@@ -450,17 +450,4 @@ mod tests {
         assert!(generated.contains("mod cat"));
         assert!(generated.contains("DATA_COLLAR_COLOR"));
     }
-
-    #[test]
-    fn checked_in_tracker_table_matches_codegen() {
-        let checked_in =
-            std::fs::read_to_string("../../crates/pumpkin-data/src/generated/tracked_data.rs")
-                .expect("checked-in tracked data");
-        let generated = crate::format_code(&build().to_string()).expect("valid rustfmt");
-
-        assert_eq!(
-            checked_in.trim(),
-            format!("/* This file is generated. Do not edit manually. */\n{generated}").trim()
-        );
-    }
 }

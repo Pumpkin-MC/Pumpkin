@@ -53,7 +53,7 @@ impl ClientPacket for CEncryptionRequest<'_> {
         write.write_all(self.public_key)?;
         write.write_var_int(&crate::VarInt(self.verify_token.len() as i32))?;
         write.write_all(self.verify_token)?;
-        if version >= &JavaMinecraftVersion::V_1_19 {
+        if version >= &JavaMinecraftVersion::V_1_20_5 {
             write.write_bool(self.should_authenticate)?;
         }
         Ok(())
@@ -71,7 +71,7 @@ impl<'a> crate::ServerPacket<'a> for CEncryptionRequest<'a> {
         let public_key = read.read_slice_borrowed(public_key_len)?;
         let verify_token_len = read.get_var_int()?.0 as usize;
         let verify_token = read.read_slice_borrowed(verify_token_len)?;
-        let should_authenticate = if version >= &JavaMinecraftVersion::V_1_19 {
+        let should_authenticate = if version >= &JavaMinecraftVersion::V_1_20_5 {
             read.get_bool()?
         } else {
             true

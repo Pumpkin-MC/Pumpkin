@@ -73,12 +73,111 @@ impl<'a> CLogin<'a> {
     }
 }
 
+#[must_use]
+pub fn build_v1_20_registry_codec(
+    version: JavaMinecraftVersion,
+) -> pumpkin_nbt::compound::NbtCompound {
+    use pumpkin_nbt::compound::NbtCompound;
+    use pumpkin_nbt::deserializer::NbtReadHelperJava;
+    use pumpkin_nbt::tag::NbtTag;
+    use std::io::Cursor;
+
+    let mut root = NbtCompound::new();
+    let synced = pumpkin_data::registry::Registry::get_synced(version);
+
+    for reg in synced {
+        let reg_name = if let Some(suffix) = reg.registry_id.strip_prefix("minecraft:") {
+            suffix
+        } else {
+            &reg.registry_id
+        };
+        if version < JavaMinecraftVersion::V_1_20_2
+            && !matches!(
+                reg_name,
+                "dimension_type"
+                    | "worldgen/biome"
+                    | "chat_type"
+                    | "damage_type"
+                    | "trim_pattern"
+                    | "trim_material"
+            )
+        {
+            continue;
+        }
+
+        let mut reg_compound = NbtCompound::new();
+        let reg_type = if reg.registry_id.contains(':') {
+            reg.registry_id.clone()
+        } else {
+            format!("minecraft:{}", reg.registry_id)
+        };
+        reg_compound.put("type", NbtTag::String(reg_type.clone().into()));
+
+        let mut values_list = Vec::new();
+        for (i, entry) in reg.registry_entries.iter().enumerate() {
+            let mut entry_compound = NbtCompound::new();
+            entry_compound.put("name", NbtTag::String(entry.entry_id.clone().into()));
+            entry_compound.put("id", NbtTag::Int(i as i32));
+
+            if let Some(ref data) = entry.data {
+                let mut cursor = Cursor::new(&data[..]);
+                let mut reader = NbtReadHelperJava::new(&mut cursor);
+                if let Ok(element_nbt) = pumpkin_nbt::Nbt::read_unnamed(&mut reader) {
+                    entry_compound.put("element", NbtTag::Compound(element_nbt.root_tag));
+                }
+            }
+            values_list.push(NbtTag::Compound(entry_compound));
+        }
+
+        reg_compound.put("value", NbtTag::List(values_list));
+        root.put(&reg_type, NbtTag::Compound(reg_compound));
+    }
+
+    root
+}
+
 impl ClientPacket for CLogin<'_> {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
         version: &JavaMinecraftVersion,
     ) -> Result<(), WritingError> {
+        if version < &JavaMinecraftVersion::V_1_20_2 {
+            write.write_i32_be(self.entity_id)?;
+            write.write_bool(self.is_hardcore)?;
+            write.write_u8(self.spawn_data.game_mode)?;
+            write.write_i8(self.spawn_data.previous_gamemode)?;
+            write.write_list(self.dimension_names, |write, dim| write.write_string(dim))?;
+
+            let registry_codec = build_v1_20_registry_codec(*version);
+            let nbt_bytes = pumpkin_nbt::Nbt::new(String::new(), registry_codec).write();
+            write.write_all(&nbt_bytes)?;
+
+            write.write_string(self.spawn_data.dimension.minecraft_name)?;
+            write.write_string(self.spawn_data.dimension.minecraft_name)?;
+            write.write_i64_be(self.spawn_data.hashed_seed)?;
+            write.write_var_int(&self.max_players)?;
+            write.write_var_int(&self.view_distance)?;
+            write.write_var_int(&self.simulated_distance)?;
+            write.write_bool(self.reduced_debug_info)?;
+            write.write_bool(self.enabled_respawn_screen)?;
+            write.write_bool(self.limited_crafting)?;
+            write.write_bool(self.spawn_data.debug)?;
+            write.write_bool(self.spawn_data.is_flat)?;
+            write.write_option(
+                &self.spawn_data.death_dimension_name,
+                |write, (dim, pos)| {
+                    write.write_string(dim)?;
+                    write.write_block_pos(pos)?;
+                    Ok(())
+                },
+            )?;
+            if version >= &JavaMinecraftVersion::V_1_20 {
+                write.write_var_int(&self.spawn_data.portal_cooldown)?;
+            }
+            return Ok(());
+        }
+
         write.write_i32_be(self.entity_id)?;
         write.write_bool(self.is_hardcore)?;
         if version >= &JavaMinecraftVersion::V_1_16 {
