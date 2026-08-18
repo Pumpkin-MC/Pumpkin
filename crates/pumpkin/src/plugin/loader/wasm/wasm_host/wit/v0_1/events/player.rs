@@ -1154,7 +1154,6 @@ impl ToFromWasmEvent for AsyncPlayerChatEvent {
     }
 
     fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
-        cleanup_event(&event, state);
         if let Event::AsyncPlayerChatEvent(data) = event {
             self.cancelled = data.cancelled;
             self.message = data.message;
@@ -1190,7 +1189,6 @@ impl ToFromWasmEvent for AsyncPlayerPreLoginEvent {
     }
 
     fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
-        cleanup_event(&event, state);
         if let Event::AsyncPlayerPreLoginEvent(data) = event {
             self.cancelled = data.cancelled;
             self.kick_message = consume_text_component(state, &data.kick_message);
@@ -1823,7 +1821,6 @@ impl ToFromWasmEvent for PlayerNameEntityEvent {
     }
 
     fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
-        cleanup_event(&event, state);
         if let Event::PlayerNameEntityEvent(data) = event {
             self.cancelled = data.cancelled;
             self.name = consume_text_component(state, &data.name);
@@ -1925,7 +1922,6 @@ impl ToFromWasmEvent for PlayerPreLoginEvent {
     }
 
     fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
-        cleanup_event(&event, state);
         if let Event::PlayerPreLoginEvent(data) = event {
             self.cancelled = data.cancelled;
             self.kick_message = consume_text_component(state, &data.kick_message);

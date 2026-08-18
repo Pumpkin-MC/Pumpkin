@@ -209,7 +209,6 @@ impl ToFromWasmEvent for ServerListPingEvent {
     }
 
     fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
-        cleanup_event(&event, state);
         match event {
             Event::ServerListPingEvent(data) => {
                 self.motd = consume_text_component(state, &data.motd);
