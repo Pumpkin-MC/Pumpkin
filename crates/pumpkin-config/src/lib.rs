@@ -29,7 +29,7 @@ pub mod recipe;
 /// Resource pack configuration options.
 pub mod resource_pack;
 
-pub use chat::ChatConfig;
+pub use chat::{AntiSpamConfig, ChatConfig};
 pub use commands::{CommandOverride, CommandsConfig};
 pub use networking::auth::AuthenticationConfig;
 pub use networking::bedrock::BedrockConfig;

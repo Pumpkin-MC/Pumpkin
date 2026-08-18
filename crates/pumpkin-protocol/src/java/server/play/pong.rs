@@ -19,3 +19,15 @@ impl<'a> ServerPacket<'a> for SPlayPong {
         })
     }
 }
+
+impl crate::ClientPacket for SPlayPong {
+    fn write_packet_data(
+        &self,
+        mut write: impl std::io::Write,
+        _version: &JavaMinecraftVersion,
+    ) -> Result<(), crate::ser::WritingError> {
+        use crate::ser::NetworkWriteExt;
+        write.write_i32_be(self.id)?;
+        Ok(())
+    }
+}

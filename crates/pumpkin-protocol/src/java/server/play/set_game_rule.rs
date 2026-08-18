@@ -21,3 +21,16 @@ impl<'a> ServerPacket<'a> for SSetGameRule<'a> {
         })
     }
 }
+
+impl crate::ClientPacket for SSetGameRule<'_> {
+    fn write_packet_data(
+        &self,
+        mut write: impl std::io::Write,
+        _version: &JavaMinecraftVersion,
+    ) -> Result<(), crate::ser::WritingError> {
+        use crate::ser::NetworkWriteExt;
+        write.write_string(self.rule)?;
+        write.write_string(self.value)?;
+        Ok(())
+    }
+}

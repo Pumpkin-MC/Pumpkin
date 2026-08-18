@@ -8,6 +8,10 @@ impl BedrockClient {
         server: &Arc<Server>,
         packet: SCommandRequest<'_>,
     ) {
+        player.update_last_action_time();
+        if player.check_chat_spam(server).await {
+            return;
+        }
         let player_clone = player.clone();
         let server_clone = server.clone();
         let command = packet.command.strip_prefix('/').unwrap_or(&packet.command);

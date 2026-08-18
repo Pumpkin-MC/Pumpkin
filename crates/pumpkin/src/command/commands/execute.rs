@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use crate::command::argument_builder::{ArgumentBuilder, argument, command, literal};
 use crate::command::argument_types::block::BlockArgumentType;
 use crate::command::argument_types::coordinates::block_pos::BlockPosArgumentType;
@@ -8,18 +6,22 @@ use crate::command::argument_types::coordinates::vec3::Vec3ArgumentType;
 use crate::command::argument_types::core::string::StringArgumentType;
 use crate::command::argument_types::entity::EntityArgumentType;
 use crate::command::argument_types::entity_anchor::EntityAnchorArgumentType;
+use crate::command::argument_types::resource::{ENTITY_TYPE_ARGUMENT, ResourceArgument};
 use crate::command::argument_types::resource_key::ResourceKeyArgument;
 use crate::command::context::command_context::CommandContext;
 use crate::command::errors::error_types::CommandErrorType;
 use crate::command::node::attached::{CommandNodeId, NodeId};
 use crate::command::node::dispatcher::CommandDispatcher;
 use crate::command::node::tree::Tree;
-use crate::command::node::{CommandExecutor, CommandExecutorResult, RedirectModifier, Redirection};
+use crate::command::node::{RedirectModifier, Redirection};
+use crate::entity::r#type::from_type;
 use pumpkin_util::PermissionLvl;
 use pumpkin_util::identifier::Identifier;
 use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::permission::{Permission, PermissionDefault, PermissionRegistry};
 use pumpkin_util::text::TextComponent;
+use std::sync::Arc;
+use uuid::Uuid;
 
 const DESCRIPTION: &str = "Execute a command with a modified context.";
 const PERMISSION: &str = "minecraft:command.execute";
@@ -27,20 +29,7 @@ const PERMISSION: &str = "minecraft:command.execute";
 static ERROR_INVALID_DIMENSION: CommandErrorType<1> =
     CommandErrorType::new("argument.dimension.invalid", "argument.dimension.invalid");
 
-struct ExecuteRunExecutor;
-
-impl CommandExecutor for ExecuteRunExecutor {
-    fn execute<'a>(&'a self, context: &'a CommandContext) -> CommandExecutorResult<'a> {
-        Box::pin(async move {
-            let command_str = StringArgumentType::get(context, "command")?;
-            let dispatcher = context.server().command_dispatcher.read().await;
-            let result = dispatcher
-                .execute_input(command_str, &context.source)
-                .await?;
-            Ok(result)
-        })
-    }
-}
+static DIMENSION_REGISTRY: &Identifier = &Identifier::vanilla_static("dimension");
 
 fn execute_as_modifier<'a>(
     context: &'a CommandContext,
@@ -385,6 +374,24 @@ fn execute_unless_dimension_modifier<'a>(
     })
 }
 
+fn execute_summon_modifier<'a>(
+    context: &'a CommandContext,
+) -> crate::command::node::RedirectModifierResult<'a> {
+    Box::pin(async move {
+        let entity_type = ResourceArgument::get_summonable_entity_type(context, "entity_type")?;
+        let entity = from_type(
+            entity_type,
+            context.source.position,
+            context.source.world(),
+            Uuid::new_v4(),
+        );
+        context.source.world().spawn_entity(entity.clone()).await;
+        let mut source = context.source.as_ref().clone();
+        source.entity = Some(entity);
+        Ok(vec![Arc::new(source)])
+    })
+}
+
 #[allow(clippy::too_many_lines)]
 pub fn register(dispatcher: &mut CommandDispatcher, registry: &mut PermissionRegistry) {
     registry.register_permission_or_panic(Permission::new(
@@ -395,9 +402,7 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &mut PermissionReg
 
     let builder = command("execute", DESCRIPTION)
         .requires(PERMISSION)
-        .then(literal("run").then(
-            argument("command", StringArgumentType::GreedyPhrase).executes(ExecuteRunExecutor),
-        ))
+        .then(literal("run").redirect(Redirection::Root))
         .then(
             literal("as").then(argument("targets", EntityArgumentType::Entities).fork(
                 Redirection::Root,
@@ -410,18 +415,12 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &mut PermissionReg
                 RedirectModifier::Custom(Arc::new(execute_at_modifier)),
             )),
         )
-        .then(
-            literal("in").then(
-                argument(
-                    "dimension",
-                    ResourceKeyArgument(Identifier::vanilla_static("dimension")),
-                )
-                .redirect_with_modifier(
-                    Redirection::Root,
-                    RedirectModifier::Custom(Arc::new(execute_in_modifier)),
-                ),
+        .then(literal("in").then(
+            argument("dimension", ResourceKeyArgument(DIMENSION_REGISTRY)).redirect_with_modifier(
+                Redirection::Root,
+                RedirectModifier::Custom(Arc::new(execute_in_modifier)),
             ),
-        )
+        ))
         .then(
             literal("positioned")
                 .then(
@@ -505,14 +504,11 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &mut PermissionReg
                 ))
                 .then(
                     literal("dimension").then(
-                        argument(
-                            "dimension",
-                            ResourceKeyArgument(Identifier::vanilla_static("dimension")),
-                        )
-                        .redirect_with_modifier(
-                            Redirection::Root,
-                            RedirectModifier::Custom(Arc::new(execute_if_dimension_modifier)),
-                        ),
+                        argument("dimension", ResourceKeyArgument(DIMENSION_REGISTRY))
+                            .redirect_with_modifier(
+                                Redirection::Root,
+                                RedirectModifier::Custom(Arc::new(execute_if_dimension_modifier)),
+                            ),
                     ),
                 ),
         )
@@ -540,17 +536,22 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &mut PermissionReg
                 ))
                 .then(
                     literal("dimension").then(
-                        argument(
-                            "dimension",
-                            ResourceKeyArgument(Identifier::vanilla_static("dimension")),
-                        )
-                        .redirect_with_modifier(
-                            Redirection::Root,
-                            RedirectModifier::Custom(Arc::new(execute_unless_dimension_modifier)),
-                        ),
+                        argument("dimension", ResourceKeyArgument(DIMENSION_REGISTRY))
+                            .redirect_with_modifier(
+                                Redirection::Root,
+                                RedirectModifier::Custom(Arc::new(
+                                    execute_unless_dimension_modifier,
+                                )),
+                            ),
                     ),
                 ),
-        );
+        )
+        .then(literal("summon").then(
+            argument("entity_type", ENTITY_TYPE_ARGUMENT.clone()).redirect_with_modifier(
+                Redirection::Root,
+                RedirectModifier::Custom(Arc::new(execute_summon_modifier)),
+            ),
+        ));
 
     let execute_node_id = dispatcher.register(builder);
 
@@ -565,6 +566,7 @@ fn set_redirects_to_execute(tree: &mut Tree, parent: NodeId, execute_id: Command
     for child_id in tree.get_children(parent) {
         if let Some(redirect) = tree[child_id].redirect()
             && matches!(redirect, Redirection::Root)
+            && tree[child_id].name() != "run"
         {
             tree[child_id].set_redirect(Some(Redirection::Local(NodeId::from(execute_id))));
         }

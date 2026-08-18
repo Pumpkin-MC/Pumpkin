@@ -16,3 +16,15 @@ impl<'a> ServerPacket<'a> for SConfigPong {
         })
     }
 }
+
+impl crate::ClientPacket for SConfigPong {
+    fn write_packet_data(
+        &self,
+        mut write: impl std::io::Write,
+        _version: &JavaMinecraftVersion,
+    ) -> Result<(), crate::ser::WritingError> {
+        use crate::ser::NetworkWriteExt;
+        write.write_i32_be(self.id)?;
+        Ok(())
+    }
+}

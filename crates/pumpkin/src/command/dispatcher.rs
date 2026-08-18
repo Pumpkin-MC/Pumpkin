@@ -663,23 +663,61 @@ impl CommandDispatcher {
 
     /// Register a command with the dispatcher.
     pub fn register<P: Into<String>>(&mut self, tree: CommandTree, permission: P) {
-        let mut names = tree.names.iter();
+        let names = tree.names.clone();
+        let mut names_iter = names.iter();
         let permission = permission.into();
 
-        let Some(primary_name) = names.next() else {
+        let Some(primary_name) = names_iter.next() else {
             tracing::warn!("Command registration skipped: command tree has no names");
             return;
         };
 
-        for name in names {
+        for name in names_iter {
             self.commands
                 .insert(name.clone(), Command::Alias(primary_name.clone()));
             self.permissions.insert(name.clone(), permission.clone());
+
+            // For double-slash or slash-prefixed commands (like WorldEdit's //set or /set),
+            // automatically register the alternate slash variant as an alias.
+            if let Some(stripped) = name.strip_prefix("//") {
+                let single_slash = format!("/{stripped}");
+                if !self.commands.contains_key(&single_slash) && &single_slash != primary_name {
+                    self.commands
+                        .insert(single_slash.clone(), Command::Alias(primary_name.clone()));
+                    self.permissions.insert(single_slash, permission.clone());
+                }
+            } else if let Some(stripped) = name.strip_prefix('/') {
+                let double_slash = format!("//{stripped}");
+                if !self.commands.contains_key(&double_slash) && &double_slash != primary_name {
+                    self.commands
+                        .insert(double_slash.clone(), Command::Alias(primary_name.clone()));
+                    self.permissions.insert(double_slash, permission.clone());
+                }
+            }
         }
 
-        self.permissions.insert(primary_name.clone(), permission);
+        self.permissions
+            .insert(primary_name.clone(), permission.clone());
         self.commands
             .insert(primary_name.clone(), Command::Tree(tree));
+
+        // For double-slash or slash-prefixed primary commands (like //set or /set),
+        // automatically register the alternate slash variant as an alias.
+        if let Some(stripped) = primary_name.strip_prefix("//") {
+            let single_slash = format!("/{stripped}");
+            if !self.commands.contains_key(&single_slash) {
+                self.commands
+                    .insert(single_slash.clone(), Command::Alias(primary_name.clone()));
+                self.permissions.insert(single_slash, permission);
+            }
+        } else if let Some(stripped) = primary_name.strip_prefix('/') {
+            let double_slash = format!("//{stripped}");
+            if !self.commands.contains_key(&double_slash) {
+                self.commands
+                    .insert(double_slash.clone(), Command::Alias(primary_name.clone()));
+                self.permissions.insert(double_slash, permission);
+            }
+        }
     }
 
     /// Remove a command from the dispatcher by its primary name.
@@ -692,6 +730,30 @@ impl CommandDispatcher {
                 && target == name
             {
                 to_remove.push(key.clone());
+            }
+        }
+
+        if let Some(stripped) = name.strip_prefix("//") {
+            let single_slash = format!("/{stripped}");
+            for (key, value) in &self.commands {
+                if key == &single_slash {
+                    to_remove.push(key.clone());
+                } else if let Command::Alias(target) = value
+                    && target == &single_slash
+                {
+                    to_remove.push(key.clone());
+                }
+            }
+        } else if let Some(stripped) = name.strip_prefix('/') {
+            let double_slash = format!("//{stripped}");
+            for (key, value) in &self.commands {
+                if key == &double_slash {
+                    to_remove.push(key.clone());
+                } else if let Command::Alias(target) = value
+                    && target == &double_slash
+                {
+                    to_remove.push(key.clone());
+                }
             }
         }
 
@@ -867,5 +929,21 @@ mod test {
         );
 
         assert!(selected.is(&error_types::DISPATCHER_UNKNOWN_COMMAND));
+    }
+
+    #[test]
+    fn double_slash_command_registration_and_lookup() {
+        let mut dispatcher = super::CommandDispatcher::default();
+        let tree = CommandTree::new(["//set", "/set"], "WorldEdit set block");
+        dispatcher.register(tree, "worldedit.set");
+
+        assert!(dispatcher.commands.contains_key("//set"));
+        assert!(dispatcher.commands.contains_key("/set"));
+        assert!(dispatcher.get_tree("//set").is_ok());
+        assert!(dispatcher.get_tree("/set").is_ok());
+
+        dispatcher.unregister("//set");
+        assert!(!dispatcher.commands.contains_key("//set"));
+        assert!(!dispatcher.commands.contains_key("/set"));
     }
 }

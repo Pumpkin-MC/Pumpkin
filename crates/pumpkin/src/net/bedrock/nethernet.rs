@@ -36,7 +36,7 @@ use pumpkin_util::p384::{
 use serde_json::{Value, json};
 use tokio::{
     net::TcpListener,
-    sync::{Mutex, RwLock, mpsc},
+    sync::{Mutex, OnceCell, RwLock, mpsc},
 };
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, info, trace, warn};
@@ -83,7 +83,7 @@ struct EndpointState {
     incoming: mpsc::Sender<IncomingSession>,
     identity_key: Arc<SigningKey>,
     require_client_identity: bool,
-    oidc_verifier: Option<Arc<(String, Jwks)>>,
+    oidc_verifier: Option<Arc<OnceCell<(String, Jwks)>>>,
     stun_servers: Arc<[String]>,
     ice_local_addr: SocketAddr,
     external_ip: Option<IpAddr>,
@@ -97,7 +97,7 @@ impl NetherNetListener {
         external_ip: Option<IpAddr>,
         identity_key: Arc<SigningKey>,
         require_client_identity: bool,
-        oidc_verifier: Option<Arc<(String, Jwks)>>,
+        oidc_verifier: Option<Arc<OnceCell<(String, Jwks)>>>,
         stun_servers: Vec<String>,
     ) -> std::io::Result<Self> {
         let listener = TcpListener::bind(address).await?;
@@ -269,7 +269,7 @@ async fn negotiate_inner(
     let (offer, client_public_key) = authenticate_client_offer(
         offer,
         state.require_client_identity,
-        state.oidc_verifier.as_deref(),
+        state.oidc_verifier.as_ref().and_then(|c| c.get()),
     )?;
     trace!(
         %address,

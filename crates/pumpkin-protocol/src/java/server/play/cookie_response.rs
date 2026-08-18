@@ -39,3 +39,22 @@ impl<'a> ServerPacket<'a> for SCookieResponse<'a> {
         })
     }
 }
+
+impl crate::ClientPacket for SCookieResponse<'_> {
+    fn write_packet_data(
+        &self,
+        mut write: impl std::io::Write,
+        _version: &JavaMinecraftVersion,
+    ) -> Result<(), crate::ser::WritingError> {
+        use crate::{VarInt, ser::NetworkWriteExt};
+        write.write_string(self.key)?;
+        if let Some(payload) = self.payload {
+            write.write_bool(true)?;
+            write.write_var_int(&VarInt(payload.len() as i32))?;
+            write.write_slice(payload)?;
+        } else {
+            write.write_bool(false)?;
+        }
+        Ok(())
+    }
+}

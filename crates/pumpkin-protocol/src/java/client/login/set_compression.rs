@@ -36,3 +36,33 @@ impl ClientPacket for CSetCompression {
         Ok(())
     }
 }
+
+impl<'a> crate::ServerPacket<'a> for CSetCompression {
+    fn read(
+        read: &mut &'a [u8],
+        _version: &JavaMinecraftVersion,
+    ) -> Result<Self, crate::ReadingError> {
+        use crate::ser::NetworkReadExt;
+        Ok(Self {
+            threshold: read.get_var_int()?,
+        })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ServerPacket;
+
+    #[test]
+    fn set_compression_roundtrip() {
+        let packet = CSetCompression::new(crate::VarInt(256));
+        let mut buf = Vec::new();
+        let version = JavaMinecraftVersion::V_1_21_4;
+        packet.write_packet_data(&mut buf, &version).unwrap();
+
+        let mut slice = buf.as_slice();
+        let read_packet = CSetCompression::read(&mut slice, &version).unwrap();
+        assert_eq!(read_packet.threshold.0, 256);
+    }
+}
