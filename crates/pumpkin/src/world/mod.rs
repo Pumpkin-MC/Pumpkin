@@ -2759,21 +2759,7 @@ impl World {
             &bedrock_add_player,
         );
 
-        let held_item = player.inventory().held_item().await;
-
-        let be_mob_equipment = pumpkin_protocol::bedrock::client::CMobEquipment::new(
-            runtime_id,
-            NetworkItemStackDescriptor::from(&held_item),
-            0,
-            0,
-            0,
-        );
-
-        self.broadcast_packet_except_editioned_sync(
-            &[gameprofile.id],
-            &CSetEquipment::new((runtime_id as i32).into(), vec![]),
-            &be_mob_equipment,
-        );
+        self.send_player_equipment(&player).await;
 
         // Broadcast metadata to Java players so they can correctly interact with the new player
         let skin_parts = player.config.load().skin_parts;
@@ -3241,22 +3227,6 @@ impl World {
             &[player.gameprofile.id],
             &spawn_entity,
             &bedrock_add_player,
-        );
-
-        let held_item = player.inventory().held_item().await;
-
-        let be_mob_equipment = pumpkin_protocol::bedrock::client::CMobEquipment::new(
-            entity_id as u64,
-            NetworkItemStackDescriptor::from(&held_item),
-            0,
-            0,
-            0,
-        );
-
-        self.broadcast_packet_except_editioned_sync(
-            &[player.gameprofile.id],
-            &CSetEquipment::new(entity_id.into(), vec![]),
-            &be_mob_equipment,
         );
 
         // Broadcast metadata to Java players so they can correctly interact with the new player
