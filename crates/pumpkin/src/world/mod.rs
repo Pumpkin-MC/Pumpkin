@@ -447,6 +447,17 @@ impl World {
             .unwrap_or("world")
     }
 
+    /// Returns the configured shared world spawn block position and rotation.
+    #[must_use]
+    pub fn get_spawn_location(&self) -> (BlockPos, f32, f32) {
+        let level_info = self.level_info.load();
+        (
+            BlockPos::new(level_info.spawn_x, level_info.spawn_y, level_info.spawn_z),
+            level_info.spawn_yaw,
+            level_info.spawn_pitch,
+        )
+    }
+
     pub async fn shutdown(&self) {
         for entity in self.entities.load().iter() {
             self.save_entity(entity).await;
