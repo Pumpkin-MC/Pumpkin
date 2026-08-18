@@ -67,6 +67,7 @@ use pumpkin_data::{
     entity::{EntityStatus, EntityType},
     fluid::Fluid,
     item_stack::ItemStack,
+    packet::CURRENT_MC_VERSION,
     particle::Particle,
     sound::{Sound, SoundCategory},
     sound_id_remap::remap_sound_id_for_version,
@@ -882,6 +883,9 @@ impl World {
             match p.client.as_ref() {
                 ClientPlatform::Java(client) => {
                     let version = client.version.load();
+                    if version < CURRENT_MC_VERSION {
+                        continue;
+                    }
                     let mut buf = Vec::new();
                     for meta in [
                         Metadata::new(
@@ -2939,6 +2943,43 @@ impl World {
             client_suggestions::send_c_commands_packet(player, server, &command_dispatcher).await;
         };
 
+        if client.version.load() < JavaMinecraftVersion::V_1_20_2 {
+            let all_keys = [
+                pumpkin_data::tag::RegistryKey::BannerPattern,
+                pumpkin_data::tag::RegistryKey::Block,
+                pumpkin_data::tag::RegistryKey::CatVariant,
+                pumpkin_data::tag::RegistryKey::DamageType,
+                pumpkin_data::tag::RegistryKey::Dialog,
+                pumpkin_data::tag::RegistryKey::DimensionType,
+                pumpkin_data::tag::RegistryKey::Enchantment,
+                pumpkin_data::tag::RegistryKey::EntityType,
+                pumpkin_data::tag::RegistryKey::Fluid,
+                pumpkin_data::tag::RegistryKey::GameEvent,
+                pumpkin_data::tag::RegistryKey::Instrument,
+                pumpkin_data::tag::RegistryKey::Item,
+                pumpkin_data::tag::RegistryKey::PaintingVariant,
+                pumpkin_data::tag::RegistryKey::PointOfInterestType,
+                pumpkin_data::tag::RegistryKey::Potion,
+                pumpkin_data::tag::RegistryKey::Timeline,
+                pumpkin_data::tag::RegistryKey::WorldgenBiome,
+            ];
+
+            let mut tags = Vec::new();
+            let version = client.version.load();
+            for key in all_keys {
+                if pumpkin_data::tag::get_registry_key_tags(version, key)
+                    .is_some_and(|map| !map.is_empty())
+                {
+                    tags.push(key);
+                }
+            }
+            client
+                .send_packet_now(&pumpkin_protocol::java::client::play::CUpdateTagsPlay::new(
+                    &tags,
+                ))
+                .await;
+        }
+
         let (position, yaw, pitch) = if player.has_played_before.load(Ordering::Relaxed) {
             let position = player.position();
             let yaw = player.get_entity().yaw.load(); //info.spawn_angle;
@@ -2979,9 +3020,13 @@ impl World {
                 return;
             }
         }
-        client.send_packet_now(&CChunkBatchStart).await;
+        if client.version.load() >= JavaMinecraftVersion::V_1_20_2 {
+            client.send_packet_now(&CChunkBatchStart).await;
+        }
         client.send_packet_now(&CChunkData(&chunk)).await;
-        client.send_packet_now(&CChunkBatchEnd::new(1u16)).await;
+        if client.version.load() >= JavaMinecraftVersion::V_1_20_2 {
+            client.send_packet_now(&CChunkBatchEnd::new(1u16)).await;
+        }
 
         let velocity = player.living_entity.entity.velocity.load();
 
@@ -3346,7 +3391,7 @@ impl World {
                 )
                 .await;
 
-            {
+            if client.version.load() >= CURRENT_MC_VERSION {
                 let config = existing_player.config.load();
                 let mut buf = Vec::new();
                 {
@@ -3372,7 +3417,7 @@ impl World {
                         buf.into(),
                     ))
                     .await;
-            };
+            }
 
             {
                 let held_item = existing_player.inventory.held_item().await;
@@ -3925,11 +3970,15 @@ impl World {
                 .level
                 .get_or_fetch_chunk(center_chunk, std::clone::Clone::clone)
                 .await;
-            java_client.send_packet_now(&CChunkBatchStart).await;
+            if java_client.version.load() >= JavaMinecraftVersion::V_1_20_2 {
+                java_client.send_packet_now(&CChunkBatchStart).await;
+            }
             java_client.send_packet_now(&CChunkData(&chunk)).await;
-            java_client
-                .send_packet_now(&CChunkBatchEnd::new(1u16))
-                .await;
+            if java_client.version.load() >= JavaMinecraftVersion::V_1_20_2 {
+                java_client
+                    .send_packet_now(&CChunkBatchEnd::new(1u16))
+                    .await;
+            }
         }
 
         // Send teleport packet after at least the center chunk was delivered
