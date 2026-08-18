@@ -111,7 +111,12 @@ pub async fn send_attribute_updates_for_living(
 
         // Pull modifiers for this attribute
         let mut modifiers = Vec::new();
-        if let Some(inst) = living.attributes.read().unwrap().get(&attribute.id) {
+        if let Some(inst) = living
+            .attributes
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .get(&attribute.id)
+        {
             for mod_inst in &inst.modifiers {
                 modifiers.push(JeAttrMod::new(
                     mod_inst.id.clone(),

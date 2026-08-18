@@ -1,4 +1,5 @@
 use std::{
+    borrow::Cow,
     io::{Error, ErrorKind, Read},
     net::{Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6},
 };
@@ -8,7 +9,7 @@ use uuid::Uuid;
 
 use crate::{
     codec::{var_int::VarInt, var_uint::VarUInt},
-    serial::PacketRead,
+    serial::{PacketRead, PacketReadSlice, read_str_slice},
 };
 
 impl PacketRead for bool {
@@ -169,18 +170,19 @@ impl PacketRead for String {
     }
 }
 
-impl PacketRead for Vec<u8> {
+impl<T: PacketRead> PacketRead for Vec<T> {
     fn read<R: Read>(reader: &mut R) -> Result<Self, Error> {
-        const MAX_VECTOR_BYTES: usize = 2 * 1024 * 1024; // 2 MB safety cap
         let len = VarUInt::read(reader)?.0 as usize;
-        if len > MAX_VECTOR_BYTES {
+        if len > 65536 {
             return Err(Error::new(
                 ErrorKind::InvalidData,
-                format!("Byte vector length {len} exceeds maximum limit of {MAX_VECTOR_BYTES}"),
+                format!("Vector length {len} exceeds limit of 65536"),
             ));
         }
-        let mut buf = vec![0u8; len];
-        reader.read_exact(&mut buf)?;
+        let mut buf = Self::with_capacity(len.min(1024));
+        for _ in 0..len {
+            buf.push(T::read(reader)?);
+        }
         Ok(buf)
     }
 }
@@ -255,7 +257,13 @@ impl<T: PacketRead> PacketRead for Option<T> {
     }
 }
 
-impl<'a> crate::serial::PacketReadSlice<'a> for bool {
+impl PacketRead for Cow<'_, str> {
+    fn read<R: Read>(reader: &mut R) -> Result<Self, Error> {
+        Ok(Self::Owned(String::read(reader)?))
+    }
+}
+
+impl<'a> PacketReadSlice<'a> for bool {
     fn read_slice(buf: &mut &'a [u8]) -> Result<Self, Error> {
         if buf.is_empty() {
             return Err(Error::new(ErrorKind::UnexpectedEof, "expected bool byte"));
@@ -266,7 +274,7 @@ impl<'a> crate::serial::PacketReadSlice<'a> for bool {
     }
 }
 
-impl<'a> crate::serial::PacketReadSlice<'a> for u8 {
+impl<'a> PacketReadSlice<'a> for u8 {
     fn read_slice(buf: &mut &'a [u8]) -> Result<Self, Error> {
         if buf.is_empty() {
             return Err(Error::new(ErrorKind::UnexpectedEof, "expected u8"));
@@ -277,107 +285,131 @@ impl<'a> crate::serial::PacketReadSlice<'a> for u8 {
     }
 }
 
-impl<'a> crate::serial::PacketReadSlice<'a> for i8 {
+impl<'a> PacketReadSlice<'a> for i8 {
     fn read_slice(buf: &mut &'a [u8]) -> Result<Self, Error> {
         u8::read_slice(buf).map(|b| b as Self)
     }
 }
 
-impl<'a> crate::serial::PacketReadSlice<'a> for i16 {
+impl<'a> PacketReadSlice<'a> for i16 {
     fn read_slice(buf: &mut &'a [u8]) -> Result<Self, Error> {
         if buf.len() < 2 {
             return Err(Error::new(ErrorKind::UnexpectedEof, "expected i16"));
         }
         let (bytes, rest) = buf.split_at(2);
         *buf = rest;
-        Ok(Self::from_le_bytes(bytes.try_into().unwrap()))
+        let arr = bytes
+            .try_into()
+            .map_err(|_| Error::new(ErrorKind::InvalidData, "invalid i16 slice"))?;
+        Ok(Self::from_le_bytes(arr))
     }
 }
 
-impl<'a> crate::serial::PacketReadSlice<'a> for i32 {
+impl<'a> PacketReadSlice<'a> for i32 {
     fn read_slice(buf: &mut &'a [u8]) -> Result<Self, Error> {
         if buf.len() < 4 {
             return Err(Error::new(ErrorKind::UnexpectedEof, "expected i32"));
         }
         let (bytes, rest) = buf.split_at(4);
         *buf = rest;
-        Ok(Self::from_le_bytes(bytes.try_into().unwrap()))
+        let arr = bytes
+            .try_into()
+            .map_err(|_| Error::new(ErrorKind::InvalidData, "invalid i32 slice"))?;
+        Ok(Self::from_le_bytes(arr))
     }
 }
 
-impl<'a> crate::serial::PacketReadSlice<'a> for i64 {
+impl<'a> PacketReadSlice<'a> for i64 {
     fn read_slice(buf: &mut &'a [u8]) -> Result<Self, Error> {
         if buf.len() < 8 {
             return Err(Error::new(ErrorKind::UnexpectedEof, "expected i64"));
         }
         let (bytes, rest) = buf.split_at(8);
         *buf = rest;
-        Ok(Self::from_le_bytes(bytes.try_into().unwrap()))
+        let arr = bytes
+            .try_into()
+            .map_err(|_| Error::new(ErrorKind::InvalidData, "invalid i64 slice"))?;
+        Ok(Self::from_le_bytes(arr))
     }
 }
 
-impl<'a> crate::serial::PacketReadSlice<'a> for u16 {
+impl<'a> PacketReadSlice<'a> for u16 {
     fn read_slice(buf: &mut &'a [u8]) -> Result<Self, Error> {
         if buf.len() < 2 {
             return Err(Error::new(ErrorKind::UnexpectedEof, "expected u16"));
         }
         let (bytes, rest) = buf.split_at(2);
         *buf = rest;
-        Ok(Self::from_le_bytes(bytes.try_into().unwrap()))
+        let arr = bytes
+            .try_into()
+            .map_err(|_| Error::new(ErrorKind::InvalidData, "invalid u16 slice"))?;
+        Ok(Self::from_le_bytes(arr))
     }
 }
 
-impl<'a> crate::serial::PacketReadSlice<'a> for u32 {
+impl<'a> PacketReadSlice<'a> for u32 {
     fn read_slice(buf: &mut &'a [u8]) -> Result<Self, Error> {
         if buf.len() < 4 {
             return Err(Error::new(ErrorKind::UnexpectedEof, "expected u32"));
         }
         let (bytes, rest) = buf.split_at(4);
         *buf = rest;
-        Ok(Self::from_le_bytes(bytes.try_into().unwrap()))
+        let arr = bytes
+            .try_into()
+            .map_err(|_| Error::new(ErrorKind::InvalidData, "invalid u32 slice"))?;
+        Ok(Self::from_le_bytes(arr))
     }
 }
 
-impl<'a> crate::serial::PacketReadSlice<'a> for u64 {
+impl<'a> PacketReadSlice<'a> for u64 {
     fn read_slice(buf: &mut &'a [u8]) -> Result<Self, Error> {
         if buf.len() < 8 {
             return Err(Error::new(ErrorKind::UnexpectedEof, "expected u64"));
         }
         let (bytes, rest) = buf.split_at(8);
         *buf = rest;
-        Ok(Self::from_le_bytes(bytes.try_into().unwrap()))
+        let arr = bytes
+            .try_into()
+            .map_err(|_| Error::new(ErrorKind::InvalidData, "invalid u64 slice"))?;
+        Ok(Self::from_le_bytes(arr))
     }
 }
 
-impl<'a> crate::serial::PacketReadSlice<'a> for f32 {
+impl<'a> PacketReadSlice<'a> for f32 {
     fn read_slice(buf: &mut &'a [u8]) -> Result<Self, Error> {
         if buf.len() < 4 {
             return Err(Error::new(ErrorKind::UnexpectedEof, "expected f32"));
         }
         let (bytes, rest) = buf.split_at(4);
         *buf = rest;
-        Ok(Self::from_le_bytes(bytes.try_into().unwrap()))
+        let arr = bytes
+            .try_into()
+            .map_err(|_| Error::new(ErrorKind::InvalidData, "invalid f32 slice"))?;
+        Ok(Self::from_le_bytes(arr))
     }
 }
 
-impl<'a> crate::serial::PacketReadSlice<'a> for f64 {
+impl<'a> PacketReadSlice<'a> for f64 {
     fn read_slice(buf: &mut &'a [u8]) -> Result<Self, Error> {
         if buf.len() < 8 {
             return Err(Error::new(ErrorKind::UnexpectedEof, "expected f64"));
         }
         let (bytes, rest) = buf.split_at(8);
         *buf = rest;
-        Ok(Self::from_le_bytes(bytes.try_into().unwrap()))
+        let arr = bytes
+            .try_into()
+            .map_err(|_| Error::new(ErrorKind::InvalidData, "invalid f64 slice"))?;
+        Ok(Self::from_le_bytes(arr))
     }
 }
 
-impl<'a> crate::serial::PacketReadSlice<'a> for &'a str {
+impl<'a> PacketReadSlice<'a> for &'a str {
     fn read_slice(buf: &mut &'a [u8]) -> Result<Self, Error> {
-        crate::serial::read_str_slice(buf)
+        read_str_slice(buf)
     }
 }
 
-impl<'a, T: crate::serial::PacketReadSlice<'a>> crate::serial::PacketReadSlice<'a> for Option<T> {
+impl<'a, T: PacketReadSlice<'a>> PacketReadSlice<'a> for Option<T> {
     fn read_slice(buf: &mut &'a [u8]) -> Result<Self, Error> {
         bool::read_slice(buf)?
             .then(|| T::read_slice(buf))
@@ -385,31 +417,40 @@ impl<'a, T: crate::serial::PacketReadSlice<'a>> crate::serial::PacketReadSlice<'
     }
 }
 
-impl<'a> crate::serial::PacketReadSlice<'a> for uuid::Uuid {
+impl<'a> PacketReadSlice<'a> for uuid::Uuid {
     fn read_slice(buf: &mut &'a [u8]) -> Result<Self, Error> {
         if buf.len() < 16 {
             return Err(Error::new(ErrorKind::UnexpectedEof, "expected Uuid"));
         }
         let (bytes, rest) = buf.split_at(16);
         *buf = rest;
-        Ok(Self::from_bytes(bytes.try_into().unwrap()))
+        let arr = bytes
+            .try_into()
+            .map_err(|_| Error::new(ErrorKind::InvalidData, "invalid Uuid slice"))?;
+        Ok(Self::from_bytes(arr))
     }
 }
 
-impl<'a> crate::serial::PacketReadSlice<'a> for crate::codec::var_int::VarInt {
+impl<'a> PacketReadSlice<'a> for crate::codec::var_int::VarInt {
     fn read_slice(buf: &mut &'a [u8]) -> Result<Self, Error> {
         Self::read(buf)
     }
 }
 
-impl<'a> crate::serial::PacketReadSlice<'a> for crate::codec::var_uint::VarUInt {
+impl<'a> PacketReadSlice<'a> for crate::codec::var_uint::VarUInt {
     fn read_slice(buf: &mut &'a [u8]) -> Result<Self, Error> {
         Self::read(buf)
     }
 }
 
-impl<'a> crate::serial::PacketReadSlice<'a> for crate::codec::var_ulong::VarULong {
+impl<'a> PacketReadSlice<'a> for crate::codec::var_ulong::VarULong {
     fn read_slice(buf: &mut &'a [u8]) -> Result<Self, Error> {
         Self::read(buf)
+    }
+}
+
+impl<'a> PacketReadSlice<'a> for Cow<'a, str> {
+    fn read_slice(buf: &mut &'a [u8]) -> Result<Self, Error> {
+        Ok(Self::Borrowed(read_str_slice(buf)?))
     }
 }

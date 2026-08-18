@@ -85,40 +85,13 @@ impl PacketWrite for AnimateSwingSource {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PacketRead, PacketWrite)]
 #[packet(44)]
 pub struct SAnimate {
     pub action: AnimateAction,
     pub runtime_entity_id: VarULong,
     pub data: f32,
     pub swing_source: Option<AnimateSwingSource>,
-}
-
-impl PacketRead for SAnimate {
-    fn read<R: Read>(reader: &mut R) -> Result<Self, Error> {
-        let action = AnimateAction::read(reader)?;
-        let runtime_entity_id = VarULong::read(reader)?;
-        let data = f32::read(reader)?;
-
-        let swing_source = Option::<AnimateSwingSource>::read(reader)?;
-
-        Ok(Self {
-            action,
-            runtime_entity_id,
-            data,
-            swing_source,
-        })
-    }
-}
-
-impl PacketWrite for SAnimate {
-    fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
-        self.action.write(writer)?;
-        self.runtime_entity_id.write(writer)?;
-        self.data.write(writer)?;
-
-        self.swing_source.write(writer)
-    }
 }
 
 #[cfg(test)]

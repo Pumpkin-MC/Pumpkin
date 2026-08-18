@@ -356,9 +356,7 @@ impl WorldInfoWriter for AnvilLevelInfo {
         level_folder: &Path,
     ) -> Result<(), WorldInfoError> {
         let start = SystemTime::now();
-        let since_the_epoch = start
-            .duration_since(UNIX_EPOCH)
-            .expect("Time went backwards");
+        let since_the_epoch = start.duration_since(UNIX_EPOCH).unwrap_or_default();
         let mut level_data = info.clone();
         level_data.last_played = since_the_epoch.as_millis() as i64;
         stamp_current_version(&mut level_data);

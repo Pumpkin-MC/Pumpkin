@@ -9,10 +9,11 @@ use std::io::{Error, Write};
 use uuid::Uuid;
 
 use super::{
-    common::{AbilityLayer, EntityLink},
+    common::{AbilityLayer, BuildPlatform, EntityLink},
     set_actor_data::EntityMetadata,
 };
 
+#[derive(PacketWrite)]
 #[packet(12)]
 pub struct CAddPlayer {
     pub uuid: Uuid,
@@ -31,32 +32,7 @@ pub struct CAddPlayer {
     pub ability_data: AbilityData,
     pub links: Vec<EntityLink>,
     pub device_id: String,
-    pub build_platform: i32,
-}
-
-impl PacketWrite for CAddPlayer {
-    fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
-        self.uuid.write(writer)?;
-        self.username.write(writer)?;
-        self.entity_runtime_id.write(writer)?;
-        self.platform_chat_id.write(writer)?;
-        self.position.write(writer)?;
-        self.velocity.write(writer)?;
-        self.pitch.write(writer)?;
-        self.yaw.write(writer)?;
-        self.head_yaw.write(writer)?;
-        self.held_item.write(writer)?;
-        self.game_mode.write(writer)?;
-        self.metadata.write(writer)?;
-        self.properties.write(writer)?;
-        self.ability_data.write(writer)?;
-        VarUInt(self.links.len() as u32).write(writer)?;
-        for link in &self.links {
-            link.write(writer)?;
-        }
-        self.device_id.write(writer)?;
-        self.build_platform.write(writer)
-    }
+    pub build_platform: BuildPlatform,
 }
 
 impl CAddPlayer {
@@ -79,7 +55,7 @@ impl CAddPlayer {
         ability_data: AbilityData,
         links: Vec<EntityLink>,
         device_id: String,
-        build_platform: i32,
+        build_platform: BuildPlatform,
     ) -> Self {
         Self {
             uuid,
@@ -125,23 +101,10 @@ impl PacketWrite for EntityProperties {
     }
 }
 
-#[derive(Default, Clone)]
+#[derive(Default, Clone, PacketWrite)]
 pub struct AbilityData {
     pub entity_unique_id: i64,
     pub player_permissions: u8,
     pub command_permissions: u8,
     pub layers: Vec<AbilityLayer>,
-}
-
-impl PacketWrite for AbilityData {
-    fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
-        self.entity_unique_id.write(writer)?;
-        self.player_permissions.write(writer)?;
-        self.command_permissions.write(writer)?;
-        (self.layers.len() as u8).write(writer)?;
-        for layer in &self.layers {
-            layer.write(writer)?;
-        }
-        Ok(())
-    }
 }

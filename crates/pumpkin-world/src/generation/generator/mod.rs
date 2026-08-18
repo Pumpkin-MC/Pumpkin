@@ -18,6 +18,11 @@ pub trait GeneratorInit {
 use pumpkin_data::structures::{StructurePlacementCalculator, StructureSet};
 use rustc_hash::FxHashMap;
 
+use std::sync::Arc;
+
+use crate::chunk_system::StagedChunkEnum;
+use crate::generation::proto_chunk::ProtoChunk;
+
 pub mod flat;
 
 #[derive(Clone, Debug)]
@@ -26,35 +31,83 @@ pub struct FlatLayer {
     pub height: i32,
 }
 
+pub trait CustomChunkGenerator: Send + Sync {
+    fn dimension(&self) -> &Dimension;
+    fn seed(&self) -> u64;
+    fn default_block(&self) -> &'static BlockState {
+        pumpkin_data::Block::AIR.default_state
+    }
+    fn biome_mixer_seed(&self) -> i64 {
+        0
+    }
+    fn global_structure_cache(
+        &self,
+    ) -> Option<&crate::generation::structure::placement::GlobalStructureCache> {
+        None
+    }
+
+    fn step_to_biomes(&self, chunk: &mut ProtoChunk) {
+        chunk.stage = StagedChunkEnum::Biomes;
+    }
+
+    fn step_to_noise(&self, chunk: &mut ProtoChunk) {
+        chunk.stage = StagedChunkEnum::Noise;
+    }
+
+    fn step_to_surface(&self, chunk: &mut ProtoChunk) {
+        chunk.stage = StagedChunkEnum::Surface;
+    }
+
+    fn step_to_carvers(&self, chunk: &mut ProtoChunk) {
+        chunk.stage = StagedChunkEnum::Carvers;
+    }
+
+    fn step_to_features(
+        &self,
+        cache: &mut crate::chunk_system::generation_cache::Cache,
+        _block_registry: &dyn crate::world::WorldPortalExt,
+    ) {
+        let mid = ((cache.size * cache.size) >> 1) as usize;
+        cache.chunks[mid].get_proto_chunk_mut().stage = StagedChunkEnum::Features;
+    }
+
+    fn set_structure_starts(&self, _chunk: &mut ProtoChunk) {}
+    fn set_structure_references(&self, _chunk: &mut ProtoChunk) {}
+}
+
 pub enum WorldGenerator {
     Noise(Box<VanillaGenerator>),
     Flat(flat::FlatGenerator),
+    Custom(Arc<dyn CustomChunkGenerator>),
 }
 
 impl WorldGenerator {
     #[must_use]
-    pub const fn dimension(&self) -> &Dimension {
+    pub fn dimension(&self) -> &Dimension {
         match self {
             Self::Noise(noise_gen) => &noise_gen.dimension,
             Self::Flat(flat_gen) => &flat_gen.dimension,
+            Self::Custom(custom_gen) => custom_gen.dimension(),
         }
     }
 
     #[must_use]
-    pub const fn seed(&self) -> u64 {
+    pub fn seed(&self) -> u64 {
         match self {
             Self::Noise(noise_gen) => noise_gen.random_config.seed,
             Self::Flat(flat_gen) => flat_gen.seed,
+            Self::Custom(custom_gen) => custom_gen.seed(),
         }
     }
 
     #[must_use]
-    pub const fn global_structure_cache(
+    pub fn global_structure_cache(
         &self,
     ) -> Option<&crate::generation::structure::placement::GlobalStructureCache> {
         match self {
             Self::Noise(noise_gen) => Some(&noise_gen.global_structure_cache),
             Self::Flat(_) => None,
+            Self::Custom(custom_gen) => custom_gen.global_structure_cache(),
         }
     }
 }

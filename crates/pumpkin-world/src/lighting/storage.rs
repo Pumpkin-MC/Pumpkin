@@ -40,7 +40,10 @@ pub fn get_block_light(cache: &Cache, pos: BlockPos) -> u8 {
 
     match &cache.chunks[idx] {
         Chunk::Level(c) => {
-            let light_engine = c.light_engine.lock().unwrap();
+            let light_engine = c
+                .light_engine
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
             if section_y >= light_engine.block_light.len() {
                 return 0;
             }
@@ -115,7 +118,10 @@ pub fn get_sky_light(cache: &Cache, pos: BlockPos) -> u8 {
 
     match &cache.chunks[idx] {
         Chunk::Level(c) => {
-            let light_engine = c.light_engine.lock().unwrap();
+            let light_engine = c
+                .light_engine
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
             if section_y >= light_engine.sky_light.len() {
                 return 0;
             }

@@ -9,7 +9,10 @@ use pumpkin_data::advancement_data::{
     AdvancementNode, AdvancementProgressData, AdvancementRequirement, AdvancementReward, Criteria,
 };
 use pumpkin_data::{ADVANCEMENT_TREE, Advancement, translation};
-use pumpkin_protocol::java::client::play::{CSelectAdvancementsTab, CUpdateAdvancements};
+use pumpkin_protocol::bedrock::server::text::SText;
+use pumpkin_protocol::java::client::play::{
+    CSelectAdvancementsTab, CSystemChatMessage, CUpdateAdvancements,
+};
 use pumpkin_util::identifier::Identifier;
 use pumpkin_util::text::TextComponent;
 use serde::ser::SerializeMap;
@@ -18,7 +21,6 @@ use serde_json::to_string_pretty;
 use std::collections::{HashMap, HashSet};
 use std::fs::{create_dir_all, read, write};
 use std::path::PathBuf;
-use std::str::from_utf8;
 use std::sync::{Arc, Weak};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::task::spawn_blocking;
@@ -271,14 +273,17 @@ impl PlayerAdvancement {
         let json = to_string_pretty(self).map_err(AdvancementDataError::Json)?;
         let path = self.path.clone();
         spawn_blocking(move || {
-            if let Err(e) = create_dir_all(path.parent().unwrap()) {
+            let Some(parent) = path.parent() else {
+                return Ok(());
+            };
+            if let Err(e) = create_dir_all(parent) {
                 error!("Failed to create player advancement directory : {e}");
                 return Err(AdvancementDataError::Io(e));
             }
             write(path, json).map_err(AdvancementDataError::Io)
         })
         .await
-        .expect("spawn_blocking task panicked")
+        .unwrap_or(Ok(()))
     }
 
     /// Loads the player's advancement progress from disk.
@@ -290,10 +295,12 @@ impl PlayerAdvancement {
         let path = self.path.clone();
         let json = spawn_blocking(|| read(path).map_err(AdvancementDataError::Io))
             .await
-            .expect("spawn_blocking task panicked")?;
+            .unwrap_or(Err(AdvancementDataError::Io(std::io::Error::from(
+                std::io::ErrorKind::Other,
+            ))))?;
 
         let loaded_data: HashMap<String, AdvancementProgress> =
-            serde_json::from_str(from_utf8(&json).unwrap()).map_err(AdvancementDataError::Json)?;
+            serde_json::from_slice(&json).map_err(AdvancementDataError::Json)?;
 
         self.progress.clear();
         for (advancement_id, mut progress) in loaded_data {
@@ -377,7 +384,8 @@ impl PlayerAdvancement {
                             .map(|(key, val)| Criteria {
                                 criterion_id: key.clone(),
                                 achieve_date: val.0.map(|time| {
-                                    time.duration_since(UNIX_EPOCH).unwrap().as_millis() as i64
+                                    time.duration_since(UNIX_EPOCH)
+                                        .map_or(0, |d| d.as_millis() as i64)
                                 }),
                             })
                             .collect(),
@@ -415,14 +423,27 @@ impl PlayerAdvancement {
     pub fn award(&mut self, advancement: &'static Advancement, criterion: &str) -> bool {
         //TODO call and creates Events for plugins
         let mut result = false;
-        let player = self.player.upgrade().unwrap();
+        let Some(player) = self.player.upgrade() else {
+            return false;
+        };
         let progress = self.progress.get_mut_or_start_progress(advancement);
         let was_done = progress.is_done();
         if progress.grant_progress(criterion) {
             result = true;
             self.progress_changed.insert(advancement);
             if !was_done && progress.is_done() {
-                //TODO listener
+                let player_c = player.clone();
+                let adv_id = advancement.id.to_string();
+                tokio::spawn(async move {
+                    if let Some(server) = player_c.world().server.upgrade() {
+                        let mut event =
+                            crate::plugin::api::events::player::player_advancement_done::PlayerAdvancementDoneEvent::new(
+                                player_c,
+                                adv_id,
+                            );
+                        server.plugin_manager.fire(&server, &mut event).await;
+                    }
+                });
                 Self::grant_reward(player.clone(), advancement.reward);
                 if let Some(display) = advancement.display
                     && display.announce_to_chat
@@ -434,15 +455,25 @@ impl PlayerAdvancement {
                         .show_advancement_messages
                 {
                     tokio::spawn(async move {
-                        let component = TextComponent::translate_cross(
+                        let player_name = player.get_display_name().await;
+                        let je_component = TextComponent::translate(
                             display.frame_type.get_translation(),
-                            translation::bedrock::CHAT_TYPE_ACHIEVEMENT,
-                            [player.get_display_name().await, advancement.name()],
+                            [player_name.clone(), advancement.name()],
                         );
+                        let je_packet = CSystemChatMessage::new(&je_component, false);
+
+                        let be_packet = SText::translation(
+                            translation::bedrock::CHAT_TYPE_ACHIEVEMENT.to_string(),
+                            vec![
+                                player_name.0.to_bedrock_string(),
+                                display.get_title().0.to_bedrock_string(),
+                            ],
+                        );
+
                         player
                             .world()
-                            .broadcast_system_message(&component, false)
-                            .await; //send translate component for the event
+                            .broadcast_editioned(&je_packet, &be_packet)
+                            .await;
                     });
                 }
             }

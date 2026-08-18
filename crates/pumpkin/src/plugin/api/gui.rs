@@ -1,6 +1,6 @@
 use std::any::Any;
 use std::sync::Arc;
-use tokio::sync::Mutex;
+use tokio::sync::RwLock;
 
 use pumpkin_data::{item_stack::ItemStack, screen::WindowType};
 use pumpkin_inventory::screen_handler::{
@@ -19,67 +19,77 @@ pub struct PluginGui {
 }
 
 pub struct PluginInventory {
-    pub slots: Vec<Arc<Mutex<ItemStack>>>,
+    pub slots: RwLock<Vec<ItemStack>>,
 }
 
 impl PluginInventory {
     #[must_use]
     pub fn new(size: usize) -> Self {
-        let mut slots = Vec::with_capacity(size);
-        for _ in 0..size {
-            slots.push(Arc::new(Mutex::new(ItemStack::EMPTY.clone())));
+        Self {
+            slots: RwLock::new(vec![ItemStack::EMPTY.clone(); size]),
         }
-        Self { slots }
     }
 }
 
 impl Clearable for PluginInventory {
     fn clear(&self) -> std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send + '_>> {
         Box::pin(async move {
-            for slot in &self.slots {
-                *slot.lock().await = ItemStack::EMPTY.clone();
-            }
+            let mut slots = self.slots.write().await;
+            slots.fill_with(|| ItemStack::EMPTY.clone());
         })
     }
 }
 
 impl Inventory for PluginInventory {
     fn size(&self) -> usize {
-        self.slots.len()
+        futures::executor::block_on(self.slots.read()).len()
     }
 
     fn is_empty(&self) -> InventoryFuture<'_, bool> {
         Box::pin(async move {
-            for slot in &self.slots {
-                if !slot.lock().await.is_empty() {
-                    return false;
-                }
-            }
-            true
+            let slots = self.slots.read().await;
+            slots.iter().all(ItemStack::is_empty)
         })
     }
 
-    fn get_stack(&self, slot: usize) -> InventoryFuture<'_, Arc<Mutex<ItemStack>>> {
-        Box::pin(async move { self.slots[slot].clone() })
+    fn get_stack(&self, slot: usize) -> InventoryFuture<'_, ItemStack> {
+        Box::pin(async move {
+            let slots = self.slots.read().await;
+            slots
+                .get(slot)
+                .cloned()
+                .unwrap_or_else(|| ItemStack::EMPTY.clone())
+        })
     }
 
     fn remove_stack(&self, slot: usize) -> InventoryFuture<'_, ItemStack> {
         Box::pin(async move {
-            let mut stack = self.slots[slot].lock().await;
-            std::mem::replace(&mut *stack, ItemStack::EMPTY.clone())
+            let mut slots = self.slots.write().await;
+            if slot < slots.len() {
+                std::mem::replace(&mut slots[slot], ItemStack::EMPTY.clone())
+            } else {
+                ItemStack::EMPTY.clone()
+            }
         })
     }
 
     fn remove_stack_specific(&self, slot: usize, amount: u8) -> InventoryFuture<'_, ItemStack> {
         Box::pin(async move {
-            let mut stack = self.slots[slot].lock().await;
-            stack.split(amount)
+            let mut slots = self.slots.write().await;
+            if slot < slots.len() && !slots[slot].is_empty() && amount > 0 {
+                slots[slot].split(amount)
+            } else {
+                ItemStack::EMPTY.clone()
+            }
         })
     }
 
     fn set_stack(&self, slot: usize, stack: ItemStack) -> InventoryFuture<'_, ()> {
         Box::pin(async move {
-            *self.slots[slot].lock().await = stack;
+            let mut slots = self.slots.write().await;
+            if slot < slots.len() {
+                slots[slot] = stack;
+            }
         })
     }
 

@@ -1,7 +1,6 @@
 use std::any::Any;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU8, Ordering};
-use tokio::sync::Mutex;
 
 use crate::player::player_inventory::PlayerInventory;
 use crate::screen_handler::{
@@ -56,8 +55,7 @@ impl StonecutterScreenHandler {
     }
 
     async fn update_output(&self) {
-        let input_stack = self.input_inventory.get_stack(0).await;
-        let input_lock = input_stack.lock().await;
+        let input_lock = self.input_inventory.get_stack(0).await;
 
         if input_lock.is_empty() {
             self.output_inventory
@@ -72,8 +70,7 @@ impl StonecutterScreenHandler {
 
         if recipe_index != u8::MAX && (recipe_index as usize) < available_recipes.len() {
             let recipe = available_recipes[recipe_index as usize];
-            let item =
-                Item::from_registry_key(recipe.result.id).expect("Invalid recipe result item");
+            let item = Item::from_registry_key(recipe.result.id).unwrap_or(&Item::AIR);
             let result = ItemStack::new(recipe.result.count, item);
             self.output_inventory.set_stack(0, result).await;
         } else {
@@ -213,14 +210,7 @@ impl Slot for StonecutterOutputSlot {
                     stack.item_count as i32,
                 )
                 .await;
-            let input_stack = self.input_inventory.get_stack(0).await;
-            let mut input_lock = input_stack.lock().await;
-            if !input_lock.is_empty() {
-                input_lock.item_count -= 1;
-                if input_lock.item_count == 0 {
-                    *input_lock = ItemStack::EMPTY.clone();
-                }
-            }
+            self.input_inventory.remove_stack_specific(0, 1).await;
             self.mark_dirty().await;
         })
     }
@@ -229,22 +219,16 @@ impl Slot for StonecutterOutputSlot {
         Box::pin(async move { false })
     }
 
-    fn get_stack(&self) -> BoxFuture<'_, Arc<Mutex<ItemStack>>> {
+    fn get_stack(&self) -> BoxFuture<'_, ItemStack> {
         Box::pin(async move { self.inventory.get_stack(self.index).await })
     }
 
     fn get_cloned_stack(&self) -> BoxFuture<'_, ItemStack> {
-        Box::pin(async move {
-            let stack = self.inventory.get_stack(self.index).await;
-            stack.lock().await.clone()
-        })
+        Box::pin(async move { self.inventory.get_stack(self.index).await })
     }
 
     fn has_stack(&self) -> BoxFuture<'_, bool> {
-        Box::pin(async move {
-            let stack = self.inventory.get_stack(self.index).await;
-            !stack.lock().await.is_empty()
-        })
+        Box::pin(async move { !self.inventory.get_stack(self.index).await.is_empty() })
     }
 
     fn set_stack(&self, stack: ItemStack) -> BoxFuture<'_, ()> {

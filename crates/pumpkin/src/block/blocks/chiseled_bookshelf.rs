@@ -23,7 +23,6 @@ use pumpkin_data::{
 use pumpkin_inventory::screen_handler::InventoryPlayer;
 use pumpkin_util::math::{position::BlockPos, vector2::Vector2};
 use pumpkin_world::inventory::Inventory;
-use tokio::sync::Mutex;
 
 #[pumpkin_block("minecraft:chiseled_bookshelf")]
 pub struct ChiseledBookshelfBlock;
@@ -81,8 +80,6 @@ impl BlockBehaviour for ChiseledBookshelfBlock {
 
             if !args
                 .item_stack
-                .lock()
-                .await
                 .get_item()
                 .has_tag(&tag::Item::MINECRAFT_BOOKSHELF_BOOKS)
             {
@@ -146,11 +143,10 @@ impl ChiseledBookshelfBlock {
         entity: &ChiseledBookshelfBlockEntity,
         properties: ChiseledBookshelfLikeProperties,
         slot: i8,
-        item: &Arc<Mutex<ItemStack>>,
+        item: &mut ItemStack,
     ) {
         // TODO: Increment used stats for chiseled bookshelf on the player
 
-        let mut item = item.lock().await;
         let sound = if item.get_item() == &Item::ENCHANTED_BOOK {
             Sound::BlockChiseledBookshelfPickupEnchanted
         } else {
@@ -163,7 +159,9 @@ impl ChiseledBookshelfBlock {
                 item.split_unless_creative(player.gamemode.load(), 1),
             )
             .await;
-        entity.update_state(properties, world.clone(), slot).await;
+        entity
+            .update_state(properties, world.clone(), slot as usize)
+            .await;
 
         world.play_sound(sound, SoundCategory::Blocks, &position.to_centered_f64());
     }
@@ -192,7 +190,9 @@ impl ChiseledBookshelfBlock {
             // Drop the item on the ground if the player cannot hold it because of a full inventory
             player.drop_item(stack).await;
         }
-        entity.update_state(properties, world.clone(), slot).await;
+        entity
+            .update_state(properties, world.clone(), slot as usize)
+            .await;
 
         world.play_sound(sound, SoundCategory::Blocks, &position.to_centered_f64());
     }

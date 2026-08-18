@@ -30,9 +30,22 @@ impl CommandExecutor for WasmCommandExecutor {
         Box::pin(async move {
             let mut store = self.plugin.store.lock().await;
 
-            let sender_resource = store.data_mut().add_command_sender(sender.clone()).unwrap();
-            let server_resource = store.data_mut().add_server(self.server.clone()).unwrap();
-            let args_resource = store.data_mut().add_consumed_args(args).unwrap();
+            let sender_resource = store
+                .data_mut()
+                .add_command_sender(sender.clone())
+                .expect("valid command sender");
+            let server_resource = store
+                .data_mut()
+                .add_server(self.server.clone())
+                .expect("valid server");
+            let args_resource = store
+                .data_mut()
+                .add_consumed_args(args)
+                .expect("valid consumed args");
+
+            let sender_rep = sender_resource.rep();
+            let server_rep = server_resource.rep();
+            let args_rep = args_resource.rep();
 
             match self.plugin.plugin_instance {
                 PluginInstance::V0_1(ref plugin) => {
@@ -44,15 +57,35 @@ impl CommandExecutor for WasmCommandExecutor {
                             server_resource,
                             args_resource,
                         )
-                        .await
-                        .map_err(|e| {
-                            CommandError::CommandFailed(
-                                TextComponent::text(format!(
-                                    "Wasm command failed with following error: {e}"
-                                ))
-                                .color(Color::Named(NamedColor::Red)),
-                            )
-                        })?;
+                        .await;
+
+                    let _ = store
+                        .data_mut()
+                        .resource_table
+                        .delete::<crate::plugin::loader::wasm::wasm_host::state::CommandSenderResource>(
+                            wasmtime::component::Resource::new_own(sender_rep),
+                        );
+                    let _ = store
+                        .data_mut()
+                        .resource_table
+                        .delete::<crate::plugin::loader::wasm::wasm_host::state::ServerResource>(
+                        wasmtime::component::Resource::new_own(server_rep),
+                    );
+                    let _ = store
+                        .data_mut()
+                        .resource_table
+                        .delete::<crate::plugin::loader::wasm::wasm_host::state::ConsumedArgsResource>(
+                            wasmtime::component::Resource::new_own(args_rep),
+                        );
+
+                    let result = result.map_err(|e| {
+                        CommandError::CommandFailed(
+                            TextComponent::text(format!(
+                                "Wasm command failed with following error: {e}"
+                            ))
+                            .color(Color::Named(NamedColor::Red)),
+                        )
+                    })?;
 
                     match result {
                         Ok(value) => Ok(value),

@@ -201,8 +201,8 @@ impl Inventory for JukeboxBlockEntity {
         Box::pin(async move { self.record_stack.lock().await.is_empty() })
     }
 
-    fn get_stack(&self, _slot: usize) -> InventoryFuture<'_, Arc<Mutex<ItemStack>>> {
-        Box::pin(async move { self.record_stack.clone() })
+    fn get_stack(&self, _slot: usize) -> InventoryFuture<'_, ItemStack> {
+        Box::pin(async move { self.record_stack.lock().await.clone() })
     }
 
     fn remove_stack(&self, _slot: usize) -> InventoryFuture<'_, ItemStack> {

@@ -65,10 +65,14 @@ pub async fn velocity_login(connection: &mut PendingConnection) {
 
 #[must_use]
 pub fn check_integrity(data: (&[u8], &[u8]), secret: &str) -> bool {
+    if secret.is_empty() {
+        return false;
+    }
     let (signature, data_without_signature) = data;
     // Our fault, we can panic/expect?
-    let mut mac =
-        HmacSha256::new_from_slice(secret.as_bytes()).expect("HMAC can take key of any size");
+    let Ok(mut mac) = HmacSha256::new_from_slice(secret.as_bytes()) else {
+        return false;
+    };
     mac.update(data_without_signature);
     mac.verify_slice(signature).is_ok()
 }

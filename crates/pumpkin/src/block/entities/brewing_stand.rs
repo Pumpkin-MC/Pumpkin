@@ -18,12 +18,12 @@ use pumpkin_data::tag::{self, Taggable};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
-use pumpkin_world::inventory::{Inventory, sync_write_items_to_nbt};
-use tokio::sync::Mutex;
+use pumpkin_world::inventory::{Inventory, sync_read_items_from_nbt, sync_write_items_to_nbt};
+use tokio::sync::RwLock;
 
 pub struct BrewingStandBlockEntity {
     pub position: BlockPos,
-    pub items: [Arc<Mutex<ItemStack>>; Self::INVENTORY_SIZE],
+    pub items: RwLock<[ItemStack; Self::INVENTORY_SIZE]>,
     pub dirty: AtomicBool,
     pub brew_time: AtomicI32,
     pub fuel: AtomicI32,
@@ -40,7 +40,7 @@ impl BrewingStandBlockEntity {
         use std::array::from_fn;
         Self {
             position,
-            items: from_fn(|_| Arc::new(Mutex::new(ItemStack::EMPTY.clone()))),
+            items: RwLock::new(from_fn(|_| ItemStack::EMPTY.clone())),
             dirty: AtomicBool::new(false),
             brew_time: AtomicI32::new(0),
             fuel: AtomicI32::new(0),
@@ -53,7 +53,7 @@ impl BrewingStandBlockEntity {
     fn ingredient_matches(&self, ingredient: &ItemStack) -> bool {
         self.ingredient_item
             .lock()
-            .expect("Ingredient item mutex should not be poisoned")
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
             .is_some_and(|stored| !ingredient.is_empty() && ingredient.get_item().id == stored.id)
     }
 
@@ -66,8 +66,9 @@ impl BrewingStandBlockEntity {
         let ingredient_id = ingredient.get_item().id;
 
         // Check potion recipes (water bottle -> potions, potion upgrades, etc.)
+        let items = self.items.read().await;
         for slot_idx in 0..3usize {
-            let slot = self.items[slot_idx].lock().await;
+            let slot = &items[slot_idx];
             if slot.is_empty() {
                 continue;
             }
@@ -105,7 +106,8 @@ impl BrewingStandBlockEntity {
 
         // Apply recipes to each slot
         for slot_idx in 0..3usize {
-            let slot = self.items[slot_idx].lock().await;
+            let items = self.items.read().await;
+            let slot = &items[slot_idx];
             if slot.is_empty() {
                 continue;
             }
@@ -167,8 +169,7 @@ impl BrewingStandBlockEntity {
                 }
             }
 
-            // Drop the lock before calling set_stack
-            drop(slot);
+            drop(items);
 
             // Update the slot using set_stack if a recipe was applied
             if let Some(new_stack) = new_stack_opt {
@@ -176,14 +177,22 @@ impl BrewingStandBlockEntity {
             }
         }
 
-        // Consume ingredient
-        let mut ingredient_slot = self.items[3].lock().await;
-        ingredient_slot.decrement(1);
-        let updated_ingredient = ingredient_slot.clone();
-        drop(ingredient_slot);
+        let mut event = crate::plugin::api::events::inventory::brew::BrewEvent::new(
+            self.position,
+            self.fuel.load(std::sync::atomic::Ordering::Relaxed) as u8,
+        );
+        if let Some(server) = world.server.upgrade() {
+            server.plugin_manager.fire(&server, &mut event).await;
+        }
+        if event.cancelled {
+            return;
+        }
 
-        // Update the slot with the decremented stack
-        self.set_stack(3, updated_ingredient).await;
+        // Consume ingredient
+        let mut items = self.items.write().await;
+        items[3].decrement(1);
+        self.mark_dirty();
+        drop(items);
 
         // Play sound at the center of the block
         let pos = Vector3::new(
@@ -208,8 +217,9 @@ impl pumpkin_world::inventory::Inventory for BrewingStandBlockEntity {
 
     fn is_empty(&self) -> pumpkin_world::inventory::InventoryFuture<'_, bool> {
         Box::pin(async move {
-            for slot in &self.items {
-                if !slot.lock().await.is_empty() {
+            let items = self.items.read().await;
+            for slot in items.iter() {
+                if !slot.is_empty() {
                     return false;
                 }
             }
@@ -217,11 +227,11 @@ impl pumpkin_world::inventory::Inventory for BrewingStandBlockEntity {
         })
     }
 
-    fn get_stack(
-        &self,
-        slot: usize,
-    ) -> pumpkin_world::inventory::InventoryFuture<'_, Arc<Mutex<ItemStack>>> {
-        Box::pin(async move { self.items[slot].clone() })
+    fn get_stack(&self, slot: usize) -> pumpkin_world::inventory::InventoryFuture<'_, ItemStack> {
+        Box::pin(async move {
+            let items = self.items.read().await;
+            items[slot].clone()
+        })
     }
 
     fn remove_stack(
@@ -229,9 +239,9 @@ impl pumpkin_world::inventory::Inventory for BrewingStandBlockEntity {
         slot: usize,
     ) -> pumpkin_world::inventory::InventoryFuture<'_, ItemStack> {
         Box::pin(async move {
-            let mut removed = ItemStack::EMPTY.clone();
-            let mut guard = self.items[slot].lock().await;
-            std::mem::swap(&mut removed, &mut *guard);
+            let mut items = self.items.write().await;
+            let removed = std::mem::replace(&mut items[slot], ItemStack::EMPTY.clone());
+            self.mark_dirty();
             removed
         })
     }
@@ -242,15 +252,16 @@ impl pumpkin_world::inventory::Inventory for BrewingStandBlockEntity {
         amount: u8,
     ) -> pumpkin_world::inventory::InventoryFuture<'_, ItemStack> {
         Box::pin(async move {
-            let mut guard = self.items[slot].lock().await;
-            let mut taken = ItemStack::EMPTY.clone();
-            if guard.item_count <= amount {
-                std::mem::swap(&mut taken, &mut *guard);
+            let mut items = self.items.write().await;
+            let taken = if items[slot].item_count <= amount {
+                std::mem::replace(&mut items[slot], ItemStack::EMPTY.clone())
             } else {
-                taken = guard.clone();
+                let mut taken = items[slot].clone();
                 taken.item_count = amount;
-                guard.item_count -= amount;
-            }
+                items[slot].item_count -= amount;
+                taken
+            };
+            self.mark_dirty();
             taken
         })
     }
@@ -261,7 +272,8 @@ impl pumpkin_world::inventory::Inventory for BrewingStandBlockEntity {
         stack: ItemStack,
     ) -> pumpkin_world::inventory::InventoryFuture<'_, ()> {
         Box::pin(async move {
-            *self.items[slot].lock().await = stack;
+            let mut items = self.items.write().await;
+            items[slot] = stack;
             self.mark_dirty();
         })
     }
@@ -311,10 +323,8 @@ impl pumpkin_world::inventory::Inventory for BrewingStandBlockEntity {
 impl pumpkin_world::inventory::Clearable for BrewingStandBlockEntity {
     fn clear(&self) -> Pin<Box<dyn Future<Output = ()> + Send + '_>> {
         Box::pin(async move {
-            for slot in &self.items {
-                let mut guard = slot.lock().await;
-                guard.clear();
-            }
+            let mut items = self.items.write().await;
+            items.fill_with(|| ItemStack::EMPTY.clone());
             self.mark_dirty();
         })
     }
@@ -333,7 +343,7 @@ impl crate::block::entities::BlockEntity for BrewingStandBlockEntity {
     where
         Self: Sized,
     {
-        let entity = Self::new(position);
+        let mut entity = Self::new(position);
 
         // Load brew time / fuel if present in NBT
         if let Some(bt) = nbt.get_int("BrewTime") {
@@ -344,31 +354,33 @@ impl crate::block::entities::BlockEntity for BrewingStandBlockEntity {
         }
 
         // Load inventory items from NBT
-        entity.read_data(nbt, &entity.items);
+        let items = entity.items.get_mut();
+        sync_read_items_from_nbt(nbt, items);
 
         // If there's an ingredient in slot 3, remember its base item for matching
-        if let Ok(guard) = entity.items[3].try_lock()
-            && !guard.is_empty()
-        {
-            *entity
-                .ingredient_item
-                .lock()
-                .expect("Ingredient item mutex should not be poisoned") = Some(guard.get_item());
-        }
+        let ingredient_item = (!items[3].is_empty()).then(|| items[3].get_item());
 
         // Recompute last_potion_count so visuals are correct after load
         let mut current: [bool; 3] = [false; 3];
-        for (i, slot_arc) in entity.items.iter().take(3).enumerate() {
-            if let Ok(slot) = slot_arc.try_lock() {
-                current[i] = !slot.is_empty()
-                    && (slot.get_data_component::<pumpkin_data::data_component_impl::PotionContentsImpl>().is_some()
-                        || slot.get_item().id == pumpkin_data::item::Item::GLASS_BOTTLE.id);
-            }
+        for (i, slot) in items.iter().take(3).enumerate() {
+            current[i] = !slot.is_empty()
+                && (slot
+                    .get_data_component::<pumpkin_data::data_component_impl::PotionContentsImpl>()
+                    .is_some()
+                    || slot.get_item().id == pumpkin_data::item::Item::GLASS_BOTTLE.id);
         }
+
+        if let Some(item) = ingredient_item {
+            *entity
+                .ingredient_item
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(item);
+        }
+
         *entity
             .last_potion_count
             .lock()
-            .expect("Last potion count mutex should not be poisoned") = Some(current);
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(current);
 
         entity
     }
@@ -395,7 +407,7 @@ impl crate::block::entities::BlockEntity for BrewingStandBlockEntity {
         let mut nbt = NbtCompound::new();
         nbt.put_int("BrewTime", self.brew_time.load(Ordering::Relaxed));
         nbt.put_int("Fuel", self.fuel.load(Ordering::Relaxed));
-        sync_write_items_to_nbt(&self.items, &mut nbt);
+        sync_write_items_to_nbt(&*futures::executor::block_on(self.items.read()), &mut nbt);
         Some(nbt)
     }
 
@@ -418,16 +430,27 @@ impl crate::block::entities::BlockEntity for BrewingStandBlockEntity {
         Box::pin(async move {
             // Refill fuel counter from fuel item if needed
             let fuel_refilled = if self.fuel.load(Ordering::Relaxed) <= 0 {
-                let fuel_stack_arc = self.items[4].clone();
-                let mut fuel_stack = fuel_stack_arc.lock().await;
-                if !fuel_stack.is_empty()
-                    && fuel_stack
+                let mut items = self.items.write().await;
+                if !items[4].is_empty()
+                    && items[4]
                         .get_item()
                         .has_tag(&tag::Item::MINECRAFT_BREWING_FUEL)
                 {
-                    self.fuel.store(20, Ordering::Relaxed);
-                    fuel_stack.decrement(1);
-                    true
+                    let mut fuel_event = crate::plugin::api::events::inventory::brewing_stand_fuel::BrewingStandFuelEvent::new(
+                        self.position,
+                        20,
+                    );
+                    if let Some(server) = world.server.upgrade() {
+                        server.plugin_manager.fire(&server, &mut fuel_event).await;
+                    }
+                    if fuel_event.cancelled {
+                        false
+                    } else {
+                        self.fuel
+                            .store(fuel_event.fuel_power as i32, Ordering::Relaxed);
+                        items[4].decrement(1);
+                        true
+                    }
                 } else {
                     false
                 }
@@ -436,7 +459,7 @@ impl crate::block::entities::BlockEntity for BrewingStandBlockEntity {
             };
 
             // Get current ingredient and check brewing state
-            let ingredient = self.items[3].lock().await.clone();
+            let ingredient = self.items.read().await[3].clone();
             let brewable = self.is_brewable(&ingredient).await;
             let is_brewing = self.brew_time.load(Ordering::Relaxed) > 0;
 
@@ -464,7 +487,7 @@ impl crate::block::entities::BlockEntity for BrewingStandBlockEntity {
                 *self
                     .ingredient_item
                     .lock()
-                    .expect("Ingredient item mutex should not be poisoned") =
+                    .unwrap_or_else(std::sync::PoisonError::into_inner) =
                     Some(ingredient.get_item());
                 self.mark_dirty();
             } else if fuel_refilled {
@@ -475,11 +498,12 @@ impl crate::block::entities::BlockEntity for BrewingStandBlockEntity {
             // Ensure clients are notified when potion slot contents (and their data) change.
             // Compute current presence bits for the three bottle slots
             let mut current: [bool; 3] = [false; 3];
-            for (i, slot_arc) in self.items.iter().take(3).enumerate() {
-                let slot = slot_arc.lock().await;
+            let items_guard = self.items.read().await;
+            for (i, slot) in items_guard.iter().take(3).enumerate() {
                 // Consider a potion slot "present" when it has an item and a PotionContents component or is a glass bottle
                 current[i] = !slot.is_empty() && (slot.get_data_component::<pumpkin_data::data_component_impl::PotionContentsImpl>().is_some() || slot.get_item().id == Item::GLASS_BOTTLE.id);
             }
+            drop(items_guard);
 
             // If potion presence changed, update last_potion_count and update block state so clients
             let mut needs_update = false;
@@ -487,7 +511,7 @@ impl crate::block::entities::BlockEntity for BrewingStandBlockEntity {
                 let mut last_guard = self
                     .last_potion_count
                     .lock()
-                    .expect("Last potion count mutex should not be poisoned");
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
                 if last_guard.as_ref() != Some(&current) {
                     *last_guard = Some(current);
                     needs_update = true;

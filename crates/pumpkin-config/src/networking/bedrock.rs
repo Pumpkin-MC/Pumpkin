@@ -1,7 +1,7 @@
 use crate::CompressionConfig;
 use serde::{Deserialize, Serialize};
-use std::net::SocketAddr;
-use std::num::NonZeroU8;
+use std::net::{IpAddr, SocketAddr};
+use std::num::NonZero;
 use std::path::PathBuf;
 
 /// Configuration for Bedrock authentication.
@@ -24,19 +24,25 @@ pub struct BedrockAuthenticationConfig {
 pub struct NetherNetConfig {
     /// Whether clients may connect using `NetherNet`.
     pub enabled: bool,
-    /// HTTP signaling address. WebRTC uses separately allocated UDP ports for game traffic.
+    /// TCP signaling and shared UDP status/ICE address.
     pub address: SocketAddr,
+    /// Optional public IP advertised when the ICE address is behind NAT.
+    pub external_ip: Option<IpAddr>,
     /// PKCS#8 P-384 identity key retained across restarts for Trust On First Use.
     pub identity_key: PathBuf,
-    /// Optional STUN server URLs used to gather a public ICE candidate behind NAT.
+    /// Optional ICE server URLs. Use `external_ip` for NAT with the single-port UDP mux.
     pub stun_servers: Vec<String>,
 }
 
 impl Default for NetherNetConfig {
     fn default() -> Self {
+        let address = "0.0.0.0:19132"
+            .parse()
+            .unwrap_or_else(|_| std::net::SocketAddr::from(([0, 0, 0, 0], 19132)));
         Self {
             enabled: true,
-            address: "0.0.0.0:19132".parse().unwrap(),
+            address,
+            external_ip: None,
             identity_key: "nethernet-key.der".into(),
             stun_servers: Vec::new(),
         }
@@ -65,9 +71,9 @@ pub struct BedrockConfig {
     /// The maximum number of players allowed on the server. Specifying `0` disables the limit.
     pub max_players: u32,
     /// The maximum view distance for players.
-    pub view_distance: NonZeroU8,
+    pub view_distance: NonZero<u8>,
     /// The maximum simulated view distance.
-    pub simulation_distance: NonZeroU8,
+    pub simulation_distance: NonZero<u8>,
     /// Bedrock Edition packet compression settings.
     pub compression: CompressionConfig,
     /// Message of the Day; the server's description displayed on the status screen.
@@ -76,20 +82,25 @@ pub struct BedrockConfig {
     pub authentication: BedrockAuthenticationConfig,
     /// Bedrock `NetherNet` transport settings.
     pub nethernet: NetherNetConfig,
+    /// Whether Bedrock client chunk blob caching is enabled.
+    pub chunk_caching: bool,
 }
 
 impl Default for BedrockConfig {
     fn default() -> Self {
+        let view_distance = NonZero::new(16).unwrap_or(NonZero::<u8>::MIN);
+        let simulation_distance = NonZero::new(10).unwrap_or(NonZero::<u8>::MIN);
         Self {
             enabled: true,
             online_mode: true,
             max_players: 1000,
-            view_distance: NonZeroU8::new(16).unwrap(),
-            simulation_distance: NonZeroU8::new(10).unwrap(),
+            view_distance,
+            simulation_distance,
             compression: CompressionConfig::default(),
             motd: "A blazingly fast Pumpkin server!".to_string(),
             authentication: BedrockAuthenticationConfig::default(),
             nethernet: NetherNetConfig::default(),
+            chunk_caching: true,
         }
     }
 }

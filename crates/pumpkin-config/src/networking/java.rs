@@ -1,7 +1,7 @@
 use crate::{AuthenticationConfig, CompressionConfig};
 use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
-use std::num::NonZeroU8;
+use std::num::NonZero;
 
 /// Configuration for Java Edition client connections.
 #[derive(Deserialize, Serialize, Clone)]
@@ -18,9 +18,9 @@ pub struct JavaConfig {
     /// The maximum number of players allowed on the server. Specifying `0` disables the limit.
     pub max_players: u32,
     /// The maximum view distance for players.
-    pub view_distance: NonZeroU8,
+    pub view_distance: NonZero<u8>,
     /// The maximum simulated view distance.
-    pub simulation_distance: NonZeroU8,
+    pub simulation_distance: NonZero<u8>,
     /// Java Edition packet compression settings.
     pub compression: CompressionConfig,
     /// Message of the Day; the server's description displayed on the status screen.
@@ -31,14 +31,19 @@ pub struct JavaConfig {
 
 impl Default for JavaConfig {
     fn default() -> Self {
+        let address = "0.0.0.0:25565"
+            .parse()
+            .unwrap_or_else(|_| std::net::SocketAddr::from(([0, 0, 0, 0], 25565)));
+        let view_distance = NonZero::new(16).unwrap_or(NonZero::<u8>::MIN);
+        let simulation_distance = NonZero::new(10).unwrap_or(NonZero::<u8>::MIN);
         Self {
             enabled: true,
-            address: "0.0.0.0:25565".parse().unwrap(),
+            address,
             encryption: true,
             online_mode: true,
             max_players: 1000,
-            view_distance: NonZeroU8::new(16).unwrap(),
-            simulation_distance: NonZeroU8::new(10).unwrap(),
+            view_distance,
+            simulation_distance,
             compression: CompressionConfig::default(),
             motd: "A blazingly fast Pumpkin server!".to_string(),
             authentication: AuthenticationConfig::default(),

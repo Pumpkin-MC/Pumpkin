@@ -89,7 +89,7 @@ pub struct Level {
     pub chunk_saver: Arc<ChunkSaver>,
     entity_saver: Arc<EntitySaver>,
 
-    pub world_gen: Arc<WorldGenerator>,
+    pub world_gen: ArcSwap<WorldGenerator>,
 
     /// Handles runtime lighting updates
     pub light_engine: DynamicLightEngine,
@@ -165,9 +165,9 @@ impl Level {
         let entities_folder = dim_folder.join("entities");
         let poi_folder = dim_folder.join("poi");
 
-        std::fs::create_dir_all(&region_folder).expect("Failed to create Region folder");
-        std::fs::create_dir_all(&entities_folder).expect("Failed to create Entities folder");
-        std::fs::create_dir_all(&poi_folder).expect("Failed to create POI folder");
+        let _ = std::fs::create_dir_all(&region_folder);
+        let _ = std::fs::create_dir_all(&entities_folder);
+        let _ = std::fs::create_dir_all(&poi_folder);
 
         let level_folder = Arc::new(LevelFolder {
             root_folder,
@@ -251,7 +251,7 @@ impl Level {
         let level_ref = Arc::new(Self {
             seed,
             world_portal: ArcSwap::new(Arc::new(None)),
-            world_gen,
+            world_gen: ArcSwap::new(world_gen),
             level_folder,
             lighting_config: level_config.lighting,
             light_engine: DynamicLightEngine::new(),
@@ -291,11 +291,24 @@ impl Level {
             level_ref.clone(),
             level_channel,
             listener,
-            level_ref.thread_tracker.lock().unwrap().as_mut(),
+            level_ref
+                .thread_tracker
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .as_mut(),
             gen_pool,
         );
 
         level_ref
+    }
+
+    pub fn set_world_gen(&self, generator: Arc<WorldGenerator>) {
+        self.world_gen.store(generator);
+    }
+
+    #[must_use]
+    pub fn world_gen(&self) -> Arc<WorldGenerator> {
+        self.world_gen.load_full()
     }
 
     pub fn spawn_entity_generation(self: &Arc<Self>, pos: Vector2<i32>) {
@@ -320,7 +333,7 @@ impl Level {
         } else {
             // Fallback to spawning a new thread if no pool is available (should not happen in production)
             let level_clone = level;
-            thread::Builder::new()
+            let _ = thread::Builder::new()
                 .name(format!("Entity Gen {pos:?}"))
                 .spawn(move || {
                     let arc_chunk = Arc::new(ChunkEntityData {
@@ -340,8 +353,7 @@ impl Level {
                             let _ = tx.send(arc_chunk.clone());
                         }
                     }
-                })
-                .expect("Failed to spawn entity generation thread");
+                });
         }
     }
 
@@ -366,7 +378,10 @@ impl Level {
         self.chunk_system_tasks.close();
 
         let handles = {
-            let mut lock = self.thread_tracker.lock().unwrap();
+            let mut lock = self
+                .thread_tracker
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
             lock.drain(..).collect::<Vec<_>>()
         };
 
@@ -530,7 +545,11 @@ impl Level {
                 // Use the bitmask to skip sections
                 let mask = chunk.section.randomly_ticking_mask.load(Ordering::Relaxed);
                 if mask != 0 {
-                    let sections = chunk.section.block_sections.read().unwrap();
+                    let sections = chunk
+                        .section
+                        .block_sections
+                        .read()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner);
                     let min_y = chunk.section.min_y;
 
                     for i in 0..section_count {
@@ -618,6 +637,10 @@ impl Level {
             self.chunk_watchers.shrink_to_fit();
         }
 
+        if self.loaded_chunks.capacity() - self.loaded_chunks.len() >= 4096 {
+            self.loaded_chunks.shrink_to_fit();
+        }
+
         if self.loaded_entity_chunks.capacity() - self.loaded_entity_chunks.len() >= 4096 {
             self.loaded_entity_chunks.shrink_to_fit();
         }
@@ -641,17 +664,23 @@ impl Level {
         let recv = self.chunk_listener.add_single_chunk_listener(pos);
 
         {
-            let mut lock = self.chunk_loading.lock().unwrap();
+            let mut lock = self
+                .chunk_loading
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
             lock.add_ticket(pos, 31);
             lock.send_change();
         };
 
         let chunk = recv
             .await
-            .expect("Chunk listener dropped without sending chunk");
+            .unwrap_or_else(|_| ChunkData::empty_sync(pos.x, pos.y));
 
         {
-            let mut lock = self.chunk_loading.lock().unwrap();
+            let mut lock = self
+                .chunk_loading
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
             lock.remove_ticket(pos, 31);
             lock.send_change();
         };
@@ -768,7 +797,14 @@ impl Level {
                     self.spawn_entity_generation(pos);
                 }
             }
-            rx.await.expect("Entity generation worker dropped")
+            rx.await.unwrap_or_else(|_| {
+                Arc::new(ChunkEntityData {
+                    x: pos.x,
+                    z: pos.y,
+                    data: tokio::sync::Mutex::new(Vec::new()),
+                    dirty: AtomicBool::new(false),
+                })
+            })
         }
     }
 

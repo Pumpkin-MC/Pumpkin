@@ -1,14 +1,13 @@
 #![no_main]
 use libfuzzer_sys::fuzz_target;
-use pumpkin_protocol::java::packet_encoder::TCPNetworkEncoder;
-use pumpkin_protocol::codec::var_int::VarInt;
-use pumpkin_protocol::ser::NetworkWriteExt;
-use pumpkin_protocol::ServerPacket;
-use pumpkin_protocol::java::client::play::CPlayerPosition;
-use pumpkin_protocol::packet::MultiVersionJavaPacket;
 use pumpkin_protocol::ClientPacket;
+use pumpkin_protocol::ServerPacket;
+use pumpkin_protocol::codec::var_int::VarInt;
+use pumpkin_protocol::java::client::play::CPlayerPosition;
+use pumpkin_protocol::java::packet_encoder::TCPNetworkEncoder;
+use pumpkin_protocol::packet::MultiVersionJavaPacket;
+use pumpkin_protocol::ser::NetworkWriteExt;
 use pumpkin_util::version::JavaMinecraftVersion;
-use std::io::Cursor;
 use tokio::runtime::Runtime;
 
 const TARGET_VERSION: JavaMinecraftVersion = JavaMinecraftVersion::V_1_21_4;
@@ -34,24 +33,28 @@ fuzz_target!(|data: &[u8]| {
             encoder.set_compression((compression_threshold, compression_level));
         }
         if use_encryption {
-            encoder.set_encryption(&encryption_key);
+            let _ = encoder.set_encryption(&encryption_key);
         }
 
         // 1. Fuzz with raw bytes (simulating various packet payloads)
         let mut buf = Vec::new();
-        let packet_id = if packet_data.is_empty() { 0 } else { packet_data[0] as i32 };
+        let packet_id = if packet_data.is_empty() {
+            0
+        } else {
+            packet_data[0] as i32
+        };
         let _ = buf.write_var_int(&VarInt(packet_id));
         buf.extend_from_slice(packet_data);
         let _ = encoder.write_packet(buf.into()).await;
 
         // 2. Fuzz with actual packets if they can be partially read
-        let mut cursor = Cursor::new(packet_data);
-        if let Ok(packet) = CPlayerPosition::read(&mut cursor, &TARGET_VERSION) {
-             let mut packet_buf = Vec::new();
-             let id = CPlayerPosition::to_id(TARGET_VERSION);
-             let _ = packet_buf.write_var_int(&VarInt(id));
-             let _ = packet.write_packet_data(&mut packet_buf, &TARGET_VERSION);
-             let _ = encoder.write_packet(packet_buf.into()).await;
+        let mut slice = packet_data;
+        if let Ok(packet) = CPlayerPosition::read(&mut slice, &TARGET_VERSION) {
+            let mut packet_buf = Vec::new();
+            let id = CPlayerPosition::to_id(TARGET_VERSION);
+            let _ = packet_buf.write_var_int(&VarInt(id));
+            let _ = packet.write_packet_data(&mut packet_buf, &TARGET_VERSION);
+            let _ = encoder.write_packet(packet_buf.into()).await;
         }
 
         let _ = encoder.flush().await;

@@ -1,4 +1,4 @@
-use crate::data_component_impl::{DataComponentImpl, default_impl, get_i32_hash, get_str_hash};
+use crate::data_component_impl::{DataComponentImpl, get_i32_hash, get_str_hash};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
 use pumpkin_util::text::TextComponent;

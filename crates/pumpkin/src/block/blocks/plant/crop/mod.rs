@@ -48,6 +48,28 @@ trait CropBlockBase: PlantBlockBase {
         props.to_state_id(block)
     }
 
+    fn bonemeal_age_increase(&self) -> i32 {
+        rand::rng().random_range(2..=5)
+    }
+
+    fn is_valid_bonemeal_target(&self, world: &World, pos: &BlockPos) -> bool {
+        let (block, state) = world.get_block_and_state_id(pos);
+        self.get_age(state, block) < self.max_age()
+    }
+
+    async fn perform_bonemeal(&self, world: &Arc<World>, pos: &BlockPos) {
+        let (block, state) = world.get_block_and_state_id(pos);
+        let age = self.get_age(state, block);
+        let new_age = (age + self.bonemeal_age_increase()).min(self.max_age());
+        world
+            .set_block_state(
+                pos,
+                self.state_with_age(block, state, new_age),
+                BlockFlags::NOTIFY_LISTENERS,
+            )
+            .await;
+    }
+
     async fn random_tick(&self, world: &Arc<World>, pos: &BlockPos) {
         let (block, state) = world.get_block_and_state_id(pos);
         let age = self.get_age(state, block);

@@ -149,7 +149,7 @@ impl StructurePiece {
         }
     }
 
-    const fn offset_pos(&self, x: i32, y: i32, z: i32) -> Vector3<i32> {
+    pub(crate) const fn offset_pos(&self, x: i32, y: i32, z: i32) -> Vector3<i32> {
         Vector3::new(
             self.apply_x_transform(x, z),
             self.apply_y_transform(y),
@@ -631,7 +631,7 @@ impl StructurePiecesCollector {
         }
 
         let bbox = BlockBox::encompass_all(self.pieces.iter().map(|p| p.bounding_box()))
-            .expect("Structure must have at least one piece to calculate a bounding box");
+            .unwrap_or_else(|| BlockBox::new(0, 0, 0, 0, 0, 0));
 
         self.cached_box = Some(bbox);
         bbox
@@ -656,7 +656,10 @@ pub struct StructurePosition {
 impl StructurePosition {
     #[must_use]
     pub fn get_bounding_box(&self) -> BlockBox {
-        self.collector.lock().unwrap().get_bounding_box()
+        self.collector
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .get_bounding_box()
     }
 }
 
@@ -669,6 +672,10 @@ pub trait StructureGenerator {
 
 pub trait HeightSampler {
     fn estimate_height(&mut self, block_x: i32, block_z: i32) -> i32;
+
+    fn estimate_ocean_floor_height(&mut self, block_x: i32, block_z: i32) -> i32 {
+        self.estimate_height(block_x, block_z)
+    }
 }
 
 impl HeightSampler

@@ -45,7 +45,10 @@ impl Goal for RandomLookAroundGoal {
         Box::pin(async {
             let mob_entity = mob.get_mob_entity();
             self.look_time -= 1;
-            let mut look_control = mob_entity.look_control.lock().unwrap();
+            let mut look_control = mob_entity
+                .look_control
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
 
             let pos = mob_entity.living_entity.entity.pos.load();
             look_control.look_at(

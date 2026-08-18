@@ -77,6 +77,7 @@ pub mod logs;
 pub mod mangrove_roots;
 pub mod plant;
 pub mod pumpkin;
+pub mod sculk;
 pub mod vine;
 
 // Terrain / environment / physics
@@ -88,6 +89,7 @@ pub mod falling;
 pub mod grass_block;
 pub mod infested;
 pub mod powder_snow;
+pub mod rooted_dirt;
 pub mod snow;
 pub mod sponge;
 
@@ -98,6 +100,7 @@ pub mod cake;
 pub mod cauldron;
 pub mod composter;
 pub mod ladder;
+pub mod respawn_anchor;
 pub mod slime;
 pub mod spawner;
 pub mod tnt;
@@ -108,3 +111,15 @@ pub mod coral;
 pub mod abstract_wall_mounting;
 
 pub mod beacon;
+pub mod brushable_block;
+pub mod cartography_table;
+pub mod creaking_heart;
+pub mod decorated_pot;
+pub mod fletching_table;
+pub mod loom;
+pub mod smithing_table;
+pub mod sniffer_egg;
+pub mod structure_block;
+pub mod trial_spawner;
+pub mod turtle_egg;
+pub mod vault;

@@ -5,8 +5,8 @@ use crate::block::{
     OnScheduledTickArgs,
 };
 use crate::world::World;
-use pumpkin_data::block_properties::{BlockProperties, Facing, LightningRodLikeProperties};
-use pumpkin_data::{BlockDirection, BlockStateId, FacingExt};
+use pumpkin_data::block_properties::{BlockProperties, LightningRodLikeProperties};
+use pumpkin_data::{BlockStateId, FacingExt};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::tick::TickPriority;
@@ -47,16 +47,8 @@ impl LightningRodBlock {
 impl BlockBehaviour for LightningRodBlock {
     fn on_place<'a>(&'a self, args: OnPlaceArgs<'a>) -> BlockFuture<'a, BlockStateId> {
         Box::pin(async move {
-            let facing = match args.direction {
-                BlockDirection::North => Facing::North,
-                BlockDirection::South => Facing::South,
-                BlockDirection::East => Facing::East,
-                BlockDirection::West => Facing::West,
-                BlockDirection::Up => Facing::Up,
-                BlockDirection::Down => Facing::Down,
-            };
             let mut props = LightningRodLikeProperties::default(args.block);
-            props.facing = facing;
+            props.facing = args.direction.to_facing().opposite();
             props.to_state_id(args.block)
         })
     }

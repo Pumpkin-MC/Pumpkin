@@ -12,11 +12,7 @@ impl BlockMetadata for CoralBlock {
         for alive_plant_id in alive_plants {
             let block_id = BlockId::new_or_air(*alive_plant_id);
             plants.push(block_id);
-            plants.push(
-                get_dead_coral_block_type(block_id)
-                    .expect("not a coral block")
-                    .id,
-            );
+            plants.push(get_dead_coral_block_type(block_id).map_or(BlockId::AIR, |b| b.id));
         }
         plants.into()
     }
@@ -32,10 +28,10 @@ impl BlockBehaviour for CoralBlock {
     fn on_scheduled_tick<'a>(&'a self, args: OnScheduledTickArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
             if !scan_for_water(args.world, args.position).await && !is_dead_coral(args.block) {
-                let dead_block_state_id = get_dead_coral_block_type(args.block.id)
-                    .expect("not a coral block")
-                    .default_state
-                    .id;
+                let Some(dead_block) = get_dead_coral_block_type(args.block.id) else {
+                    return;
+                };
+                let dead_block_state_id = dead_block.default_state.id;
                 args.world
                     .set_block_state(args.position, dead_block_state_id, BlockFlags::empty())
                     .await;

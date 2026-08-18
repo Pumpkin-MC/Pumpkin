@@ -24,14 +24,19 @@ impl PermissionCache {
     }
 
     pub async fn save(&self, path: &Path) -> tokio::io::Result<()> {
-        let data = serde_json::to_string_pretty(self).unwrap();
+        let data = serde_json::to_string_pretty(self).map_err(std::io::Error::other)?;
         fs::write(path, data).await
     }
 }
 
 pub async fn calculate_hash(path: &Path) -> tokio::io::Result<String> {
-    let bytes = fs::read(path).await?;
-    Ok(calculate_hash_for_bytes(&bytes))
+    let path = path.to_path_buf();
+    tokio::task::spawn_blocking(move || {
+        let bytes = std::fs::read(path)?;
+        Ok(calculate_hash_for_bytes(&bytes))
+    })
+    .await
+    .map_err(std::io::Error::other)?
 }
 
 #[must_use]

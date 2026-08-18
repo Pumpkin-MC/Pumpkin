@@ -1,7 +1,3 @@
-use std::sync::Arc;
-
-use tokio::sync::Mutex;
-
 use pumpkin_data::item_stack::ItemStack;
 
 #[expect(clippy::module_inception)]
@@ -11,11 +7,10 @@ mod simple_inventory;
 pub use inventory::*;
 pub use simple_inventory::*;
 
-// These are some utility functions found in Inventories.java
-pub async fn split_stack(stacks: &[Arc<Mutex<ItemStack>>], slot: usize, amount: u8) -> ItemStack {
-    let mut stack = stacks[slot].lock().await;
-    if slot < stacks.len() && !stack.is_empty() && amount > 0 {
-        stack.split(amount)
+// Utility functions for split_stack
+pub fn split_stack_slice(stacks: &mut [ItemStack], slot: usize, amount: u8) -> ItemStack {
+    if slot < stacks.len() && !stacks[slot].is_empty() && amount > 0 {
+        stacks[slot].split(amount)
     } else {
         ItemStack::EMPTY.clone()
     }

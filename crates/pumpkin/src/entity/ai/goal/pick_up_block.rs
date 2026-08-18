@@ -83,6 +83,18 @@ impl Goal for PickUpBlockGoal {
 
             let default_state_id = block.default_state.id;
 
+            let mut event = crate::plugin::api::events::entity::entity_change_block::EntityChangeBlockEvent::new(
+                entity.entity_id,
+                target_pos,
+                "minecraft:air".to_string(),
+            );
+            if let Some(server) = world.server.upgrade() {
+                server.plugin_manager.fire(&server, &mut event).await;
+            }
+            if event.cancelled {
+                return;
+            }
+
             // TODO: Emit game event (BLOCK_DESTROY)
             world
                 .set_block_state(&target_pos, BlockStateId::AIR, BlockFlags::NOTIFY_ALL)

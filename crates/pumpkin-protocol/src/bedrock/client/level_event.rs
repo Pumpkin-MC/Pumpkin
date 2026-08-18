@@ -14,6 +14,7 @@ pub struct CLevelEvent {
 #[repr(i32)]
 pub enum LevelEvent {
     // There are hundreds of these, adding only what we need for now
+    ParticlesDestroyBlock = 2001,
     BlockStartBreak = 3600,
     BlockStopBreak = 3601,
     BlockUpdateBreak = 3602,

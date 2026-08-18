@@ -53,9 +53,7 @@ impl BlockBehaviour for CandleBlock {
             let state = args.world.get_block_state(args.position);
             let mut properties = CandleLikeProperties::from_state_id(state.id, args.block);
 
-            let item_lock = args.item_stack.lock().await;
-            let item = item_lock.item;
-            drop(item_lock);
+            let item = args.item_stack.item;
 
             match item.id {
                 id if (Item::CANDLE.id..=Item::BLACK_CANDLE.id).contains(&id)

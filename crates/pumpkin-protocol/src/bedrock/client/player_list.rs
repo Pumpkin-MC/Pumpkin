@@ -6,6 +6,16 @@ use pumpkin_macros::packet;
 use std::io::{Error, Write};
 use uuid::Uuid;
 
+use super::common::BuildPlatform;
+
+const WIDE_SKIN_RESOURCE_PATCH: &[u8] = br#"{"geometry":{"default":"geometry.humanoid.custom"}}"#;
+const SLIM_SKIN_RESOURCE_PATCH: &[u8] =
+    br#"{"geometry":{"default":"geometry.humanoid.customSlim"}}"#;
+const DEFAULT_SKIN_GEOMETRY: &[u8] = include_bytes!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../../assets/bedrock/player_geometry.json"
+));
+
 #[packet(63)]
 pub struct CPlayerList {
     pub action: u8,
@@ -45,7 +55,7 @@ pub struct PlayerListEntry {
     pub username: String,
     pub xuid: String,
     pub platform_chat_id: String,
-    pub build_platform: i32,
+    pub build_platform: BuildPlatform,
     pub skin: Skin,
     pub is_teacher: bool,
     pub is_host: bool,
@@ -105,7 +115,7 @@ impl Skin {
         Self {
             skin_id: "Standard_Custom".to_string(),
             play_fab_id: String::new(),
-            resource_patch: r#"{"geometry":{"default":"geometry.humanoid"}}"#.into(),
+            resource_patch: WIDE_SKIN_RESOURCE_PATCH.to_vec(),
             image_width: 64,
             image_height: 64,
             // 64 * 64 * 4 = 16384 bytes of raw RGBA data
@@ -115,23 +125,35 @@ impl Skin {
             cape_width: 0,
             cape_height: 0,
             cape_data: Vec::new(),
-            geometry_data: Vec::new(),
+            geometry_data: DEFAULT_SKIN_GEOMETRY.to_vec(),
             animation_data: Vec::new(),
-            geometry_data_engine_version: Vec::new(),
+            geometry_data_engine_version: b"1.26.40".to_vec(),
             cape_id: String::new(),
             full_id: "Standard_Custom".to_string(),
             arm_size: "wide".to_string(),
             skin_color: "#0".to_string(),
             persona_pieces: Vec::new(),
             piece_tint_colors: Vec::new(),
-            is_premium: false,
+            is_premium: true,
             is_persona: false,
             persona_cape_on_classic: false,
             is_primary_user: false,
-            override_appearance: false,
+            override_appearance: true,
             is_trusted: true,
             profile_hash: String::new(),
         }
+    }
+
+    /// Selects the standard wide or slim player geometry while preserving the
+    /// rest of the serialized skin.
+    pub fn set_slim(&mut self, slim: bool) {
+        self.arm_size = if slim { "slim" } else { "wide" }.to_string();
+        self.resource_patch = if slim {
+            SLIM_SKIN_RESOURCE_PATCH
+        } else {
+            WIDE_SKIN_RESOURCE_PATCH
+        }
+        .to_vec();
     }
 }
 
@@ -238,4 +260,36 @@ impl PacketWrite for PieceTintColor {
 fn parse_color(color: &str) -> i32 {
     let value = color.trim_start_matches('#');
     u32::from_str_radix(value, 16).unwrap_or_default() as i32
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{DEFAULT_SKIN_GEOMETRY, SLIM_SKIN_RESOURCE_PATCH, Skin, WIDE_SKIN_RESOURCE_PATCH};
+
+    #[test]
+    fn fallback_skin_contains_the_geometry_it_references() {
+        let skin = Skin::steve();
+
+        assert_eq!(skin.resource_patch, WIDE_SKIN_RESOURCE_PATCH);
+        assert_eq!(skin.geometry_data, DEFAULT_SKIN_GEOMETRY);
+        assert!(
+            String::from_utf8_lossy(&skin.geometry_data)
+                .contains(r#""identifier":"geometry.humanoid.custom""#)
+        );
+        assert!(skin.override_appearance);
+        assert!(skin.is_trusted);
+    }
+
+    #[test]
+    fn slim_fallback_skin_references_the_slim_geometry() {
+        let mut skin = Skin::steve();
+        skin.set_slim(true);
+
+        assert_eq!(skin.arm_size, "slim");
+        assert_eq!(skin.resource_patch, SLIM_SKIN_RESOURCE_PATCH);
+        assert!(
+            String::from_utf8_lossy(&skin.geometry_data)
+                .contains(r#""identifier":"geometry.humanoid.customSlim""#)
+        );
+    }
 }

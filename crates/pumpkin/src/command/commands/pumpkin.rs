@@ -404,7 +404,9 @@ mod test {
 
     #[test]
     fn contributor_cache_updates_and_retrieves() {
-        let mut guard = CONTRIBUTORS_CACHE.lock().unwrap();
+        let mut guard = CONTRIBUTORS_CACHE
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         *guard = Some(ContributorCache {
             fetched_at: Instant::now(),
             data: vec![Contributor {
@@ -421,7 +423,9 @@ mod test {
     #[test]
     fn donator_cache_updates_and_retrieves() {
         let expected = TextComponent::text("Cached Donator Test");
-        let mut guard = DONATORS_CACHE.lock().unwrap();
+        let mut guard = DONATORS_CACHE
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         *guard = Some(DonatorCache {
             fetched_at: Instant::now(),
             data: expected.clone(),

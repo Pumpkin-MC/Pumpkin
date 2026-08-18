@@ -82,7 +82,9 @@ mod format {
             date: &OffsetDateTime,
             serializer: S,
         ) -> Result<S::Ok, S::Error> {
-            let s = date.format(DATE_FORMAT).unwrap();
+            let s = date
+                .format(DATE_FORMAT)
+                .map_err(serde::ser::Error::custom)?;
             serializer.serialize_str(&s)
         }
 
@@ -106,7 +108,9 @@ mod format {
             serializer: S,
         ) -> Result<S::Ok, S::Error> {
             if let Some(date) = date {
-                let s = date.format(DATE_FORMAT).unwrap();
+                let s = date
+                    .format(DATE_FORMAT)
+                    .map_err(serde::ser::Error::custom)?;
                 serializer.serialize_str(&s)
             } else {
                 serializer.serialize_str("forever")

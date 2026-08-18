@@ -1,6 +1,6 @@
 use crate::{
     entity::item::ItemEntity,
-    net::{ClientPlatform, bedrock::BedrockClient},
+    net::{ClientPlatform, bedrock::BedrockClient, java::JavaClient},
     server::Server,
     world::{
         World,
@@ -91,8 +91,12 @@ pub mod effect;
 pub mod experience_orb;
 pub mod falling;
 pub mod hunger;
+pub mod interaction;
 pub mod item;
+pub mod item_steerable;
+pub mod lightning;
 pub mod living;
+pub mod marker;
 pub mod mob;
 pub mod passive;
 pub mod player;
@@ -101,6 +105,8 @@ pub mod projectile_deflection;
 pub mod tnt;
 pub mod r#type;
 pub mod vehicle;
+
+pub use lightning::LightningBoltEntity;
 
 mod combat;
 pub mod predicate;
@@ -163,6 +169,10 @@ pub trait EntityBase: Send + Sync + NBTStorage + std::any::Any {
         Self: Sized,
     {
         self
+    }
+
+    fn get_item_steerable(&self) -> Option<&dyn crate::entity::item_steerable::ItemSteerable> {
+        None
     }
 
     fn get_eye_pos(&self) -> Vector3<f64> {
@@ -248,6 +258,28 @@ pub trait EntityBase: Send + Sync + NBTStorage + std::any::Any {
         })
     }
 
+    fn on_lightning_strike<'a>(
+        &'a self,
+        caller: &'a dyn EntityBase,
+        lightning: &'a lightning::LightningBoltEntity,
+    ) -> EntityBaseFuture<'a, ()> {
+        Box::pin(async move {
+            if self.get_living_entity().is_some() {
+                self.set_on_fire_for(8.0);
+                let cause = lightning.get_cause().await;
+                self.damage_with_context(
+                    caller,
+                    5.0,
+                    DamageType::LIGHTNING_BOLT,
+                    None,
+                    Some(lightning),
+                    cause.as_deref().map(|p| p as &dyn EntityBase),
+                )
+                .await;
+            }
+        })
+    }
+
     fn is_spectator(&self) -> bool {
         false
     }
@@ -299,6 +331,14 @@ pub trait EntityBase: Send + Sync + NBTStorage + std::any::Any {
         })
     }
 
+    fn send_java_spawn_packet<'a>(&'a self, client: &'a JavaClient) -> EntityBaseFuture<'a, ()> {
+        Box::pin(async move {
+            client
+                .enqueue_packet(&self.get_entity().create_spawn_packet())
+                .await;
+        })
+    }
+
     fn damage_with_context<'a>(
         &'a self,
         caller: &'a dyn EntityBase,
@@ -338,6 +378,20 @@ pub trait EntityBase: Send + Sync + NBTStorage + std::any::Any {
 
     fn set_on_fire_for_ticks(&self, ticks: u32) {
         let entity = self.get_entity();
+        let mut event = crate::plugin::api::events::entity::entity_combust::EntityCombustEvent::new(
+            entity.entity_id,
+            ticks as f32 / 20.0,
+        );
+        if let Some(server) = entity.world.load().server.upgrade() {
+            tokio::task::block_in_place(|| {
+                tokio::runtime::Handle::current().block_on(async {
+                    server.plugin_manager.fire(&server, &mut event).await;
+                });
+            });
+            if event.cancelled {
+                return;
+            }
+        }
         if entity.fire_ticks.load(Ordering::Relaxed) < ticks as i32 {
             entity.fire_ticks.store(ticks as i32, Ordering::Relaxed);
         }
@@ -838,6 +892,8 @@ pub struct Entity {
     pub last_sent_pos: AtomicCell<Vector3<f64>>,
     /// Cache for the last sent head yaw byte
     pub last_sent_head_yaw: AtomicU8,
+    /// Persistent custom data container for plugins (matching Bukkit's `PersistentDataHolder`)
+    pub custom_data: Mutex<NbtCompound>,
 }
 
 impl Entity {
@@ -960,6 +1016,7 @@ impl Entity {
             last_sent_pitch: AtomicU8::new(0),
             last_sent_head_yaw: AtomicU8::new(0),
             last_sent_pos: AtomicCell::new(position),
+            custom_data: Mutex::new(NbtCompound::new()),
         }
     }
 
@@ -1329,37 +1386,42 @@ impl Entity {
         if movement.get_axis(Axis::Y) != 0.0 {
             let mut max_time = 1.0;
             let mut positions = block_positions.into_iter();
-            let (mut collisions_len, mut position) = positions.next().unwrap();
-            let mut supporting_block_pos = None;
+            if let Some((mut collisions_len, mut position)) = positions.next() {
+                let mut supporting_block_pos = None;
 
-            for (i, inert_box) in collisions.iter().enumerate() {
-                if i == collisions_len {
-                    (collisions_len, position) = positions.next().unwrap();
-                }
+                for (i, inert_box) in collisions.iter().enumerate() {
+                    if i == collisions_len {
+                        let Some((next_len, next_pos)) = positions.next() else {
+                            break;
+                        };
+                        collisions_len = next_len;
+                        position = next_pos;
+                    }
 
-                if let Some(collision_time) = bounding_box.calculate_collision_time(
-                    inert_box,
-                    adjusted_movement,
-                    Axis::Y,
-                    max_time,
-                ) {
-                    max_time = collision_time;
+                    if let Some(collision_time) = bounding_box.calculate_collision_time(
+                        inert_box,
+                        adjusted_movement,
+                        Axis::Y,
+                        max_time,
+                    ) {
+                        max_time = collision_time;
 
-                    // If the entity is moving downwards and collides, set the supporting block position
-                    if movement.get_axis(Axis::Y) < 0.0 {
-                        supporting_block_pos = Some(position);
+                        // If the entity is moving downwards and collides, set the supporting block position
+                        if movement.get_axis(Axis::Y) < 0.0 {
+                            supporting_block_pos = Some(position);
+                        }
                     }
                 }
-            }
 
-            if max_time != 1.0 {
-                let changed_component = adjusted_movement.get_axis(Axis::Y) * max_time;
-                adjusted_movement.set_axis(Axis::Y, changed_component);
-            }
+                if max_time != 1.0 {
+                    let changed_component = adjusted_movement.get_axis(Axis::Y) * max_time;
+                    adjusted_movement.set_axis(Axis::Y, changed_component);
+                }
 
-            self.on_ground
-                .store(supporting_block_pos.is_some(), Ordering::SeqCst);
-            self.supporting_block_pos.store(supporting_block_pos);
+                self.on_ground
+                    .store(supporting_block_pos.is_some(), Ordering::SeqCst);
+                self.supporting_block_pos.store(supporting_block_pos);
+            }
         }
 
         let mut horizontal_collision = false;
@@ -1770,6 +1832,36 @@ impl Entity {
             }
         }
         self.send_head_rot(yaw);
+    }
+
+    pub fn send_bedrock_pos(&self) {
+        let position = self.pos.load();
+        let chunk_pos = self.chunk_pos.load();
+        let mut flags =
+            MOVE_ACTOR_DELTA_FLAG_HAS_X | MOVE_ACTOR_DELTA_FLAG_HAS_Y | MOVE_ACTOR_DELTA_FLAG_HAS_Z;
+        if self.on_ground.load(Relaxed) {
+            flags |= MOVE_ACTOR_DELTA_FLAG_ON_GROUND;
+        }
+        let packet = CMoveActorDelta::new(
+            VarULong(self.entity_id as u64),
+            flags,
+            position.x as f32,
+            position.y as f32,
+            position.z as f32,
+            0,
+            0,
+            0,
+        );
+        let world = self.world.load();
+        for player in world.players.load().iter() {
+            let center = player.get_entity().chunk_pos.load();
+            let view_distance = crate::world::chunker::get_view_distance(player).get() as i32;
+            if is_within_view_distance(chunk_pos, center, view_distance)
+                && let ClientPlatform::Bedrock(client) = player.client.as_ref()
+            {
+                client.try_enqueue_packet(&packet);
+            }
+        }
     }
 
     pub fn update_last_pos(&self) -> Vector3<f64> {
@@ -2343,6 +2435,18 @@ impl Entity {
         portal_world: Arc<World>,
         pos: BlockPos,
     ) {
+        let mut portal_event =
+            crate::plugin::api::events::entity::entity_portal::EntityPortalEvent::new(
+                self.entity_id,
+                pos,
+            );
+        if let Some(server) = self.world.load().server.upgrade() {
+            server.plugin_manager.fire(&server, &mut portal_event).await;
+        }
+        if portal_event.cancelled {
+            return;
+        }
+
         // Passengers don't teleport independently - they wait for their vehicle
         if self.has_vehicle().await {
             return;
@@ -2354,20 +2458,12 @@ impl Entity {
             return;
         }
 
-        if (portal_world.dimension == Dimension::THE_NETHER
-            && !portal_world
-                .server
-                .upgrade()
-                .unwrap()
-                .basic_config
-                .allow_nether)
-            || (portal_world.dimension == Dimension::THE_END
-                && !portal_world
-                    .server
-                    .upgrade()
-                    .unwrap()
-                    .basic_config
-                    .allow_end)
+        let Some(server) = portal_world.server.upgrade() else {
+            return;
+        };
+
+        if (portal_world.dimension == Dimension::THE_NETHER && !server.basic_config.allow_nether)
+            || (portal_world.dimension == Dimension::THE_END && !server.basic_config.allow_end)
         {
             return;
         }
@@ -2455,21 +2551,15 @@ impl Entity {
             return true;
         };
 
-        let armor = {
-            let equipment = living.entity_equipment.lock().await;
-            [
-                equipment.get(&EquipmentSlot::HEAD),
-                equipment.get(&EquipmentSlot::CHEST),
-                equipment.get(&EquipmentSlot::LEGS),
-                equipment.get(&EquipmentSlot::FEET),
-            ]
-        };
-
-        for stack in armor {
-            let stack = stack.lock().await;
-            if stack
-                .get_item()
-                .has_tag(&tag::Item::MINECRAFT_FREEZE_IMMUNE_WEARABLES)
+        let equipment = living.entity_equipment.lock().await;
+        for (slot, stack) in &equipment.equipment {
+            if (*slot == EquipmentSlot::HEAD
+                || *slot == EquipmentSlot::CHEST
+                || *slot == EquipmentSlot::LEGS
+                || *slot == EquipmentSlot::FEET)
+                && stack
+                    .get_item()
+                    .has_tag(&tag::Item::MINECRAFT_FREEZE_IMMUNE_WEARABLES)
             {
                 return false;
             }
@@ -2595,10 +2685,21 @@ impl Entity {
         self.sneaking.load(Ordering::Relaxed)
     }
 
-    pub async fn set_swimming(&self, invisible: bool) {
-        if self.swimming.load(Ordering::Relaxed) != invisible {
-            self.swimming.store(invisible, Relaxed);
-            self.set_flag(Flag::Swimming, invisible).await;
+    pub async fn set_swimming(&self, swimming: bool) {
+        if self.swimming.load(Ordering::Relaxed) != swimming {
+            let mut event =
+                crate::plugin::api::events::entity::entity_toggle_swim::EntityToggleSwimEvent::new(
+                    self.entity_id,
+                    swimming,
+                );
+            if let Some(server) = self.world.load().server.upgrade() {
+                server.plugin_manager.fire(&server, &mut event).await;
+            }
+            if event.cancelled {
+                return;
+            }
+            self.swimming.store(event.is_swimming, Relaxed);
+            self.set_flag(Flag::Swimming, event.is_swimming).await;
         }
     }
 
@@ -2855,7 +2956,7 @@ impl Entity {
                     if is_within_view_distance(chunk_pos, center, view_distance) {
                         let mut buf = Vec::new();
                         for m in meta {
-                            m.write(&mut buf, &client.version.load()).unwrap();
+                            let _ = m.write(&mut buf, &client.version.load());
                         }
                         buf.put_u8(255);
                         player.client.try_enqueue_packet(&CSetEntityMetadata::new(
@@ -2888,6 +2989,22 @@ impl Entity {
     }
 
     pub fn set_pose(&self, pose: EntityPose) {
+        let mut pose_event =
+            crate::plugin::api::events::entity::entity_pose_change::EntityPoseChangeEvent::new(
+                self.entity_id,
+                (pose as u8).to_string(),
+            );
+        if let Some(server) = self.world.load().server.upgrade() {
+            tokio::task::block_in_place(|| {
+                tokio::runtime::Handle::current().block_on(async {
+                    server.plugin_manager.fire(&server, &mut pose_event).await;
+                });
+            });
+            if pose_event.cancelled {
+                return;
+            }
+        }
+
         let dimension = Self::get_entity_dimensions(pose);
         let position = self.pos.load();
         let aabb = BoundingBox::new_from_pos(position.x, position.y, position.z, &dimension);
@@ -2899,6 +3016,14 @@ impl Entity {
             let pose = pose as i32;
             let mut bedrock_meta = EntityMetadata::new();
             bedrock_meta.set(entity_data_key::POSE_INDEX, MetadataValue::Int(pose));
+            bedrock_meta.set(
+                entity_data_key::WIDTH,
+                MetadataValue::Float(dimension.width),
+            );
+            bedrock_meta.set(
+                entity_data_key::HEIGHT,
+                MetadataValue::Float(dimension.height),
+            );
             self.send_meta_data(
                 &[Metadata::new(
                     TrackedData::POSE,
@@ -2966,7 +3091,7 @@ impl Entity {
                 for z in blockpos.0.z..=blockpos1.0.z {
                     let pos = BlockPos::new(x, y, z);
                     let (block, state) = world.get_block_and_state(&pos);
-                    let block_outlines = state.get_block_outline_shapes();
+                    let block_outlines = state.get_block_outline_shapes_at(&pos);
 
                     if state.outline_shapes.is_empty() {
                         world
@@ -3168,11 +3293,37 @@ impl Entity {
         vehicle.is_some()
     }
 
+    pub async fn is_leashed(&self) -> bool {
+        let leashed_to = self.leashed_to.lock().await;
+        leashed_to.is_some()
+    }
+
     pub async fn add_passenger(
         &self,
         vehicle: Arc<dyn EntityBase>,
         passenger: Arc<dyn EntityBase>,
     ) {
+        let mut mount_event =
+            crate::plugin::api::events::entity::entity_mount::EntityMountEvent::new(
+                passenger.get_entity().entity_id,
+                self.entity_id,
+            );
+        let mut vehicle_enter =
+            crate::plugin::api::events::vehicle::vehicle_enter::VehicleEnterEvent::new(
+                self.entity_id,
+                passenger.get_entity().entity_id,
+            );
+        if let Some(server) = self.world.load().server.upgrade() {
+            server.plugin_manager.fire(&server, &mut mount_event).await;
+            server
+                .plugin_manager
+                .fire(&server, &mut vehicle_enter)
+                .await;
+        }
+        if mount_event.cancelled || vehicle_enter.cancelled {
+            return;
+        }
+
         let passenger_entity = passenger.get_entity();
         *passenger_entity.vehicle.lock().await = Some(vehicle);
 
@@ -3192,8 +3343,51 @@ impl Entity {
         );
     }
 
+    pub(crate) async fn remove_passenger_on_disconnect(&self, passenger_id: i32) {
+        let mut passengers = self.passengers.lock().await;
+        if let Some(index) = passengers
+            .iter()
+            .position(|passenger| passenger.get_entity().entity_id == passenger_id)
+        {
+            let passenger = passengers.remove(index);
+            *passenger.get_entity().vehicle.lock().await = None;
+        }
+
+        let passenger_ids: Vec<VarInt> = passengers
+            .iter()
+            .map(|passenger| VarInt(passenger.get_entity().entity_id))
+            .collect();
+        drop(passengers);
+
+        self.world.load().broadcast_to_chunk(
+            self.chunk_pos.load(),
+            &CSetPassengers::new(VarInt(self.entity_id), &passenger_ids),
+        );
+    }
+
     #[allow(clippy::too_many_lines)]
     pub async fn remove_passenger(&self, passenger_id: i32) {
+        let mut dismount_event =
+            crate::plugin::api::events::entity::entity_dismount::EntityDismountEvent::new(
+                passenger_id,
+                self.entity_id,
+            );
+        let mut vehicle_exit =
+            crate::plugin::api::events::vehicle::vehicle_exit::VehicleExitEvent::new(
+                self.entity_id,
+                passenger_id,
+            );
+        if let Some(server) = self.world.load().server.upgrade() {
+            server
+                .plugin_manager
+                .fire(&server, &mut dismount_event)
+                .await;
+            server.plugin_manager.fire(&server, &mut vehicle_exit).await;
+        }
+        if dismount_event.cancelled || vehicle_exit.cancelled {
+            return;
+        }
+
         let mut passengers = self.passengers.lock().await;
         let removed_passenger = if let Some(idx) = passengers
             .iter()
@@ -3428,31 +3622,33 @@ impl Entity {
             };
 
             if let Some(player) = passenger.get_player() {
-                let id = teleport_id.unwrap();
-                player.get_entity().set_pos(dismount_pos);
-                // Update awaiting_teleport with the real dismount position
-                *player.awaiting_teleport.lock().await = Some((id.into(), dismount_pos));
-                // Use enqueue_packet (not send_packet_now) so the teleport goes through
-                // the same packet queue as CSetPassengers, preserving send order.
-                // Vanilla uses DELTA | ROT flags: position absolute, delta/rotation relative.
-                // With rotation relative and yaw/pitch=0, the client preserves its current look.
-                player
-                    .client
-                    .enqueue_packet(&CPlayerPosition::new(
-                        id.into(),
-                        dismount_pos,
-                        Vector3::new(0.0, 0.0, 0.0),
-                        0.0,
-                        0.0,
-                        vec![
-                            PositionFlag::DeltaX,
-                            PositionFlag::DeltaY,
-                            PositionFlag::DeltaZ,
-                            PositionFlag::YRot,
-                            PositionFlag::XRot,
-                        ],
-                    ))
-                    .await;
+                if let Some(id) = teleport_id {
+                    player.get_entity().set_pos(dismount_pos);
+                    // Update awaiting_teleport with the real dismount position
+                    *player.awaiting_teleport.lock().await = Some((id.into(), dismount_pos));
+                    // Use enqueue_packet (not send_packet_now) so the teleport goes through
+                    // the same packet queue as CSetPassengers, preserving send order.
+                    // Vanilla uses DELTA | ROT flags: position absolute, delta/rotation relative.
+                    // With rotation relative and yaw/pitch=0, the client preserves its current look.
+                    player
+                        .client
+                        .enqueue_packet(&CPlayerPosition::new(
+                            id.into(),
+                            dismount_pos,
+                            Vector3::new(0.0, 0.0, 0.0),
+                            0.0,
+                            0.0,
+                            vec![
+                                PositionFlag::DeltaX,
+                                PositionFlag::DeltaY,
+                                PositionFlag::DeltaZ,
+                                PositionFlag::YRot,
+                                PositionFlag::XRot,
+                            ],
+                        ))
+                        .await;
+                }
+
                 // Vanilla: setSneaking(false) after dismount via sneak input
                 if passenger_entity.sneaking.load(Relaxed) {
                     passenger_entity.set_sneaking(false).await;
@@ -3506,6 +3702,53 @@ impl Entity {
             living.fall_distance.store(0f32);
         }
         self.movement_multiplier.store(multiplier);
+    }
+
+    pub async fn set_custom_data(&self, namespace: &str, key: &str, value: NbtTag) {
+        let mut custom_data = self.custom_data.lock().await;
+
+        let mut namespace_data = custom_data
+            .child_tags
+            .remove(namespace)
+            .and_then(|tag| match tag {
+                NbtTag::Compound(compound) => Some(compound),
+                _ => None,
+            })
+            .unwrap_or_default();
+
+        namespace_data.child_tags.insert(key.into(), value);
+        custom_data
+            .child_tags
+            .insert(namespace.into(), NbtTag::Compound(namespace_data));
+    }
+
+    pub async fn get_custom_data(&self, namespace: &str, key: &str) -> Option<NbtTag> {
+        let custom_data = self.custom_data.lock().await;
+        custom_data
+            .get(namespace)?
+            .extract_compound()?
+            .get(key)
+            .cloned()
+    }
+
+    pub async fn remove_custom_data(&self, namespace: &str, key: &str) {
+        let mut custom_data = self.custom_data.lock().await;
+
+        let Some(NbtTag::Compound(mut namespace_data)) = custom_data.child_tags.remove(namespace)
+        else {
+            return;
+        };
+
+        namespace_data.child_tags.remove(key);
+        if !namespace_data.is_empty() {
+            custom_data
+                .child_tags
+                .insert(namespace.into(), NbtTag::Compound(namespace_data));
+        }
+    }
+
+    pub async fn has_custom_data(&self, namespace: &str, key: &str) -> bool {
+        self.get_custom_data(namespace, key).await.is_some()
     }
 }
 
@@ -3564,6 +3807,11 @@ impl NBTStorage for Entity {
                             .collect(),
                     ),
                 );
+            }
+
+            let custom_data = self.custom_data.lock().await;
+            if !custom_data.is_empty() {
+                nbt.put_compound("PumpkinCustomData", custom_data.clone());
             }
 
             // todo more...
@@ -3632,6 +3880,14 @@ impl NBTStorage for Entity {
                         .filter_map(|tag| tag.extract_string().map(str::to_owned))
                         .take(MAX_SCOREBOARD_TAGS),
                 );
+            }
+
+            if let Some(custom_data) = nbt
+                .get_compound("PumpkinCustomData")
+                .or_else(|| nbt.get_compound("BukkitValues"))
+            {
+                let mut data = self.custom_data.lock().await;
+                *data = custom_data.clone();
             }
 
             // todo more...

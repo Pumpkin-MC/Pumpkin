@@ -63,7 +63,11 @@ impl<V: Hash + Eq + Copy + Default, const DIM: usize> HeterogeneousPaletteData<V
             return original;
         }
 
-        let original_index = self.palette.iter().position(|v| v == &original).unwrap();
+        let original_index = self
+            .palette
+            .iter()
+            .position(|v| v == &original)
+            .unwrap_or(0);
 
         // Find or add the new value to the palette.
         let new_index = if let Some(new_index) = self.palette.iter().position(|v| v == &value) {
@@ -172,7 +176,7 @@ impl<V: Hash + Eq + Copy + Default, const DIM: usize> PalettedContainer<V, DIM> 
             if palette.len() <= 256 && std::mem::size_of::<V>() > 1 {
                 let mut indices = Box::new([[[0u8; DIM]; DIM]; DIM]);
                 for (i, v) in cube.as_flattened().as_flattened().iter().enumerate() {
-                    let idx = palette.iter().position(|p| p == v).unwrap();
+                    let idx = palette.iter().position(|p| p == v).unwrap_or(0);
                     indices.as_flattened_mut().as_flattened_mut()[i] = idx as u8;
                 }
                 Self::Heterogeneous(Box::new(HeterogeneousPaletteData {
@@ -259,7 +263,7 @@ impl<V: Hash + Eq + Copy + Default, const DIM: usize> PalettedContainer<V, DIM> 
                         .map(|chunk| {
                             chunk.iter().enumerate().fold(0, |acc, (index, key)| {
                                 let key_index =
-                                    data.palette.iter().position(|&x| x == *key).unwrap();
+                                    data.palette.iter().position(|&x| x == *key).unwrap_or(0);
                                 debug_assert!((1 << bits_per_entry) > key_index);
 
                                 let packed_offset_index =
@@ -578,7 +582,7 @@ impl BiomePalette {
                     for y in 0..16 {
                         for z in 0..16 {
                             let key = self.get(x / 4, z / 4, y / 4);
-                            let key_index = key_to_index_map.get(&key).unwrap();
+                            let key_index = key_to_index_map.get(&key).unwrap_or(&0);
                             debug_assert!((1 << bits_per_entry) > *key_index);
 
                             current_word |= (*key_index as u32)
@@ -728,7 +732,7 @@ impl BlockPalette {
                             // Java has it in y, z, x order, so we need to convert it back to x, y, z
                             // Please test your code on bedrock before merging
                             let key = data.get(x, z, y);
-                            let key_index = key_to_index_map.get(&key).unwrap();
+                            let key_index = key_to_index_map.get(&key).unwrap_or(&0);
                             debug_assert!((1 << bits_per_entry) > *key_index);
 
                             current_word |= (*key_index as u32)

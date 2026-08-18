@@ -164,8 +164,7 @@ impl ScreenHandler for PlayerScreenHandler {
             // TODO: Equippable component
 
             if slot.has_stack().await {
-                let slot_stack_lock = slot.get_stack().await;
-                let mut slot_stack = slot_stack_lock.lock().await;
+                let mut slot_stack = slot.get_stack().await;
                 let stack_prev = slot_stack.clone();
 
                 let equipment_slot = slot_stack
@@ -232,13 +231,12 @@ impl ScreenHandler for PlayerScreenHandler {
                 }
 
                 let stack = slot_stack.clone();
-                drop(slot_stack); // release the lock before calling other methods
 
                 if stack.is_empty() {
                     slot.set_stack_prev(ItemStack::EMPTY.clone(), stack_prev.clone())
                         .await;
                 } else {
-                    slot.mark_dirty().await;
+                    slot.set_stack(stack.clone()).await;
                 }
 
                 if stack.item_count == stack_prev.item_count {

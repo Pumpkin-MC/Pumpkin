@@ -1,13 +1,16 @@
 use pumpkin_data::translation;
+use pumpkin_protocol::java::client::play::{CWaypoint, WaypointIcon};
+use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::text::TextComponent;
 
-use crate::command::CommandResult;
 use crate::command::args::{
     FindArg, entity::EntityArgumentConsumer, hex_color::HexColorArgumentConsumer,
     resource_location::ResourceLocationArgumentConsumer, team_color::TeamColorArgumentConsumer,
 };
 use crate::command::tree::builder::{argument, literal};
-use crate::command::{CommandExecutor, CommandSender, ConsumedArgs, tree::CommandTree};
+use crate::command::{
+    CommandError, CommandExecutor, CommandResult, CommandSender, ConsumedArgs, tree::CommandTree,
+};
 
 const NAMES: [&str; 1] = ["waypoint"];
 const DESCRIPTION: &str = "List or modify waypoints.";
@@ -26,16 +29,14 @@ impl CommandExecutor for ListExecutor {
     ) -> CommandResult<'a> {
         Box::pin(async move {
             let worlds = server.worlds.load();
-            let world = worlds
-                .first()
-                .expect("There should always be at least one world");
+            let world = worlds.first().ok_or(CommandError::InvalidRequirement)?;
             let dimension = world.dimension.minecraft_name.to_string();
 
-            // Currently no active waypoints are tracked in the level
             sender
-                .send_message(TextComponent::translate(
+                .send_message(pumpkin_macros::translate_cross!(
                     translation::java::COMMANDS_WAYPOINT_LIST_EMPTY,
-                    [TextComponent::text(dimension)],
+                    translation::java::COMMANDS_WAYPOINT_LIST_EMPTY,
+                    TextComponent::text(dimension)
                 ))
                 .await;
             Ok(0)
@@ -59,15 +60,47 @@ impl CommandExecutor for ColorExecutor {
         args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {
-            let _waypoint_entity = EntityArgumentConsumer::find_arg(args, ARG_WAYPOINT)?;
+            let waypoint_entity = EntityArgumentConsumer::find_arg(args, ARG_WAYPOINT)?;
+            let entity = waypoint_entity.get_entity();
+            let pos = entity.pos.load();
+            let block_pos = BlockPos::new(
+                pos.x.floor() as i32,
+                pos.y.floor() as i32,
+                pos.z.floor() as i32,
+            );
+            let uuid = entity.entity_uuid;
+
+            let color_val = match self.0 {
+                ColorAction::Named => {
+                    let color = TeamColorArgumentConsumer::find_arg(args, ARG_COLOR)?;
+                    let rgb = color.to_rgb();
+                    i32::from_be_bytes([0, rgb.red, rgb.green, rgb.blue])
+                }
+                ColorAction::Hex => HexColorArgumentConsumer::find_arg(args, ARG_COLOR)? as i32,
+                ColorAction::Reset => 0xFFFFFF,
+            };
+
+            let packet = CWaypoint::update_position(
+                uuid,
+                Some(WaypointIcon {
+                    style: None,
+                    color: color_val,
+                }),
+                block_pos,
+            );
+
+            if let Some(player) = sender.as_player() {
+                player.client.enqueue_packet(&packet).await;
+            }
 
             match self.0 {
                 ColorAction::Named => {
                     let color = TeamColorArgumentConsumer::find_arg(args, ARG_COLOR)?;
                     sender
-                        .send_message(TextComponent::translate(
+                        .send_message(pumpkin_macros::translate_cross!(
                             translation::java::COMMANDS_WAYPOINT_MODIFY_COLOR,
-                            [TextComponent::text(color.name()).color_named(color)],
+                            translation::java::COMMANDS_WAYPOINT_MODIFY_COLOR,
+                            TextComponent::text(color.name()).color_named(color)
                         ))
                         .await;
                 }
@@ -75,17 +108,18 @@ impl CommandExecutor for ColorExecutor {
                     let color_val = HexColorArgumentConsumer::find_arg(args, ARG_COLOR)?;
                     let hex_str = format!("{:06X}", color_val & 0xFFFFFF);
                     sender
-                        .send_message(TextComponent::translate(
+                        .send_message(pumpkin_macros::translate_cross!(
                             translation::java::COMMANDS_WAYPOINT_MODIFY_COLOR,
-                            [TextComponent::text(hex_str)],
+                            translation::java::COMMANDS_WAYPOINT_MODIFY_COLOR,
+                            TextComponent::text(hex_str)
                         ))
                         .await;
                 }
                 ColorAction::Reset => {
                     sender
-                        .send_message(TextComponent::translate(
+                        .send_message(pumpkin_macros::translate_cross!(
                             translation::java::COMMANDS_WAYPOINT_MODIFY_COLOR_RESET,
-                            [],
+                            translation::java::COMMANDS_WAYPOINT_MODIFY_COLOR_RESET
                         ))
                         .await;
                 }
@@ -111,19 +145,41 @@ impl CommandExecutor for StyleExecutor {
         args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {
-            let _waypoint_entity = EntityArgumentConsumer::find_arg(args, ARG_WAYPOINT)?;
+            let waypoint_entity = EntityArgumentConsumer::find_arg(args, ARG_WAYPOINT)?;
+            let entity = waypoint_entity.get_entity();
+            let pos = entity.pos.load();
+            let block_pos = BlockPos::new(
+                pos.x.floor() as i32,
+                pos.y.floor() as i32,
+                pos.z.floor() as i32,
+            );
+            let uuid = entity.entity_uuid;
 
-            match self.0 {
+            let style_str = match self.0 {
                 StyleAction::Set => {
-                    let _style = ResourceLocationArgumentConsumer::find_arg(args, ARG_STYLE)?;
+                    let style = ResourceLocationArgumentConsumer::find_arg(args, ARG_STYLE)?;
+                    Some(style)
                 }
-                StyleAction::Reset => {}
+                StyleAction::Reset => None,
+            };
+
+            let packet = CWaypoint::update_position(
+                uuid,
+                Some(WaypointIcon {
+                    style: style_str,
+                    color: 0xFFFFFF,
+                }),
+                block_pos,
+            );
+
+            if let Some(player) = sender.as_player() {
+                player.client.enqueue_packet(&packet).await;
             }
 
             sender
-                .send_message(TextComponent::translate(
+                .send_message(pumpkin_macros::translate_cross!(
                     translation::java::COMMANDS_WAYPOINT_MODIFY_STYLE,
-                    [],
+                    translation::java::COMMANDS_WAYPOINT_MODIFY_STYLE
                 ))
                 .await;
 

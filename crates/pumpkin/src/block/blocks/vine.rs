@@ -108,9 +108,7 @@ impl BlockBehaviour for VineBlock {
             let state = args.world.get_block_state(args.position);
             let mut props = VineLikeProperties::from_state_id(state.id, args.block);
 
-            let item_lock = args.item_stack.lock().await;
-            let item = item_lock.item;
-            drop(item_lock);
+            let item = args.item_stack.item;
 
             if item.id != Item::VINE.id {
                 return BlockActionResult::Pass;

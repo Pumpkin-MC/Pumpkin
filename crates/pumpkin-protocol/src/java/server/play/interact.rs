@@ -63,6 +63,40 @@ impl<'a> ServerPacket<'a> for SInteract {
     }
 }
 
+impl crate::ClientPacket for SInteract {
+    fn write_packet_data(
+        &self,
+        mut write: impl std::io::Write,
+        version: &JavaMinecraftVersion,
+    ) -> Result<(), crate::ser::WritingError> {
+        use crate::ser::NetworkWriteExt;
+        if version >= &JavaMinecraftVersion::V_26_1 {
+            write.write_var_int(&self.entity_id)?;
+            write.write_var_int(&self.hand.unwrap_or(VarInt(0)))?;
+            if let Some(pos) = self.target_position {
+                LpVector3d(pos).write(&mut write)?;
+            } else {
+                LpVector3d(Vector3::new(0.0, 0.0, 0.0)).write(&mut write)?;
+            }
+            write.write_bool(self.sneaking)?;
+            return Ok(());
+        }
+
+        write.write_var_int(&self.entity_id)?;
+        write.write_var_int(&self.r#type)?;
+        if let Some(target) = self.target_position {
+            write.write_f32_be(target.x as f32)?;
+            write.write_f32_be(target.y as f32)?;
+            write.write_f32_be(target.z as f32)?;
+        }
+        if let Some(hand) = self.hand {
+            write.write_var_int(&hand)?;
+        }
+        write.write_bool(self.sneaking)?;
+        Ok(())
+    }
+}
+
 #[derive(PartialEq, Eq, Debug, Clone)]
 pub enum ActionType {
     Interact,

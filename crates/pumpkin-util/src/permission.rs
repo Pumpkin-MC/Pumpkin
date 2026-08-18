@@ -107,6 +107,7 @@ impl PermissionRegistry {
     ///
     /// # Parameters
     /// - `permission`: The `Permission` instance to add.
+    #[allow(clippy::expect_used)]
     pub fn register_permission_or_panic(&mut self, permission: Permission) {
         self.register_permission(permission)
             .expect("Permission should have been registered successfully");
@@ -122,6 +123,27 @@ impl PermissionRegistry {
     #[must_use]
     pub fn get_permission(&self, node: &str) -> Option<&Permission> {
         self.permissions.get(node)
+    }
+
+    /// Overrides the default behaviour of an already-registered permission.
+    ///
+    /// Used to apply per-command permission overrides from the server
+    /// configuration after the built-in permissions have been registered.
+    ///
+    /// # Parameters
+    /// - `node`: The full permission node string to update.
+    /// - `default`: The new default behaviour to apply.
+    ///
+    /// # Returns
+    /// - `true` if the node existed and its default was updated.
+    /// - `false` if no permission with that node is registered.
+    pub fn set_default(&mut self, node: &str, default: PermissionDefault) -> bool {
+        if let Some(permission) = self.permissions.get_mut(node) {
+            permission.default = default;
+            true
+        } else {
+            false
+        }
     }
 
     /// Checks whether a permission node exists in the registry.
@@ -302,9 +324,9 @@ impl PermissionManager {
             // Check for inherited permissions from parent nodes
             for (node, value) in attachment.get_permissions() {
                 if let Some(permission) = reg.get_permission(node)
-                    && permission.children.contains_key(permission_node)
+                    && let Some(child_val) = permission.children.get(permission_node)
                 {
-                    return *value && *permission.children.get(permission_node).unwrap();
+                    return *value && *child_val;
                 }
             }
         }

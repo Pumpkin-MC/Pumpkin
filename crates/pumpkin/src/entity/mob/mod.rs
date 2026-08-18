@@ -168,12 +168,20 @@ impl MobEntity {
     }
 
     pub async fn clear_ai_goals(&self, mob: &dyn Mob) {
-        let running_goals = self.goals_selector.lock().unwrap().clear();
+        let running_goals = self
+            .goals_selector
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clear();
         for mut goal in running_goals {
             goal.goal.stop(mob).await;
         }
 
-        let running_target_goals = self.target_selector.lock().unwrap().clear();
+        let running_target_goals = self
+            .target_selector
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clear();
         for mut goal in running_target_goals {
             goal.goal.stop(mob).await;
         }
@@ -182,7 +190,7 @@ impl MobEntity {
     pub fn add_goal<G: crate::entity::ai::goal::Goal + 'static>(&self, priority: u8, goal: G) {
         self.goals_selector
             .lock()
-            .unwrap()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
             .add_goal(priority, Box::new(goal));
     }
 
@@ -193,7 +201,7 @@ impl MobEntity {
     ) {
         self.target_selector
             .lock()
-            .unwrap()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
             .add_goal(priority, Box::new(goal));
     }
 
@@ -500,6 +508,20 @@ pub trait Mob: EntityBase + Send + Sync {
         None
     }
 
+    fn get_item_steerable(&self) -> Option<&dyn crate::entity::item_steerable::ItemSteerable> {
+        None
+    }
+
+    fn is_saddled(&self) -> bool {
+        false
+    }
+
+    fn can_be_saddled(&self) -> bool {
+        false
+    }
+
+    fn set_saddled(&self, _saddled: bool) {}
+
     /// Per-mob tick hook called each tick before AI runs. Override for mob-specific logic.
     fn mob_tick<'a>(&'a self, _caller: &'a Arc<dyn EntityBase>) -> EntityBaseFuture<'a, ()> {
         Box::pin(async {})
@@ -550,7 +572,20 @@ pub trait Mob: EntityBase + Send + Sync {
     /// Set or clear the mob's target. Override to add side effects when targeting changes.
     fn set_mob_target(&self, target: Option<Arc<dyn EntityBase>>) -> EntityBaseFuture<'_, ()> {
         Box::pin(async move {
-            let mut mob_target = self.get_mob_entity().target.lock().await;
+            let target_id = target.as_ref().map(|t| t.get_entity().entity_id);
+            let mob = self.get_mob_entity();
+            let mut event =
+                crate::plugin::api::events::entity::entity_target::EntityTargetEvent::new(
+                    mob.living_entity.entity.entity_id,
+                    target_id,
+                );
+            if let Some(server) = mob.living_entity.entity.world.load().server.upgrade() {
+                server.plugin_manager.fire(&server, &mut event).await;
+            }
+            if event.cancelled {
+                return;
+            }
+            let mut mob_target = mob.target.lock().await;
             *mob_target = target;
         })
     }
@@ -561,6 +596,138 @@ pub trait Mob: EntityBase + Send + Sync {
         item_stack: &'a mut ItemStack,
     ) -> EntityBaseFuture<'a, bool> {
         Box::pin(async move { self.get_mob_entity().mob_interact(player, item_stack).await })
+    }
+
+    fn tame<'a>(&'a self, player: &'a Arc<Player>) -> EntityBaseFuture<'a, ()> {
+        Box::pin(async move {
+            let mob = self.get_mob_entity();
+            let mut event = crate::plugin::api::events::entity::entity_tame::EntityTameEvent::new(
+                mob.living_entity.entity.entity_id,
+                player.clone(),
+            );
+            if let Some(server) = mob.living_entity.entity.world.load().server.upgrade() {
+                server.plugin_manager.fire(&server, &mut event).await;
+            }
+        })
+    }
+
+    fn breed(&self, father_id: i32, mother_id: i32, child_id: i32) -> EntityBaseFuture<'_, ()> {
+        Box::pin(async move {
+            let mob = self.get_mob_entity();
+            let mut event = crate::plugin::api::events::entity::entity_breed::EntityBreedEvent::new(
+                father_id, mother_id, child_id,
+            );
+            if let Some(server) = mob.living_entity.entity.world.load().server.upgrade() {
+                server.plugin_manager.fire(&server, &mut event).await;
+            }
+        })
+    }
+
+    fn dye<'a>(
+        &'a self,
+        color: crate::plugin::api::events::entity::entity_dye::DyeColor,
+        player: Option<&'a Arc<Player>>,
+    ) -> EntityBaseFuture<'a, ()> {
+        Box::pin(async move {
+            let mob = self.get_mob_entity();
+            let mut event = crate::plugin::api::events::entity::entity_dye::EntityDyeEvent::new(
+                mob.living_entity.entity.entity_id,
+                color,
+                player.cloned(),
+            );
+            if let Some(server) = mob.living_entity.entity.world.load().server.upgrade() {
+                server.plugin_manager.fire(&server, &mut event).await;
+            }
+        })
+    }
+
+    fn enter_love_mode(
+        &self,
+        human_entity_id: Option<i32>,
+        ticks_in_love: i32,
+    ) -> EntityBaseFuture<'_, ()> {
+        Box::pin(async move {
+            let mob = self.get_mob_entity();
+            let mut event = crate::plugin::api::events::entity::entity_enter_love_mode::EntityEnterLoveModeEvent::new(
+                mob.living_entity.entity.entity_id,
+                human_entity_id,
+                ticks_in_love,
+            );
+            if let Some(server) = mob.living_entity.entity.world.load().server.upgrade() {
+                server.plugin_manager.fire(&server, &mut event).await;
+            }
+        })
+    }
+
+    fn transform(&self, new_entity_id: i32, transform_reason: String) -> EntityBaseFuture<'_, ()> {
+        Box::pin(async move {
+            let mob = self.get_mob_entity();
+            let mut event =
+                crate::plugin::api::events::entity::entity_transform::EntityTransformEvent::new(
+                    mob.living_entity.entity.entity_id,
+                    new_entity_id,
+                    transform_reason,
+                );
+            if let Some(server) = mob.living_entity.entity.world.load().server.upgrade() {
+                server.plugin_manager.fire(&server, &mut event).await;
+            }
+        })
+    }
+
+    fn break_door(&self, block_pos: BlockPos) -> EntityBaseFuture<'_, ()> {
+        Box::pin(async move {
+            let mob = self.get_mob_entity();
+            let mut event =
+                crate::plugin::api::events::entity::entity_break_door::EntityBreakDoorEvent::new(
+                    mob.living_entity.entity.entity_id,
+                    block_pos,
+                );
+            if let Some(server) = mob.living_entity.entity.world.load().server.upgrade() {
+                server.plugin_manager.fire(&server, &mut event).await;
+            }
+        })
+    }
+
+    fn enter_block(&self, block_pos: BlockPos) -> EntityBaseFuture<'_, ()> {
+        Box::pin(async move {
+            let mob = self.get_mob_entity();
+            let mut event =
+                crate::plugin::api::events::entity::entity_enter_block::EntityEnterBlockEvent::new(
+                    mob.living_entity.entity.entity_id,
+                    block_pos,
+                );
+            if let Some(server) = mob.living_entity.entity.world.load().server.upgrade() {
+                server.plugin_manager.fire(&server, &mut event).await;
+            }
+        })
+    }
+
+    fn interact(&self, block_pos: BlockPos) -> EntityBaseFuture<'_, ()> {
+        Box::pin(async move {
+            let mob = self.get_mob_entity();
+            let mut event =
+                crate::plugin::api::events::entity::entity_interact::EntityInteractEvent::new(
+                    mob.living_entity.entity.entity_id,
+                    block_pos,
+                );
+            if let Some(server) = mob.living_entity.entity.world.load().server.upgrade() {
+                server.plugin_manager.fire(&server, &mut event).await;
+            }
+        })
+    }
+
+    fn place_block(&self, block_pos: BlockPos, block_name: String) -> EntityBaseFuture<'_, ()> {
+        Box::pin(async move {
+            let mob = self.get_mob_entity();
+            let mut event = crate::plugin::api::events::entity::entity_place::EntityPlaceEvent::new(
+                mob.living_entity.entity.entity_id,
+                block_pos,
+                block_name,
+            );
+            if let Some(server) = mob.living_entity.entity.world.load().server.upgrade() {
+                server.plugin_manager.fire(&server, &mut event).await;
+            }
+        })
     }
 
     fn mob_player_collision<'a>(&'a self, _player: &'a Arc<Player>) -> EntityBaseFuture<'a, ()> {
@@ -597,10 +764,41 @@ pub trait Mob: EntityBase + Send + Sync {
     }
 
     fn mob_set_variant_name(&self, _name: &str) {}
+
+    fn get_sheep(&self) -> Option<&crate::entity::passive::sheep::SheepEntity> {
+        None
+    }
+
+    fn mob_on_lightning_strike<'a>(
+        &'a self,
+        caller: &'a dyn EntityBase,
+        lightning: &'a crate::entity::lightning::LightningBoltEntity,
+    ) -> EntityBaseFuture<'a, ()> {
+        Box::pin(async move {
+            self.get_mob_entity()
+                .living_entity
+                .on_lightning_strike(caller, lightning)
+                .await;
+        })
+    }
 }
 impl<T: Mob + Send + 'static> EntityBase for T {
     fn get_mob(&self) -> Option<&dyn Mob> {
         Some(self)
+    }
+
+    fn on_lightning_strike<'a>(
+        &'a self,
+        caller: &'a dyn EntityBase,
+        lightning: &'a crate::entity::lightning::LightningBoltEntity,
+    ) -> EntityBaseFuture<'a, ()> {
+        Box::pin(async move {
+            self.mob_on_lightning_strike(caller, lightning).await;
+        })
+    }
+
+    fn get_item_steerable(&self) -> Option<&dyn crate::entity::item_steerable::ItemSteerable> {
+        Mob::get_item_steerable(self)
     }
 
     fn init_data_tracker(&self) -> EntityBaseFuture<'_, ()> {
@@ -629,6 +827,7 @@ impl<T: Mob + Send + 'static> EntityBase for T {
         self.mob_set_variant_name(name);
     }
 
+    #[allow(clippy::too_many_lines)]
     fn tick<'a>(
         &'a self,
         caller: &'a Arc<dyn EntityBase>,
@@ -666,11 +865,17 @@ impl<T: Mob + Send + 'static> EntityBase for T {
 
             // 1. "Take" selectors out of the mutexes
             let mut target_selector = {
-                let mut guard = mob_entity.target_selector.lock().unwrap();
+                let mut guard = mob_entity
+                    .target_selector
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
                 std::mem::take(&mut *guard)
             };
             let mut goals_selector = {
-                let mut guard = mob_entity.goals_selector.lock().unwrap();
+                let mut guard = mob_entity
+                    .goals_selector
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
                 std::mem::take(&mut *guard)
             };
 
@@ -685,30 +890,48 @@ impl<T: Mob + Send + 'static> EntityBase for T {
 
             // 3. "Put back" selectors
             {
-                *mob_entity.target_selector.lock().unwrap() = target_selector;
-                *mob_entity.goals_selector.lock().unwrap() = goals_selector;
+                *mob_entity
+                    .target_selector
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner) = target_selector;
+                *mob_entity
+                    .goals_selector
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner) = goals_selector;
             };
 
             // 4. Repeat for Navigator
             let mut navigator = {
-                let mut guard = mob_entity.navigator.lock().unwrap();
+                let mut guard = mob_entity
+                    .navigator
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
                 std::mem::take(&mut *guard)
             };
 
             navigator.tick(&mob_entity.living_entity).await;
 
             {
-                *mob_entity.navigator.lock().unwrap() = navigator;
+                *mob_entity
+                    .navigator
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner) = navigator;
             };
 
             // Controllers are synchronous, so we can just use normal blocks
             {
-                let mut look_control = mob_entity.look_control.lock().unwrap();
+                let mut look_control = mob_entity
+                    .look_control
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
                 look_control.tick(self);
             };
 
             {
-                let mut move_control = mob_entity.move_control.lock().unwrap();
+                let mut move_control = mob_entity
+                    .move_control
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
                 move_control.tick(self);
             };
 
@@ -892,7 +1115,11 @@ pub trait PathAwareEntity: Mob + Send + Sync {
 
     fn is_navigation<'a>(&'a self) -> Pin<Box<dyn Future<Output = bool> + Send + 'a>> {
         Box::pin(async {
-            let navigator = self.get_mob_entity().navigator.lock().unwrap();
+            let navigator = self
+                .get_mob_entity()
+                .navigator
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
             !navigator.is_idle()
         })
     }

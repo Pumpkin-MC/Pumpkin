@@ -168,6 +168,18 @@ impl BlockBehaviour for PistonBlock {
 
             // Extend Piston
             if r#type == 0 {
+                let mut event =
+                    crate::plugin::api::events::block::block_piston::BlockPistonExtendEvent::new(
+                        *pos,
+                        format!("{dir:?}"),
+                    );
+                if let Some(server) = world.server.upgrade() {
+                    server.plugin_manager.fire(&server, &mut event).await;
+                }
+                if event.cancelled {
+                    return false;
+                }
+
                 if !move_piston(world, dir, pos, true, sticky).await {
                     return false;
                 }
@@ -191,6 +203,18 @@ impl BlockBehaviour for PistonBlock {
                 return true;
             }
             // Reduce Piston
+
+            let mut event =
+                crate::plugin::api::events::block::block_piston::BlockPistonRetractEvent::new(
+                    *pos,
+                    format!("{dir:?}"),
+                );
+            if let Some(server) = world.server.upgrade() {
+                server.plugin_manager.fire(&server, &mut event).await;
+            }
+            if event.cancelled {
+                return false;
+            }
 
             let extended_pos = pos.offset(dir.to_offset());
 
@@ -218,7 +242,7 @@ impl BlockBehaviour for PistonBlock {
 
             let mut props = PistonProps::default(block);
             props.facing = BlockDirection::by_index((data & 7) as usize)
-                .expect("Invalid block direction index")
+                .unwrap_or(BlockDirection::North)
                 .to_facing();
 
             world.add_block_entity(Arc::new(PistonBlockEntity {
@@ -345,10 +369,9 @@ pub async fn try_move(world: &Arc<World>, block: &Block, block_pos: &BlockPos) {
             if new_props.facing == props.facing
                 && let Some(entity) = world.get_block_entity(&new_pos)
             {
-                let piston = entity
-                    .as_any()
-                    .downcast_ref::<PistonBlockEntity>()
-                    .expect("Block entity at MOVING_PISTON should be PistonBlockEntity");
+                let Some(piston) = entity.as_any().downcast_ref::<PistonBlockEntity>() else {
+                    return;
+                };
                 if piston.extending && piston.current_progress.load() < 0.5
                 // TODO: more stuff...
                 {

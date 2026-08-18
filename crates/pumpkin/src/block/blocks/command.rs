@@ -106,10 +106,10 @@ impl CommandBlock {
             );
             return;
         };
-        let behind_entity: &CommandBlockEntity = behind_entity
-            .as_any()
-            .downcast_ref()
-            .expect("behind should always be a command block");
+        let Some(behind_entity) = behind_entity.as_any().downcast_ref::<CommandBlockEntity>()
+        else {
+            return;
+        };
 
         if behind_entity.success_count.load(Ordering::Relaxed) > 0 {
             world.schedule_block_tick(block, *pos, 1, TickPriority::Normal);
@@ -364,11 +364,9 @@ impl BlockBehaviour for CommandBlock {
                     None
                 },
                 |entity| {
-                    let command_block_entity: &CommandBlockEntity =
-                        entity.as_any().downcast_ref().expect(
-                            "Block entity command block's position should be a matching entity",
-                        );
-                    Some(command_block_entity.success_count.load(Ordering::Acquire) as u8)
+                    let command_block_entity: Option<&CommandBlockEntity> =
+                        entity.as_any().downcast_ref();
+                    command_block_entity.map(|e| e.success_count.load(Ordering::Acquire) as u8)
                 },
             )
         })

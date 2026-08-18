@@ -3,7 +3,6 @@ use std::sync::Arc;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::translation;
 use pumpkin_util::text::TextComponent;
-use tokio::sync::Mutex;
 
 use crate::command::args::bounded_num::BoundedNumArgumentConsumer;
 use crate::command::args::players::PlayersArgumentConsumer;
@@ -40,58 +39,37 @@ async fn clear_player(target: &Player, item: &ItemPredicate, max: i32) -> i32 {
     let mut max: i32 = max;
     let mut is_done: bool = false;
 
-    iter_test_and_clear(
-        &inventory.main_inventory,
-        &mut count,
-        &mut max,
-        item,
-        &mut is_done,
-    )
-    .await;
-
-    let entity_equipment_lock = inventory.entity_equipment.lock().await;
-    iter_test_and_clear(
-        entity_equipment_lock.equipment.values(),
-        &mut count,
-        &mut max,
-        item,
-        &mut is_done,
-    )
-    .await;
-    drop(entity_equipment_lock);
-
-    count
-}
-
-async fn iter_test_and_clear<'i, I>(
-    iter: I,
-    count: &mut i32,
-    max: &mut i32,
-    item: &ItemPredicate,
-    is_done: &mut bool,
-) where
-    I: IntoIterator<Item = &'i Arc<Mutex<ItemStack>>>,
-{
-    // Don't need to enter the loop if we are already done.
-    if !*is_done {
-        for slot in iter {
-            test_and_clear(count, max, item, slot, is_done).await;
-            if *is_done {
+    {
+        let mut main_inv = inventory.main_inventory.write().await;
+        for slot in main_inv.iter_mut() {
+            test_and_clear(&mut count, &mut max, item, slot, &mut is_done);
+            if is_done {
                 break;
             }
         }
     }
+
+    if !is_done {
+        let mut entity_equipment_lock = inventory.entity_equipment.lock().await;
+        for slot in entity_equipment_lock.equipment.values_mut() {
+            test_and_clear(&mut count, &mut max, item, slot, &mut is_done);
+            if is_done {
+                break;
+            }
+        }
+    }
+
+    count
 }
 
-async fn test_and_clear(
+fn test_and_clear(
     count: &mut i32,
     max: &mut i32,
     item: &ItemPredicate,
-    slot: &Arc<Mutex<ItemStack>>,
+    slot_lock: &mut ItemStack,
     is_done: &mut bool,
 ) {
-    let mut slot_lock = slot.lock().await;
-    if item.test_item_stack(&slot_lock) {
+    if item.test_item_stack(slot_lock) {
         let item_count = slot_lock.item_count as i32;
         if *max == MAX_NO_CLEAR_BUT_SIMULATE {
             *count += item_count;

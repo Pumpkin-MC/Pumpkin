@@ -21,7 +21,7 @@ use pumpkin_protocol::java::client::play::CommandSuggestion;
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::click::ClickEvent;
 use pumpkin_util::text::color::{Color, NamedColor};
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 use std::collections::BTreeMap;
 use std::pin::Pin;
 use std::sync::{Arc, LazyLock};
@@ -103,6 +103,11 @@ pub struct CommandDispatcher {
     // We add this because we have a lot of commands
     // still dependent on this dispatcher.
     pub fallback_dispatcher: crate::command::dispatcher::CommandDispatcher,
+
+    /// Primary names of commands that have been turned off through the server
+    /// configuration. A disabled command behaves as if it does not exist: it
+    /// cannot be executed and is left out of listings and suggestions.
+    disabled: FxHashSet<String>,
 }
 
 impl Default for CommandDispatcher {
@@ -124,7 +129,77 @@ impl CommandDispatcher {
             tree,
             consumer: RESULT_DEFERRER.clone(),
             fallback_dispatcher: crate::command::dispatcher::CommandDispatcher::default(),
+            disabled: FxHashSet::default(),
         }
+    }
+
+    /// Turns a command off. A disabled command's primary name is recorded here
+    /// so that it can no longer be executed, listed, or suggested, regardless of
+    /// which internal dispatcher it lives on.
+    pub fn disable_command(&mut self, name: impl Into<String>) {
+        self.disabled.insert(name.into());
+    }
+
+    /// Returns `true` if the command with the given primary name has been turned
+    /// off through the server configuration.
+    #[must_use]
+    pub fn is_disabled(&self, name: &str) -> bool {
+        if self.disabled.contains(name) {
+            return true;
+        }
+        if name.starts_with('/') && self.disabled.contains(name.trim_start_matches('/')) {
+            return true;
+        }
+        if !name.starts_with('/') {
+            let single = format!("/{name}");
+            let double = format!("//{name}");
+            if self.disabled.contains(&single) || self.disabled.contains(&double) {
+                return true;
+            }
+        }
+        false
+    }
+
+    /// Returns `true` if a command (or alias) with the given name is registered
+    /// on either the node-based tree or the legacy dispatcher.
+    #[must_use]
+    pub fn has_command(&self, name: &str) -> bool {
+        self.tree.get(name).is_some() || self.fallback_dispatcher.commands.contains_key(name)
+    }
+
+    /// Collects the names of every root-level alias that redirects to the command
+    /// with the given primary name.
+    ///
+    /// Node-based commands model their aliases as extra root literals that
+    /// redirect to the primary node (see `register_with_aliases`). When a command
+    /// is disabled we also need to turn those aliases off, otherwise a player
+    /// could still reach the live executor through one of them.
+    #[must_use]
+    pub fn tree_alias_names(&self, primary: &str) -> Vec<String> {
+        let Some(primary_id) = self.tree.get(primary) else {
+            return Vec::new();
+        };
+        let primary_node: NodeId = primary_id.into();
+
+        let mut names = Vec::new();
+        for child in self.tree.get_root_children() {
+            // Index by `NodeId` so we get the `AttachedNode` enum (which exposes
+            // `redirect`/`name`) rather than the inner command node.
+            let node_id: NodeId = child.into();
+            let node = &self.tree[node_id];
+            if let Some(redirect) = node.redirect()
+                && self.tree.resolve(redirect) == Some(primary_node)
+            {
+                names.push(node.name().to_ascii_lowercase());
+            }
+        }
+        names
+    }
+
+    /// Extracts the command name (the first whitespace-separated token) from a
+    /// raw input string.
+    fn command_name(input: &str) -> &str {
+        input.split_whitespace().next().unwrap_or("")
     }
 
     /// Registers a command which can then be dispatched.
@@ -134,7 +209,51 @@ impl CommandDispatcher {
     /// unregister a command. This is due to redirection to
     /// potentially unregistered (freed) nodes.
     pub fn register(&mut self, command_node: impl Into<CommandDetachedNode>) -> CommandNodeId {
-        self.tree.add_child_to_root(command_node)
+        let node = command_node.into();
+        let name = node.meta.literal.to_string();
+        let main_node_id = self.tree.add_child_to_root(node);
+
+        // For double-slash or slash-prefixed commands (e.g. //set or /set),
+        // automatically register the alternate slash variant as an alias.
+        if let Some(stripped) = name.strip_prefix("//") {
+            let single_slash = format!("/{stripped}");
+            if self.tree.get(&single_slash).is_none() {
+                let main_node = &self.tree[main_node_id];
+                let description = main_node.meta.description.clone();
+                let mut alias = crate::command::argument_builder::CommandArgumentBuilder::new(
+                    single_slash,
+                    description,
+                );
+                if let Some(executor) = &main_node.owned.command {
+                    alias = alias.executes_arc(executor.clone());
+                    alias = alias.overwrite_requirements(main_node.owned.requirements.clone());
+                }
+                alias = alias.redirect(crate::command::node::Redirection::Local(
+                    main_node_id.into(),
+                ));
+                self.tree.add_child_to_root(alias.build());
+            }
+        } else if let Some(stripped) = name.strip_prefix('/') {
+            let double_slash = format!("//{stripped}");
+            if self.tree.get(&double_slash).is_none() {
+                let main_node = &self.tree[main_node_id];
+                let description = main_node.meta.description.clone();
+                let mut alias = crate::command::argument_builder::CommandArgumentBuilder::new(
+                    double_slash,
+                    description,
+                );
+                if let Some(executor) = &main_node.owned.command {
+                    alias = alias.executes_arc(executor.clone());
+                    alias = alias.overwrite_requirements(main_node.owned.requirements.clone());
+                }
+                alias = alias.redirect(crate::command::node::Redirection::Local(
+                    main_node_id.into(),
+                ));
+                self.tree.add_child_to_root(alias.build());
+            }
+        }
+
+        main_node_id
     }
 
     /// Registers a command which can then be dispatched, along with its
@@ -204,6 +323,15 @@ impl CommandDispatcher {
         source: &CommandSource,
     ) -> Result<i32, CommandSyntaxError> {
         let mut reader = StringReader::new(input);
+
+        // A disabled command must behave as if it does not exist from every
+        // execution path, not just `handle_command`. This backstop covers
+        // programmatic callers such as `/execute run <command>`, which reach the
+        // dispatcher here without going through `handle_command`.
+        if self.is_disabled(Self::command_name(input)) {
+            return Err(DISPATCHER_UNKNOWN_COMMAND.create(&reader));
+        }
+
         self.execute_reader(&mut reader, source).await
     }
 
@@ -382,8 +510,29 @@ impl CommandDispatcher {
             "Source provided to this command was a dummy source"
         );
 
-        if let Some(sliced) = input.strip_prefix("/") {
-            input = sliced;
+        // If input starts with '/', but the command with that leading slash is NOT
+        // registered, while the stripped command IS registered (or if it's an unknown command
+        // starting with a single slash, e.g. from console input), strip one leading slash.
+        // For double-slash commands like WorldEdit's `//set`, the client sends `/set`, which
+        // matches a registered `/set` or `//set` command and preserves the slash.
+        if let Some(sliced) = input.strip_prefix('/') {
+            let first_token = input.split_whitespace().next().unwrap_or("");
+            let sliced_token = sliced.split_whitespace().next().unwrap_or("");
+            if !self.has_command(first_token)
+                && (self.has_command(sliced_token) || !first_token.starts_with("//"))
+            {
+                input = sliced;
+            }
+        }
+
+        // A command that has been turned off in the configuration must behave as
+        // if it does not exist, so we report the usual "unknown command" error
+        // before either dispatcher gets a chance to run it.
+        if self.is_disabled(Self::command_name(input)) {
+            let reader = StringReader::new(input);
+            Self::send_error_to_source(source, DISPATCHER_UNKNOWN_COMMAND.create(&reader), input)
+                .await;
+            return;
         }
 
         let output = self.execute_input(input, source).await;
@@ -562,6 +711,11 @@ impl CommandDispatcher {
     /// This function currently panics if the source provided was a dummy source.
     /// This is subject to change in the future.
     pub async fn suggest(&self, input: &str, source: &CommandSource) -> Vec<CommandSuggestion> {
+        // Never suggest arguments for a command that has been turned off.
+        if self.is_disabled(Self::command_name(input)) {
+            return Vec::new();
+        }
+
         let future1 = async move {
             let parsed = self.parse_input(input, source).await;
             let suggestions = self.get_completion_suggestions_at_end(parsed).await;
@@ -596,11 +750,17 @@ impl CommandDispatcher {
 
         for command in self.tree.get_root_children() {
             let meta = &self.tree[command].meta;
+            if self.is_disabled(&meta.literal_lowercase) {
+                continue;
+            }
             commands.insert(&meta.literal_lowercase, &meta.description);
         }
 
         for fallback_command in self.fallback_dispatcher.commands.values() {
             if let Command::Tree(command_tree) = fallback_command {
+                if self.is_disabled(&command_tree.names[0]) {
+                    continue;
+                }
                 for name in &command_tree.names {
                     commands.insert(name, &command_tree.description);
                 }
@@ -621,12 +781,18 @@ impl CommandDispatcher {
         for command in self.tree.get_root_children() {
             if self.tree.can_use(command.into(), source).await {
                 let meta = &self.tree[command].meta;
+                if self.is_disabled(&meta.literal_lowercase) {
+                    continue;
+                }
                 commands.insert(&meta.literal_lowercase, &meta.description);
             }
         }
 
         for fallback_command in self.fallback_dispatcher.commands.values() {
             if let Command::Tree(command_tree) = fallback_command {
+                if self.is_disabled(&command_tree.names[0]) {
+                    continue;
+                }
                 if let Some(permission) = self
                     .fallback_dispatcher
                     .permissions
@@ -662,12 +828,16 @@ impl CommandDispatcher {
         for (command_node_id, usage) in self.get_usage_of_commands(source).await {
             let meta = &self.tree[command_node_id].meta;
             let command_name = meta.literal.as_ref();
+            if self.is_disabled(&meta.literal_lowercase) {
+                continue;
+            }
             let command_description = meta.description.as_ref();
             commands.insert(command_name, (command_description, usage.into_boxed_str()));
         }
 
         for fallback_command in self.fallback_dispatcher.commands.values() {
             if let Command::Tree(command_tree) = fallback_command
+                && !self.is_disabled(&command_tree.names[0])
                 && let Some(permission) = self
                     .fallback_dispatcher
                     .permissions
@@ -978,6 +1148,23 @@ mod test {
     }
 
     #[tokio::test]
+    async fn disabled_command_cannot_be_executed_directly() {
+        // Guards the `/execute run <command>` bypass: a disabled command must be
+        // rejected even when reached through `execute_input` rather than
+        // `handle_command`.
+        let mut dispatcher = CommandDispatcher::new();
+        let executor: for<'c> fn(&'c CommandContext) -> CommandExecutorResult<'c> =
+            |_| Box::pin(async move { Ok(1) });
+        dispatcher
+            .register(CommandArgumentBuilder::new("simple", "A simple command").executes(executor));
+        dispatcher.disable_command("simple");
+
+        let source = CommandSource::dummy();
+        let result = dispatcher.execute_input("simple", &source).await;
+        assert!(result.is_err_and(|error| error.error_type == &DISPATCHER_UNKNOWN_COMMAND));
+    }
+
+    #[tokio::test]
     async fn arithmetic_command() {
         enum Operation {
             Add,
@@ -1135,5 +1322,22 @@ mod test {
                 .await,
             Ok(1)
         );
+    }
+
+    #[tokio::test]
+    async fn double_slash_command_execution() {
+        let mut dispatcher = CommandDispatcher::new();
+        let executor: for<'c> fn(&'c CommandContext) -> CommandExecutorResult<'c> =
+            |_| Box::pin(async move { Ok(42) });
+
+        dispatcher.register(
+            CommandArgumentBuilder::new("//set", "WorldEdit set command").executes(executor),
+        );
+
+        let source = CommandSource::dummy();
+        // Direct execution with //set
+        assert_eq!(dispatcher.execute_input("//set", &source).await, Ok(42));
+        // Execution via /set alias (as sent by Java client for //set)
+        assert_eq!(dispatcher.execute_input("/set", &source).await, Ok(42));
     }
 }

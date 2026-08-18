@@ -474,7 +474,7 @@ fn verify_oidc_claims(payload: &Value, expected_issuer: Option<&str>) -> Result<
         .ok_or_else(|| AuthError::PublicKeyBuild("OIDC payload missing exp".into()))?;
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
+        .map_err(|_| AuthError::PublicKeyBuild("Clock before UNIX epoch".into()))?
         .as_secs();
     if now > exp {
         return Err(AuthError::PublicKeyBuild("OIDC token expired".into()));

@@ -13,6 +13,9 @@
 //! - [`SyncHandler`] - Synchronizes inventory state between server and client
 //!
 //! # Module Structure
+
+#![deny(clippy::unwrap_used)]
+#![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used, clippy::panic))]
 //!
 //! - [`player`] - Player inventory and screen handler implementations
 //! - [`crafting`] - Crafting table and inventory crafting mechanics
@@ -33,6 +36,7 @@
 pub mod anvil;
 pub mod beacon_screen_handler;
 pub mod brewing;
+pub mod cartography_table_screen_handler;
 pub mod container_click;
 pub mod crafting;
 pub mod double;
@@ -44,10 +48,12 @@ pub mod furnace_like;
 pub mod generic_container_screen_handler;
 pub mod gui_builder;
 pub mod lectern_screen_handler;
+pub mod loom_screen_handler;
 pub mod merchant;
 pub mod player;
 pub mod screen_handler;
 pub mod slot;
+pub mod smithing_table_screen_handler;
 pub mod stonecutter_screen_handler;
 pub mod sync_handler;
 pub mod window_property;

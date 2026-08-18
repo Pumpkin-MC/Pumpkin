@@ -1,5 +1,7 @@
+#![deny(clippy::unwrap_used)]
+#![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used, clippy::panic))]
 // Not warn event sending macros
-#![allow(unused_labels)]
+#![allow(unused_labels, deprecated)]
 
 #[macro_use]
 extern crate pumpkin_macros;
@@ -10,7 +12,7 @@ use crate::logging::{GzipRollingLogger, PumpkinCommandCompleter, ReadlineLogWrap
 use crate::net::bedrock::{
     BedrockClient,
     nethernet::{NetherNetListener, load_or_create_identity_key},
-    status::StatusResponder,
+    status::{IceSocket, StatusResponder},
 };
 use crate::net::java::JavaClient;
 use crate::net::java::pending::PendingConnection;
@@ -95,10 +97,13 @@ pub fn init_logger(advanced_config: &AdvancedConfiguration) {
         let file_logger: Option<GzipRollingLogger> = if advanced_config.logging.file.is_empty() {
             None
         } else {
-            Some(
-                GzipRollingLogger::new(level, advanced_config.logging.file.clone())
-                    .expect("Failed to initialize file logger."),
-            )
+            match GzipRollingLogger::new(level, advanced_config.logging.file.clone()) {
+                Ok(logger) => Some(logger),
+                Err(err) => {
+                    error!("Failed to initialize file logger: {err}");
+                    None
+                }
+            }
         };
 
         let (logger, rl): (
@@ -265,9 +270,9 @@ impl PumpkinServer {
                 },
             };
             // In the event the user puts 0 for their port, this will allow us to know what port it is running on
-            let addr = listener
-                .local_addr()
-                .expect("Unable to get the address of the server!");
+            let addr = listener.local_addr().unwrap_or_else(|_| {
+                std::net::SocketAddr::new(std::net::IpAddr::V4(std::net::Ipv4Addr::UNSPECIFIED), 0)
+            });
 
             if server.advanced_config.networking.query.enabled {
                 info!("Query protocol is enabled. Starting...");
@@ -300,8 +305,8 @@ impl PumpkinServer {
             });
         };
 
-        let nethernet_listener = Self::bind_nethernet(&server).await;
-        let bedrock_status = Self::bind_bedrock_status(&server, nethernet_listener.is_some()).await;
+        let (bedrock_status, ice_socket) = Self::bind_bedrock_status(&server).await;
+        let nethernet_listener = Self::bind_nethernet(&server, ice_socket).await;
 
         Self {
             server,
@@ -311,56 +316,98 @@ impl PumpkinServer {
         }
     }
 
-    async fn bind_nethernet(server: &Arc<Server>) -> Option<NetherNetListener> {
+    async fn bind_nethernet(
+        server: &Arc<Server>,
+        ice_socket: Option<IceSocket>,
+    ) -> Option<NetherNetListener> {
         let config = &server.advanced_config.networking.bedrock;
         if !config.enabled || !config.nethernet.enabled {
             return None;
         }
-        let identity_key = load_or_create_identity_key(&config.nethernet.identity_key)
-            .expect("Failed to load or create the Bedrock NetherNet identity key");
+        let Some(ice_socket) = ice_socket else {
+            error!("Bedrock UDP should be bound before NetherNet");
+            return None;
+        };
+        let identity_key = match load_or_create_identity_key(&config.nethernet.identity_key) {
+            Ok(key) => key,
+            Err(err) => {
+                error!("Failed to load or create the Bedrock NetherNet identity key: {err}");
+                return None;
+            }
+        };
         let _ = server.bedrock_private_key.set(identity_key.clone());
-        let oidc_verifier = (config.online_mode && config.authentication.enabled).then(|| {
-            let (issuer, keys) = server
-                .bedrock_oidc_keys
-                .get()
-                .expect("Bedrock OIDC keys should be initialized before binding NetherNet");
-            Arc::new((issuer.clone(), keys.clone()))
-        });
-        Some(
-            NetherNetListener::bind(
-                config.nethernet.address,
-                identity_key,
-                oidc_verifier,
-                config.nethernet.stun_servers.clone(),
-            )
-            .await
-            .expect("Failed to bind Bedrock NetherNet signaling endpoint"),
+        let oidc_verifier = if config.online_mode && config.authentication.enabled {
+            let Some((issuer, keys)) = server.bedrock_oidc_keys.get() else {
+                error!("Bedrock OIDC keys should be initialized before binding NetherNet");
+                return None;
+            };
+            Some(Arc::new((issuer.clone(), keys.clone())))
+        } else {
+            None
+        };
+        match NetherNetListener::bind(
+            config.nethernet.address,
+            ice_socket,
+            config.nethernet.external_ip,
+            identity_key,
+            config.online_mode,
+            oidc_verifier,
+            config.nethernet.stun_servers.clone(),
         )
+        .await
+        {
+            Ok(l) => Some(l),
+            Err(err) => {
+                error!("Failed to bind Bedrock NetherNet signaling endpoint: {err}");
+                None
+            }
+        }
     }
 
-    async fn bind_bedrock_status(server: &Server, enabled: bool) -> Option<StatusResponder> {
-        if !enabled {
-            return None;
+    async fn bind_bedrock_status(server: &Server) -> (Option<StatusResponder>, Option<IceSocket>) {
+        let config = &server.advanced_config.networking.bedrock;
+        if !config.enabled || !config.nethernet.enabled {
+            return (None, None);
         }
-        let responder =
-            StatusResponder::bind(server.advanced_config.networking.bedrock.nethernet.address)
-                .await
-                .expect("Failed to bind Bedrock server-list status");
-        let (ipv4, ipv6) = responder
-            .local_addrs()
-            .expect("Bedrock status sockets should have local addresses");
-        info!("Bedrock server-list status is listening on {ipv4} (IPv4) and {ipv6} (IPv6)");
-        Some(responder)
+        match StatusResponder::bind(config.nethernet.address).await {
+            Ok((responder, ice_socket)) => {
+                if let Ok((ipv4, ipv6)) = responder.local_addrs() {
+                    info!(
+                        "Bedrock server-list status is listening on {ipv4} (IPv4) and {ipv6} (IPv6)"
+                    );
+                }
+                (Some(responder), Some(ice_socket))
+            }
+            Err(err) => {
+                error!("Failed to bind Bedrock UDP status/ICE endpoint: {err}");
+                (None, None)
+            }
+        }
     }
 
     pub async fn init_plugins(&self) -> std::time::Duration {
-        match self.server.plugin_manager.load_plugins(&self.server).await {
+        if !self.server.advanced_config.plugins.enabled {
+            info!("Plugin system is disabled in configuration.");
+            return std::time::Duration::ZERO;
+        }
+
+        let duration = match self.server.plugin_manager.load_plugins(&self.server).await {
             Ok(duration) => duration,
             Err(err) => {
                 error!("{err}");
                 std::time::Duration::ZERO
             }
+        };
+
+        if self.server.advanced_config.plugins.hot_reload {
+            if let Err(err) = self.server.plugin_manager.start_watcher(&self.server).await {
+                error!("Failed to start plugin hot-reloading watcher: {err}");
+            } else {
+                info!("Plugin hot-reloading watcher started from configuration.");
+            }
         }
+
+        duration
     }
 
     pub async fn unload_plugins(&self) {
@@ -652,26 +699,25 @@ fn setup_stdin_console(server: Arc<Server>) {
             if line.is_empty() || line.as_bytes()[line.len() - 1] != b'\n' {
                 warn!("Console command was not terminated with a newline");
             }
-            rt.block_on(tx.send(line.trim().to_string()))
-                .expect("Failed to send command to server");
+            let _ = rt.block_on(tx.send(line.trim().to_string()));
         }
     });
     tokio::spawn(async move {
-        while !SHOULD_STOP.load(Ordering::Relaxed) {
-            if let Some(command) = rx.recv().await {
-                let mut event = ServerCommandEvent::new(command.clone());
-                server.plugin_manager.fire(&server, &mut event).await;
-                if !event.cancelled {
-                    server
-                        .command_dispatcher
-                        .read()
-                        .await
-                        .handle_command(
-                            &command::CommandSender::Console.into_source(&server).await,
-                            command.as_str(),
-                        )
-                        .await;
-                }
+        while !SHOULD_STOP.load(Ordering::Relaxed)
+            && let Some(command) = rx.recv().await
+        {
+            let mut event = ServerCommandEvent::new(command.clone());
+            server.plugin_manager.fire(&server, &mut event).await;
+            if !event.cancelled {
+                server
+                    .command_dispatcher
+                    .read()
+                    .await
+                    .handle_command(
+                        &command::CommandSender::Console.into_source(&server).await,
+                        command.as_str(),
+                    )
+                    .await;
             }
         }
     });

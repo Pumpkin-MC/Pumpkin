@@ -35,3 +35,22 @@ impl<'a> ServerPacket<'a> for SSetJigsawBlock<'a> {
         })
     }
 }
+
+impl crate::ClientPacket for SSetJigsawBlock<'_> {
+    fn write_packet_data(
+        &self,
+        mut write: impl std::io::Write,
+        _version: &JavaMinecraftVersion,
+    ) -> Result<(), crate::ser::WritingError> {
+        use crate::ser::NetworkWriteExt;
+        write.write_block_pos(&self.pos)?;
+        write.write_string_bounded(self.name, 32767)?;
+        write.write_string_bounded(self.target, 32767)?;
+        write.write_string_bounded(self.pool, 32767)?;
+        write.write_string_bounded(self.final_state, 32767)?;
+        write.write_string_bounded(self.joint, 32767)?;
+        write.write_var_int(&self.selection_priority)?;
+        write.write_var_int(&self.placement_priority)?;
+        Ok(())
+    }
+}

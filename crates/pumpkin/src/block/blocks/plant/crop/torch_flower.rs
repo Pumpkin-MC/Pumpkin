@@ -16,6 +16,16 @@ type TorchFlowerProperties = TorchflowerCropLikeProperties;
 pub struct TorchFlowerBlock;
 
 impl BlockBehaviour for TorchFlowerBlock {
+    fn is_valid_bonemeal_target(&self, args: crate::block::BonemealArgs<'_>) -> bool {
+        <Self as CropBlockBase>::is_valid_bonemeal_target(self, args.world, args.position)
+    }
+
+    fn perform_bonemeal<'a>(&'a self, args: crate::block::BonemealArgs<'a>) -> BlockFuture<'a, ()> {
+        Box::pin(async move {
+            <Self as CropBlockBase>::perform_bonemeal(self, args.world, args.position).await;
+        })
+    }
+
     fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
         <Self as CropBlockBase>::can_plant_on_top(self, args.block_accessor, &args.position.down())
     }
@@ -47,6 +57,10 @@ impl BlockBehaviour for TorchFlowerBlock {
 impl PlantBlockBase for TorchFlowerBlock {}
 
 impl CropBlockBase for TorchFlowerBlock {
+    fn bonemeal_age_increase(&self) -> i32 {
+        1
+    }
+
     fn max_age(&self) -> i32 {
         2
     }

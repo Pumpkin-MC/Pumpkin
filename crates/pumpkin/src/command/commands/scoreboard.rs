@@ -60,15 +60,12 @@ impl CommandExecutor for ObjectivesAddExecutor {
                 return Err(DUPLICATE_OBJECTIVE_ERROR.create_without_context());
             }
 
-            let obj_name_static = Box::leak(objective_name.to_string().into_boxed_str());
-            let criterion_static = Box::leak(criterion.to_string().into_boxed_str());
-
             let new_objective = ScoreboardObjective::new(
-                obj_name_static,
+                objective_name,
                 display_name.clone(),
                 RenderType::Integer,
                 None,
-                criterion_static,
+                criterion,
             );
 
             scoreboard.add_objective(world, new_objective).await;
@@ -128,8 +125,8 @@ impl CommandExecutor for PlayersEnableExecutor {
                     let number_format = current_score.and_then(|s| s.number_format.clone());
 
                     let updated_score = ScoreboardScore {
-                        entity_name: Box::leak(player_name.clone().into_boxed_str()),
-                        objective_name: Box::leak(objective_name.to_string().into_boxed_str()),
+                        entity_name: player_name.clone(),
+                        objective_name: objective_name.to_string(),
                         value: VarInt(value),
                         display_name,
                         number_format,
@@ -172,6 +169,42 @@ impl CommandExecutor for PlayersEnableExecutor {
     }
 }
 
+struct ObjectivesRemoveExecutor;
+
+impl CommandExecutor for ObjectivesRemoveExecutor {
+    fn execute<'a>(&'a self, context: &'a CommandContext) -> CommandExecutorResult<'a> {
+        Box::pin(async move {
+            let objective_name = ObjectiveArgumentType::get(context, ARG_OBJECTIVE)?;
+
+            let world = context.world();
+            let mut scoreboard = world.scoreboard.lock().await;
+
+            let objective = scoreboard
+                .get_objectives()
+                .get(objective_name)
+                .ok_or_else(|| INVALID_ENABLE_ERROR.create_without_context())?;
+
+            let display_name = objective.display_name.clone();
+
+            scoreboard.remove_objective(world, objective_name).await;
+
+            context
+                .source
+                .send_feedback(
+                    TextComponent::translate_cross(
+                        translation::java::COMMANDS_SCOREBOARD_OBJECTIVES_REMOVE_SUCCESS,
+                        translation::bedrock::COMMANDS_SCOREBOARD_OBJECTIVES_REMOVE_SUCCESS,
+                        [display_name],
+                    ),
+                    true,
+                )
+                .await;
+
+            Ok(1)
+        })
+    }
+}
+
 pub fn register(dispatcher: &mut CommandDispatcher, registry: &mut PermissionRegistry) {
     registry.register_permission_or_panic(Permission::new(
         PERMISSION,
@@ -183,22 +216,34 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &mut PermissionReg
         command("scoreboard", DESCRIPTION)
             .requires(PERMISSION)
             .then(
-                literal("objectives").then(
-                    literal("add").then(
-                        argument(ARG_OBJECTIVE, StringArgumentType::SingleWord).then(
-                            argument(ARG_CRITERION, StringArgumentType::SingleWord)
-                                .executes(ObjectivesAddExecutor {
-                                    has_display_name: false,
-                                })
-                                .then(
-                                    argument(ARG_DISPLAY_NAME, StringArgumentType::GreedyPhrase)
-                                        .executes(ObjectivesAddExecutor {
-                                            has_display_name: true,
-                                        }),
-                                ),
+                literal("objectives")
+                    .then(
+                        literal("add").then(
+                            argument(ARG_OBJECTIVE, StringArgumentType::SingleWord).then(
+                                argument(ARG_CRITERION, StringArgumentType::SingleWord)
+                                    .executes(ObjectivesAddExecutor {
+                                        has_display_name: false,
+                                    })
+                                    .then(
+                                        argument(
+                                            ARG_DISPLAY_NAME,
+                                            StringArgumentType::GreedyPhrase,
+                                        )
+                                        .executes(
+                                            ObjectivesAddExecutor {
+                                                has_display_name: true,
+                                            },
+                                        ),
+                                    ),
+                            ),
+                        ),
+                    )
+                    .then(
+                        literal("remove").then(
+                            argument(ARG_OBJECTIVE, ObjectiveArgumentType)
+                                .executes(ObjectivesRemoveExecutor),
                         ),
                     ),
-                ),
             )
             .then(literal("players").then(literal("enable").then(
                 argument(ARG_TARGETS, EntityArgumentType::Players).then(

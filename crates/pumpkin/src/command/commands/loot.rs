@@ -58,8 +58,7 @@ async fn insert_into_inventory(
         if stack.is_empty() {
             break;
         }
-        let slot = inventory.get_stack(i).await;
-        let mut slot_stack = slot.lock().await;
+        let mut slot_stack = inventory.get_stack(i).await;
         if !slot_stack.is_empty() && slot_stack.get_item().id == stack.get_item().id {
             let max_stack_size = 64;
             let space = max_stack_size - slot_stack.item_count;
@@ -67,6 +66,7 @@ async fn insert_into_inventory(
                 let to_add = stack.item_count.min(space);
                 slot_stack.item_count += to_add;
                 stack.item_count -= to_add;
+                inventory.set_stack(i, slot_stack).await;
             }
         }
     }
@@ -75,10 +75,9 @@ async fn insert_into_inventory(
         if stack.is_empty() {
             break;
         }
-        let slot = inventory.get_stack(i).await;
-        let mut slot_stack = slot.lock().await;
+        let slot_stack = inventory.get_stack(i).await;
         if slot_stack.is_empty() {
-            *slot_stack = stack.clone();
+            inventory.set_stack(i, stack.clone()).await;
             stack.item_count = 0;
             break;
         }

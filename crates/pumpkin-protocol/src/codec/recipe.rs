@@ -18,9 +18,7 @@ impl OwnedRecipeIngredient {
                 let name = format!("minecraft:{}", item.registry_key);
                 name == *id
             }
-            Self::Tagged(tag) => item
-                .is_tagged_with(tag)
-                .expect("Crafting recipe used invalid tag"),
+            Self::Tagged(tag) => item.is_tagged_with(tag).unwrap_or(false),
             Self::OneOf(ids) => {
                 let name = format!("minecraft:{}", item.registry_key);
                 ids.contains(&name)
@@ -39,6 +37,7 @@ pub struct OwnedRecipeResult {
 #[derive(Clone, Debug)]
 pub enum OwnedCraftingRecipe {
     Shaped {
+        recipe_id: Option<String>,
         category: RecipeCategoryTypes,
         group: Option<String>,
         show_notification: bool,
@@ -47,6 +46,7 @@ pub enum OwnedCraftingRecipe {
         result: OwnedRecipeResult,
     },
     Shapeless {
+        recipe_id: Option<String>,
         category: RecipeCategoryTypes,
         group: Option<String>,
         ingredients: Vec<OwnedRecipeIngredient>,

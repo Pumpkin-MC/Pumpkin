@@ -1,3 +1,5 @@
+#![deny(clippy::unwrap_used)]
+#![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used, clippy::panic))]
 // Don't warn on event sending macros
 #![recursion_limit = "512"]
 
@@ -45,9 +47,7 @@ static MAIN_THREAD: OnceLock<ThreadId> = OnceLock::new();
 #[allow(clippy::too_many_lines)]
 #[tokio::main]
 async fn main() {
-    MAIN_THREAD
-        .set(thread::current().id())
-        .expect("Expected to successfully set the main thread ID");
+    let _ = MAIN_THREAD.set(thread::current().id());
 
     // Set the panic handler.
     std::panic::set_hook(Box::new(handle_panic));
@@ -56,7 +56,7 @@ async fn main() {
     console_subscriber::init();
     let time = Instant::now();
 
-    let exec_dir = std::env::current_dir().unwrap();
+    let exec_dir = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
 
     let config = PumpkinConfig::load(&exec_dir);
 
@@ -106,9 +106,9 @@ async fn main() {
     print_support_links_and_warning();
 
     tokio::spawn(async {
-        setup_sighandler()
-            .await
-            .expect("Unable to setup signal handlers");
+        if let Err(err) = setup_sighandler().await {
+            tracing::error!("Unable to setup signal handlers: {err}");
+        }
     });
 
     let pumpkin_server = PumpkinServer::new(config.basic, config.advanced, vanilla_data).await;

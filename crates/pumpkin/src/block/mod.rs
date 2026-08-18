@@ -28,7 +28,6 @@ use pumpkin_protocol::java::server::play::SUseItemOn;
 use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::world::{BlockAccessor, BlockFlags};
-use tokio::sync::Mutex;
 
 pub trait BlockMetadata {
     fn ids() -> Box<[BlockId]>;
@@ -66,6 +65,18 @@ pub(crate) fn bounce_entity_after_fall(entity: &dyn EntityBase, bounce_multiplie
 }
 
 pub trait BlockBehaviour: Send + Sync {
+    fn is_valid_bonemeal_target(&self, _args: BonemealArgs<'_>) -> bool {
+        false
+    }
+
+    fn is_bonemeal_success(&self, _args: BonemealArgs<'_>) -> bool {
+        true
+    }
+
+    fn perform_bonemeal<'a>(&'a self, _args: BonemealArgs<'a>) -> BlockFuture<'a, ()> {
+        Box::pin(async {})
+    }
+
     fn normal_use<'a>(&'a self, _args: NormalUseArgs<'a>) -> BlockFuture<'a, BlockActionResult> {
         Box::pin(async move { BlockActionResult::Pass })
     }
@@ -231,6 +242,14 @@ pub trait BlockBehaviour: Send + Sync {
     }
 }
 
+#[derive(Clone, Copy)]
+pub struct BonemealArgs<'a> {
+    pub world: &'a Arc<World>,
+    pub block: &'a Block,
+    pub position: &'a BlockPos,
+    pub state_id: BlockStateId,
+}
+
 pub struct NormalUseArgs<'a> {
     pub server: &'a Server,
     pub world: &'a Arc<World>,
@@ -247,7 +266,7 @@ pub struct UseWithItemArgs<'a> {
     pub position: &'a BlockPos,
     pub player: &'a Arc<Player>,
     pub hit: &'a BlockHitResult<'a>,
-    pub item_stack: &'a Arc<Mutex<ItemStack>>,
+    pub item_stack: &'a mut ItemStack,
     pub equipment_slot: &'a EquipmentSlot,
 }
 
@@ -447,8 +466,23 @@ pub async fn drop_loot(
     params: LootContextParameters,
 ) {
     if let Some(loot_table) = &block.loot_table {
-        for stack in loot_table.get_loot(params) {
-            world.drop_stack(pos, stack).await;
+        let items = loot_table.get_loot(params);
+        if !items.is_empty() {
+            let mut event = crate::plugin::block::block_drop_item::BlockDropItemEvent {
+                block_pos: *pos,
+                world: world.clone(),
+                player: None,
+                items,
+                cancelled: false,
+            };
+            if let Some(server) = world.server.upgrade() {
+                server.plugin_manager.fire(&server, &mut event).await;
+            }
+            if !event.cancelled {
+                for stack in event.items {
+                    world.drop_stack(pos, stack).await;
+                }
+            }
         }
     }
 
@@ -457,7 +491,17 @@ pub async fn drop_loot(
         let amount = experience.experience.get(&mut random);
         // TODO: Silk touch gives no exp
         if amount > 0 {
-            ExperienceOrbEntity::spawn(world, pos.to_f64(), amount as u32).await;
+            let mut event = crate::plugin::block::block_exp::BlockExpEvent {
+                block_pos: *pos,
+                world: world.clone(),
+                exp: amount,
+            };
+            if let Some(server) = world.server.upgrade() {
+                server.plugin_manager.fire(&server, &mut event).await;
+            }
+            if event.exp > 0 {
+                ExperienceOrbEntity::spawn(world, pos.to_f64(), event.exp as u32).await;
+            }
         }
     }
 }
@@ -512,8 +556,7 @@ pub async fn calculate_comparator_output(
     let mut fill_sum = 0.0;
     let mut non_empty_count = 0;
     for i in 0..size {
-        let stack_mutex = inventory.get_stack(i).await;
-        let stack = stack_mutex.lock().await;
+        let stack = inventory.get_stack(i).await;
         if !stack.is_empty() {
             let max_stack = stack.get_max_stack_size() as f32;
             let count = stack.item_count as f32;

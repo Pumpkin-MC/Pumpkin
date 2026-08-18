@@ -3,7 +3,6 @@
 use crate::Block;
 use crate::BlockId;
 use crate::data_component::DataComponent;
-use crate::effect::StatusEffect;
 use crate::entity_type::EntityType;
 use crate::sound::Sound;
 use crate::tag::Taggable;
@@ -43,22 +42,36 @@ impl Clone for Box<dyn DataComponentImpl> {
 pub fn get<T: DataComponentImpl + 'static>(value: &dyn DataComponentImpl) -> &T {
     value.as_any().downcast_ref::<T>().unwrap_or_else(|| {
         panic!(
-            "you are trying to cast {} to {}",
+            "you are trying to cast {} ({}) to {} ({})",
             value.get_self_enum().to_name(),
-            T::get_enum().to_name()
+            std::any::type_name_of_val(value),
+            T::get_enum().to_name(),
+            std::any::type_name::<T>()
         )
     })
 }
 
 #[inline]
 pub fn get_mut<T: DataComponentImpl + 'static>(value: &mut dyn DataComponentImpl) -> &mut T {
-    value.as_mut_any().downcast_mut::<T>().unwrap()
+    let name = value.get_self_enum().to_name();
+    let val_type = std::any::type_name_of_val(value);
+    value.as_mut_any().downcast_mut::<T>().unwrap_or_else(|| {
+        panic!(
+            "you are trying to cast {name} ({val_type}) to {} ({})",
+            T::get_enum().to_name(),
+            std::any::type_name::<T>()
+        )
+    })
 }
 
 macro_rules! default_impl {
     ($t: ident) => {
         fn equal(&self, other: &dyn crate::data_component_impl::DataComponentImpl) -> bool {
-            self == crate::data_component_impl::get::<Self>(other)
+            if let Some(other) = other.as_any().downcast_ref::<Self>() {
+                self == other
+            } else {
+                false
+            }
         }
         #[inline]
         fn get_enum() -> crate::data_component::DataComponent
@@ -84,8 +97,6 @@ macro_rules! default_impl {
         }
     };
 }
-
-pub(crate) use default_impl;
 
 pub fn get_str_hash(val: &str) -> u32 {
     let mut digest = Digest::new(Crc32Iscsi);
@@ -154,9 +165,9 @@ pub fn get_idor(nbt: &NbtCompound, key: &str, default: Sound) -> IdOr<basic::Sou
         let sound = sound.strip_prefix("minecraft:").unwrap_or(sound);
         IdOr::Id(Sound::from_name(sound).unwrap_or(default))
     } else if let Some(sound_compound) = nbt.get_compound(key) {
-        let sound_name = sound_compound
-            .get_string("sound_id")
-            .expect("SoundEvent compound must have a 'sound_id' field");
+        let Some(sound_name) = sound_compound.get_string("sound_id") else {
+            return IdOr::Id(default);
+        };
         let range = sound_compound.get_float("range");
         IdOr::Value(basic::SoundEvent {
             sound_name: sound_name.to_string(),
@@ -741,5 +752,34 @@ mod tests {
             CanPlaceOnImpl::read_data,
         );
         assert_round_trip(LockImpl { predicate }, LockImpl::read_data);
+    }
+
+    #[test]
+    fn equal_with_different_types_returns_false() {
+        let enc = EnchantmentsImpl {
+            enchantment: Cow::Borrowed(&[(&crate::Enchantment::SHARPNESS, 2)]),
+        };
+        let max_stack = MaxStackSizeImpl { size: 64 };
+        assert!(!enc.equal(&max_stack));
+    }
+
+    #[test]
+    fn enchantments_read_data_formats() {
+        let mut direct = NbtCompound::new();
+        direct.put_int("sharpness", 2);
+        let enc1 = EnchantmentsImpl::read_data(&NbtTag::Compound(direct)).unwrap();
+        assert!(enc1.enchantment[0].0 == &crate::Enchantment::SHARPNESS);
+        assert_eq!(enc1.enchantment[0].1, 2);
+
+        let mut levels = NbtCompound::new();
+        levels.put_int("minecraft:sharpness", 2);
+        let mut wrapped = NbtCompound::new();
+        wrapped
+            .child_tags
+            .insert("levels".into(), NbtTag::Compound(levels));
+        let enc2 = EnchantmentsImpl::read_data(&NbtTag::Compound(wrapped)).unwrap();
+        assert_eq!(enc2.enchantment.len(), 1);
+        assert!(enc2.enchantment[0].0 == &crate::Enchantment::SHARPNESS);
+        assert_eq!(enc2.enchantment[0].1, 2);
     }
 }

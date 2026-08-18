@@ -37,10 +37,9 @@ async fn kick_non_whitelisted_players(server: &Server) {
             player
                 .kick(
                     DisconnectReason::Kicked,
-                    TextComponent::translate_cross(
+                    pumpkin_macros::translate_cross!(
                         translation::java::MULTIPLAYER_DISCONNECT_NOT_WHITELISTED,
-                        translation::java::MULTIPLAYER_DISCONNECT_NOT_WHITELISTED,
-                        &[],
+                        translation::bedrock::DISCONNECT_KICKED
                     ),
                 )
                 .await;
@@ -60,18 +59,18 @@ impl CommandExecutor for OnExecutor {
         Box::pin(async move {
             let previous = server.white_list.swap(true, Ordering::Relaxed);
             if previous {
-                Err(CommandError::CommandFailed(TextComponent::translate_cross(
-                    translation::java::COMMANDS_WHITELIST_ALREADYON,
-                    translation::java::COMMANDS_WHITELIST_ALREADYON,
-                    &[],
-                )))
+                Err(CommandError::CommandFailed(
+                    pumpkin_macros::translate_cross!(
+                        translation::java::COMMANDS_WHITELIST_ALREADYON,
+                        translation::bedrock::COMMANDS_ALLOWLIST_ENABLED
+                    ),
+                ))
             } else {
                 kick_non_whitelisted_players(server).await;
                 sender
-                    .send_message(TextComponent::translate_cross(
+                    .send_message(pumpkin_macros::translate_cross!(
                         translation::java::COMMANDS_WHITELIST_ENABLED,
-                        translation::java::COMMANDS_WHITELIST_ENABLED,
-                        &[],
+                        translation::bedrock::COMMANDS_ALLOWLIST_ENABLED
                     ))
                     .await;
                 Ok(1)
@@ -93,19 +92,19 @@ impl CommandExecutor for OffExecutor {
             let previous = server.white_list.swap(false, Ordering::Relaxed);
             if previous {
                 sender
-                    .send_message(TextComponent::translate_cross(
+                    .send_message(pumpkin_macros::translate_cross!(
                         translation::java::COMMANDS_WHITELIST_DISABLED,
-                        translation::java::COMMANDS_WHITELIST_DISABLED,
-                        &[],
+                        translation::bedrock::COMMANDS_ALLOWLIST_DISABLED
                     ))
                     .await;
                 Ok(1)
             } else {
-                Err(CommandError::CommandFailed(TextComponent::translate_cross(
-                    translation::java::COMMANDS_WHITELIST_ALREADYOFF,
-                    translation::java::COMMANDS_WHITELIST_ALREADYOFF,
-                    &[],
-                )))
+                Err(CommandError::CommandFailed(
+                    pumpkin_macros::translate_cross!(
+                        translation::java::COMMANDS_WHITELIST_ALREADYOFF,
+                        translation::bedrock::COMMANDS_ALLOWLIST_DISABLED
+                    ),
+                ))
             }
         })
     }
@@ -124,10 +123,9 @@ impl CommandExecutor for ListExecutor {
             let whitelist = &server.data.whitelist_config.read().await.whitelist;
             if whitelist.is_empty() {
                 sender
-                    .send_message(TextComponent::translate_cross(
+                    .send_message(pumpkin_macros::translate_cross!(
                         translation::java::COMMANDS_WHITELIST_NONE,
-                        translation::java::COMMANDS_WHITELIST_NONE,
-                        [],
+                        translation::bedrock::COMMANDS_ALLOWLIST_LIST
                     ))
                     .await;
                 return Ok(0);
@@ -142,13 +140,11 @@ impl CommandExecutor for ListExecutor {
             let names_len = names.len() as i32;
 
             sender
-                .send_message(TextComponent::translate_cross(
+                .send_message(pumpkin_macros::translate_cross!(
                     translation::java::COMMANDS_WHITELIST_LIST,
-                    translation::java::COMMANDS_WHITELIST_LIST,
-                    [
-                        TextComponent::text(whitelist.len().to_string()),
-                        TextComponent::text(names),
-                    ],
+                    translation::bedrock::COMMANDS_ALLOWLIST_LIST,
+                    TextComponent::text(whitelist.len().to_string()),
+                    TextComponent::text(names)
                 ))
                 .await;
 
@@ -170,10 +166,9 @@ impl CommandExecutor for ReloadExecutor {
             *server.data.whitelist_config.write().await = WhitelistConfig::load();
             kick_non_whitelisted_players(server).await;
             sender
-                .send_message(TextComponent::translate_cross(
+                .send_message(pumpkin_macros::translate_cross!(
                     translation::java::COMMANDS_WHITELIST_RELOADED,
-                    translation::java::COMMANDS_WHITELIST_RELOADED,
-                    &[],
+                    translation::bedrock::COMMANDS_ALLOWLIST_RELOADED
                 ))
                 .await;
             Ok(1)
@@ -212,10 +207,10 @@ impl CommandExecutor for AddExecutor {
                     .whitelist
                     .push(WhitelistEntry::new(profile.id, profile.name.clone()));
                 sender
-                    .send_message(TextComponent::translate_cross(
+                    .send_message(pumpkin_macros::translate_cross!(
                         translation::java::COMMANDS_WHITELIST_ADD_SUCCESS,
-                        translation::java::COMMANDS_WHITELIST_ADD_SUCCESS,
-                        [TextComponent::text(profile.name.clone())],
+                        translation::bedrock::COMMANDS_ALLOWLIST_ADD_SUCCESS,
+                        TextComponent::text(profile.name.clone())
                     ))
                     .await;
                 successes += 1;
@@ -224,11 +219,12 @@ impl CommandExecutor for AddExecutor {
             whitelist.save();
 
             if successes == 0 {
-                Err(CommandError::CommandFailed(TextComponent::translate_cross(
-                    translation::java::COMMANDS_WHITELIST_ADD_FAILED,
-                    translation::java::COMMANDS_WHITELIST_ADD_FAILED,
-                    &[],
-                )))
+                Err(CommandError::CommandFailed(
+                    pumpkin_macros::translate_cross!(
+                        translation::java::COMMANDS_WHITELIST_ADD_FAILED,
+                        translation::bedrock::COMMANDS_ALLOWLIST_ADD_FAILED
+                    ),
+                ))
             } else {
                 Ok(successes)
             }
@@ -261,10 +257,10 @@ impl CommandExecutor for RemoveExecutor {
                 if let Some(i) = i {
                     whitelist.whitelist.remove(i);
                     sender
-                        .send_message(TextComponent::translate_cross(
+                        .send_message(pumpkin_macros::translate_cross!(
                             translation::java::COMMANDS_WHITELIST_REMOVE_SUCCESS,
-                            translation::java::COMMANDS_WHITELIST_REMOVE_SUCCESS,
-                            [TextComponent::text(player.name.clone())],
+                            translation::bedrock::COMMANDS_ALLOWLIST_REMOVE_SUCCESS,
+                            TextComponent::text(player.name.clone())
                         ))
                         .await;
                     successes += 1;
@@ -277,11 +273,12 @@ impl CommandExecutor for RemoveExecutor {
             kick_non_whitelisted_players(server).await;
 
             if successes == 0 {
-                Err(CommandError::CommandFailed(TextComponent::translate_cross(
-                    translation::java::COMMANDS_WHITELIST_REMOVE_FAILED,
-                    translation::java::COMMANDS_WHITELIST_REMOVE_FAILED,
-                    &[],
-                )))
+                Err(CommandError::CommandFailed(
+                    pumpkin_macros::translate_cross!(
+                        translation::java::COMMANDS_WHITELIST_REMOVE_FAILED,
+                        translation::bedrock::COMMANDS_ALLOWLIST_REMOVE_FAILED
+                    ),
+                ))
             } else {
                 Ok(successes)
             }

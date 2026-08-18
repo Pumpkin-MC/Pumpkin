@@ -12,17 +12,19 @@ use crossbeam::atomic::AtomicCell;
 use pumpkin_data::packet::CURRENT_MC_VERSION;
 use pumpkin_data::translation;
 use pumpkin_protocol::java::server::play::{
-    SAttack, SBundleItemSelected, SChangeGameMode, SChatCommand, SChatMessage, SChunkBatch,
-    SClickSlot, SClientCommand, SClientInformationPlay, SClientTickEnd, SCloseContainer,
-    SCommandSuggestion, SConfirmTeleport, SContainerButtonClick,
-    SCookieResponse as SPCookieResponse, SCustomPayload, SDebugSampleSubscription,
-    SDebugSubscriptionRequest, SInteract, SJigsawGenerate, SMoveVehicle, SPaddleBoat,
-    SPickItemFromBlock, SPlaceRecipe, SPlayPingRequest, SPlayerAbilities, SPlayerAction,
-    SPlayerCommand, SPlayerInput, SPlayerLoaded, SPlayerPosition, SPlayerPositionRotation,
-    SPlayerRotation, SPlayerSession, SRecipeBookChangeSettings, SRecipeBookSeenRecipe, SRenameItem,
-    SSeenAdvancement, SSelectTrade, SSetCommandBlock, SSetCreativeSlot, SSetHeldItem,
-    SSetJigsawBlock, SSetPlayerGround, SSetTestBlock, SSwingArm, STeleportToEntity,
-    STestInstanceBlockAction, SUpdateSign, SUseItem, SUseItemOn,
+    SAttack, SBlockEntityTagQuery, SBundleItemSelected, SChangeGameMode, SChatCommand,
+    SChatMessage, SChunkBatch, SClickSlot, SClientCommand, SClientInformationPlay, SClientTickEnd,
+    SCloseContainer, SCommandSuggestion, SConfigurationAcknowledged, SConfirmTeleport,
+    SContainerButtonClick, SContainerSlotStateChanged, SCookieResponse as SPCookieResponse,
+    SCustomPayload, SDebugSampleSubscription, SDebugSubscriptionRequest, SEditBook,
+    SEntityTagQuery, SInteract, SJigsawGenerate, SLockDifficulty, SMoveVehicle, SPaddleBoat,
+    SPickItemFromBlock, SPlaceRecipe, SPlayPingRequest, SPlayPong, SPlayResourcePack,
+    SPlayerAbilities, SPlayerAction, SPlayerCommand, SPlayerInput, SPlayerLoaded, SPlayerPosition,
+    SPlayerPositionRotation, SPlayerRotation, SPlayerSession, SRecipeBookChangeSettings,
+    SRecipeBookSeenRecipe, SRenameItem, SSeenAdvancement, SSelectTrade, SSetCommandBlock,
+    SSetCommandMinecart, SSetCreativeSlot, SSetGameRule, SSetHeldItem, SSetJigsawBlock,
+    SSetPlayerGround, SSetStructureBlock, SSetTestBlock, SSpectateEntity, SSwingArm,
+    STeleportToEntity, STestInstanceBlockAction, SUpdateSign, SUseItem, SUseItemOn,
 };
 use pumpkin_protocol::packet::MultiVersionJavaPacket;
 use pumpkin_protocol::{
@@ -178,7 +180,12 @@ impl JavaClient {
     }
 
     pub async fn progress_player_packets(&self, player: &Arc<Player>, server: &Arc<Server>) {
-        let Some(mut network_reader) = self.network_reader.lock().unwrap().take() else {
+        let Some(mut network_reader) = self
+            .network_reader
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .take()
+        else {
             return;
         };
 
@@ -193,7 +200,7 @@ impl JavaClient {
                 _ = keep_alive_interval.tick() => {
                     // If the client never responded to the LAST keep-alive, they timed out.
                     if self.wait_for_keep_alive.load(Ordering::Relaxed) {
-                        self.kick(TextComponent::translate(translation::java::DISCONNECT_TIMEOUT, [])).await;
+                        self.kick(pumpkin_macros::translate_cross!(translation::java::DISCONNECT_TIMEOUT, translation::bedrock::DISCONNECT_TIMEOUT)).await;
                         break;
                     }
 
@@ -208,13 +215,6 @@ impl JavaClient {
                     self.last_keep_alive_time.store(Instant::now());
                     let packet = pumpkin_protocol::java::client::play::CKeepAlive::new(keep_alive_id);
                     self.enqueue_packet(&packet).await;
-
-                    let seq = self.packet_sequence.swap(-1, Ordering::Relaxed);
-                    if seq != -1 {
-                        self
-                            .send_packet_now(&CAcknowledgeBlockChange::new(seq.into()))
-                            .await;
-                    }
                 }
 
                 // INCOMING PACKETS
@@ -243,6 +243,15 @@ impl JavaClient {
                                 e
                             );
                         }
+                    }
+
+                    // ServerGamePacketListenerImpl acknowledges the sequence at the end of the
+                    // packet that carried it. Until we do, the client keeps predicting the block
+                    // it interacted with and drops our updates for that position
+                    let seq = self.packet_sequence.swap(-1, Ordering::Relaxed);
+                    if seq != -1 {
+                        self.send_packet_now(&CAcknowledgeBlockChange::new(seq.into()))
+                            .await;
                     }
                 }
             }
@@ -318,14 +327,14 @@ impl JavaClient {
         let payload = Bytes::from(buf);
 
         let player = self.player.load_full();
-        let cancelled = if let Some(player) = player.as_ref() {
-            player
-                .fire_packet_sent_no_obj(P::to_id(self.version.load()), payload.clone())
-                .await
+        if let Some(player) = player.as_ref() {
+            let event = player
+                .fire_packet_sent_event_no_obj(P::to_id(self.version.load()), payload)
+                .await;
+            if !event.cancelled {
+                self.enqueue_packet_data(event.payload).await;
+            }
         } else {
-            false
-        };
-        if !cancelled {
             self.enqueue_packet_data(payload).await;
         }
     }
@@ -404,7 +413,7 @@ impl JavaClient {
                     Ok(packet) => Some(packet),
                     Err(err) => {
                         if !matches!(err, PacketDecodeError::ConnectionClosed) {
-                            warn!("Failed to decode packet from client {}: {}", self.id, err);
+                            debug!("Failed to decode packet from client {}: {}", self.id, err);
                             let text = format!("Error while reading incoming packet {err}");
                             self.kick(TextComponent::text(text)).await;
                         }
@@ -416,20 +425,26 @@ impl JavaClient {
     }
 
     pub async fn kick(&self, reason: TextComponent) {
-        match self.connection_state.load() {
-            ConnectionState::Login => {
-                // TextComponent implements Serialize and writes in bytes instead of String, that's the reasib we only use content
-                self.send_packet_now(&CLoginDisconnect::new(
-                    serde_json::to_string(&reason.0).unwrap_or_else(|_| String::new()),
-                ))
-                .await;
-            }
-            ConnectionState::Config => {
-                self.send_packet_now(&CConfigDisconnect::new(&reason.get_text()))
+        self.kick_explicit(&reason, true).await;
+    }
+
+    pub async fn kick_explicit(&self, reason: &TextComponent, send_packet: bool) {
+        if send_packet {
+            match self.connection_state.load() {
+                ConnectionState::Login => {
+                    // TextComponent implements Serialize and writes in bytes instead of String, that's the reason we only use content
+                    self.send_packet_now(&CLoginDisconnect::new(
+                        serde_json::to_string(&reason.0).unwrap_or_else(|_| String::new()),
+                    ))
                     .await;
+                }
+                ConnectionState::Config => {
+                    self.send_packet_now(&CConfigDisconnect::new(&reason.clone().get_text()))
+                        .await;
+                }
+                ConnectionState::Play => self.send_packet_now(&CPlayDisconnect::new(reason)).await,
+                _ => {}
             }
-            ConnectionState::Play => self.send_packet_now(&CPlayDisconnect::new(&reason)).await,
-            _ => {}
         }
         debug!("Closing connection for {}", self.id);
         self.close();
@@ -445,15 +460,14 @@ impl JavaClient {
         let payload = Bytes::from(packet_buf);
 
         let player = self.player.load_full();
-        let cancelled = if let Some(player) = player.as_ref() {
-            player
-                .fire_packet_sent_no_obj(P::to_id(self.version.load()), payload.clone())
-                .await
+        if let Some(player) = player.as_ref() {
+            let event = player
+                .fire_packet_sent_event_no_obj(P::to_id(self.version.load()), payload)
+                .await;
+            if !event.cancelled {
+                self.send_packet_now_data(event.payload).await;
+            }
         } else {
-            false
-        };
-
-        if !cancelled {
             self.send_packet_now_data(payload).await;
         }
     }
@@ -532,16 +546,19 @@ impl JavaClient {
     pub fn start_outgoing_packet_task(&mut self) {
         const MAX_BATCH_SIZE: usize = 64;
 
-        let mut packet_receiver = self
-            .outgoing_packet_queue_recv
-            .take()
-            .expect("This was set in the new fn");
-        let mut priority_packet_receiver = self
-            .outgoing_packet_priority_recv
-            .take()
-            .expect("This was set in the new fn");
+        let Some(mut packet_receiver) = self.outgoing_packet_queue_recv.take() else {
+            return;
+        };
+        let Some(mut priority_packet_receiver) = self.outgoing_packet_priority_recv.take() else {
+            return;
+        };
         let close_token = self.close_token.clone();
-        let Some(mut writer) = self.network_writer.lock().unwrap().take() else {
+        let Some(mut writer) = self
+            .network_writer
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .take()
+        else {
             return;
         };
         let id = self.id;
@@ -637,7 +654,6 @@ impl JavaClient {
         server: &Arc<Server>,
         packet: &RawPacket,
     ) -> Result<(), Box<dyn PumpkinError>> {
-        let mut payload = &packet.payload[..];
         let version = self.version.load();
 
         let mut event = crate::plugin::server::packet::PacketReceivedEvent::new(
@@ -650,7 +666,9 @@ impl JavaClient {
             return Ok(());
         }
 
-        match packet.id {
+        let mut payload = &event.payload[..];
+
+        match event.packet_id {
             id if id == SConfirmTeleport::to_id(version) => {
                 self.handle_confirm_teleport(
                     player,
@@ -887,6 +905,10 @@ impl JavaClient {
                 self.handle_sign_update(player, SUpdateSign::read(&mut payload, &version)?)
                     .await;
             }
+            id if id == SEditBook::to_id(version) => {
+                self.handle_edit_book(player, SEditBook::read(&mut payload, &version)?)
+                    .await;
+            }
             id if id == SUseItemOn::to_id(version) => {
                 self.handle_use_item_on(player, SUseItemOn::read(&mut payload, &version)?, server)
                     .await?;
@@ -937,6 +959,7 @@ impl JavaClient {
             }
             id if id == SRecipeBookChangeSettings::to_id(version) => {
                 self.handle_recipe_book_change_settings(
+                    server,
                     player,
                     SRecipeBookChangeSettings::read(&mut payload, &version)?,
                 )
@@ -944,6 +967,7 @@ impl JavaClient {
             }
             id if id == SRecipeBookSeenRecipe::to_id(version) => {
                 self.handle_recipe_book_seen_recipe(
+                    server,
                     player,
                     SRecipeBookSeenRecipe::read(&mut payload, &version)?,
                 )
@@ -983,8 +1007,72 @@ impl JavaClient {
                 )
                 .await;
             }
+            id if id == SPlayResourcePack::to_id(version) => {
+                self.handle_play_resource_pack_response(
+                    server,
+                    player,
+                    SPlayResourcePack::read(&mut payload, &version)?,
+                )
+                .await;
+            }
+            id if id == SPlayPong::to_id(version) => {
+                self.handle_play_pong(player, &SPlayPong::read(&mut payload, &version)?);
+            }
+            id if id == SLockDifficulty::to_id(version) => {
+                self.handle_lock_difficulty(
+                    server,
+                    player,
+                    &SLockDifficulty::read(&mut payload, &version)?,
+                );
+            }
+            id if id == SContainerSlotStateChanged::to_id(version) => {
+                self.handle_container_slot_state_changed(
+                    player,
+                    &SContainerSlotStateChanged::read(&mut payload, &version)?,
+                );
+            }
+            id if id == SSpectateEntity::to_id(version) => {
+                self.handle_spectate_entity(
+                    player,
+                    server,
+                    SSpectateEntity::read(&mut payload, &version)?,
+                )
+                .await;
+            }
+            id if id == SSetCommandMinecart::to_id(version) => {
+                self.handle_set_command_minecart(
+                    player,
+                    &SSetCommandMinecart::read(&mut payload, &version)?,
+                );
+            }
+            id if id == SSetStructureBlock::to_id(version) => {
+                self.handle_set_structure_block(
+                    player,
+                    &SSetStructureBlock::read(&mut payload, &version)?,
+                );
+            }
+            id if id == SSetGameRule::to_id(version) => {
+                self.handle_set_game_rule(player, &SSetGameRule::read(&mut payload, &version)?);
+            }
+            id if id == SBlockEntityTagQuery::to_id(version) => {
+                self.handle_block_entity_tag_query(
+                    player,
+                    SBlockEntityTagQuery::read(&mut payload, &version)?,
+                )
+                .await;
+            }
+            id if id == SEntityTagQuery::to_id(version) => {
+                self.handle_entity_tag_query(
+                    player,
+                    SEntityTagQuery::read(&mut payload, &version)?,
+                )
+                .await;
+            }
+            id if id == SConfigurationAcknowledged::to_id(version) => {
+                self.handle_configuration_acknowledged(player);
+            }
             _ => {
-                warn!("Failed to handle player packet id {}", packet.id);
+                warn!("Failed to handle player packet id {}", event.packet_id);
             }
         }
         Ok(())

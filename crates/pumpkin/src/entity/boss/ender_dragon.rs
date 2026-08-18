@@ -379,7 +379,7 @@ impl EnderDragonEntity {
             .iter()
             .enumerate()
             .filter_map(|(i, n)| n.map(|n| (i, n.dist_sq_vec(pos))))
-            .min_by(|a, b| a.1.partial_cmp(&b.1).unwrap())
+            .min_by(|a, b| a.1.total_cmp(&b.1))
             .map_or(0, |(i, _)| i)
     }
 
@@ -544,8 +544,7 @@ impl EnderDragonEntity {
                 let b_pos = b.living_entity.entity.pos.load();
                 a_pos
                     .distance_squared(pos)
-                    .partial_cmp(&b_pos.distance_squared(pos))
-                    .unwrap()
+                    .total_cmp(&b_pos.distance_squared(pos))
             })
             .cloned()
     }
