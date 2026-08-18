@@ -219,8 +219,9 @@ impl<'a> ContextChain<'a> {
         let mut current = Arc::new(root.clone());
         loop {
             if let Some(child) = current.get_child() {
+                let temp_child = child.clone();
                 modifiers.push(current);
-                current = child.clone();
+                current = temp_child;
             } else {
                 return current
                     .command
