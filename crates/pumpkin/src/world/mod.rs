@@ -161,6 +161,7 @@ pub mod bossbar;
 pub mod custom_bossbar;
 pub mod dragon_fight;
 pub mod end_podium;
+pub mod game_event;
 pub mod natural_spawner;
 pub mod scoreboard;
 pub mod weather;
@@ -1205,12 +1206,28 @@ impl World {
                 let p_cache = players_cache.clone();
 
                 tasks.spawn(async move {
-                    e_clone.get_entity().age.fetch_add(1, Relaxed);
+                    let first_tick = e_clone.get_entity().age.fetch_add(1, Relaxed) == 0;
                     e_clone.tick(&e_clone, &s_clone).await;
 
                     let entity_inner = e_clone.get_entity();
                     let entity_pos = entity_inner.pos.load();
                     let entity_bb = entity_inner.bounding_box.load();
+
+                    if first_tick
+                        && crate::entity::projectile::is_projectile(entity_inner.entity_type)
+                    {
+                        entity_inner
+                            .world
+                            .load()
+                            .game_event(
+                                pumpkin_data::game_event::GameEvent::ProjectileShoot,
+                                entity_pos,
+                                &crate::world::game_event::vibration::GameEventContext::of_entity(
+                                    &e_clone,
+                                ),
+                            )
+                            .await;
+                    }
 
                     for (player, player_pos, player_bb) in p_cache.iter() {
                         if (player_pos.x - entity_pos.x).abs() < 5.0
@@ -3660,6 +3677,12 @@ impl World {
         }
 
         let block_count = explosion.explode(self).await;
+        self.game_event(
+            pumpkin_data::game_event::GameEvent::Explode,
+            position,
+            &crate::world::game_event::vibration::GameEventContext::default(),
+        )
+        .await;
         let particle = if power < 2.0 {
             Particle::Explosion
         } else {
@@ -5013,6 +5036,20 @@ impl World {
 
             let broken_state_id = self.set_block_state(position, new_state_id, flags).await;
 
+            let context = cause.as_ref().map_or_else(
+                crate::world::game_event::vibration::GameEventContext::default,
+                |player| {
+                    let source_entity: Arc<dyn EntityBase> = player.clone();
+                    crate::world::game_event::vibration::GameEventContext::of_entity(&source_entity)
+                },
+            );
+            self.game_event(
+                pumpkin_data::game_event::GameEvent::BlockDestroy,
+                position.to_centered_f64(),
+                &context.with_affected_state(broken_state_id),
+            )
+            .await;
+
             // Close container screens for any players viewing this block
             self.close_container_screens_at(position).await;
 
@@ -5767,6 +5804,54 @@ impl World {
         self.level.read_chunk_sync(&chunk_pos, |chunk| {
             chunk.mark_dirty(true);
         });
+    }
+
+    /// Dispatches a game event to Sculk Sensors in nearby loaded chunks.
+    pub async fn game_event(
+        self: &Arc<Self>,
+        event: pumpkin_data::game_event::GameEvent,
+        source_position: Vector3<f64>,
+        context: &crate::world::game_event::vibration::GameEventContext,
+    ) {
+        use crate::block::entities::calibrated_sculk_sensor::CalibratedSculkSensorBlockEntity;
+        use crate::block::entities::sculk_sensor::SculkSensorBlockEntity;
+        use crate::world::game_event::vibration::SculkSensorVibrationUser;
+
+        let source_chunk = BlockPos::floored_v(source_position).chunk_position();
+        let active_chunks = self.active_chunks.load();
+
+        for x in -1..=1 {
+            for z in -1..=1 {
+                let chunk_pos = Vector2::new(source_chunk.x + x, source_chunk.y + z);
+                if !active_chunks.contains(&chunk_pos) {
+                    continue;
+                }
+
+                let Some(block_entities) = self.block_entities.get(&chunk_pos) else {
+                    continue;
+                };
+                for (sensor_pos, block_entity) in block_entities.iter() {
+                    let (listener, radius) = if let Some(sensor) = block_entity
+                        .as_any()
+                        .downcast_ref::<SculkSensorBlockEntity>(
+                    ) {
+                        (&sensor.listener, 8)
+                    } else if let Some(sensor) = block_entity
+                        .as_any()
+                        .downcast_ref::<CalibratedSculkSensorBlockEntity>()
+                    {
+                        (&sensor.listener, 16)
+                    } else {
+                        continue;
+                    };
+
+                    let user = SculkSensorVibrationUser::new(*sensor_pos, radius);
+                    listener
+                        .handle_game_event(self, event, context, &source_position, &user)
+                        .await;
+                }
+            }
+        }
     }
 
     fn intersects_aabb_with_direction(

@@ -561,6 +561,10 @@ pub trait Mob: EntityBase + Send + Sync {
         true
     }
 
+    fn dampens_vibrations(&self) -> bool {
+        false
+    }
+
     fn get_mob_gravity(&self) -> f64 {
         self.get_mob_entity().living_entity.get_gravity()
     }
@@ -785,6 +789,10 @@ pub trait Mob: EntityBase + Send + Sync {
 impl<T: Mob + Send + 'static> EntityBase for T {
     fn get_mob(&self) -> Option<&dyn Mob> {
         Some(self)
+    }
+
+    fn dampens_vibrations(&self) -> bool {
+        Mob::dampens_vibrations(self)
     }
 
     fn on_lightning_strike<'a>(

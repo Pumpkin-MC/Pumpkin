@@ -1,13 +1,14 @@
 use std::{pin::Pin, sync::Arc};
 
 use crate::{
-    entity::player::Player,
+    entity::{EntityBase, player::Player},
     item::{ItemBehaviour, ItemMetadata},
 };
 use pumpkin_data::{
     Block, BlockDirection, BlockStateId,
     dimension::Dimension,
     fluid::Fluid,
+    game_event::GameEvent,
     item::Item,
     item_stack::ItemStack,
     sound::{Sound, SoundCategory},
@@ -18,7 +19,7 @@ use pumpkin_util::{
 };
 use pumpkin_world::{inventory::Inventory, tick::TickPriority, world::BlockFlags};
 
-use crate::world::World;
+use crate::world::{World, game_event::vibration::GameEventContext};
 
 pub struct EmptyBucketItem;
 pub struct FilledBucketItem;
@@ -186,9 +187,9 @@ async fn try_pickup_bucket_item(
     world: &Arc<World>,
     block_pos: BlockPos,
     direction: BlockDirection,
-) -> Option<&'static Item> {
+) -> Option<(&'static Item, BlockPos)> {
     if let Some(item) = try_pickup_fluid_at(world, block_pos).await {
-        return Some(item);
+        return Some((item, block_pos));
     }
 
     let target_pos = block_pos.offset(direction.to_offset());
@@ -199,7 +200,7 @@ async fn try_pickup_bucket_item(
             .set_block_state(&target_pos, state_id, BlockFlags::NOTIFY_NEIGHBORS)
             .await;
         world.schedule_fluid_tick(&Fluid::WATER, target_pos, 5, TickPriority::Normal);
-        return Some(&Item::WATER_BUCKET);
+        return Some((&Item::WATER_BUCKET, target_pos));
     }
 
     None
@@ -225,7 +226,7 @@ async fn try_place_powder_snow(
     world: &Arc<World>,
     pos: BlockPos,
     direction: BlockDirection,
-) -> bool {
+) -> Option<BlockPos> {
     let state = world.get_block_state(&pos);
     let target_pos = if state.replaceable() {
         pos
@@ -234,7 +235,7 @@ async fn try_place_powder_snow(
     };
     let target_state = world.get_block_state(&target_pos);
     if !target_state.is_air() && !target_state.is_liquid() && !target_state.replaceable() {
-        return false;
+        return None;
     }
     world
         .set_block_state(
@@ -243,7 +244,7 @@ async fn try_place_powder_snow(
             BlockFlags::NOTIFY_NEIGHBORS,
         )
         .await;
-    true
+    Some(target_pos)
 }
 
 pub(crate) async fn try_place_filled_bucket(
@@ -251,7 +252,7 @@ pub(crate) async fn try_place_filled_bucket(
     item: &Item,
     pos: BlockPos,
     direction: BlockDirection,
-) -> bool {
+) -> Option<BlockPos> {
     let (block, state) = world.get_block_and_state(&pos);
     if item.id == Item::POWDER_SNOW_BUCKET.id {
         return try_place_powder_snow(world, pos, direction).await;
@@ -263,7 +264,7 @@ pub(crate) async fn try_place_filled_bucket(
             .set_block_state(&pos, state_id, BlockFlags::NOTIFY_NEIGHBORS)
             .await;
         world.schedule_fluid_tick(&Fluid::WATER, pos, 5, TickPriority::Normal);
-        return true;
+        return Some(pos);
     }
 
     let target_pos = pos.offset(direction.to_offset());
@@ -271,14 +272,14 @@ pub(crate) async fn try_place_filled_bucket(
 
     if waterlogged_check(block, state.id).is_some() {
         if item.id == Item::LAVA_BUCKET.id {
-            return false;
+            return None;
         }
         let state_id = set_waterlogged(block, state.id, true);
         world
             .set_block_state(&target_pos, state_id, BlockFlags::NOTIFY_NEIGHBORS)
             .await;
         world.schedule_fluid_tick(&Fluid::WATER, target_pos, 5, TickPriority::Normal);
-        return true;
+        return Some(target_pos);
     }
 
     if state.id == Block::AIR.default_state.id || state.is_liquid() {
@@ -293,10 +294,28 @@ pub(crate) async fn try_place_filled_bucket(
                 BlockFlags::NOTIFY_NEIGHBORS,
             )
             .await;
-        return true;
+        return Some(target_pos);
     }
 
-    false
+    None
+}
+
+async fn emit_bucket_game_event(
+    world: &Arc<World>,
+    player: &Player,
+    event: GameEvent,
+    pos: BlockPos,
+) {
+    let context = world
+        .get_player_by_uuid(player.gameprofile.id)
+        .map(|player| {
+            let source: Arc<dyn EntityBase> = player;
+            GameEventContext::of_entity(&source)
+        })
+        .unwrap_or_default();
+    world
+        .game_event(event, pos.to_centered_f64(), &context)
+        .await;
 }
 
 impl ItemBehaviour for EmptyBucketItem {
@@ -328,7 +347,9 @@ impl ItemBehaviour for EmptyBucketItem {
                 return;
             };
 
-            let Some(item) = try_pickup_bucket_item(&world, block_pos, direction).await else {
+            let Some((item, event_pos)) =
+                try_pickup_bucket_item(&world, block_pos, direction).await
+            else {
                 return;
             };
 
@@ -346,6 +367,7 @@ impl ItemBehaviour for EmptyBucketItem {
                     return;
                 }
             }
+            emit_bucket_game_event(&world, player, GameEvent::FluidPickup, event_pos).await;
 
             give_player_bucket_item(player, item).await;
         })
@@ -381,9 +403,10 @@ impl ItemBehaviour for FilledBucketItem {
                 play_bucket_evaporation(&world, &player.position());
                 return;
             }
-            if !try_place_filled_bucket(&world, item, pos, direction).await {
+            let Some(event_pos) = try_place_filled_bucket(&world, item, pos, direction).await
+            else {
                 return;
-            }
+            };
 
             if let Some(server) = world.server.upgrade()
                 && let Some(player_arc) = world.get_player_by_uuid(player.gameprofile.id)
@@ -396,6 +419,7 @@ impl ItemBehaviour for FilledBucketItem {
                     );
                 server.plugin_manager.fire(&server, &mut event).await;
             }
+            emit_bucket_game_event(&world, player, GameEvent::FluidPlace, event_pos).await;
 
             //TODO: Spawn entity if applicable
             if player.gamemode.load() != GameMode::Creative {

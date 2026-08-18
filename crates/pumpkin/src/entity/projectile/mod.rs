@@ -2,6 +2,7 @@ use super::{Entity, EntityBase, NBTStorage, living::LivingEntity};
 use crate::server::Server;
 use pumpkin_data::BlockDirection;
 use pumpkin_data::entity::EntityType;
+use pumpkin_data::game_event::GameEvent;
 use pumpkin_protocol::java::client::play::CEntityVelocity;
 use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
@@ -36,6 +37,7 @@ pub fn is_projectile(entity_type: &EntityType) -> bool {
         || *entity_type == EntityType::SPLASH_POTION
         || *entity_type == EntityType::LINGERING_POTION
         || *entity_type == EntityType::ENDER_PEARL
+        || *entity_type == EntityType::EYE_OF_ENDER
         || *entity_type == EntityType::SHULKER_BULLET
         || *entity_type == EntityType::FIREBALL
         || *entity_type == EntityType::SMALL_FIREBALL
@@ -221,6 +223,8 @@ impl ThrownItemEntity {
                 return;
             }
 
+            emit_projectile_land(caller, &h).await;
+
             // Just trigger hit effects and remove
             caller.on_hit(h).await;
             entity.remove().await;
@@ -334,6 +338,24 @@ pub enum ProjectileHit {
     },
 }
 
+pub async fn emit_projectile_land(projectile: &Arc<dyn EntityBase>, hit: &ProjectileHit) {
+    let world = projectile.get_entity().world.load();
+    let (pos, context) = match hit {
+        ProjectileHit::Block { pos, .. } => (
+            pos.to_centered_f64(),
+            crate::world::game_event::vibration::GameEventContext::of_entity(projectile)
+                .with_affected_state(world.get_block_state(pos).id),
+        ),
+        ProjectileHit::Entity { hit_pos, .. } => (
+            *hit_pos,
+            crate::world::game_event::vibration::GameEventContext::of_entity(projectile),
+        ),
+    };
+    world
+        .game_event(GameEvent::ProjectileLand, pos, &context)
+        .await;
+}
+
 impl ProjectileHit {
     /// Returns the exact impact coordinates regardless of what was hit.
     #[must_use]
@@ -358,5 +380,16 @@ impl ProjectileHit {
             Self::Block { face, .. } => Some(*face),
             Self::Entity { .. } => None,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn throwable_utility_entities_emit_projectile_events() {
+        assert!(is_projectile(&EntityType::EGG));
+        assert!(is_projectile(&EntityType::EYE_OF_ENDER));
     }
 }

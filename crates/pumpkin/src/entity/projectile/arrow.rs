@@ -446,6 +446,7 @@ impl EntityBase for ArrowEntity {
                     return;
                 }
 
+                super::emit_projectile_land(caller, &h).await;
                 caller.on_hit(h).await;
             }
         })

@@ -63,4 +63,8 @@ impl Mob for WardenEntity {
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
     }
+
+    fn dampens_vibrations(&self) -> bool {
+        true
+    }
 }

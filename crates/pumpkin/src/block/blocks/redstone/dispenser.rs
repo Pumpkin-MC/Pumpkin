@@ -746,6 +746,7 @@ impl DispenserBlock {
                 ctx.facing.to_block_direction(),
             )
             .await
+            .is_some()
         };
 
         if emptied {
