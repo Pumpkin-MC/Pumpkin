@@ -4,6 +4,6 @@ mod advancement;
 mod attributes;
 mod config_value;
 mod game_rules;
-mod player;
+pub mod player;
 mod server_list_ping;
 mod uuid;
