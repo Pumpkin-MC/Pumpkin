@@ -144,7 +144,7 @@ impl CommandNode {
 
         COMMAND_SUGGESTION_HANDLERS
             .lock()
-            .unwrap()
+            .unwrap_or_else(|e| e.into_inner())
             .insert(id, Box::new(handler));
 
         self.suggest_with_handler_id(id);
