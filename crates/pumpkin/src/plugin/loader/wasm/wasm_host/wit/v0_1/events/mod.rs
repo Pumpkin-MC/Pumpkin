@@ -24,6 +24,7 @@ use crate::{
 };
 
 pub mod block;
+pub mod cleanup;
 pub mod enchantment;
 pub mod entity;
 pub mod hanging;
@@ -33,6 +34,8 @@ pub mod raid;
 pub mod server;
 pub mod vehicle;
 pub mod world;
+
+pub use cleanup::*;
 
 impl pumpkin::plugin::event::Host for PluginHostState {}
 
@@ -230,15 +233,32 @@ impl<E: Payload + ToFromWasmEvent> EventHandler<E> for WasmPluginEventHandler {
     fn handle<'a>(&'a self, server: &'a Arc<Server>, event: &'a E) -> BoxFuture<'a, ()> {
         Box::pin(async {
             let mut store = self.plugin.store.lock().await;
-            let event = event.to_wasm_event(store.data_mut());
+            let wasm_event = event.to_wasm_event(store.data_mut());
             match self.plugin.plugin_instance {
                 PluginInstance::V0_1(ref plugin) => {
-                    let Ok(server) = store.data_mut().add_server(server.clone()) else {
+                    let Ok(server_res) = store.data_mut().add_server(server.clone()) else {
+                        cleanup_event(&wasm_event, store.data_mut());
                         return;
                     };
-                    let _ = plugin
-                        .call_handle_event(&mut *store, self.handler_id, server, &event)
+                    let server_rep = server_res.rep();
+                    let result = plugin
+                        .call_handle_event(&mut *store, self.handler_id, server_res, &wasm_event)
                         .await;
+                    match result {
+                        Ok(returned_event) => {
+                            cleanup_event(&returned_event, store.data_mut());
+                            cleanup_event(&wasm_event, store.data_mut());
+                        }
+                        Err(_) => {
+                            cleanup_event(&wasm_event, store.data_mut());
+                        }
+                    }
+                    let _ = store
+                        .data_mut()
+                        .resource_table
+                        .delete::<crate::plugin::loader::wasm::wasm_host::state::ServerResource>(
+                        wasmtime::component::Resource::new_own(server_rep),
+                    );
                 }
             }
         })
@@ -254,15 +274,29 @@ impl<E: Payload + ToFromWasmEvent> EventHandler<E> for WasmPluginEventHandler {
             let wasm_event = event.to_wasm_event(store.data_mut());
             match self.plugin.plugin_instance {
                 PluginInstance::V0_1(ref plugin) => {
-                    let Ok(server) = store.data_mut().add_server(server.clone()) else {
+                    let Ok(server_res) = store.data_mut().add_server(server.clone()) else {
+                        cleanup_event(&wasm_event, store.data_mut());
                         return;
                     };
-                    if let Ok(returned_event) = plugin
-                        .call_handle_event(&mut *store, self.handler_id, server, &wasm_event)
-                        .await
-                    {
-                        event.apply_wasm_event(returned_event, store.data_mut());
+                    let server_rep = server_res.rep();
+                    let result = plugin
+                        .call_handle_event(&mut *store, self.handler_id, server_res, &wasm_event)
+                        .await;
+                    match result {
+                        Ok(returned_event) => {
+                            event.apply_wasm_event(returned_event, store.data_mut());
+                            cleanup_event(&wasm_event, store.data_mut());
+                        }
+                        Err(_) => {
+                            cleanup_event(&wasm_event, store.data_mut());
+                        }
                     }
+                    let _ = store
+                        .data_mut()
+                        .resource_table
+                        .delete::<crate::plugin::loader::wasm::wasm_host::state::ServerResource>(
+                        wasmtime::component::Resource::new_own(server_rep),
+                    );
                 }
             }
         })

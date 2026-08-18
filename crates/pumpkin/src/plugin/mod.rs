@@ -658,6 +658,38 @@ impl PluginManager {
                 if loader.can_load(&path) {
                     match loader.load(&path).await {
                         Ok((instance, metadata, loader_data)) => {
+                            let plugin_override =
+                                server.advanced_config.plugins.overrides.get(&metadata.name);
+
+                            if plugin_override.is_some_and(|o| !o.enabled) {
+                                info!(
+                                    "Plugin \"{}\" is disabled in configuration, skipping.",
+                                    metadata.name
+                                );
+                                loader_found = true;
+                                break;
+                            }
+
+                            let allow_unsigned = plugin_override
+                                .and_then(|o| o.allow_unsigned)
+                                .unwrap_or(server.advanced_config.plugins.allow_unsigned);
+
+                            if !allow_unsigned
+                                && path
+                                    .extension()
+                                    .is_some_and(|ext| ext.eq_ignore_ascii_case("wasm"))
+                            {
+                                let wasm_bytes = std::fs::read(&path).unwrap_or_default();
+                                if !crate::plugin::loader::wasm::wasm_host::signature::is_wasm_signed(&wasm_bytes) {
+                                    error!(
+                                        "Plugin \"{}\" ({:?}) is unsigned or invalid and allow_unsigned is disabled in configuration, skipping.",
+                                        metadata.name, path
+                                    );
+                                    loader_found = true;
+                                    break;
+                                }
+                            }
+
                             prepared_plugins.push((
                                 instance,
                                 metadata,
@@ -710,7 +742,7 @@ impl PluginManager {
             {
                 let (allowed, wait_time) = self
                     .clone()
-                    .check_permissions_cached(&path, &metadata, &mut cache, &cache_path)
+                    .check_permissions_cached(&path, &metadata, &mut cache, &cache_path, server)
                     .await;
 
                 total_wait_time += wait_time;
@@ -754,7 +786,33 @@ impl PluginManager {
         metadata: &PluginMetadata,
         cache: &mut cache::PermissionCache,
         cache_path: &Path,
+        server: &Arc<Server>,
     ) -> (bool, std::time::Duration) {
+        let plugin_config = &server.advanced_config.plugins;
+        let plugin_override = plugin_config.overrides.get(&metadata.name);
+
+        let is_blocked = |p: &str| {
+            plugin_config.blocked_permissions.iter().any(|b| b == p)
+                || plugin_override.is_some_and(|o| o.blocked_permissions.iter().any(|b| b == p))
+        };
+
+        let is_pre_allowed = |p: &str| {
+            plugin_config.allowed_permissions.iter().any(|a| a == p)
+                || plugin_override.is_some_and(|o| o.allowed_permissions.iter().any(|a| a == p))
+        };
+
+        let effective_permissions: Vec<String> = metadata
+            .permissions
+            .iter()
+            .filter(|p| !is_blocked(p))
+            .cloned()
+            .collect();
+
+        // If all requested permissions are pre-allowed, grant without prompting
+        if !effective_permissions.iter().any(|p| !is_pre_allowed(p)) {
+            return (true, std::time::Duration::ZERO);
+        }
+
         let hash = cache::calculate_hash(path).await.unwrap_or_default();
 
         if let Some(entry) = cache.entries.get(&hash)
@@ -765,6 +823,22 @@ impl PluginManager {
                 metadata.name, entry.approved
             );
             return (entry.approved, std::time::Duration::ZERO);
+        }
+
+        if !plugin_config.ask_permission_confirmation {
+            info!(
+                "Auto-approving permissions for plugin \"{}\" (ask_permission_confirmation is disabled)",
+                metadata.name
+            );
+            cache.entries.insert(
+                hash,
+                cache::PermissionCacheEntry {
+                    permissions_requested: metadata.permissions.clone(),
+                    approved: true,
+                },
+            );
+            let _ = cache.save(cache_path).await;
+            return (true, std::time::Duration::ZERO);
         }
 
         let (allowed, wait_time) = Self::ask_permission_confirmation(metadata);
@@ -785,15 +859,51 @@ impl PluginManager {
         server: &Arc<Server>,
         path: &Path,
     ) -> Result<tokio::task::JoinHandle<()>, ManagerError> {
+        if !server.advanced_config.plugins.enabled {
+            return Err(ManagerError::LoaderError(LoaderError::RuntimeError(
+                "Plugin system is disabled in configuration".to_string(),
+            )));
+        }
+
         for loader in self.loaders.read().await.iter() {
             if loader.can_load(path) {
                 let (instance, metadata, loader_data) = loader.load(path).await?;
+
+                let plugin_override = server.advanced_config.plugins.overrides.get(&metadata.name);
+
+                if plugin_override.is_some_and(|o| !o.enabled) {
+                    return Err(ManagerError::LoaderError(LoaderError::RuntimeError(
+                        format!("Plugin \"{}\" is disabled in configuration", metadata.name),
+                    )));
+                }
+
+                let allow_unsigned = plugin_override
+                    .and_then(|o| o.allow_unsigned)
+                    .unwrap_or(server.advanced_config.plugins.allow_unsigned);
+
+                if !allow_unsigned
+                    && path
+                        .extension()
+                        .is_some_and(|ext| ext.eq_ignore_ascii_case("wasm"))
+                {
+                    let wasm_bytes = std::fs::read(path).unwrap_or_default();
+                    if !crate::plugin::loader::wasm::wasm_host::signature::is_wasm_signed(
+                        &wasm_bytes,
+                    ) {
+                        return Err(ManagerError::LoaderError(LoaderError::RuntimeError(
+                            format!(
+                                "Plugin \"{}\" is unsigned or invalid and allow_unsigned is disabled",
+                                metadata.name
+                            ),
+                        )));
+                    }
+                }
 
                 let cache_path = Path::new(PLUGIN_DIR).join("permission_cache.json");
                 let mut cache = cache::PermissionCache::load(&cache_path).await;
 
                 let (allowed, _) = self
-                    .check_permissions_cached(path, &metadata, &mut cache, &cache_path)
+                    .check_permissions_cached(path, &metadata, &mut cache, &cache_path, server)
                     .await;
 
                 if !allowed {

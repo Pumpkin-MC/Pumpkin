@@ -4,8 +4,6 @@ use tokio::sync::RwLock;
 
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
-use pumpkin_data::meta_data_type::MetaDataType;
-use pumpkin_data::tracked_data::TrackedData;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::codec::item_stack_seralizer::ItemStackSerializer;
 use pumpkin_protocol::java::client::play::Metadata;
@@ -118,8 +116,7 @@ impl FireballEntity {
 
         self.get_entity().send_meta_data(
             &[Metadata::new(
-                TrackedData::ITEM_STACK,
-                MetaDataType::ITEM_STACK,
+                pumpkin_data::tracked_data::fireball::ITEM_STACK,
                 &ItemStackSerializer::from(new_item),
             )],
             None,
@@ -201,8 +198,7 @@ impl EntityBase for FireballEntity {
 
             entity.send_meta_data(
                 &[Metadata::new(
-                    TrackedData::ITEM_STACK,
-                    MetaDataType::ITEM_STACK,
+                    pumpkin_data::tracked_data::fireball::ITEM_STACK,
                     &ItemStackSerializer::from(stack.clone()),
                 )],
                 None,

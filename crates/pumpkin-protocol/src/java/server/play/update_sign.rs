@@ -31,3 +31,20 @@ impl<'a> ServerPacket<'a> for SUpdateSign<'a> {
         })
     }
 }
+
+impl crate::ClientPacket for SUpdateSign<'_> {
+    fn write_packet_data(
+        &self,
+        mut write: impl std::io::Write,
+        _version: &JavaMinecraftVersion,
+    ) -> Result<(), crate::ser::WritingError> {
+        use crate::ser::NetworkWriteExt;
+        write.write_block_pos(&self.location)?;
+        write.write_bool(self.is_front_text)?;
+        write.write_string_bounded(self.line_1, MAX_LINE_LENGTH)?;
+        write.write_string_bounded(self.line_2, MAX_LINE_LENGTH)?;
+        write.write_string_bounded(self.line_3, MAX_LINE_LENGTH)?;
+        write.write_string_bounded(self.line_4, MAX_LINE_LENGTH)?;
+        Ok(())
+    }
+}

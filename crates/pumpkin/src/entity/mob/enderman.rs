@@ -13,12 +13,10 @@ use pumpkin_data::{
     data_component_impl::EquipmentSlot,
     entity::EntityType,
     item::Item,
-    meta_data_type::MetaDataType,
     particle::Particle,
     sound::{Sound, SoundCategory},
     tag,
     tag::Taggable,
-    tracked_data::TrackedData,
 };
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::{
@@ -316,8 +314,7 @@ impl EndermanEntity {
         self.angry.store(angry, Ordering::Relaxed);
         self.mob_entity.living_entity.entity.send_meta_data(
             &[Metadata::new(
-                TrackedData::CREEPY,
-                MetaDataType::BOOLEAN,
+                pumpkin_data::tracked_data::enderman::CREEPY,
                 angry,
             )],
             None,
@@ -332,8 +329,7 @@ impl EndermanEntity {
         self.provoked.store(provoked, Ordering::Relaxed);
         self.mob_entity.living_entity.entity.send_meta_data(
             &[Metadata::new(
-                TrackedData::STARED_AT,
-                MetaDataType::BOOLEAN,
+                pumpkin_data::tracked_data::enderman::STARED_AT,
                 provoked,
             )],
             None,
@@ -345,8 +341,7 @@ impl EndermanEntity {
         let value = block_state.map_or(VarInt(0), |id| VarInt(id.as_u16() as i32));
         self.mob_entity.living_entity.entity.send_meta_data(
             &[Metadata::new(
-                TrackedData::CARRY_STATE,
-                MetaDataType::OPTIONAL_BLOCK_STATE,
+                pumpkin_data::tracked_data::enderman::CARRY_STATE,
                 value,
             )],
             None,

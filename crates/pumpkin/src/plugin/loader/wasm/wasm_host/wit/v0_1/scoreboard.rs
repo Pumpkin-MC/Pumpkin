@@ -534,6 +534,120 @@ impl scoreboard::HostScoreboard for PluginHostState {
         Ok(())
     }
 
+    async fn get_teams(
+        &mut self,
+        res: Resource<scoreboard::Scoreboard>,
+    ) -> wasmtime::Result<Vec<String>> {
+        let provider = self.get_scoreboard_res(&res)?.provider.clone();
+        let teams = match provider {
+            ScoreboardProvider::World(world) => world
+                .scoreboard
+                .lock()
+                .await
+                .get_teams()
+                .keys()
+                .cloned()
+                .collect(),
+            ScoreboardProvider::Player(player) => {
+                let custom_guard = player.custom_scoreboard.lock().await;
+                if let Some(crate::entity::player::CustomScoreboard::Java(sb)) =
+                    custom_guard.as_ref()
+                {
+                    sb.get_teams().keys().cloned().collect()
+                } else {
+                    Vec::new()
+                }
+            }
+        };
+        Ok(teams)
+    }
+
+    async fn get_team(
+        &mut self,
+        res: Resource<scoreboard::Scoreboard>,
+        name: String,
+    ) -> wasmtime::Result<Option<TeamSettings>> {
+        let provider = self.get_scoreboard_res(&res)?.provider.clone();
+        let team_opt = match provider {
+            ScoreboardProvider::World(world) => {
+                world.scoreboard.lock().await.get_team(&name).cloned()
+            }
+            ScoreboardProvider::Player(player) => {
+                let custom_guard = player.custom_scoreboard.lock().await;
+                if let Some(crate::entity::player::CustomScoreboard::Java(sb)) =
+                    custom_guard.as_ref()
+                {
+                    sb.get_team(&name).cloned()
+                } else {
+                    None
+                }
+            }
+        };
+
+        if let Some(team) = team_opt {
+            Ok(Some(map_team_to_settings(&team, self)?))
+        } else {
+            Ok(None)
+        }
+    }
+
+    async fn get_team_players(
+        &mut self,
+        res: Resource<scoreboard::Scoreboard>,
+        team_name: String,
+    ) -> wasmtime::Result<Vec<String>> {
+        let provider = self.get_scoreboard_res(&res)?.provider.clone();
+        let players = match provider {
+            ScoreboardProvider::World(world) => world
+                .scoreboard
+                .lock()
+                .await
+                .get_team(&team_name)
+                .map(|t| t.players.clone())
+                .unwrap_or_default(),
+            ScoreboardProvider::Player(player) => {
+                let custom_guard = player.custom_scoreboard.lock().await;
+                if let Some(crate::entity::player::CustomScoreboard::Java(sb)) =
+                    custom_guard.as_ref()
+                {
+                    sb.get_team(&team_name)
+                        .map(|t| t.players.clone())
+                        .unwrap_or_default()
+                } else {
+                    Vec::new()
+                }
+            }
+        };
+        Ok(players)
+    }
+
+    async fn get_player_team(
+        &mut self,
+        res: Resource<scoreboard::Scoreboard>,
+        player_name: String,
+    ) -> wasmtime::Result<Option<String>> {
+        let provider = self.get_scoreboard_res(&res)?.provider.clone();
+        let team_name = match provider {
+            ScoreboardProvider::World(world) => world
+                .scoreboard
+                .lock()
+                .await
+                .get_entity_team(&player_name)
+                .map(|t| t.name.clone()),
+            ScoreboardProvider::Player(player) => {
+                let custom_guard = player.custom_scoreboard.lock().await;
+                if let Some(crate::entity::player::CustomScoreboard::Java(sb)) =
+                    custom_guard.as_ref()
+                {
+                    sb.get_entity_team(&player_name).map(|t| t.name.clone())
+                } else {
+                    None
+                }
+            }
+        };
+        Ok(team_name)
+    }
+
     async fn drop(&mut self, rep: Resource<scoreboard::Scoreboard>) -> wasmtime::Result<()> {
         self.resource_table
             .delete::<ScoreboardResource>(Resource::new_own(rep.rep()))
@@ -664,6 +778,88 @@ const fn map_named_color(
             pumpkin_util::text::color::NamedColor::Yellow
         }
         pumpkin::plugin::common::NamedColor::White => pumpkin_util::text::color::NamedColor::White,
+    }
+}
+
+fn map_team_to_settings(
+    team: &Team,
+    state: &mut PluginHostState,
+) -> wasmtime::Result<TeamSettings> {
+    let display_name = state.add_text_component(team.display_name.clone())?;
+    let prefix = state.add_text_component(team.player_prefix.clone())?;
+    let suffix = state.add_text_component(team.player_suffix.clone())?;
+
+    let friendly_fire = (team.options & 0x01) != 0;
+    let see_friendly_invisibles = (team.options & 0x02) != 0;
+
+    let nametag_visibility = match team.nametag_visibility {
+        crate::world::scoreboard::NameTagVisibility::Always => NametagVisibility::Always,
+        crate::world::scoreboard::NameTagVisibility::Never => NametagVisibility::Never,
+        crate::world::scoreboard::NameTagVisibility::HideForOtherTeams => {
+            NametagVisibility::HideForOtherTeams
+        }
+        crate::world::scoreboard::NameTagVisibility::HideForOwnTeam => {
+            NametagVisibility::HideForOwnTeam
+        }
+    };
+
+    let collision_rule = match team.collision_rule {
+        crate::world::scoreboard::CollisionRule::Always => CollisionRule::Always,
+        crate::world::scoreboard::CollisionRule::Never => CollisionRule::Never,
+        crate::world::scoreboard::CollisionRule::PushOtherTeams => CollisionRule::PushOtherTeams,
+        crate::world::scoreboard::CollisionRule::PushOwnTeam => CollisionRule::PushOwnTeam,
+    };
+
+    let color = map_named_color_rev(team.color);
+
+    Ok(TeamSettings {
+        display_name,
+        friendly_fire,
+        see_friendly_invisibles,
+        nametag_visibility,
+        collision_rule,
+        color,
+        prefix,
+        suffix,
+    })
+}
+
+const fn map_named_color_rev(
+    color: pumpkin_util::text::color::NamedColor,
+) -> pumpkin::plugin::common::NamedColor {
+    match color {
+        pumpkin_util::text::color::NamedColor::Black => pumpkin::plugin::common::NamedColor::Black,
+        pumpkin_util::text::color::NamedColor::DarkBlue => {
+            pumpkin::plugin::common::NamedColor::DarkBlue
+        }
+        pumpkin_util::text::color::NamedColor::DarkGreen => {
+            pumpkin::plugin::common::NamedColor::DarkGreen
+        }
+        pumpkin_util::text::color::NamedColor::DarkAqua => {
+            pumpkin::plugin::common::NamedColor::DarkAqua
+        }
+        pumpkin_util::text::color::NamedColor::DarkRed => {
+            pumpkin::plugin::common::NamedColor::DarkRed
+        }
+        pumpkin_util::text::color::NamedColor::DarkPurple => {
+            pumpkin::plugin::common::NamedColor::DarkPurple
+        }
+        pumpkin_util::text::color::NamedColor::Gold => pumpkin::plugin::common::NamedColor::Gold,
+        pumpkin_util::text::color::NamedColor::Gray => pumpkin::plugin::common::NamedColor::Gray,
+        pumpkin_util::text::color::NamedColor::DarkGray => {
+            pumpkin::plugin::common::NamedColor::DarkGray
+        }
+        pumpkin_util::text::color::NamedColor::Blue => pumpkin::plugin::common::NamedColor::Blue,
+        pumpkin_util::text::color::NamedColor::Green => pumpkin::plugin::common::NamedColor::Green,
+        pumpkin_util::text::color::NamedColor::Aqua => pumpkin::plugin::common::NamedColor::Aqua,
+        pumpkin_util::text::color::NamedColor::Red => pumpkin::plugin::common::NamedColor::Red,
+        pumpkin_util::text::color::NamedColor::LightPurple => {
+            pumpkin::plugin::common::NamedColor::LightPurple
+        }
+        pumpkin_util::text::color::NamedColor::Yellow => {
+            pumpkin::plugin::common::NamedColor::Yellow
+        }
+        pumpkin_util::text::color::NamedColor::White => pumpkin::plugin::common::NamedColor::White,
     }
 }
 

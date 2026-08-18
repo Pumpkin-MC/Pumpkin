@@ -30,6 +30,10 @@ impl JavaClient {
             return;
         }
 
+        if player.check_chat_spam(server).await {
+            return;
+        }
+
         send_cancellable! {{
             server;
             PlayerChatEvent::new(player.clone(), chat_message.message.to_string(), vec![]);

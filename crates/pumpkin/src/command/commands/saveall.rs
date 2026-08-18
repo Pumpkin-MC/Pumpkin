@@ -1,5 +1,3 @@
-use std::sync::atomic::Ordering::Relaxed;
-
 use pumpkin_data::translation;
 use pumpkin_util::PermissionLvl;
 use pumpkin_util::permission::{Permission, PermissionDefault, PermissionRegistry};
@@ -40,25 +38,9 @@ impl CommandExecutor for SaveAllExecutor {
 
             let server = context.server();
 
-            if let Err(err) = server.player_data_storage.save_all_players(server).await {
-                error!("Failed to save player data: {err}");
+            if let Err(err) = server.save_all().await {
+                error!("Failed to save server data: {err}");
                 return Err(SAVE_FAILED_ERROR_TYPE.create_without_context());
-            }
-
-            if let Err(err) = server
-                .advancement_manager
-                .save_all_players(&server.get_all_players())
-                .await
-            {
-                error!("Failed to save player advancements: {err}");
-                return Err(SAVE_FAILED_ERROR_TYPE.create_without_context());
-            }
-
-            // Request a save from every world's chunk scheduler. This works even
-            // while autosaving is disabled via /save-off, matching Vanilla.
-            for world in server.worlds.load().iter() {
-                world.level.should_save.store(true, Relaxed);
-                world.level.level_channel.notify();
             }
 
             context

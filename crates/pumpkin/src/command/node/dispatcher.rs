@@ -144,7 +144,20 @@ impl CommandDispatcher {
     /// off through the server configuration.
     #[must_use]
     pub fn is_disabled(&self, name: &str) -> bool {
-        self.disabled.contains(name)
+        if self.disabled.contains(name) {
+            return true;
+        }
+        if name.starts_with('/') && self.disabled.contains(name.trim_start_matches('/')) {
+            return true;
+        }
+        if !name.starts_with('/') {
+            let single = format!("/{name}");
+            let double = format!("//{name}");
+            if self.disabled.contains(&single) || self.disabled.contains(&double) {
+                return true;
+            }
+        }
+        false
     }
 
     /// Returns `true` if a command (or alias) with the given name is registered
@@ -184,13 +197,9 @@ impl CommandDispatcher {
     }
 
     /// Extracts the command name (the first whitespace-separated token) from a
-    /// raw input string, ignoring any leading slash.
+    /// raw input string.
     fn command_name(input: &str) -> &str {
-        input
-            .trim_start_matches('/')
-            .split_whitespace()
-            .next()
-            .unwrap_or("")
+        input.split_whitespace().next().unwrap_or("")
     }
 
     /// Registers a command which can then be dispatched.
@@ -200,7 +209,51 @@ impl CommandDispatcher {
     /// unregister a command. This is due to redirection to
     /// potentially unregistered (freed) nodes.
     pub fn register(&mut self, command_node: impl Into<CommandDetachedNode>) -> CommandNodeId {
-        self.tree.add_child_to_root(command_node)
+        let node = command_node.into();
+        let name = node.meta.literal.to_string();
+        let main_node_id = self.tree.add_child_to_root(node);
+
+        // For double-slash or slash-prefixed commands (e.g. //set or /set),
+        // automatically register the alternate slash variant as an alias.
+        if let Some(stripped) = name.strip_prefix("//") {
+            let single_slash = format!("/{stripped}");
+            if self.tree.get(&single_slash).is_none() {
+                let main_node = &self.tree[main_node_id];
+                let description = main_node.meta.description.clone();
+                let mut alias = crate::command::argument_builder::CommandArgumentBuilder::new(
+                    single_slash,
+                    description,
+                );
+                if let Some(executor) = &main_node.owned.command {
+                    alias = alias.executes_arc(executor.clone());
+                    alias = alias.overwrite_requirements(main_node.owned.requirements.clone());
+                }
+                alias = alias.redirect(crate::command::node::Redirection::Local(
+                    main_node_id.into(),
+                ));
+                self.tree.add_child_to_root(alias.build());
+            }
+        } else if let Some(stripped) = name.strip_prefix('/') {
+            let double_slash = format!("//{stripped}");
+            if self.tree.get(&double_slash).is_none() {
+                let main_node = &self.tree[main_node_id];
+                let description = main_node.meta.description.clone();
+                let mut alias = crate::command::argument_builder::CommandArgumentBuilder::new(
+                    double_slash,
+                    description,
+                );
+                if let Some(executor) = &main_node.owned.command {
+                    alias = alias.executes_arc(executor.clone());
+                    alias = alias.overwrite_requirements(main_node.owned.requirements.clone());
+                }
+                alias = alias.redirect(crate::command::node::Redirection::Local(
+                    main_node_id.into(),
+                ));
+                self.tree.add_child_to_root(alias.build());
+            }
+        }
+
+        main_node_id
     }
 
     /// Registers a command which can then be dispatched, along with its
@@ -457,8 +510,19 @@ impl CommandDispatcher {
             "Source provided to this command was a dummy source"
         );
 
-        if let Some(sliced) = input.strip_prefix("/") {
-            input = sliced;
+        // If input starts with '/', but the command with that leading slash is NOT
+        // registered, while the stripped command IS registered (or if it's an unknown command
+        // starting with a single slash, e.g. from console input), strip one leading slash.
+        // For double-slash commands like WorldEdit's `//set`, the client sends `/set`, which
+        // matches a registered `/set` or `//set` command and preserves the slash.
+        if let Some(sliced) = input.strip_prefix('/') {
+            let first_token = input.split_whitespace().next().unwrap_or("");
+            let sliced_token = sliced.split_whitespace().next().unwrap_or("");
+            if !self.has_command(first_token)
+                && (self.has_command(sliced_token) || !first_token.starts_with("//"))
+            {
+                input = sliced;
+            }
         }
 
         // A command that has been turned off in the configuration must behave as
@@ -1258,5 +1322,22 @@ mod test {
                 .await,
             Ok(1)
         );
+    }
+
+    #[tokio::test]
+    async fn double_slash_command_execution() {
+        let mut dispatcher = CommandDispatcher::new();
+        let executor: for<'c> fn(&'c CommandContext) -> CommandExecutorResult<'c> =
+            |_| Box::pin(async move { Ok(42) });
+
+        dispatcher.register(
+            CommandArgumentBuilder::new("//set", "WorldEdit set command").executes(executor),
+        );
+
+        let source = CommandSource::dummy();
+        // Direct execution with //set
+        assert_eq!(dispatcher.execute_input("//set", &source).await, Ok(42));
+        // Execution via /set alias (as sent by Java client for //set)
+        assert_eq!(dispatcher.execute_input("/set", &source).await, Ok(42));
     }
 }

@@ -35,3 +35,33 @@ impl ClientPacket for CKeepAlive {
         Ok(())
     }
 }
+
+impl<'a> crate::ServerPacket<'a> for CKeepAlive {
+    fn read(
+        read: &mut &'a [u8],
+        _version: &JavaMinecraftVersion,
+    ) -> Result<Self, crate::ReadingError> {
+        use crate::ser::NetworkReadExt;
+        Ok(Self {
+            keep_alive_id: read.get_i64_be()?,
+        })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ServerPacket;
+
+    #[test]
+    fn keep_alive_roundtrip() {
+        let packet = CKeepAlive::new(1234567890123456789);
+        let mut buf = Vec::new();
+        let version = JavaMinecraftVersion::V_1_21_4;
+        packet.write_packet_data(&mut buf, &version).unwrap();
+
+        let mut slice = buf.as_slice();
+        let read_packet = CKeepAlive::read(&mut slice, &version).unwrap();
+        assert_eq!(read_packet.keep_alive_id, 1234567890123456789);
+    }
+}

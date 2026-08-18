@@ -29,7 +29,7 @@ pub mod recipe;
 /// Resource pack configuration options.
 pub mod resource_pack;
 
-pub use chat::ChatConfig;
+pub use chat::{AntiSpamConfig, ChatConfig};
 pub use commands::{CommandOverride, CommandsConfig};
 pub use networking::auth::AuthenticationConfig;
 pub use networking::bedrock::BedrockConfig;
@@ -37,7 +37,7 @@ pub use networking::compression::CompressionConfig;
 pub use networking::java::JavaConfig;
 pub use networking::lan_broadcast::LANBroadcastConfig;
 pub use networking::rcon::RCONConfig;
-pub use plugins::PluginsConfig;
+pub use plugins::{PluginOverride, PluginsConfig};
 pub use pvp::PVPConfig;
 pub use server_links::ServerLinksConfig;
 

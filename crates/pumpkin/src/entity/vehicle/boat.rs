@@ -9,8 +9,6 @@ use crate::server::Server;
 
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::item_stack::ItemStack;
-use pumpkin_data::meta_data_type::MetaDataType;
-use pumpkin_data::tracked_data::TrackedData;
 
 use pumpkin_protocol::java::client::play::Metadata;
 
@@ -41,8 +39,8 @@ impl BoatEntity {
 
         self.vehicle.entity.send_meta_data(
             &[
-                Metadata::new(TrackedData::ID_PADDLE_LEFT, MetaDataType::BOOLEAN, left),
-                Metadata::new(TrackedData::ID_PADDLE_RIGHT, MetaDataType::BOOLEAN, right),
+                Metadata::new(pumpkin_data::tracked_data::boat::ID_PADDLE_LEFT, left),
+                Metadata::new(pumpkin_data::tracked_data::boat::ID_PADDLE_RIGHT, right),
             ],
             None,
         );

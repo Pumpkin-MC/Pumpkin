@@ -2,20 +2,20 @@ use crate::plugin::loader::wasm::wasm_host::state::{ItemStackResource, PluginHos
 use crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::data_components::DataComponent as WitDataComponent;
 use crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::enchantments::Enchantment as WitEnchantment;
 use crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::item_stack::{
+    CustomEnchantmentValue as WitCustomEnchantmentValue,
     DataComponentValue as WitDataComponentValue, EnchantmentValue as WitEnchantmentValue,
     Host as ItemStackInterfaceHost, HostItemStack, ItemStack as ItemStackHandle,
-    NbtEntry as WitNbtEntry, NbtTag as WitNbtTag, NbtTree as WitNbtTree,
 };
 use crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::text::TextComponent as WitTextComponent;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use wasmtime::component::Resource;
 
+use super::common::{WitNbtTree, from_wit_nbt_tree, to_wit_nbt_tree};
 use crate::plugin::loader::wasm::wasm_host::wit::v0_1::player::text_component_from_resource;
 use pumpkin_data::Enchantment;
 use pumpkin_data::data_component::DataComponent;
 use pumpkin_data::data_component_impl::{CustomNameImpl, EnchantmentsImpl};
-use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
 use pumpkin_protocol::codec::data_component::{deserialize, serialize};
 use std::borrow::Cow;
@@ -38,91 +38,6 @@ pub(crate) fn to_wit_enchantment(id: &Enchantment) -> WitEnchantment {
 pub(crate) fn from_wit_enchantment(id: WitEnchantment) -> &'static Enchantment {
     // Safety: WIT enum is generated in the same order as the internal enum
     Enchantment::from_id(id as u8).expect("valid enchantment ID")
-}
-
-fn push_wit_nbt_tag(tag: NbtTag, tags: &mut Vec<WitNbtTag>) -> u32 {
-    let index = tags.len() as u32;
-    tags.push(WitNbtTag::Byte(0));
-    let tag = match tag {
-        NbtTag::End => WitNbtTag::Compound(Vec::new()),
-        NbtTag::Byte(value) => WitNbtTag::Byte(value),
-        NbtTag::Short(value) => WitNbtTag::Short(value),
-        NbtTag::Int(value) => WitNbtTag::Int(value),
-        NbtTag::Long(value) => WitNbtTag::Long(value),
-        NbtTag::Float(value) => WitNbtTag::Float(value),
-        NbtTag::Double(value) => WitNbtTag::Double(value),
-        NbtTag::ByteArray(value) => WitNbtTag::ByteArray(value.into_vec()),
-        NbtTag::String(value) => WitNbtTag::StringTag(value.into()),
-        NbtTag::List(value) => WitNbtTag::ListTag(
-            value
-                .into_iter()
-                .map(|value| push_wit_nbt_tag(value, tags))
-                .collect(),
-        ),
-        NbtTag::Compound(value) => WitNbtTag::Compound(
-            value
-                .child_tags
-                .into_iter()
-                .map(|(key, value)| WitNbtEntry {
-                    key: key.into(),
-                    value: push_wit_nbt_tag(value, tags),
-                })
-                .collect(),
-        ),
-        NbtTag::IntArray(value) => WitNbtTag::IntArray(value),
-        NbtTag::LongArray(value) => WitNbtTag::LongArray(value),
-    };
-    tags[index as usize] = tag;
-    index
-}
-
-fn to_wit_nbt_tree(tag: NbtTag) -> WitNbtTree {
-    let mut tags = Vec::new();
-    let root = push_wit_nbt_tag(tag, &mut tags);
-    WitNbtTree { root, tags }
-}
-
-fn from_wit_nbt_tree(tree: &WitNbtTree) -> Result<NbtTag, String> {
-    fn read_tag(index: u32, tags: &[WitNbtTag], visiting: &mut Vec<u32>) -> Result<NbtTag, String> {
-        let Some(tag) = tags.get(index as usize) else {
-            return Err(format!("NBT tag index {index} is out of bounds"));
-        };
-        if visiting.contains(&index) {
-            return Err(format!("NBT tag tree contains a cycle at index {index}"));
-        }
-        visiting.push(index);
-        let tag = match tag {
-            WitNbtTag::Byte(value) => NbtTag::Byte(*value),
-            WitNbtTag::Short(value) => NbtTag::Short(*value),
-            WitNbtTag::Int(value) => NbtTag::Int(*value),
-            WitNbtTag::Long(value) => NbtTag::Long(*value),
-            WitNbtTag::Float(value) => NbtTag::Float(*value),
-            WitNbtTag::Double(value) => NbtTag::Double(*value),
-            WitNbtTag::ByteArray(value) => NbtTag::ByteArray(value.clone().into()),
-            WitNbtTag::StringTag(value) => NbtTag::String(value.clone().into()),
-            WitNbtTag::ListTag(value) => NbtTag::List(
-                value
-                    .iter()
-                    .map(|value| read_tag(*value, tags, visiting))
-                    .collect::<Result<Vec<_>, _>>()?,
-            ),
-            WitNbtTag::Compound(value) => NbtTag::Compound(NbtCompound {
-                child_tags: value
-                    .iter()
-                    .map(|entry| {
-                        read_tag(entry.value, tags, visiting)
-                            .map(|value| (entry.key.clone().into(), value))
-                    })
-                    .collect::<Result<_, _>>()?,
-            }),
-            WitNbtTag::IntArray(value) => NbtTag::IntArray(value.clone()),
-            WitNbtTag::LongArray(value) => NbtTag::LongArray(value.clone()),
-        };
-        visiting.pop();
-        Ok(tag)
-    }
-
-    read_tag(tree.root, &tree.tags, &mut Vec::new())
 }
 
 impl PluginHostState {
@@ -287,6 +202,182 @@ impl HostItemStack for PluginHostState {
             enc_impl.enchantment = Cow::from(encs);
         }
         Ok(())
+    }
+
+    async fn get_custom_enchantments(
+        &mut self,
+        res: Resource<ItemStackHandle>,
+    ) -> wasmtime::Result<Vec<WitCustomEnchantmentValue>> {
+        let stack = self.get_item_stack(&res)?;
+        let stack = stack.lock().await;
+        let mut result = Vec::new();
+
+        if let Some(compound) = stack.custom_data_compound()
+            && let Some(pumpkin_encs) = compound
+                .get("pumpkin:enchantments")
+                .and_then(NbtTag::extract_compound)
+        {
+            for (k, v) in &pumpkin_encs.child_tags {
+                if let Some(lvl) = v.extract_int() {
+                    result.push(WitCustomEnchantmentValue {
+                        enchantment_id: k.to_string(),
+                        level: (lvl.max(1)) as u32,
+                    });
+                }
+            }
+        }
+
+        if let Some((_, Some(data))) = stack
+            .patch
+            .iter()
+            .find(|(id, _)| *id == DataComponent::Enchantments)
+            && let Some(enc_impl) = data.as_any().downcast_ref::<EnchantmentsImpl>()
+        {
+            for (enc, level) in enc_impl.enchantment.iter() {
+                if !result.iter().any(|e| e.enchantment_id == enc.name) {
+                    result.push(WitCustomEnchantmentValue {
+                        enchantment_id: enc.name.to_string(),
+                        level: (*level).max(1) as u32,
+                    });
+                }
+            }
+        }
+
+        Ok(result)
+    }
+
+    async fn add_custom_enchantment(
+        &mut self,
+        res: Resource<ItemStackHandle>,
+        enchantment_id: String,
+        level: u32,
+    ) -> wasmtime::Result<()> {
+        let stack = self.get_item_stack(&res)?;
+        let mut stack = stack.lock().await;
+
+        stack.set_custom_data(
+            "pumpkin:enchantments",
+            &enchantment_id,
+            NbtTag::Int(level as i32),
+        );
+
+        if let Some(vanilla) = super::enchantment::find_vanilla_enchantment(&enchantment_id) {
+            let mut current_encs = if let Some((_, Some(data))) = stack
+                .patch
+                .iter()
+                .find(|(id, _)| *id == DataComponent::Enchantments)
+            {
+                data.as_any()
+                    .downcast_ref::<EnchantmentsImpl>()
+                    .map(|e| e.enchantment.clone().into_owned())
+                    .unwrap_or_default()
+            } else {
+                Vec::new()
+            };
+
+            current_encs.retain(|(e, _)| e.id != vanilla.id);
+            current_encs.push((vanilla, level as i32));
+
+            if let Some((_, data)) = stack
+                .patch
+                .iter_mut()
+                .find(|(id, _)| *id == DataComponent::Enchantments)
+            {
+                *data = Some(Box::new(EnchantmentsImpl {
+                    enchantment: Cow::from(current_encs),
+                }));
+            } else {
+                stack.patch.push((
+                    DataComponent::Enchantments,
+                    Some(Box::new(EnchantmentsImpl {
+                        enchantment: Cow::from(current_encs),
+                    })),
+                ));
+            }
+        }
+
+        Ok(())
+    }
+
+    async fn remove_custom_enchantment(
+        &mut self,
+        res: Resource<ItemStackHandle>,
+        enchantment_id: String,
+    ) -> wasmtime::Result<()> {
+        let stack = self.get_item_stack(&res)?;
+        let mut stack = stack.lock().await;
+
+        stack.remove_custom_data("pumpkin:enchantments", &enchantment_id);
+
+        if let Some(vanilla) = super::enchantment::find_vanilla_enchantment(&enchantment_id)
+            && let Some((_, Some(data))) = stack
+                .patch
+                .iter_mut()
+                .find(|(id, _)| *id == DataComponent::Enchantments)
+            && let Some(enc_impl) = data.as_mut_any().downcast_mut::<EnchantmentsImpl>()
+        {
+            let mut encs = enc_impl.enchantment.clone().into_owned();
+            encs.retain(|(e, _)| e.id != vanilla.id);
+            enc_impl.enchantment = Cow::from(encs);
+        }
+
+        Ok(())
+    }
+
+    async fn get_custom_enchantment_level(
+        &mut self,
+        res: Resource<ItemStackHandle>,
+        enchantment_id: String,
+    ) -> wasmtime::Result<Option<u32>> {
+        let stack = self.get_item_stack(&res)?;
+        let stack = stack.lock().await;
+
+        if let Some(NbtTag::Int(level)) =
+            stack.get_custom_data("pumpkin:enchantments", &enchantment_id)
+        {
+            return Ok(Some(level.max(1) as u32));
+        }
+
+        if let Some(vanilla) = super::enchantment::find_vanilla_enchantment(&enchantment_id)
+            && let Some((_, Some(data))) = stack
+                .patch
+                .iter()
+                .find(|(id, _)| *id == DataComponent::Enchantments)
+            && let Some(enc_impl) = data.as_any().downcast_ref::<EnchantmentsImpl>()
+            && let Some((_, level)) = enc_impl
+                .enchantment
+                .iter()
+                .find(|(e, _)| e.id == vanilla.id)
+        {
+            return Ok(Some((*level).max(1) as u32));
+        }
+
+        Ok(None)
+    }
+
+    async fn has_custom_enchantment(
+        &mut self,
+        res: Resource<ItemStackHandle>,
+        enchantment_id: String,
+    ) -> wasmtime::Result<bool> {
+        let stack = self.get_item_stack(&res)?;
+        let stack = stack.lock().await;
+
+        if stack.has_custom_data("pumpkin:enchantments", &enchantment_id) {
+            return Ok(true);
+        }
+
+        if let Some(vanilla) = super::enchantment::find_vanilla_enchantment(&enchantment_id)
+            && let Some((_, Some(data))) = stack
+                .patch
+                .iter()
+                .find(|(id, _)| *id == DataComponent::Enchantments)
+            && let Some(enc_impl) = data.as_any().downcast_ref::<EnchantmentsImpl>()
+        {
+            return Ok(enc_impl.enchantment.iter().any(|(e, _)| e.id == vanilla.id));
+        }
+
+        Ok(false)
     }
 
     async fn get_lore(

@@ -56,7 +56,10 @@ impl EnderChestInventory {
     ///
     /// Used to animate the ender chest lid based on viewers.
     pub async fn set_tracker(&self, tracker: Arc<ViewerCountTracker>) {
-        self.tracker.lock().await.replace(tracker);
+        let old = self.tracker.lock().await.replace(tracker);
+        if let Some(old_tracker) = old {
+            old_tracker.close_container();
+        }
     }
 
     /// Checks if this inventory has a tracker set.
@@ -88,21 +91,28 @@ impl Inventory for EnderChestInventory {
     fn get_stack(&self, slot: usize) -> InventoryFuture<'_, ItemStack> {
         Box::pin(async move {
             let items = self.items.read().await;
-            items[slot].clone()
+            items
+                .get(slot)
+                .cloned()
+                .unwrap_or_else(|| ItemStack::EMPTY.clone())
         })
     }
 
     fn remove_stack(&self, slot: usize) -> InventoryFuture<'_, ItemStack> {
         Box::pin(async move {
             let mut items = self.items.write().await;
-            std::mem::replace(&mut items[slot], ItemStack::EMPTY.clone())
+            if slot < Self::INVENTORY_SIZE {
+                std::mem::replace(&mut items[slot], ItemStack::EMPTY.clone())
+            } else {
+                ItemStack::EMPTY.clone()
+            }
         })
     }
 
     fn remove_stack_specific(&self, slot: usize, amount: u8) -> InventoryFuture<'_, ItemStack> {
         Box::pin(async move {
             let mut items = self.items.write().await;
-            if !items[slot].is_empty() && amount > 0 {
+            if slot < Self::INVENTORY_SIZE && !items[slot].is_empty() && amount > 0 {
                 items[slot].split(amount)
             } else {
                 ItemStack::EMPTY.clone()
@@ -113,7 +123,9 @@ impl Inventory for EnderChestInventory {
     fn set_stack(&self, slot: usize, stack: ItemStack) -> InventoryFuture<'_, ()> {
         Box::pin(async move {
             let mut items = self.items.write().await;
-            items[slot] = stack;
+            if slot < Self::INVENTORY_SIZE {
+                items[slot] = stack;
+            }
         })
     }
 
@@ -127,7 +139,8 @@ impl Inventory for EnderChestInventory {
 
     fn on_close(&self) -> InventoryFuture<'_, ()> {
         Box::pin(async move {
-            if let Some(tracker) = self.tracker.lock().await.as_ref() {
+            let tracker = self.tracker.lock().await.take();
+            if let Some(tracker) = tracker {
                 tracker.close_container();
             }
         })
@@ -146,5 +159,87 @@ impl Clearable for EnderChestInventory {
             let mut items = self.items.write().await;
             items.fill_with(|| ItemStack::EMPTY.clone());
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pumpkin_data::item::Item;
+
+    #[tokio::test]
+    async fn new_inventory() {
+        let ec = EnderChestInventory::new();
+        assert_eq!(ec.size(), 27);
+        assert!(ec.is_empty().await);
+        assert!(!ec.has_tracker().await);
+    }
+
+    #[tokio::test]
+    async fn set_and_get_stack() {
+        let ec = EnderChestInventory::new();
+        let stack = ItemStack::new(1, &Item::DIRT);
+        ec.set_stack(0, stack.clone()).await;
+        assert_eq!(ec.get_stack(0).await.item.id, Item::DIRT.id);
+        assert_eq!(ec.get_stack(0).await.item_count, 1);
+        assert!(!ec.is_empty().await);
+
+        // Out of bounds shouldn't panic
+        ec.set_stack(100, stack).await;
+        assert!(ec.get_stack(100).await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn remove_stack() {
+        let ec = EnderChestInventory::new();
+        let stack = ItemStack::new(5, &Item::DIAMOND);
+        ec.set_stack(10, stack).await;
+
+        let removed_specific = ec.remove_stack_specific(10, 2).await;
+        assert_eq!(removed_specific.item_count, 2);
+        assert_eq!(ec.get_stack(10).await.item_count, 3);
+
+        let removed_all = ec.remove_stack(10).await;
+        assert_eq!(removed_all.item_count, 3);
+        assert!(ec.get_stack(10).await.is_empty());
+        assert!(ec.is_empty().await);
+    }
+
+    #[tokio::test]
+    async fn clear_inventory() {
+        let ec = EnderChestInventory::new();
+        ec.set_stack(0, ItemStack::new(1, &Item::STONE)).await;
+        ec.set_stack(26, ItemStack::new(1, &Item::OAK_LOG)).await;
+        assert!(!ec.is_empty().await);
+
+        ec.clear().await;
+        assert!(ec.is_empty().await);
+    }
+
+    #[tokio::test]
+    async fn tracker_lifecycle() {
+        let ec = EnderChestInventory::new();
+        let tracker1 = Arc::new(ViewerCountTracker::new());
+        let tracker2 = Arc::new(ViewerCountTracker::new());
+
+        ec.set_tracker(tracker1.clone()).await;
+        assert!(ec.has_tracker().await);
+        assert!(ec.is_tracker(&tracker1).await);
+        assert!(!ec.is_tracker(&tracker2).await);
+
+        ec.on_open().await;
+        assert_eq!(tracker1.get_viewer_count(), 1);
+
+        // Setting a new tracker while one is open should close the old tracker
+        ec.set_tracker(tracker2.clone()).await;
+        assert_eq!(tracker1.get_viewer_count(), 0);
+        assert!(ec.is_tracker(&tracker2).await);
+
+        ec.on_open().await;
+        assert_eq!(tracker2.get_viewer_count(), 1);
+
+        ec.on_close().await;
+        assert_eq!(tracker2.get_viewer_count(), 0);
+        assert!(!ec.has_tracker().await);
     }
 }

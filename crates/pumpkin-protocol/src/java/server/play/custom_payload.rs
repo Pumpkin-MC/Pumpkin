@@ -28,3 +28,16 @@ impl<'a> ServerPacket<'a> for SCustomPayload<'a> {
         })
     }
 }
+
+impl crate::ClientPacket for SCustomPayload<'_> {
+    fn write_packet_data(
+        &self,
+        mut write: impl std::io::Write,
+        _version: &JavaMinecraftVersion,
+    ) -> Result<(), crate::ser::WritingError> {
+        use crate::ser::NetworkWriteExt;
+        write.write_string(self.channel)?;
+        write.write_slice(self.data)?;
+        Ok(())
+    }
+}

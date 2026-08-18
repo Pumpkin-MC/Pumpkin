@@ -90,6 +90,58 @@ pub struct ReadlineLogWrapper {
     readline: std::sync::Mutex<Option<Editor<PumpkinCommandCompleter, FileHistory>>>,
 }
 
+pub struct ConsoleWriter {
+    printer: Option<Box<dyn rustyline::ExternalPrinter + Send>>,
+    buffer: Vec<u8>,
+}
+
+impl ConsoleWriter {
+    #[must_use]
+    pub fn new(printer: Option<Box<dyn rustyline::ExternalPrinter + Send>>) -> Self {
+        Self {
+            printer,
+            buffer: Vec::new(),
+        }
+    }
+}
+
+impl Write for ConsoleWriter {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        if let Some(ref mut printer) = self.printer {
+            self.buffer.extend_from_slice(buf);
+            while let Some(pos) = self.buffer.iter().position(|&b| b == b'\n') {
+                let line_bytes: Vec<u8> = self.buffer.drain(..=pos).collect();
+                let msg = String::from_utf8_lossy(&line_bytes).into_owned();
+                if printer.print(msg).is_err() {
+                    let mut stdout = io::stdout().lock();
+                    let _ = stdout.write_all(line_bytes.as_slice());
+                    let _ = stdout.flush();
+                }
+            }
+            Ok(buf.len())
+        } else {
+            io::stdout().write(buf)
+        }
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        if let Some(ref mut printer) = self.printer {
+            if !self.buffer.is_empty() {
+                let buffer = std::mem::take(&mut self.buffer);
+                let msg = String::from_utf8_lossy(&buffer).into_owned();
+                if printer.print(msg).is_err() {
+                    let mut stdout = io::stdout().lock();
+                    let _ = stdout.write_all(buffer.as_slice());
+                    let _ = stdout.flush();
+                }
+            }
+            Ok(())
+        } else {
+            io::stdout().flush()
+        }
+    }
+}
+
 struct GzipRollingLoggerData {
     pub current_day_of_month: u8,
     pub last_rotate_time: time::OffsetDateTime,

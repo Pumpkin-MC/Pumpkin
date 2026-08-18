@@ -29,10 +29,10 @@ jobs:
           submodules: recursive
 
       - name: Install Nix
-        uses: DeterminateSystems/nix-installer-action@v16
+        uses: DeterminateSystems/nix-installer-action@v22
 
       - name: Magic Nix Cache
-        uses: DeterminateSystems/magic-nix-cache-action@v9
+        uses: DeterminateSystems/magic-nix-cache-action@v14
 
       - name: Check flake formatting and evaluation
         run: nix flake check

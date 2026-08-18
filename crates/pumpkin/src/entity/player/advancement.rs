@@ -432,7 +432,18 @@ impl PlayerAdvancement {
             result = true;
             self.progress_changed.insert(advancement);
             if !was_done && progress.is_done() {
-                //TODO listener
+                let player_c = player.clone();
+                let adv_id = advancement.id.to_string();
+                tokio::spawn(async move {
+                    if let Some(server) = player_c.world().server.upgrade() {
+                        let mut event =
+                            crate::plugin::api::events::player::player_advancement_done::PlayerAdvancementDoneEvent::new(
+                                player_c,
+                                adv_id,
+                            );
+                        server.plugin_manager.fire(&server, &mut event).await;
+                    }
+                });
                 Self::grant_reward(player.clone(), advancement.reward);
                 if let Some(display) = advancement.display
                     && display.announce_to_chat

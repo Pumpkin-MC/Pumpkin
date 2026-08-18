@@ -52,6 +52,7 @@ use tokio::task::{JoinHandle, JoinSet};
 use tokio_util::task::TaskTracker;
 
 mod connection_cache;
+pub mod enchantment;
 mod key_store;
 pub mod recipe;
 pub mod scheduler;
@@ -85,7 +86,7 @@ pub struct Server {
     /// Handles cryptographic keys for secure communication.
     key_store: OnceCell<Arc<KeyStore>>,
     /// Bedrock OIDC provider keys, fetched on startup for 1.26.10+ token validation.
-    pub bedrock_oidc_keys: OnceCell<(String, pumpkin_util::jwt::Jwks)>,
+    pub bedrock_oidc_keys: Arc<OnceCell<(String, pumpkin_util::jwt::Jwks)>>,
     /// Cached Bedrock server private key (process-lifetime). Generated on first Bedrock login and reused.
     pub bedrock_private_key: OnceCell<Arc<pumpkin_util::p384::ecdsa::SigningKey>>,
     /// Manages server status information.
@@ -105,6 +106,7 @@ pub struct Server {
     /// Assigns unique IDs to containers.
     container_id: AtomicU32,
     pub recipe_manager: Arc<recipe::RecipeManager>,
+    pub enchantment_manager: Arc<enchantment::EnchantmentManager>,
     /// Assigns unique IDs to maps.
     map_id: AtomicI32,
     /// Mojang's public keys, used for chat session signing
@@ -239,21 +241,6 @@ impl Server {
 
         let tick_rate_manager = Arc::new(ServerTickRateManager::new(basic_config.tps));
 
-        let mojang_keys_task = tokio::spawn({
-            let auth_config = advanced_config.networking.java.authentication.clone();
-            let allow_chat = basic_config.allow_chat_reports;
-            async move {
-                if allow_chat {
-                    fetch_mojang_public_keys(&auth_config).unwrap_or_else(|e| {
-                        error!("Failed to fetch Mojang keys: {e}");
-                        Vec::new()
-                    })
-                } else {
-                    Vec::new()
-                }
-            }
-        });
-
         let dimensions = {
             let mut dimensions = vec![Dimension::OVERWORLD];
             if basic_config.allow_nether {
@@ -283,6 +270,7 @@ impl Server {
             permission_registry,
             container_id: 0.into(),
             recipe_manager: Arc::new(recipe::RecipeManager::new()),
+            enchantment_manager: Arc::new(enchantment::EnchantmentManager::new()),
             map_id: level_info.load().map_id.into(),
             worlds: ArcSwap::from_pointee(vec![]),
             dimensions,
@@ -290,7 +278,7 @@ impl Server {
             block_registry: block_registry.clone(),
             item_registry: super::item::items::default_registry(),
             key_store: OnceCell::new(),
-            bedrock_oidc_keys: OnceCell::new(),
+            bedrock_oidc_keys: Arc::new(OnceCell::new()),
             bedrock_private_key: OnceCell::new(),
             listing,
             branding: CachedBranding::new(),
@@ -325,13 +313,74 @@ impl Server {
                 }),
         );
 
+        // Fetch / generate keys in background tasks to avoid blocking startup
         let server_clone = server.clone();
         tokio::spawn(async move {
-            server_clone
-                .key_store
-                .get_or_init(|| async { Arc::new(KeyStore::new()) })
-                .await;
+            let key_store = tokio::task::spawn_blocking(|| Arc::new(KeyStore::new()))
+                .await
+                .unwrap_or_else(|_| Arc::new(KeyStore::new()));
+            let _ = server_clone.key_store.set(key_store);
         });
+
+        if server.basic_config.allow_chat_reports {
+            let server_clone = server.clone();
+            tokio::spawn(async move {
+                let auth_config = server_clone
+                    .advanced_config
+                    .networking
+                    .java
+                    .authentication
+                    .clone();
+                let keys = tokio::task::spawn_blocking(move || {
+                    fetch_mojang_public_keys(&auth_config).unwrap_or_else(|e| {
+                        error!("Failed to fetch Mojang keys: {e}");
+                        Vec::new()
+                    })
+                })
+                .await
+                .unwrap_or_default();
+                server_clone.mojang_public_keys.store(Arc::new(keys));
+            });
+        }
+
+        if server.advanced_config.networking.bedrock.online_mode
+            && server
+                .advanced_config
+                .networking
+                .bedrock
+                .authentication
+                .enabled
+        {
+            let server_clone = server.clone();
+            tokio::spawn(async move {
+                let auth = server_clone
+                    .advanced_config
+                    .networking
+                    .bedrock
+                    .authentication
+                    .clone();
+                let keys = match tokio::task::spawn_blocking(move || {
+                    pumpkin_util::jwt::fetch_oidc_jwks(
+                        auth.url.as_deref(),
+                        auth.connect_timeout,
+                        auth.read_timeout,
+                    )
+                })
+                .await
+                {
+                    Ok(Ok(keys)) => keys,
+                    Ok(Err(error)) => {
+                        error!("Failed to fetch Bedrock OIDC keys: {error}");
+                        (String::new(), pumpkin_util::jwt::Jwks { keys: Vec::new() })
+                    }
+                    Err(join_err) => {
+                        error!("Bedrock OIDC key task failed: {join_err}");
+                        (String::new(), pumpkin_util::jwt::Jwks { keys: Vec::new() })
+                    }
+                };
+                let _ = server_clone.bedrock_oidc_keys.set(keys);
+            });
+        }
 
         let world_loader = |dim: Dimension| {
             let path = world_path.clone();
@@ -362,8 +411,7 @@ impl Server {
             world_futures.push(world_loader(dim.clone()));
         }
 
-        let (worlds_results, keys) =
-            tokio::join!(futures::future::join_all(world_futures), mojang_keys_task);
+        let worlds_results = futures::future::join_all(world_futures).await;
 
         let mut worlds_vec = Vec::new();
         for world in worlds_results.into_iter().flatten() {
@@ -387,31 +435,8 @@ impl Server {
         }
 
         server.worlds.store(Arc::new(worlds_vec));
-        if let Ok(k) = keys {
-            server.mojang_public_keys.store(Arc::new(k));
-        }
 
         info!("All worlds loaded successfully.");
-
-        if server.advanced_config.networking.bedrock.online_mode {
-            server
-                .bedrock_oidc_keys
-                .get_or_init(|| async {
-                    tokio::task::block_in_place(|| {
-                        let auth = &server.advanced_config.networking.bedrock.authentication;
-                        pumpkin_util::jwt::fetch_oidc_jwks(
-                            auth.url.as_deref(),
-                            auth.connect_timeout,
-                            auth.read_timeout,
-                        )
-                    })
-                    .unwrap_or_else(|error| {
-                        error!("Failed to fetch Bedrock OIDC keys: {error}");
-                        (String::new(), pumpkin_util::jwt::Jwks { keys: Vec::new() })
-                    })
-                })
-                .await;
-        }
         server
     }
 
@@ -490,6 +515,61 @@ impl Server {
             error!("World creation failed");
             std::process::exit(1);
         })
+    }
+
+    pub async fn unload_world(&self, name: &str) -> Result<(), String> {
+        let worlds = self.worlds.load();
+        let world_to_unload = worlds
+            .iter()
+            .find(|w| w.get_world_name() == name || w.dimension.minecraft_name == name)
+            .cloned()
+            .ok_or_else(|| format!("World '{name}' not found"))?;
+
+        if let Some(first_world) = worlds.first()
+            && Arc::ptr_eq(first_world, &world_to_unload)
+        {
+            return Err("Cannot unload the primary/default world".to_string());
+        }
+
+        let player_count = world_to_unload.players.load().len();
+        if player_count > 0 {
+            return Err(format!(
+                "Cannot unload world '{name}': {player_count} players are still in this world"
+            ));
+        }
+
+        world_to_unload.shutdown().await;
+        world_to_unload.unload().await;
+
+        self.worlds.rcu(|w_list| {
+            let mut new_list = (**w_list).clone();
+            new_list.retain(|w| !Arc::ptr_eq(w, &world_to_unload));
+            new_list
+        });
+
+        Ok(())
+    }
+
+    pub async fn save_all(&self) -> Result<(), String> {
+        if let Err(err) = self.player_data_storage.save_all_players(self).await {
+            error!("Failed to save player data: {err}");
+            return Err(format!("Failed to save player data: {err}"));
+        }
+
+        if let Err(err) = self
+            .advancement_manager
+            .save_all_players(&self.get_all_players())
+            .await
+        {
+            error!("Failed to save player advancements: {err}");
+            return Err(format!("Failed to save player advancements: {err}"));
+        }
+
+        for world in self.worlds.load().iter() {
+            world.save().await;
+        }
+
+        Ok(())
     }
 
     /// Adds a new player to the server.

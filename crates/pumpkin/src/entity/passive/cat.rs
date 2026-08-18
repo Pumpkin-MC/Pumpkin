@@ -7,9 +7,7 @@ use crossbeam::atomic::AtomicCell;
 use pumpkin_data::entity::{EntityStatus, EntityType};
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
-use pumpkin_data::meta_data_type::MetaDataType;
 use pumpkin_data::tag::{self, Taggable};
-use pumpkin_data::tracked_data::TrackedData;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::bedrock::server::actor_event::ActorEventType;
 use pumpkin_protocol::codec::var_int::VarInt;
@@ -196,8 +194,7 @@ impl CatEntity {
         let entity = self.get_entity();
         entity.send_meta_data(
             &[Metadata::new(
-                TrackedData::CAT_COLLAR_COLOR,
-                MetaDataType::INT,
+                pumpkin_data::tracked_data::cat::CAT_COLLAR_COLOR,
                 VarInt(color as i32),
             )],
             None,
@@ -209,8 +206,7 @@ impl CatEntity {
         let entity = self.get_entity();
         entity.send_meta_data(
             &[Metadata::new(
-                TrackedData::TAMEABLE_FLAGS,
-                MetaDataType::BYTE,
+                pumpkin_data::tracked_data::cat::TAMEABLE_FLAGS,
                 self.get_tame_flags(),
             )],
             None,
@@ -223,16 +219,14 @@ impl CatEntity {
         let entity = self.get_entity();
         entity.send_meta_data(
             &[Metadata::new(
-                TrackedData::TAMEABLE_FLAGS,
-                MetaDataType::BYTE,
+                pumpkin_data::tracked_data::cat::TAMEABLE_FLAGS,
                 self.get_tame_flags(),
             )],
             None,
         );
         entity.send_meta_data(
             &[Metadata::new(
-                TrackedData::OWNER_UUID,
-                MetaDataType::OPTIONAL_UUID,
+                pumpkin_data::tracked_data::cat::OWNER_UUID,
                 owner,
             )],
             None,
@@ -244,8 +238,7 @@ impl CatEntity {
         let entity = self.get_entity();
         entity.send_meta_data(
             &[Metadata::new(
-                TrackedData::IS_LYING,
-                MetaDataType::BOOLEAN,
+                pumpkin_data::tracked_data::cat::IS_LYING,
                 lying,
             )],
             None,
@@ -257,8 +250,7 @@ impl CatEntity {
         let entity = self.get_entity();
         entity.send_meta_data(
             &[Metadata::new(
-                TrackedData::RELAX_STATE_ONE,
-                MetaDataType::BOOLEAN,
+                pumpkin_data::tracked_data::cat::RELAX_STATE_ONE,
                 relax,
             )],
             None,
@@ -394,8 +386,7 @@ impl Mob for CatEntity {
             if is_baby {
                 entity.send_meta_data(
                     &[Metadata::new(
-                        TrackedData::BABY_ID,
-                        MetaDataType::BOOLEAN,
+                        pumpkin_data::tracked_data::cat::BABY_ID,
                         true,
                     )],
                     None,
@@ -403,56 +394,49 @@ impl Mob for CatEntity {
             }
             entity.send_meta_data(
                 &[Metadata::new(
-                    TrackedData::TAMEABLE_FLAGS,
-                    MetaDataType::BYTE,
+                    pumpkin_data::tracked_data::cat::TAMEABLE_FLAGS,
                     self.get_tame_flags(),
                 )],
                 None,
             );
             entity.send_meta_data(
                 &[Metadata::new(
-                    TrackedData::OWNER_UUID,
-                    MetaDataType::OPTIONAL_UUID,
+                    pumpkin_data::tracked_data::cat::OWNER_UUID,
                     self.owner.load(),
                 )],
                 None,
             );
             entity.send_meta_data(
                 &[Metadata::new(
-                    TrackedData::CAT_VARIANT,
-                    MetaDataType::CAT_VARIANT,
+                    pumpkin_data::tracked_data::cat::CAT_VARIANT,
                     VarInt(self.variant.load(Ordering::Relaxed) as i32),
                 )],
                 None,
             );
             entity.send_meta_data(
                 &[Metadata::new(
-                    TrackedData::IS_LYING,
-                    MetaDataType::BOOLEAN,
+                    pumpkin_data::tracked_data::cat::IS_LYING,
                     self.is_lying.load(Ordering::Relaxed),
                 )],
                 None,
             );
             entity.send_meta_data(
                 &[Metadata::new(
-                    TrackedData::RELAX_STATE_ONE,
-                    MetaDataType::BOOLEAN,
+                    pumpkin_data::tracked_data::cat::RELAX_STATE_ONE,
                     self.relax_state_one.load(Ordering::Relaxed),
                 )],
                 None,
             );
             entity.send_meta_data(
                 &[Metadata::new(
-                    TrackedData::CAT_COLLAR_COLOR,
-                    MetaDataType::INT,
+                    pumpkin_data::tracked_data::cat::CAT_COLLAR_COLOR,
                     VarInt(self.collar_color.load(Ordering::Relaxed) as i32),
                 )],
                 None,
             );
             entity.send_meta_data(
                 &[Metadata::new(
-                    TrackedData::SOUND_VARIANT,
-                    MetaDataType::CAT_SOUND_VARIANT,
+                    pumpkin_data::tracked_data::cat::SOUND_VARIANT,
                     VarInt(self.sound_variant.load(Ordering::Relaxed) as i32),
                 )],
                 None,

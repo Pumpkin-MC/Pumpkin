@@ -7,9 +7,7 @@ use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::{
     entity::EntityType,
     item::Item,
-    meta_data_type::MetaDataType,
     sound::{Sound, SoundCategory},
-    tracked_data::TrackedData,
 };
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::{codec::var_int::VarInt, java::client::play::Metadata};
@@ -96,8 +94,7 @@ impl CreeperEntity {
         self.fuse_speed.store(speed, Ordering::Relaxed);
         self.mob_entity.living_entity.entity.send_meta_data(
             &[Metadata::new(
-                TrackedData::FUSE_ID,
-                MetaDataType::INTEGER,
+                pumpkin_data::tracked_data::creeper::FUSE_ID,
                 VarInt(speed),
             )],
             None,
@@ -172,8 +169,7 @@ impl Mob for CreeperEntity {
             self.charged.store(true, Ordering::Relaxed);
             self.mob_entity.living_entity.entity.send_meta_data(
                 &[Metadata::new(
-                    TrackedData::CHARGED,
-                    MetaDataType::BOOLEAN,
+                    pumpkin_data::tracked_data::creeper::CHARGED,
                     true,
                 )],
                 None,
@@ -251,8 +247,7 @@ impl Mob for CreeperEntity {
             self.ignited.store(true, Ordering::Relaxed);
             entity.send_meta_data(
                 &[Metadata::new(
-                    TrackedData::IS_IGNITED,
-                    MetaDataType::BOOLEAN,
+                    pumpkin_data::tracked_data::creeper::IS_IGNITED,
                     true,
                 )],
                 None,

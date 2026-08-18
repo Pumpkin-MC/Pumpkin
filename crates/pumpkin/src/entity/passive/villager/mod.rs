@@ -10,9 +10,7 @@ use pumpkin_data::block_properties::{
 };
 use pumpkin_data::entity::{EntityPose, EntityType};
 use pumpkin_data::item_stack::ItemStack;
-use pumpkin_data::meta_data_type::MetaDataType;
 use pumpkin_data::tag::Taggable;
-use pumpkin_data::tracked_data::TrackedData;
 use pumpkin_inventory::merchant::merchant_screen_handler::MerchantScreenHandler;
 use pumpkin_inventory::screen_handler::{
     BoxFuture, InventoryPlayer, ScreenHandlerFactory, SharedScreenHandler,
@@ -166,8 +164,7 @@ impl VillagerEntity {
         // Send initial metadata
         mob_arc.get_entity().send_meta_data(
             &[Metadata::new(
-                TrackedData::VILLAGER_DATA,
-                MetaDataType::VILLAGER_DATA,
+                pumpkin_data::tracked_data::villager::VILLAGER_DATA,
                 villager_data,
             )],
             None,
@@ -224,8 +221,7 @@ impl VillagerEntity {
         };
         self.get_entity().send_meta_data(
             &[Metadata::new(
-                TrackedData::VILLAGER_DATA,
-                MetaDataType::VILLAGER_DATA,
+                pumpkin_data::tracked_data::villager::VILLAGER_DATA,
                 data,
             )],
             None,
@@ -816,8 +812,7 @@ impl Mob for VillagerEntity {
                         self.get_entity().set_pose(EntityPose::Standing);
                         self.get_entity().send_meta_data(
                             &[Metadata::new(
-                                TrackedData::SLEEPING_POS_ID,
-                                MetaDataType::OPTIONAL_BLOCK_POS,
+                                pumpkin_data::tracked_data::villager::SLEEPING_POS_ID,
                                 None::<BlockPos>,
                             )],
                             None,
@@ -919,8 +914,7 @@ impl Mob for VillagerEntity {
                                     self.get_entity().set_pose(EntityPose::Sleeping);
                                     self.get_entity().send_meta_data(
                                         &[Metadata::new(
-                                            TrackedData::SLEEPING_POS_ID,
-                                            MetaDataType::OPTIONAL_BLOCK_POS,
+                                            pumpkin_data::tracked_data::villager::SLEEPING_POS_ID,
                                             Some(home_pos),
                                         )],
                                         None,
@@ -942,8 +936,7 @@ impl Mob for VillagerEntity {
                     self.get_entity().set_pose(EntityPose::Standing);
                     self.get_entity().send_meta_data(
                         &[Metadata::new(
-                            TrackedData::SLEEPING_POS_ID,
-                            MetaDataType::OPTIONAL_BLOCK_POS,
+                            pumpkin_data::tracked_data::villager::SLEEPING_POS_ID,
                             None::<BlockPos>,
                         )],
                         None,

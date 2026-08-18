@@ -235,7 +235,7 @@ impl BedrockClient {
                                 pumpkin_protocol::java::server::play::SUseItemOn {
                                     hand: VarInt(0),
                                     position: data.block_position,
-                                    face: VarInt(data.block_face),
+                                    face: VarInt(i32::from(data.block_face)),
                                     cursor_pos: data.click_position,
                                     inside_block: false,
                                     is_against_world_border: false,

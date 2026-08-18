@@ -10,6 +10,7 @@ members = [
     "crates/pumpkin-macros",
     "crates/pumpkin-nbt",
     "crates/pumpkin-plugin-api",
+    "crates/pumpkin-plugin-utils",
     "crates/pumpkin-protocol",
     "crates/pumpkin-util",
     "crates/pumpkin-world",
@@ -177,6 +178,8 @@ pumpkin-data = { path = "crates/pumpkin-data", default-features = false }
 pumpkin-inventory = { path = "crates/pumpkin-inventory", default-features = false }
 pumpkin-macros = { path = "crates/pumpkin-macros", default-features = false }
 pumpkin-nbt = { path = "crates/pumpkin-nbt", default-features = false }
+pumpkin-plugin-api = { path = "crates/pumpkin-plugin-api", default-features = false }
+pumpkin-plugin-utils = { path = "crates/pumpkin-plugin-utils", default-features = false }
 pumpkin-protocol = { path = "crates/pumpkin-protocol", default-features = false }
 pumpkin-util = { path = "crates/pumpkin-util", default-features = false }
 pumpkin-world = { path = "crates/pumpkin-world", default-features = false }
@@ -214,8 +217,8 @@ ordered-float = { version = "5.3", default-features = false, features = ["std"] 
 xxhash-rust = { version = "0.8", default-features = false, features = ["xxh64"] }
 
 wasmtime = { version = "47.0", default-features = false, features = ["runtime", "component-model", "async", "cache", "cranelift", "gc", "gc-drc", "threads", "std"] }
-wasmtime-wasi = { version = "47.0", default-features = false, features = ["p2"] }
-wasmtime-wasi-http = { version = "47.0", default-features = false, features = ["p2", "default-send-request"] }
+wasmtime-wasi = { version = "47.0", default-features = false, features = ["p2", "p3"] }
+wasmtime-wasi-http = { version = "47.0", default-features = false, features = ["p2", "p3", "default-send-request"] }
 # needed for interacting with wasmtime-wasi-http - keep in sync
 hyper = { version = "^1.11", default-features = false }
 axum = { version = "0.8.9", default-features = false, features = ["http1", "tokio"] }
@@ -225,3 +228,4 @@ wit-bindgen = { version = "0.60", default-features = false, features = ["macros"
 
 postcard = { version = "1.1", default-features = false, features = ["alloc"] }
 tracing-serde-structured = { version = "0.4", default-features = false }
+wasmparser = { version = "0.256", default-features = false }

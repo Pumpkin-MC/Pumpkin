@@ -21,9 +21,8 @@ use pumpkin_data::dimension::Dimension;
 use pumpkin_data::entity::EntityStatus;
 use pumpkin_data::fluid::Fluid;
 use pumpkin_data::item_stack::ItemStack;
-use pumpkin_data::meta_data_type::MetaDataType;
 use pumpkin_data::tag::{self, Taggable};
-use pumpkin_data::tracked_data::TrackedData;
+use pumpkin_data::tracked_data;
 use pumpkin_data::{Block, BlockDirection};
 use pumpkin_data::{
     block_properties::{Facing, HorizontalFacing},
@@ -195,11 +194,7 @@ pub trait EntityBase: Send + Sync + NBTStorage + std::any::Any {
                 let mut bedrock_meta = EntityMetadata::new();
                 bedrock_meta.set_flag(entity_data_key::FLAGS, entity_data_flag::BABY as u8, true);
                 entity.send_meta_data(
-                    &[Metadata::new(
-                        TrackedData::BABY_ID,
-                        MetaDataType::BOOLEAN,
-                        true,
-                    )],
+                    &[Metadata::new(tracked_data::ageable_mob::DATA_BABY_ID, true)],
                     Some(&bedrock_meta),
                 );
             }
@@ -892,6 +887,8 @@ pub struct Entity {
     pub last_sent_pos: AtomicCell<Vector3<f64>>,
     /// Cache for the last sent head yaw byte
     pub last_sent_head_yaw: AtomicU8,
+    /// Persistent custom data container for plugins (matching Bukkit's `PersistentDataHolder`)
+    pub custom_data: Mutex<NbtCompound>,
 }
 
 impl Entity {
@@ -1014,6 +1011,7 @@ impl Entity {
             last_sent_pitch: AtomicU8::new(0),
             last_sent_head_yaw: AtomicU8::new(0),
             last_sent_pos: AtomicCell::new(position),
+            custom_data: Mutex::new(NbtCompound::new()),
         }
     }
 
@@ -1127,8 +1125,7 @@ impl Entity {
         );
         self.send_meta_data(
             &[Metadata::new(
-                TrackedData::CUSTOM_NAME,
-                MetaDataType::OPTIONAL_TEXT_COMPONENT,
+                tracked_data::entity::DATA_CUSTOM_NAME,
                 Some(name),
             )],
             Some(&bedrock_meta),
@@ -1156,8 +1153,7 @@ impl Entity {
         );
         self.send_meta_data(
             &[Metadata::new(
-                TrackedData::CUSTOM_NAME_VISIBLE,
-                MetaDataType::BOOLEAN,
+                tracked_data::entity::DATA_CUSTOM_NAME_VISIBLE,
                 visible,
             )],
             Some(&bedrock_meta),
@@ -1171,11 +1167,7 @@ impl Entity {
     pub fn set_silent(&self, silent: bool) {
         self.silent.store(silent, Ordering::Relaxed);
         self.send_meta_data(
-            &[Metadata::new(
-                TrackedData::SILENT,
-                MetaDataType::BOOLEAN,
-                silent,
-            )],
+            &[Metadata::new(tracked_data::entity::DATA_SILENT, silent)],
             None,
         );
     }
@@ -1188,8 +1180,7 @@ impl Entity {
         self.has_no_gravity.store(no_gravity, Ordering::Relaxed);
         self.send_meta_data(
             &[Metadata::new(
-                TrackedData::NO_GRAVITY,
-                MetaDataType::BOOLEAN,
+                tracked_data::entity::DATA_NO_GRAVITY,
                 no_gravity,
             )],
             None,
@@ -2592,8 +2583,7 @@ impl Entity {
             );
             self.send_meta_data(
                 &[Metadata::new(
-                    TrackedData::TICKS_FROZEN,
-                    MetaDataType::INTEGER,
+                    tracked_data::entity::DATA_TICKS_FROZEN,
                     VarInt(new_frozen_ticks),
                 )],
                 Some(&bedrock_meta),
@@ -2862,8 +2852,7 @@ impl Entity {
 
         self.send_meta_data(
             &[Metadata::new(
-                TrackedData::SHARED_FLAGS_ID,
-                MetaDataType::BYTE,
+                tracked_data::entity::DATA_SHARED_FLAGS_ID,
                 new_je_flags,
             )],
             None,
@@ -3022,11 +3011,7 @@ impl Entity {
                 MetadataValue::Float(dimension.height),
             );
             self.send_meta_data(
-                &[Metadata::new(
-                    TrackedData::POSE,
-                    MetaDataType::ENTITY_POSE,
-                    VarInt(pose),
-                )],
+                &[Metadata::new(tracked_data::entity::DATA_POSE, VarInt(pose))],
                 Some(&bedrock_meta),
             );
         }
@@ -3700,6 +3685,53 @@ impl Entity {
         }
         self.movement_multiplier.store(multiplier);
     }
+
+    pub async fn set_custom_data(&self, namespace: &str, key: &str, value: NbtTag) {
+        let mut custom_data = self.custom_data.lock().await;
+
+        let mut namespace_data = custom_data
+            .child_tags
+            .remove(namespace)
+            .and_then(|tag| match tag {
+                NbtTag::Compound(compound) => Some(compound),
+                _ => None,
+            })
+            .unwrap_or_default();
+
+        namespace_data.child_tags.insert(key.into(), value);
+        custom_data
+            .child_tags
+            .insert(namespace.into(), NbtTag::Compound(namespace_data));
+    }
+
+    pub async fn get_custom_data(&self, namespace: &str, key: &str) -> Option<NbtTag> {
+        let custom_data = self.custom_data.lock().await;
+        custom_data
+            .get(namespace)?
+            .extract_compound()?
+            .get(key)
+            .cloned()
+    }
+
+    pub async fn remove_custom_data(&self, namespace: &str, key: &str) {
+        let mut custom_data = self.custom_data.lock().await;
+
+        let Some(NbtTag::Compound(mut namespace_data)) = custom_data.child_tags.remove(namespace)
+        else {
+            return;
+        };
+
+        namespace_data.child_tags.remove(key);
+        if !namespace_data.is_empty() {
+            custom_data
+                .child_tags
+                .insert(namespace.into(), NbtTag::Compound(namespace_data));
+        }
+    }
+
+    pub async fn has_custom_data(&self, namespace: &str, key: &str) -> bool {
+        self.get_custom_data(namespace, key).await.is_some()
+    }
 }
 
 impl NBTStorage for Entity {
@@ -3757,6 +3789,11 @@ impl NBTStorage for Entity {
                             .collect(),
                     ),
                 );
+            }
+
+            let custom_data = self.custom_data.lock().await;
+            if !custom_data.is_empty() {
+                nbt.put_compound("PumpkinCustomData", custom_data.clone());
             }
 
             // todo more...
@@ -3825,6 +3862,14 @@ impl NBTStorage for Entity {
                         .filter_map(|tag| tag.extract_string().map(str::to_owned))
                         .take(MAX_SCOREBOARD_TAGS),
                 );
+            }
+
+            if let Some(custom_data) = nbt
+                .get_compound("PumpkinCustomData")
+                .or_else(|| nbt.get_compound("BukkitValues"))
+            {
+                let mut data = self.custom_data.lock().await;
+                *data = custom_data.clone();
             }
 
             // todo more...

@@ -4,9 +4,7 @@ use std::sync::{
 };
 
 use pumpkin_data::item_stack::ItemStack;
-use pumpkin_data::meta_data_type::MetaDataType;
 use pumpkin_data::sound::Sound;
-use pumpkin_data::tracked_data::TrackedData;
 use pumpkin_data::{entity::EntityType, item::Item};
 use pumpkin_protocol::codec::var_int::VarInt;
 use rand::RngExt;
@@ -159,8 +157,7 @@ impl Mob for ChickenEntity {
             if is_baby {
                 entity.send_meta_data(
                     &[pumpkin_protocol::java::client::play::Metadata::new(
-                        TrackedData::BABY_ID,
-                        MetaDataType::BOOLEAN,
+                        pumpkin_data::tracked_data::chicken::BABY_ID,
                         true,
                     )],
                     None,
@@ -168,8 +165,7 @@ impl Mob for ChickenEntity {
             }
             entity.send_meta_data(
                 &[pumpkin_protocol::java::client::play::Metadata::new(
-                    TrackedData::VARIANT,
-                    MetaDataType::CHICKEN_VARIANT,
+                    pumpkin_data::tracked_data::chicken::VARIANT,
                     VarInt(self.variant.load(Ordering::Relaxed) as i32),
                 )],
                 None,

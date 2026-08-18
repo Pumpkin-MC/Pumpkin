@@ -11,9 +11,8 @@ use crossbeam::atomic::AtomicCell;
 use pumpkin_data::attributes::Attributes;
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::item_stack::ItemStack;
-use pumpkin_data::meta_data_type::MetaDataType;
 use pumpkin_data::tag::{self, Taggable};
-use pumpkin_data::tracked_data::TrackedData;
+use pumpkin_data::tracked_data;
 use pumpkin_protocol::java::client::play::{CHeadRot, CUpdateEntityRot, Metadata};
 use pumpkin_util::Difficulty;
 use pumpkin_util::math::boundingbox::BoundingBox;
@@ -223,11 +222,7 @@ impl MobEntity {
             self.mob_flags.store(new_b, Ordering::Relaxed);
 
             self.living_entity.entity.send_meta_data(
-                &[Metadata::new(
-                    TrackedData::MOB_FLAGS_ID,
-                    MetaDataType::BYTE,
-                    new_b,
-                )],
+                &[Metadata::new(tracked_data::mob::DATA_MOB_FLAGS_ID, new_b)],
                 None,
             );
         }
@@ -752,11 +747,7 @@ pub trait Mob: EntityBase + Send + Sync {
             let is_baby = entity.age.load(std::sync::atomic::Ordering::Relaxed) < 0;
             if is_baby {
                 entity.send_meta_data(
-                    &[Metadata::new(
-                        TrackedData::BABY_ID,
-                        MetaDataType::BOOLEAN,
-                        true,
-                    )],
+                    &[Metadata::new(tracked_data::ageable_mob::DATA_BABY_ID, true)],
                     None,
                 );
             }

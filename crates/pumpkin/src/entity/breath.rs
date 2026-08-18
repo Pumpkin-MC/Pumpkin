@@ -2,10 +2,8 @@ use crate::entity::EntityBase;
 use crate::entity::player::Player;
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::effect::StatusEffect;
-use pumpkin_data::meta_data_type::MetaDataType;
 use pumpkin_data::tag;
 use pumpkin_data::tag::Taggable;
-use pumpkin_data::tracked_data::TrackedData;
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::java::client::play::Metadata;
 use pumpkin_util::GameMode;
@@ -176,8 +174,7 @@ impl BreathManager {
 
         player.get_entity().send_meta_data(
             &[Metadata::new(
-                TrackedData::AIR_SUPPLY_ID,
-                MetaDataType::INT,
+                pumpkin_data::tracked_data::entity::DATA_AIR_SUPPLY_ID,
                 VarInt(air),
             )],
             Some(&bedrock_meta),

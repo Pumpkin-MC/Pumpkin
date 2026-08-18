@@ -239,6 +239,7 @@ pub fn write_generated_file(new_code: &str, out_file: &str) {
 }
 
 /// Error returned when `rustfmt` is unavailable or fails to format code.
+#[derive(Debug)]
 pub struct RustFmtError;
 
 /// Formats a Rust source string by piping it through `rustfmt`.

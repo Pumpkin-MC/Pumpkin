@@ -31,3 +31,18 @@ impl<'a> ServerPacket<'a> for SKnownPacks<'a> {
         Ok(Self { known_packs })
     }
 }
+
+impl crate::ClientPacket for SKnownPacks<'_> {
+    fn write_packet_data(
+        &self,
+        mut write: impl std::io::Write,
+        _version: &JavaMinecraftVersion,
+    ) -> Result<(), crate::ser::WritingError> {
+        use crate::{VarInt, ser::NetworkWriteExt};
+        write.write_var_int(&VarInt(self.known_packs.len() as i32))?;
+        for pack in &self.known_packs {
+            pack.write(&mut write)?;
+        }
+        Ok(())
+    }
+}

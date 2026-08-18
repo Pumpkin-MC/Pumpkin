@@ -1,9 +1,11 @@
 use std::io::{Cursor, Write};
 
 use pumpkin_data::{
-    block_state_remap::remap_block_state_for_version, item_id_remap::remap_item_id_for_version,
-    meta_data_type::MetaDataType, packet::clientbound::PLAY_SET_ENTITY_DATA,
-    tracked_data::TrackedId,
+    block_state_remap::remap_block_state_for_version,
+    item_id_remap::remap_item_id_for_version,
+    meta_data_type::MetaDataType,
+    packet::clientbound::PLAY_SET_ENTITY_DATA,
+    tracked_data::{TrackedData, TrackedId},
 };
 use pumpkin_macros::java_packet;
 use pumpkin_util::version::JavaMinecraftVersion;
@@ -69,7 +71,15 @@ pub struct Metadata<T> {
 }
 
 impl<T> Metadata<T> {
-    pub const fn new(index: TrackedId, r#type: MetaDataType, value: T) -> Self {
+    pub const fn new(tracked: TrackedData, value: T) -> Self {
+        Self {
+            index: tracked.id,
+            r#type: tracked.r#type,
+            value,
+        }
+    }
+
+    pub const fn new_raw(index: TrackedId, r#type: MetaDataType, value: T) -> Self {
         Self {
             index,
             r#type,
@@ -305,9 +315,7 @@ impl MetadataSerializer for Option<uuid::Uuid> {
 mod tests {
     use std::io::{Cursor, Read};
 
-    use pumpkin_data::{
-        meta_data_type::MetaDataType, particle::Particle, tracked_data::TrackedData,
-    };
+    use pumpkin_data::{meta_data_type::MetaDataType, particle::Particle};
     use pumpkin_util::version::JavaMinecraftVersion;
 
     use crate::{VarInt, ser::NetworkWriteExt};
@@ -332,8 +340,7 @@ mod tests {
     fn encoded_particle(version: JavaMinecraftVersion) -> (VarInt, Vec<u8>) {
         let particle_data = [0x12, 0x34, 0x56, 0x78];
         let metadata = Metadata::new(
-            TrackedData::PARTICLE,
-            MetaDataType::PARTICLE,
+            pumpkin_data::tracked_data::area_effect_cloud::DATA_PARTICLE,
             ParticleMetadata {
                 particle_id: VarInt(Particle::ExplosionEmitter as i32),
                 data: particle_data,
@@ -342,7 +349,10 @@ mod tests {
         let mut bytes = Vec::new();
         metadata.write(&mut bytes, &version).unwrap();
 
-        assert_eq!(bytes[0], TrackedData::PARTICLE.get(&version));
+        assert_eq!(
+            bytes[0],
+            pumpkin_data::tracked_data::area_effect_cloud::DATA_PARTICLE.get(&version)
+        );
         assert_eq!(bytes[1], MetaDataType::PARTICLE.id(version) as u8);
 
         let mut cursor = Cursor::new(&bytes[2..]);
