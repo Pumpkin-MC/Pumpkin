@@ -4893,6 +4893,8 @@ impl World {
     }
 
     /// Sets a block and returns the old block id
+    ///
+    /// **DO NOT LOCK world.portal_poi BEFORE RUNNING THIS, AS IT WILL CAUSE A DEADLOCK**
     #[expect(clippy::too_many_lines)]
     pub async fn set_block_state(
         self: &Arc<Self>,
