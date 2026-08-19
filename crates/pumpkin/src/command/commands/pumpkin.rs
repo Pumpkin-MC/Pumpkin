@@ -5,11 +5,12 @@ use pumpkin_util::text::{TextComponent, color::NamedColor};
 use pumpkin_util::translation::get_translation_text;
 use serde::Deserialize;
 use std::borrow::Cow;
-use std::sync::{LazyLock, Mutex};
+use std::sync::{Arc, LazyLock, Mutex};
 use std::time::{Duration, Instant};
 
 use crate::command::CommandResult;
 use crate::command::{CommandExecutor, CommandSender, args::ConsumedArgs, tree::CommandTree};
+use crate::server::Server;
 
 const NAMES: [&str; 3] = ["pumpkin", "version", "ver"];
 
@@ -241,8 +242,8 @@ impl CommandExecutor for Executor {
     fn execute<'a>(
         &'a self,
         sender: &'a CommandSender,
-        _server: &'a crate::server::Server,
-        _args: &'a ConsumedArgs<'a>,
+        server: &'a Arc<Server>,
+        args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {
             let contributors = tokio::task::spawn_blocking(fetch_all_contributors_cached)

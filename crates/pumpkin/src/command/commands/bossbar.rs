@@ -4,6 +4,7 @@ use crate::command::args::bossbar_style::BossbarStyleArgumentConsumer;
 use crate::command::args::bounded_num::BoundedNumArgumentConsumer;
 use crate::command::args::players::PlayersArgumentConsumer;
 use crate::command::args::resource_location::ResourceLocationArgumentConsumer;
+use std::sync::Arc;
 
 use crate::command::args::{ConsumedArgs, FindArg, FindArgDefaultName};
 
@@ -12,6 +13,7 @@ use crate::command::dispatcher::CommandError;
 use crate::command::tree::CommandTree;
 use crate::command::tree::builder::{argument, argument_default_name, literal};
 use crate::command::{CommandExecutor, CommandResult, CommandSender};
+use crate::server::Server;
 use crate::world::bossbar::Bossbar;
 use crate::world::custom_bossbar::BossbarUpdateError;
 use pumpkin_data::translation;
@@ -54,7 +56,7 @@ impl CommandExecutor for AddExecutor {
     fn execute<'a>(
         &'a self,
         sender: &'a CommandSender,
-        server: &'a crate::server::Server,
+        server: &'a Arc<Server>,
         args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {
@@ -101,7 +103,7 @@ impl CommandExecutor for GetExecutor {
     fn execute<'a>(
         &'a self,
         sender: &'a CommandSender,
-        server: &'a crate::server::Server,
+        server: &'a Arc<Server>,
         args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {
@@ -184,8 +186,8 @@ impl CommandExecutor for ListExecutor {
     fn execute<'a>(
         &'a self,
         sender: &'a CommandSender,
-        server: &'a crate::server::Server,
-        _args: &'a ConsumedArgs<'a>,
+        server: &'a Arc<Server>,
+        args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {
             let bossbars = server.bossbars.lock().await.get_all_bossbars();
@@ -240,7 +242,7 @@ impl CommandExecutor for RemoveExecutor {
     fn execute<'a>(
         &'a self,
         sender: &'a CommandSender,
-        server: &'a crate::server::Server,
+        server: &'a Arc<Server>,
         args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {
@@ -290,7 +292,7 @@ impl CommandExecutor for SetExecutor {
     fn execute<'a>(
         &'a self,
         sender: &'a CommandSender,
-        server: &'a crate::server::Server,
+        server: &'a Arc<Server>,
         args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {

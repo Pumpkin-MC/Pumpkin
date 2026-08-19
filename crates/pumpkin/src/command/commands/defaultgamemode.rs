@@ -4,8 +4,10 @@ use crate::command::args::{Arg, GetCloned};
 use crate::command::dispatcher::CommandError::InvalidConsumption;
 use crate::command::tree::builder::argument;
 use crate::command::{CommandExecutor, CommandSender, args::ConsumedArgs, tree::CommandTree};
+use crate::server::Server;
 use pumpkin_util::GameMode;
 use pumpkin_util::text::TextComponent;
+use std::sync::Arc;
 
 const NAMES: [&str; 1] = ["defaultgamemode"];
 
@@ -23,7 +25,7 @@ impl CommandExecutor for DefaultGamemodeExecutor {
     fn execute<'a>(
         &'a self,
         sender: &'a CommandSender,
-        server: &'a crate::server::Server,
+        server: &'a Arc<Server>,
         args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {

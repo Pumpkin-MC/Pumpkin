@@ -1,8 +1,10 @@
 use pumpkin_util::text::{TextComponent, color::NamedColor, hover::HoverEvent};
+use std::sync::Arc;
 
 use crate::command::{
     CommandExecutor, CommandResult, CommandSender, args::ConsumedArgs, tree::CommandTree,
 };
+use crate::server::Server;
 
 const NAMES: [&str; 2] = ["pl", "plugins"];
 
@@ -14,8 +16,8 @@ impl CommandExecutor for Executor {
     fn execute<'a>(
         &'a self,
         sender: &'a CommandSender,
-        server: &'a crate::server::Server,
-        _args: &'a ConsumedArgs<'a>,
+        server: &'a Arc<Server>,
+        args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {
             let plugins = server.plugin_manager.active_plugins().await;

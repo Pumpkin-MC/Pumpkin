@@ -1,5 +1,6 @@
 use pumpkin_data::translation;
 use pumpkin_util::text::TextComponent;
+use std::sync::Arc;
 
 use crate::command::args::{
     FindArg, bounded_num::BoundedNumArgumentConsumer,
@@ -9,6 +10,7 @@ use crate::command::tree::builder::{argument, literal};
 use crate::command::{
     CommandError, CommandExecutor, CommandResult, CommandSender, ConsumedArgs, tree::CommandTree,
 };
+use crate::server::Server;
 
 const NAMES: [&str; 1] = ["time"];
 const DESCRIPTION: &str = "Query or modify the world time and clocks.";
@@ -64,7 +66,7 @@ impl CommandExecutor for QueryExecutor {
     fn execute<'a>(
         &'a self,
         sender: &'a CommandSender,
-        server: &'a crate::server::Server,
+        server: &'a Arc<Server>,
         args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {
@@ -132,7 +134,7 @@ impl CommandExecutor for ActionExecutor {
     fn execute<'a>(
         &'a self,
         sender: &'a CommandSender,
-        server: &'a crate::server::Server,
+        server: &'a Arc<Server>,
         args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {

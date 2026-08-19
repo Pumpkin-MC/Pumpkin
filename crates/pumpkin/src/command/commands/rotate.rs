@@ -1,6 +1,7 @@
 use pumpkin_data::translation;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::text::TextComponent;
+use std::sync::Arc;
 
 use crate::command::args::entity::EntityArgumentConsumer;
 use crate::command::args::entity_anchor::{EntityAnchor, EntityAnchorArgumentConsumer};
@@ -10,6 +11,7 @@ use crate::command::args::{ConsumedArgs, FindArg};
 use crate::command::tree::CommandTree;
 use crate::command::tree::builder::{argument, literal};
 use crate::command::{CommandExecutor, CommandResult, CommandSender};
+use crate::server::Server;
 
 const NAMES: [&str; 1] = ["rotate"];
 const DESCRIPTION: &str = "Changes the rotation of an entity.";
@@ -104,7 +106,7 @@ impl CommandExecutor for RotateToRotationExecutor {
     fn execute<'a>(
         &'a self,
         sender: &'a CommandSender,
-        _server: &'a crate::server::Server,
+        server: &'a Arc<Server>,
         args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {
@@ -127,7 +129,7 @@ impl CommandExecutor for RotateFacingLocationExecutor {
     fn execute<'a>(
         &'a self,
         sender: &'a CommandSender,
-        _server: &'a crate::server::Server,
+        server: &'a Arc<Server>,
         args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {
@@ -157,7 +159,7 @@ impl CommandExecutor for RotateFacingEntityExecutor {
     fn execute<'a>(
         &'a self,
         sender: &'a CommandSender,
-        _server: &'a crate::server::Server,
+        server: &'a Arc<Server>,
         args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {
@@ -189,7 +191,7 @@ impl CommandExecutor for RotateFacingEntityNoAnchorExecutor {
     fn execute<'a>(
         &'a self,
         sender: &'a CommandSender,
-        _server: &'a crate::server::Server,
+        server: &'a Arc<Server>,
         args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {

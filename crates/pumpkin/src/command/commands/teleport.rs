@@ -17,6 +17,7 @@ use crate::command::tree::CommandTree;
 use crate::command::tree::builder::{argument, literal};
 use crate::command::{CommandExecutor, CommandSender};
 use crate::entity::EntityBase;
+use crate::server::Server;
 use crate::world::World;
 
 const NAMES: [&str; 2] = ["teleport", "tp"];
@@ -82,7 +83,7 @@ impl CommandExecutor for EntitiesToEntityExecutor {
     fn execute<'a>(
         &'a self,
         sender: &'a CommandSender,
-        _server: &'a crate::server::Server,
+        server: &'a Arc<Server>,
         args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {
@@ -133,7 +134,7 @@ impl CommandExecutor for EntitiesToPosFacingPosExecutor {
     fn execute<'a>(
         &'a self,
         sender: &'a CommandSender,
-        server: &'a crate::server::Server,
+        server: &'a Arc<Server>,
         args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {
@@ -188,7 +189,7 @@ impl CommandExecutor for EntitiesToPosFacingEntityExecutor {
     fn execute<'a>(
         &'a self,
         sender: &'a CommandSender,
-        server: &'a crate::server::Server,
+        server: &'a Arc<Server>,
         args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {
@@ -244,7 +245,7 @@ impl CommandExecutor for EntitiesToPosWithRotationExecutor {
     fn execute<'a>(
         &'a self,
         sender: &'a CommandSender,
-        server: &'a crate::server::Server,
+        server: &'a Arc<Server>,
         args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {
@@ -300,7 +301,7 @@ impl CommandExecutor for EntitiesToPosExecutor {
     fn execute<'a>(
         &'a self,
         sender: &'a CommandSender,
-        server: &'a crate::server::Server,
+        server: &'a Arc<Server>,
         args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {
@@ -354,7 +355,7 @@ impl CommandExecutor for SelfToEntityExecutor {
     fn execute<'a>(
         &'a self,
         sender: &'a CommandSender,
-        _server: &'a crate::server::Server,
+        server: &'a Arc<Server>,
         args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {
@@ -407,7 +408,7 @@ impl CommandExecutor for SelfToPosExecutor {
     fn execute<'a>(
         &'a self,
         sender: &'a CommandSender,
-        _server: &'a crate::server::Server,
+        server: &'a Arc<Server>,
         args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {

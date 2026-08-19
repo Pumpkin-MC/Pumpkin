@@ -1,3 +1,4 @@
+use std::sync::Arc;
 use std::sync::atomic::Ordering;
 
 use pumpkin_config::whitelist::WhitelistEntry;
@@ -53,8 +54,8 @@ impl CommandExecutor for OnExecutor {
     fn execute<'a>(
         &'a self,
         sender: &'a CommandSender,
-        server: &'a crate::server::Server,
-        _args: &'a ConsumedArgs<'a>,
+        server: &'a Arc<Server>,
+        args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {
             let previous = server.white_list.swap(true, Ordering::Relaxed);
@@ -85,8 +86,8 @@ impl CommandExecutor for OffExecutor {
     fn execute<'a>(
         &'a self,
         sender: &'a CommandSender,
-        server: &'a crate::server::Server,
-        _args: &'a ConsumedArgs<'a>,
+        server: &'a Arc<Server>,
+        args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {
             let previous = server.white_list.swap(false, Ordering::Relaxed);
@@ -116,8 +117,8 @@ impl CommandExecutor for ListExecutor {
     fn execute<'a>(
         &'a self,
         sender: &'a CommandSender,
-        server: &'a crate::server::Server,
-        _args: &'a ConsumedArgs<'a>,
+        server: &'a Arc<Server>,
+        args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {
             let whitelist = &server.data.whitelist_config.read().await.whitelist;
@@ -159,8 +160,8 @@ impl CommandExecutor for ReloadExecutor {
     fn execute<'a>(
         &'a self,
         sender: &'a CommandSender,
-        server: &'a crate::server::Server,
-        _args: &'a ConsumedArgs<'a>,
+        server: &'a Arc<Server>,
+        args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {
             *server.data.whitelist_config.write().await = WhitelistConfig::load();
@@ -182,7 +183,7 @@ impl CommandExecutor for AddExecutor {
     fn execute<'a>(
         &'a self,
         sender: &'a CommandSender,
-        server: &'a crate::server::Server,
+        server: &'a Arc<Server>,
         args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {
@@ -238,7 +239,7 @@ impl CommandExecutor for RemoveExecutor {
     fn execute<'a>(
         &'a self,
         sender: &'a CommandSender,
-        server: &'a crate::server::Server,
+        server: &'a Arc<Server>,
         args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {

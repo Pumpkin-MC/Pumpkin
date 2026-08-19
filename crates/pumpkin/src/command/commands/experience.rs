@@ -13,6 +13,7 @@ use crate::command::tree::builder::{argument, literal};
 use crate::command::{CommandExecutor, CommandResult, CommandSender};
 use crate::entity::EntityBase;
 use crate::entity::player::Player;
+use crate::server::Server;
 
 const NAMES: [&str; 2] = ["experience", "xp"];
 const DESCRIPTION: &str = "Add, set or query player experience.";
@@ -151,7 +152,7 @@ impl CommandExecutor for Executor {
     fn execute<'a>(
         &'a self,
         sender: &'a CommandSender,
-        _server: &'a crate::server::Server,
+        server: &'a Arc<Server>,
         args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {

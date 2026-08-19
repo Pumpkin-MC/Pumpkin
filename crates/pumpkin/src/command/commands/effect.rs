@@ -9,7 +9,9 @@ use crate::command::tree::CommandTree;
 use crate::command::tree::builder::{argument, literal};
 use crate::command::{CommandExecutor, CommandResult, CommandSender};
 use crate::entity::EntityBase;
+use crate::server::Server;
 use pumpkin_data::potion::Effect;
+use std::sync::Arc;
 
 const NAMES: [&str; 1] = ["effect"];
 
@@ -41,7 +43,7 @@ impl CommandExecutor for GiveExecutor {
     fn execute<'a>(
         &'a self,
         sender: &'a CommandSender,
-        _server: &'a crate::server::Server,
+        server: &'a Arc<Server>,
         args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {
@@ -154,7 +156,7 @@ impl CommandExecutor for ClearExecutor {
     fn execute<'a>(
         &'a self,
         sender: &'a CommandSender,
-        _server: &'a crate::server::Server,
+        server: &'a Arc<Server>,
         args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {

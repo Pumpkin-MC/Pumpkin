@@ -2947,7 +2947,7 @@ impl Player {
     /// Sets the player's permission level and notifies the client.
     pub async fn set_permission_lvl(
         self: &Arc<Self>,
-        server: &Server,
+        server: &Arc<Server>,
         lvl: PermissionLvl,
         command_dispatcher: &CommandDispatcher,
     ) {

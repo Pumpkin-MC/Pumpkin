@@ -1,4 +1,5 @@
 use crate::command::CommandResult;
+use crate::server::Server;
 use crate::{
     command::{
         CommandError, CommandExecutor, CommandSender,
@@ -13,6 +14,7 @@ use crate::{
 };
 use CommandError::InvalidConsumption;
 use pumpkin_util::text::TextComponent;
+use std::sync::Arc;
 
 const NAMES: [&str; 1] = ["deop"];
 const DESCRIPTION: &str = "Revokes operator status from a player.";
@@ -24,7 +26,7 @@ impl CommandExecutor for Executor {
     fn execute<'a>(
         &'a self,
         sender: &'a CommandSender,
-        server: &'a crate::server::Server,
+        server: &'a Arc<Server>,
         args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {

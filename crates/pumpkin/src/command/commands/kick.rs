@@ -1,6 +1,7 @@
 use pumpkin_data::translation;
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::color::NamedColor;
+use std::sync::Arc;
 
 use crate::command::args::message::MsgArgConsumer;
 use crate::command::args::players::PlayersArgumentConsumer;
@@ -11,6 +12,7 @@ use crate::command::{CommandError, CommandResult};
 use crate::command::{CommandExecutor, CommandSender};
 use crate::entity::EntityBase;
 use crate::net::DisconnectReason;
+use crate::server::Server;
 use CommandError::InvalidConsumption;
 
 const NAMES: [&str; 1] = ["kick"];
@@ -26,7 +28,7 @@ impl CommandExecutor for Executor {
     fn execute<'a>(
         &'a self,
         sender: &'a CommandSender,
-        _server: &'a crate::server::Server,
+        server: &'a Arc<Server>,
         args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {

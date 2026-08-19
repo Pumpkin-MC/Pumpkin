@@ -1,5 +1,6 @@
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::hover::HoverEvent;
+use std::sync::Arc;
 
 use crate::command::args::bounded_num::BoundedNumArgumentConsumer;
 use crate::command::args::players::PlayersArgumentConsumer;
@@ -9,6 +10,7 @@ use crate::command::tree::CommandTree;
 use crate::command::tree::builder::{argument, argument_default_name};
 use crate::command::{CommandExecutor, CommandResult, CommandSender};
 use crate::entity::EntityBase;
+use crate::server::Server;
 
 const NAMES: [&str; 1] = ["give"];
 
@@ -29,7 +31,7 @@ impl CommandExecutor for Executor {
     fn execute<'a>(
         &'a self,
         sender: &'a CommandSender,
-        _server: &'a crate::server::Server,
+        server: &'a Arc<Server>,
         args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {

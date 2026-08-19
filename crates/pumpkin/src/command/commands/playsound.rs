@@ -6,6 +6,7 @@ use pumpkin_util::text::TextComponent;
 use rand::{RngExt, rng};
 
 use crate::entity::EntityBase;
+use crate::server::Server;
 use crate::{
     command::{
         CommandExecutor, CommandResult, CommandSender,
@@ -69,7 +70,7 @@ impl CommandExecutor for Executor {
     fn execute<'a>(
         &'a self,
         sender: &'a CommandSender,
-        _server: &'a crate::server::Server,
+        server: &'a Arc<Server>,
         args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {

@@ -23,7 +23,7 @@ use pumpkin_protocol::java::client::play::SuggestionProviders;
 #[expect(clippy::too_many_lines)]
 pub async fn send_c_commands_packet(
     player: &Arc<Player>,
-    server: &Server,
+    server: &Arc<Server>,
     dispatcher: &CommandDispatcher,
 ) {
     let cmd_src = super::CommandSender::Player(player.clone());
@@ -102,7 +102,14 @@ pub async fn send_c_commands_packet(
             .and_then(|redirection| dispatcher.tree.resolve(redirection))
             .map(|id| resolve_node_id(id, node_id_offset, root_node_index) as i32);
 
-        let satisfies_requirements = true;
+        let satisfies_requirements = node
+            .requirements()
+            .evaluate(&cmd_src.clone().into_source(server).await)
+            .await;
+
+        if !satisfies_requirements {
+            continue;
+        }
 
         match node {
             AttachedNode::Root(_) => {

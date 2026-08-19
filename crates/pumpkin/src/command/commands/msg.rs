@@ -1,5 +1,6 @@
 use pumpkin_data::world::{MSG_COMMAND_INCOMING, MSG_COMMAND_OUTGOING};
 use pumpkin_util::text::TextComponent;
+use std::sync::Arc;
 
 use crate::command::{
     CommandError, CommandExecutor, CommandResult, CommandSender,
@@ -13,6 +14,7 @@ use crate::command::{
     },
 };
 use crate::entity::EntityBase;
+use crate::server::Server;
 use CommandError::InvalidConsumption;
 
 const NAMES: [&str; 3] = ["msg", "tell", "w"];
@@ -27,7 +29,7 @@ impl CommandExecutor for Executor {
     fn execute<'a>(
         &'a self,
         sender: &'a CommandSender,
-        _server: &'a crate::server::Server,
+        server: &'a Arc<Server>,
         args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {

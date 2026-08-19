@@ -2,6 +2,7 @@ use pumpkin_data::translation;
 use pumpkin_protocol::java::client::play::{CWaypoint, WaypointIcon};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::text::TextComponent;
+use std::sync::Arc;
 
 use crate::command::args::{
     FindArg, entity::EntityArgumentConsumer, hex_color::HexColorArgumentConsumer,
@@ -11,6 +12,7 @@ use crate::command::tree::builder::{argument, literal};
 use crate::command::{
     CommandError, CommandExecutor, CommandResult, CommandSender, ConsumedArgs, tree::CommandTree,
 };
+use crate::server::Server;
 
 const NAMES: [&str; 1] = ["waypoint"];
 const DESCRIPTION: &str = "List or modify waypoints.";
@@ -24,8 +26,8 @@ impl CommandExecutor for ListExecutor {
     fn execute<'a>(
         &'a self,
         sender: &'a CommandSender,
-        server: &'a crate::server::Server,
-        _args: &'a ConsumedArgs<'a>,
+        server: &'a Arc<Server>,
+        args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {
             let worlds = server.worlds.load();
@@ -56,7 +58,7 @@ impl CommandExecutor for ColorExecutor {
     fn execute<'a>(
         &'a self,
         sender: &'a CommandSender,
-        _server: &'a crate::server::Server,
+        server: &'a Arc<Server>,
         args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {
@@ -141,7 +143,7 @@ impl CommandExecutor for StyleExecutor {
     fn execute<'a>(
         &'a self,
         sender: &'a CommandSender,
-        _server: &'a crate::server::Server,
+        server: &'a Arc<Server>,
         args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {

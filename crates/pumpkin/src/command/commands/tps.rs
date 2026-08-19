@@ -1,6 +1,8 @@
 use crate::command::CommandResult;
 use crate::command::{CommandExecutor, CommandSender, args::ConsumedArgs, tree::CommandTree};
+use crate::server::Server;
 use pumpkin_util::text::{TextComponent, color::NamedColor};
+use std::sync::Arc;
 
 const NAMES: [&str; 1] = ["tps"];
 
@@ -12,8 +14,8 @@ impl CommandExecutor for Executor {
     fn execute<'a>(
         &'a self,
         sender: &'a CommandSender,
-        server: &'a crate::server::Server,
-        _args: &'a ConsumedArgs<'a>,
+        server: &'a Arc<Server>,
+        args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {
             let tps = server.get_tps().min(server.basic_config.tps as f64);

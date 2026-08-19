@@ -1,5 +1,6 @@
 use pumpkin_data::{damage::DamageType, translation};
 use pumpkin_util::text::TextComponent;
+use std::sync::Arc;
 
 use crate::command::{
     CommandExecutor, CommandResult, CommandSender,
@@ -15,6 +16,7 @@ use crate::command::{
     },
 };
 use crate::entity::EntityBase;
+use crate::server::Server;
 
 const NAMES: [&str; 1] = ["damage"];
 const DESCRIPTION: &str = "Deals damage to entities";
@@ -61,7 +63,7 @@ impl CommandExecutor for LocationExecutor {
     fn execute<'a>(
         &'a self,
         sender: &'a CommandSender,
-        _server: &'a crate::server::Server,
+        server: &'a Arc<Server>,
         args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {
@@ -91,7 +93,7 @@ impl CommandExecutor for EntityExecutor {
     fn execute<'a>(
         &'a self,
         sender: &'a CommandSender,
-        _server: &'a crate::server::Server,
+        server: &'a Arc<Server>,
         args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {

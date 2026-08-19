@@ -10,6 +10,7 @@ use crate::command::tree::builder::{argument, literal};
 use crate::command::{CommandError, CommandExecutor, CommandResult, CommandSender};
 use crate::world::World;
 
+use crate::server::Server;
 use pumpkin_data::translation;
 use pumpkin_data::{Block, BlockStateId};
 use pumpkin_util::math::position::BlockPos;
@@ -259,7 +260,7 @@ impl CommandExecutor for Executor {
     fn execute<'a>(
         &'a self,
         sender: &'a CommandSender,
-        server: &'a crate::server::Server,
+        server: &'a Arc<Server>,
         args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {

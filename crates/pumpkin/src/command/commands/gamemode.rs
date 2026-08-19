@@ -1,5 +1,6 @@
 use crate::command::args::GetCloned;
 use crate::command::args::gamemode::GamemodeArgumentConsumer;
+use std::sync::Arc;
 
 use crate::TextComponent;
 use pumpkin_data::translation;
@@ -12,6 +13,7 @@ use crate::command::tree::CommandTree;
 use crate::command::tree::builder::{argument, require};
 use crate::command::{CommandExecutor, CommandResult, CommandSender};
 use crate::entity::EntityBase;
+use crate::server::Server;
 
 const NAMES: [&str; 1] = ["gamemode"];
 
@@ -28,7 +30,7 @@ impl CommandExecutor for TargetExecutor {
     fn execute<'a>(
         &'a self,
         sender: &'a CommandSender,
-        server: &'a crate::server::Server,
+        server: &'a Arc<Server>,
         args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {

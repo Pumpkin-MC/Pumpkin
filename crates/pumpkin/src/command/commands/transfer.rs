@@ -2,6 +2,7 @@ use pumpkin_protocol::bedrock::client::transfer::CTransfer as BedrockCTransfer;
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::java::client::play::CTransfer as JavaCTransfer;
 use pumpkin_util::text::TextComponent;
+use std::sync::Arc;
 use tracing::info;
 
 use crate::command::CommandResult;
@@ -13,6 +14,7 @@ use crate::command::dispatcher::CommandError::{self, InvalidConsumption, Invalid
 use crate::command::tree::builder::{argument, argument_default_name, require};
 use crate::command::{CommandExecutor, CommandSender, args::ConsumedArgs, tree::CommandTree};
 use crate::entity::EntityBase;
+use crate::server::Server;
 
 const NAMES: [&str; 1] = ["transfer"];
 
@@ -35,7 +37,7 @@ impl CommandExecutor for TargetSelfExecutor {
     fn execute<'a>(
         &'a self,
         sender: &'a CommandSender,
-        _server: &'a crate::server::Server,
+        server: &'a Arc<Server>,
         args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {
@@ -78,7 +80,7 @@ impl CommandExecutor for TargetPlayerExecutor {
     fn execute<'a>(
         &'a self,
         sender: &'a CommandSender,
-        _server: &'a crate::server::Server,
+        server: &'a Arc<Server>,
         args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {

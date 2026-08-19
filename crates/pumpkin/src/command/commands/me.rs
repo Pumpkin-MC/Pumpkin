@@ -1,11 +1,13 @@
 use pumpkin_data::world::EMOTE_COMMAND;
 use pumpkin_util::text::TextComponent;
+use std::sync::Arc;
 
 use crate::command::{
     CommandError, CommandExecutor, CommandResult, CommandSender,
     args::{Arg, ConsumedArgs, message::MsgArgConsumer},
     tree::{CommandTree, builder::argument},
 };
+use crate::server::Server;
 use CommandError::InvalidConsumption;
 
 const NAMES: [&str; 1] = ["me"];
@@ -20,7 +22,7 @@ impl CommandExecutor for Executor {
     fn execute<'a>(
         &'a self,
         sender: &'a CommandSender,
-        server: &'a crate::server::Server,
+        server: &'a Arc<Server>,
         args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {

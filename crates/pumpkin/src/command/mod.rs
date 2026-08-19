@@ -419,7 +419,7 @@ pub trait CommandExecutor: Sync + Send {
     fn execute<'a>(
         &'a self,
         sender: &'a CommandSender,
-        server: &'a Server,
+        server: &'a Arc<Server>,
         args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a>;
 }

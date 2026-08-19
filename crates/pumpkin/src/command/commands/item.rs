@@ -6,6 +6,7 @@ use pumpkin_protocol::java::client::play::CSetContainerSlot;
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::hover::HoverEvent;
 use pumpkin_world::inventory::Inventory;
+use std::sync::Arc;
 
 use crate::command::args::bounded_num::BoundedNumArgumentConsumer;
 use crate::command::args::entities::EntitiesArgumentConsumer;
@@ -17,6 +18,7 @@ use crate::command::dispatcher::CommandError;
 use crate::command::tree::CommandTree;
 use crate::command::tree::builder::{argument, argument_default_name, literal};
 use crate::command::{CommandExecutor, CommandResult, CommandSender};
+use crate::server::Server;
 
 const NAMES: [&str; 1] = ["item"];
 const DESCRIPTION: &str = "Modifies items in block or entity inventories.";
@@ -39,7 +41,7 @@ impl CommandExecutor for BlockReplaceExecutor {
     fn execute<'a>(
         &'a self,
         sender: &'a CommandSender,
-        server: &'a crate::server::Server,
+        server: &'a Arc<Server>,
         args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {
@@ -130,7 +132,7 @@ impl CommandExecutor for EntityReplaceExecutor {
     fn execute<'a>(
         &'a self,
         sender: &'a CommandSender,
-        _server: &'a crate::server::Server,
+        server: &'a Arc<Server>,
         args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {
