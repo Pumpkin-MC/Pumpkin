@@ -305,10 +305,20 @@ pub trait EntityBase: Send + Sync + NBTStorage + std::any::Any {
         Box::pin(async move {
             let entity = self.get_entity();
             let runtime_id = entity.entity_id as u64;
+            let identifier = self
+                .get_mob()
+                .and_then(mob::Mob::mob_bedrock_identifier)
+                .unwrap_or(entity.entity_type.resource_name);
+            let mut metadata = entity.bedrock_metadata();
+            if let Some(mob) = self.get_mob()
+                && let Some(mob_metadata) = mob.mob_bedrock_spawn_metadata().await
+            {
+                metadata.0.extend(mob_metadata.0);
+            }
             let packet = CAddActor::new(
                 VarLong(runtime_id as i64),
                 VarULong(runtime_id),
-                self.get_entity().entity_type.resource_name.to_string(),
+                identifier.to_string(),
                 entity.pos.load().to_f32_lossy(),
                 entity.velocity.load().to_f32_lossy(),
                 entity.pitch.load(),
@@ -316,7 +326,7 @@ pub trait EntityBase: Send + Sync + NBTStorage + std::any::Any {
                 entity.head_yaw.load(),
                 entity.body_yaw.load(),
                 Vec::new(),
-                entity.bedrock_metadata(),
+                metadata,
                 PropertySyncData {
                     int_properties: std::collections::HashMap::new(),
                     float_properties: std::collections::HashMap::new(),
@@ -332,6 +342,16 @@ pub trait EntityBase: Send + Sync + NBTStorage + std::any::Any {
             client
                 .enqueue_packet(&self.get_entity().create_spawn_packet())
                 .await;
+            if let Some(mob) = self.get_mob()
+                && let Some(metadata) = mob.mob_java_spawn_metadata(client.version.load()).await
+            {
+                client
+                    .enqueue_packet(&CSetEntityMetadata::new(
+                        self.get_entity().entity_id.into(),
+                        metadata,
+                    ))
+                    .await;
+            }
         })
     }
 

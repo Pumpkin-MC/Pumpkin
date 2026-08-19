@@ -21,6 +21,7 @@ use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::random::xoroshiro128::Xoroshiro;
 use pumpkin_util::random::{RandomGenerator, get_seed};
+use pumpkin_util::version::JavaMinecraftVersion;
 use rand::RngExt;
 use std::pin::Pin;
 use std::sync::Arc;
@@ -491,7 +492,41 @@ pub trait Mob: EntityBase + Send + Sync {
 
     fn get_mob_entity(&self) -> &MobEntity;
 
+    fn mob_bedrock_identifier(&self) -> Option<&'static str> {
+        None
+    }
+
+    /// Metadata which must accompany this mob whenever it is spawned for a Java client.
+    fn mob_java_spawn_metadata(
+        &self,
+        _version: JavaMinecraftVersion,
+    ) -> EntityBaseFuture<'_, Option<Box<[u8]>>> {
+        Box::pin(async { None })
+    }
+
+    /// Metadata which must accompany this mob whenever it is spawned for a Bedrock client.
+    fn mob_bedrock_spawn_metadata(
+        &self,
+    ) -> EntityBaseFuture<
+        '_,
+        Option<pumpkin_protocol::bedrock::client::set_actor_data::EntityMetadata>,
+    > {
+        Box::pin(async { None })
+    }
+
     fn get_job_site(&self) -> Option<BlockPos> {
+        None
+    }
+
+    fn is_job_site_pending(&self) -> EntityBaseFuture<'_, bool> {
+        Box::pin(async { false })
+    }
+
+    fn release_pending_job_site(&self, _position: BlockPos) -> EntityBaseFuture<'_, ()> {
+        Box::pin(async {})
+    }
+
+    fn get_trading_player(&self) -> Option<Arc<Player>> {
         None
     }
 
