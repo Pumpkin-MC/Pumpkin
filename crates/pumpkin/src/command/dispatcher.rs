@@ -228,7 +228,7 @@ fn path_failure(
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct CommandDispatcher {
     pub commands: FxHashMap<String, Command>,
     pub permissions: FxHashMap<String, String>,
@@ -768,11 +768,10 @@ impl CommandDispatcher {
 mod test {
     use pumpkin_config::BasicConfiguration;
     use pumpkin_data::translation;
-    use pumpkin_util::permission::PermissionRegistry;
+    use pumpkin_util::permission::PermissionManager;
     use pumpkin_util::text::TextContent;
     use pumpkin_util::text::click::ClickEvent;
     use pumpkin_util::text::color::{Color, NamedColor};
-    use tokio::sync::RwLock;
 
     use super::{
         PathParsingFailure, render_syntax_error_messages, select_parse_error,
@@ -789,26 +788,24 @@ mod test {
         }
     }
 
-    #[tokio::test]
-    async fn dynamic_command() {
+    #[test]
+    fn dynamic_command() {
         let config = BasicConfiguration::default();
         let commands_config = pumpkin_config::CommandsConfig::default();
-        let registry = RwLock::new(PermissionRegistry::new());
-        let mut dispatcher = default_dispatcher(&registry, &config, &commands_config)
-            .await
-            .fallback_dispatcher;
+        let manager = PermissionManager::new();
+        let mut dispatcher =
+            default_dispatcher(&manager, &config, &commands_config).fallback_dispatcher;
         let tree = CommandTree::new(["test"], "test_desc");
         dispatcher.register(tree, "minecraft:test");
     }
 
-    #[tokio::test]
-    async fn pumpkin_command_aliases() {
+    #[test]
+    fn pumpkin_command_aliases() {
         let config = BasicConfiguration::default();
         let commands_config = pumpkin_config::CommandsConfig::default();
-        let registry = RwLock::new(PermissionRegistry::new());
-        let dispatcher = default_dispatcher(&registry, &config, &commands_config)
-            .await
-            .fallback_dispatcher;
+        let manager = PermissionManager::new();
+        let dispatcher =
+            default_dispatcher(&manager, &config, &commands_config).fallback_dispatcher;
 
         let pumpkin_tree = dispatcher.get_tree("pumpkin").unwrap();
         let version_tree = dispatcher.get_tree("version").unwrap();

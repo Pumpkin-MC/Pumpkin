@@ -722,8 +722,7 @@ fn setup_stdin_console(server: Arc<Server>) {
             if !event.cancelled {
                 server
                     .command_dispatcher
-                    .read()
-                    .await
+                    .load()
                     .handle_command(
                         &command::CommandSender::Console.into_source(&server).await,
                         command.as_str(),
@@ -795,8 +794,7 @@ fn setup_console(mut rl: Editor<PumpkinCommandCompleter, FileHistory>, server: A
                 if !event.cancelled {
                     server
                         .command_dispatcher
-                        .read()
-                        .await
+                        .load()
                         .handle_command(
                             &command::CommandSender::Console.into_source(&server).await,
                             &line,

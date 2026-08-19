@@ -2714,7 +2714,7 @@ impl World {
         player.send_abilities_update().await;
 
         {
-            let command_dispatcher = server.command_dispatcher.read().await;
+            let command_dispatcher = server.command_dispatcher.load();
             client_suggestions::send_bedrock_commands_packet(&player, server, &command_dispatcher)
                 .await;
         };
@@ -3092,7 +3092,7 @@ impl World {
         // Difficulty of the world
         player.send_difficulty_update().await;
         {
-            let command_dispatcher = server.command_dispatcher.read().await;
+            let command_dispatcher = server.command_dispatcher.load();
 
             client_suggestions::send_c_commands_packet(player, server, &command_dispatcher).await;
         };

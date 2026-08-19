@@ -19,8 +19,7 @@ impl JavaClient {
 
         let suggestions = server
             .command_dispatcher
-            .read()
-            .await
+            .load()
             .suggest(cmd, &player.get_command_source(server).await)
             .await;
 

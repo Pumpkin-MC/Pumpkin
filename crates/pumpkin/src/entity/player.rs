@@ -5294,11 +5294,11 @@ impl Player {
     }
 
     pub async fn has_permission(self: &Arc<Self>, server: &Server, node: &str) -> bool {
-        let perm_manager = server.permission_manager.read().await;
-        let result = perm_manager
-            .has_permission(&self.gameprofile.id, node, self.permission_lvl.load())
-            .await;
-        drop(perm_manager);
+        let result = server.permission_manager.has_permission(
+            &self.gameprofile.id,
+            node,
+            self.permission_lvl.load(),
+        );
 
         let mut event = PlayerPermissionCheckEvent::new(self.clone(), node.to_string(), result);
         let server_arc = self.world().server.upgrade();

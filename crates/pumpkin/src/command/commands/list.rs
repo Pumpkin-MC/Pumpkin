@@ -99,7 +99,7 @@ fn get_player_names_and_ids(players: &[Arc<Player>]) -> TextComponent {
     TextComponent::join_with_comma(names_and_ids)
 }
 
-pub fn register(dispatcher: &mut CommandDispatcher, registry: &mut PermissionRegistry) {
+pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistry) {
     registry.register_permission_or_panic(Permission::new(
         PERMISSION,
         DESCRIPTION,
