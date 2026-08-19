@@ -242,8 +242,8 @@ impl CommandExecutor for Executor {
     fn execute<'a>(
         &'a self,
         sender: &'a CommandSender,
-        server: &'a Arc<Server>,
-        args: &'a ConsumedArgs<'a>,
+        _server: &'a Arc<Server>,
+        _args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {
             let contributors = tokio::task::spawn_blocking(fetch_all_contributors_cached)

@@ -32,7 +32,7 @@ impl CommandExecutor for NoArgsWorldSpawnExecutor {
         &'a self,
         sender: &'a CommandSender,
         server: &'a Arc<Server>,
-        args: &'a ConsumedArgs<'a>,
+        _args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {
             let Some(player) = sender.as_player() else {

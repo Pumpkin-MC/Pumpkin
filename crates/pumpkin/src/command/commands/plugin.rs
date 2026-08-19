@@ -31,7 +31,7 @@ impl CommandExecutor for ListExecutor {
         &'a self,
         sender: &'a CommandSender,
         server: &'a Arc<Server>,
-        args: &'a ConsumedArgs<'a>,
+        _args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {
             let plugins = server.plugin_manager.active_plugins().await;
@@ -179,7 +179,7 @@ impl CommandExecutor for HotReloadExecutor {
         &'a self,
         sender: &'a CommandSender,
         server: &'a Arc<Server>,
-        args: &'a ConsumedArgs<'a>,
+        _args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {
             let enabled = self.0;

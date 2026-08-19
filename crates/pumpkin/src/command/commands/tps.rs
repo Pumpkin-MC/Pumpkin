@@ -15,7 +15,7 @@ impl CommandExecutor for Executor {
         &'a self,
         sender: &'a CommandSender,
         server: &'a Arc<Server>,
-        args: &'a ConsumedArgs<'a>,
+        _args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {
             let tps = server.get_tps().min(server.basic_config.tps as f64);

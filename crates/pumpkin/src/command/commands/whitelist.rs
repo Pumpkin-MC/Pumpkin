@@ -55,7 +55,7 @@ impl CommandExecutor for OnExecutor {
         &'a self,
         sender: &'a CommandSender,
         server: &'a Arc<Server>,
-        args: &'a ConsumedArgs<'a>,
+        _args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {
             let previous = server.white_list.swap(true, Ordering::Relaxed);
@@ -87,7 +87,7 @@ impl CommandExecutor for OffExecutor {
         &'a self,
         sender: &'a CommandSender,
         server: &'a Arc<Server>,
-        args: &'a ConsumedArgs<'a>,
+        _args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {
             let previous = server.white_list.swap(false, Ordering::Relaxed);
@@ -118,7 +118,7 @@ impl CommandExecutor for ListExecutor {
         &'a self,
         sender: &'a CommandSender,
         server: &'a Arc<Server>,
-        args: &'a ConsumedArgs<'a>,
+        _args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {
             let whitelist = &server.data.whitelist_config.read().await.whitelist;
@@ -161,7 +161,7 @@ impl CommandExecutor for ReloadExecutor {
         &'a self,
         sender: &'a CommandSender,
         server: &'a Arc<Server>,
-        args: &'a ConsumedArgs<'a>,
+        _args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {
             *server.data.whitelist_config.write().await = WhitelistConfig::load();

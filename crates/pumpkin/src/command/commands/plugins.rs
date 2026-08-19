@@ -17,7 +17,7 @@ impl CommandExecutor for Executor {
         &'a self,
         sender: &'a CommandSender,
         server: &'a Arc<Server>,
-        args: &'a ConsumedArgs<'a>,
+        _args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {
             let plugins = server.plugin_manager.active_plugins().await;
