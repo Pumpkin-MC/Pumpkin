@@ -1,19 +1,25 @@
 [workspace]
 resolver = "3"
 members = [
-    "pumpkin-api-macros",
-    "pumpkin-config",
-    "pumpkin-util",
-    "pumpkin-inventory",
-    "pumpkin-macros/",
-    "pumpkin-protocol/",
-    "pumpkin-world",
-    "pumpkin/",
-    "pumpkin-data",
-    "pumpkin-plugin-api",
-    "pumpkin-codecs"
+    "crates/pumpkin",
+    "crates/pumpkin-api-macros",
+    "crates/pumpkin-codecs",
+    "crates/pumpkin-config",
+    "crates/pumpkin-data",
+    "crates/pumpkin-inventory",
+    "crates/pumpkin-macros",
+    "crates/pumpkin-nbt",
+    "crates/pumpkin-plugin-api",
+    "crates/pumpkin-plugin-utils",
+    "crates/pumpkin-protocol",
+    "crates/pumpkin-util",
+    "crates/pumpkin-world",
+    "tools/pumpkin-codegen",
+    "tools/pumpkin-fuzzer",
 ]
-exclude = ["pumpkin-codegen"]
+
+# [workspace.lints.rust]
+# missing_docs = "warn"
 
 [workspace.lints.clippy]
 # Groups
@@ -49,7 +55,26 @@ print_stderr = "deny"
 todo = "deny"
 unreachable = "deny"
 unimplemented = "deny"
-# indexing_slicing = "deny" 
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+
+# Safety & Soundness
+undocumented_unsafe_blocks = "deny"
+uninit_assumed_init = "deny"
+uninit_vec = "deny"
+cast_ptr_alignment = "deny"
+ptr_as_ptr = "deny"
+
+# Production Quality & Best Practices
+fallible_impl_from = "deny"
+mut_mut = "deny"
+char_lit_as_u8 = "deny"
+match_wild_err_arm = "deny"
+invalid_upcast_comparisons = "deny"
+
+# Expected/Allowed
+clone_on_ref_ptr = "allow"
 
 # Expected/Allowed
 cargo_common_metadata = "allow"
@@ -77,7 +102,7 @@ module_name_repetitions = "allow"
 struct_excessive_bools = "allow"
 
 [workspace.package]
-version = "0.1.0-dev+26.2"
+version = "0.1.0-dev+26.2-26.40"
 edition = "2024"
 rust-version = "1.95"
 license = "GPL-3.0"
@@ -118,12 +143,11 @@ serde_json = { version = "1.0", default-features = false, features = ["std"] }
 tempfile = { version = "3.27.0", default-features = false }
 proc-macro-error2 = { version = "2", default-features = false }
 aes = { version = "0.9", default-features = false }
-async-compression = { version = "0.4.42", default-features = false }
-base64 = { version = "0.22.1", default-features = false, features = ["std"] }
+async-compression = { version = "0.4.43", default-features = false }
+base64 = { version = "0.23.1", default-features = false, features = ["std"] }
 bitflags = { version = "2.13.1", default-features = false, features = ["std"] }
 cesu8 = { version = "1.1", default-features = false }
 cfb8 = { version = "0.9", default-features = false }
-ctr = { version = "0.10.1", default-features = false }
 colored = { version = "3.1", default-features = false }
 console-subscriber = { version = "0.5.0", default-features = false }
 crc-fast = { version = "1.10.0", default-features = false, features = ["std"] }
@@ -133,39 +157,41 @@ crossfire = { version = "3.1.19", default-features = false, features = ["compat"
 crypto-bigint = { version = "0.7.5", default-features = false }
 dashmap = { version = "6.2", default-features = false }
 ecdsa = { version = "0.17.0", default-features = false, features = ["std"] }
-either = { version = "1.16.0", default-features = false }
-enum_dispatch = { version = "0.3.13", default-features = false }
 flate2 = { version = "1.1.9", default-features = false, features = ["rust_backend"] }
 heck = { version = "0.5", default-features = false }
 hmac = { version = "=0.13.0", default-features = false }
 indexmap = { version = "2.14", default-features = false, features = ["std"] }
 itertools = { version = "0.15.0", default-features = false, features = ["use_std"] }
 libloading = { version = "0.9", default-features = false, features = ["std"] }
-lru = { version = "0.18.1", default-features = false }
+lru = { version = "0.18.2", default-features = false }
 lz4-java-wrc = { version = "0.2.0", default-features = false, features = ["lz4_flex"] }
 md5 = { version = "0.8", default-features = false }
 num-bigint = { version = "0.5", default-features = false, features = ["std"] }
-num-derive = { version = "0.4", default-features = false }
+num-derive = { version = "0.5", default-features = false }
 num-traits = { version = "0.2", default-features = false, features = ["std"] }
-p384 = { version = "0.14.0", default-features = false, features = ["std", "arithmetic", "pkcs8", "ecdh"] }
+p384 = { version = "0.14.0", default-features = false, features = ["std", "arithmetic", "pkcs8"] }
 phf = { version = "0.14.0", default-features = false, features = ["std"] }
 proc-macro2 = { version = "1.0", default-features = false, features = ["proc-macro"] }
-pumpkin-codecs = { path = "pumpkin-codecs", default-features = false }
-pumpkin-config = { path = "pumpkin-config", default-features = false }
-pumpkin-data = { path = "pumpkin-data", default-features = false }
-pumpkin-inventory = { path = "pumpkin-inventory", default-features = false }
-pumpkin-macros = { path = "pumpkin-macros", default-features = false }
-pumpkin-nbt = { path = "pumpkin-nbt", default-features = false }
-pumpkin-protocol = { path = "pumpkin-protocol", default-features = false }
-pumpkin-util = { path = "pumpkin-util", default-features = false }
-pumpkin-world = { path = "pumpkin-world", default-features = false }
+pumpkin-codecs = { path = "crates/pumpkin-codecs", default-features = false }
+pumpkin-config = { path = "crates/pumpkin-config", default-features = false }
+pumpkin-data = { path = "crates/pumpkin-data", default-features = false }
+pumpkin-inventory = { path = "crates/pumpkin-inventory", default-features = false }
+pumpkin-macros = { path = "crates/pumpkin-macros", default-features = false }
+pumpkin-nbt = { path = "crates/pumpkin-nbt", default-features = false }
+pumpkin-plugin-api = { path = "crates/pumpkin-plugin-api", default-features = false }
+pumpkin-plugin-utils = { path = "crates/pumpkin-plugin-utils", default-features = false }
+pumpkin-protocol = { path = "crates/pumpkin-protocol", default-features = false }
+pumpkin-util = { path = "crates/pumpkin-util", default-features = false }
+pumpkin-world = { path = "crates/pumpkin-world", default-features = false }
 quote = { version = "1.0", default-features = false, features = ["proc-macro"] }
 rand = { version = "0.10.2", default-features = false, features = ["std", "std_rng", "thread_rng"] }
 rsa = { version = "=0.10.0-rc.18", default-features = false, features = ["std", "encoding"] }
+ed25519-dalek = { version = "3.0", default-features = false, features = ["fast"] }
+hex = { version = "0.4", default-features = false, features = ["std"] }
 cipher = { version = "0.5.2", default-features = false }
 rustc-hash = { version = "2.1.3", default-features = false, features = ["std"] }
 rustyline = { version = "18.0.1", default-features = false, features = ["with-file-history"] }
-ruzstd = { version = "0.8.3", default-features = false, features = ["std"] }
+ruzstd = { version = "0.9.0", default-features = false, features = ["std"] }
 sha1 = { version = "=0.11.0", default-features = false, features = ["oid"] }
 sha2 = { version = "=0.11.0", default-features = false, features = ["oid"] }
 signature = { version = "3.0.0", default-features = false, features = ["std"] }
@@ -178,13 +204,11 @@ tracing-subscriber = { version = "0.3.23", default-features = false, features = 
     "std",
 ] }
 slotmap = { version = "1.1", default-features = false, features = ["std"] }
-temp-dir = { version = "0.2.0", default-features = false }
-thread_local = { version = "1.1.10", default-features = false }
 time = { version = "0.3", default-features = false, features = ["std"] }
 arc-swap = { version = "1.9", default-features = false }
-tokio-util = { version = "0.7.18", default-features = false }
+tokio-util = { version = "0.7.19", default-features = false }
 toml = { version = "1.1", default-features = false, features = ["parse", "display", "serde"] }
-ureq = { version = "3.3.0", default-features = false, features = ["rustls"] }
+ureq = { version = "3.4.0", default-features = false, features = ["rustls"] }
 notify = { version = "8.2.0", default-features = false, features = ["macos_fsevent"] }
 
 sysinfo = { version = "0.39", default-features = false, features = ["system"] }
@@ -192,12 +216,16 @@ rustc_version_runtime = { version = "0.3", default-features = false }
 ordered-float = { version = "5.3", default-features = false, features = ["std"] }
 xxhash-rust = { version = "0.8", default-features = false, features = ["xxh64"] }
 
-wasmtime = { version = "46.0", default-features = false, features = ["runtime", "component-model", "async", "cache", "cranelift", "gc", "gc-drc", "threads", "std"] }
-wasmtime-wasi = { version = "46.0", default-features = false, features = ["p2"] }
-wasmtime-wasi-http = { version = "46.0", default-features = false, features = ["p2", "default-send-request"] }
+wasmtime = { version = "47.0", default-features = false, features = ["runtime", "component-model", "async", "cache", "cranelift", "gc", "gc-drc", "threads", "std"] }
+wasmtime-wasi = { version = "47.0", default-features = false, features = ["p2", "p3"] }
+wasmtime-wasi-http = { version = "47.0", default-features = false, features = ["p2", "p3", "default-send-request"] }
 # needed for interacting with wasmtime-wasi-http - keep in sync
-hyper = { version = "^1.10", default-features = false }
-wit-bindgen = { version = "0.59", default-features = false, features = ["macros"] }
+hyper = { version = "^1.11", default-features = false }
+axum = { version = "0.8.9", default-features = false, features = ["http1", "tokio"] }
+webrtc = { version = "0.20.2" }
+async-trait = "0.1"
+wit-bindgen = { version = "0.60", default-features = false, features = ["macros"] }
 
 postcard = { version = "1.1", default-features = false, features = ["alloc"] }
 tracing-serde-structured = { version = "0.4", default-features = false }
+wasmparser = { version = "0.256", default-features = false }

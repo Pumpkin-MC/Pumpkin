@@ -1,0 +1,91 @@
+use super::BlockEntity;
+use pumpkin_nbt::compound::NbtCompound;
+use pumpkin_util::math::position::BlockPos;
+use std::collections::HashSet;
+use std::pin::Pin;
+use tokio::sync::Mutex;
+use uuid::Uuid;
+
+pub struct VaultBlockEntity {
+    pub position: BlockPos,
+    pub config: Mutex<Option<NbtCompound>>,
+    pub server_data: Mutex<Option<NbtCompound>>,
+    pub rewarded_players: Mutex<HashSet<Uuid>>,
+}
+
+impl BlockEntity for VaultBlockEntity {
+    fn resource_location(&self) -> &'static str {
+        Self::ID
+    }
+
+    fn get_position(&self) -> BlockPos {
+        self.position
+    }
+
+    fn from_nbt(nbt: &pumpkin_nbt::compound::NbtCompound, position: BlockPos) -> Self
+    where
+        Self: Sized,
+    {
+        Self {
+            position,
+            config: Mutex::new(nbt.get_compound("config").cloned()),
+            server_data: Mutex::new(nbt.get_compound("server_data").cloned()),
+            rewarded_players: Mutex::new(HashSet::new()),
+        }
+    }
+
+    fn write_nbt<'a>(
+        &'a self,
+        nbt: &'a mut NbtCompound,
+    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
+        Box::pin(async move {
+            if let Some(cfg) = self.config.lock().await.as_ref() {
+                nbt.put_compound("config", cfg.clone());
+            }
+            if let Some(data) = self.server_data.lock().await.as_ref() {
+                nbt.put_compound("server_data", data.clone());
+            }
+        })
+    }
+
+    fn chunk_data_nbt(&self) -> Option<NbtCompound> {
+        let mut nbt = NbtCompound::new();
+        if let Ok(cfg) = self.config.try_lock()
+            && let Some(ref cfg) = *cfg
+        {
+            nbt.put_compound("config", cfg.clone());
+        }
+        if let Ok(data) = self.server_data.try_lock()
+            && let Some(ref data) = *data
+        {
+            nbt.put_compound("server_data", data.clone());
+        }
+        Some(nbt)
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+}
+
+impl VaultBlockEntity {
+    pub const ID: &'static str = "minecraft:vault";
+
+    #[must_use]
+    pub fn new(position: BlockPos) -> Self {
+        Self {
+            position,
+            config: Mutex::new(None),
+            server_data: Mutex::new(None),
+            rewarded_players: Mutex::new(HashSet::new()),
+        }
+    }
+
+    pub async fn has_rewarded(&self, player_id: &Uuid) -> bool {
+        self.rewarded_players.lock().await.contains(player_id)
+    }
+
+    pub async fn mark_rewarded(&self, player_id: Uuid) {
+        self.rewarded_players.lock().await.insert(player_id);
+    }
+}

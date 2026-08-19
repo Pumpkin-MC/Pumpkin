@@ -1,0 +1,125 @@
+// Portals & dimension blocks
+pub mod end_portal;
+pub mod end_portal_frame;
+pub mod end_rod;
+pub mod nether_portal;
+
+// Storage & containers
+pub mod barrel;
+pub mod chests;
+pub mod ender_chest;
+pub mod hopper;
+pub mod shulker_box;
+
+// Workstations & processing
+pub mod blast_furnace;
+pub mod brewing_stand;
+pub mod crafting_table;
+pub mod enchanting_table;
+pub mod furnace;
+pub mod grindstone;
+pub mod smoker;
+pub mod stonecutter;
+
+// Redstone & mechanisms
+pub mod command; // command block / redstone control
+pub mod jigsaw;
+pub mod note;
+pub mod piston;
+pub mod redstone;
+
+// Doors, gates & openings
+pub mod doors;
+pub mod fence_gates;
+pub mod fences;
+pub mod trapdoor;
+
+// Building & structural blocks
+pub mod barrier;
+pub mod chain;
+pub mod glass_panes;
+pub mod glazed_terracotta;
+pub mod iron_bars;
+pub mod slabs;
+pub mod stairs;
+pub mod walls;
+
+// Decorative & furnishings
+pub mod banners;
+pub mod bed;
+pub mod carpet;
+pub mod chiseled_bookshelf;
+pub mod conduit;
+pub mod flower_pots;
+pub mod jukebox;
+pub mod lectern;
+pub mod shelf;
+pub mod signs;
+pub mod skull_block;
+pub mod wither_skull;
+
+// Lighting, heat & fire
+pub mod campfire;
+pub mod candle_cakes;
+pub mod candles;
+pub mod fire;
+pub mod lanterns;
+pub mod magma;
+pub mod torches;
+
+// Plants, crops & natural blocks
+pub mod amethyst;
+pub mod carved_pumpkin;
+pub mod dripstone;
+pub mod farmland;
+pub mod hay;
+pub mod logs;
+pub mod mangrove_roots;
+pub mod plant;
+pub mod pumpkin;
+pub mod sculk;
+pub mod vine;
+
+// Terrain / environment / physics
+pub mod bubble_column;
+pub mod cobweb;
+pub mod dirt_path;
+pub mod dragon_egg;
+pub mod falling;
+pub mod grass_block;
+pub mod infested;
+pub mod powder_snow;
+pub mod rooted_dirt;
+pub mod snow;
+pub mod sponge;
+
+// Entities, hazards & misc gameplay blocks
+pub mod anvil;
+pub mod beehive;
+pub mod cake;
+pub mod cauldron;
+pub mod composter;
+pub mod ladder;
+pub mod respawn_anchor;
+pub mod slime;
+pub mod spawner;
+pub mod tnt;
+
+pub mod coral;
+
+// Misc / abstract
+pub mod abstract_wall_mounting;
+
+pub mod beacon;
+pub mod brushable_block;
+pub mod cartography_table;
+pub mod creaking_heart;
+pub mod decorated_pot;
+pub mod fletching_table;
+pub mod loom;
+pub mod smithing_table;
+pub mod sniffer_egg;
+pub mod structure_block;
+pub mod trial_spawner;
+pub mod turtle_egg;
+pub mod vault;
