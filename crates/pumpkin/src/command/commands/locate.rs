@@ -180,7 +180,7 @@ impl CommandExecutor for LocateStructureExecutor {
 
             let world = context.source.world();
             let seed = world.level.seed.0;
-            let world_gen = world.level.world_gen.clone();
+            let world_gen = world.level.world_gen.load_full();
 
             // Scanning up to `STRUCTURE_SEARCH_RADIUS` regions of placement
             // data is CPU-bound just like the biome spiral, so keep it off
@@ -253,7 +253,7 @@ impl CommandExecutor for LocateBiomeExecutor {
 
             let origin = BlockPos::floored_v(context.source.position);
             let world = context.source.world().clone();
-            let world_gen = world.level.world_gen.clone();
+            let world_gen = world.level.world_gen.load_full();
 
             // The spiral scan can probe hundreds of thousands of noise
             // points when the biome is rare, so keep it off the async
@@ -350,7 +350,7 @@ impl CommandExecutor for LocatePoiExecutor {
     }
 }
 
-pub fn register(dispatcher: &mut CommandDispatcher, registry: &mut PermissionRegistry) {
+pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistry) {
     registry.register_permission_or_panic(Permission::new(
         PERMISSION,
         DESCRIPTION,

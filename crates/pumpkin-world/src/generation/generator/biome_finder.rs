@@ -48,6 +48,9 @@ pub fn find_closest_biome_3d(
             horizontal_step,
             vertical_step,
         ),
+        // Plugin generators only expose biomes by generating a whole chunk, so
+        // there is no sampler to search against.
+        WorldGenerator::Custom(_) => None,
     }
 }
 

@@ -79,7 +79,7 @@ fn suggest_for_registry(registry: &Identifier, builder: SuggestionsBuilder) -> S
                     .map(|name| format!("minecraft:{name}")),
             )
             .build()
-    } else if *registry == BIOME_REGISTRY {
+    } else if *registry == *BIOME_REGISTRY {
         let biomes = pumpkin_data::biome::Biome::ALL
             .iter()
             .map(|biome| format!("minecraft:{}", biome.registry_id));
@@ -157,7 +157,7 @@ impl ArgumentType for ResourceOrTagArgument {
 
         match &value {
             ResourceOrTag::Resource(id) => {
-                if self.0 == BIOME_REGISTRY
+                if self.0 == *BIOME_REGISTRY
                     && !(id.is_vanilla()
                         && pumpkin_data::biome::Biome::from_name(id.path()).is_some())
                 {
@@ -168,7 +168,7 @@ impl ArgumentType for ResourceOrTagArgument {
                 }
             }
             ResourceOrTag::Tag(id) => {
-                let registry_key = if self.0 == BIOME_REGISTRY {
+                let registry_key = if self.0 == *BIOME_REGISTRY {
                     Some(RegistryKey::WorldgenBiome)
                 } else if self.0 == POI_REGISTRY {
                     Some(RegistryKey::PointOfInterestType)
