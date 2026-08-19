@@ -134,7 +134,6 @@ pub async fn default_dispatcher(
     dispatcher.register(rotate::init_command_tree(), "minecraft:command.rotate");
     dispatcher.register(damage::init_command_tree(), "minecraft:command.damage");
     dispatcher.register(bossbar::init_command_tree(), "minecraft:command.bossbar");
-    dispatcher.register(say::init_command_tree(), "minecraft:command.say");
     dispatcher.register(gamemode::init_command_tree(), "minecraft:command.gamemode");
     dispatcher.register(gamerule::init_command_tree(), "minecraft:command.gamerule");
     dispatcher.register(
@@ -177,6 +176,7 @@ pub async fn default_dispatcher(
         wrapper_dispatcher
     };
 
+    say::register(&mut dispatcher, registry);
     banlist::register(&mut dispatcher, registry);
     difficulty::register(&mut dispatcher, registry);
     dialog::register(&mut dispatcher, registry);
@@ -501,13 +501,6 @@ fn register_level_2_permissions(registry: &mut PermissionRegistry) {
         .register_permission(Permission::new(
             "minecraft:command.bossbar",
             "Creates and manages boss bars",
-            PermissionDefault::Op(PermissionLvl::Two),
-        ))
-        .unwrap_or_else(|e| tracing::warn!("{e}"));
-    registry
-        .register_permission(Permission::new(
-            "minecraft:command.say",
-            "Broadcasts a message to multiple players",
             PermissionDefault::Op(PermissionLvl::Two),
         ))
         .unwrap_or_else(|e| tracing::warn!("{e}"));
