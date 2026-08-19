@@ -1,11 +1,3 @@
-use pumpkin_protocol::{
-    codec::var_int::VarInt,
-    java::client::play::{
-        ArgumentType, CCommands, ProtoNode, ProtoNodeType, StringProtoArgBehavior,
-    },
-};
-use std::sync::Arc;
-
 use super::tree::{Node, NodeType};
 use crate::command::node::{
     attached::{AttachedNode, NodeId},
@@ -14,11 +6,19 @@ use crate::command::node::{
 };
 use crate::entity::player::Player;
 use crate::server::Server;
+use futures::{StreamExt, stream};
 use pumpkin_protocol::bedrock::client::available_commands::{
     CAvailableCommands, Command, CommandEnum, CommandOverload, CommandParameter, arg_flags,
     arg_types, command_permissions,
 };
 use pumpkin_protocol::java::client::play::SuggestionProviders;
+use pumpkin_protocol::{
+    codec::var_int::VarInt,
+    java::client::play::{
+        ArgumentType, CCommands, ProtoNode, ProtoNodeType, StringProtoArgBehavior,
+    },
+};
+use std::sync::Arc;
 
 #[expect(clippy::too_many_lines)]
 pub async fn send_c_commands_packet(
@@ -88,6 +88,8 @@ pub async fn send_c_commands_packet(
 
     let mut root_node_children_second: Box<[VarInt]> = Box::new([]);
 
+    let source = &cmd_src.clone().into_source(server).await;
+
     for node in &dispatcher.tree {
         let children: Box<[VarInt]> = node
             .children_ref()
@@ -102,14 +104,7 @@ pub async fn send_c_commands_packet(
             .and_then(|redirection| dispatcher.tree.resolve(redirection))
             .map(|id| resolve_node_id(id, node_id_offset, root_node_index) as i32);
 
-        let satisfies_requirements = node
-            .requirements()
-            .evaluate(&cmd_src.clone().into_source(server).await)
-            .await;
-
-        if !satisfies_requirements {
-            continue;
-        }
+        let satisfies_requirements = node.requirements().evaluate(source).await;
 
         match node {
             AttachedNode::Root(_) => {
@@ -118,33 +113,34 @@ pub async fn send_c_commands_packet(
                 // entirely. The nodes themselves stay in `proto_nodes` to keep
                 // every other node's indices valid; they simply become
                 // unreachable.
-                root_node_children_second = node
-                    .children_ref()
-                    .values()
-                    .copied()
-                    .filter(|id| {
-                        let (disabled, name) = match &dispatcher.tree[*id] {
+                root_node_children_second = stream::iter(node.children_ref().values().copied())
+                    .filter_map(async |id| {
+                        let (disabled, requirement, name) = match &dispatcher.tree[id] {
                             AttachedNode::Literal(child) => (
                                 dispatcher.is_disabled(&child.meta.literal_lowercase),
+                                child.owned.requirements.evaluate(source).await,
                                 child.meta.literal.as_ref(),
                             ),
                             AttachedNode::Command(child) => (
                                 dispatcher.is_disabled(&child.meta.literal_lowercase),
+                                child.owned.requirements.evaluate(source).await,
                                 child.meta.literal.as_ref(),
                             ),
-                            _ => (false, ""),
+                            _ => (false, true, ""),
                         };
-                        if disabled {
-                            return false;
+                        if disabled || !requirement {
+                            return None;
                         }
                         if name.starts_with("//") && dispatcher.tree.get(&name[1..]).is_some() {
-                            return false;
+                            return None;
                         }
-                        true
+                        Some(id)
                     })
                     .map(|id| resolve_node_id(id, node_id_offset, root_node_index))
                     .map(|i| VarInt(i as i32))
-                    .collect();
+                    .collect::<Vec<_>>()
+                    .await
+                    .into_boxed_slice();
             }
             AttachedNode::Literal(literal_attached_node) => {
                 let name = if literal_attached_node.meta.literal.starts_with("//") {
