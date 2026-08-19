@@ -1,6 +1,5 @@
 use pumpkin_data::translation;
 use pumpkin_util::text::TextComponent;
-use std::sync::Arc;
 
 use crate::command::{
     CommandError, CommandExecutor, CommandResult, CommandSender,
@@ -10,7 +9,6 @@ use crate::command::{
         builder::{argument, literal},
     },
 };
-use crate::server::Server;
 
 const NAMES: [&str; 1] = ["weather"];
 const DESCRIPTION: &str = "Changes the weather.";
@@ -30,7 +28,7 @@ impl CommandExecutor for Executor {
     fn execute<'a>(
         &'a self,
         sender: &'a CommandSender,
-        server: &'a Arc<Server>,
+        server: &'a crate::server::Server,
         args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {

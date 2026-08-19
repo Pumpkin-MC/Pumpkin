@@ -10,7 +10,6 @@ use crate::command::tree::CommandTree;
 use crate::command::tree::builder::argument_default_name;
 use crate::command::{CommandError, CommandExecutor, CommandResult, CommandSender};
 use crate::entity::EntityBase;
-use crate::server::Server;
 use pumpkin_data::data_component_impl::EnchantmentsImpl;
 
 const NAMES: [&str; 1] = ["enchant"];
@@ -22,7 +21,7 @@ impl CommandExecutor for Executor {
     fn execute<'a>(
         &'a self,
         sender: &'a CommandSender,
-        _server: &'a Arc<Server>,
+        _server: &'a crate::server::Server,
         args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {

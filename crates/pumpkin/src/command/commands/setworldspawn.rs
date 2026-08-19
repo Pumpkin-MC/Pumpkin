@@ -31,7 +31,7 @@ impl CommandExecutor for NoArgsWorldSpawnExecutor {
     fn execute<'a>(
         &'a self,
         sender: &'a CommandSender,
-        server: &'a Arc<Server>,
+        server: &'a crate::server::Server,
         _args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {
@@ -57,7 +57,7 @@ impl CommandExecutor for DefaultWorldSpawnExecutor {
     fn execute<'a>(
         &'a self,
         sender: &'a CommandSender,
-        server: &'a Arc<Server>,
+        server: &'a crate::server::Server,
         args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {
@@ -76,7 +76,7 @@ impl CommandExecutor for AngleWorldSpawnExecutor {
     fn execute<'a>(
         &'a self,
         sender: &'a CommandSender,
-        server: &'a Arc<Server>,
+        server: &'a crate::server::Server,
         args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {

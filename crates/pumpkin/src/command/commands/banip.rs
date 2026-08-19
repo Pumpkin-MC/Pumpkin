@@ -1,3 +1,5 @@
+use std::{net::IpAddr, str::FromStr};
+
 use crate::{
     command::{
         CommandError, CommandExecutor, CommandResult, CommandSender,
@@ -11,8 +13,6 @@ use crate::{
 use CommandError::InvalidConsumption;
 use pumpkin_data::translation;
 use pumpkin_util::text::TextComponent;
-use std::sync::Arc;
-use std::{net::IpAddr, str::FromStr};
 
 const NAMES: [&str; 1] = ["ban-ip"];
 const DESCRIPTION: &str = "bans a player-ip";
@@ -33,7 +33,7 @@ impl CommandExecutor for NoReasonExecutor {
     fn execute<'a>(
         &'a self,
         sender: &'a CommandSender,
-        server: &'a Arc<Server>,
+        server: &'a crate::server::Server,
         args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {
@@ -52,7 +52,7 @@ impl CommandExecutor for ReasonExecutor {
     fn execute<'a>(
         &'a self,
         sender: &'a CommandSender,
-        server: &'a Arc<Server>,
+        server: &'a crate::server::Server,
         args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {

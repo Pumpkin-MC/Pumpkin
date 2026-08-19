@@ -12,11 +12,9 @@ use crate::{
 };
 use pumpkin_data::translation;
 use pumpkin_util::{math::vector3::Vector3, text::TextComponent};
-use std::sync::Arc;
 use uuid::Uuid;
 
 use crate::block::entities::BlockEntity;
-use crate::server::Server;
 
 const NAMES: [&str; 1] = ["summon"];
 
@@ -32,7 +30,7 @@ impl CommandExecutor for Executor {
     fn execute<'a>(
         &'a self,
         sender: &'a CommandSender,
-        server: &'a Arc<Server>,
+        server: &'a crate::server::Server,
         args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {

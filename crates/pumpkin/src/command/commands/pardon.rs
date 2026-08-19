@@ -1,4 +1,3 @@
-use crate::server::Server;
 use crate::{
     command::{
         CommandError, CommandExecutor, CommandResult, CommandSender,
@@ -12,7 +11,6 @@ use crate::{
 };
 use CommandError::InvalidConsumption;
 use pumpkin_util::text::TextComponent;
-use std::sync::Arc;
 
 const NAMES: [&str; 1] = ["pardon"];
 const DESCRIPTION: &str = "unbans a player";
@@ -25,7 +23,7 @@ impl CommandExecutor for Executor {
     fn execute<'a>(
         &'a self,
         sender: &'a CommandSender,
-        server: &'a Arc<Server>,
+        server: &'a crate::server::Server,
         args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {

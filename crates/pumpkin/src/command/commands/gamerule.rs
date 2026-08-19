@@ -1,5 +1,4 @@
 use pumpkin_data::game_rules::{GameRule, GameRuleRegistry, GameRuleValue};
-use std::sync::Arc;
 
 use crate::command::args::FindArg;
 use crate::command::args::bool::BoolArgConsumer;
@@ -11,7 +10,6 @@ use crate::command::args::ConsumedArgs;
 use crate::command::tree::CommandTree;
 use crate::command::tree::builder::{argument, literal};
 use crate::command::{CommandExecutor, CommandResult, CommandSender};
-use crate::server::Server;
 
 const NAMES: [&str; 1] = ["gamerule"];
 
@@ -25,7 +23,7 @@ impl CommandExecutor for QueryExecutor {
     fn execute<'a>(
         &'a self,
         sender: &'a CommandSender,
-        server: &'a Arc<Server>,
+        server: &'a crate::server::Server,
         _args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {
@@ -61,7 +59,7 @@ impl CommandExecutor for SetExecutor {
     fn execute<'a>(
         &'a self,
         sender: &'a CommandSender,
-        server: &'a Arc<Server>,
+        server: &'a crate::server::Server,
         args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {

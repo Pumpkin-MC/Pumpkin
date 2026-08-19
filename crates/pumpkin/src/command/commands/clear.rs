@@ -13,7 +13,6 @@ use crate::command::tree::builder::{argument, require};
 use crate::command::{CommandError, CommandExecutor, CommandResult, CommandSender};
 use crate::entity::EntityBase;
 use crate::entity::player::Player;
-use crate::server::Server;
 use CommandError::InvalidConsumption;
 
 const NAMES: [&str; 1] = ["clear"];
@@ -177,7 +176,7 @@ impl CommandExecutor for SelfExecutor {
     fn execute<'a>(
         &'a self,
         sender: &'a CommandSender,
-        _server: &'a Arc<Server>,
+        _server: &'a crate::server::Server,
         _args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {
@@ -197,7 +196,7 @@ impl CommandExecutor for Executor {
     fn execute<'a>(
         &'a self,
         sender: &'a CommandSender,
-        _server: &'a Arc<Server>,
+        _server: &'a crate::server::Server,
         args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {
@@ -222,7 +221,7 @@ impl CommandExecutor for ItemExecutor {
     fn execute<'a>(
         &'a self,
         sender: &'a CommandSender,
-        _server: &'a Arc<Server>,
+        _server: &'a crate::server::Server,
         args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {
@@ -248,7 +247,7 @@ impl CommandExecutor for ItemCountExecutor {
     fn execute<'a>(
         &'a self,
         sender: &'a CommandSender,
-        _server: &'a Arc<Server>,
+        _server: &'a crate::server::Server,
         args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {

@@ -17,7 +17,6 @@ use crate::command::dispatcher::CommandError::{
 use crate::command::tree::{Command, CommandTree, NodeType, RawArg, RawArgs};
 use crate::server::Server;
 use std::collections::{HashMap, HashSet};
-use std::sync::Arc;
 
 #[derive(Debug)]
 pub enum CommandError {
@@ -240,7 +239,7 @@ impl CommandDispatcher {
     pub async fn handle_command<'a>(
         &'a self,
         sender: &CommandSender,
-        server: &'a Arc<Server>,
+        server: &'a Server,
         cmd: &'a str,
     ) {
         let result = self.dispatch(sender, server, cmd).await;
@@ -445,7 +444,7 @@ impl CommandDispatcher {
     pub(crate) async fn dispatch<'a>(
         &'a self,
         src: &CommandSender,
-        server: &'a Arc<Server>,
+        server: &'a Server,
         cmd: &'a str,
     ) -> Result<(), CommandError> {
         let (key, raw_args) = Self::split_parts(cmd)?;
@@ -505,7 +504,7 @@ impl CommandDispatcher {
     #[allow(clippy::too_many_lines)]
     async fn try_is_fitting_path<'a>(
         src: &'a CommandSender,
-        server: &'a Arc<Server>,
+        server: &'a Server,
         path: &[usize],
         tree: &'a CommandTree,
         raw_args: &mut RawArgs<'a>,

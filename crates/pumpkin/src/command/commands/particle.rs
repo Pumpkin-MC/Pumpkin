@@ -8,10 +8,7 @@ use crate::command::{
     tree::{CommandTree, builder::argument},
 };
 use crate::entity::EntityBase;
-use crate::server::Server;
 use pumpkin_util::{math::vector3::Vector3, text::TextComponent};
-use std::sync::Arc;
-
 const NAMES: [&str; 1] = ["particle"];
 
 const DESCRIPTION: &str = "Spawns a Particle at position.";
@@ -29,7 +26,7 @@ impl CommandExecutor for Executor {
     fn execute<'a>(
         &'a self,
         sender: &'a CommandSender,
-        server: &'a Arc<Server>,
+        server: &'a crate::server::Server,
         args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {

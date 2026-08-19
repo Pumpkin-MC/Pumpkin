@@ -6,10 +6,8 @@ use crate::command::{
     },
     tree::{CommandTree, builder::argument},
 };
-use crate::server::Server;
 use pumpkin_data::translation;
 use pumpkin_util::text::TextComponent;
-use std::sync::Arc;
 
 const NAMES: [&str; 1] = ["stopsound"];
 const DESCRIPTION: &str = "Stops a currently playing sound.";
@@ -24,7 +22,7 @@ impl CommandExecutor for Executor {
     fn execute<'a>(
         &'a self,
         sender: &'a CommandSender,
-        _server: &'a Arc<Server>,
+        _server: &'a crate::server::Server,
         args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {

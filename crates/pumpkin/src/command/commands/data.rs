@@ -7,14 +7,12 @@ use crate::command::{
     tree::{CommandTree, builder::argument},
 };
 use crate::entity::NBTStorage;
-use crate::server::Server;
 use CommandError::InvalidConsumption;
 use pumpkin_data::translation;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::color::NamedColor;
-use std::sync::Arc;
 
 const NAMES: [&str; 1] = ["data"];
 const DESCRIPTION: &str = "Query and modify data of entities and blocks";
@@ -27,7 +25,7 @@ impl CommandExecutor for GetEntityDataExecutor {
     fn execute<'a>(
         &'a self,
         sender: &'a CommandSender,
-        _server: &'a Arc<Server>,
+        _server: &'a crate::server::Server,
         args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {

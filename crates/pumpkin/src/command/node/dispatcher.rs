@@ -545,7 +545,7 @@ impl CommandDispatcher {
                 // Run the fallback dispatcher instead.
                 // It might have the command we're looking for.
                 self.fallback_dispatcher
-                    .handle_command(&source.output, source.server(), input)
+                    .handle_command(&source.output, source.server().as_ref(), input)
                     .await;
             } else {
                 // Print the error to the output.

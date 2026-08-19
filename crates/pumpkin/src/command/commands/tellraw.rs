@@ -6,8 +6,6 @@ use crate::command::{
     },
     tree::{CommandTree, builder::argument},
 };
-use crate::server::Server;
-use std::sync::Arc;
 
 const NAMES: [&str; 1] = ["tellraw"];
 
@@ -23,7 +21,7 @@ impl CommandExecutor for TellRawExecutor {
     fn execute<'a>(
         &'a self,
         _sender: &'a CommandSender,
-        _server: &'a Arc<Server>,
+        _server: &'a crate::server::Server,
         args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {

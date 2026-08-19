@@ -1,6 +1,5 @@
 use pumpkin_util::text::TextComponent;
 use pumpkin_world::world::BlockFlags;
-use std::sync::Arc;
 
 use crate::command::args::block::BlockArgumentConsumer;
 use crate::command::args::position_block::BlockPosArgumentConsumer;
@@ -8,7 +7,6 @@ use crate::command::args::{ConsumedArgs, FindArg};
 use crate::command::tree::CommandTree;
 use crate::command::tree::builder::{argument, literal};
 use crate::command::{CommandError, CommandExecutor, CommandResult, CommandSender};
-use crate::server::Server;
 
 const NAMES: [&str; 1] = ["setblock"];
 
@@ -38,7 +36,7 @@ impl CommandExecutor for Executor {
     fn execute<'a>(
         &'a self,
         sender: &'a CommandSender,
-        server: &'a Arc<Server>,
+        server: &'a crate::server::Server,
         args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {

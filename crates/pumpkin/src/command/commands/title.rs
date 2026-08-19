@@ -1,11 +1,9 @@
 use pumpkin_protocol::java::client::play::CClearTitle;
 use pumpkin_util::text::TextComponent;
-use std::sync::Arc;
 
 use crate::command::CommandResult;
 use crate::command::args::time::TimeArgumentConsumer;
 use crate::entity::EntityBase;
-use crate::server::Server;
 use crate::{
     command::{
         CommandError, CommandExecutor, CommandSender,
@@ -36,7 +34,7 @@ impl CommandExecutor for ClearOrResetExecutor {
     fn execute<'a>(
         &'a self,
         sender: &'a CommandSender,
-        _server: &'a Arc<Server>,
+        _server: &'a crate::server::Server,
         args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {
@@ -85,7 +83,7 @@ impl CommandExecutor for TitleExecutor {
     fn execute<'a>(
         &'a self,
         sender: &'a CommandSender,
-        _server: &'a Arc<Server>,
+        _server: &'a crate::server::Server,
         args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {
@@ -129,7 +127,7 @@ impl CommandExecutor for TimesTitleExecutor {
     fn execute<'a>(
         &'a self,
         sender: &'a CommandSender,
-        _server: &'a Arc<Server>,
+        _server: &'a crate::server::Server,
         args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {

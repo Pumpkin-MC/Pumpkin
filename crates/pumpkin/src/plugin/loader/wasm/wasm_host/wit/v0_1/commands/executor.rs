@@ -5,8 +5,6 @@ use pumpkin_util::text::{
     color::{Color, NamedColor},
 };
 
-use crate::command::args::ConsumedArgs;
-use crate::command::{CommandResult, CommandSender};
 use crate::{
     command::{CommandExecutor, dispatcher::CommandError},
     plugin::loader::wasm::wasm_host::{
@@ -25,10 +23,10 @@ pub struct WasmCommandExecutor {
 impl CommandExecutor for WasmCommandExecutor {
     fn execute<'a>(
         &'a self,
-        sender: &'a CommandSender,
-        _server: &'a Arc<Server>,
-        args: &'a ConsumedArgs<'a>,
-    ) -> CommandResult<'a> {
+        sender: &'a crate::command::CommandSender,
+        _server: &'a crate::server::Server,
+        args: &'a crate::command::args::ConsumedArgs<'a>,
+    ) -> crate::command::CommandResult<'a> {
         Box::pin(async move {
             let mut store = self.plugin.store.lock().await;
 

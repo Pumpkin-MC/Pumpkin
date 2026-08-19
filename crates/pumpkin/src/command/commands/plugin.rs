@@ -1,9 +1,9 @@
+use std::path::Path;
+
 use pumpkin_util::{
     PermissionLvl,
     text::{TextComponent, color::NamedColor, hover::HoverEvent},
 };
-use std::path::Path;
-use std::sync::Arc;
 
 use crate::command::{
     CommandExecutor, CommandResult, CommandSender,
@@ -16,7 +16,6 @@ use crate::command::{
 };
 
 use crate::command::CommandError::InvalidConsumption;
-use crate::server::Server;
 
 const NAMES: [&str; 1] = ["plugin"];
 
@@ -30,7 +29,7 @@ impl CommandExecutor for ListExecutor {
     fn execute<'a>(
         &'a self,
         sender: &'a CommandSender,
-        server: &'a Arc<Server>,
+        server: &'a crate::server::Server,
         _args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {
@@ -81,7 +80,7 @@ impl CommandExecutor for LoadExecutor {
     fn execute<'a>(
         &'a self,
         sender: &'a CommandSender,
-        server: &'a Arc<Server>,
+        server: &'a crate::server::Server,
         args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {
@@ -135,7 +134,7 @@ impl CommandExecutor for UnloadExecutor {
     fn execute<'a>(
         &'a self,
         sender: &'a CommandSender,
-        server: &'a Arc<Server>,
+        server: &'a crate::server::Server,
         args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {
@@ -178,7 +177,7 @@ impl CommandExecutor for HotReloadExecutor {
     fn execute<'a>(
         &'a self,
         sender: &'a CommandSender,
-        server: &'a Arc<Server>,
+        server: &'a crate::server::Server,
         _args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {
