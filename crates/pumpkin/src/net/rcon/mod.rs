@@ -146,8 +146,7 @@ impl RCONClient {
                     let _ = tokio::spawn(async move {
                         server_clone
                             .command_dispatcher
-                            .read()
-                            .await
+                            .load()
                             .handle_command(&command_source, &packet_body)
                             .await;
                     })

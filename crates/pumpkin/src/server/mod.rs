@@ -23,7 +23,7 @@ use key_store::KeyStore;
 use pumpkin_config::{AdvancedConfiguration, BasicConfiguration};
 use pumpkin_data::dimension::Dimension;
 use pumpkin_data::entity::EntityType;
-use pumpkin_util::permission::{PermissionManager, PermissionRegistry};
+use pumpkin_util::permission::PermissionManager;
 use pumpkin_util::text::color::NamedColor;
 use pumpkin_world::dimension::into_level;
 use pumpkin_world::world::WorldPortalExt;
@@ -47,7 +47,7 @@ use std::net::IpAddr;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicI32, AtomicI64, AtomicU32};
 use std::{future::Future, sync::atomic::Ordering, time::Duration};
-use tokio::sync::{Mutex, OnceCell, RwLock};
+use tokio::sync::{Mutex, OnceCell};
 use tokio::task::{JoinHandle, JoinSet};
 use tokio_util::task::TaskTracker;
 
@@ -79,9 +79,7 @@ pub struct Server {
     pub plugin_manager: Arc<PluginManager>,
 
     /// Permission manager for the server.
-    pub permission_manager: Arc<RwLock<PermissionManager>>,
-    /// Permission registry for the server.
-    pub permission_registry: Arc<RwLock<PermissionRegistry>>,
+    pub permission_manager: Arc<PermissionManager>,
 
     /// Handles cryptographic keys for secure communication.
     key_store: OnceCell<Arc<KeyStore>>,
@@ -94,7 +92,7 @@ pub struct Server {
     /// Saves server branding information.
     branding: CachedBranding,
     /// Saves and dispatches commands to appropriate handlers.
-    pub command_dispatcher: RwLock<CommandDispatcher>,
+    pub command_dispatcher: ArcSwap<CommandDispatcher>,
     /// Block behaviour.
     pub block_registry: Arc<BlockRegistry>,
     /// Item behaviour.
@@ -154,16 +152,13 @@ impl Server {
         advanced_config: AdvancedConfiguration,
         vanilla_data: VanillaData,
     ) -> Arc<Self> {
-        let permission_registry = Arc::new(RwLock::new(PermissionRegistry::new()));
+        let permission_manager = Arc::new(PermissionManager::new());
         // First register the default commands. After that, plugins can put in their own.
-        let command_dispatcher = RwLock::new(
-            default_dispatcher(
-                &permission_registry,
-                &basic_config,
-                &advanced_config.commands,
-            )
-            .await,
-        );
+        let command_dispatcher = ArcSwap::from_pointee(default_dispatcher(
+            &permission_manager,
+            &basic_config,
+            &advanced_config.commands,
+        ));
 
         crate::command::set_broadcast_console_to_ops(
             advanced_config.commands.broadcast_console_to_ops,
@@ -264,10 +259,7 @@ impl Server {
             advanced_config,
             data: vanilla_data,
             plugin_manager: Arc::new(PluginManager::new()),
-            permission_manager: Arc::new(RwLock::new(PermissionManager::new(
-                permission_registry.clone(),
-            ))),
-            permission_registry,
+            permission_manager,
             container_id: 0.into(),
             recipe_manager: Arc::new(recipe::RecipeManager::new()),
             enchantment_manager: Arc::new(enchantment::EnchantmentManager::new()),

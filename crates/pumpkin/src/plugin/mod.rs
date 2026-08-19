@@ -1,3 +1,4 @@
+use arc_swap::ArcSwap;
 use futures::future::join_all;
 use loader::{LoaderError, PluginLoader, native::NativePluginLoader};
 use notify::{EventKind, RecursiveMode, Watcher, event::ModifyKind};
@@ -101,15 +102,15 @@ pub trait EventHandler<E: Payload>: Send + Sync {
 /// A struct representing a typed event handler.
 ///
 /// This struct holds a reference to an event handler, its priority, and whether it is blocking.
-struct TypedEventHandler<E, H>
+pub struct TypedEventHandler<E, H>
 where
     E: Payload + Send + Sync + 'static,
     H: EventHandler<E> + Send + Sync,
 {
-    handler: Arc<H>,
-    priority: EventPriority,
-    blocking: bool,
-    _phantom: std::marker::PhantomData<E>,
+    pub handler: Arc<H>,
+    pub priority: EventPriority,
+    pub blocking: bool,
+    pub _phantom: std::marker::PhantomData<E>,
 }
 
 impl<E, H> DynEventHandler for TypedEventHandler<E, H>
@@ -158,7 +159,7 @@ where
 
 /// A type alias for a map of event handlers, where the key is a static string
 /// and the value is a vector of dynamic event handlers.
-type HandlerMap = HashMap<&'static str, Vec<Box<dyn DynEventHandler>>>;
+pub type HandlerMap = HashMap<&'static str, Vec<Arc<dyn DynEventHandler>>>;
 
 /// Plugin loading state
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -172,7 +173,7 @@ pub enum PluginState {
 pub struct PluginManager {
     plugins: RwLock<Vec<LoadedPlugin>>,
     loaders: RwLock<Vec<Arc<dyn PluginLoader>>>,
-    handlers: Arc<RwLock<HandlerMap>>,
+    handlers: Arc<ArcSwap<HandlerMap>>,
     unloaded_files: RwLock<HashSet<PathBuf>>,
     services: Arc<RwLock<HashMap<String, Arc<dyn Payload>>>>,
     // Plugin state tracking
@@ -227,7 +228,7 @@ impl PluginManager {
                 Arc::new(NativePluginLoader),
                 Arc::new(WasmPluginLoader),
             ]),
-            handlers: Arc::new(RwLock::new(HashMap::new())),
+            handlers: Arc::new(ArcSwap::from_pointee(HashMap::new())),
             unloaded_files: RwLock::new(HashSet::new()),
             services: Arc::new(RwLock::new(HashMap::new())),
             plugin_states: RwLock::new(HashMap::new()),
@@ -1090,23 +1091,26 @@ impl PluginManager {
     }
 
     /// Register an event handler
-    pub async fn register<E, H>(&self, handler: Arc<H>, priority: EventPriority, blocking: bool)
+    pub fn register<E, H>(&self, handler: Arc<H>, priority: EventPriority, blocking: bool)
     where
         E: Payload + Send + Sync + 'static,
         H: EventHandler<E> + 'static,
     {
-        let mut handlers = self.handlers.write().await;
-        let typed_handler = TypedEventHandler {
+        let typed_handler = Arc::new(TypedEventHandler {
             handler,
             priority,
             blocking,
             _phantom: std::marker::PhantomData,
-        };
+        });
 
-        handlers
-            .entry(E::get_name_static())
-            .or_default()
-            .push(Box::new(typed_handler));
+        self.handlers.rcu(|handlers| {
+            let mut new_handlers = (**handlers).clone();
+            new_handlers
+                .entry(E::get_name_static())
+                .or_default()
+                .push(typed_handler.clone());
+            Arc::new(new_handlers)
+        });
     }
 
     /// Fire an event to all registered handlers
@@ -1115,12 +1119,12 @@ impl PluginManager {
         server: &Arc<Server>,
         event: &mut E,
     ) {
-        let handlers_lock = self.handlers.read().await;
-        if handlers_lock.is_empty() {
+        let handlers_map = self.handlers.load();
+        if handlers_map.is_empty() {
             return;
         }
 
-        let Some(handlers) = handlers_lock.get(&E::get_name_static()) else {
+        let Some(handlers) = handlers_map.get(E::get_name_static()) else {
             return;
         };
 
