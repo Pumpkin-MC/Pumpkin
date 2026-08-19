@@ -56,7 +56,6 @@ use pumpkin_protocol::{
         CEntityPositionSync, CEntityVelocity, CHeadRot, CPlayerPosition, CSetEntityMetadata,
         CSetPassengers, CSpawnEntity, CUpdateEntityRot, Metadata, MetadataSerializer,
     },
-    ser::NetworkWriteExt,
 };
 use pumpkin_util::math::vector3::Axis;
 use pumpkin_util::math::{
@@ -69,8 +68,7 @@ use pumpkin_util::math::{
 };
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::hover::HoverEvent;
-use pumpkin_util::version::JavaMinecraftVersion;
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, HashSet};
 use std::pin::Pin;
 use std::sync::{
     Arc,
