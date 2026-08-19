@@ -284,3 +284,6 @@ pub use start_configuration::*;
 
 mod tag_query;
 pub use tag_query::*;
+
+mod update_tags;
+pub use update_tags::*;

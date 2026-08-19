@@ -33,7 +33,7 @@ impl Registry {
     pub fn get_synced(version: JavaMinecraftVersion) -> Vec<Self> {
         #[allow(clippy::match_same_arms)]
         let static_regs = match version {
-            pumpkin_util::version::JavaMinecraftVersion::V_1_20_5 => REGISTRY_V_1_20_5,
+            v if v <= pumpkin_util::version::JavaMinecraftVersion::V_1_20_5 => REGISTRY_V_1_20_5,
             pumpkin_util::version::JavaMinecraftVersion::V_1_21 => REGISTRY_V_1_21,
             pumpkin_util::version::JavaMinecraftVersion::V_1_21_2 => REGISTRY_V_1_21_2,
             pumpkin_util::version::JavaMinecraftVersion::V_1_21_4 => REGISTRY_V_1_21_4,
@@ -43,8 +43,7 @@ impl Registry {
             pumpkin_util::version::JavaMinecraftVersion::V_1_21_9 => REGISTRY_V_1_21_9,
             pumpkin_util::version::JavaMinecraftVersion::V_1_21_11 => REGISTRY_V_1_21_11,
             pumpkin_util::version::JavaMinecraftVersion::V_26_1 => REGISTRY_V_26_1,
-            pumpkin_util::version::JavaMinecraftVersion::V_26_2 => REGISTRY_V_26_2,
-            _ => REGISTRY_V_26_2,
+            pumpkin_util::version::JavaMinecraftVersion::V_26_2 | _ => REGISTRY_V_26_2,
         };
         static_regs
             .iter()

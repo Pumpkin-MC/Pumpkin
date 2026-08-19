@@ -2,7 +2,7 @@ use crate::VarInt;
 use crate::codec::data_component::{deserialize, serialize};
 use crate::ser::{NetworkReadExt, NetworkWriteExt, ReadingError, WritingError};
 use pumpkin_data::data_component::DataComponent;
-use pumpkin_data::data_component_impl::{CustomNameImpl, DataComponentImpl};
+use pumpkin_data::data_component_impl::{CustomNameImpl, DataComponentImpl, ItemNameImpl};
 use pumpkin_data::item::Item;
 use pumpkin_data::item_id_remap::{remap_item_id_for_version, remap_item_id_from_version};
 use pumpkin_data::item_stack::ItemStack;
@@ -75,6 +75,31 @@ fn serialize_item_stack_with_id(
     serialize_any_item_stack_with_id(stack, item_id, false, write)
 }
 
+fn serialize_item_cost_with_id(
+    stack: &ItemStack,
+    item_id: u16,
+    write: &mut impl NetworkWriteExt,
+) -> Result<(), WritingError> {
+    let component_count = stack
+        .patch
+        .iter()
+        .filter(|(_, data)| data.is_some())
+        .count();
+    let component_count = i32::try_from(component_count)
+        .map_err(|_| WritingError::Message("Too many item cost components".into()))?;
+
+    write.put_var_int(&VarInt::from(item_id))?;
+    write.put_var_int(&VarInt::from(stack.item_count))?;
+    write.put_var_int(&VarInt(component_count))?;
+    for (id, data) in &stack.patch {
+        if let Some(data) = data {
+            write.put_var_int(&VarInt::from(id.to_id()))?;
+            serialize(*id, data.as_ref(), write)?;
+        }
+    }
+    Ok(())
+}
+
 fn read_component_id(read: &mut impl NetworkReadExt) -> Result<DataComponent, ReadingError> {
     let id_val = read.get_var_int()?.0;
     let id_u8 = id_val
@@ -101,6 +126,40 @@ fn decode_custom_name(component_data: &[u8]) -> Result<Box<dyn DataComponentImpl
     Ok(CustomNameImpl { name }.to_dyn())
 }
 
+fn decode_item_name(component_data: &[u8]) -> Result<Box<dyn DataComponentImpl>, ReadingError> {
+    let mut cursor = Cursor::new(component_data);
+    let mut nbt_reader = pumpkin_nbt::deserializer::NbtReadHelperJava::new(&mut cursor);
+    let tag = NbtTag::deserialize(&mut nbt_reader)
+        .map_err(|err| ReadingError::Message(format!("Failed to decode ItemName NBT: {err}")))?;
+    let name = match tag {
+        NbtTag::String(name) => name.to_string(),
+        NbtTag::Compound(compound) => compound
+            .get_string("translate")
+            .or_else(|| compound.get_string("text"))
+            .unwrap_or_default()
+            .to_owned(),
+        _ => String::new(),
+    };
+    Ok(ItemNameImpl {
+        name: Cow::Owned(name),
+    }
+    .to_dyn())
+}
+
+fn decode_component(
+    id: DataComponent,
+    component_data: &[u8],
+) -> Result<Box<dyn DataComponentImpl>, ReadingError> {
+    match id {
+        DataComponent::CustomName => decode_custom_name(component_data),
+        DataComponent::ItemName => decode_item_name(component_data),
+        _ => {
+            let mut cursor = Cursor::new(component_data);
+            deserialize(id, &mut cursor)
+        }
+    }
+}
+
 fn read_length_prefixed_component(
     read: &mut impl NetworkReadExt,
 ) -> Result<(DataComponent, Box<dyn DataComponentImpl>), ReadingError> {
@@ -117,22 +176,11 @@ fn read_length_prefixed_component(
         let mut stack_buf = [0u8; 256];
         let slice = &mut stack_buf[..byte_len];
         read.read_bytes_to_buf(slice)?;
-
-        if id == DataComponent::CustomName {
-            decode_custom_name(slice)?
-        } else {
-            let mut cursor = Cursor::new(slice);
-            deserialize(id, &mut cursor)?
-        }
+        decode_component(id, slice)?
     } else {
         let mut component_data = vec![0u8; byte_len];
         read.read_bytes_to_buf(&mut component_data)?;
-        if id == DataComponent::CustomName {
-            decode_custom_name(component_data.as_ref())?
-        } else {
-            let mut cursor = Cursor::new(component_data);
-            deserialize(id, &mut cursor)?
-        }
+        decode_component(id, &component_data)?
     };
 
     Ok((id, component_impl))
@@ -269,6 +317,15 @@ impl ItemStackSerializer<'_> {
     ) -> Result<(), WritingError> {
         let remapped_item_id = remap_item_id_for_version(self.0.item.id, *version);
         serialize_item_stack_with_id(self.0.as_ref(), remapped_item_id, write)
+    }
+
+    pub fn write_item_cost_with_version(
+        &self,
+        write: &mut impl NetworkWriteExt,
+        version: &JavaMinecraftVersion,
+    ) -> Result<(), WritingError> {
+        let remapped_item_id = remap_item_id_for_version(self.0.item.id, *version);
+        serialize_item_cost_with_id(self.0.as_ref(), remapped_item_id, write)
     }
 
     #[must_use]

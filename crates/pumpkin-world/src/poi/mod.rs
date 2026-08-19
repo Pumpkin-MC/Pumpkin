@@ -464,6 +464,10 @@ impl PoiStorage {
     }
 
     pub fn add(&mut self, pos: BlockPos, poi_type: &str) {
+        self.add_with_free_tickets(pos, poi_type, 0);
+    }
+
+    pub fn add_with_free_tickets(&mut self, pos: BlockPos, poi_type: &str, free_tickets: i32) {
         let (rx, rz) = Self::region_coords(&pos);
         let region = self.get_or_load_region(rx, rz);
         region.add(PoiEntry {
@@ -471,7 +475,7 @@ impl PoiStorage {
             y: pos.0.y,
             z: pos.0.z,
             poi_type: poi_type.to_string(),
-            free_tickets: 0,
+            free_tickets,
         });
     }
 

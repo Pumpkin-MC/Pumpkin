@@ -198,13 +198,13 @@ impl Mob for OcelotEntity {
                     self.get_entity().world.load().send_entity_status(
                         self.get_entity(),
                         EntityStatus::TrustingSucceeded,
-                        Some(ActorEventType::TrustingSucceeded),
+                        Some(ActorEventType::TamingSucceeded),
                     );
                 } else {
                     self.get_entity().world.load().send_entity_status(
                         self.get_entity(),
                         EntityStatus::TrustingFailed,
-                        Some(ActorEventType::TrustingFailed),
+                        Some(ActorEventType::TamingFailed),
                     );
                 }
 

@@ -523,15 +523,23 @@ pub fn read_data(id: DataComponent, data: &NbtTag) -> Option<Box<dyn DataCompone
         DataComponent::CustomData => Some(CustomDataImpl::read_data(data)?.to_dyn()),
         DataComponent::Enchantments => Some(EnchantmentsImpl::read_data(data)?.to_dyn()),
         DataComponent::Damage => Some(DamageImpl::read_data(data)?.to_dyn()),
+        DataComponent::MaxDamage => Some(MaxDamageImpl::read_data(data)?.to_dyn()),
         DataComponent::Unbreakable => Some(UnbreakableImpl::read_data(data)?.to_dyn()),
+        DataComponent::Food => Some(FoodImpl::read_data(data)?.to_dyn()),
+        DataComponent::Tool => Some(ToolImpl::read_data(data)?.to_dyn()),
+        DataComponent::Enchantable => Some(EnchantableImpl::read_data(data)?.to_dyn()),
         DataComponent::DamageResistant => Some(DamageResistantImpl::read_data(data)?.to_dyn()),
         DataComponent::PotionContents => Some(PotionContentsImpl::read_data(data)?.to_dyn()),
         DataComponent::PotionDurationScale => {
             Some(PotionDurationScaleImpl::read_data(data)?.to_dyn())
         }
+        DataComponent::SuspiciousStewEffects => {
+            Some(SuspiciousStewEffectsImpl::read_data(data)?.to_dyn())
+        }
         DataComponent::Fireworks => Some(FireworksImpl::read_data(data)?.to_dyn()),
         DataComponent::FireworkExplosion => Some(FireworkExplosionImpl::read_data(data)?.to_dyn()),
         DataComponent::CustomName => Some(CustomNameImpl::read_data(data)?.to_dyn()),
+        DataComponent::ItemName => Some(ItemNameImpl::read_data(data)?.to_dyn()),
         DataComponent::ItemModel => Some(ItemModelImpl::read_data(data)?.to_dyn()),
         DataComponent::Consumable => Some(ConsumableImpl::read_data(data)?.to_dyn()),
         DataComponent::Equippable => Some(EquippableImpl::read_data(data)?.to_dyn()),
@@ -640,6 +648,60 @@ mod tests {
     ) {
         let restored = read(&value.write_data()).expect("read_data returned None");
         assert!(value.equal(&restored));
+    }
+
+    #[test]
+    fn max_damage_round_trip() {
+        assert_round_trip(MaxDamageImpl { max_damage: 1561 }, MaxDamageImpl::read_data);
+    }
+
+    #[test]
+    fn enchantable_round_trip() {
+        assert_round_trip(EnchantableImpl { value: 14 }, EnchantableImpl::read_data);
+    }
+
+    #[test]
+    fn food_round_trip() {
+        assert_round_trip(
+            FoodImpl {
+                nutrition: 4,
+                saturation: 2.4,
+                can_always_eat: true,
+            },
+            FoodImpl::read_data,
+        );
+    }
+
+    #[test]
+    fn block_entity_data_round_trip() {
+        let mut nbt = NbtCompound::new();
+        nbt.put_string("id", "minecraft:chest".to_string());
+        nbt.put_int("x", 12);
+        assert_round_trip(BlockEntityDataImpl { nbt }, BlockEntityDataImpl::read_data);
+    }
+
+    #[test]
+    fn tool_round_trip() {
+        assert_round_trip(
+            ToolImpl {
+                rules: Cow::Owned(vec![
+                    ToolRule {
+                        blocks: IDSet::Tag(Cow::Borrowed("mineable/pickaxe")),
+                        speed: Some(6.0),
+                        correct_for_drops: Some(true),
+                    },
+                    ToolRule {
+                        blocks: IDSet::Tag(Cow::Borrowed("incorrect_for_wooden_tool")),
+                        speed: None,
+                        correct_for_drops: Some(false),
+                    },
+                ]),
+                default_mining_speed: 1.0,
+                damage_per_block: 2,
+                can_destroy_blocks_in_creative: false,
+            },
+            ToolImpl::read_data,
+        );
     }
 
     #[test]

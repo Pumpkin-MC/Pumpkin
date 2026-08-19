@@ -17,6 +17,7 @@ use arc_swap::ArcSwap;
 use crossbeam::atomic::AtomicCell;
 use crossbeam::channel::Receiver;
 use pumpkin_data::dimension::Dimension;
+use pumpkin_inventory::merchant::merchant_screen_handler::MerchantScreenHandler;
 use pumpkin_inventory::player::ender_chest_inventory::EnderChestInventory;
 use pumpkin_protocol::bedrock::client::play_status::CPlayStatus;
 use pumpkin_protocol::bedrock::client::set_time::CSetTime;
@@ -2354,13 +2355,21 @@ impl Player {
             }
         }
 
-        self.current_screen_handler
-            .lock()
-            .await
-            .lock()
-            .await
-            .send_content_updates()
-            .await;
+        let current_screen_handler = self.current_screen_handler.lock().await.clone();
+        let invalid_merchant = {
+            let screen_handler = current_screen_handler.lock().await;
+            screen_handler.as_any().is::<MerchantScreenHandler>()
+                && !screen_handler.can_use(self.as_ref())
+        };
+        if invalid_merchant {
+            self.close_handled_screen().await;
+        } else {
+            current_screen_handler
+                .lock()
+                .await
+                .send_content_updates()
+                .await;
+        }
 
         // if self.client.closed.load(Ordering::Relaxed) {
         //     return;
@@ -4364,13 +4373,20 @@ impl Player {
                             &pumpkin_data::map_decoration::MapDecorationType::PLAYER
                         };
 
-                        let icons = [MapIcon {
+                        let mut icons = vec![MapIcon {
                             icon_type: VarInt(decoration_type.id as i32),
                             x: icon_x,
                             z: icon_z,
                             direction: icon_direction,
                             display_name: None,
                         }];
+                        icons.extend(map_data.decorations.iter().map(|decoration| MapIcon {
+                            icon_type: VarInt(decoration.icon_type),
+                            x: decoration.x,
+                            z: decoration.z,
+                            direction: decoration.direction,
+                            display_name: decoration.display_name.clone(),
+                        }));
 
                         let data = map_data.dirty.then(|| MapPatch {
                             columns: 128,
@@ -4830,6 +4846,7 @@ impl Player {
                 WindowType::Anvil => 5,
                 WindowType::Hopper => 8,
                 WindowType::Beacon => 13,
+                WindowType::Merchant => 15,
                 WindowType::BlastFurnace => 27,
                 WindowType::Smoker => 28,
                 WindowType::Stonecutter => 29,

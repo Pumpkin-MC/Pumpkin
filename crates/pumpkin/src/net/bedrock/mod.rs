@@ -28,7 +28,7 @@ use pumpkin_protocol::{
         packet_decoder::BedrockBatchDecoder,
         packet_encoder::BedrockBatchEncoder,
         server::{
-            animate::SAnimate, block_pick_request::SBlockPickRequest,
+            actor_event::SActorEvent, animate::SAnimate, block_pick_request::SBlockPickRequest,
             client_cache_blob_status::SClientCacheBlobStatus,
             client_cache_status::SClientCacheStatus, command_request::SCommandRequest,
             container_close::SContainerClose, emote::SEmote, emote_list::SEmoteList,
@@ -708,7 +708,7 @@ impl BedrockClient {
                 self.handle_item_stack_request(player, pumpkin_protocol::bedrock::server::item_stack_request::SItemStackRequest::read(reader)?).await;
             }
             SInteraction::PACKET_ID => {
-                self.handle_interaction(player, SInteraction::read(reader)?)
+                self.handle_interaction(player, SInteraction::read(reader)?, server)
                     .await;
             }
             SContainerClose::PACKET_ID => {
@@ -742,6 +742,9 @@ impl BedrockClient {
             }
             SAnimate::PACKET_ID => {
                 self.handle_animate(player, server, &SAnimate::read(reader)?).await;
+            }
+            SActorEvent::PACKET_ID => {
+                self.handle_actor_event(player, SActorEvent::read(reader)?).await;
             }
             SEmote::PACKET_ID => {
                 self.handle_emote(player, server, SEmote::read_slice(reader)?).await;

@@ -25,6 +25,7 @@ pub mod loot;
 pub mod map;
 pub mod portal;
 pub mod time;
+pub mod villager_poi;
 
 use crate::block::RandomTickArgs;
 use crate::world::chunker::is_within_view_distance;
@@ -67,6 +68,7 @@ use pumpkin_data::{
     entity::{EntityStatus, EntityType},
     fluid::Fluid,
     item_stack::ItemStack,
+    packet::CURRENT_MC_VERSION,
     particle::Particle,
     sound::{Sound, SoundCategory},
     sound_id_remap::remap_sound_id_for_version,
@@ -142,7 +144,9 @@ use pumpkin_util::{
 use pumpkin_world::inventory::Clearable;
 use pumpkin_world::world::{GetBlockError, WorldPortalExt};
 use pumpkin_world::{
-    CURRENT_BEDROCK_MC_VERSION, biome, chunk::io::Dirtiable, inventory::Inventory,
+    CURRENT_BEDROCK_MC_VERSION, biome,
+    chunk::{io::Dirtiable, palette::bedrock_water_state},
+    inventory::Inventory,
 };
 use pumpkin_world::{chunk::ChunkData, world::BlockAccessor};
 use pumpkin_world::{level::Level, tick::TickPriority};
@@ -263,8 +267,10 @@ pub struct World {
     synced_block_event_queue: Mutex<Vec<BlockEvent>>,
     /// A map of unsent block changes, keyed by block position.
     unsent_block_changes: Mutex<HashMap<BlockPos, BlockStateId>>,
-    /// POI storage for fast portal lookups
+    /// Persisted vanilla POI storage for portal and villager lookups.
     pub portal_poi: Mutex<portal::PortalPoiStorage>,
+    /// Villager job sites and their current owners.
+    pub villager_poi: Mutex<villager_poi::VillagerPoiStorage>,
     /// End Dragon fight manager (only present in `THE_END` dimension).
     pub dragon_fight: Option<Mutex<dragon_fight::DragonFight>>,
     pub spawn_state: ArcSwap<SpawnState>,
@@ -383,6 +389,7 @@ impl World {
             synced_block_event_queue: Mutex::new(Vec::new()),
             unsent_block_changes: Mutex::new(HashMap::new()),
             portal_poi: Mutex::new(portal_poi),
+            villager_poi: Mutex::new(villager_poi::VillagerPoiStorage::default()),
             dragon_fight,
             spawn_state: ArcSwap::new(Arc::new(SpawnState::empty())),
             active_chunks: ArcSwap::new(Arc::new(FxHashSet::default())),
@@ -882,6 +889,9 @@ impl World {
             match p.client.as_ref() {
                 ClientPlatform::Java(client) => {
                     let version = client.version.load();
+                    if version < CURRENT_MC_VERSION {
+                        continue;
+                    }
                     let mut buf = Vec::new();
                     for meta in [
                         Metadata::new(
@@ -1387,6 +1397,28 @@ impl World {
                     &CMultiBlockUpdate::new(&updates),
                     recipients_by_version,
                 );
+            }
+
+            let players = self.players.load();
+            let recipients = players.iter().filter(|player| {
+                let center = player.get_entity().chunk_pos.load();
+                let view_distance = get_view_distance(player).get() as i32;
+                is_within_view_distance(chunk_pos, center, view_distance)
+            });
+            for player in recipients {
+                let ClientPlatform::Bedrock(client) = player.client.as_ref() else {
+                    continue;
+                };
+                for (block_pos, block_state_id) in &updates {
+                    let water_state = bedrock_water_state(*block_state_id);
+                    client.try_enqueue_packet(
+                        &pumpkin_protocol::bedrock::client::CUpdateBlock::with_layer(
+                            *block_pos,
+                            u32::from(BlockState::to_be_network_id(water_state)),
+                            1,
+                        ),
+                    );
+                }
             }
         }
     }
@@ -2735,21 +2767,7 @@ impl World {
             &bedrock_add_player,
         );
 
-        let held_item = player.inventory().held_item().await;
-
-        let be_mob_equipment = pumpkin_protocol::bedrock::client::CMobEquipment::new(
-            runtime_id,
-            NetworkItemStackDescriptor::from(&held_item),
-            0,
-            0,
-            0,
-        );
-
-        self.broadcast_packet_except_editioned_sync(
-            &[gameprofile.id],
-            &CSetEquipment::new((runtime_id as i32).into(), vec![]),
-            &be_mob_equipment,
-        );
+        self.send_player_equipment(&player).await;
 
         // Broadcast metadata to Java players so they can correctly interact with the new player
         let skin_parts = player.config.load().skin_parts;
@@ -2953,6 +2971,43 @@ impl World {
             client_suggestions::send_c_commands_packet(player, server, &command_dispatcher).await;
         };
 
+        if client.version.load() < JavaMinecraftVersion::V_1_20_2 {
+            let all_keys = [
+                pumpkin_data::tag::RegistryKey::BannerPattern,
+                pumpkin_data::tag::RegistryKey::Block,
+                pumpkin_data::tag::RegistryKey::CatVariant,
+                pumpkin_data::tag::RegistryKey::DamageType,
+                pumpkin_data::tag::RegistryKey::Dialog,
+                pumpkin_data::tag::RegistryKey::DimensionType,
+                pumpkin_data::tag::RegistryKey::Enchantment,
+                pumpkin_data::tag::RegistryKey::EntityType,
+                pumpkin_data::tag::RegistryKey::Fluid,
+                pumpkin_data::tag::RegistryKey::GameEvent,
+                pumpkin_data::tag::RegistryKey::Instrument,
+                pumpkin_data::tag::RegistryKey::Item,
+                pumpkin_data::tag::RegistryKey::PaintingVariant,
+                pumpkin_data::tag::RegistryKey::PointOfInterestType,
+                pumpkin_data::tag::RegistryKey::Potion,
+                pumpkin_data::tag::RegistryKey::Timeline,
+                pumpkin_data::tag::RegistryKey::WorldgenBiome,
+            ];
+
+            let mut tags = Vec::new();
+            let version = client.version.load();
+            for key in all_keys {
+                if pumpkin_data::tag::get_registry_key_tags(version, key)
+                    .is_some_and(|map| !map.is_empty())
+                {
+                    tags.push(key);
+                }
+            }
+            client
+                .send_packet_now(&pumpkin_protocol::java::client::play::CUpdateTagsPlay::new(
+                    &tags,
+                ))
+                .await;
+        }
+
         let (position, yaw, pitch) = if player.has_played_before.load(Ordering::Relaxed) {
             let position = player.position();
             let yaw = player.get_entity().yaw.load(); //info.spawn_angle;
@@ -2993,9 +3048,13 @@ impl World {
                 return;
             }
         }
-        client.send_packet_now(&CChunkBatchStart).await;
+        if client.version.load() >= JavaMinecraftVersion::V_1_20_2 {
+            client.send_packet_now(&CChunkBatchStart).await;
+        }
         client.send_packet_now(&CChunkData(&chunk)).await;
-        client.send_packet_now(&CChunkBatchEnd::new(1u16)).await;
+        if client.version.load() >= JavaMinecraftVersion::V_1_20_2 {
+            client.send_packet_now(&CChunkBatchEnd::new(1u16)).await;
+        }
 
         let velocity = player.living_entity.entity.velocity.load();
 
@@ -3219,22 +3278,6 @@ impl World {
             &bedrock_add_player,
         );
 
-        let held_item = player.inventory().held_item().await;
-
-        let be_mob_equipment = pumpkin_protocol::bedrock::client::CMobEquipment::new(
-            entity_id as u64,
-            NetworkItemStackDescriptor::from(&held_item),
-            0,
-            0,
-            0,
-        );
-
-        self.broadcast_packet_except_editioned_sync(
-            &[player.gameprofile.id],
-            &CSetEquipment::new(entity_id.into(), vec![]),
-            &be_mob_equipment,
-        );
-
         // Broadcast metadata to Java players so they can correctly interact with the new player
         let skin_parts = player.config.load().skin_parts;
 
@@ -3376,7 +3419,7 @@ impl World {
                 )
                 .await;
 
-            {
+            if client.version.load() >= CURRENT_MC_VERSION {
                 let config = existing_player.config.load();
                 let mut buf = Vec::new();
                 {
@@ -3402,7 +3445,7 @@ impl World {
                         buf.into(),
                     ))
                     .await;
-            };
+            }
 
             {
                 let held_item = existing_player.inventory.held_item().await;
@@ -3955,11 +3998,15 @@ impl World {
                 .level
                 .get_or_fetch_chunk(center_chunk, std::clone::Clone::clone)
                 .await;
-            java_client.send_packet_now(&CChunkBatchStart).await;
+            if java_client.version.load() >= JavaMinecraftVersion::V_1_20_2 {
+                java_client.send_packet_now(&CChunkBatchStart).await;
+            }
             java_client.send_packet_now(&CChunkData(&chunk)).await;
-            java_client
-                .send_packet_now(&CChunkBatchEnd::new(1u16))
-                .await;
+            if java_client.version.load() >= JavaMinecraftVersion::V_1_20_2 {
+                java_client
+                    .send_packet_now(&CChunkBatchEnd::new(1u16))
+                    .await;
+            }
         }
 
         // Send teleport packet after at least the center chunk was delivered
@@ -4762,9 +4809,24 @@ impl World {
         let old_block = Block::from_state_id(replaced_block_state_id);
         let new_block = Block::from_state_id(block_state_id);
 
+        self.villager_poi
+            .lock()
+            .await
+            .update_block(*position, new_block);
+
         let block_moved = flags.contains(BlockFlags::MOVED);
 
         let is_new_block = old_block != new_block;
+
+        if is_new_block {
+            let mut poi = self.portal_poi.lock().await;
+            if villager_poi::profession_for_block(old_block).is_some() {
+                poi.remove(position);
+            }
+            if let Some(poi_type) = villager_poi::poi_type_for_block(new_block) {
+                poi.add_with_free_tickets(*position, poi_type, 1);
+            }
+        }
 
         // WorldChunk.java line 305-314
         if is_new_block
@@ -5977,7 +6039,11 @@ impl World {
         Self::broadcast_java_grouped(packet, recipients_by_version);
     }
 
-    fn broadcast_to_chunk_bedrock<P: BClientPacket>(&self, chunk_pos: Vector2<i32>, packet: &P) {
+    pub fn broadcast_to_chunk_bedrock<P: BClientPacket>(
+        &self,
+        chunk_pos: Vector2<i32>,
+        packet: &P,
+    ) {
         let players = self.players.load();
         for player in players.iter().filter(|player| {
             let center = player.get_entity().chunk_pos.load();

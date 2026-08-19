@@ -1,4 +1,5 @@
 use pumpkin_data::item::Item;
+use pumpkin_data::particle::Particle;
 use pumpkin_data::potion::Effect;
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_data::tracked_data;
@@ -57,7 +58,8 @@ use pumpkin_protocol::java::client::play::{
 };
 use pumpkin_protocol::{
     codec::item_stack_seralizer::ItemStackSerializer,
-    java::client::play::{CDamageEvent, CSetEquipment, Metadata},
+    java::client::play::{CDamageEvent, CSetEquipment, Metadata, MetadataSerializer},
+    ser::{NetworkWriteExt, WritingError},
 };
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::text::TextComponent;
@@ -118,6 +120,36 @@ pub struct LivingEntity {
 
     /// The attributes of the entity
     pub attributes: RwLock<HashMap<u8, AttributeInstance>>,
+}
+
+struct EffectParticle {
+    particle_id: VarInt,
+    color: i32,
+}
+
+struct EffectParticles(Vec<EffectParticle>);
+
+impl MetadataSerializer for EffectParticles {
+    fn write_metadata(&self, writer: &mut impl std::io::Write) -> Result<(), WritingError> {
+        let count = i32::try_from(self.0.len())
+            .map_err(|_| WritingError::Message("Too many effect particles".into()))?;
+        writer.write_var_int(&VarInt(count))?;
+        for particle in &self.0 {
+            writer.write_var_int(&particle.particle_id)?;
+            writer.write_i32(particle.color)?;
+        }
+        Ok(())
+    }
+}
+
+impl EffectParticle {
+    const fn from_effect(effect: &Effect) -> Self {
+        Self {
+            particle_id: VarInt(Particle::EntityEffect as i32),
+            color: (((if effect.ambient { 38 } else { 255 }) as u32) << 24
+                | effect.effect_type.color as u32) as i32,
+        }
+    }
 }
 
 impl LivingEntity {
@@ -690,6 +722,41 @@ impl LivingEntity {
             .world
             .load()
             .broadcast_to_chunk_editioned_sync(chunk_pos, &je_packet, &be_packet);
+        self.sync_effect_particles().await;
+    }
+
+    async fn sync_effect_particles(&self) {
+        let effects = self.active_effects.lock().await;
+        let has_effects = !effects.is_empty();
+        let particles = EffectParticles(
+            effects
+                .values()
+                .filter(|effect| effect.show_particles)
+                .map(EffectParticle::from_effect)
+                .collect(),
+        );
+        let ambient = effects
+            .values()
+            .filter(|effect| effect.show_particles)
+            .all(|effect| effect.ambient);
+        drop(effects);
+
+        self.entity.send_meta_data(
+            &[Metadata::new(
+                tracked_data::living_entity::EFFECT_PARTICLES,
+                particles,
+            )],
+            None,
+        );
+        if has_effects {
+            self.entity.send_meta_data(
+                &[Metadata::new(
+                    tracked_data::living_entity::EFFECT_AMBIENCE_ID,
+                    ambient,
+                )],
+                None,
+            );
+        }
     }
 
     pub async fn remove_effect(&self, effect_type: &'static StatusEffect) -> bool {
@@ -757,6 +824,10 @@ impl LivingEntity {
         // If glowing effect removed, disable glowing
         if effect_type == &StatusEffect::GLOWING {
             self.entity.set_glowing(false).await;
+        }
+
+        if succeeded {
+            self.sync_effect_particles().await;
         }
 
         succeeded
@@ -2823,6 +2894,11 @@ impl EntityBase for LivingEntity {
                             .hunger_manager
                             .eat(player, food.nutrition as u8, food.saturation)
                             .await;
+                        self.entity.world.load().play_bedrock_level_sound(
+                            "burp",
+                            &self.entity.pos.load(),
+                            -1,
+                        );
                     }
 
                     self.apply_consumable_effects(item).await;
@@ -3222,5 +3298,32 @@ mod tests {
             LivingEntity::hurt_sound_for_entity(&EntityType::CREEPER),
             Sound::EntityGenericHurt
         );
+    }
+
+    #[test]
+    fn regeneration_particle_metadata_uses_vanilla_argb_color() {
+        let effect = Effect {
+            effect_type: &StatusEffect::REGENERATION,
+            duration: 200,
+            amplifier: 0,
+            ambient: false,
+            show_particles: true,
+            show_icon: true,
+            blend: false,
+        };
+        let metadata = Metadata::new(
+            tracked_data::living_entity::EFFECT_PARTICLES,
+            EffectParticles(vec![EffectParticle::from_effect(&effect)]),
+        );
+        let mut bytes = Vec::new();
+
+        metadata
+            .write(
+                &mut bytes,
+                &pumpkin_util::version::JavaMinecraftVersion::V_26_2,
+            )
+            .unwrap();
+
+        assert_eq!(bytes, [10, 17, 1, 28, 0xff, 0xcd, 0x5c, 0xab]);
     }
 }
