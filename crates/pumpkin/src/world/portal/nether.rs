@@ -8,7 +8,6 @@ use pumpkin_data::{
 use pumpkin_util::math::{boundingbox::EntityDimensions, position::BlockPos, vector3::Vector3};
 use pumpkin_world::{chunk::ChunkHeightmapType, world::BlockFlags};
 use std::sync::Arc;
-use tracing::error;
 
 use crate::world::World;
 
