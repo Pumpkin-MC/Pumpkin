@@ -95,6 +95,7 @@ pub static RESULT_DEFERRER: LazyLock<Arc<ResultDeferrer>> =
 ///
 /// Internally, this dispatcher stores a [`Tree`]. Refer to its documentation
 /// for more information about nodes.
+#[derive(Clone)]
 pub struct CommandDispatcher {
     pub tree: Tree,
     pub consumer: Arc<dyn ResultConsumer>,

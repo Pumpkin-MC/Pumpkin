@@ -1349,7 +1349,7 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         let player = player_from_resource(self, &player)?;
         let server = self.server.as_ref().expect("server not available");
         let level = from_wit_permission_level(level);
-        let command_dispatcher = server.command_dispatcher.read().await;
+        let command_dispatcher = server.command_dispatcher.load();
         player
             .set_permission_lvl(server, level, &command_dispatcher)
             .await;
@@ -1365,11 +1365,9 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         let player = player_from_resource(self, &player)?;
         let server = self.server.as_ref().expect("server not available");
 
-        let mut perm_manager = server.permission_manager.write().await;
-        let attachment = perm_manager.get_attachment(player.gameprofile.id);
-        drop(perm_manager);
-
-        attachment.write().await.set_permission(&node, value);
+        server
+            .permission_manager
+            .set_permission(player.gameprofile.id, node, value);
 
         Ok(())
     }
@@ -1382,11 +1380,9 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         let player = player_from_resource(self, &player)?;
         let server = self.server.as_ref().expect("server not available");
 
-        let mut perm_manager = server.permission_manager.write().await;
-        let attachment = perm_manager.get_attachment(player.gameprofile.id);
-        drop(perm_manager);
-
-        attachment.write().await.unset_permission(&node);
+        server
+            .permission_manager
+            .unset_permission(&player.gameprofile.id, &node);
 
         Ok(())
     }
@@ -1399,11 +1395,9 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         let player = player_from_resource(self, &player)?;
         let server = self.server.as_ref().expect("server not available");
 
-        let mut perm_manager = server.permission_manager.write().await;
-        let attachment = perm_manager.get_attachment(player.gameprofile.id);
-        drop(perm_manager);
-
-        Ok(attachment.read().await.has_permission_set(&node))
+        Ok(server
+            .permission_manager
+            .has_permission_set(&player.gameprofile.id, &node))
     }
 
     async fn has_permission(

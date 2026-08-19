@@ -3595,6 +3595,7 @@ dependencies = [
  "colored",
  "criterion",
  "crypto-bigint 0.7.5",
+ "dashmap",
  "ecdsa 0.17.0",
  "md5",
  "num-derive",
@@ -3610,7 +3611,6 @@ dependencies = [
  "sha2 0.11.0",
  "syn 3.0.3",
  "thiserror 2.0.20",
- "tokio",
  "ureq",
  "uuid",
 ]
