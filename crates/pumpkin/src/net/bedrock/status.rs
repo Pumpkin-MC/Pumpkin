@@ -20,7 +20,7 @@ use tokio::{
     net::UdpSocket,
     sync::{Mutex, mpsc},
 };
-use tracing::trace;
+use tracing::{debug, trace};
 
 pub struct StatusResponder {
     ipv4: Arc<UdpSocket>,
@@ -76,10 +76,20 @@ impl StatusResponder {
                     trace!(%client, length, "Received Bedrock server-list status ping");
                     self.respond(server, &self.ipv4, packet, client).await
                 } else {
+                    let kind = udp_packet_kind(packet);
+                    if raknet_connection_packet_kind(packet).is_some() {
+                        debug!(
+                            %client,
+                            length,
+                            kind,
+                            "Bedrock client selected the unsupported RakNet game transport"
+                        );
+                        return Ok(());
+                    }
                     trace!(
                         %client,
                         length,
-                        kind = ice_packet_kind(packet),
+                        kind,
                         "Received Bedrock ICE datagram"
                     );
                     if self.ice_packets.try_send((Bytes::copy_from_slice(packet), client)).is_err() {
@@ -125,13 +135,27 @@ fn is_status_packet(packet: &[u8]) -> bool {
         && packet.get(9..25) == Some(OFFLINE_MESSAGE_MAGIC.as_slice())
 }
 
-fn ice_packet_kind(packet: &[u8]) -> &'static str {
+fn udp_packet_kind(packet: &[u8]) -> &'static str {
+    if let Some(kind) = raknet_connection_packet_kind(packet) {
+        return kind;
+    }
     if packet.len() >= 20 && packet.get(4..8) == Some(&[0x21, 0x12, 0xa4, 0x42]) {
         "STUN"
     } else if matches!(packet.first(), Some(20..=63)) {
         "DTLS"
     } else {
         "unknown"
+    }
+}
+
+fn raknet_connection_packet_kind(packet: &[u8]) -> Option<&'static str> {
+    if packet.get(1..17) != Some(OFFLINE_MESSAGE_MAGIC.as_slice()) {
+        return None;
+    }
+    match packet.first() {
+        Some(0x05) => Some("RakNet OpenConnectionRequest1"),
+        Some(0x07) => Some("RakNet OpenConnectionRequest2"),
+        _ => None,
     }
 }
 
@@ -242,7 +266,12 @@ mod tests {
         stun_success[..2].copy_from_slice(&[0x01, 0x01]);
         stun_success[4..8].copy_from_slice(&[0x21, 0x12, 0xa4, 0x42]);
         assert!(!is_status_packet(&stun_success));
-        assert_eq!(ice_packet_kind(&stun_success), "STUN");
+        assert_eq!(udp_packet_kind(&stun_success), "STUN");
+
+        let mut request = [0; 18];
+        request[0] = 0x05;
+        request[1..17].copy_from_slice(&OFFLINE_MESSAGE_MAGIC);
+        assert_eq!(udp_packet_kind(&request), "RakNet OpenConnectionRequest1");
     }
 
     #[tokio::test]
