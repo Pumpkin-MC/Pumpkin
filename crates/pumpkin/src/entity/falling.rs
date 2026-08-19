@@ -69,16 +69,17 @@ impl EntityBase for FallingEntity {
             entity.tick_block_collisions(caller, server).await;
             if entity.on_ground.load(Ordering::Relaxed) {
                 entity.velocity.store(velo.multiply(0.7, -0.5, 0.7));
-                entity
-                    .world
-                    .load()
-                    .set_block_state(
-                        &self.entity.block_pos.load(),
-                        self.block_state_id,
-                        BlockFlags::NOTIFY_ALL,
-                    )
-                    .await;
-                entity.remove().await;
+                let landing_pos = self.entity.block_pos.load();
+                let world = entity.world.load();
+                // A piston is animating through this position. Vanilla leaves the
+                // entity alone until the animation is over instead of overwriting
+                // the `moving_piston` block, which would destroy the piston.
+                if world.get_block(&landing_pos) != &Block::MOVING_PISTON {
+                    world
+                        .set_block_state(&landing_pos, self.block_state_id, BlockFlags::NOTIFY_ALL)
+                        .await;
+                    entity.remove().await;
+                }
             }
 
             entity.velocity.store(velo.multiply(0.98, 0.98, 0.98));
