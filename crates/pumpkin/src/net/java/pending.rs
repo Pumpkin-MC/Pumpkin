@@ -1,4 +1,4 @@
-use std::{net::SocketAddr, num::NonZeroU8, sync::Arc};
+use std::{net::SocketAddr, num::NonZero, sync::Arc};
 
 use bytes::Bytes;
 use crossbeam::atomic::AtomicCell;
@@ -13,8 +13,8 @@ use pumpkin_protocol::{
         packet_decoder::TCPNetworkDecoder,
         packet_encoder::TCPNetworkEncoder,
         server::config::{
-            SAcknowledgeFinishConfig, SClientInformationConfig, SConfigCookieResponse,
-            SConfigResourcePack, SKnownPacks, SPluginMessage,
+            SAcceptCodeOfConduct, SAcknowledgeFinishConfig, SClientInformationConfig,
+            SConfigCookieResponse, SConfigPong, SConfigResourcePack, SKnownPacks, SPluginMessage,
         },
     },
     packet::MultiVersionJavaPacket,
@@ -33,13 +33,26 @@ use tracing::{debug, error, warn};
 
 use crate::{
     entity::player::ChatMode,
-    net::{EncryptionError, GameProfile, PacketHandlerResult, PlayerConfig, can_not_join},
+    net::{
+        EncryptionError, GameProfile, PacketHandlerResult, PacketRateLimiter, PlayerConfig,
+        can_not_join,
+    },
     server::Server,
 };
 
 use super::JavaClient;
 
 const BRAND_CHANNEL_PREFIX: &str = "minecraft:brand";
+
+/// How long a connection may stay silent before login finishes.
+///
+/// Once a player is in game, [`JavaClient::progress_player_packets`] keeps the
+/// connection honest with keep-alives. Nothing plays that role beforehand, and
+/// accepted sockets have no TCP keep-alive either, so a peer that stops talking
+/// without closing would otherwise hold its descriptor for the lifetime of the
+/// server. The timer covers silence rather than the whole handshake: it is reset
+/// on every packet, so a slow but progressing login is never cut off.
+const HANDSHAKE_IDLE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
 
 pub struct PendingConnection {
     pub id: u64,
@@ -53,11 +66,17 @@ pub struct PendingConnection {
     pub gameprofile: Option<GameProfile>,
     pub config: Option<PlayerConfig>,
     pub brand: Option<String>,
+    pub packet_limiter: PacketRateLimiter,
 }
 
 impl PendingConnection {
     #[must_use]
-    pub fn new(tcp_stream: TcpStream, address: SocketAddr, id: u64) -> Self {
+    pub fn new(
+        tcp_stream: TcpStream,
+        address: SocketAddr,
+        id: u64,
+        packet_limiter: PacketRateLimiter,
+    ) -> Self {
         let (read, write) = tcp_stream.into_split();
         Self {
             id,
@@ -71,6 +90,7 @@ impl PendingConnection {
             gameprofile: None,
             config: None,
             brand: None,
+            packet_limiter,
         }
     }
 
@@ -116,6 +136,14 @@ impl PendingConnection {
         let packet_result = tokio::select! {
             () = close_token.cancelled() => {
                 debug!("Canceling pending connection packet processing");
+                return None;
+            },
+            () = tokio::time::sleep(HANDSHAKE_IDLE_TIMEOUT) => {
+                debug!(
+                    "Client {} sent nothing for {}s before finishing login, dropping it",
+                    self.id,
+                    HANDSHAKE_IDLE_TIMEOUT.as_secs()
+                );
                 return None;
             },
             res = self.network_reader.get_raw_packet() => res,
@@ -172,6 +200,25 @@ impl PendingConnection {
 
     pub async fn handle_login_sequence(&mut self, server: &Arc<Server>) -> PacketHandlerResult {
         while let Some(packet) = self.get_packet().await {
+            if !self.packet_limiter.check_packet() {
+                warn!(
+                    "Pending client {} exceeded packet rate limit (rate: {}/s)",
+                    self.id,
+                    self.packet_limiter.max_rate()
+                );
+                self.kick(TextComponent::text(
+                    server
+                        .advanced_config
+                        .networking
+                        .java
+                        .packet_limiter
+                        .kick_message
+                        .clone(),
+                ))
+                .await;
+                return PacketHandlerResult::Stop;
+            }
+
             match self.handle_packet(server, &packet).await {
                 Ok(result) => {
                     if let Some(result) = result {
@@ -281,7 +328,7 @@ impl PendingConnection {
                     )?,
                 )
                 .await;
-                Ok(None)
+                Ok(())
             }
             id if id
                 == pumpkin_protocol::java::server::login::SEncryptionResponse::to_id(version) =>
@@ -294,7 +341,7 @@ impl PendingConnection {
                     )?,
                 )
                 .await;
-                Ok(None)
+                Ok(())
             }
             id if id
                 == pumpkin_protocol::java::server::login::SLoginPluginResponse::to_id(version) =>
@@ -307,7 +354,7 @@ impl PendingConnection {
                     )?,
                 )
                 .await;
-                Ok(None)
+                Ok(())
             }
             id if id
                 == pumpkin_protocol::java::server::login::SLoginCookieResponse::to_id(version) =>
@@ -318,19 +365,33 @@ impl PendingConnection {
                         &version,
                     )?,
                 );
-                Ok(None)
+                Ok(())
             }
             id if id
                 == pumpkin_protocol::java::server::login::SLoginAcknowledged::to_id(version) =>
             {
                 self.handle_login_acknowledged(server).await;
-                Ok(None)
+                Ok(())
             }
             _ => Err(ReadingError::Message(format!(
                 "Failed to handle packet id {} in Login State",
                 packet.id
             ))),
+        }?;
+
+        if self.version.load() < JavaMinecraftVersion::V_1_20_2
+            && self.connection_state.load() == ConnectionState::Play
+            && let Some(profile) = self.gameprofile.clone()
+        {
+            let config = self.config.clone().unwrap_or_default();
+            if let Some(reason) = can_not_join(&profile, &self.address, server).await {
+                self.kick(reason).await;
+                return Ok(Some(PacketHandlerResult::Stop));
+            }
+            return Ok(Some(PacketHandlerResult::ReadyToPlay(profile, config)));
         }
+
+        Ok(None)
     }
 
     async fn handle_config_packet(
@@ -389,6 +450,14 @@ impl PendingConnection {
                 )?);
                 Ok(None)
             }
+            id if id == SConfigPong::to_id(version) => {
+                let _pong = SConfigPong::read(&mut payload, &version)?;
+                Ok(None)
+            }
+            id if id == SAcceptCodeOfConduct::to_id(version) => {
+                let _accept = SAcceptCodeOfConduct::read(&mut payload, &version)?;
+                Ok(None)
+            }
             _ => Err(ReadingError::Message(format!(
                 "Failed to handle packet id {} in Config State",
                 packet.id
@@ -415,8 +484,8 @@ impl PendingConnection {
         ) {
             self.config = Some(PlayerConfig {
                 locale: client_information.locale.to_string(),
-                view_distance: NonZeroU8::new(client_information.view_distance as u8)
-                    .unwrap_or(NonZeroU8::MIN),
+                view_distance: NonZero::new(client_information.view_distance as u8)
+                    .unwrap_or(NonZero::<u8>::MIN),
                 chat_mode,
                 chat_colors: client_information.chat_colors,
                 skin_parts: client_information.skin_parts,

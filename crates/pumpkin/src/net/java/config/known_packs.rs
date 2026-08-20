@@ -11,7 +11,7 @@ impl JavaClient {
         // let mut tags_to_send = Vec::new();
         let version = self.version.load();
         if version >= JavaMinecraftVersion::V_1_20_2 {
-            self.send_packet_now(&CFeatureFlags::new(&["minecraft:vanilla".to_string()]))
+            self.send_packet(&CFeatureFlags::new(&["minecraft:vanilla".to_string()]))
                 .await;
             let registry = Registry::get_synced(version);
             let mut sent_dimension_type = false;
@@ -19,7 +19,7 @@ impl JavaClient {
                 if reg.registry_id == "minecraft:dimension_type" {
                     sent_dimension_type = true;
                 }
-                self.send_packet_now(&CRegistryData::new(&reg.registry_id, &reg.registry_entries))
+                self.send_packet(&CRegistryData::new(&reg.registry_id, &reg.registry_entries))
                     .await;
             }
             if !sent_dimension_type {
@@ -36,7 +36,7 @@ impl JavaClient {
                         data: Some(build_dimension_nbt(dim).into_boxed_slice()),
                     })
                     .collect();
-                self.send_packet_now(&CRegistryData::new(
+                self.send_packet(&CRegistryData::new(
                     &"minecraft:dimension_type".to_string(),
                     &dim_entries,
                 ))
@@ -71,10 +71,10 @@ impl JavaClient {
                 tags.push(key);
             }
         }
-        self.send_packet_now(&CUpdateTags::new(&tags)).await;
+        self.send_packet(&CUpdateTags::new(&tags)).await;
 
         // We are done with configuring
-        self.send_packet_now(&CFinishConfig).await;
+        self.send_packet(&CFinishConfig).await;
 
         if version < JavaMinecraftVersion::V_1_20_2 {
             return Some(self.handle_config_acknowledged(server).await);

@@ -119,7 +119,7 @@ impl BedrockClient {
         }
 
         if inventory_updated {
-            self.enqueue_packet(&CInventoryContent {
+            self.enqueue_client_packet(&CInventoryContent {
                 container_id: VarUInt(0),
                 slots: player
                     .inventory()
@@ -235,7 +235,7 @@ impl BedrockClient {
                                 pumpkin_protocol::java::server::play::SUseItemOn {
                                     hand: VarInt(0),
                                     position: data.block_position,
-                                    face: VarInt(data.block_face),
+                                    face: VarInt(i32::from(data.block_face)),
                                     cursor_pos: data.click_position,
                                     inside_block: false,
                                     is_against_world_border: false,
@@ -444,7 +444,7 @@ impl BedrockClient {
                 }
             }
 
-            self.enqueue_packet(&CItemStackResponse {
+            self.enqueue_client_packet(&CItemStackResponse {
                 responses: vec![ItemStackResponse {
                     result,
                     request_id: packet.legacy_request_id,

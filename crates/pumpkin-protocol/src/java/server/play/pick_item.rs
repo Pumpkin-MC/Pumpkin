@@ -24,6 +24,19 @@ impl<'a> ServerPacket<'a> for SPickItemFromBlock {
     }
 }
 
+impl crate::ClientPacket for SPickItemFromBlock {
+    fn write_packet_data(
+        &self,
+        mut write: impl std::io::Write,
+        _version: &JavaMinecraftVersion,
+    ) -> Result<(), crate::ser::WritingError> {
+        use crate::ser::NetworkWriteExt;
+        write.write_block_pos(&self.pos)?;
+        write.write_bool(self.include_data)?;
+        Ok(())
+    }
+}
+
 #[java_packet(PLAY_PICK_ITEM_FROM_ENTITY)]
 pub struct SPickItemFromEntity {
     pub id: VarInt,
@@ -36,5 +49,18 @@ impl<'a> ServerPacket<'a> for SPickItemFromEntity {
             id: bytebuf.get_var_int()?,
             include_data: bytebuf.get_bool()?,
         })
+    }
+}
+
+impl crate::ClientPacket for SPickItemFromEntity {
+    fn write_packet_data(
+        &self,
+        mut write: impl std::io::Write,
+        _version: &JavaMinecraftVersion,
+    ) -> Result<(), crate::ser::WritingError> {
+        use crate::ser::NetworkWriteExt;
+        write.write_var_int(&self.id)?;
+        write.write_bool(self.include_data)?;
+        Ok(())
     }
 }

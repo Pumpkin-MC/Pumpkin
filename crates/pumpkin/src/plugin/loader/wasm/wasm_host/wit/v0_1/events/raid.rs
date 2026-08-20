@@ -2,7 +2,9 @@ use crate::plugin::{
     loader::wasm::wasm_host::{
         state::PluginHostState,
         wit::v0_1::{
-            events::{ToFromWasmEvent, from_wasm_block_position, to_wasm_block_position},
+            events::{
+                ToFromWasmEvent, cleanup_event, from_wasm_block_position, to_wasm_block_position,
+            },
             pumpkin::plugin::event::{
                 Event, RaidFinishEventData, RaidSpawnWaveEventData, RaidStopEventData,
                 RaidTriggerEventData,
@@ -23,7 +25,8 @@ impl ToFromWasmEvent for RaidFinishEvent {
         })
     }
 
-    fn apply_wasm_event(&mut self, event: Event, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
+        cleanup_event(&event, state);
         if let Event::RaidFinishEvent(data) = event {
             self.cancelled = data.cancelled;
         }
@@ -49,7 +52,8 @@ impl ToFromWasmEvent for RaidSpawnWaveEvent {
         })
     }
 
-    fn apply_wasm_event(&mut self, event: Event, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
+        cleanup_event(&event, state);
         if let Event::RaidSpawnWaveEvent(data) = event {
             self.cancelled = data.cancelled;
         }
@@ -75,7 +79,8 @@ impl ToFromWasmEvent for RaidStopEvent {
         })
     }
 
-    fn apply_wasm_event(&mut self, event: Event, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
+        cleanup_event(&event, state);
         if let Event::RaidStopEvent(data) = event {
             self.cancelled = data.cancelled;
             self.reason = data.reason;
@@ -101,7 +106,8 @@ impl ToFromWasmEvent for RaidTriggerEvent {
         })
     }
 
-    fn apply_wasm_event(&mut self, event: Event, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
+        cleanup_event(&event, state);
         if let Event::RaidTriggerEvent(data) = event {
             self.cancelled = data.cancelled;
         }

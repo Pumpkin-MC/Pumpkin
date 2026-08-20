@@ -11,9 +11,8 @@ use crossbeam::atomic::AtomicCell;
 use pumpkin_data::attributes::Attributes;
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::item_stack::ItemStack;
-use pumpkin_data::meta_data_type::MetaDataType;
 use pumpkin_data::tag::{self, Taggable};
-use pumpkin_data::tracked_data::TrackedData;
+use pumpkin_data::tracked_data;
 use pumpkin_protocol::java::client::play::{CHeadRot, CUpdateEntityRot, Metadata};
 use pumpkin_util::Difficulty;
 use pumpkin_util::math::boundingbox::BoundingBox;
@@ -22,6 +21,7 @@ use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::random::xoroshiro128::Xoroshiro;
 use pumpkin_util::random::{RandomGenerator, get_seed};
+use pumpkin_util::version::JavaMinecraftVersion;
 use rand::RngExt;
 use std::pin::Pin;
 use std::sync::Arc;
@@ -223,11 +223,7 @@ impl MobEntity {
             self.mob_flags.store(new_b, Ordering::Relaxed);
 
             self.living_entity.entity.send_meta_data(
-                &[Metadata::new(
-                    TrackedData::MOB_FLAGS_ID,
-                    MetaDataType::BYTE,
-                    new_b,
-                )],
+                &[Metadata::new(tracked_data::mob::DATA_MOB_FLAGS_ID, new_b)],
                 None,
             );
         }
@@ -496,7 +492,41 @@ pub trait Mob: EntityBase + Send + Sync {
 
     fn get_mob_entity(&self) -> &MobEntity;
 
+    fn mob_bedrock_identifier(&self) -> Option<&'static str> {
+        None
+    }
+
+    /// Metadata which must accompany this mob whenever it is spawned for a Java client.
+    fn mob_java_spawn_metadata(
+        &self,
+        _version: JavaMinecraftVersion,
+    ) -> EntityBaseFuture<'_, Option<Box<[u8]>>> {
+        Box::pin(async { None })
+    }
+
+    /// Metadata which must accompany this mob whenever it is spawned for a Bedrock client.
+    fn mob_bedrock_spawn_metadata(
+        &self,
+    ) -> EntityBaseFuture<
+        '_,
+        Option<pumpkin_protocol::bedrock::client::set_actor_data::EntityMetadata>,
+    > {
+        Box::pin(async { None })
+    }
+
     fn get_job_site(&self) -> Option<BlockPos> {
+        None
+    }
+
+    fn is_job_site_pending(&self) -> EntityBaseFuture<'_, bool> {
+        Box::pin(async { false })
+    }
+
+    fn release_pending_job_site(&self, _position: BlockPos) -> EntityBaseFuture<'_, ()> {
+        Box::pin(async {})
+    }
+
+    fn get_trading_player(&self) -> Option<Arc<Player>> {
         None
     }
 
@@ -752,11 +782,7 @@ pub trait Mob: EntityBase + Send + Sync {
             let is_baby = entity.age.load(std::sync::atomic::Ordering::Relaxed) < 0;
             if is_baby {
                 entity.send_meta_data(
-                    &[Metadata::new(
-                        TrackedData::BABY_ID,
-                        MetaDataType::BOOLEAN,
-                        true,
-                    )],
+                    &[Metadata::new(tracked_data::ageable_mob::DATA_BABY_ID, true)],
                     None,
                 );
             }

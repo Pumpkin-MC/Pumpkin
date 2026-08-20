@@ -19,3 +19,21 @@ impl<'a> ServerPacket<'a> for SLoginPluginResponse {
         })
     }
 }
+
+impl crate::ClientPacket for SLoginPluginResponse {
+    fn write_packet_data(
+        &self,
+        mut write: impl std::io::Write,
+        _version: &JavaMinecraftVersion,
+    ) -> Result<(), crate::ser::WritingError> {
+        use crate::ser::NetworkWriteExt;
+        write.write_var_int(&self.message_id)?;
+        if let Some(data) = &self.data {
+            write.write_bool(true)?;
+            write.write_slice(data)?;
+        } else {
+            write.write_bool(false)?;
+        }
+        Ok(())
+    }
+}

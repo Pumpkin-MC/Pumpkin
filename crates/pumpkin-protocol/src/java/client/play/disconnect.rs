@@ -29,9 +29,14 @@ impl ClientPacket for CPlayDisconnect<'_> {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        _version: &JavaMinecraftVersion,
+        version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
-        write.write_slice(&self.reason.encode())?;
+        if version < &JavaMinecraftVersion::V_1_20_5 {
+            let json = serde_json::to_string(&self.reason.0).unwrap_or_default();
+            write.write_string(&json)?;
+        } else {
+            write.write_slice(&self.reason.encode())?;
+        }
         Ok(())
     }
 }

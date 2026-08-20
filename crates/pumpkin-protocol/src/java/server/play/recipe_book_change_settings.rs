@@ -24,3 +24,17 @@ impl<'a> ServerPacket<'a> for SRecipeBookChangeSettings {
         })
     }
 }
+
+impl crate::ClientPacket for SRecipeBookChangeSettings {
+    fn write_packet_data(
+        &self,
+        mut write: impl std::io::Write,
+        _version: &JavaMinecraftVersion,
+    ) -> Result<(), crate::ser::WritingError> {
+        use crate::ser::NetworkWriteExt;
+        write.write_var_int(&self.book_type)?;
+        write.write_bool(self.is_open)?;
+        write.write_bool(self.is_filtering)?;
+        Ok(())
+    }
+}

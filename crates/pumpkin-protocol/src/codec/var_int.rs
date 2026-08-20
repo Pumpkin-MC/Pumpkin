@@ -1,6 +1,6 @@
 use std::{
     io::{Error, ErrorKind, Read, Write},
-    num::NonZeroUsize,
+    num::NonZero,
     ops::Deref,
 };
 
@@ -20,9 +20,7 @@ pub type VarIntType = i32;
 pub struct VarInt(pub VarIntType);
 
 impl VarInt {
-    /// The maximum number of bytes a `VarInt` can occupy.
-    #[allow(clippy::unwrap_used)]
-    pub const MAX_SIZE: NonZeroUsize = NonZeroUsize::new(5).unwrap();
+    pub const MAX_SIZE: NonZero<usize> = NonZero::new(5).expect("5 is non-zero");
 
     #[must_use]
     #[inline]

@@ -40,8 +40,7 @@ impl JavaClient {
         }
 
         player
-            .client
-            .enqueue_packet(&CSetSelectedSlot::new(
+            .send_client_packet(&CSetSelectedSlot::new(
                 player.inventory.get_selected_slot() as i8
             ))
             .await;
@@ -104,8 +103,7 @@ impl JavaClient {
             }
 
             player
-                .client
-                .enqueue_packet(&CSetSelectedSlot::new(
+                .send_client_packet(&CSetSelectedSlot::new(
                     player.inventory.get_selected_slot() as i8
                 ))
                 .await;

@@ -20,3 +20,15 @@ impl<'a> ServerPacket<'a> for SChangeGameMode {
         })
     }
 }
+
+impl crate::ClientPacket for SChangeGameMode {
+    fn write_packet_data(
+        &self,
+        mut write: impl std::io::Write,
+        _version: &JavaMinecraftVersion,
+    ) -> Result<(), crate::ser::WritingError> {
+        use crate::ser::NetworkWriteExt;
+        write.write_u8(self.game_mode as u8)?;
+        Ok(())
+    }
+}

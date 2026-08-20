@@ -116,7 +116,7 @@ impl HelpCommandExecutor {
         Box::pin(async move {
             let server = context.server();
 
-            let dispatcher = server.command_dispatcher.read().await;
+            let dispatcher = server.command_dispatcher.load();
             let commands = dispatcher
                 .get_all_permitted_commands_usage(&context.source)
                 .await;
@@ -206,7 +206,7 @@ impl HelpCommandExecutor {
 
     fn command<'a>(context: &'a CommandContext, command: &'a str) -> CommandExecutorResult<'a> {
         Box::pin(async move {
-            let dispatcher = context.server().command_dispatcher.read().await;
+            let dispatcher = context.server().command_dispatcher.load();
 
             let Some((description, usage)) = dispatcher
                 .get_permitted_command_usage(&context.source, command)
@@ -274,7 +274,7 @@ impl HelpCommandExecutor {
     fn plugin<'a>(context: &'a CommandContext, plugin_name: &'a str) -> CommandExecutorResult<'a> {
         Box::pin(async move {
             let server = context.server();
-            let dispatcher = server.command_dispatcher.read().await;
+            let dispatcher = server.command_dispatcher.load();
             let commands = dispatcher
                 .get_all_permitted_commands_usage_by_plugin(&context.source, plugin_name)
                 .await;
@@ -335,7 +335,7 @@ impl HelpCommandExecutor {
         Box::pin(async move {
             // Prioritize commands ig
             {
-                let dispatcher = context.server().command_dispatcher.read().await;
+                let dispatcher = context.server().command_dispatcher.load();
                 if dispatcher
                     .get_permitted_command_usage(&context.source, input)
                     .await
@@ -346,7 +346,7 @@ impl HelpCommandExecutor {
             }
 
             {
-                let dispatcher = context.server().command_dispatcher.read().await;
+                let dispatcher = context.server().command_dispatcher.load();
                 let plugin_commands = dispatcher
                     .get_all_permitted_commands_usage_by_plugin(&context.source, input)
                     .await;
@@ -373,7 +373,7 @@ impl CommandExecutor for HelpCommandExecutor {
     }
 }
 
-pub fn register(dispatcher: &mut CommandDispatcher, registry: &mut PermissionRegistry) {
+pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistry) {
     registry.register_permission_or_panic(Permission::new(
         PERMISSION,
         DESCRIPTION,

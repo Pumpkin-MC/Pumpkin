@@ -3,12 +3,12 @@ use crate::entity::living::LivingEntity;
 use crate::entity::player::Player;
 use crate::{entity::EntityBaseFuture, server::Server};
 use core::f64;
+use pumpkin_data::damage::DamageType;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::Sound;
 use pumpkin_data::world::WorldEvent;
-use pumpkin_data::{damage::DamageType, meta_data_type::MetaDataType, tracked_data::TrackedData};
 use pumpkin_protocol::{
     codec::item_stack_seralizer::ItemStackSerializer, java::client::play::Metadata,
 };
@@ -174,8 +174,7 @@ impl EntityBase for EyeOfEnder {
         Box::pin(async {
             self.entity.send_meta_data(
                 &[Metadata::new(
-                    TrackedData::ITEM,
-                    MetaDataType::ITEM_STACK,
+                    pumpkin_data::tracked_data::eye_of_ender::ITEM_STACK,
                     &ItemStackSerializer::from(self.item_stack.lock().await.clone()),
                 )],
                 None,

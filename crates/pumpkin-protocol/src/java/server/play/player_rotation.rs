@@ -22,3 +22,17 @@ impl<'a> ServerPacket<'a> for SPlayerRotation {
         })
     }
 }
+
+impl crate::ClientPacket for SPlayerRotation {
+    fn write_packet_data(
+        &self,
+        mut write: impl std::io::Write,
+        _version: &JavaMinecraftVersion,
+    ) -> Result<(), crate::ser::WritingError> {
+        use crate::ser::NetworkWriteExt;
+        write.write_f32_be(self.yaw)?;
+        write.write_f32_be(self.pitch)?;
+        write.write_bool(self.ground)?;
+        Ok(())
+    }
+}

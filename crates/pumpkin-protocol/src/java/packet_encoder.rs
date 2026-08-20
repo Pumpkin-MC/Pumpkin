@@ -1,12 +1,14 @@
 use aes::cipher::KeyIvInit;
 use bytes::Bytes;
 use flate2::{Compress, Compression, FlushCompress, Status};
+use pumpkin_util::version::JavaMinecraftVersion;
 use thiserror::Error;
 use tokio::io::{AsyncWrite, AsyncWriteExt};
 
 use crate::{
-    Aes128Cfb8Enc, CompressionLevel, CompressionThreshold, MAX_PACKET_DATA_SIZE, MAX_PACKET_SIZE,
-    PacketEncodeError, StreamEncryptor, VarInt,
+    Aes128Cfb8Enc, ClientPacket, CompressionLevel, CompressionThreshold, MAX_PACKET_DATA_SIZE,
+    MAX_PACKET_SIZE, PacketEncodeError, StreamEncryptor, VarInt, WritingError,
+    ser::NetworkWriteExt,
 };
 
 // raw -> compress -> encrypt
@@ -316,6 +318,28 @@ impl<W: AsyncWrite + Unpin> TCPNetworkEncoder<W> {
             .await
             .map_err(|err| PacketEncodeError::Message(err.to_string()))
     }
+}
+
+pub fn write_packet<P: ClientPacket + ?Sized>(
+    packet: &P,
+    version: &JavaMinecraftVersion,
+    mut write: impl std::io::Write,
+) -> Result<(), WritingError> {
+    let version_number = P::to_id(*version);
+    if version_number == -1 {
+        return Ok(());
+    }
+    write.write_var_int(&VarInt(version_number))?;
+    packet.write_packet_data(write, version)
+}
+
+pub fn serialize_packet<P: ClientPacket + ?Sized>(
+    packet: &P,
+    version: &JavaMinecraftVersion,
+) -> Result<Bytes, WritingError> {
+    let mut packet_buf = Vec::new();
+    write_packet(packet, version, &mut packet_buf)?;
+    Ok(packet_buf.into())
 }
 
 #[derive(Error, Debug)]

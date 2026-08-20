@@ -2,7 +2,7 @@
 use pumpkin_util::version::JavaMinecraftVersion;
 pub const CURRENT_MC_VERSION: JavaMinecraftVersion =
     pumpkin_util::version::JavaMinecraftVersion::V_26_2;
-pub const LOWEST_SUPPORTED_MC_VERSION: JavaMinecraftVersion = JavaMinecraftVersion::V_1_20_5;
+pub const LOWEST_SUPPORTED_MC_VERSION: JavaMinecraftVersion = JavaMinecraftVersion::V_1_7_2;
 #[derive(Clone, Copy, Debug)]
 pub struct PacketId {
     pub v1_20_5: i32,

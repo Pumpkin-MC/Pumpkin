@@ -12,12 +12,22 @@ pub struct SEncryptionResponse {
 }
 
 impl<'a> ServerPacket<'a> for SEncryptionResponse {
-    fn read(
-        mut read: &mut &'a [u8],
-        _version: &JavaMinecraftVersion,
-    ) -> Result<Self, ReadingError> {
+    fn read(mut read: &mut &'a [u8], version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
         let shared_secret = read_encryption_buffer(&mut read)?;
-        let verify_token = read_encryption_buffer(&mut read)?;
+        let verify_token = if version >= &JavaMinecraftVersion::V_1_19_3
+            && version < &JavaMinecraftVersion::V_1_20_2
+        {
+            let has_verify_token = read.get_bool()?;
+            if has_verify_token {
+                read_encryption_buffer(&mut read)?
+            } else {
+                let _salt = read.get_i64_be()?;
+                let _signature = read_encryption_buffer(&mut read)?;
+                Box::new([])
+            }
+        } else {
+            read_encryption_buffer(&mut read)?
+        };
         Ok(Self {
             shared_secret,
             verify_token,
@@ -29,11 +39,14 @@ impl crate::ClientPacket for SEncryptionResponse {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        _version: &JavaMinecraftVersion,
+        version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         use crate::ser::NetworkWriteExt;
         write.write_var_int(&crate::VarInt(self.shared_secret.len() as i32))?;
         write.write_all(&self.shared_secret)?;
+        if version >= &JavaMinecraftVersion::V_1_19_3 && version < &JavaMinecraftVersion::V_1_20_2 {
+            write.write_bool(true)?;
+        }
         write.write_var_int(&crate::VarInt(self.verify_token.len() as i32))?;
         write.write_all(&self.verify_token)?;
         Ok(())

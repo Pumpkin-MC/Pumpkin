@@ -181,7 +181,7 @@ impl SuggestionsBuilder {
     fn matches_substr(pattern: &str, input: &str) -> bool {
         let mut current_str = input;
         while !current_str.starts_with(pattern) {
-            match current_str.find(['.', '_', '/']) {
+            match current_str.find(['.', '_', '/', ':']) {
                 Some(pos) => current_str = &current_str[(pos + 1)..],
                 None => return false,
             }

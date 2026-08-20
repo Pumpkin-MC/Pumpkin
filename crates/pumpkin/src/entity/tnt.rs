@@ -1,7 +1,7 @@
 use super::{Entity, EntityBase, NBTStorage, living::LivingEntity};
 use crate::{entity::EntityBaseFuture, server::Server};
 use core::f32;
-use pumpkin_data::{Block, meta_data_type::MetaDataType, tracked_data::TrackedData};
+use pumpkin_data::Block;
 use pumpkin_protocol::{codec::var_int::VarInt, java::client::play::Metadata};
 use pumpkin_util::math::vector3::Vector3;
 use std::{
@@ -41,13 +41,17 @@ impl EntityBase for TNTEntity {
     ) -> EntityBaseFuture<'a, ()> {
         Box::pin(async move {
             let entity = &self.entity;
-            let original_velo = entity.velocity.load();
 
-            let mut velo = original_velo;
+            let mut velo = entity.velocity.load();
             velo.y -= self.get_gravity();
 
             entity.move_entity(caller, velo).await;
             entity.tick_block_collisions(caller, server).await;
+
+            // Read back what actually happened instead of reusing the pre-move
+            // value: `move_entity` clamps on collision, and an explosion may have
+            // pushed us while we were awaiting above
+            let velo = entity.velocity.load();
             if entity.on_ground.load(Ordering::Relaxed) {
                 entity.velocity.store(velo.multiply(0.7, -0.5, 0.7));
             } else {
@@ -88,13 +92,11 @@ impl EntityBase for TNTEntity {
             self.entity.send_meta_data(
                 &[
                     Metadata::new(
-                        TrackedData::FUSE_ID,
-                        MetaDataType::INTEGER,
+                        pumpkin_data::tracked_data::tnt::FUSE_ID,
                         VarInt(self.fuse.load(Relaxed) as i32),
                     ),
                     Metadata::new(
-                        TrackedData::BLOCK_STATE_ID,
-                        MetaDataType::BLOCK_STATE,
+                        pumpkin_data::tracked_data::tnt::BLOCK_STATE_ID,
                         VarInt(i32::from(Block::TNT.default_state.id.as_u16())),
                     ),
                 ],
@@ -121,9 +123,5 @@ impl EntityBase for TNTEntity {
 
     fn cast_any(&self) -> &dyn std::any::Any {
         self
-    }
-
-    fn is_immune_to_explosion(&self) -> bool {
-        true
     }
 }

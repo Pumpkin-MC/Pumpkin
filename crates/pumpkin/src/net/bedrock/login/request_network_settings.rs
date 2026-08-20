@@ -8,10 +8,10 @@ impl BedrockClient {
         server: &Server,
     ) {
         if packet.protocol_version < CURRENT_BEDROCK_MC_PROTOCOL as i32 {
-            self.send_game_packet(&CPlayStatus::OutdatedClient).await;
+            self.send_packet(&CPlayStatus::OutdatedClient).await;
             return;
         } else if packet.protocol_version > CURRENT_BEDROCK_MC_PROTOCOL as i32 {
-            self.send_game_packet(&CPlayStatus::OutdatedServer).await;
+            self.send_packet(&CPlayStatus::OutdatedServer).await;
             return;
         }
 
@@ -26,7 +26,7 @@ impl BedrockClient {
             .compression
             .info
             .clone();
-        self.send_game_packet(&CNetworkSettings::new(
+        self.send_packet(&CNetworkSettings::new(
             compression.threshold as u16,
             0,
             false,

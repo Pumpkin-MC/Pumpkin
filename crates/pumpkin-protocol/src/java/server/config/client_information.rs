@@ -65,3 +65,28 @@ impl<'a> ServerPacket<'a> for SClientInformationConfig<'a> {
         })
     }
 }
+
+impl crate::ClientPacket for SClientInformationConfig<'_> {
+    fn write_packet_data(
+        &self,
+        mut write: impl std::io::Write,
+        version: &JavaMinecraftVersion,
+    ) -> Result<(), crate::ser::WritingError> {
+        use crate::ser::NetworkWriteExt;
+        write.write_string(self.locale)?;
+        write.write_i8(self.view_distance)?;
+        write.write_var_int(&self.chat_mode)?;
+        write.write_bool(self.chat_colors)?;
+        write.write_u8(self.skin_parts)?;
+        if version >= &JavaMinecraftVersion::V_1_9 {
+            write.write_var_int(&self.main_hand)?;
+        }
+        if version >= &JavaMinecraftVersion::V_1_17 {
+            write.write_bool(self.text_filtering)?;
+        }
+        if version >= &JavaMinecraftVersion::V_1_18 {
+            write.write_bool(self.server_listing)?;
+        }
+        Ok(())
+    }
+}

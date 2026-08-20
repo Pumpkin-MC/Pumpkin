@@ -1,7 +1,6 @@
+use dashmap::DashMap;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::collections::HashMap;
-use std::sync::Arc;
-use tokio::sync::RwLock;
 
 /// Describes the default behaviour for permissions.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -65,7 +64,7 @@ impl Permission {
 #[derive(Default)]
 pub struct PermissionRegistry {
     /// All registered permissions.
-    permissions: HashMap<String, Permission>,
+    permissions: DashMap<String, Permission>,
 }
 
 impl PermissionRegistry {
@@ -76,7 +75,7 @@ impl PermissionRegistry {
     #[must_use]
     pub fn new() -> Self {
         Self {
-            permissions: HashMap::new(),
+            permissions: DashMap::new(),
         }
     }
 
@@ -88,7 +87,7 @@ impl PermissionRegistry {
     /// # Returns
     /// - `Ok(())` if the permission was successfully registered.
     /// - `Err(String)` if a permission with the same node already exists.
-    pub fn register_permission(&mut self, permission: Permission) -> Result<(), String> {
+    pub fn register_permission(&self, permission: Permission) -> Result<(), String> {
         if self.permissions.contains_key(&permission.node) {
             return Err(format!(
                 "Permission {} is already registered",
@@ -108,7 +107,7 @@ impl PermissionRegistry {
     /// # Parameters
     /// - `permission`: The `Permission` instance to add.
     #[allow(clippy::expect_used)]
-    pub fn register_permission_or_panic(&mut self, permission: Permission) {
+    pub fn register_permission_or_panic(&self, permission: Permission) {
         self.register_permission(permission)
             .expect("Permission should have been registered successfully");
     }
@@ -119,9 +118,12 @@ impl PermissionRegistry {
     /// - `node`: The full permission node string to look up.
     ///
     /// # Returns
-    /// `Some(&Permission)` if the node exists, or `None` otherwise.
+    /// `Some(Ref<'_, String, Permission>)` if the node exists, or `None` otherwise.
     #[must_use]
-    pub fn get_permission(&self, node: &str) -> Option<&Permission> {
+    pub fn get_permission(
+        &self,
+        node: &str,
+    ) -> Option<dashmap::mapref::one::Ref<'_, String, Permission>> {
         self.permissions.get(node)
     }
 
@@ -137,8 +139,9 @@ impl PermissionRegistry {
     /// # Returns
     /// - `true` if the node existed and its default was updated.
     /// - `false` if no permission with that node is registered.
-    pub fn set_default(&mut self, node: &str, default: PermissionDefault) -> bool {
-        if let Some(permission) = self.permissions.get_mut(node) {
+    #[must_use]
+    pub fn set_default(&self, node: &str, default: PermissionDefault) -> bool {
+        if let Some(mut permission) = self.permissions.get_mut(node) {
             permission.default = default;
             true
         } else {
@@ -163,7 +166,7 @@ impl PermissionRegistry {
 #[derive(Default, Clone, Debug, Serialize, Deserialize)]
 pub struct PermissionAttachment {
     /// Directly assigned permissions.
-    permissions: HashMap<String, bool>,
+    pub permissions: HashMap<String, bool>,
 }
 
 impl PermissionAttachment {
@@ -217,51 +220,101 @@ impl PermissionAttachment {
     }
 }
 
-/// Manager for player permissions.
+/// Manager for player and server permissions.
 #[derive(Default)]
 pub struct PermissionManager {
     /// Global registry of permissions.
-    pub registry: Arc<RwLock<PermissionRegistry>>,
-    /// Player permission attachments.
-    pub attachments: HashMap<uuid::Uuid, Arc<RwLock<PermissionAttachment>>>,
+    pub registry: PermissionRegistry,
+    /// Player permission attachments keyed by player UUID.
+    pub attachments: DashMap<uuid::Uuid, DashMap<String, bool>>,
 }
 
 impl PermissionManager {
-    /// Creates a new `PermissionManager`.
-    ///
-    /// # Parameters
-    /// - `registry`: An `Arc<RwLock<PermissionRegistry>>` containing the global permissions registry.
-    ///
-    /// # Returns
-    /// A `PermissionManager` with an empty attachments map.
-    pub fn new(registry: Arc<RwLock<PermissionRegistry>>) -> Self {
+    /// Creates a new empty `PermissionManager`.
+    #[must_use]
+    pub fn new() -> Self {
         Self {
-            registry,
-            attachments: HashMap::new(),
+            registry: PermissionRegistry::new(),
+            attachments: DashMap::new(),
         }
     }
 
-    /// Retrieves the `PermissionAttachment` for a given player, creating one if it doesn't exist.
-    ///
-    /// # Parameters
-    /// - `player_id`: The UUID of the player.
-    ///
-    /// # Returns
-    /// An `Arc<RwLock<PermissionAttachment>>` representing the player's attachment.
-    pub fn get_attachment(&mut self, player_id: uuid::Uuid) -> Arc<RwLock<PermissionAttachment>> {
-        Arc::clone(
-            self.attachments
-                .entry(player_id)
-                .or_insert_with(|| Arc::new(RwLock::new(PermissionAttachment::new()))),
-        )
+    /// Creates a new `PermissionManager` with an existing `PermissionRegistry`.
+    #[must_use]
+    pub fn with_registry(registry: PermissionRegistry) -> Self {
+        Self {
+            registry,
+            attachments: DashMap::new(),
+        }
     }
 
-    /// Removes the `PermissionAttachment` for a given player.
-    ///
-    /// # Parameters
-    /// - `player_id`: The UUID of the player.
-    pub fn remove_attachment(&mut self, player_id: &uuid::Uuid) {
+    /// Registers a new permission node in the global registry.
+    pub fn register_permission(&self, permission: Permission) -> Result<(), String> {
+        self.registry.register_permission(permission)
+    }
+
+    /// Registers a new permission node in the global registry or panics if already registered.
+    pub fn register_permission_or_panic(&self, permission: Permission) {
+        self.registry.register_permission_or_panic(permission);
+    }
+
+    /// Retrieves a permission node by its name from the registry.
+    #[must_use]
+    pub fn get_permission(
+        &self,
+        node: &str,
+    ) -> Option<dashmap::mapref::one::Ref<'_, String, Permission>> {
+        self.registry.get_permission(node)
+    }
+
+    /// Overrides the default behaviour of an already-registered permission in the registry.
+    #[must_use]
+    pub fn set_default(&self, node: &str, default: PermissionDefault) -> bool {
+        self.registry.set_default(node, default)
+    }
+
+    /// Checks whether a permission node exists in the registry.
+    #[must_use]
+    pub fn has_registered_permission(&self, node: &str) -> bool {
+        self.registry.has_permission(node)
+    }
+
+    /// Sets a player's explicit permission.
+    pub fn set_permission(&self, player_id: uuid::Uuid, node: impl Into<String>, value: bool) {
+        self.attachments
+            .entry(player_id)
+            .or_default()
+            .insert(node.into(), value);
+    }
+
+    /// Unsets a player's explicit permission.
+    pub fn unset_permission(&self, player_id: &uuid::Uuid, node: &str) {
+        if let Some(player_perms) = self.attachments.get(player_id) {
+            player_perms.remove(node);
+        }
+    }
+
+    /// Checks if a permission is explicitly set for a player.
+    #[must_use]
+    pub fn has_permission_set(&self, player_id: &uuid::Uuid, node: &str) -> Option<bool> {
+        self.attachments
+            .get(player_id)
+            .and_then(|p| p.get(node).as_deref().copied())
+    }
+
+    /// Removes all permission attachments for a player.
+    pub fn remove_attachment(&self, player_id: &uuid::Uuid) {
         self.attachments.remove(player_id);
+    }
+
+    /// Retrieves all explicitly assigned permissions for a player.
+    #[must_use]
+    pub fn get_player_permissions(&self, player_id: &uuid::Uuid) -> Option<HashMap<String, bool>> {
+        self.attachments.get(player_id).map(|p| {
+            p.iter()
+                .map(|item| (item.key().clone(), *item.value()))
+                .collect()
+        })
     }
 
     /// Checks if a player has a specific permission.
@@ -273,21 +326,18 @@ impl PermissionManager {
     ///
     /// # Returns
     /// `true` if the player has the permission, `false` otherwise.
-    pub async fn has_permission(
+    #[must_use]
+    pub fn has_permission(
         &self,
         player_id: &uuid::Uuid,
         permission_node: &str,
         player_op_level: PermissionLvl,
     ) -> bool {
-        let reg = self.registry.read().await;
-
         // Check explicitly set permissions
         if let Some(attachment) = self.attachments.get(player_id) {
-            let attachment = attachment.read().await;
-
             // Check for the exact permission match
-            if let Some(value) = attachment.has_permission_set(permission_node) {
-                return value;
+            if let Some(value) = attachment.get(permission_node) {
+                return *value;
             }
 
             // Check parent nodes (for wildcard permissions)
@@ -298,23 +348,21 @@ impl PermissionManager {
 
                 // Check wildcard permissions at each level
                 let mut current_node = namespace.to_string();
-                if let Some(value) = attachment.has_permission_set(&format!("{current_node}:*")) {
-                    return value;
+                if let Some(value) = attachment.get(&format!("{current_node}:*")) {
+                    return *value;
                 }
 
                 current_node.push(':');
                 for (i, part) in key_parts.iter().enumerate() {
                     current_node.push_str(part);
 
-                    if let Some(value) = attachment.has_permission_set(&current_node) {
-                        return value;
+                    if let Some(value) = attachment.get(&current_node) {
+                        return *value;
                     }
 
                     if i < key_parts.len() - 1 {
-                        if let Some(value) =
-                            attachment.has_permission_set(&format!("{current_node}.*"))
-                        {
-                            return value;
+                        if let Some(value) = attachment.get(&format!("{current_node}.*")) {
+                            return *value;
                         }
                         current_node.push('.');
                     }
@@ -322,17 +370,20 @@ impl PermissionManager {
             }
 
             // Check for inherited permissions from parent nodes
-            for (node, value) in attachment.get_permissions() {
-                if let Some(permission) = reg.get_permission(node)
+            for item in attachment.iter() {
+                let node = item.key();
+                let value = *item.value();
+                if let Some(permission) = self.registry.get_permission(node)
                     && let Some(child_val) = permission.children.get(permission_node)
                 {
-                    return *value && *child_val;
+                    return value && *child_val;
                 }
             }
         }
 
         // Fall back to the default permission value
-        reg.get_permission(permission_node)
+        self.registry
+            .get_permission(permission_node)
             .is_some_and(|permission| match permission.default {
                 PermissionDefault::Allow => true,
                 PermissionDefault::Deny => false,

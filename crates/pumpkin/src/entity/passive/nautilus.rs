@@ -10,11 +10,9 @@ use pumpkin_data::{
     effect::StatusEffect,
     entity::EntityStatus,
     item_stack::ItemStack,
-    meta_data_type::MetaDataType,
     particle::Particle,
     potion::Effect,
     sound::{Sound, SoundCategory},
-    tracked_data::TrackedData,
 };
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::java::client::play::Metadata;
@@ -61,8 +59,7 @@ impl NautilusEntity {
         self.is_dashing.store(dashing, Ordering::Relaxed);
         self.mob_entity.living_entity.entity.send_meta_data(
             &[Metadata::new(
-                TrackedData::DASH,
-                MetaDataType::BOOLEAN,
+                pumpkin_data::tracked_data::nautilus::DASH,
                 dashing,
             )],
             None,
@@ -271,8 +268,7 @@ impl Mob for NautilusEntity {
         Box::pin(async move {
             self.mob_entity.living_entity.entity.send_meta_data(
                 &[Metadata::new(
-                    TrackedData::DASH,
-                    MetaDataType::BOOLEAN,
+                    pumpkin_data::tracked_data::nautilus::DASH,
                     self.is_dashing(),
                 )],
                 None,

@@ -1,6 +1,8 @@
 /* This file is generated. Do not edit manually. */
+use pumpkin_util::math::floor_div;
 use pumpkin_util::random::{
-    RandomGenerator, RandomImpl,
+    RandomGenerator, RandomImpl, get_carver_seed, get_region_seed, legacy_rand::LegacyRand,
+    xoroshiro128::Xoroshiro,
 };
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub enum StructureKeys {
@@ -1276,6 +1278,29 @@ impl StructureSet {
         Self::TRIAL_CHAMBERS,
         Self::VILLAGES,
         Self::WOODLAND_MANSIONS,
+    ];
+    #[doc = r" The registry names of all structure sets, in the same order as [`Self::ALL`]."]
+    pub const NAMES: &'static [&'static str] = &[
+        "ancient_cities",
+        "buried_treasures",
+        "desert_pyramids",
+        "end_cities",
+        "igloos",
+        "jungle_temples",
+        "mineshafts",
+        "nether_complexes",
+        "nether_fossils",
+        "ocean_monuments",
+        "ocean_ruins",
+        "pillager_outposts",
+        "ruined_portals",
+        "shipwrecks",
+        "strongholds",
+        "swamp_huts",
+        "trail_ruins",
+        "trial_chambers",
+        "villages",
+        "woodland_mansions",
     ];
     #[must_use]
     pub fn get(name: &str) -> Option<&'static Self> {

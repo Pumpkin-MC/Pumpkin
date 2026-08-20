@@ -3,9 +3,7 @@ use std::sync::{
     atomic::{AtomicU8, Ordering},
 };
 
-use pumpkin_data::{
-    entity::EntityType, item::Item, meta_data_type::MetaDataType, tracked_data::TrackedData,
-};
+use pumpkin_data::{entity::EntityType, item::Item};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::java::client::play::Metadata;
 
@@ -88,8 +86,7 @@ impl SheepEntity {
         self.color_and_sheared.store(byte, Ordering::Relaxed);
         self.mob_entity.living_entity.entity.send_meta_data(
             &[Metadata::new(
-                TrackedData::WOOL_ID,
-                MetaDataType::BYTE,
+                pumpkin_data::tracked_data::sheep::WOOL_ID,
                 byte as i8,
             )],
             None,
