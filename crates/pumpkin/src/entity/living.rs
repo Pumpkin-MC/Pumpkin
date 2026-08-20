@@ -2905,7 +2905,7 @@ impl EntityBase for LivingEntity {
                         );
                     }
 
-                    self.apply_consumable_effects(item).await;
+                    self.apply_consumable_effects(caller, item).await;
 
                     // Handle potion consumption
                     if item.get_data_component::<pumpkin_data::data_component_impl::PotionContentsImpl>().is_some() {
@@ -3057,7 +3057,7 @@ impl EntityBase for LivingEntity {
 impl LivingEntity {
     /// Applies data-driven `apply_effects` consume effects after an item completes use.
     /// Vanilla: `Consumable.onConsume` invokes every configured effect server-side.
-    async fn apply_consumable_effects(&self, item: &ItemStack) {
+    async fn apply_consumable_effects(&self, caller: &Arc<dyn EntityBase>, item: &ItemStack) {
         let Some(consumable) = item.get_data_component::<ConsumableImpl>() else {
             return;
         };
@@ -3111,7 +3111,10 @@ impl LivingEntity {
                         pumpkin_util::math::vector3::Vector3::new(target_x, target_y, target_z);
                     let (yaw, pitch) = (self.entity.yaw.load(), self.entity.pitch.load());
                     let world = self.entity.world.load().clone();
-                    self.entity.teleport(pos, Some(yaw), Some(pitch), world);
+                    caller
+                        .clone()
+                        .teleport(pos, Some(yaw), Some(pitch), world)
+                        .await;
                 }
                 ConsumeEffect::PlaySound(_) => {}
             }
