@@ -84,6 +84,14 @@ impl JigsawBlockEntity {
         let pool = self.pool.lock().await.clone();
         let target = self.target.lock().await.clone();
 
+        // The block at this position can have been broken/replaced by the time this runs (e.g.
+        // concurrently with the action that triggered generation). Decoding properties against
+        // the new, unrelated block would either panic (debug) or silently produce garbage
+        // (release), so bail out.
+        if !JigsawLikeProperties::handles_block_id(world.get_block(&self.position).id) {
+            return;
+        }
+
         let block_state = world.get_block_state(&self.position);
         let props =
             JigsawLikeProperties::from_state_id(block_state.id, &pumpkin_data::Block::JIGSAW);

@@ -339,6 +339,14 @@ macro_rules! impl_chest_helper_methods {
                 );
 
                 let (block, state) = world.get_block_and_state(&self.position);
+                // The block at this position can have been broken/replaced concurrently with
+                // this container being closed (e.g. another player breaking it while this one
+                // has the GUI open). Decoding properties against the new, unrelated block would
+                // either panic (debug) or silently produce garbage (release), so bail out.
+                if !pumpkin_data::block_properties::ChestLikeProperties::handles_block_id(block.id)
+                {
+                    return;
+                }
                 let properties = pumpkin_data::block_properties::ChestLikeProperties::from_state_id(
                     state.id, block,
                 );

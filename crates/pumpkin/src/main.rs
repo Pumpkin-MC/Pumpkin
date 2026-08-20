@@ -41,12 +41,34 @@ const CARGO_PKG_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 static MAIN_THREAD: OnceLock<ThreadId> = OnceLock::new();
 
+/// Windows defaults the main thread to a 1MB stack, which is tight for the deep `async`/`.await`
+/// call chains this codebase builds up (each nested `.await` is inlined into one state machine,
+/// so the whole chain shares a single stack frame budget) - especially in debug builds, where
+/// per-frame stack usage is much larger than release. Run the actual server on a dedicated
+/// thread with a larger stack instead of the OS-provided one.
+const MAIN_STACK_SIZE: usize = 16 * 1024 * 1024;
+
+fn main() {
+    std::thread::Builder::new()
+        .name("pumpkin-main".into())
+        .stack_size(MAIN_STACK_SIZE)
+        .spawn(|| {
+            tokio::runtime::Builder::new_multi_thread()
+                .enable_all()
+                .build()
+                .expect("Failed to build the Tokio runtime")
+                .block_on(run())
+        })
+        .expect("Failed to spawn the main thread with a larger stack")
+        .join()
+        .expect("The main thread panicked");
+}
+
 // WARNING: All rayon calls from the tokio runtime must be non-blocking! This includes things
 // like `par_iter`. These should be spawned in the the rayon pool and then passed to the tokio
 // runtime with a channel! See `Level::fetch_chunks` as an example!
 #[allow(clippy::too_many_lines)]
-#[tokio::main]
-async fn main() {
+async fn run() {
     let _ = MAIN_THREAD.set(thread::current().id());
 
     // Set the panic handler.
