@@ -72,7 +72,7 @@ const LATEST_VERSION: JavaMinecraftVersion = JavaMinecraftVersion::V_26_2;
 
 /// Generates the `TokenStream` for the `Tag` type, `RegistryKey` enum, all per-version tag
 /// modules, and the `Taggable` trait with its lookup helpers.
-pub(crate) fn build() -> TokenStream {
+pub(crate) fn build() -> (TokenStream, TokenStream) {
     // --- Rerun Triggers ---
 
     // Watch specific tag versions
@@ -148,6 +148,7 @@ pub(crate) fn build() -> TokenStream {
     let mut legacy_modules = Vec::new();
 
     let mut match_get_map = Vec::new();
+    let mut macro_block_tags = None;
 
     for (ver, file) in assets {
         let file_path = format!("../../assets/tags/{file}");
@@ -205,13 +206,17 @@ pub(crate) fn build() -> TokenStream {
                 quote!(super::Tag)
             };
 
-            tag_dicts.push(quote! {
+            let tokens = quote! {
                 #[allow(non_snake_case)]
                 pub mod #key_pascal {
                     #(#tag_entries)* }
                 static #dict_name: phf::Map<&'static str, &'static #tag_type_path> = phf::phf_map! {
                     #(#tag_map_entries),* };
-            });
+            };
+            if is_latest && key == "block" {
+                macro_block_tags = Some(tokens.clone());
+            }
+            tag_dicts.push(tokens);
 
             match_local_map.push(quote! { RegistryKey::#key_pascal => Some(&#dict_name) });
         }
@@ -249,7 +254,7 @@ pub(crate) fn build() -> TokenStream {
     }
     .to_token_stream();
 
-    quote! {
+    let a = quote! {
         use pumpkin_util::version::JavaMinecraftVersion;
 
         pub type Tag = (&'static [&'static str], &'static [u16]);
@@ -303,5 +308,11 @@ pub(crate) fn build() -> TokenStream {
                 get_tag_values(Self::tag_key(), tag)
             }
         }
-    }
+    };
+    let b = quote! {
+        type Tag = (&'static [&'static str], &'static [u16]);
+        pub const BLOCK: &phf::Map<&'static str, &'static Tag> = &BLOCK_TAGS;
+        #macro_block_tags
+    };
+    (a, b)
 }

@@ -52,81 +52,89 @@ default = [
     "bedrock_biome",
     "map_color",
     "map_decoration",
-    "dye_color"
+    "dye_color",
+    "chunk_view_lut",
+    "chest_loot"
 ]
+
 
 map_color = []
 map_decoration = []
 dye_color = []
-advancement = []
+advancement = ["dep:pumpkin-util", "dep:serde"]
 bedrock_creative = []
 bedrock_biome = []
-item = []
-packet = []
+item = ["dep:pumpkin-util", "dep:pumpkin-nbt"]
+packet = ["dep:pumpkin-util"]
 jukebox_song = []
 translation = []
-registry = []
+registry = ["dep:pumpkin-util"]
 screen = []
-particle = []
-statistic = []
+particle = ["dep:pumpkin-util"]
+statistic = ["dep:serde"]
 sound = []
-recipes = []
-data_component = []
+recipes = ["dep:serde"]
+data_component = ["dep:pumpkin-util", "dep:pumpkin-nbt", "dep:serde", "dep:crc-fast", "dep:rand"]
 attributes = []
-tracked_data = []
-meta_data_type = []
+tracked_data = ["dep:pumpkin-util"]
+meta_data_type = ["dep:pumpkin-util"]
 chunk = ["noise_parameter", "biome", "chunk_status"]
 game_event = []
-game_rules = []
+game_rules = ["dep:serde"]
 entity = ["entity_pose", "entity_status", "entity_type", "spawn_egg"]
-dimension = []
-enchantment = []
+dimension = ["dep:pumpkin-util"]
+enchantment = ["dep:pumpkin-util"]
 world = ["world_event", "message_type"]
 scoreboard = []
 damage = []
-fluid = []
-tag = []
-noise_router = []
+fluid = ["dep:pumpkin-util"]
+tag = ["dep:pumpkin-util", "dep:phf"]
+noise_router = ["dep:pumpkin-util"]
 composter = []
 flower_pot = []
 fuels = []
 effect = []
-structures = []
+structures = ["dep:pumpkin-util"]
 potion = ["potion_brewing"]
 recipe_remainder = []
-chunk_gen_settings = []
-carver = []
-villager = ["item", "sound"]
+chunk_gen_settings = ["dep:pumpkin-util"]
+carver = ["dep:pumpkin-util"]
+villager = ["item", "sound", "dep:serde"]
 slot_ranges = []
+chest_loot = ["dep:pumpkin-util"]
+block_id_map = ["dep:phf"]
+block_tags = ["dep:phf"]
 
+
+chunk_view_lut = []
 noise_parameter = []
-biome = []
-chunk_status = []
+biome = ["dep:pumpkin-util", "dep:phf", "dep:serde"]
+chunk_status = ["dep:serde"]
 entity_pose = []
 entity_status = []
-entity_type = ["sound"]
+entity_type = ["sound", "dep:pumpkin-util"]
 spawn_egg = []
 world_event = []
 message_type = []
-placed_feature = []
-configured_feature = []
-block = []
-item_id_remap = []
-entity_id_remap = []
-sound_id_remap = []
-particle_id_remap = []
+placed_feature = ["configured_feature"]
+configured_feature = ["placed_feature"]
+block = ["dep:pumpkin-util", "dep:phf", "dep:serde"]
+item_id_remap = ["dep:pumpkin-util"]
+entity_id_remap = ["dep:pumpkin-util"]
+sound_id_remap = ["dep:pumpkin-util"]
+particle_id_remap = ["dep:pumpkin-util"]
 potion_brewing = []
 
 [dependencies]
-phf = { workspace = true, features = ["macros"] }
-pumpkin-util.workspace = true
-pumpkin-nbt.workspace = true
-serde = {workspace = true, features = ["rc"]}
-crc-fast.workspace = true
-rand.workspace = true
+phf = { workspace = true, optional = true }
+pumpkin-util = { workspace = true, optional = true }
+pumpkin-nbt = { workspace = true, optional = true }
+serde = {workspace = true, features = ["rc"], optional = true }
+crc-fast = { workspace = true, optional = true }
+rand = { workspace = true, optional = true }
 
 [dev-dependencies]
-criterion.workspace = true
+criterion = { workspace = true }
 
 [[bench]]
 name = "has_random_ticks"
