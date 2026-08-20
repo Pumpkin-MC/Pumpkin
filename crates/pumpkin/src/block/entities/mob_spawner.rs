@@ -100,7 +100,9 @@ impl BlockEntity for MobSpawnerBlockEntity {
 
     fn tick<'a>(&'a self, world: &'a Arc<World>) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
         Box::pin(async move {
-            if let Some(entity_type) = &self.entity_type.load() {
+            if let Some(entity_type) = &self.entity_type.load()
+                && world.level_info.load().game_rules.spawn_mobs
+            {
                 if self.delay.load(Ordering::Relaxed) == -1 {
                     self.update_spawns(world).await;
                 } else {

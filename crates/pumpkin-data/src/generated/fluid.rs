@@ -25,6 +25,50 @@ pub struct FluidState {
     pub is_source: bool,
     pub falling: bool,
 }
+impl FluidState {
+    pub fn get_state_from_id(id: BlockStateId) -> Option<&'static Self> {
+        match id.as_u16() {
+            0u16 => Some(&Fluid::EMPTY.states[0usize]),
+            101u16 => Some(&Fluid::FLOWING_WATER.states[0usize]),
+            100u16 => Some(&Fluid::FLOWING_WATER.states[1usize]),
+            99u16 => Some(&Fluid::FLOWING_WATER.states[2usize]),
+            98u16 => Some(&Fluid::FLOWING_WATER.states[3usize]),
+            97u16 => Some(&Fluid::FLOWING_WATER.states[4usize]),
+            96u16 => Some(&Fluid::FLOWING_WATER.states[5usize]),
+            95u16 => Some(&Fluid::FLOWING_WATER.states[6usize]),
+            94u16 => Some(&Fluid::FLOWING_WATER.states[7usize]),
+            93u16 => Some(&Fluid::FLOWING_WATER.states[8usize]),
+            92u16 => Some(&Fluid::FLOWING_WATER.states[9usize]),
+            91u16 => Some(&Fluid::FLOWING_WATER.states[10usize]),
+            90u16 => Some(&Fluid::FLOWING_WATER.states[11usize]),
+            89u16 => Some(&Fluid::FLOWING_WATER.states[12usize]),
+            88u16 => Some(&Fluid::FLOWING_WATER.states[13usize]),
+            87u16 => Some(&Fluid::FLOWING_WATER.states[14usize]),
+            86u16 => Some(&Fluid::FLOWING_WATER.states[15usize]),
+            86u16 => Some(&Fluid::WATER.states[0usize]),
+            86u16 => Some(&Fluid::WATER.states[1usize]),
+            117u16 => Some(&Fluid::FLOWING_LAVA.states[0usize]),
+            116u16 => Some(&Fluid::FLOWING_LAVA.states[1usize]),
+            115u16 => Some(&Fluid::FLOWING_LAVA.states[2usize]),
+            114u16 => Some(&Fluid::FLOWING_LAVA.states[3usize]),
+            113u16 => Some(&Fluid::FLOWING_LAVA.states[4usize]),
+            112u16 => Some(&Fluid::FLOWING_LAVA.states[5usize]),
+            111u16 => Some(&Fluid::FLOWING_LAVA.states[6usize]),
+            110u16 => Some(&Fluid::FLOWING_LAVA.states[7usize]),
+            109u16 => Some(&Fluid::FLOWING_LAVA.states[8usize]),
+            108u16 => Some(&Fluid::FLOWING_LAVA.states[9usize]),
+            107u16 => Some(&Fluid::FLOWING_LAVA.states[10usize]),
+            106u16 => Some(&Fluid::FLOWING_LAVA.states[11usize]),
+            105u16 => Some(&Fluid::FLOWING_LAVA.states[12usize]),
+            104u16 => Some(&Fluid::FLOWING_LAVA.states[13usize]),
+            103u16 => Some(&Fluid::FLOWING_LAVA.states[14usize]),
+            102u16 => Some(&Fluid::FLOWING_LAVA.states[15usize]),
+            102u16 => Some(&Fluid::LAVA.states[0usize]),
+            102u16 => Some(&Fluid::LAVA.states[1usize]),
+            _ => None,
+        }
+    }
+}
 #[derive(Clone)]
 pub struct FluidStateRef {
     pub id: u16,

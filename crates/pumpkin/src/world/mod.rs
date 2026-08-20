@@ -1698,7 +1698,7 @@ impl World {
         ));
 
         // 5. Spawn Chunk Spawners into the SAME JoinSet
-        if !spawn_list.is_empty() {
+        if !spawn_list.is_empty() && self.level_info.load().game_rules.spawn_mobs {
             let mut spawning_chunks = Vec::new();
             for pos in active_chunks.iter() {
                 if let Some(chunk) = self.level.read_chunk_sync(pos, std::clone::Clone::clone) {
@@ -5523,17 +5523,15 @@ impl World {
         position: &BlockPos,
     ) -> (&'static Fluid, &'static FluidState) {
         let id = self.get_block_state_id(position);
-
-        let Some(raw_fluid) = Fluid::from_state_id(id) else {
+        let Some(fluid) = Fluid::from_state_id(id) else {
             let block = Block::from_state_id(id);
             if let Some(properties) = block.properties(id) {
                 for (name, value) in properties.to_props() {
                     if name == "waterlogged" {
                         if value == "true" {
-                            let state = &Fluid::FLOWING_WATER.states[0];
+                            let state = &Fluid::WATER.states[0];
                             return (&Fluid::FLOWING_WATER, state);
                         }
-
                         break;
                     }
                 }
@@ -5543,9 +5541,7 @@ impl World {
             return (&Fluid::EMPTY, state);
         };
 
-        let fluid = raw_fluid.to_flowing();
-        let state = &fluid.states[0];
-
+        let state = FluidState::get_state_from_id(id).expect("should be a valid fluidState");
         (fluid, state)
     }
 
