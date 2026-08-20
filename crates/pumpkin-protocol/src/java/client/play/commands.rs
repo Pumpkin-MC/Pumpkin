@@ -93,7 +93,7 @@ impl ProtoNode<'_> {
                 restricted,
             } => {
                 let mut n = 1;
-                if restricted {
+                if restricted && version >= &JavaMinecraftVersion::V_1_21_6 {
                     n |= Self::FLAG_IS_RESTRICTED;
                 }
                 if is_executable {
@@ -114,7 +114,7 @@ impl ProtoNode<'_> {
                 restricted,
             } => {
                 let mut n = 2;
-                if restricted {
+                if restricted && version >= &JavaMinecraftVersion::V_1_21_6 {
                     n |= Self::FLAG_IS_RESTRICTED;
                 }
                 if override_suggestion_type.is_some() {
@@ -255,26 +255,26 @@ impl ArgumentType {
         if version < &JavaMinecraftVersion::V_1_21_5 {
             match id {
                 ..=16 => id,
-                18..=46 => id - 1,
-                48..=53 => id - 2,
-                55.. => id - 3,
+                18..=47 => id - 1,
+                49..=54 => id - 2,
+                56.. => id - 3,
 
                 // Fallbacks:
                 // 17 HexColor => String
-                // 47 ResourceSelector => String
-                // 54 Dialog => String
-                17 | 47 | 54 => 5,
+                // 48 ResourceSelector => String
+                // 55 Dialog => String
+                17 | 48 | 55 => 5,
             }
         } else if version < &JavaMinecraftVersion::V_1_21_6 {
             match id {
                 ..=16 => id,
-                18..=53 => id - 1,
-                55.. => id - 2,
+                18..=54 => id - 1,
+                56.. => id - 2,
 
                 // Fallbacks:
                 // 17 HexColor => String
-                // 54 Dialog => String
-                17 | 54 => 5,
+                // 55 Dialog => String
+                17 | 55 => 5,
             }
         } else {
             id
@@ -301,6 +301,15 @@ impl ArgumentType {
                     StringProtoArgBehavior::GreedyPhrase => 2,
                 };
                 write.write_var_int(&i.into())
+            }
+            // HexColor, ResourceSelector, and Dialog have no equivalent parser on clients
+            // older than 1.21.5/1.21.6 (see `to_id`), so they're sent as a fallback
+            // `brigadier:string` (wire id 5) argument. Whenever `to_id` reports id 5 for
+            // one of these, the client expects the `string_type` property byte that a
+            // real `String` argument would send — write it here to match, using
+            // GreedyPhrase since these accept arbitrary text/identifiers.
+            Self::HexColor | Self::ResourceSelector | Self::Dialog if self.to_id(version) == 5 => {
+                write.write_var_int(&(StringProtoArgBehavior::GreedyPhrase as i32).into())
             }
             Self::Entity { flags } => Self::write_with_flags(*flags, write),
             Self::ScoreHolder { flags } => Self::write_with_flags(*flags, write),
