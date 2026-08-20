@@ -1,10 +1,10 @@
-use pumpkin_data::packet::clientbound::PLAY_BUNDLE_DELIMITER;
+use pumpkin_data::packet::clientbound::play::BUNDLE_DELIMITER;
 use pumpkin_macros::java_packet;
 
 use crate::ClientPacket;
 use pumpkin_util::version::JavaMinecraftVersion;
 
-#[java_packet(PLAY_BUNDLE_DELIMITER)]
+#[java_packet(BUNDLE_DELIMITER)]
 pub struct CBundleDelimiter;
 
 impl ClientPacket for CBundleDelimiter {

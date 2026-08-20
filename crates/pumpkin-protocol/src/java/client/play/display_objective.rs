@@ -2,7 +2,7 @@ use crate::ClientPacket;
 use crate::VarInt;
 use crate::ser::NetworkWriteExt;
 use pumpkin_data::{
-    packet::clientbound::PLAY_SET_DISPLAY_OBJECTIVE, scoreboard::ScoreboardDisplaySlot,
+    packet::clientbound::play::SET_DISPLAY_OBJECTIVE, scoreboard::ScoreboardDisplaySlot,
 };
 use pumpkin_macros::java_packet;
 use pumpkin_util::version::JavaMinecraftVersion;
@@ -12,7 +12,7 @@ use pumpkin_util::version::JavaMinecraftVersion;
 /// This packet is the final step in showing a scoreboard to a player. After
 /// an objective is created and populated with scores, this packet "maps"
 /// that objective to a visual location like the sidebar or the player list.
-#[java_packet(PLAY_SET_DISPLAY_OBJECTIVE)]
+#[java_packet(SET_DISPLAY_OBJECTIVE)]
 pub struct CDisplayObjective {
     /// The display slot/position for the objective.
     pub position: VarInt,

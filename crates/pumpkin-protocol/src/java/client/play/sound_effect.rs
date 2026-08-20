@@ -1,7 +1,7 @@
 use std::io::Write;
 
 use pumpkin_data::{
-    packet::clientbound::PLAY_SOUND, sound::SoundCategory,
+    packet::clientbound::play::SOUND, sound::SoundCategory,
     sound_id_remap::remap_sound_id_for_version,
 };
 use pumpkin_macros::java_packet;
@@ -9,7 +9,7 @@ use pumpkin_util::{math::vector3::Vector3, version::JavaMinecraftVersion};
 
 use crate::{ClientPacket, IdOr, SoundEvent, VarInt, WritingError, ser::NetworkWriteExt};
 
-#[java_packet(PLAY_SOUND)]
+#[java_packet(SOUND)]
 pub struct CSoundEffect {
     pub sound_event: IdOr<SoundEvent>,
     pub sound_category: VarInt,

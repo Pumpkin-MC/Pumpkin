@@ -3,7 +3,7 @@ use std::io::Write;
 use pumpkin_data::block_state_remap::remap_block_state_for_version;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::entity_id_remap::remap_entity_id_for_version;
-use pumpkin_data::packet::clientbound::PLAY_ADD_ENTITY;
+use pumpkin_data::packet::clientbound::play::ADD_ENTITY;
 use pumpkin_macros::java_packet;
 use pumpkin_util::{math::vector3::Vector3, version::JavaMinecraftVersion};
 
@@ -13,7 +13,7 @@ use crate::{
     ser::{NetworkWriteExt, WritingError},
 };
 
-#[java_packet(PLAY_ADD_ENTITY)]
+#[java_packet(ADD_ENTITY)]
 pub struct CSpawnEntity {
     pub entity_id: VarInt,
     pub entity_uuid: uuid::Uuid,
@@ -62,23 +62,44 @@ impl ClientPacket for CSpawnEntity {
     ) -> Result<(), WritingError> {
         let mut write = write;
 
+        let v1_9 = *version >= JavaMinecraftVersion::V_1_9;
+        let v1_14 = *version >= JavaMinecraftVersion::V_1_14;
+        let v1_19 = *version >= JavaMinecraftVersion::V_1_19;
+        let v1_21_9 = *version >= JavaMinecraftVersion::V_1_21_9;
+
         write.write_var_int(&self.entity_id)?;
-        write.write_uuid(&self.entity_uuid)?;
-        let remapped_type =
-            VarInt(remap_entity_id_for_version(self.r#type.0 as u16, *version) as i32);
-        write.write_var_int(&remapped_type)?;
 
-        write.write_f64_be(self.position.x)?;
-        write.write_f64_be(self.position.y)?;
-        write.write_f64_be(self.position.z)?;
+        if v1_9 {
+            write.write_uuid(&self.entity_uuid)?;
+        }
 
-        // Angles
-        if version >= &JavaMinecraftVersion::V_1_21_9 {
+        let remapped_type = remap_entity_id_for_version(self.r#type.0 as u16, *version);
+        if v1_14 {
+            write.write_var_int(&VarInt(remapped_type as i32))?;
+        } else {
+            write.write_u8(remapped_type as u8)?;
+        }
+
+        if v1_9 {
+            write.write_f64_be(self.position.x)?;
+            write.write_f64_be(self.position.y)?;
+            write.write_f64_be(self.position.z)?;
+        } else {
+            write.write_i32_be((self.position.x * 32.0).floor() as i32)?;
+            write.write_i32_be((self.position.y * 32.0).floor() as i32)?;
+            write.write_i32_be((self.position.z * 32.0).floor() as i32)?;
+        }
+
+        // Angles and velocity
+        if v1_21_9 {
             self.velocity.write(&mut write)?;
         }
         write.write_u8(self.pitch)?;
         write.write_u8(self.yaw)?;
-        write.write_u8(self.head_yaw)?;
+
+        if v1_19 {
+            write.write_u8(self.head_yaw)?;
+        }
 
         let data = if self.r#type.0 == i32::from(EntityType::FALLING_BLOCK.id) {
             u16::try_from(self.data.0).map_or(self.data, |state_id| {
@@ -87,9 +108,14 @@ impl ClientPacket for CSpawnEntity {
         } else {
             self.data
         };
-        write.write_var_int(&data)?;
 
-        if version < &JavaMinecraftVersion::V_1_21_9 {
+        if v1_19 {
+            write.write_var_int(&data)?;
+        } else {
+            write.write_i32_be(data.0)?;
+        }
+
+        if !v1_21_9 && (v1_9 || data.0 > 0) {
             self.velocity.write_legacy(&mut write)?;
         }
 

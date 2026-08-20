@@ -32,6 +32,7 @@ use pumpkin_protocol::bedrock::respawn::RespawnState;
 use pumpkin_protocol::bedrock::server::text::SText;
 use pumpkin_protocol::codec::item_stack_seralizer::ItemStackSerializer;
 use pumpkin_util::translation::Locale;
+use pumpkin_util::version::JavaMinecraftVersion;
 use pumpkin_world::chunk::{ChunkData, ChunkEntityData};
 use pumpkin_world::inventory::Inventory;
 use tokio::sync::Mutex;
@@ -948,6 +949,12 @@ impl Player {
             bedrock_skin.full_id = skin_id;
         }
 
+        let supports_player_loaded = match client.as_ref() {
+            ClientPlatform::Java(client) => client.version.load() >= JavaMinecraftVersion::V_1_21_4,
+            ClientPlatform::Bedrock(_) => true,
+        };
+        let initially_loaded = !supports_player_loaded;
+
         Self {
             living_entity,
             config: ArcSwap::new(Arc::new(config)),
@@ -995,9 +1002,9 @@ impl Player {
             last_action_time: AtomicCell::new(std::time::Instant::now()),
             ping: AtomicU32::new(0),
             last_attacked_ticks: AtomicU32::new(0),
-            client_loaded: AtomicBool::new(false),
+            client_loaded: AtomicBool::new(initially_loaded),
             bedrock_spawned: AtomicBool::new(false),
-            client_loaded_timeout: AtomicU32::new(60),
+            client_loaded_timeout: AtomicU32::new(if initially_loaded { 0 } else { 60 }),
             chat_spam_tick_count: AtomicU32::new(0),
             // Item usage tracking
             using_item: AtomicBool::new(false),
@@ -2374,18 +2381,26 @@ impl Player {
         let (chunk_of_chunks, total_sent_chunks) = {
             let mut chunk_manager = self.chunk_manager.lock().await;
             chunk_manager.pull_new_chunks();
-            let chunks = if let ClientPlatform::Java(_) = self.client.as_ref() {
-                // Java clients can only send a limited amount of chunks per tick.
-                // If we have sent too many chunks without receiving an ack, we stop sending chunks.
-                chunk_manager
-                    .can_send_chunk()
-                    .then(|| chunk_manager.next_chunk())
+            let chunks = if let ClientPlatform::Java(java_client) = self.client.as_ref() {
+                if java_client.version.load() >= JavaMinecraftVersion::V_1_20_2 {
+                    // Java clients (1.20.2+) use the chunk batching protocol.
+                    // If we have sent too many chunks without receiving an ack, we stop sending chunks.
+                    chunk_manager
+                        .can_send_chunk()
+                        .then(|| chunk_manager.next_chunk())
+                } else {
+                    // Java clients < 1.20.2 do not have chunk batching/ack packets.
+                    // Send chunks every tick directly based on chunks_per_tick.
+                    (!chunk_manager.chunk_queue.is_empty()).then(|| chunk_manager.next_chunk())
+                }
             } else {
-                Some(chunk_manager.next_chunk())
+                (!chunk_manager.chunk_queue.is_empty()).then(|| chunk_manager.next_chunk())
             };
             (chunks, chunk_manager.sent_chunks_count())
         };
-        if let Some(chunk_of_chunks) = chunk_of_chunks {
+        if let Some(chunk_of_chunks) = chunk_of_chunks
+            && !chunk_of_chunks.is_empty()
+        {
             let client = self.client.clone();
             tokio::spawn(async move {
                 client.send_chunks(&chunk_of_chunks).await;
@@ -2588,12 +2603,29 @@ impl Player {
         }
     }
 
+    #[must_use]
+    pub fn supports_player_loaded(&self) -> bool {
+        match self.client.as_ref() {
+            ClientPlatform::Java(client) => client.version.load() >= JavaMinecraftVersion::V_1_21_4,
+            ClientPlatform::Bedrock(_) => true,
+        }
+    }
+
+    #[must_use]
     pub fn has_client_loaded(&self) -> bool {
+        if !self.supports_player_loaded() {
+            return true;
+        }
         self.client_loaded.load(Ordering::Relaxed)
             || self.client_loaded_timeout.load(Ordering::Relaxed) == 0
     }
 
     pub fn set_client_loaded(&self, loaded: bool) {
+        if !self.supports_player_loaded() {
+            self.client_loaded.store(true, Ordering::Relaxed);
+            self.client_loaded_timeout.store(0, Ordering::Relaxed);
+            return;
+        }
         if !loaded {
             self.client_loaded_timeout.store(60, Ordering::Relaxed);
         }
@@ -3946,6 +3978,9 @@ impl Player {
     }
 
     pub fn tick_client_load_timeout(&self) {
+        if !self.supports_player_loaded() {
+            return;
+        }
         if !self.client_loaded.load(Ordering::Relaxed) {
             let timeout = self.client_loaded_timeout.load(Ordering::Relaxed);
             self.client_loaded_timeout

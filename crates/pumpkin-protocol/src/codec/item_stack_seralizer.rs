@@ -75,6 +75,40 @@ fn serialize_item_stack_with_id(
     serialize_any_item_stack_with_id(stack, item_id, false, write)
 }
 
+fn serialize_length_prefixed_item_stack_with_id(
+    stack: &ItemStack,
+    item_id: u16,
+    write: &mut impl NetworkWriteExt,
+) -> Result<(), WritingError> {
+    if stack.is_empty() {
+        write.put_var_int(&VarInt(0))
+    } else {
+        let (to_add, to_remove) = item_component_counts(stack);
+        write.put_var_int(&VarInt::from(stack.item_count))?;
+        write.put_var_int(&VarInt::from(item_id))?;
+        write.put_var_int(&VarInt::from(to_add))?;
+        write.put_var_int(&VarInt::from(to_remove))?;
+
+        for (id, data) in &stack.patch {
+            if let Some(data) = data {
+                write.put_var_int(&VarInt::from(id.to_id()))?;
+                let mut comp_buf = Vec::new();
+                serialize(*id, data.as_ref(), &mut comp_buf)?;
+                write.put_var_int(&VarInt::from(comp_buf.len() as i32))?;
+                write.write_slice(&comp_buf)?;
+            }
+        }
+
+        for (id, data) in &stack.patch {
+            if data.is_none() {
+                write.put_var_int(&VarInt::from(id.to_id()))?;
+            }
+        }
+
+        Ok(())
+    }
+}
+
 fn serialize_item_cost_with_id(
     stack: &ItemStack,
     item_id: u16,
@@ -222,8 +256,6 @@ impl ItemStackSerializer<'_> {
             let id = DataComponent::try_from_id(id_val as u8)
                 .ok_or_else(|| ReadingError::Message(format!("Unknown component ID: {id_val}")))?;
 
-            let _byte_len = read.get_var_int()?;
-
             let component_impl = deserialize(id, read)?;
             patch.push((id, Some(component_impl)));
         }
@@ -317,6 +349,15 @@ impl ItemStackSerializer<'_> {
     ) -> Result<(), WritingError> {
         let remapped_item_id = remap_item_id_for_version(self.0.item.id, *version);
         serialize_item_stack_with_id(self.0.as_ref(), remapped_item_id, write)
+    }
+
+    pub fn write_length_prefixed_with_version(
+        &self,
+        write: &mut impl NetworkWriteExt,
+        version: &JavaMinecraftVersion,
+    ) -> Result<(), WritingError> {
+        let remapped_item_id = remap_item_id_for_version(self.0.item.id, *version);
+        serialize_length_prefixed_item_stack_with_id(self.0.as_ref(), remapped_item_id, write)
     }
 
     pub fn write_item_cost_with_version(

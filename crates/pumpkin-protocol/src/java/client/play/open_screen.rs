@@ -1,4 +1,4 @@
-use pumpkin_data::packet::clientbound::PLAY_OPEN_SCREEN;
+use pumpkin_data::packet::clientbound::play::OPEN_SCREEN;
 use pumpkin_util::text::TextComponent;
 
 use pumpkin_macros::java_packet;
@@ -14,7 +14,7 @@ use pumpkin_util::version::JavaMinecraftVersion;
 /// or when a command/plugin forces an interface to open. It establishes a
 /// `sync_id` which must be used in all subsequent "Set Slot" or "Click Slot"
 /// packets to ensure the server and client are talking about the same window.
-#[java_packet(PLAY_OPEN_SCREEN)]
+#[java_packet(OPEN_SCREEN)]
 pub struct COpenScreen<'a> {
     /// A unique identifier for the current window session.
     /// Typically increments by 1 for every new window opened.
@@ -46,13 +46,14 @@ impl ClientPacket for COpenScreen<'_> {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        _version: &JavaMinecraftVersion,
+        version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         write.write_var_int(&self.sync_id)?;
-        write.write_var_int(&self.window_type)?;
-        // Write the text component as JSON string
-        let buf = self.window_title.encode();
-        write.write_slice(&buf)?;
-        Ok(())
+        let window_type = pumpkin_data::menu_id_remap::remap_menu_id_for_version(
+            self.window_type.0 as u8,
+            *version,
+        );
+        write.write_var_int(&VarInt(i32::from(window_type)))?;
+        write.write_component(self.window_title, version)
     }
 }

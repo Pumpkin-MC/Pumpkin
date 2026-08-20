@@ -2,7 +2,7 @@ use crate::{
     ClientPacket, ConnectionState, ReadingError, ServerPacket, VarInt, ser::NetworkReadExt,
     ser::NetworkWriteExt,
 };
-use pumpkin_data::packet::serverbound::HANDSHAKE_INTENTION;
+use pumpkin_data::packet::serverbound::handshake::INTENTION;
 use pumpkin_macros::java_packet;
 use pumpkin_util::version::JavaMinecraftVersion;
 
@@ -10,7 +10,7 @@ use pumpkin_util::version::JavaMinecraftVersion;
 ///
 /// It determines whether the client wants to check the server status (SLP)
 /// or actually login to play.
-#[java_packet(HANDSHAKE_INTENTION)]
+#[java_packet(INTENTION)]
 pub struct SHandShake {
     /// The protocol version of the client (e.g., 767 for 1.21).
     pub protocol_version: VarInt,

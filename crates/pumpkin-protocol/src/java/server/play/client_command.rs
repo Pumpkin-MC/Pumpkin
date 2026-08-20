@@ -2,13 +2,13 @@ use crate::{
     ServerPacket,
     ser::{NetworkReadExt, ReadingError},
 };
-use pumpkin_data::packet::serverbound::PLAY_CLIENT_COMMAND;
+use pumpkin_data::packet::serverbound::play::CLIENT_COMMAND;
 use pumpkin_macros::java_packet;
 use pumpkin_util::version::JavaMinecraftVersion;
 
 use crate::VarInt;
 
-#[java_packet(PLAY_CLIENT_COMMAND)]
+#[java_packet(CLIENT_COMMAND)]
 pub struct SClientCommand {
     pub action_id: VarInt,
 }

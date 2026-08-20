@@ -1,7 +1,7 @@
 use crate::WritingError;
 use crate::codec::bit_set::BitSet;
 use crate::{ClientPacket, VarInt, ser::NetworkWriteExt};
-use pumpkin_data::packet::clientbound::PLAY_LIGHT_UPDATE;
+use pumpkin_data::packet::clientbound::play::LIGHT_UPDATE;
 use pumpkin_macros::java_packet;
 use pumpkin_util::version::JavaMinecraftVersion;
 use pumpkin_world::chunk::ChunkData;
@@ -12,14 +12,14 @@ use std::io::Write;
 ///
 /// This packet updates lighting data for a specific chunk without sending the full chunk data.
 /// It's used when block placement or removal changes the lighting in a chunk.
-#[java_packet(PLAY_LIGHT_UPDATE)]
+#[java_packet(LIGHT_UPDATE)]
 pub struct CLightUpdate<'a>(pub &'a ChunkData);
 
 impl ClientPacket for CLightUpdate<'_> {
     fn write_packet_data(
         &self,
         write: impl Write,
-        _version: &JavaMinecraftVersion,
+        version: &JavaMinecraftVersion,
     ) -> Result<(), WritingError> {
         let mut write = write;
 
@@ -57,6 +57,10 @@ impl ClientPacket for CLightUpdate<'_> {
             } else {
                 block_light_empty_mask |= 1 << bit_index;
             }
+        }
+
+        if version < &JavaMinecraftVersion::V_1_20_2 {
+            write.write_bool(true)?; // trust edges (removed in 1.20.2)
         }
 
         // Write Sky Light Mask

@@ -76,7 +76,7 @@ use crate::plugin::loader::wasm::wasm_host::{
     },
     wit::v0_1::pumpkin::{self, plugin::world::World},
 };
-use crate::world::explosion::Explosion;
+use crate::world::explosion::ExplosionInteraction;
 use pumpkin_data::game_rules::{GameRule, GameRuleValue};
 
 pub(crate) fn from_wit_game_rule(rule: WitGameRule) -> GameRule {
@@ -682,15 +682,24 @@ impl pumpkin::plugin::world::HostWorld for PluginHostState {
         pos: pumpkin::plugin::common::Position,
         power: f32,
         _create_fire: bool,
-        _interaction: pumpkin::plugin::world::ExplosionInteraction,
+        interaction: pumpkin::plugin::world::ExplosionInteraction,
     ) -> wasmtime::Result<()> {
         let world_ref = self.get_world_res(&world)?;
-        // Currently Explosion only supports power and position in this codebase
-        let explosion = Explosion::new(
-            power,
-            pumpkin_util::math::vector3::Vector3::new(pos.0, pos.1, pos.2),
-        );
-        explosion.explode(&world_ref.provider).await;
+        let interaction = match interaction {
+            pumpkin::plugin::world::ExplosionInteraction::None => ExplosionInteraction::None,
+            pumpkin::plugin::world::ExplosionInteraction::Block => ExplosionInteraction::Block,
+            pumpkin::plugin::world::ExplosionInteraction::Mob => ExplosionInteraction::Mob,
+            pumpkin::plugin::world::ExplosionInteraction::Tnt => ExplosionInteraction::Tnt,
+            pumpkin::plugin::world::ExplosionInteraction::Trigger => ExplosionInteraction::Trigger,
+        };
+        world_ref
+            .provider
+            .explode(
+                pumpkin_util::math::vector3::Vector3::new(pos.0, pos.1, pos.2),
+                power,
+                interaction,
+            )
+            .await;
         Ok(())
     }
 

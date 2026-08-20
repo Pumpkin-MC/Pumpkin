@@ -1,0 +1,38 @@
+{
+  "type": "minecraft:huge_brown_mushroom",
+  "config": {
+    "can_place_on": {
+      "type": "minecraft:matching_block_tag",
+      "tag": "minecraft:huge_brown_mushroom_can_place_on"
+    },
+    "cap_provider": {
+      "type": "minecraft:simple_state_provider",
+      "state": {
+        "Name": "minecraft:brown_mushroom_block",
+        "Properties": {
+          "down": "false",
+          "east": "true",
+          "north": "true",
+          "south": "true",
+          "up": "true",
+          "west": "true"
+        }
+      }
+    },
+    "foliage_radius": 3,
+    "stem_provider": {
+      "type": "minecraft:simple_state_provider",
+      "state": {
+        "Name": "minecraft:mushroom_stem",
+        "Properties": {
+          "down": "false",
+          "east": "true",
+          "north": "true",
+          "south": "true",
+          "up": "false",
+          "west": "true"
+        }
+      }
+    }
+  }
+}

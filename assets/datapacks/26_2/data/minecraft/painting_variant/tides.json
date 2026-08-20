@@ -1,0 +1,13 @@
+{
+  "asset_id": "minecraft:tides",
+  "author": {
+    "color": "gray",
+    "translate": "painting.minecraft.tides.author"
+  },
+  "height": 3,
+  "title": {
+    "color": "yellow",
+    "translate": "painting.minecraft.tides.title"
+  },
+  "width": 3
+}

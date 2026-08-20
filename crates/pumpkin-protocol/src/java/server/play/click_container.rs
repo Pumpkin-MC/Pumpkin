@@ -4,13 +4,13 @@ use crate::{
     ServerPacket,
     ser::{NetworkReadExt, ReadingError},
 };
-use pumpkin_data::packet::serverbound::PLAY_CONTAINER_CLICK;
+use pumpkin_data::packet::serverbound::play::CONTAINER_CLICK;
 use pumpkin_macros::java_packet;
 use pumpkin_util::version::JavaMinecraftVersion;
 use std::io::Read;
 
 #[derive(Debug)]
-#[java_packet(PLAY_CONTAINER_CLICK)]
+#[java_packet(CONTAINER_CLICK)]
 pub struct SClickSlot {
     pub sync_id: VarInt,
     pub revision: VarInt,

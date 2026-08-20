@@ -1,4 +1,4 @@
-use pumpkin_data::packet::clientbound::PLAY_SET_EXPERIENCE;
+use pumpkin_data::packet::clientbound::play::SET_EXPERIENCE;
 use pumpkin_macros::java_packet;
 
 use crate::ClientPacket;
@@ -6,7 +6,7 @@ use crate::VarInt;
 use crate::ser::NetworkWriteExt;
 use pumpkin_util::version::JavaMinecraftVersion;
 
-#[java_packet(PLAY_SET_EXPERIENCE)]
+#[java_packet(SET_EXPERIENCE)]
 pub struct CSetExperience {
     pub progress: f32,
     pub level: VarInt,

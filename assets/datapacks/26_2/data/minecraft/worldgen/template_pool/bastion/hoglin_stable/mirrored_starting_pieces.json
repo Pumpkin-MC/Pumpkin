@@ -1,0 +1,50 @@
+{
+  "elements": [
+    {
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "minecraft:bastion/hoglin_stable/starting_pieces/stairs_0_mirrored",
+        "processors": "minecraft:stable_degradation",
+        "projection": "rigid"
+      },
+      "weight": 1
+    },
+    {
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "minecraft:bastion/hoglin_stable/starting_pieces/stairs_1_mirrored",
+        "processors": "minecraft:stable_degradation",
+        "projection": "rigid"
+      },
+      "weight": 1
+    },
+    {
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "minecraft:bastion/hoglin_stable/starting_pieces/stairs_2_mirrored",
+        "processors": "minecraft:stable_degradation",
+        "projection": "rigid"
+      },
+      "weight": 1
+    },
+    {
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "minecraft:bastion/hoglin_stable/starting_pieces/stairs_3_mirrored",
+        "processors": "minecraft:stable_degradation",
+        "projection": "rigid"
+      },
+      "weight": 1
+    },
+    {
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "minecraft:bastion/hoglin_stable/starting_pieces/stairs_4_mirrored",
+        "processors": "minecraft:stable_degradation",
+        "projection": "rigid"
+      },
+      "weight": 1
+    }
+  ],
+  "fallback": "minecraft:empty"
+}

@@ -1,6 +1,6 @@
 use std::io::Write;
 
-use pumpkin_data::packet::clientbound::PLAY_BLOCK_ENTITY_DATA;
+use pumpkin_data::packet::clientbound::play::BLOCK_ENTITY_DATA;
 use pumpkin_macros::java_packet;
 use pumpkin_util::{math::position::BlockPos, version::JavaMinecraftVersion};
 
@@ -13,7 +13,7 @@ use crate::{
 ///
 /// This packet is sent by the server when a block entity's state changes
 /// (like text on a sign) or when the block entity is loaded into the client's view.
-#[java_packet(PLAY_BLOCK_ENTITY_DATA)]
+#[java_packet(BLOCK_ENTITY_DATA)]
 pub struct CBlockEntityData {
     /// The world coordinates of the block entity.
     pub location: BlockPos,

@@ -122,7 +122,7 @@ fn path_to_ident(relative: &str) -> String {
 /// and emit a `pumpkin-data/src/generated/chest_loot.rs` with static constants
 /// and a `get_chest_loot_table(key) -> Option<&'static ChestLootTable>` function.
 pub fn build() -> TokenStream {
-    let base = Path::new("../../assets/loot_table/chests");
+    let base = Path::new("../../assets/datapacks/26_2/data/minecraft/loot_table/chests");
 
     // Collect all JSON files recursively, sorted for deterministic output.
     let mut files: Vec<(String, ChestLootTableJson)> = collect_json_files(base, base);

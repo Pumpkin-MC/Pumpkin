@@ -1,4 +1,4 @@
-use pumpkin_data::packet::serverbound::PLAY_TEST_INSTANCE_BLOCK_ACTION;
+use pumpkin_data::packet::serverbound::play::TEST_INSTANCE_BLOCK_ACTION;
 use pumpkin_macros::java_packet;
 use pumpkin_util::math::position::BlockPos;
 
@@ -11,7 +11,7 @@ use crate::{
 use pumpkin_util::version::JavaMinecraftVersion;
 use std::io::Read;
 
-#[java_packet(PLAY_TEST_INSTANCE_BLOCK_ACTION)]
+#[java_packet(TEST_INSTANCE_BLOCK_ACTION)]
 pub struct STestInstanceBlockAction<'a> {
     pub pos: BlockPos,
     pub action: TestInstanceBlockAction,

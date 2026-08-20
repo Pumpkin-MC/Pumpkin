@@ -1,14 +1,18 @@
-use pumpkin_data::packet::serverbound::LOGIN_KEY;
-use pumpkin_macros::java_packet;
 use pumpkin_util::version::JavaMinecraftVersion;
 
-use crate::{ReadingError, ServerPacket, ser::NetworkReadExt};
+use crate::{MultiVersionJavaPacket, ReadingError, ServerPacket, ser::NetworkReadExt};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-#[java_packet(LOGIN_KEY)]
+//#[java_packet(KEY)]
 pub struct SEncryptionResponse {
     pub shared_secret: Box<[u8]>,
     pub verify_token: Box<[u8]>,
+}
+
+impl MultiVersionJavaPacket for SEncryptionResponse {
+    fn to_id(_version: JavaMinecraftVersion) -> i32 {
+        1
+    }
 }
 
 impl<'a> ServerPacket<'a> for SEncryptionResponse {

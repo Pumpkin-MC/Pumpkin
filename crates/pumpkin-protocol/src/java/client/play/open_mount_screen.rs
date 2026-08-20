@@ -1,10 +1,10 @@
-use pumpkin_data::packet::clientbound::PLAY_MOUNT_SCREEN_OPEN;
+use pumpkin_data::packet::clientbound::play::MOUNT_SCREEN_OPEN;
 use pumpkin_macros::java_packet;
 
 use crate::{ClientPacket, codec::var_int::VarInt, ser::NetworkWriteExt};
 use pumpkin_util::version::JavaMinecraftVersion;
 
-#[java_packet(PLAY_MOUNT_SCREEN_OPEN)]
+#[java_packet(MOUNT_SCREEN_OPEN)]
 pub struct COpenMountScreen {
     pub window_id: u8,
     pub slot_count: VarInt,

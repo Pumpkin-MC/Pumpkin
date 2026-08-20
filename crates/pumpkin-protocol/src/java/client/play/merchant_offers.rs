@@ -1,4 +1,4 @@
-use pumpkin_data::packet::clientbound::PLAY_MERCHANT_OFFERS;
+use pumpkin_data::packet::clientbound::play::MERCHANT_OFFERS;
 use pumpkin_macros::java_packet;
 
 use crate::ClientPacket;
@@ -62,7 +62,7 @@ impl MerchantOffer {
     }
 }
 
-#[java_packet(PLAY_MERCHANT_OFFERS)]
+#[java_packet(MERCHANT_OFFERS)]
 pub struct CMerchantOffers {
     pub window_id: VarInt,
     pub offers: Vec<MerchantOffer>,

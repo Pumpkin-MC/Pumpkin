@@ -4,11 +4,11 @@ use crate::VarInt;
 use crate::codec::item_stack_seralizer::ItemStackSerializer;
 use crate::{ClientPacket, WritingError, ser::NetworkWriteExt};
 
-use pumpkin_data::packet::clientbound::PLAY_CONTAINER_SET_SLOT;
+use pumpkin_data::packet::clientbound::play::CONTAINER_SET_SLOT;
 use pumpkin_macros::java_packet;
 use pumpkin_util::version::JavaMinecraftVersion;
 
-#[java_packet(PLAY_CONTAINER_SET_SLOT)]
+#[java_packet(CONTAINER_SET_SLOT)]
 pub struct CSetContainerSlot<'a> {
     pub window_id: i8,
     pub state_id: VarInt,

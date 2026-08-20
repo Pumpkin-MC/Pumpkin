@@ -320,41 +320,41 @@ impl PendingConnection {
 
         match packet.id {
             id if id == pumpkin_protocol::java::server::login::SLoginStart::to_id(version) => {
-                self.handle_login_start(
-                    server,
-                    pumpkin_protocol::java::server::login::SLoginStart::read(
-                        &mut payload,
-                        &version,
-                    )?,
-                )
-                .await;
-                Ok(())
+                Ok(self
+                    .handle_login_start(
+                        server,
+                        pumpkin_protocol::java::server::login::SLoginStart::read(
+                            &mut payload,
+                            &version,
+                        )?,
+                    )
+                    .await)
             }
             id if id
                 == pumpkin_protocol::java::server::login::SEncryptionResponse::to_id(version) =>
             {
-                self.handle_encryption_response(
-                    server,
-                    pumpkin_protocol::java::server::login::SEncryptionResponse::read(
-                        &mut payload,
-                        &version,
-                    )?,
-                )
-                .await;
-                Ok(())
+                Ok(self
+                    .handle_encryption_response(
+                        server,
+                        pumpkin_protocol::java::server::login::SEncryptionResponse::read(
+                            &mut payload,
+                            &version,
+                        )?,
+                    )
+                    .await)
             }
             id if id
                 == pumpkin_protocol::java::server::login::SLoginPluginResponse::to_id(version) =>
             {
-                self.handle_plugin_response(
-                    server,
-                    pumpkin_protocol::java::server::login::SLoginPluginResponse::read(
-                        &mut payload,
-                        &version,
-                    )?,
-                )
-                .await;
-                Ok(())
+                Ok(self
+                    .handle_plugin_response(
+                        server,
+                        pumpkin_protocol::java::server::login::SLoginPluginResponse::read(
+                            &mut payload,
+                            &version,
+                        )?,
+                    )
+                    .await)
             }
             id if id
                 == pumpkin_protocol::java::server::login::SLoginCookieResponse::to_id(version) =>
@@ -365,33 +365,18 @@ impl PendingConnection {
                         &version,
                     )?,
                 );
-                Ok(())
+                Ok(None)
             }
             id if id
                 == pumpkin_protocol::java::server::login::SLoginAcknowledged::to_id(version) =>
             {
-                self.handle_login_acknowledged(server).await;
-                Ok(())
+                Ok(self.handle_login_acknowledged(server).await)
             }
             _ => Err(ReadingError::Message(format!(
                 "Failed to handle packet id {} in Login State",
                 packet.id
             ))),
-        }?;
-
-        if self.version.load() < JavaMinecraftVersion::V_1_20_2
-            && self.connection_state.load() == ConnectionState::Play
-            && let Some(profile) = self.gameprofile.clone()
-        {
-            let config = self.config.clone().unwrap_or_default();
-            if let Some(reason) = can_not_join(&profile, &self.address, server).await {
-                self.kick(reason).await;
-                return Ok(Some(PacketHandlerResult::Stop));
-            }
-            return Ok(Some(PacketHandlerResult::ReadyToPlay(profile, config)));
         }
-
-        Ok(None)
     }
 
     async fn handle_config_packet(

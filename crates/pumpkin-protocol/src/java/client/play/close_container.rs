@@ -1,7 +1,7 @@
 use crate::ClientPacket;
 use crate::VarInt;
 use crate::ser::NetworkWriteExt;
-use pumpkin_data::packet::clientbound::PLAY_CONTAINER_CLOSE;
+use pumpkin_data::packet::clientbound::play::CONTAINER_CLOSE;
 use pumpkin_macros::java_packet;
 use pumpkin_util::version::JavaMinecraftVersion;
 
@@ -10,7 +10,7 @@ use pumpkin_util::version::JavaMinecraftVersion;
 /// This is used by the server to force the player's UI to shut, for example,
 /// if the player moves too far away from a chest or if an NPC's trade window
 /// is invalidated.
-#[java_packet(PLAY_CONTAINER_CLOSE)]
+#[java_packet(CONTAINER_CLOSE)]
 pub struct CCloseContainer {
     /// The ID of the container window to close.
     ///

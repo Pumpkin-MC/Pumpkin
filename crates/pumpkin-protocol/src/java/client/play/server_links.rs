@@ -1,8 +1,8 @@
 use crate::Link;
-use pumpkin_data::packet::clientbound::PLAY_SERVER_LINKS;
+use pumpkin_data::packet::clientbound::play::SERVER_LINKS;
 use pumpkin_macros::java_packet;
 
-#[java_packet(PLAY_SERVER_LINKS)]
+#[java_packet(SERVER_LINKS)]
 pub struct CPlayServerLinks<'a> {
     pub links: &'a [Link<'a>],
 }

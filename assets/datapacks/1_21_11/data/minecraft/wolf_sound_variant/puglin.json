@@ -1,0 +1,8 @@
+{
+  "ambient_sound": "minecraft:entity.wolf_puglin.ambient",
+  "death_sound": "minecraft:entity.wolf_puglin.death",
+  "growl_sound": "minecraft:entity.wolf_puglin.growl",
+  "hurt_sound": "minecraft:entity.wolf_puglin.hurt",
+  "pant_sound": "minecraft:entity.wolf_puglin.pant",
+  "whine_sound": "minecraft:entity.wolf_puglin.whine"
+}

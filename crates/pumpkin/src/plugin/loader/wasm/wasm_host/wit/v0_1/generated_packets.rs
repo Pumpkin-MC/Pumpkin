@@ -63,17 +63,6 @@ pub fn serialize_java_packet(
             crate::net::java::JavaClient::write_packet_for_version(&p, version, &mut buf).unwrap();
             Some(buf.into())
         }
-        ClientboundPacket::LoginCEncryptionRequest(data) => {
-            let p = pumpkin_protocol::java::client::login::CEncryptionRequest {
-                server_id: &data.server_id,
-                public_key: &data.public_key,
-                verify_token: &data.verify_token,
-                should_authenticate: data.should_authenticate.try_into().unwrap(),
-            };
-            let mut buf = Vec::new();
-            crate::net::java::JavaClient::write_packet_for_version(&p, version, &mut buf).unwrap();
-            Some(buf.into())
-        }
         ClientboundPacket::LoginCLoginDisconnect(data) => {
             let p = pumpkin_protocol::java::client::login::CLoginDisconnect {
                 json_reason: data.json_reason.clone(),
@@ -294,27 +283,6 @@ pub fn serialize_java_packet(
             let p = pumpkin_protocol::java::client::play::CSetEntityMetadata {
                 entity_id: VarInt(data.entity_id),
                 metadata: data.metadata.clone().into_boxed_slice(),
-            };
-            let mut buf = Vec::new();
-            crate::net::java::JavaClient::write_packet_for_version(&p, version, &mut buf).unwrap();
-            Some(buf.into())
-        }
-        ClientboundPacket::CEntityPositionSync(data) => {
-            let p = pumpkin_protocol::java::client::play::CEntityPositionSync {
-                entity_id: VarInt(data.entity_id),
-                position: pumpkin_util::math::vector3::Vector3::new(
-                    data.position.0 as _,
-                    data.position.1 as _,
-                    data.position.2 as _,
-                ),
-                delta: pumpkin_util::math::vector3::Vector3::new(
-                    data.delta.0 as _,
-                    data.delta.1 as _,
-                    data.delta.2 as _,
-                ),
-                yaw: data.yaw.try_into().unwrap(),
-                pitch: data.pitch.try_into().unwrap(),
-                on_ground: data.on_ground.try_into().unwrap(),
             };
             let mut buf = Vec::new();
             crate::net::java::JavaClient::write_packet_for_version(&p, version, &mut buf).unwrap();
@@ -983,14 +951,6 @@ pub fn deserialize_java_serverbound_packet(
                 result: p.result.0.try_into().unwrap(),
             }))
         }
-        id if id == pumpkin_protocol::java::server::login::SEncryptionResponse::to_id(version) => {
-            use pumpkin_protocol::ServerPacket;
-            let p = <pumpkin_protocol::java::server::login::SEncryptionResponse as pumpkin_protocol::ServerPacket>::read(&mut payload, &version).ok()?;
-            Some(ServerboundPacket::LoginSEncryptionResponse(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::java_packets::LoginSEncryptionResponse {
-                shared_secret: p.shared_secret.to_vec(),
-                verify_token: p.verify_token.to_vec(),
-            }))
-        }
         id if id == pumpkin_protocol::java::server::play::SAttack::to_id(version) => {
             use pumpkin_protocol::ServerPacket;
             let p = <pumpkin_protocol::java::server::play::SAttack as pumpkin_protocol::ServerPacket>::read(&mut payload, &version).ok()?;
@@ -1064,13 +1024,6 @@ pub fn deserialize_java_serverbound_packet(
             Some(ServerboundPacket::SCommandSuggestion(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::java_packets::SCommandSuggestion {
                 id: p.id.0.try_into().unwrap(),
                 command: p.command.into(),
-            }))
-        }
-        id if id == pumpkin_protocol::java::server::play::SConfirmTeleport::to_id(version) => {
-            use pumpkin_protocol::ServerPacket;
-            let p = <pumpkin_protocol::java::server::play::SConfirmTeleport as pumpkin_protocol::ServerPacket>::read(&mut payload, &version).ok()?;
-            Some(ServerboundPacket::SConfirmTeleport(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::java_packets::SConfirmTeleport {
-                teleport_id: p.teleport_id.0.try_into().unwrap(),
             }))
         }
         id if id == pumpkin_protocol::java::server::play::SContainerButtonClick::to_id(version) => {
@@ -1508,17 +1461,6 @@ impl ToWitClientboundJava for pumpkin_protocol::java::client::config::CTransfer<
     }
 }
 
-impl ToWitClientboundJava for pumpkin_protocol::java::client::login::CEncryptionRequest<'_> {
-    fn to_wit(&self) -> ClientboundPacket {
-        ClientboundPacket::LoginCEncryptionRequest(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::java_packets::LoginCEncryptionRequest {
-                server_id: self.server_id.to_string(),
-                public_key: self.public_key.iter().map(|v| *v as _).collect(),
-                verify_token: self.verify_token.iter().map(|v| *v as _).collect(),
-                should_authenticate: self.should_authenticate.try_into().unwrap(),
-        })
-    }
-}
-
 impl ToWitClientboundJava for pumpkin_protocol::java::client::login::CLoginDisconnect {
     fn to_wit(&self) -> ClientboundPacket {
         ClientboundPacket::LoginCLoginDisconnect(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::java_packets::LoginCLoginDisconnect {
@@ -1718,19 +1660,6 @@ impl ToWitClientboundJava for pumpkin_protocol::java::client::play::CSetEntityMe
         ClientboundPacket::CSetEntityMetadata(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::java_packets::CSetEntityMetadata {
                 entity_id: self.entity_id.0.try_into().unwrap(),
                 metadata: self.metadata.to_vec(),
-        })
-    }
-}
-
-impl ToWitClientboundJava for pumpkin_protocol::java::client::play::CEntityPositionSync {
-    fn to_wit(&self) -> ClientboundPacket {
-        ClientboundPacket::CEntityPositionSync(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::java_packets::CEntityPositionSync {
-                entity_id: self.entity_id.0.try_into().unwrap(),
-                position: (self.position.x as _, self.position.y as _, self.position.z as _),
-                delta: (self.delta.x as _, self.delta.y as _, self.delta.z as _),
-                yaw: self.yaw.try_into().unwrap(),
-                pitch: self.pitch.try_into().unwrap(),
-                on_ground: self.on_ground.try_into().unwrap(),
         })
     }
 }
@@ -2284,10 +2213,6 @@ pub fn clientbound_java_any_to_wit(any: &dyn Any) -> Option<ClientboundPacket> {
     if let Some(p) = any.downcast_ref::<pumpkin_protocol::java::client::config::CTransfer>() {
         return Some(p.to_wit());
     }
-    if let Some(p) = any.downcast_ref::<pumpkin_protocol::java::client::login::CEncryptionRequest>()
-    {
-        return Some(p.to_wit());
-    }
     if let Some(p) = any.downcast_ref::<pumpkin_protocol::java::client::login::CLoginDisconnect>() {
         return Some(p.to_wit());
     }
@@ -2363,10 +2288,6 @@ pub fn clientbound_java_any_to_wit(any: &dyn Any) -> Option<ClientboundPacket> {
         return Some(p.to_wit());
     }
     if let Some(p) = any.downcast_ref::<pumpkin_protocol::java::client::play::CSetEntityMetadata>()
-    {
-        return Some(p.to_wit());
-    }
-    if let Some(p) = any.downcast_ref::<pumpkin_protocol::java::client::play::CEntityPositionSync>()
     {
         return Some(p.to_wit());
     }

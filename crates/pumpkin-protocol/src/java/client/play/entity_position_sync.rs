@@ -2,7 +2,7 @@ use crate::ClientPacket;
 use crate::VarInt;
 use crate::packet::MultiVersionJavaPacket;
 use crate::ser::NetworkWriteExt;
-use pumpkin_data::packet::clientbound::{PLAY_ENTITY_POSITION_SYNC, PLAY_TELEPORT_ENTITY};
+use pumpkin_data::packet::clientbound::play::{ENTITY_POSITION_SYNC, TELEPORT_ENTITY};
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::version::JavaMinecraftVersion;
 
@@ -54,9 +54,9 @@ impl CEntityPositionSync {
 impl MultiVersionJavaPacket for CEntityPositionSync {
     fn to_id(version: JavaMinecraftVersion) -> i32 {
         if version >= JavaMinecraftVersion::V_1_21_2 {
-            PLAY_ENTITY_POSITION_SYNC.to_id(version)
+            ENTITY_POSITION_SYNC.to_id(version)
         } else {
-            PLAY_TELEPORT_ENTITY.to_id(version)
+            TELEPORT_ENTITY.to_id(version)
         }
     }
 }

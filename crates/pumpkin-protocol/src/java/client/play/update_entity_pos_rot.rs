@@ -1,4 +1,4 @@
-use pumpkin_data::packet::clientbound::PLAY_MOVE_ENTITY_POS_ROT;
+use pumpkin_data::packet::clientbound::play::MOVE_ENTITY_POS_ROT;
 use pumpkin_macros::java_packet;
 use pumpkin_util::math::vector3::Vector3;
 
@@ -7,7 +7,7 @@ use crate::VarInt;
 use crate::ser::NetworkWriteExt;
 use pumpkin_util::version::JavaMinecraftVersion;
 
-#[java_packet(PLAY_MOVE_ENTITY_POS_ROT)]
+#[java_packet(MOVE_ENTITY_POS_ROT)]
 pub struct CUpdateEntityPosRot {
     pub entity_id: VarInt,
     pub delta: Vector3<i16>,

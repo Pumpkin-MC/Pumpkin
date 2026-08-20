@@ -1,0 +1,48 @@
+{
+  "type": "minecraft:jigsaw",
+  "biomes": "#minecraft:has_structure/ancient_city",
+  "max_distance_from_center": 116,
+  "size": 7,
+  "spawn_overrides": {
+    "ambient": {
+      "bounding_box": "full",
+      "spawns": []
+    },
+    "axolotls": {
+      "bounding_box": "full",
+      "spawns": []
+    },
+    "creature": {
+      "bounding_box": "full",
+      "spawns": []
+    },
+    "misc": {
+      "bounding_box": "full",
+      "spawns": []
+    },
+    "monster": {
+      "bounding_box": "full",
+      "spawns": []
+    },
+    "underground_water_creature": {
+      "bounding_box": "full",
+      "spawns": []
+    },
+    "water_ambient": {
+      "bounding_box": "full",
+      "spawns": []
+    },
+    "water_creature": {
+      "bounding_box": "full",
+      "spawns": []
+    }
+  },
+  "start_height": {
+    "absolute": -27
+  },
+  "start_jigsaw_name": "minecraft:city_anchor",
+  "start_pool": "minecraft:ancient_city/city_center",
+  "step": "underground_decoration",
+  "terrain_adaptation": "beard_box",
+  "use_expansion_hack": false
+}

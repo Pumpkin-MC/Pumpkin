@@ -69,11 +69,16 @@ impl EntityBase for TNTEntity {
             if fuse <= 1 {
                 // TNT explodes now
                 self.entity.remove().await;
-                self.entity
-                    .world
-                    .load()
-                    .explode(self.entity.pos.load(), self.power)
-                    .await;
+                let world = self.entity.world.load();
+                if world.level_info.load().game_rules.tnt_explodes {
+                    world
+                        .explode(
+                            self.entity.pos.load(),
+                            self.power,
+                            crate::world::ExplosionInteraction::Tnt,
+                        )
+                        .await;
+                }
             } else {
                 // Safe decrement
                 self.fuse.store(fuse - 1, Relaxed);

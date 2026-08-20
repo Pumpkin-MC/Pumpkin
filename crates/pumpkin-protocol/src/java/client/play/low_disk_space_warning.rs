@@ -1,10 +1,10 @@
-use pumpkin_data::packet::clientbound::PLAY_LOW_DISK_SPACE_WARNING;
+use pumpkin_data::packet::clientbound::play::LOW_DISK_SPACE_WARNING;
 use pumpkin_macros::java_packet;
 
 use crate::ClientPacket;
 use pumpkin_util::version::JavaMinecraftVersion;
 
-#[java_packet(PLAY_LOW_DISK_SPACE_WARNING)]
+#[java_packet(LOW_DISK_SPACE_WARNING)]
 pub struct CLowDiskSpaceWarning;
 
 impl ClientPacket for CLowDiskSpaceWarning {

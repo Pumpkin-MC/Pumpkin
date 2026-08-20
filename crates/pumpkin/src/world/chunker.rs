@@ -75,7 +75,6 @@ pub async fn update_position(player: &Arc<Player>) {
                 .await;
         }
     }
-
     let (loading_iter, unloading_iter) =
         Cylindrical::changed_chunks(old_cylindrical, new_cylindrical);
     let loading_chunks: Vec<_> = loading_iter.collect();

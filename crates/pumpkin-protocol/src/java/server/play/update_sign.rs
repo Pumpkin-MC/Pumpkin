@@ -1,4 +1,4 @@
-use pumpkin_data::packet::serverbound::PLAY_SIGN_UPDATE;
+use pumpkin_data::packet::serverbound::play::SIGN_UPDATE;
 use pumpkin_macros::java_packet;
 use pumpkin_util::{math::position::BlockPos, version::JavaMinecraftVersion};
 
@@ -7,7 +7,7 @@ use crate::{
     ser::{NetworkReadExt, NetworkReadSliceExt, ReadingError},
 };
 
-#[java_packet(PLAY_SIGN_UPDATE)]
+#[java_packet(SIGN_UPDATE)]
 pub struct SUpdateSign<'a> {
     pub location: BlockPos,
     pub is_front_text: bool,

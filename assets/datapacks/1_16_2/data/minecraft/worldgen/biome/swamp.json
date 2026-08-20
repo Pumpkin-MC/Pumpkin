@@ -1,0 +1,22 @@
+{
+  "category": "swamp",
+  "temperature": 0.800000011920929,
+  "downfall": 0.8999999761581421,
+  "depth": -0.20000000298023224,
+  "effects": {
+    "water_fog_color": 2302743,
+    "water_color": 6388580,
+    "foliage_color": 6975545,
+    "grass_color_modifier": "swamp",
+    "fog_color": 12638463,
+    "mood_sound": {
+      "offset": 2.0,
+      "sound": "minecraft:ambient.cave",
+      "block_search_extent": 8,
+      "tick_delay": 6000
+    },
+    "sky_color": 7907327
+  },
+  "precipitation": "rain",
+  "scale": 0.10000000149011612
+}

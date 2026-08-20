@@ -1,4 +1,4 @@
-use pumpkin_data::packet::serverbound::PLAY_LOCK_DIFFICULTY;
+use pumpkin_data::packet::serverbound::play::LOCK_DIFFICULTY;
 use pumpkin_macros::java_packet;
 
 use crate::{
@@ -7,7 +7,7 @@ use crate::{
 };
 use pumpkin_util::version::JavaMinecraftVersion;
 
-#[java_packet(PLAY_LOCK_DIFFICULTY)]
+#[java_packet(LOCK_DIFFICULTY)]
 pub struct SLockDifficulty {
     pub locked: bool,
 }

@@ -1,0 +1,153 @@
+{
+  "parent": "minecraft:recipes/root",
+  "criteria": {
+    "has_golden_axe": {
+      "conditions": {
+        "items": [
+          {
+            "items": "minecraft:golden_axe"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    },
+    "has_golden_boots": {
+      "conditions": {
+        "items": [
+          {
+            "items": "minecraft:golden_boots"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    },
+    "has_golden_chestplate": {
+      "conditions": {
+        "items": [
+          {
+            "items": "minecraft:golden_chestplate"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    },
+    "has_golden_helmet": {
+      "conditions": {
+        "items": [
+          {
+            "items": "minecraft:golden_helmet"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    },
+    "has_golden_hoe": {
+      "conditions": {
+        "items": [
+          {
+            "items": "minecraft:golden_hoe"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    },
+    "has_golden_horse_armor": {
+      "conditions": {
+        "items": [
+          {
+            "items": "minecraft:golden_horse_armor"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    },
+    "has_golden_leggings": {
+      "conditions": {
+        "items": [
+          {
+            "items": "minecraft:golden_leggings"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    },
+    "has_golden_nautilus_armor": {
+      "conditions": {
+        "items": [
+          {
+            "items": "minecraft:golden_nautilus_armor"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    },
+    "has_golden_pickaxe": {
+      "conditions": {
+        "items": [
+          {
+            "items": "minecraft:golden_pickaxe"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    },
+    "has_golden_shovel": {
+      "conditions": {
+        "items": [
+          {
+            "items": "minecraft:golden_shovel"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    },
+    "has_golden_spear": {
+      "conditions": {
+        "items": [
+          {
+            "items": "minecraft:golden_spear"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    },
+    "has_golden_sword": {
+      "conditions": {
+        "items": [
+          {
+            "items": "minecraft:golden_sword"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    },
+    "has_the_recipe": {
+      "conditions": {
+        "recipe": "minecraft:gold_nugget_from_smelting"
+      },
+      "trigger": "minecraft:recipe_unlocked"
+    }
+  },
+  "requirements": [
+    [
+      "has_the_recipe",
+      "has_golden_pickaxe",
+      "has_golden_shovel",
+      "has_golden_axe",
+      "has_golden_hoe",
+      "has_golden_sword",
+      "has_golden_spear",
+      "has_golden_helmet",
+      "has_golden_chestplate",
+      "has_golden_leggings",
+      "has_golden_boots",
+      "has_golden_horse_armor",
+      "has_golden_nautilus_armor"
+    ]
+  ],
+  "rewards": {
+    "recipes": [
+      "minecraft:gold_nugget_from_smelting"
+    ]
+  }
+}

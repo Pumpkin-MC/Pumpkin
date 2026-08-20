@@ -1,12 +1,12 @@
 use std::io::Write;
 
-use pumpkin_data::packet::clientbound::PLAY_SET_OBJECTIVE;
+use pumpkin_data::packet::clientbound::play::SET_OBJECTIVE;
 use pumpkin_macros::java_packet;
 use pumpkin_util::{text::TextComponent, version::JavaMinecraftVersion};
 
 use crate::{ClientPacket, NumberFormat, VarInt, WritingError, ser::NetworkWriteExt};
 
-#[java_packet(PLAY_SET_OBJECTIVE)]
+#[java_packet(SET_OBJECTIVE)]
 pub struct CUpdateObjectives {
     pub objective_name: String,
     pub mode: u8,
@@ -38,14 +38,14 @@ impl ClientPacket for CUpdateObjectives {
     fn write_packet_data(
         &self,
         write: impl Write,
-        _version: &JavaMinecraftVersion,
+        version: &JavaMinecraftVersion,
     ) -> Result<(), WritingError> {
         let mut write = write;
 
         write.write_string(&self.objective_name)?;
         write.write_u8(self.mode)?;
         if self.mode == 0 || self.mode == 2 {
-            write.write_slice(&self.display_name.encode())?;
+            write.write_component(&self.display_name, version)?;
             write.write_var_int(&self.render_type)?;
             write.write_option(&self.number_format, |p, v| {
                 match v {
@@ -59,7 +59,7 @@ impl ClientPacket for CUpdateObjectives {
                     }
                     NumberFormat::Fixed(text_component) => {
                         p.write_var_int(&VarInt(2))?;
-                        p.write_slice(&text_component.encode())
+                        p.write_component(text_component, version)
                     }
                 }
             })

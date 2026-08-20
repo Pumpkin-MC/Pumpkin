@@ -1,0 +1,34 @@
+{
+  "description": {
+    "translate": "enchantment.minecraft.loyalty"
+  },
+  "min_cost": {
+    "base": 12,
+    "per_level_above_first": 7
+  },
+  "max_cost": {
+    "base": 50,
+    "per_level_above_first": 0
+  },
+  "anvil_cost": 2,
+  "slots": [
+    "mainhand"
+  ],
+  "supported_items": "#minecraft:enchantable/trident",
+  "weight": 5,
+  "max_level": 3,
+  "effects": {
+    "minecraft:trident_return_acceleration": [
+      {
+        "effect": {
+          "value": {
+            "base": 1.0,
+            "per_level_above_first": 1.0,
+            "type": "minecraft:linear"
+          },
+          "type": "minecraft:add"
+        }
+      }
+    ]
+  }
+}
