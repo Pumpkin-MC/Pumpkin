@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 
 use pumpkin_data::biome::Biome;
-use pumpkin_data::structures::StructureSet;
+use pumpkin_data::structures::{StructureKeys, StructurePlacementType, StructureSet};
 use pumpkin_data::tag::{self, RegistryKey};
 use pumpkin_data::translation;
 use pumpkin_util::PermissionLvl;
@@ -11,7 +11,9 @@ use pumpkin_util::text::click::ClickEvent;
 use pumpkin_util::text::hover::HoverEvent;
 use pumpkin_util::text::{TextComponent, color::NamedColor};
 use pumpkin_world::generation::generator::biome_finder::find_closest_biome_3d;
-use pumpkin_world::generation::generator::structure_finder::find_nearest_structure;
+use pumpkin_world::generation::generator::structure_finder::{
+    find_nearest_structure, find_nearest_structure_start,
+};
 use rustc_hash::FxHashSet;
 
 use crate::command::argument_builder::{ArgumentBuilder, argument, command, literal};
@@ -186,15 +188,36 @@ impl CommandExecutor for LocateStructureExecutor {
             // data is CPU-bound just like the biome spiral, so keep it off
             // the async workers too.
             let found = tokio::task::spawn_blocking(move || {
-                world_gen.global_structure_cache().and_then(|global_cache| {
-                    find_nearest_structure(
-                        origin,
-                        &[&set.placement],
-                        STRUCTURE_SEARCH_RADIUS,
-                        seed as i64,
-                        global_cache,
-                    )
-                })
+                match &set.placement.placement_type {
+                    // Strongholds come out of the pre-computed ring cache, which
+                    // already holds positions they really occupy.
+                    StructurePlacementType::ConcentricRings(_) => {
+                        world_gen.global_structure_cache().and_then(|global_cache| {
+                            find_nearest_structure(
+                                origin,
+                                &[&set.placement],
+                                STRUCTURE_SEARCH_RADIUS,
+                                seed as i64,
+                                global_cache,
+                            )
+                        })
+                    }
+                    // Everything else is spread over a grid whose candidate chunks
+                    // are only *possible* sites: the biome at a candidate can still
+                    // reject every structure in the set. Resolving the start makes
+                    // sure the reported position actually holds one.
+                    StructurePlacementType::RandomSpread(_) => {
+                        let targets: Vec<StructureKeys> =
+                            set.structures.iter().map(|entry| entry.structure).collect();
+                        find_nearest_structure_start(
+                            origin,
+                            set,
+                            &targets,
+                            STRUCTURE_SEARCH_RADIUS,
+                            &world_gen,
+                        )
+                    }
+                }
             })
             .await
             .map_err(|_| SEARCH_FAILED_ERROR_TYPE.create_without_context())?;
