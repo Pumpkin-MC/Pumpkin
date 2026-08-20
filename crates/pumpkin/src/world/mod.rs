@@ -1739,34 +1739,6 @@ impl World {
         }
     }
 
-    pub fn get_fluid_collisions(self: &Arc<Self>, bounding_box: BoundingBox) -> Vec<&Fluid> {
-        let mut collisions = Vec::new();
-
-        let min = bounding_box.min_block_pos();
-
-        let max = bounding_box.max_block_pos();
-
-        for x in min.0.x..=max.0.x {
-            for y in min.0.y..=max.0.y {
-                for z in min.0.z..=max.0.z {
-                    let pos = BlockPos::new(x, y, z);
-
-                    let (fluid, state) = self.get_fluid_and_fluid_state(&pos);
-
-                    if fluid.id != Fluid::EMPTY.id {
-                        let height = f64::from(state.height);
-
-                        if height >= bounding_box.min.y {
-                            collisions.push(fluid);
-                        }
-                    }
-                }
-            }
-        }
-
-        collisions
-    }
-
     pub fn check_fluid_collision(self: &Arc<Self>, bounding_box: BoundingBox) -> bool {
         let min = bounding_box.min_block_pos();
 
