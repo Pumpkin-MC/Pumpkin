@@ -45,6 +45,7 @@ use pumpkin_data::data_component_impl::{
 };
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::entity::{EntityPose, EntityStatus, EntityType};
+use pumpkin_data::fluid::Fluid;
 use pumpkin_data::item_stack::{DamageResult, ItemStack};
 use pumpkin_data::sound::SoundCategory;
 use pumpkin_data::{Block, Enchantment, translation};
@@ -61,6 +62,7 @@ use pumpkin_protocol::{
     java::client::play::{CDamageEvent, CSetEquipment, Metadata, MetadataSerializer},
     ser::{NetworkWriteExt, WritingError},
 };
+use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::text::TextComponent;
 use rand::RngExt;
@@ -159,6 +161,7 @@ impl EffectParticle {
 impl LivingEntity {
     const USING_ITEM_FLAG: u8 = 1;
     const OFF_HAND_ACTIVE_FLAG: u8 = 2;
+    const RANDOM_TELEPORT_ATTEMPTS: usize = 16;
     #[expect(dead_code)]
     const USING_RIPTIDE_FLAG: u8 = 4;
 
@@ -3103,23 +3106,88 @@ impl LivingEntity {
                 }
                 ConsumeEffect::TeleportRandomly(diameter) => {
                     let center = self.entity.pos.load();
-                    let radius = f64::from(*diameter) / 2.0;
-                    let target_x = center.x + (rand::random::<f64>() - 0.5) * radius * 2.0;
-                    let target_y = center.y + (rand::random::<f64>() - 0.5) * radius;
-                    let target_z = center.z + (rand::random::<f64>() - 0.5) * radius * 2.0;
-                    let pos =
-                        pumpkin_util::math::vector3::Vector3::new(target_x, target_y, target_z);
+                    let Some(pos) = self.find_random_teleport_target(*diameter) else {
+                        continue;
+                    };
                     let (yaw, pitch) = (self.entity.yaw.load(), self.entity.pitch.load());
-                    let world = self.entity.world.load().clone();
+                    let world = self.entity.world.load_full();
                     caller
                         .clone()
-                        .teleport(pos, Some(yaw), Some(pitch), world)
+                        .teleport(pos, Some(yaw), Some(pitch), world.clone())
                         .await;
+
+                    let destination = self.entity.pos.load();
+                    if destination != center {
+                        self.fall_distance.store(0.0);
+                        world.emit_game_event("teleport", center).await;
+                        world.play_sound(
+                            Sound::ItemChorusFruitTeleport,
+                            SoundCategory::Players,
+                            &destination,
+                        );
+                    }
                 }
                 ConsumeEffect::PlaySound(_) => {}
             }
         }
     }
+
+    fn find_random_teleport_target(&self, diameter: f32) -> Option<Vector3<f64>> {
+        let center = self.entity.pos.load();
+        let world = self.entity.world.load();
+        let bottom_y = world.get_bottom_y();
+        let top_y = world.get_top_y();
+        let dimensions = self.entity.entity_dimension.load();
+        let mut rng = rand::rng();
+
+        'attempts: for _ in 0..Self::RANDOM_TELEPORT_ATTEMPTS {
+            let target_x = random_teleport_coordinate(center.x, diameter, rng.random());
+            let target_z = random_teleport_coordinate(center.z, diameter, rng.random());
+            let sampled_y = random_teleport_coordinate(center.y, diameter, rng.random())
+                .clamp(f64::from(bottom_y + 1), f64::from(top_y));
+            let mut block_y = sampled_y.floor() as i32;
+            let block_x = target_x.floor() as i32;
+            let block_z = target_z.floor() as i32;
+
+            loop {
+                if block_y <= bottom_y {
+                    continue 'attempts;
+                }
+
+                let below = BlockPos::new(block_x, block_y - 1, block_z);
+                let Some(below_state) = world.get_block_state_if_loaded(&below) else {
+                    continue 'attempts;
+                };
+                if below_state.is_solid() {
+                    break;
+                }
+                block_y -= 1;
+            }
+
+            let target = Vector3::new(target_x, f64::from(block_y), target_z);
+            let bounding_box = BoundingBox::new_from_pos(target.x, target.y, target.z, &dimensions);
+
+            for block_pos in
+                BlockPos::iterate(bounding_box.min_block_pos(), bounding_box.max_block_pos())
+            {
+                if world.get_block_state_if_loaded(&block_pos).is_none()
+                    || world.get_fluid(&block_pos).id != Fluid::EMPTY.id
+                {
+                    continue 'attempts;
+                }
+            }
+
+            if world.is_space_empty(bounding_box) {
+                return Some(target);
+            }
+        }
+
+        None
+    }
+}
+
+fn random_teleport_coordinate(center: f64, diameter: f32, random: f64) -> f64 {
+    center + (random - 0.5) * f64::from(diameter)
 }
 
 /// Mirrors vanilla's strict `random < probability` consume-effect gate.
@@ -3129,7 +3197,7 @@ const fn consume_effect_probability_applies(probability: f32, random: f32) -> bo
 
 #[cfg(test)]
 mod consumable_effect_tests {
-    use super::consume_effect_probability_applies;
+    use super::{consume_effect_probability_applies, random_teleport_coordinate};
 
     #[test]
     fn consumable_effect_probability_matches_vanilla_strict_threshold() {
@@ -3137,6 +3205,13 @@ mod consumable_effect_tests {
         assert!(consume_effect_probability_applies(1.0, 0.999));
         assert!(consume_effect_probability_applies(0.5, 0.499));
         assert!(!consume_effect_probability_applies(0.5, 0.5));
+    }
+
+    #[test]
+    fn random_teleport_coordinate_uses_full_diameter() {
+        assert_eq!(random_teleport_coordinate(10.0, 16.0, 0.0), 2.0);
+        assert_eq!(random_teleport_coordinate(10.0, 16.0, 0.5), 10.0);
+        assert_eq!(random_teleport_coordinate(10.0, 16.0, 1.0), 18.0);
     }
 }
 /// Returns `true` if `damage_type` is in `#minecraft:bypasses_armor` (1.21.11).
