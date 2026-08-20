@@ -5541,7 +5541,7 @@ impl World {
             return (&Fluid::EMPTY, state);
         };
 
-        let state = FluidState::get_state_from_id(id).expect("should be a valid fluidState");
+        let state = FluidState::get_state_from_id(id).unwrap_or(&Fluid::EMPTY.states[0]);
         (fluid, state)
     }
 
