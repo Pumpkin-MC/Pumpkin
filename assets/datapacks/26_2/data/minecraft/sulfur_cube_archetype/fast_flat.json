@@ -1,0 +1,45 @@
+{
+  "attribute_modifiers": [
+    {
+      "amount": -1.0,
+      "attribute": "minecraft:knockback_resistance",
+      "id": "minecraft:fast_flat_add_knockback_resistance",
+      "operation": "add_value"
+    },
+    {
+      "amount": -1.0,
+      "attribute": "minecraft:explosion_knockback_resistance",
+      "id": "minecraft:fast_flat_add_explosion_knockback_resistance",
+      "operation": "add_value"
+    },
+    {
+      "amount": 0.5,
+      "attribute": "minecraft:bounciness",
+      "id": "minecraft:fast_flat_add_bounciness",
+      "operation": "add_value"
+    },
+    {
+      "amount": -0.7999999970197678,
+      "attribute": "minecraft:friction_modifier",
+      "id": "minecraft:fast_flat_mul_friction_modifier",
+      "operation": "add_multiplied_total"
+    },
+    {
+      "amount": -0.9900000002235174,
+      "attribute": "minecraft:air_drag_modifier",
+      "id": "minecraft:fast_flat_mul_air_drag_modifier",
+      "operation": "add_multiplied_total"
+    }
+  ],
+  "items": "#minecraft:sulfur_cube_archetype/fast_flat",
+  "knockback_modifiers": {
+    "horizontal_power": 0.9125,
+    "vertical_power": 0.09
+  },
+  "sound_settings": {
+    "hit_sound": "minecraft:entity.sulfur_cube.fast_flat.hit",
+    "push_sound": "minecraft:entity.sulfur_cube.fast_flat.push",
+    "push_sound_cooldown": 0.9,
+    "push_sound_impulse_threshold": 0.03
+  }
+}

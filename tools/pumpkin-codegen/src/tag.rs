@@ -4,16 +4,15 @@ use std::{
 };
 
 use crate::block::BlockAssets;
-use crate::enchantments::Enchantment;
 use crate::entity_type::EntityType;
 use crate::fluid::Fluid;
 use crate::item::Item;
-use crate::{biome::Biome, version::JavaMinecraftVersion};
+use crate::version::JavaMinecraftVersion;
 use heck::ToPascalCase;
 use proc_macro2::TokenStream;
 use quote::{ToTokens, format_ident, quote};
 
-/// Builder that generates an enum with `from_string` and `identifier_string` methods.
+// Builder that generates an enum with `from_string` and `identifier_string` methods.
 pub struct EnumCreator {
     /// Name of the enum to generate (converted to PascalCase).
     pub name: String,
@@ -30,6 +29,20 @@ impl ToTokens for EnumCreator {
             let variant_name = format_ident!("{}", v.to_pascal_case());
             quote! { #variant_name }
         });
+
+        let all_variants = self.values.iter().map(|v| {
+            let variant_name = format_ident!("{}", v.to_pascal_case());
+            quote! { Self::#variant_name }
+        });
+
+        let network_variants = self
+            .values
+            .iter()
+            .filter(|v| !v.starts_with("worldgen/") || *v == "worldgen/biome")
+            .map(|v| {
+                let variant_name = format_ident!("{}", v.to_pascal_case());
+                quote! { Self::#variant_name }
+            });
 
         let from_string_arms = self.values.iter().map(|v| {
             let variant_name = format_ident!("{}", v.to_pascal_case());
@@ -48,6 +61,22 @@ impl ToTokens for EnumCreator {
             }
 
             impl #name {
+                pub const ALL: &[Self] = &[
+                    #(#all_variants),*
+                ];
+
+                pub const NETWORK_KEYS: &[Self] = &[
+                    #(#network_variants),*
+                ];
+
+                #[must_use]
+                pub const fn is_network_synced(&self) -> bool {
+                    match self {
+                        Self::WorldgenConfiguredFeature => false,
+                        _ => true,
+                    }
+                }
+
                 #[must_use]
                 pub fn from_string(s: &str) -> Option<Self> {
                     match s {
@@ -65,6 +94,30 @@ impl ToTokens for EnumCreator {
             }
         });
     }
+}
+
+fn load_datapack_registry_ids(dir: &std::path::Path) -> BTreeMap<String, u16> {
+    let mut id_map = BTreeMap::new();
+    if dir.is_dir() {
+        let mut entries: Vec<_> = fs::read_dir(dir)
+            .into_iter()
+            .flatten()
+            .filter_map(Result::ok)
+            .filter(|e| e.path().extension().is_some_and(|ext| ext == "json"))
+            .collect();
+        entries.sort_by_key(|e| e.path());
+        for (i, entry) in entries.iter().enumerate() {
+            let stem = entry
+                .path()
+                .file_stem()
+                .unwrap()
+                .to_string_lossy()
+                .into_owned();
+            id_map.insert(format!("minecraft:{stem}"), i as u16);
+            id_map.insert(stem, i as u16);
+        }
+    }
+    id_map
 }
 
 /// The newest protocol version whose tag data is served as the latest-version fallback.
@@ -95,51 +148,93 @@ pub(crate) fn build() -> TokenStream {
     let blocks_assets: BlockAssets =
         serde_json::from_str(&fs::read_to_string("../../assets/blocks.json").unwrap())
             .expect("Failed to parse blocks.json");
+    let mut block_id_map: BTreeMap<String, u16> = BTreeMap::new();
+    for b in &blocks_assets.blocks {
+        block_id_map.insert(b.name.clone(), b.id.0);
+        block_id_map.insert(format!("minecraft:{}", b.name), b.id.0);
+    }
+
     let items: BTreeMap<String, Item> =
         serde_json::from_str(&fs::read_to_string("../../assets/items.json").unwrap())
             .expect("Failed to parse items.json");
-    let biomes: BTreeMap<String, Biome> =
-        serde_json::from_str(&fs::read_to_string("../../assets/biome.json").unwrap())
-            .expect("Failed to parse biome.json");
+    let mut item_id_map: BTreeMap<String, u16> = BTreeMap::new();
+    for (name, item) in &items {
+        item_id_map.insert(name.clone(), item.id);
+        item_id_map.insert(format!("minecraft:{name}"), item.id);
+    }
+
     let fluids: Vec<Fluid> =
         serde_json::from_str(&fs::read_to_string("../../assets/fluids.json").unwrap())
             .expect("Failed to parse fluids.json");
-    let enchantments: BTreeMap<String, Enchantment> =
-        serde_json::from_str(&fs::read_to_string("../../assets/enchantments.json").unwrap())
-            .expect("Failed to parse enchantments.json");
+    let mut fluid_id_map: BTreeMap<String, u16> = BTreeMap::new();
+    for f in &fluids {
+        fluid_id_map.insert(f.name.clone(), f.id);
+        fluid_id_map.insert(format!("minecraft:{}", f.name), f.id);
+    }
+
     let entities: BTreeMap<String, EntityType> =
         serde_json::from_str(&fs::read_to_string("../../assets/entities.json").unwrap())
             .expect("Failed to parse entities.json");
-
-    // build a map of dimension name -> numeric id
-    let dimension_json: BTreeMap<String, serde_json::Value> =
-        serde_json::from_str(&fs::read_to_string("../../assets/dimension.json").unwrap())
-            .expect("Failed to parse dimension.json");
-    let mut dimension_id_map: BTreeMap<String, u16> = BTreeMap::new();
-    for (i, name) in dimension_json.keys().enumerate() {
-        dimension_id_map.insert(name.clone(), i as u16);
+    let mut entity_id_map: BTreeMap<String, u16> = BTreeMap::new();
+    for (name, entity) in &entities {
+        entity_id_map.insert(name.clone(), entity.id);
+        entity_id_map.insert(format!("minecraft:{name}"), entity.id);
     }
 
-    // also build timeline id map from registry file so timeline tags carry numbers
-    let mut timeline_id_map: BTreeMap<String, u16> = BTreeMap::new();
-    if let Ok(registries) = serde_json::from_str::<serde_json::Value>(
-        &fs::read_to_string("../../assets/registry/1_21_11_synced_registries.json").unwrap(),
-    ) && let Some(timelines) = registries.get("timeline")
-        && let Some(obj) = timelines.as_object()
-    {
-        for (i, name) in obj.keys().enumerate() {
-            timeline_id_map.insert(name.clone(), i as u16);
-        }
+    let game_events: Vec<String> =
+        serde_json::from_str(&fs::read_to_string("../../assets/game_event.json").unwrap())
+            .expect("Failed to parse game_event.json");
+    let mut game_event_id_map: BTreeMap<String, u16> = BTreeMap::new();
+    for (i, name) in game_events.iter().enumerate() {
+        game_event_id_map.insert(name.clone(), i as u16);
+        game_event_id_map.insert(format!("minecraft:{name}"), i as u16);
     }
-    // dimension_id_map will be used when resolving dimension_type tag entries below
 
-    let block_id_map: BTreeMap<String, u16> = blocks_assets
-        .blocks
-        .iter()
-        .map(|b| (b.name.clone(), b.id.0))
-        .collect();
-    let fluid_id_map: BTreeMap<String, u16> =
-        fluids.iter().map(|f| (f.name.clone(), f.id)).collect();
+    #[derive(serde::Deserialize)]
+    struct PotionEntry {
+        id: u8,
+    }
+    let potions: BTreeMap<String, PotionEntry> =
+        serde_json::from_str(&fs::read_to_string("../../assets/potion.json").unwrap())
+            .expect("Failed to parse potion.json");
+    let mut potion_id_map: BTreeMap<String, u16> = BTreeMap::new();
+    for (name, potion) in &potions {
+        potion_id_map.insert(name.clone(), u16::from(potion.id));
+        potion_id_map.insert(format!("minecraft:{name}"), u16::from(potion.id));
+    }
+
+    const POI_TYPES: &[&str] = &[
+        "armorer",
+        "butcher",
+        "cartographer",
+        "cleric",
+        "farmer",
+        "fisherman",
+        "fletcher",
+        "leatherworker",
+        "librarian",
+        "mason",
+        "shepherd",
+        "toolsmith",
+        "weaponsmith",
+        "home",
+        "meeting",
+        "beehive",
+        "bee_nest",
+        "nether_portal",
+        "lodestone",
+        "lightning_rod",
+        "trial_spawner",
+        "vault",
+    ];
+    let mut poi_id_map: BTreeMap<String, u16> = BTreeMap::new();
+    for (i, &name) in POI_TYPES.iter().enumerate() {
+        poi_id_map.insert(name.to_string(), i as u16);
+        poi_id_map.insert(format!("minecraft:{name}"), i as u16);
+    }
+
+    let datapack_base = std::path::Path::new("../../assets/datapacks/26_2/data/minecraft");
+    let mut datapack_id_maps: BTreeMap<String, BTreeMap<String, u16>> = BTreeMap::new();
 
     let mut all_registry_keys = HashSet::new();
     all_registry_keys.insert("dimension_type".to_string());
@@ -172,21 +267,25 @@ pub(crate) fn build() -> TokenStream {
                 quote!(super::super::Tag)
             };
 
+            if !datapack_id_maps.contains_key(&key) {
+                let dir = datapack_base.join(&key);
+                if dir.is_dir() {
+                    datapack_id_maps.insert(key.clone(), load_datapack_registry_ids(&dir));
+                }
+            }
+
             for (tag_name, values) in tag_map {
                 let ids: Vec<u16> = values
                     .iter()
                     .filter_map(|v| match key.as_str() {
-                        "worldgen/biome" => biomes.get(v).map(|b| u16::from(b.id)),
-                        "fluid" => fluid_id_map.get(v).copied(),
-                        "item" => items.get(v).map(|i| i.id),
                         "block" => block_id_map.get(v).copied(),
-                        "enchantment" => enchantments
-                            .get(&format!("minecraft:{v}"))
-                            .map(|e| u16::from(e.id)),
-                        "entity_type" => entities.get(v).map(|e| e.id),
-                        "dimension_type" => dimension_id_map.get(v).copied(),
-                        "timeline" => timeline_id_map.get(v).copied(),
-                        _ => None,
+                        "item" => item_id_map.get(v).copied(),
+                        "fluid" => fluid_id_map.get(v).copied(),
+                        "entity_type" => entity_id_map.get(v).copied(),
+                        "game_event" => game_event_id_map.get(v).copied(),
+                        "potion" => potion_id_map.get(v).copied(),
+                        "point_of_interest_type" => poi_id_map.get(v).copied(),
+                        _ => datapack_id_maps.get(&key).and_then(|m| m.get(v).copied()),
                     })
                     .collect();
 

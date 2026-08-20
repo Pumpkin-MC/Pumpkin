@@ -1,4 +1,4 @@
-use pumpkin_data::packet::clientbound::PLAY_MOVE_ENTITY_ROT;
+use pumpkin_data::packet::clientbound::play::MOVE_ENTITY_ROT;
 use pumpkin_macros::java_packet;
 
 use crate::ClientPacket;
@@ -6,7 +6,7 @@ use crate::VarInt;
 use crate::ser::NetworkWriteExt;
 use pumpkin_util::version::JavaMinecraftVersion;
 
-#[java_packet(PLAY_MOVE_ENTITY_ROT)]
+#[java_packet(MOVE_ENTITY_ROT)]
 pub struct CUpdateEntityRot {
     pub entity_id: VarInt,
     pub yaw: u8,

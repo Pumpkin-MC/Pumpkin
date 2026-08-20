@@ -1,0 +1,29 @@
+{
+  "has_precipitation": true,
+  "temperature": -0.2,
+  "downfall": 0.8,
+  "effects": {
+    "mood_sound": {
+      "sound": "minecraft:ambient.cave",
+      "tick_delay": 6000,
+      "block_search_extent": 8,
+      "offset": 2.0
+    },
+    "music": [
+      {
+        "data": {
+          "sound": "minecraft:music.overworld.grove",
+          "min_delay": 12000,
+          "max_delay": 24000,
+          "replace_current_music": false
+        },
+        "weight": 1
+      }
+    ],
+    "music_volume": 1.0,
+    "sky_color": 8495359,
+    "fog_color": 12638463,
+    "water_color": 4159204,
+    "water_fog_color": 329011
+  }
+}

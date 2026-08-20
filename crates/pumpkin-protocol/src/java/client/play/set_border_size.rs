@@ -1,11 +1,11 @@
-use pumpkin_data::packet::clientbound::PLAY_SET_BORDER_SIZE;
+use pumpkin_data::packet::clientbound::play::SET_BORDER_SIZE;
 use pumpkin_macros::java_packet;
 
 use crate::ClientPacket;
 use crate::ser::NetworkWriteExt;
 use pumpkin_util::version::JavaMinecraftVersion;
 
-#[java_packet(PLAY_SET_BORDER_SIZE)]
+#[java_packet(SET_BORDER_SIZE)]
 pub struct CSetBorderSize {
     pub diameter: f64,
 }

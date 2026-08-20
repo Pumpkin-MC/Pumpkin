@@ -2,22 +2,40 @@ use heck::ToPascalCase;
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use serde_json::Value;
+use std::collections::BTreeMap;
 use std::fs;
 
-/// Reads `placed_feature.json` and emits the complete `PlacedFeature` enum `TokenStream`.
+fn load_placed_features() -> BTreeMap<String, Value> {
+    let dir =
+        std::path::Path::new("../../assets/datapacks/26_2/data/minecraft/worldgen/placed_feature");
+    let mut map = BTreeMap::new();
+    let mut entries: Vec<_> = fs::read_dir(dir)
+        .expect("Missing worldgen/placed_feature directory")
+        .flatten()
+        .filter(|e| e.path().extension().is_some_and(|ext| ext == "json"))
+        .collect();
+    entries.sort_by_key(|e| e.path());
+
+    for entry in entries {
+        let path = entry.path();
+        let stem = path.file_stem().unwrap().to_string_lossy().into_owned();
+        let content = fs::read_to_string(&path).expect("Failed to read placed_feature file");
+        let val: Value =
+            serde_json::from_str(&content).expect("Failed to parse placed_feature JSON");
+        map.insert(stem, val);
+    }
+    map
+}
+
+/// Reads placed_feature files from 26.2 datapack and emits the complete `PlacedFeature` enum `TokenStream`.
 pub fn build_enum() -> TokenStream {
-    let json_content = fs::read_to_string("../../assets/placed_feature.json")
-        .expect("Failed to read placed_feature.json");
-    let json: Value =
-        serde_json::from_str(&json_content).expect("Failed to parse placed_feature.json");
+    let json = load_placed_features();
 
     let mut from_name_arms = Vec::new();
     let mut to_name_arms = Vec::new();
     let mut all_names: Vec<String> = Vec::new();
 
     let variants: Vec<TokenStream> = json
-        .as_object()
-        .unwrap()
         .iter()
         .map(|(name, _)| {
             let variant_name = format_ident!("{}", name.to_pascal_case());
@@ -66,16 +84,11 @@ pub fn build_enum() -> TokenStream {
     }
 }
 
-/// Reads `placed_feature.json` and emits the complete `build_placed_features()` function `TokenStream`.
+/// Reads placed_feature files from 26.2 datapack and emits the complete `build_placed_features()` function `TokenStream`.
 pub fn build() -> TokenStream {
-    let json_content = fs::read_to_string("../../assets/placed_feature.json")
-        .expect("Failed to read placed_feature.json");
-    let json: Value =
-        serde_json::from_str(&json_content).expect("Failed to parse placed_feature.json");
+    let json = load_placed_features();
 
     let entries: Vec<TokenStream> = json
-        .as_object()
-        .unwrap()
         .iter()
         .map(|(name, value)| {
             let variant_name = format_ident!("{}", name.to_pascal_case());

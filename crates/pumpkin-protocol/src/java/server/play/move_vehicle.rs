@@ -2,11 +2,11 @@ use crate::{
     ServerPacket,
     ser::{NetworkReadExt, ReadingError},
 };
-use pumpkin_data::packet::serverbound::PLAY_MOVE_VEHICLE;
+use pumpkin_data::packet::serverbound::play::MOVE_VEHICLE;
 use pumpkin_macros::java_packet;
 use pumpkin_util::version::JavaMinecraftVersion;
 
-#[java_packet(PLAY_MOVE_VEHICLE)]
+#[java_packet(MOVE_VEHICLE)]
 pub struct SMoveVehicle {
     pub x: f64,
     pub y: f64,

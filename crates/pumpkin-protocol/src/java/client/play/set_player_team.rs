@@ -1,6 +1,6 @@
 use std::io::Write;
 
-use pumpkin_data::packet::clientbound::PLAY_SET_PLAYER_TEAM;
+use pumpkin_data::packet::clientbound::play::SET_PLAYER_TEAM;
 use pumpkin_macros::java_packet;
 use pumpkin_util::{text::TextComponent, version::JavaMinecraftVersion};
 
@@ -30,7 +30,7 @@ pub struct TeamParameters<'a> {
     pub player_suffix: &'a TextComponent,
 }
 
-#[java_packet(PLAY_SET_PLAYER_TEAM)]
+#[java_packet(SET_PLAYER_TEAM)]
 pub struct CSetPlayerTeam<'a> {
     pub team_name: String,
     pub method: TeamMethod,
@@ -42,7 +42,7 @@ impl ClientPacket for CSetPlayerTeam<'_> {
     fn write_packet_data(
         &self,
         mut write: impl Write,
-        _version: &JavaMinecraftVersion,
+        version: &JavaMinecraftVersion,
     ) -> Result<(), WritingError> {
         write.write_string(&self.team_name)?;
         write.write_i8(self.method as i8)?;
@@ -50,13 +50,13 @@ impl ClientPacket for CSetPlayerTeam<'_> {
         match self.method {
             TeamMethod::Create | TeamMethod::Update => {
                 if let Some(params) = &self.parameters {
-                    write.write_slice(&params.display_name.encode())?;
+                    write.write_component(params.display_name, version)?;
                     write.write_i8(params.options)?;
                     write.write_string(params.nametag_visibility)?;
                     write.write_string(params.collision_rule)?;
                     write.write_var_int(&VarInt(params.color))?;
-                    write.write_slice(&params.player_prefix.encode())?;
-                    write.write_slice(&params.player_suffix.encode())?;
+                    write.write_component(params.player_prefix, version)?;
+                    write.write_component(params.player_suffix, version)?;
                 } else {
                     return Err(WritingError::Message(
                         "Parameters missing for Create/Update".into(),

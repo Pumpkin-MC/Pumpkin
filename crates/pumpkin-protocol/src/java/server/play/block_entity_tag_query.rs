@@ -1,4 +1,4 @@
-use pumpkin_data::packet::serverbound::PLAY_BLOCK_ENTITY_TAG_QUERY;
+use pumpkin_data::packet::serverbound::play::BLOCK_ENTITY_TAG_QUERY;
 use pumpkin_macros::java_packet;
 
 use crate::{
@@ -8,7 +8,7 @@ use crate::{
 };
 use pumpkin_util::{math::position::BlockPos, version::JavaMinecraftVersion};
 
-#[java_packet(PLAY_BLOCK_ENTITY_TAG_QUERY)]
+#[java_packet(BLOCK_ENTITY_TAG_QUERY)]
 pub struct SBlockEntityTagQuery {
     pub transaction_id: VarInt,
     pub location: BlockPos,

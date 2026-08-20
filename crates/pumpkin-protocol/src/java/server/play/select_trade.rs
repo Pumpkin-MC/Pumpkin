@@ -1,4 +1,4 @@
-use pumpkin_data::packet::serverbound::PLAY_SELECT_TRADE;
+use pumpkin_data::packet::serverbound::play::SELECT_TRADE;
 use pumpkin_macros::java_packet;
 
 use crate::VarInt;
@@ -9,7 +9,7 @@ use crate::{
 };
 use pumpkin_util::version::JavaMinecraftVersion;
 
-#[java_packet(PLAY_SELECT_TRADE)]
+#[java_packet(SELECT_TRADE)]
 pub struct SSelectTrade {
     pub selected_slot: VarInt,
 }

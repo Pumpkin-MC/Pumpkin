@@ -680,7 +680,6 @@ impl JavaClient {
         }
 
         let mut payload = &event.payload[..];
-
         match event.packet_id {
             id if id == SConfirmTeleport::to_id(version) => {
                 self.handle_confirm_teleport(

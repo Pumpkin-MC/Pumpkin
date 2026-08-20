@@ -1,18 +1,55 @@
 use std::io::Write;
 
+use crate::packet::MultiVersionJavaPacket;
 use crate::{ClientPacket, WritingError, ser::NetworkWriteExt};
 
 use crate::codec::var_int::VarInt;
 use pumpkin_data::{
-    packet::clientbound::PLAY_UPDATE_TAGS,
+    packet::clientbound::play::UPDATE_TAGS,
     tag::{RegistryKey, get_registry_key_tags},
 };
-use pumpkin_macros::java_packet;
 use pumpkin_util::version::JavaMinecraftVersion;
 
-#[java_packet(PLAY_UPDATE_TAGS)]
 pub struct CUpdateTagsPlay<'a> {
     pub tags: &'a [pumpkin_data::tag::RegistryKey],
+}
+
+impl MultiVersionJavaPacket for CUpdateTagsPlay<'_> {
+    fn to_id(version: JavaMinecraftVersion) -> i32 {
+        let id = UPDATE_TAGS.to_id(version);
+        if id != -1 {
+            return id;
+        }
+        #[allow(clippy::match_same_arms)]
+        match version {
+            JavaMinecraftVersion::V_1_20_5 => 0x78,
+            JavaMinecraftVersion::V_1_20_3 => 0x74,
+            JavaMinecraftVersion::V_1_20_2 => 0x70,
+            JavaMinecraftVersion::V_1_20 | JavaMinecraftVersion::V_1_19_4 => 0x6E,
+            JavaMinecraftVersion::V_1_19_3 => 0x6A,
+            JavaMinecraftVersion::V_1_19_1 => 0x6B,
+            JavaMinecraftVersion::V_1_19 => 0x68,
+            JavaMinecraftVersion::V_1_18_2 | JavaMinecraftVersion::V_1_18 => 0x67,
+            JavaMinecraftVersion::V_1_17_1 | JavaMinecraftVersion::V_1_17 => 0x66,
+            JavaMinecraftVersion::V_1_16_4
+            | JavaMinecraftVersion::V_1_16_3
+            | JavaMinecraftVersion::V_1_16_2
+            | JavaMinecraftVersion::V_1_16_1
+            | JavaMinecraftVersion::V_1_16
+            | JavaMinecraftVersion::V_1_14_4
+            | JavaMinecraftVersion::V_1_14_3
+            | JavaMinecraftVersion::V_1_14_2
+            | JavaMinecraftVersion::V_1_14_1
+            | JavaMinecraftVersion::V_1_14 => 0x5B,
+            JavaMinecraftVersion::V_1_15_2
+            | JavaMinecraftVersion::V_1_15_1
+            | JavaMinecraftVersion::V_1_15 => 0x5C,
+            JavaMinecraftVersion::V_1_13_2
+            | JavaMinecraftVersion::V_1_13_1
+            | JavaMinecraftVersion::V_1_13 => 0x55,
+            _ => -1,
+        }
+    }
 }
 
 impl<'a> CUpdateTagsPlay<'a> {

@@ -1,4 +1,4 @@
-use pumpkin_data::packet::clientbound::PLAY_AWARD_STATS;
+use pumpkin_data::packet::clientbound::play::AWARD_STATS;
 use pumpkin_macros::java_packet;
 
 use crate::ClientPacket;
@@ -6,7 +6,7 @@ use crate::codec::var_int::VarInt;
 use crate::ser::NetworkWriteExt;
 use pumpkin_util::version::JavaMinecraftVersion;
 
-#[java_packet(PLAY_AWARD_STATS)]
+#[java_packet(AWARD_STATS)]
 pub struct CAwardStats<'a> {
     pub stats: &'a [Statistic],
 }

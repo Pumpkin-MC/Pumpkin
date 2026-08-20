@@ -1,0 +1,18 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "building",
+  "ingredients": [
+    "minecraft:nether_wart",
+    "minecraft:nether_wart",
+    "minecraft:nether_wart",
+    "minecraft:nether_wart",
+    "minecraft:nether_wart",
+    "minecraft:nether_wart",
+    "minecraft:nether_wart",
+    "minecraft:nether_wart",
+    "minecraft:nether_wart"
+  ],
+  "result": {
+    "id": "minecraft:nether_wart_block"
+  }
+}

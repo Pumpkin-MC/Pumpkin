@@ -1,4 +1,4 @@
-use pumpkin_data::packet::clientbound::PLAY_REMOVE_ENTITIES;
+use pumpkin_data::packet::clientbound::play::REMOVE_ENTITIES;
 use pumpkin_macros::java_packet;
 
 use crate::ClientPacket;
@@ -10,7 +10,7 @@ use pumpkin_util::version::JavaMinecraftVersion;
 ///
 /// This is typically sent when an entity leaves the player's tracking range,
 /// is killed, or is otherwise removed from the world.
-#[java_packet(PLAY_REMOVE_ENTITIES)]
+#[java_packet(REMOVE_ENTITIES)]
 pub struct CRemoveEntities<'a> {
     /// A list of entity IDs to be removed.
     pub entity_ids: &'a [VarInt],

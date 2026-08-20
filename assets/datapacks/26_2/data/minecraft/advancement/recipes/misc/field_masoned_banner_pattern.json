@@ -1,0 +1,32 @@
+{
+  "parent": "minecraft:recipes/root",
+  "criteria": {
+    "has_bricks": {
+      "conditions": {
+        "items": [
+          {
+            "items": "minecraft:bricks"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    },
+    "has_the_recipe": {
+      "conditions": {
+        "recipe": "minecraft:field_masoned_banner_pattern"
+      },
+      "trigger": "minecraft:recipe_unlocked"
+    }
+  },
+  "requirements": [
+    [
+      "has_the_recipe",
+      "has_bricks"
+    ]
+  ],
+  "rewards": {
+    "recipes": [
+      "minecraft:field_masoned_banner_pattern"
+    ]
+  }
+}

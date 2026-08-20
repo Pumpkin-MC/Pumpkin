@@ -1,0 +1,35 @@
+{
+  "type": "minecraft:add",
+  "argument1": {
+    "type": "minecraft:mul",
+    "argument1": 4.0,
+    "argument2": {
+      "type": "minecraft:quarter_negative",
+      "argument": {
+        "type": "minecraft:mul",
+        "argument1": {
+          "type": "minecraft:add",
+          "argument1": "minecraft:overworld_large_biomes/depth",
+          "argument2": {
+            "type": "minecraft:flat_cache",
+            "argument": {
+              "type": "minecraft:mul",
+              "argument1": "minecraft:overworld_large_biomes/jaggedness",
+              "argument2": {
+                "type": "minecraft:half_negative",
+                "argument": {
+                  "type": "minecraft:noise",
+                  "noise": "minecraft:jagged",
+                  "xz_scale": 1500.0,
+                  "y_scale": 0.0
+                }
+              }
+            }
+          }
+        },
+        "argument2": "minecraft:overworld_large_biomes/factor"
+      }
+    }
+  },
+  "argument2": "minecraft:overworld/base_3d_noise"
+}

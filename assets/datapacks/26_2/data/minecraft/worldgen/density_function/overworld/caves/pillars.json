@@ -1,0 +1,50 @@
+{
+  "type": "minecraft:cache_once",
+  "argument": {
+    "type": "minecraft:mul",
+    "argument1": {
+      "type": "minecraft:add",
+      "argument1": {
+        "type": "minecraft:mul",
+        "argument1": 2.0,
+        "argument2": {
+          "type": "minecraft:noise",
+          "noise": "minecraft:pillar",
+          "xz_scale": 25.0,
+          "y_scale": 0.3
+        }
+      },
+      "argument2": {
+        "type": "minecraft:add",
+        "argument1": -1.0,
+        "argument2": {
+          "type": "minecraft:mul",
+          "argument1": -1.0,
+          "argument2": {
+            "type": "minecraft:noise",
+            "noise": "minecraft:pillar_rareness",
+            "xz_scale": 1.0,
+            "y_scale": 1.0
+          }
+        }
+      }
+    },
+    "argument2": {
+      "type": "minecraft:cube",
+      "argument": {
+        "type": "minecraft:add",
+        "argument1": 0.55,
+        "argument2": {
+          "type": "minecraft:mul",
+          "argument1": 0.55,
+          "argument2": {
+            "type": "minecraft:noise",
+            "noise": "minecraft:pillar_thickness",
+            "xz_scale": 1.0,
+            "y_scale": 1.0
+          }
+        }
+      }
+    }
+  }
+}

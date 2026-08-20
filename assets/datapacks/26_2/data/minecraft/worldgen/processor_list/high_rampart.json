@@ -1,0 +1,51 @@
+{
+  "processors": [
+    {
+      "processor_type": "minecraft:rule",
+      "rules": [
+        {
+          "input_predicate": {
+            "block": "minecraft:gold_block",
+            "predicate_type": "minecraft:random_block_match",
+            "probability": 0.3
+          },
+          "location_predicate": {
+            "predicate_type": "minecraft:always_true"
+          },
+          "output_state": {
+            "Name": "minecraft:cracked_polished_blackstone_bricks"
+          }
+        },
+        {
+          "input_predicate": {
+            "predicate_type": "minecraft:always_true"
+          },
+          "location_predicate": {
+            "predicate_type": "minecraft:always_true"
+          },
+          "output_state": {
+            "Name": "minecraft:air"
+          },
+          "position_predicate": {
+            "max_chance": 0.05,
+            "max_dist": 100,
+            "predicate_type": "minecraft:axis_aligned_linear_pos"
+          }
+        },
+        {
+          "input_predicate": {
+            "block": "minecraft:gilded_blackstone",
+            "predicate_type": "minecraft:random_block_match",
+            "probability": 0.5
+          },
+          "location_predicate": {
+            "predicate_type": "minecraft:always_true"
+          },
+          "output_state": {
+            "Name": "minecraft:blackstone"
+          }
+        }
+      ]
+    }
+  ]
+}

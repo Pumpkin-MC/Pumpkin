@@ -1,0 +1,32 @@
+{
+  "parent": "minecraft:recipes/root",
+  "criteria": {
+    "has_oxidized_copper_chain": {
+      "conditions": {
+        "items": [
+          {
+            "items": "minecraft:oxidized_copper_chain"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    },
+    "has_the_recipe": {
+      "conditions": {
+        "recipe": "minecraft:waxed_oxidized_copper_chain_from_honeycomb"
+      },
+      "trigger": "minecraft:recipe_unlocked"
+    }
+  },
+  "requirements": [
+    [
+      "has_the_recipe",
+      "has_oxidized_copper_chain"
+    ]
+  ],
+  "rewards": {
+    "recipes": [
+      "minecraft:waxed_oxidized_copper_chain_from_honeycomb"
+    ]
+  }
+}

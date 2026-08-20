@@ -1,4 +1,4 @@
-use pumpkin_data::packet::serverbound::PLAY_SET_GAME_RULE;
+use pumpkin_data::packet::serverbound::play::SET_GAME_RULE;
 use pumpkin_macros::java_packet;
 
 use crate::{
@@ -7,7 +7,7 @@ use crate::{
 };
 use pumpkin_util::version::JavaMinecraftVersion;
 
-#[java_packet(PLAY_SET_GAME_RULE)]
+#[java_packet(SET_GAME_RULE)]
 pub struct SSetGameRule<'a> {
     pub rule: &'a str,
     pub value: &'a str,

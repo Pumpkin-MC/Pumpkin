@@ -1,6 +1,6 @@
 use std::io::Write;
 
-use pumpkin_data::packet::clientbound::PLAY_SET_DEFAULT_SPAWN_POSITION;
+use pumpkin_data::packet::clientbound::play::SET_DEFAULT_SPAWN_POSITION;
 use pumpkin_macros::java_packet;
 use pumpkin_util::{math::position::BlockPos, version::JavaMinecraftVersion};
 
@@ -13,7 +13,7 @@ use crate::{
 ///
 /// This packet updates where the player will respawn upon death (if no bed or anchor is set)
 /// and dictates the coordinates that a compass will point toward.
-#[java_packet(PLAY_SET_DEFAULT_SPAWN_POSITION)]
+#[java_packet(SET_DEFAULT_SPAWN_POSITION)]
 pub struct CPlayerSpawnPosition {
     /// The namespaced ID of the dimension (e.g., "minecraft:overworld").
     /// Required for the client to determine if the spawn point is in their current world.

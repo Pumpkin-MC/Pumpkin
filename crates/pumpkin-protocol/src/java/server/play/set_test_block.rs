@@ -1,4 +1,4 @@
-use pumpkin_data::packet::serverbound::PLAY_SET_TEST_BLOCK;
+use pumpkin_data::packet::serverbound::play::SET_TEST_BLOCK;
 use pumpkin_macros::java_packet;
 use pumpkin_util::math::position::BlockPos;
 
@@ -9,7 +9,7 @@ use crate::{
 use pumpkin_util::version::JavaMinecraftVersion;
 use std::io::Read;
 
-#[java_packet(PLAY_SET_TEST_BLOCK)]
+#[java_packet(SET_TEST_BLOCK)]
 pub struct SSetTestBlock<'a> {
     pub position: BlockPos,
     pub mode: TestBlockMode,

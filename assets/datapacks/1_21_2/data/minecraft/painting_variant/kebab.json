@@ -1,0 +1,13 @@
+{
+  "asset_id": "minecraft:kebab",
+  "title": {
+    "translate": "painting.minecraft.kebab.title",
+    "color": "yellow"
+  },
+  "author": {
+    "translate": "painting.minecraft.kebab.author",
+    "color": "gray"
+  },
+  "width": 1,
+  "height": 1
+}

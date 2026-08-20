@@ -33,6 +33,31 @@ pub struct WindChargeEntity {
     thrown_item_entity: ThrownItemEntity,
 }
 
+use crate::world::SimpleExplosionDamageCalculator;
+use pumpkin_data::tag;
+use std::sync::LazyLock;
+
+pub static WIND_CHARGE_EXPLOSION_DAMAGE_CALCULATOR: LazyLock<Arc<SimpleExplosionDamageCalculator>> =
+    LazyLock::new(|| {
+        Arc::new(SimpleExplosionDamageCalculator::new(
+            true,
+            false,
+            Some(1.22),
+            Some(&tag::Block::MINECRAFT_BLOCKS_WIND_CHARGE_EXPLOSIONS),
+        ))
+    });
+
+pub static BREEZE_WIND_CHARGE_EXPLOSION_DAMAGE_CALCULATOR: LazyLock<
+    Arc<SimpleExplosionDamageCalculator>,
+> = LazyLock::new(|| {
+    Arc::new(SimpleExplosionDamageCalculator::new(
+        true,
+        false,
+        None,
+        Some(&tag::Block::MINECRAFT_BLOCKS_WIND_CHARGE_EXPLOSIONS),
+    ))
+});
+
 impl WindChargeEntity {
     #[must_use]
     pub const fn new_normal(thrown_item_entity: ThrownItemEntity) -> Self {
@@ -64,10 +89,19 @@ impl WindChargeEntity {
     }
 
     pub async fn create_explosion(&self, position: Vector3<f64>) {
+        let calculator = match self.kind {
+            WindChargeKind::Normal { .. } => WIND_CHARGE_EXPLOSION_DAMAGE_CALCULATOR.clone(),
+            WindChargeKind::Breeze => BREEZE_WIND_CHARGE_EXPLOSION_DAMAGE_CALCULATOR.clone(),
+        };
         self.get_entity()
             .world
             .load()
-            .explode(position, EXPLOSION_POWER)
+            .explode_with_calculator(
+                position,
+                EXPLOSION_POWER,
+                crate::world::ExplosionInteraction::Trigger,
+                Some(calculator),
+            )
             .await;
     }
 

@@ -1,4 +1,4 @@
-use pumpkin_data::packet::serverbound::PLAY_RESOURCE_PACK;
+use pumpkin_data::packet::serverbound::play::RESOURCE_PACK;
 use pumpkin_macros::java_packet;
 
 use crate::{
@@ -21,7 +21,7 @@ pub enum PlayResourcePackResult {
     Unknown(i32),
 }
 
-#[java_packet(PLAY_RESOURCE_PACK)]
+#[java_packet(RESOURCE_PACK)]
 pub struct SPlayResourcePack {
     pub uuid: uuid::Uuid,
     pub result: VarInt,

@@ -1,4 +1,4 @@
-use pumpkin_data::packet::clientbound::PLAY_OPEN_SIGN_EDITOR;
+use pumpkin_data::packet::clientbound::play::OPEN_SIGN_EDITOR;
 use pumpkin_macros::java_packet;
 use pumpkin_util::math::position::BlockPos;
 
@@ -11,7 +11,7 @@ use pumpkin_util::version::JavaMinecraftVersion;
 /// This packet is sent by the server to force the client to show the
 /// sign editing interface. This usually happens immediately after a
 /// player places a sign or interacts with an existing one (if allowed).
-#[java_packet(PLAY_OPEN_SIGN_EDITOR)]
+#[java_packet(OPEN_SIGN_EDITOR)]
 pub struct COpenSignEditor {
     /// The world coordinates of the sign block to be edited.
     pub location: BlockPos,

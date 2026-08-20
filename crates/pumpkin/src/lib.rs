@@ -560,16 +560,19 @@ impl PumpkinServer {
                                 PacketHandlerResult::ReadyToPlay(profile, config) => {
                                      let mut java_client = JavaClient::from_pending(pending, profile.clone(), config.clone());
                                      java_client.start_outgoing_packet_task();
+
                                      if let Some((player, world)) = server_clone
                                      .add_player(Arc::new(ClientPlatform::Java(java_client)), profile, Some(config))
                                           .await
                                 {
+
                                     if let ClientPlatform::Java(client) = player.client.as_ref() {
                                         client.set_player(player.clone());
                                     }
                                     world
                                         .spawn_java_player(&server_clone.basic_config, &player, &server_clone)
                                         .await;
+
                                     if let ClientPlatform::Java(client) = player.client.as_ref() {
                                         client.progress_player_packets(&player, &server_clone).await;
 

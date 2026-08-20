@@ -1,11 +1,11 @@
-use pumpkin_data::packet::clientbound::PLAY_TICKING_STATE;
+use pumpkin_data::packet::clientbound::play::TICKING_STATE;
 use pumpkin_macros::java_packet;
 
 use crate::ClientPacket;
 use crate::ser::NetworkWriteExt;
 use pumpkin_util::version::JavaMinecraftVersion;
 
-#[java_packet(PLAY_TICKING_STATE)]
+#[java_packet(TICKING_STATE)]
 pub struct CTickingState {
     pub tick_rate: f32,
     pub is_frozen: bool,

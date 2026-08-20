@@ -4,7 +4,7 @@ use pumpkin_data::{
     block_state_remap::remap_block_state_for_version,
     item_id_remap::remap_item_id_for_version,
     meta_data_type::MetaDataType,
-    packet::clientbound::PLAY_SET_ENTITY_DATA,
+    packet::clientbound::play::SET_ENTITY_DATA,
     tracked_data::{TrackedData, TrackedId},
 };
 use pumpkin_macros::java_packet;
@@ -32,7 +32,7 @@ impl<T: MetadataSerializer + ?Sized> MetadataSerializer for &T {
 /// Entity Metadata (or `DataWatchers`) controls persistent visual states that
 /// don't require a full packet to update, such as whether an entity is on fire,
 /// crouching, glowing, or the custom name displayed above its head.
-#[java_packet(PLAY_SET_ENTITY_DATA)]
+#[java_packet(SET_ENTITY_DATA)]
 pub struct CSetEntityMetadata {
     /// The Entity ID of the entity whose metadata is being updated.
     pub entity_id: VarInt,

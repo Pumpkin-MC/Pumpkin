@@ -1,4 +1,4 @@
-use pumpkin_data::packet::clientbound::PLAY_SET_BORDER_LERP_SIZE;
+use pumpkin_data::packet::clientbound::play::SET_BORDER_LERP_SIZE;
 use pumpkin_macros::java_packet;
 
 use crate::ClientPacket;
@@ -6,7 +6,7 @@ use crate::codec::var_long::VarLong;
 use crate::ser::NetworkWriteExt;
 use pumpkin_util::version::JavaMinecraftVersion;
 
-#[java_packet(PLAY_SET_BORDER_LERP_SIZE)]
+#[java_packet(SET_BORDER_LERP_SIZE)]
 pub struct CSetBorderLerpSize {
     pub old_diameter: f64,
     pub new_diameter: f64,

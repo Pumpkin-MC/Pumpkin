@@ -1,4 +1,4 @@
-use pumpkin_data::packet::serverbound::PLAY_PADDLE_BOAT;
+use pumpkin_data::packet::serverbound::play::PADDLE_BOAT;
 use pumpkin_macros::java_packet;
 
 use crate::{
@@ -7,7 +7,7 @@ use crate::{
 };
 use pumpkin_util::version::JavaMinecraftVersion;
 
-#[java_packet(PLAY_PADDLE_BOAT)]
+#[java_packet(PADDLE_BOAT)]
 pub struct SPaddleBoat {
     pub left_paddle: bool,
     pub right_paddle: bool,

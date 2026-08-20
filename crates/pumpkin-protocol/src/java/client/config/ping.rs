@@ -1,11 +1,11 @@
-use pumpkin_data::packet::clientbound::CONFIG_PING;
+use pumpkin_data::packet::clientbound::config::PING;
 use pumpkin_macros::java_packet;
 
 use crate::ClientPacket;
 use crate::ser::NetworkWriteExt;
 use pumpkin_util::version::JavaMinecraftVersion;
 
-#[java_packet(CONFIG_PING)]
+#[java_packet(PING)]
 pub struct CConfigPing {
     pub id: i32,
 }

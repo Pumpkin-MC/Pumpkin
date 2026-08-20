@@ -3,20 +3,26 @@ use pumpkin_nbt::compound::NbtCompound;
 
 use crate::version::JavaMinecraftVersion;
 
+mod argument_type;
 mod block_state;
 mod entity_id;
 mod item_id;
+mod menu_id;
 mod particle_id;
+mod recipe_serializer;
 mod sound_id;
 
 /// Returns the list of remap builder functions paired with their output file names.
 #[allow(clippy::type_complexity)]
 pub fn build() -> Vec<(fn() -> TokenStream, &'static str)> {
     vec![
+        (argument_type::build, "argument_type_id_remap.rs"),
         (block_state::build, "block_state_remap.rs"),
         (entity_id::build, "entity_id_remap.rs"),
         (item_id::build, "item_id_remap.rs"),
+        (menu_id::build, "menu_id_remap.rs"),
         (particle_id::build, "particle_id_remap.rs"),
+        (recipe_serializer::build, "recipe_serializer_id_remap.rs"),
         (sound_id::build, "sound_id_remap.rs"),
     ]
 }

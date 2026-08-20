@@ -1,0 +1,28 @@
+{
+  "has_precipitation": true,
+  "temperature": 0.0,
+  "downfall": 0.5,
+  "attributes": {
+    "minecraft:visual/sky_color": "#7fa1ff",
+    "minecraft:audio/background_music": {
+      "default": {
+        "sound": "minecraft:music.game",
+        "min_delay": 12000,
+        "max_delay": 24000
+      },
+      "creative": {
+        "sound": "minecraft:music.creative",
+        "min_delay": 12000,
+        "max_delay": 24000
+      },
+      "underwater": {
+        "sound": "minecraft:music.under_water",
+        "min_delay": 12000,
+        "max_delay": 24000
+      }
+    }
+  },
+  "effects": {
+    "water_color": "#3938c9"
+  }
+}
