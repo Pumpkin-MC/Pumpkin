@@ -75,6 +75,16 @@ impl BlockEntity for HopperBlockEntity {
         Box::pin(async move {
             self.ticked_game_time
                 .store(world.get_world_age().await, Ordering::Relaxed);
+
+            // The block at this position can have been broken/replaced by the time this tick
+            // actually runs (block removal and the world tick loop race on which one observes
+            // the other first), leaving a stale block entity behind until it gets cleaned up.
+            // Ticking it against the new, unrelated block state would either panic (debug) or
+            // silently decode garbage properties (release), so just skip this tick instead.
+            if !HopperLikeProperties::handles_block_id(world.get_block(&self.position).id) {
+                return;
+            }
+
             if self.cooldown_time.fetch_sub(1, Ordering::Relaxed) <= 0 {
                 self.cooldown_time.store(0, Ordering::Relaxed);
                 let state = HopperLikeProperties::from_state_id(

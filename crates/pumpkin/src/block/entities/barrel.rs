@@ -138,6 +138,13 @@ impl BarrelBlockEntity {
     }
 
     async fn set_open(&self, world: &Arc<World>, open: bool) {
+        // The block at this position can have been broken/replaced concurrently with this
+        // container being opened/closed (e.g. another player breaking it while this one has the
+        // GUI open). Decoding properties against the new, unrelated block would either panic
+        // (debug) or silently produce garbage (release), so bail out.
+        if !BarrelLikeProperties::handles_block_id(world.get_block(&self.position).id) {
+            return;
+        }
         let state = world.get_block_state(&self.position);
         let mut properties = BarrelLikeProperties::from_state_id(state.id, &Block::BARREL);
 
@@ -154,6 +161,11 @@ impl BarrelBlockEntity {
     }
 
     fn play_sound(&self, world: &Arc<World>, sound: Sound) {
+        // See the comment in `set_open` - the block here can be stale relative to this entity.
+        if !BarrelLikeProperties::handles_block_id(world.get_block(&self.position).id) {
+            return;
+        }
+
         let mut rng = Xoroshiro::from_seed(get_seed());
 
         let state = world.get_block_state(&self.position);
