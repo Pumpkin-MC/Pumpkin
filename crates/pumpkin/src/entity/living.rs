@@ -3105,6 +3105,18 @@ impl LivingEntity {
                     }
                 }
                 ConsumeEffect::TeleportRandomly(diameter) => {
+                    // Java Edition dismounts the consumer before random teleport attempts.
+                    let vehicle = caller.get_entity().vehicle.lock().await.clone();
+                    if let Some(vehicle) = vehicle {
+                        vehicle
+                            .get_entity()
+                            .remove_passenger(caller.get_entity().entity_id)
+                            .await;
+                        if caller.get_entity().has_vehicle().await {
+                            continue;
+                        }
+                    }
+
                     let center = self.entity.pos.load();
                     let Some(pos) = self.find_random_teleport_target(*diameter) else {
                         continue;
