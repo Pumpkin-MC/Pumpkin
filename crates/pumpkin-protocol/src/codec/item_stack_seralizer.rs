@@ -301,6 +301,9 @@ impl ItemStackSerializer<'_> {
             let id = DataComponent::try_from_id(id_val as u8)
                 .ok_or_else(|| ReadingError::Message(format!("Unknown component ID: {id_val}")))?;
 
+            // The plain Slot format has no per-component byte-length prefix (that's only used
+            // by the length-prefixed variant, e.g. Set Creative Mode Slot); reading one here
+            // would desync the rest of the stream.
             let component_impl = deserialize(id, read)?;
             patch.push((id, Some(component_impl)));
         }
