@@ -41,13 +41,17 @@ impl EntityBase for TNTEntity {
     ) -> EntityBaseFuture<'a, ()> {
         Box::pin(async move {
             let entity = &self.entity;
-            let original_velo = entity.velocity.load();
 
-            let mut velo = original_velo;
+            let mut velo = entity.velocity.load();
             velo.y -= self.get_gravity();
 
             entity.move_entity(caller, velo).await;
             entity.tick_block_collisions(caller, server).await;
+
+            // Read back what actually happened instead of reusing the pre-move
+            // value: `move_entity` clamps on collision, and an explosion may have
+            // pushed us while we were awaiting above
+            let velo = entity.velocity.load();
             if entity.on_ground.load(Ordering::Relaxed) {
                 entity.velocity.store(velo.multiply(0.7, -0.5, 0.7));
             } else {
@@ -119,9 +123,5 @@ impl EntityBase for TNTEntity {
 
     fn cast_any(&self) -> &dyn std::any::Any {
         self
-    }
-
-    fn is_immune_to_explosion(&self) -> bool {
-        true
     }
 }

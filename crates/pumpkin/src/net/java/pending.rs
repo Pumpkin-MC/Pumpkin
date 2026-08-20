@@ -44,6 +44,16 @@ use super::JavaClient;
 
 const BRAND_CHANNEL_PREFIX: &str = "minecraft:brand";
 
+/// How long a connection may stay silent before login finishes.
+///
+/// Once a player is in game, [`JavaClient::progress_player_packets`] keeps the
+/// connection honest with keep-alives. Nothing plays that role beforehand, and
+/// accepted sockets have no TCP keep-alive either, so a peer that stops talking
+/// without closing would otherwise hold its descriptor for the lifetime of the
+/// server. The timer covers silence rather than the whole handshake: it is reset
+/// on every packet, so a slow but progressing login is never cut off.
+const HANDSHAKE_IDLE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
+
 pub struct PendingConnection {
     pub id: u64,
     pub address: SocketAddr,
@@ -126,6 +136,14 @@ impl PendingConnection {
         let packet_result = tokio::select! {
             () = close_token.cancelled() => {
                 debug!("Canceling pending connection packet processing");
+                return None;
+            },
+            () = tokio::time::sleep(HANDSHAKE_IDLE_TIMEOUT) => {
+                debug!(
+                    "Client {} sent nothing for {}s before finishing login, dropping it",
+                    self.id,
+                    HANDSHAKE_IDLE_TIMEOUT.as_secs()
+                );
                 return None;
             },
             res = self.network_reader.get_raw_packet() => res,

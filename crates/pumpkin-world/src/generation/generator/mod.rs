@@ -9,6 +9,7 @@ use super::noise::router::proto_noise_router::ProtoNoiseRouters;
 use crate::generation::proto_chunk::TerrainCache;
 use crate::generation::{GlobalRandomConfig, Seed};
 
+pub mod biome_finder;
 pub mod structure_finder;
 
 pub trait GeneratorInit {

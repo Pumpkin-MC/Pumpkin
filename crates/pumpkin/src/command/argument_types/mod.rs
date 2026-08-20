@@ -235,6 +235,7 @@ pub mod pool;
 pub mod range;
 pub mod resource;
 pub mod resource_key;
+pub mod resource_or_tag;
 pub mod slot;
 pub mod structure;
 pub mod team;
