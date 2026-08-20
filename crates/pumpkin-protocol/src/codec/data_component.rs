@@ -11,13 +11,14 @@ use pumpkin_data::data_component_impl::{
     DataComponentImpl, DyedColorImpl, EnchantmentsImpl, EquipmentSlot, EquippableImpl,
     FireworkExplosionImpl, FireworkExplosionShape, FireworksImpl, FoxVariantImpl, FrogVariantImpl,
     HorseVariantImpl, IDSet, IDSetContent, IdOr, ItemModelImpl, ItemNameImpl, LlamaVariantImpl,
-    LoreImpl, MapIdImpl, MaxStackSizeImpl, MooshroomVariantImpl, PaintingVariantImpl,
-    ParrotVariantImpl, PigSoundVariantImpl, PigVariantImpl, PotionContentsImpl, RabbitVariantImpl,
-    SalmonSizeImpl, SheepColorImpl, ShulkerColorImpl, SoundEvent, StatusEffectInstance,
-    StoredEnchantmentsImpl, SuspiciousStewEffect, SuspiciousStewEffectsImpl,
-    TropicalFishBaseColorImpl, TropicalFishPatternColorImpl, TropicalFishPatternImpl,
-    UnbreakableImpl, UseCooldownImpl, VillagerVariantImpl, WolfCollarImpl, WolfSoundVariantImpl,
-    WolfVariantImpl, ZombieNautilusVariantImpl, get,
+    LodestoneTarget, LodestoneTrackerImpl, LoreImpl, MapIdImpl, MaxStackSizeImpl,
+    MooshroomVariantImpl, PaintingVariantImpl, ParrotVariantImpl, PigSoundVariantImpl,
+    PigVariantImpl, PotionContentsImpl, RabbitVariantImpl, SalmonSizeImpl, SheepColorImpl,
+    ShulkerColorImpl, SoundEvent, StatusEffectInstance, StoredEnchantmentsImpl,
+    SuspiciousStewEffect, SuspiciousStewEffectsImpl, TropicalFishBaseColorImpl,
+    TropicalFishPatternColorImpl, TropicalFishPatternImpl, UnbreakableImpl, UseCooldownImpl,
+    VillagerVariantImpl, WolfCollarImpl, WolfSoundVariantImpl, WolfVariantImpl,
+    ZombieNautilusVariantImpl, get,
 };
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::entity::EntityType;
@@ -948,6 +949,7 @@ pub fn deserialize(
         DataComponent::StoredEnchantments => Ok(StoredEnchantmentsImpl::deserialize(seq)?.to_dyn()),
         DataComponent::UseCooldown => Ok(UseCooldownImpl::deserialize(seq)?.to_dyn()),
         DataComponent::MapId => Ok(MapIdImpl::deserialize(seq)?.to_dyn()),
+        DataComponent::LodestoneTracker => Ok(LodestoneTrackerImpl::deserialize(seq)?.to_dyn()),
         DataComponent::BundleContents => Ok(BundleContentsImpl::deserialize(seq)?.to_dyn()),
         _ => Err(ReadingError::Message(format!("component_id_{} (TODO)", id.to_id()))),
     }
@@ -979,6 +981,7 @@ pub fn serialize(
         DataComponent::StoredEnchantments => get::<StoredEnchantmentsImpl>(value).serialize(seq),
         DataComponent::UseCooldown => get::<UseCooldownImpl>(value).serialize(seq),
         DataComponent::MapId => get::<MapIdImpl>(value).serialize(seq),
+        DataComponent::LodestoneTracker => get::<LodestoneTrackerImpl>(value).serialize(seq),
         DataComponent::BundleContents => get::<BundleContentsImpl>(value).serialize(seq),
         _ => Err(WritingError::Message(format!(
             "{} not yet implemented",
@@ -1019,6 +1022,39 @@ impl DataComponentCodec<Self> for UseCooldownImpl {
             seconds,
             cooldown_group,
         })
+    }
+}
+
+impl DataComponentCodec<Self> for LodestoneTrackerImpl {
+    fn serialize(&self, seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
+        seq.write_bool(self.target.is_some())?;
+        if let Some(target) = &self.target {
+            seq.write_string(&target.dimension)?;
+            let pos = pumpkin_util::math::position::BlockPos(
+                pumpkin_util::math::vector3::Vector3::new(target.x, target.y, target.z),
+            );
+            seq.write_i64(pos.as_long())?;
+        }
+        seq.write_bool(self.tracked)?;
+        Ok(())
+    }
+
+    fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
+        let has_global_position = seq.get_bool()?;
+        let target = if has_global_position {
+            let dimension = seq.get_str()?.into();
+            let pos = pumpkin_util::math::position::BlockPos::from_i64(seq.get_i64()?);
+            Some(LodestoneTarget {
+                dimension,
+                x: pos.0.x,
+                y: pos.0.y,
+                z: pos.0.z,
+            })
+        } else {
+            None
+        };
+        let tracked = seq.get_bool()?;
+        Ok(Self { target, tracked })
     }
 }
 
@@ -1201,6 +1237,39 @@ mod tests {
             .and_then(|data| data.as_any().downcast_ref::<CustomNameImpl>())
             .expect("nested item kept its CustomName component");
         assert_eq!(decoded_name.name.clone().get_text(), "Boost");
+    }
+
+    // Regression test for `minecraft:lodestone_tracker` (component id 67) previously falling
+    // through to the "component_id_N (TODO)" fallback because no codec was registered for it.
+    #[test]
+    fn lodestone_tracker_round_trips() {
+        let tracker = LodestoneTrackerImpl {
+            target: Some(LodestoneTarget {
+                dimension: "minecraft:overworld".to_string(),
+                x: 100,
+                y: 64,
+                z: -200,
+            }),
+            tracked: true,
+        };
+
+        let mut bytes = Vec::new();
+        serialize(DataComponent::LodestoneTracker, &tracker, &mut bytes)
+            .expect("serialize lodestone_tracker");
+
+        let mut cursor = std::io::Cursor::new(bytes.as_slice());
+        let decoded = deserialize(DataComponent::LodestoneTracker, &mut cursor)
+            .expect("deserialize lodestone_tracker");
+        let decoded = decoded
+            .as_ref()
+            .as_any()
+            .downcast_ref::<LodestoneTrackerImpl>()
+            .expect("decoded value is LodestoneTrackerImpl");
+
+        assert!(decoded.tracked);
+        let target = decoded.target.as_ref().expect("target present");
+        assert_eq!(target.dimension, "minecraft:overworld");
+        assert_eq!((target.x, target.y, target.z), (100, 64, -200));
     }
 }
 
