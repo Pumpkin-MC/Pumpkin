@@ -3110,7 +3110,7 @@ impl LivingEntity {
                     if let Some(vehicle) = vehicle {
                         vehicle
                             .get_entity()
-                            .remove_passenger(caller.get_entity().entity_id)
+                            .remove_passenger_before_teleport(caller.get_entity().entity_id)
                             .await;
                         if caller.get_entity().has_vehicle().await {
                             continue;
