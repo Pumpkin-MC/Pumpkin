@@ -1,11 +1,11 @@
-use pumpkin_data::packet::clientbound::PLAY_FORGET_LEVEL_CHUNK;
+use pumpkin_data::packet::clientbound::play::FORGET_LEVEL_CHUNK;
 use pumpkin_macros::java_packet;
 
 use crate::ClientPacket;
 use crate::ser::NetworkWriteExt;
 use pumpkin_util::version::JavaMinecraftVersion;
 
-#[java_packet(PLAY_FORGET_LEVEL_CHUNK)]
+#[java_packet(FORGET_LEVEL_CHUNK)]
 pub struct CUnloadChunk {
     pub z: i32,
     pub x: i32,

@@ -1,4 +1,4 @@
-use pumpkin_data::packet::serverbound::PLAY_SET_STRUCTURE_BLOCK;
+use pumpkin_data::packet::serverbound::play::SET_STRUCTURE_BLOCK;
 use pumpkin_macros::java_packet;
 
 use crate::{
@@ -8,7 +8,7 @@ use crate::{
 };
 use pumpkin_util::{math::position::BlockPos, version::JavaMinecraftVersion};
 
-#[java_packet(PLAY_SET_STRUCTURE_BLOCK)]
+#[java_packet(SET_STRUCTURE_BLOCK)]
 pub struct SSetStructureBlock<'a> {
     pub location: BlockPos,
     pub action: VarInt,

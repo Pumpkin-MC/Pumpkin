@@ -1,4 +1,4 @@
-use pumpkin_data::packet::serverbound::PLAY_INTERACT;
+use pumpkin_data::packet::serverbound::play::INTERACT;
 use pumpkin_macros::java_packet;
 use pumpkin_util::{math::vector3::Vector3, version::JavaMinecraftVersion};
 
@@ -8,7 +8,7 @@ use crate::{
     ser::{NetworkReadExt, ReadingError},
 };
 
-#[java_packet(PLAY_INTERACT)]
+#[java_packet(INTERACT)]
 pub struct SInteract {
     pub entity_id: VarInt,
     pub r#type: VarInt,

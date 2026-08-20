@@ -1,7 +1,7 @@
 use std::io::Write;
 
 use pumpkin_data::{
-    packet::clientbound::PLAY_LEVEL_PARTICLES, particle_id_remap::remap_particle_id_for_version,
+    packet::clientbound::play::LEVEL_PARTICLES, particle_id_remap::remap_particle_id_for_version,
 };
 use pumpkin_macros::java_packet;
 use pumpkin_util::{math::vector3::Vector3, version::JavaMinecraftVersion};
@@ -17,7 +17,7 @@ use crate::{
 /// precise control over particle density, spread, and speed. It can also
 /// carry extra data for complex particles like redstone dust (color) or
 /// block/item breaking (textures).
-#[java_packet(PLAY_LEVEL_PARTICLES)]
+#[java_packet(LEVEL_PARTICLES)]
 pub struct CParticle<'a> {
     /// If true, the particle renders even if the client's "Particles"
     /// setting is set to "Minimal".
@@ -86,12 +86,34 @@ impl ClientPacket for CParticle<'_> {
     ) -> Result<(), WritingError> {
         let mut write = write;
 
-        write.write_bool(self.force_spawn)?;
-        write.write_bool(self.important)?;
+        if *version <= JavaMinecraftVersion::V_1_7_6 {
+            let name = pumpkin_data::particle::Particle::from_id(self.particle_id.0 as u16)
+                .map_or("smoke", |p| p.to_name());
+            write.write_string_bounded(name, 64)?;
+        } else if *version < JavaMinecraftVersion::V_1_20_5 {
+            let remapped_id =
+                remap_particle_id_for_version(self.particle_id.0 as u16, *version) as i32;
+            if *version >= JavaMinecraftVersion::V_1_19 {
+                write.write_var_int(&VarInt(remapped_id))?;
+            } else {
+                write.write_i32_be(remapped_id)?;
+            }
+        }
 
-        write.write_f64_be(self.position.x)?;
-        write.write_f64_be(self.position.y)?;
-        write.write_f64_be(self.position.z)?;
+        write.write_bool(self.important)?;
+        if *version >= JavaMinecraftVersion::V_1_21_4 {
+            write.write_bool(self.force_spawn)?;
+        }
+
+        if *version >= JavaMinecraftVersion::V_1_15 {
+            write.write_f64_be(self.position.x)?;
+            write.write_f64_be(self.position.y)?;
+            write.write_f64_be(self.position.z)?;
+        } else {
+            write.write_f32_be(self.position.x as f32)?;
+            write.write_f32_be(self.position.y as f32)?;
+            write.write_f32_be(self.position.z as f32)?;
+        }
 
         write.write_f32_be(self.offset.x)?;
         write.write_f32_be(self.offset.y)?;
@@ -99,9 +121,15 @@ impl ClientPacket for CParticle<'_> {
 
         write.write_f32_be(self.max_speed)?;
         write.write_i32_be(self.particle_count)?;
-        write.write_var_int(&particle_id_for_version(self.particle_id, *version))?;
 
-        write.write_all(self.data).map_err(WritingError::IoError)
+        if *version >= JavaMinecraftVersion::V_1_20_5 {
+            let remapped_id =
+                remap_particle_id_for_version(self.particle_id.0 as u16, *version) as i32;
+            write.write_var_int(&VarInt(remapped_id))?;
+        }
+        write.write_slice(self.data)?;
+
+        Ok(())
     }
 }
 
@@ -149,5 +177,75 @@ mod tests {
             encoded_particle_id(JavaMinecraftVersion::V_26_2),
             VarInt(29)
         );
+    }
+
+    #[test]
+    fn particle_encoding_legacy_1_7_string() {
+        use crate::ser::NetworkReadSliceExt;
+
+        let packet = CParticle::new(
+            false,
+            false,
+            Vector3::new(1.0, 2.0, 3.0),
+            Vector3::new(0.1, 0.2, 0.3),
+            0.5,
+            10,
+            VarInt(Particle::ExplosionEmitter as i32),
+            &[],
+        );
+        let mut bytes = Vec::new();
+        packet
+            .write_packet_data(&mut bytes, &JavaMinecraftVersion::V_1_7_6)
+            .unwrap();
+
+        let mut slice = bytes.as_slice();
+        let name = slice.get_str_borrowed().unwrap();
+        assert_eq!(name, "explosion_emitter");
+    }
+
+    #[test]
+    fn particle_encoding_1_8_int_id() {
+        use crate::ser::NetworkReadExt;
+
+        let packet = CParticle::new(
+            false,
+            false,
+            Vector3::new(1.0, 2.0, 3.0),
+            Vector3::new(0.1, 0.2, 0.3),
+            0.5,
+            10,
+            VarInt(Particle::ExplosionEmitter as i32),
+            &[],
+        );
+        let mut bytes = Vec::new();
+        packet
+            .write_packet_data(&mut bytes, &JavaMinecraftVersion::V_1_8)
+            .unwrap();
+
+        let mut slice = bytes.as_slice();
+        let id = slice.get_i32_be().unwrap();
+        assert_eq!(id, 18);
+    }
+
+    #[test]
+    fn particle_encoding_1_19_varint_id() {
+        let packet = CParticle::new(
+            false,
+            false,
+            Vector3::new(1.0, 2.0, 3.0),
+            Vector3::new(0.1, 0.2, 0.3),
+            0.5,
+            10,
+            VarInt(Particle::ExplosionEmitter as i32),
+            &[],
+        );
+        let mut bytes = Vec::new();
+        packet
+            .write_packet_data(&mut bytes, &JavaMinecraftVersion::V_1_19)
+            .unwrap();
+
+        let mut cursor = Cursor::new(bytes);
+        let id = VarInt::decode(&mut cursor).unwrap();
+        assert_eq!(id, VarInt(22));
     }
 }

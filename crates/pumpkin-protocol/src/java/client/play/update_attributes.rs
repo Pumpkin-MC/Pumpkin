@@ -1,4 +1,4 @@
-use pumpkin_data::packet::clientbound::PLAY_UPDATE_ATTRIBUTES;
+use pumpkin_data::packet::clientbound::play::UPDATE_ATTRIBUTES;
 use pumpkin_macros::java_packet;
 
 use crate::ClientPacket;
@@ -7,7 +7,7 @@ use crate::ser::NetworkWriteExt;
 use pumpkin_util::version::JavaMinecraftVersion;
 
 #[derive(Debug, PartialEq, Clone)]
-#[java_packet(PLAY_UPDATE_ATTRIBUTES)]
+#[java_packet(UPDATE_ATTRIBUTES)]
 pub struct CUpdateAttributes {
     pub entity_id: VarInt,
     pub properties: Vec<Property>,

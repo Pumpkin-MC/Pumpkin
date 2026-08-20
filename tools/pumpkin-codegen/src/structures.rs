@@ -418,15 +418,43 @@ fn generation_step_to_token(step: &str) -> TokenStream {
     }
 }
 
-/// Reads `structures.json` and `structure_set.json` and emits the complete structures `TokenStream`.
+/// Reads structure and structure_set files from 26.2 datapack and emits the complete structures `TokenStream`.
 pub fn build() -> TokenStream {
-    let structures_json: BTreeMap<String, StructureStruct> =
-        serde_json::from_str(&fs::read_to_string("../../assets/structures.json").unwrap())
-            .expect("Failed to parse structures.json");
+    let structures_dir =
+        std::path::Path::new("../../assets/datapacks/26_2/data/minecraft/worldgen/structure");
+    let mut structures_json: BTreeMap<String, StructureStruct> = BTreeMap::new();
+    let mut s_entries: Vec<_> = fs::read_dir(structures_dir)
+        .expect("Missing worldgen/structure directory")
+        .flatten()
+        .filter(|e| e.path().extension().is_some_and(|ext| ext == "json"))
+        .collect();
+    s_entries.sort_by_key(|e| e.path());
+    for entry in s_entries {
+        let path = entry.path();
+        let stem = path.file_stem().unwrap().to_string_lossy().into_owned();
+        let content = fs::read_to_string(&path).expect("Failed to read structure file");
+        let structure: StructureStruct =
+            serde_json::from_str(&content).expect("Failed to parse structure JSON");
+        structures_json.insert(stem, structure);
+    }
 
-    let structure_sets_json: BTreeMap<String, StructureSetStruct> =
-        serde_json::from_str(&fs::read_to_string("../../assets/structure_set.json").unwrap())
-            .expect("Failed to parse structure_set.json");
+    let structure_sets_dir =
+        std::path::Path::new("../../assets/datapacks/26_2/data/minecraft/worldgen/structure_set");
+    let mut structure_sets_json: BTreeMap<String, StructureSetStruct> = BTreeMap::new();
+    let mut ss_entries: Vec<_> = fs::read_dir(structure_sets_dir)
+        .expect("Missing worldgen/structure_set directory")
+        .flatten()
+        .filter(|e| e.path().extension().is_some_and(|ext| ext == "json"))
+        .collect();
+    ss_entries.sort_by_key(|e| e.path());
+    for entry in ss_entries {
+        let path = entry.path();
+        let stem = path.file_stem().unwrap().to_string_lossy().into_owned();
+        let content = fs::read_to_string(&path).expect("Failed to read structure_set file");
+        let set: StructureSetStruct =
+            serde_json::from_str(&content).expect("Failed to parse structure_set JSON");
+        structure_sets_json.insert(stem, set);
+    }
 
     let mut structure_const_defs = TokenStream::new();
     let mut structure_lookup_arms = TokenStream::new();

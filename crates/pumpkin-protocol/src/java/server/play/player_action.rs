@@ -2,14 +2,14 @@ use crate::{
     ServerPacket,
     ser::{NetworkReadExt, ReadingError},
 };
-use pumpkin_data::packet::serverbound::PLAY_PLAYER_ACTION;
+use pumpkin_data::packet::serverbound::play::PLAYER_ACTION;
 use pumpkin_macros::java_packet;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::version::JavaMinecraftVersion;
 
 use crate::VarInt;
 
-#[java_packet(PLAY_PLAYER_ACTION)]
+#[java_packet(PLAYER_ACTION)]
 pub struct SPlayerAction {
     pub status: VarInt,
     pub position: BlockPos,

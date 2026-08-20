@@ -2,14 +2,14 @@ use crate::{
     ServerPacket,
     ser::{NetworkReadExt, NetworkReadSliceExt, ReadingError},
 };
-use pumpkin_data::packet::serverbound::PLAY_SET_COMMAND_BLOCK;
+use pumpkin_data::packet::serverbound::play::SET_COMMAND_BLOCK;
 use pumpkin_macros::java_packet;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::version::JavaMinecraftVersion;
 
 use crate::codec::var_int::VarInt;
 
-#[java_packet(PLAY_SET_COMMAND_BLOCK)]
+#[java_packet(SET_COMMAND_BLOCK)]
 pub struct SSetCommandBlock<'a> {
     pub pos: BlockPos,
     pub command: &'a str,

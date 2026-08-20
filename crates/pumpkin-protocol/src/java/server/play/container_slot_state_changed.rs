@@ -1,4 +1,4 @@
-use pumpkin_data::packet::serverbound::PLAY_CONTAINER_SLOT_STATE_CHANGED;
+use pumpkin_data::packet::serverbound::play::CONTAINER_SLOT_STATE_CHANGED;
 use pumpkin_macros::java_packet;
 
 use crate::{
@@ -8,7 +8,7 @@ use crate::{
 };
 use pumpkin_util::version::JavaMinecraftVersion;
 
-#[java_packet(PLAY_CONTAINER_SLOT_STATE_CHANGED)]
+#[java_packet(CONTAINER_SLOT_STATE_CHANGED)]
 pub struct SContainerSlotStateChanged {
     pub slot_id: VarInt,
     pub container_id: VarInt,

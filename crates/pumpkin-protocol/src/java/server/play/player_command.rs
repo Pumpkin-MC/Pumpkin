@@ -1,4 +1,4 @@
-use pumpkin_data::packet::serverbound::PLAY_PLAYER_COMMAND;
+use pumpkin_data::packet::serverbound::play::PLAYER_COMMAND;
 use pumpkin_macros::java_packet;
 use pumpkin_util::version::JavaMinecraftVersion;
 
@@ -8,7 +8,7 @@ use crate::{
     ser::{NetworkReadExt, ReadingError},
 };
 
-#[java_packet(PLAY_PLAYER_COMMAND)]
+#[java_packet(PLAYER_COMMAND)]
 pub struct SPlayerCommand {
     pub entity_id: VarInt,
     pub action: Action,

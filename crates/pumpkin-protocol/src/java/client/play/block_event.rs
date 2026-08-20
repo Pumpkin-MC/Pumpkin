@@ -1,4 +1,4 @@
-use pumpkin_data::packet::clientbound::PLAY_BLOCK_EVENT;
+use pumpkin_data::packet::clientbound::play::BLOCK_EVENT;
 use pumpkin_util::math::position::BlockPos;
 
 use crate::ClientPacket;
@@ -11,7 +11,7 @@ use pumpkin_util::version::JavaMinecraftVersion;
 ///
 /// This is used for simple block interactions that don't necessarily change
 /// NBT data, such as chests opening/closing, pistons extending, or note blocks playing.
-#[java_packet(PLAY_BLOCK_EVENT)]
+#[java_packet(BLOCK_EVENT)]
 pub struct CBlockEvent {
     /// The coordinates where the event occurs.
     pub location: BlockPos,

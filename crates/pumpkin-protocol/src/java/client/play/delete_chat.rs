@@ -1,10 +1,10 @@
-use pumpkin_data::packet::clientbound::PLAY_DELETE_CHAT;
+use pumpkin_data::packet::clientbound::play::DELETE_CHAT;
 use pumpkin_macros::java_packet;
 
 use crate::{ClientPacket, codec::var_int::VarInt, ser::NetworkWriteExt};
 use pumpkin_util::version::JavaMinecraftVersion;
 
-#[java_packet(PLAY_DELETE_CHAT)]
+#[java_packet(DELETE_CHAT)]
 pub struct CDeleteChat<'a> {
     pub signature_id: VarInt,
     pub signature: Option<&'a [u8]>,

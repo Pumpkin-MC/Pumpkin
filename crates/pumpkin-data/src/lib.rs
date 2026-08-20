@@ -270,6 +270,21 @@ pub mod sound_id_remap;
 #[path = "generated/particle_id_remap.rs"]
 pub mod particle_id_remap;
 
+#[cfg(feature = "menu_id_remap")]
+#[rustfmt::skip]
+#[path = "generated/menu_id_remap.rs"]
+pub mod menu_id_remap;
+
+#[cfg(feature = "recipe_serializer_id_remap")]
+#[rustfmt::skip]
+#[path = "generated/recipe_serializer_id_remap.rs"]
+pub mod recipe_serializer_id_remap;
+
+#[cfg(feature = "argument_type_id_remap")]
+#[rustfmt::skip]
+#[path = "generated/argument_type_id_remap.rs"]
+pub mod argument_type_id_remap;
+
 #[cfg(feature = "bedrock_creative")]
 #[rustfmt::skip]
 #[path = "generated/bedrock_creative.rs"]

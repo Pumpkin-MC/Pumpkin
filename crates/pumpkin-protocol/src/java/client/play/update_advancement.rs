@@ -2,7 +2,7 @@ use crate::codec::item_stack_seralizer::ItemStackTemplateSerializer;
 use crate::codec::var_int::VarInt;
 use pumpkin_data::Advancement;
 use pumpkin_data::advancement_data::AdvancementProgressData;
-use pumpkin_data::packet::clientbound::PLAY_UPDATE_ADVANCEMENTS;
+use pumpkin_data::packet::clientbound::play::UPDATE_ADVANCEMENTS;
 use pumpkin_macros::java_packet;
 use pumpkin_util::identifier::Identifier;
 
@@ -10,7 +10,7 @@ use crate::ClientPacket;
 use crate::ser::NetworkWriteExt;
 use pumpkin_util::version::JavaMinecraftVersion;
 
-#[java_packet(PLAY_UPDATE_ADVANCEMENTS)]
+#[java_packet(UPDATE_ADVANCEMENTS)]
 #[allow(unused)]
 pub struct CUpdateAdvancements {
     pub reset: bool,
@@ -61,8 +61,8 @@ impl ClientPacket for CUpdateAdvancements {
             let has_display = adv.display.is_some();
             write.write_bool(has_display)?;
             if let Some(display) = adv.display {
-                write.write_slice(&display.get_title().encode())?;
-                write.write_slice(&display.get_description().encode())?;
+                write.write_component(&display.get_title(), version)?;
+                write.write_component(&display.get_description(), version)?;
 
                 // Item icon
                 ItemStackTemplateSerializer::from(display.item_icon.clone())

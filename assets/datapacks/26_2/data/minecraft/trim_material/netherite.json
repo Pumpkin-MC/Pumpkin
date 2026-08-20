@@ -1,0 +1,10 @@
+{
+  "asset_name": "netherite",
+  "description": {
+    "color": "#625859",
+    "translate": "trim_material.minecraft.netherite"
+  },
+  "override_armor_assets": {
+    "minecraft:netherite": "netherite_darker"
+  }
+}

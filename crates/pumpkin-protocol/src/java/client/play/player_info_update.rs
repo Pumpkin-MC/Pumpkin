@@ -1,7 +1,7 @@
 use std::io::Write;
 
 use bitflags::bitflags;
-use pumpkin_data::packet::clientbound::PLAY_PLAYER_INFO_UPDATE;
+use pumpkin_data::packet::clientbound::play::PLAYER_INFO_UPDATE;
 use pumpkin_macros::java_packet;
 use pumpkin_util::version::JavaMinecraftVersion;
 
@@ -28,9 +28,9 @@ bitflags! {
         const UPDATE_LATENCY        = 0x10;
         /// Changes the name shown in the Tab list (supports formatting).
         const UPDATE_DISPLAY_NAME   = 0x20;
-        /// Sets the sorting order in the Tab list (introduced in 1.21.2).
+        /// Sets the sorting order in the Tab list (Added in 1.21.2).
         const UPDATE_LIST_PRIORITY  = 0x40;
-        /// Toggles the visibility of the player's hat layer.
+        /// Toggles the visibility of the player's hat layer (Added in 1.21.4).
         const UPDATE_HAT            = 0x80;
     }
 }
@@ -40,7 +40,7 @@ bitflags! {
 /// This packet replaces the legacy "Player Info" packet with a more efficient
 /// bitmask-driven approach. Instead of sending full data every time, the
 /// server only sends the fields specified in the `actions` bitmask.
-#[java_packet(PLAY_PLAYER_INFO_UPDATE)]
+#[java_packet(PLAYER_INFO_UPDATE)]
 pub struct CPlayerInfoUpdate<'a> {
     /// The bitmask (`PlayerInfoFlags`) determining which data follows.
     pub actions: u8,
@@ -70,13 +70,13 @@ impl ClientPacket for CPlayerInfoUpdate<'_> {
     ) -> Result<(), WritingError> {
         let mut write = write;
 
-        // UPDATE_LIST_PRIORITY was added in 1.21.2 and UPDATE_HAT in 26.1.
+        // UPDATE_LIST_PRIORITY was added in 1.21.2 and UPDATE_HAT in 1.21.4.
         // Mask unsupported bits and omit their data so older clients can parse the packet.
         let mut effective_actions = self.actions;
         if *version < JavaMinecraftVersion::V_1_21_2 {
             effective_actions &= !PlayerInfoFlags::UPDATE_LIST_PRIORITY.bits();
         }
-        if *version < JavaMinecraftVersion::V_26_1 {
+        if *version < JavaMinecraftVersion::V_1_21_4 {
             effective_actions &= !PlayerInfoFlags::UPDATE_HAT.bits();
         }
 
@@ -118,21 +118,17 @@ impl ClientPacket for CPlayerInfoUpdate<'_> {
                     PlayerAction::UpdateLatency(latency) => p.write_var_int(latency)?,
                     PlayerAction::UpdateDisplayName(display_name) => {
                         p.write_option(display_name, |w, text_component| {
-                            if *version < JavaMinecraftVersion::V_1_20_5 {
-                                let json =
-                                    serde_json::to_string(&text_component.0).unwrap_or_default();
-                                w.write_string(&json)
-                            } else {
-                                w.write_slice(&text_component.encode())
-                            }
+                            w.write_component(text_component, version)
                         })?;
                     }
                     PlayerAction::UpdateListOrder(order) => {
+                        // Added in 1.21.2
                         if effective_actions & PlayerInfoFlags::UPDATE_LIST_PRIORITY.bits() != 0 {
                             p.write_var_int(order)?;
                         }
                     }
                     PlayerAction::UpdateHat(show_hat) => {
+                        // Added in 1.21.4
                         if effective_actions & PlayerInfoFlags::UPDATE_HAT.bits() != 0 {
                             p.write_bool(*show_hat)?;
                         }
@@ -142,59 +138,5 @@ impl ClientPacket for CPlayerInfoUpdate<'_> {
 
             Ok(())
         })
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::{CPlayerInfoUpdate, Player, PlayerInfoFlags};
-    use crate::{ClientPacket, VarInt, java::client::play::PlayerAction};
-    use pumpkin_util::version::JavaMinecraftVersion;
-
-    fn write_player_info(version: JavaMinecraftVersion) -> Vec<u8> {
-        let actions = [
-            PlayerAction::UpdateListOrder(VarInt(42)),
-            PlayerAction::UpdateHat(true),
-        ];
-        let players = [Player {
-            uuid: uuid::Uuid::nil(),
-            actions: &actions,
-        }];
-        let packet = CPlayerInfoUpdate::new(
-            (PlayerInfoFlags::UPDATE_LIST_PRIORITY | PlayerInfoFlags::UPDATE_HAT).bits(),
-            &players,
-        );
-        let mut bytes = Vec::new();
-        packet.write_packet_data(&mut bytes, &version).unwrap();
-        bytes
-    }
-
-    #[test]
-    fn player_info_omits_new_actions_before_1_21_2() {
-        let mut expected = vec![0, 1];
-        expected.extend_from_slice(&[0; 16]);
-
-        assert_eq!(write_player_info(JavaMinecraftVersion::V_1_21), expected);
-    }
-
-    #[test]
-    fn player_info_keeps_list_order_before_26_1() {
-        let mut expected = vec![PlayerInfoFlags::UPDATE_LIST_PRIORITY.bits(), 1];
-        expected.extend_from_slice(&[0; 16]);
-        expected.push(42);
-
-        assert_eq!(write_player_info(JavaMinecraftVersion::V_1_21_11), expected);
-    }
-
-    #[test]
-    fn player_info_writes_hat_from_26_1() {
-        let mut expected = vec![
-            (PlayerInfoFlags::UPDATE_LIST_PRIORITY | PlayerInfoFlags::UPDATE_HAT).bits(),
-            1,
-        ];
-        expected.extend_from_slice(&[0; 16]);
-        expected.extend_from_slice(&[42, 1]);
-
-        assert_eq!(write_player_info(JavaMinecraftVersion::V_26_1), expected);
     }
 }

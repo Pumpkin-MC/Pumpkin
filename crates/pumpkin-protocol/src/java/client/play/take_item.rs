@@ -1,12 +1,12 @@
 use crate::VarInt;
-use pumpkin_data::packet::clientbound::PLAY_TAKE_ITEM_ENTITY;
+use pumpkin_data::packet::clientbound::play::TAKE_ITEM_ENTITY;
 use pumpkin_macros::java_packet;
 
 use crate::ClientPacket;
 use crate::ser::NetworkWriteExt;
 use pumpkin_util::version::JavaMinecraftVersion;
 
-#[java_packet(PLAY_TAKE_ITEM_ENTITY)]
+#[java_packet(TAKE_ITEM_ENTITY)]
 pub struct CTakeItemEntity {
     /// The entity id of the item entity.
     pub entity_id: VarInt,

@@ -1,4 +1,4 @@
-use pumpkin_data::packet::serverbound::CONFIG_RESOURCE_PACK;
+use pumpkin_data::packet::serverbound::config::RESOURCE_PACK;
 use pumpkin_macros::java_packet;
 
 use crate::{
@@ -25,7 +25,7 @@ pub enum ResourcePackResponseResult {
 ///
 /// This allows the server to know if the player is using the required textures
 /// or if the download failed.
-#[java_packet(CONFIG_RESOURCE_PACK)]
+#[java_packet(RESOURCE_PACK)]
 pub struct SConfigResourcePack {
     /// The unique identifier of the resource pack this response refers to.
     pub uuid: uuid::Uuid,

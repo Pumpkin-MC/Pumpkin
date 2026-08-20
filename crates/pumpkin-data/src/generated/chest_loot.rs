@@ -131,6 +131,12 @@ static ABANDONED_MINESHAFT_POOL2_ENTRIES: &[ChestLootEntry] = &[
         min_count: 1i32,
         max_count: 16i32,
     },
+    ChestLootEntry {
+        item: "minecraft:music_disc_bounce",
+        weight: 10i32,
+        min_count: 1i32,
+        max_count: 1i32,
+    },
 ];
 static ABANDONED_MINESHAFT_POOLS: &[ChestLootPool] = &[
     ChestLootPool {

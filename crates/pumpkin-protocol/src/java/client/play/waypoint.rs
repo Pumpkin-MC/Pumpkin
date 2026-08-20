@@ -2,7 +2,7 @@ use std::io::Write;
 
 use crate::ser::NetworkWriteExt;
 use crate::{ClientPacket, VarInt, WritingError};
-use pumpkin_data::packet::clientbound::PLAY_WAYPOINT;
+use pumpkin_data::packet::clientbound::play::WAYPOINT;
 use pumpkin_macros::java_packet;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::version::JavaMinecraftVersion;
@@ -62,7 +62,7 @@ impl TrackedWaypoint<'_> {
 }
 
 /// Syncs tracked waypoints (`ClientboundTrackedWaypointPacket`) to client.
-#[java_packet(PLAY_WAYPOINT)]
+#[java_packet(WAYPOINT)]
 pub struct CWaypoint<'a> {
     pub operation: WaypointOperation,
     pub waypoint: TrackedWaypoint<'a>,

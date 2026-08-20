@@ -2,14 +2,14 @@ use crate::{
     ServerPacket,
     ser::{NetworkReadExt, ReadingError},
 };
-use pumpkin_data::packet::serverbound::PLAY_JIGSAW_GENERATE;
+use pumpkin_data::packet::serverbound::play::JIGSAW_GENERATE;
 use pumpkin_macros::java_packet;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::version::JavaMinecraftVersion;
 
 use crate::codec::var_int::VarInt;
 
-#[java_packet(PLAY_JIGSAW_GENERATE)]
+#[java_packet(JIGSAW_GENERATE)]
 pub struct SJigsawGenerate {
     pub pos: BlockPos,
     pub levels: VarInt,

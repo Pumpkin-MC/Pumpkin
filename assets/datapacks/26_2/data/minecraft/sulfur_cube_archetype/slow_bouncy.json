@@ -1,0 +1,45 @@
+{
+  "attribute_modifiers": [
+    {
+      "amount": 0.4000000059604645,
+      "attribute": "minecraft:knockback_resistance",
+      "id": "minecraft:slow_bouncy_add_knockback_resistance",
+      "operation": "add_value"
+    },
+    {
+      "amount": 0.4000000059604645,
+      "attribute": "minecraft:explosion_knockback_resistance",
+      "id": "minecraft:slow_bouncy_add_explosion_knockback_resistance",
+      "operation": "add_value"
+    },
+    {
+      "amount": 0.6000000238418579,
+      "attribute": "minecraft:bounciness",
+      "id": "minecraft:slow_bouncy_add_bounciness",
+      "operation": "add_value"
+    },
+    {
+      "amount": -0.699999988079071,
+      "attribute": "minecraft:friction_modifier",
+      "id": "minecraft:slow_bouncy_mul_friction_modifier",
+      "operation": "add_multiplied_total"
+    },
+    {
+      "amount": -0.9499999992549419,
+      "attribute": "minecraft:air_drag_modifier",
+      "id": "minecraft:slow_bouncy_mul_air_drag_modifier",
+      "operation": "add_multiplied_total"
+    }
+  ],
+  "items": "#minecraft:sulfur_cube_archetype/slow_bouncy",
+  "knockback_modifiers": {
+    "horizontal_power": 0.4125,
+    "vertical_power": 0.24
+  },
+  "sound_settings": {
+    "hit_sound": "minecraft:entity.sulfur_cube.slow_bouncy.hit",
+    "push_sound": "minecraft:entity.sulfur_cube.slow_bouncy.push",
+    "push_sound_cooldown": 0.5,
+    "push_sound_impulse_threshold": 0.05
+  }
+}

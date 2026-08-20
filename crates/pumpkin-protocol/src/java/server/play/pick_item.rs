@@ -1,4 +1,4 @@
-use pumpkin_data::packet::serverbound::{PLAY_PICK_ITEM_FROM_BLOCK, PLAY_PICK_ITEM_FROM_ENTITY};
+use pumpkin_data::packet::serverbound::play::{PICK_ITEM_FROM_BLOCK, PICK_ITEM_FROM_ENTITY};
 use pumpkin_macros::java_packet;
 use pumpkin_util::math::position::BlockPos;
 
@@ -9,7 +9,7 @@ use crate::{
 };
 use pumpkin_util::version::JavaMinecraftVersion;
 
-#[java_packet(PLAY_PICK_ITEM_FROM_BLOCK)]
+#[java_packet(PICK_ITEM_FROM_BLOCK)]
 pub struct SPickItemFromBlock {
     pub pos: BlockPos,
     pub include_data: bool,
@@ -37,7 +37,7 @@ impl crate::ClientPacket for SPickItemFromBlock {
     }
 }
 
-#[java_packet(PLAY_PICK_ITEM_FROM_ENTITY)]
+#[java_packet(PICK_ITEM_FROM_ENTITY)]
 pub struct SPickItemFromEntity {
     pub id: VarInt,
     pub include_data: bool,

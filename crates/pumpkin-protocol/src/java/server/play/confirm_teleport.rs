@@ -1,16 +1,21 @@
 use crate::{
-    ServerPacket,
+    MultiVersionJavaPacket, ServerPacket, VarInt,
     ser::{NetworkReadExt, ReadingError},
 };
-use pumpkin_data::packet::serverbound::PLAY_ACCEPT_TELEPORTATION;
-use pumpkin_macros::java_packet;
 use pumpkin_util::version::JavaMinecraftVersion;
 
-use crate::VarInt;
-
-#[java_packet(PLAY_ACCEPT_TELEPORTATION)]
 pub struct SConfirmTeleport {
     pub teleport_id: VarInt,
+}
+
+impl MultiVersionJavaPacket for SConfirmTeleport {
+    fn to_id(version: JavaMinecraftVersion) -> i32 {
+        if version >= JavaMinecraftVersion::V_1_9 {
+            0
+        } else {
+            -1
+        }
+    }
 }
 
 impl<'a> ServerPacket<'a> for SConfirmTeleport {

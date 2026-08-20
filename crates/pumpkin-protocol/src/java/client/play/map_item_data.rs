@@ -1,9 +1,9 @@
 use crate::{ClientPacket, VarInt, WritingError, ser::NetworkWriteExt};
-use pumpkin_data::packet::clientbound::PLAY_MAP_ITEM_DATA;
+use pumpkin_data::packet::clientbound::play::MAP_ITEM_DATA;
 use pumpkin_macros::java_packet;
 use std::io::Write;
 
-#[java_packet(PLAY_MAP_ITEM_DATA)]
+#[java_packet(MAP_ITEM_DATA)]
 pub struct CMapItemData<'a> {
     pub map_id: VarInt,
     pub scale: i8,

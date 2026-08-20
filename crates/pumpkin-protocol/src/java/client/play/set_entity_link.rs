@@ -1,11 +1,11 @@
-use pumpkin_data::packet::clientbound::PLAY_SET_ENTITY_LINK;
+use pumpkin_data::packet::clientbound::play::SET_ENTITY_LINK;
 use pumpkin_macros::java_packet;
 use pumpkin_util::version::JavaMinecraftVersion;
 
 use crate::{ClientPacket, ser::NetworkWriteExt};
 
 /// Sent by the server to attach (leash) or detach an entity to another entity (e.g. leash knot, player, mob).
-#[java_packet(PLAY_SET_ENTITY_LINK)]
+#[java_packet(SET_ENTITY_LINK)]
 pub struct CSetEntityLink {
     pub attached_entity_id: i32,
     pub holding_entity_id: i32,
