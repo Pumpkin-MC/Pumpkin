@@ -99,7 +99,6 @@ impl PressurePlate for WeightedPressurePlateBlock {
         props.power
     }
 
-    #[allow(clippy::unused_async_trait_impl)]
     async fn calculate_redstone_output(&self, world: &World, block: &Block, pos: &BlockPos) -> u8 {
         // light = Gold
         // heavy = Iron
