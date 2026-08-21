@@ -1147,6 +1147,7 @@ impl PluginManager {
         }
     }
 
+    #[expect(clippy::result_unit_err)]
     pub async fn send_message(
         &self,
         sender: &str,

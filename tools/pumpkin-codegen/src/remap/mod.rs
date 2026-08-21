@@ -4,12 +4,20 @@ use pumpkin_nbt::compound::NbtCompound;
 use crate::version::JavaMinecraftVersion;
 
 mod argument_type;
+mod attribute;
+mod block_entity_type;
 mod block_state;
+mod custom_stat;
+mod data_component_type;
+mod enchantment;
 mod entity_id;
+mod environment_attribute;
 mod item_id;
 mod menu_id;
+mod painting_variant;
 mod particle_id;
 mod recipe_serializer;
+mod slot_display;
 mod sound_id;
 
 /// Returns the list of remap builder functions paired with their output file names.
@@ -17,14 +25,185 @@ mod sound_id;
 pub fn build() -> Vec<(fn() -> TokenStream, &'static str)> {
     vec![
         (argument_type::build, "argument_type_id_remap.rs"),
+        (attribute::build, "attribute_id_remap.rs"),
+        (block_entity_type::build, "block_entity_type_id_remap.rs"),
         (block_state::build, "block_state_remap.rs"),
+        (custom_stat::build, "custom_stat_id_remap.rs"),
+        (
+            data_component_type::build,
+            "data_component_type_id_remap.rs",
+        ),
+        (enchantment::build, "enchantment_id_remap.rs"),
         (entity_id::build, "entity_id_remap.rs"),
+        (
+            environment_attribute::build,
+            "environment_attribute_id_remap.rs",
+        ),
         (item_id::build, "item_id_remap.rs"),
         (menu_id::build, "menu_id_remap.rs"),
+        (painting_variant::build, "painting_variant_id_remap.rs"),
         (particle_id::build, "particle_id_remap.rs"),
         (recipe_serializer::build, "recipe_serializer_id_remap.rs"),
+        (slot_display::build, "slot_display_id_remap.rs"),
         (sound_id::build, "sound_id_remap.rs"),
     ]
+}
+
+#[macro_export]
+macro_rules! remap_nodes {
+    ($remapper:expr) => {{
+        let node_1_7_6 = $crate::remap::MappingNode {
+            version: $crate::version::JavaMinecraftVersion::V_1_7_6,
+            value: "../../assets/viarewind/data/mappings-1.8to1.7.10.nbt",
+            child: None,
+        };
+        let node_1_8 = $crate::remap::MappingNode {
+            version: $crate::version::JavaMinecraftVersion::V_1_8,
+            value: "../../assets/viarewind/data/mappings-1.9.4to1.8.nbt",
+            child: Some(&node_1_7_6),
+        };
+        let node_1_9 = $crate::remap::MappingNode {
+            version: $crate::version::JavaMinecraftVersion::V_1_9,
+            value: "../../assets/viabackwards/data/mappings-1.10to1.9.4.nbt",
+            child: Some(&node_1_8),
+        };
+        let node_1_10 = $crate::remap::MappingNode {
+            version: $crate::version::JavaMinecraftVersion::V_1_10,
+            value: "../../assets/viabackwards/data/mappings-1.11to1.10.nbt",
+            child: Some(&node_1_9),
+        };
+        let node_1_11 = $crate::remap::MappingNode {
+            version: $crate::version::JavaMinecraftVersion::V_1_11,
+            value: "../../assets/viabackwards/data/mappings-1.12to1.11.nbt",
+            child: Some(&node_1_10),
+        };
+        let node_1_12 = $crate::remap::MappingNode {
+            version: $crate::version::JavaMinecraftVersion::V_1_12,
+            value: "../../assets/viabackwards/data/mappings-1.13to1.12.nbt",
+            child: Some(&node_1_11),
+        };
+        let node_1_13 = $crate::remap::MappingNode {
+            version: $crate::version::JavaMinecraftVersion::V_1_13,
+            value: "../../assets/viabackwards/data/mappings-1.13.2to1.13.nbt",
+            child: Some(&node_1_12),
+        };
+        let node_1_13_2 = $crate::remap::MappingNode {
+            version: $crate::version::JavaMinecraftVersion::V_1_13_2,
+            value: "../../assets/viabackwards/data/mappings-1.14to1.13.2.nbt",
+            child: Some(&node_1_13),
+        };
+        let node_1_14 = $crate::remap::MappingNode {
+            version: $crate::version::JavaMinecraftVersion::V_1_14,
+            value: "../../assets/viabackwards/data/mappings-1.15to1.14.nbt",
+            child: Some(&node_1_13_2),
+        };
+        let node_1_15 = $crate::remap::MappingNode {
+            version: $crate::version::JavaMinecraftVersion::V_1_15,
+            value: "../../assets/viabackwards/data/mappings-1.16to1.15.nbt",
+            child: Some(&node_1_14),
+        };
+        let node_1_16 = $crate::remap::MappingNode {
+            version: $crate::version::JavaMinecraftVersion::V_1_16,
+            value: "../../assets/viabackwards/data/mappings-1.16.2to1.16.nbt",
+            child: Some(&node_1_15),
+        };
+        let node_1_16_2 = $crate::remap::MappingNode {
+            version: $crate::version::JavaMinecraftVersion::V_1_16_2,
+            value: "../../assets/viabackwards/data/mappings-1.17to1.16.2.nbt",
+            child: Some(&node_1_16),
+        };
+        let node_1_17 = $crate::remap::MappingNode {
+            version: $crate::version::JavaMinecraftVersion::V_1_17,
+            value: "../../assets/viabackwards/data/mappings-1.18to1.17.nbt",
+            child: Some(&node_1_16_2),
+        };
+        let node_1_18 = $crate::remap::MappingNode {
+            version: $crate::version::JavaMinecraftVersion::V_1_18,
+            value: "../../assets/viabackwards/data/mappings-1.19to1.18.nbt",
+            child: Some(&node_1_17),
+        };
+        let node_1_19 = $crate::remap::MappingNode {
+            version: $crate::version::JavaMinecraftVersion::V_1_19,
+            value: "../../assets/viabackwards/data/mappings-1.19.3to1.19.nbt",
+            child: Some(&node_1_18),
+        };
+        let node_1_19_3 = $crate::remap::MappingNode {
+            version: $crate::version::JavaMinecraftVersion::V_1_19_3,
+            value: "../../assets/viabackwards/data/mappings-1.19.4to1.19.3.nbt",
+            child: Some(&node_1_19),
+        };
+        let node_1_19_4 = $crate::remap::MappingNode {
+            version: $crate::version::JavaMinecraftVersion::V_1_19_4,
+            value: "../../assets/viabackwards/data/mappings-1.20to1.19.4.nbt",
+            child: Some(&node_1_19_3),
+        };
+        let node_1_20 = $crate::remap::MappingNode {
+            version: $crate::version::JavaMinecraftVersion::V_1_20,
+            value: "../../assets/viabackwards/data/mappings-1.20.2to1.20.nbt",
+            child: Some(&node_1_19_4),
+        };
+        let node_1_20_2 = $crate::remap::MappingNode {
+            version: $crate::version::JavaMinecraftVersion::V_1_20_2,
+            value: "../../assets/viabackwards/data/mappings-1.20.3to1.20.2.nbt",
+            child: Some(&node_1_20),
+        };
+        let node_1_20_3 = $crate::remap::MappingNode {
+            version: $crate::version::JavaMinecraftVersion::V_1_20_3,
+            value: "../../assets/viabackwards/data/mappings-1.20.5to1.20.3.nbt",
+            child: Some(&node_1_20_2),
+        };
+        let node_1_20_5 = $crate::remap::MappingNode {
+            version: $crate::version::JavaMinecraftVersion::V_1_20_5,
+            value: "../../assets/viabackwards/data/mappings-1.21to1.20.5.nbt",
+            child: Some(&node_1_20_3),
+        };
+        let node_1_21 = $crate::remap::MappingNode {
+            version: $crate::version::JavaMinecraftVersion::V_1_21,
+            value: "../../assets/viabackwards/data/mappings-1.21.2to1.21.nbt",
+            child: Some(&node_1_20_5),
+        };
+        let node_1_21_2 = $crate::remap::MappingNode {
+            version: $crate::version::JavaMinecraftVersion::V_1_21_2,
+            value: "../../assets/viabackwards/data/mappings-1.21.4to1.21.2.nbt",
+            child: Some(&node_1_21),
+        };
+        let node_1_21_4 = $crate::remap::MappingNode {
+            version: $crate::version::JavaMinecraftVersion::V_1_21_4,
+            value: "../../assets/viabackwards/data/mappings-1.21.5to1.21.4.nbt",
+            child: Some(&node_1_21_2),
+        };
+        let node_1_21_5 = $crate::remap::MappingNode {
+            version: $crate::version::JavaMinecraftVersion::V_1_21_5,
+            value: "../../assets/viabackwards/data/mappings-1.21.6to1.21.5.nbt",
+            child: Some(&node_1_21_4),
+        };
+        let node_1_21_6 = $crate::remap::MappingNode {
+            version: $crate::version::JavaMinecraftVersion::V_1_21_6,
+            value: "../../assets/viabackwards/data/mappings-1.21.7to1.21.6.nbt",
+            child: Some(&node_1_21_5),
+        };
+        let node_1_21_7 = $crate::remap::MappingNode {
+            version: $crate::version::JavaMinecraftVersion::V_1_21_7,
+            value: "../../assets/viabackwards/data/mappings-1.21.9to1.21.7.nbt",
+            child: Some(&node_1_21_6),
+        };
+        let node_1_21_9 = $crate::remap::MappingNode {
+            version: $crate::version::JavaMinecraftVersion::V_1_21_9,
+            value: "../../assets/viabackwards/data/mappings-1.21.11to1.21.9.nbt",
+            child: Some(&node_1_21_7),
+        };
+        let node_1_21_11 = $crate::remap::MappingNode {
+            version: $crate::version::JavaMinecraftVersion::V_1_21_11,
+            value: "../../assets/viabackwards/data/mappings-26.1to1.21.11.nbt",
+            child: Some(&node_1_21_9),
+        };
+        let node_26_1 = $crate::remap::MappingNode {
+            version: $crate::version::JavaMinecraftVersion::V_26_1,
+            value: "../../assets/viabackwards/data/mappings-26.2to26.1.nbt",
+            child: Some(&node_1_21_11),
+        };
+        $remapper.process(&node_26_1)
+    }};
 }
 
 /// A node in a linked chain of ViaVersion mapping files, each describing how IDs changed
@@ -340,6 +519,22 @@ impl ParsedMappings {
                 } else {
                     u16::try_from(id)
                         .unwrap_or_else(|_| panic!("{name}: id {id} does not fit in u16"))
+                }
+            })
+            .collect()
+    }
+
+    /// Converts the forward mapping directly to a u32 table.
+    /// Used with ViaBackwards mappings which are already in new→old direction.
+    pub fn to_u32(&self, name: &str) -> Vec<u32> {
+        self.forward
+            .iter()
+            .map(|&id| {
+                if id < 0 {
+                    0
+                } else {
+                    u32::try_from(id)
+                        .unwrap_or_else(|_| panic!("{name}: id {id} does not fit in u32"))
                 }
             })
             .collect()

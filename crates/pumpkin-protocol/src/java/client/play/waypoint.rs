@@ -114,7 +114,7 @@ impl ClientPacket for CWaypoint<'_> {
     fn write_packet_data(
         &self,
         mut write: impl Write,
-        _version: &JavaMinecraftVersion,
+        version: &JavaMinecraftVersion,
     ) -> Result<(), WritingError> {
         // 1. Operation (TRACK = 0, UNTRACK = 1, UPDATE = 2)
         write.write_var_int(&VarInt(self.operation as i32))?;
@@ -146,7 +146,7 @@ impl ClientPacket for CWaypoint<'_> {
         match &self.waypoint.target {
             WaypointTarget::Position(pos) => {
                 write.write_var_int(&VarInt(0))?;
-                write.write_block_pos(pos)?;
+                write.write_block_pos(pos, version)?;
             }
             WaypointTarget::Chunk { x, z } => {
                 write.write_var_int(&VarInt(1))?;

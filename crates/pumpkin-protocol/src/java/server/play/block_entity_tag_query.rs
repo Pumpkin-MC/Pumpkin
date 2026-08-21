@@ -15,10 +15,10 @@ pub struct SBlockEntityTagQuery {
 }
 
 impl<'a> ServerPacket<'a> for SBlockEntityTagQuery {
-    fn read(bytebuf: &mut &'a [u8], _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+    fn read(bytebuf: &mut &'a [u8], version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
         Ok(Self {
             transaction_id: bytebuf.get_var_int()?,
-            location: BlockPos::from_i64(bytebuf.get_i64_be()?),
+            location: bytebuf.get_block_pos(version)?,
         })
     }
 }
@@ -27,11 +27,11 @@ impl crate::ClientPacket for SBlockEntityTagQuery {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        _version: &JavaMinecraftVersion,
+        version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         use crate::ser::NetworkWriteExt;
         write.write_var_int(&self.transaction_id)?;
-        write.write_block_pos(&self.location)?;
+        write.write_block_pos(&self.location, version)?;
         Ok(())
     }
 }

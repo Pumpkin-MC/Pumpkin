@@ -45,9 +45,9 @@ impl ClientPacket for CBlockEvent {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        _version: &JavaMinecraftVersion,
+        version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
-        write.write_block_pos(&self.location)?;
+        write.write_block_pos(&self.location, version)?;
         write.write_u8(self.action_id)?;
         write.write_u8(self.action_parameter)?;
         write.write_var_int(&self.block_type)?;

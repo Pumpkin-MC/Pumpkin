@@ -29,12 +29,18 @@ impl ClientPacket for CUpdateEntityPos {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        _version: &JavaMinecraftVersion,
+        version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         write.write_var_int(&self.entity_id)?;
-        write.write_i16_be(self.delta.x)?;
-        write.write_i16_be(self.delta.y)?;
-        write.write_i16_be(self.delta.z)?;
+        if *version >= JavaMinecraftVersion::V_1_9 {
+            write.write_i16_be(self.delta.x)?;
+            write.write_i16_be(self.delta.y)?;
+            write.write_i16_be(self.delta.z)?;
+        } else {
+            write.write_i8((self.delta.x / 128) as i8)?;
+            write.write_i8((self.delta.y / 128) as i8)?;
+            write.write_i8((self.delta.z / 128) as i8)?;
+        }
         write.write_bool(self.on_ground)?;
         Ok(())
     }

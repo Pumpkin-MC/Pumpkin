@@ -15,11 +15,7 @@ pub struct SCloseContainer {
 
 impl<'a> ServerPacket<'a> for SCloseContainer {
     fn read(bytebuf: &mut &'a [u8], version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
-        let window_id = if *version >= JavaMinecraftVersion::V_1_21_2 {
-            bytebuf.get_var_int()?
-        } else {
-            VarInt(bytebuf.get_u8()? as i32)
-        };
+        let window_id = bytebuf.get_container_id(version)?;
 
         Ok(Self { window_id })
     }
@@ -33,11 +29,7 @@ impl crate::ClientPacket for SCloseContainer {
     ) -> Result<(), crate::ser::WritingError> {
         use crate::ser::NetworkWriteExt;
 
-        if *version >= JavaMinecraftVersion::V_1_21_2 {
-            write.write_var_int(&self.window_id)?;
-        } else {
-            write.write_u8(self.window_id.0 as u8)?;
-        }
+        write.write_container_id(&self.window_id, version)?;
 
         Ok(())
     }

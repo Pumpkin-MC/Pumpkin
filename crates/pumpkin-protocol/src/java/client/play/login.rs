@@ -348,7 +348,7 @@ impl ClientPacket for CLogin<'_> {
                 &self.spawn_data.death_dimension_name,
                 |write, (dim, pos)| {
                     write.write_string(dim)?;
-                    write.write_block_pos(pos)?;
+                    write.write_block_pos(pos, version)?;
                     Ok(())
                 },
             )?;

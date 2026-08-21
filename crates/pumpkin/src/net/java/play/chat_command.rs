@@ -14,11 +14,12 @@ impl JavaClient {
         }
         let player_clone = player.clone();
         let server_clone = server.clone();
+        let command_str = command.command.strip_prefix('/').unwrap_or(command.command);
         send_cancellable! {{
             server;
             PlayerCommandSendEvent {
                 player: player.clone(),
-                command: command.command.to_string(),
+                command: command_str.to_string(),
                 cancelled: false
             };
 
