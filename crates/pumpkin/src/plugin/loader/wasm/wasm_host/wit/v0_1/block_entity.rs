@@ -1772,7 +1772,7 @@ impl HostEndGatewayBlockEntity for PluginHostState {
         Ok(entity
             .as_any()
             .downcast_ref::<InternalEndGatewayBlockEntity>()
-            .is_some_and(|b| b.exact_teleport.try_lock().ok().is_some_and(|g| *g)))
+            .is_some_and(|b| b.exact_teleport.try_lock().is_ok_and(|g| *g)))
     }
 
     async fn drop(&mut self, rep: Resource<EndGatewayBlockEntity>) -> wasmtime::Result<()> {

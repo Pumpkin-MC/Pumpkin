@@ -476,6 +476,7 @@ impl NodeEvaluator for WalkNodeEvaluator {
         }
     }
 
+    #[allow(clippy::unused_async_trait_impl)]
     async fn get_path_type_of_mob(
         &mut self,
         context: &mut PathfindingContext,
@@ -556,6 +557,7 @@ impl NodeEvaluator for WalkNodeEvaluator {
         result
     }
 
+    #[allow(clippy::unused_async_trait_impl)]
     async fn get_path_type(
         &mut self,
         context: &mut PathfindingContext,
