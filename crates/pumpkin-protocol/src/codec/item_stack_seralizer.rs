@@ -181,7 +181,7 @@ fn serialize_item_cost_with_id(
 
 fn read_component_id(
     read: &mut impl NetworkReadExt,
-    version: &JavaMinecraftVersion,
+    version: JavaMinecraftVersion,
 ) -> Result<DataComponent, ReadingError> {
     let id_val = read.get_var_int()?.0;
     let id_u8 = id_val
@@ -191,7 +191,7 @@ fn read_component_id(
     // versions: components added since the last pre-26.1 release shift every id after their
     // insertion point, so an id sent by an older client must be resolved through the legacy
     // table instead of the (26.1+) table `try_from_id` uses.
-    let component = if *version < JavaMinecraftVersion::V_26_1 {
+    let component = if version < JavaMinecraftVersion::V_26_1 {
         DataComponent::try_from_id_legacy(id_u8)
     } else {
         DataComponent::try_from_id(id_u8)
@@ -252,7 +252,7 @@ fn decode_component(
 
 fn read_length_prefixed_component(
     read: &mut impl NetworkReadExt,
-    version: &JavaMinecraftVersion,
+    version: JavaMinecraftVersion,
 ) -> Result<(DataComponent, Box<dyn DataComponentImpl>), ReadingError> {
     let id = read_component_id(read, version)?;
     let byte_len = read.get_var_int()?.0;
@@ -421,12 +421,12 @@ impl ItemStackSerializer<'_> {
         let mut patch = Vec::with_capacity(total_components as usize);
 
         for _ in 0..num_to_add {
-            let (id, component_impl) = read_length_prefixed_component(read, version)?;
+            let (id, component_impl) = read_length_prefixed_component(read, *version)?;
             patch.push((id, Some(component_impl)));
         }
 
         for _ in 0..num_to_remove {
-            patch.push((read_component_id(read, version)?, None));
+            patch.push((read_component_id(read, *version)?, None));
         }
 
         let item_id_u16 = item_id
