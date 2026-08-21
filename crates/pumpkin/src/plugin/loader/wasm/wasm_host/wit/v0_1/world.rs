@@ -8,17 +8,67 @@ use pumpkin_world::world::BlockFlags;
 use std::sync::Arc;
 use wasmtime::component::Resource;
 
+use crate::block::entities::banner::BannerBlockEntity as InternalBannerBlockEntity;
+use crate::block::entities::barrel::BarrelBlockEntity as InternalBarrelBlockEntity;
+use crate::block::entities::beacon::BeaconBlockEntity as InternalBeaconBlockEntity;
+use crate::block::entities::bed::BedBlockEntity as InternalBedBlockEntity;
+use crate::block::entities::beehive::BeehiveBlockEntity as InternalBeehiveBlockEntity;
+use crate::block::entities::bell::BellBlockEntity as InternalBellBlockEntity;
+use crate::block::entities::blasting_furnace::BlastingFurnaceBlockEntity as InternalBlastingFurnaceBlockEntity;
+use crate::block::entities::brewing_stand::BrewingStandBlockEntity as InternalBrewingStandBlockEntity;
+use crate::block::entities::brushable_block::BrushableBlockBlockEntity as InternalBrushableBlockBlockEntity;
+use crate::block::entities::calibrated_sculk_sensor::CalibratedSculkSensorBlockEntity as InternalCalibratedSculkSensorBlockEntity;
+use crate::block::entities::campfire::CampfireBlockEntity as InternalCampfireBlockEntity;
 use crate::block::entities::chest::ChestBlockEntity as InternalChestBlockEntity;
+use crate::block::entities::chiseled_bookshelf::ChiseledBookshelfBlockEntity as InternalChiseledBookshelfBlockEntity;
 use crate::block::entities::command_block::CommandBlockEntity as InternalCommandBlockEntity;
+use crate::block::entities::comparator::ComparatorBlockEntity as InternalComparatorBlockEntity;
+use crate::block::entities::conduit::ConduitBlockEntity as InternalConduitBlockEntity;
+use crate::block::entities::copper_golem_statue::CopperGolemStatueBlockEntity as InternalCopperGolemStatueBlockEntity;
+use crate::block::entities::crafter::CrafterBlockEntity as InternalCrafterBlockEntity;
+use crate::block::entities::creaking_heart::CreakingHeartBlockEntity as InternalCreakingHeartBlockEntity;
+use crate::block::entities::daylight_detector::DaylightDetectorBlockEntity as InternalDaylightDetectorBlockEntity;
+use crate::block::entities::decorated_pot::DecoratedPotBlockEntity as InternalDecoratedPotBlockEntity;
+use crate::block::entities::dispenser::DispenserBlockEntity as InternalDispenserBlockEntity;
+use crate::block::entities::dropper::DropperBlockEntity as InternalDropperBlockEntity;
+use crate::block::entities::enchanting_table::EnchantingTableBlockEntity as InternalEnchantingTableBlockEntity;
+use crate::block::entities::end_gateway::EndGatewayBlockEntity as InternalEndGatewayBlockEntity;
+use crate::block::entities::end_portal::EndPortalBlockEntity as InternalEndPortalBlockEntity;
+use crate::block::entities::ender_chest::EnderChestBlockEntity as InternalEnderChestBlockEntity;
+use crate::block::entities::furnace::FurnaceBlockEntity as InternalFurnaceBlockEntity;
+use crate::block::entities::hanging_sign::HangingSignBlockEntity as InternalHangingSignBlockEntity;
+use crate::block::entities::hopper::HopperBlockEntity as InternalHopperBlockEntity;
+use crate::block::entities::jigsaw_block::JigsawBlockEntity as InternalJigsawBlockEntity;
 use crate::block::entities::jukebox::JukeboxBlockEntity as InternalJukeboxBlockEntity;
+use crate::block::entities::lectern::LecternBlockEntity as InternalLecternBlockEntity;
+use crate::block::entities::map::MapBlockEntity as InternalMapBlockEntity;
 use crate::block::entities::mob_spawner::MobSpawnerBlockEntity as InternalMobSpawnerBlockEntity;
+use crate::block::entities::piston::PistonBlockEntity as InternalPistonBlockEntity;
+use crate::block::entities::potent_sulfur::PotentSulfurBlockEntity as InternalPotentSulfurBlockEntity;
+use crate::block::entities::sculk_catalyst::SculkCatalystBlockEntity as InternalSculkCatalystBlockEntity;
+use crate::block::entities::sculk_sensor::SculkSensorBlockEntity as InternalSculkSensorBlockEntity;
+use crate::block::entities::sculk_shrieker::SculkShriekerBlockEntity as InternalSculkShriekerBlockEntity;
+use crate::block::entities::shelf::ShelfBlockEntity as InternalShelfBlockEntity;
+use crate::block::entities::shulker_box::ShulkerBoxBlockEntity as InternalShulkerBoxBlockEntity;
 use crate::block::entities::sign::SignBlockEntity as InternalSignBlockEntity;
+use crate::block::entities::skull::SkullBlockEntity as InternalSkullBlockEntity;
+use crate::block::entities::smoker::SmokerBlockEntity as InternalSmokerBlockEntity;
+use crate::block::entities::structure_block::StructureBlockBlockEntity as InternalStructureBlockBlockEntity;
+use crate::block::entities::test_block::TestBlockBlockEntity as InternalTestBlockBlockEntity;
+use crate::block::entities::test_instance_block::TestInstanceBlockBlockEntity as InternalTestInstanceBlockBlockEntity;
+use crate::block::entities::trapped_chest::TrappedChestBlockEntity as InternalTrappedChestBlockEntity;
+use crate::block::entities::trial_spawner::TrialSpawnerBlockEntity as InternalTrialSpawnerBlockEntity;
+use crate::block::entities::vault::VaultBlockEntity as InternalVaultBlockEntity;
 use crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::common::Position as WitPosition;
+use crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::game_rules::{
+    GameRule as WitGameRule, GameRuleValue as WitGameRuleValue,
+};
 use crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::world::{
     BlockDirection as WitBlockDirection, BlockEntity, BlockEntityType, BlockFlags as WitBlockFlags,
-    BlockPos as WitBlockPos, BlockState as WitBlockState, BoundingBox as WitBoundingBox,
-    Chunk as WitChunk, NoteblockInstrument as WitNoteblockInstrument,
-    PistonBehavior as WitPistonBehavior, WorldBorder as WitWorldBorder,
+    BlockPos as WitBlockPos, BlockState as WitBlockState, BlockStateInfo as WitBlockStateInfo,
+    BoundingBox as WitBoundingBox, Chunk as WitChunk,
+    NoteblockInstrument as WitNoteblockInstrument, PistonBehavior as WitPistonBehavior,
+    WorldBorder as WitWorldBorder,
 };
 use crate::plugin::loader::wasm::wasm_host::{
     state::{
@@ -26,7 +76,29 @@ use crate::plugin::loader::wasm::wasm_host::{
     },
     wit::v0_1::pumpkin::{self, plugin::world::World},
 };
-use crate::world::explosion::Explosion;
+use crate::world::explosion::ExplosionInteraction;
+use pumpkin_data::game_rules::{GameRule, GameRuleValue};
+
+pub(crate) fn from_wit_game_rule(rule: WitGameRule) -> GameRule {
+    // SAFETY: WIT GameRule and pumpkin_data::game_rules::GameRule have identical variant order
+    unsafe { std::mem::transmute::<u8, GameRule>(rule as u8) }
+}
+
+pub(crate) fn to_wit_game_rule_value(value: &GameRuleValue<i64, bool>) -> WitGameRuleValue {
+    match *value {
+        GameRuleValue::Int(v) => {
+            WitGameRuleValue::Int(v.clamp(i32::MIN as i64, i32::MAX as i64) as i32)
+        }
+        GameRuleValue::Bool(v) => WitGameRuleValue::Bool(v),
+    }
+}
+
+pub(crate) const fn from_wit_game_rule_value(value: WitGameRuleValue) -> GameRuleValue<i64, bool> {
+    match value {
+        WitGameRuleValue::Int(v) => GameRuleValue::Int(v as i64),
+        WitGameRuleValue::Bool(v) => GameRuleValue::Bool(v),
+    }
+}
 
 pub(crate) const fn to_wasm_block_direction(dir: InternalBlockDirection) -> WitBlockDirection {
     match dir {
@@ -84,7 +156,7 @@ pub(crate) const fn to_wit_bounding_box(
 
 // --- Trapping Helpers ---
 impl PluginHostState {
-    fn get_world_res(&self, res: &Resource<World>) -> wasmtime::Result<&WorldResource> {
+    pub(crate) fn get_world_res(&self, res: &Resource<World>) -> wasmtime::Result<&WorldResource> {
         self.resource_table
             .get::<WorldResource>(&Resource::new_own(res.rep()))
             .map_err(wasmtime::Error::from)
@@ -142,58 +214,124 @@ impl PluginHostState {
         block_entity: Arc<dyn crate::block::entities::BlockEntity>,
     ) -> wasmtime::Result<Option<BlockEntityType>> {
         let be = block_entity;
-        if be
-            .as_any()
-            .downcast_ref::<InternalCommandBlockEntity>()
-            .is_some()
-        {
-            let res: Resource<BlockEntity> = self.add_block_entity(be)?;
-            Ok(Some(BlockEntityType::CommandBlockEntity(
-                Resource::new_own(res.rep()),
-            )))
-        } else if be
-            .as_any()
-            .downcast_ref::<InternalSignBlockEntity>()
-            .is_some()
-        {
-            let res: Resource<BlockEntity> = self.add_block_entity(be)?;
-            Ok(Some(BlockEntityType::SignBlockEntity(Resource::new_own(
-                res.rep(),
-            ))))
-        } else if be
-            .as_any()
-            .downcast_ref::<InternalJukeboxBlockEntity>()
-            .is_some()
-        {
-            let res: Resource<BlockEntity> = self.add_block_entity(be)?;
-            Ok(Some(BlockEntityType::JukeboxBlockEntity(
-                Resource::new_own(res.rep()),
-            )))
-        } else if be
-            .as_any()
-            .downcast_ref::<InternalChestBlockEntity>()
-            .is_some()
-        {
-            let res: Resource<BlockEntity> = self.add_block_entity(be)?;
-            Ok(Some(BlockEntityType::ChestBlockEntity(Resource::new_own(
-                res.rep(),
-            ))))
-        } else if be
-            .as_any()
-            .downcast_ref::<InternalMobSpawnerBlockEntity>()
-            .is_some()
-        {
-            let res: Resource<BlockEntity> = self.add_block_entity(be)?;
-            Ok(Some(BlockEntityType::MobSpawnerBlockEntity(
-                Resource::new_own(res.rep()),
-            )))
-        } else {
-            Ok(None)
+        macro_rules! match_be {
+            ($( $internal_type:ty => $variant:ident ),* $(,)?) => {
+                $(
+                    if be.as_any().downcast_ref::<$internal_type>().is_some() {
+                        let res: Resource<BlockEntity> = self.add_block_entity(be)?;
+                        return Ok(Some(BlockEntityType::$variant(Resource::new_own(res.rep()))));
+                    }
+                )*
+            };
         }
+
+        match_be! {
+            InternalCommandBlockEntity => CommandBlockEntity,
+            InternalSignBlockEntity => SignBlockEntity,
+            InternalHangingSignBlockEntity => HangingSignBlockEntity,
+            InternalJukeboxBlockEntity => JukeboxBlockEntity,
+            InternalChestBlockEntity => ChestBlockEntity,
+            InternalTrappedChestBlockEntity => TrappedChestBlockEntity,
+            InternalMobSpawnerBlockEntity => MobSpawnerBlockEntity,
+            InternalMapBlockEntity => MapBlockEntity,
+            InternalBannerBlockEntity => BannerBlockEntity,
+            InternalBarrelBlockEntity => BarrelBlockEntity,
+            InternalBeaconBlockEntity => BeaconBlockEntity,
+            InternalBedBlockEntity => BedBlockEntity,
+            InternalBeehiveBlockEntity => BeehiveBlockEntity,
+            InternalBellBlockEntity => BellBlockEntity,
+            InternalBlastingFurnaceBlockEntity => BlastingFurnaceBlockEntity,
+            InternalBrewingStandBlockEntity => BrewingStandBlockEntity,
+            InternalBrushableBlockBlockEntity => BrushableBlockBlockEntity,
+            InternalCalibratedSculkSensorBlockEntity => CalibratedSculkSensorBlockEntity,
+            InternalCampfireBlockEntity => CampfireBlockEntity,
+            InternalChiseledBookshelfBlockEntity => ChiseledBookshelfBlockEntity,
+            InternalComparatorBlockEntity => ComparatorBlockEntity,
+            InternalConduitBlockEntity => ConduitBlockEntity,
+            InternalCopperGolemStatueBlockEntity => CopperGolemStatueBlockEntity,
+            InternalCrafterBlockEntity => CrafterBlockEntity,
+            InternalCreakingHeartBlockEntity => CreakingHeartBlockEntity,
+            InternalDaylightDetectorBlockEntity => DaylightDetectorBlockEntity,
+            InternalDecoratedPotBlockEntity => DecoratedPotBlockEntity,
+            InternalDispenserBlockEntity => DispenserBlockEntity,
+            InternalDropperBlockEntity => DropperBlockEntity,
+            InternalEnchantingTableBlockEntity => EnchantingTableBlockEntity,
+            InternalEndGatewayBlockEntity => EndGatewayBlockEntity,
+            InternalEndPortalBlockEntity => EndPortalBlockEntity,
+            InternalEnderChestBlockEntity => EnderChestBlockEntity,
+            InternalFurnaceBlockEntity => FurnaceBlockEntity,
+            InternalHopperBlockEntity => HopperBlockEntity,
+            InternalJigsawBlockEntity => JigsawBlockEntity,
+            InternalLecternBlockEntity => LecternBlockEntity,
+            InternalPistonBlockEntity => PistonBlockEntity,
+            InternalPotentSulfurBlockEntity => PotentSulfurBlockEntity,
+            InternalSculkCatalystBlockEntity => SculkCatalystBlockEntity,
+            InternalSculkSensorBlockEntity => SculkSensorBlockEntity,
+            InternalSculkShriekerBlockEntity => SculkShriekerBlockEntity,
+            InternalShelfBlockEntity => ShelfBlockEntity,
+            InternalShulkerBoxBlockEntity => ShulkerBoxBlockEntity,
+            InternalSkullBlockEntity => SkullBlockEntity,
+            InternalSmokerBlockEntity => SmokerBlockEntity,
+            InternalStructureBlockBlockEntity => StructureBlockBlockEntity,
+            InternalTestBlockBlockEntity => TestBlockBlockEntity,
+            InternalTestInstanceBlockBlockEntity => TestInstanceBlockBlockEntity,
+            InternalTrialSpawnerBlockEntity => TrialSpawnerBlockEntity,
+            InternalVaultBlockEntity => VaultBlockEntity,
+        }
+
+        Ok(None)
     }
 }
 
-impl pumpkin::plugin::world::Host for PluginHostState {}
+impl pumpkin::plugin::world::Host for PluginHostState {
+    async fn resolve_block_state(
+        &mut self,
+        name: String,
+        properties: Vec<(String, String)>,
+    ) -> wasmtime::Result<Option<u16>> {
+        let Some(block) = pumpkin_data::Block::from_name(&name) else {
+            return Ok(None);
+        };
+
+        if properties.is_empty() {
+            return Ok(Some(block.default_state.id.as_u16()));
+        }
+
+        let props: Vec<(&str, &str)> = properties
+            .iter()
+            .map(|(k, v)| (k.as_str(), v.as_str()))
+            .collect();
+        // from_properties/from_value panics on unknown property values,
+        // so catch panics to avoid crashing on schematics from other MC versions.
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let block_props = block.from_properties(&props);
+            block_props.to_state_id(block).as_u16()
+        }));
+        Ok(result.ok())
+    }
+
+    async fn block_state_to_info(
+        &mut self,
+        state_id: u16,
+    ) -> wasmtime::Result<Option<WitBlockStateInfo>> {
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let bsid = BlockStateId::new_or_air(state_id);
+            let block = pumpkin_data::Block::from_state_id(bsid);
+            let name = format!("minecraft:{}", block.name);
+            let properties = block
+                .properties(bsid)
+                .map(|p| {
+                    p.to_props()
+                        .into_iter()
+                        .map(|(k, v)| (k.to_string(), v.to_string()))
+                        .collect()
+                })
+                .unwrap_or_default();
+            WitBlockStateInfo { name, properties }
+        }));
+        Ok(result.ok())
+    }
+}
 impl pumpkin::plugin::particles::Host for PluginHostState {}
 impl pumpkin::plugin::sounds::Host for PluginHostState {}
 
@@ -284,11 +422,11 @@ impl pumpkin::plugin::world::HostWorld for PluginHostState {
             block_entity_type: state.block_entity_type,
             instrument: to_wit_noteblock_instrument(state.instrument),
             collision_shapes: state
-                .get_block_collision_shapes()
+                .get_block_collision_shapes_at(&internal_pos)
                 .map(to_wit_bounding_box)
                 .collect(),
             outline_shapes: state
-                .get_block_outline_shapes()
+                .get_block_outline_shapes_at(&internal_pos)
                 .map(to_wit_bounding_box)
                 .collect(),
             down_side_solid: state.is_side_solid(InternalBlockDirection::Down),
@@ -446,7 +584,11 @@ impl pumpkin::plugin::world::HostWorld for PluginHostState {
         world: Resource<World>,
     ) -> wasmtime::Result<Resource<pumpkin::plugin::scoreboard::Scoreboard>> {
         let world_provider = self.get_world_res(&world)?.provider.clone();
-        self.add_scoreboard(world_provider)
+        self.add_scoreboard(
+            crate::plugin::loader::wasm::wasm_host::state::ScoreboardProvider::World(
+                world_provider,
+            ),
+        )
     }
 
     async fn play_sound(
@@ -540,15 +682,24 @@ impl pumpkin::plugin::world::HostWorld for PluginHostState {
         pos: pumpkin::plugin::common::Position,
         power: f32,
         _create_fire: bool,
-        _interaction: pumpkin::plugin::world::ExplosionInteraction,
+        interaction: pumpkin::plugin::world::ExplosionInteraction,
     ) -> wasmtime::Result<()> {
         let world_ref = self.get_world_res(&world)?;
-        // Currently Explosion only supports power and position in this codebase
-        let explosion = Explosion::new(
-            power,
-            pumpkin_util::math::vector3::Vector3::new(pos.0, pos.1, pos.2),
-        );
-        explosion.explode(&world_ref.provider).await;
+        let interaction = match interaction {
+            pumpkin::plugin::world::ExplosionInteraction::None => ExplosionInteraction::None,
+            pumpkin::plugin::world::ExplosionInteraction::Block => ExplosionInteraction::Block,
+            pumpkin::plugin::world::ExplosionInteraction::Mob => ExplosionInteraction::Mob,
+            pumpkin::plugin::world::ExplosionInteraction::Tnt => ExplosionInteraction::Tnt,
+            pumpkin::plugin::world::ExplosionInteraction::Trigger => ExplosionInteraction::Trigger,
+        };
+        world_ref
+            .provider
+            .explode(
+                pumpkin_util::math::vector3::Vector3::new(pos.0, pos.1, pos.2),
+                power,
+                interaction,
+            )
+            .await;
         Ok(())
     }
 
@@ -727,6 +878,165 @@ impl pumpkin::plugin::world::HostWorld for PluginHostState {
         block_entity.map_or_else(|| Ok(None), |be| self.get_wit_block_entity(be))
     }
 
+    async fn get_block_entity_nbt(
+        &mut self,
+        world: Resource<World>,
+        pos: WitBlockPos,
+    ) -> wasmtime::Result<Option<Vec<u8>>> {
+        let world_ref = self.get_world_res(&world)?.provider.clone();
+        let internal_pos = BlockPos::new(pos.x, pos.y, pos.z);
+
+        let Some(entity) = world_ref.get_block_entity(&internal_pos) else {
+            return Ok(None);
+        };
+
+        let mut nbt = pumpkin_nbt::NbtCompound::new();
+        entity.write_internal(&mut nbt).await;
+
+        let bytes = pumpkin_nbt::Nbt::from(nbt).write_unnamed();
+        Ok(Some(bytes.to_vec()))
+    }
+
+    async fn set_block_entity_nbt(
+        &mut self,
+        world: Resource<World>,
+        pos: WitBlockPos,
+        nbt_data: Vec<u8>,
+    ) -> wasmtime::Result<Result<(), String>> {
+        let world_ref = self.get_world_res(&world)?.provider.clone();
+        let internal_pos = BlockPos::new(pos.x, pos.y, pos.z);
+
+        let mut cursor = std::io::Cursor::new(&nbt_data[..]);
+        let mut reader = pumpkin_nbt::deserializer::NbtReadHelperJava::new(
+            pumpkin_nbt::deserializer::NbtStreamReader(&mut cursor),
+        );
+        let mut nbt: pumpkin_nbt::NbtCompound = pumpkin_nbt::Nbt::read_unnamed(&mut reader)
+            .map_err(|e| wasmtime::Error::msg(format!("Invalid NBT: {e}")))?
+            .root_tag;
+
+        // Override NBT position with the caller-provided position so tile
+        // entities land at the correct coordinates during schematic pastes.
+        nbt.put_int("x", pos.x);
+        nbt.put_int("y", pos.y);
+        nbt.put_int("z", pos.z);
+
+        // Use add_block_entity_nbt for lazy loading — avoids broadcasting
+        // a packet per tile entity during bulk operations.
+        world_ref.add_block_entity_nbt(internal_pos, &nbt);
+        Ok(Ok(()))
+    }
+
+    async fn set_chunk_generator(
+        &mut self,
+        world: Resource<World>,
+        generator_id: u32,
+    ) -> wasmtime::Result<()> {
+        let world_ref = self.get_world_res(&world)?.provider.clone();
+        let Some(plugin_weak) = self.plugin.as_ref() else {
+            return Ok(());
+        };
+        let Some(plugin) = plugin_weak.upgrade() else {
+            return Ok(());
+        };
+
+        let wasm_gen = Arc::new(WasmChunkGenerator {
+            generator_id,
+            plugin,
+            dimension: world_ref.dimension.clone(),
+            seed: world_ref.level.seed.0,
+        });
+
+        world_ref.level.set_world_gen(Arc::new(
+            pumpkin_world::generation::generator::WorldGenerator::Custom(wasm_gen),
+        ));
+        Ok(())
+    }
+
+    async fn get_name(&mut self, world: Resource<World>) -> wasmtime::Result<String> {
+        Ok(self
+            .get_world_res(&world)?
+            .provider
+            .get_world_name()
+            .to_string())
+    }
+
+    async fn save(&mut self, world: Resource<World>) -> wasmtime::Result<Result<(), String>> {
+        let world_res = self.get_world_res(&world)?;
+        world_res.provider.save().await;
+        Ok(Ok(()))
+    }
+
+    async fn set_custom_data(
+        &mut self,
+        world: Resource<World>,
+        namespace: String,
+        key: String,
+        value: super::common::WitNbtTree,
+    ) -> wasmtime::Result<()> {
+        let world_res = self.get_world_res(&world)?;
+        let tag = super::common::from_wit_nbt_tree(&value).map_err(wasmtime::Error::msg)?;
+        world_res.provider.set_custom_data(&namespace, &key, tag);
+        Ok(())
+    }
+
+    async fn get_custom_data(
+        &mut self,
+        world: Resource<World>,
+        namespace: String,
+        key: String,
+    ) -> wasmtime::Result<Option<super::common::WitNbtTree>> {
+        let world_res = self.get_world_res(&world)?;
+        let tag = world_res.provider.get_custom_data(&namespace, &key);
+        Ok(tag.map(super::common::to_wit_nbt_tree))
+    }
+
+    async fn remove_custom_data(
+        &mut self,
+        world: Resource<World>,
+        namespace: String,
+        key: String,
+    ) -> wasmtime::Result<()> {
+        let world_res = self.get_world_res(&world)?;
+        world_res.provider.remove_custom_data(&namespace, &key);
+        Ok(())
+    }
+
+    async fn has_custom_data(
+        &mut self,
+        world: Resource<World>,
+        namespace: String,
+        key: String,
+    ) -> wasmtime::Result<bool> {
+        let world_res = self.get_world_res(&world)?;
+        Ok(world_res.provider.has_custom_data(&namespace, &key))
+    }
+
+    async fn get_game_rule(
+        &mut self,
+        world: Resource<World>,
+        rule: WitGameRule,
+    ) -> wasmtime::Result<WitGameRuleValue> {
+        let world_res = self.get_world_res(&world)?;
+        let internal_rule = from_wit_game_rule(rule);
+        let value = world_res.provider.get_game_rule(&internal_rule);
+        Ok(to_wit_game_rule_value(&value))
+    }
+
+    async fn set_game_rule(
+        &mut self,
+        world: Resource<World>,
+        rule: WitGameRule,
+        value: WitGameRuleValue,
+    ) -> wasmtime::Result<()> {
+        let world_res = self.get_world_res(&world)?;
+        let internal_rule = from_wit_game_rule(rule);
+        let internal_value = from_wit_game_rule_value(value);
+        world_res
+            .provider
+            .set_game_rule(&internal_rule, internal_value);
+        Ok(())
+    }
+
     async fn drop(&mut self, rep: Resource<World>) -> wasmtime::Result<()> {
         self.resource_table
             .delete::<WorldResource>(Resource::new_own(rep.rep()))
@@ -786,6 +1096,7 @@ impl pumpkin::plugin::world::HostChunk for PluginHostState {
             .get_block_absolute_y(pos.x as usize, pos.y, pos.z as usize)
             .unwrap_or(BlockStateId::AIR);
         let state = id.to_state();
+        let world_pos = BlockPos::new(chunk_data.x * 16 + pos.x, pos.y, chunk_data.z * 16 + pos.z);
 
         Ok(WitBlockState {
             id: id.as_u16(),
@@ -812,11 +1123,11 @@ impl pumpkin::plugin::world::HostChunk for PluginHostState {
             block_entity_type: state.block_entity_type,
             instrument: to_wit_noteblock_instrument(state.instrument),
             collision_shapes: state
-                .get_block_collision_shapes()
+                .get_block_collision_shapes_at(&world_pos)
                 .map(to_wit_bounding_box)
                 .collect(),
             outline_shapes: state
-                .get_block_outline_shapes()
+                .get_block_outline_shapes_at(&world_pos)
                 .map(to_wit_bounding_box)
                 .collect(),
             down_side_solid: state.is_side_solid(InternalBlockDirection::Down),
@@ -964,6 +1275,67 @@ impl pumpkin::plugin::world::HostChunk for PluginHostState {
             }))
     }
 
+    async fn set_custom_data(
+        &mut self,
+        chunk: Resource<WitChunk>,
+        namespace: String,
+        key: String,
+        value: super::common::WitNbtTree,
+    ) -> wasmtime::Result<()> {
+        let chunk_res = self.get_chunk_res(&chunk)?;
+        let (_, chunk_data) = &chunk_res.provider;
+        let Some(chunk_data) = chunk_data.upgrade() else {
+            return Err(wasmtime::Error::msg("Chunk unloaded"));
+        };
+        let tag = super::common::from_wit_nbt_tree(&value).map_err(wasmtime::Error::msg)?;
+        chunk_data.set_custom_data(&namespace, &key, tag);
+        Ok(())
+    }
+
+    async fn get_custom_data(
+        &mut self,
+        chunk: Resource<WitChunk>,
+        namespace: String,
+        key: String,
+    ) -> wasmtime::Result<Option<super::common::WitNbtTree>> {
+        let chunk_res = self.get_chunk_res(&chunk)?;
+        let (_, chunk_data) = &chunk_res.provider;
+        let Some(chunk_data) = chunk_data.upgrade() else {
+            return Err(wasmtime::Error::msg("Chunk unloaded"));
+        };
+        let tag = chunk_data.get_custom_data(&namespace, &key);
+        Ok(tag.map(super::common::to_wit_nbt_tree))
+    }
+
+    async fn remove_custom_data(
+        &mut self,
+        chunk: Resource<WitChunk>,
+        namespace: String,
+        key: String,
+    ) -> wasmtime::Result<()> {
+        let chunk_res = self.get_chunk_res(&chunk)?;
+        let (_, chunk_data) = &chunk_res.provider;
+        let Some(chunk_data) = chunk_data.upgrade() else {
+            return Err(wasmtime::Error::msg("Chunk unloaded"));
+        };
+        chunk_data.remove_custom_data(&namespace, &key);
+        Ok(())
+    }
+
+    async fn has_custom_data(
+        &mut self,
+        chunk: Resource<WitChunk>,
+        namespace: String,
+        key: String,
+    ) -> wasmtime::Result<bool> {
+        let chunk_res = self.get_chunk_res(&chunk)?;
+        let (_, chunk_data) = &chunk_res.provider;
+        let Some(chunk_data) = chunk_data.upgrade() else {
+            return Err(wasmtime::Error::msg("Chunk unloaded"));
+        };
+        Ok(chunk_data.has_custom_data(&namespace, &key))
+    }
+
     async fn drop(&mut self, rep: Resource<WitChunk>) -> wasmtime::Result<()> {
         self.resource_table
             .delete::<ChunkResource>(Resource::new_own(rep.rep()))
@@ -1077,5 +1449,319 @@ impl pumpkin::plugin::world::HostWorldBorder for PluginHostState {
             .delete::<WorldBorderResource>(Resource::new_own(rep.rep()))
             .map_err(wasmtime::Error::from)?;
         Ok(())
+    }
+}
+
+impl pumpkin::plugin::world::HostChunkBuffer for PluginHostState {
+    async fn get_x(
+        &mut self,
+        this: Resource<pumpkin::plugin::world::ChunkBuffer>,
+    ) -> wasmtime::Result<i32> {
+        let res = self.get_chunk_buffer_res(&this)?;
+        Ok(res.provider.x)
+    }
+
+    async fn get_z(
+        &mut self,
+        this: Resource<pumpkin::plugin::world::ChunkBuffer>,
+    ) -> wasmtime::Result<i32> {
+        let res = self.get_chunk_buffer_res(&this)?;
+        Ok(res.provider.z)
+    }
+
+    async fn get_min_y(
+        &mut self,
+        this: Resource<pumpkin::plugin::world::ChunkBuffer>,
+    ) -> wasmtime::Result<i32> {
+        let res = self.get_chunk_buffer_res(&this)?;
+        Ok(res.provider.min_y)
+    }
+
+    async fn get_height(
+        &mut self,
+        this: Resource<pumpkin::plugin::world::ChunkBuffer>,
+    ) -> wasmtime::Result<u32> {
+        let res = self.get_chunk_buffer_res(&this)?;
+        Ok(res.provider.height)
+    }
+
+    async fn set_block_state_id(
+        &mut self,
+        this: Resource<pumpkin::plugin::world::ChunkBuffer>,
+        x: u8,
+        y: i32,
+        z: u8,
+        state_id: u16,
+    ) -> wasmtime::Result<()> {
+        let res = self.get_chunk_buffer_res(&this)?;
+        if x < 16 && z < 16 {
+            let world_x =
+                pumpkin_world::generation::positions::chunk_pos::start_block_x(res.provider.x)
+                    + x as i32;
+            let world_z =
+                pumpkin_world::generation::positions::chunk_pos::start_block_z(res.provider.z)
+                    + z as i32;
+            // SAFETY: `proto_chunk` points to a valid proto chunk allocated for world generation and is not aliased across threads.
+            let proto = unsafe { &mut *res.provider.proto_chunk };
+            let block_state = pumpkin_data::BlockState::from_id(
+                pumpkin_data::BlockStateId::new(state_id)
+                    .unwrap_or(pumpkin_data::BlockStateId::AIR),
+            );
+            proto.set_block_state(world_x, y, world_z, block_state);
+        }
+        Ok(())
+    }
+
+    async fn get_block_state_id(
+        &mut self,
+        this: Resource<pumpkin::plugin::world::ChunkBuffer>,
+        x: u8,
+        y: i32,
+        z: u8,
+    ) -> wasmtime::Result<u16> {
+        let res = self.get_chunk_buffer_res(&this)?;
+        if x < 16 && z < 16 {
+            // SAFETY: `proto_chunk` points to a valid proto chunk allocated for world generation and is not aliased across threads.
+            let proto = unsafe { &*res.provider.proto_chunk };
+            let local_y = y - proto.bottom_y() as i32;
+            if local_y >= 0 && local_y < proto.height() as i32 {
+                Ok(proto
+                    .get_block_state_raw(x as i32, local_y, z as i32)
+                    .as_u16())
+            } else {
+                Ok(0)
+            }
+        } else {
+            Ok(0)
+        }
+    }
+
+    async fn fill_layer(
+        &mut self,
+        this: Resource<pumpkin::plugin::world::ChunkBuffer>,
+        y: i32,
+        state_id: u16,
+    ) -> wasmtime::Result<()> {
+        let res = self.get_chunk_buffer_res(&this)?;
+        let start_x =
+            pumpkin_world::generation::positions::chunk_pos::start_block_x(res.provider.x);
+        let start_z =
+            pumpkin_world::generation::positions::chunk_pos::start_block_z(res.provider.z);
+        let block_state = pumpkin_data::BlockState::from_id(
+            pumpkin_data::BlockStateId::new(state_id).unwrap_or(pumpkin_data::BlockStateId::AIR),
+        );
+        // SAFETY: `proto_chunk` points to a valid proto chunk allocated for world generation and is not aliased across threads.
+        let proto = unsafe { &mut *res.provider.proto_chunk };
+        for x in 0..16 {
+            for z in 0..16 {
+                proto.set_block_state(start_x + x, y, start_z + z, block_state);
+            }
+        }
+        Ok(())
+    }
+
+    async fn fill_range(
+        &mut self,
+        this: Resource<pumpkin::plugin::world::ChunkBuffer>,
+        x: u8,
+        min_y: i32,
+        max_y: i32,
+        z: u8,
+        state_id: u16,
+    ) -> wasmtime::Result<()> {
+        let res = self.get_chunk_buffer_res(&this)?;
+        if x < 16 && z < 16 {
+            let world_x =
+                pumpkin_world::generation::positions::chunk_pos::start_block_x(res.provider.x)
+                    + x as i32;
+            let world_z =
+                pumpkin_world::generation::positions::chunk_pos::start_block_z(res.provider.z)
+                    + z as i32;
+            let block_state = pumpkin_data::BlockState::from_id(
+                pumpkin_data::BlockStateId::new(state_id)
+                    .unwrap_or(pumpkin_data::BlockStateId::AIR),
+            );
+            // SAFETY: `proto_chunk` points to a valid proto chunk allocated for world generation and is not aliased across threads.
+            let proto = unsafe { &mut *res.provider.proto_chunk };
+            for y in min_y..=max_y {
+                proto.set_block_state(world_x, y, world_z, block_state);
+            }
+        }
+        Ok(())
+    }
+
+    async fn fill_cuboid(
+        &mut self,
+        this: Resource<pumpkin::plugin::world::ChunkBuffer>,
+        min_x: u8,
+        min_y: i32,
+        min_z: u8,
+        max_x: u8,
+        max_y: i32,
+        max_z: u8,
+        state_id: u16,
+    ) -> wasmtime::Result<()> {
+        let res = self.get_chunk_buffer_res(&this)?;
+        let start_x =
+            pumpkin_world::generation::positions::chunk_pos::start_block_x(res.provider.x);
+        let start_z =
+            pumpkin_world::generation::positions::chunk_pos::start_block_z(res.provider.z);
+        let block_state = pumpkin_data::BlockState::from_id(
+            pumpkin_data::BlockStateId::new(state_id).unwrap_or(pumpkin_data::BlockStateId::AIR),
+        );
+        // SAFETY: `proto_chunk` points to a valid proto chunk allocated for world generation and is not aliased across threads.
+        let proto = unsafe { &mut *res.provider.proto_chunk };
+        let max_x = max_x.min(15);
+        let max_z = max_z.min(15);
+        for x in min_x..=max_x {
+            for y in min_y..=max_y {
+                for z in min_z..=max_z {
+                    proto.set_block_state(start_x + x as i32, y, start_z + z as i32, block_state);
+                }
+            }
+        }
+        Ok(())
+    }
+
+    async fn set_biome(
+        &mut self,
+        this: Resource<pumpkin::plugin::world::ChunkBuffer>,
+        x: u8,
+        y: i32,
+        z: u8,
+        biome: pumpkin::plugin::biomes::Biome,
+    ) -> wasmtime::Result<()> {
+        let res = self.get_chunk_buffer_res(&this)?;
+        if x < 16 && z < 16 {
+            let biome_id = biome as u8;
+            // SAFETY: `proto_chunk` points to a valid proto chunk allocated for world generation and is not aliased across threads.
+            let proto = unsafe { &mut *res.provider.proto_chunk };
+            let biome_x = x as i32 / 4;
+            let biome_z = z as i32 / 4;
+            let biome_y = (y - proto.bottom_y() as i32) / 4;
+            if biome_y >= 0 && (biome_y as usize) < (proto.height() as usize / 4) {
+                let index = proto.local_biome_pos_to_biome_index(biome_x, biome_y, biome_z);
+                if index < proto.flat_biome_map.len() {
+                    proto.flat_biome_map[index] = biome_id;
+                }
+            }
+        }
+        Ok(())
+    }
+
+    async fn fill_biome(
+        &mut self,
+        this: Resource<pumpkin::plugin::world::ChunkBuffer>,
+        biome: pumpkin::plugin::biomes::Biome,
+    ) -> wasmtime::Result<()> {
+        let res = self.get_chunk_buffer_res(&this)?;
+        let biome_id = biome as u8;
+        // SAFETY: `proto_chunk` points to a valid proto chunk allocated for world generation and is not aliased across threads.
+        let proto = unsafe { &mut *res.provider.proto_chunk };
+        proto.flat_biome_map.fill(biome_id);
+        Ok(())
+    }
+
+    async fn drop(
+        &mut self,
+        rep: Resource<pumpkin::plugin::world::ChunkBuffer>,
+    ) -> wasmtime::Result<()> {
+        self.resource_table
+            .delete::<crate::plugin::loader::wasm::wasm_host::state::ChunkBufferResource>(
+                Resource::new_own(rep.rep()),
+            )
+            .map_err(wasmtime::Error::from)?;
+        Ok(())
+    }
+}
+
+pub struct WasmChunkGenerator {
+    pub generator_id: u32,
+    pub plugin: Arc<crate::plugin::loader::wasm::wasm_host::WasmPlugin>,
+    pub dimension: pumpkin_data::dimension::Dimension,
+    pub seed: u64,
+}
+
+impl WasmChunkGenerator {
+    fn invoke_phase(
+        &self,
+        phase: pumpkin::plugin::world::GenerationPhase,
+        proto_chunk: &mut pumpkin_world::ProtoChunk,
+    ) {
+        let chunk_buffer = crate::plugin::loader::wasm::wasm_host::state::ChunkBuffer {
+            x: proto_chunk.x,
+            z: proto_chunk.z,
+            min_y: proto_chunk.bottom_y() as i32,
+            height: proto_chunk.height() as u32,
+            proto_chunk,
+        };
+
+        futures::executor::block_on(async {
+            let mut store = self.plugin.store.lock().await;
+            let Ok(buffer_res) = store.data_mut().add_chunk_buffer(chunk_buffer) else {
+                return;
+            };
+            let buffer_rep = buffer_res.rep();
+
+            match self.plugin.plugin_instance {
+                crate::plugin::loader::wasm::wasm_host::PluginInstance::V0_1(ref plugin) => {
+                    let _ = plugin
+                        .call_handle_generate_phase(
+                            &mut *store,
+                            self.generator_id,
+                            phase,
+                            buffer_res,
+                        )
+                        .await;
+
+                    let _ = store
+                        .data_mut()
+                        .resource_table
+                        .delete::<crate::plugin::loader::wasm::wasm_host::state::ChunkBufferResource>(
+                            wasmtime::component::Resource::new_own(buffer_rep),
+                        );
+                }
+            }
+        });
+    }
+}
+
+impl pumpkin_world::generation::generator::CustomChunkGenerator for WasmChunkGenerator {
+    fn dimension(&self) -> &pumpkin_data::dimension::Dimension {
+        &self.dimension
+    }
+
+    fn seed(&self) -> u64 {
+        self.seed
+    }
+
+    fn step_to_biomes(&self, chunk: &mut pumpkin_world::ProtoChunk) {
+        self.invoke_phase(pumpkin::plugin::world::GenerationPhase::Biomes, chunk);
+        chunk.stage = pumpkin_world::chunk_system::StagedChunkEnum::Biomes;
+    }
+
+    fn step_to_noise(&self, chunk: &mut pumpkin_world::ProtoChunk) {
+        self.invoke_phase(pumpkin::plugin::world::GenerationPhase::Noise, chunk);
+        chunk.stage = pumpkin_world::chunk_system::StagedChunkEnum::Noise;
+    }
+
+    fn step_to_surface(&self, chunk: &mut pumpkin_world::ProtoChunk) {
+        self.invoke_phase(pumpkin::plugin::world::GenerationPhase::Surface, chunk);
+        chunk.stage = pumpkin_world::chunk_system::StagedChunkEnum::Surface;
+    }
+
+    fn step_to_carvers(&self, chunk: &mut pumpkin_world::ProtoChunk) {
+        chunk.stage = pumpkin_world::chunk_system::StagedChunkEnum::Carvers;
+    }
+
+    fn step_to_features(
+        &self,
+        cache: &mut pumpkin_world::chunk_system::generation_cache::Cache,
+        _block_registry: &dyn pumpkin_world::world::WorldPortalExt,
+    ) {
+        let mid = ((cache.size * cache.size) >> 1) as usize;
+        let chunk = cache.chunks[mid].get_proto_chunk_mut();
+        self.invoke_phase(pumpkin::plugin::world::GenerationPhase::Features, chunk);
+        chunk.stage = pumpkin_world::chunk_system::StagedChunkEnum::Features;
     }
 }

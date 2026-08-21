@@ -1,0 +1,13 @@
+{
+  "asset_id": "minecraft:endboss",
+  "title": {
+    "translate": "painting.minecraft.endboss.title",
+    "color": "yellow"
+  },
+  "author": {
+    "translate": "painting.minecraft.endboss.author",
+    "color": "gray"
+  },
+  "width": 3,
+  "height": 3
+}

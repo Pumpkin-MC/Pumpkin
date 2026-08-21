@@ -18,6 +18,15 @@ pub struct SaplingBlock;
 
 impl SaplingBlock {
     async fn generate(&self, world: &Arc<World>, pos: &BlockPos) {
+        use crate::plugin::api::events::world::structure_grow::{StructureGrowEvent, TreeType};
+        let mut event = StructureGrowEvent::new(*pos, TreeType::Oak, false);
+        if let Some(server) = world.server.upgrade() {
+            server.plugin_manager.fire(&server, &mut event).await;
+        }
+        if event.cancelled {
+            return;
+        }
+
         let (block, state) = world.get_block_and_state_id(pos);
         let mut props = SaplingProperties::from_state_id(state, block);
         if props.stage == 0 {

@@ -57,10 +57,9 @@ impl ScreenHandlerFactory for CraftingTableScreenFactory {
     }
 
     fn get_display_name(&self) -> TextComponent {
-        TextComponent::translate_cross(
+        pumpkin_macros::translate_cross!(
             translation::java::CONTAINER_CRAFTING,
-            translation::bedrock::CONTAINER_CRAFTING,
-            &[],
+            translation::bedrock::CONTAINER_CRAFTING
         )
     }
 }

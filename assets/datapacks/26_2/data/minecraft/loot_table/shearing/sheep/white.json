@@ -1,0 +1,19 @@
+{
+  "type": "minecraft:shearing",
+  "pools": [
+    {
+      "entries": [
+        {
+          "type": "minecraft:item",
+          "name": "minecraft:white_wool"
+        }
+      ],
+      "rolls": {
+        "type": "minecraft:uniform",
+        "max": 3.0,
+        "min": 1.0
+      }
+    }
+  ],
+  "random_sequence": "minecraft:shearing/sheep/white"
+}

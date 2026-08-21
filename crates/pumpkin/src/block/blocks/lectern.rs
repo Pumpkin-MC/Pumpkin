@@ -97,10 +97,9 @@ impl ScreenHandlerFactory for LecternScreenFactory {
     }
 
     fn get_display_name(&self) -> TextComponent {
-        TextComponent::translate_cross(
+        pumpkin_macros::translate_cross!(
             translation::java::CONTAINER_LECTERN,
-            translation::bedrock::TILE_LECTERN_NAME,
-            &[],
+            translation::bedrock::TILE_LECTERN_NAME
         )
     }
 }

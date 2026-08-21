@@ -34,8 +34,7 @@ impl ForkingTrunkPlacer {
         let mut nodes = Vec::new();
         let mut logs = Vec::new();
 
-        let horizontal_directions = BlockDirection::horizontal();
-        let lean_direction = horizontal_directions[random.next_bounded_i32(4) as usize];
+        let lean_direction = BlockDirection::random_horizontal(random);
         let lean_height = height as i32 - random.next_bounded_i32(4) - 1;
         let mut lean_steps = 3 - random.next_bounded_i32(3);
 
@@ -69,7 +68,7 @@ impl ForkingTrunkPlacer {
 
         let mut branch_tx = start_pos.0.x;
         let mut branch_tz = start_pos.0.z;
-        let branch_direction = horizontal_directions[random.next_bounded_i32(4) as usize];
+        let branch_direction = BlockDirection::random_horizontal(random);
 
         if branch_direction != lean_direction {
             let branch_pos = lean_height - random.next_bounded_i32(2) - 1;

@@ -1,5 +1,5 @@
 use pumpkin_util::math::vector2::Vector2;
-use std::{num::NonZeroU8, sync::Arc};
+use std::{num::NonZero, sync::Arc};
 
 use pumpkin_protocol::{
     bedrock::client::network_chunk_publisher_update::CNetworkChunkPublisherUpdate,
@@ -12,8 +12,8 @@ use crate::{
     net::ClientPlatform,
 };
 
-pub fn get_view_distance(player: &Player) -> NonZeroU8 {
-    let fallback = NonZeroU8::new(2).unwrap_or(NonZeroU8::MIN);
+pub fn get_view_distance(player: &Player) -> NonZero<u8> {
+    let fallback = NonZero::new(2).unwrap_or(NonZero::<u8>::MIN);
     let Some(server) = player.world().server.upgrade() else {
         return fallback;
     };
@@ -60,7 +60,7 @@ pub async fn update_position(player: &Arc<Player>) {
     match player.client.as_ref() {
         ClientPlatform::Java(java_client) => {
             java_client
-                .send_packet_now(&CCenterChunk {
+                .send_packet(&CCenterChunk {
                     chunk_x: new_chunk_center.x.into(),
                     chunk_z: new_chunk_center.y.into(),
                 })
@@ -68,14 +68,13 @@ pub async fn update_position(player: &Arc<Player>) {
         }
         ClientPlatform::Bedrock(bedrock_client) => {
             bedrock_client
-                .send_game_packet(&CNetworkChunkPublisherUpdate::new(
+                .send_packet(&CNetworkChunkPublisherUpdate::new(
                     player.get_entity().block_pos.load(),
                     u32::from(view_distance.get()) * 16,
                 ))
                 .await;
         }
     }
-
     let (loading_iter, unloading_iter) =
         Cylindrical::changed_chunks(old_cylindrical, new_cylindrical);
     let loading_chunks: Vec<_> = loading_iter.collect();
@@ -100,7 +99,7 @@ pub async fn update_position(player: &Arc<Player>) {
     if let ClientPlatform::Java(client) = player.client.as_ref() {
         for chunk in &unloading_chunks {
             client
-                .enqueue_packet(&CUnloadChunk::new(chunk.x, chunk.y))
+                .enqueue_client_packet(&CUnloadChunk::new(chunk.x, chunk.y))
                 .await;
         }
     }

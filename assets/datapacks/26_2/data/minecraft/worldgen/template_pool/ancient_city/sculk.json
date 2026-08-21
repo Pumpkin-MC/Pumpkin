@@ -1,0 +1,19 @@
+{
+  "elements": [
+    {
+      "element": {
+        "element_type": "minecraft:feature_pool_element",
+        "feature": "minecraft:sculk_patch_ancient_city",
+        "projection": "rigid"
+      },
+      "weight": 6
+    },
+    {
+      "element": {
+        "element_type": "minecraft:empty_pool_element"
+      },
+      "weight": 1
+    }
+  ],
+  "fallback": "minecraft:empty"
+}

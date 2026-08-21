@@ -9,7 +9,7 @@ use crate::command::args::{
 };
 use crate::command::tree::builder::{argument, literal};
 use crate::command::{
-    CommandExecutor, CommandResult, CommandSender, ConsumedArgs, tree::CommandTree,
+    CommandError, CommandExecutor, CommandResult, CommandSender, ConsumedArgs, tree::CommandTree,
 };
 
 const NAMES: [&str; 1] = ["waypoint"];
@@ -29,15 +29,14 @@ impl CommandExecutor for ListExecutor {
     ) -> CommandResult<'a> {
         Box::pin(async move {
             let worlds = server.worlds.load();
-            let world = worlds
-                .first()
-                .expect("There should always be at least one world");
+            let world = worlds.first().ok_or(CommandError::InvalidRequirement)?;
             let dimension = world.dimension.minecraft_name.to_string();
 
             sender
-                .send_message(TextComponent::translate(
+                .send_message(pumpkin_macros::translate_cross!(
                     translation::java::COMMANDS_WAYPOINT_LIST_EMPTY,
-                    [TextComponent::text(dimension)],
+                    translation::java::COMMANDS_WAYPOINT_LIST_EMPTY,
+                    TextComponent::text(dimension)
                 ))
                 .await;
             Ok(0)
@@ -91,16 +90,17 @@ impl CommandExecutor for ColorExecutor {
             );
 
             if let Some(player) = sender.as_player() {
-                player.client.enqueue_packet(&packet).await;
+                player.send_client_packet(&packet).await;
             }
 
             match self.0 {
                 ColorAction::Named => {
                     let color = TeamColorArgumentConsumer::find_arg(args, ARG_COLOR)?;
                     sender
-                        .send_message(TextComponent::translate(
+                        .send_message(pumpkin_macros::translate_cross!(
                             translation::java::COMMANDS_WAYPOINT_MODIFY_COLOR,
-                            [TextComponent::text(color.name()).color_named(color)],
+                            translation::java::COMMANDS_WAYPOINT_MODIFY_COLOR,
+                            TextComponent::text(color.name()).color_named(color)
                         ))
                         .await;
                 }
@@ -108,17 +108,18 @@ impl CommandExecutor for ColorExecutor {
                     let color_val = HexColorArgumentConsumer::find_arg(args, ARG_COLOR)?;
                     let hex_str = format!("{:06X}", color_val & 0xFFFFFF);
                     sender
-                        .send_message(TextComponent::translate(
+                        .send_message(pumpkin_macros::translate_cross!(
                             translation::java::COMMANDS_WAYPOINT_MODIFY_COLOR,
-                            [TextComponent::text(hex_str)],
+                            translation::java::COMMANDS_WAYPOINT_MODIFY_COLOR,
+                            TextComponent::text(hex_str)
                         ))
                         .await;
                 }
                 ColorAction::Reset => {
                     sender
-                        .send_message(TextComponent::translate(
+                        .send_message(pumpkin_macros::translate_cross!(
                             translation::java::COMMANDS_WAYPOINT_MODIFY_COLOR_RESET,
-                            [],
+                            translation::java::COMMANDS_WAYPOINT_MODIFY_COLOR_RESET
                         ))
                         .await;
                 }
@@ -172,13 +173,13 @@ impl CommandExecutor for StyleExecutor {
             );
 
             if let Some(player) = sender.as_player() {
-                player.client.enqueue_packet(&packet).await;
+                player.send_client_packet(&packet).await;
             }
 
             sender
-                .send_message(TextComponent::translate(
+                .send_message(pumpkin_macros::translate_cross!(
                     translation::java::COMMANDS_WAYPOINT_MODIFY_STYLE,
-                    [],
+                    translation::java::COMMANDS_WAYPOINT_MODIFY_STYLE
                 ))
                 .await;
 

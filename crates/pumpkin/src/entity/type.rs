@@ -8,13 +8,19 @@ use uuid::Uuid;
 use crate::entity::boss::ender_dragon::EnderDragonEntity;
 use crate::entity::boss::wither::WitherEntity;
 use crate::entity::decoration::{
-    armor_stand::ArmorStandEntity, end_crystal::EndCrystalEntity, item_frame::ItemFrameEntity,
+    armor_stand::ArmorStandEntity,
+    display::{BlockDisplayEntity, ItemDisplayEntity, TextDisplayEntity},
+    end_crystal::EndCrystalEntity,
+    item_frame::ItemFrameEntity,
     painting::PaintingEntity,
 };
 use crate::entity::experience_orb::ExperienceOrbEntity;
 use crate::entity::falling::FallingEntity;
+use crate::entity::interaction::InteractionEntity;
 use crate::entity::item::ItemEntity;
+use crate::entity::lightning::LightningBoltEntity;
 use crate::entity::living::LivingEntity;
+use crate::entity::marker::MarkerEntity;
 use crate::entity::mob::bat::{self, BatEntity};
 use crate::entity::mob::blaze::BlazeEntity;
 use crate::entity::mob::breeze::BreezeEntity;
@@ -60,6 +66,7 @@ use crate::entity::passive::camel::CamelEntity;
 use crate::entity::passive::cat::CatEntity;
 use crate::entity::passive::chicken::ChickenEntity;
 use crate::entity::passive::cod::CodEntity;
+use crate::entity::passive::copper_golem::CopperGolemEntity;
 use crate::entity::passive::cow::CowEntity;
 use crate::entity::passive::dolphin::DolphinEntity;
 use crate::entity::passive::donkey::DonkeyEntity;
@@ -67,11 +74,13 @@ use crate::entity::passive::fox::FoxEntity;
 use crate::entity::passive::frog::FrogEntity;
 use crate::entity::passive::glow_squid::GlowSquidEntity;
 use crate::entity::passive::goat::GoatEntity;
+use crate::entity::passive::happy_ghast::HappyGhastEntity;
 use crate::entity::passive::horse::HorseEntity;
 use crate::entity::passive::iron_golem::IronGolemEntity;
 use crate::entity::passive::llama::LlamaEntity;
 use crate::entity::passive::mooshroom::MooshroomEntity;
 use crate::entity::passive::mule::MuleEntity;
+use crate::entity::passive::nautilus::NautilusEntity;
 use crate::entity::passive::ocelot::OcelotEntity;
 use crate::entity::passive::panda::PandaEntity;
 use crate::entity::passive::parrot::ParrotEntity;
@@ -193,8 +202,10 @@ pub fn from_type(
         id if id == EntityType::AXOLOTL.id => AxolotlEntity::new(entity),
         id if id == EntityType::BEE.id => BeeEntity::new(entity),
         id if id == EntityType::CAMEL.id => CamelEntity::new(entity),
+        id if id == EntityType::COPPER_GOLEM.id => CopperGolemEntity::new(entity),
         id if id == EntityType::FROG.id => FrogEntity::new(entity),
         id if id == EntityType::GOAT.id => GoatEntity::new(entity),
+        id if id == EntityType::HAPPY_GHAST.id => HappyGhastEntity::new(entity),
         id if id == EntityType::MOOSHROOM.id => MooshroomEntity::new(entity),
         id if id == EntityType::OCELOT.id => OcelotEntity::new(entity),
         id if id == EntityType::PANDA.id => PandaEntity::new(entity),
@@ -209,6 +220,7 @@ pub fn from_type(
         id if id == EntityType::TROPICAL_FISH.id => TropicalFishEntity::new(entity),
         id if id == EntityType::TADPOLE.id => TadpoleEntity::new(entity),
         id if id == EntityType::DOLPHIN.id => DolphinEntity::new(entity),
+        id if id == EntityType::NAUTILUS.id => NautilusEntity::new(entity),
 
         id if id == EntityType::SNOW_GOLEM.id => SnowGolemEntity::new(entity),
         id if id == EntityType::IRON_GOLEM.id => IronGolemEntity::new(entity),
@@ -220,10 +232,16 @@ pub fn from_type(
             crate::entity::area_effect_cloud::AreaEffectCloudEntity::new(entity)
         }
         id if id == EntityType::ARMOR_STAND.id => Arc::new(ArmorStandEntity::new(entity)),
+        id if id == EntityType::BLOCK_DISPLAY.id => BlockDisplayEntity::new(entity),
+        id if id == EntityType::ITEM_DISPLAY.id => ItemDisplayEntity::new(entity),
+        id if id == EntityType::TEXT_DISPLAY.id => TextDisplayEntity::new(entity),
         id if id == EntityType::PAINTING.id => Arc::new(PaintingEntity::new(entity)),
         id if id == EntityType::ITEM_FRAME.id || id == EntityType::GLOW_ITEM_FRAME.id => {
             Arc::new(ItemFrameEntity::new(entity))
         }
+        id if id == EntityType::EVOKER_FANGS.id => Arc::new(
+            crate::entity::projectile::evoker_fangs::EvokerFangsEntity::new(entity, 0, 0.0, None),
+        ),
         id if id == EntityType::END_CRYSTAL.id => Arc::new(EndCrystalEntity::new(entity)),
         id if id == EntityType::ENDER_PEARL.id => Arc::new(EnderPearlEntity::new(entity)),
         id if id == EntityType::SNOWBALL.id => Arc::new(SnowballEntity::new(entity)),
@@ -277,6 +295,9 @@ pub fn from_type(
             };
             Arc::new(WindChargeEntity::new_breeze(thrown))
         }
+        id if id == EntityType::LIGHTNING_BOLT.id => Arc::new(LightningBoltEntity::new(entity)),
+        id if id == EntityType::MARKER.id => MarkerEntity::new(entity),
+        id if id == EntityType::INTERACTION.id => InteractionEntity::new(entity),
         id if id == EntityType::FIREWORK_ROCKET.id => Arc::new(FireworkRocketEntity::new(entity)),
         id if id == EntityType::SPLASH_POTION.id => Arc::new(SplashPotionEntity::new(entity)),
         id if id == EntityType::LINGERING_POTION.id => Arc::new(LingeringPotionEntity::new(entity)),

@@ -27,6 +27,20 @@ pub fn has_random_ticking_fluid(id: BlockStateId) -> bool {
     Fluid::from_state_id(id).is_some_and(|fluid| Fluid::same_fluid_type(fluid.id, Fluid::LAVA.id))
 }
 
+/// Returns the block state for Bedrock's secondary water storage.
+///
+/// Java stores water inside waterlogged and aquatic block states, while Bedrock stores it in a
+/// separate subchunk layer. Pure fluid blocks stay in the primary layer.
+#[must_use]
+pub fn bedrock_water_state(id: BlockStateId) -> BlockStateId {
+    let state = BlockState::from_id(id);
+    if state.is_waterlogged() || (state.is_liquid() && Fluid::from_state_id(id).is_none()) {
+        pumpkin_data::Block::WATER.default_state.id
+    } else {
+        pumpkin_data::Block::AIR.default_state.id
+    }
+}
+
 #[derive(Clone)]
 pub struct HeterogeneousPaletteData<V: Hash + Eq + Copy, const DIM: usize> {
     storage: PaletteStorage<V, DIM>,
@@ -649,6 +663,65 @@ impl BiomePalette {
 }
 
 impl BlockPalette {
+    /// Builds Bedrock's secondary water storage for blocks whose Java state also contains water.
+    ///
+    /// Bedrock expects mixed secondary storages to use a one-bit, air-first palette. The first
+    /// entry is the default for every position not occupied by water.
+    #[must_use]
+    pub fn convert_be_water_network(&self) -> Option<BeNetworkSerialization<u16>> {
+        let air = pumpkin_data::Block::AIR.default_state.id;
+        let water = pumpkin_data::Block::WATER.default_state.id;
+        match self {
+            Self::Homogeneous(id) => {
+                (bedrock_water_state(*id) != air).then_some(BeNetworkSerialization {
+                    bits_per_entry: 0,
+                    palette: NetworkPalette::Single(BlockState::to_be_network_id(water)),
+                    packed_data: Box::new([]),
+                })
+            }
+            Self::Heterogeneous(data) => {
+                let water_states = data
+                    .palette
+                    .iter()
+                    .map(|&id| bedrock_water_state(id) != air)
+                    .collect::<Vec<_>>();
+                if !water_states.iter().any(|&waterlogged| waterlogged) {
+                    return None;
+                }
+
+                let key_to_index = data
+                    .palette
+                    .iter()
+                    .enumerate()
+                    .map(|(index, &id)| (id, index))
+                    .collect::<HashMap<_, _>>();
+                let mut packed_data = vec![0u32; Self::VOLUME / u32::BITS as usize];
+                let mut output_index = 0;
+                for x in 0..Self::SIZE {
+                    for y in 0..Self::SIZE {
+                        for z in 0..Self::SIZE {
+                            let palette_index = key_to_index[&data.get(x, z, y)];
+                            if water_states[palette_index] {
+                                packed_data[output_index / u32::BITS as usize] |=
+                                    1 << (output_index % u32::BITS as usize);
+                            }
+                            output_index += 1;
+                        }
+                    }
+                }
+
+                Some(BeNetworkSerialization {
+                    bits_per_entry: 1,
+                    palette: NetworkPalette::Indirect(Box::new([
+                        BlockState::to_be_network_id(air),
+                        BlockState::to_be_network_id(water),
+                    ])),
+                    packed_data: packed_data.into_boxed_slice(),
+                })
+            }
+        }
+    }
+
     #[must_use]
     pub fn convert_network(&self) -> NetworkSerialization<u16> {
         match self {
@@ -1005,5 +1078,29 @@ mod tests {
         assert_eq!(network.bits_per_entry, 8);
         assert_eq!(network.packed_data.len(), 1024);
         assert!(matches!(network.palette, NetworkPalette::Indirect(values) if values.len() == 65));
+    }
+
+    #[test]
+    fn bedrock_water_palette_uses_bedrock_block_order() {
+        let mut palette = BlockPalette::default();
+        palette.set(1, 2, 3, Block::SEAGRASS.default_state.id);
+
+        let network = palette.convert_be_water_network().unwrap();
+        let (x, y, z) = (1, 2, 3);
+        let bedrock_index = x * 256 + z * 16 + y;
+
+        assert_eq!(network.bits_per_entry, 1);
+        assert_eq!(
+            network.packed_data[bedrock_index / 32],
+            1 << (bedrock_index % 32)
+        );
+        assert_eq!(
+            network
+                .packed_data
+                .iter()
+                .filter(|&&word| word != 0)
+                .count(),
+            1
+        );
     }
 }

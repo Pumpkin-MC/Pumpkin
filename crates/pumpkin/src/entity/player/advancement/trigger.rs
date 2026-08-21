@@ -8,6 +8,7 @@ pub enum AdvancementTrigger {
     PlacedBlock { block_id: String },
     ConsumeItem { item_id: String },
     SleptInBed,
+    FishedItem { item_id: String },
     EnterDimension { dimension: String },
     PlayerKilled,
     DeflectedDamage,
@@ -20,6 +21,7 @@ pub enum AdvancementTrigger {
     Arbalistic,
     Bullseye,
     CuredZombieVillager,
+    TradedWithVillager,
 }
 
 impl Player {
@@ -227,27 +229,6 @@ impl Player {
                             "netherite_armor",
                         )
                         .await;
-                    }
-                }
-
-                if !self
-                    .has_advancement(Advancement::HUSBANDRY_FISHY_BUSINESS)
-                    .await
-                {
-                    let fishes = [
-                        (&Item::COD, "cod"),
-                        (&Item::SALMON, "salmon"),
-                        (&Item::PUFFERFISH, "pufferfish"),
-                        (&Item::TROPICAL_FISH, "tropical_fish"),
-                    ];
-                    for (item, criterion) in fishes {
-                        if self.has_item_in_inventory(item).await {
-                            self.trigger_advancement_criterion(
-                                Advancement::HUSBANDRY_FISHY_BUSINESS,
-                                criterion,
-                            )
-                            .await;
-                        }
                     }
                 }
 
@@ -538,6 +519,29 @@ impl Player {
                     .await;
                 }
             }
+            AdvancementTrigger::FishedItem { item_id } => {
+                if !self
+                    .has_advancement(Advancement::HUSBANDRY_FISHY_BUSINESS)
+                    .await
+                {
+                    let fishes = [
+                        ("minecraft:cod", "cod"),
+                        ("minecraft:salmon", "salmon"),
+                        ("minecraft:pufferfish", "pufferfish"),
+                        ("minecraft:tropical_fish", "tropical_fish"),
+                    ];
+                    for (fish, criterion) in fishes {
+                        if item_id == fish {
+                            self.trigger_advancement_criterion(
+                                Advancement::HUSBANDRY_FISHY_BUSINESS,
+                                criterion,
+                            )
+                            .await;
+                            break;
+                        }
+                    }
+                }
+            }
             AdvancementTrigger::PlacedBlock { block_id } => {
                 if !self
                     .has_advancement(Advancement::HUSBANDRY_PLANT_SEED)
@@ -731,6 +735,23 @@ impl Player {
                     self.trigger_advancement_criterion(
                         Advancement::STORY_CURE_ZOMBIE_VILLAGER,
                         "cured_zombie",
+                    )
+                    .await;
+                }
+            }
+            AdvancementTrigger::TradedWithVillager => {
+                if !self.has_advancement(Advancement::ADVENTURE_TRADE).await {
+                    self.trigger_advancement_criterion(Advancement::ADVENTURE_TRADE, "traded")
+                        .await;
+                }
+                if self.living_entity.entity.pos.load().y >= 319.0
+                    && !self
+                        .has_advancement(Advancement::ADVENTURE_TRADE_AT_WORLD_HEIGHT)
+                        .await
+                {
+                    self.trigger_advancement_criterion(
+                        Advancement::ADVENTURE_TRADE_AT_WORLD_HEIGHT,
+                        "trade_at_world_height",
                     )
                     .await;
                 }

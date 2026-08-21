@@ -165,14 +165,13 @@ impl CommandExecutor for PlaceTemplateExecutor {
             context
                 .source
                 .send_feedback(
-                    TextComponent::translate(
+                    pumpkin_macros::translate_cross!(
                         translation::java::COMMANDS_PLACE_TEMPLATE_SUCCESS,
-                        [
-                            TextComponent::text(template_name.clone()),
-                            TextComponent::text(block_pos.0.x.to_string()),
-                            TextComponent::text(block_pos.0.y.to_string()),
-                            TextComponent::text(block_pos.0.z.to_string()),
-                        ],
+                        translation::bedrock::COMMANDS_PLACE_SUCCESS,
+                        TextComponent::text(template_name.clone()),
+                        TextComponent::text(block_pos.0.x.to_string()),
+                        TextComponent::text(block_pos.0.y.to_string()),
+                        TextComponent::text(block_pos.0.z.to_string())
                     ),
                     true,
                 )
@@ -198,10 +197,10 @@ impl CommandExecutor for PlaceJigsawExecutor {
                     BlockPos::new(p.x as i32, p.y as i32, p.z as i32)
                 });
 
-            let (piece_count, placer) = {
+            let (_piece_count, placer) = {
                 let seed = hash_block_pos(block_pos.0.x, block_pos.0.y, block_pos.0.z) as u64;
                 let random = RandomGenerator::Legacy(LegacyRand::from_seed(seed));
-                let world_gen = &context.world().level.world_gen;
+                let world_gen = context.world().level.world_gen();
                 let settings = GenerationSettings::from_dimension(world_gen.dimension());
                 let mut structure_context = StructureGeneratorContext {
                     seed: seed as i64,
@@ -259,14 +258,12 @@ impl CommandExecutor for PlaceJigsawExecutor {
             context
                 .source
                 .send_feedback(
-                    TextComponent::translate(
+                    pumpkin_macros::translate_cross!(
                         translation::java::COMMANDS_PLACE_JIGSAW_SUCCESS,
-                        [
-                            TextComponent::text(piece_count.to_string()),
-                            TextComponent::text(block_pos.0.x.to_string()),
-                            TextComponent::text(block_pos.0.y.to_string()),
-                            TextComponent::text(block_pos.0.z.to_string()),
-                        ],
+                        translation::bedrock::COMMANDS_PLACE_SUCCESS,
+                        TextComponent::text(block_pos.0.x.to_string()),
+                        TextComponent::text(block_pos.0.y.to_string()),
+                        TextComponent::text(block_pos.0.z.to_string())
                     ),
                     true,
                 )
@@ -302,7 +299,7 @@ impl CommandExecutor for PlaceStructureExecutor {
             let seed = hash_block_pos(block_pos.0.x, block_pos.0.y, block_pos.0.z) as u64;
 
             let (_piece_count, placer) = {
-                let world_gen = context.world().level.world_gen.clone();
+                let world_gen = context.world().level.world_gen();
                 let settings = GenerationSettings::from_dimension(world_gen.dimension());
 
                 if structure.structure_type == StructureType::Jigsaw {
@@ -525,14 +522,13 @@ impl CommandExecutor for PlaceStructureExecutor {
             context
                 .source
                 .send_feedback(
-                    TextComponent::translate(
+                    pumpkin_macros::translate_cross!(
                         translation::java::COMMANDS_PLACE_STRUCTURE_SUCCESS,
-                        [
-                            TextComponent::text(structure_name),
-                            TextComponent::text(block_pos.0.x.to_string()),
-                            TextComponent::text(block_pos.0.y.to_string()),
-                            TextComponent::text(block_pos.0.z.to_string()),
-                        ],
+                        translation::bedrock::COMMANDS_PLACE_SUCCESS,
+                        TextComponent::text(structure_name),
+                        TextComponent::text(block_pos.0.x.to_string()),
+                        TextComponent::text(block_pos.0.y.to_string()),
+                        TextComponent::text(block_pos.0.z.to_string())
                     ),
                     true,
                 )
@@ -573,7 +569,7 @@ impl CommandExecutor for PlaceFeatureExecutor {
                     BlockPos::new(p.x as i32, p.y as i32, p.z as i32)
                 });
 
-            let world_gen = context.world().level.world_gen.clone();
+            let world_gen = context.world().level.world_gen();
             let cx = block_pos.0.x >> 4;
             let cz = block_pos.0.z >> 4;
             let mut chunk = ProtoChunk::new(cx, cz, &world_gen);
@@ -642,14 +638,13 @@ impl CommandExecutor for PlaceFeatureExecutor {
             context
                 .source
                 .send_feedback(
-                    TextComponent::translate(
+                    pumpkin_macros::translate_cross!(
                         translation::java::COMMANDS_PLACE_FEATURE_SUCCESS,
-                        [
-                            TextComponent::text(feature_name),
-                            TextComponent::text(block_pos.0.x.to_string()),
-                            TextComponent::text(block_pos.0.y.to_string()),
-                            TextComponent::text(block_pos.0.z.to_string()),
-                        ],
+                        translation::bedrock::COMMANDS_PLACE_SUCCESS,
+                        TextComponent::text(feature_name),
+                        TextComponent::text(block_pos.0.x.to_string()),
+                        TextComponent::text(block_pos.0.y.to_string()),
+                        TextComponent::text(block_pos.0.z.to_string())
                     ),
                     true,
                 )
@@ -706,7 +701,7 @@ fn apply_delta(
     }
 }
 
-pub fn register(dispatcher: &mut CommandDispatcher, registry: &mut PermissionRegistry) {
+pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistry) {
     registry.register_permission_or_panic(Permission::new(
         PERMISSION,
         DESCRIPTION,

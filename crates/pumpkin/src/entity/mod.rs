@@ -21,9 +21,9 @@ use pumpkin_data::dimension::Dimension;
 use pumpkin_data::entity::EntityStatus;
 use pumpkin_data::fluid::Fluid;
 use pumpkin_data::item_stack::ItemStack;
-use pumpkin_data::meta_data_type::MetaDataType;
+use pumpkin_data::packet::CURRENT_MC_VERSION;
 use pumpkin_data::tag::{self, Taggable};
-use pumpkin_data::tracked_data::TrackedData;
+use pumpkin_data::tracked_data;
 use pumpkin_data::{Block, BlockDirection};
 use pumpkin_data::{
     block_properties::{Facing, HorizontalFacing},
@@ -91,9 +91,12 @@ pub mod effect;
 pub mod experience_orb;
 pub mod falling;
 pub mod hunger;
+pub mod interaction;
 pub mod item;
 pub mod item_steerable;
+pub mod lightning;
 pub mod living;
+pub mod marker;
 pub mod mob;
 pub mod passive;
 pub mod player;
@@ -102,6 +105,8 @@ pub mod projectile_deflection;
 pub mod tnt;
 pub mod r#type;
 pub mod vehicle;
+
+pub use lightning::LightningBoltEntity;
 
 mod combat;
 pub mod predicate;
@@ -190,11 +195,7 @@ pub trait EntityBase: Send + Sync + NBTStorage + std::any::Any {
                 let mut bedrock_meta = EntityMetadata::new();
                 bedrock_meta.set_flag(entity_data_key::FLAGS, entity_data_flag::BABY as u8, true);
                 entity.send_meta_data(
-                    &[Metadata::new(
-                        TrackedData::BABY_ID,
-                        MetaDataType::BOOLEAN,
-                        true,
-                    )],
+                    &[Metadata::new(tracked_data::ageable_mob::DATA_BABY_ID, true)],
                     Some(&bedrock_meta),
                 );
             }
@@ -253,6 +254,28 @@ pub trait EntityBase: Send + Sync + NBTStorage + std::any::Any {
         })
     }
 
+    fn on_lightning_strike<'a>(
+        &'a self,
+        caller: &'a dyn EntityBase,
+        lightning: &'a lightning::LightningBoltEntity,
+    ) -> EntityBaseFuture<'a, ()> {
+        Box::pin(async move {
+            if self.get_living_entity().is_some() {
+                self.set_on_fire_for(8.0);
+                let cause = lightning.get_cause().await;
+                self.damage_with_context(
+                    caller,
+                    5.0,
+                    DamageType::LIGHTNING_BOLT,
+                    None,
+                    Some(lightning),
+                    cause.as_deref().map(|p| p as &dyn EntityBase),
+                )
+                .await;
+            }
+        })
+    }
+
     fn is_spectator(&self) -> bool {
         false
     }
@@ -282,10 +305,20 @@ pub trait EntityBase: Send + Sync + NBTStorage + std::any::Any {
         Box::pin(async move {
             let entity = self.get_entity();
             let runtime_id = entity.entity_id as u64;
+            let identifier = self
+                .get_mob()
+                .and_then(mob::Mob::mob_bedrock_identifier)
+                .unwrap_or(entity.entity_type.resource_name);
+            let mut metadata = entity.bedrock_metadata();
+            if let Some(mob) = self.get_mob()
+                && let Some(mob_metadata) = mob.mob_bedrock_spawn_metadata().await
+            {
+                metadata.0.extend(mob_metadata.0);
+            }
             let packet = CAddActor::new(
                 VarLong(runtime_id as i64),
                 VarULong(runtime_id),
-                self.get_entity().entity_type.resource_name.to_string(),
+                identifier.to_string(),
                 entity.pos.load().to_f32_lossy(),
                 entity.velocity.load().to_f32_lossy(),
                 entity.pitch.load(),
@@ -293,22 +326,34 @@ pub trait EntityBase: Send + Sync + NBTStorage + std::any::Any {
                 entity.head_yaw.load(),
                 entity.body_yaw.load(),
                 Vec::new(),
-                entity.bedrock_metadata(),
+                metadata,
                 PropertySyncData {
                     int_properties: std::collections::HashMap::new(),
                     float_properties: std::collections::HashMap::new(),
                 },
                 Vec::new(),
             );
-            client.send_game_packet(&packet).await;
+            if let Ok(data) = client.serialize_packet(&packet) {
+                client.send_game_packet(data).await;
+            }
         })
     }
 
     fn send_java_spawn_packet<'a>(&'a self, client: &'a JavaClient) -> EntityBaseFuture<'a, ()> {
         Box::pin(async move {
-            client
-                .enqueue_packet(&self.get_entity().create_spawn_packet())
-                .await;
+            let spawn_packet = self.get_entity().create_spawn_packet();
+            if let Ok(data) = client.serialize_packet(&spawn_packet) {
+                client.enqueue_packet(data).await;
+            }
+            if let Some(mob) = self.get_mob()
+                && let Some(metadata) = mob.mob_java_spawn_metadata(client.version.load()).await
+            {
+                let meta_packet =
+                    CSetEntityMetadata::new(self.get_entity().entity_id.into(), metadata);
+                if let Ok(meta_data) = client.serialize_packet(&meta_packet) {
+                    client.enqueue_packet(meta_data).await;
+                }
+            }
         })
     }
 
@@ -351,6 +396,20 @@ pub trait EntityBase: Send + Sync + NBTStorage + std::any::Any {
 
     fn set_on_fire_for_ticks(&self, ticks: u32) {
         let entity = self.get_entity();
+        let mut event = crate::plugin::api::events::entity::entity_combust::EntityCombustEvent::new(
+            entity.entity_id,
+            ticks as f32 / 20.0,
+        );
+        if let Some(server) = entity.world.load().server.upgrade() {
+            tokio::task::block_in_place(|| {
+                tokio::runtime::Handle::current().block_on(async {
+                    server.plugin_manager.fire(&server, &mut event).await;
+                });
+            });
+            if event.cancelled {
+                return;
+            }
+        }
         if entity.fire_ticks.load(Ordering::Relaxed) < ticks as i32 {
             entity.fire_ticks.store(ticks as i32, Ordering::Relaxed);
         }
@@ -851,6 +910,8 @@ pub struct Entity {
     pub last_sent_pos: AtomicCell<Vector3<f64>>,
     /// Cache for the last sent head yaw byte
     pub last_sent_head_yaw: AtomicU8,
+    /// Persistent custom data container for plugins (matching Bukkit's `PersistentDataHolder`)
+    pub custom_data: Mutex<NbtCompound>,
 }
 
 impl Entity {
@@ -973,6 +1034,7 @@ impl Entity {
             last_sent_pitch: AtomicU8::new(0),
             last_sent_head_yaw: AtomicU8::new(0),
             last_sent_pos: AtomicCell::new(position),
+            custom_data: Mutex::new(NbtCompound::new()),
         }
     }
 
@@ -1086,8 +1148,7 @@ impl Entity {
         );
         self.send_meta_data(
             &[Metadata::new(
-                TrackedData::CUSTOM_NAME,
-                MetaDataType::OPTIONAL_TEXT_COMPONENT,
+                tracked_data::entity::DATA_CUSTOM_NAME,
                 Some(name),
             )],
             Some(&bedrock_meta),
@@ -1115,8 +1176,7 @@ impl Entity {
         );
         self.send_meta_data(
             &[Metadata::new(
-                TrackedData::CUSTOM_NAME_VISIBLE,
-                MetaDataType::BOOLEAN,
+                tracked_data::entity::DATA_CUSTOM_NAME_VISIBLE,
                 visible,
             )],
             Some(&bedrock_meta),
@@ -1130,11 +1190,7 @@ impl Entity {
     pub fn set_silent(&self, silent: bool) {
         self.silent.store(silent, Ordering::Relaxed);
         self.send_meta_data(
-            &[Metadata::new(
-                TrackedData::SILENT,
-                MetaDataType::BOOLEAN,
-                silent,
-            )],
+            &[Metadata::new(tracked_data::entity::DATA_SILENT, silent)],
             None,
         );
     }
@@ -1147,8 +1203,7 @@ impl Entity {
         self.has_no_gravity.store(no_gravity, Ordering::Relaxed);
         self.send_meta_data(
             &[Metadata::new(
-                TrackedData::NO_GRAVITY,
-                MetaDataType::BOOLEAN,
+                tracked_data::entity::DATA_NO_GRAVITY,
                 no_gravity,
             )],
             None,
@@ -1809,15 +1864,7 @@ impl Entity {
             0,
         );
         let world = self.world.load();
-        for player in world.players.load().iter() {
-            let center = player.get_entity().chunk_pos.load();
-            let view_distance = crate::world::chunker::get_view_distance(player).get() as i32;
-            if is_within_view_distance(chunk_pos, center, view_distance)
-                && let ClientPlatform::Bedrock(client) = player.client.as_ref()
-            {
-                client.try_enqueue_packet(&packet);
-            }
-        }
+        world.broadcast_to_chunk_bedrock(chunk_pos, &packet);
     }
 
     pub fn update_last_pos(&self) -> Vector3<f64> {
@@ -2391,6 +2438,18 @@ impl Entity {
         portal_world: Arc<World>,
         pos: BlockPos,
     ) {
+        let mut portal_event =
+            crate::plugin::api::events::entity::entity_portal::EntityPortalEvent::new(
+                self.entity_id,
+                pos,
+            );
+        if let Some(server) = self.world.load().server.upgrade() {
+            server.plugin_manager.fire(&server, &mut portal_event).await;
+        }
+        if portal_event.cancelled {
+            return;
+        }
+
         // Passengers don't teleport independently - they wait for their vehicle
         if self.has_vehicle().await {
             return;
@@ -2539,8 +2598,7 @@ impl Entity {
             );
             self.send_meta_data(
                 &[Metadata::new(
-                    TrackedData::TICKS_FROZEN,
-                    MetaDataType::INTEGER,
+                    tracked_data::entity::DATA_TICKS_FROZEN,
                     VarInt(new_frozen_ticks),
                 )],
                 Some(&bedrock_meta),
@@ -2620,43 +2678,58 @@ impl Entity {
         ));
     }
 
+    #[expect(clippy::unused_async)]
     pub async fn set_sneaking(&self, sneaking: bool) {
         //assert!(self.sneaking.load(Relaxed) != sneaking);
         self.sneaking.store(sneaking, Relaxed);
-        self.set_flag(Flag::Sneaking, sneaking).await;
+        self.set_flag(Flag::Sneaking, sneaking);
     }
     pub fn is_sneaking(&self) -> bool {
         self.sneaking.load(Ordering::Relaxed)
     }
 
-    pub async fn set_swimming(&self, invisible: bool) {
-        if self.swimming.load(Ordering::Relaxed) != invisible {
-            self.swimming.store(invisible, Relaxed);
-            self.set_flag(Flag::Swimming, invisible).await;
+    pub async fn set_swimming(&self, swimming: bool) {
+        if self.swimming.load(Ordering::Relaxed) != swimming {
+            let mut event =
+                crate::plugin::api::events::entity::entity_toggle_swim::EntityToggleSwimEvent::new(
+                    self.entity_id,
+                    swimming,
+                );
+            if let Some(server) = self.world.load().server.upgrade() {
+                server.plugin_manager.fire(&server, &mut event).await;
+            }
+            if event.cancelled {
+                return;
+            }
+            self.swimming.store(event.is_swimming, Relaxed);
+            self.set_flag(Flag::Swimming, event.is_swimming);
         }
     }
 
     /// Sets whether the entity is invisible and sends updated metadata.
+    #[expect(clippy::unused_async)]
     pub async fn set_invisible(&self, invisible: bool) {
         if self.invisible.load(Ordering::Relaxed) != invisible {
             self.invisible.store(invisible, Relaxed);
-            self.set_flag(Flag::Invisible, invisible).await;
+            self.set_flag(Flag::Invisible, invisible);
         }
     }
 
     /// Sets whether the entity is glowing and sends updated metadata.
+    #[expect(clippy::unused_async)]
     pub async fn set_glowing(&self, glowing: bool) {
         if self.glowing.load(Ordering::Relaxed) != glowing {
             self.glowing.store(glowing, Ordering::Relaxed);
-            self.set_flag(Flag::Glowing, glowing).await;
+            self.set_flag(Flag::Glowing, glowing);
         }
     }
 
     /// Sets whether the entity is on fire for visual and damage purposes. This is separate from `fire_ticks` which tracks the damage aspect of being on fire.
+    #[expect(clippy::unused_async)]
     pub async fn set_on_fire(&self, on_fire: bool) {
         if self.has_visual_fire.load(Ordering::Relaxed) != on_fire {
             self.has_visual_fire.store(on_fire, Ordering::Relaxed);
-            self.set_flag(Flag::OnFire, on_fire).await;
+            self.set_flag(Flag::OnFire, on_fire);
         }
     }
 
@@ -2765,10 +2838,11 @@ impl Entity {
         ]
     }
 
+    #[expect(clippy::unused_async)]
     pub async fn set_sprinting(&self, sprinting: bool) {
         //assert!(self.sprinting.load(Relaxed) != sprinting);
         self.sprinting.store(sprinting, Relaxed);
-        self.set_flag(Flag::Sprinting, sprinting).await;
+        self.set_flag(Flag::Sprinting, sprinting);
     }
 
     pub fn is_sprinting(&self) -> bool {
@@ -2778,16 +2852,17 @@ impl Entity {
         !self.on_ground.load(Relaxed)
     }
 
+    #[expect(clippy::unused_async)]
     pub async fn set_fall_flying(&self, fall_flying: bool) {
         assert_ne!(self.fall_flying.load(Relaxed), fall_flying);
         self.fall_flying.store(fall_flying, Relaxed);
-        self.set_flag(Flag::FallFlying, fall_flying).await;
+        self.set_flag(Flag::FallFlying, fall_flying);
     }
     pub fn is_fall_flying(&self) -> bool {
         self.fall_flying.load(Ordering::Relaxed)
     }
 
-    async fn set_flag(&self, flag: Flag, value: bool) {
+    fn set_flag(&self, flag: Flag, value: bool) {
         let index = flag as u8;
         let mask = (1i8).wrapping_shl(index as u32);
         let new_je_flags = if value {
@@ -2798,8 +2873,7 @@ impl Entity {
 
         self.send_meta_data(
             &[Metadata::new(
-                TrackedData::SHARED_FLAGS_ID,
-                MetaDataType::BYTE,
+                tracked_data::entity::DATA_SHARED_FLAGS_ID,
                 new_je_flags,
             )],
             None,
@@ -2830,36 +2904,25 @@ impl Entity {
 
             let world = self.world.load();
             let chunk_pos = self.chunk_pos.load();
-            for player in world.players.load().iter() {
-                if let ClientPlatform::Bedrock(client) = player.client.as_ref() {
-                    let center = player.get_entity().chunk_pos.load();
-                    let view_distance =
-                        crate::world::chunker::get_view_distance(player).get() as i32;
-
-                    if is_within_view_distance(chunk_pos, center, view_distance) {
-                        let mut metadata = EntityMetadata(std::collections::HashMap::new());
-                        metadata.set(
-                            entity_data_key::FLAGS,
-                            MetadataValue::Long(self.bedrock_flags.load(Ordering::Relaxed)),
-                        );
-                        metadata.set(
-                            entity_data_key::FLAGS_TWO,
-                            MetadataValue::Long(self.bedrock_flags_two.load(Ordering::Relaxed)),
-                        );
-                        client
-                            .enqueue_packet(&CSetActorData {
-                                actor_runtime_id: VarULong(self.entity_id as u64),
-                                metadata,
-                                synced_properties: PropertySyncData {
-                                    int_properties: std::collections::HashMap::new(),
-                                    float_properties: std::collections::HashMap::new(),
-                                },
-                                tick: VarULong(0),
-                            })
-                            .await;
-                    }
-                }
-            }
+            let mut metadata = EntityMetadata(std::collections::HashMap::new());
+            metadata.set(
+                entity_data_key::FLAGS,
+                MetadataValue::Long(self.bedrock_flags.load(Ordering::Relaxed)),
+            );
+            metadata.set(
+                entity_data_key::FLAGS_TWO,
+                MetadataValue::Long(self.bedrock_flags_two.load(Ordering::Relaxed)),
+            );
+            let packet = CSetActorData {
+                actor_runtime_id: VarULong(self.entity_id as u64),
+                metadata,
+                synced_properties: PropertySyncData {
+                    int_properties: std::collections::HashMap::new(),
+                    float_properties: std::collections::HashMap::new(),
+                },
+                tick: VarULong(0),
+            };
+            world.broadcast_to_chunk_bedrock(chunk_pos, &packet);
         }
     }
 
@@ -2877,51 +2940,80 @@ impl Entity {
     ) {
         let world = self.world.load();
         let chunk_pos = self.chunk_pos.load();
+        let players = world.players.load();
 
-        for player in world.players.load().iter() {
-            match player.client.as_ref() {
-                ClientPlatform::Java(client) => {
-                    // Apply Chebyshev distance check
-                    let center = player.get_entity().chunk_pos.load();
-                    let view_distance =
-                        crate::world::chunker::get_view_distance(player).get() as i32;
+        let mut java_recipients = Vec::new();
+        let mut bedrock_recipients = Vec::new();
 
-                    if is_within_view_distance(chunk_pos, center, view_distance) {
-                        let mut buf = Vec::new();
-                        for m in meta {
-                            let _ = m.write(&mut buf, &client.version.load());
-                        }
-                        buf.put_u8(255);
-                        player.client.try_enqueue_packet(&CSetEntityMetadata::new(
-                            self.entity_id.into(),
-                            buf.into(),
-                        ));
-                    }
+        for player in players.iter() {
+            let center = player.get_entity().chunk_pos.load();
+            let view_distance = crate::world::chunker::get_view_distance(player).get() as i32;
+
+            if is_within_view_distance(chunk_pos, center, view_distance) {
+                match player.client.as_ref() {
+                    ClientPlatform::Java(_) => java_recipients.push(player),
+                    ClientPlatform::Bedrock(client) => bedrock_recipients.push(client),
                 }
-                ClientPlatform::Bedrock(client) => {
-                    if let Some(bedrock_meta) = bedrock_meta {
-                        let center = player.get_entity().chunk_pos.load();
-                        let view_distance =
-                            crate::world::chunker::get_view_distance(player).get() as i32;
+            }
+        }
 
-                        if is_within_view_distance(chunk_pos, center, view_distance) {
-                            client.try_enqueue_packet(&CSetActorData {
-                                actor_runtime_id: VarULong(self.entity_id as u64),
-                                metadata: EntityMetadata(bedrock_meta.0.clone()),
-                                synced_properties: PropertySyncData {
-                                    int_properties: std::collections::HashMap::new(),
-                                    float_properties: std::collections::HashMap::new(),
-                                },
-                                tick: VarULong(0),
-                            });
-                        }
-                    }
+        let recipients_by_version =
+            World::collect_java_recipients_by_version(java_recipients.into_iter());
+
+        for (version, recipients) in recipients_by_version {
+            if version < CURRENT_MC_VERSION {
+                continue;
+            }
+            let mut buf = Vec::new();
+            for m in meta {
+                let _ = m.write(&mut buf, &version);
+            }
+            buf.put_u8(255);
+            let packet = CSetEntityMetadata::new(self.entity_id.into(), buf.into());
+            if let Ok(packet_data) = JavaClient::serialize_packet_for_version(&packet, version) {
+                for recipient in recipients {
+                    recipient.try_enqueue_packet(packet_data.clone());
+                }
+            }
+        }
+
+        if let Some(bedrock_meta) = bedrock_meta {
+            let packet = CSetActorData {
+                actor_runtime_id: VarULong(self.entity_id as u64),
+                metadata: EntityMetadata(bedrock_meta.0.clone()),
+                synced_properties: PropertySyncData {
+                    int_properties: std::collections::HashMap::new(),
+                    float_properties: std::collections::HashMap::new(),
+                },
+                tick: VarULong(0),
+            };
+            if let Ok(packet_data) =
+                pumpkin_protocol::bedrock::packet_encoder::serialize_packet(&packet)
+            {
+                for recipient in bedrock_recipients {
+                    recipient.try_enqueue_packet(packet_data.clone());
                 }
             }
         }
     }
 
     pub fn set_pose(&self, pose: EntityPose) {
+        let mut pose_event =
+            crate::plugin::api::events::entity::entity_pose_change::EntityPoseChangeEvent::new(
+                self.entity_id,
+                (pose as u8).to_string(),
+            );
+        if let Some(server) = self.world.load().server.upgrade() {
+            tokio::task::block_in_place(|| {
+                tokio::runtime::Handle::current().block_on(async {
+                    server.plugin_manager.fire(&server, &mut pose_event).await;
+                });
+            });
+            if pose_event.cancelled {
+                return;
+            }
+        }
+
         let dimension = Self::get_entity_dimensions(pose);
         let position = self.pos.load();
         let aabb = BoundingBox::new_from_pos(position.x, position.y, position.z, &dimension);
@@ -2933,12 +3025,16 @@ impl Entity {
             let pose = pose as i32;
             let mut bedrock_meta = EntityMetadata::new();
             bedrock_meta.set(entity_data_key::POSE_INDEX, MetadataValue::Int(pose));
+            bedrock_meta.set(
+                entity_data_key::WIDTH,
+                MetadataValue::Float(dimension.width),
+            );
+            bedrock_meta.set(
+                entity_data_key::HEIGHT,
+                MetadataValue::Float(dimension.height),
+            );
             self.send_meta_data(
-                &[Metadata::new(
-                    TrackedData::POSE,
-                    MetaDataType::ENTITY_POSE,
-                    VarInt(pose),
-                )],
+                &[Metadata::new(tracked_data::entity::DATA_POSE, VarInt(pose))],
                 Some(&bedrock_meta),
             );
         }
@@ -3000,7 +3096,7 @@ impl Entity {
                 for z in blockpos.0.z..=blockpos1.0.z {
                     let pos = BlockPos::new(x, y, z);
                     let (block, state) = world.get_block_and_state(&pos);
-                    let block_outlines = state.get_block_outline_shapes();
+                    let block_outlines = state.get_block_outline_shapes_at(&pos);
 
                     if state.outline_shapes.is_empty() {
                         world
@@ -3202,11 +3298,37 @@ impl Entity {
         vehicle.is_some()
     }
 
+    pub async fn is_leashed(&self) -> bool {
+        let leashed_to = self.leashed_to.lock().await;
+        leashed_to.is_some()
+    }
+
     pub async fn add_passenger(
         &self,
         vehicle: Arc<dyn EntityBase>,
         passenger: Arc<dyn EntityBase>,
     ) {
+        let mut mount_event =
+            crate::plugin::api::events::entity::entity_mount::EntityMountEvent::new(
+                passenger.get_entity().entity_id,
+                self.entity_id,
+            );
+        let mut vehicle_enter =
+            crate::plugin::api::events::vehicle::vehicle_enter::VehicleEnterEvent::new(
+                self.entity_id,
+                passenger.get_entity().entity_id,
+            );
+        if let Some(server) = self.world.load().server.upgrade() {
+            server.plugin_manager.fire(&server, &mut mount_event).await;
+            server
+                .plugin_manager
+                .fire(&server, &mut vehicle_enter)
+                .await;
+        }
+        if mount_event.cancelled || vehicle_enter.cancelled {
+            return;
+        }
+
         let passenger_entity = passenger.get_entity();
         *passenger_entity.vehicle.lock().await = Some(vehicle);
 
@@ -3226,8 +3348,51 @@ impl Entity {
         );
     }
 
+    pub(crate) async fn remove_passenger_on_disconnect(&self, passenger_id: i32) {
+        let mut passengers = self.passengers.lock().await;
+        if let Some(index) = passengers
+            .iter()
+            .position(|passenger| passenger.get_entity().entity_id == passenger_id)
+        {
+            let passenger = passengers.remove(index);
+            *passenger.get_entity().vehicle.lock().await = None;
+        }
+
+        let passenger_ids: Vec<VarInt> = passengers
+            .iter()
+            .map(|passenger| VarInt(passenger.get_entity().entity_id))
+            .collect();
+        drop(passengers);
+
+        self.world.load().broadcast_to_chunk(
+            self.chunk_pos.load(),
+            &CSetPassengers::new(VarInt(self.entity_id), &passenger_ids),
+        );
+    }
+
     #[allow(clippy::too_many_lines)]
     pub async fn remove_passenger(&self, passenger_id: i32) {
+        let mut dismount_event =
+            crate::plugin::api::events::entity::entity_dismount::EntityDismountEvent::new(
+                passenger_id,
+                self.entity_id,
+            );
+        let mut vehicle_exit =
+            crate::plugin::api::events::vehicle::vehicle_exit::VehicleExitEvent::new(
+                self.entity_id,
+                passenger_id,
+            );
+        if let Some(server) = self.world.load().server.upgrade() {
+            server
+                .plugin_manager
+                .fire(&server, &mut dismount_event)
+                .await;
+            server.plugin_manager.fire(&server, &mut vehicle_exit).await;
+        }
+        if dismount_event.cancelled || vehicle_exit.cancelled {
+            return;
+        }
+
         let mut passengers = self.passengers.lock().await;
         let removed_passenger = if let Some(idx) = passengers
             .iter()
@@ -3280,7 +3445,7 @@ impl Entity {
             let world = self.world.load();
             let passengers_packet = CSetPassengers::new(VarInt(self.entity_id), &passenger_ids);
             if let Some(player) = passenger.get_player() {
-                player.client.enqueue_packet(&passengers_packet).await;
+                player.send_client_packet(&passengers_packet).await;
                 world.broadcast_to_chunk_except(
                     chunk_pos,
                     &[player.get_entity().entity_uuid],
@@ -3461,18 +3626,21 @@ impl Entity {
                 }
             };
 
+            // Clean up any remaining reference to the dismounted passenger.
+            passenger_entity.set_pos(dismount_pos);
+
+            // Phase 2: Teleport to safety (unblocks movement)
             if let Some(player) = passenger.get_player() {
                 if let Some(id) = teleport_id {
                     player.get_entity().set_pos(dismount_pos);
                     // Update awaiting_teleport with the real dismount position
                     *player.awaiting_teleport.lock().await = Some((id.into(), dismount_pos));
-                    // Use enqueue_packet (not send_packet_now) so the teleport goes through
+                    // Use send_client_packet so the teleport goes through
                     // the same packet queue as CSetPassengers, preserving send order.
                     // Vanilla uses DELTA | ROT flags: position absolute, delta/rotation relative.
                     // With rotation relative and yaw/pitch=0, the client preserves its current look.
                     player
-                        .client
-                        .enqueue_packet(&CPlayerPosition::new(
+                        .send_client_packet(&CPlayerPosition::new(
                             id.into(),
                             dismount_pos,
                             Vector3::new(0.0, 0.0, 0.0),
@@ -3543,6 +3711,53 @@ impl Entity {
         }
         self.movement_multiplier.store(multiplier);
     }
+
+    pub async fn set_custom_data(&self, namespace: &str, key: &str, value: NbtTag) {
+        let mut custom_data = self.custom_data.lock().await;
+
+        let mut namespace_data = custom_data
+            .child_tags
+            .remove(namespace)
+            .and_then(|tag| match tag {
+                NbtTag::Compound(compound) => Some(compound),
+                _ => None,
+            })
+            .unwrap_or_default();
+
+        namespace_data.child_tags.insert(key.into(), value);
+        custom_data
+            .child_tags
+            .insert(namespace.into(), NbtTag::Compound(namespace_data));
+    }
+
+    pub async fn get_custom_data(&self, namespace: &str, key: &str) -> Option<NbtTag> {
+        let custom_data = self.custom_data.lock().await;
+        custom_data
+            .get(namespace)?
+            .extract_compound()?
+            .get(key)
+            .cloned()
+    }
+
+    pub async fn remove_custom_data(&self, namespace: &str, key: &str) {
+        let mut custom_data = self.custom_data.lock().await;
+
+        let Some(NbtTag::Compound(mut namespace_data)) = custom_data.child_tags.remove(namespace)
+        else {
+            return;
+        };
+
+        namespace_data.child_tags.remove(key);
+        if !namespace_data.is_empty() {
+            custom_data
+                .child_tags
+                .insert(namespace.into(), NbtTag::Compound(namespace_data));
+        }
+    }
+
+    pub async fn has_custom_data(&self, namespace: &str, key: &str) -> bool {
+        self.get_custom_data(namespace, key).await.is_some()
+    }
 }
 
 impl NBTStorage for Entity {
@@ -3600,6 +3815,11 @@ impl NBTStorage for Entity {
                             .collect(),
                     ),
                 );
+            }
+
+            let custom_data = self.custom_data.lock().await;
+            if !custom_data.is_empty() {
+                nbt.put_compound("PumpkinCustomData", custom_data.clone());
             }
 
             // todo more...
@@ -3668,6 +3888,14 @@ impl NBTStorage for Entity {
                         .filter_map(|tag| tag.extract_string().map(str::to_owned))
                         .take(MAX_SCOREBOARD_TAGS),
                 );
+            }
+
+            if let Some(custom_data) = nbt
+                .get_compound("PumpkinCustomData")
+                .or_else(|| nbt.get_compound("BukkitValues"))
+            {
+                let mut data = self.custom_data.lock().await;
+                *data = custom_data.clone();
             }
 
             // todo more...

@@ -1,0 +1,59 @@
+{
+  "elements": [
+    {
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "minecraft:bastion/treasure/walls/outer/top_corner",
+        "processors": "minecraft:high_wall",
+        "projection": "rigid"
+      },
+      "weight": 1
+    },
+    {
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "minecraft:bastion/treasure/walls/outer/mid_corner",
+        "processors": "minecraft:high_wall",
+        "projection": "rigid"
+      },
+      "weight": 1
+    },
+    {
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "minecraft:bastion/treasure/walls/outer/bottom_corner",
+        "processors": "minecraft:high_wall",
+        "projection": "rigid"
+      },
+      "weight": 1
+    },
+    {
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "minecraft:bastion/treasure/walls/outer/outer_wall",
+        "processors": "minecraft:high_wall",
+        "projection": "rigid"
+      },
+      "weight": 1
+    },
+    {
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "minecraft:bastion/treasure/walls/outer/medium_outer_wall",
+        "processors": "minecraft:high_wall",
+        "projection": "rigid"
+      },
+      "weight": 1
+    },
+    {
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "minecraft:bastion/treasure/walls/outer/tall_outer_wall",
+        "processors": "minecraft:high_wall",
+        "projection": "rigid"
+      },
+      "weight": 1
+    }
+  ],
+  "fallback": "minecraft:empty"
+}

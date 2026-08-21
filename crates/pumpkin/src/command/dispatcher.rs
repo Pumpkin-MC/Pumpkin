@@ -228,7 +228,7 @@ fn path_failure(
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct CommandDispatcher {
     pub commands: FxHashMap<String, Command>,
     pub permissions: FxHashMap<String, String>,
@@ -663,20 +663,61 @@ impl CommandDispatcher {
 
     /// Register a command with the dispatcher.
     pub fn register<P: Into<String>>(&mut self, tree: CommandTree, permission: P) {
-        let mut names = tree.names.iter();
+        let names = tree.names.clone();
+        let mut names_iter = names.iter();
         let permission = permission.into();
 
-        let primary_name = names.next().expect("at least one name must be provided");
+        let Some(primary_name) = names_iter.next() else {
+            tracing::warn!("Command registration skipped: command tree has no names");
+            return;
+        };
 
-        for name in names {
+        for name in names_iter {
             self.commands
                 .insert(name.clone(), Command::Alias(primary_name.clone()));
             self.permissions.insert(name.clone(), permission.clone());
+
+            // For double-slash or slash-prefixed commands (like WorldEdit's //set or /set),
+            // automatically register the alternate slash variant as an alias.
+            if let Some(stripped) = name.strip_prefix("//") {
+                let single_slash = format!("/{stripped}");
+                if !self.commands.contains_key(&single_slash) && &single_slash != primary_name {
+                    self.commands
+                        .insert(single_slash.clone(), Command::Alias(primary_name.clone()));
+                    self.permissions.insert(single_slash, permission.clone());
+                }
+            } else if let Some(stripped) = name.strip_prefix('/') {
+                let double_slash = format!("//{stripped}");
+                if !self.commands.contains_key(&double_slash) && &double_slash != primary_name {
+                    self.commands
+                        .insert(double_slash.clone(), Command::Alias(primary_name.clone()));
+                    self.permissions.insert(double_slash, permission.clone());
+                }
+            }
         }
 
-        self.permissions.insert(primary_name.clone(), permission);
+        self.permissions
+            .insert(primary_name.clone(), permission.clone());
         self.commands
             .insert(primary_name.clone(), Command::Tree(tree));
+
+        // For double-slash or slash-prefixed primary commands (like //set or /set),
+        // automatically register the alternate slash variant as an alias.
+        if let Some(stripped) = primary_name.strip_prefix("//") {
+            let single_slash = format!("/{stripped}");
+            if !self.commands.contains_key(&single_slash) {
+                self.commands
+                    .insert(single_slash.clone(), Command::Alias(primary_name.clone()));
+                self.permissions.insert(single_slash, permission);
+            }
+        } else if let Some(stripped) = primary_name.strip_prefix('/') {
+            let double_slash = format!("//{stripped}");
+            if !self.commands.contains_key(&double_slash) {
+                self.commands
+                    .insert(double_slash.clone(), Command::Alias(primary_name.clone()));
+                self.permissions.insert(double_slash, permission);
+            }
+        }
     }
 
     /// Remove a command from the dispatcher by its primary name.
@@ -692,6 +733,30 @@ impl CommandDispatcher {
             }
         }
 
+        if let Some(stripped) = name.strip_prefix("//") {
+            let single_slash = format!("/{stripped}");
+            for (key, value) in &self.commands {
+                if key == &single_slash {
+                    to_remove.push(key.clone());
+                } else if let Command::Alias(target) = value
+                    && target == &single_slash
+                {
+                    to_remove.push(key.clone());
+                }
+            }
+        } else if let Some(stripped) = name.strip_prefix('/') {
+            let double_slash = format!("//{stripped}");
+            for (key, value) in &self.commands {
+                if key == &double_slash {
+                    to_remove.push(key.clone());
+                } else if let Command::Alias(target) = value
+                    && target == &double_slash
+                {
+                    to_remove.push(key.clone());
+                }
+            }
+        }
+
         for key in to_remove {
             self.commands.remove(&key);
             self.permissions.remove(&key);
@@ -703,11 +768,10 @@ impl CommandDispatcher {
 mod test {
     use pumpkin_config::BasicConfiguration;
     use pumpkin_data::translation;
-    use pumpkin_util::permission::PermissionRegistry;
+    use pumpkin_util::permission::PermissionManager;
     use pumpkin_util::text::TextContent;
     use pumpkin_util::text::click::ClickEvent;
     use pumpkin_util::text::color::{Color, NamedColor};
-    use tokio::sync::RwLock;
 
     use super::{
         PathParsingFailure, render_syntax_error_messages, select_parse_error,
@@ -724,24 +788,24 @@ mod test {
         }
     }
 
-    #[tokio::test]
-    async fn dynamic_command() {
+    #[test]
+    fn dynamic_command() {
         let config = BasicConfiguration::default();
-        let registry = RwLock::new(PermissionRegistry::new());
-        let mut dispatcher = default_dispatcher(&registry, &config)
-            .await
-            .fallback_dispatcher;
+        let commands_config = pumpkin_config::CommandsConfig::default();
+        let manager = PermissionManager::new();
+        let mut dispatcher =
+            default_dispatcher(&manager, &config, &commands_config).fallback_dispatcher;
         let tree = CommandTree::new(["test"], "test_desc");
         dispatcher.register(tree, "minecraft:test");
     }
 
-    #[tokio::test]
-    async fn pumpkin_command_aliases() {
+    #[test]
+    fn pumpkin_command_aliases() {
         let config = BasicConfiguration::default();
-        let registry = RwLock::new(PermissionRegistry::new());
-        let dispatcher = default_dispatcher(&registry, &config)
-            .await
-            .fallback_dispatcher;
+        let commands_config = pumpkin_config::CommandsConfig::default();
+        let manager = PermissionManager::new();
+        let dispatcher =
+            default_dispatcher(&manager, &config, &commands_config).fallback_dispatcher;
 
         let pumpkin_tree = dispatcher.get_tree("pumpkin").unwrap();
         let version_tree = dispatcher.get_tree("version").unwrap();
@@ -862,5 +926,21 @@ mod test {
         );
 
         assert!(selected.is(&error_types::DISPATCHER_UNKNOWN_COMMAND));
+    }
+
+    #[test]
+    fn double_slash_command_registration_and_lookup() {
+        let mut dispatcher = super::CommandDispatcher::default();
+        let tree = CommandTree::new(["//set", "/set"], "WorldEdit set block");
+        dispatcher.register(tree, "worldedit.set");
+
+        assert!(dispatcher.commands.contains_key("//set"));
+        assert!(dispatcher.commands.contains_key("/set"));
+        assert!(dispatcher.get_tree("//set").is_ok());
+        assert!(dispatcher.get_tree("/set").is_ok());
+
+        dispatcher.unregister("//set");
+        assert!(!dispatcher.commands.contains_key("//set"));
+        assert!(!dispatcher.commands.contains_key("/set"));
     }
 }

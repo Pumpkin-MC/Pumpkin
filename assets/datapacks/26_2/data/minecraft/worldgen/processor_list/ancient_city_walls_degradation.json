@@ -1,0 +1,70 @@
+{
+  "processors": [
+    {
+      "integrity": 0.95,
+      "processor_type": "minecraft:block_rot",
+      "rottable_blocks": "#minecraft:ancient_city_replaceable"
+    },
+    {
+      "processor_type": "minecraft:rule",
+      "rules": [
+        {
+          "input_predicate": {
+            "block": "minecraft:deepslate_bricks",
+            "predicate_type": "minecraft:random_block_match",
+            "probability": 0.3
+          },
+          "location_predicate": {
+            "predicate_type": "minecraft:always_true"
+          },
+          "output_state": {
+            "Name": "minecraft:cracked_deepslate_bricks"
+          }
+        },
+        {
+          "input_predicate": {
+            "block": "minecraft:deepslate_tiles",
+            "predicate_type": "minecraft:random_block_match",
+            "probability": 0.3
+          },
+          "location_predicate": {
+            "predicate_type": "minecraft:always_true"
+          },
+          "output_state": {
+            "Name": "minecraft:cracked_deepslate_tiles"
+          }
+        },
+        {
+          "input_predicate": {
+            "block": "minecraft:deepslate_tile_slab",
+            "predicate_type": "minecraft:random_block_match",
+            "probability": 0.3
+          },
+          "location_predicate": {
+            "predicate_type": "minecraft:always_true"
+          },
+          "output_state": {
+            "Name": "minecraft:air"
+          }
+        },
+        {
+          "input_predicate": {
+            "block": "minecraft:soul_lantern",
+            "predicate_type": "minecraft:random_block_match",
+            "probability": 0.05
+          },
+          "location_predicate": {
+            "predicate_type": "minecraft:always_true"
+          },
+          "output_state": {
+            "Name": "minecraft:air"
+          }
+        }
+      ]
+    },
+    {
+      "processor_type": "minecraft:protected_blocks",
+      "value": "#minecraft:features_cannot_replace"
+    }
+  ]
+}

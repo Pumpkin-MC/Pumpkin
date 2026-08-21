@@ -38,10 +38,9 @@ impl ScreenHandlerFactory for BrewingScreenFactory {
     }
 
     fn get_display_name(&self) -> TextComponent {
-        TextComponent::translate_cross(
+        pumpkin_macros::translate_cross!(
             translation::java::CONTAINER_BREWING,
-            translation::bedrock::CONTAINER_BREWING,
-            &[],
+            translation::bedrock::CONTAINER_BREWING
         )
     }
 }

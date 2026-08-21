@@ -76,10 +76,9 @@ impl ArgumentConsumer for TeamColorArgumentConsumer {
         let result = NamedColor::try_from(raw_arg.value)
             .map(|color| Some(Arg::TeamColor(color)))
             .map_err(|()| {
-                INVALID_COLOR_ERROR_TYPE.create_without_context(TextComponent::translate(
-                    translation::java::ARGUMENT_COLOR_INVALID,
-                    [TextComponent::text(raw_arg.value.to_string())],
-                ))
+                INVALID_COLOR_ERROR_TYPE.create_without_context_args_slice(&[TextComponent::text(
+                    raw_arg.value.to_string(),
+                )])
             });
 
         Box::pin(async move { result })

@@ -1,4 +1,4 @@
-use pumpkin_data::packet::clientbound::PLAY_SECTION_BLOCKS_UPDATE;
+use pumpkin_data::packet::clientbound::play::SECTION_BLOCKS_UPDATE;
 use pumpkin_data::{BlockStateId, block_state_remap::remap_block_state_for_version};
 use pumpkin_util::math::{
     position::{BlockPos, chunk_section_from_pos, pack_local_chunk_section},
@@ -20,7 +20,7 @@ use crate::{
 /// This packet is much more efficient than sending multiple individual
 /// `CBlockUpdate` packets when many changes occur in the same area
 /// (e.g., explosions, structure generation, or large-scale terraforming).
-#[java_packet(PLAY_SECTION_BLOCKS_UPDATE)]
+#[java_packet(SECTION_BLOCKS_UPDATE)]
 pub struct CMultiBlockUpdate {
     /// Chunk section position (x << 42 | z << 20 | y)
     pub chunk_section: i64,

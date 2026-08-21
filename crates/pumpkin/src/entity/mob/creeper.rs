@@ -7,9 +7,7 @@ use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::{
     entity::EntityType,
     item::Item,
-    meta_data_type::MetaDataType,
     sound::{Sound, SoundCategory},
-    tracked_data::TrackedData,
 };
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::{codec::var_int::VarInt, java::client::play::Metadata};
@@ -96,8 +94,7 @@ impl CreeperEntity {
         self.fuse_speed.store(speed, Ordering::Relaxed);
         self.mob_entity.living_entity.entity.send_meta_data(
             &[Metadata::new(
-                TrackedData::FUSE_ID,
-                MetaDataType::INTEGER,
+                pumpkin_data::tracked_data::creeper::FUSE_ID,
                 VarInt(speed),
             )],
             None,
@@ -118,7 +115,13 @@ impl CreeperEntity {
             .store(true, Ordering::Relaxed);
         let world = entity.world.load();
         let pos = entity.pos.load();
-        world.explode(pos, radius * multiplier).await;
+        world
+            .explode(
+                pos,
+                radius * multiplier,
+                crate::world::ExplosionInteraction::Mob,
+            )
+            .await;
         // TODO: spawn area effect cloud with potion effects
         entity.remove().await;
     }
@@ -161,6 +164,27 @@ impl NBTStorage for CreeperEntity {
 impl Mob for CreeperEntity {
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
+    }
+
+    fn mob_on_lightning_strike<'a>(
+        &'a self,
+        caller: &'a dyn EntityBase,
+        lightning: &'a crate::entity::lightning::LightningBoltEntity,
+    ) -> EntityBaseFuture<'a, ()> {
+        Box::pin(async move {
+            self.charged.store(true, Ordering::Relaxed);
+            self.mob_entity.living_entity.entity.send_meta_data(
+                &[Metadata::new(
+                    pumpkin_data::tracked_data::creeper::CHARGED,
+                    true,
+                )],
+                None,
+            );
+            self.mob_entity
+                .living_entity
+                .on_lightning_strike(caller, lightning)
+                .await;
+        })
     }
 
     fn mob_tick<'a>(&'a self, _caller: &'a Arc<dyn EntityBase>) -> EntityBaseFuture<'a, ()> {
@@ -229,8 +253,7 @@ impl Mob for CreeperEntity {
             self.ignited.store(true, Ordering::Relaxed);
             entity.send_meta_data(
                 &[Metadata::new(
-                    TrackedData::IS_IGNITED,
-                    MetaDataType::BOOLEAN,
+                    pumpkin_data::tracked_data::creeper::IS_IGNITED,
                     true,
                 )],
                 None,

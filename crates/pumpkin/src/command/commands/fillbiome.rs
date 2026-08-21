@@ -158,7 +158,7 @@ impl CommandExecutor for FillBiomeExecutor {
     }
 }
 
-pub fn register(dispatcher: &mut CommandDispatcher, registry: &mut PermissionRegistry) {
+pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistry) {
     registry.register_permission_or_panic(Permission::new(
         PERMISSION,
         DESCRIPTION,
@@ -168,10 +168,10 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &mut PermissionReg
     let builder = command("fillbiome", DESCRIPTION).requires(PERMISSION).then(
         argument("from", BlockPosArgumentType).then(
             argument("to", BlockPosArgumentType).then(
-                argument("biome", ResourceKeyArgument(BIOME_REGISTRY.clone()))
+                argument("biome", ResourceKeyArgument(BIOME_REGISTRY))
                     .executes(FillBiomeExecutor { has_replace: false })
                     .then(
-                        argument("replace_biome", ResourceKeyArgument(BIOME_REGISTRY.clone()))
+                        argument("replace_biome", ResourceKeyArgument(BIOME_REGISTRY))
                             .executes(FillBiomeExecutor { has_replace: true }),
                     ),
             ),

@@ -1,0 +1,8 @@
+{
+  "comparator_output": 9,
+  "description": {
+    "translate": "jukebox_song.minecraft.lava_chicken"
+  },
+  "length_in_seconds": 134.0,
+  "sound_event": "minecraft:music_disc.lava_chicken"
+}

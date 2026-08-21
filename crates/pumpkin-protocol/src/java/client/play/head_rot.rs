@@ -1,4 +1,4 @@
-use pumpkin_data::packet::clientbound::PLAY_ROTATE_HEAD;
+use pumpkin_data::packet::clientbound::play::ROTATE_HEAD;
 use pumpkin_macros::java_packet;
 
 use crate::ClientPacket;
@@ -12,7 +12,7 @@ use pumpkin_util::version::JavaMinecraftVersion;
 /// While standard movement packets update the body, this packet is
 /// required to make an entity (like a player or a mob) look in a
 /// specific direction without necessarily turning its entire body.
-#[java_packet(PLAY_ROTATE_HEAD)]
+#[java_packet(ROTATE_HEAD)]
 pub struct CHeadRot {
     /// The Entity ID of the entity whose head is rotating.
     pub entity_id: VarInt,

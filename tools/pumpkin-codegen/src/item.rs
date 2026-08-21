@@ -213,7 +213,7 @@ impl ToTokens for ItemComponents {
         let item_name = LitStr::new(&text, Span::call_site());
         tokens.extend(quote! {
             (ItemName, &ItemNameImpl {
-                name: #item_name,
+                name: Cow::Borrowed(#item_name),
             }),
         });
 
@@ -861,7 +861,7 @@ impl ToTokens for ItemComponents {
             tokens.extend(quote! { (StoredEnchantments, &StoredEnchantmentsImpl { enchantment: Cow::Borrowed(&[]) }), });
         }
         if self.suspicious_stew_effects.is_some() {
-            tokens.extend(quote! { (SuspiciousStewEffects, &SuspiciousStewEffectsImpl), });
+            tokens.extend(quote! { (SuspiciousStewEffects, &SuspiciousStewEffectsImpl::EMPTY), });
         }
         if self.swing_animation.is_some() {
             tokens.extend(quote! { (SwingAnimation, &SwingAnimationImpl), });
@@ -1614,13 +1614,22 @@ pub fn build() -> TokenStream {
             #constants
 
             #[must_use]
+            #[allow(deprecated)]
             pub fn translated_name(&self) -> TextComponent {
-                TextComponent::translate(
-                    self.components
-                        .iter()
-                        .find_map(|(id, data)| (id == &ItemName).then(|| data.as_any().downcast_ref::<ItemNameImpl>().unwrap().name)).unwrap(),
-                    &[],
-                )
+                let name = self
+                    .components
+                    .iter()
+                    .find_map(|(id, data)| {
+                        if id == &ItemName {
+                            data.as_any()
+                                .downcast_ref::<ItemNameImpl>()
+                                .map(|name| name.name.as_ref())
+                        } else {
+                            None
+                        }
+                    })
+                    .unwrap_or(self.registry_key);
+                TextComponent::translate(name, &[])
             }
 
             #[doc = "Try to parse an item from a resource location string."]

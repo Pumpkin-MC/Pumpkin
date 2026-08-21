@@ -1,0 +1,32 @@
+{
+  "parent": "minecraft:recipes/root",
+  "criteria": {
+    "has_polished_tuff": {
+      "conditions": {
+        "items": [
+          {
+            "items": "minecraft:polished_tuff"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    },
+    "has_the_recipe": {
+      "conditions": {
+        "recipe": "minecraft:tuff_bricks"
+      },
+      "trigger": "minecraft:recipe_unlocked"
+    }
+  },
+  "requirements": [
+    [
+      "has_the_recipe",
+      "has_polished_tuff"
+    ]
+  ],
+  "rewards": {
+    "recipes": [
+      "minecraft:tuff_bricks"
+    ]
+  }
+}

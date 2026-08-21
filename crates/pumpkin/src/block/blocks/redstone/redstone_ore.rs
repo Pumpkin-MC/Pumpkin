@@ -1,12 +1,11 @@
 use crate::block::{
     BlockBehaviour, BlockFuture, BlockMetadata, NormalUseArgs, OnEntityCollisionArgs,
-    OnEntityStepArgs, OnScheduledTickArgs, registry::BlockActionResult,
+    OnEntityStepArgs, RandomTickArgs, registry::BlockActionResult,
 };
 use crate::world::World;
 use pumpkin_data::block_properties::{BlockProperties, RedstoneOreLikeProperties};
 use pumpkin_data::{Block, BlockId, BlockState};
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::tick::TickPriority;
 use pumpkin_world::world::BlockFlags;
 use std::sync::Arc;
 
@@ -27,9 +26,6 @@ impl RedstoneOreBlock {
                 .set_block_state(pos, props.to_state_id(block), BlockFlags::NOTIFY_ALL)
                 .await;
         }
-        // In vanilla Minecraft, it stays lit for 30 seconds (600 ticks) before scheduled tick turns it off.
-        // We use 30 ticks to fit in the u8 parameter range.
-        world.schedule_block_tick(block, *pos, 30, TickPriority::Normal);
     }
 }
 
@@ -56,10 +52,11 @@ impl BlockBehaviour for RedstoneOreBlock {
         })
     }
 
-    fn on_scheduled_tick<'a>(&'a self, args: OnScheduledTickArgs<'a>) -> BlockFuture<'a, ()> {
+    fn random_tick<'a>(&'a self, args: RandomTickArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
             let state = args.world.get_block_state(args.position);
             let mut props = RedstoneOreLikeProperties::from_state_id(state.id, args.block);
+
             if props.lit {
                 props.lit = false;
                 args.world

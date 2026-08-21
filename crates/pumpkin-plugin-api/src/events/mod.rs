@@ -18,25 +18,37 @@ use crate::{Context, Result, Server, wit::pumpkin::plugin::event::EventType};
 
 /// Block events.
 pub mod block;
+/// Enchantment events.
+pub mod enchantment;
 /// Entity events.
 pub mod entity;
+/// Hanging entity events.
+pub mod hanging;
 /// Inventory events.
 pub mod inventory;
 /// Network packet events.
 pub mod packet;
 /// Player events.
 pub mod player;
+/// Raid events.
+pub mod raid;
 /// Server lifecycle events.
 pub mod server;
+/// Vehicle events.
+pub mod vehicle;
 /// World events.
 pub mod world;
 
 pub use block::*;
+pub use enchantment::*;
 pub use entity::*;
+pub use hanging::*;
 pub use inventory::*;
 pub use packet::*;
 pub use player::*;
+pub use raid::*;
 pub use server::*;
+pub use vehicle::*;
 pub use world::*;
 
 pub(crate) static NEXT_HANDLER_ID: AtomicU32 = AtomicU32::new(0);

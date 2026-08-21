@@ -23,7 +23,7 @@ use key_store::KeyStore;
 use pumpkin_config::{AdvancedConfiguration, BasicConfiguration};
 use pumpkin_data::dimension::Dimension;
 use pumpkin_data::entity::EntityType;
-use pumpkin_util::permission::{PermissionManager, PermissionRegistry};
+use pumpkin_util::permission::PermissionManager;
 use pumpkin_util::text::color::NamedColor;
 use pumpkin_world::dimension::into_level;
 use pumpkin_world::world::WorldPortalExt;
@@ -47,12 +47,13 @@ use std::net::IpAddr;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicI32, AtomicI64, AtomicU32};
 use std::{future::Future, sync::atomic::Ordering, time::Duration};
-use tokio::sync::{Mutex, OnceCell, RwLock};
+use tokio::sync::{Mutex, OnceCell};
 use tokio::task::{JoinHandle, JoinSet};
 use tokio_util::task::TaskTracker;
 
 mod connection_cache;
 pub(crate) mod debug_profiler;
+pub mod enchantment;
 mod key_store;
 pub mod recipe;
 pub mod scheduler;
@@ -79,14 +80,12 @@ pub struct Server {
     pub plugin_manager: Arc<PluginManager>,
 
     /// Permission manager for the server.
-    pub permission_manager: Arc<RwLock<PermissionManager>>,
-    /// Permission registry for the server.
-    pub permission_registry: Arc<RwLock<PermissionRegistry>>,
+    pub permission_manager: Arc<PermissionManager>,
 
     /// Handles cryptographic keys for secure communication.
     key_store: OnceCell<Arc<KeyStore>>,
     /// Bedrock OIDC provider keys, fetched on startup for 1.26.10+ token validation.
-    pub bedrock_oidc_keys: OnceCell<(String, pumpkin_util::jwt::Jwks)>,
+    pub bedrock_oidc_keys: Arc<OnceCell<(String, pumpkin_util::jwt::Jwks)>>,
     /// Cached Bedrock server private key (process-lifetime). Generated on first Bedrock login and reused.
     pub bedrock_private_key: OnceCell<Arc<pumpkin_util::p384::ecdsa::SigningKey>>,
     /// Manages server status information.
@@ -94,7 +93,7 @@ pub struct Server {
     /// Saves server branding information.
     branding: CachedBranding,
     /// Saves and dispatches commands to appropriate handlers.
-    pub command_dispatcher: RwLock<CommandDispatcher>,
+    pub command_dispatcher: ArcSwap<CommandDispatcher>,
     /// Block behaviour.
     pub block_registry: Arc<BlockRegistry>,
     /// Item behaviour.
@@ -106,6 +105,7 @@ pub struct Server {
     /// Assigns unique IDs to containers.
     container_id: AtomicU32,
     pub recipe_manager: Arc<recipe::RecipeManager>,
+    pub enchantment_manager: Arc<enchantment::EnchantmentManager>,
     /// Assigns unique IDs to maps.
     map_id: AtomicI32,
     /// Mojang's public keys, used for chat session signing
@@ -155,10 +155,13 @@ impl Server {
         advanced_config: AdvancedConfiguration,
         vanilla_data: VanillaData,
     ) -> Arc<Self> {
-        let permission_registry = Arc::new(RwLock::new(PermissionRegistry::new()));
+        let permission_manager = Arc::new(PermissionManager::new());
         // First register the default commands. After that, plugins can put in their own.
-        let command_dispatcher =
-            RwLock::new(default_dispatcher(&permission_registry, &basic_config).await);
+        let command_dispatcher = ArcSwap::from_pointee(default_dispatcher(
+            &permission_manager,
+            &basic_config,
+            &advanced_config.commands,
+        ));
 
         crate::command::set_broadcast_console_to_ops(
             advanced_config.commands.broadcast_console_to_ops,
@@ -236,21 +239,6 @@ impl Server {
 
         let tick_rate_manager = Arc::new(ServerTickRateManager::new(basic_config.tps));
 
-        let mojang_keys_task = tokio::spawn({
-            let auth_config = advanced_config.networking.java.authentication.clone();
-            let allow_chat = basic_config.allow_chat_reports;
-            async move {
-                if allow_chat {
-                    fetch_mojang_public_keys(&auth_config).unwrap_or_else(|e| {
-                        error!("Failed to fetch Mojang keys: {e}");
-                        Vec::new()
-                    })
-                } else {
-                    Vec::new()
-                }
-            }
-        });
-
         let dimensions = {
             let mut dimensions = vec![Dimension::OVERWORLD];
             if basic_config.allow_nether {
@@ -274,12 +262,10 @@ impl Server {
             advanced_config,
             data: vanilla_data,
             plugin_manager: Arc::new(PluginManager::new()),
-            permission_manager: Arc::new(RwLock::new(PermissionManager::new(
-                permission_registry.clone(),
-            ))),
-            permission_registry,
+            permission_manager,
             container_id: 0.into(),
             recipe_manager: Arc::new(recipe::RecipeManager::new()),
+            enchantment_manager: Arc::new(enchantment::EnchantmentManager::new()),
             map_id: level_info.load().map_id.into(),
             worlds: ArcSwap::from_pointee(vec![]),
             dimensions,
@@ -287,7 +273,7 @@ impl Server {
             block_registry: block_registry.clone(),
             item_registry: super::item::items::default_registry(),
             key_store: OnceCell::new(),
-            bedrock_oidc_keys: OnceCell::new(),
+            bedrock_oidc_keys: Arc::new(OnceCell::new()),
             bedrock_private_key: OnceCell::new(),
             listing,
             branding: CachedBranding::new(),
@@ -323,13 +309,74 @@ impl Server {
                 }),
         );
 
+        // Fetch / generate keys in background tasks to avoid blocking startup
         let server_clone = server.clone();
         tokio::spawn(async move {
-            server_clone
-                .key_store
-                .get_or_init(|| async { Arc::new(KeyStore::new()) })
-                .await;
+            let key_store = tokio::task::spawn_blocking(|| Arc::new(KeyStore::new()))
+                .await
+                .unwrap_or_else(|_| Arc::new(KeyStore::new()));
+            let _ = server_clone.key_store.set(key_store);
         });
+
+        if server.basic_config.allow_chat_reports {
+            let server_clone = server.clone();
+            tokio::spawn(async move {
+                let auth_config = server_clone
+                    .advanced_config
+                    .networking
+                    .java
+                    .authentication
+                    .clone();
+                let keys = tokio::task::spawn_blocking(move || {
+                    fetch_mojang_public_keys(&auth_config).unwrap_or_else(|e| {
+                        error!("Failed to fetch Mojang keys: {e}");
+                        Vec::new()
+                    })
+                })
+                .await
+                .unwrap_or_default();
+                server_clone.mojang_public_keys.store(Arc::new(keys));
+            });
+        }
+
+        if server.advanced_config.networking.bedrock.online_mode
+            && server
+                .advanced_config
+                .networking
+                .bedrock
+                .authentication
+                .enabled
+        {
+            let server_clone = server.clone();
+            tokio::spawn(async move {
+                let auth = server_clone
+                    .advanced_config
+                    .networking
+                    .bedrock
+                    .authentication
+                    .clone();
+                let keys = match tokio::task::spawn_blocking(move || {
+                    pumpkin_util::jwt::fetch_oidc_jwks(
+                        auth.url.as_deref(),
+                        auth.connect_timeout,
+                        auth.read_timeout,
+                    )
+                })
+                .await
+                {
+                    Ok(Ok(keys)) => keys,
+                    Ok(Err(error)) => {
+                        error!("Failed to fetch Bedrock OIDC keys: {error}");
+                        (String::new(), pumpkin_util::jwt::Jwks { keys: Vec::new() })
+                    }
+                    Err(join_err) => {
+                        error!("Bedrock OIDC key task failed: {join_err}");
+                        (String::new(), pumpkin_util::jwt::Jwks { keys: Vec::new() })
+                    }
+                };
+                let _ = server_clone.bedrock_oidc_keys.set(keys);
+            });
+        }
 
         let world_loader = |dim: Dimension| {
             let path = world_path.clone();
@@ -360,40 +407,32 @@ impl Server {
             world_futures.push(world_loader(dim.clone()));
         }
 
-        let (worlds_results, keys) =
-            tokio::join!(futures::future::join_all(world_futures), mojang_keys_task);
+        let worlds_results = futures::future::join_all(world_futures).await;
 
         let mut worlds_vec = Vec::new();
         for world in worlds_results.into_iter().flatten() {
             worlds_vec.push(world);
         }
 
-        server.worlds.store(Arc::new(worlds_vec));
-        if let Ok(k) = keys {
-            server.mojang_public_keys.store(Arc::new(k));
-        }
-
-        info!("All worlds loaded successfully.");
-
-        if server.advanced_config.networking.bedrock.online_mode {
+        for world in &worlds_vec {
+            let mut world_init_event =
+                crate::plugin::api::events::world::world_init::WorldInitEvent::new(world.clone());
             server
-                .bedrock_oidc_keys
-                .get_or_init(|| async {
-                    tokio::task::block_in_place(|| {
-                        let auth = &server.advanced_config.networking.bedrock.authentication;
-                        pumpkin_util::jwt::fetch_oidc_jwks(
-                            auth.url.as_deref(),
-                            auth.connect_timeout,
-                            auth.read_timeout,
-                        )
-                    })
-                    .unwrap_or_else(|error| {
-                        error!("Failed to fetch Bedrock OIDC keys: {error}");
-                        (String::new(), pumpkin_util::jwt::Jwks { keys: Vec::new() })
-                    })
-                })
+                .plugin_manager
+                .fire(&server, &mut world_init_event)
+                .await;
+
+            let mut world_load_event =
+                crate::plugin::api::events::world::world_load::WorldLoadEvent::new(world.clone());
+            server
+                .plugin_manager
+                .fire(&server, &mut world_load_event)
                 .await;
         }
+
+        server.worlds.store(Arc::new(worlds_vec));
+
+        info!("All worlds loaded successfully.");
         server
     }
 
@@ -423,11 +462,12 @@ impl Server {
     pub async fn create_world(self: &Arc<Self>, name: String, dimension: Dimension) -> Arc<World> {
         {
             let worlds = self.worlds.load();
-            if let Some(world) = worlds
+            let world = worlds
                 .iter()
                 .find(|w| w.get_world_name() == name && w.dimension == dimension)
-            {
-                return world.clone();
+                .cloned();
+            if let Some(world) = world {
+                return world;
             }
         }
 
@@ -471,6 +511,61 @@ impl Server {
             error!("World creation failed");
             std::process::exit(1);
         })
+    }
+
+    pub async fn unload_world(&self, name: &str) -> Result<(), String> {
+        let worlds = self.worlds.load();
+        let world_to_unload = worlds
+            .iter()
+            .find(|w| w.get_world_name() == name || w.dimension.minecraft_name == name)
+            .cloned()
+            .ok_or_else(|| format!("World '{name}' not found"))?;
+
+        if let Some(first_world) = worlds.first()
+            && Arc::ptr_eq(first_world, &world_to_unload)
+        {
+            return Err("Cannot unload the primary/default world".to_string());
+        }
+
+        let player_count = world_to_unload.players.load().len();
+        if player_count > 0 {
+            return Err(format!(
+                "Cannot unload world '{name}': {player_count} players are still in this world"
+            ));
+        }
+
+        world_to_unload.shutdown().await;
+        world_to_unload.unload().await;
+
+        self.worlds.rcu(|w_list| {
+            let mut new_list = (**w_list).clone();
+            new_list.retain(|w| !Arc::ptr_eq(w, &world_to_unload));
+            new_list
+        });
+
+        Ok(())
+    }
+
+    pub async fn save_all(&self) -> Result<(), String> {
+        if let Err(err) = self.player_data_storage.save_all_players(self).await {
+            error!("Failed to save player data: {err}");
+            return Err(format!("Failed to save player data: {err}"));
+        }
+
+        if let Err(err) = self
+            .advancement_manager
+            .save_all_players(&self.get_all_players())
+            .await
+        {
+            error!("Failed to save player advancements: {err}");
+            return Err(format!("Failed to save player advancements: {err}"));
+        }
+
+        for world in self.worlds.load().iter() {
+            world.save().await;
+        }
+
+        Ok(())
     }
 
     /// Adds a new player to the server.
@@ -538,6 +633,9 @@ impl Server {
 
         if let Some(mut nbt_data) = nbt {
             player.read_nbt(&mut nbt_data).await;
+            // The data file itself proves this is a returning player. Older Bedrock
+            // sessions could persist HasPlayedBefore as false and mask a valid Pos.
+            player.has_played_before.store(true, Ordering::Relaxed);
         }
 
         // Wrap in Arc after data is loaded
@@ -639,8 +737,8 @@ impl Server {
             for player in world.players.load().iter() {
                 *player.tab_list_header.lock().await = header.clone();
                 *player.tab_list_footer.lock().await = footer.clone();
-                player.client.enqueue_packet(&packet).await;
             }
+            world.broadcast_packet_all(&packet);
         }
     }
 
@@ -961,13 +1059,15 @@ impl Server {
             pumpkin_protocol::codec::var_int::VarInt(0),
         );
         for world in self.worlds.load().iter() {
-            for player in world.players.load().iter() {
-                if player.subscribed_debug_sample.load(Ordering::Relaxed)
-                    && player.permission_lvl.load() >= pumpkin_util::PermissionLvl::Two
-                {
-                    player.client.try_enqueue_packet(&packet);
-                }
-            }
+            let players = world.players.load();
+            let recipients = players
+                .iter()
+                .filter(|player| {
+                    player.subscribed_debug_sample.load(Ordering::Relaxed)
+                        && player.permission_lvl.load() >= pumpkin_util::PermissionLvl::Two
+                })
+                .filter_map(|player| player.client.java());
+            World::broadcast_java_clients(&packet, recipients);
         }
     }
 
@@ -1025,9 +1125,7 @@ impl Server {
                 .map_or_else(Vec::new, |player| vec![player]),
         };
 
-        let Some(player_type) = EntityType::from_name("player") else {
-            return Vec::new();
-        };
+        let player_type = &EntityType::PLAYER;
         let type_included = target_selector
             .conditions
             .iter()
@@ -1203,5 +1301,50 @@ impl Server {
                 entities.into_iter().take(limit).collect()
             }
         }
+    }
+
+    pub async fn execute_remote_command(self: &Arc<Self>, command: String) {
+        let mut remote_event = crate::plugin::api::events::server::remote_server_command::RemoteServerCommandEvent::new(
+            command,
+        );
+        self.plugin_manager.fire(self, &mut remote_event).await;
+    }
+
+    pub async fn register_service(self: &Arc<Self>, service_name: String) {
+        let mut service_event =
+            crate::plugin::api::events::server::service_register::ServiceRegisterEvent::new(
+                service_name,
+            );
+        self.plugin_manager.fire(self, &mut service_event).await;
+    }
+
+    pub async fn unregister_service(self: &Arc<Self>, service_name: String) {
+        let mut service_event =
+            crate::plugin::api::events::server::service_unregister::ServiceUnregisterEvent::new(
+                service_name,
+            );
+        self.plugin_manager.fire(self, &mut service_event).await;
+    }
+
+    pub async fn tab_complete(self: &Arc<Self>, buffer: String, completions: Vec<String>) {
+        let mut tab_event = crate::plugin::api::events::server::tab_complete::TabCompleteEvent::new(
+            buffer,
+            completions,
+        );
+        self.plugin_manager.fire(self, &mut tab_event).await;
+    }
+
+    pub async fn enable_plugin(self: &Arc<Self>, plugin_name: String) {
+        let mut enable_event =
+            crate::plugin::api::events::server::plugin_enable::PluginEnableEvent::new(plugin_name);
+        self.plugin_manager.fire(self, &mut enable_event).await;
+    }
+
+    pub async fn disable_plugin(self: &Arc<Self>, plugin_name: String) {
+        let mut disable_event =
+            crate::plugin::api::events::server::plugin_disable::PluginDisableEvent::new(
+                plugin_name,
+            );
+        self.plugin_manager.fire(self, &mut disable_event).await;
     }
 }

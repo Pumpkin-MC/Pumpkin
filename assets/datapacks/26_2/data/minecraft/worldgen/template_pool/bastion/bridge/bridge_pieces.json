@@ -1,0 +1,14 @@
+{
+  "elements": [
+    {
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "minecraft:bastion/bridge/bridge_pieces/bridge",
+        "processors": "minecraft:bridge",
+        "projection": "rigid"
+      },
+      "weight": 1
+    }
+  ],
+  "fallback": "minecraft:empty"
+}

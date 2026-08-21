@@ -1,0 +1,35 @@
+{
+  "processors": [
+    {
+      "processor_type": "minecraft:rule",
+      "rules": [
+        {
+          "input_predicate": {
+            "block": "minecraft:polished_blackstone_bricks",
+            "predicate_type": "minecraft:random_block_match",
+            "probability": 0.3
+          },
+          "location_predicate": {
+            "predicate_type": "minecraft:always_true"
+          },
+          "output_state": {
+            "Name": "minecraft:cracked_polished_blackstone_bricks"
+          }
+        },
+        {
+          "input_predicate": {
+            "block": "minecraft:blackstone",
+            "predicate_type": "minecraft:random_block_match",
+            "probability": 1.0E-4
+          },
+          "location_predicate": {
+            "predicate_type": "minecraft:always_true"
+          },
+          "output_state": {
+            "Name": "minecraft:air"
+          }
+        }
+      ]
+    }
+  ]
+}

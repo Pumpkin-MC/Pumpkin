@@ -10,11 +10,13 @@ members = [
     "crates/pumpkin-macros",
     "crates/pumpkin-nbt",
     "crates/pumpkin-plugin-api",
+    "crates/pumpkin-plugin-utils",
     "crates/pumpkin-protocol",
     "crates/pumpkin-util",
     "crates/pumpkin-world",
+    "tools/pumpkin-codegen",
+    "tools/pumpkin-fuzzer",
 ]
-exclude = ["tools/pumpkin-codegen"]
 
 # [workspace.lints.rust]
 # missing_docs = "warn"
@@ -98,6 +100,7 @@ missing_panics_doc = "allow"
 missing_errors_doc = "allow"
 module_name_repetitions = "allow"
 struct_excessive_bools = "allow"
+unused_async_trait_impl = "allow"
 
 [workspace.package]
 version = "0.1.0-dev+26.2-26.40"
@@ -120,7 +123,6 @@ strip = false
 
 
 [workspace.dependencies]
-serde_json5 = "0.2.1"
 tokio = { version = "1.53", default-features = false }
 syn = { version = "3.0", default-features = false, features = ["full", "parsing", "printing", "proc-macro", "clone-impls", "derive"] }
 
@@ -176,6 +178,8 @@ pumpkin-data = { path = "crates/pumpkin-data", default-features = false }
 pumpkin-inventory = { path = "crates/pumpkin-inventory", default-features = false }
 pumpkin-macros = { path = "crates/pumpkin-macros", default-features = false }
 pumpkin-nbt = { path = "crates/pumpkin-nbt", default-features = false }
+pumpkin-plugin-api = { path = "crates/pumpkin-plugin-api", default-features = false }
+pumpkin-plugin-utils = { path = "crates/pumpkin-plugin-utils", default-features = false }
 pumpkin-protocol = { path = "crates/pumpkin-protocol", default-features = false }
 pumpkin-util = { path = "crates/pumpkin-util", default-features = false }
 pumpkin-world = { path = "crates/pumpkin-world", default-features = false }
@@ -204,7 +208,7 @@ time = { version = "0.3", default-features = false, features = ["std"] }
 arc-swap = { version = "1.9", default-features = false }
 tokio-util = { version = "0.7.19", default-features = false }
 toml = { version = "1.1", default-features = false, features = ["parse", "display", "serde"] }
-ureq = { version = "3.3.0", default-features = false, features = ["rustls"] }
+ureq = { version = "3.4.0", default-features = false, features = ["rustls"] }
 notify = { version = "8.2.0", default-features = false, features = ["macos_fsevent"] }
 
 sysinfo = { version = "0.39", default-features = false, features = ["system"] }
@@ -213,13 +217,15 @@ ordered-float = { version = "5.3", default-features = false, features = ["std"] 
 xxhash-rust = { version = "0.8", default-features = false, features = ["xxh64"] }
 
 wasmtime = { version = "47.0", default-features = false, features = ["runtime", "component-model", "async", "cache", "cranelift", "gc", "gc-drc", "threads", "std"] }
-wasmtime-wasi = { version = "47.0", default-features = false, features = ["p2"] }
-wasmtime-wasi-http = { version = "47.0", default-features = false, features = ["p2", "default-send-request"] }
+wasmtime-wasi = { version = "47.0", default-features = false, features = ["p2", "p3"] }
+wasmtime-wasi-http = { version = "47.0", default-features = false, features = ["p2", "p3", "default-send-request"] }
 # needed for interacting with wasmtime-wasi-http - keep in sync
 hyper = { version = "^1.11", default-features = false }
 axum = { version = "0.8.9", default-features = false, features = ["http1", "tokio"] }
-webrtc = { version = "0.17.0", default-features = false }
+webrtc = { version = "0.20.2" }
+async-trait = "0.1"
 wit-bindgen = { version = "0.60", default-features = false, features = ["macros"] }
 
 postcard = { version = "1.1", default-features = false, features = ["alloc"] }
 tracing-serde-structured = { version = "0.4", default-features = false }
+wasmparser = { version = "0.257", default-features = false }

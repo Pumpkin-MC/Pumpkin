@@ -4,9 +4,7 @@ use std::sync::{
 };
 
 use pumpkin_data::item_stack::ItemStack;
-use pumpkin_data::meta_data_type::MetaDataType;
 use pumpkin_data::sound::Sound;
-use pumpkin_data::tracked_data::TrackedData;
 use pumpkin_data::{entity::EntityType, item::Item};
 use pumpkin_protocol::codec::var_int::VarInt;
 use rand::RngExt;
@@ -130,7 +128,11 @@ impl NBTStorage for ChickenEntity {
 
 impl super::animal::Animal for ChickenEntity {
     fn is_food(&self, item_stack: &ItemStack) -> bool {
-        TEMPT_ITEMS.iter().any(|i| i.id == item_stack.item.id)
+        use pumpkin_data::tag::Taggable;
+        item_stack
+            .item
+            .has_tag(&pumpkin_data::tag::Item::MINECRAFT_CHICKEN_FOOD)
+            || TEMPT_ITEMS.iter().any(|i| i.id == item_stack.item.id)
     }
 }
 
@@ -155,8 +157,7 @@ impl Mob for ChickenEntity {
             if is_baby {
                 entity.send_meta_data(
                     &[pumpkin_protocol::java::client::play::Metadata::new(
-                        TrackedData::BABY_ID,
-                        MetaDataType::BOOLEAN,
+                        pumpkin_data::tracked_data::chicken::BABY_ID,
                         true,
                     )],
                     None,
@@ -164,8 +165,7 @@ impl Mob for ChickenEntity {
             }
             entity.send_meta_data(
                 &[pumpkin_protocol::java::client::play::Metadata::new(
-                    TrackedData::VARIANT,
-                    MetaDataType::CHICKEN_VARIANT,
+                    pumpkin_data::tracked_data::chicken::VARIANT,
                     VarInt(self.variant.load(Ordering::Relaxed) as i32),
                 )],
                 None,
@@ -190,7 +190,18 @@ impl Mob for ChickenEntity {
                 let next_time = rand::rng().random_range(6000..12000);
                 let world = entity.world.load_full();
                 let pos = entity.block_pos.load();
-                world.drop_stack(&pos, ItemStack::new(1, &Item::EGG)).await;
+                let mut drop_event =
+                    crate::plugin::api::events::entity::entity_drop_item::EntityDropItemEvent::new(
+                        entity.entity_id,
+                        "minecraft:egg".to_string(),
+                        1,
+                    );
+                if let Some(server) = world.server.upgrade() {
+                    server.plugin_manager.fire(&server, &mut drop_event).await;
+                }
+                if !drop_event.cancelled {
+                    world.drop_stack(&pos, ItemStack::new(1, &Item::EGG)).await;
+                }
                 self.egg_lay_time.store(next_time, Ordering::Relaxed);
             }
         })

@@ -4,11 +4,11 @@ use crate::VarInt;
 use crate::codec::item_stack_seralizer::ItemStackSerializer;
 use crate::{ClientPacket, WritingError, ser::NetworkWriteExt};
 
-use pumpkin_data::packet::clientbound::PLAY_CONTAINER_SET_SLOT;
+use pumpkin_data::packet::clientbound::play::CONTAINER_SET_SLOT;
 use pumpkin_macros::java_packet;
 use pumpkin_util::version::JavaMinecraftVersion;
 
-#[java_packet(PLAY_CONTAINER_SET_SLOT)]
+#[java_packet(CONTAINER_SET_SLOT)]
 pub struct CSetContainerSlot<'a> {
     pub window_id: i8,
     pub state_id: VarInt,
@@ -41,8 +41,10 @@ impl ClientPacket for CSetContainerSlot<'_> {
     ) -> Result<(), WritingError> {
         let mut write = write;
 
-        write.write_i8(self.window_id)?;
-        write.write_var_int(&self.state_id)?;
+        write.write_container_id(&VarInt(i32::from(self.window_id)), version)?;
+        if *version >= JavaMinecraftVersion::V_1_17_1 {
+            write.write_var_int(&self.state_id)?;
+        }
         write.write_i16_be(self.slot)?;
         self.slot_data.write_with_version(&mut write, version)?;
 

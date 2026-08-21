@@ -1,4 +1,4 @@
-use pumpkin_data::packet::clientbound::PLAY_DISCONNECT;
+use pumpkin_data::packet::clientbound::play::DISCONNECT;
 use pumpkin_util::text::TextComponent;
 
 use crate::ClientPacket;
@@ -11,7 +11,7 @@ use pumpkin_util::version::JavaMinecraftVersion;
 /// This packet displays the provided reason to the player on a dedicated
 /// disconnection screen. It is used for kicks, server shutdowns, or when
 /// a player is banned.
-#[java_packet(PLAY_DISCONNECT)]
+#[java_packet(DISCONNECT)]
 pub struct CPlayDisconnect<'a> {
     /// The message shown to the player explaining why they were disconnected.
     /// This supports full JSON formatting (colors, bold, links, etc.).
@@ -29,9 +29,8 @@ impl ClientPacket for CPlayDisconnect<'_> {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        _version: &JavaMinecraftVersion,
+        version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
-        write.write_slice(&self.reason.encode())?;
-        Ok(())
+        write.write_component(self.reason, version)
     }
 }

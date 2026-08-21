@@ -1,0 +1,39 @@
+{
+  "has_precipitation": false,
+  "temperature": 2.0,
+  "downfall": 0.0,
+  "attributes": {
+    "minecraft:visual/fog_color": "#330303",
+    "minecraft:visual/ambient_particles": [
+      {
+        "particle": {
+          "type": "minecraft:crimson_spore"
+        },
+        "probability": 0.025
+      }
+    ],
+    "minecraft:audio/background_music": {
+      "default": {
+        "sound": "minecraft:music.nether.crimson_forest",
+        "min_delay": 12000,
+        "max_delay": 24000
+      }
+    },
+    "minecraft:audio/ambient_sounds": {
+      "loop": "minecraft:ambient.crimson_forest.loop",
+      "mood": {
+        "sound": "minecraft:ambient.crimson_forest.mood",
+        "tick_delay": 6000,
+        "block_search_extent": 8,
+        "offset": 2.0
+      },
+      "additions": {
+        "sound": "minecraft:ambient.crimson_forest.additions",
+        "tick_chance": 0.0111
+      }
+    }
+  },
+  "effects": {
+    "water_color": "#3f76e4"
+  }
+}

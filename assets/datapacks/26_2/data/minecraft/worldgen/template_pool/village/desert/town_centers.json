@@ -1,0 +1,65 @@
+{
+  "elements": [
+    {
+      "element": {
+        "element_type": "minecraft:legacy_single_pool_element",
+        "location": "minecraft:village/desert/town_centers/desert_meeting_point_1",
+        "processors": {
+          "processors": []
+        },
+        "projection": "rigid"
+      },
+      "weight": 98
+    },
+    {
+      "element": {
+        "element_type": "minecraft:legacy_single_pool_element",
+        "location": "minecraft:village/desert/town_centers/desert_meeting_point_2",
+        "processors": {
+          "processors": []
+        },
+        "projection": "rigid"
+      },
+      "weight": 98
+    },
+    {
+      "element": {
+        "element_type": "minecraft:legacy_single_pool_element",
+        "location": "minecraft:village/desert/town_centers/desert_meeting_point_3",
+        "processors": {
+          "processors": []
+        },
+        "projection": "rigid"
+      },
+      "weight": 49
+    },
+    {
+      "element": {
+        "element_type": "minecraft:legacy_single_pool_element",
+        "location": "minecraft:village/desert/zombie/town_centers/desert_meeting_point_1",
+        "processors": "minecraft:zombie_desert",
+        "projection": "rigid"
+      },
+      "weight": 2
+    },
+    {
+      "element": {
+        "element_type": "minecraft:legacy_single_pool_element",
+        "location": "minecraft:village/desert/zombie/town_centers/desert_meeting_point_2",
+        "processors": "minecraft:zombie_desert",
+        "projection": "rigid"
+      },
+      "weight": 2
+    },
+    {
+      "element": {
+        "element_type": "minecraft:legacy_single_pool_element",
+        "location": "minecraft:village/desert/zombie/town_centers/desert_meeting_point_3",
+        "processors": "minecraft:zombie_desert",
+        "projection": "rigid"
+      },
+      "weight": 1
+    }
+  ],
+  "fallback": "minecraft:empty"
+}

@@ -1,0 +1,6 @@
+{
+  "type": "minecraft:jungle_temple",
+  "biomes": "#minecraft:has_structure/jungle_temple",
+  "spawn_overrides": {},
+  "step": "surface_structures"
+}

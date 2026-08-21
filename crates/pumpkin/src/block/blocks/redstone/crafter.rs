@@ -44,10 +44,9 @@ impl ScreenHandlerFactory for CrafterScreenFactory {
     }
 
     fn get_display_name(&self) -> TextComponent {
-        TextComponent::translate_cross(
+        pumpkin_macros::translate_cross!(
             translation::java::CONTAINER_CRAFTER,
-            translation::bedrock::CONTAINER_CRAFTER,
-            &[],
+            translation::bedrock::CONTAINER_CRAFTER
         )
     }
 }

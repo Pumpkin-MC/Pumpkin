@@ -1,0 +1,153 @@
+{
+  "parent": "minecraft:recipes/root",
+  "criteria": {
+    "has_copper_axe": {
+      "conditions": {
+        "items": [
+          {
+            "items": "minecraft:copper_axe"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    },
+    "has_copper_boots": {
+      "conditions": {
+        "items": [
+          {
+            "items": "minecraft:copper_boots"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    },
+    "has_copper_chestplate": {
+      "conditions": {
+        "items": [
+          {
+            "items": "minecraft:copper_chestplate"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    },
+    "has_copper_helmet": {
+      "conditions": {
+        "items": [
+          {
+            "items": "minecraft:copper_helmet"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    },
+    "has_copper_hoe": {
+      "conditions": {
+        "items": [
+          {
+            "items": "minecraft:copper_hoe"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    },
+    "has_copper_horse_armor": {
+      "conditions": {
+        "items": [
+          {
+            "items": "minecraft:copper_horse_armor"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    },
+    "has_copper_leggings": {
+      "conditions": {
+        "items": [
+          {
+            "items": "minecraft:copper_leggings"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    },
+    "has_copper_nautilus_armor": {
+      "conditions": {
+        "items": [
+          {
+            "items": "minecraft:copper_nautilus_armor"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    },
+    "has_copper_pickaxe": {
+      "conditions": {
+        "items": [
+          {
+            "items": "minecraft:copper_pickaxe"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    },
+    "has_copper_shovel": {
+      "conditions": {
+        "items": [
+          {
+            "items": "minecraft:copper_shovel"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    },
+    "has_copper_spear": {
+      "conditions": {
+        "items": [
+          {
+            "items": "minecraft:copper_spear"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    },
+    "has_copper_sword": {
+      "conditions": {
+        "items": [
+          {
+            "items": "minecraft:copper_sword"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    },
+    "has_the_recipe": {
+      "conditions": {
+        "recipe": "minecraft:copper_nugget_from_blasting"
+      },
+      "trigger": "minecraft:recipe_unlocked"
+    }
+  },
+  "requirements": [
+    [
+      "has_the_recipe",
+      "has_copper_pickaxe",
+      "has_copper_shovel",
+      "has_copper_axe",
+      "has_copper_hoe",
+      "has_copper_sword",
+      "has_copper_spear",
+      "has_copper_helmet",
+      "has_copper_chestplate",
+      "has_copper_leggings",
+      "has_copper_boots",
+      "has_copper_horse_armor",
+      "has_copper_nautilus_armor"
+    ]
+  ],
+  "rewards": {
+    "recipes": [
+      "minecraft:copper_nugget_from_blasting"
+    ]
+  }
+}

@@ -9,7 +9,10 @@ use pumpkin_data::advancement_data::{
     AdvancementNode, AdvancementProgressData, AdvancementRequirement, AdvancementReward, Criteria,
 };
 use pumpkin_data::{ADVANCEMENT_TREE, Advancement, translation};
-use pumpkin_protocol::java::client::play::{CSelectAdvancementsTab, CUpdateAdvancements};
+use pumpkin_protocol::bedrock::server::text::SText;
+use pumpkin_protocol::java::client::play::{
+    CSelectAdvancementsTab, CSystemChatMessage, CUpdateAdvancements,
+};
 use pumpkin_util::identifier::Identifier;
 use pumpkin_util::text::TextComponent;
 use serde::ser::SerializeMap;
@@ -391,8 +394,7 @@ impl PlayerAdvancement {
                 let first_packet = self.is_first_packet;
                 tokio::spawn(async move {
                     player
-                        .client
-                        .send_packet_now(&CUpdateAdvancements::new(
+                        .send_client_packet(&CUpdateAdvancements::new(
                             first_packet,
                             added,
                             parsed_progress,
@@ -429,7 +431,18 @@ impl PlayerAdvancement {
             result = true;
             self.progress_changed.insert(advancement);
             if !was_done && progress.is_done() {
-                //TODO listener
+                let player_c = player.clone();
+                let adv_id = advancement.id.to_string();
+                tokio::spawn(async move {
+                    if let Some(server) = player_c.world().server.upgrade() {
+                        let mut event =
+                            crate::plugin::api::events::player::player_advancement_done::PlayerAdvancementDoneEvent::new(
+                                player_c,
+                                adv_id,
+                            );
+                        server.plugin_manager.fire(&server, &mut event).await;
+                    }
+                });
                 Self::grant_reward(player.clone(), advancement.reward);
                 if let Some(display) = advancement.display
                     && display.announce_to_chat
@@ -441,15 +454,25 @@ impl PlayerAdvancement {
                         .show_advancement_messages
                 {
                     tokio::spawn(async move {
-                        let component = TextComponent::translate_cross(
+                        let player_name = player.get_display_name().await;
+                        let je_component = TextComponent::translate(
                             display.frame_type.get_translation(),
-                            translation::bedrock::CHAT_TYPE_ACHIEVEMENT,
-                            [player.get_display_name().await, advancement.name()],
+                            [player_name.clone(), advancement.name()],
                         );
+                        let je_packet = CSystemChatMessage::new(&je_component, false);
+
+                        let be_packet = SText::translation(
+                            translation::bedrock::CHAT_TYPE_ACHIEVEMENT.to_string(),
+                            vec![
+                                player_name.0.to_bedrock_string(),
+                                display.get_title().0.to_bedrock_string(),
+                            ],
+                        );
+
                         player
                             .world()
-                            .broadcast_system_message(&component, false)
-                            .await; //send translate component for the event
+                            .broadcast_editioned(&je_packet, &be_packet)
+                            .await;
                     });
                 }
             }
@@ -492,8 +515,7 @@ impl PlayerAdvancement {
             && let Some(player) = self.player.upgrade()
         {
             player
-                .client
-                .send_packet_now(&CSelectAdvancementsTab::new(
+                .send_client_packet(&CSelectAdvancementsTab::new(
                     self.last_selected_tab.map(|adv| adv.id.clone()),
                 ))
                 .await;

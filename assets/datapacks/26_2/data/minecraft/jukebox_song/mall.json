@@ -1,0 +1,8 @@
+{
+  "comparator_output": 6,
+  "description": {
+    "translate": "jukebox_song.minecraft.mall"
+  },
+  "length_in_seconds": 197.0,
+  "sound_event": "minecraft:music_disc.mall"
+}

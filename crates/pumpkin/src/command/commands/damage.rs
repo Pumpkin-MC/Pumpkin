@@ -67,12 +67,7 @@ impl CommandExecutor for LocationExecutor {
         Box::pin(async move {
             let target = EntityArgumentConsumer::find_arg(args, ARG_TARGET)?;
 
-            let Ok(Ok(amount)) = BoundedNumArgumentConsumer::<f32>::find_arg(args, ARG_AMOUNT)
-            else {
-                return Err(CommandError::CommandFailed(TextComponent::text(
-                    "Invalid damage amount",
-                )));
-            };
+            let amount = BoundedNumArgumentConsumer::<f32>::find_arg(args, ARG_AMOUNT)??;
 
             let damage_type =
                 args.get(ARG_DAMAGE_TYPE)
@@ -102,12 +97,7 @@ impl CommandExecutor for EntityExecutor {
         Box::pin(async move {
             let target = EntityArgumentConsumer::find_arg(args, ARG_TARGET)?;
 
-            let Ok(Ok(amount)) = BoundedNumArgumentConsumer::<f32>::find_arg(args, ARG_AMOUNT)
-            else {
-                return Err(CommandError::CommandFailed(TextComponent::text(
-                    "Invalid damage amount",
-                )));
-            };
+            let amount = BoundedNumArgumentConsumer::<f32>::find_arg(args, ARG_AMOUNT)??;
 
             let damage_type =
                 args.get(ARG_DAMAGE_TYPE)

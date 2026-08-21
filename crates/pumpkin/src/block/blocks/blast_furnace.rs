@@ -16,7 +16,6 @@ use pumpkin_inventory::{
     screen_handler::{BoxFuture, InventoryPlayer, ScreenHandlerFactory, SharedScreenHandler},
 };
 use pumpkin_macros::pumpkin_block;
-use pumpkin_util::text::TextComponent;
 use pumpkin_world::inventory::Inventory;
 use tokio::sync::Mutex;
 
@@ -73,10 +72,9 @@ impl ScreenHandlerFactory for BlastingFurnaceScreenFactory {
     }
 
     fn get_display_name(&self) -> pumpkin_util::text::TextComponent {
-        TextComponent::translate_cross(
+        pumpkin_macros::translate_cross!(
             translation::java::CONTAINER_BLAST_FURNACE,
-            translation::bedrock::TILE_BLAST_FURNACE_NAME,
-            &[],
+            translation::bedrock::TILE_BLAST_FURNACE_NAME
         )
     }
 }

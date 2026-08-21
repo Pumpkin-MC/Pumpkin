@@ -1,0 +1,12 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "key": {
+    "#": "minecraft:wheat"
+  },
+  "pattern": [
+    "###"
+  ],
+  "result": {
+    "id": "minecraft:bread"
+  }
+}

@@ -100,15 +100,14 @@ macro_rules! impl_block_entity_for_chest {
 
             fn chunk_data_nbt(&self) -> Option<pumpkin_nbt::compound::NbtCompound> {
                 let mut nbt = pumpkin_nbt::compound::NbtCompound::new();
-                let loot_table_key = self.loot_table.lock().unwrap_or_else(std::sync::PoisonError::into_inner).clone();
-                if let Some(key) = loot_table_key {
-                    nbt.put_string("LootTable", key);
-                    if self.loot_table_seed != 0 {
-                        nbt.put_long("LootTableSeed", self.loot_table_seed);
+                let has_loot_table = self.loot_table.lock().unwrap_or_else(std::sync::PoisonError::into_inner).is_some();
+                if !has_loot_table {
+                    if let Ok(items) = self.items.try_read() {
+                        pumpkin_world::inventory::sync_write_items_to_nbt(&*items, &mut nbt);
+                    } else {
+                        let items = futures::executor::block_on(self.items.read());
+                        pumpkin_world::inventory::sync_write_items_to_nbt(&*items, &mut nbt);
                     }
-                } else {
-                    let items = futures::executor::block_on(self.items.read());
-                    pumpkin_world::inventory::sync_write_items_to_nbt(&*items, &mut nbt);
                 }
                 Some(nbt)
             }
@@ -118,12 +117,12 @@ macro_rules! impl_block_entity_for_chest {
             }
 
             fn take_loot_table(&self) -> Option<(String, i64)> {
-                let mut guard = self.loot_table.lock().expect("Loot table mutex should not be poisoned");
+                let mut guard = self.loot_table.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
                 guard.take().map(|key| (key, self.loot_table_seed))
             }
 
             fn has_loot_table(&self) -> bool {
-                self.loot_table.lock().expect("Loot table mutex should not be poisoned").is_some()
+                self.loot_table.lock().unwrap_or_else(std::sync::PoisonError::into_inner).is_some()
             }
         }
     };
@@ -372,6 +371,12 @@ macro_rules! impl_chest_helper_methods {
                     0.5,
                     pumpkin_util::random::RandomImpl::next_f32(&mut rng) * 0.1 + 0.9,
                 );
+                let bedrock_sound = match sound {
+                    pumpkin_data::sound::Sound::BlockChestOpen => "chest.open",
+                    pumpkin_data::sound::Sound::BlockChestClose => "chest.closed",
+                    _ => return,
+                };
+                world.play_bedrock_level_sound(bedrock_sound, &position, 0);
             }
         }
     };
