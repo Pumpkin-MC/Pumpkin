@@ -68,7 +68,7 @@ use crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::world::{
     BlockPos as WitBlockPos, BlockState as WitBlockState, BlockStateInfo as WitBlockStateInfo,
     BoundingBox as WitBoundingBox, Chunk as WitChunk,
     NoteblockInstrument as WitNoteblockInstrument, PistonBehavior as WitPistonBehavior,
-    WorldBorder as WitWorldBorder,
+    WorldBorder as WitWorldBorder, WorldSpawnLocation as WitWorldSpawnLocation,
 };
 use crate::plugin::loader::wasm::wasm_host::{
     state::{
@@ -510,6 +510,22 @@ impl pumpkin::plugin::world::HostWorld for PluginHostState {
             .dimension
             .minecraft_name
             .to_string())
+    }
+
+    async fn get_spawn_location(
+        &mut self,
+        world: Resource<World>,
+    ) -> wasmtime::Result<WitWorldSpawnLocation> {
+        let (pos, yaw, pitch) = self.get_world_res(&world)?.provider.get_spawn_location();
+        Ok(WitWorldSpawnLocation {
+            pos: WitBlockPos {
+                x: pos.0.x,
+                y: pos.0.y,
+                z: pos.0.z,
+            },
+            yaw,
+            pitch,
+        })
     }
 
     async fn get_top_block_y(
