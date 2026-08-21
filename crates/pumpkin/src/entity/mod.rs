@@ -2708,6 +2708,7 @@ impl Entity {
 
     /// Sets whether the entity is invisible and sends updated metadata.
     #[expect(clippy::unused_async)]
+    #[allow(clippy::unused_async_trait_impl)]
     pub async fn set_invisible(&self, invisible: bool) {
         if self.invisible.load(Ordering::Relaxed) != invisible {
             self.invisible.store(invisible, Relaxed);
@@ -2717,6 +2718,7 @@ impl Entity {
 
     /// Sets whether the entity is glowing and sends updated metadata.
     #[expect(clippy::unused_async)]
+    #[allow(clippy::unused_async_trait_impl)]
     pub async fn set_glowing(&self, glowing: bool) {
         if self.glowing.load(Ordering::Relaxed) != glowing {
             self.glowing.store(glowing, Ordering::Relaxed);
@@ -2726,6 +2728,7 @@ impl Entity {
 
     /// Sets whether the entity is on fire for visual and damage purposes. This is separate from `fire_ticks` which tracks the damage aspect of being on fire.
     #[expect(clippy::unused_async)]
+    #[allow(clippy::unused_async_trait_impl)]
     pub async fn set_on_fire(&self, on_fire: bool) {
         if self.has_visual_fire.load(Ordering::Relaxed) != on_fire {
             self.has_visual_fire.store(on_fire, Ordering::Relaxed);
