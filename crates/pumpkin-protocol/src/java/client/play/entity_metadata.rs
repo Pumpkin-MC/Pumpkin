@@ -2,7 +2,6 @@ use std::io::{Cursor, Write};
 
 use pumpkin_data::{
     block_state_remap::remap_block_state_for_version,
-    item_id_remap::remap_item_id_for_version,
     meta_data_type::MetaDataType,
     packet::clientbound::play::SET_ENTITY_DATA,
     tracked_data::{TrackedData, TrackedId},
@@ -157,27 +156,11 @@ impl<T> Metadata<T> {
         }
 
         if self.r#type == MetaDataType::ITEM_STACK {
-            let mut serialized_value = Vec::new();
-            self.value.write_metadata(&mut serialized_value, version)?;
-
-            let mut cursor = Cursor::new(serialized_value);
-            let item_count = VarInt::decode(&mut cursor).map_err(|e| {
-                WritingError::Message(format!("Failed to decodeitem stack count: {e}"))
-            })?;
-
-            if item_count.0 <= 0 {
-                writer.write_var_int(&item_count)?;
-            } else {
-                let item_id = VarInt::decode(&mut cursor)
-                    .map_err(|e| WritingError::Message(format!("Failed to decode item id: {e}")))?;
-                let remapped_id = u16::try_from(item_id.0)
-                    .map_or(0, |id| remap_item_id_for_version(id, *version));
-                writer.write_var_int(&item_count)?;
-                writer.write_var_int(&VarInt(i32::from(remapped_id)))?;
-                let remainder_start = cursor.position() as usize;
-                let inner = cursor.into_inner();
-                writer.write_slice(&inner[remainder_start..])?;
-            }
+            // Delegates to ItemStackSerializer::write_with_version, which remaps both the item
+            // id and every data component id for `version` - unlike the other branches here,
+            // there's no separate post-processing step needed since the item's own version-aware
+            // writer already produces correct bytes end to end.
+            self.value.write_metadata(&mut writer, version)?;
             return Ok(());
         }
 
@@ -338,9 +321,9 @@ impl MetadataSerializer for crate::codec::item_stack_seralizer::ItemStackSeriali
     fn write_metadata(
         &self,
         writer: &mut impl std::io::Write,
-        _version: &JavaMinecraftVersion,
+        version: &JavaMinecraftVersion,
     ) -> Result<(), WritingError> {
-        self.write(writer)
+        self.write_with_version(writer, version)
     }
 }
 
@@ -489,5 +472,50 @@ mod tests {
 
         assert_eq!(particle_id, VarInt(29));
         assert_eq!(data, [0x12, 0x34, 0x56, 0x78]);
+    }
+
+    // Regression test: entity metadata of type ITEM_STACK (e.g. a dropped ItemEntity's visual)
+    // used to serialize the item generically and only remap the leading item id, leaving data
+    // component ids inside at the current (26.1+) numbering regardless of the recipient's
+    // version - breaking decode for any pre-26.1 client viewing an item with a real component
+    // patch (e.g. a firework rocket with actual flight_duration/explosions data).
+    #[test]
+    fn item_stack_metadata_uses_legacy_component_id_for_1_21_11() {
+        use crate::codec::item_stack_seralizer::ItemStackSerializer;
+        use pumpkin_data::data_component::DataComponent;
+        use pumpkin_data::data_component_impl::{DataComponentImpl, FireworksImpl};
+        use pumpkin_data::item::Item;
+        use pumpkin_data::item_stack::ItemStack;
+
+        let fireworks = FireworksImpl::new(3, Vec::new());
+        let mut stack = ItemStack::new(1, &Item::FIREWORK_ROCKET);
+        stack
+            .patch
+            .push((DataComponent::Fireworks, Some(fireworks.to_dyn())));
+
+        let metadata = Metadata::new(
+            pumpkin_data::tracked_data::item::ITEM,
+            ItemStackSerializer::from(stack),
+        );
+        let mut bytes = Vec::new();
+        metadata
+            .write(&mut bytes, &JavaMinecraftVersion::V_1_21_11)
+            .unwrap();
+
+        // index byte, type id varint, then item_count, item_id, num_to_add, num_to_remove,
+        // component id.
+        let mut cursor = Cursor::new(&bytes[2..]);
+        VarInt::decode(&mut cursor).unwrap(); // item_count
+        VarInt::decode(&mut cursor).unwrap(); // item_id
+        VarInt::decode(&mut cursor).unwrap(); // num_to_add
+        VarInt::decode(&mut cursor).unwrap(); // num_to_remove
+        let mut remainder = Vec::new();
+        cursor.read_to_end(&mut remainder).unwrap();
+
+        assert_eq!(
+            remainder[0], 67,
+            "fireworks component in entity metadata must use legacy id 67 for a 1.21.11 \
+             recipient, not the current id 69"
+        );
     }
 }
