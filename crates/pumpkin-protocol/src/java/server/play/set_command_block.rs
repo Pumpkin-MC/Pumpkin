@@ -23,9 +23,9 @@ pub struct SSetCommandBlock<'a> {
 }
 
 impl<'a> ServerPacket<'a> for SSetCommandBlock<'a> {
-    fn read(bytebuf: &mut &'a [u8], _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+    fn read(bytebuf: &mut &'a [u8], version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
         Ok(Self {
-            pos: BlockPos::from_i64(bytebuf.get_i64_be()?),
+            pos: bytebuf.get_block_pos(version)?,
             command: bytebuf.get_str_bounded_borrowed(32767)?,
             mode: bytebuf.get_var_int()?,
             flags: bytebuf.get_i8()?,
@@ -37,10 +37,10 @@ impl crate::ClientPacket for SSetCommandBlock<'_> {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        _version: &JavaMinecraftVersion,
+        version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         use crate::ser::NetworkWriteExt;
-        write.write_block_pos(&self.pos)?;
+        write.write_block_pos(&self.pos, version)?;
         write.write_string_bounded(self.command, 32767)?;
         write.write_var_int(&self.mode)?;
         write.write_i8(self.flags)?;

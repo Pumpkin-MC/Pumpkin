@@ -16,9 +16,9 @@ pub struct SPickItemFromBlock {
 }
 
 impl<'a> ServerPacket<'a> for SPickItemFromBlock {
-    fn read(bytebuf: &mut &'a [u8], _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+    fn read(bytebuf: &mut &'a [u8], version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
         Ok(Self {
-            pos: BlockPos::from_i64(bytebuf.get_i64_be()?),
+            pos: bytebuf.get_block_pos(version)?,
             include_data: bytebuf.get_bool()?,
         })
     }
@@ -28,10 +28,10 @@ impl crate::ClientPacket for SPickItemFromBlock {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        _version: &JavaMinecraftVersion,
+        version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         use crate::ser::NetworkWriteExt;
-        write.write_block_pos(&self.pos)?;
+        write.write_block_pos(&self.pos, version)?;
         write.write_bool(self.include_data)?;
         Ok(())
     }

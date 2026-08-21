@@ -333,14 +333,19 @@ impl ClientPacket for CChunkData<'_> {
                         .position(|&n| n == name)
                         .unwrap_or(0)
                 });
+                let remapped_id = pumpkin_data::block_entity_type_id_remap::remap_block_entity_type_id_for_version(id as u32, *version);
 
-                write.write_var_int(&VarInt(id as i32))?;
+                write.write_var_int(&VarInt(remapped_id as i32))?;
 
                 let mut client_nbt = nbt.clone();
                 client_nbt.child_tags.remove("id");
                 client_nbt.child_tags.remove("x");
                 client_nbt.child_tags.remove("y");
                 client_nbt.child_tags.remove("z");
+                client_nbt.child_tags.remove("LootTable");
+                client_nbt.child_tags.remove("LootTableSeed");
+                client_nbt.child_tags.remove("PumpkinCustomData");
+                client_nbt.child_tags.remove("BukkitValues");
                 write_compound_nbt(&mut write, client_nbt, *version)?;
             }
 

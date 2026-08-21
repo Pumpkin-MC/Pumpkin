@@ -41,19 +41,33 @@ impl ClientPacket for CSetContainerContent<'_> {
     ) -> Result<(), WritingError> {
         let mut write = write;
 
-        write.write_var_int(&self.window_id)?;
-        write.write_var_int(&self.state_id)?;
-        let slot_count = i32::try_from(self.slot_data.len()).map_err(|_| {
-            WritingError::Message(format!(
-                "{} slot entries do not fit in VarInt",
-                self.slot_data.len()
-            ))
-        })?;
-        write.write_var_int(&VarInt(slot_count))?;
+        write.write_container_id(&self.window_id, version)?;
+        if *version >= JavaMinecraftVersion::V_1_17_1 {
+            write.write_var_int(&self.state_id)?;
+        }
+        if *version >= JavaMinecraftVersion::V_1_17_1 {
+            let slot_count = i32::try_from(self.slot_data.len()).map_err(|_| {
+                WritingError::Message(format!(
+                    "{} slot entries do not fit in VarInt",
+                    self.slot_data.len()
+                ))
+            })?;
+            write.write_var_int(&VarInt(slot_count))?;
+        } else {
+            let slot_count = i16::try_from(self.slot_data.len()).map_err(|_| {
+                WritingError::Message(format!(
+                    "{} slot entries do not fit in Short",
+                    self.slot_data.len()
+                ))
+            })?;
+            write.write_i16_be(slot_count)?;
+        }
         for stack in self.slot_data {
             stack.write_with_version(&mut write, version)?;
         }
-        self.carried_item.write_with_version(&mut write, version)?;
+        if *version >= JavaMinecraftVersion::V_1_17_1 {
+            self.carried_item.write_with_version(&mut write, version)?;
+        }
 
         Ok(())
     }

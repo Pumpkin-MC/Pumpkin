@@ -34,9 +34,9 @@ impl ClientPacket for COpenSignEditor {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        _version: &JavaMinecraftVersion,
+        version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
-        write.write_block_pos(&self.location)?;
+        write.write_block_pos(&self.location, version)?;
         write.write_bool(self.is_front_text)?;
         Ok(())
     }

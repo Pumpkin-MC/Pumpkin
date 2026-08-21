@@ -59,16 +59,19 @@ impl AttributeModifier {
     }
 }
 
+use pumpkin_data::attribute_id_remap::remap_attribute_id_for_version;
+
 impl ClientPacket for CUpdateAttributes {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        _version: &JavaMinecraftVersion,
+        version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         write.write_var_int(&self.entity_id)?;
         write.write_var_int(&VarInt(self.properties.len() as i32))?;
         for prop in &self.properties {
-            write.write_var_int(&prop.id)?;
+            let remapped_id = remap_attribute_id_for_version(prop.id.0 as u32, *version);
+            write.write_var_int(&VarInt(remapped_id as i32))?;
             write.write_f64(prop.value)?;
             write.write_var_int(&VarInt(prop.modifiers.len() as i32))?;
             for modifier in &prop.modifiers {
