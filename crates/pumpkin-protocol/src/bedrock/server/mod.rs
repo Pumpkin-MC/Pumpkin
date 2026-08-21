@@ -27,6 +27,7 @@ pub mod set_local_player_as_initialized;
 pub mod set_player_inventory_options;
 pub mod text;
 
+pub use actor_event::*;
 pub use animate::*;
 pub use block_pick_request::*;
 pub use client_cache_blob_status::*;

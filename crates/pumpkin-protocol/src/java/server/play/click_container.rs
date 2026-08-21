@@ -4,13 +4,13 @@ use crate::{
     ServerPacket,
     ser::{NetworkReadExt, ReadingError},
 };
-use pumpkin_data::packet::serverbound::PLAY_CONTAINER_CLICK;
+use pumpkin_data::packet::serverbound::play::CONTAINER_CLICK;
 use pumpkin_macros::java_packet;
 use pumpkin_util::version::JavaMinecraftVersion;
 use std::io::Read;
 
 #[derive(Debug)]
-#[java_packet(PLAY_CONTAINER_CLICK)]
+#[java_packet(CONTAINER_CLICK)]
 pub struct SClickSlot {
     pub sync_id: VarInt,
     pub revision: VarInt,
@@ -66,6 +66,32 @@ impl<'a> ServerPacket<'a> for SClickSlot {
     }
 }
 
+impl crate::ClientPacket for SClickSlot {
+    fn write_packet_data(
+        &self,
+        mut write: impl std::io::Write,
+        version: &JavaMinecraftVersion,
+    ) -> Result<(), crate::ser::WritingError> {
+        use crate::ser::NetworkWriteExt;
+        write.write_var_int(&self.sync_id)?;
+        if version >= &JavaMinecraftVersion::V_1_17_1 {
+            write.write_var_int(&self.revision)?;
+        } else {
+            write.write_i16_be(self.revision.0 as i16)?;
+        }
+        write.write_i16_be(self.slot)?;
+        write.write_i8(self.button)?;
+        self.mode.write(&mut write)?;
+        write.write_var_int(&VarInt(self.array_of_changed_slots.len() as i32))?;
+        for (slot, item) in &self.array_of_changed_slots {
+            write.write_i16_be(*slot)?;
+            item.write(&mut write)?;
+        }
+        self.carried_item.write(&mut write)?;
+        Ok(())
+    }
+}
+
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum SlotActionType {
     /// Performs a normal slot click. This can pick up or place items in the slot, possibly merging the cursor stack into the slot, or swapping the slot stack with the cursor stack if they can't be merged.
@@ -92,6 +118,22 @@ impl SlotActionType {
         let mode = bytebuf.get_var_int()?;
         Self::try_from(mode.0)
             .map_err(|_| ReadingError::Message("Invalid slot action type".to_string()))
+    }
+
+    pub fn write(
+        &self,
+        write: &mut impl crate::ser::NetworkWriteExt,
+    ) -> Result<(), crate::ser::WritingError> {
+        let mode = match self {
+            Self::Pickup => 0,
+            Self::QuickMove => 1,
+            Self::Swap => 2,
+            Self::Clone => 3,
+            Self::Throw => 4,
+            Self::QuickCraft => 5,
+            Self::PickupAll => 6,
+        };
+        write.write_var_int(&VarInt(mode))
     }
 }
 

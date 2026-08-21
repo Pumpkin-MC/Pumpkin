@@ -2,14 +2,14 @@ use crate::{
     ServerPacket,
     ser::{NetworkReadExt, NetworkReadSliceExt, ReadingError},
 };
-use pumpkin_data::packet::serverbound::PLAY_SET_COMMAND_BLOCK;
+use pumpkin_data::packet::serverbound::play::SET_COMMAND_BLOCK;
 use pumpkin_macros::java_packet;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::version::JavaMinecraftVersion;
 
 use crate::codec::var_int::VarInt;
 
-#[java_packet(PLAY_SET_COMMAND_BLOCK)]
+#[java_packet(SET_COMMAND_BLOCK)]
 pub struct SSetCommandBlock<'a> {
     pub pos: BlockPos,
     pub command: &'a str,
@@ -30,6 +30,21 @@ impl<'a> ServerPacket<'a> for SSetCommandBlock<'a> {
             mode: bytebuf.get_var_int()?,
             flags: bytebuf.get_i8()?,
         })
+    }
+}
+
+impl crate::ClientPacket for SSetCommandBlock<'_> {
+    fn write_packet_data(
+        &self,
+        mut write: impl std::io::Write,
+        _version: &JavaMinecraftVersion,
+    ) -> Result<(), crate::ser::WritingError> {
+        use crate::ser::NetworkWriteExt;
+        write.write_block_pos(&self.pos)?;
+        write.write_string_bounded(self.command, 32767)?;
+        write.write_var_int(&self.mode)?;
+        write.write_i8(self.flags)?;
+        Ok(())
     }
 }
 

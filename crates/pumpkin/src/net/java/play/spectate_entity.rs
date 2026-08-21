@@ -28,8 +28,7 @@ impl JavaClient {
 
             player.camera_target_id.store(Some(target_id));
             player
-                .client
-                .send_packet_now(&CSetCamera::new(target_id.into()))
+                .send_client_packet(&CSetCamera::new(target_id.into()))
                 .await;
 
             player
@@ -43,8 +42,7 @@ impl JavaClient {
 
             player.camera_target_id.store(Some(target_id));
             player
-                .client
-                .send_packet_now(&CSetCamera::new(target_id.into()))
+                .send_client_packet(&CSetCamera::new(target_id.into()))
                 .await;
 
             player

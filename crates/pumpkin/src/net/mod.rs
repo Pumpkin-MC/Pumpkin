@@ -30,6 +30,8 @@ pub mod authentication;
 pub mod bedrock;
 pub mod java;
 pub mod lan_broadcast;
+pub mod packet_limiter;
+pub use packet_limiter::PacketRateLimiter;
 mod proxy;
 pub mod query;
 pub mod rcon;
@@ -202,8 +204,16 @@ impl ClientPlatform {
         be_packet: &B,
     ) {
         match self {
-            Self::Java(java) => java.enqueue_packet(je_packet).await,
-            Self::Bedrock(bedrock) => bedrock.enqueue_packet(be_packet).await,
+            Self::Java(java) => {
+                if let Ok(data) = java.serialize_packet(je_packet) {
+                    java.enqueue_packet(data).await;
+                }
+            }
+            Self::Bedrock(bedrock) => {
+                if let Ok(data) = bedrock.serialize_packet(be_packet) {
+                    bedrock.enqueue_packet(data).await;
+                }
+            }
         }
     }
 
@@ -213,38 +223,41 @@ impl ClientPlatform {
         be_packet: &B,
     ) {
         match self {
-            Self::Java(java) => java.try_enqueue_packet(je_packet),
-            Self::Bedrock(bedrock) => bedrock.try_enqueue_packet(be_packet),
+            Self::Java(java) => {
+                if let Ok(data) = java.serialize_packet(je_packet) {
+                    java.try_enqueue_packet(data);
+                }
+            }
+            Self::Bedrock(bedrock) => {
+                if let Ok(data) = bedrock.serialize_packet(be_packet) {
+                    bedrock.try_enqueue_packet(data);
+                }
+            }
         }
     }
 
-    pub async fn enqueue_packet<P: ClientPacket>(&self, packet: &P) {
-        if let Self::Java(java) = self {
-            java.enqueue_packet(packet).await;
+    pub async fn enqueue_packet(&self, packet_data: Bytes) {
+        match self {
+            Self::Java(java) => java.enqueue_packet(packet_data).await,
+            Self::Bedrock(bedrock) => bedrock.enqueue_packet(packet_data).await,
         }
     }
 
-    pub async fn enqueue_be_packet<P: BClientPacket>(&self, packet: &P) {
-        if let Self::Bedrock(bedrock) = self {
-            bedrock.enqueue_packet(packet).await;
-        }
-    }
-
-    pub fn try_enqueue_packet<P: ClientPacket>(&self, packet: &P) {
-        if let Self::Java(java) = self {
-            java.try_enqueue_packet(packet);
-        }
-    }
-
-    pub fn try_enqueue_be_packet<P: BClientPacket>(&self, packet: &P) {
-        if let Self::Bedrock(bedrock) = self {
-            bedrock.try_enqueue_packet(packet);
+    pub fn try_enqueue_packet(&self, packet_data: Bytes) {
+        match self {
+            Self::Java(java) => java.try_enqueue_packet(packet_data),
+            Self::Bedrock(bedrock) => bedrock.try_enqueue_packet(packet_data),
         }
     }
 
     pub fn try_enqueue_spawn_packet(&self, entity: &Arc<dyn crate::entity::EntityBase>) {
         match self {
-            Self::Java(java) => java.try_enqueue_packet(&entity.get_entity().create_spawn_packet()),
+            Self::Java(java) => {
+                let packet = entity.get_entity().create_spawn_packet();
+                if let Ok(data) = java.serialize_packet(&packet) {
+                    java.try_enqueue_packet(data);
+                }
+            }
             Self::Bedrock(bedrock) => bedrock.enqueue_spawn_packet(entity.clone()),
         }
     }
@@ -263,15 +276,10 @@ impl ClientPlatform {
         }
     }
 
-    pub async fn send_packet_now<P: ClientPacket>(&self, packet: &P) {
-        if let Self::Java(java) = self {
-            java.send_packet_now(packet).await;
-        }
-    }
-
-    pub async fn send_be_packet_now<P: BClientPacket>(&self, packet: &P) {
-        if let Self::Bedrock(bedrock) = self {
-            bedrock.send_game_packet(packet).await;
+    pub async fn send_packet_now(&self, packet_data: Bytes) {
+        match self {
+            Self::Java(java) => java.send_packet_now(packet_data).await,
+            Self::Bedrock(bedrock) => bedrock.send_game_packet(packet_data).await,
         }
     }
 
@@ -281,16 +289,21 @@ impl ClientPlatform {
         be_packet: &B,
     ) {
         match self {
-            Self::Java(java) => java.send_packet_now(je_packet).await,
-            Self::Bedrock(bedrock) => bedrock.send_game_packet(be_packet).await,
+            Self::Java(java) => {
+                if let Ok(data) = java.serialize_packet(je_packet) {
+                    java.send_packet_now(data).await;
+                }
+            }
+            Self::Bedrock(bedrock) => {
+                if let Ok(data) = bedrock.serialize_packet(be_packet) {
+                    bedrock.send_game_packet(data).await;
+                }
+            }
         }
     }
 
     pub async fn send_packet_now_data(&self, data: Bytes) {
-        match self {
-            Self::Java(java) => java.send_packet_now_data(data).await,
-            Self::Bedrock(bedrock) => bedrock.enqueue_packet_data(data).await,
-        }
+        self.send_packet_now(data).await;
     }
 
     pub async fn kick(&self, reason: DisconnectReason, message: TextComponent) {

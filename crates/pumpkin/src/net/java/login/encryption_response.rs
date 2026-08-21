@@ -6,23 +6,23 @@ impl PendingConnection {
         &mut self,
         server: &Server,
         encryption_response: SEncryptionResponse,
-    ) {
+    ) -> Option<PacketHandlerResult> {
         debug!("Handling encryption");
         let Ok(shared_secret) = server.decrypt(&encryption_response.shared_secret).await else {
             self.kick(TextComponent::text("Failed to decrypt shared secret"))
                 .await;
-            return;
+            return Some(PacketHandlerResult::Stop);
         };
 
         if let Err(error) = self.set_encryption(&shared_secret) {
             self.kick(TextComponent::text(error.to_string())).await;
-            return;
+            return Some(PacketHandlerResult::Stop);
         }
 
         let profile_name = {
             let Some(profile) = self.gameprofile.as_ref() else {
                 self.kick(TextComponent::text("No `GameProfile`")).await;
-                return;
+                return Some(PacketHandlerResult::Stop);
             };
             profile.name.clone()
         };
@@ -48,13 +48,13 @@ impl PendingConnection {
                         e => TextComponent::text(e.to_string()),
                     })
                     .await;
-                    return;
+                    return Some(PacketHandlerResult::Stop);
                 }
             }
         }
 
         let Some(profile) = self.gameprofile.clone() else {
-            return;
+            return Some(PacketHandlerResult::Stop);
         };
 
         if let Some(online_player) = &server.get_player_by_uuid(profile.id) {
@@ -68,7 +68,7 @@ impl PendingConnection {
                 [],
             ))
             .await;
-            return;
+            return Some(PacketHandlerResult::Stop);
         }
 
         if let Some(online_player) = &server.get_player_by_name(&profile.name) {
@@ -82,10 +82,10 @@ impl PendingConnection {
                 [],
             ))
             .await;
-            return;
+            return Some(PacketHandlerResult::Stop);
         }
 
-        self.finish_login(&profile).await;
+        self.finish_login(server, &profile).await
     }
 
     pub(super) async fn enable_compression(&mut self, server: &Server) {
@@ -106,7 +106,11 @@ impl PendingConnection {
         self.set_compression(&compression);
     }
 
-    pub(super) async fn finish_login(&mut self, profile: &GameProfile) {
+    pub(super) async fn finish_login(
+        &mut self,
+        server: &Server,
+        profile: &GameProfile,
+    ) -> Option<PacketHandlerResult> {
         let props = profile.properties.load();
         let packet = CLoginSuccess::new(
             &profile.id,
@@ -116,9 +120,17 @@ impl PendingConnection {
             uuid::Uuid::new_v4(),
         );
         self.send_packet_now(&packet).await;
-        if self.version.load() < JavaMinecraftVersion::V_1_20_2 {
-            self.connection_state.store(ConnectionState::Play);
+        if self.version.load().supports_configuration_state() {
+            return None;
         }
+
+        self.connection_state.store(ConnectionState::Play);
+        let config = self.config.clone().unwrap_or_default();
+        if let Some(reason) = can_not_join(profile, &self.address, server).await {
+            self.kick(reason).await;
+            return Some(PacketHandlerResult::Stop);
+        }
+        Some(PacketHandlerResult::ReadyToPlay(profile.clone(), config))
     }
 
     async fn authenticate(

@@ -1,4 +1,4 @@
-use pumpkin_data::packet::serverbound::PLAY_SIGN_UPDATE;
+use pumpkin_data::packet::serverbound::play::SIGN_UPDATE;
 use pumpkin_macros::java_packet;
 use pumpkin_util::{math::position::BlockPos, version::JavaMinecraftVersion};
 
@@ -7,7 +7,7 @@ use crate::{
     ser::{NetworkReadExt, NetworkReadSliceExt, ReadingError},
 };
 
-#[java_packet(PLAY_SIGN_UPDATE)]
+#[java_packet(SIGN_UPDATE)]
 pub struct SUpdateSign<'a> {
     pub location: BlockPos,
     pub is_front_text: bool,
@@ -29,5 +29,22 @@ impl<'a> ServerPacket<'a> for SUpdateSign<'a> {
             line_3: read.get_str_bounded_borrowed(MAX_LINE_LENGTH)?,
             line_4: read.get_str_bounded_borrowed(MAX_LINE_LENGTH)?,
         })
+    }
+}
+
+impl crate::ClientPacket for SUpdateSign<'_> {
+    fn write_packet_data(
+        &self,
+        mut write: impl std::io::Write,
+        _version: &JavaMinecraftVersion,
+    ) -> Result<(), crate::ser::WritingError> {
+        use crate::ser::NetworkWriteExt;
+        write.write_block_pos(&self.location)?;
+        write.write_bool(self.is_front_text)?;
+        write.write_string_bounded(self.line_1, MAX_LINE_LENGTH)?;
+        write.write_string_bounded(self.line_2, MAX_LINE_LENGTH)?;
+        write.write_string_bounded(self.line_3, MAX_LINE_LENGTH)?;
+        write.write_string_bounded(self.line_4, MAX_LINE_LENGTH)?;
+        Ok(())
     }
 }

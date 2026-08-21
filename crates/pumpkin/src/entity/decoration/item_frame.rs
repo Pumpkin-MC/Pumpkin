@@ -11,9 +11,8 @@ use pumpkin_data::damage::DamageType;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
-use pumpkin_data::meta_data_type::MetaDataType;
+use pumpkin_data::packet::CURRENT_MC_VERSION;
 use pumpkin_data::sound::Sound;
-use pumpkin_data::tracked_data::TrackedData;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::codec::item_stack_seralizer::ItemStackSerializer;
 use pumpkin_protocol::java::client::play::{CSetEntityMetadata, Metadata};
@@ -129,8 +128,7 @@ impl ItemFrameEntity {
 
         self.entity.send_meta_data(
             &[Metadata::new(
-                TrackedData::ITEM,
-                MetaDataType::ITEM_STACK,
+                pumpkin_data::tracked_data::item_frame::ITEM,
                 &item_serializer,
             )],
             None,
@@ -157,8 +155,7 @@ impl ItemFrameEntity {
 
         self.entity.send_meta_data(
             &[Metadata::new(
-                TrackedData::ROTATION,
-                MetaDataType::INT,
+                pumpkin_data::tracked_data::item_frame::ROTATION,
                 rot as i32,
             )],
             None,
@@ -331,16 +328,14 @@ impl EntityBase for ItemFrameEntity {
 
             self.entity.send_meta_data(
                 &[Metadata::new(
-                    TrackedData::ITEM,
-                    MetaDataType::ITEM_STACK,
+                    pumpkin_data::tracked_data::item_frame::ITEM,
                     &item_serializer,
                 )],
                 None,
             );
             self.entity.send_meta_data(
                 &[Metadata::new(
-                    TrackedData::ROTATION,
-                    MetaDataType::INT,
+                    pumpkin_data::tracked_data::item_frame::ROTATION,
                     rotation,
                 )],
                 None,
@@ -353,27 +348,35 @@ impl EntityBase for ItemFrameEntity {
         client: &'a crate::net::java::JavaClient,
     ) -> EntityBaseFuture<'a, ()> {
         Box::pin(async move {
-            client
-                .enqueue_packet(&self.entity.create_spawn_packet())
-                .await;
-
-            let item_serializer = ItemStackSerializer::from(self.item_stack.lock().await.clone());
-            let rotation = self.get_rotation() as i32;
-
-            let mut data = Vec::new();
-            let meta_item =
-                Metadata::new(TrackedData::ITEM, MetaDataType::ITEM_STACK, item_serializer);
-            let meta_rot = Metadata::new(TrackedData::ROTATION, MetaDataType::INT, rotation);
+            let spawn_packet = self.entity.create_spawn_packet();
+            if let Ok(data) = client.serialize_packet(&spawn_packet) {
+                client.enqueue_packet(data).await;
+            }
 
             let ver = client.version.load();
-            if meta_item.write(&mut data, &ver).is_ok() && meta_rot.write(&mut data, &ver).is_ok() {
-                data.push(255);
-                client
-                    .enqueue_packet(&CSetEntityMetadata::new(
-                        self.entity.entity_id.into(),
-                        data.into(),
-                    ))
-                    .await;
+            if ver >= CURRENT_MC_VERSION {
+                let item_serializer =
+                    ItemStackSerializer::from(self.item_stack.lock().await.clone());
+                let rotation = self.get_rotation() as i32;
+
+                let mut data = Vec::new();
+                let meta_item = Metadata::new(
+                    pumpkin_data::tracked_data::item_frame::ITEM,
+                    item_serializer,
+                );
+                let meta_rot =
+                    Metadata::new(pumpkin_data::tracked_data::item_frame::ROTATION, rotation);
+
+                if meta_item.write(&mut data, &ver).is_ok()
+                    && meta_rot.write(&mut data, &ver).is_ok()
+                {
+                    data.push(255);
+                    let meta_packet =
+                        CSetEntityMetadata::new(self.entity.entity_id.into(), data.into());
+                    if let Ok(meta_data) = client.serialize_packet(&meta_packet) {
+                        client.enqueue_packet(meta_data).await;
+                    }
+                }
             }
         })
     }

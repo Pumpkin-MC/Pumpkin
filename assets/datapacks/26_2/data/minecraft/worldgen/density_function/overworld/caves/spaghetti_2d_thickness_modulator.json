@@ -1,0 +1,17 @@
+{
+  "type": "minecraft:cache_once",
+  "argument": {
+    "type": "minecraft:add",
+    "argument1": -0.95,
+    "argument2": {
+      "type": "minecraft:mul",
+      "argument1": -0.35000000000000003,
+      "argument2": {
+        "type": "minecraft:noise",
+        "noise": "minecraft:spaghetti_2d_thickness",
+        "xz_scale": 2.0,
+        "y_scale": 1.0
+      }
+    }
+  }
+}

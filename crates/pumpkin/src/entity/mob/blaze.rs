@@ -76,7 +76,7 @@ impl BlazeEntity {
         //     .living_entity
         //     .entity
         //     .send_meta_data(&[Metadata::new(
-        //         TrackedData::FLAGS_ID,
+        //         pumpkin_data::tracked_data::blaze::FLAGS_ID,
         //         MetaDataType::BYTE,
         //         new_je_flags,
         //     )])

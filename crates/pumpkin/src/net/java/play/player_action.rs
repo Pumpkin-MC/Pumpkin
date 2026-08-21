@@ -66,7 +66,7 @@ impl JavaClient {
                     let inventory = player.inventory();
                     let held = inventory.held_item().await;
                     if !server.item_registry.can_mine(held.item, player) {
-                        self.enqueue_packet(&CBlockUpdate::new(
+                        self.enqueue_client_packet(&CBlockUpdate::new(
                             position,
                             VarInt(i32::from(state.id.as_u16())),
                         ))
@@ -277,7 +277,7 @@ impl JavaClient {
 
     async fn sync_block_state_to_client(&self, world: &World, position: BlockPos) {
         let synced_state_id = world.get_block_state_id(&position);
-        self.send_packet_now(&CBlockUpdate::new(
+        self.send_packet(&CBlockUpdate::new(
             position,
             VarInt(i32::from(synced_state_id.as_u16())),
         ))

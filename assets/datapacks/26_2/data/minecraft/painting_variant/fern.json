@@ -1,0 +1,13 @@
+{
+  "asset_id": "minecraft:fern",
+  "author": {
+    "color": "gray",
+    "translate": "painting.minecraft.fern.author"
+  },
+  "height": 3,
+  "title": {
+    "color": "yellow",
+    "translate": "painting.minecraft.fern.title"
+  },
+  "width": 3
+}

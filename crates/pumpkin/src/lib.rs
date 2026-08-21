@@ -8,7 +8,9 @@ extern crate pumpkin_macros;
 
 use crate::crash::CrashReport;
 use crate::data::VanillaData;
-use crate::logging::{GzipRollingLogger, PumpkinCommandCompleter, ReadlineLogWrapper};
+use crate::logging::{
+    ConsoleWriter, GzipRollingLogger, PumpkinCommandCompleter, ReadlineLogWrapper,
+};
 use crate::net::bedrock::{
     BedrockClient,
     nethernet::{NetherNetListener, load_or_create_identity_key},
@@ -16,7 +18,7 @@ use crate::net::bedrock::{
 };
 use crate::net::java::JavaClient;
 use crate::net::java::pending::PendingConnection;
-use crate::net::{ClientPlatform, DisconnectReason, PacketHandlerResult};
+use crate::net::{ClientPlatform, DisconnectReason, PacketHandlerResult, PacketRateLimiter};
 use crate::net::{lan_broadcast::LANBroadcast, query, rcon::RCONServer};
 use crate::plugin::server::server_command::ServerCommandEvent;
 use crate::server::{Server, ticker::Ticker};
@@ -69,7 +71,7 @@ pub type LoggerOption = Option<(ReadlineLogWrapper, LevelFilter, LoggingConfig)>
 pub static LOGGER_IMPL: LazyLock<Arc<OnceLock<LoggerOption>>> =
     LazyLock::new(|| Arc::new(OnceLock::new()));
 
-#[expect(clippy::print_stderr)]
+#[expect(clippy::print_stderr, clippy::too_many_lines)]
 pub fn init_logger(advanced_config: &AdvancedConfiguration) {
     use tracing_subscriber::EnvFilter;
     use tracing_subscriber::fmt;
@@ -107,7 +109,7 @@ pub fn init_logger(advanced_config: &AdvancedConfiguration) {
         };
 
         let (logger, rl): (
-            Box<dyn std::io::Write + Send + 'static>,
+            ConsoleWriter,
             Option<Editor<PumpkinCommandCompleter, FileHistory>>,
         ) = if advanced_config.commands.use_tty && stdin().is_terminal() {
             let rl_config = Config::builder()
@@ -120,17 +122,21 @@ pub fn init_logger(advanced_config: &AdvancedConfiguration) {
             match Editor::with_config(rl_config) {
                 Ok(mut rl) => {
                     rl.set_helper(Some(helper));
-                    (Box::new(std::io::stdout()), Some(rl))
+                    let printer = rl.create_external_printer().ok().map(|p| {
+                        let boxed: Box<dyn rustyline::ExternalPrinter + Send> = Box::new(p);
+                        boxed
+                    });
+                    (ConsoleWriter::new(printer), Some(rl))
                 }
                 Err(e) => {
                     eprintln!(
                         "Failed to initialize console input ({e}); falling back to simple logger"
                     );
-                    (Box::new(std::io::stdout()), None)
+                    (ConsoleWriter::new(None), None)
                 }
             }
         } else {
-            (Box::new(std::io::stdout()), None)
+            (ConsoleWriter::new(None), None)
         };
 
         let fmt_layer = fmt::layer()
@@ -336,15 +342,8 @@ impl PumpkinServer {
             }
         };
         let _ = server.bedrock_private_key.set(identity_key.clone());
-        let oidc_verifier = if config.online_mode && config.authentication.enabled {
-            let Some((issuer, keys)) = server.bedrock_oidc_keys.get() else {
-                error!("Bedrock OIDC keys should be initialized before binding NetherNet");
-                return None;
-            };
-            Some(Arc::new((issuer.clone(), keys.clone())))
-        } else {
-            None
-        };
+        let oidc_verifier = (config.online_mode && config.authentication.enabled)
+            .then(|| server.bedrock_oidc_keys.clone());
         match NetherNetListener::bind(
             config.nethernet.address,
             ice_socket,
@@ -544,7 +543,15 @@ impl PumpkinServer {
                         let server_clone = self.server.clone();
 
                         tasks.spawn(async move {
-                            let mut pending = PendingConnection::new(connection, client_addr, client_id);
+                            let packet_limiter = PacketRateLimiter::from_config(
+                                &server_clone.advanced_config.networking.java.packet_limiter,
+                            );
+                            let mut pending = PendingConnection::new(
+                                connection,
+                                client_addr,
+                                client_id,
+                                packet_limiter,
+                            );
                             let login_result = pending.handle_login_sequence(&server_clone).await;
 
                             match login_result {
@@ -554,16 +561,19 @@ impl PumpkinServer {
                                 PacketHandlerResult::ReadyToPlay(profile, config) => {
                                      let mut java_client = JavaClient::from_pending(pending, profile.clone(), config.clone());
                                      java_client.start_outgoing_packet_task();
+
                                      if let Some((player, world)) = server_clone
                                      .add_player(Arc::new(ClientPlatform::Java(java_client)), profile, Some(config))
                                           .await
                                 {
+
                                     if let ClientPlatform::Java(client) = player.client.as_ref() {
                                         client.set_player(player.clone());
                                     }
                                     world
                                         .spawn_java_player(&server_clone.basic_config, &player, &server_clone)
                                         .await;
+
                                     if let ClientPlatform::Java(client) = player.client.as_ref() {
                                         client.progress_player_packets(&player, &server_clone).await;
 
@@ -611,10 +621,14 @@ impl PumpkinServer {
                 if let Some((session, client_addr)) = nethernet_result {
                     *master_client_id_counter += 1;
                     let be_clients = bedrock_clients.clone();
+                    let packet_limiter = PacketRateLimiter::from_config(
+                        &self.server.advanced_config.networking.bedrock.packet_limiter,
+                    );
                     let client = Arc::new(BedrockClient::new(
                         session.clone(),
                         client_addr,
                         be_clients,
+                        packet_limiter,
                     ));
                     client.start_outgoing_packet_task();
                     bedrock_clients.lock().await.insert(client_addr, client.clone());
@@ -712,8 +726,7 @@ fn setup_stdin_console(server: Arc<Server>) {
             if !event.cancelled {
                 server
                     .command_dispatcher
-                    .read()
-                    .await
+                    .load()
                     .handle_command(
                         &command::CommandSender::Console.into_source(&server).await,
                         command.as_str(),
@@ -785,15 +798,14 @@ fn setup_console(mut rl: Editor<PumpkinCommandCompleter, FileHistory>, server: A
                 if !event.cancelled {
                     server
                         .command_dispatcher
-                        .read()
-                        .await
+                        .load()
                         .handle_command(
                             &command::CommandSender::Console.into_source(&server).await,
                             &line,
                         )
                         .await;
-                    let _ = tx_reply.send(1).await;
                 }
+                let _ = tx_reply.send(1).await;
             } else {
                 break;
             }

@@ -1,5 +1,5 @@
 use crate::VarInt;
-use pumpkin_data::packet::serverbound::PLAY_CONTAINER_BUTTON_CLICK;
+use pumpkin_data::packet::serverbound::play::CONTAINER_BUTTON_CLICK;
 use pumpkin_macros::java_packet;
 
 use crate::{
@@ -9,7 +9,7 @@ use crate::{
 use pumpkin_util::version::JavaMinecraftVersion;
 
 #[derive(Debug)]
-#[java_packet(PLAY_CONTAINER_BUTTON_CLICK)]
+#[java_packet(CONTAINER_BUTTON_CLICK)]
 pub struct SContainerButtonClick {
     pub window_id: VarInt,
     pub button_id: VarInt,
@@ -21,5 +21,18 @@ impl<'a> ServerPacket<'a> for SContainerButtonClick {
             window_id: bytebuf.get_var_int()?,
             button_id: bytebuf.get_var_int()?,
         })
+    }
+}
+
+impl crate::ClientPacket for SContainerButtonClick {
+    fn write_packet_data(
+        &self,
+        mut write: impl std::io::Write,
+        _version: &JavaMinecraftVersion,
+    ) -> Result<(), crate::ser::WritingError> {
+        use crate::ser::NetworkWriteExt;
+        write.write_var_int(&self.window_id)?;
+        write.write_var_int(&self.button_id)?;
+        Ok(())
     }
 }

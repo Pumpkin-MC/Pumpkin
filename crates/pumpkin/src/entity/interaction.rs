@@ -5,10 +5,7 @@ use std::sync::{
 use tokio::sync::Mutex;
 use uuid::Uuid;
 
-use pumpkin_data::{
-    damage::DamageType, item_stack::ItemStack, meta_data_type::MetaDataType,
-    tracked_data::TrackedData,
-};
+use pumpkin_data::{damage::DamageType, item_stack::ItemStack};
 use pumpkin_nbt::{compound::NbtCompound, tag::NbtTag};
 use pumpkin_protocol::java::client::play::Metadata;
 use pumpkin_util::math::{
@@ -85,8 +82,7 @@ impl InteractionEntity {
         self.update_dimensions().await;
         self.entity.send_meta_data(
             &[Metadata::new(
-                TrackedData::WIDTH,
-                MetaDataType::FLOAT,
+                pumpkin_data::tracked_data::interaction::WIDTH,
                 width,
             )],
             None,
@@ -102,8 +98,7 @@ impl InteractionEntity {
         self.update_dimensions().await;
         self.entity.send_meta_data(
             &[Metadata::new(
-                TrackedData::HEIGHT,
-                MetaDataType::FLOAT,
+                pumpkin_data::tracked_data::interaction::HEIGHT,
                 height,
             )],
             None,
@@ -118,8 +113,7 @@ impl InteractionEntity {
         self.response.store(response, Ordering::Relaxed);
         self.entity.send_meta_data(
             &[Metadata::new(
-                TrackedData::RESPONSE,
-                MetaDataType::BOOLEAN,
+                pumpkin_data::tracked_data::interaction::RESPONSE,
                 response,
             )],
             None,
@@ -215,24 +209,21 @@ impl EntityBase for InteractionEntity {
 
             self.entity.send_meta_data(
                 &[Metadata::new(
-                    TrackedData::WIDTH,
-                    MetaDataType::FLOAT,
+                    pumpkin_data::tracked_data::interaction::WIDTH,
                     width,
                 )],
                 None,
             );
             self.entity.send_meta_data(
                 &[Metadata::new(
-                    TrackedData::HEIGHT,
-                    MetaDataType::FLOAT,
+                    pumpkin_data::tracked_data::interaction::HEIGHT,
                     height,
                 )],
                 None,
             );
             self.entity.send_meta_data(
                 &[Metadata::new(
-                    TrackedData::RESPONSE,
-                    MetaDataType::BOOLEAN,
+                    pumpkin_data::tracked_data::interaction::RESPONSE,
                     response,
                 )],
                 None,

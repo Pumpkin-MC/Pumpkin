@@ -1,8 +1,7 @@
+use pumpkin_data::Block;
 use pumpkin_data::BlockStateId;
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::entity::EntityType;
-use pumpkin_data::meta_data_type::MetaDataType;
-use pumpkin_data::{Block, tracked_data::TrackedData};
 use pumpkin_protocol::java::client::play::Metadata;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::world::BlockFlags;
@@ -95,8 +94,7 @@ impl EntityBase for FallingEntity {
         Box::pin(async move {
             self.entity.send_meta_data(
                 &[Metadata::new(
-                    TrackedData::START_POS,
-                    MetaDataType::BLOCK_POS,
+                    pumpkin_data::tracked_data::falling_block::START_POS,
                     self.entity.block_pos.load(),
                 )],
                 None,

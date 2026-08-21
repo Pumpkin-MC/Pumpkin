@@ -40,7 +40,7 @@ impl BedrockClient {
                     Vec::new()
                 };
 
-                self.enqueue_packet_internal(&CResourcePackStackPacket::new(
+                self.enqueue_client_packet(&CResourcePackStackPacket::new(
                     br_config.force,
                     resource_packs,
                     CURRENT_BEDROCK_MC_VERSION.to_string(),

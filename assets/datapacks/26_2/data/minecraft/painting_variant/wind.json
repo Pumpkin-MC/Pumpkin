@@ -1,0 +1,9 @@
+{
+  "asset_id": "minecraft:wind",
+  "height": 2,
+  "title": {
+    "color": "yellow",
+    "translate": "painting.minecraft.wind.title"
+  },
+  "width": 2
+}

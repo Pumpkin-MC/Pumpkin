@@ -20,10 +20,11 @@ pub struct PlayerSpawnData {
     pub debug: bool,
     /// If true, the world is a flat world (affects the horizon rendering).
     pub is_flat: bool,
-    /// The location where the player last died (used for the recovery compass).
+    /// The location where the player last died (Added in 1.19, used for the recovery compass).
     pub death_dimension_name: Option<(ResourceLocation, BlockPos)>,
+    /// Added in 1.20.
     pub portal_cooldown: VarInt,
-    /// The height of the ocean level (usually 63).
+    /// The height of the ocean level, usually 63 (Added in 1.21.2).
     pub sealevel: VarInt,
 }
 
@@ -59,7 +60,7 @@ impl PlayerSpawnData {
         mut write: impl std::io::Write,
         version: &JavaMinecraftVersion,
     ) -> Result<(), WritingError> {
-        if version >= &JavaMinecraftVersion::V_1_21_2 {
+        if version >= &JavaMinecraftVersion::V_1_20_5 {
             write.write_var_int(&VarInt(self.dimension.id as i32))?;
         } else if version >= &JavaMinecraftVersion::V_1_16 {
             write.write_string(self.dimension.minecraft_name)?;

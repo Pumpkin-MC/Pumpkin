@@ -6,8 +6,6 @@ use pumpkin_protocol::java::client::play::Metadata;
 
 use crate::entity::EntityBase;
 use crate::world::loot::{LootContextParameters, LootTableExt};
-use pumpkin_data::meta_data_type::MetaDataType;
-use pumpkin_data::tracked_data::TrackedData;
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_util::GameMode;
 
@@ -142,41 +140,21 @@ impl VehicleEntity {
         self.entity.send_meta_data(
             &[
                 Metadata::new(
-                    TrackedData::DAMAGE_WOBBLE_TICKS,
-                    MetaDataType::INTEGER,
+                    pumpkin_data::tracked_data::boat::ID_HURT,
                     VarInt(self.get_hurt_time()),
                 ),
                 Metadata::new(
-                    TrackedData::DAMAGE_WOBBLE_SIDE,
-                    MetaDataType::INTEGER,
-                    VarInt(self.get_hurt_dir()),
-                ),
-                Metadata::new(
-                    TrackedData::ID_HURT,
-                    MetaDataType::INT,
-                    VarInt(self.get_hurt_time()),
-                ),
-                Metadata::new(
-                    TrackedData::ID_HURTDIR,
-                    MetaDataType::INT,
+                    pumpkin_data::tracked_data::boat::ID_HURTDIR,
                     VarInt(self.get_hurt_dir()),
                 ),
             ],
             None,
         );
         self.entity.send_meta_data(
-            &[
-                Metadata::new(
-                    TrackedData::DAMAGE_WOBBLE_STRENGTH,
-                    MetaDataType::FLOAT,
-                    self.get_damage(),
-                ),
-                Metadata::new(
-                    TrackedData::ID_DAMAGE,
-                    MetaDataType::FLOAT,
-                    self.get_damage(),
-                ),
-            ],
+            &[Metadata::new(
+                pumpkin_data::tracked_data::boat::ID_DAMAGE,
+                self.get_damage(),
+            )],
             None,
         );
     }
@@ -273,8 +251,6 @@ impl VehicleEntity {
 
 #[cfg(test)]
 mod tests {
-    use pumpkin_data::meta_data_type::MetaDataType;
-    use pumpkin_data::tracked_data::TrackedData;
     use pumpkin_protocol::codec::var_int::VarInt;
     use pumpkin_protocol::java::client::play::Metadata;
     use pumpkin_util::version::JavaMinecraftVersion;
@@ -282,18 +258,8 @@ mod tests {
     fn wobble_integer_metadata(version: JavaMinecraftVersion) -> Vec<u8> {
         let mut bytes = Vec::new();
         for metadata in [
-            Metadata::new(
-                TrackedData::DAMAGE_WOBBLE_TICKS,
-                MetaDataType::INTEGER,
-                VarInt(10),
-            ),
-            Metadata::new(
-                TrackedData::DAMAGE_WOBBLE_SIDE,
-                MetaDataType::INTEGER,
-                VarInt(-1),
-            ),
-            Metadata::new(TrackedData::ID_HURT, MetaDataType::INT, VarInt(10)),
-            Metadata::new(TrackedData::ID_HURTDIR, MetaDataType::INT, VarInt(-1)),
+            Metadata::new(pumpkin_data::tracked_data::boat::ID_HURT, VarInt(10)),
+            Metadata::new(pumpkin_data::tracked_data::boat::ID_HURTDIR, VarInt(-1)),
         ] {
             metadata.write(&mut bytes, &version).unwrap();
         }

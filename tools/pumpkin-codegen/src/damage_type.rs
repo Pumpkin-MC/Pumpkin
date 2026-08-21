@@ -61,15 +61,29 @@ pub enum DeathMessageType {
 
 /// Generates the `TokenStream` for the `DamageType` struct, its associated enums, and constants.
 pub fn build() -> TokenStream {
-    let damage_types: BTreeMap<String, DamageTypeEntry> =
-        serde_json::from_str(&fs::read_to_string("../../assets/damage_type.json").unwrap())
-            .expect("Failed to parse damage_type.json");
+    let dir = std::path::Path::new("../../assets/datapacks/26_2/data/minecraft/damage_type");
+    let mut damage_types: BTreeMap<String, DamageTypeData> = BTreeMap::new();
+    let mut entries: Vec<_> = fs::read_dir(dir)
+        .expect("Missing damage_type directory")
+        .flatten()
+        .filter(|e| e.path().extension().is_some_and(|ext| ext == "json"))
+        .collect();
+    entries.sort_by_key(|e| e.path());
+
+    for entry in entries {
+        let path = entry.path();
+        let stem = path.file_stem().unwrap().to_string_lossy().into_owned();
+        let content = fs::read_to_string(&path).expect("Failed to read damage_type file");
+        let data: DamageTypeData =
+            serde_json::from_str(&content).expect("Failed to parse damage_type JSON");
+        damage_types.insert(stem, data);
+    }
 
     let mut constants = Vec::new();
     let mut type_from_name = TokenStream::new();
     let mut type_from_id = TokenStream::new();
 
-    for (name, entry) in damage_types {
+    for (id, (name, data)) in damage_types.iter().enumerate() {
         let const_ident = format_ident!("{}", name.to_shouty_snake_case());
         let resource_name = name.to_lowercase();
 
@@ -77,12 +91,12 @@ pub fn build() -> TokenStream {
             #resource_name => Some(Self::#const_ident),
         });
 
-        let id_lit = LitInt::new(&entry.id.to_string(), proc_macro2::Span::call_site());
+        let id_lit = LitInt::new(&id.to_string(), proc_macro2::Span::call_site());
         type_from_id.extend(quote! {
             #id_lit => Some(Self::#const_ident),
         });
 
-        let data = &entry.components;
+        let data = data;
         let death_message_type = if let Some(msg) = &data.death_message_type {
             let msg_ident = Ident::new(&format!("{msg:?}"), proc_macro2::Span::call_site());
             quote! { DeathMessageType::#msg_ident }

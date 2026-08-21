@@ -1,7 +1,7 @@
 use std::io::Write;
 
 use pumpkin_data::{
-    packet::clientbound::PLAY_SOUND_ENTITY, sound::SoundCategory,
+    packet::clientbound::play::SOUND_ENTITY, sound::SoundCategory,
     sound_id_remap::remap_sound_id_for_version,
 };
 use pumpkin_macros::java_packet;
@@ -14,7 +14,7 @@ use crate::{ClientPacket, IdOr, SoundEvent, VarInt, WritingError, ser::NetworkWr
 /// Unlike global sounds, this sound will follow the entity as it moves
 /// through the world. The client handles the panning and attenuation
 /// (volume drop-off) based on the distance between the player and the entity.
-#[java_packet(PLAY_SOUND_ENTITY)]
+#[java_packet(SOUND_ENTITY)]
 pub struct CEntitySoundEffect {
     /// The sound to play. Can be a hardcoded ID or a custom `SoundEvent`
     /// (Resource Location).

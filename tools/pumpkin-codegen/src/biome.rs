@@ -33,6 +33,7 @@ pub struct Biome {
     /// Per-entity spawn cost budget entries, keyed by namespaced entity ID.
     spawn_costs: BTreeMap<String, SpawnCosts>,
     /// Numeric registry ID assigned to this biome.
+    #[serde(default)]
     pub id: u8,
 }
 
@@ -213,9 +214,28 @@ struct MultiNoiseBiomeSuppliers {
 /// Generates the `TokenStream` for the `Biome` struct, its constants, lookup methods,
 /// the multi-noise biome source trees, and the `BiomeTree` search implementation.
 pub fn build() -> TokenStream {
-    let biomes: BTreeMap<String, Biome> =
-        serde_json::from_str(&fs::read_to_string("../../assets/biome.json").unwrap())
-            .expect("Failed to parse biome.json");
+    let dir = std::path::Path::new("../../assets/datapacks/26_2/data/minecraft/worldgen/biome");
+    let mut biomes: BTreeMap<String, Biome> = BTreeMap::new();
+    let mut entries: Vec<_> = fs::read_dir(dir)
+        .expect("Missing worldgen/biome directory")
+        .flatten()
+        .filter(|e| e.path().extension().is_some_and(|ext| ext == "json"))
+        .collect();
+    entries.sort_by_key(|e| e.path());
+
+    for (i, entry) in entries.iter().enumerate() {
+        let stem = entry
+            .path()
+            .file_stem()
+            .unwrap()
+            .to_string_lossy()
+            .into_owned();
+        let content = fs::read_to_string(entry.path()).expect("Failed to read biome file");
+        let mut biome: Biome = serde_json::from_str(&content).expect("Failed to parse biome JSON");
+        biome.id = i as u8;
+        biomes.insert(stem, biome);
+    }
+
     let biome_trees: MultiNoiseBiomeSuppliers = serde_json::from_str(
         &fs::read_to_string("../../assets/multi_noise_biome_tree.json").unwrap(),
     )

@@ -17,7 +17,7 @@ impl JavaClient {
 
         // Empty NBT compound (TAG_End = 0)
         let empty_nbt = [0u8];
-        self.send_packet_now(&CTagQueryResponse::new(packet.transaction_id, &empty_nbt))
+        self.send_packet(&CTagQueryResponse::new(packet.transaction_id, &empty_nbt))
             .await;
     }
 
@@ -28,7 +28,7 @@ impl JavaClient {
 
         // Empty NBT compound (TAG_End = 0)
         let empty_nbt = [0u8];
-        self.send_packet_now(&CTagQueryResponse::new(packet.transaction_id, &empty_nbt))
+        self.send_packet(&CTagQueryResponse::new(packet.transaction_id, &empty_nbt))
             .await;
     }
 }

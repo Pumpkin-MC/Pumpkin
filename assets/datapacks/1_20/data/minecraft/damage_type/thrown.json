@@ -1,0 +1,5 @@
+{
+  "scaling": "when_caused_by_living_non_player",
+  "message_id": "thrown",
+  "exhaustion": 0.10000000149011612
+}

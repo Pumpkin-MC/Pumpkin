@@ -7,9 +7,7 @@ use crossbeam::atomic::AtomicCell;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
-use pumpkin_data::meta_data_type::MetaDataType;
 use pumpkin_data::tag::{self, Taggable};
-use pumpkin_data::tracked_data::TrackedData;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::java::client::play::Metadata;
@@ -266,8 +264,7 @@ impl Mob for WolfEntity {
             if is_baby {
                 entity.send_meta_data(
                     &[Metadata::new(
-                        TrackedData::BABY_ID,
-                        MetaDataType::BOOLEAN,
+                        pumpkin_data::tracked_data::wolf::BABY_ID,
                         true,
                     )],
                     None,
@@ -275,32 +272,28 @@ impl Mob for WolfEntity {
             }
             entity.send_meta_data(
                 &[Metadata::new(
-                    TrackedData::TAMEABLE_FLAGS,
-                    MetaDataType::BYTE,
+                    pumpkin_data::tracked_data::wolf::TAMEABLE_FLAGS,
                     self.get_tame_flags(),
                 )],
                 None,
             );
             entity.send_meta_data(
                 &[Metadata::new(
-                    TrackedData::COLLAR_COLOR,
-                    MetaDataType::INT,
+                    pumpkin_data::tracked_data::wolf::COLLAR_COLOR,
                     VarInt(self.collar_color.load(Ordering::Relaxed) as i32),
                 )],
                 None,
             );
             entity.send_meta_data(
                 &[Metadata::new(
-                    TrackedData::WOLF_VARIANT_ID,
-                    MetaDataType::WOLF_VARIANT,
+                    pumpkin_data::tracked_data::wolf::WOLF_VARIANT_ID,
                     VarInt(self.variant.load(Ordering::Relaxed) as i32),
                 )],
                 None,
             );
             entity.send_meta_data(
                 &[Metadata::new(
-                    TrackedData::OWNER_UUID,
-                    MetaDataType::OPTIONAL_UUID,
+                    pumpkin_data::tracked_data::wolf::OWNER_UUID,
                     self.owner.load(),
                 )],
                 None,

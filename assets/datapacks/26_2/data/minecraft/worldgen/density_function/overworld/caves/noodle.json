@@ -1,0 +1,94 @@
+{
+  "type": "minecraft:range_choice",
+  "input": {
+    "type": "minecraft:interpolated",
+    "argument": {
+      "type": "minecraft:range_choice",
+      "input": "minecraft:y",
+      "max_exclusive": 321.0,
+      "min_inclusive": -60.0,
+      "when_in_range": {
+        "type": "minecraft:noise",
+        "noise": "minecraft:noodle",
+        "xz_scale": 1.0,
+        "y_scale": 1.0
+      },
+      "when_out_of_range": -1.0
+    }
+  },
+  "max_exclusive": 0.0,
+  "min_inclusive": -1000000.0,
+  "when_in_range": 64.0,
+  "when_out_of_range": {
+    "type": "minecraft:add",
+    "argument1": {
+      "type": "minecraft:interpolated",
+      "argument": {
+        "type": "minecraft:range_choice",
+        "input": "minecraft:y",
+        "max_exclusive": 321.0,
+        "min_inclusive": -60.0,
+        "when_in_range": {
+          "type": "minecraft:add",
+          "argument1": -0.07500000000000001,
+          "argument2": {
+            "type": "minecraft:mul",
+            "argument1": -0.025,
+            "argument2": {
+              "type": "minecraft:noise",
+              "noise": "minecraft:noodle_thickness",
+              "xz_scale": 1.0,
+              "y_scale": 1.0
+            }
+          }
+        },
+        "when_out_of_range": 0.0
+      }
+    },
+    "argument2": {
+      "type": "minecraft:mul",
+      "argument1": 1.5,
+      "argument2": {
+        "type": "minecraft:max",
+        "argument1": {
+          "type": "minecraft:abs",
+          "argument": {
+            "type": "minecraft:interpolated",
+            "argument": {
+              "type": "minecraft:range_choice",
+              "input": "minecraft:y",
+              "max_exclusive": 321.0,
+              "min_inclusive": -60.0,
+              "when_in_range": {
+                "type": "minecraft:noise",
+                "noise": "minecraft:noodle_ridge_a",
+                "xz_scale": 2.6666666666666665,
+                "y_scale": 2.6666666666666665
+              },
+              "when_out_of_range": 0.0
+            }
+          }
+        },
+        "argument2": {
+          "type": "minecraft:abs",
+          "argument": {
+            "type": "minecraft:interpolated",
+            "argument": {
+              "type": "minecraft:range_choice",
+              "input": "minecraft:y",
+              "max_exclusive": 321.0,
+              "min_inclusive": -60.0,
+              "when_in_range": {
+                "type": "minecraft:noise",
+                "noise": "minecraft:noodle_ridge_b",
+                "xz_scale": 2.6666666666666665,
+                "y_scale": 2.6666666666666665
+              },
+              "when_out_of_range": 0.0
+            }
+          }
+        }
+      }
+    }
+  }
+}

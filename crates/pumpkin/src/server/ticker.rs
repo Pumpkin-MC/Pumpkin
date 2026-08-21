@@ -62,6 +62,9 @@ impl Ticker {
 
             next_tick += tick_interval;
 
+            // Explicitly yield to tokio to allow pending network packets / I/O tasks to be processed
+            tokio::task::yield_now().await;
+
             tokio::select! {
                 () = sleep_until(next_tick) => {},
                 () = STOP_INTERRUPT.cancelled() => {
@@ -69,9 +72,11 @@ impl Ticker {
                 }
             }
 
-            // Death Spiral Prevention
+            // Death Spiral Prevention / Catch-up Clamping
+            // If the server fell behind the scheduled tick, clamp next_tick to now
+            // so we don't run a burst of back-to-back ticks with zero sleep.
             let now = Instant::now();
-            if now.saturating_duration_since(next_tick) > Duration::from_secs(5) {
+            if now > next_tick {
                 next_tick = now;
             }
         }

@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:smelting",
+  "experience": 0.1,
+  "ingredient": "minecraft:netherrack",
+  "result": {
+    "id": "minecraft:nether_brick"
+  }
+}

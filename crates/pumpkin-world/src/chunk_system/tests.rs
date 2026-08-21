@@ -416,3 +416,47 @@ fn dag_prune_edge_chain_removes_dead_target_edges() {
     assert!(head.is_null());
     assert_eq!(graph.edges.len(), 0);
 }
+
+#[test]
+fn cancelled_out_of_range_task_clears_holder_task_slot() {
+    let mut graph = DAG::default();
+    let mut chunk_map = HashMap::new();
+    let pos = ChunkPos::new(0, 0);
+
+    let stage = StagedChunkEnum::Biomes;
+    let node_key = graph.nodes.insert(Node::new(pos, stage));
+
+    let mut holder = ChunkHolder {
+        current_stage: StagedChunkEnum::Empty,
+        target_stage: StagedChunkEnum::None, // Chunk was downgraded / moved out of range
+        dependency_stage: StagedChunkEnum::None,
+        ..Default::default()
+    };
+    holder.tasks[stage as usize] = node_key;
+    chunk_map.insert(pos, holder);
+
+    // Simulate task processing loop cancellation when node.stage > effective_target
+    let node = graph.nodes.get(node_key).unwrap().clone();
+    let effective_target = chunk_map.get(&node.pos).map_or(StagedChunkEnum::None, |h| {
+        h.target_stage.max(h.dependency_stage)
+    });
+
+    assert!(node.stage > effective_target);
+    if let Some(holder) = chunk_map.get_mut(&node.pos) {
+        let task_slot = &mut holder.tasks[node.stage as usize];
+        if *task_slot == node_key {
+            *task_slot = NodeKey::null();
+        }
+    }
+    graph.fast_drop_node(node_key);
+
+    let holder = chunk_map.get(&pos).unwrap();
+    assert!(
+        holder.tasks[stage as usize].is_null(),
+        "Task slot must be null after cancellation"
+    );
+    assert!(
+        holder.tasks.iter().all(Key::is_null),
+        "All task slots must be null when idle"
+    );
+}

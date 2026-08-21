@@ -2,14 +2,14 @@ use crate::{
     ServerPacket,
     ser::{NetworkReadExt, ReadingError},
 };
-use pumpkin_data::packet::serverbound::PLAY_USE_ITEM_ON;
+use pumpkin_data::packet::serverbound::play::USE_ITEM_ON;
 use pumpkin_macros::java_packet;
 use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 use pumpkin_util::version::JavaMinecraftVersion;
 
 use crate::VarInt;
 
-#[java_packet(PLAY_USE_ITEM_ON)]
+#[java_packet(USE_ITEM_ON)]
 pub struct SUseItemOn {
     pub hand: VarInt,
     pub position: BlockPos,
@@ -47,5 +47,27 @@ impl<'a> ServerPacket<'a> for SUseItemOn {
             is_against_world_border,
             sequence,
         })
+    }
+}
+
+impl crate::ClientPacket for SUseItemOn {
+    fn write_packet_data(
+        &self,
+        mut write: impl std::io::Write,
+        version: &JavaMinecraftVersion,
+    ) -> Result<(), crate::ser::WritingError> {
+        use crate::ser::NetworkWriteExt;
+        write.write_var_int(&self.hand)?;
+        write.write_block_pos(&self.position)?;
+        write.write_var_int(&self.face)?;
+        write.write_f32_be(self.cursor_pos.x)?;
+        write.write_f32_be(self.cursor_pos.y)?;
+        write.write_f32_be(self.cursor_pos.z)?;
+        write.write_bool(self.inside_block)?;
+        if version >= &JavaMinecraftVersion::V_1_21_5 {
+            write.write_bool(self.is_against_world_border)?;
+        }
+        write.write_var_int(&self.sequence)?;
+        Ok(())
     }
 }

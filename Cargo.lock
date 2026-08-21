@@ -3555,8 +3555,6 @@ dependencies = [
 name = "pumpkin-plugin-utils"
 version = "0.1.0"
 dependencies = [
- "ed25519-dalek",
- "hex",
  "pumpkin-plugin-api",
  "serde",
  "serde_json",
@@ -3564,8 +3562,6 @@ dependencies = [
  "thiserror 2.0.20",
  "tracing",
  "ureq",
- "wasm-encoder 0.256.0",
- "wasmparser 0.256.0",
 ]
 
 [[package]]
@@ -3585,6 +3581,7 @@ dependencies = [
  "pumpkin-util",
  "pumpkin-world",
  "serde",
+ "serde_json",
  "thiserror 2.0.20",
  "tokio",
  "uuid",
@@ -3600,6 +3597,7 @@ dependencies = [
  "colored",
  "criterion",
  "crypto-bigint 0.7.5",
+ "dashmap",
  "ecdsa 0.17.0",
  "md5",
  "num-derive",
@@ -3615,7 +3613,6 @@ dependencies = [
  "sha2 0.11.0",
  "syn 3.0.3",
  "thiserror 2.0.20",
- "tokio",
  "ureq",
  "uuid",
 ]

@@ -4,13 +4,13 @@ use crate::{ClientPacket, WritingError, ser::NetworkWriteExt};
 
 use crate::codec::var_int::VarInt;
 use pumpkin_data::{
-    packet::clientbound::CONFIG_UPDATE_TAGS,
+    packet::clientbound::config::UPDATE_TAGS,
     tag::{RegistryKey, get_registry_key_tags},
 };
 use pumpkin_macros::java_packet;
 use pumpkin_util::version::JavaMinecraftVersion;
 
-#[java_packet(CONFIG_UPDATE_TAGS)]
+#[java_packet(UPDATE_TAGS)]
 pub struct CUpdateTags<'a> {
     pub tags: &'a [pumpkin_data::tag::RegistryKey],
 }

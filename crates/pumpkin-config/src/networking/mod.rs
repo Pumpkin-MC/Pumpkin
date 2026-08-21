@@ -24,6 +24,10 @@ pub mod query;
 /// RCON remote console configuration.
 pub mod rcon;
 
+/// Packet limiter configuration.
+pub mod packet_limiter;
+pub use packet_limiter::PacketLimiterConfig;
+
 /// Configuration for server networking features.
 ///
 /// Covers authentication, query, RCON, proxying, packet compression,

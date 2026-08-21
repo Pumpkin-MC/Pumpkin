@@ -1,0 +1,8 @@
+{
+  "comparator_output": 10,
+  "description": {
+    "translate": "jukebox_song.minecraft.ward"
+  },
+  "length_in_seconds": 251.0,
+  "sound_event": "minecraft:music_disc.ward"
+}

@@ -1,7 +1,7 @@
 use crate::ClientPacket;
 use crate::codec::var_int::VarInt;
 use crate::ser::NetworkWriteExt;
-use pumpkin_data::packet::clientbound::PLAY_CHUNK_BATCH_FINISHED;
+use pumpkin_data::packet::clientbound::play::CHUNK_BATCH_FINISHED;
 use pumpkin_macros::java_packet;
 use pumpkin_util::version::JavaMinecraftVersion;
 
@@ -10,7 +10,7 @@ use pumpkin_util::version::JavaMinecraftVersion;
 /// Introduced in modern protocol versions to optimize world loading, this packet
 /// allows the client to acknowledge the receipt of a group of chunks, helping
 /// the server regulate the flow of data and prevent network congestion.
-#[java_packet(PLAY_CHUNK_BATCH_FINISHED)]
+#[java_packet(CHUNK_BATCH_FINISHED)]
 pub struct CChunkBatchEnd {
     /// The number of chunks sent in the batch that just finished.
     pub batch_size: VarInt,

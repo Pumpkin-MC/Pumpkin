@@ -1,5 +1,4 @@
-use pumpkin_data::meta_data_type::MetaDataType;
-use pumpkin_data::tracked_data::TrackedData;
+use pumpkin_data::tracked_data;
 use pumpkin_protocol::java::client::play::Metadata;
 use std::sync::atomic::{AtomicBool, AtomicI32, Ordering::Relaxed};
 
@@ -54,8 +53,7 @@ pub trait AgeableMob: Mob {
             let is_baby = new_age < 0;
             entity.send_meta_data(
                 &[Metadata::new(
-                    TrackedData::BABY_ID,
-                    MetaDataType::BOOLEAN,
+                    tracked_data::ageable_mob::DATA_BABY_ID,
                     is_baby,
                 )],
                 None,

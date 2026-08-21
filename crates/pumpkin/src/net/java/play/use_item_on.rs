@@ -66,7 +66,7 @@ impl JavaClient {
             event;
             'cancelled: {
                 let state_id = world.get_block_state_id(&position);
-                self.enqueue_packet(&CBlockUpdate::new(
+                self.enqueue_client_packet(&CBlockUpdate::new(
                     position,
                     VarInt(i32::from(state_id.as_u16())),
                 ))
@@ -237,7 +237,7 @@ impl JavaClient {
             .await
         {
             Ok(Some((final_block_pos, new_state))) => {
-                self.send_packet_now(&CBlockUpdate::new(
+                self.send_packet(&CBlockUpdate::new(
                     final_block_pos,
                     VarInt(i32::from(new_state.as_u16())),
                 ))
@@ -256,7 +256,7 @@ impl JavaClient {
 
     /// Checks if the block placed was a sign, then opens a dialog.
     pub async fn send_sign_packet(&self, block_position: BlockPos, is_front_text: bool) {
-        self.enqueue_packet(&COpenSignEditor::new(block_position, is_front_text))
+        self.enqueue_client_packet(&COpenSignEditor::new(block_position, is_front_text))
             .await;
     }
 }

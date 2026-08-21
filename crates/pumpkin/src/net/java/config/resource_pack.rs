@@ -74,7 +74,7 @@ impl JavaClient {
 
     pub async fn send_known_packs(&self) {
         let version_str = self.version.load().to_string();
-        self.send_packet_now(&CKnownPacks::new(&[KnownPack {
+        self.send_packet(&CKnownPacks::new(&[KnownPack {
             namespace: "minecraft",
             id: "core",
             version: &version_str,

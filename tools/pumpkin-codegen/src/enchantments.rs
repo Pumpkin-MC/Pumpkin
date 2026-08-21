@@ -7,10 +7,11 @@ use pumpkin_util::text::TextContent::Translate;
 use quote::{format_ident, quote};
 use serde::Deserialize;
 
-/// Raw deserialization shape for a single enchantment entry from `enchantments.json`.
+/// Raw deserialization shape for a single enchantment entry from `enchantment/*.json`.
 #[derive(Deserialize)]
 pub struct Enchantment {
     /// Numeric registry ID for this enchantment.
+    #[serde(default)]
     pub id: u8,
     /// Anvil repair cost multiplier added when applying this enchantment.
     pub anvil_cost: u32,
@@ -58,11 +59,11 @@ pub enum AttributeModifierSlot {
     Chest,
     /// Applies when worn on the head.
     Head,
-    /// Applies when wearing any piece of armor.
+    /// Applies when worn on armor.
     Armor,
-    /// Applies when worn as a body armor piece (e.g. on horses or wolves).
+    /// Applies when worn on body.
     Body,
-    /// Applies when placed in a saddle slot.
+    /// Applies when equipped as saddle.
     Saddle,
 }
 
@@ -88,9 +89,29 @@ impl AttributeModifierSlot {
 /// Generates the `TokenStream` for the `Enchantment` struct, `AttributeModifierSlot` enum,
 /// and `from_name`/`from_id` lookup methods.
 pub fn build() -> TokenStream {
-    let enchantments: BTreeMap<String, Enchantment> =
-        serde_json::from_str(&fs::read_to_string("../../assets/enchantments.json").unwrap())
-            .expect("Failed to parse enchantments.json");
+    let dir = std::path::Path::new("../../assets/datapacks/26_2/data/minecraft/enchantment");
+    let mut enchantments: BTreeMap<String, Enchantment> = BTreeMap::new();
+    let mut entries: Vec<_> = fs::read_dir(dir)
+        .expect("Missing enchantment directory")
+        .flatten()
+        .filter(|e| e.path().extension().is_some_and(|ext| ext == "json"))
+        .collect();
+    entries.sort_by_key(|e| e.path());
+
+    for (i, entry) in entries.iter().enumerate() {
+        let stem = entry
+            .path()
+            .file_stem()
+            .unwrap()
+            .to_string_lossy()
+            .into_owned();
+        let key = format!("minecraft:{stem}");
+        let content = fs::read_to_string(entry.path()).expect("Failed to read enchantment file");
+        let mut enc: Enchantment =
+            serde_json::from_str(&content).expect("Failed to parse enchantment JSON");
+        enc.id = i as u8;
+        enchantments.insert(key, enc);
+    }
 
     let mut variants = TokenStream::new();
     let mut all_variants = TokenStream::new();

@@ -9,10 +9,8 @@ use pumpkin_data::damage::DamageType;
 use pumpkin_data::data_component_impl::EquipmentSlot;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
-use pumpkin_data::meta_data_type::MetaDataType;
 use pumpkin_data::particle::Particle;
 use pumpkin_data::sound::{Sound, SoundCategory};
-use pumpkin_data::tracked_data::TrackedData;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::java::client::play::{CEntityStatus, Metadata};
 use pumpkin_util::math::position::BlockPos;
@@ -159,8 +157,7 @@ impl CreakingEntity {
         self.can_move.store(can_move, Ordering::Relaxed);
         self.mob_entity.living_entity.entity.send_meta_data(
             &[Metadata::new(
-                TrackedData::CAN_MOVE,
-                MetaDataType::BOOLEAN,
+                pumpkin_data::tracked_data::creaking::CAN_MOVE,
                 can_move,
             )],
             None,
@@ -175,8 +172,7 @@ impl CreakingEntity {
         self.is_active.store(active, Ordering::Relaxed);
         self.mob_entity.living_entity.entity.send_meta_data(
             &[Metadata::new(
-                TrackedData::IS_ACTIVE,
-                MetaDataType::BOOLEAN,
+                pumpkin_data::tracked_data::creaking::IS_ACTIVE,
                 active,
             )],
             None,
@@ -191,8 +187,7 @@ impl CreakingEntity {
         self.is_tearing_down.store(true, Ordering::Relaxed);
         self.mob_entity.living_entity.entity.send_meta_data(
             &[Metadata::new(
-                TrackedData::IS_TEARING_DOWN,
-                MetaDataType::BOOLEAN,
+                pumpkin_data::tracked_data::creaking::IS_TEARING_DOWN,
                 true,
             )],
             None,
@@ -217,8 +212,7 @@ impl CreakingEntity {
         }
         self.mob_entity.living_entity.entity.send_meta_data(
             &[Metadata::new(
-                TrackedData::HOME_POS,
-                MetaDataType::OPTIONAL_BLOCK_POS,
+                pumpkin_data::tracked_data::creaking::HOME_POS,
                 pos,
             )],
             None,
