@@ -48,6 +48,10 @@ static MAIN_THREAD: OnceLock<ThreadId> = OnceLock::new();
 /// thread with a larger stack instead of the OS-provided one.
 const MAIN_STACK_SIZE: usize = 16 * 1024 * 1024;
 
+// These are unrecoverable startup failures - there's no `Result`-returning path out of `main`
+// that would let them propagate, and if the runtime can't even be built, there's nothing left to
+// gracefully shut down.
+#[allow(clippy::expect_used)]
 fn main() {
     std::thread::Builder::new()
         .name("pumpkin-main".into())
@@ -57,7 +61,7 @@ fn main() {
                 .enable_all()
                 .build()
                 .expect("Failed to build the Tokio runtime")
-                .block_on(run())
+                .block_on(run());
         })
         .expect("Failed to spawn the main thread with a larger stack")
         .join()
