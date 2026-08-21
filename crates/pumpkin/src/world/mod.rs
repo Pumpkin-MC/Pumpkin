@@ -71,7 +71,6 @@ use pumpkin_data::{
     entity::{EntityStatus, EntityType},
     fluid::Fluid,
     item_stack::ItemStack,
-    packet::CURRENT_MC_VERSION,
     particle::Particle,
     sound::{Sound, SoundCategory},
     sound_id_remap::remap_sound_id_for_version,
@@ -976,9 +975,6 @@ impl World {
             Self::collect_java_recipients_by_version(java_recipients.into_iter());
 
         for (version, recipients) in recipients_by_version {
-            if version < CURRENT_MC_VERSION {
-                continue;
-            }
             let mut buf = Vec::new();
             for meta in [
                 Metadata::new(
@@ -3562,33 +3558,30 @@ impl World {
                 )
                 .await;
 
-            if client.version.load() >= CURRENT_MC_VERSION {
-                let config = existing_player.config.load();
-                let mut buf = Vec::new();
-                {
-                    let meta = Metadata::new(
-                        pumpkin_data::tracked_data::player::PLAYER_MODE_CUSTOMISATION,
-                        config.skin_parts,
-                    );
-                    let _ = meta.write(&mut buf, &client.version.load());
-                };
-                {
-                    let meta = Metadata::new(
-                        pumpkin_data::tracked_data::player::PLAYER_MODE_CUSTOMIZATION_ID,
-                        config.skin_parts,
-                    );
-                    let _ = meta.write(&mut buf, &client.version.load());
-                };
-                drop(config);
-                // END
-                buf.put_u8(255);
-                client
-                    .enqueue_client_packet(&CSetEntityMetadata::new(
-                        existing_player.get_entity().entity_id.into(),
-                        buf.into(),
-                    ))
-                    .await;
-            }
+            let config = existing_player.config.load();
+            let mut buf = Vec::new();
+            {
+                let meta = Metadata::new(
+                    pumpkin_data::tracked_data::player::PLAYER_MODE_CUSTOMISATION,
+                    config.skin_parts,
+                );
+                let _ = meta.write(&mut buf, &client.version.load());
+            };
+            {
+                let meta = Metadata::new(
+                    pumpkin_data::tracked_data::player::PLAYER_MODE_CUSTOMIZATION_ID,
+                    config.skin_parts,
+                );
+                let _ = meta.write(&mut buf, &client.version.load());
+            };
+            drop(config);
+            buf.put_u8(255);
+            client
+                .enqueue_client_packet(&CSetEntityMetadata::new(
+                    existing_player.get_entity().entity_id.into(),
+                    buf.into(),
+                ))
+                .await;
 
             {
                 let held_item = existing_player.inventory.held_item().await;
