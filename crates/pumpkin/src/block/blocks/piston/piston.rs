@@ -40,13 +40,21 @@ impl BlockMetadata for PistonBlock {
 impl PistonBlock {
     #[must_use]
     pub fn is_movable(
+        world: &World,
+        pos: &BlockPos,
         block: &Block,
         state: &BlockState,
         dir: BlockDirection,
         can_break: bool,
         piston_dir: BlockDirection,
     ) -> bool {
-        // TODO: more checks
+        // Blocks may never be pushed out of the world; without this they would be
+        // silently destroyed at the build limit.
+        let min_y = world.dimension.min_y;
+        let max_y = min_y + world.dimension.height - 1;
+        if pos.0.y < min_y || pos.0.y > max_y {
+            return false;
+        }
         if state.is_air() {
             return true;
         }
@@ -56,6 +64,12 @@ impl PistonBlock {
             || block == &Block::RESPAWN_ANCHOR
             || block == &Block::REINFORCED_DEEPSLATE
         {
+            return false;
+        }
+        if dir == BlockDirection::Down && pos.0.y == min_y {
+            return false;
+        }
+        if dir == BlockDirection::Up && pos.0.y == max_y {
             return false;
         }
         if block == &Block::PISTON || block == &Block::STICKY_PISTON {
@@ -273,7 +287,7 @@ impl BlockBehaviour for PistonBlock {
                 if !piston_piece {
                     if r#type == 1
                         && !state.is_air()
-                        && Self::is_movable(block, state, dir, false, dir)
+                        && Self::is_movable(world, &pull_pos, block, state, dir, false, dir)
                         && (state.piston_behavior == PistonBehavior::Normal
                             || block == &Block::PISTON
                             || block == &Block::STICKY_PISTON)
