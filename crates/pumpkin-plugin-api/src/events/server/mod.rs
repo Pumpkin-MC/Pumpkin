@@ -1,5 +1,7 @@
 /// Map initialization event.
 pub mod map_initialize;
+/// Plugin load event.
+pub mod plugin_load;
 /// Server broadcast event.
 pub mod server_broadcast;
 /// Server command execution event.
@@ -16,6 +18,7 @@ pub mod server_tick_start;
 pub mod spawn_change;
 
 pub use map_initialize::*;
+pub use plugin_load::*;
 pub use server_broadcast::*;
 pub use server_command::*;
 pub use server_list_ping::*;

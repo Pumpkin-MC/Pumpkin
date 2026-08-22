@@ -1378,6 +1378,7 @@ fn register_server_event(
     use crate::plugin::server::{
         list_ping::ServerListPingEvent,
         packet::{PacketReceivedEvent, PacketSentEvent},
+        plugin_load::PluginLoadEvent,
         server_broadcast::ServerBroadcastEvent,
         server_command::ServerCommandEvent,
         server_load::ServerLoadEvent,
@@ -1403,6 +1404,9 @@ fn register_server_event(
         }
         EventType::ServerLoadEvent => {
             register_typed_event::<ServerLoadEvent>(resource, handler, priority, blocking);
+        }
+        EventType::PluginLoadEvent => {
+            register_typed_event::<PluginLoadEvent>(resource, handler, priority, blocking).await;
         }
         EventType::ServerTickEndEvent => {
             register_typed_event::<ServerTickEndEvent>(resource, handler, priority, blocking);
@@ -1489,7 +1493,7 @@ impl pumpkin::plugin::context::HostContext for PluginHostState {
         event_type: EventType,
         event_priority: EventPriority,
         blocking: bool,
-    ) -> wasmtime::Result<()> {
+    ) -> wasmtime::Result<Result<(), String>> {
         // Updated return type
         let priority = match event_priority {
             EventPriority::Highest => crate::plugin::EventPriority::Highest,
@@ -1517,6 +1521,7 @@ impl pumpkin::plugin::context::HostContext for PluginHostState {
             | EventType::ServerListPingEvent
             | EventType::ServerBroadcastEvent
             | EventType::ServerLoadEvent
+            | EventType::PluginLoadEvent
             | EventType::ServerTickEndEvent
             | EventType::ServerTickStartEvent
             | EventType::MapInitializeEvent) => {
@@ -1726,7 +1731,7 @@ impl pumpkin::plugin::context::HostContext for PluginHostState {
             }
         }
 
-        Ok(())
+        Ok(Ok(()))
     }
 
     async fn register_command(

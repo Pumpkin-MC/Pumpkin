@@ -7,10 +7,10 @@ use crate::plugin::{
             generated_packets,
             pumpkin::plugin::event::{
                 ClientboundPacket, Event, MapInitializeEventData, PacketReceivedEventData,
-                PacketSentEventData, ServerBroadcastEventData, ServerCommandEventData,
-                ServerListPingAddress, ServerListPingEventData, ServerLoadEventData,
-                ServerLoadType, ServerTickEndEventData, ServerTickStartEventData,
-                ServerboundPacket,
+                PacketSentEventData, PluginLoadEventData, ServerBroadcastEventData,
+                ServerCommandEventData, ServerListPingAddress, ServerListPingEventData,
+                ServerLoadEventData, ServerLoadType, ServerTickEndEventData,
+                ServerTickStartEventData, ServerboundPacket,
             },
         },
     },
@@ -18,6 +18,7 @@ use crate::plugin::{
         list_ping::ServerListPingEvent,
         map_initialize::MapInitializeEvent,
         packet::{PacketReceivedEvent, PacketSentEvent},
+        plugin_load::PluginLoadEvent,
         server_broadcast::ServerBroadcastEvent,
         server_command::ServerCommandEvent,
         server_load::{LoadType, ServerLoadEvent},
@@ -239,6 +240,25 @@ impl ToFromWasmEvent for ServerLoadEvent {
                     ServerLoadType::Startup => LoadType::Startup,
                     ServerLoadType::Reload => LoadType::Reload,
                 },
+            },
+            _ => panic!("unexpected event type"),
+        }
+    }
+}
+
+impl ToFromWasmEvent for PluginLoadEvent {
+    fn to_wasm_event(&self, _state: &mut PluginHostState) -> Event {
+        Event::PluginLoadEvent(PluginLoadEventData {
+            name: self.name.clone(),
+            version: self.version.clone(),
+        })
+    }
+
+    fn from_wasm_event(event: Event, _state: &mut PluginHostState) -> Self {
+        match event {
+            Event::PluginLoadEvent(data) => Self {
+                name: data.name,
+                version: data.version,
             },
             _ => panic!("unexpected event type"),
         }

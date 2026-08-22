@@ -517,6 +517,7 @@ impl PluginManager {
             .await
             .insert(metadata.name.clone(), PluginState::Loading);
 
+        let server_for_fire = Arc::clone(&server);
         let context = Arc::new(Context::new(
             metadata.clone(),
             server,
@@ -566,6 +567,12 @@ impl PluginManager {
                         .await
                         .insert(plugin_name.clone(), PluginState::Loaded);
                     state_notify.notify_waiters();
+
+                    let mut plugin_load_event =
+                        crate::plugin::server::plugin_load::PluginLoadEvent::new(&metadata);
+                    self_ref_clone
+                        .fire(&server_for_fire, &mut plugin_load_event)
+                        .await;
 
                     info!("Loaded {} ({})", metadata.name, metadata.version);
 
