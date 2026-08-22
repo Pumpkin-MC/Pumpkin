@@ -17,12 +17,12 @@ use pumpkin_data::block_properties::FarmlandLikeProperties;
 use pumpkin_data::tag;
 use pumpkin_data::tag::Taggable;
 use pumpkin_macros::pumpkin_block;
-use rand::RngExt;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::tick::TickPriority;
 use pumpkin_world::world::BlockAccessor;
 use pumpkin_world::world::BlockFlags;
+use rand::RngExt;
 
 type FarmlandProperties = FarmlandLikeProperties;
 
