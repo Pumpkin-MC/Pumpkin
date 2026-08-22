@@ -120,7 +120,7 @@ use pumpkin_protocol::{
     java::{
         self,
         client::play::{
-            CBlockEntityData, CEntityStatus, CGameEvent, CLogin, CMultiBlockUpdate,
+            CBlockEntityData, CEntityStatus, CGameEvent, CLogin, CMultiBlockUpdate, CParticle,
             CPlayerChatMessage, CPlayerInfoUpdate, CRemoveEntities, CRemovePlayerInfo,
             CSetSelectedSlot, CSoundEffect, CSpawnEntity, FilterType, GameEvent, InitChat,
             PlayerAction, PlayerInfoFlags,
@@ -180,6 +180,12 @@ use weather::Weather;
 type FlowingFluidProperties = pumpkin_data::fluid::FlowingWaterLikeFluidProperties;
 
 const MAX_LIGHT_LEVEL: u8 = 15;
+const PARTICLE_VIEW_DISTANCE: f64 = 32.0;
+
+fn is_particle_visible(particle_position: &Vector3<f64>, player_position: &Vector3<f64>) -> bool {
+    player_position.squared_distance_to_vec(particle_position)
+        <= PARTICLE_VIEW_DISTANCE * PARTICLE_VIEW_DISTANCE
+}
 
 fn bedrock_chest_block_actor(state_id: BlockStateId, position: BlockPos) -> Option<NbtCompound> {
     let (block, _) = BlockState::from_id_with_block(state_id);
@@ -1053,9 +1059,24 @@ impl World {
         particle_count: i32,
         particle: Particle,
     ) {
-        for player in self.players.load().iter() {
-            player.spawn_particle(position, offset, max_speed, particle_count, particle);
-        }
+        let packet = CParticle::new(
+            false,
+            false,
+            position,
+            offset,
+            max_speed,
+            particle_count,
+            VarInt(particle as i32),
+            &[],
+        );
+
+        let players = self.players.load();
+        let recipients = players
+            .iter()
+            .filter(|player| is_particle_visible(&position, &player.get_entity().pos.load()));
+
+        let recipients_by_version = Self::collect_java_recipients_by_version(recipients);
+        Self::broadcast_java_grouped(&packet, recipients_by_version);
     }
 
     pub fn play_sound(&self, sound: Sound, category: SoundCategory, position: &Vector3<f64>) {
@@ -6756,9 +6777,29 @@ mod tests {
         Block,
         block_properties::{BlockProperties, ChestLikeProperties, ChestType, HorizontalFacing},
     };
-    use pumpkin_util::math::position::BlockPos;
+    use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 
-    use super::{bedrock_block_breaking_rate, bedrock_chest_block_actor};
+    use super::{
+        PARTICLE_VIEW_DISTANCE, bedrock_block_breaking_rate, bedrock_chest_block_actor,
+        is_particle_visible,
+    };
+
+    #[test]
+    fn particles_are_only_visible_within_the_vanilla_radius() {
+        let particle = Vector3::new(0.0, 64.0, 0.0);
+
+        let inside = Vector3::new(PARTICLE_VIEW_DISTANCE - 0.5, 64.0, 0.0);
+        assert!(is_particle_visible(&particle, &inside));
+
+        let outside = Vector3::new(PARTICLE_VIEW_DISTANCE + 0.5, 64.0, 0.0);
+        assert!(!is_particle_visible(&particle, &outside));
+
+        let diagonal = Vector3::new(25.0, 64.0, 25.0);
+        assert!(!is_particle_visible(&particle, &diagonal));
+
+        let far_above = Vector3::new(0.0, 64.0 + PARTICLE_VIEW_DISTANCE + 0.5, 0.0);
+        assert!(!is_particle_visible(&particle, &far_above));
+    }
 
     #[test]
     fn bedrock_block_breaking_rate_uses_progress_per_tick() {
