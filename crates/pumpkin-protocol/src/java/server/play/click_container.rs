@@ -27,7 +27,7 @@ impl<'a> ServerPacket<'a> for SClickSlot {
         mut bytebuf: &mut &'a [u8],
         version: &JavaMinecraftVersion,
     ) -> Result<Self, ReadingError> {
-        let sync_id = bytebuf.get_var_int()?;
+        let sync_id = bytebuf.get_container_id(version)?;
         let revision = if version >= &JavaMinecraftVersion::V_1_17_1 {
             bytebuf.get_var_int()?
         } else {
@@ -73,7 +73,7 @@ impl crate::ClientPacket for SClickSlot {
         version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         use crate::ser::NetworkWriteExt;
-        write.write_var_int(&self.sync_id)?;
+        write.write_container_id(&self.sync_id, version)?;
         if version >= &JavaMinecraftVersion::V_1_17_1 {
             write.write_var_int(&self.revision)?;
         } else {

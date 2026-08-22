@@ -77,7 +77,7 @@ impl ClientPacket for CPlayerPosition {
             write.write_f64_be(self.position.z)?;
             write.write_f32_be(self.yaw)?;
             write.write_f32_be(self.pitch)?;
-            if version >= &JavaMinecraftVersion::V_1_8 {
+            if version >= &JavaMinecraftVersion::V_1_9 {
                 // Relative flags added in 1.8
                 write.write_u8(PositionFlag::get_bitfield(self.relatives.as_slice()) as u8)?;
             } else {
@@ -88,9 +88,9 @@ impl ClientPacket for CPlayerPosition {
                 // Teleport confirmation ID added in 1.9
                 write.write_var_int(&self.teleport_id)?;
             }
-            if *version >= JavaMinecraftVersion::V_1_17 && *version < JavaMinecraftVersion::V_1_19_4
+            if *version >= JavaMinecraftVersion::V_1_17
+                && *version <= JavaMinecraftVersion::V_1_19_3
             {
-                // Dismount vehicle boolean present in 1.17 - 1.19.3 (removed in 1.19.4)
                 write.write_bool(false)?;
             }
         }

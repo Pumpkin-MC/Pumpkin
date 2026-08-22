@@ -1433,6 +1433,19 @@ impl World {
                         be_block_id as u32,
                     ),
                 );
+                if let Some(block_entity) = self.get_block_entity(&block_pos)
+                    && let Some(nbt) = block_entity.chunk_data_nbt()
+                {
+                    let bytes = pumpkin_nbt::Nbt::from(nbt).write_unnamed();
+                    self.broadcast_to_chunk(
+                        chunk_pos,
+                        &CBlockEntityData::new(
+                            block_pos,
+                            VarInt(block_entity.get_id() as i32),
+                            bytes.as_ref().into(),
+                        ),
+                    );
+                }
                 if let Some(data) = self.bedrock_block_entity_data(block_state_id, block_pos) {
                     self.broadcast_to_chunk_bedrock(
                         chunk_pos,
@@ -1496,6 +1509,22 @@ impl World {
                     &CMultiBlockUpdate::new(&updates),
                     recipients_by_version,
                 );
+
+                for (block_pos, _) in &updates {
+                    if let Some(block_entity) = self.get_block_entity(block_pos)
+                        && let Some(nbt) = block_entity.chunk_data_nbt()
+                    {
+                        let bytes = pumpkin_nbt::Nbt::from(nbt).write_unnamed();
+                        self.broadcast_to_chunk(
+                            chunk_pos,
+                            &CBlockEntityData::new(
+                                *block_pos,
+                                VarInt(block_entity.get_id() as i32),
+                                bytes.as_ref().into(),
+                            ),
+                        );
+                    }
+                }
             }
 
             let mut bedrock_water_packets: Vec<Bytes> = Vec::new();
@@ -3099,7 +3128,6 @@ impl World {
 
             client_suggestions::send_c_commands_packet(player, server, &command_dispatcher).await;
         };
-
         if client.version.load() < JavaMinecraftVersion::V_1_20_2 {
             let mut tags = Vec::new();
             let version = client.version.load();
@@ -3688,7 +3716,6 @@ impl World {
                 java_client.send_packet_now(data).await;
             }
         }
-
         let msg_comp = TextComponent::translate_cross(
             translation::java::MULTIPLAYER_PLAYER_JOINED,
             translation::bedrock::MULTIPLAYER_PLAYER_JOINED,
@@ -4781,7 +4808,7 @@ impl World {
             let view_distance = get_view_distance(player).get() as i32;
 
             if is_within_view_distance(chunk_pos, center, view_distance) {
-                player.client.try_enqueue_spawn_packet(entity);
+                //  player.client.try_enqueue_spawn_packet(entity);
             }
         }
     }
@@ -5792,7 +5819,8 @@ impl World {
                     .pending_block_entities
                     .lock()
                     .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .remove(block_pos)
+                    .get(block_pos)
+                    .cloned()
             })
             .flatten()?;
         if let Some(custom_data) = nbt

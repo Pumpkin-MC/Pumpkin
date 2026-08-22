@@ -100,15 +100,14 @@ macro_rules! impl_block_entity_for_chest {
 
             fn chunk_data_nbt(&self) -> Option<pumpkin_nbt::compound::NbtCompound> {
                 let mut nbt = pumpkin_nbt::compound::NbtCompound::new();
-                let loot_table_key = self.loot_table.lock().unwrap_or_else(std::sync::PoisonError::into_inner).clone();
-                if let Some(key) = loot_table_key {
-                    nbt.put_string("LootTable", key);
-                    if self.loot_table_seed != 0 {
-                        nbt.put_long("LootTableSeed", self.loot_table_seed);
+                let has_loot_table = self.loot_table.lock().unwrap_or_else(std::sync::PoisonError::into_inner).is_some();
+                if !has_loot_table {
+                    if let Ok(items) = self.items.try_read() {
+                        pumpkin_world::inventory::sync_write_items_to_nbt(&*items, &mut nbt);
+                    } else {
+                        let items = futures::executor::block_on(self.items.read());
+                        pumpkin_world::inventory::sync_write_items_to_nbt(&*items, &mut nbt);
                     }
-                } else {
-                    let items = futures::executor::block_on(self.items.read());
-                    pumpkin_world::inventory::sync_write_items_to_nbt(&*items, &mut nbt);
                 }
                 Some(nbt)
             }

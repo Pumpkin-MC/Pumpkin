@@ -37,7 +37,7 @@ impl ClientPacket for CBlockUpdate {
         version: &JavaMinecraftVersion,
     ) -> Result<(), WritingError> {
         let mut write = write;
-        write.write_block_pos(&self.location)?;
+        write.write_block_pos(&self.location, version)?;
 
         let remapped_state = u16::try_from(self.state_id.0).map_or(self.state_id.0, |state_id| {
             i32::from(remap_block_state_for_version(state_id, *version))

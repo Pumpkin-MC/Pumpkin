@@ -7,7 +7,6 @@ use crate::block::BlockAssets;
 use crate::entity_type::EntityType;
 use crate::fluid::Fluid;
 use crate::item::Item;
-use crate::version::JavaMinecraftVersion;
 use heck::ToPascalCase;
 use proc_macro2::TokenStream;
 use quote::{ToTokens, format_ident, quote};
@@ -35,13 +34,32 @@ impl ToTokens for EnumCreator {
             quote! { Self::#variant_name }
         });
 
+        let is_network_synced_cat = |v: &str| -> bool {
+            if v == "villager_trade" || v == "trade_set" {
+                return false;
+            }
+            if v.starts_with("worldgen/") && v != "worldgen/biome" {
+                return false;
+            }
+            true
+        };
+
         let network_variants = self
             .values
             .iter()
-            .filter(|v| !v.starts_with("worldgen/") || *v == "worldgen/biome")
+            .filter(|v| is_network_synced_cat(v))
             .map(|v| {
                 let variant_name = format_ident!("{}", v.to_pascal_case());
                 quote! { Self::#variant_name }
+            });
+
+        let unsynced_arms = self
+            .values
+            .iter()
+            .filter(|v| !is_network_synced_cat(v))
+            .map(|v| {
+                let variant_name = format_ident!("{}", v.to_pascal_case());
+                quote! { Self::#variant_name => false }
             });
 
         let from_string_arms = self.values.iter().map(|v| {
@@ -72,7 +90,7 @@ impl ToTokens for EnumCreator {
                 #[must_use]
                 pub const fn is_network_synced(&self) -> bool {
                     match self {
-                        Self::WorldgenConfiguredFeature => false,
+                        #(#unsynced_arms,)*
                         _ => true,
                     }
                 }
@@ -120,30 +138,137 @@ fn load_datapack_registry_ids(dir: &std::path::Path) -> BTreeMap<String, u16> {
     id_map
 }
 
-/// The newest protocol version whose tag data is served as the latest-version fallback.
-const LATEST_VERSION: JavaMinecraftVersion = JavaMinecraftVersion::V_26_2;
+fn load_datapack_tags(
+    data_dir: &std::path::Path,
+) -> BTreeMap<String, BTreeMap<String, Vec<String>>> {
+    let mut raw_categories: BTreeMap<String, BTreeMap<String, Vec<String>>> = BTreeMap::new();
 
-/// Generates the `TokenStream` for the `Tag` type, `RegistryKey` enum, all per-version tag
+    fn walk_namespace_tags(
+        dir: &std::path::Path,
+        tags_dir: &std::path::Path,
+        namespace: &str,
+        raw: &mut BTreeMap<String, BTreeMap<String, Vec<String>>>,
+    ) {
+        if let Ok(entries) = fs::read_dir(dir) {
+            let mut entries: Vec<_> = entries.flatten().collect();
+            entries.sort_by_key(|e| e.path());
+            for entry in entries {
+                let path = entry.path();
+                if path.is_dir() {
+                    walk_namespace_tags(&path, tags_dir, namespace, raw);
+                } else if path.extension().is_some_and(|ext| ext == "json") {
+                    let rel = path.strip_prefix(tags_dir).unwrap();
+                    let components: Vec<_> = rel
+                        .iter()
+                        .map(|c| c.to_string_lossy().into_owned())
+                        .collect();
+                    if components.is_empty() {
+                        continue;
+                    }
+                    let (category, tag_rel_path) =
+                        if components[0] == "worldgen" && components.len() >= 2 {
+                            let cat = format!("worldgen/{}", components[1]);
+                            let rest = components[2..].join("/");
+                            let tag_stem = rest.trim_end_matches(".json").to_string();
+                            (cat, tag_stem)
+                        } else {
+                            let cat = components[0].clone();
+                            let rest = components[1..].join("/");
+                            let tag_stem = rest.trim_end_matches(".json").to_string();
+                            (cat, tag_stem)
+                        };
+
+                    let tag_name = format!("{namespace}:{tag_rel_path}");
+                    if let Ok(content) = fs::read_to_string(&path) {
+                        #[derive(serde::Deserialize)]
+                        struct TagFile {
+                            values: Vec<serde_json::Value>,
+                        }
+                        if let Ok(tag_file) = serde_json::from_str::<TagFile>(&content) {
+                            let mut values = Vec::new();
+                            for val in tag_file.values {
+                                if let Some(s) = val.as_str() {
+                                    values.push(s.to_string());
+                                } else if let Some(id) = val.get("id").and_then(|i| i.as_str()) {
+                                    values.push(id.to_string());
+                                }
+                            }
+                            raw.entry(category).or_default().insert(tag_name, values);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if let Ok(entries) = fs::read_dir(data_dir) {
+        let mut entries: Vec<_> = entries.flatten().collect();
+        entries.sort_by_key(|e| e.path());
+        for entry in entries {
+            let namespace = entry.file_name().to_string_lossy().into_owned();
+            let tags_dir = entry.path().join("tags");
+            if tags_dir.is_dir() {
+                walk_namespace_tags(&tags_dir, &tags_dir, &namespace, &mut raw_categories);
+            }
+        }
+    }
+
+    // Recursively resolve references for each category
+    let mut resolved_categories: BTreeMap<String, BTreeMap<String, Vec<String>>> = BTreeMap::new();
+
+    for (cat, tag_map) in &raw_categories {
+        let mut cat_resolved = BTreeMap::new();
+
+        fn resolve_tag(
+            tag_name: &str,
+            tag_map: &BTreeMap<String, Vec<String>>,
+            visited: &mut HashSet<String>,
+        ) -> Vec<String> {
+            if visited.contains(tag_name) {
+                return Vec::new();
+            }
+            visited.insert(tag_name.to_string());
+            let mut result = Vec::new();
+            if let Some(raw_values) = tag_map.get(tag_name) {
+                for v in raw_values {
+                    if let Some(sub_tag) = v.strip_prefix('#') {
+                        let full_sub = if sub_tag.contains(':') {
+                            sub_tag.to_string()
+                        } else {
+                            format!("minecraft:{sub_tag}")
+                        };
+                        let mut sub_visited = visited.clone();
+                        for child in resolve_tag(&full_sub, tag_map, &mut sub_visited) {
+                            if !result.contains(&child) {
+                                result.push(child);
+                            }
+                        }
+                    } else {
+                        let clean = v.strip_prefix("minecraft:").unwrap_or(v).to_string();
+                        if !result.contains(&clean) {
+                            result.push(clean);
+                        }
+                    }
+                }
+            }
+            result
+        }
+
+        for tag_name in tag_map.keys() {
+            let mut visited = HashSet::new();
+            let resolved = resolve_tag(tag_name, tag_map, &mut visited);
+            cat_resolved.insert(tag_name.clone(), resolved);
+        }
+
+        resolved_categories.insert(cat.clone(), cat_resolved);
+    }
+
+    resolved_categories
+}
+
+/// Generates the `TokenStream` for the `Tag` type, `RegistryKey` enum, tag
 /// modules, and the `Taggable` trait with its lookup helpers.
 pub(crate) fn build() -> TokenStream {
-    // --- Rerun Triggers ---
-
-    // Watch specific tag versions
-    let assets = [
-        (JavaMinecraftVersion::V_1_20_5, "1_21_2_tags.json"),
-        // TODO: upload 1_21_tags.json
-        (JavaMinecraftVersion::V_1_21, "1_21_2_tags.json"),
-        (JavaMinecraftVersion::V_1_21_2, "1_21_2_tags.json"),
-        (JavaMinecraftVersion::V_1_21_4, "1_21_4_tags.json"),
-        (JavaMinecraftVersion::V_1_21_5, "1_21_5_tags.json"),
-        (JavaMinecraftVersion::V_1_21_6, "1_21_6_tags.json"),
-        (JavaMinecraftVersion::V_1_21_7, "1_21_7_tags.json"),
-        (JavaMinecraftVersion::V_1_21_9, "1_21_9_tags.json"),
-        (JavaMinecraftVersion::V_1_21_11, "1_21_11_tags.json"),
-        (JavaMinecraftVersion::V_26_1, "26_1_tags.json"),
-        (JavaMinecraftVersion::V_26_2, "26_2_tags.json"),
-    ];
-
     // --- Load Global Assets ---
     let blocks_assets: BlockAssets =
         serde_json::from_str(&fs::read_to_string("../../assets/blocks.json").unwrap())
@@ -233,112 +358,71 @@ pub(crate) fn build() -> TokenStream {
         poi_id_map.insert(format!("minecraft:{name}"), i as u16);
     }
 
-    let datapack_base = std::path::Path::new("../../assets/datapacks/26_2/data/minecraft");
+    let datapack_data_dir = std::path::Path::new("../../assets/datapacks/26_2/data");
+    let datapack_base = datapack_data_dir.join("minecraft");
     let mut datapack_id_maps: BTreeMap<String, BTreeMap<String, u16>> = BTreeMap::new();
 
     let mut all_registry_keys = HashSet::new();
     all_registry_keys.insert("dimension_type".to_string());
 
-    let mut latest_modules = Vec::new();
-    let mut legacy_modules = Vec::new();
+    let tags = load_datapack_tags(datapack_data_dir);
 
-    let mut match_get_map = Vec::new();
+    let mut tag_dicts = Vec::new();
+    let mut match_local_map = Vec::new();
 
-    for (ver, file) in assets {
-        let file_path = format!("../../assets/tags/{file}");
+    for (key, tag_map) in tags {
+        all_registry_keys.insert(key.clone());
+        let key_pascal = format_ident!("{}", key.to_pascal_case());
+        let dict_name = format_ident!("{}_TAGS", key.to_pascal_case().to_uppercase());
 
-        let tags: BTreeMap<String, BTreeMap<String, Vec<String>>> =
-            serde_json::from_str(&fs::read_to_string(&file_path).unwrap()).unwrap();
+        let mut tag_entries = Vec::new();
+        let mut tag_map_entries = Vec::new();
 
-        let is_latest = ver == LATEST_VERSION;
-        let mut tag_dicts = Vec::new();
-        let mut match_local_map = Vec::new();
-
-        for (key, tag_map) in tags {
-            all_registry_keys.insert(key.clone());
-            let key_pascal = format_ident!("{}", key.to_pascal_case());
-            let dict_name = format_ident!("{}_TAGS", key.to_pascal_case().to_uppercase());
-
-            let mut tag_entries = Vec::new();
-            let mut tag_map_entries = Vec::new();
-            let tag_type_path = if is_latest {
-                quote!(super::Tag)
-            } else {
-                quote!(super::super::Tag)
-            };
-
-            if !datapack_id_maps.contains_key(&key) {
-                let dir = datapack_base.join(&key);
-                if dir.is_dir() {
-                    datapack_id_maps.insert(key.clone(), load_datapack_registry_ids(&dir));
-                }
+        if !datapack_id_maps.contains_key(&key) {
+            let dir = datapack_base.join(&key);
+            if dir.is_dir() {
+                datapack_id_maps.insert(key.clone(), load_datapack_registry_ids(&dir));
             }
-
-            for (tag_name, values) in tag_map {
-                let ids: Vec<u16> = values
-                    .iter()
-                    .filter_map(|v| match key.as_str() {
-                        "block" => block_id_map.get(v).copied(),
-                        "item" => item_id_map.get(v).copied(),
-                        "fluid" => fluid_id_map.get(v).copied(),
-                        "entity_type" => entity_id_map.get(v).copied(),
-                        "game_event" => game_event_id_map.get(v).copied(),
-                        "potion" => potion_id_map.get(v).copied(),
-                        "point_of_interest_type" => poi_id_map.get(v).copied(),
-                        _ => datapack_id_maps.get(&key).and_then(|m| m.get(v).copied()),
-                    })
-                    .collect();
-
-                let tag_const_name =
-                    format_ident!("{}", tag_name.replace([':', '/'], "_").to_uppercase());
-
-                tag_entries.push(quote! {
-                    pub const #tag_const_name: #tag_type_path = (&[#(#values),*], &[#(#ids),*]);
-                });
-                tag_map_entries.push(quote! { #tag_name => &#key_pascal::#tag_const_name });
-            }
-
-            let tag_type_path = if is_latest {
-                quote!(Tag)
-            } else {
-                quote!(super::Tag)
-            };
-
-            tag_dicts.push(quote! {
-                #[allow(non_snake_case)]
-                pub mod #key_pascal {
-                    #(#tag_entries)* }
-                static #dict_name: phf::Map<&'static str, &'static #tag_type_path> = phf::phf_map! {
-                    #(#tag_map_entries),* };
-            });
-
-            match_local_map.push(quote! { RegistryKey::#key_pascal => Some(&#dict_name) });
         }
 
-        if is_latest {
-            latest_modules.push(quote! {
-                #(#tag_dicts)*
-                #[allow(unreachable_patterns)]
-                #[must_use]
-                pub const fn get_latest_map(key: RegistryKey) -> Option<&'static phf::Map<&'static str, &'static Tag>> {
-                    match key { #(#match_local_map,)* _ => None }
-                }
+        for (tag_name, values) in tag_map {
+            let ids: Vec<u16> = values
+                .iter()
+                .filter_map(|v| match key.as_str() {
+                    "block" => block_id_map.get(v).copied(),
+                    "item" => item_id_map.get(v).copied(),
+                    "fluid" => fluid_id_map.get(v).copied(),
+                    "entity_type" => entity_id_map.get(v).copied(),
+                    "game_event" => game_event_id_map.get(v).copied(),
+                    "potion" => potion_id_map.get(v).copied(),
+                    "point_of_interest_type" => poi_id_map.get(v).copied(),
+                    _ => datapack_id_maps.get(&key).and_then(|m| m.get(v).copied()),
+                })
+                .collect();
+
+            let tag_const_name = format_ident!(
+                "{}",
+                tag_name.replace([':', '/', '.', '-'], "_").to_uppercase()
+            );
+
+            tag_entries.push(quote! {
+                pub const #tag_const_name: Tag = (&[#(#values),*], &[#(#ids),*]);
             });
-            match_get_map.push(quote! { #LATEST_VERSION => get_latest_map(tag_category) });
-        } else {
-            let mod_name = format_ident!("tags_{}", ver.to_field_ident());
-            legacy_modules.push(quote! {
-                mod #mod_name {
-                    use super::RegistryKey;
-                    #(#tag_dicts)*
-                    #[must_use]
-                    pub const fn get_map(key: RegistryKey) -> Option<&'static phf::Map<&'static str, &'static super::Tag>> {
-                        match key { #(#match_local_map,)* _ => None }
-                    }
-                }
-            });
-            match_get_map.push(quote! { #ver => #mod_name::get_map(tag_category) });
+            tag_map_entries.push(quote! { #tag_name => &#key_pascal::#tag_const_name });
         }
+
+        tag_dicts.push(quote! {
+            #[allow(non_snake_case)]
+            pub mod #key_pascal {
+                use super::Tag;
+                #(#tag_entries)*
+            }
+            static #dict_name: phf::Map<&'static str, &'static Tag> = phf::phf_map! {
+                #(#tag_map_entries),*
+            };
+        });
+
+        match_local_map.push(quote! { RegistryKey::#key_pascal => Some(&#dict_name) });
     }
 
     // --- Generate RegistryKey Enum ---
@@ -355,11 +439,16 @@ pub(crate) fn build() -> TokenStream {
 
         #registry_key_enum
 
-        // Latest tags are exported directly here
-        #(#latest_modules)*
+        #(#tag_dicts)*
 
-        // Legacy tags are hidden in their own module
-        #(#legacy_modules)*
+        #[allow(unreachable_patterns)]
+        #[must_use]
+        pub const fn get_latest_map(key: RegistryKey) -> Option<&'static phf::Map<&'static str, &'static Tag>> {
+            match key {
+                #(#match_local_map,)*
+                _ => None,
+            }
+        }
 
         #[must_use]
         pub fn get_tag_values(tag_category: RegistryKey, tag: &str) -> Option<&'static [&'static str]> {
@@ -372,11 +461,8 @@ pub(crate) fn build() -> TokenStream {
         }
 
         #[must_use]
-        pub const fn get_registry_key_tags(version: JavaMinecraftVersion, tag_category: RegistryKey) -> Option<&'static phf::Map<&'static str, &'static Tag>> {
-            match version {
-                #(#match_get_map),*,
-                _ => get_latest_map(tag_category)
-            }
+        pub const fn get_registry_key_tags(_version: JavaMinecraftVersion, tag_category: RegistryKey) -> Option<&'static phf::Map<&'static str, &'static Tag>> {
+            get_latest_map(tag_category)
         }
 
         pub trait Taggable {

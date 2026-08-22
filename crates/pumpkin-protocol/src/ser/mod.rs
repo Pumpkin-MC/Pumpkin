@@ -112,6 +112,21 @@ pub trait NetworkReadExt {
     fn get_fixed_bitset(&mut self, bits: usize) -> Result<FixedBitSet, ReadingError>;
 
     #[inline]
+    fn get_block_pos(&mut self, version: &JavaMinecraftVersion) -> Result<BlockPos, ReadingError> {
+        let val = self.get_i64_be()?;
+        Ok(BlockPos::from_long_for_version(val, version))
+    }
+
+    #[inline]
+    fn get_container_id(&mut self, version: &JavaMinecraftVersion) -> Result<VarInt, ReadingError> {
+        if *version >= JavaMinecraftVersion::V_1_21_2 {
+            self.get_var_int()
+        } else {
+            Ok(VarInt(i32::from(self.get_u8()?)))
+        }
+    }
+
+    #[inline]
     fn get_option<G>(
         &mut self,
         parse: impl FnOnce(&mut Self) -> Result<G, ReadingError>,
@@ -480,9 +495,7 @@ pub trait NetworkWriteExt {
         version: &JavaMinecraftVersion,
     ) -> Result<(), WritingError> {
         if *version < JavaMinecraftVersion::V_1_20_3 {
-            let json = serde_json::to_string(&component.0).map_err(|e| {
-                WritingError::Message(format!("Failed to serialize component JSON: {e}"))
-            })?;
+            let json = component.to_json_for_version(version);
             let max_len = if *version >= JavaMinecraftVersion::V_1_13 {
                 262144
             } else {
@@ -490,7 +503,7 @@ pub trait NetworkWriteExt {
             };
             self.write_string_bounded(&json, max_len)
         } else {
-            self.write_slice(&component.encode())
+            self.write_slice(&component.encode_for_version(version))
         }
     }
 
@@ -555,7 +568,24 @@ pub trait NetworkWriteExt {
     fn write_var_long(&mut self, data: &VarLong) -> Result<(), WritingError>;
     fn write_string_bounded(&mut self, data: &str, bound: usize) -> Result<(), WritingError>;
     fn write_string(&mut self, data: &str) -> Result<(), WritingError>;
-    fn write_block_pos(&mut self, pos: &BlockPos) -> Result<(), WritingError>;
+    fn write_block_pos(
+        &mut self,
+        pos: &BlockPos,
+        version: &JavaMinecraftVersion,
+    ) -> Result<(), WritingError>;
+
+    #[inline]
+    fn write_container_id(
+        &mut self,
+        container_id: &VarInt,
+        version: &JavaMinecraftVersion,
+    ) -> Result<(), WritingError> {
+        if *version >= JavaMinecraftVersion::V_1_21_2 {
+            self.write_var_int(container_id)
+        } else {
+            self.write_u8(container_id.0 as u8)
+        }
+    }
 
     fn write_uuid(&mut self, data: &uuid::Uuid) -> Result<(), WritingError> {
         let (first, second) = data.as_u64_pair();
@@ -684,8 +714,12 @@ impl<W: Write> NetworkWriteExt for W {
         self.write_string_bounded(data, i16::MAX as usize)
     }
 
-    fn write_block_pos(&mut self, pos: &BlockPos) -> Result<(), WritingError> {
-        self.write_i64_be(pos.as_long())
+    fn write_block_pos(
+        &mut self,
+        pos: &BlockPos,
+        version: &JavaMinecraftVersion,
+    ) -> Result<(), WritingError> {
+        self.write_i64_be(pos.as_long_for_version(version))
     }
 
     fn write_bitset(&mut self, data: &BitSet) -> Result<(), WritingError> {

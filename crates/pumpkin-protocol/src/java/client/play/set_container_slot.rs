@@ -41,8 +41,10 @@ impl ClientPacket for CSetContainerSlot<'_> {
     ) -> Result<(), WritingError> {
         let mut write = write;
 
-        write.write_i8(self.window_id)?;
-        write.write_var_int(&self.state_id)?;
+        write.write_container_id(&VarInt(i32::from(self.window_id)), version)?;
+        if *version >= JavaMinecraftVersion::V_1_17_1 {
+            write.write_var_int(&self.state_id)?;
+        }
         write.write_i16_be(self.slot)?;
         self.slot_data.write_with_version(&mut write, version)?;
 

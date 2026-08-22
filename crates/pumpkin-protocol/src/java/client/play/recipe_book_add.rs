@@ -14,22 +14,19 @@ use std::{collections::HashMap, io::Write};
 use crate::codec::item_stack_seralizer::ItemStackTemplateSerializer;
 use crate::{ClientPacket, VarInt, WritingError, ser::NetworkWriteExt};
 
+use pumpkin_data::slot_display_id_remap::remap_slot_display_id_for_version;
+
 // Recipe Display type IDs
 const RECIPE_DISPLAY_SHAPELESS: i32 = 0;
 const RECIPE_DISPLAY_SHAPED: i32 = 1;
 const RECIPE_DISPLAY_FURNACE: i32 = 2;
 
-// Slot Display type IDs
-const SLOT_DISPLAY_EMPTY: i32 = 0;
-const SLOT_DISPLAY_ANY_FUEL: i32 = 1;
-// 1.21.2 - 1.21.11
-const SLOT_DISPLAY_ITEM_LEGACY: i32 = 2;
-const SLOT_DISPLAY_ITEM_STACK_LEGACY: i32 = 3;
-const SLOT_DISPLAY_COMPOSITE_LEGACY: i32 = 7;
-// 26.1+
-const SLOT_DISPLAY_ITEM_26_1: i32 = 4;
-const SLOT_DISPLAY_ITEM_STACK_26_1: i32 = 5;
-const SLOT_DISPLAY_COMPOSITE_26_1: i32 = 10;
+// Slot Display base type IDs (26.2)
+const SLOT_DISPLAY_EMPTY: u32 = 0;
+const SLOT_DISPLAY_ANY_FUEL: u32 = 1;
+const SLOT_DISPLAY_ITEM: u32 = 4;
+const SLOT_DISPLAY_ITEM_STACK: u32 = 5;
+const SLOT_DISPLAY_COMPOSITE: u32 = 10;
 
 const ENTRY_FLAG_NOTIFICATION: u8 = 0x01;
 const ENTRY_FLAG_HIGHLIGHT: u8 = 0x02;
@@ -72,27 +69,15 @@ fn item_id_versioned(item: &Item, version: JavaMinecraftVersion) -> i32 {
 }
 
 fn slot_display_item_type(version: JavaMinecraftVersion) -> i32 {
-    if version >= JavaMinecraftVersion::V_26_1 {
-        SLOT_DISPLAY_ITEM_26_1
-    } else {
-        SLOT_DISPLAY_ITEM_LEGACY
-    }
+    remap_slot_display_id_for_version(SLOT_DISPLAY_ITEM, version) as i32
 }
 
 fn slot_display_composite_type(version: JavaMinecraftVersion) -> i32 {
-    if version >= JavaMinecraftVersion::V_26_1 {
-        SLOT_DISPLAY_COMPOSITE_26_1
-    } else {
-        SLOT_DISPLAY_COMPOSITE_LEGACY
-    }
+    remap_slot_display_id_for_version(SLOT_DISPLAY_COMPOSITE, version) as i32
 }
 
 fn slot_display_item_stack_type(version: JavaMinecraftVersion) -> i32 {
-    if version >= JavaMinecraftVersion::V_26_1 {
-        SLOT_DISPLAY_ITEM_STACK_26_1
-    } else {
-        SLOT_DISPLAY_ITEM_STACK_LEGACY
-    }
+    remap_slot_display_id_for_version(SLOT_DISPLAY_ITEM_STACK, version) as i32
 }
 
 fn write_item_slot_display(
@@ -118,13 +103,23 @@ fn write_item_stack_slot_display(
         .write_with_version(write, &version)
 }
 
-fn write_empty_slot_display(write: &mut impl Write) -> Result<(), WritingError> {
-    write.write_var_int(&VarInt(SLOT_DISPLAY_EMPTY))?;
+fn write_empty_slot_display(
+    write: &mut impl Write,
+    version: JavaMinecraftVersion,
+) -> Result<(), WritingError> {
+    write.write_var_int(&VarInt(
+        remap_slot_display_id_for_version(SLOT_DISPLAY_EMPTY, version) as i32,
+    ))?;
     Ok(())
 }
 
-fn write_any_fuel_slot_display(write: &mut impl Write) -> Result<(), WritingError> {
-    write.write_var_int(&VarInt(SLOT_DISPLAY_ANY_FUEL))?;
+fn write_any_fuel_slot_display(
+    write: &mut impl Write,
+    version: JavaMinecraftVersion,
+) -> Result<(), WritingError> {
+    write.write_var_int(&VarInt(
+        remap_slot_display_id_for_version(SLOT_DISPLAY_ANY_FUEL, version) as i32,
+    ))?;
     Ok(())
 }
 
@@ -168,7 +163,7 @@ fn write_ingredient_slot_display(
             if let Some(item) = Item::from_registry_key(key) {
                 write_item_slot_display(write, item, version)?;
             } else {
-                write_empty_slot_display(write)?;
+                write_empty_slot_display(write, version)?;
             }
         }
         RecipeIngredientTypes::Tagged(tag) => {
@@ -183,7 +178,7 @@ fn write_ingredient_slot_display(
                     }
                 }
             } else {
-                write_empty_slot_display(write)?;
+                write_empty_slot_display(write, version)?;
             }
         }
         RecipeIngredientTypes::OneOf(ids) => {
@@ -195,7 +190,7 @@ fn write_ingredient_slot_display(
                 }
             }
             if items.is_empty() {
-                write_empty_slot_display(write)?;
+                write_empty_slot_display(write, version)?;
             } else if items.len() == 1 {
                 write_item_slot_display(write, items[0], version)?;
             } else {
@@ -294,7 +289,7 @@ fn write_result_slot_display(
     if let Some(item) = Item::from_registry_key(key) {
         write_item_stack_slot_display(write, item, result.count, version)?;
     } else {
-        write_empty_slot_display(write)?;
+        write_empty_slot_display(write, version)?;
     }
     Ok(())
 }
@@ -370,11 +365,11 @@ fn write_entry(
                 for row in *pattern {
                     for ch in row.chars() {
                         if ch == ' ' {
-                            write_empty_slot_display(write)?;
+                            write_empty_slot_display(write, version)?;
                         } else if let Some((_, ingredient)) = key.iter().find(|(k, _)| *k == ch) {
                             write_ingredient_slot_display(write, ingredient, version)?;
                         } else {
-                            write_empty_slot_display(write)?;
+                            write_empty_slot_display(write, version)?;
                         }
                     }
                 }
@@ -478,7 +473,7 @@ fn write_entry(
         // ingredient
         write_ingredient_slot_display(write, &cooking.ingredient, version)?;
         // fuel: AnyFuel
-        write_any_fuel_slot_display(write)?;
+        write_any_fuel_slot_display(write, version)?;
         // result
         write_result_slot_display(write, &cooking.result, version)?;
         // craftingStation
@@ -738,7 +733,7 @@ fn write_dynamic_ingredient_slot_display(
             if let Some(item) = Item::from_registry_key(key) {
                 write_item_slot_display(write, item, version)?;
             } else {
-                write_empty_slot_display(write)?;
+                write_empty_slot_display(write, version)?;
             }
         }
         crate::codec::recipe::OwnedRecipeIngredient::Tagged(tag) => {
@@ -753,7 +748,7 @@ fn write_dynamic_ingredient_slot_display(
                     }
                 }
             } else {
-                write_empty_slot_display(write)?;
+                write_empty_slot_display(write, version)?;
             }
         }
         crate::codec::recipe::OwnedRecipeIngredient::OneOf(ids) => {
@@ -766,7 +761,7 @@ fn write_dynamic_ingredient_slot_display(
                 .collect();
 
             if items.is_empty() {
-                write_empty_slot_display(write)?;
+                write_empty_slot_display(write, version)?;
             } else if items.len() == 1 {
                 write_item_slot_display(write, items[0], version)?;
             } else {
@@ -847,7 +842,7 @@ fn write_dynamic_result_slot_display(
     if let Some(item) = Item::from_registry_key(key) {
         write_item_stack_slot_display(write, item, result.count, version)?;
     } else {
-        write_empty_slot_display(write)?;
+        write_empty_slot_display(write, version)?;
     }
     Ok(())
 }
@@ -880,11 +875,11 @@ fn write_dynamic_crafting_entry(
             for row in pattern {
                 for ch in row.chars() {
                     if ch == ' ' {
-                        write_empty_slot_display(write)?;
+                        write_empty_slot_display(write, version)?;
                     } else if let Some((_, ingredient)) = key.iter().find(|(k, _)| *k == ch) {
                         write_dynamic_ingredient_slot_display(write, ingredient, version)?;
                     } else {
-                        write_empty_slot_display(write)?;
+                        write_empty_slot_display(write, version)?;
                     }
                 }
             }
@@ -952,7 +947,7 @@ fn write_dynamic_cooking_entry(
     write.write_var_int(&VarInt(display_id))?;
     write.write_var_int(&VarInt(RECIPE_DISPLAY_FURNACE))?;
     write_dynamic_ingredient_slot_display(write, &cooking.ingredient, version)?;
-    write_any_fuel_slot_display(write)?;
+    write_any_fuel_slot_display(write, version)?;
     write_dynamic_result_slot_display(write, &cooking.result, version)?;
     write_item_slot_display(write, station, version)?;
     write.write_var_int(&VarInt(cooking.cooking_time))?;

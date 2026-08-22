@@ -130,7 +130,11 @@ struct EffectParticle {
 struct EffectParticles(Vec<EffectParticle>);
 
 impl MetadataSerializer for EffectParticles {
-    fn write_metadata(&self, writer: &mut impl std::io::Write) -> Result<(), WritingError> {
+    fn write_metadata(
+        &self,
+        writer: &mut impl std::io::Write,
+        _version: &pumpkin_util::version::JavaMinecraftVersion,
+    ) -> Result<(), WritingError> {
         let count = i32::try_from(self.0.len())
             .map_err(|_| WritingError::Message("Too many effect particles".into()))?;
         writer.write_var_int(&VarInt(count))?;
