@@ -45,6 +45,7 @@ mod op;
 mod pardon;
 mod pardonip;
 mod particle;
+mod perf;
 mod place;
 mod playsound;
 mod plugin;
@@ -186,6 +187,7 @@ pub fn default_dispatcher(
     help::register(&mut dispatcher, registry);
     kill::register(&mut dispatcher, registry);
     op::register(&mut dispatcher, registry);
+    perf::register(&mut dispatcher, registry);
     place::register(&mut dispatcher, registry);
     random::register(&mut dispatcher, registry);
     list::register(&mut dispatcher, registry);
