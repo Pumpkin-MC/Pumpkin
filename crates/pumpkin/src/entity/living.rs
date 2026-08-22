@@ -1901,7 +1901,8 @@ impl LivingEntity {
                 && let Some(player) = entity.get_player()
             {
                 // Add hunger and saturation
-                let hunger = amplifier + 1;
+                // `amplifier` reaches 255 through `/effect`, so this must not wrap.
+                let hunger = amplifier.saturating_add(1);
                 player.hunger_manager.add_hunger(hunger);
                 player.hunger_manager.add_saturation(hunger as f32 * 2.0);
             }
