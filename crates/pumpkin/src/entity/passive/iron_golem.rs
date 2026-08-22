@@ -6,9 +6,7 @@ use std::sync::{
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
-use pumpkin_data::meta_data_type::MetaDataType;
 use pumpkin_data::sound::{Sound, SoundCategory};
-use pumpkin_data::tracked_data::TrackedData;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::java::client::play::Metadata;
 use pumpkin_util::GameMode;
@@ -94,8 +92,7 @@ impl IronGolemEntity {
         let flag: u8 = u8::from(value);
         entity.send_meta_data(
             &[Metadata::new(
-                TrackedData::FLAGS_ID,
-                MetaDataType::BYTE,
+                pumpkin_data::tracked_data::iron_golem::FLAGS_ID,
                 flag,
             )],
             None,
@@ -146,8 +143,7 @@ impl Mob for IronGolemEntity {
             let flag: u8 = u8::from(self.is_player_created());
             entity.send_meta_data(
                 &[Metadata::new(
-                    TrackedData::FLAGS_ID,
-                    MetaDataType::BYTE,
+                    pumpkin_data::tracked_data::iron_golem::FLAGS_ID,
                     flag,
                 )],
                 None,

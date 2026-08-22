@@ -84,6 +84,7 @@ impl Debug for NodeType {
     }
 }
 
+#[derive(Clone, Debug)]
 pub enum Command {
     Tree(CommandTree),
     Alias(String),

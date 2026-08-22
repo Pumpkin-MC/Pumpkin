@@ -9,6 +9,14 @@ impl JavaClient {
         chat_message: SChatMessage<'_>,
     ) {
         player.update_last_action_time();
+
+        if let Some(command) = chat_message.message.strip_prefix('/') {
+            let command_packet = SChatCommand { command };
+            self.handle_chat_command(player, server, &command_packet)
+                .await;
+            return;
+        }
+
         let gameprofile = &player.gameprofile;
 
         if let Err(err) = self
@@ -27,6 +35,10 @@ impl JavaClient {
             {
                 self.kick(TextComponent::text(reason)).await;
             }
+            return;
+        }
+
+        if player.check_chat_spam(server).await {
             return;
         }
 
@@ -114,6 +126,34 @@ impl JavaClient {
             // Verify session expiry
             if player.chat_session.lock().await.expires_at < now {
                 return Err(ChatError::ExpiredPublicKey);
+            }
+
+            let offset = chat_message.message_count.0;
+            if offset < 0 {
+                return Err(ChatError::ChatValidationFailed);
+            }
+
+            {
+                let mut cache = player.signature_cache.lock().await;
+                if !chat_message.acknowledged.is_empty() {
+                    if cache
+                        .last_seen_validator
+                        .apply_update(offset as usize, chat_message.acknowledged)
+                        .is_err()
+                    {
+                        return Err(ChatError::ChatValidationFailed);
+                    }
+                } else if cache
+                    .last_seen_validator
+                    .apply_offset(offset as usize)
+                    .is_err()
+                {
+                    return Err(ChatError::ChatValidationFailed);
+                }
+
+                if cache.last_seen_validator.tracked_messages_count() > 4096 {
+                    return Err(ChatError::TooManyPendingChats);
+                }
             }
 
             // Validate previous signature checksum (new in 1.21.5)

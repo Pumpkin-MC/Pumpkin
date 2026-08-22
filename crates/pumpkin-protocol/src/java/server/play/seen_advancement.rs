@@ -2,13 +2,13 @@ use crate::{
     ServerPacket,
     ser::{NetworkReadExt, NetworkReadSliceExt, ReadingError},
 };
-use pumpkin_data::packet::serverbound::PLAY_SEEN_ADVANCEMENTS;
+use pumpkin_data::packet::serverbound::play::SEEN_ADVANCEMENTS;
 use pumpkin_macros::java_packet;
 use pumpkin_util::identifier::Identifier;
 use pumpkin_util::version::JavaMinecraftVersion;
 
 #[derive(Debug)]
-#[java_packet(PLAY_SEEN_ADVANCEMENTS)]
+#[java_packet(SEEN_ADVANCEMENTS)]
 pub enum SSeenAdvancement {
     OpenTab(Identifier),
     CloseTab,

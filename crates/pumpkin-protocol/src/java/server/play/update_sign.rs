@@ -1,4 +1,4 @@
-use pumpkin_data::packet::serverbound::PLAY_SIGN_UPDATE;
+use pumpkin_data::packet::serverbound::play::SIGN_UPDATE;
 use pumpkin_macros::java_packet;
 use pumpkin_util::{math::position::BlockPos, version::JavaMinecraftVersion};
 
@@ -7,7 +7,7 @@ use crate::{
     ser::{NetworkReadExt, NetworkReadSliceExt, ReadingError},
 };
 
-#[java_packet(PLAY_SIGN_UPDATE)]
+#[java_packet(SIGN_UPDATE)]
 pub struct SUpdateSign<'a> {
     pub location: BlockPos,
     pub is_front_text: bool,
@@ -17,17 +17,28 @@ pub struct SUpdateSign<'a> {
     pub line_4: &'a str,
 }
 
-const MAX_LINE_LENGTH: usize = 386;
+const MAX_LINE_LENGTH: usize = 384;
 
 impl<'a> ServerPacket<'a> for SUpdateSign<'a> {
-    fn read(read: &mut &'a [u8], _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+    fn read(read: &mut &'a [u8], version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+        let location = read.get_block_pos(version)?;
+        let is_front_text = if *version >= JavaMinecraftVersion::V_1_20 {
+            read.get_bool()?
+        } else {
+            true
+        };
+        let line_1 = read.get_str_bounded_borrowed(MAX_LINE_LENGTH)?;
+        let line_2 = read.get_str_bounded_borrowed(MAX_LINE_LENGTH)?;
+        let line_3 = read.get_str_bounded_borrowed(MAX_LINE_LENGTH)?;
+        let line_4 = read.get_str_bounded_borrowed(MAX_LINE_LENGTH)?;
+
         Ok(Self {
-            location: BlockPos::from_i64(read.get_i64_be()?),
-            is_front_text: read.get_bool()?,
-            line_1: read.get_str_bounded_borrowed(MAX_LINE_LENGTH)?,
-            line_2: read.get_str_bounded_borrowed(MAX_LINE_LENGTH)?,
-            line_3: read.get_str_bounded_borrowed(MAX_LINE_LENGTH)?,
-            line_4: read.get_str_bounded_borrowed(MAX_LINE_LENGTH)?,
+            location,
+            is_front_text,
+            line_1,
+            line_2,
+            line_3,
+            line_4,
         })
     }
 }
@@ -36,11 +47,13 @@ impl crate::ClientPacket for SUpdateSign<'_> {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        _version: &JavaMinecraftVersion,
+        version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         use crate::ser::NetworkWriteExt;
-        write.write_block_pos(&self.location)?;
-        write.write_bool(self.is_front_text)?;
+        write.write_block_pos(&self.location, version)?;
+        if *version >= JavaMinecraftVersion::V_1_20 {
+            write.write_bool(self.is_front_text)?;
+        }
         write.write_string_bounded(self.line_1, MAX_LINE_LENGTH)?;
         write.write_string_bounded(self.line_2, MAX_LINE_LENGTH)?;
         write.write_string_bounded(self.line_3, MAX_LINE_LENGTH)?;

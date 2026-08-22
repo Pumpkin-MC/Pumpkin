@@ -1,0 +1,39 @@
+{
+  "parent": "minecraft:adventure/root",
+  "criteria": {
+    "brush_armadillo": {
+      "conditions": {
+        "entity": [
+          {
+            "condition": "minecraft:entity_properties",
+            "entity": "this",
+            "predicate": {
+              "minecraft:entity_type": "minecraft:armadillo"
+            }
+          }
+        ],
+        "item": {
+          "items": "minecraft:brush"
+        }
+      },
+      "trigger": "minecraft:player_interacted_with_entity"
+    }
+  },
+  "display": {
+    "description": {
+      "translate": "advancements.adventure.brush_armadillo.description"
+    },
+    "icon": {
+      "id": "minecraft:armadillo_scute"
+    },
+    "title": {
+      "translate": "advancements.adventure.brush_armadillo.title"
+    }
+  },
+  "requirements": [
+    [
+      "brush_armadillo"
+    ]
+  ],
+  "sends_telemetry_event": true
+}

@@ -1,4 +1,4 @@
-use pumpkin_data::packet::serverbound::PLAY_BUNDLE_ITEM_SELECTED;
+use pumpkin_data::packet::serverbound::play::BUNDLE_ITEM_SELECTED;
 use pumpkin_macros::java_packet;
 
 use crate::VarInt;
@@ -9,7 +9,7 @@ use crate::{
 };
 use pumpkin_util::version::JavaMinecraftVersion;
 
-#[java_packet(PLAY_BUNDLE_ITEM_SELECTED)]
+#[java_packet(BUNDLE_ITEM_SELECTED)]
 pub struct SBundleItemSelected {
     pub slot_id: VarInt,
     pub selected_item_index: VarInt,

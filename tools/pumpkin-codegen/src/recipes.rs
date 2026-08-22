@@ -463,11 +463,26 @@ impl ToTokens for RecipeCategoryTypes {
     }
 }
 
-/// Reads `recipes.json` and emits the complete recipe constants and helpers `TokenStream`.
+/// Reads recipe JSON files from the 26.2 datapack and emits the complete recipe constants and helpers `TokenStream`.
 pub fn build() -> TokenStream {
-    let recipes_assets: BTreeMap<String, RecipeTypes> =
-        serde_json::from_str(&fs::read_to_string("../../assets/recipes.json").unwrap())
-            .expect("Failed to parse recipes.json");
+    let dir = std::path::Path::new("../../assets/datapacks/26_2/data/minecraft/recipe");
+    let mut recipes_assets: BTreeMap<String, RecipeTypes> = BTreeMap::new();
+    let mut entries: Vec<_> = fs::read_dir(dir)
+        .expect("Missing recipe directory")
+        .flatten()
+        .filter(|e| e.path().extension().is_some_and(|ext| ext == "json"))
+        .collect();
+    entries.sort_by_key(|e| e.path());
+
+    for entry in entries {
+        let path = entry.path();
+        let stem = path.file_stem().unwrap().to_string_lossy().into_owned();
+        let key = format!("minecraft:{stem}");
+        let content = fs::read_to_string(&path).expect("Failed to read recipe file");
+        if let Ok(recipe) = serde_json::from_str::<RecipeTypes>(&content) {
+            recipes_assets.insert(key, recipe);
+        }
+    }
 
     let mut crafting_recipes = Vec::new();
     let mut cooking_recipes = Vec::new();

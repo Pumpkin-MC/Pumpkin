@@ -51,8 +51,7 @@ impl DarkOakTrunkPlacer {
             below_trunk_provider,
         );
 
-        let horizontal_directions = BlockDirection::horizontal();
-        let lean_direction = horizontal_directions[random.next_bounded_i32(4) as usize];
+        let lean_direction = BlockDirection::random_horizontal(random);
         let lean_height = height as i32 - random.next_bounded_i32(4);
         let mut lean_steps = 2 - random.next_bounded_i32(3);
 

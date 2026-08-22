@@ -1,7 +1,11 @@
 use std::sync::Arc;
 
 use pumpkin_data::{
-    Block, BlockState, BlockStateId, damage::DamageType, entity::EntityType, fluid::Fluid,
+    Block, BlockState, BlockStateId,
+    damage::DamageType,
+    entity::EntityType,
+    fluid::Fluid,
+    tag::{Tag, Taggable},
 };
 use pumpkin_util::math::{boundingbox::BoundingBox, position::BlockPos, vector3::Vector3};
 use pumpkin_world::chunk::ChunkData;
@@ -15,20 +19,198 @@ use crate::{
 
 use super::{BlockFlags, World};
 
+/// Defines the type of explosion interaction with the world.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ExplosionInteraction {
+    None,
+    Block,
+    Mob,
+    Tnt,
+    Trigger,
+}
+
+/// Defines how an explosion interacts with blocks in the world.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum BlockInteraction {
+    /// Keeps blocks intact (no block damage, no drops).
+    Keep,
+    /// Destroys blocks and drops 100% of items without decay.
+    Destroy,
+    /// Destroys blocks and applies loot decay based on explosion radius.
+    DestroyWithDecay,
+    /// Triggers block effects without destroying them.
+    TriggerBlock,
+}
+
+/// Defines how damage and block destruction are calculated for an explosion.
+pub trait ExplosionDamageCalculator: Send + Sync {
+    /// Returns the block's explosion resistance. If None, the block is treated as air/empty.
+    fn get_block_explosion_resistance(
+        &self,
+        _explosion: &Explosion,
+        _world: &World,
+        _pos: &BlockPos,
+        block: &Block,
+        fluid: &pumpkin_data::fluid::FluidState,
+    ) -> Option<f32> {
+        if block.default_state.is_air() && fluid.is_empty {
+            None
+        } else {
+            Some(fluid.blast_resistance.max(block.blast_resistance))
+        }
+    }
+
+    /// Returns whether this block should be destroyed / affected by the explosion.
+    fn should_block_explode(
+        &self,
+        _explosion: &Explosion,
+        _world: &World,
+        _pos: &BlockPos,
+        _block: &Block,
+        _power: f32,
+    ) -> bool {
+        true
+    }
+
+    /// Returns whether the entity should take damage from the explosion.
+    fn should_damage_entity(&self, _explosion: &Explosion, _entity: &dyn EntityBase) -> bool {
+        true
+    }
+
+    /// Returns knockback multiplier for the given entity (default 1.0).
+    fn get_knockback_multiplier(&self, _entity: &dyn EntityBase) -> f32 {
+        1.0
+    }
+
+    /// Calculates the damage amount to deal to the entity given the exposure.
+    fn get_entity_damage_amount(
+        &self,
+        explosion: &Explosion,
+        entity: &dyn EntityBase,
+        exposure: f32,
+    ) -> f32 {
+        let radius = explosion.power as f64 * 2.0;
+        let distance = (entity
+            .get_entity()
+            .pos
+            .load()
+            .squared_distance_to_vec(&explosion.pos))
+        .sqrt()
+            / radius;
+        let damage_multiplier = (1.0 - distance) * exposure as f64;
+        (f64::midpoint(damage_multiplier * damage_multiplier, damage_multiplier)
+            * 7.0
+            * explosion.power as f64
+            + 1.0) as f32
+    }
+}
+
+/// Default explosion damage calculator implementing vanilla standard explosion rules.
+pub struct DefaultExplosionDamageCalculator;
+
+impl ExplosionDamageCalculator for DefaultExplosionDamageCalculator {}
+
+/// A configurable explosion damage calculator (e.g. for wind charges, mace wind bursts).
+pub struct SimpleExplosionDamageCalculator {
+    pub damages_entities: bool,
+    pub damages_blocks: bool,
+    pub knockback_multiplier: Option<f32>,
+    pub immune_blocks: Option<&'static Tag>,
+}
+
+impl SimpleExplosionDamageCalculator {
+    #[must_use]
+    pub const fn new(
+        damages_entities: bool,
+        damages_blocks: bool,
+        knockback_multiplier: Option<f32>,
+        immune_blocks: Option<&'static Tag>,
+    ) -> Self {
+        Self {
+            damages_entities,
+            damages_blocks,
+            knockback_multiplier,
+            immune_blocks,
+        }
+    }
+}
+
+impl ExplosionDamageCalculator for SimpleExplosionDamageCalculator {
+    fn get_block_explosion_resistance(
+        &self,
+        _explosion: &Explosion,
+        _world: &World,
+        _pos: &BlockPos,
+        block: &Block,
+        fluid: &pumpkin_data::fluid::FluidState,
+    ) -> Option<f32> {
+        if let Some(immune_tag) = self.immune_blocks
+            && block.has_tag(immune_tag)
+        {
+            return None;
+        }
+        if block.default_state.is_air() && fluid.is_empty {
+            None
+        } else {
+            Some(fluid.blast_resistance.max(block.blast_resistance))
+        }
+    }
+
+    fn should_block_explode(
+        &self,
+        _explosion: &Explosion,
+        _world: &World,
+        _pos: &BlockPos,
+        block: &Block,
+        _power: f32,
+    ) -> bool {
+        if !self.damages_blocks {
+            return false;
+        }
+        if let Some(immune_tag) = self.immune_blocks
+            && block.has_tag(immune_tag)
+        {
+            return false;
+        }
+        true
+    }
+
+    fn should_damage_entity(&self, _explosion: &Explosion, _entity: &dyn EntityBase) -> bool {
+        self.damages_entities
+    }
+
+    fn get_knockback_multiplier(&self, _entity: &dyn EntityBase) -> f32 {
+        self.knockback_multiplier.unwrap_or(1.0)
+    }
+}
+
 pub struct Explosion {
     power: f32,
     pos: Vector3<f64>,
+    block_interaction: BlockInteraction,
+    damage_calculator: Option<Arc<dyn ExplosionDamageCalculator>>,
     preserve_rails: bool,
 }
 
 impl Explosion {
     #[must_use]
-    pub const fn new(power: f32, pos: Vector3<f64>) -> Self {
+    pub const fn new(power: f32, pos: Vector3<f64>, block_interaction: BlockInteraction) -> Self {
         Self {
             power,
             pos,
+            block_interaction,
+            damage_calculator: None,
             preserve_rails: false,
         }
+    }
+
+    #[must_use]
+    pub fn with_damage_calculator(
+        mut self,
+        calculator: Arc<dyn ExplosionDamageCalculator>,
+    ) -> Self {
+        self.damage_calculator = Some(calculator);
+        self
     }
 
     #[must_use]
@@ -48,6 +230,7 @@ impl Explosion {
             || block.id == Block::ACTIVATOR_RAIL.id
     }
 
+    #[allow(clippy::too_many_lines)]
     fn get_blocks_to_destroy(
         &self,
         world: &World,
@@ -58,6 +241,12 @@ impl Explosion {
             pumpkin_util::math::vector2::Vector2<i32>,
             Option<Arc<ChunkData>>,
         > = FxHashMap::default();
+
+        let default_calc = DefaultExplosionDamageCalculator;
+        let calc: &dyn ExplosionDamageCalculator = match &self.damage_calculator {
+            Some(c) => c.as_ref(),
+            None => &default_calc,
+        };
 
         for x in 0..16 {
             for y in 0..16 {
@@ -137,14 +326,25 @@ impl Explosion {
                         if !state.is_air() || !fluid_state.is_empty {
                             let protects_rail = self.protects_rail(world, &block_pos, block);
                             let resistance = if protects_rail {
-                                0.0
+                                Some(0.0)
                             } else {
-                                fluid_state.blast_resistance.max(block.blast_resistance)
+                                calc.get_block_explosion_resistance(
+                                    self,
+                                    world,
+                                    &block_pos,
+                                    block,
+                                    fluid_state,
+                                )
                             };
 
-                            h -= (resistance + 0.3) * 0.3;
+                            if let Some(resistance) = resistance {
+                                h -= (resistance + 0.3) * 0.3;
+                            }
 
-                            if h > 0.0 && !protects_rail {
+                            if h > 0.0
+                                && !protects_rail
+                                && calc.should_block_explode(self, world, &block_pos, block, h)
+                            {
                                 map.insert(block_pos, (block, state));
                             }
                         }
@@ -181,6 +381,12 @@ impl Explosion {
 
         let entities = world.get_all_at_box(&search_box);
 
+        let default_calc = DefaultExplosionDamageCalculator;
+        let calc: &dyn ExplosionDamageCalculator = match &self.damage_calculator {
+            Some(c) => c.as_ref(),
+            None => &default_calc,
+        };
+
         for entity_base in entities {
             if entity_base.is_immune_to_explosion() {
                 continue;
@@ -198,21 +404,26 @@ impl Explosion {
                 continue;
             }
 
-            let exposure = Self::calculate_exposure(&self.pos, entity, world).await as f64;
+            let should_damage = calc.should_damage_entity(self, entity_base.as_ref());
+            let knockback_multiplier = calc.get_knockback_multiplier(entity_base.as_ref()) as f64;
+
+            let exposure = if !should_damage && knockback_multiplier == 0.0 {
+                0.0
+            } else {
+                Self::calculate_exposure(&self.pos, entity, world).await as f64
+            };
+
             if exposure == 0.0 {
                 continue;
             }
 
-            let damage_multiplier = (1.0 - distance) * exposure;
-            let damage = (f64::midpoint(damage_multiplier * damage_multiplier, damage_multiplier)
-                * 7.0
-                * self.power as f64
-                + 1.0) as f32;
-
-            // TODO: damage type
-            entity
-                .damage(entity_base.as_ref(), damage, DamageType::EXPLOSION)
-                .await;
+            if should_damage {
+                let damage =
+                    calc.get_entity_damage_amount(self, entity_base.as_ref(), exposure as f32);
+                entity
+                    .damage(entity_base.as_ref(), damage, DamageType::EXPLOSION)
+                    .await;
+            }
 
             // Calculate and apply knockback
             let dir_pos = if entity.entity_type == &EntityType::TNT {
@@ -221,11 +432,12 @@ impl Explosion {
                 entity.get_eye_pos()
             };
             let direction = (dir_pos - self.pos).normalize();
-            // TODO
+            // TODO: entity explosion knockback resistance attribute
             let knockback_resistance = 0.0;
 
-            let knockback_multiplier = (1.0 - distance) * exposure * (1.0 - knockback_resistance);
-            let knockback = direction * knockback_multiplier;
+            let knockback_power =
+                (1.0 - distance) * exposure * knockback_multiplier * (1.0 - knockback_resistance);
+            let knockback = direction * knockback_power;
             entity.add_velocity(knockback);
         }
     }
@@ -291,62 +503,88 @@ impl Explosion {
 
     /// Returns the removed block count
     pub async fn explode(&self, world: &Arc<World>) -> u32 {
-        let center_pos = BlockPos::floored(self.pos.x, self.pos.y, self.pos.z);
-        let mut event = crate::plugin::api::events::block::block_explode::BlockExplodeEvent::new(
-            center_pos,
-            if self.power > 0.0 {
-                1.0 / self.power
-            } else {
-                1.0
-            },
-        );
-        if let Some(server) = world.server.upgrade() {
-            server.plugin_manager.fire(&server, &mut event).await;
-        }
-        if event.cancelled {
-            return 0;
-        }
-
-        let blocks = self.get_blocks_to_destroy(world);
         self.damage_entities(world).await;
-        for (pos, (block, state)) in &blocks {
-            world
-                .set_block_state(pos, BlockStateId::AIR, BlockFlags::NOTIFY_ALL)
-                .await;
-            world.close_container_screens_at(pos).await;
 
-            let pumpkin_block = world.block_registry.get_pumpkin_block(block.id);
-
-            if pumpkin_block.is_none_or(|s| s.should_drop_items_on_explosion()) {
-                let is_raining = world.is_raining().await;
-                let is_thundering = world.is_thundering().await;
-                let params = LootContextParameters {
-                    block_state: Some(state),
-                    explosion_radius: Some(self.power),
-                    position: Some(pumpkin_util::math::vector3::Vector3::new(
-                        pos.0.x as f64,
-                        pos.0.y as f64,
-                        pos.0.z as f64,
-                    )),
-                    world_time: world.level_info.load().day_time as u64,
-                    is_raining: Some(is_raining),
-                    is_thundering: Some(is_thundering),
-                    ..Default::default()
-                };
-                drop_loot(world, block, pos, false, params).await;
+        match self.block_interaction {
+            BlockInteraction::Keep => 0,
+            BlockInteraction::TriggerBlock => {
+                let blocks = self.get_blocks_to_destroy(world);
+                for (pos, (block, _state)) in &blocks {
+                    let pumpkin_block = world.block_registry.get_pumpkin_block(block.id);
+                    if let Some(pumpkin_block) = pumpkin_block {
+                        pumpkin_block
+                            .explode(ExplodeArgs {
+                                world,
+                                block,
+                                position: pos,
+                            })
+                            .await;
+                    }
+                }
+                0
             }
-            if let Some(pumpkin_block) = pumpkin_block {
-                pumpkin_block
-                    .explode(ExplodeArgs {
-                        world,
-                        block,
-                        position: pos,
-                    })
-                    .await;
+            BlockInteraction::Destroy | BlockInteraction::DestroyWithDecay => {
+                let center_pos = BlockPos::floored(self.pos.x, self.pos.y, self.pos.z);
+                let mut event =
+                    crate::plugin::api::events::block::block_explode::BlockExplodeEvent::new(
+                        center_pos,
+                        if self.power > 0.0 {
+                            1.0 / self.power
+                        } else {
+                            1.0
+                        },
+                    );
+                if let Some(server) = world.server.upgrade() {
+                    server.plugin_manager.fire(&server, &mut event).await;
+                }
+                if event.cancelled {
+                    return 0;
+                }
+
+                let blocks = self.get_blocks_to_destroy(world);
+                let decay_drops = self.block_interaction == BlockInteraction::DestroyWithDecay;
+                let explosion_radius = decay_drops.then_some(self.power);
+
+                for (pos, (block, state)) in &blocks {
+                    world
+                        .set_block_state(pos, BlockStateId::AIR, BlockFlags::NOTIFY_ALL)
+                        .await;
+                    world.close_container_screens_at(pos).await;
+
+                    let pumpkin_block = world.block_registry.get_pumpkin_block(block.id);
+
+                    if pumpkin_block.is_none_or(|s| s.should_drop_items_on_explosion()) {
+                        let is_raining = world.is_raining().await;
+                        let is_thundering = world.is_thundering().await;
+                        let params = LootContextParameters {
+                            block_state: Some(state),
+                            explosion_radius,
+                            position: Some(pumpkin_util::math::vector3::Vector3::new(
+                                pos.0.x as f64,
+                                pos.0.y as f64,
+                                pos.0.z as f64,
+                            )),
+                            world_time: world.level_info.load().day_time as u64,
+                            is_raining: Some(is_raining),
+                            is_thundering: Some(is_thundering),
+                            ..Default::default()
+                        };
+                        drop_loot(world, block, pos, false, params).await;
+                    }
+                    if let Some(pumpkin_block) = pumpkin_block {
+                        pumpkin_block
+                            .explode(ExplodeArgs {
+                                world,
+                                block,
+                                position: pos,
+                            })
+                            .await;
+                    }
+                }
+                // TODO: fire
+                blocks.len() as u32
             }
         }
-        // TODO: fire
-        blocks.len() as u32
     }
 }
 

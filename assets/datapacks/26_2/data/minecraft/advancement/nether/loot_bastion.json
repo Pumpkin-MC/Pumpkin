@@ -1,0 +1,49 @@
+{
+  "parent": "minecraft:nether/find_bastion",
+  "criteria": {
+    "loot_bastion_bridge": {
+      "conditions": {
+        "loot_table": "minecraft:chests/bastion_bridge"
+      },
+      "trigger": "minecraft:player_generates_container_loot"
+    },
+    "loot_bastion_hoglin_stable": {
+      "conditions": {
+        "loot_table": "minecraft:chests/bastion_hoglin_stable"
+      },
+      "trigger": "minecraft:player_generates_container_loot"
+    },
+    "loot_bastion_other": {
+      "conditions": {
+        "loot_table": "minecraft:chests/bastion_other"
+      },
+      "trigger": "minecraft:player_generates_container_loot"
+    },
+    "loot_bastion_treasure": {
+      "conditions": {
+        "loot_table": "minecraft:chests/bastion_treasure"
+      },
+      "trigger": "minecraft:player_generates_container_loot"
+    }
+  },
+  "display": {
+    "description": {
+      "translate": "advancements.nether.loot_bastion.description"
+    },
+    "icon": {
+      "id": "minecraft:chest"
+    },
+    "title": {
+      "translate": "advancements.nether.loot_bastion.title"
+    }
+  },
+  "requirements": [
+    [
+      "loot_bastion_other",
+      "loot_bastion_treasure",
+      "loot_bastion_hoglin_stable",
+      "loot_bastion_bridge"
+    ]
+  ],
+  "sends_telemetry_event": true
+}

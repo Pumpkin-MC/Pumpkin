@@ -1,0 +1,13 @@
+{
+  "asset_id": "minecraft:cotan",
+  "author": {
+    "color": "gray",
+    "translate": "painting.minecraft.cotan.author"
+  },
+  "height": 3,
+  "title": {
+    "color": "yellow",
+    "translate": "painting.minecraft.cotan.title"
+  },
+  "width": 3
+}

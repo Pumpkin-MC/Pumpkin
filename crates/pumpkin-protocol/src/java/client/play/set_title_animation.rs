@@ -1,11 +1,11 @@
-use pumpkin_data::packet::clientbound::PLAY_SET_TITLES_ANIMATION;
+use pumpkin_data::packet::clientbound::play::SET_TITLES_ANIMATION;
 
 use crate::ClientPacket;
 use crate::ser::NetworkWriteExt;
 use pumpkin_macros::java_packet;
 use pumpkin_util::version::JavaMinecraftVersion;
 
-#[java_packet(PLAY_SET_TITLES_ANIMATION)]
+#[java_packet(SET_TITLES_ANIMATION)]
 pub struct CTitleAnimation {
     pub fade_in_ticks: i32,
     pub stay_ticks: i32,

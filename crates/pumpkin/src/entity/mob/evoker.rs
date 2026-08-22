@@ -4,9 +4,7 @@ use tokio::sync::Mutex;
 use uuid::Uuid;
 
 use pumpkin_data::entity::EntityType;
-use pumpkin_data::meta_data_type::MetaDataType;
 use pumpkin_data::sound::Sound;
-use pumpkin_data::tracked_data::TrackedData;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::java::client::play::Metadata;
 use pumpkin_util::math::vector3::Vector3;
@@ -121,8 +119,7 @@ impl EvokerEntity {
         let entity = &self.mob_entity.living_entity.entity;
         entity.send_meta_data(
             &[Metadata::new(
-                TrackedData::SPELL_CASTING_ID,
-                MetaDataType::BYTE,
+                pumpkin_data::tracked_data::evoker::SPELL_CASTING_ID,
                 spell as u8 as i8,
             )],
             None,

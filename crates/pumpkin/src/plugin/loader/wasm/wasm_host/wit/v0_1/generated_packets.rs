@@ -63,17 +63,6 @@ pub fn serialize_java_packet(
             crate::net::java::JavaClient::write_packet_for_version(&p, version, &mut buf).unwrap();
             Some(buf.into())
         }
-        ClientboundPacket::LoginCEncryptionRequest(data) => {
-            let p = pumpkin_protocol::java::client::login::CEncryptionRequest {
-                server_id: &data.server_id,
-                public_key: &data.public_key,
-                verify_token: &data.verify_token,
-                should_authenticate: data.should_authenticate.try_into().unwrap(),
-            };
-            let mut buf = Vec::new();
-            crate::net::java::JavaClient::write_packet_for_version(&p, version, &mut buf).unwrap();
-            Some(buf.into())
-        }
         ClientboundPacket::LoginCLoginDisconnect(data) => {
             let p = pumpkin_protocol::java::client::login::CLoginDisconnect {
                 json_reason: data.json_reason.clone(),
@@ -127,6 +116,20 @@ pub fn serialize_java_packet(
                     data.location.2,
                 ),
                 destroy_stage: data.destroy_stage.try_into().unwrap(),
+            };
+            let mut buf = Vec::new();
+            crate::net::java::JavaClient::write_packet_for_version(&p, version, &mut buf).unwrap();
+            Some(buf.into())
+        }
+        ClientboundPacket::CBlockEntityData(data) => {
+            let p = pumpkin_protocol::java::client::play::CBlockEntityData {
+                location: pumpkin_util::math::position::BlockPos::new(
+                    data.location.0,
+                    data.location.1,
+                    data.location.2,
+                ),
+                r#type: VarInt(data.r_type),
+                nbt_data: data.nbt_data.clone().into_boxed_slice(),
             };
             let mut buf = Vec::new();
             crate::net::java::JavaClient::write_packet_for_version(&p, version, &mut buf).unwrap();
@@ -276,22 +279,10 @@ pub fn serialize_java_packet(
             crate::net::java::JavaClient::write_packet_for_version(&p, version, &mut buf).unwrap();
             Some(buf.into())
         }
-        ClientboundPacket::CEntityPositionSync(data) => {
-            let p = pumpkin_protocol::java::client::play::CEntityPositionSync {
+        ClientboundPacket::CSetEntityMetadata(data) => {
+            let p = pumpkin_protocol::java::client::play::CSetEntityMetadata {
                 entity_id: VarInt(data.entity_id),
-                position: pumpkin_util::math::vector3::Vector3::new(
-                    data.position.0 as _,
-                    data.position.1 as _,
-                    data.position.2 as _,
-                ),
-                delta: pumpkin_util::math::vector3::Vector3::new(
-                    data.delta.0 as _,
-                    data.delta.1 as _,
-                    data.delta.2 as _,
-                ),
-                yaw: data.yaw.try_into().unwrap(),
-                pitch: data.pitch.try_into().unwrap(),
-                on_ground: data.on_ground.try_into().unwrap(),
+                metadata: data.metadata.clone().into_boxed_slice(),
             };
             let mut buf = Vec::new();
             crate::net::java::JavaClient::write_packet_for_version(&p, version, &mut buf).unwrap();
@@ -301,6 +292,22 @@ pub fn serialize_java_packet(
             let p = pumpkin_protocol::java::client::play::CEntityStatus {
                 entity_id: data.entity_id.try_into().unwrap(),
                 entity_status: data.entity_status.try_into().unwrap(),
+            };
+            let mut buf = Vec::new();
+            crate::net::java::JavaClient::write_packet_for_version(&p, version, &mut buf).unwrap();
+            Some(buf.into())
+        }
+        ClientboundPacket::CEntityVelocity(data) => {
+            let parsed_velocity: [f64; 3] = serde_json::from_str(&data.velocity).ok()?;
+            let p = pumpkin_protocol::java::client::play::CEntityVelocity {
+                entity_id: VarInt(data.entity_id),
+                velocity: pumpkin_protocol::codec::lp_vector_3d::LpVector3d(
+                    pumpkin_util::math::vector3::Vector3::new(
+                        parsed_velocity[0],
+                        parsed_velocity[1],
+                        parsed_velocity[2],
+                    ),
+                ),
             };
             let mut buf = Vec::new();
             crate::net::java::JavaClient::write_packet_for_version(&p, version, &mut buf).unwrap();
@@ -636,6 +643,7 @@ pub fn serialize_java_packet(
             let p = pumpkin_protocol::java::client::play::CSetEntityLink {
                 attached_entity_id: data.attached_entity_id.try_into().unwrap(),
                 holding_entity_id: data.holding_entity_id.try_into().unwrap(),
+                leash: data.leash.try_into().unwrap(),
             };
             let mut buf = Vec::new();
             crate::net::java::JavaClient::write_packet_for_version(&p, version, &mut buf).unwrap();
@@ -690,20 +698,39 @@ pub fn serialize_java_packet(
             crate::net::java::JavaClient::write_packet_for_version(&p, version, &mut buf).unwrap();
             Some(buf.into())
         }
-        ClientboundPacket::CSubtitle(data) => {
-            let component_subtitle = pumpkin_util::text::TextComponent::text(data.subtitle.clone());
-            let p = pumpkin_protocol::java::client::play::CSubtitle {
-                subtitle: &component_subtitle,
+        ClientboundPacket::CSpawnEntity(data) => {
+            let uuid_entity_uuid =
+                uuid::Uuid::from_u64_pair(data.entity_uuid.high, data.entity_uuid.low);
+            let parsed_velocity: [f64; 3] = serde_json::from_str(&data.velocity).ok()?;
+            let p = pumpkin_protocol::java::client::play::CSpawnEntity {
+                entity_id: VarInt(data.entity_id),
+                entity_uuid: uuid_entity_uuid,
+                r#type: VarInt(data.r_type),
+                position: pumpkin_util::math::vector3::Vector3::new(
+                    data.position.0 as _,
+                    data.position.1 as _,
+                    data.position.2 as _,
+                ),
+                velocity: pumpkin_protocol::codec::lp_vector_3d::LpVector3d(
+                    pumpkin_util::math::vector3::Vector3::new(
+                        parsed_velocity[0],
+                        parsed_velocity[1],
+                        parsed_velocity[2],
+                    ),
+                ),
+                pitch: data.pitch.try_into().unwrap(),
+                yaw: data.yaw.try_into().unwrap(),
+                head_yaw: data.head_yaw.try_into().unwrap(),
+                data: VarInt(data.data),
             };
             let mut buf = Vec::new();
             crate::net::java::JavaClient::write_packet_for_version(&p, version, &mut buf).unwrap();
             Some(buf.into())
         }
-        ClientboundPacket::CSystemChatMessage(data) => {
-            let component_content = pumpkin_util::text::TextComponent::text(data.content.clone());
-            let p = pumpkin_protocol::java::client::play::CSystemChatMessage {
-                content: &component_content,
-                overlay: data.overlay.try_into().unwrap(),
+        ClientboundPacket::CSubtitle(data) => {
+            let component_subtitle = pumpkin_util::text::TextComponent::text(data.subtitle.clone());
+            let p = pumpkin_protocol::java::client::play::CSubtitle {
+                subtitle: &component_subtitle,
             };
             let mut buf = Vec::new();
             crate::net::java::JavaClient::write_packet_for_version(&p, version, &mut buf).unwrap();
@@ -767,8 +794,8 @@ pub fn serialize_java_packet(
         }
         ClientboundPacket::CUnloadChunk(data) => {
             let p = pumpkin_protocol::java::client::play::CUnloadChunk {
-                z: data.z.try_into().unwrap(),
                 x: data.x.try_into().unwrap(),
+                z: data.z.try_into().unwrap(),
             };
             let mut buf = Vec::new();
             crate::net::java::JavaClient::write_packet_for_version(&p, version, &mut buf).unwrap();
@@ -822,6 +849,19 @@ pub fn serialize_java_packet(
                 amplifier: VarInt(data.amplifier),
                 duration: VarInt(data.duration),
                 flags: data.flags.try_into().unwrap(),
+            };
+            let mut buf = Vec::new();
+            crate::net::java::JavaClient::write_packet_for_version(&p, version, &mut buf).unwrap();
+            Some(buf.into())
+        }
+        ClientboundPacket::CUseBed(data) => {
+            let p = pumpkin_protocol::java::client::play::CUseBed {
+                entity_id: VarInt(data.entity_id),
+                location: pumpkin_util::math::position::BlockPos::new(
+                    data.location.0,
+                    data.location.1,
+                    data.location.2,
+                ),
             };
             let mut buf = Vec::new();
             crate::net::java::JavaClient::write_packet_for_version(&p, version, &mut buf).unwrap();
@@ -938,6 +978,13 @@ pub fn deserialize_java_serverbound_packet(
                 selected_item_index: p.selected_item_index.0.try_into().unwrap(),
             }))
         }
+        id if id == pumpkin_protocol::java::server::play::SChatAck::to_id(version) => {
+            use pumpkin_protocol::ServerPacket;
+            let p = <pumpkin_protocol::java::server::play::SChatAck as pumpkin_protocol::ServerPacket>::read(&mut payload, &version).ok()?;
+            Some(ServerboundPacket::SChatAck(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::java_packets::SChatAck {
+                offset: p.offset.0.try_into().unwrap(),
+            }))
+        }
         id if id == pumpkin_protocol::java::server::play::SChatCommand::to_id(version) => {
             use pumpkin_protocol::ServerPacket;
             let p = <pumpkin_protocol::java::server::play::SChatCommand as pumpkin_protocol::ServerPacket>::read(&mut payload, &version).ok()?;
@@ -988,13 +1035,6 @@ pub fn deserialize_java_serverbound_packet(
             Some(ServerboundPacket::SCommandSuggestion(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::java_packets::SCommandSuggestion {
                 id: p.id.0.try_into().unwrap(),
                 command: p.command.into(),
-            }))
-        }
-        id if id == pumpkin_protocol::java::server::play::SConfirmTeleport::to_id(version) => {
-            use pumpkin_protocol::ServerPacket;
-            let p = <pumpkin_protocol::java::server::play::SConfirmTeleport as pumpkin_protocol::ServerPacket>::read(&mut payload, &version).ok()?;
-            Some(ServerboundPacket::SConfirmTeleport(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::java_packets::SConfirmTeleport {
-                teleport_id: p.teleport_id.0.try_into().unwrap(),
             }))
         }
         id if id == pumpkin_protocol::java::server::play::SContainerButtonClick::to_id(version) => {
@@ -1082,6 +1122,7 @@ pub fn deserialize_java_serverbound_packet(
                 z: p.z.try_into().unwrap(),
                 yaw: p.yaw.try_into().unwrap(),
                 pitch: p.pitch.try_into().unwrap(),
+                on_ground: p.on_ground.try_into().unwrap(),
             }))
         }
         id if id == pumpkin_protocol::java::server::play::SPaddleBoat::to_id(version) => {
@@ -1182,6 +1223,16 @@ pub fn deserialize_java_serverbound_packet(
                 yaw: p.yaw.try_into().unwrap(),
                 pitch: p.pitch.try_into().unwrap(),
                 ground: p.ground.try_into().unwrap(),
+            }))
+        }
+        id if id == pumpkin_protocol::java::server::play::SPlayerSession::to_id(version) => {
+            use pumpkin_protocol::ServerPacket;
+            let p = <pumpkin_protocol::java::server::play::SPlayerSession as pumpkin_protocol::ServerPacket>::read(&mut payload, &version).ok()?;
+            Some(ServerboundPacket::SPlayerSession(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::java_packets::SPlayerSession {
+                session_id: crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::uuid::Uuid { high: p.session_id.as_u64_pair().1, low: p.session_id.as_u64_pair().0 },
+                expires_at: p.expires_at.try_into().unwrap(),
+                public_key: p.public_key.to_vec(),
+                key_signature: p.key_signature.to_vec(),
             }))
         }
         id if id == pumpkin_protocol::java::server::play::SPlayPong::to_id(version) => {
@@ -1422,17 +1473,6 @@ impl ToWitClientboundJava for pumpkin_protocol::java::client::config::CTransfer<
     }
 }
 
-impl ToWitClientboundJava for pumpkin_protocol::java::client::login::CEncryptionRequest<'_> {
-    fn to_wit(&self) -> ClientboundPacket {
-        ClientboundPacket::LoginCEncryptionRequest(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::java_packets::LoginCEncryptionRequest {
-                server_id: self.server_id.to_string(),
-                public_key: self.public_key.iter().map(|v| *v as _).collect(),
-                verify_token: self.verify_token.iter().map(|v| *v as _).collect(),
-                should_authenticate: self.should_authenticate.try_into().unwrap(),
-        })
-    }
-}
-
 impl ToWitClientboundJava for pumpkin_protocol::java::client::login::CLoginDisconnect {
     fn to_wit(&self) -> ClientboundPacket {
         ClientboundPacket::LoginCLoginDisconnect(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::java_packets::LoginCLoginDisconnect {
@@ -1481,6 +1521,16 @@ impl ToWitClientboundJava for pumpkin_protocol::java::client::play::CSetBlockDes
                 entity_id: self.entity_id.0.try_into().unwrap(),
                 location: (self.location.0.x, self.location.0.y, self.location.0.z),
                 destroy_stage: self.destroy_stage.try_into().unwrap(),
+        })
+    }
+}
+
+impl ToWitClientboundJava for pumpkin_protocol::java::client::play::CBlockEntityData {
+    fn to_wit(&self) -> ClientboundPacket {
+        ClientboundPacket::CBlockEntityData(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::java_packets::CBlockEntityData {
+                location: (self.location.0.x, self.location.0.y, self.location.0.z),
+                r_type: self.r#type.0.try_into().unwrap(),
+                nbt_data: self.nbt_data.to_vec(),
         })
     }
 }
@@ -1617,15 +1667,11 @@ impl ToWitClientboundJava for pumpkin_protocol::java::client::play::CEntityAnima
     }
 }
 
-impl ToWitClientboundJava for pumpkin_protocol::java::client::play::CEntityPositionSync {
+impl ToWitClientboundJava for pumpkin_protocol::java::client::play::CSetEntityMetadata {
     fn to_wit(&self) -> ClientboundPacket {
-        ClientboundPacket::CEntityPositionSync(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::java_packets::CEntityPositionSync {
+        ClientboundPacket::CSetEntityMetadata(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::java_packets::CSetEntityMetadata {
                 entity_id: self.entity_id.0.try_into().unwrap(),
-                position: (self.position.x as _, self.position.y as _, self.position.z as _),
-                delta: (self.delta.x as _, self.delta.y as _, self.delta.z as _),
-                yaw: self.yaw.try_into().unwrap(),
-                pitch: self.pitch.try_into().unwrap(),
-                on_ground: self.on_ground.try_into().unwrap(),
+                metadata: self.metadata.to_vec(),
         })
     }
 }
@@ -1635,6 +1681,15 @@ impl ToWitClientboundJava for pumpkin_protocol::java::client::play::CEntityStatu
         ClientboundPacket::CEntityStatus(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::java_packets::CEntityStatus {
                 entity_id: self.entity_id.try_into().unwrap(),
                 entity_status: self.entity_status.try_into().unwrap(),
+        })
+    }
+}
+
+impl ToWitClientboundJava for pumpkin_protocol::java::client::play::CEntityVelocity {
+    fn to_wit(&self) -> ClientboundPacket {
+        ClientboundPacket::CEntityVelocity(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::java_packets::CEntityVelocity {
+                entity_id: self.entity_id.0.try_into().unwrap(),
+                velocity: serde_json::to_string(&[self.velocity.0.x, self.velocity.0.y, self.velocity.0.z]).unwrap_or_default(),
         })
     }
 }
@@ -1933,6 +1988,7 @@ impl ToWitClientboundJava for pumpkin_protocol::java::client::play::CSetEntityLi
         ClientboundPacket::CSetEntityLink(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::java_packets::CSetEntityLink {
                 attached_entity_id: self.attached_entity_id.try_into().unwrap(),
                 holding_entity_id: self.holding_entity_id.try_into().unwrap(),
+                leash: self.leash.try_into().unwrap(),
         })
     }
 }
@@ -1984,19 +2040,26 @@ impl ToWitClientboundJava for pumpkin_protocol::java::client::play::CTitleAnimat
     }
 }
 
-impl ToWitClientboundJava for pumpkin_protocol::java::client::play::CSubtitle<'_> {
+impl ToWitClientboundJava for pumpkin_protocol::java::client::play::CSpawnEntity {
     fn to_wit(&self) -> ClientboundPacket {
-        ClientboundPacket::CSubtitle(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::java_packets::CSubtitle {
-                subtitle: serde_json::to_string(&self.subtitle).unwrap_or_default(),
+        ClientboundPacket::CSpawnEntity(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::java_packets::CSpawnEntity {
+                entity_id: self.entity_id.0.try_into().unwrap(),
+                entity_uuid: crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::uuid::Uuid { high: self.entity_uuid.as_u64_pair().1, low: self.entity_uuid.as_u64_pair().0 },
+                r_type: self.r#type.0.try_into().unwrap(),
+                position: (self.position.x as _, self.position.y as _, self.position.z as _),
+                velocity: serde_json::to_string(&[self.velocity.0.x, self.velocity.0.y, self.velocity.0.z]).unwrap_or_default(),
+                pitch: self.pitch.try_into().unwrap(),
+                yaw: self.yaw.try_into().unwrap(),
+                head_yaw: self.head_yaw.try_into().unwrap(),
+                data: self.data.0.try_into().unwrap(),
         })
     }
 }
 
-impl ToWitClientboundJava for pumpkin_protocol::java::client::play::CSystemChatMessage<'_> {
+impl ToWitClientboundJava for pumpkin_protocol::java::client::play::CSubtitle<'_> {
     fn to_wit(&self) -> ClientboundPacket {
-        ClientboundPacket::CSystemChatMessage(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::java_packets::CSystemChatMessage {
-                content: serde_json::to_string(&self.content).unwrap_or_default(),
-                overlay: self.overlay.try_into().unwrap(),
+        ClientboundPacket::CSubtitle(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::java_packets::CSubtitle {
+                subtitle: serde_json::to_string(&self.subtitle).unwrap_or_default(),
         })
     }
 }
@@ -2058,8 +2121,8 @@ impl ToWitClientboundJava for pumpkin_protocol::java::client::play::CTransfer<'_
 impl ToWitClientboundJava for pumpkin_protocol::java::client::play::CUnloadChunk {
     fn to_wit(&self) -> ClientboundPacket {
         ClientboundPacket::CUnloadChunk(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::java_packets::CUnloadChunk {
-                z: self.z.try_into().unwrap(),
                 x: self.x.try_into().unwrap(),
+                z: self.z.try_into().unwrap(),
         })
     }
 }
@@ -2109,6 +2172,15 @@ impl ToWitClientboundJava for pumpkin_protocol::java::client::play::CUpdateMobEf
     }
 }
 
+impl ToWitClientboundJava for pumpkin_protocol::java::client::play::CUseBed {
+    fn to_wit(&self) -> ClientboundPacket {
+        ClientboundPacket::CUseBed(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::java_packets::CUseBed {
+                entity_id: self.entity_id.0.try_into().unwrap(),
+                location: (self.location.0.x, self.location.0.y, self.location.0.z),
+        })
+    }
+}
+
 impl ToWitClientboundJava for pumpkin_protocol::java::client::play::CWorldEvent {
     fn to_wit(&self) -> ClientboundPacket {
         ClientboundPacket::CWorldEvent(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::java_packets::CWorldEvent {
@@ -2154,10 +2226,6 @@ pub fn clientbound_java_any_to_wit(any: &dyn Any) -> Option<ClientboundPacket> {
     if let Some(p) = any.downcast_ref::<pumpkin_protocol::java::client::config::CTransfer>() {
         return Some(p.to_wit());
     }
-    if let Some(p) = any.downcast_ref::<pumpkin_protocol::java::client::login::CEncryptionRequest>()
-    {
-        return Some(p.to_wit());
-    }
     if let Some(p) = any.downcast_ref::<pumpkin_protocol::java::client::login::CLoginDisconnect>() {
         return Some(p.to_wit());
     }
@@ -2180,6 +2248,9 @@ pub fn clientbound_java_any_to_wit(any: &dyn Any) -> Option<ClientboundPacket> {
     if let Some(p) =
         any.downcast_ref::<pumpkin_protocol::java::client::play::CSetBlockDestroyStage>()
     {
+        return Some(p.to_wit());
+    }
+    if let Some(p) = any.downcast_ref::<pumpkin_protocol::java::client::play::CBlockEntityData>() {
         return Some(p.to_wit());
     }
     if let Some(p) = any.downcast_ref::<pumpkin_protocol::java::client::play::CBlockEvent>() {
@@ -2229,11 +2300,14 @@ pub fn clientbound_java_any_to_wit(any: &dyn Any) -> Option<ClientboundPacket> {
     if let Some(p) = any.downcast_ref::<pumpkin_protocol::java::client::play::CEntityAnimation>() {
         return Some(p.to_wit());
     }
-    if let Some(p) = any.downcast_ref::<pumpkin_protocol::java::client::play::CEntityPositionSync>()
+    if let Some(p) = any.downcast_ref::<pumpkin_protocol::java::client::play::CSetEntityMetadata>()
     {
         return Some(p.to_wit());
     }
     if let Some(p) = any.downcast_ref::<pumpkin_protocol::java::client::play::CEntityStatus>() {
+        return Some(p.to_wit());
+    }
+    if let Some(p) = any.downcast_ref::<pumpkin_protocol::java::client::play::CEntityVelocity>() {
         return Some(p.to_wit());
     }
     if let Some(p) = any.downcast_ref::<pumpkin_protocol::java::client::play::CGameEvent>() {
@@ -2356,11 +2430,10 @@ pub fn clientbound_java_any_to_wit(any: &dyn Any) -> Option<ClientboundPacket> {
     if let Some(p) = any.downcast_ref::<pumpkin_protocol::java::client::play::CTitleAnimation>() {
         return Some(p.to_wit());
     }
-    if let Some(p) = any.downcast_ref::<pumpkin_protocol::java::client::play::CSubtitle>() {
+    if let Some(p) = any.downcast_ref::<pumpkin_protocol::java::client::play::CSpawnEntity>() {
         return Some(p.to_wit());
     }
-    if let Some(p) = any.downcast_ref::<pumpkin_protocol::java::client::play::CSystemChatMessage>()
-    {
+    if let Some(p) = any.downcast_ref::<pumpkin_protocol::java::client::play::CSubtitle>() {
         return Some(p.to_wit());
     }
     if let Some(p) = any.downcast_ref::<pumpkin_protocol::java::client::play::CTabList>() {
@@ -2395,6 +2468,9 @@ pub fn clientbound_java_any_to_wit(any: &dyn Any) -> Option<ClientboundPacket> {
         return Some(p.to_wit());
     }
     if let Some(p) = any.downcast_ref::<pumpkin_protocol::java::client::play::CUpdateMobEffect>() {
+        return Some(p.to_wit());
+    }
+    if let Some(p) = any.downcast_ref::<pumpkin_protocol::java::client::play::CUseBed>() {
         return Some(p.to_wit());
     }
     if let Some(p) = any.downcast_ref::<pumpkin_protocol::java::client::play::CWorldEvent>() {

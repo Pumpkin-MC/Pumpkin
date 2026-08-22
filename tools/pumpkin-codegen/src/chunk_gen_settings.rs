@@ -464,11 +464,26 @@ impl ToTokens for MaterialRuleStruct {
     }
 }
 
-/// Reads `chunk_gen_settings.json` and emits the complete chunk generation settings `TokenStream`.
+/// Reads noise_settings files from the 26.2 datapack and emits the complete chunk generation settings `TokenStream`.
 pub fn build() -> TokenStream {
-    let json: BTreeMap<String, GenerationSettingsStruct> =
-        serde_json::from_str(&fs::read_to_string("../../assets/chunk_gen_settings.json").unwrap())
-            .expect("Failed to parse settings.json");
+    let dir =
+        std::path::Path::new("../../assets/datapacks/26_2/data/minecraft/worldgen/noise_settings");
+    let mut json: BTreeMap<String, GenerationSettingsStruct> = BTreeMap::new();
+    let mut entries: Vec<_> = fs::read_dir(dir)
+        .expect("Missing worldgen/noise_settings directory")
+        .flatten()
+        .filter(|e| e.path().extension().is_some_and(|ext| ext == "json"))
+        .collect();
+    entries.sort_by_key(|e| e.path());
+
+    for entry in entries {
+        let path = entry.path();
+        let stem = path.file_stem().unwrap().to_string_lossy().into_owned();
+        let content = fs::read_to_string(&path).expect("Failed to read noise_settings file");
+        let settings: GenerationSettingsStruct =
+            serde_json::from_str(&content).expect("Failed to parse noise_settings JSON");
+        json.insert(stem, settings);
+    }
 
     let mut const_defs = TokenStream::new();
 

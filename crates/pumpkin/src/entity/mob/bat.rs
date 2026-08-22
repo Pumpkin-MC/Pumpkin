@@ -80,7 +80,7 @@ impl BatEntity {
         //     .living_entity
         //     .entity
         //     .send_meta_data(&[Metadata::new(
-        //         TrackedData::ID_FLAGS,
+        //         pumpkin_data::tracked_data::bat::ID_FLAGS,
         //         MetaDataType::BYTE,
         //         flags,
         //     )])

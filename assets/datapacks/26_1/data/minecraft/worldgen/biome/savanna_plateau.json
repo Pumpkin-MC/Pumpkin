@@ -1,0 +1,11 @@
+{
+  "has_precipitation": false,
+  "temperature": 2.0,
+  "downfall": 0.0,
+  "attributes": {
+    "minecraft:visual/sky_color": "#6eb1ff"
+  },
+  "effects": {
+    "water_color": "#3f76e4"
+  }
+}

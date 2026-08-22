@@ -213,7 +213,7 @@ impl ToTokens for ItemComponents {
         let item_name = LitStr::new(&text, Span::call_site());
         tokens.extend(quote! {
             (ItemName, &ItemNameImpl {
-                name: #item_name,
+                name: Cow::Borrowed(#item_name),
             }),
         });
 
@@ -861,7 +861,7 @@ impl ToTokens for ItemComponents {
             tokens.extend(quote! { (StoredEnchantments, &StoredEnchantmentsImpl { enchantment: Cow::Borrowed(&[]) }), });
         }
         if self.suspicious_stew_effects.is_some() {
-            tokens.extend(quote! { (SuspiciousStewEffects, &SuspiciousStewEffectsImpl), });
+            tokens.extend(quote! { (SuspiciousStewEffects, &SuspiciousStewEffectsImpl::EMPTY), });
         }
         if self.swing_animation.is_some() {
             tokens.extend(quote! { (SwingAnimation, &SwingAnimationImpl), });
@@ -1621,7 +1621,9 @@ pub fn build() -> TokenStream {
                     .iter()
                     .find_map(|(id, data)| {
                         if id == &ItemName {
-                            data.as_any().downcast_ref::<ItemNameImpl>().map(|n| n.name)
+                            data.as_any()
+                                .downcast_ref::<ItemNameImpl>()
+                                .map(|name| name.name.as_ref())
                         } else {
                             None
                         }

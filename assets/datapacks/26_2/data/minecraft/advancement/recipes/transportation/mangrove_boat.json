@@ -1,0 +1,28 @@
+{
+  "parent": "minecraft:recipes/root",
+  "criteria": {
+    "has_the_recipe": {
+      "conditions": {
+        "recipe": "minecraft:mangrove_boat"
+      },
+      "trigger": "minecraft:recipe_unlocked"
+    },
+    "in_water": {
+      "conditions": {
+        "block": "minecraft:water"
+      },
+      "trigger": "minecraft:enter_block"
+    }
+  },
+  "requirements": [
+    [
+      "has_the_recipe",
+      "in_water"
+    ]
+  ],
+  "rewards": {
+    "recipes": [
+      "minecraft:mangrove_boat"
+    ]
+  }
+}

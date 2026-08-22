@@ -348,7 +348,7 @@ impl pumpkin::plugin::server::HostServer for PluginHostState {
             }
         };
 
-        let dispatcher = server.command_dispatcher.read().await;
+        let dispatcher = server.command_dispatcher.load();
         dispatcher
             .handle_command(&native_sender.into_source(server).await, &command)
             .await;
@@ -700,7 +700,7 @@ impl pumpkin::plugin::server::HostOpManager for PluginHostState {
         drop(config);
 
         if let Some(player) = server.get_player_by_uuid(uuid) {
-            let command_dispatcher = server.command_dispatcher.read().await;
+            let command_dispatcher = server.command_dispatcher.load();
             player
                 .set_permission_lvl(server, internal_level, &command_dispatcher)
                 .await;
@@ -727,7 +727,7 @@ impl pumpkin::plugin::server::HostOpManager for PluginHostState {
             drop(config);
 
             if let Some(player) = server.get_player_by_uuid(uuid) {
-                let command_dispatcher = server.command_dispatcher.read().await;
+                let command_dispatcher = server.command_dispatcher.load();
                 player
                     .set_permission_lvl(
                         server,

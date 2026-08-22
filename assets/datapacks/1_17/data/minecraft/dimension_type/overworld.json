@@ -1,0 +1,17 @@
+{
+  "piglin_safe": 0,
+  "natural": 1,
+  "ambient_light": 0.0,
+  "infiniburn": "minecraft:infiniburn_overworld",
+  "respawn_anchor_works": 0,
+  "has_skylight": 1,
+  "bed_works": 1,
+  "effects": "minecraft:overworld",
+  "has_raids": 1,
+  "logical_height": 256,
+  "coordinate_scale": 1.0,
+  "min_y": 0,
+  "has_ceiling": 0,
+  "ultrawarm": 0,
+  "height": 256
+}

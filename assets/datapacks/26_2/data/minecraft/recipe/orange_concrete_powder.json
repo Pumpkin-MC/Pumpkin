@@ -1,0 +1,20 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "building",
+  "group": "concrete_powder",
+  "ingredients": [
+    "minecraft:orange_dye",
+    "minecraft:sand",
+    "minecraft:sand",
+    "minecraft:sand",
+    "minecraft:sand",
+    "minecraft:gravel",
+    "minecraft:gravel",
+    "minecraft:gravel",
+    "minecraft:gravel"
+  ],
+  "result": {
+    "count": 8,
+    "id": "minecraft:orange_concrete_powder"
+  }
+}

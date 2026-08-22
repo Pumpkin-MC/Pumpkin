@@ -6,10 +6,8 @@ use std::sync::{
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
-use pumpkin_data::meta_data_type::MetaDataType;
 use pumpkin_data::sound::Sound;
 use pumpkin_data::tag::{self, Taggable};
-use pumpkin_data::tracked_data::TrackedData;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::java::client::play::Metadata;
 
@@ -93,8 +91,7 @@ impl HappyGhastEntity {
         let entity = self.get_entity();
         entity.send_meta_data(
             &[Metadata::new(
-                TrackedData::IS_LEASH_HOLDER,
-                MetaDataType::BOOLEAN,
+                pumpkin_data::tracked_data::happy_ghast::IS_LEASH_HOLDER,
                 is_leash_holder,
             )],
             None,
@@ -107,8 +104,7 @@ impl HappyGhastEntity {
         let entity = self.get_entity();
         entity.send_meta_data(
             &[Metadata::new(
-                TrackedData::STAYS_STILL,
-                MetaDataType::BOOLEAN,
+                pumpkin_data::tracked_data::happy_ghast::STAYS_STILL,
                 stays_still,
             )],
             None,
@@ -205,8 +201,7 @@ impl Mob for HappyGhastEntity {
             if is_baby {
                 entity.send_meta_data(
                     &[Metadata::new(
-                        TrackedData::BABY_ID,
-                        MetaDataType::BOOLEAN,
+                        pumpkin_data::tracked_data::happy_ghast::BABY_ID,
                         true,
                     )],
                     None,
@@ -215,13 +210,11 @@ impl Mob for HappyGhastEntity {
             entity.send_meta_data(
                 &[
                     Metadata::new(
-                        TrackedData::IS_LEASH_HOLDER,
-                        MetaDataType::BOOLEAN,
+                        pumpkin_data::tracked_data::happy_ghast::IS_LEASH_HOLDER,
                         self.is_leash_holder.load(Ordering::Relaxed),
                     ),
                     Metadata::new(
-                        TrackedData::STAYS_STILL,
-                        MetaDataType::BOOLEAN,
+                        pumpkin_data::tracked_data::happy_ghast::STAYS_STILL,
                         self.stays_still.load(Ordering::Relaxed),
                     ),
                 ],

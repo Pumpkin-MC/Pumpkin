@@ -220,6 +220,7 @@ impl PumpkinError for ChatError {
 pub mod attack;
 pub mod bundle_item_selected;
 pub mod change_game_mode;
+pub mod chat_ack;
 pub mod chat_command;
 pub mod chat_message;
 pub mod chunk_batch;

@@ -1,7 +1,7 @@
 use crate::ClientPacket;
 use crate::VarInt;
 use crate::ser::NetworkWriteExt;
-use pumpkin_data::packet::clientbound::PLAY_SET_CHUNK_CACHE_CENTER;
+use pumpkin_data::packet::clientbound::play::SET_CHUNK_CACHE_CENTER;
 use pumpkin_macros::java_packet;
 use pumpkin_util::version::JavaMinecraftVersion;
 
@@ -10,7 +10,7 @@ use pumpkin_util::version::JavaMinecraftVersion;
 /// This packet tells the client which chunk coordinate it should use as the
 /// focal point for loading and unloading chunks. It is typically sent when
 /// a player moves across a chunk boundary.
-#[java_packet(PLAY_SET_CHUNK_CACHE_CENTER)]
+#[java_packet(SET_CHUNK_CACHE_CENTER)]
 pub struct CCenterChunk {
     /// The X coordinate of the center chunk.
     pub chunk_x: VarInt,

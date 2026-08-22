@@ -80,8 +80,7 @@ impl BedrockClient {
             ));
         }
 
-        self.enqueue_packet_internal(&CPlayStatus::LoginSuccess)
-            .await;
+        self.enqueue_client_packet(&CPlayStatus::LoginSuccess).await;
         let br_config = &server.advanced_config.resource_pack.bedrock;
 
         let mut entries = Vec::new();
@@ -111,7 +110,7 @@ impl BedrockClient {
             world_template_version: String::new(),
             resource_packs: entries,
         };
-        self.enqueue_packet_internal(&packs_info).await;
+        self.enqueue_client_packet(&packs_info).await;
 
         let new_config = PlayerConfig {
             locale: client_data.language_code.clone(),

@@ -3,7 +3,7 @@ use crate::{
     server::Server,
     world::World,
 };
-use pumpkin_data::{entity::EntityStatus, meta_data_type::MetaDataType, tracked_data::TrackedData};
+use pumpkin_data::entity::EntityStatus;
 use pumpkin_protocol::bedrock::server::actor_event::ActorEventType;
 use pumpkin_protocol::{codec::optional_int::OptionalInt, java::client::play::Metadata};
 use pumpkin_util::{
@@ -71,8 +71,7 @@ impl FireworkRocketEntity {
         // Set shooter metadata
         rocket.entity.entity.send_meta_data(
             &[Metadata::new(
-                TrackedData::ATTACHED_TO_TARGET,
-                MetaDataType::OPTIONAL_INT,
+                pumpkin_data::tracked_data::firework_rocket::ATTACHED_TO_TARGET,
                 OptionalInt(Some(shooter.entity_id)),
             )],
             None,

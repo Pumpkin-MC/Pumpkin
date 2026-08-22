@@ -1,0 +1,32 @@
+{
+  "parent": "minecraft:recipes/root",
+  "criteria": {
+    "has_oxidized_copper_lantern": {
+      "conditions": {
+        "items": [
+          {
+            "items": "minecraft:oxidized_copper_lantern"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    },
+    "has_the_recipe": {
+      "conditions": {
+        "recipe": "minecraft:waxed_oxidized_copper_lantern_from_honeycomb"
+      },
+      "trigger": "minecraft:recipe_unlocked"
+    }
+  },
+  "requirements": [
+    [
+      "has_the_recipe",
+      "has_oxidized_copper_lantern"
+    ]
+  ],
+  "rewards": {
+    "recipes": [
+      "minecraft:waxed_oxidized_copper_lantern_from_honeycomb"
+    ]
+  }
+}

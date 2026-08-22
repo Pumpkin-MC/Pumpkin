@@ -3,9 +3,7 @@ use crate::entity::EntityBase;
 use crate::entity::mob::Mob;
 use crate::entity::player::Player;
 use pumpkin_data::item::Item;
-use pumpkin_data::meta_data_type::MetaDataType;
 use pumpkin_data::tag::{self, Taggable};
-use pumpkin_data::tracked_data::TrackedData;
 use pumpkin_protocol::java::client::play::Metadata;
 use rand::RngExt;
 use std::sync::Arc;
@@ -49,8 +47,7 @@ impl BegGoal {
     fn set_is_interested(mob: &dyn Mob, value: bool) {
         mob.get_mob_entity().living_entity.entity.send_meta_data(
             &[Metadata::new(
-                TrackedData::INTERESTED_ID,
-                MetaDataType::BOOLEAN,
+                pumpkin_data::tracked_data::wolf::INTERESTED_ID,
                 value,
             )],
             None,
