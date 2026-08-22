@@ -2,6 +2,8 @@ use pumpkin_data::Block;
 use pumpkin_data::BlockStateId;
 use pumpkin_data::block_properties::{BlockProperties, TorchflowerCropLikeProperties};
 use pumpkin_macros::pumpkin_block;
+use pumpkin_util::math::position::BlockPos;
+use pumpkin_world::world::BlockAccessor;
 use rand::RngExt;
 
 use crate::block::blocks::plant::PlantBlockBase;
@@ -45,7 +47,13 @@ impl BlockBehaviour for TorchFlowerBlock {
     }
 }
 
-impl PlantBlockBase for TorchFlowerBlock {}
+impl PlantBlockBase for TorchFlowerBlock {
+    // Crops require farmland below; without this override the generic plant
+    // survival check (`supports_vegetation`) keeps them alive on dirt.
+    fn can_plant_on_top(&self, block_accessor: &dyn BlockAccessor, pos: &BlockPos) -> bool {
+        <Self as CropBlockBase>::can_plant_on_top(self, block_accessor, pos)
+    }
+}
 
 impl CropBlockBase for TorchFlowerBlock {
     fn bonemeal_age_increase(&self) -> i32 {

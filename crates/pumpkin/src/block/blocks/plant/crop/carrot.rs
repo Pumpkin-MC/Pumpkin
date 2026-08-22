@@ -1,5 +1,7 @@
 use pumpkin_data::BlockStateId;
 use pumpkin_macros::pumpkin_block;
+use pumpkin_util::math::position::BlockPos;
+use pumpkin_world::world::BlockAccessor;
 
 use crate::block::blocks::plant::PlantBlockBase;
 use crate::block::blocks::plant::crop::CropBlockBase;
@@ -38,6 +40,12 @@ impl BlockBehaviour for CarrotBlock {
     }
 }
 
-impl PlantBlockBase for CarrotBlock {}
+impl PlantBlockBase for CarrotBlock {
+    // Crops require farmland below; without this override the generic plant
+    // survival check (`supports_vegetation`) keeps them alive on dirt.
+    fn can_plant_on_top(&self, block_accessor: &dyn BlockAccessor, pos: &BlockPos) -> bool {
+        <Self as CropBlockBase>::can_plant_on_top(self, block_accessor, pos)
+    }
+}
 
 impl CropBlockBase for CarrotBlock {}
