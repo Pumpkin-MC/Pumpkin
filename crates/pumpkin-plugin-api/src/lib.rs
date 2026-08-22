@@ -104,7 +104,7 @@ pub mod command {
 }
 
 pub use wit::pumpkin::plugin::{
-    advancement as advancement_wit, bedrock_packets, block_entity, boss_bar,
+    advancement as advancement_wit, bedrock_packets, block_entity, blocks, boss_bar,
     command as command_wit, common,
     context::{self, Context, MarketplaceMetadata, Server},
     damage_types as damage_types_wit, data_components, display as display_wit,
