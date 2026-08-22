@@ -1484,9 +1484,15 @@ impl LivingEntity {
                 if let Some(cause) = cause
                     && source.is_some()
                 {
+                    // XXX: Java and bedrock are using same key
+                    let key = if damage_type.message_id == "player" {
+                        translation::java::DEATH_ATTACK_PLAYER.to_string()
+                    } else {
+                        format!("death.attack.{}.player", damage_type.message_id)
+                    };
                     TextComponent::translate_cross(
-                        format!("death.attack.{}.player", damage_type.message_id),
-                        format!("death.attack.{}.player", damage_type.message_id),
+                        key.clone(), // Java
+                        key.clone(), // Bedrock
                         [
                             dyn_self.get_display_name().await,
                             cause.get_display_name().await,
