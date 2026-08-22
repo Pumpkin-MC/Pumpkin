@@ -254,11 +254,18 @@ impl Server {
                 .collect::<Vec<_>>()
         );
 
+        let verify_plugin_signatures = advanced_config.plugins.verify_signatures;
+        if !verify_plugin_signatures {
+            warn!(
+                "Plugin signature verification is disabled. Only do this if you fully trust your plugins and their sources, because unsigned or tampered WASM plugins will be loaded without verification."
+            );
+        }
+
         let server = Self {
             basic_config,
             advanced_config,
             data: vanilla_data,
-            plugin_manager: Arc::new(PluginManager::new()),
+            plugin_manager: Arc::new(PluginManager::new(verify_plugin_signatures)),
             permission_manager,
             container_id: 0.into(),
             recipe_manager: Arc::new(recipe::RecipeManager::new()),

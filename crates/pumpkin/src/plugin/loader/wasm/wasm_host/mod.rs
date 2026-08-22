@@ -89,29 +89,36 @@ impl PluginRuntime {
     pub async fn init_plugin<P: AsRef<Path>>(
         &self,
         path: P,
+        verify_signatures: bool,
     ) -> Result<(Arc<WasmPlugin>, PluginMetadata), PluginInitError> {
         let wasm_bytes = std::fs::read(&path).map_err(PluginInitError::FileReadFailed)?;
-
-        let verification =
-            signature::verify_wasm_plugin(&wasm_bytes, &path.as_ref().to_string_lossy());
-        let marketplace_metadata = if verification.is_signed && verification.is_valid {
-            verification.metadata.map(|m| {
-                wit::v0_1::pumpkin::plugin::context::MarketplaceMetadata {
-                    marketplace_url: m.marketplace_url,
-                    plugin_id: m.plugin_id,
-                    plugin_name: m.plugin_name,
-                    version: m.version,
-                    dev_id: m.dev_id,
-                    dev_name: m.dev_name,
-                    is_paid: m.is_paid,
-                    user_id: m.user_id,
-                    license_key: m.license_key,
-                    issued_at: m.issued_at,
+        let marketplace_metadata = maybe_verify_wasm_plugin(
+            &wasm_bytes,
+            &path.as_ref().to_string_lossy(),
+            verify_signatures,
+            |bytes, path_str| {
+                let verification = signature::verify_wasm_plugin(bytes, path_str);
+                if verification.is_signed && verification.is_valid {
+                    verification.metadata.map(|m| {
+                        wit::v0_1::pumpkin::plugin::context::MarketplaceMetadata {
+                            marketplace_url: m.marketplace_url,
+                            plugin_id: m.plugin_id,
+                            plugin_name: m.plugin_name,
+                            version: m.version,
+                            dev_id: m.dev_id,
+                            dev_name: m.dev_name,
+                            is_paid: m.is_paid,
+                            user_id: m.user_id,
+                            license_key: m.license_key,
+                            issued_at: m.issued_at,
+                        }
+                    })
+                } else {
+                    None
                 }
-            })
-        } else {
-            None
-        };
+            },
+        )
+        .flatten();
 
         let wasm_bytes = signature::strip_pumpkin_sections(&wasm_bytes).unwrap_or(wasm_bytes);
 
@@ -137,6 +144,18 @@ impl PluginRuntime {
         };
         Ok((wasm_plugin, metadata))
     }
+}
+
+fn maybe_verify_wasm_plugin<T, F>(
+    wasm_bytes: &[u8],
+    path_str: &str,
+    verify_signatures: bool,
+    verify: F,
+) -> Option<T>
+where
+    F: FnOnce(&[u8], &str) -> T,
+{
+    verify_signatures.then(|| verify(wasm_bytes, path_str))
 }
 
 fn setup_linker(engine: &Engine) -> wasmtime::Result<Linker<PluginHostState>> {
