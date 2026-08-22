@@ -373,6 +373,18 @@ macro_rules! impl_block_entity_for_cooking {
                 world: &'a Arc<$crate::world::World>,
             ) -> std::pin::Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
                 Box::pin(async move {
+                    // The block at this position can have been broken/replaced by the time this
+                    // tick actually runs (block removal and the world tick loop race on which
+                    // one observes the other first), leaving a stale block entity behind until
+                    // it gets cleaned up. Decoding properties against the new, unrelated block
+                    // would either panic (debug) or silently produce garbage (release), so just
+                    // skip this tick instead.
+                    if !pumpkin_data::block_properties::FurnaceLikeProperties::handles_block_id(
+                        world.get_block(&self.position).id,
+                    ) {
+                        return;
+                    }
+
                     let is_burning = self.is_burning();
                     let mut is_dirty = false;
                     if self.is_burning() {

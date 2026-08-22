@@ -428,6 +428,17 @@ impl crate::block::entities::BlockEntity for BrewingStandBlockEntity {
         world: &'a Arc<crate::world::World>,
     ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
         Box::pin(async move {
+            // The block at this position can have been broken/replaced by the time this tick
+            // actually runs (block removal and the world tick loop race on which one observes
+            // the other first), leaving a stale block entity behind until it gets cleaned up.
+            // Ticking it against the new, unrelated block state would either panic (debug) or
+            // silently decode garbage properties (release), so just skip this tick instead.
+            if !pumpkin_data::block_properties::BrewingStandLikeProperties::handles_block_id(
+                world.get_block(&self.position).id,
+            ) {
+                return;
+            }
+
             // Refill fuel counter from fuel item if needed
             let fuel_refilled = if self.fuel.load(Ordering::Relaxed) <= 0 {
                 let mut items = self.items.write().await;

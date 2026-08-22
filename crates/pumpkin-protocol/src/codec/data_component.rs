@@ -11,20 +11,65 @@ use pumpkin_data::data_component_impl::{
     DataComponentImpl, DyedColorImpl, EnchantmentsImpl, EquipmentSlot, EquippableImpl,
     FireworkExplosionImpl, FireworkExplosionShape, FireworksImpl, FoxVariantImpl, FrogVariantImpl,
     HorseVariantImpl, IDSet, IDSetContent, IdOr, ItemModelImpl, ItemNameImpl, LlamaVariantImpl,
-    MapIdImpl, MaxStackSizeImpl, MooshroomVariantImpl, PaintingVariantImpl, ParrotVariantImpl,
-    PigSoundVariantImpl, PigVariantImpl, PotionContentsImpl, RabbitVariantImpl, SalmonSizeImpl,
-    SheepColorImpl, ShulkerColorImpl, SoundEvent, StatusEffectInstance, StoredEnchantmentsImpl,
-    SuspiciousStewEffect, SuspiciousStewEffectsImpl, TropicalFishBaseColorImpl,
-    TropicalFishPatternColorImpl, TropicalFishPatternImpl, UnbreakableImpl, UseCooldownImpl,
-    VillagerVariantImpl, WolfCollarImpl, WolfSoundVariantImpl, WolfVariantImpl,
-    ZombieNautilusVariantImpl, get,
+    LodestoneTarget, LodestoneTrackerImpl, MapIdImpl, MaxStackSizeImpl, MooshroomVariantImpl,
+    PaintingVariantImpl, ParrotVariantImpl, PigSoundVariantImpl, PigVariantImpl,
+    PotionContentsImpl, RabbitVariantImpl, SalmonSizeImpl, SheepColorImpl, ShulkerColorImpl,
+    SoundEvent, StatusEffectInstance, StoredEnchantmentsImpl, SuspiciousStewEffect,
+    SuspiciousStewEffectsImpl, TropicalFishBaseColorImpl, TropicalFishPatternColorImpl,
+    TropicalFishPatternImpl, UnbreakableImpl, UseCooldownImpl, VillagerVariantImpl, WolfCollarImpl,
+    WolfSoundVariantImpl, WolfVariantImpl, ZombieNautilusVariantImpl, get,
 };
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::sound::Sound;
-use pumpkin_nbt::{serializer::NbtWriteHelperJava, tag::NbtTag};
+use pumpkin_nbt::{
+    deserializer::{NbtReadHelperJava, NbtStreamReader},
+    serializer::NbtWriteHelperJava,
+    tag::NbtTag,
+};
 
 const MAX_STATUS_EFFECTS: usize = 128;
+
+/// Adapts a [`NetworkReadExt`] stream into [`std::io::Read`] + [`std::io::Seek`] so it can be
+/// fed into an NBT reader. Data components carrying a [`pumpkin_util::text::TextComponent`]
+/// (e.g. `custom_name`, `item_name`) are encoded as raw, self-delimiting NBT on the wire
+/// rather than as a plain length-prefixed string, so they must be parsed with the NBT reader
+/// directly instead of `NetworkReadExt::get_str`. Only forward seeking (skipping bytes) is
+/// supported, which is all the NBT reader ever needs when parsing values read strictly in order.
+struct NetworkNbtReader<'a, T: NetworkReadExt>(&'a mut T);
+
+impl<T: NetworkReadExt> std::io::Read for NetworkNbtReader<'_, T> {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        self.0
+            .read_bytes_to_buf(buf)
+            .map_err(std::io::Error::other)?;
+        Ok(buf.len())
+    }
+}
+
+impl<T: NetworkReadExt> std::io::Seek for NetworkNbtReader<'_, T> {
+    fn seek(&mut self, pos: std::io::SeekFrom) -> std::io::Result<u64> {
+        match pos {
+            std::io::SeekFrom::Current(offset) if offset >= 0 => {
+                let mut discard = vec![0u8; offset as usize];
+                self.0
+                    .read_bytes_to_buf(&mut discard)
+                    .map_err(std::io::Error::other)?;
+                Ok(0)
+            }
+            _ => Err(std::io::Error::new(
+                std::io::ErrorKind::Unsupported,
+                "cannot seek backwards while streaming NBT from a network reader",
+            )),
+        }
+    }
+}
+
+fn deserialize_network_text_nbt(seq: &mut impl NetworkReadExt) -> Result<NbtTag, ReadingError> {
+    let mut reader = NbtReadHelperJava::new(NbtStreamReader(NetworkNbtReader(seq)));
+    NbtTag::deserialize(&mut reader)
+        .map_err(|err| ReadingError::Message(format!("Failed to decode text component NBT: {err}")))
+}
 
 #[must_use]
 pub fn data_to_proto_sound(id_or: &IdOr<SoundEvent>) -> crate::IdOr<crate::SoundEvent> {
@@ -328,10 +373,17 @@ impl DataComponentCodec<Self> for CustomNameImpl {
     }
 
     fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
-        let name = seq.get_str()?;
-        Ok(Self {
-            name: pumpkin_util::text::TextComponent::text(String::from(name)),
-        })
+        let tag = deserialize_network_text_nbt(seq)?;
+        let name = match tag {
+            NbtTag::String(name) => pumpkin_util::text::TextComponent::text(name.to_string()),
+            NbtTag::Compound(compound) => compound
+                .get_string("text")
+                .map_or_else(pumpkin_util::text::TextComponent::empty, |name| {
+                    pumpkin_util::text::TextComponent::text(name.to_string())
+                }),
+            _ => pumpkin_util::text::TextComponent::empty(),
+        };
+        Ok(Self { name })
     }
 }
 
@@ -347,9 +399,18 @@ impl DataComponentCodec<Self> for ItemNameImpl {
     }
 
     fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
-        let name = seq.get_str()?;
+        let tag = deserialize_network_text_nbt(seq)?;
+        let name = match tag {
+            NbtTag::String(name) => name.to_string(),
+            NbtTag::Compound(compound) => compound
+                .get_string("translate")
+                .or_else(|| compound.get_string("text"))
+                .unwrap_or_default()
+                .to_owned(),
+            _ => String::new(),
+        };
         Ok(Self {
-            name: Cow::Owned(name.into()),
+            name: Cow::Owned(name),
         })
     }
 }
@@ -869,6 +930,7 @@ pub fn deserialize(
         DataComponent::StoredEnchantments => Ok(StoredEnchantmentsImpl::deserialize(seq)?.to_dyn()),
         DataComponent::UseCooldown => Ok(UseCooldownImpl::deserialize(seq)?.to_dyn()),
         DataComponent::MapId => Ok(MapIdImpl::deserialize(seq)?.to_dyn()),
+        DataComponent::LodestoneTracker => Ok(LodestoneTrackerImpl::deserialize(seq)?.to_dyn()),
         DataComponent::BundleContents => Ok(BundleContentsImpl::deserialize(seq)?.to_dyn()),
         _ => Err(ReadingError::Message(format!("component_id_{} (TODO)", id.to_id()))),
     }
@@ -899,6 +961,7 @@ pub fn serialize(
         DataComponent::StoredEnchantments => get::<StoredEnchantmentsImpl>(value).serialize(seq),
         DataComponent::UseCooldown => get::<UseCooldownImpl>(value).serialize(seq),
         DataComponent::MapId => get::<MapIdImpl>(value).serialize(seq),
+        DataComponent::LodestoneTracker => get::<LodestoneTrackerImpl>(value).serialize(seq),
         DataComponent::BundleContents => get::<BundleContentsImpl>(value).serialize(seq),
         _ => Err(WritingError::Message(format!(
             "{} not yet implemented",
@@ -942,6 +1005,39 @@ impl DataComponentCodec<Self> for UseCooldownImpl {
     }
 }
 
+impl DataComponentCodec<Self> for LodestoneTrackerImpl {
+    fn serialize(&self, seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
+        seq.write_bool(self.target.is_some())?;
+        if let Some(target) = &self.target {
+            seq.write_string(&target.dimension)?;
+            let pos = pumpkin_util::math::position::BlockPos(
+                pumpkin_util::math::vector3::Vector3::new(target.x, target.y, target.z),
+            );
+            seq.write_i64(pos.as_long())?;
+        }
+        seq.write_bool(self.tracked)?;
+        Ok(())
+    }
+
+    fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
+        let has_global_position = seq.get_bool()?;
+        let target = if has_global_position {
+            let dimension = seq.get_str()?.into();
+            let pos = pumpkin_util::math::position::BlockPos::from_i64(seq.get_i64()?);
+            Some(LodestoneTarget {
+                dimension,
+                x: pos.0.x,
+                y: pos.0.y,
+                z: pos.0.z,
+            })
+        } else {
+            None
+        };
+        let tracked = seq.get_bool()?;
+        Ok(Self { target, tracked })
+    }
+}
+
 fn deserialize_item_stack_template(
     seq: &mut impl NetworkReadExt,
 ) -> Result<pumpkin_data::item_stack::ItemStack, ReadingError> {
@@ -975,8 +1071,9 @@ fn deserialize_item_stack_template(
         let id = DataComponent::try_from_id(id_val as u8)
             .ok_or_else(|| ReadingError::Message(format!("Unknown component ID: {id_val}")))?;
 
-        let _byte_len = seq.get_var_int()?;
-
+        // Bundle contents use the plain Slot format (Prefixed Array of Slot): components have
+        // no per-entry byte-length prefix, unlike the Set Creative Mode Slot packet's
+        // length-prefixed format. Reading a phantom length here desyncs the rest of the stream.
         let component_impl = deserialize(id, seq)?;
         patch.push((id, Some(component_impl)));
     }
@@ -1029,6 +1126,131 @@ fn serialize_item_stack_template(
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pumpkin_data::data_component_impl::{
+        BundleContentsImpl, DataComponentImpl, FireworkExplosionImpl, FireworkExplosionShape,
+        FireworksImpl,
+    };
+    use pumpkin_data::item::Item;
+    use pumpkin_data::item_stack::ItemStack;
+
+    // Regression test for a stream desync when a bundle contains an item with a non-empty
+    // component patch (e.g. a crafted firework rocket with real explosion data, optionally
+    // renamed). `bundle_contents` nested items use the plain, non-length-prefixed Slot format,
+    // so decoding must not assume a byte-length prefix per component, and text-component
+    // fields (custom_name/item_name) must be parsed as NBT rather than a plain wire string.
+    #[test]
+    fn bundle_with_named_firework_round_trips() {
+        let explosion = FireworkExplosionImpl::new(
+            FireworkExplosionShape::LargeBall,
+            vec![0x00FF_0000, 0x0000_FF00],
+            vec![0x0000_00FF],
+            true,
+            false,
+        );
+        let fireworks = FireworksImpl::new(2, vec![explosion]);
+
+        let mut firework_rocket = ItemStack::new(1, &Item::FIREWORK_ROCKET);
+        firework_rocket
+            .patch
+            .push((DataComponent::Fireworks, Some(fireworks.to_dyn())));
+        firework_rocket.patch.push((
+            DataComponent::CustomName,
+            Some(
+                CustomNameImpl {
+                    name: pumpkin_util::text::TextComponent::text("Boost".to_string()),
+                }
+                .to_dyn(),
+            ),
+        ));
+
+        let mut bundle = ItemStack::new(1, &Item::BUNDLE);
+        bundle.patch.push((
+            DataComponent::BundleContents,
+            Some(
+                BundleContentsImpl {
+                    items: vec![firework_rocket],
+                }
+                .to_dyn(),
+            ),
+        ));
+
+        let mut bytes = Vec::new();
+        serialize(
+            DataComponent::BundleContents,
+            bundle.patch[0].1.as_ref().unwrap().as_ref(),
+            &mut bytes,
+        )
+        .expect("serialize bundle_contents");
+
+        let mut cursor = std::io::Cursor::new(bytes.as_slice());
+        let decoded = deserialize(DataComponent::BundleContents, &mut cursor)
+            .expect("deserialize bundle_contents without desyncing");
+
+        let decoded_bundle = decoded
+            .as_ref()
+            .as_any()
+            .downcast_ref::<BundleContentsImpl>()
+            .expect("decoded value is BundleContentsImpl");
+        assert_eq!(decoded_bundle.items.len(), 1);
+
+        let decoded_firework = &decoded_bundle.items[0];
+        let decoded_fireworks = decoded_firework
+            .patch
+            .iter()
+            .find(|(id, _)| *id == DataComponent::Fireworks)
+            .and_then(|(_, data)| data.as_ref())
+            .and_then(|data| data.as_any().downcast_ref::<FireworksImpl>())
+            .expect("nested item kept its Fireworks component");
+        assert_eq!(decoded_fireworks.flight_duration, 2);
+        assert_eq!(decoded_fireworks.explosions.len(), 1);
+
+        let decoded_name = decoded_firework
+            .patch
+            .iter()
+            .find(|(id, _)| *id == DataComponent::CustomName)
+            .and_then(|(_, data)| data.as_ref())
+            .and_then(|data| data.as_any().downcast_ref::<CustomNameImpl>())
+            .expect("nested item kept its CustomName component");
+        assert_eq!(decoded_name.name.clone().get_text(), "Boost");
+    }
+
+    // Regression test for `minecraft:lodestone_tracker` (component id 67) previously falling
+    // through to the "component_id_N (TODO)" fallback because no codec was registered for it.
+    #[test]
+    fn lodestone_tracker_round_trips() {
+        let tracker = LodestoneTrackerImpl {
+            target: Some(LodestoneTarget {
+                dimension: "minecraft:overworld".to_string(),
+                x: 100,
+                y: 64,
+                z: -200,
+            }),
+            tracked: true,
+        };
+
+        let mut bytes = Vec::new();
+        serialize(DataComponent::LodestoneTracker, &tracker, &mut bytes)
+            .expect("serialize lodestone_tracker");
+
+        let mut cursor = std::io::Cursor::new(bytes.as_slice());
+        let decoded = deserialize(DataComponent::LodestoneTracker, &mut cursor)
+            .expect("deserialize lodestone_tracker");
+        let decoded = decoded
+            .as_ref()
+            .as_any()
+            .downcast_ref::<LodestoneTrackerImpl>()
+            .expect("decoded value is LodestoneTrackerImpl");
+
+        assert!(decoded.tracked);
+        let target = decoded.target.as_ref().expect("target present");
+        assert_eq!(target.dimension, "minecraft:overworld");
+        assert_eq!((target.x, target.y, target.z), (100, 64, -200));
+    }
 }
 
 impl DataComponentCodec<Self> for BundleContentsImpl {
