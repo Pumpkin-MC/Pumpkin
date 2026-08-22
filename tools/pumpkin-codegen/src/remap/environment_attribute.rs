@@ -52,8 +52,9 @@ pub fn build() -> TokenStream {
         static_values.extend(quote! {
             pub static #ident: &[u32] = &[#(#mapping_tokens),*];
         });
+        let versions = crate::remap::version_patterns(*ver);
         match_arms.extend(quote! {
-            #ver => #ident
+            #(#versions)|* => #ident
                 .get(environment_attribute_id as usize)
                 .copied()
                 .unwrap_or(environment_attribute_id),

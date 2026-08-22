@@ -123,7 +123,8 @@ pub static ATTRIBUTE_ID_REMAP_V_26_2_TO_V_26_1: &[u32] = &[
 #[must_use]
 pub fn remap_attribute_id_for_version(attribute_id: u32, version: JavaMinecraftVersion) -> u32 {
     match version {
-        pumpkin_util::version::JavaMinecraftVersion::V_1_7_6 => {
+        pumpkin_util::version::JavaMinecraftVersion::V_1_7_2
+        | pumpkin_util::version::JavaMinecraftVersion::V_1_7_6 => {
             ATTRIBUTE_ID_REMAP_V_26_2_TO_V_1_7_6
                 .get(attribute_id as usize)
                 .copied()
@@ -133,62 +134,101 @@ pub fn remap_attribute_id_for_version(attribute_id: u32, version: JavaMinecraftV
             .get(attribute_id as usize)
             .copied()
             .unwrap_or(attribute_id),
-        pumpkin_util::version::JavaMinecraftVersion::V_1_9 => ATTRIBUTE_ID_REMAP_V_26_2_TO_V_1_9
-            .get(attribute_id as usize)
-            .copied()
-            .unwrap_or(attribute_id),
+        pumpkin_util::version::JavaMinecraftVersion::V_1_9
+        | pumpkin_util::version::JavaMinecraftVersion::V_1_9_1
+        | pumpkin_util::version::JavaMinecraftVersion::V_1_9_2
+        | pumpkin_util::version::JavaMinecraftVersion::V_1_9_3 => {
+            ATTRIBUTE_ID_REMAP_V_26_2_TO_V_1_9
+                .get(attribute_id as usize)
+                .copied()
+                .unwrap_or(attribute_id)
+        }
         pumpkin_util::version::JavaMinecraftVersion::V_1_10 => ATTRIBUTE_ID_REMAP_V_26_2_TO_V_1_10
             .get(attribute_id as usize)
             .copied()
             .unwrap_or(attribute_id),
-        pumpkin_util::version::JavaMinecraftVersion::V_1_11 => ATTRIBUTE_ID_REMAP_V_26_2_TO_V_1_11
-            .get(attribute_id as usize)
-            .copied()
-            .unwrap_or(attribute_id),
-        pumpkin_util::version::JavaMinecraftVersion::V_1_12 => ATTRIBUTE_ID_REMAP_V_26_2_TO_V_1_12
-            .get(attribute_id as usize)
-            .copied()
-            .unwrap_or(attribute_id),
-        pumpkin_util::version::JavaMinecraftVersion::V_1_13 => ATTRIBUTE_ID_REMAP_V_26_2_TO_V_1_13
-            .get(attribute_id as usize)
-            .copied()
-            .unwrap_or(attribute_id),
+        pumpkin_util::version::JavaMinecraftVersion::V_1_11
+        | pumpkin_util::version::JavaMinecraftVersion::V_1_11_1 => {
+            ATTRIBUTE_ID_REMAP_V_26_2_TO_V_1_11
+                .get(attribute_id as usize)
+                .copied()
+                .unwrap_or(attribute_id)
+        }
+        pumpkin_util::version::JavaMinecraftVersion::V_1_12
+        | pumpkin_util::version::JavaMinecraftVersion::V_1_12_1
+        | pumpkin_util::version::JavaMinecraftVersion::V_1_12_2 => {
+            ATTRIBUTE_ID_REMAP_V_26_2_TO_V_1_12
+                .get(attribute_id as usize)
+                .copied()
+                .unwrap_or(attribute_id)
+        }
+        pumpkin_util::version::JavaMinecraftVersion::V_1_13
+        | pumpkin_util::version::JavaMinecraftVersion::V_1_13_1 => {
+            ATTRIBUTE_ID_REMAP_V_26_2_TO_V_1_13
+                .get(attribute_id as usize)
+                .copied()
+                .unwrap_or(attribute_id)
+        }
         pumpkin_util::version::JavaMinecraftVersion::V_1_13_2 => {
             ATTRIBUTE_ID_REMAP_V_26_2_TO_V_1_13_2
                 .get(attribute_id as usize)
                 .copied()
                 .unwrap_or(attribute_id)
         }
-        pumpkin_util::version::JavaMinecraftVersion::V_1_14 => ATTRIBUTE_ID_REMAP_V_26_2_TO_V_1_14
-            .get(attribute_id as usize)
-            .copied()
-            .unwrap_or(attribute_id),
-        pumpkin_util::version::JavaMinecraftVersion::V_1_15 => ATTRIBUTE_ID_REMAP_V_26_2_TO_V_1_15
-            .get(attribute_id as usize)
-            .copied()
-            .unwrap_or(attribute_id),
-        pumpkin_util::version::JavaMinecraftVersion::V_1_16 => ATTRIBUTE_ID_REMAP_V_26_2_TO_V_1_16
-            .get(attribute_id as usize)
-            .copied()
-            .unwrap_or(attribute_id),
-        pumpkin_util::version::JavaMinecraftVersion::V_1_16_2 => {
+        pumpkin_util::version::JavaMinecraftVersion::V_1_14
+        | pumpkin_util::version::JavaMinecraftVersion::V_1_14_1
+        | pumpkin_util::version::JavaMinecraftVersion::V_1_14_2
+        | pumpkin_util::version::JavaMinecraftVersion::V_1_14_3
+        | pumpkin_util::version::JavaMinecraftVersion::V_1_14_4 => {
+            ATTRIBUTE_ID_REMAP_V_26_2_TO_V_1_14
+                .get(attribute_id as usize)
+                .copied()
+                .unwrap_or(attribute_id)
+        }
+        pumpkin_util::version::JavaMinecraftVersion::V_1_15
+        | pumpkin_util::version::JavaMinecraftVersion::V_1_15_1
+        | pumpkin_util::version::JavaMinecraftVersion::V_1_15_2 => {
+            ATTRIBUTE_ID_REMAP_V_26_2_TO_V_1_15
+                .get(attribute_id as usize)
+                .copied()
+                .unwrap_or(attribute_id)
+        }
+        pumpkin_util::version::JavaMinecraftVersion::V_1_16
+        | pumpkin_util::version::JavaMinecraftVersion::V_1_16_1 => {
+            ATTRIBUTE_ID_REMAP_V_26_2_TO_V_1_16
+                .get(attribute_id as usize)
+                .copied()
+                .unwrap_or(attribute_id)
+        }
+        pumpkin_util::version::JavaMinecraftVersion::V_1_16_2
+        | pumpkin_util::version::JavaMinecraftVersion::V_1_16_3
+        | pumpkin_util::version::JavaMinecraftVersion::V_1_16_4 => {
             ATTRIBUTE_ID_REMAP_V_26_2_TO_V_1_16_2
                 .get(attribute_id as usize)
                 .copied()
                 .unwrap_or(attribute_id)
         }
-        pumpkin_util::version::JavaMinecraftVersion::V_1_17 => ATTRIBUTE_ID_REMAP_V_26_2_TO_V_1_17
-            .get(attribute_id as usize)
-            .copied()
-            .unwrap_or(attribute_id),
-        pumpkin_util::version::JavaMinecraftVersion::V_1_18 => ATTRIBUTE_ID_REMAP_V_26_2_TO_V_1_18
-            .get(attribute_id as usize)
-            .copied()
-            .unwrap_or(attribute_id),
-        pumpkin_util::version::JavaMinecraftVersion::V_1_19 => ATTRIBUTE_ID_REMAP_V_26_2_TO_V_1_19
-            .get(attribute_id as usize)
-            .copied()
-            .unwrap_or(attribute_id),
+        pumpkin_util::version::JavaMinecraftVersion::V_1_17
+        | pumpkin_util::version::JavaMinecraftVersion::V_1_17_1 => {
+            ATTRIBUTE_ID_REMAP_V_26_2_TO_V_1_17
+                .get(attribute_id as usize)
+                .copied()
+                .unwrap_or(attribute_id)
+        }
+        pumpkin_util::version::JavaMinecraftVersion::V_1_18
+        | pumpkin_util::version::JavaMinecraftVersion::V_1_18_2 => {
+            ATTRIBUTE_ID_REMAP_V_26_2_TO_V_1_18
+                .get(attribute_id as usize)
+                .copied()
+                .unwrap_or(attribute_id)
+        }
+        pumpkin_util::version::JavaMinecraftVersion::V_1_19
+        | pumpkin_util::version::JavaMinecraftVersion::V_1_19_1 => {
+            ATTRIBUTE_ID_REMAP_V_26_2_TO_V_1_19
+                .get(attribute_id as usize)
+                .copied()
+                .unwrap_or(attribute_id)
+        }
         pumpkin_util::version::JavaMinecraftVersion::V_1_19_3 => {
             ATTRIBUTE_ID_REMAP_V_26_2_TO_V_1_19_3
                 .get(attribute_id as usize)

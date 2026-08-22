@@ -47,6 +47,7 @@ pub fn build() -> TokenStream {
         let Some(mapping) = mapping else {
             continue;
         };
+        let versions = crate::remap::version_patterns(*ver);
 
         // Forward: 26.2 → old version
         {
@@ -67,7 +68,7 @@ pub fn build() -> TokenStream {
                 pub static #ident: &[u32] = &[#(#mapping_tokens),*];
             });
             match_arms_id_for_ver.extend(quote! {
-                #ver => #ident
+                #(#versions)|* => #ident
                     .get(data_component_type_id as usize)
                     .copied()
                     .unwrap_or(data_component_type_id),
@@ -90,7 +91,7 @@ pub fn build() -> TokenStream {
                 pub static #ident: &[u32] = &[#(#mapping_tokens),*];
             });
             match_arms_id_from_ver.extend(quote! {
-                #ver => #ident
+                #(#versions)|* => #ident
                     .get(data_component_type_id as usize)
                     .copied()
                     .unwrap_or(data_component_type_id),

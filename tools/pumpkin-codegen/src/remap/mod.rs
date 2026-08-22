@@ -540,3 +540,79 @@ impl ParsedMappings {
             .collect()
     }
 }
+
+/// Returns all JavaMinecraftVersion variants that share the same protocol data mapping.
+#[must_use]
+pub fn version_patterns(ver: JavaMinecraftVersion) -> Vec<JavaMinecraftVersion> {
+    match ver {
+        JavaMinecraftVersion::V_1_7_6 => {
+            vec![JavaMinecraftVersion::V_1_7_2, JavaMinecraftVersion::V_1_7_6]
+        }
+        JavaMinecraftVersion::V_1_8 => vec![JavaMinecraftVersion::V_1_8],
+        JavaMinecraftVersion::V_1_9 => vec![
+            JavaMinecraftVersion::V_1_9,
+            JavaMinecraftVersion::V_1_9_1,
+            JavaMinecraftVersion::V_1_9_2,
+            JavaMinecraftVersion::V_1_9_3,
+        ],
+        JavaMinecraftVersion::V_1_10 => vec![JavaMinecraftVersion::V_1_10],
+        JavaMinecraftVersion::V_1_11 => {
+            vec![JavaMinecraftVersion::V_1_11, JavaMinecraftVersion::V_1_11_1]
+        }
+        JavaMinecraftVersion::V_1_12 => vec![
+            JavaMinecraftVersion::V_1_12,
+            JavaMinecraftVersion::V_1_12_1,
+            JavaMinecraftVersion::V_1_12_2,
+        ],
+        JavaMinecraftVersion::V_1_13 => {
+            vec![JavaMinecraftVersion::V_1_13, JavaMinecraftVersion::V_1_13_1]
+        }
+        JavaMinecraftVersion::V_1_13_2 => vec![JavaMinecraftVersion::V_1_13_2],
+        JavaMinecraftVersion::V_1_14 => vec![
+            JavaMinecraftVersion::V_1_14,
+            JavaMinecraftVersion::V_1_14_1,
+            JavaMinecraftVersion::V_1_14_2,
+            JavaMinecraftVersion::V_1_14_3,
+            JavaMinecraftVersion::V_1_14_4,
+        ],
+        JavaMinecraftVersion::V_1_15 => vec![
+            JavaMinecraftVersion::V_1_15,
+            JavaMinecraftVersion::V_1_15_1,
+            JavaMinecraftVersion::V_1_15_2,
+        ],
+        JavaMinecraftVersion::V_1_16 => {
+            vec![JavaMinecraftVersion::V_1_16, JavaMinecraftVersion::V_1_16_1]
+        }
+        JavaMinecraftVersion::V_1_16_2 => vec![
+            JavaMinecraftVersion::V_1_16_2,
+            JavaMinecraftVersion::V_1_16_3,
+            JavaMinecraftVersion::V_1_16_4,
+        ],
+        JavaMinecraftVersion::V_1_17 => {
+            vec![JavaMinecraftVersion::V_1_17, JavaMinecraftVersion::V_1_17_1]
+        }
+        JavaMinecraftVersion::V_1_18 => {
+            vec![JavaMinecraftVersion::V_1_18, JavaMinecraftVersion::V_1_18_2]
+        }
+        JavaMinecraftVersion::V_1_19 => {
+            vec![JavaMinecraftVersion::V_1_19, JavaMinecraftVersion::V_1_19_1]
+        }
+        JavaMinecraftVersion::V_1_19_3 => vec![JavaMinecraftVersion::V_1_19_3],
+        JavaMinecraftVersion::V_1_19_4 => vec![JavaMinecraftVersion::V_1_19_4],
+        JavaMinecraftVersion::V_1_20 => vec![JavaMinecraftVersion::V_1_20],
+        JavaMinecraftVersion::V_1_20_2 => vec![JavaMinecraftVersion::V_1_20_2],
+        JavaMinecraftVersion::V_1_20_3 => vec![JavaMinecraftVersion::V_1_20_3],
+        JavaMinecraftVersion::V_1_20_5 => vec![JavaMinecraftVersion::V_1_20_5],
+        JavaMinecraftVersion::V_1_21 => vec![JavaMinecraftVersion::V_1_21],
+        JavaMinecraftVersion::V_1_21_2 => vec![JavaMinecraftVersion::V_1_21_2],
+        JavaMinecraftVersion::V_1_21_4 => vec![JavaMinecraftVersion::V_1_21_4],
+        JavaMinecraftVersion::V_1_21_5 => vec![JavaMinecraftVersion::V_1_21_5],
+        JavaMinecraftVersion::V_1_21_6 => vec![JavaMinecraftVersion::V_1_21_6],
+        JavaMinecraftVersion::V_1_21_7 => vec![JavaMinecraftVersion::V_1_21_7],
+        JavaMinecraftVersion::V_1_21_9 => vec![JavaMinecraftVersion::V_1_21_9],
+        JavaMinecraftVersion::V_1_21_11 => vec![JavaMinecraftVersion::V_1_21_11],
+        JavaMinecraftVersion::V_26_1 => vec![JavaMinecraftVersion::V_26_1],
+        JavaMinecraftVersion::V_26_2 => vec![JavaMinecraftVersion::V_26_2],
+        _ => vec![ver],
+    }
+}

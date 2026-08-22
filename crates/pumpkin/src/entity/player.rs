@@ -4420,12 +4420,17 @@ impl Player {
                             direction: icon_direction,
                             display_name: None,
                         }];
-                        icons.extend(map_data.decorations.iter().map(|decoration| MapIcon {
-                            icon_type: VarInt(decoration.icon_type),
-                            x: decoration.x,
-                            z: decoration.z,
-                            direction: decoration.direction,
-                            display_name: decoration.display_name.clone(),
+                        icons.extend(map_data.decorations.iter().map(|decoration| {
+                            MapIcon {
+                                icon_type: VarInt(decoration.icon_type),
+                                x: decoration.x,
+                                z: decoration.z,
+                                direction: decoration.direction,
+                                display_name: decoration
+                                    .display_name
+                                    .as_ref()
+                                    .map(|name| TextComponent::text(name.clone())),
+                            }
                         }));
 
                         let data = map_data.dirty.then(|| MapPatch {
@@ -4439,6 +4444,7 @@ impl Player {
                         self.send_client_packet(&CMapItemData {
                             map_id: VarInt(map_id),
                             scale: map_data.scale,
+                            tracking_position: true,
                             locked: map_data.locked,
                             icons: Some(&icons),
                             data,
@@ -6278,6 +6284,116 @@ impl LastSeen {
     }
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct LastSeenTrackedEntry {
+    pub signature: Box<[u8]>,
+    pub pending: bool,
+}
+
+impl LastSeenTrackedEntry {
+    #[must_use]
+    pub fn acknowledge(&self) -> Self {
+        Self {
+            signature: self.signature.clone(),
+            pending: false,
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct LastSeenMessagesValidator {
+    pub last_seen_count: usize,
+    pub tracked_messages: VecDeque<Option<LastSeenTrackedEntry>>,
+    pub last_pending_message: Option<Box<[u8]>>,
+}
+
+impl Default for LastSeenMessagesValidator {
+    fn default() -> Self {
+        Self::new(MAX_PREVIOUS_MESSAGES as usize)
+    }
+}
+
+impl LastSeenMessagesValidator {
+    #[must_use]
+    pub fn new(last_seen_count: usize) -> Self {
+        let mut tracked = VecDeque::with_capacity(last_seen_count);
+        for _ in 0..last_seen_count {
+            tracked.push_back(None);
+        }
+        Self {
+            last_seen_count,
+            tracked_messages: tracked,
+            last_pending_message: None,
+        }
+    }
+
+    pub fn add_pending(&mut self, signature: &[u8]) {
+        if self.last_pending_message.as_deref() != Some(signature) {
+            let sig_box: Box<[u8]> = signature.into();
+            self.tracked_messages.push_back(Some(LastSeenTrackedEntry {
+                signature: sig_box.clone(),
+                pending: true,
+            }));
+            self.last_pending_message = Some(sig_box);
+        }
+    }
+
+    #[must_use]
+    pub fn tracked_messages_count(&self) -> usize {
+        self.tracked_messages.len()
+    }
+
+    pub fn apply_offset(&mut self, offset: usize) -> Result<(), &'static str> {
+        let max_offset = self
+            .tracked_messages
+            .len()
+            .saturating_sub(self.last_seen_count);
+        if offset <= max_offset {
+            self.tracked_messages.drain(0..offset);
+            Ok(())
+        } else {
+            Err("Advanced last seen window by more messages than expected")
+        }
+    }
+
+    pub fn apply_update(
+        &mut self,
+        offset: usize,
+        acknowledged: &[u8],
+    ) -> Result<Vec<Box<[u8]>>, &'static str> {
+        self.apply_offset(offset)?;
+        let mut last_seen_entries = Vec::new();
+
+        for i in 0..self.last_seen_count {
+            let is_acknowledged = if i / 8 < acknowledged.len() {
+                (acknowledged[i / 8] & (1 << (i % 8))) != 0
+            } else {
+                false
+            };
+
+            let message = self.tracked_messages.get(i).cloned().flatten();
+            if is_acknowledged {
+                let Some(entry) = message else {
+                    return Err(
+                        "Last seen update acknowledged unknown or previously ignored message",
+                    );
+                };
+                self.tracked_messages[i] = Some(entry.acknowledge());
+                last_seen_entries.push(entry.signature);
+            } else {
+                if let Some(entry) = message
+                    && !entry.pending
+                {
+                    return Err("Last seen update ignored previously acknowledged message");
+                }
+                self.tracked_messages[i] = None;
+            }
+        }
+
+        Ok(last_seen_entries)
+    }
+}
+
 pub struct MessageCache {
     /// max 128 cached message signatures. Most recent FIRST.
     /// Server should (when possible) reference indexes in this (recipient's) cache instead of sending full signatures in last seen.
@@ -6285,6 +6401,7 @@ pub struct MessageCache {
     full_cache: VecDeque<Box<[u8]>>,
     /// max 20 last seen messages by the sender. Most Recent LAST
     pub last_seen: LastSeen,
+    pub last_seen_validator: LastSeenMessagesValidator,
 }
 
 impl Default for MessageCache {
@@ -6292,6 +6409,7 @@ impl Default for MessageCache {
         Self {
             full_cache: VecDeque::with_capacity(MAX_CACHED_SIGNATURES as usize),
             last_seen: LastSeen::default(),
+            last_seen_validator: LastSeenMessagesValidator::default(),
         }
     }
 }

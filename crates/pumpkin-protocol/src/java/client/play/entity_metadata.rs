@@ -63,12 +63,35 @@ impl ClientPacket for CSetEntityMetadata {
     fn write_packet_data(
         &self,
         mut write: impl Write,
-        _version: &JavaMinecraftVersion,
+        version: &JavaMinecraftVersion,
     ) -> Result<(), WritingError> {
         // 1. Entity ID
-        write.write_var_int(&self.entity_id)?;
+        if *version <= JavaMinecraftVersion::V_1_7_6 {
+            write.write_i32_be(self.entity_id.0)?;
+        } else {
+            write.write_var_int(&self.entity_id)?;
+        }
 
         write.write_slice(&self.metadata)
+    }
+}
+
+impl<'a> crate::ServerPacket<'a> for CSetEntityMetadata {
+    fn read(
+        bytebuf: &mut &'a [u8],
+        version: &JavaMinecraftVersion,
+    ) -> Result<Self, crate::ser::ReadingError> {
+        use crate::ser::{NetworkReadExt, NetworkReadSliceExt};
+        let entity_id = if *version <= JavaMinecraftVersion::V_1_7_6 {
+            VarInt(bytebuf.get_i32_be()?)
+        } else {
+            bytebuf.get_var_int()?
+        };
+        let metadata = bytebuf.read_remaining_slice_borrowed(usize::MAX)?;
+        Ok(Self {
+            entity_id,
+            metadata: metadata.into(),
+        })
     }
 }
 

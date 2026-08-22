@@ -79,6 +79,33 @@ pub fn place_template(
     processors: &[StructureProcessor],
     chunk_box: Option<&pumpkin_util::math::block_box::BlockBox>,
 ) {
+    place_template_with_options(
+        placer,
+        template,
+        origin,
+        offset,
+        rotation,
+        skip_air,
+        apply_waterlogging,
+        processors,
+        chunk_box,
+        false,
+    );
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn place_template_with_options(
+    placer: &mut impl BlockPlacer,
+    template: &StructureTemplate,
+    origin: Vector3<i32>,
+    offset: (i32, i32),
+    rotation: Rotation,
+    skip_air: bool,
+    apply_waterlogging: bool,
+    processors: &[StructureProcessor],
+    chunk_box: Option<&pumpkin_util::math::block_box::BlockBox>,
+    keep_jigsaws: bool,
+) {
     let (rotated_ox, rotated_oz) = rotation.rotate_offset(offset.0, offset.1);
     let world_x = origin.x + rotated_ox;
     let world_z = origin.z + rotated_oz;
@@ -96,7 +123,7 @@ pub fn place_template(
 
         // Jigsaw blocks are replaced during template processing, before block entities are
         // collected. Keeping this in the placement pipeline avoids stale jigsaw entities.
-        if palette_entry.name == "minecraft:jigsaw" {
+        if !keep_jigsaws && palette_entry.name == "minecraft:jigsaw" {
             let final_state = block_entity_nbt
                 .as_ref()
                 .and_then(|nbt| nbt.get_string("final_state"))

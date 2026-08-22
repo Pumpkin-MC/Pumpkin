@@ -222,7 +222,7 @@ impl CommandExecutor for PlaceJigsawExecutor {
                     false,
                     false,
                     &MaxDistance::new(128),
-                    &DimensionPadding::ZERO,
+                    DimensionPadding::ZERO,
                     LiquidSettings::ApplyWaterlog,
                     &PoolAliasLookup::default(),
                 )
@@ -241,7 +241,7 @@ impl CommandExecutor for PlaceJigsawExecutor {
                     if let Some(jigsaw_piece) =
                         piece.as_any().downcast_ref::<PoolElementStructurePiece>()
                     {
-                        place_pool_element_templates(jigsaw_piece, &mut placer, None);
+                        place_pool_element_templates(jigsaw_piece, &mut placer, None, false);
                     }
                 }
 
@@ -332,7 +332,7 @@ impl CommandExecutor for PlaceStructureExecutor {
                         structure.use_expansion_hack.unwrap_or(false),
                         structure.project_start_to_heightmap.is_some(),
                         &MaxDistance::new(structure.max_distance_from_center.unwrap_or(128)),
-                        &DimensionPadding::ZERO,
+                        DimensionPadding::ZERO,
                         LiquidSettings::ApplyWaterlog,
                         &PoolAliasLookup::default(),
                     )
@@ -352,7 +352,7 @@ impl CommandExecutor for PlaceStructureExecutor {
                         if let Some(jigsaw_piece) =
                             piece.as_any().downcast_ref::<PoolElementStructurePiece>()
                         {
-                            place_pool_element_templates(jigsaw_piece, &mut placer, None);
+                            place_pool_element_templates(jigsaw_piece, &mut placer, None, false);
                         }
                     }
 
@@ -392,7 +392,7 @@ impl CommandExecutor for PlaceStructureExecutor {
                         if let Some(jigsaw_piece) =
                             piece.as_any().downcast_ref::<PoolElementStructurePiece>()
                         {
-                            place_pool_element_templates(jigsaw_piece, &mut placer, None);
+                            place_pool_element_templates(jigsaw_piece, &mut placer, None, false);
                         }
                     }
 

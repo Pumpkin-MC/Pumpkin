@@ -80,6 +80,13 @@ impl ClientPacket for CUpdateAdvancements {
                 write.write_f32_be(display.y)?;
             }
 
+            if *version < JavaMinecraftVersion::V_1_20_2 {
+                write.write_var_int(&VarInt(adv.criteria.len() as i32))?;
+                for crit in adv.criteria {
+                    write.write_string(crit)?;
+                }
+            }
+
             write.write_var_int(&VarInt(adv.requirements.len() as i32))?;
             for req in adv.requirements {
                 write.write_var_int(&VarInt(req.len() as i32))?;
@@ -88,7 +95,9 @@ impl ClientPacket for CUpdateAdvancements {
                 }
             }
 
-            write.write_bool(adv.send_telemetry)?;
+            if *version >= JavaMinecraftVersion::V_1_20 {
+                write.write_bool(adv.send_telemetry)?;
+            }
         }
 
         write.write_var_int(&VarInt(self.removed.len() as i32))?;
@@ -110,7 +119,9 @@ impl ClientPacket for CUpdateAdvancements {
             }
         }
 
-        write.write_bool(self.show_advancements)?;
+        if *version >= JavaMinecraftVersion::V_1_21_5 {
+            write.write_bool(self.show_advancements)?;
+        }
 
         Ok(())
     }

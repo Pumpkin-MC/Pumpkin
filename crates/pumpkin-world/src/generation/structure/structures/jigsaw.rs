@@ -229,7 +229,130 @@ impl PoolElement {
 
         visit(&self.kind, &mut consumer);
     }
+}
 
+impl PoolElementKind {
+    #[must_use]
+    pub const fn is_empty(&self) -> bool {
+        matches!(self, Self::Empty)
+    }
+
+    #[must_use]
+    pub fn get_ground_level_delta(&self) -> i32 {
+        match self {
+            Self::Single { .. } => 1,
+            Self::List(elements) => elements.first().map_or(1, Self::get_ground_level_delta),
+            Self::Feature(_) | Self::Empty => 0,
+        }
+    }
+
+    #[must_use]
+    pub fn get_y_size(&self) -> Option<i32> {
+        match self {
+            Self::Single { template, .. } => {
+                crate::generation::structure::template::get_template(template).map(|t| t.size.y)
+            }
+            Self::List(elements) => elements.iter().filter_map(Self::get_y_size).max(),
+            Self::Feature(_) => Some(1),
+            Self::Empty => None,
+        }
+    }
+
+    #[must_use]
+    pub fn get_bounding_box(&self, offset: BlockPos, rotation: pumpkin_data::Rotation) -> BlockBox {
+        match self {
+            Self::Single { template, .. } => {
+                crate::generation::structure::template::get_template(template).map_or_else(
+                    || {
+                        BlockBox::new(
+                            offset.0.x, offset.0.y, offset.0.z, offset.0.x, offset.0.y, offset.0.z,
+                        )
+                    },
+                    |t| super::jigsaw_placement::rotated_box(offset, t.size, rotation),
+                )
+            }
+            Self::List(elements) => {
+                let mut bbox: Option<BlockBox> = None;
+                for element in elements {
+                    if element.is_empty() {
+                        continue;
+                    }
+                    let b = element.get_bounding_box(offset, rotation);
+                    if let Some(existing) = &mut bbox {
+                        existing.encompass(&b);
+                    } else {
+                        bbox = Some(b);
+                    }
+                }
+                bbox.unwrap_or_else(|| {
+                    BlockBox::new(
+                        offset.0.x, offset.0.y, offset.0.z, offset.0.x, offset.0.y, offset.0.z,
+                    )
+                })
+            }
+            Self::Feature(_) | Self::Empty => BlockBox::new(
+                offset.0.x, offset.0.y, offset.0.z, offset.0.x, offset.0.y, offset.0.z,
+            ),
+        }
+    }
+
+    #[must_use]
+    pub fn get_shuffled_jigsaw_blocks(
+        &self,
+        offset: BlockPos,
+        rotation: pumpkin_data::Rotation,
+        random: &mut pumpkin_util::random::RandomGenerator,
+    ) -> Vec<JigsawBlock> {
+        match self {
+            Self::Single { template, .. } => {
+                let Some(template) = crate::generation::structure::template::get_template(template)
+                else {
+                    return Vec::new();
+                };
+                let mut jigsaws = Vec::new();
+                for block in &template.blocks {
+                    if let Some(jigsaw) = JigsawBlock::from_template_block(
+                        block,
+                        &template.palette[block.state as usize],
+                    ) {
+                        jigsaws.push(jigsaw);
+                    }
+                }
+                for i in (1..jigsaws.len()).rev() {
+                    let j = random.next_bounded_i32(i as i32 + 1) as usize;
+                    jigsaws.swap(i, j);
+                }
+                jigsaws.sort_by_key(|j| std::cmp::Reverse(j.selection_priority));
+                for jigsaw in &mut jigsaws {
+                    let rotated_pos = super::jigsaw_placement::rotate_pos(jigsaw.pos.0, rotation);
+                    jigsaw.pos = offset.add(rotated_pos.x, rotated_pos.y, rotated_pos.z);
+                    jigsaw.facing =
+                        super::jigsaw_placement::rotate_direction(jigsaw.facing, rotation);
+                    jigsaw.up = super::jigsaw_placement::rotate_direction(jigsaw.up, rotation);
+                }
+                jigsaws
+            }
+            Self::List(elements) => elements.first().map_or_else(Vec::new, |e| {
+                e.get_shuffled_jigsaw_blocks(offset, rotation, random)
+            }),
+            Self::Feature(_) => vec![JigsawBlock {
+                pos: offset,
+                name: "minecraft:bottom".to_string(),
+                target: "minecraft:empty".to_string(),
+                pool: "minecraft:empty".to_string(),
+                final_state: "minecraft:air".to_string(),
+                joint: JigsawJointType::Rollable,
+                facing: pumpkin_util::BlockDirection::Down,
+                up: pumpkin_util::BlockDirection::South,
+                selection_priority: 0,
+                placement_priority: 0,
+            }],
+            Self::Empty => Vec::new(),
+        }
+    }
+}
+
+impl PoolElement {
     #[must_use]
     pub const fn feature(&self) -> Option<pumpkin_data::placed_feature::PlacedFeature> {
         match self.kind {
@@ -237,9 +360,43 @@ impl PoolElement {
             _ => None,
         }
     }
+
+    #[must_use]
+    pub fn get_ground_level_delta(&self) -> i32 {
+        self.kind.get_ground_level_delta()
+    }
+
+    #[must_use]
+    pub fn get_y_size(&self) -> Option<i32> {
+        self.kind.get_y_size()
+    }
+
+    #[must_use]
+    pub fn get_bounding_box(&self, offset: BlockPos, rotation: pumpkin_data::Rotation) -> BlockBox {
+        self.kind.get_bounding_box(offset, rotation)
+    }
+
+    #[must_use]
+    pub fn get_shuffled_jigsaw_blocks(
+        &self,
+        offset: BlockPos,
+        rotation: pumpkin_data::Rotation,
+        random: &mut pumpkin_util::random::RandomGenerator,
+    ) -> Vec<JigsawBlock> {
+        self.kind
+            .get_shuffled_jigsaw_blocks(offset, rotation, random)
+    }
 }
 
 impl TemplatePool {
+    #[must_use]
+    pub fn get_max_size(&self) -> i32 {
+        self.elements
+            .iter()
+            .filter_map(PoolElement::get_y_size)
+            .max()
+            .unwrap_or(0)
+    }
     pub fn get_random_element(
         &self,
         random: &mut pumpkin_util::random::RandomGenerator,
@@ -357,6 +514,14 @@ pub enum JigsawJointType {
 }
 
 impl JigsawJointType {
+    #[must_use]
+    pub const fn as_str(&self) -> &'static str {
+        match self {
+            Self::Rollable => "rollable",
+            Self::Aligned => "aligned",
+        }
+    }
+
     #[allow(clippy::should_implement_trait)]
     #[must_use]
     pub fn from_str(s: &str) -> Self {
@@ -552,6 +717,7 @@ pub fn place_pool_element_templates(
     piece: &PoolElementStructurePiece,
     placer: &mut impl BlockPlacer,
     chunk_box: Option<&BlockBox>,
+    keep_jigsaws: bool,
 ) {
     let origin = Vector3::new(piece.pos.0.x, piece.pos.0.y, piece.pos.0.z);
 
@@ -573,7 +739,7 @@ pub fn place_pool_element_templates(
                 }
                 ProcessorListRef::Empty => Arc::from([]),
             };
-            crate::generation::structure::template::place_template(
+            crate::generation::structure::template::place_template_with_options(
                 placer,
                 &template,
                 placement_origin,
@@ -583,6 +749,7 @@ pub fn place_pool_element_templates(
                 piece.liquid_settings == LiquidSettings::ApplyWaterlog,
                 processors.as_ref(),
                 chunk_box,
+                keep_jigsaws,
             );
         });
 }
@@ -670,16 +837,26 @@ impl StructureGenerator for JigsawGenerator {
                     bottom: dp,
                 });
 
+        let use_expansion_hack = self.use_expansion_hack
+            || structure
+                .and_then(|s| s.use_expansion_hack)
+                .unwrap_or(false);
+
+        let start_jigsaw = self
+            .start_jigsaw_name
+            .as_deref()
+            .or_else(|| structure.and_then(|s| s.start_jigsaw_name));
+
         JigsawPlacement::add_pieces(
             &mut context,
             &self.start_pool,
-            self.start_jigsaw_name.as_deref(),
+            start_jigsaw,
             self.size,
             start_pos,
-            self.use_expansion_hack,
+            use_expansion_hack,
             project_start_to_heightmap,
             &MaxDistance::new(max_distance),
-            &dimension_padding,
+            dimension_padding,
             liquid_settings,
             &PoolAliasLookup::default(),
         )

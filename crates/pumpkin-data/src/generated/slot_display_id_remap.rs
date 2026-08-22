@@ -35,7 +35,8 @@ pub fn remap_slot_display_id_for_version(
     version: JavaMinecraftVersion,
 ) -> u32 {
     match version {
-        pumpkin_util::version::JavaMinecraftVersion::V_1_7_6 => {
+        pumpkin_util::version::JavaMinecraftVersion::V_1_7_2
+        | pumpkin_util::version::JavaMinecraftVersion::V_1_7_6 => {
             SLOT_DISPLAY_ID_REMAP_V_26_2_TO_V_1_7_6
                 .get(slot_display_id as usize)
                 .copied()
@@ -45,29 +46,38 @@ pub fn remap_slot_display_id_for_version(
             .get(slot_display_id as usize)
             .copied()
             .unwrap_or(slot_display_id),
-        pumpkin_util::version::JavaMinecraftVersion::V_1_9 => SLOT_DISPLAY_ID_REMAP_V_26_2_TO_V_1_9
-            .get(slot_display_id as usize)
-            .copied()
-            .unwrap_or(slot_display_id),
+        pumpkin_util::version::JavaMinecraftVersion::V_1_9
+        | pumpkin_util::version::JavaMinecraftVersion::V_1_9_1
+        | pumpkin_util::version::JavaMinecraftVersion::V_1_9_2
+        | pumpkin_util::version::JavaMinecraftVersion::V_1_9_3 => {
+            SLOT_DISPLAY_ID_REMAP_V_26_2_TO_V_1_9
+                .get(slot_display_id as usize)
+                .copied()
+                .unwrap_or(slot_display_id)
+        }
         pumpkin_util::version::JavaMinecraftVersion::V_1_10 => {
             SLOT_DISPLAY_ID_REMAP_V_26_2_TO_V_1_10
                 .get(slot_display_id as usize)
                 .copied()
                 .unwrap_or(slot_display_id)
         }
-        pumpkin_util::version::JavaMinecraftVersion::V_1_11 => {
+        pumpkin_util::version::JavaMinecraftVersion::V_1_11
+        | pumpkin_util::version::JavaMinecraftVersion::V_1_11_1 => {
             SLOT_DISPLAY_ID_REMAP_V_26_2_TO_V_1_11
                 .get(slot_display_id as usize)
                 .copied()
                 .unwrap_or(slot_display_id)
         }
-        pumpkin_util::version::JavaMinecraftVersion::V_1_12 => {
+        pumpkin_util::version::JavaMinecraftVersion::V_1_12
+        | pumpkin_util::version::JavaMinecraftVersion::V_1_12_1
+        | pumpkin_util::version::JavaMinecraftVersion::V_1_12_2 => {
             SLOT_DISPLAY_ID_REMAP_V_26_2_TO_V_1_12
                 .get(slot_display_id as usize)
                 .copied()
                 .unwrap_or(slot_display_id)
         }
-        pumpkin_util::version::JavaMinecraftVersion::V_1_13 => {
+        pumpkin_util::version::JavaMinecraftVersion::V_1_13
+        | pumpkin_util::version::JavaMinecraftVersion::V_1_13_1 => {
             SLOT_DISPLAY_ID_REMAP_V_26_2_TO_V_1_13
                 .get(slot_display_id as usize)
                 .copied()
@@ -79,43 +89,55 @@ pub fn remap_slot_display_id_for_version(
                 .copied()
                 .unwrap_or(slot_display_id)
         }
-        pumpkin_util::version::JavaMinecraftVersion::V_1_14 => {
+        pumpkin_util::version::JavaMinecraftVersion::V_1_14
+        | pumpkin_util::version::JavaMinecraftVersion::V_1_14_1
+        | pumpkin_util::version::JavaMinecraftVersion::V_1_14_2
+        | pumpkin_util::version::JavaMinecraftVersion::V_1_14_3
+        | pumpkin_util::version::JavaMinecraftVersion::V_1_14_4 => {
             SLOT_DISPLAY_ID_REMAP_V_26_2_TO_V_1_14
                 .get(slot_display_id as usize)
                 .copied()
                 .unwrap_or(slot_display_id)
         }
-        pumpkin_util::version::JavaMinecraftVersion::V_1_15 => {
+        pumpkin_util::version::JavaMinecraftVersion::V_1_15
+        | pumpkin_util::version::JavaMinecraftVersion::V_1_15_1
+        | pumpkin_util::version::JavaMinecraftVersion::V_1_15_2 => {
             SLOT_DISPLAY_ID_REMAP_V_26_2_TO_V_1_15
                 .get(slot_display_id as usize)
                 .copied()
                 .unwrap_or(slot_display_id)
         }
-        pumpkin_util::version::JavaMinecraftVersion::V_1_16 => {
+        pumpkin_util::version::JavaMinecraftVersion::V_1_16
+        | pumpkin_util::version::JavaMinecraftVersion::V_1_16_1 => {
             SLOT_DISPLAY_ID_REMAP_V_26_2_TO_V_1_16
                 .get(slot_display_id as usize)
                 .copied()
                 .unwrap_or(slot_display_id)
         }
-        pumpkin_util::version::JavaMinecraftVersion::V_1_16_2 => {
+        pumpkin_util::version::JavaMinecraftVersion::V_1_16_2
+        | pumpkin_util::version::JavaMinecraftVersion::V_1_16_3
+        | pumpkin_util::version::JavaMinecraftVersion::V_1_16_4 => {
             SLOT_DISPLAY_ID_REMAP_V_26_2_TO_V_1_16_2
                 .get(slot_display_id as usize)
                 .copied()
                 .unwrap_or(slot_display_id)
         }
-        pumpkin_util::version::JavaMinecraftVersion::V_1_17 => {
+        pumpkin_util::version::JavaMinecraftVersion::V_1_17
+        | pumpkin_util::version::JavaMinecraftVersion::V_1_17_1 => {
             SLOT_DISPLAY_ID_REMAP_V_26_2_TO_V_1_17
                 .get(slot_display_id as usize)
                 .copied()
                 .unwrap_or(slot_display_id)
         }
-        pumpkin_util::version::JavaMinecraftVersion::V_1_18 => {
+        pumpkin_util::version::JavaMinecraftVersion::V_1_18
+        | pumpkin_util::version::JavaMinecraftVersion::V_1_18_2 => {
             SLOT_DISPLAY_ID_REMAP_V_26_2_TO_V_1_18
                 .get(slot_display_id as usize)
                 .copied()
                 .unwrap_or(slot_display_id)
         }
-        pumpkin_util::version::JavaMinecraftVersion::V_1_19 => {
+        pumpkin_util::version::JavaMinecraftVersion::V_1_19
+        | pumpkin_util::version::JavaMinecraftVersion::V_1_19_1 => {
             SLOT_DISPLAY_ID_REMAP_V_26_2_TO_V_1_19
                 .get(slot_display_id as usize)
                 .copied()

@@ -42,7 +42,11 @@ impl ClientPacket for CUpdateEntityPosRot {
         mut write: impl std::io::Write,
         version: &JavaMinecraftVersion,
     ) -> Result<(), WritingError> {
-        write.write_var_int(&self.entity_id)?;
+        if *version <= JavaMinecraftVersion::V_1_7_6 {
+            write.write_i32_be(self.entity_id.0)?;
+        } else {
+            write.write_var_int(&self.entity_id)?;
+        }
         if *version >= JavaMinecraftVersion::V_1_9 {
             write.write_i16_be(self.delta.x)?;
             write.write_i16_be(self.delta.y)?;
@@ -54,14 +58,20 @@ impl ClientPacket for CUpdateEntityPosRot {
         }
         write.write_u8(self.yaw)?;
         write.write_u8(self.pitch)?;
-        write.write_bool(self.on_ground)?;
+        if *version >= JavaMinecraftVersion::V_1_8 {
+            write.write_bool(self.on_ground)?;
+        }
         Ok(())
     }
 }
 
 impl<'a> ServerPacket<'a> for CUpdateEntityPosRot {
     fn read(bytebuf: &mut &'a [u8], version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
-        let entity_id = bytebuf.get_var_int()?;
+        let entity_id = if *version <= JavaMinecraftVersion::V_1_7_6 {
+            VarInt(bytebuf.get_i32_be()?)
+        } else {
+            bytebuf.get_var_int()?
+        };
         let delta = if *version >= JavaMinecraftVersion::V_1_9 {
             Vector3::new(
                 bytebuf.get_i16_be()?,
@@ -77,7 +87,11 @@ impl<'a> ServerPacket<'a> for CUpdateEntityPosRot {
         };
         let yaw = bytebuf.get_u8()?;
         let pitch = bytebuf.get_u8()?;
-        let on_ground = bytebuf.get_bool()?;
+        let on_ground = if *version >= JavaMinecraftVersion::V_1_8 {
+            bytebuf.get_bool()?
+        } else {
+            false
+        };
         Ok(Self {
             entity_id,
             delta,

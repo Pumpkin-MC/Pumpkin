@@ -1,5 +1,6 @@
 use pumpkin_protocol::java::client::play::{
-    CAcknowledgeBlockChange, CChunkBatchEnd, CChunkBatchStart, CChunkData, CPlayDisconnect,
+    CAcknowledgeBlockChange, CChunkBatchEnd, CChunkBatchStart, CChunkData, CLightUpdate,
+    CPlayDisconnect,
 };
 use pumpkin_world::level::SyncChunk;
 use std::net::SocketAddr;
@@ -11,7 +12,7 @@ use bytes::Bytes;
 use crossbeam::atomic::AtomicCell;
 use pumpkin_data::translation;
 use pumpkin_protocol::java::server::play::{
-    SAttack, SBlockEntityTagQuery, SBundleItemSelected, SChangeGameMode, SChatCommand,
+    SAttack, SBlockEntityTagQuery, SBundleItemSelected, SChangeGameMode, SChatAck, SChatCommand,
     SChatMessage, SChunkBatch, SClickSlot, SClientCommand, SClientInformationPlay, SClientTickEnd,
     SCloseContainer, SCommandSuggestion, SConfigurationAcknowledged, SConfirmTeleport,
     SContainerButtonClick, SContainerSlotStateChanged, SCookieResponse as SPCookieResponse,
@@ -363,6 +364,28 @@ impl JavaClient {
                 continue;
             }
             self.send_packet_now_data(buf.into()).await;
+
+            if version >= JavaMinecraftVersion::V_1_14 && version < JavaMinecraftVersion::V_1_18 {
+                match CLightUpdate::from_chunk(chunk, version) {
+                    Ok(light_packet) => {
+                        let mut light_buf = Vec::new();
+                        if let Err(err) =
+                            light_buf.write_var_int(&VarInt(CLightUpdate::to_id(version)))
+                        {
+                            error!("Failed to write light update id: {err:?}");
+                        } else if let Err(err) =
+                            light_packet.write_packet_data(&mut light_buf, &version)
+                        {
+                            error!("Failed to write light update data: {err:?}");
+                        } else {
+                            self.send_packet_now_data(light_buf.into()).await;
+                        }
+                    }
+                    Err(err) => {
+                        error!("Failed to create light update packet: {err:?}");
+                    }
+                }
+            }
         }
         if self.version.load() >= JavaMinecraftVersion::V_1_20_2 {
             self.send_packet(&CChunkBatchEnd::new(chunks.len() as u16))
@@ -694,6 +717,10 @@ impl JavaClient {
                     SChangeGameMode::read(&mut payload, &version)?,
                 )
                 .await;
+            }
+            id if id == SChatAck::to_id(version) => {
+                let packet = SChatAck::read(&mut payload, &version)?;
+                self.handle_chat_ack(player, &packet).await;
             }
             id if id == SChatCommand::to_id(version) => {
                 self.handle_chat_command(

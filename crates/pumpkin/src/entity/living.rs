@@ -2639,6 +2639,7 @@ impl EntityBase for LivingEntity {
                         &hurt_event,
                     )
                     .await;
+                world.broadcast_packet_all(&CEntityStatus::new(entity_id, 2));
             }
 
             world.broadcast_packet_all(&CDamageEvent::new(

@@ -90,7 +90,7 @@ use pumpkin_protocol::bedrock::client::set_actor_data::{CSetActorData, PropertyS
 use pumpkin_protocol::bedrock::client::start_game::{CStartGame, ServerTelemetryData};
 use pumpkin_protocol::java::client::play::{
     CBlockUpdate, CChunkBatchEnd, CChunkBatchStart, CChunkData, CDisguisedChatMessage, CExplosion,
-    CRespawn, CSetBlockDestroyStage, CWorldEvent, PlayerSpawnData,
+    CLightUpdate, CRespawn, CSetBlockDestroyStage, CWorldEvent, PlayerSpawnData,
 };
 use pumpkin_protocol::java::client::play::{
     CPlayerSpawnPosition, CRecipeBookAdd, CRecipeBookSettings, CSystemChatMessage,
@@ -702,6 +702,9 @@ impl World {
         for (version, recipients) in recipients_by_version {
             let packet_data = match JavaClient::serialize_packet_for_version(packet, version) {
                 Ok(packet_data) => packet_data,
+                Err(pumpkin_protocol::ser::WritingError::UnsupportedVersion(_)) => {
+                    continue;
+                }
                 Err(err) => {
                     error!(
                         "Failed to serialize packet {} for version {:?}: {}",
@@ -886,11 +889,24 @@ impl World {
             }
 
             if let Some(signature) = chat_message.signature {
-                recipient
-                    .signature_cache
-                    .lock()
-                    .await
-                    .add_seen_signature(signature);
+                let mut cache = recipient.signature_cache.lock().await;
+                cache.add_seen_signature(signature);
+                cache.last_seen_validator.add_pending(signature);
+                let tracked_count = cache.last_seen_validator.tracked_messages_count();
+                drop(cache);
+
+                if tracked_count > 4096 {
+                    recipient
+                        .kick(
+                            crate::net::DisconnectReason::Kicked,
+                            TextComponent::translate_cross(
+                                pumpkin_data::translation::java::MULTIPLAYER_DISCONNECT_TOO_MANY_PENDING_CHATS,
+                                pumpkin_data::translation::java::MULTIPLAYER_DISCONNECT_TOO_MANY_PENDING_CHATS,
+                                [],
+                            ),
+                        )
+                        .await;
+                }
             }
 
             if recipient.gameprofile.id != sender.gameprofile.id {
@@ -1769,34 +1785,6 @@ impl World {
                 chunk.inhabited_time.fetch_add(1, Relaxed);
             }
         }
-    }
-
-    pub fn get_fluid_collisions(self: &Arc<Self>, bounding_box: BoundingBox) -> Vec<&Fluid> {
-        let mut collisions = Vec::new();
-
-        let min = bounding_box.min_block_pos();
-
-        let max = bounding_box.max_block_pos();
-
-        for x in min.0.x..=max.0.x {
-            for y in min.0.y..=max.0.y {
-                for z in min.0.z..=max.0.z {
-                    let pos = BlockPos::new(x, y, z);
-
-                    let (fluid, state) = self.get_fluid_and_fluid_state(&pos);
-
-                    if fluid.id != Fluid::EMPTY.id {
-                        let height = f64::from(state.height);
-
-                        if height >= bounding_box.min.y {
-                            collisions.push(fluid);
-                        }
-                    }
-                }
-            }
-        }
-
-        collisions
     }
 
     pub fn check_fluid_collision(self: &Arc<Self>, bounding_box: BoundingBox) -> bool {
@@ -3128,7 +3116,9 @@ impl World {
 
             client_suggestions::send_c_commands_packet(player, server, &command_dispatcher).await;
         };
-        if client.version.load() < JavaMinecraftVersion::V_1_20_2 {
+        if client.version.load() < JavaMinecraftVersion::V_1_20_2
+            && client.version.load() >= JavaMinecraftVersion::V_1_13
+        {
             let mut tags = Vec::new();
             let version = client.version.load();
             for &key in pumpkin_data::tag::RegistryKey::NETWORK_KEYS {
@@ -3189,6 +3179,12 @@ impl World {
             client.send_packet(&CChunkBatchStart).await;
         }
         client.send_packet(&CChunkData(&chunk)).await;
+        if client.version.load() >= JavaMinecraftVersion::V_1_14
+            && client.version.load() < JavaMinecraftVersion::V_1_18
+            && let Ok(light_packet) = CLightUpdate::from_chunk(&chunk, client.version.load())
+        {
+            client.send_packet(&light_packet).await;
+        }
         if client.version.load() >= JavaMinecraftVersion::V_1_20_2 {
             client.send_packet(&CChunkBatchEnd::new(1u16)).await;
         }
@@ -4194,6 +4190,13 @@ impl World {
                 java_client.send_packet(&CChunkBatchStart).await;
             }
             java_client.send_packet(&CChunkData(&chunk)).await;
+            if java_client.version.load() >= JavaMinecraftVersion::V_1_14
+                && java_client.version.load() < JavaMinecraftVersion::V_1_18
+                && let Ok(light_packet) =
+                    CLightUpdate::from_chunk(&chunk, java_client.version.load())
+            {
+                java_client.send_packet(&light_packet).await;
+            }
             if java_client.version.load() >= JavaMinecraftVersion::V_1_20_2 {
                 java_client.send_packet(&CChunkBatchEnd::new(1u16)).await;
             }
@@ -4962,6 +4965,8 @@ impl World {
     }
 
     /// Sets a block and returns the old block id
+    ///
+    /// **DO NOT LOCK `world.portal_poi` BEFORE RUNNING THIS, AS IT WILL CAUSE A DEADLOCK**
     #[expect(clippy::too_many_lines)]
     pub async fn set_block_state(
         self: &Arc<Self>,

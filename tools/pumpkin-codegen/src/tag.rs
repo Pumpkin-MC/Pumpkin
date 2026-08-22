@@ -96,6 +96,34 @@ impl ToTokens for EnumCreator {
                 }
 
                 #[must_use]
+                pub const fn is_valid_for_version(&self, version: JavaMinecraftVersion) -> bool {
+                    if !self.is_network_synced() {
+                        return false;
+                    }
+                    match self {
+                        Self::Block | Self::Item | Self::Fluid => {
+                            (version as u32) >= (JavaMinecraftVersion::V_1_13 as u32)
+                        }
+                        Self::EntityType => {
+                            (version as u32) >= (JavaMinecraftVersion::V_1_14 as u32)
+                        }
+                        Self::GameEvent => (version as u32) >= (JavaMinecraftVersion::V_1_17 as u32),
+                        Self::WorldgenBiome => (version as u32) >= (JavaMinecraftVersion::V_1_18 as u32),
+                        Self::BannerPattern
+                        | Self::Instrument
+                        | Self::PaintingVariant
+                        | Self::PointOfInterestType => {
+                            (version as u32) >= (JavaMinecraftVersion::V_1_19 as u32)
+                        }
+                        Self::DamageType => (version as u32) >= (JavaMinecraftVersion::V_1_20 as u32),
+                        Self::Enchantment | Self::Potion => {
+                            (version as u32) >= (JavaMinecraftVersion::V_1_20_5 as u32)
+                        }
+                        _ => (version as u32) >= (JavaMinecraftVersion::V_26_1 as u32),
+                    }
+                }
+
+                #[must_use]
                 pub fn from_string(s: &str) -> Option<Self> {
                     match s {
                         #(#from_string_arms,)*
@@ -157,6 +185,9 @@ fn load_datapack_tags(
                 if path.is_dir() {
                     walk_namespace_tags(&path, tags_dir, namespace, raw);
                 } else if path.extension().is_some_and(|ext| ext == "json") {
+                    if path.file_name().is_some_and(|n| n == "_list.json") {
+                        continue;
+                    }
                     let rel = path.strip_prefix(tags_dir).unwrap();
                     let components: Vec<_> = rel
                         .iter()
@@ -167,15 +198,27 @@ fn load_datapack_tags(
                     }
                     let (category, tag_rel_path) =
                         if components[0] == "worldgen" && components.len() >= 2 {
-                            let cat = format!("worldgen/{}", components[1]);
+                            let sub = match components[1].as_str() {
+                                "biomes" => "biome",
+                                s => s,
+                            };
+                            let cat = format!("worldgen/{sub}");
                             let rest = components[2..].join("/");
                             let tag_stem = rest.trim_end_matches(".json").to_string();
                             (cat, tag_stem)
                         } else {
-                            let cat = components[0].clone();
+                            let cat_norm = match components[0].as_str() {
+                                "blocks" => "block",
+                                "items" => "item",
+                                "fluids" => "fluid",
+                                "entity_types" => "entity_type",
+                                "game_events" => "game_event",
+                                "biomes" => "biome",
+                                s => s,
+                            };
                             let rest = components[1..].join("/");
                             let tag_stem = rest.trim_end_matches(".json").to_string();
-                            (cat, tag_stem)
+                            (cat_norm.to_string(), tag_stem)
                         };
 
                     let tag_name = format!("{namespace}:{tag_rel_path}");
@@ -269,6 +312,70 @@ fn load_datapack_tags(
 /// Generates the `TokenStream` for the `Tag` type, `RegistryKey` enum, tag
 /// modules, and the `Taggable` trait with its lookup helpers.
 pub(crate) fn build() -> TokenStream {
+    let versions = [
+        ("1_13", "V_1_13"),
+        ("1_14", "V_1_14"),
+        ("1_15", "V_1_15"),
+        ("1_16", "V_1_16"),
+        ("1_16_2", "V_1_16_2"),
+        ("1_17", "V_1_17"),
+        ("1_18", "V_1_18"),
+        ("1_19", "V_1_19"),
+        ("1_20", "V_1_20"),
+        ("1_20_2", "V_1_20_2"),
+        ("1_21", "V_1_21"),
+        ("1_21_2", "V_1_21_2"),
+        ("1_21_4", "V_1_21_4"),
+        ("1_21_5", "V_1_21_5"),
+        ("1_21_6", "V_1_21_6"),
+        ("1_21_7", "V_1_21_7"),
+        ("1_21_9", "V_1_21_9"),
+        ("1_21_11", "V_1_21_11"),
+        ("26_1", "V_26_1"),
+        ("26_2", "V_26_2"),
+    ];
+
+    let version_mapping = [
+        ("V_1_13", "V_1_13"),
+        ("V_1_13_1", "V_1_13"),
+        ("V_1_13_2", "V_1_13"),
+        ("V_1_14", "V_1_14"),
+        ("V_1_14_1", "V_1_14"),
+        ("V_1_14_2", "V_1_14"),
+        ("V_1_14_3", "V_1_14"),
+        ("V_1_14_4", "V_1_14"),
+        ("V_1_15", "V_1_15"),
+        ("V_1_15_1", "V_1_15"),
+        ("V_1_15_2", "V_1_15"),
+        ("V_1_16", "V_1_16"),
+        ("V_1_16_1", "V_1_16"),
+        ("V_1_16_2", "V_1_16_2"),
+        ("V_1_16_3", "V_1_16_2"),
+        ("V_1_16_4", "V_1_16_2"),
+        ("V_1_17", "V_1_17"),
+        ("V_1_17_1", "V_1_17"),
+        ("V_1_18", "V_1_18"),
+        ("V_1_18_2", "V_1_18"),
+        ("V_1_19", "V_1_19"),
+        ("V_1_19_1", "V_1_19"),
+        ("V_1_19_3", "V_1_19"),
+        ("V_1_19_4", "V_1_20"),
+        ("V_1_20", "V_1_20"),
+        ("V_1_20_2", "V_1_20_2"),
+        ("V_1_20_3", "V_1_20_2"),
+        ("V_1_20_5", "V_1_21"),
+        ("V_1_21", "V_1_21"),
+        ("V_1_21_2", "V_1_21_2"),
+        ("V_1_21_4", "V_1_21_4"),
+        ("V_1_21_5", "V_1_21_5"),
+        ("V_1_21_6", "V_1_21_6"),
+        ("V_1_21_7", "V_1_21_7"),
+        ("V_1_21_9", "V_1_21_9"),
+        ("V_1_21_11", "V_1_21_11"),
+        ("V_26_1", "V_26_1"),
+        ("V_26_2", "V_26_2"),
+    ];
+
     // --- Load Global Assets ---
     let blocks_assets: BlockAssets =
         serde_json::from_str(&fs::read_to_string("../../assets/blocks.json").unwrap())
@@ -358,71 +465,128 @@ pub(crate) fn build() -> TokenStream {
         poi_id_map.insert(format!("minecraft:{name}"), i as u16);
     }
 
-    let datapack_data_dir = std::path::Path::new("../../assets/datapacks/26_2/data");
-    let datapack_base = datapack_data_dir.join("minecraft");
     let mut datapack_id_maps: BTreeMap<String, BTreeMap<String, u16>> = BTreeMap::new();
-
     let mut all_registry_keys = HashSet::new();
     all_registry_keys.insert("dimension_type".to_string());
 
-    let tags = load_datapack_tags(datapack_data_dir);
+    let mut latest_tag_modules = Vec::new();
+    let mut latest_match_arms = Vec::new();
+    let mut all_version_code = Vec::new();
+    let mut version_fn_match_arms = Vec::new();
 
-    let mut tag_dicts = Vec::new();
-    let mut match_local_map = Vec::new();
+    for (ver_folder, ver_ident_str) in versions {
+        let datapack_data_dir = std::path::Path::new("../../assets/datapacks")
+            .join(ver_folder)
+            .join("data");
+        let datapack_base = datapack_data_dir.join("minecraft");
 
-    for (key, tag_map) in tags {
-        all_registry_keys.insert(key.clone());
-        let key_pascal = format_ident!("{}", key.to_pascal_case());
-        let dict_name = format_ident!("{}_TAGS", key.to_pascal_case().to_uppercase());
+        let tags = load_datapack_tags(&datapack_data_dir);
+        let is_latest = ver_folder == "26_2";
 
-        let mut tag_entries = Vec::new();
-        let mut tag_map_entries = Vec::new();
+        let mut ver_cat_match_arms = Vec::new();
+        let fn_name = format_ident!("get_tags_{}", ver_ident_str);
 
-        if !datapack_id_maps.contains_key(&key) {
-            let dir = datapack_base.join(&key);
-            if dir.is_dir() {
-                datapack_id_maps.insert(key.clone(), load_datapack_registry_ids(&dir));
-            }
-        }
-
-        for (tag_name, values) in tag_map {
-            let ids: Vec<u16> = values
-                .iter()
-                .filter_map(|v| match key.as_str() {
-                    "block" => block_id_map.get(v).copied(),
-                    "item" => item_id_map.get(v).copied(),
-                    "fluid" => fluid_id_map.get(v).copied(),
-                    "entity_type" => entity_id_map.get(v).copied(),
-                    "game_event" => game_event_id_map.get(v).copied(),
-                    "potion" => potion_id_map.get(v).copied(),
-                    "point_of_interest_type" => poi_id_map.get(v).copied(),
-                    _ => datapack_id_maps.get(&key).and_then(|m| m.get(v).copied()),
-                })
-                .collect();
-
-            let tag_const_name = format_ident!(
-                "{}",
-                tag_name.replace([':', '/', '.', '-'], "_").to_uppercase()
-            );
-
-            tag_entries.push(quote! {
-                pub const #tag_const_name: Tag = (&[#(#values),*], &[#(#ids),*]);
-            });
-            tag_map_entries.push(quote! { #tag_name => &#key_pascal::#tag_const_name });
-        }
-
-        tag_dicts.push(quote! {
-            #[allow(non_snake_case)]
-            pub mod #key_pascal {
-                use super::Tag;
-                #(#tag_entries)*
-            }
-            static #dict_name: phf::Map<&'static str, &'static Tag> = phf::phf_map! {
-                #(#tag_map_entries),*
+        for (key, tag_map) in tags {
+            all_registry_keys.insert(key.clone());
+            let key_pascal = format_ident!("{}", key.to_pascal_case());
+            let dict_name = if is_latest {
+                format_ident!("{}_TAGS", key.to_pascal_case().to_uppercase())
+            } else {
+                format_ident!(
+                    "TAGS_{}_{}",
+                    ver_ident_str,
+                    key.replace(['/', '.', '-'], "_").to_uppercase()
+                )
             };
-        });
 
-        match_local_map.push(quote! { RegistryKey::#key_pascal => Some(&#dict_name) });
+            let mut tag_entries = Vec::new();
+            let mut tag_map_entries = Vec::new();
+
+            if !datapack_id_maps.contains_key(&key) {
+                let dir =
+                    std::path::Path::new("../../assets/datapacks/26_2/data/minecraft").join(&key);
+                if dir.is_dir() {
+                    datapack_id_maps.insert(key.clone(), load_datapack_registry_ids(&dir));
+                }
+            }
+
+            for (tag_name, values) in tag_map {
+                let ids: Vec<u16> = values
+                    .iter()
+                    .filter_map(|v| match key.as_str() {
+                        "block" => block_id_map.get(v).copied(),
+                        "item" => item_id_map.get(v).copied(),
+                        "fluid" => fluid_id_map.get(v).copied(),
+                        "entity_type" => entity_id_map.get(v).copied(),
+                        "game_event" => game_event_id_map.get(v).copied(),
+                        "potion" => potion_id_map.get(v).copied(),
+                        "point_of_interest_type" => poi_id_map.get(v).copied(),
+                        _ => datapack_id_maps.get(&key).and_then(|m| m.get(v).copied()),
+                    })
+                    .collect();
+
+                let tag_const_name = format_ident!(
+                    "{}",
+                    tag_name.replace([':', '/', '.', '-'], "_").to_uppercase()
+                );
+
+                if is_latest {
+                    tag_entries.push(quote! {
+                        pub const #tag_const_name: Tag = (&[#(#values),*], &[#(#ids),*]);
+                    });
+                    tag_map_entries.push(quote! { #tag_name => &#key_pascal::#tag_const_name });
+                } else {
+                    tag_map_entries.push(quote! { #tag_name => &(&[#(#values),*], &[#(#ids),*]) });
+                }
+            }
+
+            if is_latest {
+                latest_tag_modules.push(quote! {
+                    #[allow(non_snake_case)]
+                    pub mod #key_pascal {
+                        use super::Tag;
+                        #(#tag_entries)*
+                    }
+                    static #dict_name: phf::Map<&'static str, &'static Tag> = phf::phf_map! {
+                        #(#tag_map_entries),*
+                    };
+                });
+                latest_match_arms.push(quote! { RegistryKey::#key_pascal => Some(&#dict_name) });
+            } else {
+                all_version_code.push(quote! {
+                    static #dict_name: phf::Map<&'static str, &'static Tag> = phf::phf_map! {
+                        #(#tag_map_entries),*
+                    };
+                });
+                ver_cat_match_arms.push(quote! { RegistryKey::#key_pascal => Some(&#dict_name) });
+            }
+        }
+
+        if !is_latest {
+            all_version_code.push(quote! {
+                #[allow(non_snake_case, unreachable_patterns)]
+                const fn #fn_name(key: RegistryKey) -> Option<&'static phf::Map<&'static str, &'static Tag>> {
+                    match key {
+                        #(#ver_cat_match_arms,)*
+                        _ => None,
+                    }
+                }
+            });
+        }
+    }
+
+    for (ver_variant, ver_ident_str) in version_mapping {
+        let ver_ident = format_ident!("{ver_variant}");
+        if ver_ident_str == "V_26_2" {
+            version_fn_match_arms.push(quote! {
+                JavaMinecraftVersion::#ver_ident => get_latest_map(tag_category)
+            });
+        } else {
+            let fn_name = format_ident!("get_tags_{}", ver_ident_str);
+            version_fn_match_arms.push(quote! {
+                JavaMinecraftVersion::#ver_ident => #fn_name(tag_category)
+            });
+        }
     }
 
     // --- Generate RegistryKey Enum ---
@@ -439,13 +603,15 @@ pub(crate) fn build() -> TokenStream {
 
         #registry_key_enum
 
-        #(#tag_dicts)*
+        #(#latest_tag_modules)*
+
+        #(#all_version_code)*
 
         #[allow(unreachable_patterns)]
         #[must_use]
         pub const fn get_latest_map(key: RegistryKey) -> Option<&'static phf::Map<&'static str, &'static Tag>> {
             match key {
-                #(#match_local_map,)*
+                #(#latest_match_arms,)*
                 _ => None,
             }
         }
@@ -461,8 +627,14 @@ pub(crate) fn build() -> TokenStream {
         }
 
         #[must_use]
-        pub const fn get_registry_key_tags(_version: JavaMinecraftVersion, tag_category: RegistryKey) -> Option<&'static phf::Map<&'static str, &'static Tag>> {
-            get_latest_map(tag_category)
+        pub const fn get_registry_key_tags(version: JavaMinecraftVersion, tag_category: RegistryKey) -> Option<&'static phf::Map<&'static str, &'static Tag>> {
+            if !tag_category.is_valid_for_version(version) {
+                return None;
+            }
+            match version {
+                #(#version_fn_match_arms,)*
+                _ => get_latest_map(tag_category),
+            }
         }
 
         pub trait Taggable {

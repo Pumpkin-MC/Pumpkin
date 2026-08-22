@@ -8,6 +8,14 @@ pub mod end;
 pub mod multi_noise;
 pub mod position_finder;
 
+pub use position_finder::{
+    Climate, ClimateSampler, DistanceMetric, FittestPositionFinder, FittestPositionFinderResult,
+    ParameterList, RTree, RTreeLeaf, RTreeNode, RTreeSubTree, SpawnFinder, SpawnFinderResult,
+};
+pub use pumpkin_data::chunk::{
+    Parameter, ParameterPoint, ParameterRange, TargetPoint, quantize_coord, unquantize_coord,
+};
+
 thread_local! {
     /// A shortcut; check if last used biome is what we should use
     static LAST_RESULT_NODE: RefCell<Option<&'static BiomeTree>> = const {RefCell::new(None) };

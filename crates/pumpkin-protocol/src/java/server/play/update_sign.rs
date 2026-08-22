@@ -17,17 +17,28 @@ pub struct SUpdateSign<'a> {
     pub line_4: &'a str,
 }
 
-const MAX_LINE_LENGTH: usize = 386;
+const MAX_LINE_LENGTH: usize = 384;
 
 impl<'a> ServerPacket<'a> for SUpdateSign<'a> {
     fn read(read: &mut &'a [u8], version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+        let location = read.get_block_pos(version)?;
+        let is_front_text = if *version >= JavaMinecraftVersion::V_1_20 {
+            read.get_bool()?
+        } else {
+            true
+        };
+        let line_1 = read.get_str_bounded_borrowed(MAX_LINE_LENGTH)?;
+        let line_2 = read.get_str_bounded_borrowed(MAX_LINE_LENGTH)?;
+        let line_3 = read.get_str_bounded_borrowed(MAX_LINE_LENGTH)?;
+        let line_4 = read.get_str_bounded_borrowed(MAX_LINE_LENGTH)?;
+
         Ok(Self {
-            location: read.get_block_pos(version)?,
-            is_front_text: read.get_bool()?,
-            line_1: read.get_str_bounded_borrowed(MAX_LINE_LENGTH)?,
-            line_2: read.get_str_bounded_borrowed(MAX_LINE_LENGTH)?,
-            line_3: read.get_str_bounded_borrowed(MAX_LINE_LENGTH)?,
-            line_4: read.get_str_bounded_borrowed(MAX_LINE_LENGTH)?,
+            location,
+            is_front_text,
+            line_1,
+            line_2,
+            line_3,
+            line_4,
         })
     }
 }
@@ -40,7 +51,9 @@ impl crate::ClientPacket for SUpdateSign<'_> {
     ) -> Result<(), crate::ser::WritingError> {
         use crate::ser::NetworkWriteExt;
         write.write_block_pos(&self.location, version)?;
-        write.write_bool(self.is_front_text)?;
+        if *version >= JavaMinecraftVersion::V_1_20 {
+            write.write_bool(self.is_front_text)?;
+        }
         write.write_string_bounded(self.line_1, MAX_LINE_LENGTH)?;
         write.write_string_bounded(self.line_2, MAX_LINE_LENGTH)?;
         write.write_string_bounded(self.line_3, MAX_LINE_LENGTH)?;

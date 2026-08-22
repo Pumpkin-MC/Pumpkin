@@ -128,6 +128,34 @@ impl JavaClient {
                 return Err(ChatError::ExpiredPublicKey);
             }
 
+            let offset = chat_message.message_count.0;
+            if offset < 0 {
+                return Err(ChatError::ChatValidationFailed);
+            }
+
+            {
+                let mut cache = player.signature_cache.lock().await;
+                if !chat_message.acknowledged.is_empty() {
+                    if cache
+                        .last_seen_validator
+                        .apply_update(offset as usize, chat_message.acknowledged)
+                        .is_err()
+                    {
+                        return Err(ChatError::ChatValidationFailed);
+                    }
+                } else if cache
+                    .last_seen_validator
+                    .apply_offset(offset as usize)
+                    .is_err()
+                {
+                    return Err(ChatError::ChatValidationFailed);
+                }
+
+                if cache.last_seen_validator.tracked_messages_count() > 4096 {
+                    return Err(ChatError::TooManyPendingChats);
+                }
+            }
+
             // Validate previous signature checksum (new in 1.21.5)
             // The client can bypass this check by sending 0
             if chat_message.checksum != 0 {

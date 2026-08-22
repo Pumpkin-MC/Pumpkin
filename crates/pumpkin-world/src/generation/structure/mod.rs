@@ -72,14 +72,8 @@ pub fn generate_structure_position(
         | StructureKeys::VillageDesert
         | StructureKeys::VillageSavanna
         | StructureKeys::VillageSnowy
-        | StructureKeys::VillageTaiga => {
-            let (Some(start_pool), Some(size)) = (structure.start_pool, structure.size) else {
-                return None;
-            };
-            let generator = JigsawGenerator::new(start_pool, size);
-            generator.get_structure_position(context)
-        }
-        StructureKeys::AncientCity
+        | StructureKeys::VillageTaiga
+        | StructureKeys::AncientCity
         | StructureKeys::BastionRemnant
         | StructureKeys::PillagerOutpost
         | StructureKeys::TrailRuins
@@ -88,7 +82,7 @@ pub fn generate_structure_position(
                 return None;
             };
             let mut generator = JigsawGenerator::new(start_pool, size);
-            if *key == StructureKeys::PillagerOutpost {
+            if structure.use_expansion_hack.unwrap_or(false) {
                 generator = generator.with_expansion_hack(true);
             }
             if let Some(start_jigsaw_name) = structure.start_jigsaw_name {

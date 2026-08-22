@@ -17,6 +17,7 @@ mod clear;
 mod clone;
 mod damage;
 mod data;
+mod debug;
 pub mod defaultgamemode;
 mod deop;
 mod dialog;
@@ -177,6 +178,7 @@ pub fn default_dispatcher(
     say::register(&mut dispatcher, registry);
     banlist::register(&mut dispatcher, registry);
     difficulty::register(&mut dispatcher, registry);
+    debug::register(&mut dispatcher, registry);
     dialog::register(&mut dispatcher, registry);
     execute::register(&mut dispatcher, registry);
     fillbiome::register(&mut dispatcher, registry);
