@@ -136,7 +136,11 @@ impl JigsawPlacement {
         let mut anchored_position = position;
         if let Some(target_jigsaw_id) = start_jigsaw {
             let mut found_anchor = None;
-            let jigsaws = get_jigsaw_blocks(&template);
+            let mut jigsaws = get_jigsaw_blocks(&template);
+            for index in (1..jigsaws.len()).rev() {
+                let other = context.random.next_bounded_i32(index as i32 + 1) as usize;
+                jigsaws.swap(index, other);
+            }
             for jigsaw in jigsaws {
                 if jigsaw.name == target_jigsaw_id {
                     let rotated_pos = rotate_pos(jigsaw.pos.0, rotation);
@@ -262,7 +266,7 @@ impl JigsawPlacement {
                     let j = context.random.next_bounded_i32(i as i32 + 1) as usize;
                     source_jigsaws.swap(i, j);
                 }
-                source_jigsaws.sort_by_key(|j| std::cmp::Reverse(j.selection_priority));
+                sort_by_selection_priority(&mut source_jigsaws);
 
                 let source_box = pieces[source_piece_idx].piece.bounding_box;
                 let source_collision_box = piece_collision_boxes[source_piece_idx];
@@ -325,6 +329,7 @@ impl JigsawPlacement {
                                 let j = context.random.next_bounded_i32(i as i32 + 1) as usize;
                                 target_jigsaws_shuffled.swap(i, j);
                             }
+                            sort_by_selection_priority(&mut target_jigsaws_shuffled);
 
                             for target_jigsaw in target_jigsaws_shuffled {
                                 if !can_attach(source_jigsaw, &target_jigsaw, target_rotation) {
@@ -653,7 +658,14 @@ fn get_jigsaw_blocks(template: &StructureTemplate) -> Vec<JigsawBlock> {
             jigsaws.push(jigsaw);
         }
     }
+    // Vanilla groups block-entity entries together when loading a template and orders that
+    // group by Y, X, and Z. Every jigsaw carries NBT, so the order before shuffling must match.
+    jigsaws.sort_by_key(|jigsaw| (jigsaw.pos.0.y, jigsaw.pos.0.x, jigsaw.pos.0.z));
     jigsaws
+}
+
+fn sort_by_selection_priority(jigsaws: &mut [JigsawBlock]) {
+    jigsaws.sort_by_key(|jigsaw| std::cmp::Reverse(jigsaw.selection_priority));
 }
 
 const fn rotate_pos(pos: Vector3<i32>, rotation: Rotation) -> Vector3<i32> {
@@ -770,5 +782,55 @@ const fn rotate_direction(
             BlockDirection::East => BlockDirection::North,
             _ => dir,
         },
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{JigsawBlock, get_jigsaw_blocks, sort_by_selection_priority};
+    use crate::generation::structure::template::{all_template_names, get_template};
+
+    #[test]
+    fn jigsaw_blocks_follow_vanilla_coordinate_order() {
+        for name in all_template_names() {
+            let template = get_template(name).unwrap_or_else(|| panic!("missing template {name}"));
+            let jigsaws = get_jigsaw_blocks(&template);
+
+            assert!(
+                jigsaws.windows(2).all(|pair| {
+                    let left = &pair[0].pos.0;
+                    let right = &pair[1].pos.0;
+                    (left.y, left.x, left.z) <= (right.y, right.x, right.z)
+                }),
+                "jigsaws in {name} are not ordered by Y, X, Z"
+            );
+        }
+    }
+
+    #[test]
+    fn higher_selection_priority_is_tried_first() {
+        let mut jigsaws = [jigsaw("first", 1), jigsaw("high", 3), jigsaw("second", 1)];
+
+        sort_by_selection_priority(&mut jigsaws);
+
+        assert_eq!(
+            jigsaws.map(|jigsaw| jigsaw.name),
+            ["high", "first", "second"]
+        );
+    }
+
+    fn jigsaw(name: &str, selection_priority: i32) -> JigsawBlock {
+        JigsawBlock {
+            pos: pumpkin_util::math::position::BlockPos::new(0, 0, 0),
+            name: name.to_string(),
+            target: String::new(),
+            pool: String::new(),
+            final_state: String::new(),
+            joint: super::JigsawJointType::Rollable,
+            facing: pumpkin_util::BlockDirection::North,
+            up: pumpkin_util::BlockDirection::Up,
+            selection_priority,
+            placement_priority: 0,
+        }
     }
 }
