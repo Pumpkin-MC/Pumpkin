@@ -4,6 +4,7 @@ use crate::block::BlockBehaviour;
 use crate::block::BlockFuture;
 use crate::block::CanPlaceAtArgs;
 use crate::block::GetStateForNeighborUpdateArgs;
+use crate::block::OnLandedUponArgs;
 use crate::block::OnPlaceArgs;
 use crate::block::OnScheduledTickArgs;
 use crate::block::RandomTickArgs;
@@ -21,6 +22,7 @@ use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::tick::TickPriority;
 use pumpkin_world::world::BlockAccessor;
 use pumpkin_world::world::BlockFlags;
+use rand::RngExt;
 
 type FarmlandProperties = FarmlandLikeProperties;
 
@@ -65,6 +67,36 @@ impl BlockBehaviour for FarmlandBlock {
 
     fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
         can_place_at(args.block_accessor, args.position)
+    }
+
+    fn on_landed_upon<'a>(&'a self, args: OnLandedUponArgs<'a>) -> BlockFuture<'a, ()> {
+        Box::pin(async move {
+            let entity = args.entity.get_entity();
+            let dimensions = entity.entity_dimension.load();
+            // Small entities (width * width * height <= 0.512) never trample
+            if rand::rng().random::<f32>() < args.fall_distance - 0.5
+                && args.entity.get_living_entity().is_some()
+                && (args.entity.get_player().is_some()
+                    || args.world.level_info.load().game_rules.mob_griefing)
+                && dimensions.width * dimensions.width * dimensions.height > 0.512
+            {
+                let position = entity.get_pos_with_y_offset(0.2).0;
+                // TODO: push up entities
+                args.world
+                    .set_block_state(
+                        &position,
+                        Block::DIRT.default_state.id,
+                        BlockFlags::NOTIFY_ALL,
+                    )
+                    .await;
+            }
+
+            if let Some(living) = args.entity.get_living_entity() {
+                living
+                    .handle_fall_damage(args.entity, args.fall_distance, 1.0)
+                    .await;
+            }
+        })
     }
 
     fn random_tick<'a>(&'a self, args: RandomTickArgs<'a>) -> BlockFuture<'a, ()> {
