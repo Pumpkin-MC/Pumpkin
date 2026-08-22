@@ -1004,7 +1004,7 @@ impl LivingEntity {
                 self.entity.water_height.load()
             };
 
-            let swim_height = self.get_swim_height();
+            let swim_height = self.get_jump_fluid_threshold();
 
             let on_ground = self.entity.on_ground.load(SeqCst);
 
@@ -1193,7 +1193,7 @@ impl LivingEntity {
 
             let mut velo = self.entity.velocity.load();
 
-            if self.entity.lava_height.load() <= self.get_swim_height() {
+            if self.entity.lava_height.load() <= self.get_jump_fluid_threshold() {
                 velo.x *= 0.5;
                 velo.z *= 0.5;
                 velo.y *= 0.8;
@@ -1348,7 +1348,7 @@ impl LivingEntity {
         }
     }
 
-    pub fn get_swim_height(&self) -> f64 {
+    pub fn get_jump_fluid_threshold(&self) -> f64 {
         let eye_height = self.entity.get_eye_height();
 
         if self.entity.entity_type == &EntityType::BREEZE {

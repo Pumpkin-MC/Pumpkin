@@ -2070,17 +2070,8 @@ impl Player {
         self.sleeping_since.load().is_some()
     }
 
-    async fn is_swimming(&self, flying: bool) -> bool {
-        let entity = self.get_entity();
-        let touching_water = entity.touching_water.load(Ordering::Relaxed);
-        let can_start_swimming = entity.water_height.load() > self.living_entity.get_swim_height();
-
-        touching_water
-            && (entity.swimming.load(Ordering::Relaxed) || can_start_swimming)
-            && entity.is_sprinting()
-            && !entity.on_ground.load(Ordering::Relaxed)
-            && !flying
-            && !entity.has_vehicle().await
+    fn is_swimming(&self, flying: bool) -> bool {
+        self.get_entity().swimming.load(Ordering::Relaxed) && !flying
     }
 
     const fn is_auto_spin_attack() -> bool {
@@ -2106,8 +2097,7 @@ impl Player {
         }
 
         let flying = self.is_flying().await;
-        let swimming = self.is_swimming(flying).await;
-        entity.set_swimming(swimming).await;
+        let swimming = self.is_swimming(flying);
         let desired_pose = if self.is_sleeping() {
             EntityPose::Sleeping
         } else if swimming {

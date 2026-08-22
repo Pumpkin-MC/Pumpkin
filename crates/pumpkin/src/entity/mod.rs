@@ -1991,6 +1991,7 @@ impl Entity {
         let mut fluid_height: [f64; 2] = [0.0, 0.0];
 
         let bounding_box = self.bounding_box.load().expand(-0.001, -0.001, -0.001);
+        //TODO take in account passengers
 
         let min = bounding_box.min_block_pos();
 
@@ -2117,6 +2118,25 @@ impl Entity {
 
             self.velocity.store(velo + push);
         }
+    }
+
+    async fn update_swimming(&self) {
+        let swimming = self.is_swimming();
+        let is_not_passenger = !self.is_passenger().await;
+        let new_swimming_state = if swimming {
+            self.is_sprinting() && self.is_in_water() && is_not_passenger
+        } else {
+            self.is_sprinting()
+                && self.is_under_water()
+                && is_not_passenger
+                && self
+                    .world
+                    .load()
+                    .get_block_and_state(&self.block_pos.load())
+                    .0
+                    == &Block::WATER
+        };
+        self.set_swimming(new_swimming_state).await;
     }
 
     fn get_pos_with_y_offset(
@@ -2891,6 +2911,19 @@ impl Entity {
     pub fn is_sprinting(&self) -> bool {
         self.sprinting.load(Ordering::Relaxed)
     }
+
+    pub fn is_swimming(&self) -> bool {
+        self.swimming.load(Ordering::Relaxed)
+    }
+
+    pub fn is_in_water(&self) -> bool {
+        self.touching_water.load(Relaxed)
+    }
+
+    pub fn is_under_water(&self) -> bool {
+        self.water_height.load() >= f64::from(self.entity_dimension.load().eye_height)
+    }
+
     pub fn check_fall_flying(&self) -> bool {
         !self.on_ground.load(Relaxed)
     }
@@ -3971,6 +4004,7 @@ impl EntityBase for Entity {
             self.update_last_pos();
             self.tick_portal(caller).await;
             self.update_fluid_state(caller).await;
+            self.update_swimming().await;
             self.check_out_of_world(&**caller).await;
             let fire_ticks = self.fire_ticks.load(Ordering::Relaxed);
 
