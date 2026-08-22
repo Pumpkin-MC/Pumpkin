@@ -76,6 +76,8 @@ use crate::{
 
 /// Plugin command registration and handling utilities.
 pub mod commands;
+/// Plugin configuration.
+pub mod config;
 /// Display and interaction entity utilities and builders.
 pub mod display;
 /// Custom enchantment registration and builder utilities.

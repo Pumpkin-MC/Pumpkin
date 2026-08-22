@@ -21,16 +21,17 @@ use crate::{
         args::ConsumedArgs,
         tree::{CommandTree, builder::NonLeafNodeBuilder},
     },
-    entity::EntityBase,
-    entity::player::Player,
+    entity::{EntityBase, player::Player},
     plugin::{
         Context,
         api::gui::PluginGui,
-        loader::wasm::wasm_host::{WasmPlugin, args::OwnedArg},
+        loader::wasm::wasm_host::{WasmPlugin, args::OwnedArg, state::config::PluginConfigManager},
     },
     server::{RecipeManager, Server},
     world::World,
 };
+
+pub mod config;
 
 pub struct WasmResource<T> {
     pub provider: T,
@@ -71,6 +72,7 @@ pub type OpManagerResource = WasmResource<Arc<Server>>;
 pub type BanManagerResource = WasmResource<Arc<Server>>;
 pub type WhitelistManagerResource = WasmResource<Arc<Server>>;
 pub type BlockEntityResource = WasmResource<Arc<dyn crate::block::entities::BlockEntity>>;
+pub type ConfigResource = WasmResource<Arc<PluginConfigManager>>;
 
 #[derive(Clone)]
 pub struct ContainerBlockEntity {
@@ -283,6 +285,16 @@ impl PluginHostState {
         let resource = self.resource_table.push(CommandSenderResource {
             provider: command_sender,
         })?;
+        Ok(wasmtime::component::Resource::new_own(resource.rep()))
+    }
+
+    pub fn add_config<T>(
+        &mut self,
+        config: Arc<PluginConfigManager>,
+    ) -> wasmtime::Result<wasmtime::component::Resource<T>> {
+        let resource = self
+            .resource_table
+            .push(ConfigResource { provider: config })?;
         Ok(wasmtime::component::Resource::new_own(resource.rep()))
     }
 

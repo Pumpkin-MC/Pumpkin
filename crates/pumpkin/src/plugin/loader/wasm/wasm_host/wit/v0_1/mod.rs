@@ -19,6 +19,7 @@ pub mod boss_bar;
 #[allow(clippy::unused_async_trait_impl)]
 pub mod commands;
 pub mod common;
+pub mod config;
 #[allow(clippy::unused_async_trait_impl)]
 pub mod context;
 #[allow(clippy::unused_async_trait_impl)]
@@ -62,7 +63,7 @@ bindgen!({
     path: "../pumpkin-plugin-wit/v0.1",
     world: "plugin",
     imports: { default: async | trappable },
-    exports: { default: async | trappable},
+    exports: { default: async | trappable },
 });
 
 impl pumpkin::plugin::java_packets::Host for PluginHostState {}
@@ -119,10 +120,8 @@ pub async fn init_plugin(
         permissions: metadata.permissions,
     };
 
-    store
-        .data_mut()
-        .permissions
-        .clone_from(&metadata.permissions);
+    let store_data = store.data_mut();
+    store_data.permissions.clone_from(&metadata.permissions);
 
     Ok((
         WasmPlugin {

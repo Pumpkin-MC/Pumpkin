@@ -26,7 +26,11 @@ pub mod loader;
 /// host features.
 pub mod permissions;
 
-use crate::{LOGGER_IMPL, plugin::loader::wasm::WasmPluginLoader, server::Server};
+use crate::{
+    LOGGER_IMPL,
+    plugin::loader::wasm::{WasmPluginLoader, wasm_host::state::config::PluginConfigManager},
+    server::Server,
+};
 pub use api::*;
 
 pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
@@ -36,6 +40,7 @@ pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 pub const PLUGIN_API_VERSION: u32 = 2;
 
 const PLUGIN_DIR: &str = "./plugins";
+const PLUGIN_CONFIG_DIR: &str = "./config";
 
 /// A trait for handling events dynamically.
 ///
@@ -517,12 +522,21 @@ impl PluginManager {
             .await
             .insert(metadata.name.clone(), PluginState::Loading);
 
+        let config = Arc::new(PluginConfigManager::new({
+            let mut path = PathBuf::from(PLUGIN_CONFIG_DIR);
+            // FIXME(uid): This should be the uid of the plugin once it is implemented
+            path.push(format!("{}.toml", metadata.name));
+            path
+        }));
+        server.register_plugin_config(Arc::clone(&config)).await;
+
         let context = Arc::new(Context::new(
             metadata.clone(),
             server,
             Arc::clone(&self.handlers),
             Arc::clone(self),
             Arc::clone(&LOGGER_IMPL),
+            config,
         ));
 
         // Create the plugin structure first
