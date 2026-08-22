@@ -5241,6 +5241,7 @@ impl World {
             } else {
                 flags.insert(BlockFlags::SKIP_DROPS);
             }
+            flags.insert(BlockFlags::NOTIFY_NEIGHBORS);
             let new_state_id = if broken_block
                 .properties(broken_block_state)
                 .and_then(|properties| {
