@@ -52,7 +52,7 @@ use crate::{
 };
 use arc_swap::ArcSwap;
 use border::Worldborder;
-use bytes::{BufMut, Bytes};
+use bytes::BufMut;
 pub use explosion::{
     BlockInteraction, DefaultExplosionDamageCalculator, Explosion, ExplosionDamageCalculator,
     ExplosionInteraction, SimpleExplosionDamageCalculator,
@@ -726,21 +726,17 @@ impl World {
         packet: &P,
         recipients: impl Iterator<Item = &'a Arc<BedrockClient>>,
     ) {
-        let packet_data = match pumpkin_protocol::bedrock::packet_encoder::serialize_packet(packet)
-        {
-            Ok(packet_data) => packet_data,
-            Err(err) => {
-                error!(
-                    "Failed to serialize bedrock packet {}: {}",
-                    std::any::type_name::<P>(),
-                    err
-                );
-                return;
-            }
-        };
-
         for recipient in recipients {
-            recipient.try_enqueue_packet(packet_data.clone());
+            match recipient.serialize_packet(packet) {
+                Ok(packet_data) => recipient.try_enqueue_packet(packet_data),
+                Err(err) => {
+                    error!(
+                        "Failed to serialize bedrock packet {}: {}",
+                        std::any::type_name::<P>(),
+                        err
+                    );
+                }
+            }
         }
     }
 
@@ -748,21 +744,8 @@ impl World {
         packet: &P,
         recipients: impl Iterator<Item = &'a Arc<BedrockClient>>,
     ) {
-        let packet_data = match pumpkin_protocol::bedrock::packet_encoder::serialize_packet(packet)
-        {
-            Ok(packet_data) => packet_data,
-            Err(err) => {
-                error!(
-                    "Failed to serialize bedrock packet {}: {}",
-                    std::any::type_name::<P>(),
-                    err
-                );
-                return;
-            }
-        };
-
         for recipient in recipients {
-            recipient.enqueue_packet(packet_data.clone()).await;
+            recipient.enqueue_client_packet(packet).await;
         }
     }
 
@@ -1112,13 +1095,12 @@ impl World {
         };
         let chunk_pos = BlockPos::floored_v(*position).chunk_position();
 
-        if let Ok(data) = pumpkin_protocol::bedrock::packet_encoder::serialize_packet(&packet) {
-            for player in self.players.load().iter() {
-                if is_within_view_distance(chunk_pos, player.get_entity().chunk_pos.load(), 1)
-                    && let ClientPlatform::Bedrock(client) = player.client.as_ref()
-                {
-                    client.try_enqueue_packet(data.clone());
-                }
+        for player in self.players.load().iter() {
+            if is_within_view_distance(chunk_pos, player.get_entity().chunk_pos.load(), 1)
+                && let ClientPlatform::Bedrock(client) = player.client.as_ref()
+                && let Ok(data) = client.serialize_packet(&packet)
+            {
+                client.try_enqueue_packet(data);
             }
         }
     }
@@ -1478,29 +1460,17 @@ impl World {
                     is_within_view_distance(chunk_pos, center, view_distance)
                 });
 
-                let mut bedrock_packets: Vec<Bytes> = Vec::new();
+                let mut bedrock_packets = Vec::new();
                 for (block_pos, block_state_id) in &updates {
                     let be_block_id = BlockState::to_be_network_id(*block_state_id);
                     let update_packet = pumpkin_protocol::bedrock::client::CUpdateBlock::new(
                         *block_pos,
                         be_block_id as u32,
                     );
-                    if let Ok(data) =
-                        pumpkin_protocol::bedrock::packet_encoder::serialize_packet(&update_packet)
-                    {
-                        bedrock_packets.push(data);
-                    }
-                    if let Some(data) = self.bedrock_block_entity_data(*block_state_id, *block_pos)
-                    {
-                        let actor_packet = CBlockActorData::new(*block_pos, data);
-                        if let Ok(data) =
-                            pumpkin_protocol::bedrock::packet_encoder::serialize_packet(
-                                &actor_packet,
-                            )
-                        {
-                            bedrock_packets.push(data);
-                        }
-                    }
+                    let actor_packet = self
+                        .bedrock_block_entity_data(*block_state_id, *block_pos)
+                        .map(|data| CBlockActorData::new(*block_pos, data));
+                    bedrock_packets.push((update_packet, actor_packet));
                 }
 
                 let mut bedrock_recipients = Vec::new();
@@ -1514,8 +1484,15 @@ impl World {
                 }
 
                 for be_client in bedrock_recipients {
-                    for packet_data in &bedrock_packets {
-                        be_client.try_enqueue_packet(packet_data.clone());
+                    for (update_packet, actor_packet) in &bedrock_packets {
+                        if let Ok(data) = be_client.serialize_packet(update_packet) {
+                            be_client.try_enqueue_packet(data);
+                        }
+                        if let Some(actor_packet) = actor_packet
+                            && let Ok(data) = be_client.serialize_packet(actor_packet)
+                        {
+                            be_client.try_enqueue_packet(data);
+                        }
                     }
                 }
 
@@ -1543,7 +1520,7 @@ impl World {
                 }
             }
 
-            let mut bedrock_water_packets: Vec<Bytes> = Vec::new();
+            let mut bedrock_water_packets = Vec::new();
             for (block_pos, block_state_id) in &updates {
                 let water_state = bedrock_water_state(*block_state_id);
                 let packet = pumpkin_protocol::bedrock::client::CUpdateBlock::with_layer(
@@ -1551,11 +1528,7 @@ impl World {
                     u32::from(BlockState::to_be_network_id(water_state)),
                     1,
                 );
-                if let Ok(data) =
-                    pumpkin_protocol::bedrock::packet_encoder::serialize_packet(&packet)
-                {
-                    bedrock_water_packets.push(data);
-                }
+                bedrock_water_packets.push(packet);
             }
 
             if !bedrock_water_packets.is_empty() {
@@ -1567,8 +1540,10 @@ impl World {
                 });
                 for player in recipients {
                     if let ClientPlatform::Bedrock(client) = player.client.as_ref() {
-                        for packet_data in &bedrock_water_packets {
-                            client.try_enqueue_packet(packet_data.clone());
+                        for packet in &bedrock_water_packets {
+                            if let Ok(data) = client.serialize_packet(packet) {
+                                client.try_enqueue_packet(data);
+                            }
                         }
                     }
                 }

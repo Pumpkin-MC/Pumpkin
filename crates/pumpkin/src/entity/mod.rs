@@ -3054,11 +3054,9 @@ impl Entity {
                 },
                 tick: VarULong(0),
             };
-            if let Ok(packet_data) =
-                pumpkin_protocol::bedrock::packet_encoder::serialize_packet(&packet)
-            {
-                for recipient in bedrock_recipients {
-                    recipient.try_enqueue_packet(packet_data.clone());
+            for recipient in bedrock_recipients {
+                if let Ok(packet_data) = recipient.serialize_packet(&packet) {
+                    recipient.try_enqueue_packet(packet_data);
                 }
             }
         }
