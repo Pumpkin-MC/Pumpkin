@@ -43,7 +43,7 @@ impl PendingConnection {
             );
             self.kick(TextComponent::text("Failed to verify encryption token"))
                 .await;
-            return;
+            return None;
         }
 
         let Ok(shared_secret) = server.decrypt(&encryption_response.shared_secret).await else {

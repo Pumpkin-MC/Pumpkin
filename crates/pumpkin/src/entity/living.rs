@@ -2219,6 +2219,16 @@ impl LivingEntity {
             Self::hurt_sound_for_entity(self.entity.entity_type)
         }
     }
+
+    fn sound_category(&self) -> SoundCategory {
+        if self.entity.entity_type == &EntityType::PLAYER {
+            SoundCategory::Players
+        } else if self.entity.entity_type.category == &pumpkin_data::entity::MobCategory::MONSTER {
+            SoundCategory::Hostile
+        } else {
+            SoundCategory::Neutral
+        }
+    }
 }
 
 impl LivingEntity {
@@ -2654,7 +2664,7 @@ impl EntityBase for LivingEntity {
             if play_sound {
                 world.play_sound(
                     self.hurt_sound(),
-                    SoundCategory::Players,
+                    self.sound_category(),
                     &self.entity.pos.load(),
                 );
 
@@ -3292,11 +3302,17 @@ mod tests {
     }
 
     #[test]
-    fn hurt_sound_for_entity_defaults_to_generic_hurt() {
-        assert_eq!(
-            LivingEntity::hurt_sound_for_entity(&EntityType::CREEPER),
-            Sound::EntityGenericHurt
-        );
+    fn hurt_sound_for_entity_uses_animal_sounds() {
+        let cases = [
+            (&EntityType::COW, Sound::EntityCowHurt),
+            (&EntityType::PIG, Sound::EntityPigHurt),
+            (&EntityType::SHEEP, Sound::EntitySheepHurt),
+            (&EntityType::CHICKEN, Sound::EntityChickenHurt),
+        ];
+
+        for (entity_type, expected) in cases {
+            assert_eq!(LivingEntity::hurt_sound_for_entity(entity_type), expected);
+        }
     }
 
     #[test]
