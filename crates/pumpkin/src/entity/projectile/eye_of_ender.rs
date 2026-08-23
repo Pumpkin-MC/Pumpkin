@@ -209,7 +209,38 @@ impl EntityBase for EyeOfEnder {
     fn get_item_entity(self: Arc<Self>) -> Option<Arc<ItemEntity>> {
         None
     }
+
     fn cast_any(&self) -> &dyn std::any::Any {
         self
+    }
+
+    fn send_java_spawn_packet<'a>(
+        &'a self,
+        client: &'a crate::net::java::JavaClient,
+    ) -> EntityBaseFuture<'a, ()> {
+        Box::pin(async move {
+            let spawn_packet = self.entity.create_spawn_packet();
+            if let Ok(data) = client.serialize_packet(&spawn_packet) {
+                client.enqueue_packet(data).await;
+            }
+
+            if client.version.load() >= pumpkin_data::packet::CURRENT_MC_VERSION {
+                let metadata = Metadata::new(
+                    pumpkin_data::tracked_data::eye_of_ender::ITEM_STACK,
+                    ItemStackSerializer::from(self.item_stack.lock().await.clone()),
+                );
+                let mut data = Vec::new();
+                if metadata.write(&mut data, &client.version.load()).is_ok() {
+                    data.push(255);
+                    let meta_packet = pumpkin_protocol::java::client::play::CSetEntityMetadata::new(
+                        self.entity.entity_id.into(),
+                        data.into(),
+                    );
+                    if let Ok(meta_data) = client.serialize_packet(&meta_packet) {
+                        client.enqueue_packet(meta_data).await;
+                    }
+                }
+            }
+        })
     }
 }

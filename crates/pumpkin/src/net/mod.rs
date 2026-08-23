@@ -401,6 +401,10 @@ pub enum EncryptionError {
     SharedWrongLength,
     #[error("encryption is already enabled")]
     AlreadyEncrypted,
+    #[error("no encryption request is pending")]
+    NoPendingVerifyToken,
+    #[error("verify token does not match")]
+    VerifyTokenMismatch,
 }
 
 fn is_valid_player_name(name: &str) -> bool {

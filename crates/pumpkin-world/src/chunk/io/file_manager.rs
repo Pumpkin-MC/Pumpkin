@@ -101,6 +101,13 @@ impl<S: ChunkSerializer<WriteBackend = PathBuf> + 'static> ChunkSerializerLazyLo
 
         match tokio::fs::read(&self.path).await {
             Ok(bytes) => {
+                if bytes.is_empty() {
+                    trace!(
+                        "File is empty (0 bytes), using default for: {}",
+                        self.path.display()
+                    );
+                    return Ok(S::default());
+                }
                 let value = tokio::task::spawn_blocking(move || S::read(bytes.into()))
                     .await
                     .map_err(|e| ChunkReadingError::IoError(std::io::Error::other(e)))??;

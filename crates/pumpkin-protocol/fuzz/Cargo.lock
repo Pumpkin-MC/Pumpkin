@@ -1179,6 +1179,7 @@ dependencies = [
  "pumpkin-util",
  "pumpkin-world",
  "serde",
+ "serde_json",
  "thiserror",
  "tokio",
  "uuid",
@@ -1203,6 +1204,7 @@ dependencies = [
  "bytes",
  "colored",
  "crypto-bigint",
+ "dashmap",
  "ecdsa",
  "md5",
  "num-derive",
@@ -1215,7 +1217,6 @@ dependencies = [
  "serde_json",
  "sha2",
  "thiserror",
- "tokio",
  "ureq",
  "uuid",
 ]
@@ -1835,9 +1836,9 @@ checksum = "b8c0a043c9540bae7c578c88f91dda8bd82e59ae27c21baca69c8b191aaf5a6e"
 
 [[package]]
 name = "uuid"
-version = "1.24.1"
+version = "1.25.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2cefc03fd367c0c6d4305de1b312cf00248c4114f4a0418ce6a6af769e3b0bd9"
+checksum = "f053576934f05a761a402421fbbe3d425d9366f75f978806a037b3ca481abecc"
 dependencies = [
  "getrandom 0.4.2",
  "js-sys",

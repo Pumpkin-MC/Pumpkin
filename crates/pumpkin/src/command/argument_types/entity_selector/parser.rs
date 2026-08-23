@@ -246,11 +246,10 @@ impl<'b, 'a> EntitySelectorParser<'b, 'a> {
     fn parse_selector(&mut self) -> Result<(), CommandSyntaxError> {
         self.uses_selector_variable = true;
         self.suggestions = EntitySelectorParserSuggestions::Selector;
-        if !self.reader.can_read_char() {
-            return Err(MISSING_SELECTOR_TYPE_ERROR_TYPE.create(self.reader));
-        }
         let i = self.reader.cursor();
-        let char = self.reader.read().expect("can_read_char is true");
+        let Some(char) = self.reader.read() else {
+            return Err(MISSING_SELECTOR_TYPE_ERROR_TYPE.create(self.reader));
+        };
         let mut add_alive_predicate = false;
         match char {
             'a' => {

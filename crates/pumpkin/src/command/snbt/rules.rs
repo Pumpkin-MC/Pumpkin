@@ -522,16 +522,13 @@ impl SnbtParser<'_, '_> {
             Some('\'') => Some(EscapeSequenceBranch::Return('\'')),
             Some('"') => Some(EscapeSequenceBranch::Return('"')),
             Some('x') => Some(EscapeSequenceBranch::CheckValidity(
-                u32::from_str_radix(&self.string_hex_2()?, 16)
-                    .expect("Hexadecimal parsed should have been valid"),
+                u32::from_str_radix(&self.string_hex_2()?, 16).ok()?,
             )),
             Some('u') => Some(EscapeSequenceBranch::CheckValidity(
-                u32::from_str_radix(&self.string_hex_4()?, 16)
-                    .expect("Hexadecimal parsed should have been valid"),
+                u32::from_str_radix(&self.string_hex_4()?, 16).ok()?,
             )),
             Some('U') => Some(EscapeSequenceBranch::CheckValidity(
-                u32::from_str_radix(&self.string_hex_8()?, 16)
-                    .expect("Hexadecimal parsed should have been valid"),
+                u32::from_str_radix(&self.string_hex_8()?, 16).ok()?,
             )),
             Some('N') => {
                 if self.reader.peek() != Some('{') {

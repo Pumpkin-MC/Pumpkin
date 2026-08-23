@@ -268,9 +268,10 @@ impl GenerationSchedule {
 
         let mut ready = Vec::new();
         for (key, node) in &mut graph.nodes {
-            node.in_queue = false;
             if node.stage == StagedChunkEnum::None
                 || node.in_degree != 0
+                || node.in_queue
+                || node.in_flight
                 || waiting_for_chunks.contains(&key)
             {
                 continue;
@@ -1242,8 +1243,8 @@ impl GenerationSchedule {
                 }
 
                 if let Some(node) = self.graph.nodes.get_mut(task.1) {
+                    node.in_queue = false;
                     if node.in_degree != 0 {
-                        node.in_queue = false;
                         continue;
                     }
                     node.in_flight = true;
@@ -1492,7 +1493,9 @@ impl GenerationSchedule {
                         &self.waiting_for_chunks,
                     );
                     if restored > 0 {
-                        warn!("Restored {restored} stranded ready chunk tasks to generation queue");
+                        debug!(
+                            "Restored {restored} stranded ready chunk tasks to generation queue"
+                        );
                         continue;
                     }
                     debug_assert!(self.debug_check());
