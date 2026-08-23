@@ -15,7 +15,7 @@ use super::common::{WitNbtTree, from_wit_nbt_tree, to_wit_nbt_tree};
 use crate::plugin::loader::wasm::wasm_host::wit::v0_1::player::text_component_from_resource;
 use pumpkin_data::Enchantment;
 use pumpkin_data::data_component::DataComponent;
-use pumpkin_data::data_component_impl::{CustomNameImpl, EnchantmentsImpl};
+use pumpkin_data::data_component_impl::{CustomNameImpl, EnchantmentsImpl, LoreImpl};
 use pumpkin_nbt::tag::NbtTag;
 use pumpkin_protocol::codec::data_component::{deserialize, serialize};
 use std::borrow::Cow;
@@ -384,26 +384,42 @@ impl HostItemStack for PluginHostState {
         &mut self,
         res: Resource<ItemStackHandle>,
     ) -> wasmtime::Result<Vec<Resource<WitTextComponent>>> {
-        let _stack = self.get_item_stack(&res)?;
-        // LoreImpl is currently not fully implemented with data.
-        Ok(Vec::new())
+        let stack = self.get_item_stack(&res)?;
+        let lines = {
+            let stack = stack.lock().await;
+            stack
+                .get_data_component::<LoreImpl>()
+                .map_or_else(Vec::new, |lore| lore.lines.clone())
+        };
+
+        lines
+            .into_iter()
+            .map(|line| self.add_text_component(line))
+            .collect()
     }
 
     async fn set_lore(
         &mut self,
         res: Resource<ItemStackHandle>,
-        _lore: Vec<Resource<WitTextComponent>>,
+        lore: Vec<Resource<WitTextComponent>>,
     ) -> wasmtime::Result<()> {
-        let _stack = self.get_item_stack(&res)?;
+        let lore = lore
+            .iter()
+            .map(|line| text_component_from_resource(self, line))
+            .collect();
+        let stack = self.get_item_stack(&res)?;
+        stack.lock().await.set_lore(lore);
         Ok(())
     }
 
     async fn add_lore(
         &mut self,
         res: Resource<ItemStackHandle>,
-        _line: Resource<WitTextComponent>,
+        line: Resource<WitTextComponent>,
     ) -> wasmtime::Result<()> {
-        let _stack = self.get_item_stack(&res)?;
+        let line = text_component_from_resource(self, &line);
+        let stack = self.get_item_stack(&res)?;
+        stack.lock().await.add_lore(line);
         Ok(())
     }
 

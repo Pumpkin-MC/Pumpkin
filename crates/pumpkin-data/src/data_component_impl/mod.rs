@@ -539,6 +539,7 @@ pub fn read_data(id: DataComponent, data: &NbtTag) -> Option<Box<dyn DataCompone
         DataComponent::Fireworks => Some(FireworksImpl::read_data(data)?.to_dyn()),
         DataComponent::FireworkExplosion => Some(FireworkExplosionImpl::read_data(data)?.to_dyn()),
         DataComponent::CustomName => Some(CustomNameImpl::read_data(data)?.to_dyn()),
+        DataComponent::Lore => Some(LoreImpl::read_data(data)?.to_dyn()),
         DataComponent::ItemName => Some(ItemNameImpl::read_data(data)?.to_dyn()),
         DataComponent::ItemModel => Some(ItemModelImpl::read_data(data)?.to_dyn()),
         DataComponent::Consumable => Some(ConsumableImpl::read_data(data)?.to_dyn()),

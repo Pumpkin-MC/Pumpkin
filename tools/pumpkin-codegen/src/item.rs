@@ -802,7 +802,7 @@ impl ToTokens for ItemComponents {
             tokens.extend(quote! { (KineticWeapon, &KineticWeaponImpl), });
         }
         if self.lore.is_some() {
-            tokens.extend(quote! { (Lore, &LoreImpl), });
+            tokens.extend(quote! { (Lore, &LoreImpl { lines: Vec::new() }), });
         }
         if self.map_color.is_some() {
             tokens.extend(quote! { (MapColor, &MapColorImpl), });
