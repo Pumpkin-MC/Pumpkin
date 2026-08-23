@@ -60,6 +60,7 @@ impl PlantBlockBase for TallSeaGrassBlock {
         }
         false
     }
+    #[allow(clippy::unused_async_trait_impl)]
     async fn get_state_for_neighbor_update(
         &self,
         block_accessor: &dyn BlockAccessor,

@@ -476,7 +476,7 @@ impl Completer for PumpkinCommandCompleter {
         let ends_with_space = cmd.ends_with(' ');
 
         handle.block_on(async {
-            let dispatcher = server.command_dispatcher.read().await;
+            let dispatcher = server.command_dispatcher.load();
             let source = CommandSender::Console.into_source(server).await;
 
             // Temporary setups to unify both dispatchers for now:
@@ -597,7 +597,7 @@ impl Completer for PumpkinCommandCompleter {
                             candidates.push(string.clone());
                         }
                     }
-                    NodeType::Argument { name, consumer } => {
+                    NodeType::Argument { name, consumer, .. } => {
                         let suggest_future = consumer.suggest(&src, server, typing);
 
                         if let Ok(Some(suggestions)) = suggest_future.await {

@@ -5,7 +5,8 @@ use std::{
 
 use pumpkin_data::{
     data_component_impl::{
-        BlocksAttacksImpl, ConsumableImpl, EquipmentSlot, EquippableImpl, FoodImpl,
+        BlocksAttacksImpl, ConsumableImpl, ConsumeAnimation, EquipmentSlot, EquippableImpl,
+        FoodImpl,
     },
     item_stack::ItemStack,
 };
@@ -27,6 +28,7 @@ use pumpkin_protocol::{
             player_hotbar::CPlayerHotbar, update_block::CUpdateBlock,
         },
         server::{
+            actor_event::{ActorEventType, SActorEvent},
             animate::{AnimateAction, SAnimate},
             block_pick_request::SBlockPickRequest,
             command_request::SCommandRequest,
@@ -132,6 +134,7 @@ const fn map_bedrock_slot_to_screen_handler(window_id: i32, slot: u32) -> Option
     }
 }
 
+pub mod actor_event;
 pub mod animate;
 pub mod block_pick_request;
 pub mod chat_command;

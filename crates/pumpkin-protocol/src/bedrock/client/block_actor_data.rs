@@ -1,12 +1,11 @@
-use std::io::{Error, Write};
-
 use pumpkin_macros::packet;
-use pumpkin_nbt::{Nbt, compound::NbtCompound};
+use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
 
 use crate::serial::PacketWrite;
 
 /// Synchronizes the complete block-actor data for a block position.
+#[derive(PacketWrite)]
 #[packet(56)]
 pub struct CBlockActorData {
     pub position: BlockPos,
@@ -20,18 +19,11 @@ impl CBlockActorData {
     }
 }
 
-impl PacketWrite for CBlockActorData {
-    fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
-        self.position.write(writer)?;
-        writer.write_all(&Nbt::from(self.data.clone()).write_bedrock())
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use std::io::Cursor;
 
-    use pumpkin_nbt::deserializer::NbtReadHelperBedrock;
+    use pumpkin_nbt::{Nbt, deserializer::NbtReadHelperBedrock};
 
     use super::*;
     use crate::{Packet, serial::PacketWrite};

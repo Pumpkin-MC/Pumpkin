@@ -8,11 +8,11 @@ use crate::{
     LoggerOption, command::client_suggestions, net::ClientPlatform, plugin::PluginMetadata,
     plugin_log,
 };
+use arc_swap::ArcSwap;
 use pumpkin_util::{
     PermissionLvl,
     permission::{Permission, PermissionManager},
 };
-use tokio::sync::RwLock;
 use tracing::Level;
 
 use crate::{
@@ -31,13 +31,13 @@ use super::{EventPriority, Payload};
 /// # Fields
 /// - `metadata`: Metadata of the plugin.
 /// - `server`: A reference to the server on which the plugin operates.
-/// - `handlers`: A map of event handlers, protected by a read-write lock for safe access across threads.
+/// - `handlers`: A map of event handlers, wrapped in `ArcSwap` for lock-free read access across threads.
 pub struct Context {
     metadata: PluginMetadata,
     pub server: Arc<Server>,
-    pub handlers: Arc<RwLock<HandlerMap>>,
+    pub handlers: Arc<ArcSwap<HandlerMap>>,
     pub plugin_manager: Arc<PluginManager>,
-    pub permission_manager: Arc<RwLock<PermissionManager>>,
+    pub permission_manager: Arc<PermissionManager>,
     pub logger: Arc<OnceLock<LoggerOption>>,
 }
 impl Context {
@@ -54,7 +54,7 @@ impl Context {
     pub fn new(
         metadata: PluginMetadata,
         server: Arc<Server>,
-        handlers: Arc<RwLock<HandlerMap>>,
+        handlers: Arc<ArcSwap<HandlerMap>>,
         plugin_manager: Arc<PluginManager>,
         logger: Arc<OnceLock<LoggerOption>>,
     ) -> Self {
@@ -175,12 +175,13 @@ impl Context {
             format!("{}:{permission}", self.metadata.name)
         };
 
-        {
-            let mut dispatcher_lock = self.server.command_dispatcher.write().await;
-            dispatcher_lock
+        self.server.command_dispatcher.rcu(|dispatcher| {
+            let mut new_dispatcher = (**dispatcher).clone();
+            new_dispatcher
                 .fallback_dispatcher
-                .register(tree, full_permission_node);
-        };
+                .register(tree.clone(), full_permission_node.clone());
+            Arc::new(new_dispatcher)
+        });
 
         self.reload_commands_for_everyone().await;
     }
@@ -190,10 +191,11 @@ impl Context {
     /// # Arguments
     /// - `name`: The name of the command to unregister.
     pub async fn unregister_command(&self, name: &str) {
-        {
-            let mut dispatcher_lock = self.server.command_dispatcher.write().await;
-            dispatcher_lock.fallback_dispatcher.unregister(name);
-        };
+        self.server.command_dispatcher.rcu(|dispatcher| {
+            let mut new_dispatcher = (**dispatcher).clone();
+            new_dispatcher.fallback_dispatcher.unregister(name);
+            Arc::new(new_dispatcher)
+        });
 
         self.reload_commands_for_everyone().await;
     }
@@ -212,7 +214,7 @@ impl Context {
     /// # Arguments
     /// - `player`: The player for which the commands will be reloaded.
     pub async fn reload_commands_for(&self, player: &Arc<Player>) {
-        let command_dispatcher = self.server.command_dispatcher.read().await;
+        let command_dispatcher = self.server.command_dispatcher.load();
         if let ClientPlatform::Bedrock(_) = player.client.as_ref() {
             client_suggestions::send_bedrock_commands_packet(
                 player,
@@ -227,7 +229,7 @@ impl Context {
     }
 
     /// Register a permission for this plugin
-    pub async fn register_permission(&self, permission: Permission) -> Result<(), String> {
+    pub fn register_permission(&self, permission: Permission) -> Result<(), String> {
         // Ensure the permission has the correct namespace
         if !permission
             .node
@@ -239,26 +241,23 @@ impl Context {
             ));
         }
 
-        let registry = &self.permission_manager.read().await.registry;
-        registry.write().await.register_permission(permission)
+        self.permission_manager.register_permission(permission)
     }
 
     /// Check if a player has a permission
-    pub async fn player_has_permission(&self, player_uuid: &uuid::Uuid, permission: &str) -> bool {
-        let permission_manager = self.permission_manager.read().await;
-
+    #[must_use]
+    pub fn player_has_permission(&self, player_uuid: &uuid::Uuid, permission: &str) -> bool {
         // If the player isn't online, we need to find their op level
         let player_op_level = self
             .server
             .get_player_by_uuid(*player_uuid)
             .map_or(PermissionLvl::Zero, |player| player.permission_lvl.load());
 
-        permission_manager
+        self.permission_manager
             .has_permission(player_uuid, permission, player_op_level)
-            .await
     }
 
-    /// Asynchronously registers an event handler for a specific event type.
+    /// Registers an event handler for a specific event type.
     ///
     /// # Type Parameters
     /// - `E`: The event type that the handler will respond to.
@@ -271,7 +270,7 @@ impl Context {
     ///
     /// # Constraints
     /// The handler must implement the `EventHandler<E>` trait.
-    pub async fn register_event<E: Payload + 'static, H>(
+    pub fn register_event<E: Payload + 'static, H>(
         &self,
         handler: Arc<H>,
         priority: EventPriority,
@@ -279,19 +278,21 @@ impl Context {
     ) where
         H: EventHandler<E> + 'static,
     {
-        let mut handlers = self.handlers.write().await;
-
-        let handlers_vec = handlers
-            .entry(E::get_name_static())
-            .or_insert_with(Vec::new);
-
-        let typed_handler = TypedEventHandler {
+        let typed_handler = Arc::new(TypedEventHandler {
             handler,
             priority,
             blocking,
             _phantom: std::marker::PhantomData,
-        };
-        handlers_vec.push(Box::new(typed_handler));
+        });
+
+        self.handlers.rcu(|handlers| {
+            let mut new_handlers = (**handlers).clone();
+            new_handlers
+                .entry(E::get_name_static())
+                .or_default()
+                .push(typed_handler.clone());
+            Arc::new(new_handlers)
+        });
     }
 
     /// Registers a custom plugin loader that can load additional plugin types.

@@ -12,7 +12,7 @@ impl BedrockClient {
 
         let entity = player.get_entity();
         let position = entity.pos.load();
-        self.enqueue_packet(&CRespawn::new(
+        self.enqueue_client_packet(&CRespawn::new(
             pumpkin_util::math::vector3::Vector3::new(
                 position.x as f32,
                 position.y as f32 + entity.entity_type.eye_height,

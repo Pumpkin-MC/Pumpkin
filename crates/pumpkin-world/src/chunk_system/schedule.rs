@@ -1282,6 +1282,12 @@ impl GenerationSchedule {
                         });
 
                     if node.stage > effective_target {
+                        if let Some(holder) = self.chunk_map.get_mut(&node.pos) {
+                            let task_slot = &mut holder.tasks[node.stage as usize];
+                            if *task_slot == task.1 {
+                                *task_slot = NodeKey::null();
+                            }
+                        }
                         self.waiting_for_chunks.remove(&task.1);
                         self.drop_node(task.1);
                         continue;

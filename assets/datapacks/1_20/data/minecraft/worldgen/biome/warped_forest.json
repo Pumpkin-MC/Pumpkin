@@ -1,0 +1,34 @@
+{
+  "temperature": 2.0,
+  "downfall": 0.0,
+  "effects": {
+    "water_fog_color": 329011,
+    "water_color": 4159204,
+    "music": {
+      "max_delay": 24000,
+      "sound": "minecraft:music.nether.warped_forest",
+      "replace_current_music": 0,
+      "min_delay": 12000
+    },
+    "additions_sound": {
+      "sound": "minecraft:ambient.warped_forest.additions",
+      "tick_chance": 0.0111
+    },
+    "fog_color": 1705242,
+    "particle": {
+      "options": {
+        "type": "minecraft:warped_spore"
+      },
+      "probability": 0.014279999770224094
+    },
+    "ambient_sound": "minecraft:ambient.warped_forest.loop",
+    "mood_sound": {
+      "offset": 2.0,
+      "sound": "minecraft:ambient.warped_forest.mood",
+      "block_search_extent": 8,
+      "tick_delay": 6000
+    },
+    "sky_color": 7254527
+  },
+  "has_precipitation": 0
+}

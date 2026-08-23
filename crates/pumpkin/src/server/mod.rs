@@ -23,9 +23,10 @@ use key_store::KeyStore;
 use pumpkin_config::{AdvancedConfiguration, BasicConfiguration};
 use pumpkin_data::dimension::Dimension;
 use pumpkin_data::entity::EntityType;
-use pumpkin_util::permission::{PermissionManager, PermissionRegistry};
+use pumpkin_util::permission::PermissionManager;
 use pumpkin_util::text::color::NamedColor;
 use pumpkin_world::dimension::into_level;
+use pumpkin_world::generation::generator::GeneratorInit;
 use pumpkin_world::world::WorldPortalExt;
 use tracing::{debug, error, info, warn};
 
@@ -47,11 +48,12 @@ use std::net::IpAddr;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicI32, AtomicI64, AtomicU32};
 use std::{future::Future, sync::atomic::Ordering, time::Duration};
-use tokio::sync::{Mutex, OnceCell, RwLock};
+use tokio::sync::{Mutex, OnceCell};
 use tokio::task::{JoinHandle, JoinSet};
 use tokio_util::task::TaskTracker;
 
 mod connection_cache;
+pub(crate) mod debug_profiler;
 pub mod enchantment;
 mod key_store;
 pub mod recipe;
@@ -79,9 +81,7 @@ pub struct Server {
     pub plugin_manager: Arc<PluginManager>,
 
     /// Permission manager for the server.
-    pub permission_manager: Arc<RwLock<PermissionManager>>,
-    /// Permission registry for the server.
-    pub permission_registry: Arc<RwLock<PermissionRegistry>>,
+    pub permission_manager: Arc<PermissionManager>,
 
     /// Handles cryptographic keys for secure communication.
     key_store: OnceCell<Arc<KeyStore>>,
@@ -94,7 +94,7 @@ pub struct Server {
     /// Saves server branding information.
     branding: CachedBranding,
     /// Saves and dispatches commands to appropriate handlers.
-    pub command_dispatcher: RwLock<CommandDispatcher>,
+    pub command_dispatcher: ArcSwap<CommandDispatcher>,
     /// Block behaviour.
     pub block_registry: Arc<BlockRegistry>,
     /// Item behaviour.
@@ -106,6 +106,7 @@ pub struct Server {
     /// Assigns unique IDs to containers.
     container_id: AtomicU32,
     pub recipe_manager: Arc<recipe::RecipeManager>,
+    pub datapack_manager: Arc<crate::data::datapack::DatapackManager>,
     pub enchantment_manager: Arc<enchantment::EnchantmentManager>,
     /// Assigns unique IDs to maps.
     map_id: AtomicI32,
@@ -132,6 +133,8 @@ pub struct Server {
     pub aggregated_tick_times_nanos: AtomicI64,
     /// Total number of ticks processed by the server
     pub tick_count: AtomicI32,
+    /// Owns the server-wide tick profiling session used by `/debug`.
+    pub(crate) debug_profiler: debug_profiler::DebugProfiler,
     /// Random unique Server ID used by Bedrock Edition
     pub server_guid: u64,
     /// Player idle timeout in minutes (0 = disabled)
@@ -154,16 +157,13 @@ impl Server {
         advanced_config: AdvancedConfiguration,
         vanilla_data: VanillaData,
     ) -> Arc<Self> {
-        let permission_registry = Arc::new(RwLock::new(PermissionRegistry::new()));
+        let permission_manager = Arc::new(PermissionManager::new());
         // First register the default commands. After that, plugins can put in their own.
-        let command_dispatcher = RwLock::new(
-            default_dispatcher(
-                &permission_registry,
-                &basic_config,
-                &advanced_config.commands,
-            )
-            .await,
-        );
+        let command_dispatcher = ArcSwap::from_pointee(default_dispatcher(
+            &permission_manager,
+            &basic_config,
+            &advanced_config.commands,
+        ));
 
         crate::command::set_broadcast_console_to_ops(
             advanced_config.commands.broadcast_console_to_ops,
@@ -190,7 +190,12 @@ impl Server {
                     world_path.display(),
                     basic_config.seed.0 as i64
                 );
-                let default_data = LevelData::default(basic_config.seed);
+                let overworld_gen = pumpkin_world::generation::generator::VanillaGenerator::new(
+                    basic_config.seed,
+                    Dimension::OVERWORLD,
+                );
+                let default_data =
+                    LevelData::from_world_generator(basic_config.seed, &overworld_gen);
                 if let Err(err) = AnvilLevelInfo.write_world_info(&default_data, &world_path) {
                     error!("Failed to save level.dat: {err}");
                 }
@@ -259,17 +264,22 @@ impl Server {
                 .collect::<Vec<_>>()
         );
 
+        let verify_plugin_signatures = advanced_config.plugins.verify_signatures;
+        if !verify_plugin_signatures {
+            warn!(
+                "Plugin signature verification is disabled. Only do this if you fully trust your plugins and their sources, because unsigned or tampered WASM plugins will be loaded without verification."
+            );
+        }
+
         let server = Self {
             basic_config,
             advanced_config,
             data: vanilla_data,
-            plugin_manager: Arc::new(PluginManager::new()),
-            permission_manager: Arc::new(RwLock::new(PermissionManager::new(
-                permission_registry.clone(),
-            ))),
-            permission_registry,
+            plugin_manager: Arc::new(PluginManager::new(verify_plugin_signatures)),
+            permission_manager,
             container_id: 0.into(),
             recipe_manager: Arc::new(recipe::RecipeManager::new()),
+            datapack_manager: Arc::new(crate::data::datapack::DatapackManager::new()),
             enchantment_manager: Arc::new(enchantment::EnchantmentManager::new()),
             map_id: level_info.load().map_id.into(),
             worlds: ArcSwap::from_pointee(vec![]),
@@ -292,6 +302,7 @@ impl Server {
             tick_times_nanos: Mutex::new([0; 100]),
             aggregated_tick_times_nanos: AtomicI64::new(0),
             tick_count: AtomicI32::new(0),
+            debug_profiler: debug_profiler::DebugProfiler::new(),
             tasks: TaskTracker::new(),
             runtime: tokio::runtime::Handle::current(),
             task_scheduler: Arc::new(TaskScheduler::new()),
@@ -437,6 +448,24 @@ impl Server {
         server.worlds.store(Arc::new(worlds_vec));
 
         info!("All worlds loaded successfully.");
+
+        let enabled_packs = server.level_info.load().data_packs.enabled.clone();
+        server
+            .datapack_manager
+            .load_all(&world_path, &enabled_packs, &server.recipe_manager)
+            .await;
+
+        let server_for_load = server.clone();
+        tokio::spawn(async move {
+            let source = crate::command::CommandSender::Console
+                .into_source(&server_for_load)
+                .await;
+            let _ = server_for_load
+                .datapack_manager
+                .execute_function(&server_for_load, &source, "#minecraft:load")
+                .await;
+        });
+
         server
     }
 
@@ -550,7 +579,47 @@ impl Server {
         Ok(())
     }
 
+    pub fn save_world_info(&self) -> Result<(), WorldInfoError> {
+        let level_data = self.level_info.load();
+        self.world_info_writer
+            .write_world_info(&level_data, &self.basic_config.get_world_path())
+    }
+
+    pub async fn reload_datapacks(&self, server: &Arc<Self>) {
+        let enabled_packs = self.level_info.load().data_packs.enabled.clone();
+        let world_path = self.basic_config.get_world_path();
+        self.datapack_manager
+            .load_all(&world_path, &enabled_packs, &self.recipe_manager)
+            .await;
+
+        let source = crate::command::CommandSender::Console
+            .into_source(server)
+            .await;
+        let _ = self
+            .datapack_manager
+            .execute_function(server, &source, "#minecraft:load")
+            .await;
+
+        let dynamic_recipes = self.recipe_manager.get_dynamic_recipes_internal().await;
+        for player in self.get_all_players() {
+            if let crate::net::ClientPlatform::Java(java_client) = player.client.as_ref() {
+                let add_packet = pumpkin_protocol::java::client::play::CRecipeBookAdd::new(
+                    true,
+                    &dynamic_recipes,
+                );
+                if let Ok(data) = java_client.serialize_packet(&add_packet) {
+                    java_client.send_packet_now(data).await;
+                }
+            }
+        }
+    }
+
     pub async fn save_all(&self) -> Result<(), String> {
+        if let Err(err) = self.save_world_info() {
+            error!("Failed to save world info: {err}");
+            return Err(format!("Failed to save world info: {err}"));
+        }
+
         if let Err(err) = self.player_data_storage.save_all_players(self).await {
             error!("Failed to save player data: {err}");
             return Err(format!("Failed to save player data: {err}"));
@@ -741,8 +810,8 @@ impl Server {
             for player in world.players.load().iter() {
                 *player.tab_list_header.lock().await = header.clone();
                 *player.tab_list_footer.lock().await = footer.clone();
-                player.client.enqueue_packet(&packet).await;
             }
+            world.broadcast_packet_all(&packet);
         }
     }
 
@@ -807,6 +876,24 @@ impl Server {
 
         for world in self.worlds.load().iter() {
             world.set_difficulty(difficulty);
+            world
+                .broadcast_editioned(
+                    &CChangeDifficulty::new(difficulty as u8, locked),
+                    &pumpkin_protocol::bedrock::client::CSetDifficulty::new(difficulty as u32),
+                )
+                .await;
+        }
+    }
+
+    /// Sets the difficulty lock status of the server and broadcasts the update to all players.
+    pub async fn set_difficulty_locked(&self, locked: bool) {
+        let current_info = self.level_info.load();
+        let mut new_info = (**current_info).clone();
+        new_info.difficulty_locked = locked;
+        let difficulty = new_info.difficulty;
+        self.level_info.store(Arc::new(new_info));
+
+        for world in self.worlds.load().iter() {
             world
                 .broadcast_editioned(
                     &CChangeDifficulty::new(difficulty as u8, locked),
@@ -1063,13 +1150,15 @@ impl Server {
             pumpkin_protocol::codec::var_int::VarInt(0),
         );
         for world in self.worlds.load().iter() {
-            for player in world.players.load().iter() {
-                if player.subscribed_debug_sample.load(Ordering::Relaxed)
-                    && player.permission_lvl.load() >= pumpkin_util::PermissionLvl::Two
-                {
-                    player.client.try_enqueue_packet(&packet);
-                }
-            }
+            let players = world.players.load();
+            let recipients = players
+                .iter()
+                .filter(|player| {
+                    player.subscribed_debug_sample.load(Ordering::Relaxed)
+                        && player.permission_lvl.load() >= pumpkin_util::PermissionLvl::Two
+                })
+                .filter_map(|player| player.client.java());
+            World::broadcast_java_clients(&packet, recipients);
         }
     }
 

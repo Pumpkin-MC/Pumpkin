@@ -5,11 +5,12 @@ use crate::{
     codec::var_int::VarInt,
     ser::{NetworkWriteExt, WritingError},
 };
-use pumpkin_data::{packet::clientbound::CONFIG_REGISTRY_DATA, registry::RegistryEntryData};
+use pumpkin_data::{packet::clientbound::config::REGISTRY_DATA, registry::RegistryEntryData};
 use pumpkin_macros::java_packet;
 use pumpkin_util::{resource_location::ResourceLocation, version::JavaMinecraftVersion};
 
-#[java_packet(CONFIG_REGISTRY_DATA)]
+/// Added in 1.20.2
+#[java_packet(REGISTRY_DATA)]
 pub struct CRegistryData<'a> {
     pub registry_id: &'a ResourceLocation,
     pub entries: &'a [RegistryEntryData],

@@ -1,4 +1,4 @@
-use pumpkin_data::packet::serverbound::LOGIN_COOKIE_RESPONSE;
+use pumpkin_data::packet::serverbound::login::COOKIE_RESPONSE;
 use pumpkin_macros::java_packet;
 use pumpkin_util::version::JavaMinecraftVersion;
 
@@ -7,7 +7,7 @@ use crate::{
     ser::{NetworkReadExt, NetworkReadSliceExt, ReadingError},
 };
 
-#[java_packet(LOGIN_COOKIE_RESPONSE)]
+#[java_packet(COOKIE_RESPONSE)]
 /// Response to a `CCookieRequest` (login) from the server.
 /// The Notchian server only accepts responses of up to 5 kiB in size.
 pub struct SLoginCookieResponse<'a> {

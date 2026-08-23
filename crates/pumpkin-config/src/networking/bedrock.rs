@@ -1,4 +1,4 @@
-use crate::CompressionConfig;
+use crate::{CompressionConfig, PacketLimiterConfig};
 use serde::{Deserialize, Serialize};
 use std::net::{IpAddr, SocketAddr};
 use std::num::NonZero;
@@ -84,6 +84,8 @@ pub struct BedrockConfig {
     pub nethernet: NetherNetConfig,
     /// Whether Bedrock client chunk blob caching is enabled.
     pub chunk_caching: bool,
+    /// Packet rate limiting settings.
+    pub packet_limiter: PacketLimiterConfig,
 }
 
 impl Default for BedrockConfig {
@@ -101,6 +103,7 @@ impl Default for BedrockConfig {
             authentication: BedrockAuthenticationConfig::default(),
             nethernet: NetherNetConfig::default(),
             chunk_caching: true,
+            packet_limiter: PacketLimiterConfig::default(),
         }
     }
 }

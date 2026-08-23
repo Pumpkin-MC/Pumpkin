@@ -6,10 +6,8 @@ use std::sync::{
 use pumpkin_data::entity::{EntityStatus, EntityType};
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
-use pumpkin_data::meta_data_type::MetaDataType;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::{self, Taggable};
-use pumpkin_data::tracked_data::TrackedData;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::java::client::play::Metadata;
@@ -17,7 +15,7 @@ use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 
 use crate::entity::{
-    Entity, EntityBase, EntityBaseFuture, NBTStorage, NbtFuture,
+    Entity, EntityBase, EntityBaseFuture, NbtFuture,
     ageable::{AgeableData, AgeableMob},
     ai::goal::{
         breed::BreedGoal, follow_parent::FollowParentGoal, look_around::RandomLookAroundGoal,
@@ -126,8 +124,7 @@ impl SnifferEntity {
         let entity = self.get_entity();
         entity.send_meta_data(
             &[Metadata::new(
-                TrackedData::STATE,
-                MetaDataType::SNIFFER_STATE,
+                pumpkin_data::tracked_data::sniffer::STATE,
                 VarInt(state.id()),
             )],
             None,
@@ -195,8 +192,7 @@ impl SnifferEntity {
         self.drop_seed_at_tick.store(drop_tick, Ordering::Relaxed);
         entity.send_meta_data(
             &[Metadata::new(
-                TrackedData::DROP_SEED_AT_TICK,
-                MetaDataType::INT,
+                pumpkin_data::tracked_data::sniffer::DROP_SEED_AT_TICK,
                 VarInt(drop_tick),
             )],
             None,
@@ -324,35 +320,6 @@ impl AgeableMob for SnifferEntity {
     }
 }
 
-impl NBTStorage for SnifferEntity {
-    fn write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
-        Box::pin(async move {
-            self.mob_entity.living_entity.write_nbt(nbt).await;
-            self.write_ageable_nbt(nbt);
-            self.write_animal_nbt(nbt);
-            nbt.put_int("State", self.get_state().id());
-            nbt.put_int(
-                "DropSeedAtTick",
-                self.drop_seed_at_tick.load(Ordering::Relaxed),
-            );
-        })
-    }
-
-    fn read_nbt_non_mut<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
-        Box::pin(async move {
-            self.mob_entity.living_entity.read_nbt_non_mut(nbt).await;
-            self.read_ageable_nbt(nbt);
-            self.read_animal_nbt(nbt);
-            if let Some(state_id) = nbt.get_int("State") {
-                self.state.store(state_id, Ordering::Relaxed);
-            }
-            if let Some(drop_tick) = nbt.get_int("DropSeedAtTick") {
-                self.drop_seed_at_tick.store(drop_tick, Ordering::Relaxed);
-            }
-        })
-    }
-}
-
 impl Animal for SnifferEntity {
     fn is_food(&self, item_stack: &ItemStack) -> bool {
         item_stack.item.has_tag(&tag::Item::MINECRAFT_SNIFFER_FOOD)
@@ -361,6 +328,35 @@ impl Animal for SnifferEntity {
 }
 
 impl Mob for SnifferEntity {
+    fn as_ageable(&self) -> Option<&dyn AgeableMob> {
+        Some(self)
+    }
+
+    fn as_animal(&self) -> Option<&dyn Animal> {
+        Some(self)
+    }
+
+    fn mob_write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
+        Box::pin(async move {
+            nbt.put_int("State", self.get_state().id());
+            nbt.put_int(
+                "DropSeedAtTick",
+                self.drop_seed_at_tick.load(Ordering::Relaxed),
+            );
+        })
+    }
+
+    fn mob_read_nbt<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
+        Box::pin(async move {
+            if let Some(state_id) = nbt.get_int("State") {
+                self.state.store(state_id, Ordering::Relaxed);
+            }
+            if let Some(drop_tick) = nbt.get_int("DropSeedAtTick") {
+                self.drop_seed_at_tick.store(drop_tick, Ordering::Relaxed);
+            }
+        })
+    }
+
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
     }
@@ -397,8 +393,7 @@ impl Mob for SnifferEntity {
             if is_baby {
                 entity.send_meta_data(
                     &[Metadata::new(
-                        TrackedData::BABY_ID,
-                        MetaDataType::BOOLEAN,
+                        pumpkin_data::tracked_data::sniffer::BABY_ID,
                         true,
                     )],
                     None,
@@ -407,13 +402,11 @@ impl Mob for SnifferEntity {
             entity.send_meta_data(
                 &[
                     Metadata::new(
-                        TrackedData::STATE,
-                        MetaDataType::SNIFFER_STATE,
+                        pumpkin_data::tracked_data::sniffer::STATE,
                         VarInt(self.get_state().id()),
                     ),
                     Metadata::new(
-                        TrackedData::DROP_SEED_AT_TICK,
-                        MetaDataType::INT,
+                        pumpkin_data::tracked_data::sniffer::DROP_SEED_AT_TICK,
                         VarInt(self.drop_seed_at_tick.load(Ordering::Relaxed)),
                     ),
                 ],

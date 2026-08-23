@@ -1,0 +1,75 @@
+{
+  "description": {
+    "translate": "enchantment.minecraft.unbreaking"
+  },
+  "supported_items": "#minecraft:enchantable/durability",
+  "weight": 5,
+  "max_level": 3,
+  "min_cost": {
+    "base": 5,
+    "per_level_above_first": 8
+  },
+  "max_cost": {
+    "base": 55,
+    "per_level_above_first": 8
+  },
+  "anvil_cost": 2,
+  "slots": [
+    "any"
+  ],
+  "effects": {
+    "minecraft:item_damage": [
+      {
+        "effect": {
+          "chance": {
+            "numerator": {
+              "base": 2.0,
+              "per_level_above_first": 2.0,
+              "type": "minecraft:linear"
+            },
+            "denominator": {
+              "base": 10.0,
+              "per_level_above_first": 5.0,
+              "type": "minecraft:linear"
+            },
+            "type": "minecraft:fraction"
+          },
+          "type": "minecraft:remove_binomial"
+        },
+        "requirements": {
+          "predicate": {
+            "items": "#minecraft:enchantable/armor"
+          },
+          "condition": "minecraft:match_tool"
+        }
+      },
+      {
+        "effect": {
+          "chance": {
+            "numerator": {
+              "base": 1.0,
+              "per_level_above_first": 1.0,
+              "type": "minecraft:linear"
+            },
+            "denominator": {
+              "base": 2.0,
+              "per_level_above_first": 1.0,
+              "type": "minecraft:linear"
+            },
+            "type": "minecraft:fraction"
+          },
+          "type": "minecraft:remove_binomial"
+        },
+        "requirements": {
+          "term": {
+            "predicate": {
+              "items": "#minecraft:enchantable/armor"
+            },
+            "condition": "minecraft:match_tool"
+          },
+          "condition": "minecraft:inverted"
+        }
+      }
+    ]
+  }
+}

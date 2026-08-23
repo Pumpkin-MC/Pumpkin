@@ -60,7 +60,7 @@ pub async fn update_position(player: &Arc<Player>) {
     match player.client.as_ref() {
         ClientPlatform::Java(java_client) => {
             java_client
-                .send_packet_now(&CCenterChunk {
+                .send_packet(&CCenterChunk {
                     chunk_x: new_chunk_center.x.into(),
                     chunk_z: new_chunk_center.y.into(),
                 })
@@ -68,14 +68,13 @@ pub async fn update_position(player: &Arc<Player>) {
         }
         ClientPlatform::Bedrock(bedrock_client) => {
             bedrock_client
-                .send_game_packet(&CNetworkChunkPublisherUpdate::new(
+                .send_packet(&CNetworkChunkPublisherUpdate::new(
                     player.get_entity().block_pos.load(),
                     u32::from(view_distance.get()) * 16,
                 ))
                 .await;
         }
     }
-
     let (loading_iter, unloading_iter) =
         Cylindrical::changed_chunks(old_cylindrical, new_cylindrical);
     let loading_chunks: Vec<_> = loading_iter.collect();
@@ -100,7 +99,7 @@ pub async fn update_position(player: &Arc<Player>) {
     if let ClientPlatform::Java(client) = player.client.as_ref() {
         for chunk in &unloading_chunks {
             client
-                .enqueue_packet(&CUnloadChunk::new(chunk.x, chunk.y))
+                .enqueue_client_packet(&CUnloadChunk::new(chunk.x, chunk.y))
                 .await;
         }
     }

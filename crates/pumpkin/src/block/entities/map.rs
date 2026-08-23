@@ -124,6 +124,7 @@ impl MapBlockEntity {
         let packet = CMapItemData {
             map_id: VarInt(map_id),
             scale: 0,
+            tracking_position: false,
             locked: false,
             icons: Some(&[]),
             data: Some(data),

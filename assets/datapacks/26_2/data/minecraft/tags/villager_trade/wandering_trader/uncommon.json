@@ -1,0 +1,19 @@
+{
+  "values": [
+    "minecraft:wandering_trader/emerald_packed_ice",
+    "minecraft:wandering_trader/emerald_blue_ice",
+    "minecraft:wandering_trader/emerald_gunpowder",
+    "minecraft:wandering_trader/emerald_podzol",
+    "minecraft:wandering_trader/emerald_acacia_log",
+    "minecraft:wandering_trader/emerald_birch_log",
+    "minecraft:wandering_trader/emerald_dark_oak_log",
+    "minecraft:wandering_trader/emerald_jungle_log",
+    "minecraft:wandering_trader/emerald_oak_log",
+    "minecraft:wandering_trader/emerald_spruce_log",
+    "minecraft:wandering_trader/emerald_cherry_log",
+    "minecraft:wandering_trader/emerald_mangrove_log",
+    "minecraft:wandering_trader/emerald_pale_oak_log",
+    "minecraft:wandering_trader/emerald_enchanted_iron_pickaxe",
+    "minecraft:wandering_trader/emerald_long_invisibility_potion"
+  ]
+}

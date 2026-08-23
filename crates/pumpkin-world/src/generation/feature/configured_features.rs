@@ -78,26 +78,17 @@ pub static CONFIGURED_FEATURES: LazyLock<
     HashMap<pumpkin_data::configured_feature::ConfiguredFeature, ConfiguredFeature>,
 > = LazyLock::new(build_configured_features);
 
-fn resolve_bone_meal_features(
-    extracted_tags: &str,
-) -> HashSet<pumpkin_data::configured_feature::ConfiguredFeature> {
-    let extracted_tags = serde_json::from_str::<serde_json::Value>(extracted_tags).ok();
-    let values = extracted_tags.as_ref().and_then(|tags| {
-        tags["worldgen/configured_feature"]["minecraft:can_spawn_from_bone_meal"].as_array()
-    });
-
-    values
-        .into_iter()
-        .flatten()
-        .filter_map(|value| value.as_str())
-        .filter_map(pumpkin_data::configured_feature::ConfiguredFeature::from_name)
-        .collect()
-}
-
 pub static BONE_MEAL_FEATURES: LazyLock<
     HashSet<pumpkin_data::configured_feature::ConfiguredFeature>,
 > = LazyLock::new(|| {
-    resolve_bone_meal_features(include_str!("../../../../../assets/tags/26_2_tags.json"))
+    pumpkin_data::tag::get_tag_values(
+        pumpkin_data::tag::RegistryKey::WorldgenConfiguredFeature,
+        "minecraft:can_spawn_from_bone_meal",
+    )
+    .into_iter()
+    .flatten()
+    .filter_map(|name| pumpkin_data::configured_feature::ConfiguredFeature::from_name(name))
+    .collect()
 });
 
 pub enum ConfiguredFeature {
@@ -485,9 +476,7 @@ include!("../../../../pumpkin-data/src/generated/configured_features_generated.r
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        BONE_MEAL_FEATURES, CONFIGURED_FEATURES, ConfiguredFeature, resolve_bone_meal_features,
-    };
+    use super::{BONE_MEAL_FEATURES, CONFIGURED_FEATURES, ConfiguredFeature};
     use pumpkin_util::{
         math::position::BlockPos,
         random::{RandomGenerator, xoroshiro128::Xoroshiro},
@@ -511,21 +500,15 @@ mod tests {
     }
 
     #[test]
-    fn bonemeal_features_use_extractor_tag_output() {
-        let features = resolve_bone_meal_features(
-            r#"{
-                "worldgen/configured_feature": {
-                    "minecraft:can_spawn_from_bone_meal": ["flower_default", "wildflower"]
-                }
-            }"#,
+    fn bonemeal_features_use_tag_output() {
+        let tag_values = pumpkin_data::tag::get_tag_values(
+            pumpkin_data::tag::RegistryKey::WorldgenConfiguredFeature,
+            "minecraft:can_spawn_from_bone_meal",
         );
-
-        assert_eq!(features.len(), 2);
-        assert!(
-            features.contains(&pumpkin_data::configured_feature::ConfiguredFeature::FlowerDefault)
-        );
-        assert!(
-            features.contains(&pumpkin_data::configured_feature::ConfiguredFeature::Wildflower)
-        );
+        assert!(tag_values.is_some());
+        let values = tag_values.unwrap();
+        assert_eq!(values.len(), 8);
+        assert!(values.contains(&"flower_default"));
+        assert!(values.contains(&"wildflower"));
     }
 }

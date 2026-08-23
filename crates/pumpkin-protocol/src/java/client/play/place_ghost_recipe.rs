@@ -1,10 +1,10 @@
-use pumpkin_data::packet::clientbound::PLAY_PLACE_GHOST_RECIPE;
+use pumpkin_data::packet::clientbound::play::PLACE_GHOST_RECIPE;
 use pumpkin_macros::java_packet;
 
 use crate::{ClientPacket, ser::NetworkWriteExt};
 use pumpkin_util::version::JavaMinecraftVersion;
 
-#[java_packet(PLAY_PLACE_GHOST_RECIPE)]
+#[java_packet(PLACE_GHOST_RECIPE)]
 pub struct CPlaceGhostRecipe<'a> {
     pub window_id: u8,
     pub recipe_id: &'a str,

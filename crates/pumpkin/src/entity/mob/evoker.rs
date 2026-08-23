@@ -4,15 +4,13 @@ use tokio::sync::Mutex;
 use uuid::Uuid;
 
 use pumpkin_data::entity::EntityType;
-use pumpkin_data::meta_data_type::MetaDataType;
 use pumpkin_data::sound::Sound;
-use pumpkin_data::tracked_data::TrackedData;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::java::client::play::Metadata;
 use pumpkin_util::math::vector3::Vector3;
 
 use crate::entity::{
-    Entity, EntityBase, EntityBaseFuture, NBTStorage, NbtFuture,
+    Entity, EntityBase, EntityBaseFuture, NbtFuture,
     ai::goal::{
         Controls, Goal, GoalFuture, active_target::ActiveTargetGoal,
         look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal, swim::SwimGoal,
@@ -121,8 +119,7 @@ impl EvokerEntity {
         let entity = &self.mob_entity.living_entity.entity;
         entity.send_meta_data(
             &[Metadata::new(
-                TrackedData::SPELL_CASTING_ID,
-                MetaDataType::BYTE,
+                pumpkin_data::tracked_data::evoker::SPELL_CASTING_ID,
                 spell as u8 as i8,
             )],
             None,
@@ -143,29 +140,21 @@ impl EvokerEntity {
     }
 }
 
-impl NBTStorage for EvokerEntity {
-    fn write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
+impl Mob for EvokerEntity {
+    fn mob_write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async move {
-            self.mob_entity.living_entity.entity.write_nbt(nbt).await;
             nbt.put_int("SpellTicks", self.get_spell_casting_time());
         })
     }
 
-    fn read_nbt_non_mut<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
+    fn mob_read_nbt<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async move {
-            self.mob_entity
-                .living_entity
-                .entity
-                .read_nbt_non_mut(nbt)
-                .await;
             if let Some(ticks) = nbt.get_int("SpellTicks") {
                 self.set_spell_casting_time(ticks);
             }
         })
     }
-}
 
-impl Mob for EvokerEntity {
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
     }

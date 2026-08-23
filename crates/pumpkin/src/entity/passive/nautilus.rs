@@ -10,18 +10,16 @@ use pumpkin_data::{
     effect::StatusEffect,
     entity::EntityStatus,
     item_stack::ItemStack,
-    meta_data_type::MetaDataType,
     particle::Particle,
     potion::Effect,
     sound::{Sound, SoundCategory},
-    tracked_data::TrackedData,
 };
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::java::client::play::Metadata;
 use pumpkin_util::math::vector3::Vector3;
 
 use crate::entity::{
-    Entity, EntityBase, EntityBaseFuture, NBTStorage, NbtFuture,
+    Entity, EntityBase, EntityBaseFuture, NbtFuture,
     mob::{Mob, MobEntity},
     passive::animal::Animal,
     player::Player,
@@ -61,8 +59,7 @@ impl NautilusEntity {
         self.is_dashing.store(dashing, Ordering::Relaxed);
         self.mob_entity.living_entity.entity.send_meta_data(
             &[Metadata::new(
-                TrackedData::DASH,
-                MetaDataType::BOOLEAN,
+                pumpkin_data::tracked_data::nautilus::DASH,
                 dashing,
             )],
             None,
@@ -218,11 +215,23 @@ impl NautilusEntity {
     }
 }
 
-impl NBTStorage for NautilusEntity {
-    fn write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
+impl Animal for NautilusEntity {
+    fn is_food(&self, item_stack: &ItemStack) -> bool {
+        item_stack.item == &pumpkin_data::item::Item::NAUTILUS_SHELL
+            || item_stack.item == &pumpkin_data::item::Item::PUFFERFISH
+            || item_stack.item == &pumpkin_data::item::Item::COD
+            || item_stack.item == &pumpkin_data::item::Item::SALMON
+            || item_stack.item == &pumpkin_data::item::Item::TROPICAL_FISH
+    }
+}
+
+impl Mob for NautilusEntity {
+    fn as_animal(&self) -> Option<&dyn Animal> {
+        Some(self)
+    }
+
+    fn mob_write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async move {
-            self.mob_entity.living_entity.write_nbt(nbt).await;
-            self.write_animal_nbt(nbt);
             nbt.put_bool("IsTame", self.is_tame.load(Ordering::Relaxed));
             nbt.put_bool("Saddled", self.is_saddled.load(Ordering::Relaxed));
             nbt.put_int("DashCooldown", self.dash_cooldown.load(Ordering::Relaxed));
@@ -232,10 +241,8 @@ impl NBTStorage for NautilusEntity {
         })
     }
 
-    fn read_nbt_non_mut<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
+    fn mob_read_nbt<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async move {
-            self.mob_entity.living_entity.read_nbt_non_mut(nbt).await;
-            self.read_animal_nbt(nbt);
             if let Some(is_tame) = nbt.get_bool("IsTame") {
                 self.is_tame.store(is_tame, Ordering::Relaxed);
             }
@@ -250,19 +257,7 @@ impl NBTStorage for NautilusEntity {
             }
         })
     }
-}
 
-impl Animal for NautilusEntity {
-    fn is_food(&self, item_stack: &ItemStack) -> bool {
-        item_stack.item == &pumpkin_data::item::Item::NAUTILUS_SHELL
-            || item_stack.item == &pumpkin_data::item::Item::PUFFERFISH
-            || item_stack.item == &pumpkin_data::item::Item::COD
-            || item_stack.item == &pumpkin_data::item::Item::SALMON
-            || item_stack.item == &pumpkin_data::item::Item::TROPICAL_FISH
-    }
-}
-
-impl Mob for NautilusEntity {
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
     }
@@ -271,8 +266,7 @@ impl Mob for NautilusEntity {
         Box::pin(async move {
             self.mob_entity.living_entity.entity.send_meta_data(
                 &[Metadata::new(
-                    TrackedData::DASH,
-                    MetaDataType::BOOLEAN,
+                    pumpkin_data::tracked_data::nautilus::DASH,
                     self.is_dashing(),
                 )],
                 None,

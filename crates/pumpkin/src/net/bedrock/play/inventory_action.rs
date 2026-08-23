@@ -119,7 +119,7 @@ impl BedrockClient {
         }
 
         if inventory_updated {
-            self.enqueue_packet(&CInventoryContent {
+            self.enqueue_client_packet(&CInventoryContent {
                 container_id: VarUInt(0),
                 slots: player
                     .inventory()
@@ -444,7 +444,7 @@ impl BedrockClient {
                 }
             }
 
-            self.enqueue_packet(&CItemStackResponse {
+            self.enqueue_client_packet(&CItemStackResponse {
                 responses: vec![ItemStackResponse {
                     result,
                     request_id: packet.legacy_request_id,

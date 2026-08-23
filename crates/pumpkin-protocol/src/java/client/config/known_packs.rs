@@ -1,4 +1,4 @@
-use pumpkin_data::packet::clientbound::CONFIG_SELECT_KNOWN_PACKS;
+use pumpkin_data::packet::clientbound::config::SELECT_KNOWN_PACKS;
 use pumpkin_macros::java_packet;
 
 use crate::ClientPacket;
@@ -6,7 +6,7 @@ use crate::KnownPack;
 use crate::ser::NetworkWriteExt;
 use pumpkin_util::version::JavaMinecraftVersion;
 
-#[java_packet(CONFIG_SELECT_KNOWN_PACKS)]
+#[java_packet(SELECT_KNOWN_PACKS)]
 pub struct CKnownPacks<'a> {
     pub known_packs: &'a [KnownPack<'a>],
 }

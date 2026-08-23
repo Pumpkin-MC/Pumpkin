@@ -99,7 +99,9 @@ impl TntMinecart {
         if primed {
             world.explode_tnt_minecart(pos, power).await;
         } else {
-            world.explode(pos, power).await;
+            world
+                .explode(pos, power, crate::world::ExplosionInteraction::Tnt)
+                .await;
         }
     }
 

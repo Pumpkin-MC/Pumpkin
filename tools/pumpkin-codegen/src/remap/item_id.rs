@@ -199,6 +199,7 @@ pub fn build() -> TokenStream {
     let mut match_arms_id_from_ver = TokenStream::new();
 
     for (ver, mapping) in &all_mappings {
+        let versions = crate::remap::version_patterns(*ver);
         // Forward: 26.1 → old version (for sending to old clients)
         {
             let ident = format_ident!(
@@ -216,7 +217,7 @@ pub fn build() -> TokenStream {
                 const #ident: &[u16] = &[#(#mapping_tokens),*];
             });
             match_arms_id_for_ver.extend(quote! {
-                #ver => #ident
+                #(#versions)|* => #ident
                     .get(usize::from(item_id))
                     .copied()
                     .unwrap_or(item_id),
@@ -235,7 +236,7 @@ pub fn build() -> TokenStream {
                 const #ident: &[u16] = &[#(#mapping_tokens),*];
             });
             match_arms_id_from_ver.extend(quote! {
-                #ver => #ident
+                #(#versions)|* => #ident
                     .get(usize::from(item_id))
                     .copied()
                     .unwrap_or(item_id),

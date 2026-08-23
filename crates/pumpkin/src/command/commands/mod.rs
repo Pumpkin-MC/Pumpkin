@@ -3,9 +3,8 @@ use crate::command::tree::Command;
 use pumpkin_config::{BasicConfiguration, CommandsConfig};
 use pumpkin_util::{
     PermissionLvl,
-    permission::{Permission, PermissionDefault, PermissionRegistry},
+    permission::{Permission, PermissionDefault, PermissionManager, PermissionRegistry},
 };
-use tokio::sync::RwLock;
 use tracing::{info, warn};
 
 mod advancement;
@@ -18,6 +17,8 @@ mod clear;
 mod clone;
 mod damage;
 mod data;
+mod datapack;
+mod debug;
 pub mod defaultgamemode;
 mod deop;
 mod dialog;
@@ -30,6 +31,7 @@ mod fetchprofile;
 mod fill;
 mod fillbiome;
 mod forceload;
+mod function;
 mod gamemode;
 mod gamerule;
 mod give;
@@ -38,6 +40,7 @@ mod item;
 mod kick;
 mod kill;
 mod list;
+mod locate;
 mod loot;
 mod me;
 mod msg;
@@ -87,15 +90,13 @@ mod worldborder;
 
 #[allow(clippy::too_many_lines)]
 #[must_use]
-pub async fn default_dispatcher(
-    registry: &RwLock<PermissionRegistry>,
+pub fn default_dispatcher(
+    permission_manager: &PermissionManager,
     _basic_config: &BasicConfiguration,
     commands_config: &CommandsConfig,
 ) -> CommandDispatcher {
     let mut dispatcher = crate::command::dispatcher::CommandDispatcher::default();
-
-    let mut registry_lock = registry.write().await;
-    let registry = &mut *registry_lock;
+    let registry = &permission_manager.registry;
 
     register_permissions(registry);
 
@@ -134,7 +135,6 @@ pub async fn default_dispatcher(
     dispatcher.register(rotate::init_command_tree(), "minecraft:command.rotate");
     dispatcher.register(damage::init_command_tree(), "minecraft:command.damage");
     dispatcher.register(bossbar::init_command_tree(), "minecraft:command.bossbar");
-    dispatcher.register(say::init_command_tree(), "minecraft:command.say");
     dispatcher.register(gamemode::init_command_tree(), "minecraft:command.gamemode");
     dispatcher.register(gamerule::init_command_tree(), "minecraft:command.gamerule");
     dispatcher.register(
@@ -177,8 +177,10 @@ pub async fn default_dispatcher(
         wrapper_dispatcher
     };
 
+    say::register(&mut dispatcher, registry);
     banlist::register(&mut dispatcher, registry);
     difficulty::register(&mut dispatcher, registry);
+    debug::register(&mut dispatcher, registry);
     dialog::register(&mut dispatcher, registry);
     execute::register(&mut dispatcher, registry);
     fillbiome::register(&mut dispatcher, registry);
@@ -191,6 +193,7 @@ pub async fn default_dispatcher(
     place::register(&mut dispatcher, registry);
     random::register(&mut dispatcher, registry);
     list::register(&mut dispatcher, registry);
+    locate::register(&mut dispatcher, registry);
     loot::register(&mut dispatcher, registry);
     seed::register(&mut dispatcher, registry);
     saveall::register(&mut dispatcher, registry);
@@ -208,6 +211,8 @@ pub async fn default_dispatcher(
     teammsg::register(&mut dispatcher, registry);
     clone::register(&mut dispatcher, registry);
     attribute::register(&mut dispatcher, registry);
+    datapack::register(&mut dispatcher, registry);
+    function::register(&mut dispatcher, registry);
     fetchprofile::register(&mut dispatcher, registry);
 
     apply_command_overrides(&mut dispatcher, registry, commands_config);
@@ -227,7 +232,7 @@ pub async fn default_dispatcher(
 ///   this affects both the legacy and the node-based dispatchers uniformly.
 fn apply_command_overrides(
     dispatcher: &mut CommandDispatcher,
-    registry: &mut PermissionRegistry,
+    registry: &PermissionRegistry,
     commands_config: &CommandsConfig,
 ) {
     for (raw_name, settings) in &commands_config.overrides {
@@ -278,11 +283,16 @@ fn apply_command_overrides(
             };
 
             if let Some(node) = resolve_permission_node(dispatcher, registry, &name) {
-                registry.set_default(&node, default);
-                info!(
-                    "The /{name} command now needs permission level {} to use",
-                    level as u8
-                );
+                if registry.set_default(&node, default) {
+                    info!(
+                        "The /{name} command now needs permission level {} to use",
+                        level as u8
+                    );
+                } else {
+                    warn!(
+                        "Command override for /{name} sets a permission level, but matching permission node could not be updated; leaving it unchanged"
+                    );
+                }
             } else {
                 warn!(
                     "Command override for /{name} sets a permission level, but no matching permission node could be found; leaving it unchanged"
@@ -316,7 +326,7 @@ fn resolve_permission_node(
     None
 }
 
-fn register_permissions(registry: &mut PermissionRegistry) {
+fn register_permissions(registry: &PermissionRegistry) {
     // Register level 0 permissions (allowed by default)
     register_level_0_permissions(registry);
 
@@ -336,7 +346,7 @@ fn register_permissions(registry: &mut PermissionRegistry) {
         .unwrap_or_else(|e| tracing::warn!("{e}"));
 }
 
-fn register_level_0_permissions(registry: &mut PermissionRegistry) {
+fn register_level_0_permissions(registry: &PermissionRegistry) {
     // Register permissions for builtin commands that are allowed for everyone
     registry
         .register_permission(Permission::new(
@@ -362,7 +372,7 @@ fn register_level_0_permissions(registry: &mut PermissionRegistry) {
 }
 
 #[expect(clippy::too_many_lines)]
-fn register_level_2_permissions(registry: &mut PermissionRegistry) {
+fn register_level_2_permissions(registry: &PermissionRegistry) {
     // Register permissions for commands with PermissionLvl::Two
     registry
         .register_permission(Permission::new(
@@ -506,13 +516,6 @@ fn register_level_2_permissions(registry: &mut PermissionRegistry) {
         .unwrap_or_else(|e| tracing::warn!("{e}"));
     registry
         .register_permission(Permission::new(
-            "minecraft:command.say",
-            "Broadcasts a message to multiple players",
-            PermissionDefault::Op(PermissionLvl::Two),
-        ))
-        .unwrap_or_else(|e| tracing::warn!("{e}"));
-    registry
-        .register_permission(Permission::new(
             "minecraft:command.gamemode",
             "Sets a player's game mode",
             PermissionDefault::Op(PermissionLvl::Two),
@@ -576,7 +579,7 @@ fn register_level_2_permissions(registry: &mut PermissionRegistry) {
         .unwrap_or_else(|e| tracing::warn!("{e}"));
 }
 
-fn register_level_3_permissions(registry: &mut PermissionRegistry) {
+fn register_level_3_permissions(registry: &PermissionRegistry) {
     // Register permissions for commands with PermissionLvl::Three
     registry
         .register_permission(Permission::new(
@@ -661,8 +664,7 @@ fn register_level_3_permissions(registry: &mut PermissionRegistry) {
 mod override_tests {
     use pumpkin_config::{BasicConfiguration, CommandOverride, CommandsConfig};
     use pumpkin_util::PermissionLvl;
-    use pumpkin_util::permission::{PermissionDefault, PermissionRegistry};
-    use tokio::sync::RwLock;
+    use pumpkin_util::permission::{PermissionDefault, PermissionManager};
 
     use super::default_dispatcher;
 
@@ -686,16 +688,16 @@ mod override_tests {
         );
     }
 
-    #[tokio::test]
-    async fn disabling_a_command_removes_and_hides_it() {
+    #[test]
+    fn disabling_a_command_removes_and_hides_it() {
         let basic = BasicConfiguration::default();
         let mut commands = CommandsConfig::default();
         // `gamemode` lives on the legacy dispatcher; disabling it should remove
         // it there and flag it on the wrapper.
         disabled(&mut commands, "gamemode");
 
-        let registry = RwLock::new(PermissionRegistry::new());
-        let dispatcher = default_dispatcher(&registry, &basic, &commands).await;
+        let manager = PermissionManager::new();
+        let dispatcher = default_dispatcher(&manager, &basic, &commands);
 
         assert!(dispatcher.is_disabled("gamemode"));
         assert!(
@@ -708,16 +710,16 @@ mod override_tests {
         );
     }
 
-    #[tokio::test]
-    async fn disabling_an_alias_turns_off_the_whole_command() {
+    #[test]
+    fn disabling_an_alias_turns_off_the_whole_command() {
         let basic = BasicConfiguration::default();
         let mut commands = CommandsConfig::default();
         // `tp` is an alias of `teleport`; disabling it should take the whole
         // command down, including the primary name.
         disabled(&mut commands, "tp");
 
-        let registry = RwLock::new(PermissionRegistry::new());
-        let dispatcher = default_dispatcher(&registry, &basic, &commands).await;
+        let manager = PermissionManager::new();
+        let dispatcher = default_dispatcher(&manager, &basic, &commands);
 
         assert!(dispatcher.is_disabled("tp"));
         assert!(dispatcher.is_disabled("teleport"));
@@ -725,60 +727,59 @@ mod override_tests {
         assert!(dispatcher.fallback_dispatcher.get_tree("teleport").is_err());
     }
 
-    #[tokio::test]
-    async fn disabling_a_node_command_also_disables_its_aliases() {
+    #[test]
+    fn disabling_a_node_command_also_disables_its_aliases() {
         let basic = BasicConfiguration::default();
         let mut commands = CommandsConfig::default();
         // `help` is a node-based command with the aliases `h` and `?`.
         disabled(&mut commands, "help");
 
-        let registry = RwLock::new(PermissionRegistry::new());
-        let dispatcher = default_dispatcher(&registry, &basic, &commands).await;
+        let manager = PermissionManager::new();
+        let dispatcher = default_dispatcher(&manager, &basic, &commands);
 
         assert!(dispatcher.is_disabled("help"));
         assert!(dispatcher.is_disabled("h"));
         assert!(dispatcher.is_disabled("?"));
     }
 
-    #[tokio::test]
-    async fn override_for_unknown_command_is_ignored() {
+    #[test]
+    fn override_for_unknown_command_is_ignored() {
         let basic = BasicConfiguration::default();
         let mut commands = CommandsConfig::default();
         // A command name that does not exist (usually a typo in the config)
         // should be ignored, not silently swallow a real command or panic.
         disabled(&mut commands, "notacommand");
 
-        let registry = RwLock::new(PermissionRegistry::new());
-        let dispatcher = default_dispatcher(&registry, &basic, &commands).await;
+        let manager = PermissionManager::new();
+        let dispatcher = default_dispatcher(&manager, &basic, &commands);
 
         assert!(!dispatcher.is_disabled("notacommand"));
         assert!(dispatcher.fallback_dispatcher.get_tree("gamemode").is_ok());
     }
 
-    #[tokio::test]
-    async fn override_is_case_insensitive() {
+    #[test]
+    fn override_is_case_insensitive() {
         let basic = BasicConfiguration::default();
         let mut commands = CommandsConfig::default();
         disabled(&mut commands, "GameMode");
 
-        let registry = RwLock::new(PermissionRegistry::new());
-        let dispatcher = default_dispatcher(&registry, &basic, &commands).await;
+        let manager = PermissionManager::new();
+        let dispatcher = default_dispatcher(&manager, &basic, &commands);
 
         assert!(dispatcher.is_disabled("gamemode"));
     }
 
-    #[tokio::test]
-    async fn permission_level_override_rewrites_the_registry_default() {
+    #[test]
+    fn permission_level_override_rewrites_the_registry_default() {
         let basic = BasicConfiguration::default();
         let mut commands = CommandsConfig::default();
         // `gamemode` is normally level 2; bump it to owner-only.
         permission(&mut commands, "gamemode", PermissionLvl::Four);
 
-        let registry = RwLock::new(PermissionRegistry::new());
-        let _dispatcher = default_dispatcher(&registry, &basic, &commands).await;
+        let manager = PermissionManager::new();
+        let _dispatcher = default_dispatcher(&manager, &basic, &commands);
 
-        let registry = registry.read().await;
-        let permission = registry
+        let permission = manager
             .get_permission("minecraft:command.gamemode")
             .expect("gamemode permission should be registered");
         assert_eq!(
@@ -787,8 +788,8 @@ mod override_tests {
         );
     }
 
-    #[tokio::test]
-    async fn permission_override_resolves_node_command_by_convention() {
+    #[test]
+    fn permission_override_resolves_node_command_by_convention() {
         let basic = BasicConfiguration::default();
         let mut commands = CommandsConfig::default();
         // `kill` is a node-based command whose permission node is not recorded in
@@ -796,11 +797,10 @@ mod override_tests {
         // `minecraft:command.kill` naming convention.
         permission(&mut commands, "kill", PermissionLvl::Four);
 
-        let registry = RwLock::new(PermissionRegistry::new());
-        let _dispatcher = default_dispatcher(&registry, &basic, &commands).await;
+        let manager = PermissionManager::new();
+        let _dispatcher = default_dispatcher(&manager, &basic, &commands);
 
-        let registry = registry.read().await;
-        let permission = registry
+        let permission = manager
             .get_permission("minecraft:command.kill")
             .expect("kill permission should be registered");
         assert_eq!(
@@ -809,17 +809,16 @@ mod override_tests {
         );
     }
 
-    #[tokio::test]
-    async fn permission_level_zero_allows_everyone() {
+    #[test]
+    fn permission_level_zero_allows_everyone() {
         let basic = BasicConfiguration::default();
         let mut commands = CommandsConfig::default();
         permission(&mut commands, "gamemode", PermissionLvl::Zero);
 
-        let registry = RwLock::new(PermissionRegistry::new());
-        let _dispatcher = default_dispatcher(&registry, &basic, &commands).await;
+        let manager = PermissionManager::new();
+        let _dispatcher = default_dispatcher(&manager, &basic, &commands);
 
-        let registry = registry.read().await;
-        let permission = registry
+        let permission = manager
             .get_permission("minecraft:command.gamemode")
             .expect("gamemode permission should be registered");
         assert_eq!(permission.default, PermissionDefault::Allow);

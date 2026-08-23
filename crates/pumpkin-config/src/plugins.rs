@@ -45,6 +45,8 @@ pub struct PluginsConfig {
     /// MY_API_KEY = "secret_key"
     /// ```
     pub overrides: HashMap<String, PluginOverride>,
+    /// Whether Pumpkin should verify WASM plugin signatures before loading.
+    pub verify_signatures: bool,
 }
 
 impl Default for PluginsConfig {
@@ -60,6 +62,7 @@ impl Default for PluginsConfig {
             loopback_only: false,
             max_memory_mb: None,
             overrides: HashMap::new(),
+            verify_signatures: true,
         }
     }
 }
@@ -117,6 +120,7 @@ mod tests {
         assert!(!config.loopback_only);
         assert_eq!(config.max_memory_mb, None);
         assert!(config.overrides.is_empty());
+        assert!(config.verify_signatures);
     }
 
     #[test]
@@ -131,6 +135,7 @@ mod tests {
             inherit_env = true
             loopback_only = true
             max_memory_mb = 256
+            verify_signatures = false
 
             [overrides.my_plugin]
             enabled = false
@@ -154,6 +159,7 @@ mod tests {
         assert!(config.inherit_env);
         assert!(config.loopback_only);
         assert_eq!(config.max_memory_mb, Some(256));
+        assert!(!config.verify_signatures);
 
         let override_cfg = config.overrides.get("my_plugin").unwrap();
         assert!(!override_cfg.enabled);

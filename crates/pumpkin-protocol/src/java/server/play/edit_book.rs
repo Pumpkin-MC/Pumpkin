@@ -1,4 +1,4 @@
-use pumpkin_data::packet::serverbound::PLAY_EDIT_BOOK;
+use pumpkin_data::packet::serverbound::play::EDIT_BOOK;
 use pumpkin_macros::java_packet;
 use pumpkin_util::version::JavaMinecraftVersion;
 
@@ -8,7 +8,7 @@ use crate::{
 };
 
 #[derive(Debug)]
-#[java_packet(PLAY_EDIT_BOOK)]
+#[java_packet(EDIT_BOOK)]
 pub struct SEditBook<'a> {
     pub slot: VarInt,
     pub pages: Vec<&'a str>,

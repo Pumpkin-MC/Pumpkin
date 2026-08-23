@@ -3,11 +3,11 @@ use crate::{
     ServerPacket,
     ser::{NetworkReadExt, NetworkReadSliceExt, ReadingError},
 };
-use pumpkin_data::packet::serverbound::CONFIG_SELECT_KNOWN_PACKS;
+use pumpkin_data::packet::serverbound::config::SELECT_KNOWN_PACKS;
 use pumpkin_macros::java_packet;
 use pumpkin_util::version::JavaMinecraftVersion;
 
-#[java_packet(CONFIG_SELECT_KNOWN_PACKS)]
+#[java_packet(SELECT_KNOWN_PACKS)]
 pub struct SKnownPacks<'a> {
     pub known_packs: Vec<KnownPack<'a>>,
 }

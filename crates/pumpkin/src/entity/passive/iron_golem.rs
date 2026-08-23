@@ -6,15 +6,13 @@ use std::sync::{
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
-use pumpkin_data::meta_data_type::MetaDataType;
 use pumpkin_data::sound::{Sound, SoundCategory};
-use pumpkin_data::tracked_data::TrackedData;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::java::client::play::Metadata;
 use pumpkin_util::GameMode;
 
 use crate::entity::{
-    Entity, EntityBase, EntityBaseFuture, NBTStorage, NbtFuture,
+    Entity, EntityBase, EntityBaseFuture, NbtFuture,
     ai::goal::{
         active_target::ActiveTargetGoal, look_around::RandomLookAroundGoal,
         look_at_entity::LookAtEntityGoal, melee_attack::MeleeAttackGoal, revenge::RevengeGoal,
@@ -94,8 +92,7 @@ impl IronGolemEntity {
         let flag: u8 = u8::from(value);
         entity.send_meta_data(
             &[Metadata::new(
-                TrackedData::FLAGS_ID,
-                MetaDataType::BYTE,
+                pumpkin_data::tracked_data::iron_golem::FLAGS_ID,
                 flag,
             )],
             None,
@@ -103,25 +100,21 @@ impl IronGolemEntity {
     }
 }
 
-impl NBTStorage for IronGolemEntity {
-    fn write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
+impl Mob for IronGolemEntity {
+    fn mob_write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async move {
-            self.mob_entity.living_entity.write_nbt(nbt).await;
             nbt.put_bool("PlayerCreated", self.is_player_created());
         })
     }
 
-    fn read_nbt_non_mut<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
+    fn mob_read_nbt<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async move {
-            self.mob_entity.living_entity.read_nbt_non_mut(nbt).await;
             if let Some(created) = nbt.get_bool("PlayerCreated") {
                 self.set_player_created(created);
             }
         })
     }
-}
 
-impl Mob for IronGolemEntity {
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
     }
@@ -146,8 +139,7 @@ impl Mob for IronGolemEntity {
             let flag: u8 = u8::from(self.is_player_created());
             entity.send_meta_data(
                 &[Metadata::new(
-                    TrackedData::FLAGS_ID,
-                    MetaDataType::BYTE,
+                    pumpkin_data::tracked_data::iron_golem::FLAGS_ID,
                     flag,
                 )],
                 None,

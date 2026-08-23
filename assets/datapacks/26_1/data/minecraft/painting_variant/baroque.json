@@ -1,0 +1,13 @@
+{
+  "width": 2,
+  "height": 2,
+  "asset_id": "minecraft:baroque",
+  "title": {
+    "translate": "painting.minecraft.baroque.title",
+    "color": "yellow"
+  },
+  "author": {
+    "translate": "painting.minecraft.baroque.author",
+    "color": "gray"
+  }
+}

@@ -11,23 +11,20 @@ use futures::Future;
 use pumpkin_data::block_properties::{BlockProperties, JigsawLikeProperties, Orientation};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::{
-    BlockDirection,
     math::position::BlockPos,
     random::{RandomGenerator, xoroshiro128::Xoroshiro},
 };
-use pumpkin_world::generation::structure::{
-    structures::{
-        StructureGeneratorContext, StructurePosition,
-        jigsaw::{JigsawJointType, PoolElementStructurePiece},
-        jigsaw_placement::{
-            DimensionPadding, JigsawPlacement, LiquidSettings, MaxDistance, PoolAliasLookup,
-        },
+use pumpkin_world::generation::structure::structures::{
+    StructureGeneratorContext, StructurePosition,
+    jigsaw::{JigsawJointType, PoolElementStructurePiece},
+    jigsaw_placement::{
+        DimensionPadding, JigsawPlacement, LiquidSettings, MaxDistance, PoolAliasLookup,
     },
-    template::BlockStateResolver,
 };
 
 use tokio::sync::Mutex;
 
+use crate::block::blocks::jigsaw::JigsawBlock;
 use crate::world::World;
 
 use super::BlockEntity;
@@ -46,18 +43,40 @@ pub struct JigsawBlockEntity {
 
 impl JigsawBlockEntity {
     pub const ID: &'static str = "minecraft:jigsaw";
+    pub const EMPTY_ID: &'static str = "minecraft:empty";
+    pub const DEFAULT_FINAL_STATE: &'static str = "minecraft:air";
+    pub const DEFAULT_PLACEMENT_PRIORITY: i32 = 0;
+    pub const DEFAULT_SELECTION_PRIORITY: i32 = 0;
+    pub const NAME: &'static str = "name";
+    pub const TARGET: &'static str = "target";
+    pub const POOL: &'static str = "pool";
+    pub const FINAL_STATE: &'static str = "final_state";
+    pub const JOINT: &'static str = "joint";
+    pub const PLACEMENT_PRIORITY: &'static str = "placement_priority";
+    pub const SELECTION_PRIORITY: &'static str = "selection_priority";
+
     #[must_use]
     pub fn new(position: BlockPos) -> Self {
         Self {
             position,
-            name: Mutex::new("minecraft:empty".to_string()),
-            target: Mutex::new("minecraft:empty".to_string()),
-            pool: Mutex::new("minecraft:empty".to_string()),
-            final_state: Mutex::new("minecraft:air".to_string()),
+            name: Mutex::new(Self::EMPTY_ID.to_string()),
+            target: Mutex::new(Self::EMPTY_ID.to_string()),
+            pool: Mutex::new(Self::EMPTY_ID.to_string()),
+            final_state: Mutex::new(Self::DEFAULT_FINAL_STATE.to_string()),
             joint: Mutex::new(JigsawJointType::Rollable),
-            selection_priority: AtomicI32::new(0),
-            placement_priority: AtomicI32::new(0),
+            selection_priority: AtomicI32::new(Self::DEFAULT_SELECTION_PRIORITY),
+            placement_priority: AtomicI32::new(Self::DEFAULT_PLACEMENT_PRIORITY),
             dirty: AtomicBool::new(false),
+        }
+    }
+
+    #[must_use]
+    pub const fn get_default_joint_type(orientation: Orientation) -> JigsawJointType {
+        let front = JigsawBlock::get_front_facing(orientation);
+        if front.is_horizontal() {
+            JigsawJointType::Aligned
+        } else {
+            JigsawJointType::Rollable
         }
     }
 
@@ -68,15 +87,15 @@ impl JigsawBlockEntity {
         let block_state = world.get_block_state(&self.position);
         let props =
             JigsawLikeProperties::from_state_id(block_state.id, &pumpkin_data::Block::JIGSAW);
-        let (front, _top) = Self::to_front_top(props.r#orientation);
+        let front = JigsawBlock::get_front_facing(props.r#orientation);
 
-        let position = self.position.offset(front.to_vector());
+        let position = self.position.offset(front.to_offset());
 
         let structure = {
             let mut context = StructureGeneratorContext {
                 seed: world.level_info.load().world_gen_settings.seed,
-                chunk_x: self.position.chunk_position().x,
-                chunk_z: self.position.chunk_position().y,
+                chunk_x: position.chunk_position().x,
+                chunk_z: position.chunk_position().y,
                 random: RandomGenerator::Xoroshiro(Xoroshiro::from_seed(rand::rng().next_u64())),
                 sea_level: 63,
                 min_y: -64,
@@ -92,8 +111,8 @@ impl JigsawBlockEntity {
                 position,
                 false,
                 false,
-                &MaxDistance::new(80),
-                &DimensionPadding::ZERO,
+                &MaxDistance::new(128),
+                DimensionPadding::ZERO,
                 LiquidSettings::ApplyWaterlog,
                 &PoolAliasLookup::default(),
             )
@@ -117,109 +136,20 @@ impl JigsawBlockEntity {
                 .unwrap_or_else(std::sync::PoisonError::into_inner)
                 .pieces,
         );
+        let mut placer = crate::world::block_placer::WorldBlockPlacer::new(world);
         for piece in &mut pieces {
             if let Some(pool_piece) = piece.as_any().downcast_ref::<PoolElementStructurePiece>() {
-                let origin = pool_piece.pos;
-                let rotation = pool_piece.rotation;
-                let mut templates = Vec::new();
-                pool_piece
-                    .element
-                    .for_each_template(|_, _, _, template| templates.push(template));
-
-                for template in templates {
-                    for block in &template.blocks {
-                        let palette_entry = &template.palette[block.state as usize];
-                        if palette_entry.name == "minecraft:structure_void" {
-                            continue;
-                        }
-
-                        if !keep_jigsaws && palette_entry.name == "minecraft:jigsaw" {
-                            let final_state_str = block
-                                .nbt
-                                .as_ref()
-                                .and_then(|n| n.get_string("final_state"))
-                                .unwrap_or("minecraft:air");
-
-                            let entry =
-                            pumpkin_world::generation::structure::template::PaletteEntry::from_string(
-                                final_state_str,
-                            );
-                            if entry.name == "minecraft:structure_void" {
-                                continue;
-                            }
-                            let final_state =
-                            pumpkin_world::generation::structure::template::BlockStateResolver::resolve(
-                                &entry,
-                                rotation,
-                                pumpkin_data::Mirror::default(),
-                            )
-                            .unwrap_or(pumpkin_data::Block::AIR.default_state);
-
-                            let local_pos = rotation.transform_pos(block.pos, template.size);
-                            let world_pos = origin.add(local_pos.x, local_pos.y, local_pos.z);
-
-                            world
-                                .set_block_state(
-                                    &world_pos,
-                                    final_state.id,
-                                    pumpkin_world::world::BlockFlags::NOTIFY_ALL,
-                                )
-                                .await;
-                            continue;
-                        }
-
-                        let Some(state) = BlockStateResolver::resolve(
-                            palette_entry,
-                            rotation,
-                            pumpkin_data::Mirror::default(),
-                        ) else {
-                            continue;
-                        };
-
-                        let local_pos = rotation.transform_pos(block.pos, template.size);
-                        let world_pos = origin.add(local_pos.x, local_pos.y, local_pos.z);
-
-                        world
-                            .set_block_state(
-                                &world_pos,
-                                state.id,
-                                pumpkin_world::world::BlockFlags::NOTIFY_ALL,
-                            )
-                            .await;
-
-                        // Handle block entities
-                        if let Some(nbt) = &block.nbt {
-                            let mut block_entity_nbt = nbt.clone();
-                            block_entity_nbt.put_int("x", world_pos.0.x);
-                            block_entity_nbt.put_int("y", world_pos.0.y);
-                            block_entity_nbt.put_int("z", world_pos.0.z);
-                            if let Some(block_entity) =
-                                crate::block::entities::block_entity_from_nbt(&block_entity_nbt)
-                            {
-                                world.add_block_entity(block_entity);
-                            }
-                        }
-                    }
-                }
+                pumpkin_world::generation::structure::structures::jigsaw::place_pool_element_templates(
+                    pool_piece,
+                    &mut placer,
+                    None,
+                    keep_jigsaws,
+                );
             }
         }
-    }
-
-    const fn to_front_top(orientation: Orientation) -> (BlockDirection, BlockDirection) {
-        match orientation {
-            Orientation::DownEast => (BlockDirection::Down, BlockDirection::East),
-            Orientation::DownNorth => (BlockDirection::Down, BlockDirection::North),
-            Orientation::DownSouth => (BlockDirection::Down, BlockDirection::South),
-            Orientation::DownWest => (BlockDirection::Down, BlockDirection::West),
-            Orientation::UpEast => (BlockDirection::Up, BlockDirection::East),
-            Orientation::UpNorth => (BlockDirection::Up, BlockDirection::North),
-            Orientation::UpSouth => (BlockDirection::Up, BlockDirection::South),
-            Orientation::UpWest => (BlockDirection::Up, BlockDirection::West),
-            Orientation::WestUp => (BlockDirection::West, BlockDirection::Up),
-            Orientation::EastUp => (BlockDirection::East, BlockDirection::Up),
-            Orientation::NorthUp => (BlockDirection::North, BlockDirection::Up),
-            Orientation::SouthUp => (BlockDirection::South, BlockDirection::Up),
-        }
+        placer.finalize();
+        world.queue_block_updates(&placer.changed_positions).await;
+        world.flush_block_updates().await;
     }
 }
 
@@ -236,30 +166,37 @@ impl BlockEntity for JigsawBlockEntity {
         Self: Sized,
     {
         let name = Mutex::new(
-            nbt.get_string("name")
-                .unwrap_or("minecraft:empty")
+            nbt.get_string(Self::NAME)
+                .unwrap_or(Self::EMPTY_ID)
                 .to_string(),
         );
         let target = Mutex::new(
-            nbt.get_string("target")
-                .unwrap_or("minecraft:empty")
+            nbt.get_string(Self::TARGET)
+                .unwrap_or(Self::EMPTY_ID)
                 .to_string(),
         );
         let pool = Mutex::new(
-            nbt.get_string("pool")
-                .unwrap_or("minecraft:empty")
+            nbt.get_string(Self::POOL)
+                .unwrap_or(Self::EMPTY_ID)
                 .to_string(),
         );
         let final_state = Mutex::new(
-            nbt.get_string("final_state")
-                .unwrap_or("minecraft:air")
+            nbt.get_string(Self::FINAL_STATE)
+                .unwrap_or(Self::DEFAULT_FINAL_STATE)
                 .to_string(),
         );
-        let joint = Mutex::new(JigsawJointType::from_str(
-            nbt.get_string("joint").unwrap_or("rollable"),
-        ));
-        let selection_priority = AtomicI32::new(nbt.get_int("selection_priority").unwrap_or(0));
-        let placement_priority = AtomicI32::new(nbt.get_int("placement_priority").unwrap_or(0));
+        let joint = Mutex::new(
+            nbt.get_string(Self::JOINT)
+                .map_or(JigsawJointType::Rollable, JigsawJointType::from_str),
+        );
+        let selection_priority = AtomicI32::new(
+            nbt.get_int(Self::SELECTION_PRIORITY)
+                .unwrap_or(Self::DEFAULT_SELECTION_PRIORITY),
+        );
+        let placement_priority = AtomicI32::new(
+            nbt.get_int(Self::PLACEMENT_PRIORITY)
+                .unwrap_or(Self::DEFAULT_PLACEMENT_PRIORITY),
+        );
 
         Self {
             position,
@@ -278,40 +215,49 @@ impl BlockEntity for JigsawBlockEntity {
         &'a self,
         nbt: &'a mut NbtCompound,
     ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
-        Box::pin(async {
-            nbt.put_string("name", self.name.lock().await.to_string());
-            nbt.put_string("target", self.target.lock().await.to_string());
-            nbt.put_string("pool", self.pool.lock().await.to_string());
-            nbt.put_string("final_state", self.final_state.lock().await.to_string());
+        Box::pin(async move {
+            nbt.put_string(Self::NAME, self.name.lock().await.clone());
+            nbt.put_string(Self::TARGET, self.target.lock().await.clone());
+            nbt.put_string(Self::POOL, self.pool.lock().await.clone());
+            nbt.put_string(Self::FINAL_STATE, self.final_state.lock().await.clone());
             let joint = *self.joint.lock().await;
-            nbt.put_string(
-                "joint",
-                match joint {
-                    JigsawJointType::Rollable => "rollable".to_string(),
-                    JigsawJointType::Aligned => "aligned".to_string(),
-                },
-            );
+            nbt.put_string(Self::JOINT, joint.as_str().to_string());
             nbt.put_int(
-                "selection_priority",
-                self.selection_priority.load(Ordering::SeqCst),
-            );
-            nbt.put_int(
-                "placement_priority",
+                Self::PLACEMENT_PRIORITY,
                 self.placement_priority.load(Ordering::SeqCst),
+            );
+            nbt.put_int(
+                Self::SELECTION_PRIORITY,
+                self.selection_priority.load(Ordering::SeqCst),
             );
         })
     }
 
     fn chunk_data_nbt(&self) -> Option<NbtCompound> {
         let mut nbt = NbtCompound::new();
-        futures::executor::block_on(async {
-            self.write_nbt(&mut nbt).await;
-        });
+        nbt.put_string(Self::NAME, self.name.try_lock().ok()?.clone());
+        nbt.put_string(Self::TARGET, self.target.try_lock().ok()?.clone());
+        nbt.put_string(Self::POOL, self.pool.try_lock().ok()?.clone());
+        nbt.put_string(Self::FINAL_STATE, self.final_state.try_lock().ok()?.clone());
+        let joint = *self.joint.try_lock().ok()?;
+        nbt.put_string(Self::JOINT, joint.as_str().to_string());
+        nbt.put_int(
+            Self::PLACEMENT_PRIORITY,
+            self.placement_priority.load(Ordering::SeqCst),
+        );
+        nbt.put_int(
+            Self::SELECTION_PRIORITY,
+            self.selection_priority.load(Ordering::SeqCst),
+        );
         Some(nbt)
     }
 
     fn is_dirty(&self) -> bool {
         self.dirty.load(Ordering::Relaxed)
+    }
+
+    fn clear_dirty(&self) {
+        self.dirty.store(false, Ordering::Relaxed);
     }
 
     fn as_any(&self) -> &dyn std::any::Any {

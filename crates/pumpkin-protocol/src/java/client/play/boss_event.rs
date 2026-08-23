@@ -3,7 +3,7 @@ use std::io::Write;
 use crate::java::client::play::BosseventAction;
 use crate::ser::NetworkWriteExt;
 use crate::{ClientPacket, WritingError};
-use pumpkin_data::packet::clientbound::PLAY_BOSS_EVENT;
+use pumpkin_data::packet::clientbound::play::BOSS_EVENT;
 use pumpkin_macros::java_packet;
 use pumpkin_util::version::JavaMinecraftVersion;
 
@@ -11,7 +11,7 @@ use pumpkin_util::version::JavaMinecraftVersion;
 ///
 /// This packet is used to manage health bars for entities like the Ender Dragon
 /// or Wither, as well as custom progress bars for server events or raids.
-#[java_packet(PLAY_BOSS_EVENT)]
+#[java_packet(BOSS_EVENT)]
 pub struct CBossEvent<'a> {
     /// A unique identifier for this specific boss bar instance.
     pub uuid: &'a uuid::Uuid,
@@ -30,7 +30,7 @@ impl ClientPacket for CBossEvent<'_> {
     fn write_packet_data(
         &self,
         write: impl Write,
-        _version: &JavaMinecraftVersion,
+        version: &JavaMinecraftVersion,
     ) -> Result<(), WritingError> {
         let mut write = write;
 
@@ -45,7 +45,7 @@ impl ClientPacket for CBossEvent<'_> {
                 flags,
             } => {
                 write.write_var_int(&0.into())?;
-                write.write_slice(&title.encode())?;
+                write.write_component(title, version)?;
                 write.write_f32_be(*health)?;
                 write.write_var_int(color)?;
                 write.write_var_int(division)?;
@@ -58,7 +58,7 @@ impl ClientPacket for CBossEvent<'_> {
             }
             BosseventAction::UpdateTile(title) => {
                 write.write_var_int(&3.into())?;
-                write.write_slice(&title.encode())
+                write.write_component(title, version)
             }
             BosseventAction::UpdateStyle { color, dividers } => {
                 write.write_var_int(&4.into())?;

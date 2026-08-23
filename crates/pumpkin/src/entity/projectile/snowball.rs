@@ -3,7 +3,7 @@ use std::sync::atomic::AtomicBool;
 
 use crate::entity::projectile::ProjectileHit;
 use crate::{
-    entity::{Entity, EntityBase, EntityBaseFuture, NBTStorage, projectile::ThrownItemEntity},
+    entity::{Entity, EntityBase, EntityBaseFuture, projectile::ThrownItemEntity},
     server::Server,
 };
 use pumpkin_data::damage::DamageType;
@@ -41,8 +41,6 @@ impl SnowballEntity {
     }
 }
 
-impl NBTStorage for SnowballEntity {}
-
 impl EntityBase for SnowballEntity {
     fn tick<'a>(
         &'a self,
@@ -59,11 +57,6 @@ impl EntityBase for SnowballEntity {
     fn get_living_entity(&self) -> Option<&crate::entity::living::LivingEntity> {
         None
     }
-
-    fn as_nbt_storage(&self) -> &dyn NBTStorage {
-        self
-    }
-
     fn cast_any(&self) -> &dyn std::any::Any {
         self
     }

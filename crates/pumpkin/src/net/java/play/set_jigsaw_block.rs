@@ -33,6 +33,7 @@ impl JavaClient {
             jigsaw_block
                 .placement_priority
                 .store(jigsaw.placement_priority.0, Ordering::SeqCst);
+            jigsaw_block.dirty.store(true, Ordering::Relaxed);
 
             player.world().update_block_entity(&block_entity);
         }

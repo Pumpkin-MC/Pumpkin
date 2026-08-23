@@ -167,7 +167,7 @@ impl BedrockClient {
                         }
                     } else {
                         let runtime_id = pumpkin_data::BlockState::to_be_network_id(state.id);
-                        self.enqueue_packet(&CUpdateBlock::new(location, runtime_id as u32))
+                        self.enqueue_client_packet(&CUpdateBlock::new(location, runtime_id as u32))
                             .await;
                         if matches!(action, PlayerAction::StopBreak) {
                             player.stop_mining().await;

@@ -1,0 +1,23 @@
+{
+  "chat": {
+    "decoration": {
+      "translation_key": "chat.type.emote",
+      "style": {},
+      "parameters": [
+        "sender",
+        "content"
+      ]
+    }
+  },
+  "narration": {
+    "priority": "chat",
+    "decoration": {
+      "translation_key": "chat.type.emote",
+      "style": {},
+      "parameters": [
+        "sender",
+        "content"
+      ]
+    }
+  }
+}

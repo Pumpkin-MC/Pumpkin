@@ -810,19 +810,49 @@ fn identifier_to_tokens(identifier: &Identifier) -> TokenStream {
     }
 }
 
+fn collect_advancements(
+    base: &std::path::Path,
+    dir: &std::path::Path,
+    result: &mut BTreeMap<String, AdvancementStruct>,
+) {
+    let Ok(entries) = fs::read_dir(dir) else {
+        return;
+    };
+    let mut entries: Vec<_> = entries.flatten().collect();
+    entries.sort_by_key(|e| e.path());
+
+    for entry in entries {
+        let path = entry.path();
+        if path.is_dir() {
+            collect_advancements(base, &path, result);
+        } else if path.extension().is_some_and(|ext| ext == "json") {
+            let rel = path.strip_prefix(base).unwrap();
+            let rel_str = rel
+                .with_extension("")
+                .components()
+                .map(|c| c.as_os_str().to_string_lossy().into_owned())
+                .collect::<Vec<_>>()
+                .join("/");
+            let key = format!("minecraft:{rel_str}");
+            if let Ok(content) = fs::read_to_string(&path)
+                && let Ok(adv) = serde_json::from_str::<AdvancementStruct>(&content)
+            {
+                result.insert(key, adv);
+            }
+        }
+    }
+}
+
 /// Entry point for the code generation of advancements.
 ///
-/// Parses the `advancements.json` asset, builds the advancement tree,
+/// Parses the advancement files from the 26.2 datapack, builds the advancement tree,
 /// calculates positions using the Reingold-Tilford algorithm, and generates
 /// the final Rust source code.
 pub(crate) fn build() -> TokenStream {
-    let advancements_path =
-        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../assets/advancements.json");
-    let advancements_json = fs::read_to_string(&advancements_path)
-        .unwrap_or_else(|err| panic!("Failed to read {}: {err}", advancements_path.display()));
-    let advancements: BTreeMap<String, AdvancementStruct> =
-        serde_json::from_str(&advancements_json)
-            .unwrap_or_else(|err| panic!("Failed to parse {}: {err}", advancements_path.display()));
+    let base_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../assets/datapacks/26_2/data/minecraft/advancement");
+    let mut advancements: BTreeMap<String, AdvancementStruct> = BTreeMap::new();
+    collect_advancements(&base_path, &base_path, &mut advancements);
 
     let mut variants = TokenStream::new();
     let mut name_to_type = TokenStream::new();

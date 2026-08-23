@@ -1,4 +1,4 @@
-use pumpkin_data::packet::serverbound::PLAY_CHAT_COMMAND;
+use pumpkin_data::packet::serverbound::play::CHAT_COMMAND;
 use pumpkin_macros::java_packet;
 
 use crate::{
@@ -7,7 +7,7 @@ use crate::{
 };
 use pumpkin_util::version::JavaMinecraftVersion;
 
-#[java_packet(PLAY_CHAT_COMMAND)]
+#[java_packet(CHAT_COMMAND)]
 pub struct SChatCommand<'a> {
     pub command: &'a str,
 }

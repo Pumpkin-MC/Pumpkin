@@ -1,4 +1,4 @@
-use pumpkin_data::packet::serverbound::PLAY_PING_REQUEST;
+use pumpkin_data::packet::serverbound::play::PING_REQUEST;
 use pumpkin_macros::java_packet;
 
 use crate::{
@@ -7,7 +7,7 @@ use crate::{
 };
 use pumpkin_util::version::JavaMinecraftVersion;
 
-#[java_packet(PLAY_PING_REQUEST)]
+#[java_packet(PING_REQUEST)]
 pub struct SPlayPingRequest {
     pub payload: i64,
 }
