@@ -797,7 +797,7 @@ pub trait EntityBase: Send + Sync + std::any::Any {
     }
 }
 
-#[derive(Clone, Copy, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum RemovalReason {
     Killed,
     Discarded,

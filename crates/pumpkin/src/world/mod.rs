@@ -14,8 +14,9 @@ use pumpkin_world::generation::proto_chunk::GenerationCache;
 use std::sync::atomic::Ordering::Relaxed;
 use std::sync::{Arc, Weak};
 use std::{
-    collections::{BTreeMap, HashMap},
+    collections::{BTreeMap, HashMap, VecDeque},
     sync::atomic::Ordering,
+    time::Instant,
 };
 use tracing::{debug, error, info, trace, warn};
 
@@ -286,6 +287,19 @@ pub struct World {
     pub custom_data: std::sync::Mutex<NbtCompound>,
     /// Persistent custom data for block entities at specific positions
     pub custom_block_entity_data: DashMap<BlockPos, NbtCompound>,
+    /// The last [`RECENT_REMOVAL_HISTORY`] entity removals, oldest first.
+    recent_removals: std::sync::Mutex<VecDeque<(i32, EntityRemoval)>>,
+}
+
+/// How many entity removals are kept around for diagnostics.
+const RECENT_REMOVAL_HISTORY: usize = 256;
+
+/// Why and when an entity id stopped existing server side.
+#[derive(Clone, Copy)]
+pub struct EntityRemoval {
+    pub reason: RemovalReason,
+    /// When the world dropped it.
+    pub at: Instant,
 }
 
 #[derive(Clone, Copy)]
@@ -401,7 +415,39 @@ impl World {
             block_entities: DashMap::new(),
             custom_data: std::sync::Mutex::new(custom_data),
             custom_block_entity_data: DashMap::new(),
+            recent_removals: std::sync::Mutex::new(VecDeque::with_capacity(RECENT_REMOVAL_HISTORY)),
         }
+    }
+
+    /// Records that `entity_id` was removed, so a later packet naming that id can be
+    /// told apart from one naming an id the server never knew.
+    fn record_removal(&self, entity_id: i32, reason: RemovalReason) {
+        let mut removals = self
+            .recent_removals
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if removals.len() == RECENT_REMOVAL_HISTORY {
+            removals.pop_front();
+        }
+        removals.push_back((
+            entity_id,
+            EntityRemoval {
+                reason,
+                at: Instant::now(),
+            },
+        ));
+    }
+
+    /// The most recent removal recorded for `entity_id`, if it is still in the history.
+    #[must_use]
+    pub fn recent_removal(&self, entity_id: i32) -> Option<EntityRemoval> {
+        self.recent_removals
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .iter()
+            .rev()
+            .find(|(id, _)| *id == entity_id)
+            .map(|(_, removal)| *removal)
     }
 
     pub fn update_active_chunks(self: &Arc<Self>) {
@@ -4755,6 +4801,7 @@ impl World {
                 &CRemoveActor::new(VarLong(entity_id as i64)),
             )
             .await;
+            self.record_removal(entity_id, RemovalReason::UnloadedWithPlayer);
 
             if fire_event {
                 let msg_comp = TextComponent::translate_cross(
@@ -4879,6 +4926,7 @@ impl World {
             &CRemoveEntities::new(&[base_entity.entity_id.into()]),
             &CRemoveActor::new(VarLong(base_entity.entity_id as i64)),
         );
+        self.record_removal(base_entity.entity_id, RemovalReason::Discarded);
     }
 
     pub async fn remove_entities_in_chunks(
@@ -4909,6 +4957,10 @@ impl World {
         for entity in entities_to_remove {
             self.save_entity(&entity).await;
             self.spawn_state.load().remove_entity(self, entity.as_ref());
+            self.record_removal(
+                entity.get_entity().entity_id,
+                RemovalReason::UnloadedToChunk,
+            );
         }
 
         for chunk_pos in &chunks_set {

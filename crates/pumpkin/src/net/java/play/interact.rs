@@ -131,9 +131,10 @@ impl JavaClient {
                         // and us handling it (e.g. it died or despawned). Vanilla ignores
                         // this rather than kicking the player.
                         debug!(
-                            "Player id {} attacked entity id {}, which was not found.",
+                            "Player id {} attacked entity id {}, which was not found. {}",
                             player.entity_id(),
-                            event.entity_id
+                            event.entity_id,
+                            describe_missing_entity(&world, event.entity_id)
                         );
                     }
                 }

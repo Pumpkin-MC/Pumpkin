@@ -217,6 +217,23 @@ impl PumpkinError for ChatError {
     }
 }
 
+/// Describes what the server still knows about an entity id it can no longer
+/// resolve. An attack packet naming a missing entity is normally a packet that
+/// lost the race against the entity's removal; this tells that case apart from
+/// an id the server has no removal record for at all.
+fn describe_missing_entity(world: &World, entity_id: i32) -> String {
+    world.recent_removal(entity_id).map_or_else(
+        || "No removal was recorded for it.".to_string(),
+        |removal| {
+            format!(
+                "It was removed ({:?}) {}ms earlier.",
+                removal.reason,
+                removal.at.elapsed().as_millis()
+            )
+        },
+    )
+}
+
 pub mod attack;
 pub mod bundle_item_selected;
 pub mod change_difficulty;
