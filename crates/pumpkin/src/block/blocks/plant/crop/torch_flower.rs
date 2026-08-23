@@ -1,4 +1,4 @@
-﻿use pumpkin_data::Block;
+use pumpkin_data::Block;
 use pumpkin_data::BlockStateId;
 use pumpkin_data::block_properties::{BlockProperties, TorchflowerCropLikeProperties};
 use pumpkin_macros::pumpkin_block;

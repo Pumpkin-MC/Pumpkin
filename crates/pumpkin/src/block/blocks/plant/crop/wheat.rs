@@ -1,4 +1,4 @@
-﻿use pumpkin_data::BlockStateId;
+use pumpkin_data::BlockStateId;
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::world::BlockAccessor;
