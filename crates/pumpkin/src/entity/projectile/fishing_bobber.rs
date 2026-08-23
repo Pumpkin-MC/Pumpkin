@@ -3,9 +3,7 @@ use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 
 use crate::entity::projectile::{ProjectileHit, is_projectile};
 use crate::{
-    entity::{
-        Entity, EntityBase, EntityBaseFuture, NBTStorage, living::LivingEntity, player::Player,
-    },
+    entity::{Entity, EntityBase, EntityBaseFuture, living::LivingEntity, player::Player},
     server::Server,
 };
 use pumpkin_data::item_stack::ItemStack;
@@ -226,8 +224,6 @@ impl FishingBobberEntity {
     }
 }
 
-impl NBTStorage for FishingBobberEntity {}
-
 impl EntityBase for FishingBobberEntity {
     fn get_entity(&self) -> &Entity {
         &self.entity
@@ -240,11 +236,6 @@ impl EntityBase for FishingBobberEntity {
     fn cast_any(&self) -> &dyn std::any::Any {
         self
     }
-
-    fn as_nbt_storage(&self) -> &dyn NBTStorage {
-        self
-    }
-
     fn on_hit(&self, _hit: ProjectileHit) -> EntityBaseFuture<'_, ()> {
         Box::pin(async move {
             self.has_hit.store(true, Ordering::Relaxed);

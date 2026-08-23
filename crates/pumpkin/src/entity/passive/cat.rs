@@ -3,7 +3,6 @@ use std::sync::{
     atomic::{AtomicBool, AtomicU8, Ordering},
 };
 
-use crossbeam::atomic::AtomicCell;
 use pumpkin_data::entity::{EntityStatus, EntityType};
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
@@ -16,7 +15,7 @@ use rand::RngExt;
 use uuid::Uuid;
 
 use crate::entity::{
-    Entity, EntityBase, EntityBaseFuture, NBTStorage, NbtFuture,
+    Entity, EntityBase, EntityBaseFuture, NbtFuture,
     ai::goal::{
         active_target::ActiveTargetGoal, avoid_entity::AvoidEntityGoal, breed::BreedGoal,
         escape_danger::EscapeDangerGoal, follow_owner::FollowOwnerGoal,
@@ -25,7 +24,10 @@ use crate::entity::{
         wander_around::WanderAroundGoal,
     },
     mob::{Mob, MobEntity},
-    passive::animal::Animal,
+    passive::{
+        animal::Animal,
+        tamable::{TamableAnimal, TamableData},
+    },
     player::Player,
 };
 
@@ -75,11 +77,9 @@ pub struct CatEntity {
     pub variant: AtomicU8,
     pub sound_variant: AtomicU8,
     pub collar_color: AtomicU8,
-    pub is_tame: AtomicBool,
-    pub is_sitting: AtomicBool,
+    pub tamable_data: TamableData,
     pub is_lying: AtomicBool,
     pub relax_state_one: AtomicBool,
-    pub owner: AtomicCell<Option<Uuid>>,
 }
 
 impl CatEntity {
@@ -90,11 +90,9 @@ impl CatEntity {
             variant: AtomicU8::new(1),       // Default to black
             sound_variant: AtomicU8::new(0), // Default to classic
             collar_color: AtomicU8::new(14), // Default to red
-            is_tame: AtomicBool::new(false),
-            is_sitting: AtomicBool::new(false),
+            tamable_data: TamableData::default(),
             is_lying: AtomicBool::new(false),
             relax_state_one: AtomicBool::new(false),
-            owner: AtomicCell::new(None),
         };
         let mob_arc = Arc::new(cat);
         let mob_weak: Weak<dyn Mob> = {
@@ -160,7 +158,7 @@ impl CatEntity {
 
     pub fn get_tame_flags(&self) -> u8 {
         let mut flags = 0u8;
-        if self.is_sitting() {
+        if self.is_in_sitting_pose() {
             flags |= 0x01;
         }
         if self.is_tame() {
@@ -169,12 +167,8 @@ impl CatEntity {
         flags
     }
 
-    pub fn is_tame(&self) -> bool {
-        self.is_tame.load(Ordering::Relaxed)
-    }
-
     pub fn is_sitting(&self) -> bool {
-        self.is_sitting.load(Ordering::Relaxed)
+        self.is_in_sitting_pose()
     }
 
     pub fn is_lying(&self) -> bool {
@@ -202,7 +196,7 @@ impl CatEntity {
     }
 
     pub fn set_sitting(&self, sitting: bool) {
-        self.is_sitting.store(sitting, Ordering::Relaxed);
+        self.set_in_sitting_pose(sitting);
         let entity = self.get_entity();
         entity.send_meta_data(
             &[Metadata::new(
@@ -214,8 +208,8 @@ impl CatEntity {
     }
 
     pub fn set_tame(&self, tame: bool, owner: Option<Uuid>) {
-        self.is_tame.store(tame, Ordering::Relaxed);
-        self.owner.store(owner);
+        self.tamable_data.is_tame.store(tame, Ordering::Relaxed);
+        self.set_owner(owner);
         let entity = self.get_entity();
         entity.send_meta_data(
             &[Metadata::new(
@@ -228,6 +222,18 @@ impl CatEntity {
             &[Metadata::new(
                 pumpkin_data::tracked_data::cat::OWNER_UUID,
                 owner,
+            )],
+            None,
+        );
+    }
+
+    pub fn set_variant(&self, variant: u8) {
+        self.variant.store(variant, Ordering::Relaxed);
+        let entity = self.get_entity();
+        entity.send_meta_data(
+            &[Metadata::new(
+                pumpkin_data::tracked_data::cat::CAT_VARIANT,
+                VarInt(variant as i32),
             )],
             None,
         );
@@ -269,11 +275,30 @@ impl CatEntity {
     }
 }
 
-impl NBTStorage for CatEntity {
-    fn write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
+impl Animal for CatEntity {
+    fn is_food(&self, item_stack: &ItemStack) -> bool {
+        let item = item_stack.get_item();
+        item.has_tag(&tag::Item::MINECRAFT_CAT_FOOD) || item == &Item::COD || item == &Item::SALMON
+    }
+}
+
+impl TamableAnimal for CatEntity {
+    fn get_tamable_data(&self) -> &TamableData {
+        &self.tamable_data
+    }
+}
+
+impl Mob for CatEntity {
+    fn as_animal(&self) -> Option<&dyn Animal> {
+        Some(self)
+    }
+
+    fn as_tamable(&self) -> Option<&dyn TamableAnimal> {
+        Some(self)
+    }
+
+    fn mob_write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async {
-            self.mob_entity.living_entity.write_nbt(nbt).await;
-            self.write_animal_nbt(nbt);
             let variant_str = match self.variant.load(Ordering::Relaxed) {
                 0 => "minecraft:all_black",
                 1 => "minecraft:black",
@@ -293,18 +318,11 @@ impl NBTStorage for CatEntity {
                 "CollarColor",
                 self.collar_color.load(Ordering::Relaxed) as i8,
             );
-            nbt.put_bool("IsTame", self.is_tame.load(Ordering::Relaxed));
-            nbt.put_bool("Sitting", self.is_sitting.load(Ordering::Relaxed));
-            if let Some(owner) = self.owner.load() {
-                nbt.put_uuid("Owner", owner);
-            }
         })
     }
 
-    fn read_nbt_non_mut<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
+    fn mob_read_nbt<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async {
-            self.mob_entity.living_entity.read_nbt_non_mut(nbt).await;
-            self.read_animal_nbt(nbt);
             if let Some(variant_str) = nbt.get_string("variant") {
                 let variant = match variant_str
                     .strip_prefix("minecraft:")
@@ -329,37 +347,11 @@ impl NBTStorage for CatEntity {
             } else if let Some(collar_int) = nbt.get_int("CollarColor") {
                 self.collar_color.store(collar_int as u8, Ordering::Relaxed);
             }
-            if let Some(sitting) = nbt.get_bool("Sitting") {
-                self.is_sitting.store(sitting, Ordering::Relaxed);
-            }
-            if let Some(owner) = nbt.get_uuid("Owner") {
-                self.owner.store(Some(owner));
-                self.is_tame.store(true, Ordering::Relaxed);
-            } else if let Some(is_tame) = nbt.get_bool("IsTame") {
-                self.is_tame.store(is_tame, Ordering::Relaxed);
-            }
         })
     }
-}
 
-impl Animal for CatEntity {
-    fn is_food(&self, item_stack: &ItemStack) -> bool {
-        let item = item_stack.get_item();
-        item.has_tag(&tag::Item::MINECRAFT_CAT_FOOD) || item == &Item::COD || item == &Item::SALMON
-    }
-}
-
-impl Mob for CatEntity {
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
-    }
-
-    fn get_owner_uuid(&self) -> Option<Uuid> {
-        self.owner.load()
-    }
-
-    fn is_sitting(&self) -> bool {
-        self.is_sitting.load(Ordering::Relaxed)
     }
 
     fn mob_set_variant_name(&self, name: &str) {
@@ -402,7 +394,7 @@ impl Mob for CatEntity {
             entity.send_meta_data(
                 &[Metadata::new(
                     pumpkin_data::tracked_data::cat::OWNER_UUID,
-                    self.owner.load(),
+                    self.get_owner(),
                 )],
                 None,
             );

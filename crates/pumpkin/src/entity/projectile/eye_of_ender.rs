@@ -19,7 +19,7 @@ use std::sync::{
 };
 use tokio::sync::Mutex;
 
-use super::{Entity, EntityBase, NBTStorage};
+use super::{Entity, EntityBase};
 
 /// Maximum horizontal distance the eye will travel before signalling at an elevated height.
 const TOO_FAR_DISTANCE: f64 = 12.0;
@@ -118,8 +118,6 @@ fn lerp(t: f64, start: f64, end: f64) -> f64 {
     start + t * (end - start)
 }
 
-impl NBTStorage for EyeOfEnder {}
-
 impl EntityBase for EyeOfEnder {
     fn tick<'a>(
         &'a self,
@@ -211,11 +209,6 @@ impl EntityBase for EyeOfEnder {
     fn get_item_entity(self: Arc<Self>) -> Option<Arc<ItemEntity>> {
         None
     }
-
-    fn as_nbt_storage(&self) -> &dyn NBTStorage {
-        self
-    }
-
     fn cast_any(&self) -> &dyn std::any::Any {
         self
     }

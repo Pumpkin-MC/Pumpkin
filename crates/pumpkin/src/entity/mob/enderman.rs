@@ -27,7 +27,7 @@ use pumpkin_util::math::{boundingbox::BoundingBox, position::BlockPos, vector3::
 use rand::RngExt;
 
 use crate::entity::{
-    Entity, EntityBase, NBTStorage, NbtFuture,
+    Entity, EntityBase, NbtFuture,
     ai::{
         goal::{
             GoalFuture, active_target::ActiveTargetGoal, chase_player::ChasePlayerGoal,
@@ -412,27 +412,23 @@ impl EndermanEntity {
     }
 }
 
-impl NBTStorage for EndermanEntity {
-    fn write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
+impl Mob for EndermanEntity {
+    fn mob_write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async {
-            self.mob_entity.living_entity.write_nbt(nbt).await;
             if let Some(block_state) = self.carried_block.load() {
                 nbt.put_int("carriedBlockState", block_state.as_u16() as i32);
             }
         })
     }
 
-    fn read_nbt_non_mut<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
+    fn mob_read_nbt<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async {
-            self.mob_entity.living_entity.read_nbt_non_mut(nbt).await;
             if let Some(block_state) = nbt.get_int("carriedBlockState") {
                 self.set_carried_block(BlockStateId::new(block_state as u16));
             }
         })
     }
-}
 
-impl Mob for EndermanEntity {
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
     }

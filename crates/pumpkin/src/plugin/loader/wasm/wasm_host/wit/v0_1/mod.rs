@@ -9,32 +9,53 @@ use wasmtime::component::{HasSelf, InstancePre, Linker, bindgen};
 use wasmtime::{Engine, Store};
 
 pub mod advancement;
+// wasmtime's `bindgen!` requires every Host trait method to be `async fn`, even the ones whose
+// implementation here happens not to need to `.await` anything - so `unused_async_trait_impl`
+// can't be avoided without breaking the generated trait signatures.
+#[allow(clippy::unused_async_trait_impl)]
 pub mod block_entity;
+#[allow(clippy::unused_async_trait_impl)]
 pub mod boss_bar;
+#[allow(clippy::unused_async_trait_impl)]
 pub mod commands;
 pub mod common;
+#[allow(clippy::unused_async_trait_impl)]
 pub mod context;
+#[allow(clippy::unused_async_trait_impl)]
 pub mod display;
+#[allow(clippy::unused_async_trait_impl)]
 pub mod enchantment;
+#[allow(clippy::unused_async_trait_impl)]
 pub mod entity;
 pub mod events;
 pub mod forms;
 pub mod generated_packets;
+#[allow(clippy::unused_async_trait_impl)]
 pub mod gui;
+#[allow(clippy::unused_async_trait_impl)]
 pub mod i18n;
 pub mod ipc;
+#[allow(clippy::unused_async_trait_impl)]
 pub mod item_stack;
 pub mod java_dialogs;
+#[allow(clippy::unused_async_trait_impl)]
 pub mod logging;
 pub mod permission;
+#[allow(clippy::unused_async_trait_impl)]
 pub mod player;
+#[allow(clippy::unused_async_trait_impl)]
 pub mod recipe;
 pub mod scheduler;
+#[allow(clippy::unused_async_trait_impl)]
 pub mod scoreboard;
+#[allow(clippy::unused_async_trait_impl)]
 pub mod server;
 pub mod status_effect;
+#[allow(clippy::unused_async_trait_impl)]
 pub mod text;
+#[allow(clippy::unused_async_trait_impl)]
 pub mod uuid;
+#[allow(clippy::unused_async_trait_impl)]
 pub mod world;
 
 bindgen!({

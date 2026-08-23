@@ -2,13 +2,13 @@ use crate::{
     ServerPacket,
     ser::{NetworkReadExt, ReadingError},
 };
-use pumpkin_data::packet::serverbound::PLAY_ATTACK;
+use pumpkin_data::packet::serverbound::play::ATTACK;
 use pumpkin_macros::java_packet;
 use pumpkin_util::version::JavaMinecraftVersion;
 
 use crate::codec::var_int::VarInt;
 
-#[java_packet(PLAY_ATTACK)]
+#[java_packet(ATTACK)]
 pub struct SAttack {
     pub entity_id: VarInt,
 }

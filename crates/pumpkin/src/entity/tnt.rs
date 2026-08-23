@@ -1,4 +1,4 @@
-use super::{Entity, EntityBase, NBTStorage, living::LivingEntity};
+use super::{Entity, EntityBase, living::LivingEntity};
 use crate::{entity::EntityBaseFuture, server::Server};
 use core::f32;
 use pumpkin_data::Block;
@@ -30,8 +30,6 @@ impl TNTEntity {
         }
     }
 }
-
-impl NBTStorage for TNTEntity {}
 
 impl EntityBase for TNTEntity {
     fn tick<'a>(
@@ -69,11 +67,16 @@ impl EntityBase for TNTEntity {
             if fuse <= 1 {
                 // TNT explodes now
                 self.entity.remove().await;
-                self.entity
-                    .world
-                    .load()
-                    .explode(self.entity.pos.load(), self.power)
-                    .await;
+                let world = self.entity.world.load();
+                if world.level_info.load().game_rules.tnt_explodes {
+                    world
+                        .explode(
+                            self.entity.pos.load(),
+                            self.power,
+                            crate::world::ExplosionInteraction::Tnt,
+                        )
+                        .await;
+                }
             } else {
                 // Safe decrement
                 self.fuse.store(fuse - 1, Relaxed);
@@ -116,11 +119,6 @@ impl EntityBase for TNTEntity {
     fn get_gravity(&self) -> f64 {
         0.04
     }
-
-    fn as_nbt_storage(&self) -> &dyn NBTStorage {
-        self
-    }
-
     fn cast_any(&self) -> &dyn std::any::Any {
         self
     }

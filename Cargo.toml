@@ -100,6 +100,7 @@ missing_panics_doc = "allow"
 missing_errors_doc = "allow"
 module_name_repetitions = "allow"
 struct_excessive_bools = "allow"
+unused_async_trait_impl = "allow"
 
 [workspace.package]
 version = "0.1.0-dev+26.2-26.40"
@@ -122,7 +123,6 @@ strip = false
 
 
 [workspace.dependencies]
-serde_json5 = "0.2.1"
 tokio = { version = "1.53", default-features = false }
 syn = { version = "3.0", default-features = false, features = ["full", "parsing", "printing", "proc-macro", "clone-impls", "derive"] }
 
@@ -228,4 +228,4 @@ wit-bindgen = { version = "0.60", default-features = false, features = ["macros"
 
 postcard = { version = "1.1", default-features = false, features = ["alloc"] }
 tracing-serde-structured = { version = "0.4", default-features = false }
-wasmparser = { version = "0.256", default-features = false }
+wasmparser = { version = "0.257", default-features = false }

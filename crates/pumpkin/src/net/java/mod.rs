@@ -1,5 +1,6 @@
 use pumpkin_protocol::java::client::play::{
-    CAcknowledgeBlockChange, CChunkBatchEnd, CChunkBatchStart, CChunkData, CPlayDisconnect,
+    CAcknowledgeBlockChange, CChunkBatchEnd, CChunkBatchStart, CChunkData, CLightUpdate,
+    CPlayDisconnect,
 };
 use pumpkin_world::level::SyncChunk;
 use std::net::SocketAddr;
@@ -11,19 +12,20 @@ use bytes::Bytes;
 use crossbeam::atomic::AtomicCell;
 use pumpkin_data::translation;
 use pumpkin_protocol::java::server::play::{
-    SAttack, SBlockEntityTagQuery, SBundleItemSelected, SChangeGameMode, SChatCommand,
-    SChatMessage, SChunkBatch, SClickSlot, SClientCommand, SClientInformationPlay, SClientTickEnd,
-    SCloseContainer, SCommandSuggestion, SConfigurationAcknowledged, SConfirmTeleport,
-    SContainerButtonClick, SContainerSlotStateChanged, SCookieResponse as SPCookieResponse,
-    SCustomPayload, SDebugSampleSubscription, SDebugSubscriptionRequest, SEditBook,
-    SEntityTagQuery, SInteract, SJigsawGenerate, SLockDifficulty, SMoveVehicle, SPaddleBoat,
-    SPickItemFromBlock, SPlaceRecipe, SPlayPingRequest, SPlayPong, SPlayResourcePack,
-    SPlayerAbilities, SPlayerAction, SPlayerCommand, SPlayerInput, SPlayerLoaded, SPlayerPosition,
-    SPlayerPositionRotation, SPlayerRotation, SPlayerSession, SRecipeBookChangeSettings,
-    SRecipeBookSeenRecipe, SRenameItem, SSeenAdvancement, SSelectTrade, SSetCommandBlock,
-    SSetCommandMinecart, SSetCreativeSlot, SSetGameRule, SSetHeldItem, SSetJigsawBlock,
-    SSetPlayerGround, SSetStructureBlock, SSetTestBlock, SSpectateEntity, SSwingArm,
-    STeleportToEntity, STestInstanceBlockAction, SUpdateSign, SUseItem, SUseItemOn,
+    SAttack, SBlockEntityTagQuery, SBundleItemSelected, SChangeDifficulty, SChangeGameMode,
+    SChatAck, SChatCommand, SChatCommandSigned, SChatMessage, SChunkBatch, SClickSlot,
+    SClientCommand, SClientInformationPlay, SClientTickEnd, SCloseContainer, SCommandSuggestion,
+    SConfigurationAcknowledged, SConfirmTeleport, SContainerButtonClick,
+    SContainerSlotStateChanged, SCookieResponse as SPCookieResponse, SCustomPayload,
+    SDebugSampleSubscription, SDebugSubscriptionRequest, SEditBook, SEntityTagQuery, SInteract,
+    SJigsawGenerate, SLockDifficulty, SMoveVehicle, SPaddleBoat, SPickItemFromBlock, SPlaceRecipe,
+    SPlayPingRequest, SPlayPong, SPlayResourcePack, SPlayerAbilities, SPlayerAction,
+    SPlayerCommand, SPlayerInput, SPlayerLoaded, SPlayerPosition, SPlayerPositionRotation,
+    SPlayerRotation, SPlayerSession, SRecipeBookChangeSettings, SRecipeBookSeenRecipe, SRenameItem,
+    SSeenAdvancement, SSelectTrade, SSetBeacon, SSetCommandBlock, SSetCommandMinecart,
+    SSetCreativeSlot, SSetGameRule, SSetHeldItem, SSetJigsawBlock, SSetPlayerGround,
+    SSetStructureBlock, SSetTestBlock, SSpectateEntity, SSwingArm, STeleportToEntity,
+    STestInstanceBlockAction, SUpdateSign, SUseItem, SUseItemOn,
 };
 use pumpkin_protocol::packet::MultiVersionJavaPacket;
 use pumpkin_protocol::{
@@ -363,6 +365,28 @@ impl JavaClient {
                 continue;
             }
             self.send_packet_now_data(buf.into()).await;
+
+            if version >= JavaMinecraftVersion::V_1_14 && version < JavaMinecraftVersion::V_1_18 {
+                match CLightUpdate::from_chunk(chunk, version) {
+                    Ok(light_packet) => {
+                        let mut light_buf = Vec::new();
+                        if let Err(err) =
+                            light_buf.write_var_int(&VarInt(CLightUpdate::to_id(version)))
+                        {
+                            error!("Failed to write light update id: {err:?}");
+                        } else if let Err(err) =
+                            light_packet.write_packet_data(&mut light_buf, &version)
+                        {
+                            error!("Failed to write light update data: {err:?}");
+                        } else {
+                            self.send_packet_now_data(light_buf.into()).await;
+                        }
+                    }
+                    Err(err) => {
+                        error!("Failed to create light update packet: {err:?}");
+                    }
+                }
+            }
         }
         if self.version.load() >= JavaMinecraftVersion::V_1_20_2 {
             self.send_packet(&CChunkBatchEnd::new(chunks.len() as u16))
@@ -680,7 +704,6 @@ impl JavaClient {
         }
 
         let mut payload = &event.payload[..];
-
         match event.packet_id {
             id if id == SConfirmTeleport::to_id(version) => {
                 self.handle_confirm_teleport(
@@ -696,11 +719,26 @@ impl JavaClient {
                 )
                 .await;
             }
+            id if id == SChatAck::to_id(version) => {
+                let packet = SChatAck::read(&mut payload, &version)?;
+                self.handle_chat_ack(player, &packet).await;
+            }
             id if id == SChatCommand::to_id(version) => {
                 self.handle_chat_command(
                     player,
                     server,
                     &(SChatCommand::read(&mut payload, &version)?),
+                )
+                .await;
+            }
+            id if id == SChatCommandSigned::to_id(version) => {
+                let signed = SChatCommandSigned::read(&mut payload, &version)?;
+                self.handle_chat_command(
+                    player,
+                    server,
+                    &SChatCommand {
+                        command: signed.command,
+                    },
                 )
                 .await;
             }
@@ -1038,7 +1076,20 @@ impl JavaClient {
                     server,
                     player,
                     &SLockDifficulty::read(&mut payload, &version)?,
-                );
+                )
+                .await;
+            }
+            id if id == SChangeDifficulty::to_id(version) => {
+                self.handle_change_difficulty(
+                    server,
+                    player,
+                    &SChangeDifficulty::read(&mut payload, &version)?,
+                )
+                .await;
+            }
+            id if id == SSetBeacon::to_id(version) => {
+                self.handle_set_beacon(player, &SSetBeacon::read(&mut payload, &version)?)
+                    .await;
             }
             id if id == SContainerSlotStateChanged::to_id(version) => {
                 self.handle_container_slot_state_changed(

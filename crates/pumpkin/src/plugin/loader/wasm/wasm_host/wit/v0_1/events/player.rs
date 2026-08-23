@@ -727,7 +727,7 @@ impl ToFromWasmEvent for PlayerInteractUnknownEntityEvent {
         Event::PlayerInteractUnknownEntityEvent(PlayerInteractUnknownEntityEventData {
             player,
             entity_id: self.entity_id,
-            action: to_wasm_entity_interaction_action(&self.action),
+            action: to_wasm_entity_interaction_action(self.action),
             cancelled: self.cancelled,
         })
     }
@@ -924,7 +924,7 @@ impl ToFromWasmEvent for PlayerInteractEntityEvent {
         Event::PlayerInteractEntityEvent(PlayerInteractEntityEventData {
             player,
             entity_id: self.target.get_entity().entity_id,
-            action: to_wasm_entity_interaction_action(&self.action),
+            action: to_wasm_entity_interaction_action(self.action),
             sneaking: self.sneaking,
             cancelled: self.cancelled,
         })

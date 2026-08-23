@@ -21,7 +21,7 @@ use crate::entity::ai::goal::revenge::RevengeGoal;
 use crate::entity::ai::goal::{Controls, Goal, GoalFuture};
 use crate::entity::mob::{Mob, MobEntity};
 use crate::entity::projectile::shulker_bullet::ShulkerBulletEntity;
-use crate::entity::{Entity, EntityBase, EntityBaseFuture, NBTStorage, NbtFuture};
+use crate::entity::{Entity, EntityBase, EntityBaseFuture, NbtFuture};
 
 const DEFAULT_ATTACH_FACE: BlockDirection = BlockDirection::Down;
 const NO_COLOR: u8 = 16;
@@ -321,19 +321,17 @@ impl ShulkerEntity {
     }
 }
 
-impl NBTStorage for ShulkerEntity {
-    fn write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
+impl Mob for ShulkerEntity {
+    fn mob_write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async move {
-            self.mob_entity.living_entity.write_nbt(nbt).await;
             nbt.put_byte("AttachFace", self.attach_face.load(Ordering::Relaxed) as i8);
             nbt.put_byte("PeekAmount", self.peek_amount.load(Ordering::Relaxed) as i8);
             nbt.put_byte("Color", self.color.load(Ordering::Relaxed) as i8);
         })
     }
 
-    fn read_nbt_non_mut<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
+    fn mob_read_nbt<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async move {
-            self.mob_entity.living_entity.read_nbt_non_mut(nbt).await;
             if let Some(face) = nbt.get_byte("AttachFace") {
                 self.attach_face.store(face as u8, Ordering::Relaxed);
             }
@@ -345,9 +343,7 @@ impl NBTStorage for ShulkerEntity {
             }
         })
     }
-}
 
-impl Mob for ShulkerEntity {
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
     }

@@ -5,8 +5,7 @@ use tokio::sync::RwLock;
 use crate::entity::projectile::ProjectileHit;
 use crate::{
     entity::{
-        Entity, EntityBase, EntityBaseFuture, NBTStorage, NbtFuture, living::LivingEntity,
-        player::Player,
+        Entity, EntityBase, EntityBaseFuture, NbtFuture, living::LivingEntity, player::Player,
     },
     server::Server,
 };
@@ -273,32 +272,27 @@ impl ArrowEntity {
     }
 }
 
-impl NBTStorage for ArrowEntity {
-    fn write_nbt<'a>(
+impl EntityBase for ArrowEntity {
+    fn write_custom_nbt<'a>(
         &'a self,
         nbt: &'a mut pumpkin_nbt::compound::NbtCompound,
     ) -> NbtFuture<'a, ()> {
         Box::pin(async move {
-            self.entity.write_nbt(nbt).await;
             let item_stack = self.item_stack.read().await;
             Self::write_item_stack_nbt(&item_stack, nbt);
         })
     }
 
-    fn read_nbt_non_mut<'a>(
+    fn read_custom_nbt<'a>(
         &'a self,
         nbt: &'a pumpkin_nbt::compound::NbtCompound,
     ) -> NbtFuture<'a, ()> {
         Box::pin(async move {
-            self.entity.read_nbt_non_mut(nbt).await;
             if let Some(item_stack) = Self::read_item_stack_nbt(nbt) {
                 *self.item_stack.write().await = item_stack;
             }
         })
     }
-}
-
-impl EntityBase for ArrowEntity {
     #[allow(clippy::too_many_lines)]
     fn tick<'a>(
         &'a self,
@@ -614,11 +608,6 @@ impl EntityBase for ArrowEntity {
     #[allow(dead_code, clippy::unused_self)]
     fn get_living_entity(&self) -> Option<&LivingEntity> {
         None
-    }
-
-    #[allow(dead_code, clippy::unused_self)]
-    fn as_nbt_storage(&self) -> &dyn NBTStorage {
-        self
     }
 
     fn on_player_collision<'a>(&'a self, player: &'a Arc<Player>) -> EntityBaseFuture<'a, ()> {

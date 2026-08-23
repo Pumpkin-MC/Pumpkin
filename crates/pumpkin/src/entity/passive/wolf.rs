@@ -1,9 +1,8 @@
 use std::sync::{
     Arc, Weak,
-    atomic::{AtomicBool, AtomicU8, Ordering},
+    atomic::{AtomicU8, Ordering},
 };
 
-use crossbeam::atomic::AtomicCell;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
@@ -11,10 +10,9 @@ use pumpkin_data::tag::{self, Taggable};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::java::client::play::Metadata;
-use uuid::Uuid;
 
 use crate::entity::{
-    Entity, EntityBase, EntityBaseFuture, NBTStorage, NbtFuture,
+    Entity, EntityBase, EntityBaseFuture, NbtFuture,
     ageable::AgeableMob,
     ai::goal::{
         active_target::ActiveTargetGoal, avoid_entity::AvoidEntityGoal, beg::BegGoal,
@@ -25,16 +23,17 @@ use crate::entity::{
         revenge::RevengeGoal, swim::SwimGoal, wander_around::WanderAroundGoal,
     },
     mob::{Mob, MobEntity},
-    passive::animal::Animal,
+    passive::{
+        animal::Animal,
+        tamable::{TamableAnimal, TamableData},
+    },
 };
 
 pub struct WolfEntity {
     pub mob_entity: MobEntity,
     pub variant: AtomicU8,
     pub collar_color: AtomicU8,
-    pub is_tame: AtomicBool,
-    pub is_sitting: AtomicBool,
-    pub owner: AtomicCell<Option<Uuid>>,
+    pub tamable_data: TamableData,
     pub ageable_data: crate::entity::ageable::AgeableData,
 }
 
@@ -45,9 +44,7 @@ impl WolfEntity {
             mob_entity,
             variant: AtomicU8::new(3),       // Default to pale
             collar_color: AtomicU8::new(14), // Default to red
-            is_tame: AtomicBool::new(false),
-            is_sitting: AtomicBool::new(false),
-            owner: AtomicCell::new(None),
+            tamable_data: TamableData::default(),
             ageable_data: crate::entity::ageable::AgeableData::default(),
         };
         let mob_arc = Arc::new(wolf);
@@ -136,10 +133,10 @@ impl WolfEntity {
 
     pub fn get_tame_flags(&self) -> u8 {
         let mut flags = 0u8;
-        if self.is_sitting.load(Ordering::Relaxed) {
+        if self.is_in_sitting_pose() {
             flags |= 0x01;
         }
-        if self.is_tame.load(Ordering::Relaxed) {
+        if self.is_tame() {
             flags |= 0x04;
         }
         flags
@@ -159,12 +156,27 @@ impl Animal for WolfEntity {
     }
 }
 
-impl NBTStorage for WolfEntity {
-    fn write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
+impl TamableAnimal for WolfEntity {
+    fn get_tamable_data(&self) -> &TamableData {
+        &self.tamable_data
+    }
+}
+
+impl Mob for WolfEntity {
+    fn as_ageable(&self) -> Option<&dyn AgeableMob> {
+        Some(self)
+    }
+
+    fn as_animal(&self) -> Option<&dyn Animal> {
+        Some(self)
+    }
+
+    fn as_tamable(&self) -> Option<&dyn TamableAnimal> {
+        Some(self)
+    }
+
+    fn mob_write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async {
-            self.mob_entity.living_entity.write_nbt(nbt).await;
-            self.write_ageable_nbt(nbt);
-            self.write_animal_nbt(nbt);
             let variant_str = match self.variant.load(Ordering::Relaxed) {
                 0 => "minecraft:ashen",
                 1 => "minecraft:black",
@@ -181,19 +193,11 @@ impl NBTStorage for WolfEntity {
                 "CollarColor",
                 self.collar_color.load(Ordering::Relaxed) as i8,
             );
-            nbt.put_bool("IsTame", self.is_tame.load(Ordering::Relaxed));
-            nbt.put_bool("Sitting", self.is_sitting.load(Ordering::Relaxed));
-            if let Some(owner) = self.owner.load() {
-                nbt.put_uuid("Owner", owner);
-            }
         })
     }
 
-    fn read_nbt_non_mut<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
+    fn mob_read_nbt<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async {
-            self.mob_entity.living_entity.read_nbt_non_mut(nbt).await;
-            self.read_ageable_nbt(nbt);
-            self.read_animal_nbt(nbt);
             if let Some(variant_str) = nbt.get_string("variant") {
                 let variant = match variant_str
                     .strip_prefix("minecraft:")
@@ -216,30 +220,11 @@ impl NBTStorage for WolfEntity {
             } else if let Some(collar_int) = nbt.get_int("CollarColor") {
                 self.collar_color.store(collar_int as u8, Ordering::Relaxed);
             }
-            if let Some(sitting) = nbt.get_bool("Sitting") {
-                self.is_sitting.store(sitting, Ordering::Relaxed);
-            }
-            if let Some(owner) = nbt.get_uuid("Owner") {
-                self.owner.store(Some(owner));
-                self.is_tame.store(true, Ordering::Relaxed);
-            } else if let Some(is_tame) = nbt.get_bool("IsTame") {
-                self.is_tame.store(is_tame, Ordering::Relaxed);
-            }
         })
     }
-}
 
-impl Mob for WolfEntity {
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
-    }
-
-    fn get_owner_uuid(&self) -> Option<Uuid> {
-        self.owner.load()
-    }
-
-    fn is_sitting(&self) -> bool {
-        self.is_sitting.load(Ordering::Relaxed)
     }
 
     fn mob_set_variant_name(&self, name: &str) {
@@ -294,7 +279,7 @@ impl Mob for WolfEntity {
             entity.send_meta_data(
                 &[Metadata::new(
                     pumpkin_data::tracked_data::wolf::OWNER_UUID,
-                    self.owner.load(),
+                    self.get_owner(),
                 )],
                 None,
             );

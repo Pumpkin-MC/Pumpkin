@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::{
-    entity::{Entity, EntityBase, EntityBaseFuture, NBTStorage},
+    entity::{Entity, EntityBase, EntityBaseFuture},
     server::Server,
 };
 use pumpkin_data::effect::StatusEffect;
@@ -22,6 +22,7 @@ impl pumpkin_protocol::java::client::play::MetadataSerializer for ParticleMeta<'
     fn write_metadata(
         &self,
         writer: &mut impl std::io::Write,
+        _version: &pumpkin_util::version::JavaMinecraftVersion,
     ) -> Result<(), pumpkin_protocol::ser::WritingError> {
         use pumpkin_protocol::ser::NetworkWriteExt;
         writer.write_var_int(&self.particle_id)?;
@@ -105,13 +106,7 @@ impl AreaEffectCloudEntity {
     }
 }
 
-impl NBTStorage for AreaEffectCloudEntity {}
-
 impl EntityBase for AreaEffectCloudEntity {
-    fn as_nbt_storage(&self) -> &dyn NBTStorage {
-        self
-    }
-
     fn init_data_tracker(&self) -> EntityBaseFuture<'_, ()> {
         Box::pin(async move {
             // Send initial radius and particle (color) so clients render correctly

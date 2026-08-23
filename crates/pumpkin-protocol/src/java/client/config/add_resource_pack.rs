@@ -2,13 +2,13 @@ use pumpkin_util::text::TextComponent;
 
 use pumpkin_macros::java_packet;
 
-use pumpkin_data::packet::clientbound::CONFIG_RESOURCE_PACK_PUSH;
+use pumpkin_data::packet::clientbound::config::RESOURCE_PACK_PUSH;
 
 use crate::ClientPacket;
 use crate::ser::NetworkWriteExt;
 use pumpkin_util::version::JavaMinecraftVersion;
 
-#[java_packet(CONFIG_RESOURCE_PACK_PUSH)]
+#[java_packet(RESOURCE_PACK_PUSH)]
 pub struct CConfigAddResourcePack<'a> {
     pub uuid: &'a uuid::Uuid,
     pub url: &'a str,
@@ -40,7 +40,7 @@ impl ClientPacket for CConfigAddResourcePack<'_> {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        _version: &JavaMinecraftVersion,
+        version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         write.write_uuid(self.uuid)?;
         write.write_string(self.url)?;
@@ -48,7 +48,7 @@ impl ClientPacket for CConfigAddResourcePack<'_> {
         write.write_bool(self.forced)?;
         if let Some(prompt) = &self.prompt_message {
             write.write_bool(true)?;
-            write.write_slice(&prompt.encode())?;
+            write.write_component(prompt, version)?;
         } else {
             write.write_bool(false)?;
         }

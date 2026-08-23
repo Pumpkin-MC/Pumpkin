@@ -20,7 +20,7 @@ use pumpkin_protocol::{
         },
     },
 };
-use pumpkin_util::{Hand, text::TextComponent, version::JavaMinecraftVersion};
+use pumpkin_util::{Hand, text::TextComponent};
 use tracing::{debug, trace, warn};
 
 const BRAND_CHANNEL_PREFIX: &str = "minecraft:brand";

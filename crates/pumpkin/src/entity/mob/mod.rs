@@ -1,4 +1,4 @@
-use super::{Entity, EntityBase, NBTStorage, ai::pathfinder::Navigator, living::LivingEntity};
+use super::{Entity, EntityBase, NbtFuture, ai::pathfinder::Navigator, living::LivingEntity};
 use crate::entity::EntityBaseFuture;
 use crate::entity::ai::control::MoveControlTrait;
 use crate::entity::ai::control::look_control::LookControl;
@@ -13,6 +13,7 @@ use pumpkin_data::damage::DamageType;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_data::tracked_data;
+use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::java::client::play::{CHeadRot, CUpdateEntityRot, Metadata};
 use pumpkin_util::Difficulty;
 use pumpkin_util::math::boundingbox::BoundingBox;
@@ -184,6 +185,30 @@ impl MobEntity {
             .clear();
         for mut goal in running_target_goals {
             goal.goal.stop(mob).await;
+        }
+    }
+
+    pub fn write_mob_nbt(&self, nbt: &mut NbtCompound) {
+        if self.is_no_ai() {
+            nbt.put_bool("NoAI", true);
+        }
+        if self.is_left_handed() {
+            nbt.put_bool("LeftHanded", true);
+        }
+        if self.can_pick_up_loot() {
+            nbt.put_bool("CanPickUpLoot", true);
+        }
+    }
+
+    pub fn read_mob_nbt(&self, nbt: &NbtCompound) {
+        if let Some(no_ai) = nbt.get_bool("NoAI") {
+            self.set_no_ai(no_ai);
+        }
+        if let Some(left_handed) = nbt.get_bool("LeftHanded") {
+            self.set_left_handed(left_handed);
+        }
+        if let Some(can_pick_up_loot) = nbt.get_bool("CanPickUpLoot") {
+            self.set_can_pick_up_loot(can_pick_up_loot);
         }
     }
 
@@ -599,6 +624,26 @@ pub trait Mob: EntityBase + Send + Sync {
         None
     }
 
+    fn as_ageable(&self) -> Option<&dyn crate::entity::ageable::AgeableMob> {
+        None
+    }
+
+    fn as_animal(&self) -> Option<&dyn crate::entity::passive::animal::Animal> {
+        None
+    }
+
+    fn as_tamable(&self) -> Option<&dyn crate::entity::passive::tamable::TamableAnimal> {
+        None
+    }
+
+    fn mob_write_nbt<'a>(&'a self, _nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
+        Box::pin(async {})
+    }
+
+    fn mob_read_nbt<'a>(&'a self, _nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
+        Box::pin(async {})
+    }
+
     /// Set or clear the mob's target. Override to add side effects when targeting changes.
     fn set_mob_target(&self, target: Option<Arc<dyn EntityBase>>) -> EntityBaseFuture<'_, ()> {
         Box::pin(async move {
@@ -765,11 +810,13 @@ pub trait Mob: EntityBase + Send + Sync {
     }
 
     fn get_owner_uuid(&self) -> Option<Uuid> {
-        None
+        self.as_tamable()
+            .and_then(crate::entity::passive::tamable::TamableAnimal::get_owner)
     }
 
     fn is_sitting(&self) -> bool {
-        false
+        self.as_tamable()
+            .is_some_and(crate::entity::passive::tamable::TamableAnimal::is_in_sitting_pose)
     }
 
     fn get_base_experience_reward(&self) -> u32 {
@@ -1093,8 +1140,36 @@ impl<T: Mob + Send + 'static> EntityBase for T {
         <T as Mob>::get_home(self)
     }
 
-    fn as_nbt_storage(&self) -> &dyn NBTStorage {
-        self
+    fn write_custom_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
+        Box::pin(async move {
+            self.get_mob_entity().write_mob_nbt(nbt);
+            if let Some(ageable) = self.as_ageable() {
+                ageable.write_ageable_nbt(nbt);
+            }
+            if let Some(animal) = self.as_animal() {
+                animal.write_animal_nbt(nbt);
+            }
+            if let Some(tamable) = self.as_tamable() {
+                tamable.write_tamable_nbt(nbt);
+            }
+            self.mob_write_nbt(nbt).await;
+        })
+    }
+
+    fn read_custom_nbt<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
+        Box::pin(async move {
+            self.get_mob_entity().read_mob_nbt(nbt);
+            if let Some(ageable) = self.as_ageable() {
+                ageable.read_ageable_nbt(nbt);
+            }
+            if let Some(animal) = self.as_animal() {
+                animal.read_animal_nbt(nbt);
+            }
+            if let Some(tamable) = self.as_tamable() {
+                tamable.read_tamable_nbt(nbt);
+            }
+            self.mob_read_nbt(nbt).await;
+        })
     }
 
     fn get_gravity(&self) -> f64 {

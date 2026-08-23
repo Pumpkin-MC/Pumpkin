@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use crate::entity::mob::zombie::ZombieEntityBase;
 use crate::entity::{
-    Entity, NBTStorage,
+    Entity,
     mob::{Mob, MobEntity},
 };
 
@@ -33,8 +33,6 @@ impl DrownedEntity {
         mob_arc
     }
 }
-
-impl NBTStorage for DrownedEntity {}
 
 impl Mob for DrownedEntity {
     fn get_mob_entity(&self) -> &MobEntity {

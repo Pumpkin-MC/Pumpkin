@@ -1,11 +1,11 @@
-use pumpkin_data::packet::clientbound::CONFIG_CODE_OF_CONDUCT;
+use pumpkin_data::packet::clientbound::config::CODE_OF_CONDUCT;
 use pumpkin_macros::java_packet;
 
 use crate::ClientPacket;
 use crate::ser::NetworkWriteExt;
 use pumpkin_util::version::JavaMinecraftVersion;
 
-#[java_packet(CONFIG_CODE_OF_CONDUCT)]
+#[java_packet(CODE_OF_CONDUCT)]
 pub struct CCodeOfConduct<'a> {
     pub code_of_conduct: &'a str,
 }

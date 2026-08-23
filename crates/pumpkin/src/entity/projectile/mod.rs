@@ -1,4 +1,4 @@
-use super::{Entity, EntityBase, NBTStorage, living::LivingEntity};
+use super::{Entity, EntityBase, living::LivingEntity};
 use crate::server::Server;
 use pumpkin_data::BlockDirection;
 use pumpkin_data::entity::EntityType;
@@ -111,8 +111,6 @@ impl ThrownItemEntity {
         );
     }
 }
-
-impl NBTStorage for ThrownItemEntity {}
 
 impl ThrownItemEntity {
     /// Process a tick for projectile movement and collisions
@@ -259,11 +257,6 @@ impl ThrownItemEntity {
     #[allow(dead_code, clippy::unused_self)]
     const fn get_living_entity(&self) -> Option<&LivingEntity> {
         None
-    }
-
-    #[allow(dead_code, clippy::unused_self)]
-    const fn as_nbt_storage(&self) -> &dyn NBTStorage {
-        self
     }
     const fn get_gravity(&self) -> f64 {
         self.gravity

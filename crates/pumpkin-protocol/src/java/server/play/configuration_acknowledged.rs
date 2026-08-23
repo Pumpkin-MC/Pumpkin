@@ -1,10 +1,10 @@
-use pumpkin_data::packet::serverbound::PLAY_CONFIGURATION_ACKNOWLEDGED;
+use pumpkin_data::packet::serverbound::play::CONFIGURATION_ACKNOWLEDGED;
 use pumpkin_macros::java_packet;
 
 use crate::{ServerPacket, ser::ReadingError};
 use pumpkin_util::version::JavaMinecraftVersion;
 
-#[java_packet(PLAY_CONFIGURATION_ACKNOWLEDGED)]
+#[java_packet(CONFIGURATION_ACKNOWLEDGED)]
 pub struct SConfigurationAcknowledged;
 
 impl<'a> ServerPacket<'a> for SConfigurationAcknowledged {

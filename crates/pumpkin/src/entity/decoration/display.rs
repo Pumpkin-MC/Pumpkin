@@ -14,7 +14,7 @@ use pumpkin_protocol::{
 use pumpkin_util::{math::vector3::Vector3, text::TextComponent};
 
 use crate::{
-    entity::{Entity, EntityBase, EntityBaseFuture, NBTStorage, NbtFuture, living::LivingEntity},
+    entity::{Entity, EntityBase, EntityBaseFuture, NbtFuture, living::LivingEntity},
     server::Server,
 };
 
@@ -22,7 +22,11 @@ use crate::{
 pub struct Vector3fSerializer(pub f32, pub f32, pub f32);
 
 impl MetadataSerializer for Vector3fSerializer {
-    fn write_metadata(&self, writer: &mut impl std::io::Write) -> Result<(), WritingError> {
+    fn write_metadata(
+        &self,
+        writer: &mut impl std::io::Write,
+        _version: &pumpkin_util::version::JavaMinecraftVersion,
+    ) -> Result<(), WritingError> {
         writer.write_f32(self.0)?;
         writer.write_f32(self.1)?;
         writer.write_f32(self.2)
@@ -33,7 +37,11 @@ impl MetadataSerializer for Vector3fSerializer {
 pub struct QuaternionfSerializer(pub f32, pub f32, pub f32, pub f32);
 
 impl MetadataSerializer for QuaternionfSerializer {
-    fn write_metadata(&self, writer: &mut impl std::io::Write) -> Result<(), WritingError> {
+    fn write_metadata(
+        &self,
+        writer: &mut impl std::io::Write,
+        _version: &pumpkin_util::version::JavaMinecraftVersion,
+    ) -> Result<(), WritingError> {
         writer.write_f32(self.0)?;
         writer.write_f32(self.1)?;
         writer.write_f32(self.2)?;
@@ -450,7 +458,6 @@ impl DisplayEntity {
     }
 
     pub async fn write_display_nbt(&self, nbt: &mut NbtCompound) {
-        self.entity.write_nbt(nbt).await;
         nbt.put_int(
             "interpolation_duration",
             self.interpolation_duration.load(Ordering::Relaxed),
@@ -516,8 +523,6 @@ impl DisplayEntity {
     }
 
     pub async fn read_display_nbt(&self, nbt: &NbtCompound) {
-        self.entity.read_nbt_non_mut(nbt).await;
-
         if let Some(dur) = nbt.get_int("interpolation_duration") {
             self.interpolation_duration.store(dur, Ordering::Relaxed);
         }
@@ -621,21 +626,15 @@ impl BlockDisplayEntity {
     }
 }
 
-impl NBTStorage for BlockDisplayEntity {
-    fn write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
+impl EntityBase for BlockDisplayEntity {
+    fn write_custom_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async move {
             self.display.write_display_nbt(nbt).await;
             nbt.put_int("block_state", self.block_state.load(Ordering::Relaxed));
         })
     }
 
-    fn read_nbt<'a>(&'a mut self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
-        Box::pin(async move {
-            self.read_nbt_non_mut(nbt).await;
-        })
-    }
-
-    fn read_nbt_non_mut<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
+    fn read_custom_nbt<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async move {
             self.display.read_display_nbt(nbt).await;
             if let Some(state) = nbt.get_int("block_state") {
@@ -643,9 +642,7 @@ impl NBTStorage for BlockDisplayEntity {
             }
         })
     }
-}
 
-impl EntityBase for BlockDisplayEntity {
     fn tick<'a>(
         &'a self,
         _caller: &'a Arc<dyn EntityBase>,
@@ -673,10 +670,6 @@ impl EntityBase for BlockDisplayEntity {
 
     fn get_living_entity(&self) -> Option<&LivingEntity> {
         None
-    }
-
-    fn as_nbt_storage(&self) -> &dyn NBTStorage {
-        self
     }
 
     fn cast_any(&self) -> &dyn std::any::Any {
@@ -758,8 +751,8 @@ impl ItemDisplayEntity {
     }
 }
 
-impl NBTStorage for ItemDisplayEntity {
-    fn write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
+impl EntityBase for ItemDisplayEntity {
+    fn write_custom_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async move {
             self.display.write_display_nbt(nbt).await;
             let display_mode_str = match self.item_display.load(Ordering::Relaxed) {
@@ -777,13 +770,7 @@ impl NBTStorage for ItemDisplayEntity {
         })
     }
 
-    fn read_nbt<'a>(&'a mut self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
-        Box::pin(async move {
-            self.read_nbt_non_mut(nbt).await;
-        })
-    }
-
-    fn read_nbt_non_mut<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
+    fn read_custom_nbt<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async move {
             self.display.read_display_nbt(nbt).await;
             if let Some(mode_str) = nbt.get_string("item_display") {
@@ -802,9 +789,7 @@ impl NBTStorage for ItemDisplayEntity {
             }
         })
     }
-}
 
-impl EntityBase for ItemDisplayEntity {
     fn tick<'a>(
         &'a self,
         _caller: &'a Arc<dyn EntityBase>,
@@ -839,10 +824,6 @@ impl EntityBase for ItemDisplayEntity {
 
     fn get_living_entity(&self) -> Option<&LivingEntity> {
         None
-    }
-
-    fn as_nbt_storage(&self) -> &dyn NBTStorage {
-        self
     }
 
     fn cast_any(&self) -> &dyn std::any::Any {
@@ -1051,8 +1032,8 @@ impl TextDisplayEntity {
     }
 }
 
-impl NBTStorage for TextDisplayEntity {
-    fn write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
+impl EntityBase for TextDisplayEntity {
+    fn write_custom_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async move {
             self.display.write_display_nbt(nbt).await;
             let text_json_res = pumpkin_util::serde_json::to_string(&*self.text.lock().await);
@@ -1078,13 +1059,7 @@ impl NBTStorage for TextDisplayEntity {
         })
     }
 
-    fn read_nbt<'a>(&'a mut self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
-        Box::pin(async move {
-            self.read_nbt_non_mut(nbt).await;
-        })
-    }
-
-    fn read_nbt_non_mut<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
+    fn read_custom_nbt<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async move {
             self.display.read_display_nbt(nbt).await;
             if let Some(text_json) = nbt.get_string("text")
@@ -1122,9 +1097,7 @@ impl NBTStorage for TextDisplayEntity {
             self.flags.store(flags, Ordering::Relaxed);
         })
     }
-}
 
-impl EntityBase for TextDisplayEntity {
     fn tick<'a>(
         &'a self,
         _caller: &'a Arc<dyn EntityBase>,
@@ -1181,10 +1154,6 @@ impl EntityBase for TextDisplayEntity {
 
     fn get_living_entity(&self) -> Option<&LivingEntity> {
         None
-    }
-
-    fn as_nbt_storage(&self) -> &dyn NBTStorage {
-        self
     }
 
     fn cast_any(&self) -> &dyn std::any::Any {

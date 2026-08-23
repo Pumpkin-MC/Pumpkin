@@ -1,0 +1,49 @@
+{
+  "description": {
+    "translate": "enchantment.minecraft.feather_falling"
+  },
+  "min_cost": {
+    "base": 5,
+    "per_level_above_first": 6
+  },
+  "max_cost": {
+    "base": 11,
+    "per_level_above_first": 6
+  },
+  "anvil_cost": 2,
+  "slots": [
+    "armor"
+  ],
+  "supported_items": "#minecraft:enchantable/foot_armor",
+  "weight": 5,
+  "max_level": 4,
+  "effects": {
+    "minecraft:damage_protection": [
+      {
+        "effect": {
+          "value": {
+            "base": 3.0,
+            "per_level_above_first": 3.0,
+            "type": "minecraft:linear"
+          },
+          "type": "minecraft:add"
+        },
+        "requirements": {
+          "predicate": {
+            "tags": [
+              {
+                "id": "minecraft:is_fall",
+                "expected": true
+              },
+              {
+                "id": "minecraft:bypasses_invulnerability",
+                "expected": false
+              }
+            ]
+          },
+          "condition": "minecraft:damage_source_properties"
+        }
+      }
+    ]
+  }
+}

@@ -52,10 +52,24 @@ pub struct Dimension {
 
 /// Generates the `TokenStream` for the `Dimension` struct, its constants, and `from_name` lookup.
 pub fn build() -> TokenStream {
-    let dimensions: BTreeMap<String, Dimension> = serde_json::from_str(
-        &fs::read_to_string("../../assets/dimension.json").expect("Missing dimension.json"),
-    )
-    .expect("Failed to parse dimension.json");
+    let dir = std::path::Path::new("../../assets/datapacks/26_2/data/minecraft/dimension_type");
+    let mut dimensions: BTreeMap<String, Dimension> = BTreeMap::new();
+    let mut entries: Vec<_> = fs::read_dir(dir)
+        .expect("Missing dimension_type directory")
+        .flatten()
+        .filter(|e| e.path().extension().is_some_and(|ext| ext == "json"))
+        .collect();
+    entries.sort_by_key(|e| e.path());
+
+    for entry in entries {
+        let path = entry.path();
+        let stem = path.file_stem().unwrap().to_string_lossy().into_owned();
+        let key = format!("minecraft:{stem}");
+        let content = fs::read_to_string(&path).expect("Failed to read dimension file");
+        let dim: Dimension =
+            serde_json::from_str(&content).expect("Failed to parse dimension JSON");
+        dimensions.insert(key, dim);
+    }
 
     let mut variants = TokenStream::new();
     let mut name_to_type = TokenStream::new();

@@ -32,6 +32,7 @@ use pumpkin_protocol::bedrock::respawn::RespawnState;
 use pumpkin_protocol::bedrock::server::text::SText;
 use pumpkin_protocol::codec::item_stack_seralizer::ItemStackSerializer;
 use pumpkin_util::translation::Locale;
+use pumpkin_util::version::JavaMinecraftVersion;
 use pumpkin_world::chunk::{ChunkData, ChunkEntityData};
 use pumpkin_world::inventory::Inventory;
 use tokio::sync::Mutex;
@@ -948,6 +949,12 @@ impl Player {
             bedrock_skin.full_id = skin_id;
         }
 
+        let supports_player_loaded = match client.as_ref() {
+            ClientPlatform::Java(client) => client.version.load() >= JavaMinecraftVersion::V_1_21_4,
+            ClientPlatform::Bedrock(_) => true,
+        };
+        let initially_loaded = !supports_player_loaded;
+
         Self {
             living_entity,
             config: ArcSwap::new(Arc::new(config)),
@@ -995,9 +1002,9 @@ impl Player {
             last_action_time: AtomicCell::new(std::time::Instant::now()),
             ping: AtomicU32::new(0),
             last_attacked_ticks: AtomicU32::new(0),
-            client_loaded: AtomicBool::new(false),
+            client_loaded: AtomicBool::new(initially_loaded),
             bedrock_spawned: AtomicBool::new(false),
-            client_loaded_timeout: AtomicU32::new(60),
+            client_loaded_timeout: AtomicU32::new(if initially_loaded { 0 } else { 60 }),
             chat_spam_tick_count: AtomicU32::new(0),
             // Item usage tracking
             using_item: AtomicBool::new(false),
@@ -2374,18 +2381,26 @@ impl Player {
         let (chunk_of_chunks, total_sent_chunks) = {
             let mut chunk_manager = self.chunk_manager.lock().await;
             chunk_manager.pull_new_chunks();
-            let chunks = if let ClientPlatform::Java(_) = self.client.as_ref() {
-                // Java clients can only send a limited amount of chunks per tick.
-                // If we have sent too many chunks without receiving an ack, we stop sending chunks.
-                chunk_manager
-                    .can_send_chunk()
-                    .then(|| chunk_manager.next_chunk())
+            let chunks = if let ClientPlatform::Java(java_client) = self.client.as_ref() {
+                if java_client.version.load() >= JavaMinecraftVersion::V_1_20_2 {
+                    // Java clients (1.20.2+) use the chunk batching protocol.
+                    // If we have sent too many chunks without receiving an ack, we stop sending chunks.
+                    chunk_manager
+                        .can_send_chunk()
+                        .then(|| chunk_manager.next_chunk())
+                } else {
+                    // Java clients < 1.20.2 do not have chunk batching/ack packets.
+                    // Send chunks every tick directly based on chunks_per_tick.
+                    (!chunk_manager.chunk_queue.is_empty()).then(|| chunk_manager.next_chunk())
+                }
             } else {
-                Some(chunk_manager.next_chunk())
+                (!chunk_manager.chunk_queue.is_empty()).then(|| chunk_manager.next_chunk())
             };
             (chunks, chunk_manager.sent_chunks_count())
         };
-        if let Some(chunk_of_chunks) = chunk_of_chunks {
+        if let Some(chunk_of_chunks) = chunk_of_chunks
+            && !chunk_of_chunks.is_empty()
+        {
             let client = self.client.clone();
             tokio::spawn(async move {
                 client.send_chunks(&chunk_of_chunks).await;
@@ -2588,12 +2603,29 @@ impl Player {
         }
     }
 
+    #[must_use]
+    pub fn supports_player_loaded(&self) -> bool {
+        match self.client.as_ref() {
+            ClientPlatform::Java(client) => client.version.load() >= JavaMinecraftVersion::V_1_21_4,
+            ClientPlatform::Bedrock(_) => true,
+        }
+    }
+
+    #[must_use]
     pub fn has_client_loaded(&self) -> bool {
+        if !self.supports_player_loaded() {
+            return true;
+        }
         self.client_loaded.load(Ordering::Relaxed)
             || self.client_loaded_timeout.load(Ordering::Relaxed) == 0
     }
 
     pub fn set_client_loaded(&self, loaded: bool) {
+        if !self.supports_player_loaded() {
+            self.client_loaded.store(true, Ordering::Relaxed);
+            self.client_loaded_timeout.store(0, Ordering::Relaxed);
+            return;
+        }
         if !loaded {
             self.client_loaded_timeout.store(60, Ordering::Relaxed);
         }
@@ -3946,6 +3978,9 @@ impl Player {
     }
 
     pub fn tick_client_load_timeout(&self) {
+        if !self.supports_player_loaded() {
+            return;
+        }
         if !self.client_loaded.load(Ordering::Relaxed) {
             let timeout = self.client_loaded_timeout.load(Ordering::Relaxed);
             self.client_loaded_timeout
@@ -4385,12 +4420,17 @@ impl Player {
                             direction: icon_direction,
                             display_name: None,
                         }];
-                        icons.extend(map_data.decorations.iter().map(|decoration| MapIcon {
-                            icon_type: VarInt(decoration.icon_type),
-                            x: decoration.x,
-                            z: decoration.z,
-                            direction: decoration.direction,
-                            display_name: decoration.display_name.clone(),
+                        icons.extend(map_data.decorations.iter().map(|decoration| {
+                            MapIcon {
+                                icon_type: VarInt(decoration.icon_type),
+                                x: decoration.x,
+                                z: decoration.z,
+                                direction: decoration.direction,
+                                display_name: decoration
+                                    .display_name
+                                    .as_ref()
+                                    .map(|name| TextComponent::text(name.clone())),
+                            }
                         }));
 
                         let data = map_data.dirty.then(|| MapPatch {
@@ -4404,6 +4444,7 @@ impl Player {
                         self.send_client_packet(&CMapItemData {
                             map_id: VarInt(map_id),
                             scale: map_data.scale,
+                            tracking_position: true,
                             locked: map_data.locked,
                             icons: Some(&icons),
                             data,
@@ -5011,14 +5052,14 @@ impl Player {
 
         let click_type = match packet.mode {
             SlotActionType::Pickup => {
-                if packet.button == 0 {
+                if packet.button == SClickSlot::BUTTON_LEFT {
                     ClickType::Left
                 } else {
                     ClickType::Right
                 }
             }
             SlotActionType::QuickMove => {
-                if packet.button == 0 {
+                if packet.button == SClickSlot::BUTTON_LEFT {
                     ClickType::ShiftLeft
                 } else {
                     ClickType::ShiftRight
@@ -5027,7 +5068,7 @@ impl Player {
             SlotActionType::Swap => ClickType::NumberKey(packet.button as u8),
             SlotActionType::Clone => ClickType::Middle,
             SlotActionType::Throw => {
-                if packet.button == 0 {
+                if packet.button == SClickSlot::BUTTON_DROP_SINGLE {
                     ClickType::Drop
                 } else {
                     ClickType::ControlDrop
@@ -5556,154 +5597,6 @@ impl PartialEq for Player {
     }
 }
 
-impl NBTStorage for Player {
-    fn write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
-        Box::pin(async move {
-            nbt.put_int("DataVersion", DATA_VERSION);
-            self.living_entity.write_nbt(nbt).await;
-            self.inventory.write_nbt(nbt).await;
-            self.ender_chest_inventory.write_nbt(nbt).await;
-
-            self.abilities.lock().await.write_nbt(nbt).await;
-
-            let total_exp =
-                experience::points_to_level(self.experience_level.load(Ordering::Relaxed))
-                    + self.experience_points.load(Ordering::Relaxed);
-            nbt.put_int("XpTotal", total_exp);
-            nbt.put_byte("playerGameType", self.gamemode.load() as i8);
-            if let Some(previous_gamemode) = self.previous_gamemode.load() {
-                nbt.put_byte("previousPlayerGameType", previous_gamemode as i8);
-            }
-
-            nbt.put_bool(
-                "HasPlayedBefore",
-                self.has_played_before.load(Ordering::Relaxed),
-            );
-
-            // Store food level, saturation, exhaustion, and tick timer
-            self.hunger_manager.write_nbt(nbt).await;
-
-            nbt.put_int(
-                "AirSupply",
-                self.breath_manager
-                    .air_supply
-                    .load(Ordering::Relaxed)
-                    .clamp(0, super::breath::MAX_AIR),
-            );
-            nbt.put_int(
-                "DrowningTick",
-                self.breath_manager
-                    .drowning_tick
-                    .load(Ordering::Relaxed)
-                    .clamp(0, super::breath::DROWNING_INTERVAL - 1),
-            );
-
-            nbt.put_string(
-                "Dimension",
-                self.world().dimension.minecraft_name.to_string(),
-            );
-
-            if let Some(respawn) = self.respawn_point.lock().await.as_ref() {
-                nbt.put_int("SpawnX", respawn.position.0.x);
-                nbt.put_int("SpawnY", respawn.position.0.y);
-                nbt.put_int("SpawnZ", respawn.position.0.z);
-                nbt.put_string(
-                    "SpawnDimension",
-                    respawn.dimension.minecraft_name.to_owned(),
-                );
-                nbt.put_bool("SpawnForced", respawn.force);
-            }
-            nbt.put_int("XpSeed", self.enchantment_seed.load(Ordering::Relaxed));
-            let vehicle_uuid = self
-                .living_entity
-                .entity
-                .vehicle
-                .lock()
-                .await
-                .as_ref()
-                .map(|vehicle| vehicle.get_entity().entity_uuid)
-                .or_else(|| self.root_vehicle_uuid.load());
-            if let Some(vehicle_uuid) = vehicle_uuid {
-                write_root_vehicle(nbt, vehicle_uuid);
-            }
-            self.stats.lock().await.write_nbt(nbt);
-        })
-    }
-
-    fn read_nbt<'a>(&'a mut self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
-        Box::pin(async move {
-            self.living_entity.read_nbt(nbt).await;
-            self.inventory.read_nbt_non_mut(nbt).await;
-            self.ender_chest_inventory.read_nbt_non_mut(nbt).await;
-            self.abilities.lock().await.read_nbt(nbt).await;
-
-            // Load from total XP
-            let total_exp = nbt.get_int("XpTotal").unwrap_or(0);
-            let (level, points) = experience::total_to_level_and_points(total_exp);
-            let progress = experience::progress_in_level(level, points);
-            self.experience_level.store(level, Ordering::Relaxed);
-            self.experience_progress.store(progress);
-            self.experience_points.store(points, Ordering::Relaxed);
-
-            self.gamemode.store(
-                GameMode::try_from(nbt.get_byte("playerGameType").unwrap_or(0))
-                    .unwrap_or(GameMode::Survival),
-            );
-
-            self.previous_gamemode.store(
-                nbt.get_byte("previousPlayerGameType")
-                    .and_then(|byte| GameMode::try_from(byte).ok()),
-            );
-
-            self.has_played_before.store(
-                nbt.get_bool("HasPlayedBefore").unwrap_or(false),
-                Ordering::Relaxed,
-            );
-
-            self.hunger_manager.read_nbt(nbt).await;
-
-            if let Some(air) = nbt.get_int("AirSupply") {
-                self.breath_manager
-                    .air_supply
-                    .store(air.clamp(0, super::breath::MAX_AIR), Ordering::Relaxed);
-            }
-            if let Some(tick) = nbt.get_int("DrowningTick") {
-                self.breath_manager.drowning_tick.store(
-                    tick.clamp(0, super::breath::DROWNING_INTERVAL - 1),
-                    Ordering::Relaxed,
-                );
-            }
-
-            // Load any saved spawnpoint data (SpawnX/SpawnY/SpawnZ, SpawnDimension, SpawnForced)
-            if let (Some(x), Some(y), Some(z)) = (
-                nbt.get_int("SpawnX"),
-                nbt.get_int("SpawnY"),
-                nbt.get_int("SpawnZ"),
-            ) {
-                let dim = nbt
-                    .get_string("SpawnDimension")
-                    .and_then(|s| Dimension::from_name(s).cloned())
-                    .unwrap_or_else(|| self.world().dimension.clone());
-                let force = nbt.get_bool("SpawnForced").unwrap_or(false);
-                *self.respawn_point.lock().await = Some(RespawnPoint {
-                    dimension: dim,
-                    position: BlockPos(Vector3::new(x, y, z)),
-                    yaw: 0.0,
-                    force,
-                });
-            }
-            self.enchantment_seed.store(
-                nbt.get_int("XpSeed").unwrap_or(rand::random()),
-                Ordering::Relaxed,
-            );
-            self.root_vehicle_uuid.store(read_root_vehicle(nbt));
-            self.stats.lock().await.read_nbt(nbt);
-        })
-    }
-}
-
-impl NBTStorageInit for Player {}
-
 impl NBTStorage for PlayerInventory {
     fn write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async move {
@@ -5999,8 +5892,146 @@ impl EntityBase for Player {
         self
     }
 
-    fn as_nbt_storage(&self) -> &dyn NBTStorage {
-        self
+    fn write_custom_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
+        Box::pin(async move {
+            nbt.put_int("DataVersion", DATA_VERSION);
+            self.inventory.write_nbt(nbt).await;
+            self.ender_chest_inventory.write_nbt(nbt).await;
+
+            self.abilities.lock().await.write_nbt(nbt).await;
+
+            let total_exp =
+                experience::points_to_level(self.experience_level.load(Ordering::Relaxed))
+                    + self.experience_points.load(Ordering::Relaxed);
+            nbt.put_int("XpTotal", total_exp);
+            nbt.put_byte("playerGameType", self.gamemode.load() as i8);
+            if let Some(previous_gamemode) = self.previous_gamemode.load() {
+                nbt.put_byte("previousPlayerGameType", previous_gamemode as i8);
+            }
+
+            nbt.put_bool(
+                "HasPlayedBefore",
+                self.has_played_before.load(Ordering::Relaxed),
+            );
+
+            // Store food level, saturation, exhaustion, and tick timer
+            self.hunger_manager.write_nbt(nbt).await;
+
+            nbt.put_int(
+                "AirSupply",
+                self.breath_manager
+                    .air_supply
+                    .load(Ordering::Relaxed)
+                    .clamp(0, super::breath::MAX_AIR),
+            );
+            nbt.put_int(
+                "DrowningTick",
+                self.breath_manager
+                    .drowning_tick
+                    .load(Ordering::Relaxed)
+                    .clamp(0, super::breath::DROWNING_INTERVAL - 1),
+            );
+
+            nbt.put_string(
+                "Dimension",
+                self.world().dimension.minecraft_name.to_string(),
+            );
+
+            if let Some(respawn) = self.respawn_point.lock().await.as_ref() {
+                nbt.put_int("SpawnX", respawn.position.0.x);
+                nbt.put_int("SpawnY", respawn.position.0.y);
+                nbt.put_int("SpawnZ", respawn.position.0.z);
+                nbt.put_string(
+                    "SpawnDimension",
+                    respawn.dimension.minecraft_name.to_owned(),
+                );
+                nbt.put_bool("SpawnForced", respawn.force);
+            }
+            nbt.put_int("XpSeed", self.enchantment_seed.load(Ordering::Relaxed));
+            let vehicle_uuid = self
+                .living_entity
+                .entity
+                .vehicle
+                .lock()
+                .await
+                .as_ref()
+                .map(|vehicle| vehicle.get_entity().entity_uuid)
+                .or_else(|| self.root_vehicle_uuid.load());
+            if let Some(vehicle_uuid) = vehicle_uuid {
+                write_root_vehicle(nbt, vehicle_uuid);
+            }
+            self.stats.lock().await.write_nbt(nbt);
+        })
+    }
+
+    fn read_custom_nbt<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
+        Box::pin(async move {
+            self.inventory.read_nbt_non_mut(nbt).await;
+            self.ender_chest_inventory.read_nbt_non_mut(nbt).await;
+            self.abilities.lock().await.read_nbt_non_mut(nbt).await;
+
+            // Load from total XP
+            let total_exp = nbt.get_int("XpTotal").unwrap_or(0);
+            let (level, points) = experience::total_to_level_and_points(total_exp);
+            let progress = experience::progress_in_level(level, points);
+            self.experience_level.store(level, Ordering::Relaxed);
+            self.experience_progress.store(progress);
+            self.experience_points.store(points, Ordering::Relaxed);
+
+            self.gamemode.store(
+                GameMode::try_from(nbt.get_byte("playerGameType").unwrap_or(0))
+                    .unwrap_or(GameMode::Survival),
+            );
+
+            self.previous_gamemode.store(
+                nbt.get_byte("previousPlayerGameType")
+                    .and_then(|byte| GameMode::try_from(byte).ok()),
+            );
+
+            self.has_played_before.store(
+                nbt.get_bool("HasPlayedBefore").unwrap_or(false),
+                Ordering::Relaxed,
+            );
+
+            self.hunger_manager.read_nbt_non_mut(nbt).await;
+
+            if let Some(air) = nbt.get_int("AirSupply") {
+                self.breath_manager
+                    .air_supply
+                    .store(air.clamp(0, super::breath::MAX_AIR), Ordering::Relaxed);
+            }
+            if let Some(tick) = nbt.get_int("DrowningTick") {
+                self.breath_manager.drowning_tick.store(
+                    tick.clamp(0, super::breath::DROWNING_INTERVAL - 1),
+                    Ordering::Relaxed,
+                );
+            }
+
+            // Load any saved spawnpoint data (SpawnX/SpawnY/SpawnZ, SpawnDimension, SpawnForced)
+            if let (Some(x), Some(y), Some(z)) = (
+                nbt.get_int("SpawnX"),
+                nbt.get_int("SpawnY"),
+                nbt.get_int("SpawnZ"),
+            ) {
+                let dim = nbt
+                    .get_string("SpawnDimension")
+                    .and_then(|s| Dimension::from_name(s).cloned())
+                    .unwrap_or_else(|| self.world().dimension.clone());
+                let force = nbt.get_bool("SpawnForced").unwrap_or(false);
+                *self.respawn_point.lock().await = Some(RespawnPoint {
+                    dimension: dim,
+                    position: BlockPos(Vector3::new(x, y, z)),
+                    yaw: 0.0,
+                    force,
+                });
+            }
+            self.enchantment_seed.store(
+                nbt.get_int("XpSeed").unwrap_or(rand::random()),
+                Ordering::Relaxed,
+            );
+            self.root_vehicle_uuid.store(read_root_vehicle(nbt));
+            self.stats.lock().await.read_nbt(nbt);
+        })
     }
 
     fn get_experience_reward(&self, _killer: Option<&dyn EntityBase>) -> u32 {
@@ -6243,6 +6274,116 @@ impl LastSeen {
     }
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct LastSeenTrackedEntry {
+    pub signature: Box<[u8]>,
+    pub pending: bool,
+}
+
+impl LastSeenTrackedEntry {
+    #[must_use]
+    pub fn acknowledge(&self) -> Self {
+        Self {
+            signature: self.signature.clone(),
+            pending: false,
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct LastSeenMessagesValidator {
+    pub last_seen_count: usize,
+    pub tracked_messages: VecDeque<Option<LastSeenTrackedEntry>>,
+    pub last_pending_message: Option<Box<[u8]>>,
+}
+
+impl Default for LastSeenMessagesValidator {
+    fn default() -> Self {
+        Self::new(MAX_PREVIOUS_MESSAGES as usize)
+    }
+}
+
+impl LastSeenMessagesValidator {
+    #[must_use]
+    pub fn new(last_seen_count: usize) -> Self {
+        let mut tracked = VecDeque::with_capacity(last_seen_count);
+        for _ in 0..last_seen_count {
+            tracked.push_back(None);
+        }
+        Self {
+            last_seen_count,
+            tracked_messages: tracked,
+            last_pending_message: None,
+        }
+    }
+
+    pub fn add_pending(&mut self, signature: &[u8]) {
+        if self.last_pending_message.as_deref() != Some(signature) {
+            let sig_box: Box<[u8]> = signature.into();
+            self.tracked_messages.push_back(Some(LastSeenTrackedEntry {
+                signature: sig_box.clone(),
+                pending: true,
+            }));
+            self.last_pending_message = Some(sig_box);
+        }
+    }
+
+    #[must_use]
+    pub fn tracked_messages_count(&self) -> usize {
+        self.tracked_messages.len()
+    }
+
+    pub fn apply_offset(&mut self, offset: usize) -> Result<(), &'static str> {
+        let max_offset = self
+            .tracked_messages
+            .len()
+            .saturating_sub(self.last_seen_count);
+        if offset <= max_offset {
+            self.tracked_messages.drain(0..offset);
+            Ok(())
+        } else {
+            Err("Advanced last seen window by more messages than expected")
+        }
+    }
+
+    pub fn apply_update(
+        &mut self,
+        offset: usize,
+        acknowledged: &[u8],
+    ) -> Result<Vec<Box<[u8]>>, &'static str> {
+        self.apply_offset(offset)?;
+        let mut last_seen_entries = Vec::new();
+
+        for i in 0..self.last_seen_count {
+            let is_acknowledged = if i / 8 < acknowledged.len() {
+                (acknowledged[i / 8] & (1 << (i % 8))) != 0
+            } else {
+                false
+            };
+
+            let message = self.tracked_messages.get(i).cloned().flatten();
+            if is_acknowledged {
+                let Some(entry) = message else {
+                    return Err(
+                        "Last seen update acknowledged unknown or previously ignored message",
+                    );
+                };
+                self.tracked_messages[i] = Some(entry.acknowledge());
+                last_seen_entries.push(entry.signature);
+            } else {
+                if let Some(entry) = message
+                    && !entry.pending
+                {
+                    return Err("Last seen update ignored previously acknowledged message");
+                }
+                self.tracked_messages[i] = None;
+            }
+        }
+
+        Ok(last_seen_entries)
+    }
+}
+
 pub struct MessageCache {
     /// max 128 cached message signatures. Most recent FIRST.
     /// Server should (when possible) reference indexes in this (recipient's) cache instead of sending full signatures in last seen.
@@ -6250,6 +6391,7 @@ pub struct MessageCache {
     full_cache: VecDeque<Box<[u8]>>,
     /// max 20 last seen messages by the sender. Most Recent LAST
     pub last_seen: LastSeen,
+    pub last_seen_validator: LastSeenMessagesValidator,
 }
 
 impl Default for MessageCache {
@@ -6257,6 +6399,7 @@ impl Default for MessageCache {
         Self {
             full_cache: VecDeque::with_capacity(MAX_CACHED_SIGNATURES as usize),
             last_seen: LastSeen::default(),
+            last_seen_validator: LastSeenMessagesValidator::default(),
         }
     }
 }

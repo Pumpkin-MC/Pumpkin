@@ -1,6 +1,6 @@
+use crate::entity::Entity;
 use crate::entity::mob::zombie::ZombieEntityBase;
 use crate::entity::mob::{Mob, MobEntity};
-use crate::entity::{Entity, NBTStorage};
 use std::sync::Arc;
 
 pub struct ZombieEntity {
@@ -14,8 +14,6 @@ impl ZombieEntity {
         Arc::new(zombie)
     }
 }
-
-impl NBTStorage for ZombieEntity {}
 
 impl Mob for ZombieEntity {
     fn get_mob_entity(&self) -> &MobEntity {

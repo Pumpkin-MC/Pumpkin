@@ -1,4 +1,4 @@
-use pumpkin_data::packet::clientbound::{LOGIN_GAME_PROFILE, LOGIN_LOGIN_FINISHED};
+use pumpkin_data::packet::clientbound::login::{GAME_PROFILE, LOGIN_FINISHED};
 use pumpkin_util::version::JavaMinecraftVersion;
 
 use crate::{ClientPacket, Property, packet::MultiVersionJavaPacket, ser::NetworkWriteExt};
@@ -42,11 +42,10 @@ impl<'a> CLoginSuccess<'a> {
 
 impl MultiVersionJavaPacket for CLoginSuccess<'_> {
     fn to_id(version: JavaMinecraftVersion) -> i32 {
-        // TODO: this is hacky :c
-        if version == JavaMinecraftVersion::V_1_21 {
-            LOGIN_GAME_PROFILE.to_id(version)
+        if version >= JavaMinecraftVersion::V_1_21_2 {
+            LOGIN_FINISHED.to_id(version)
         } else {
-            LOGIN_LOGIN_FINISHED.to_id(version)
+            GAME_PROFILE.to_id(version)
         }
     }
 }

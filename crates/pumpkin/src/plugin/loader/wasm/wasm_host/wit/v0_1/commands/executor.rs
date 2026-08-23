@@ -6,10 +6,16 @@ use pumpkin_util::text::{
 };
 
 use crate::{
-    command::{CommandExecutor, dispatcher::CommandError},
+    command::{
+        CommandExecutor,
+        context::string_range::StringRange,
+        dispatcher::CommandError,
+        suggestion::{Suggestion, suggestions::Suggestions},
+        tree::{CommandSuggestionProvider, CommandSuggestionResult},
+    },
     plugin::loader::wasm::wasm_host::{
         DowncastResourceExt, PluginInstance, WasmPlugin,
-        wit::v0_1::pumpkin::plugin::command::CommandError as CommandErrorWit,
+        wit::v0_1::pumpkin::plugin::command::{CommandError as CommandErrorWit, SuggestionRequest},
     },
     server::Server,
 };
@@ -108,6 +114,94 @@ impl CommandExecutor for WasmCommandExecutor {
                     }
                 }
             }
+        })
+    }
+}
+
+pub struct WasmCommandSuggestionProvider {
+    pub handler_id: u32,
+    pub plugin: Arc<WasmPlugin>,
+    pub server: Arc<Server>,
+}
+
+impl CommandSuggestionProvider for WasmCommandSuggestionProvider {
+    fn suggest<'a>(
+        &'a self,
+        src: &'a crate::command::CommandSender,
+        _server: &'a Server,
+        input: &'a str,
+        start: usize,
+        end: usize,
+    ) -> CommandSuggestionResult<'a> {
+        Box::pin(async move {
+            let mut store = self.plugin.store.lock().await;
+
+            let sender_resource = match store.data_mut().add_command_sender(src.clone()) {
+                Ok(resource) => resource,
+                Err(error) => {
+                    tracing::error!(
+                        "Failed to create command sender resource for suggestions: {error}"
+                    );
+                    return Suggestions::empty();
+                }
+            };
+            let server_resource = match store.data_mut().add_server(self.server.clone()) {
+                Ok(resource) => resource,
+                Err(error) => {
+                    tracing::error!("Failed to create server resource for suggestions: {error}");
+                    return Suggestions::empty();
+                }
+            };
+
+            let request = SuggestionRequest {
+                input: input.to_string(),
+                cursor: input.len().try_into().unwrap_or(u32::MAX),
+                start: start.try_into().unwrap_or(u32::MAX),
+                remaining: input[start.min(input.len())..end.min(input.len())].to_string(),
+            };
+
+            let response = match self.plugin.plugin_instance {
+                PluginInstance::V0_1(ref plugin) => {
+                    plugin
+                        .call_handle_command_suggestion(
+                            &mut *store,
+                            self.handler_id,
+                            sender_resource,
+                            server_resource,
+                            &request,
+                        )
+                        .await
+                }
+            };
+
+            let response = match response {
+                Ok(response) => response,
+                Err(error) => {
+                    tracing::error!("Wasm command suggestion failed: {error}");
+                    return Suggestions::empty();
+                }
+            };
+
+            let start = response.start as usize;
+            let end = start.saturating_add(response.length as usize);
+            let range = StringRange::between(start, end.min(input.len()));
+            let suggestions = response
+                .values
+                .into_iter()
+                .map(|suggestion| {
+                    if let Some(tooltip) = suggestion.tooltip {
+                        Suggestion::with_tooltip(
+                            range,
+                            suggestion.value,
+                            tooltip.consume(store.data_mut()).provider,
+                        )
+                    } else {
+                        Suggestion::without_tooltip(range, suggestion.value)
+                    }
+                })
+                .collect();
+
+            Suggestions::new(range, suggestions)
         })
     }
 }

@@ -4,6 +4,7 @@ use pumpkin_util::random::{
     RandomGenerator, RandomImpl, get_carver_seed, get_region_seed, legacy_rand::LegacyRand,
     xoroshiro128::Xoroshiro,
 };
+use pumpkin_util::y_offset::{AboveBottom, Absolute, BelowTop, YOffset};
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub enum StructureKeys {
     PillagerOutpost,
@@ -85,40 +86,40 @@ impl StructureKeys {
     #[must_use]
     pub const fn to_name(&self) -> &'static str {
         match self {
-            Self::AncientCity => "minecraft:ancient_city",
-            Self::BastionRemnant => "minecraft:bastion_remnant",
-            Self::BuriedTreasure => "minecraft:buried_treasure",
-            Self::DesertPyramid => "minecraft:desert_pyramid",
-            Self::EndCity => "minecraft:end_city",
-            Self::Fortress => "minecraft:fortress",
-            Self::Igloo => "minecraft:igloo",
-            Self::JunglePyramid => "minecraft:jungle_pyramid",
-            Self::Mansion => "minecraft:mansion",
-            Self::Mineshaft => "minecraft:mineshaft",
-            Self::MineshaftMesa => "minecraft:mineshaft_mesa",
-            Self::Monument => "minecraft:monument",
-            Self::NetherFossil => "minecraft:nether_fossil",
-            Self::OceanRuinCold => "minecraft:ocean_ruin_cold",
-            Self::OceanRuinWarm => "minecraft:ocean_ruin_warm",
-            Self::PillagerOutpost => "minecraft:pillager_outpost",
-            Self::RuinedPortal => "minecraft:ruined_portal",
-            Self::RuinedPortalDesert => "minecraft:ruined_portal_desert",
-            Self::RuinedPortalJungle => "minecraft:ruined_portal_jungle",
-            Self::RuinedPortalMountain => "minecraft:ruined_portal_mountain",
-            Self::RuinedPortalNether => "minecraft:ruined_portal_nether",
-            Self::RuinedPortalOcean => "minecraft:ruined_portal_ocean",
-            Self::RuinedPortalSwamp => "minecraft:ruined_portal_swamp",
-            Self::Shipwreck => "minecraft:shipwreck",
-            Self::ShipwreckBeached => "minecraft:shipwreck_beached",
-            Self::Stronghold => "minecraft:stronghold",
-            Self::SwampHut => "minecraft:swamp_hut",
-            Self::TrailRuins => "minecraft:trail_ruins",
-            Self::TrialChambers => "minecraft:trial_chambers",
-            Self::VillageDesert => "minecraft:village_desert",
-            Self::VillagePlains => "minecraft:village_plains",
-            Self::VillageSavanna => "minecraft:village_savanna",
-            Self::VillageSnowy => "minecraft:village_snowy",
-            Self::VillageTaiga => "minecraft:village_taiga",
+            Self::AncientCity => "ancient_city",
+            Self::BastionRemnant => "bastion_remnant",
+            Self::BuriedTreasure => "buried_treasure",
+            Self::DesertPyramid => "desert_pyramid",
+            Self::EndCity => "end_city",
+            Self::Fortress => "fortress",
+            Self::Igloo => "igloo",
+            Self::JunglePyramid => "jungle_pyramid",
+            Self::Mansion => "mansion",
+            Self::Mineshaft => "mineshaft",
+            Self::MineshaftMesa => "mineshaft_mesa",
+            Self::Monument => "monument",
+            Self::NetherFossil => "nether_fossil",
+            Self::OceanRuinCold => "ocean_ruin_cold",
+            Self::OceanRuinWarm => "ocean_ruin_warm",
+            Self::PillagerOutpost => "pillager_outpost",
+            Self::RuinedPortal => "ruined_portal",
+            Self::RuinedPortalDesert => "ruined_portal_desert",
+            Self::RuinedPortalJungle => "ruined_portal_jungle",
+            Self::RuinedPortalMountain => "ruined_portal_mountain",
+            Self::RuinedPortalNether => "ruined_portal_nether",
+            Self::RuinedPortalOcean => "ruined_portal_ocean",
+            Self::RuinedPortalSwamp => "ruined_portal_swamp",
+            Self::Shipwreck => "shipwreck",
+            Self::ShipwreckBeached => "shipwreck_beached",
+            Self::Stronghold => "stronghold",
+            Self::SwampHut => "swamp_hut",
+            Self::TrailRuins => "trail_ruins",
+            Self::TrialChambers => "trial_chambers",
+            Self::VillageDesert => "village_desert",
+            Self::VillagePlains => "village_plains",
+            Self::VillageSavanna => "village_savanna",
+            Self::VillageSnowy => "village_snowy",
+            Self::VillageTaiga => "village_taiga",
         }
     }
     #[must_use]
@@ -247,6 +248,125 @@ pub enum StructureType {
     SwampHut,
     Unknown,
 }
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum BoundingBoxType {
+    Piece,
+    Full,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct SpawnEntry {
+    pub entity_type: &'static str,
+    pub min_count: u32,
+    pub max_count: u32,
+    pub weight: u32,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct SpawnOverride {
+    pub category: &'static str,
+    pub bounding_box: BoundingBoxType,
+    pub spawns: &'static [SpawnEntry],
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum HeightProvider {
+    Uniform(UniformHeightProvider),
+    Trapezoid(TrapezoidHeightProvider),
+    VeryBiasedToBottom(VeryBiasedToBottomHeightProvider),
+}
+impl HeightProvider {
+    #[must_use]
+    pub fn get(&self, random: &mut RandomGenerator, min_y: i8, height: u16) -> i32 {
+        match self {
+            Self::Uniform(provider) => provider.get(random, min_y, height),
+            Self::Trapezoid(provider) => provider.get(random, min_y, height),
+            Self::VeryBiasedToBottom(provider) => provider.get(random, min_y, height),
+        }
+    }
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct UniformHeightProvider {
+    pub min_inclusive: YOffset,
+    pub max_inclusive: YOffset,
+}
+impl UniformHeightProvider {
+    #[must_use]
+    pub fn get(&self, random: &mut RandomGenerator, min_y: i8, height: u16) -> i32 {
+        let min = self.min_inclusive.get_y(min_y as i16, height);
+        let max = self.max_inclusive.get_y(min_y as i16, height);
+        if min >= max {
+            min
+        } else {
+            random.next_inbetween_i32(min, max)
+        }
+    }
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct TrapezoidHeightProvider {
+    pub min_inclusive: YOffset,
+    pub max_inclusive: YOffset,
+    pub plateau: Option<i32>,
+}
+impl TrapezoidHeightProvider {
+    #[must_use]
+    pub fn get(&self, random: &mut RandomGenerator, min_y: i8, height: u16) -> i32 {
+        let plateau = self.plateau.unwrap_or(0);
+        let i = self.min_inclusive.get_y(min_y as i16, height);
+        let j = self.max_inclusive.get_y(min_y as i16, height);
+        if i >= j {
+            return i;
+        }
+        let k = j - i;
+        if plateau >= k {
+            return random.next_inbetween_i32(i, j);
+        }
+        let l = (k - plateau) / 2;
+        let m = k - l;
+        i + random.next_inbetween_i32(0, m) + random.next_inbetween_i32(0, l)
+    }
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct VeryBiasedToBottomHeightProvider {
+    pub min_inclusive: YOffset,
+    pub max_inclusive: YOffset,
+    pub inner: Option<std::num::NonZero<u32>>,
+}
+impl VeryBiasedToBottomHeightProvider {
+    #[must_use]
+    pub fn get(&self, random: &mut RandomGenerator, min_y: i8, height: u16) -> i32 {
+        let min = self.min_inclusive.get_y(min_y as i16, height);
+        let max = self.max_inclusive.get_y(min_y as i16, height);
+        let inner = self.inner.map_or(1, std::num::NonZero::get) as i32;
+        if min >= max {
+            return min;
+        }
+        let min_rnd = random.next_inbetween_i32(min + inner, max);
+        let max_rnd = random.next_inbetween_i32(min, min_rnd - 1);
+        random.next_inbetween_i32(min, max_rnd - 1 + inner)
+    }
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PoolAliasBinding {
+    Direct {
+        alias: &'static str,
+        target: &'static str,
+    },
+    Random {
+        alias: &'static str,
+        targets: &'static [WeightedPoolAliasTarget],
+    },
+    RandomGroup {
+        groups: &'static [WeightedPoolAliasGroup],
+    },
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct WeightedPoolAliasTarget {
+    pub target: &'static str,
+    pub weight: u32,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct WeightedPoolAliasGroup {
+    pub bindings: &'static [PoolAliasBinding],
+    pub weight: u32,
+}
 pub struct Structure {
     pub biomes: &'static str,
     pub step: GenerationStep,
@@ -254,12 +374,19 @@ pub struct Structure {
     pub start_jigsaw_name: Option<&'static str>,
     pub size: Option<i32>,
     pub terrain_adaptation: TerrainAdaptation,
-    pub start_height: Option<i16>,
+    pub start_height: Option<HeightProvider>,
     pub project_start_to_heightmap: Option<&'static str>,
     pub max_distance_from_center: Option<i32>,
     pub liquid_settings: Option<&'static str>,
     pub dimension_padding: Option<i32>,
     pub use_expansion_hack: Option<bool>,
+    pub pool_aliases: &'static [PoolAliasBinding],
+    pub spawn_overrides: &'static [SpawnOverride],
+    pub is_beached: Option<bool>,
+    pub mineshaft_type: Option<&'static str>,
+    pub biome_temp: Option<&'static str>,
+    pub cluster_probability: Option<f32>,
+    pub large_probability: Option<f32>,
     pub structure_type: StructureType,
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -299,12 +426,63 @@ impl Structure {
         start_jigsaw_name: Some("minecraft:city_anchor"),
         size: Some(7i32),
         terrain_adaptation: TerrainAdaptation::BeardBox,
-        start_height: Some(-27i16),
+        start_height: Some(HeightProvider::Uniform(UniformHeightProvider {
+            min_inclusive: YOffset::Absolute(Absolute { absolute: -27i16 }),
+            max_inclusive: YOffset::Absolute(Absolute { absolute: -27i16 }),
+        })),
         project_start_to_heightmap: None,
         max_distance_from_center: Some(116i32),
         liquid_settings: None,
         dimension_padding: None,
         use_expansion_hack: Some(false),
+        pool_aliases: &[],
+        spawn_overrides: &[
+            SpawnOverride {
+                category: "ambient",
+                bounding_box: BoundingBoxType::Full,
+                spawns: &[],
+            },
+            SpawnOverride {
+                category: "axolotls",
+                bounding_box: BoundingBoxType::Full,
+                spawns: &[],
+            },
+            SpawnOverride {
+                category: "creature",
+                bounding_box: BoundingBoxType::Full,
+                spawns: &[],
+            },
+            SpawnOverride {
+                category: "misc",
+                bounding_box: BoundingBoxType::Full,
+                spawns: &[],
+            },
+            SpawnOverride {
+                category: "monster",
+                bounding_box: BoundingBoxType::Full,
+                spawns: &[],
+            },
+            SpawnOverride {
+                category: "underground_water_creature",
+                bounding_box: BoundingBoxType::Full,
+                spawns: &[],
+            },
+            SpawnOverride {
+                category: "water_ambient",
+                bounding_box: BoundingBoxType::Full,
+                spawns: &[],
+            },
+            SpawnOverride {
+                category: "water_creature",
+                bounding_box: BoundingBoxType::Full,
+                spawns: &[],
+            },
+        ],
+        is_beached: None,
+        mineshaft_type: None,
+        biome_temp: None,
+        cluster_probability: None,
+        large_probability: None,
         structure_type: StructureType::Jigsaw,
     };
     pub const BASTION_REMNANT: Self = Structure {
@@ -314,12 +492,22 @@ impl Structure {
         start_jigsaw_name: None,
         size: Some(6i32),
         terrain_adaptation: TerrainAdaptation::None,
-        start_height: Some(33i16),
+        start_height: Some(HeightProvider::Uniform(UniformHeightProvider {
+            min_inclusive: YOffset::Absolute(Absolute { absolute: 33i16 }),
+            max_inclusive: YOffset::Absolute(Absolute { absolute: 33i16 }),
+        })),
         project_start_to_heightmap: None,
         max_distance_from_center: Some(80i32),
         liquid_settings: None,
         dimension_padding: None,
         use_expansion_hack: Some(false),
+        pool_aliases: &[],
+        spawn_overrides: &[],
+        is_beached: None,
+        mineshaft_type: None,
+        biome_temp: None,
+        cluster_probability: None,
+        large_probability: None,
         structure_type: StructureType::Jigsaw,
     };
     pub const BURIED_TREASURE: Self = Structure {
@@ -335,6 +523,13 @@ impl Structure {
         liquid_settings: None,
         dimension_padding: None,
         use_expansion_hack: None,
+        pool_aliases: &[],
+        spawn_overrides: &[],
+        is_beached: None,
+        mineshaft_type: None,
+        biome_temp: None,
+        cluster_probability: None,
+        large_probability: None,
         structure_type: StructureType::BuriedTreasure,
     };
     pub const DESERT_PYRAMID: Self = Structure {
@@ -350,6 +545,13 @@ impl Structure {
         liquid_settings: None,
         dimension_padding: None,
         use_expansion_hack: None,
+        pool_aliases: &[],
+        spawn_overrides: &[],
+        is_beached: None,
+        mineshaft_type: None,
+        biome_temp: None,
+        cluster_probability: None,
+        large_probability: None,
         structure_type: StructureType::DesertPyramid,
     };
     pub const END_CITY: Self = Structure {
@@ -365,6 +567,13 @@ impl Structure {
         liquid_settings: None,
         dimension_padding: None,
         use_expansion_hack: None,
+        pool_aliases: &[],
+        spawn_overrides: &[],
+        is_beached: None,
+        mineshaft_type: None,
+        biome_temp: None,
+        cluster_probability: None,
+        large_probability: None,
         structure_type: StructureType::EndCity,
     };
     pub const FORTRESS: Self = Structure {
@@ -380,6 +589,48 @@ impl Structure {
         liquid_settings: None,
         dimension_padding: None,
         use_expansion_hack: None,
+        pool_aliases: &[],
+        spawn_overrides: &[SpawnOverride {
+            category: "monster",
+            bounding_box: BoundingBoxType::Piece,
+            spawns: &[
+                SpawnEntry {
+                    entity_type: "minecraft:blaze",
+                    min_count: 2u32,
+                    max_count: 3u32,
+                    weight: 10u32,
+                },
+                SpawnEntry {
+                    entity_type: "minecraft:zombified_piglin",
+                    min_count: 4u32,
+                    max_count: 4u32,
+                    weight: 5u32,
+                },
+                SpawnEntry {
+                    entity_type: "minecraft:wither_skeleton",
+                    min_count: 5u32,
+                    max_count: 5u32,
+                    weight: 8u32,
+                },
+                SpawnEntry {
+                    entity_type: "minecraft:skeleton",
+                    min_count: 5u32,
+                    max_count: 5u32,
+                    weight: 2u32,
+                },
+                SpawnEntry {
+                    entity_type: "minecraft:magma_cube",
+                    min_count: 4u32,
+                    max_count: 4u32,
+                    weight: 3u32,
+                },
+            ],
+        }],
+        is_beached: None,
+        mineshaft_type: None,
+        biome_temp: None,
+        cluster_probability: None,
+        large_probability: None,
         structure_type: StructureType::Fortress,
     };
     pub const IGLOO: Self = Structure {
@@ -395,6 +646,13 @@ impl Structure {
         liquid_settings: None,
         dimension_padding: None,
         use_expansion_hack: None,
+        pool_aliases: &[],
+        spawn_overrides: &[],
+        is_beached: None,
+        mineshaft_type: None,
+        biome_temp: None,
+        cluster_probability: None,
+        large_probability: None,
         structure_type: StructureType::Igloo,
     };
     pub const JUNGLE_PYRAMID: Self = Structure {
@@ -410,6 +668,13 @@ impl Structure {
         liquid_settings: None,
         dimension_padding: None,
         use_expansion_hack: None,
+        pool_aliases: &[],
+        spawn_overrides: &[],
+        is_beached: None,
+        mineshaft_type: None,
+        biome_temp: None,
+        cluster_probability: None,
+        large_probability: None,
         structure_type: StructureType::JungleTemple,
     };
     pub const MANSION: Self = Structure {
@@ -425,6 +690,13 @@ impl Structure {
         liquid_settings: None,
         dimension_padding: None,
         use_expansion_hack: None,
+        pool_aliases: &[],
+        spawn_overrides: &[],
+        is_beached: None,
+        mineshaft_type: None,
+        biome_temp: None,
+        cluster_probability: None,
+        large_probability: None,
         structure_type: StructureType::WoodlandMansion,
     };
     pub const MINESHAFT: Self = Structure {
@@ -440,6 +712,13 @@ impl Structure {
         liquid_settings: None,
         dimension_padding: None,
         use_expansion_hack: None,
+        pool_aliases: &[],
+        spawn_overrides: &[],
+        is_beached: None,
+        mineshaft_type: Some("normal"),
+        biome_temp: None,
+        cluster_probability: None,
+        large_probability: None,
         structure_type: StructureType::Mineshaft,
     };
     pub const MINESHAFT_MESA: Self = Structure {
@@ -455,6 +734,13 @@ impl Structure {
         liquid_settings: None,
         dimension_padding: None,
         use_expansion_hack: None,
+        pool_aliases: &[],
+        spawn_overrides: &[],
+        is_beached: None,
+        mineshaft_type: Some("mesa"),
+        biome_temp: None,
+        cluster_probability: None,
+        large_probability: None,
         structure_type: StructureType::Mineshaft,
     };
     pub const MONUMENT: Self = Structure {
@@ -470,6 +756,34 @@ impl Structure {
         liquid_settings: None,
         dimension_padding: None,
         use_expansion_hack: None,
+        pool_aliases: &[],
+        spawn_overrides: &[
+            SpawnOverride {
+                category: "axolotls",
+                bounding_box: BoundingBoxType::Full,
+                spawns: &[],
+            },
+            SpawnOverride {
+                category: "monster",
+                bounding_box: BoundingBoxType::Full,
+                spawns: &[SpawnEntry {
+                    entity_type: "minecraft:guardian",
+                    min_count: 2u32,
+                    max_count: 4u32,
+                    weight: 1u32,
+                }],
+            },
+            SpawnOverride {
+                category: "underground_water_creature",
+                bounding_box: BoundingBoxType::Full,
+                spawns: &[],
+            },
+        ],
+        is_beached: None,
+        mineshaft_type: None,
+        biome_temp: None,
+        cluster_probability: None,
+        large_probability: None,
         structure_type: StructureType::OceanMonument,
     };
     pub const NETHER_FOSSIL: Self = Structure {
@@ -479,12 +793,22 @@ impl Structure {
         start_jigsaw_name: None,
         size: None,
         terrain_adaptation: TerrainAdaptation::BeardThin,
-        start_height: None,
+        start_height: Some(HeightProvider::Uniform(UniformHeightProvider {
+            min_inclusive: YOffset::Absolute(Absolute { absolute: 32i16 }),
+            max_inclusive: YOffset::BelowTop(BelowTop { below_top: 2i8 }),
+        })),
         project_start_to_heightmap: None,
         max_distance_from_center: None,
         liquid_settings: None,
         dimension_padding: None,
         use_expansion_hack: None,
+        pool_aliases: &[],
+        spawn_overrides: &[],
+        is_beached: None,
+        mineshaft_type: None,
+        biome_temp: None,
+        cluster_probability: None,
+        large_probability: None,
         structure_type: StructureType::NetherFossil,
     };
     pub const OCEAN_RUIN_COLD: Self = Structure {
@@ -500,6 +824,13 @@ impl Structure {
         liquid_settings: None,
         dimension_padding: None,
         use_expansion_hack: None,
+        pool_aliases: &[],
+        spawn_overrides: &[],
+        is_beached: None,
+        mineshaft_type: None,
+        biome_temp: Some("cold"),
+        cluster_probability: Some(0.9f32),
+        large_probability: Some(0.3f32),
         structure_type: StructureType::OceanRuin,
     };
     pub const OCEAN_RUIN_WARM: Self = Structure {
@@ -515,6 +846,13 @@ impl Structure {
         liquid_settings: None,
         dimension_padding: None,
         use_expansion_hack: None,
+        pool_aliases: &[],
+        spawn_overrides: &[],
+        is_beached: None,
+        mineshaft_type: None,
+        biome_temp: Some("warm"),
+        cluster_probability: Some(0.9f32),
+        large_probability: Some(0.3f32),
         structure_type: StructureType::OceanRuin,
     };
     pub const PILLAGER_OUTPOST: Self = Structure {
@@ -524,12 +862,31 @@ impl Structure {
         start_jigsaw_name: None,
         size: Some(7i32),
         terrain_adaptation: TerrainAdaptation::BeardThin,
-        start_height: Some(0i16),
+        start_height: Some(HeightProvider::Uniform(UniformHeightProvider {
+            min_inclusive: YOffset::Absolute(Absolute { absolute: 0i16 }),
+            max_inclusive: YOffset::Absolute(Absolute { absolute: 0i16 }),
+        })),
         project_start_to_heightmap: Some("WORLD_SURFACE_WG"),
         max_distance_from_center: Some(80i32),
         liquid_settings: None,
         dimension_padding: None,
         use_expansion_hack: Some(true),
+        pool_aliases: &[],
+        spawn_overrides: &[SpawnOverride {
+            category: "monster",
+            bounding_box: BoundingBoxType::Full,
+            spawns: &[SpawnEntry {
+                entity_type: "minecraft:pillager",
+                min_count: 1u32,
+                max_count: 1u32,
+                weight: 1u32,
+            }],
+        }],
+        is_beached: None,
+        mineshaft_type: None,
+        biome_temp: None,
+        cluster_probability: None,
+        large_probability: None,
         structure_type: StructureType::Jigsaw,
     };
     pub const RUINED_PORTAL: Self = Structure {
@@ -545,6 +902,13 @@ impl Structure {
         liquid_settings: None,
         dimension_padding: None,
         use_expansion_hack: None,
+        pool_aliases: &[],
+        spawn_overrides: &[],
+        is_beached: None,
+        mineshaft_type: None,
+        biome_temp: None,
+        cluster_probability: None,
+        large_probability: None,
         structure_type: StructureType::RuinedPortal,
     };
     pub const RUINED_PORTAL_DESERT: Self = Structure {
@@ -560,6 +924,13 @@ impl Structure {
         liquid_settings: None,
         dimension_padding: None,
         use_expansion_hack: None,
+        pool_aliases: &[],
+        spawn_overrides: &[],
+        is_beached: None,
+        mineshaft_type: None,
+        biome_temp: None,
+        cluster_probability: None,
+        large_probability: None,
         structure_type: StructureType::RuinedPortal,
     };
     pub const RUINED_PORTAL_JUNGLE: Self = Structure {
@@ -575,6 +946,13 @@ impl Structure {
         liquid_settings: None,
         dimension_padding: None,
         use_expansion_hack: None,
+        pool_aliases: &[],
+        spawn_overrides: &[],
+        is_beached: None,
+        mineshaft_type: None,
+        biome_temp: None,
+        cluster_probability: None,
+        large_probability: None,
         structure_type: StructureType::RuinedPortal,
     };
     pub const RUINED_PORTAL_MOUNTAIN: Self = Structure {
@@ -590,6 +968,13 @@ impl Structure {
         liquid_settings: None,
         dimension_padding: None,
         use_expansion_hack: None,
+        pool_aliases: &[],
+        spawn_overrides: &[],
+        is_beached: None,
+        mineshaft_type: None,
+        biome_temp: None,
+        cluster_probability: None,
+        large_probability: None,
         structure_type: StructureType::RuinedPortal,
     };
     pub const RUINED_PORTAL_NETHER: Self = Structure {
@@ -605,6 +990,13 @@ impl Structure {
         liquid_settings: None,
         dimension_padding: None,
         use_expansion_hack: None,
+        pool_aliases: &[],
+        spawn_overrides: &[],
+        is_beached: None,
+        mineshaft_type: None,
+        biome_temp: None,
+        cluster_probability: None,
+        large_probability: None,
         structure_type: StructureType::RuinedPortal,
     };
     pub const RUINED_PORTAL_OCEAN: Self = Structure {
@@ -620,6 +1012,13 @@ impl Structure {
         liquid_settings: None,
         dimension_padding: None,
         use_expansion_hack: None,
+        pool_aliases: &[],
+        spawn_overrides: &[],
+        is_beached: None,
+        mineshaft_type: None,
+        biome_temp: None,
+        cluster_probability: None,
+        large_probability: None,
         structure_type: StructureType::RuinedPortal,
     };
     pub const RUINED_PORTAL_SWAMP: Self = Structure {
@@ -635,6 +1034,13 @@ impl Structure {
         liquid_settings: None,
         dimension_padding: None,
         use_expansion_hack: None,
+        pool_aliases: &[],
+        spawn_overrides: &[],
+        is_beached: None,
+        mineshaft_type: None,
+        biome_temp: None,
+        cluster_probability: None,
+        large_probability: None,
         structure_type: StructureType::RuinedPortal,
     };
     pub const SHIPWRECK: Self = Structure {
@@ -650,6 +1056,13 @@ impl Structure {
         liquid_settings: None,
         dimension_padding: None,
         use_expansion_hack: None,
+        pool_aliases: &[],
+        spawn_overrides: &[],
+        is_beached: Some(false),
+        mineshaft_type: None,
+        biome_temp: None,
+        cluster_probability: None,
+        large_probability: None,
         structure_type: StructureType::Shipwreck,
     };
     pub const SHIPWRECK_BEACHED: Self = Structure {
@@ -665,6 +1078,13 @@ impl Structure {
         liquid_settings: None,
         dimension_padding: None,
         use_expansion_hack: None,
+        pool_aliases: &[],
+        spawn_overrides: &[],
+        is_beached: Some(true),
+        mineshaft_type: None,
+        biome_temp: None,
+        cluster_probability: None,
+        large_probability: None,
         structure_type: StructureType::Shipwreck,
     };
     pub const STRONGHOLD: Self = Structure {
@@ -680,6 +1100,13 @@ impl Structure {
         liquid_settings: None,
         dimension_padding: None,
         use_expansion_hack: None,
+        pool_aliases: &[],
+        spawn_overrides: &[],
+        is_beached: None,
+        mineshaft_type: None,
+        biome_temp: None,
+        cluster_probability: None,
+        large_probability: None,
         structure_type: StructureType::Stronghold,
     };
     pub const SWAMP_HUT: Self = Structure {
@@ -695,6 +1122,34 @@ impl Structure {
         liquid_settings: None,
         dimension_padding: None,
         use_expansion_hack: None,
+        pool_aliases: &[],
+        spawn_overrides: &[
+            SpawnOverride {
+                category: "creature",
+                bounding_box: BoundingBoxType::Piece,
+                spawns: &[SpawnEntry {
+                    entity_type: "minecraft:cat",
+                    min_count: 1u32,
+                    max_count: 1u32,
+                    weight: 1u32,
+                }],
+            },
+            SpawnOverride {
+                category: "monster",
+                bounding_box: BoundingBoxType::Piece,
+                spawns: &[SpawnEntry {
+                    entity_type: "minecraft:witch",
+                    min_count: 1u32,
+                    max_count: 1u32,
+                    weight: 1u32,
+                }],
+            },
+        ],
+        is_beached: None,
+        mineshaft_type: None,
+        biome_temp: None,
+        cluster_probability: None,
+        large_probability: None,
         structure_type: StructureType::SwampHut,
     };
     pub const TRAIL_RUINS: Self = Structure {
@@ -704,12 +1159,22 @@ impl Structure {
         start_jigsaw_name: None,
         size: Some(7i32),
         terrain_adaptation: TerrainAdaptation::Bury,
-        start_height: Some(-15i16),
+        start_height: Some(HeightProvider::Uniform(UniformHeightProvider {
+            min_inclusive: YOffset::Absolute(Absolute { absolute: -15i16 }),
+            max_inclusive: YOffset::Absolute(Absolute { absolute: -15i16 }),
+        })),
         project_start_to_heightmap: Some("WORLD_SURFACE_WG"),
         max_distance_from_center: Some(80i32),
         liquid_settings: None,
         dimension_padding: None,
         use_expansion_hack: Some(false),
+        pool_aliases: &[],
+        spawn_overrides: &[],
+        is_beached: None,
+        mineshaft_type: None,
+        biome_temp: None,
+        cluster_probability: None,
+        large_probability: None,
         structure_type: StructureType::Jigsaw,
     };
     pub const TRIAL_CHAMBERS: Self = Structure {
@@ -719,12 +1184,145 @@ impl Structure {
         start_jigsaw_name: None,
         size: Some(20i32),
         terrain_adaptation: TerrainAdaptation::Encapsulate,
-        start_height: Some(-40i16),
+        start_height: Some(HeightProvider::Uniform(UniformHeightProvider {
+            min_inclusive: YOffset::Absolute(Absolute { absolute: -40i16 }),
+            max_inclusive: YOffset::Absolute(Absolute { absolute: -20i16 }),
+        })),
         project_start_to_heightmap: None,
         max_distance_from_center: Some(116i32),
         liquid_settings: Some("ignore_waterlogging"),
         dimension_padding: Some(10i32),
         use_expansion_hack: Some(false),
+        pool_aliases: &[
+            PoolAliasBinding::RandomGroup {
+                groups: &[
+                    WeightedPoolAliasGroup {
+                        bindings: &[
+                            PoolAliasBinding::Direct {
+                                alias: "minecraft:trial_chambers/spawner/contents/ranged",
+                                target: "minecraft:trial_chambers/spawner/ranged/skeleton",
+                            },
+                            PoolAliasBinding::Direct {
+                                alias: "minecraft:trial_chambers/spawner/contents/slow_ranged",
+                                target: "minecraft:trial_chambers/spawner/slow_ranged/skeleton",
+                            },
+                        ],
+                        weight: 1u32,
+                    },
+                    WeightedPoolAliasGroup {
+                        bindings: &[
+                            PoolAliasBinding::Direct {
+                                alias: "minecraft:trial_chambers/spawner/contents/ranged",
+                                target: "minecraft:trial_chambers/spawner/ranged/stray",
+                            },
+                            PoolAliasBinding::Direct {
+                                alias: "minecraft:trial_chambers/spawner/contents/slow_ranged",
+                                target: "minecraft:trial_chambers/spawner/slow_ranged/stray",
+                            },
+                        ],
+                        weight: 1u32,
+                    },
+                    WeightedPoolAliasGroup {
+                        bindings: &[
+                            PoolAliasBinding::Direct {
+                                alias: "minecraft:trial_chambers/spawner/contents/ranged",
+                                target: "minecraft:trial_chambers/spawner/ranged/poison_skeleton",
+                            },
+                            PoolAliasBinding::Direct {
+                                alias: "minecraft:trial_chambers/spawner/contents/slow_ranged",
+                                target: "minecraft:trial_chambers/spawner/slow_ranged/poison_skeleton",
+                            },
+                        ],
+                        weight: 1u32,
+                    },
+                ],
+            },
+            PoolAliasBinding::Random {
+                alias: "minecraft:trial_chambers/spawner/contents/melee",
+                targets: &[
+                    WeightedPoolAliasTarget {
+                        target: "minecraft:trial_chambers/spawner/melee/zombie",
+                        weight: 1u32,
+                    },
+                    WeightedPoolAliasTarget {
+                        target: "minecraft:trial_chambers/spawner/melee/husk",
+                        weight: 1u32,
+                    },
+                    WeightedPoolAliasTarget {
+                        target: "minecraft:trial_chambers/spawner/melee/spider",
+                        weight: 1u32,
+                    },
+                ],
+            },
+            PoolAliasBinding::Random {
+                alias: "minecraft:trial_chambers/spawner/contents/small_melee",
+                targets: &[
+                    WeightedPoolAliasTarget {
+                        target: "minecraft:trial_chambers/spawner/small_melee/slime",
+                        weight: 1u32,
+                    },
+                    WeightedPoolAliasTarget {
+                        target: "minecraft:trial_chambers/spawner/small_melee/cave_spider",
+                        weight: 1u32,
+                    },
+                    WeightedPoolAliasTarget {
+                        target: "minecraft:trial_chambers/spawner/small_melee/silverfish",
+                        weight: 1u32,
+                    },
+                    WeightedPoolAliasTarget {
+                        target: "minecraft:trial_chambers/spawner/small_melee/baby_zombie",
+                        weight: 1u32,
+                    },
+                ],
+            },
+        ],
+        spawn_overrides: &[
+            SpawnOverride {
+                category: "ambient",
+                bounding_box: BoundingBoxType::Piece,
+                spawns: &[],
+            },
+            SpawnOverride {
+                category: "axolotls",
+                bounding_box: BoundingBoxType::Piece,
+                spawns: &[],
+            },
+            SpawnOverride {
+                category: "creature",
+                bounding_box: BoundingBoxType::Piece,
+                spawns: &[],
+            },
+            SpawnOverride {
+                category: "misc",
+                bounding_box: BoundingBoxType::Piece,
+                spawns: &[],
+            },
+            SpawnOverride {
+                category: "monster",
+                bounding_box: BoundingBoxType::Piece,
+                spawns: &[],
+            },
+            SpawnOverride {
+                category: "underground_water_creature",
+                bounding_box: BoundingBoxType::Piece,
+                spawns: &[],
+            },
+            SpawnOverride {
+                category: "water_ambient",
+                bounding_box: BoundingBoxType::Piece,
+                spawns: &[],
+            },
+            SpawnOverride {
+                category: "water_creature",
+                bounding_box: BoundingBoxType::Piece,
+                spawns: &[],
+            },
+        ],
+        is_beached: None,
+        mineshaft_type: None,
+        biome_temp: None,
+        cluster_probability: None,
+        large_probability: None,
         structure_type: StructureType::Jigsaw,
     };
     pub const VILLAGE_DESERT: Self = Structure {
@@ -734,12 +1332,22 @@ impl Structure {
         start_jigsaw_name: None,
         size: Some(6i32),
         terrain_adaptation: TerrainAdaptation::BeardThin,
-        start_height: Some(0i16),
+        start_height: Some(HeightProvider::Uniform(UniformHeightProvider {
+            min_inclusive: YOffset::Absolute(Absolute { absolute: 0i16 }),
+            max_inclusive: YOffset::Absolute(Absolute { absolute: 0i16 }),
+        })),
         project_start_to_heightmap: Some("WORLD_SURFACE_WG"),
         max_distance_from_center: Some(80i32),
         liquid_settings: None,
         dimension_padding: None,
         use_expansion_hack: Some(true),
+        pool_aliases: &[],
+        spawn_overrides: &[],
+        is_beached: None,
+        mineshaft_type: None,
+        biome_temp: None,
+        cluster_probability: None,
+        large_probability: None,
         structure_type: StructureType::Jigsaw,
     };
     pub const VILLAGE_PLAINS: Self = Structure {
@@ -749,12 +1357,22 @@ impl Structure {
         start_jigsaw_name: None,
         size: Some(6i32),
         terrain_adaptation: TerrainAdaptation::BeardThin,
-        start_height: Some(0i16),
+        start_height: Some(HeightProvider::Uniform(UniformHeightProvider {
+            min_inclusive: YOffset::Absolute(Absolute { absolute: 0i16 }),
+            max_inclusive: YOffset::Absolute(Absolute { absolute: 0i16 }),
+        })),
         project_start_to_heightmap: Some("WORLD_SURFACE_WG"),
         max_distance_from_center: Some(80i32),
         liquid_settings: None,
         dimension_padding: None,
         use_expansion_hack: Some(true),
+        pool_aliases: &[],
+        spawn_overrides: &[],
+        is_beached: None,
+        mineshaft_type: None,
+        biome_temp: None,
+        cluster_probability: None,
+        large_probability: None,
         structure_type: StructureType::Jigsaw,
     };
     pub const VILLAGE_SAVANNA: Self = Structure {
@@ -764,12 +1382,22 @@ impl Structure {
         start_jigsaw_name: None,
         size: Some(6i32),
         terrain_adaptation: TerrainAdaptation::BeardThin,
-        start_height: Some(0i16),
+        start_height: Some(HeightProvider::Uniform(UniformHeightProvider {
+            min_inclusive: YOffset::Absolute(Absolute { absolute: 0i16 }),
+            max_inclusive: YOffset::Absolute(Absolute { absolute: 0i16 }),
+        })),
         project_start_to_heightmap: Some("WORLD_SURFACE_WG"),
         max_distance_from_center: Some(80i32),
         liquid_settings: None,
         dimension_padding: None,
         use_expansion_hack: Some(true),
+        pool_aliases: &[],
+        spawn_overrides: &[],
+        is_beached: None,
+        mineshaft_type: None,
+        biome_temp: None,
+        cluster_probability: None,
+        large_probability: None,
         structure_type: StructureType::Jigsaw,
     };
     pub const VILLAGE_SNOWY: Self = Structure {
@@ -779,12 +1407,22 @@ impl Structure {
         start_jigsaw_name: None,
         size: Some(6i32),
         terrain_adaptation: TerrainAdaptation::BeardThin,
-        start_height: Some(0i16),
+        start_height: Some(HeightProvider::Uniform(UniformHeightProvider {
+            min_inclusive: YOffset::Absolute(Absolute { absolute: 0i16 }),
+            max_inclusive: YOffset::Absolute(Absolute { absolute: 0i16 }),
+        })),
         project_start_to_heightmap: Some("WORLD_SURFACE_WG"),
         max_distance_from_center: Some(80i32),
         liquid_settings: None,
         dimension_padding: None,
         use_expansion_hack: Some(true),
+        pool_aliases: &[],
+        spawn_overrides: &[],
+        is_beached: None,
+        mineshaft_type: None,
+        biome_temp: None,
+        cluster_probability: None,
+        large_probability: None,
         structure_type: StructureType::Jigsaw,
     };
     pub const VILLAGE_TAIGA: Self = Structure {
@@ -794,12 +1432,22 @@ impl Structure {
         start_jigsaw_name: None,
         size: Some(6i32),
         terrain_adaptation: TerrainAdaptation::BeardThin,
-        start_height: Some(0i16),
+        start_height: Some(HeightProvider::Uniform(UniformHeightProvider {
+            min_inclusive: YOffset::Absolute(Absolute { absolute: 0i16 }),
+            max_inclusive: YOffset::Absolute(Absolute { absolute: 0i16 }),
+        })),
         project_start_to_heightmap: Some("WORLD_SURFACE_WG"),
         max_distance_from_center: Some(80i32),
         liquid_settings: None,
         dimension_padding: None,
         use_expansion_hack: Some(true),
+        pool_aliases: &[],
+        spawn_overrides: &[],
+        is_beached: None,
+        mineshaft_type: None,
+        biome_temp: None,
+        cluster_probability: None,
+        large_probability: None,
         structure_type: StructureType::Jigsaw,
     };
     #[must_use]

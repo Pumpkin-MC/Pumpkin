@@ -12,7 +12,7 @@ use pumpkin_protocol::java::client::play::Metadata;
 use pumpkin_util::GameMode;
 
 use crate::entity::{
-    Entity, EntityBase, EntityBaseFuture, NBTStorage, NbtFuture,
+    Entity, EntityBase, EntityBaseFuture, NbtFuture,
     ai::goal::{
         active_target::ActiveTargetGoal, look_around::RandomLookAroundGoal,
         look_at_entity::LookAtEntityGoal, melee_attack::MeleeAttackGoal, revenge::RevengeGoal,
@@ -100,25 +100,21 @@ impl IronGolemEntity {
     }
 }
 
-impl NBTStorage for IronGolemEntity {
-    fn write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
+impl Mob for IronGolemEntity {
+    fn mob_write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async move {
-            self.mob_entity.living_entity.write_nbt(nbt).await;
             nbt.put_bool("PlayerCreated", self.is_player_created());
         })
     }
 
-    fn read_nbt_non_mut<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
+    fn mob_read_nbt<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async move {
-            self.mob_entity.living_entity.read_nbt_non_mut(nbt).await;
             if let Some(created) = nbt.get_bool("PlayerCreated") {
                 self.set_player_created(created);
             }
         })
     }
-}
 
-impl Mob for IronGolemEntity {
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
     }

@@ -712,23 +712,26 @@ impl CommandDispatcher {
     /// This function currently panics if the source provided was a dummy source.
     /// This is subject to change in the future.
     pub async fn suggest(&self, input: &str, source: &CommandSource) -> Vec<CommandSuggestion> {
+        self.suggest_with_range(input, source)
+            .await
+            .suggestions
+            .into_iter()
+            .map(|suggestion| CommandSuggestion {
+                suggestion: suggestion.text.cached_text().clone(),
+                tooltip: suggestion.tooltip,
+            })
+            .collect()
+    }
+
+    pub async fn suggest_with_range(&self, input: &str, source: &CommandSource) -> Suggestions {
         // Never suggest arguments for a command that has been turned off.
         if self.is_disabled(Self::command_name(input)) {
-            return Vec::new();
+            return Suggestions::empty();
         }
 
         let future1 = async move {
             let parsed = self.parse_input(input, source).await;
-            let suggestions = self.get_completion_suggestions_at_end(parsed).await;
-
-            suggestions
-                .suggestions
-                .into_iter()
-                .map(|suggestion| CommandSuggestion {
-                    suggestion: suggestion.text.cached_text().clone(),
-                    tooltip: suggestion.tooltip,
-                })
-                .collect::<Vec<CommandSuggestion>>()
+            self.get_completion_suggestions_at_end(parsed).await
         };
 
         let future2 = async move {
@@ -737,9 +740,9 @@ impl CommandDispatcher {
                 .await
         };
 
-        let (mut a, mut b) = future::join(future1, future2).await;
-        a.append(&mut b);
-        a
+        let (a, b) = future::join(future1, future2).await;
+        let suggestions = <[Suggestions; 2]>::from((a, b));
+        Suggestions::merge(input, suggestions)
     }
 
     /// Gets all the commands usable in this dispatcher, sorted.

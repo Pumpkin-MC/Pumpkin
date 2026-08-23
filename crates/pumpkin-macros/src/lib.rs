@@ -761,7 +761,7 @@ fn eval_translation_key_expr(expr: &syn::Expr) -> Option<(&'static str, proc_mac
     }
 }
 
-fn count_placeholders(format_str: &str) -> usize {
+const fn count_placeholders(format_str: &str) -> usize {
     let mut count = 0;
     let bytes = format_str.as_bytes();
     let mut i = 0;

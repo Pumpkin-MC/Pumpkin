@@ -18,7 +18,7 @@ use pumpkin_util::math::vector3::Vector3;
 
 use crate::block::entities::creaking_heart::CreakingHeartBlockEntity;
 use crate::entity::{
-    Entity, EntityBase, EntityBaseFuture, NBTStorage, NbtFuture,
+    Entity, EntityBase, EntityBaseFuture, NbtFuture,
     ai::goal::{
         active_target::ActiveTargetGoal, look_around::RandomLookAroundGoal,
         look_at_entity::LookAtEntityGoal, melee_attack::MeleeAttackGoal, swim::SwimGoal,
@@ -396,10 +396,9 @@ impl CreakingEntity {
     }
 }
 
-impl NBTStorage for CreakingEntity {
-    fn write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
+impl Mob for CreakingEntity {
+    fn mob_write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async move {
-            self.mob_entity.living_entity.write_nbt(nbt).await;
             if let Some(pos) = self.get_home_pos() {
                 let mut sub = NbtCompound::new();
                 sub.put_int("x", pos.0.x);
@@ -410,9 +409,8 @@ impl NBTStorage for CreakingEntity {
         })
     }
 
-    fn read_nbt_non_mut<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
+    fn mob_read_nbt<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async move {
-            self.mob_entity.living_entity.read_nbt_non_mut(nbt).await;
             if let Some(sub) = nbt.get_compound("home_pos")
                 && let (Some(x), Some(y), Some(z)) =
                     (sub.get_int("x"), sub.get_int("y"), sub.get_int("z"))
@@ -422,9 +420,7 @@ impl NBTStorage for CreakingEntity {
             }
         })
     }
-}
 
-impl Mob for CreakingEntity {
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
     }

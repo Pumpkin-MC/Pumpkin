@@ -44,7 +44,7 @@ impl JavaClient {
                 PlayerInteractEntityEvent::new(
                     player,
                     Arc::clone(&target),
-                    action.clone(),
+                    action,
                     interact.target_position,
                     sneaking,
                 );

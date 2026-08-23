@@ -214,19 +214,19 @@ pub enum ManagerError {
 
 impl Default for PluginManager {
     fn default() -> Self {
-        Self::new()
+        Self::new(true)
     }
 }
 
 impl PluginManager {
     /// Create a new plugin manager with default loaders
     #[must_use]
-    pub fn new() -> Self {
+    pub fn new(verify_plugin_signatures: bool) -> Self {
         Self {
             plugins: RwLock::new(Vec::new()),
             loaders: RwLock::new(vec![
                 Arc::new(NativePluginLoader),
-                Arc::new(WasmPluginLoader),
+                Arc::new(WasmPluginLoader::new(verify_plugin_signatures)),
             ]),
             handlers: Arc::new(ArcSwap::from_pointee(HashMap::new())),
             unloaded_files: RwLock::new(HashSet::new()),
@@ -1147,6 +1147,7 @@ impl PluginManager {
         }
     }
 
+    #[expect(clippy::result_unit_err)]
     pub async fn send_message(
         &self,
         sender: &str,

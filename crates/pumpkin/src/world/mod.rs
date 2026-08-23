@@ -38,7 +38,7 @@ use crate::{
         {OnNeighborUpdateArgs, OnScheduledTickArgs},
     },
     command::client_suggestions,
-    entity::{Entity, EntityBase, NBTStorage, RemovalReason, player::Player, r#type::from_type},
+    entity::{Entity, EntityBase, RemovalReason, player::Player, r#type::from_type},
     error::PumpkinError,
     net::{ClientPlatform, bedrock::BedrockClient, java::JavaClient},
     plugin::{
@@ -53,7 +53,10 @@ use crate::{
 use arc_swap::ArcSwap;
 use border::Worldborder;
 use bytes::{BufMut, Bytes};
-use explosion::Explosion;
+pub use explosion::{
+    BlockInteraction, DefaultExplosionDamageCalculator, Explosion, ExplosionDamageCalculator,
+    ExplosionInteraction, SimpleExplosionDamageCalculator,
+};
 use pumpkin_config::BasicConfiguration;
 use pumpkin_data::block_properties::{blocks_movement, is_air};
 use pumpkin_data::block_rotation::{Mirror, Rotation};
@@ -87,7 +90,7 @@ use pumpkin_protocol::bedrock::client::set_actor_data::{CSetActorData, PropertyS
 use pumpkin_protocol::bedrock::client::start_game::{CStartGame, ServerTelemetryData};
 use pumpkin_protocol::java::client::play::{
     CBlockUpdate, CChunkBatchEnd, CChunkBatchStart, CChunkData, CDisguisedChatMessage, CExplosion,
-    CRespawn, CSetBlockDestroyStage, CWorldEvent, PlayerSpawnData,
+    CLightUpdate, CRespawn, CSetBlockDestroyStage, CWorldEvent, PlayerSpawnData,
 };
 use pumpkin_protocol::java::client::play::{
     CPlayerSpawnPosition, CRecipeBookAdd, CRecipeBookSettings, CSystemChatMessage,
@@ -699,6 +702,9 @@ impl World {
         for (version, recipients) in recipients_by_version {
             let packet_data = match JavaClient::serialize_packet_for_version(packet, version) {
                 Ok(packet_data) => packet_data,
+                Err(pumpkin_protocol::ser::WritingError::UnsupportedVersion(_)) => {
+                    continue;
+                }
                 Err(err) => {
                     error!(
                         "Failed to serialize packet {} for version {:?}: {}",
@@ -883,11 +889,24 @@ impl World {
             }
 
             if let Some(signature) = chat_message.signature {
-                recipient
-                    .signature_cache
-                    .lock()
-                    .await
-                    .add_seen_signature(signature);
+                let mut cache = recipient.signature_cache.lock().await;
+                cache.add_seen_signature(signature);
+                cache.last_seen_validator.add_pending(signature);
+                let tracked_count = cache.last_seen_validator.tracked_messages_count();
+                drop(cache);
+
+                if tracked_count > 4096 {
+                    recipient
+                        .kick(
+                            crate::net::DisconnectReason::Kicked,
+                            TextComponent::translate_cross(
+                                pumpkin_data::translation::java::MULTIPLAYER_DISCONNECT_TOO_MANY_PENDING_CHATS,
+                                pumpkin_data::translation::java::MULTIPLAYER_DISCONNECT_TOO_MANY_PENDING_CHATS,
+                                [],
+                            ),
+                        )
+                        .await;
+                }
             }
 
             if recipient.gameprofile.id != sender.gameprofile.id {
@@ -1430,6 +1449,19 @@ impl World {
                         be_block_id as u32,
                     ),
                 );
+                if let Some(block_entity) = self.get_block_entity(&block_pos)
+                    && let Some(nbt) = block_entity.chunk_data_nbt()
+                {
+                    let bytes = pumpkin_nbt::Nbt::from(nbt).write_unnamed();
+                    self.broadcast_to_chunk(
+                        chunk_pos,
+                        &CBlockEntityData::new(
+                            block_pos,
+                            VarInt(block_entity.get_id() as i32),
+                            bytes.as_ref().into(),
+                        ),
+                    );
+                }
                 if let Some(data) = self.bedrock_block_entity_data(block_state_id, block_pos) {
                     self.broadcast_to_chunk_bedrock(
                         chunk_pos,
@@ -1493,6 +1525,22 @@ impl World {
                     &CMultiBlockUpdate::new(&updates),
                     recipients_by_version,
                 );
+
+                for (block_pos, _) in &updates {
+                    if let Some(block_entity) = self.get_block_entity(block_pos)
+                        && let Some(nbt) = block_entity.chunk_data_nbt()
+                    {
+                        let bytes = pumpkin_nbt::Nbt::from(nbt).write_unnamed();
+                        self.broadcast_to_chunk(
+                            chunk_pos,
+                            &CBlockEntityData::new(
+                                *block_pos,
+                                VarInt(block_entity.get_id() as i32),
+                                bytes.as_ref().into(),
+                            ),
+                        );
+                    }
+                }
             }
 
             let mut bedrock_water_packets: Vec<Bytes> = Vec::new();
@@ -1737,34 +1785,6 @@ impl World {
                 chunk.inhabited_time.fetch_add(1, Relaxed);
             }
         }
-    }
-
-    pub fn get_fluid_collisions(self: &Arc<Self>, bounding_box: BoundingBox) -> Vec<&Fluid> {
-        let mut collisions = Vec::new();
-
-        let min = bounding_box.min_block_pos();
-
-        let max = bounding_box.max_block_pos();
-
-        for x in min.0.x..=max.0.x {
-            for y in min.0.y..=max.0.y {
-                for z in min.0.z..=max.0.z {
-                    let pos = BlockPos::new(x, y, z);
-
-                    let (fluid, state) = self.get_fluid_and_fluid_state(&pos);
-
-                    if fluid.id != Fluid::EMPTY.id {
-                        let height = f64::from(state.height);
-
-                        if height >= bounding_box.min.y {
-                            collisions.push(fluid);
-                        }
-                    }
-                }
-            }
-        }
-
-        collisions
     }
 
     pub fn check_fluid_collision(self: &Arc<Self>, bounding_box: BoundingBox) -> bool {
@@ -2281,7 +2301,12 @@ impl World {
             let spawn_position = Vector2::new(level_info.spawn_x, level_info.spawn_z);
             let chunk_pos = Vector2::new(level_info.spawn_x >> 4, level_info.spawn_z >> 4);
             self.level.get_or_fetch_chunk(chunk_pos, |_| ()).await;
-            let pos_y = self.get_top_block(spawn_position) + 1; // +1 to spawn on top of the block
+            let top = self.get_top_block(spawn_position);
+            let pos_y = if top > self.dimension.min_y {
+                top + 1
+            } else {
+                level_info.spawn_y
+            };
 
             let position = Vector3::new(
                 f64::from(level_info.spawn_x) + 0.5,
@@ -3096,31 +3121,12 @@ impl World {
 
             client_suggestions::send_c_commands_packet(player, server, &command_dispatcher).await;
         };
-
-        if client.version.load() < JavaMinecraftVersion::V_1_20_2 {
-            let all_keys = [
-                pumpkin_data::tag::RegistryKey::BannerPattern,
-                pumpkin_data::tag::RegistryKey::Block,
-                pumpkin_data::tag::RegistryKey::CatVariant,
-                pumpkin_data::tag::RegistryKey::DamageType,
-                pumpkin_data::tag::RegistryKey::Dialog,
-                pumpkin_data::tag::RegistryKey::DimensionType,
-                pumpkin_data::tag::RegistryKey::Enchantment,
-                pumpkin_data::tag::RegistryKey::EntityType,
-                pumpkin_data::tag::RegistryKey::Fluid,
-                pumpkin_data::tag::RegistryKey::GameEvent,
-                pumpkin_data::tag::RegistryKey::Instrument,
-                pumpkin_data::tag::RegistryKey::Item,
-                pumpkin_data::tag::RegistryKey::PaintingVariant,
-                pumpkin_data::tag::RegistryKey::PointOfInterestType,
-                pumpkin_data::tag::RegistryKey::Potion,
-                pumpkin_data::tag::RegistryKey::Timeline,
-                pumpkin_data::tag::RegistryKey::WorldgenBiome,
-            ];
-
+        if client.version.load() < JavaMinecraftVersion::V_1_20_2
+            && client.version.load() >= JavaMinecraftVersion::V_1_13
+        {
             let mut tags = Vec::new();
             let version = client.version.load();
-            for key in all_keys {
+            for &key in pumpkin_data::tag::RegistryKey::NETWORK_KEYS {
                 if pumpkin_data::tag::get_registry_key_tags(version, key)
                     .is_some_and(|map| !map.is_empty())
                 {
@@ -3145,7 +3151,12 @@ impl World {
             let spawn_position = Vector2::new(info.spawn_x, info.spawn_z);
             let chunk_pos = Vector2::new(info.spawn_x >> 4, info.spawn_z >> 4);
             self.level.get_or_fetch_chunk(chunk_pos, |_| ()).await;
-            let pos_y = self.get_top_block(spawn_position) + 1; // +1 to spawn on top of the block
+            let top = self.get_top_block(spawn_position);
+            let pos_y = if top > self.dimension.min_y {
+                top + 1
+            } else {
+                info.spawn_y
+            };
 
             let position = Vector3::new(
                 f64::from(info.spawn_x) + 0.5,
@@ -3178,6 +3189,12 @@ impl World {
             client.send_packet(&CChunkBatchStart).await;
         }
         client.send_packet(&CChunkData(&chunk)).await;
+        if client.version.load() >= JavaMinecraftVersion::V_1_14
+            && client.version.load() < JavaMinecraftVersion::V_1_18
+            && let Ok(light_packet) = CLightUpdate::from_chunk(&chunk, client.version.load())
+        {
+            client.send_packet(&light_packet).await;
+        }
         if client.version.load() >= JavaMinecraftVersion::V_1_20_2 {
             client.send_packet(&CChunkBatchEnd::new(1u16)).await;
         }
@@ -3615,11 +3632,13 @@ impl World {
             ))
             .await;
 
-        // Start waiting for level chunks. Sets the "Loading Terrain" screen
-        debug!("Sending waiting chunks to {}", player.gameprofile.name);
-        client
-            .send_packet(&CGameEvent::new(GameEvent::StartWaitingChunks, 0.0))
-            .await;
+        if client.version.load() >= JavaMinecraftVersion::V_1_20_2 {
+            // Start waiting for level chunks. Sets the "Loading Terrain" screen (Added in 1.20.2)
+            debug!("Sending waiting chunks to {}", player.gameprofile.name);
+            client
+                .send_packet(&CGameEvent::new(GameEvent::StartWaitingChunks, 0.0))
+                .await;
+        }
 
         self.worldborder.lock().await.init_client(client).await;
 
@@ -3691,6 +3710,7 @@ impl World {
 
         if let crate::net::ClientPlatform::Java(java_client) = player.client.as_ref()
             && server.advanced_config.recipe.send_recipes
+            && java_client.version.load() >= JavaMinecraftVersion::V_1_21_2
         {
             let settings_packet = CRecipeBookSettings::default_closed();
             if let Ok(data) = java_client.serialize_packet(&settings_packet) {
@@ -3702,7 +3722,6 @@ impl World {
                 java_client.send_packet_now(data).await;
             }
         }
-
         let msg_comp = TextComponent::translate_cross(
             translation::java::MULTIPLAYER_PLAYER_JOINED,
             translation::bedrock::MULTIPLAYER_PLAYER_JOINED,
@@ -3767,9 +3786,13 @@ impl World {
 
         // TODO: World spawn (compass stuff)
 
-        player
-            .send_client_packet(&CGameEvent::new(GameEvent::StartWaitingChunks, 0.0))
-            .await;
+        if let ClientPlatform::Java(client) = player.client.as_ref()
+            && client.version.load() >= JavaMinecraftVersion::V_1_20_2
+        {
+            player
+                .send_client_packet(&CGameEvent::new(GameEvent::StartWaitingChunks, 0.0))
+                .await;
+        }
 
         let entity = &player.get_entity();
 
@@ -3797,14 +3820,66 @@ impl World {
         player.set_health(20.0).await;
     }
 
-    pub async fn explode(self: &Arc<Self>, position: Vector3<f64>, power: f32) {
-        let explosion = Explosion::new(power, position);
+    pub async fn explode(
+        self: &Arc<Self>,
+        position: Vector3<f64>,
+        power: f32,
+        interaction: ExplosionInteraction,
+    ) {
+        self.explode_with_calculator(position, power, interaction, None)
+            .await;
+    }
+
+    pub async fn explode_with_calculator(
+        self: &Arc<Self>,
+        position: Vector3<f64>,
+        power: f32,
+        interaction: ExplosionInteraction,
+        damage_calculator: Option<Arc<dyn ExplosionDamageCalculator>>,
+    ) {
+        let block_interaction = self.get_block_interaction(interaction);
+        let mut explosion = Explosion::new(power, position, block_interaction);
+        if let Some(calc) = damage_calculator {
+            explosion = explosion.with_damage_calculator(calc);
+        }
         self.run_explosion(explosion, position, power).await;
     }
 
     pub async fn explode_tnt_minecart(self: &Arc<Self>, position: Vector3<f64>, power: f32) {
-        let explosion = Explosion::new(power, position).preserving_rails();
+        let block_interaction = self.get_block_interaction(ExplosionInteraction::Tnt);
+        let explosion = Explosion::new(power, position, block_interaction).preserving_rails();
         self.run_explosion(explosion, position, power).await;
+    }
+
+    #[must_use]
+    pub fn get_block_interaction(&self, interaction: ExplosionInteraction) -> BlockInteraction {
+        let game_rules = &self.level_info.load().game_rules;
+        match interaction {
+            ExplosionInteraction::None => BlockInteraction::Keep,
+            ExplosionInteraction::Block => {
+                Self::get_destroy_type(game_rules.block_explosion_drop_decay)
+            }
+            ExplosionInteraction::Mob => {
+                if game_rules.mob_griefing {
+                    Self::get_destroy_type(game_rules.mob_explosion_drop_decay)
+                } else {
+                    BlockInteraction::Keep
+                }
+            }
+            ExplosionInteraction::Tnt => {
+                Self::get_destroy_type(game_rules.tnt_explosion_drop_decay)
+            }
+            ExplosionInteraction::Trigger => BlockInteraction::TriggerBlock,
+        }
+    }
+
+    #[must_use]
+    pub const fn get_destroy_type(drop_decay: bool) -> BlockInteraction {
+        if drop_decay {
+            BlockInteraction::DestroyWithDecay
+        } else {
+            BlockInteraction::Destroy
+        }
     }
 
     async fn run_explosion(
@@ -4125,6 +4200,13 @@ impl World {
                 java_client.send_packet(&CChunkBatchStart).await;
             }
             java_client.send_packet(&CChunkData(&chunk)).await;
+            if java_client.version.load() >= JavaMinecraftVersion::V_1_14
+                && java_client.version.load() < JavaMinecraftVersion::V_1_18
+                && let Ok(light_packet) =
+                    CLightUpdate::from_chunk(&chunk, java_client.version.load())
+            {
+                java_client.send_packet(&light_packet).await;
+            }
             if java_client.version.load() >= JavaMinecraftVersion::V_1_20_2 {
                 java_client.send_packet(&CChunkBatchEnd::new(1u16)).await;
             }
@@ -4739,7 +4821,7 @@ impl World {
             let view_distance = get_view_distance(player).get() as i32;
 
             if is_within_view_distance(chunk_pos, center, view_distance) {
-                player.client.try_enqueue_spawn_packet(entity);
+                //  player.client.try_enqueue_spawn_packet(entity);
             }
         }
     }
@@ -4893,6 +4975,8 @@ impl World {
     }
 
     /// Sets a block and returns the old block id
+    ///
+    /// **DO NOT LOCK `world.portal_poi` BEFORE RUNNING THIS, AS IT WILL CAUSE A DEADLOCK**
     #[expect(clippy::too_many_lines)]
     pub async fn set_block_state(
         self: &Arc<Self>,
@@ -5750,7 +5834,8 @@ impl World {
                     .pending_block_entities
                     .lock()
                     .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .remove(block_pos)
+                    .get(block_pos)
+                    .cloned()
             })
             .flatten()?;
         if let Some(custom_data) = nbt

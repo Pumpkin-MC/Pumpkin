@@ -1,6 +1,6 @@
 use core::f32;
 
-use crate::entity::{Entity, EntityBase, EntityBaseFuture, NBTStorage, living::LivingEntity};
+use crate::entity::{Entity, EntityBase, EntityBaseFuture, living::LivingEntity};
 use pumpkin_data::{
     damage::DamageType,
     tag::{self, Taggable},
@@ -30,8 +30,6 @@ impl EndCrystalEntity {
     }
 }
 
-impl NBTStorage for EndCrystalEntity {}
-
 impl EntityBase for EndCrystalEntity {
     fn get_entity(&self) -> &Entity {
         &self.entity
@@ -56,7 +54,11 @@ impl EntityBase for EndCrystalEntity {
                 self.entity
                     .world
                     .load()
-                    .explode(self.entity.pos.load(), 6.0)
+                    .explode(
+                        self.entity.pos.load(),
+                        6.0,
+                        crate::world::ExplosionInteraction::Block,
+                    )
                     .await;
             }
 
@@ -64,11 +66,6 @@ impl EntityBase for EndCrystalEntity {
             true
         })
     }
-
-    fn as_nbt_storage(&self) -> &dyn NBTStorage {
-        self
-    }
-
     fn cast_any(&self) -> &dyn std::any::Any {
         self
     }

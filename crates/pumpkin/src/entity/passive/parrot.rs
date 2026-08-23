@@ -7,7 +7,7 @@ use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::tag::{self, Taggable};
 
 use crate::entity::{
-    Entity, EntityBase, EntityBaseFuture, NBTStorage,
+    Entity, EntityBase, EntityBaseFuture,
     ai::goal::{
         look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal, swim::SwimGoal,
         wander_around::WanderAroundGoal,
@@ -88,8 +88,6 @@ impl ParrotEntity {
         .await;
     }
 }
-
-impl NBTStorage for ParrotEntity {}
 
 impl Mob for ParrotEntity {
     fn get_mob_entity(&self) -> &MobEntity {

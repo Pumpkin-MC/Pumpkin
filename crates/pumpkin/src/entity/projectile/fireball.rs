@@ -12,7 +12,7 @@ use pumpkin_util::math::vector3::Vector3;
 
 use crate::{
     entity::{
-        Entity, EntityBase, EntityBaseFuture, NBTStorage, NbtFuture,
+        Entity, EntityBase, EntityBaseFuture, NbtFuture,
         projectile::{ProjectileHit, ThrownItemEntity},
         projectile_deflection::ProjectileDeflectionType,
     },
@@ -167,15 +167,15 @@ impl FireballEntity {
     }
 }
 
-impl NBTStorage for FireballEntity {
-    fn write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
+impl EntityBase for FireballEntity {
+    fn write_custom_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async move {
             nbt.put_double("acceleration_power", self.get_acceleration_power());
             nbt.put_float("ExplosionPower", self.get_explosion_power());
         })
     }
 
-    fn read_nbt_non_mut<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
+    fn read_custom_nbt<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async move {
             if let Some(accel) = nbt
                 .get_double("acceleration_power")
@@ -188,9 +188,7 @@ impl NBTStorage for FireballEntity {
             }
         })
     }
-}
 
-impl EntityBase for FireballEntity {
     fn init_data_tracker(&self) -> EntityBaseFuture<'_, ()> {
         Box::pin(async move {
             let entity = self.get_entity();
@@ -244,10 +242,6 @@ impl EntityBase for FireballEntity {
         None
     }
 
-    fn as_nbt_storage(&self) -> &dyn NBTStorage {
-        self
-    }
-
     fn cast_any(&self) -> &dyn std::any::Any {
         self
     }
@@ -272,7 +266,13 @@ impl EntityBase for FireballEntity {
             }
 
             let hit_pos = hit.hit_pos();
-            world.explode(hit_pos, self.get_explosion_power()).await;
+            world
+                .explode(
+                    hit_pos,
+                    self.get_explosion_power(),
+                    crate::world::ExplosionInteraction::Mob,
+                )
+                .await;
         })
     }
 }

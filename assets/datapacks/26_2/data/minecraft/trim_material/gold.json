@@ -1,0 +1,10 @@
+{
+  "asset_name": "gold",
+  "description": {
+    "color": "#DEB12D",
+    "translate": "trim_material.minecraft.gold"
+  },
+  "override_armor_assets": {
+    "minecraft:gold": "gold_darker"
+  }
+}

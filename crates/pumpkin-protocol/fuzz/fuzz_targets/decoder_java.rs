@@ -5,7 +5,7 @@ use pumpkin_protocol::java::{
     client::{
         config::CFinishConfig,
         login::CLoginDisconnect,
-        play::CPlayerPosition,
+        play::{CBlockEntityData, CPlayerPosition, CSetEquipment, CUpdateEntityPosRot},
         status::{CPingResponse, CStatusResponse},
     },
     packet_decoder::TCPNetworkDecoder,
@@ -137,9 +137,12 @@ fn fuzz_all_deserializers(payload: &[u8]) {
         SUseItem,
         SUseItemOn,
         // Clientbound packets implementing ServerPacket
+        CBlockEntityData,
         CFinishConfig,
         CLoginDisconnect,
         CPlayerPosition,
+        CSetEquipment,
+        CUpdateEntityPosRot,
         CPingResponse,
         CStatusResponse,
     );
