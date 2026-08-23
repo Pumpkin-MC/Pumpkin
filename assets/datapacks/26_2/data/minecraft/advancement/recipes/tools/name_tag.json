@@ -1,0 +1,54 @@
+{
+  "parent": "minecraft:recipes/root",
+  "criteria": {
+    "has_metal_nugget": {
+      "conditions": {
+        "items": [
+          {
+            "items": "#minecraft:metal_nuggets"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    },
+    "has_name_tag": {
+      "conditions": {
+        "items": [
+          {
+            "items": "minecraft:name_tag"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    },
+    "has_paper": {
+      "conditions": {
+        "items": [
+          {
+            "items": "minecraft:paper"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    },
+    "has_the_recipe": {
+      "conditions": {
+        "recipe": "minecraft:name_tag"
+      },
+      "trigger": "minecraft:recipe_unlocked"
+    }
+  },
+  "requirements": [
+    [
+      "has_the_recipe",
+      "has_metal_nugget",
+      "has_paper",
+      "has_name_tag"
+    ]
+  ],
+  "rewards": {
+    "recipes": [
+      "minecraft:name_tag"
+    ]
+  }
+}

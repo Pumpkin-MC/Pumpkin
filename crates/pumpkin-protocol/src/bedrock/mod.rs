@@ -2,6 +2,7 @@ pub mod client;
 pub mod network_item;
 pub mod packet_decoder;
 pub mod packet_encoder;
+pub mod respawn;
 pub mod server;
 pub mod status;
 

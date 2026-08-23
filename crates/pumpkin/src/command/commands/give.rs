@@ -1,5 +1,3 @@
-use pumpkin_data::data_component::DataComponent::MaxStackSize;
-use pumpkin_data::data_component_impl::{MaxStackSizeImpl, get};
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::hover::HoverEvent;
 
@@ -47,14 +45,7 @@ impl CommandExecutor for Executor {
             };
 
             for target in targets {
-                let max_stack = i32::from(
-                    item.components
-                        .iter()
-                        .find_map(|(id, component)| {
-                            (id == &MaxStackSize).then(|| get::<MaxStackSizeImpl>(*component).size)
-                        })
-                        .expect("Item should have MaxStackSize component"),
-                );
+                let max_stack = i32::from(parsed_stack.get_max_stack_size());
                 let mut remaining = item_count;
 
                 while remaining > 0 {

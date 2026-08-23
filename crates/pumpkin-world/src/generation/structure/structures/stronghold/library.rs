@@ -73,6 +73,7 @@ impl StructurePieceBase for LibraryPiece {
         &mut self.piece.piece
     }
 
+    #[expect(clippy::too_many_lines)]
     fn place(
         &mut self,
         chunk: &mut ProtoChunk,
@@ -234,10 +235,26 @@ impl StructurePieceBase for LibraryPiece {
         }
 
         // 6. Chests
-        // inner.add_chest(chunk, &box_limit, random, 3, 3, 5, "stronghold_library");
-        // if self.tall {
-        //     inner.add_block(chunk, &Block::AIR.default_state, 12, 9, 1, &box_limit); // Clear space above top chest
-        //     inner.add_chest(chunk, &box_limit, random, 12, 8, 1, "stronghold_library");
-        // }
+        inner.add_chest(
+            chunk,
+            &box_limit,
+            random,
+            3,
+            3,
+            5,
+            "minecraft:chests/stronghold_library",
+        );
+        if self.tall {
+            inner.add_block(chunk, Block::AIR.default_state, 12, 9, 1, &box_limit); // Clear space above top chest
+            inner.add_chest(
+                chunk,
+                &box_limit,
+                random,
+                12,
+                8,
+                1,
+                "minecraft:chests/stronghold_library",
+            );
+        }
     }
 }

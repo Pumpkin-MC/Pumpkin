@@ -1,0 +1,32 @@
+{
+  "parent": "minecraft:recipes/root",
+  "criteria": {
+    "has_smelts_to_glass": {
+      "conditions": {
+        "items": [
+          {
+            "items": "#minecraft:smelts_to_glass"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    },
+    "has_the_recipe": {
+      "conditions": {
+        "recipe": "minecraft:glass"
+      },
+      "trigger": "minecraft:recipe_unlocked"
+    }
+  },
+  "requirements": [
+    [
+      "has_the_recipe",
+      "has_smelts_to_glass"
+    ]
+  ],
+  "rewards": {
+    "recipes": [
+      "minecraft:glass"
+    ]
+  }
+}

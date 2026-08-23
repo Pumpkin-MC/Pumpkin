@@ -27,6 +27,16 @@ use rand::RngExt;
 pub struct SweetBerryBushBlock;
 
 impl BlockBehaviour for SweetBerryBushBlock {
+    fn is_valid_bonemeal_target(&self, args: crate::block::BonemealArgs<'_>) -> bool {
+        <Self as CropBlockBase>::is_valid_bonemeal_target(self, args.world, args.position)
+    }
+
+    fn perform_bonemeal<'a>(&'a self, args: crate::block::BonemealArgs<'a>) -> BlockFuture<'a, ()> {
+        Box::pin(async move {
+            <Self as CropBlockBase>::perform_bonemeal(self, args.world, args.position).await;
+        })
+    }
+
     fn normal_use<'a>(&'a self, args: NormalUseArgs<'a>) -> BlockFuture<'a, BlockActionResult> {
         Box::pin(async move {
             let state_id = args.world.get_block_state_id(args.position);
@@ -140,6 +150,7 @@ impl BlockBehaviour for SweetBerryBushBlock {
 }
 
 impl PlantBlockBase for SweetBerryBushBlock {
+    #[allow(clippy::unused_async_trait_impl)]
     async fn get_state_for_neighbor_update(
         &self,
         block_accessor: &dyn BlockAccessor,
@@ -158,6 +169,10 @@ impl PlantBlockBase for SweetBerryBushBlock {
 }
 
 impl CropBlockBase for SweetBerryBushBlock {
+    fn bonemeal_age_increase(&self) -> i32 {
+        1
+    }
+
     fn can_plant_on_top(&self, block_accessor: &dyn BlockAccessor, pos: &BlockPos) -> bool {
         <Self as PlantBlockBase>::can_plant_on_top(self, block_accessor, pos)
     }

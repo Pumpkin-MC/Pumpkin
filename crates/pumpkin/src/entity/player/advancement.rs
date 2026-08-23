@@ -394,8 +394,7 @@ impl PlayerAdvancement {
                 let first_packet = self.is_first_packet;
                 tokio::spawn(async move {
                     player
-                        .client
-                        .send_packet_now(&CUpdateAdvancements::new(
+                        .send_client_packet(&CUpdateAdvancements::new(
                             first_packet,
                             added,
                             parsed_progress,
@@ -432,7 +431,18 @@ impl PlayerAdvancement {
             result = true;
             self.progress_changed.insert(advancement);
             if !was_done && progress.is_done() {
-                //TODO listener
+                let player_c = player.clone();
+                let adv_id = advancement.id.to_string();
+                tokio::spawn(async move {
+                    if let Some(server) = player_c.world().server.upgrade() {
+                        let mut event =
+                            crate::plugin::api::events::player::player_advancement_done::PlayerAdvancementDoneEvent::new(
+                                player_c,
+                                adv_id,
+                            );
+                        server.plugin_manager.fire(&server, &mut event).await;
+                    }
+                });
                 Self::grant_reward(player.clone(), advancement.reward);
                 if let Some(display) = advancement.display
                     && display.announce_to_chat
@@ -505,8 +515,7 @@ impl PlayerAdvancement {
             && let Some(player) = self.player.upgrade()
         {
             player
-                .client
-                .send_packet_now(&CSelectAdvancementsTab::new(
+                .send_client_packet(&CSelectAdvancementsTab::new(
                     self.last_selected_tab.map(|adv| adv.id.clone()),
                 ))
                 .await;

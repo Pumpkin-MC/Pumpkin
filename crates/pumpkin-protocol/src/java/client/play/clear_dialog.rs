@@ -1,8 +1,8 @@
 use crate::ClientPacket;
-use pumpkin_data::packet::clientbound::PLAY_CLEAR_DIALOG;
+use pumpkin_data::packet::clientbound::play::CLEAR_DIALOG;
 use pumpkin_macros::java_packet;
 use pumpkin_util::version::JavaMinecraftVersion;
-#[java_packet(PLAY_CLEAR_DIALOG)]
+#[java_packet(CLEAR_DIALOG)]
 pub struct CPlayClearDialog;
 
 impl CPlayClearDialog {

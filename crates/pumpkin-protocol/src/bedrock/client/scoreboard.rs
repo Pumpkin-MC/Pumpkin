@@ -98,3 +98,11 @@ impl ScoreEntry {
 pub struct CRemoveObjective {
     pub objective_name: String,
 }
+
+impl CRemoveObjective {
+    pub fn new(objective_name: impl Into<String>) -> Self {
+        Self {
+            objective_name: objective_name.into(),
+        }
+    }
+}

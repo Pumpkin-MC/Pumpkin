@@ -38,7 +38,10 @@ fn needs_relighting(chunk: &crate::chunk::ChunkData, config: LightingEngineConfi
         return false;
     }
 
-    let engine = chunk.light_engine.lock().expect("Mutex poisoned");
+    let engine = chunk
+        .light_engine
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
 
     // Scan for any complex lighting data
     let has_complex_light = engine.sky_light.iter().any(|lc| match lc {
@@ -109,7 +112,8 @@ pub async fn io_read_work(
                             );
 
                             // Create ProtoChunk using the async method
-                            let mut proto = ProtoChunk::from_chunk_data(&chunk, &level.world_gen);
+                            let mut proto =
+                                ProtoChunk::from_chunk_data(&chunk, &level.world_gen.load());
 
                             // Clear all lighting data
                             let section_count = proto.light.sky_light.len();
@@ -141,7 +145,7 @@ pub async fn io_read_work(
                     } else {
                         // Standard ProtoChunk handling for non-full chunks
                         let val = RecvChunk::IO(Chunk::Proto(Box::new(
-                            ProtoChunk::from_chunk_data(&chunk, &level.world_gen),
+                            ProtoChunk::from_chunk_data(&chunk, &level.world_gen.load()),
                         )));
                         if send.send((pos, val)).is_err() {
                             break;
@@ -155,7 +159,7 @@ pub async fn io_read_work(
                             RecvChunk::IO(Chunk::Proto(Box::new(ProtoChunk::new(
                                 pos.x,
                                 pos.y,
-                                &level.world_gen,
+                                &level.world_gen.load(),
                             )))),
                         ))
                         .is_err()
@@ -185,7 +189,7 @@ pub async fn io_write_work(recv: AsyncRx<Vec<(ChunkPos, Chunk)>>, level: Arc<Lev
                 Chunk::Proto(chunk) => {
                     let mut temp = Chunk::Proto(chunk);
                     temp.upgrade_to_level_chunk(
-                        level.world_gen.dimension(),
+                        level.world_gen.load().dimension(),
                         &level.lighting_config,
                     );
                     let Chunk::Level(chunk) = temp else { panic!() };
@@ -237,10 +241,22 @@ pub fn run_generation(
     _settings: &GenerationSettings,
 ) -> RecvChunk {
     let portal = level.world_portal.load_full();
-    let portal_ref = portal.as_deref().expect("Portal should be initialized");
+    let Some(portal_ref) = portal.as_deref() else {
+        error!("Chunk generation FAILED at {pos:?} ({stage:?}): World portal is not initialized");
+        return RecvChunk::GenerationFailure {
+            pos,
+            stage,
+            error: "World portal is not initialized".to_string(),
+        };
+    };
     // Run generation with panic catching
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        cache.advance(stage, &level.world_gen, portal_ref, &level.lighting_config);
+        cache.advance(
+            stage,
+            &level.world_gen.load(),
+            portal_ref,
+            &level.lighting_config,
+        );
         cache // Return cache on success
     }));
 
@@ -273,7 +289,7 @@ pub fn generation_work(
     send: &crossfire::compat::MTx<(ChunkPos, RecvChunk)>,
     level: &Arc<Level>,
 ) {
-    let settings = GenerationSettings::from_dimension(level.world_gen.dimension());
+    let settings = GenerationSettings::from_dimension(level.world_gen.load().dimension());
 
     loop {
         let Ok((pos, cache, stage)) = recv.recv() else {

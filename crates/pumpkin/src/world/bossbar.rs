@@ -105,7 +105,7 @@ impl Player {
                 };
 
                 let packet = CBossEvent::new(&bossbar.uuid, boss_action);
-                java.enqueue_packet(&packet).await;
+                java.enqueue_client_packet(&packet).await;
             }
             ClientPlatform::Bedrock(bedrock) => {
                 let packet = BBossEvent {
@@ -117,7 +117,7 @@ impl Player {
                         overlay: bossbar.division.to_bedrock(),
                     },
                 };
-                bedrock.send_game_packet(&packet).await;
+                bedrock.send_packet(&packet).await;
             }
         }
     }
@@ -128,14 +128,14 @@ impl Player {
                 let boss_action = BosseventAction::Remove;
 
                 let packet = CBossEvent::new(&uuid, boss_action);
-                java.enqueue_packet(&packet).await;
+                java.enqueue_client_packet(&packet).await;
             }
             ClientPlatform::Bedrock(bedrock) => {
                 let packet = BBossEvent {
                     boss_entity_id: VarLong(uuid.as_u128() as i64),
                     action: BossEventAction::Remove,
                 };
-                bedrock.send_game_packet(&packet).await;
+                bedrock.send_packet(&packet).await;
             }
         }
     }
@@ -146,14 +146,14 @@ impl Player {
                 let boss_action = BosseventAction::UpdateHealth(health);
 
                 let packet = CBossEvent::new(uuid, boss_action);
-                java.enqueue_packet(&packet).await;
+                java.enqueue_client_packet(&packet).await;
             }
             ClientPlatform::Bedrock(bedrock) => {
                 let packet = BBossEvent {
                     boss_entity_id: VarLong(uuid.as_u128() as i64),
                     action: BossEventAction::UpdateHealth(health),
                 };
-                bedrock.send_game_packet(&packet).await;
+                bedrock.send_packet(&packet).await;
             }
         }
     }
@@ -164,14 +164,14 @@ impl Player {
                 let boss_action = BosseventAction::UpdateTile(title);
 
                 let packet = CBossEvent::new(uuid, boss_action);
-                java.enqueue_packet(&packet).await;
+                java.enqueue_client_packet(&packet).await;
             }
             ClientPlatform::Bedrock(bedrock) => {
                 let packet = BBossEvent {
                     boss_entity_id: VarLong(uuid.as_u128() as i64),
                     action: BossEventAction::UpdateTitle(title.get_text()),
                 };
-                bedrock.send_game_packet(&packet).await;
+                bedrock.send_packet(&packet).await;
             }
         }
     }
@@ -191,7 +191,7 @@ impl Player {
                 };
 
                 let packet = CBossEvent::new(uuid, boss_action);
-                java.enqueue_packet(&packet).await;
+                java.enqueue_client_packet(&packet).await;
             }
             ClientPlatform::Bedrock(bedrock) => {
                 let packet = BBossEvent {
@@ -201,7 +201,7 @@ impl Player {
                         overlay: dividers.to_bedrock(),
                     },
                 };
-                bedrock.send_game_packet(&packet).await;
+                bedrock.send_packet(&packet).await;
             }
         }
     }
@@ -212,7 +212,7 @@ impl Player {
                 let boss_action = BosseventAction::UpdateFlags(flags.bits());
 
                 let packet = CBossEvent::new(uuid, boss_action);
-                java.enqueue_packet(&packet).await;
+                java.enqueue_client_packet(&packet).await;
             }
             ClientPlatform::Bedrock(bedrock) => {
                 // For Bedrock, flags are part of properties (screen darken)
@@ -227,7 +227,7 @@ impl Player {
                         overlay: VarInt(0),
                     },
                 };
-                bedrock.send_game_packet(&packet).await;
+                bedrock.send_packet(&packet).await;
             }
         }
     }

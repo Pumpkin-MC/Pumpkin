@@ -24,7 +24,31 @@ pub struct TNTBlock;
 
 impl TNTBlock {
     pub async fn prime(world: &Arc<World>, location: &BlockPos) {
+        let mut event = crate::plugin::api::events::block::tnt_prime::TNTPrimeEvent::new(
+            *location,
+            "REDSTONE".to_string(),
+        );
+        if let Some(server) = world.server.upgrade() {
+            server.plugin_manager.fire(&server, &mut event).await;
+        }
+        if event.cancelled {
+            return;
+        }
+
         let entity = Entity::new(world.clone(), location.to_f64(), &EntityType::TNT);
+        let mut prime_event =
+            crate::plugin::api::events::entity::explosion_prime::ExplosionPrimeEvent::new(
+                entity.entity_id,
+                DEFAULT_POWER,
+                false,
+            );
+        if let Some(server) = world.server.upgrade() {
+            server.plugin_manager.fire(&server, &mut prime_event).await;
+        }
+        if prime_event.cancelled {
+            return;
+        }
+
         let pos = entity.pos.load();
         let tnt = Arc::new(TNTEntity::new(entity, DEFAULT_POWER, DEFAULT_FUSE));
         world.spawn_entity(tnt).await;

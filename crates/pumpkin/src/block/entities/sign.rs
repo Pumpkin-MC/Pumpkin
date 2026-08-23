@@ -11,104 +11,7 @@ use pumpkin_nbt::{compound::NbtCompound, tag::NbtTag};
 use pumpkin_util::math::position::BlockPos;
 use tokio::sync::Mutex;
 
-#[derive(Clone, Copy, Default, Debug, PartialEq, Eq)]
-#[repr(i8)]
-pub enum DyeColor {
-    White = 0,
-    Orange = 1,
-    Magenta = 2,
-    LightBlue = 3,
-    Yellow = 4,
-    Lime = 5,
-    Pink = 6,
-    Gray = 7,
-    LightGray = 8,
-    Cyan = 9,
-    Purple = 10,
-    Blue = 11,
-    Brown = 12,
-    Green = 13,
-    Red = 14,
-    #[default]
-    Black = 15,
-}
-
-impl From<DyeColor> for String {
-    fn from(value: DyeColor) -> Self {
-        match value {
-            DyeColor::White => "white".to_string(),
-            DyeColor::Orange => "orange".to_string(),
-            DyeColor::Magenta => "magenta".to_string(),
-            DyeColor::LightBlue => "light_blue".to_string(),
-            DyeColor::Yellow => "yellow".to_string(),
-            DyeColor::Lime => "lime".to_string(),
-            DyeColor::Pink => "pink".to_string(),
-            DyeColor::Gray => "gray".to_string(),
-            DyeColor::LightGray => "light_gray".to_string(),
-            DyeColor::Cyan => "cyan".to_string(),
-            DyeColor::Purple => "purple".to_string(),
-            DyeColor::Blue => "blue".to_string(),
-            DyeColor::Brown => "brown".to_string(),
-            DyeColor::Green => "green".to_string(),
-            DyeColor::Red => "red".to_string(),
-            DyeColor::Black => "black".to_string(),
-        }
-    }
-}
-
-impl From<&str> for DyeColor {
-    fn from(s: &str) -> Self {
-        match s {
-            "white" => Self::White,
-            "orange" => Self::Orange,
-            "magenta" => Self::Magenta,
-            "light_blue" => Self::LightBlue,
-            "yellow" => Self::Yellow,
-            "lime" => Self::Lime,
-            "pink" => Self::Pink,
-            "gray" => Self::Gray,
-            "light_gray" => Self::LightGray,
-            "cyan" => Self::Cyan,
-            "purple" => Self::Purple,
-            "blue" => Self::Blue,
-            "brown" => Self::Brown,
-            "green" => Self::Green,
-            "red" => Self::Red,
-            "black" => Self::Black,
-            _ => Self::default(),
-        }
-    }
-}
-
-impl From<i8> for DyeColor {
-    fn from(s: i8) -> Self {
-        match s {
-            0 => Self::White,
-            1 => Self::Orange,
-            2 => Self::Magenta,
-            3 => Self::LightBlue,
-            4 => Self::Yellow,
-            5 => Self::Lime,
-            6 => Self::Pink,
-            7 => Self::Gray,
-            8 => Self::LightGray,
-            9 => Self::Cyan,
-            10 => Self::Purple,
-            11 => Self::Blue,
-            12 => Self::Brown,
-            13 => Self::Green,
-            14 => Self::Red,
-            15 => Self::Black,
-            _ => Self::default(),
-        }
-    }
-}
-
-impl From<DyeColor> for NbtTag {
-    fn from(value: DyeColor) -> Self {
-        Self::Byte(value as i8)
-    }
-}
+pub use pumpkin_data::dye_color::DyeColor;
 
 pub struct SignBlockEntity {
     pub front_text: Text,
@@ -152,7 +55,7 @@ impl From<Text> for NbtTag {
             "has_glowing_text",
             value.has_glowing_text.load(Ordering::Relaxed),
         );
-        nbt.put_string("color", value.get_color().into());
+        nbt.put_string("color", value.get_color().name().to_string());
         nbt.put_list(
             "messages",
             value
@@ -184,7 +87,7 @@ impl From<NbtTag> for Text {
 
         Self {
             has_glowing_text: AtomicBool::new(has_glowing_text),
-            color: AtomicI8::new(DyeColor::from(color) as i8),
+            color: AtomicI8::new(DyeColor::by_name(color).unwrap_or_default().id() as i8),
             messages: Arc::new(std::sync::Mutex::new([
                 get_message(0),
                 get_message(1),
@@ -200,17 +103,22 @@ impl Text {
     pub fn new(messages: [Box<str>; 4]) -> Self {
         Self {
             has_glowing_text: AtomicBool::new(false),
-            color: AtomicI8::new(DyeColor::default() as i8),
+            color: AtomicI8::new(DyeColor::default().id() as i8),
             messages: Arc::new(std::sync::Mutex::new(messages)),
         }
     }
 
     pub fn get_color(&self) -> DyeColor {
-        self.color.load(Ordering::Relaxed).into()
+        let c = self.color.load(Ordering::Relaxed);
+        if c >= 0 {
+            DyeColor::by_id(c as u8).unwrap_or_default()
+        } else {
+            DyeColor::default()
+        }
     }
 
     pub fn set_color(&self, color: DyeColor) {
-        self.color.store(color as i8, Ordering::Relaxed);
+        self.color.store(color.id() as i8, Ordering::Relaxed);
     }
 }
 

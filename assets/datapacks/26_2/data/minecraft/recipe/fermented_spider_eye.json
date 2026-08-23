@@ -1,0 +1,11 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "ingredients": [
+    "minecraft:spider_eye",
+    "minecraft:brown_mushroom",
+    "minecraft:sugar"
+  ],
+  "result": {
+    "id": "minecraft:fermented_spider_eye"
+  }
+}

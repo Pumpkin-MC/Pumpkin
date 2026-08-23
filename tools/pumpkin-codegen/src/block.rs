@@ -681,6 +681,8 @@ pub struct Block {
     pub states: Vec<BlockState>,
     /// Experience points dropped when the block is mined, if any.
     pub experience: Option<Experience>,
+    /// Position-derived shape offset applied by vanilla, if any.
+    shape_offset: Option<BlockShapeOffset>,
 }
 
 impl ToTokens for Block {
@@ -837,6 +839,21 @@ pub struct BlockAssets {
     pub block_entity_types: Vec<String>,
 }
 
+#[derive(Deserialize)]
+struct BlockShapeOffset {
+    #[serde(rename = "type")]
+    offset_type: BlockShapeOffsetType,
+    max_horizontal: f32,
+    max_vertical: f32,
+}
+
+#[derive(Clone, Copy, Deserialize)]
+#[serde(rename_all = "lowercase")]
+enum BlockShapeOffsetType {
+    Xz,
+    Xyz,
+}
+
 /// Reads all block assets and generates the complete block registry `TokenStream`.
 pub fn build() -> TokenStream {
     let be_blocks_data = fs::read("../../assets/bedrock/block_states.nbt").unwrap();
@@ -853,6 +870,29 @@ pub fn build() -> TokenStream {
     let blocks_assets: BlockAssets =
         serde_json::from_str(&fs::read_to_string("../../assets/blocks.json").unwrap())
             .expect("Failed to parse blocks.json");
+
+    let shape_offset_arms = blocks_assets
+        .blocks
+        .iter()
+        .filter_map(|block| {
+            let offset = block.shape_offset.as_ref()?;
+            let block = format_ident!("{}", const_block_name_from_block_name(&block.name));
+            let offset_type = match offset.offset_type {
+                BlockShapeOffsetType::Xz => quote! { ShapeOffsetType::Xz },
+                BlockShapeOffsetType::Xyz => quote! { ShapeOffsetType::Xyz },
+            };
+            let max_horizontal = offset.max_horizontal;
+            let max_vertical = offset.max_vertical;
+
+            Some(quote! {
+                BlockId::#block => Some(ShapeOffset {
+                    offset_type: #offset_type,
+                    max_horizontal: #max_horizontal,
+                    max_vertical: #max_vertical,
+                }),
+            })
+        })
+        .collect::<Vec<_>>();
 
     let generated_properties: Vec<GeneratedProperty> =
         serde_json::from_str(&fs::read_to_string("../../assets/properties.json").unwrap())
@@ -1108,7 +1148,10 @@ pub fn build() -> TokenStream {
         #[allow(clippy::wildcard_imports, clippy::enum_glob_use, clippy::too_many_lines, clippy::match_same_arms)]
         use pumpkin_util::math::boundingbox::BoundingBox;
 
-        use crate::{BlockState, BlockStateId, Block, BlockId, blocks::Flammable};
+        use crate::{
+            BlockState, BlockStateId, Block, BlockId,
+            blocks::{Flammable, ShapeOffset, ShapeOffsetType},
+        };
         use crate::block_state::PistonBehavior;
         use pumpkin_util::math::int_provider::{UniformIntProvider, IntProvider, NormalIntProvider};
         use pumpkin_util::loot_table::*;
@@ -1250,6 +1293,13 @@ pub fn build() -> TokenStream {
 
         impl Block {
             #(#constants_list)*
+
+            pub(crate) const fn shape_offset(&self) -> Option<ShapeOffset> {
+                match self.id {
+                    #(#shape_offset_arms)*
+                    _ => None,
+                }
+            }
 
             #[doc = r" Try to parse a block from a resource location string."]
             #[inline]

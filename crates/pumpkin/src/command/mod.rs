@@ -117,7 +117,7 @@ impl CommandSender {
                 let format = time::macros::format_description!("[hour]:[minute]:[second]");
                 let timestamp = now
                     .format(&format)
-                    .expect("Failed to format timestamp for command block output");
+                    .unwrap_or_else(|_| "00:00:00".to_string());
 
                 *last_output = format!("[{}] {}", timestamp, text.get_text());
             }
@@ -174,8 +174,7 @@ impl CommandSender {
             Self::Console | Self::Rcon(_) => true, // Console and RCON always have all permissions
             Self::Player(p) => p.has_permission(server, node).await,
             Self::CommandBlock(..) | Self::Dummy => {
-                let perm_reg = server.permission_registry.read().await;
-                let Some(p) = perm_reg.get_permission(node) else {
+                let Some(p) = server.permission_manager.get_permission(node) else {
                     return false;
                 };
                 match p.default {

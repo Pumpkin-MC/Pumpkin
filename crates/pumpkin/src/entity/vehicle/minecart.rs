@@ -13,8 +13,7 @@ use rand::RngExt;
 
 use crate::{
     entity::{
-        Entity, EntityBase, EntityBaseFuture, NBTStorage, NbtFuture, living::LivingEntity,
-        player::Player,
+        Entity, EntityBase, EntityBaseFuture, NbtFuture, living::LivingEntity, player::Player,
     },
     server::Server,
 };
@@ -113,10 +112,9 @@ impl MinecartEntity {
     }
 }
 
-impl NBTStorage for MinecartEntity {
-    fn write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
+impl EntityBase for MinecartEntity {
+    fn write_custom_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async move {
-            self.vehicle.entity.write_nbt(nbt).await;
             match &self.kind {
                 MinecartKind::Chest(minecart) => minecart.write_nbt(nbt).await,
                 MinecartKind::Furnace(minecart) => minecart.write_nbt(nbt),
@@ -127,9 +125,8 @@ impl NBTStorage for MinecartEntity {
         })
     }
 
-    fn read_nbt_non_mut<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
+    fn read_custom_nbt<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async move {
-            self.vehicle.entity.read_nbt_non_mut(nbt).await;
             match &self.kind {
                 MinecartKind::Chest(minecart) => minecart.read_nbt(nbt).await,
                 MinecartKind::Furnace(minecart) => minecart.read_nbt(nbt),
@@ -139,9 +136,7 @@ impl NBTStorage for MinecartEntity {
             }
         })
     }
-}
 
-impl EntityBase for MinecartEntity {
     #[allow(clippy::too_many_lines)]
     fn tick<'a>(
         &'a self,
@@ -846,10 +841,6 @@ impl EntityBase for MinecartEntity {
                 self.vehicle.entity.move_entity(caller, back_motion).await;
             }
         })
-    }
-
-    fn as_nbt_storage(&self) -> &dyn NBTStorage {
-        self
     }
 
     fn cast_any(&self) -> &dyn std::any::Any {

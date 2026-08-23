@@ -133,10 +133,11 @@ async fn give_player_bucket_item(player: &Player, item: &'static Item) {
     }
 }
 
-async fn try_pickup_bucket_item(
+/// Tries to pick up powder snow, a waterlogged block, or a fluid source block at `block_pos`,
+/// returning the matching filled bucket item on success.
+pub(crate) async fn try_pickup_fluid_at(
     world: &Arc<World>,
     block_pos: BlockPos,
-    direction: BlockDirection,
 ) -> Option<&'static Item> {
     let (block, state) = world.get_block_and_state_id(&block_pos);
 
@@ -178,6 +179,18 @@ async fn try_pickup_bucket_item(
         });
     }
 
+    None
+}
+
+async fn try_pickup_bucket_item(
+    world: &Arc<World>,
+    block_pos: BlockPos,
+    direction: BlockDirection,
+) -> Option<&'static Item> {
+    if let Some(item) = try_pickup_fluid_at(world, block_pos).await {
+        return Some(item);
+    }
+
     let target_pos = block_pos.offset(direction.to_offset());
     let (block, state) = world.get_block_and_state_id(&target_pos);
     if waterlogged_check(block, state).is_some() {
@@ -192,17 +205,17 @@ async fn try_pickup_bucket_item(
     None
 }
 
-fn should_evaporate_in_nether(item: &Item, world: &World) -> bool {
+pub(crate) fn should_evaporate_in_nether(item: &Item, world: &World) -> bool {
     item.id != Item::LAVA_BUCKET.id
         && item.id != Item::POWDER_SNOW_BUCKET.id
         && world.dimension == Dimension::THE_NETHER
 }
 
-fn play_bucket_evaporation(world: &Arc<World>, player: &Player) {
+pub(crate) fn play_bucket_evaporation(world: &Arc<World>, position: &Vector3<f64>) {
     world.play_sound_raw(
         Sound::BlockFireExtinguish as u16,
         SoundCategory::Blocks,
-        &player.position(),
+        position,
         0.5,
         (rand::random::<f32>() - rand::random::<f32>()).mul_add(0.8, 2.6),
     );
@@ -233,7 +246,7 @@ async fn try_place_powder_snow(
     true
 }
 
-async fn try_place_filled_bucket(
+pub(crate) async fn try_place_filled_bucket(
     world: &Arc<World>,
     item: &Item,
     pos: BlockPos,
@@ -365,7 +378,7 @@ impl ItemBehaviour for FilledBucketItem {
             };
 
             if should_evaporate_in_nether(item, &world) {
-                play_bucket_evaporation(&world, player);
+                play_bucket_evaporation(&world, &player.position());
                 return;
             }
             if !try_place_filled_bucket(&world, item, pos, direction).await {

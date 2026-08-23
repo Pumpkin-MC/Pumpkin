@@ -1,7 +1,7 @@
 use crate::ClientPacket;
 use crate::VarInt;
 use crate::ser::NetworkWriteExt;
-use pumpkin_data::packet::clientbound::PLAY_COMMAND_SUGGESTIONS;
+use pumpkin_data::packet::clientbound::play::COMMAND_SUGGESTIONS;
 use pumpkin_macros::java_packet;
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::version::JavaMinecraftVersion;
@@ -11,7 +11,7 @@ use pumpkin_util::version::JavaMinecraftVersion;
 /// This packet responds to a client's request for help with commands,
 /// appearing as a scrollable list of options while the player is typing
 /// in the chat bar.
-#[java_packet(PLAY_COMMAND_SUGGESTIONS)]
+#[java_packet(COMMAND_SUGGESTIONS)]
 pub struct CCommandSuggestions {
     /// The unique ID of the request this response is for.
     /// This must match the ID sent by the client in the request packet.
@@ -59,11 +59,15 @@ impl CommandSuggestion {
         }
     }
 
-    pub fn write(&self, mut write: impl std::io::Write) -> Result<(), crate::ser::WritingError> {
+    pub fn write(
+        &self,
+        mut write: impl std::io::Write,
+        version: &JavaMinecraftVersion,
+    ) -> Result<(), crate::ser::WritingError> {
         write.write_string(&self.suggestion)?;
         if let Some(tooltip) = &self.tooltip {
             write.write_bool(true)?;
-            write.write_slice(&tooltip.encode())?;
+            write.write_component(tooltip, version)?;
         } else {
             write.write_bool(false)?;
         }
@@ -75,14 +79,14 @@ impl ClientPacket for CCommandSuggestions {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        _version: &JavaMinecraftVersion,
+        version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         write.write_var_int(&self.id)?;
         write.write_var_int(&self.start)?;
         write.write_var_int(&self.length)?;
         write.write_var_int(&VarInt(self.matches.len() as i32))?;
         for match_ in &self.matches {
-            match_.write(&mut write)?;
+            match_.write(&mut write, version)?;
         }
         Ok(())
     }

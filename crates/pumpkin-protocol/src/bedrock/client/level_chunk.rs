@@ -2,7 +2,11 @@ use std::io::{Error, Write};
 use xxhash_rust::xxh64::xxh64;
 
 use pumpkin_macros::packet;
-use pumpkin_world::chunk::{ChunkData, palette::NetworkPalette};
+use pumpkin_nbt::{Nbt, compound::NbtCompound};
+use pumpkin_world::chunk::{
+    ChunkData,
+    palette::{BeNetworkSerialization, NetworkPalette},
+};
 
 use crate::{
     codec::{var_int::VarInt, var_uint::VarUInt},
@@ -10,6 +14,29 @@ use crate::{
 };
 
 const VERSION: u8 = 9;
+
+fn write_block_storage(
+    writer: &mut Vec<u8>,
+    network_repr: BeNetworkSerialization<u16>,
+) -> Result<(), Error> {
+    (network_repr.bits_per_entry << 1 | 1).write(writer)?;
+
+    for data in network_repr.packed_data {
+        data.write(writer)?;
+    }
+
+    match network_repr.palette {
+        NetworkPalette::Single(id) => VarInt(i32::from(id)).write(writer)?,
+        NetworkPalette::Indirect(palette) => {
+            VarInt(palette.len() as i32).write(writer)?;
+            for id in palette {
+                VarInt(i32::from(id)).write(writer)?;
+            }
+        }
+        NetworkPalette::Direct => {}
+    }
+    Ok(())
+}
 
 #[packet(58)]
 pub struct CLevelChunk<'a> {
@@ -20,16 +47,26 @@ pub struct CLevelChunk<'a> {
     // https://gist.github.com/Tomcc/a96af509e275b1af483b25c543cfbf37
     // https://github.com/Mojang/bedrock-protocol-docs/blob/main/additional_docs/SubChunk%20Request%20System%20v1.18.10.md
     pub chunk: &'a ChunkData,
+    pub block_actors: &'a [NbtCompound],
 }
 
 pub type ChunkBlob = (u64, Vec<u8>);
 pub type EncodedChunk = (Vec<u8>, Vec<ChunkBlob>);
+
+fn encode_block_actors(block_actors: &[NbtCompound]) -> Result<Vec<u8>, Error> {
+    let mut encoded = Vec::new();
+    for block_actor in block_actors {
+        encoded.write_all(&Nbt::from(block_actor.clone()).write_bedrock())?;
+    }
+    Ok(encoded)
+}
 
 impl CLevelChunk<'_> {
     pub fn encode_chunk(
         chunk: &ChunkData,
         dimension: i32,
         cache_enabled: bool,
+        block_actors: &[NbtCompound],
     ) -> Result<EncodedChunk, Error> {
         let mut writer = Vec::new();
 
@@ -58,28 +95,13 @@ impl CLevelChunk<'_> {
             let mut subchunk_buf = Vec::new();
             // Version 9: [version:byte][num_storages:byte][sub_chunk_index:byte]
             let y = (i as i8) + min_y_section;
-            let num_storages = 1;
+            let water_layer = block_palette.convert_be_water_network();
+            let num_storages = if water_layer.is_some() { 2 } else { 1 };
             subchunk_buf.write_all(&[VERSION, num_storages, y as u8])?;
 
-            let network_repr = block_palette.convert_be_network();
-
-            (network_repr.bits_per_entry << 1 | 1).write(&mut subchunk_buf)?;
-
-            for data in network_repr.packed_data {
-                data.write(&mut subchunk_buf)?;
-            }
-
-            match network_repr.palette {
-                NetworkPalette::Single(id) => {
-                    VarInt(i32::from(id)).write(&mut subchunk_buf)?;
-                }
-                NetworkPalette::Indirect(palette) => {
-                    VarInt(palette.len() as i32).write(&mut subchunk_buf)?;
-                    for id in palette {
-                        VarInt(i32::from(id)).write(&mut subchunk_buf)?;
-                    }
-                }
-                NetworkPalette::Direct => (),
+            write_block_storage(&mut subchunk_buf, block_palette.convert_be_network())?;
+            if let Some(water_layer) = water_layer {
+                write_block_storage(&mut subchunk_buf, water_layer)?;
             }
 
             subchunk_bytes_list.push(subchunk_buf);
@@ -115,6 +137,8 @@ impl CLevelChunk<'_> {
             }
         }
 
+        let block_actor_bytes = encode_block_actors(block_actors)?;
+
         if cache_enabled {
             for subchunk_buf in subchunk_bytes_list {
                 let hash = xxh64(&subchunk_buf, 0);
@@ -128,9 +152,16 @@ impl CLevelChunk<'_> {
                 writer.write_all(&hash.to_le_bytes())?;
             }
 
-            // Chunk data payload when cache_enabled: only border block count byte (0).
-            VarUInt(1).write(&mut writer)?;
+            // Palette data is cached, but the per-chunk border and block actor data is not.
+            VarUInt(u32::try_from(1 + block_actor_bytes.len()).map_err(|_| {
+                Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    "Bedrock block actor payload exceeds the packet size limit",
+                )
+            })?)
+            .write(&mut writer)?;
             writer.write_all(&[0])?;
+            writer.write_all(&block_actor_bytes)?;
         } else {
             VarUInt(0).write(&mut writer)?;
 
@@ -140,6 +171,7 @@ impl CLevelChunk<'_> {
             }
             chunk_data.write_all(&biome_buf)?;
             chunk_data.write_all(&[0])?;
+            chunk_data.write_all(&block_actor_bytes)?;
 
             VarUInt(chunk_data.len() as u32).write(&mut writer)?;
             writer.write_all(&chunk_data)?;
@@ -151,25 +183,25 @@ impl CLevelChunk<'_> {
 
 impl PacketWrite for CLevelChunk<'_> {
     fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
-        let (encoded, _) = Self::encode_chunk(self.chunk, self.dimension, self.cache_enabled)?;
+        let (encoded, _) = Self::encode_chunk(
+            self.chunk,
+            self.dimension,
+            self.cache_enabled,
+            self.block_actors,
+        )?;
         writer.write_all(&encoded)
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::sync::{
-        Mutex,
-        atomic::{AtomicBool, AtomicU64},
-    };
+    use std::io::Cursor;
 
-    use pumpkin_data::chunk::ChunkStatus;
-    use pumpkin_world::{
-        chunk::{ChunkData, ChunkHeightmaps, ChunkLight, ChunkSections},
-        tick::scheduler::ChunkTickScheduler,
-    };
+    use pumpkin_data::{Block, BlockState};
+    use pumpkin_nbt::{Nbt, compound::NbtCompound, deserializer::NbtReadHelperBedrock};
+    use pumpkin_world::chunk::ChunkData;
 
-    use super::CLevelChunk;
+    use super::{CLevelChunk, VERSION};
     use crate::serial::PacketWrite;
 
     fn read_var_uint(data: &[u8], offset: &mut usize) -> u32 {
@@ -185,28 +217,41 @@ mod tests {
         panic!("VarUInt is too long");
     }
 
+    fn read_var_int(data: &[u8], offset: &mut usize) -> i32 {
+        let value = read_var_uint(data, offset);
+        ((value >> 1) as i32) ^ -((value & 1) as i32)
+    }
+
+    fn skip_storage(data: &[u8], offset: &mut usize) -> Vec<u32> {
+        let bits_per_entry = data[*offset] >> 1;
+        *offset += 1;
+        if bits_per_entry != 0 {
+            let entries_per_word = 32 / usize::from(bits_per_entry);
+            *offset += 4096usize.div_ceil(entries_per_word) * size_of::<u32>();
+        }
+        let palette_len = if bits_per_entry == 0 {
+            1
+        } else {
+            read_var_int(data, offset) as usize
+        };
+        (0..palette_len)
+            .map(|_| read_var_int(data, offset) as u32)
+            .collect()
+    }
+
+    fn empty_chunk() -> ChunkData {
+        ChunkData::empty(0, 0)
+    }
+
     #[test]
     fn biomes_follow_subchunks_without_subchunk_headers() {
-        let chunk = ChunkData {
-            section: ChunkSections::new(24, -64),
-            heightmap: Mutex::new(ChunkHeightmaps::default()),
-            x: 0,
-            z: 0,
-            block_ticks: ChunkTickScheduler::default(),
-            fluid_ticks: ChunkTickScheduler::default(),
-            pending_block_entities: Mutex::default(),
-            light_engine: Mutex::new(ChunkLight::default()),
-            light_populated: AtomicBool::new(false),
-            status: ChunkStatus::Full,
-            blending_data: None,
-            dirty: AtomicBool::new(false),
-            inhabited_time: AtomicU64::new(0),
-        };
+        let chunk = empty_chunk();
         let mut encoded = Vec::new();
         CLevelChunk {
             dimension: 0,
             cache_enabled: false,
             chunk: &chunk,
+            block_actors: &[],
         }
         .write(&mut encoded)
         .unwrap();
@@ -239,5 +284,62 @@ mod tests {
         }
         assert_eq!(raw[raw_offset], 0); // Border block count.
         assert_eq!(raw_offset + 1, raw.len());
+    }
+
+    #[test]
+    fn block_actor_nbt_follows_the_chunk_border_data() {
+        let chunk = empty_chunk();
+        let mut block_actor = NbtCompound::new();
+        block_actor.put_string("id", "Chest".to_string());
+        block_actor.put_int("x", 1);
+        block_actor.put_int("y", 64);
+        block_actor.put_int("z", 2);
+
+        let (encoded, _) = CLevelChunk::encode_chunk(&chunk, 0, true, &[block_actor]).unwrap();
+        let mut offset = 0;
+        for _ in 0..3 {
+            read_var_uint(&encoded, &mut offset);
+        }
+        read_var_uint(&encoded, &mut offset);
+        offset += 2;
+        let blob_count = read_var_uint(&encoded, &mut offset) as usize;
+        offset += blob_count * size_of::<u64>();
+        let raw_len = read_var_uint(&encoded, &mut offset) as usize;
+        let raw = &encoded[offset..offset + raw_len];
+
+        assert_eq!(raw[0], 0);
+        let mut reader = NbtReadHelperBedrock::new(Cursor::new(&raw[1..]));
+        let parsed = Nbt::read(&mut reader).unwrap();
+        assert_eq!(parsed.get_string("id"), Some("Chest"));
+        assert_eq!(parsed.get_int("x"), Some(1));
+    }
+
+    #[test]
+    fn aquatic_blocks_use_a_secondary_water_storage() {
+        let chunk = empty_chunk();
+        chunk
+            .section
+            .set_block_absolute_y(0, -64, 0, Block::SEAGRASS.default_state.id);
+
+        let (encoded, _) = CLevelChunk::encode_chunk(&chunk, 0, false, &[]).unwrap();
+        let mut offset = 0;
+        for _ in 0..4 {
+            read_var_uint(&encoded, &mut offset);
+        }
+        offset += 2; // request limit and cache flag
+        read_var_uint(&encoded, &mut offset); // blob count
+        read_var_uint(&encoded, &mut offset); // raw payload length
+
+        assert_eq!(&encoded[offset..offset + 3], &[VERSION, 2, (-4i8) as u8]);
+        offset += 3;
+        skip_storage(&encoded, &mut offset);
+        let water_palette = skip_storage(&encoded, &mut offset);
+        assert_eq!(
+            water_palette,
+            [
+                u32::from(BlockState::to_be_network_id(Block::AIR.default_state.id)),
+                u32::from(BlockState::to_be_network_id(Block::WATER.default_state.id)),
+            ]
+        );
     }
 }

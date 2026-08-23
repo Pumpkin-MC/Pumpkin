@@ -27,6 +27,22 @@ pub enum BlockStateProvider {
 }
 
 impl BlockStateProvider {
+    pub fn get_for_bonemeal(
+        &self,
+        random: &mut RandomGenerator,
+        pos: BlockPos,
+    ) -> Option<&'static BlockState> {
+        match self {
+            Self::NoiseThreshold(provider) => Some(provider.get(random, pos)),
+            Self::NoiseProvider(provider) => Some(provider.get(pos)),
+            Self::Simple(provider) => Some(provider.get(pos)),
+            Self::Weighted(provider) => Some(provider.get(random)),
+            Self::DualNoise(provider) => Some(provider.get(pos)),
+            Self::Pillar(provider) => Some(provider.get(pos)),
+            Self::RandomizedInt(_) | Self::Rule(_) => None,
+        }
+    }
+
     pub fn get<T: GenerationCache>(
         &self,
         random: &mut RandomGenerator,

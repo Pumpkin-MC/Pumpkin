@@ -1,8 +1,8 @@
 use pumpkin_data::item::Item;
-use pumpkin_data::meta_data_type::MetaDataType;
+use pumpkin_data::particle::Particle;
 use pumpkin_data::potion::Effect;
 use pumpkin_data::tag::{self, Taggable};
-use pumpkin_data::tracked_data::{TrackedData, TrackedId};
+use pumpkin_data::tracked_data;
 use pumpkin_inventory::build_equipment_slots;
 use pumpkin_inventory::player::player_inventory::PlayerInventory;
 use pumpkin_inventory::screen_handler::InventoryPlayer;
@@ -22,7 +22,7 @@ use std::{collections::HashMap, sync::atomic::AtomicI32};
 use tracing::warn;
 
 use super::experience_orb::ExperienceOrbEntity;
-use super::{Entity, EntityBase, NBTStorage, NBTStorageInit};
+use super::{Entity, EntityBase, NBTStorageInit};
 use crate::block::OnLandedUponArgs;
 use crate::entity::attributes::AttributeInstance;
 use crate::entity::attributes::Modifier;
@@ -31,7 +31,7 @@ use crate::entity::combat::knockback_after_resistance;
 use crate::entity::mob::equipment::DEFAULT_EQUIPMENT_DROP_CHANCE;
 use crate::entity::mob::slime::SlimeEntity;
 use crate::entity::player::statistics::{CustomStatistic, StatisticCategory};
-use crate::entity::{EntityBaseFuture, NbtFuture};
+use crate::entity::{EntityBaseFuture, NBTStorage, NbtFuture};
 use crate::server::Server;
 use crate::world::loot::{LootContextParameters, LootTableExt};
 use crossbeam::atomic::AtomicCell;
@@ -58,7 +58,8 @@ use pumpkin_protocol::java::client::play::{
 };
 use pumpkin_protocol::{
     codec::item_stack_seralizer::ItemStackSerializer,
-    java::client::play::{CDamageEvent, CSetEquipment, Metadata},
+    java::client::play::{CDamageEvent, CSetEquipment, Metadata, MetadataSerializer},
+    ser::{NetworkWriteExt, WritingError},
 };
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::text::TextComponent;
@@ -119,6 +120,40 @@ pub struct LivingEntity {
 
     /// The attributes of the entity
     pub attributes: RwLock<HashMap<u8, AttributeInstance>>,
+}
+
+struct EffectParticle {
+    particle_id: VarInt,
+    color: i32,
+}
+
+struct EffectParticles(Vec<EffectParticle>);
+
+impl MetadataSerializer for EffectParticles {
+    fn write_metadata(
+        &self,
+        writer: &mut impl std::io::Write,
+        _version: &pumpkin_util::version::JavaMinecraftVersion,
+    ) -> Result<(), WritingError> {
+        let count = i32::try_from(self.0.len())
+            .map_err(|_| WritingError::Message("Too many effect particles".into()))?;
+        writer.write_var_int(&VarInt(count))?;
+        for particle in &self.0 {
+            writer.write_var_int(&particle.particle_id)?;
+            writer.write_i32(particle.color)?;
+        }
+        Ok(())
+    }
+}
+
+impl EffectParticle {
+    const fn from_effect(effect: &Effect) -> Self {
+        Self {
+            particle_id: VarInt(Particle::EntityEffect as i32),
+            color: (((if effect.ambient { 38 } else { 255 }) as u32) << 24
+                | effect.effect_type.color as u32) as i32,
+        }
+    }
 }
 
 impl LivingEntity {
@@ -241,8 +276,25 @@ impl LivingEntity {
         }
     }
 
-    /// Picks up and Item entity or XP Orb
+    /// Picks up an Item entity or XP Orb
     pub fn pickup(&self, item: &Entity, stack_amount: u32) {
+        let mut pickup_event =
+            crate::plugin::api::events::entity::entity_pickup_item::EntityPickupItemEvent::new(
+                self.entity.entity_id,
+                item.entity_type.id.to_string(),
+                stack_amount as u8,
+            );
+        if let Some(server) = self.entity.world.load().server.upgrade() {
+            tokio::task::block_in_place(|| {
+                tokio::runtime::Handle::current().block_on(async {
+                    server.plugin_manager.fire(&server, &mut pickup_event).await;
+                });
+            });
+            if pickup_event.cancelled {
+                return;
+            }
+        }
+
         let chunk_pos = self.entity.chunk_pos.load();
         self.entity.world.load().broadcast_to_chunk_editioned_sync(
             chunk_pos,
@@ -278,20 +330,30 @@ impl LivingEntity {
         self.livings_flags.store(b, Ordering::Relaxed);
 
         let bedrock_meta = (flag == Self::USING_ITEM_FLAG).then(|| {
+            let index =
+                pumpkin_protocol::bedrock::client::set_actor_data::entity_data_flag::USING_ITEM;
+            let mask = 1i64 << index;
+            if value {
+                self.entity.bedrock_flags.fetch_or(mask, Ordering::Relaxed);
+            } else {
+                self.entity
+                    .bedrock_flags
+                    .fetch_and(!mask, Ordering::Relaxed);
+            }
+
             let mut meta = pumpkin_protocol::bedrock::client::set_actor_data::EntityMetadata::new();
-            meta.set_flag(
+            meta.set(
                 pumpkin_protocol::bedrock::client::set_actor_data::entity_data_key::FLAGS,
-                pumpkin_protocol::bedrock::client::set_actor_data::entity_data_flag::USING_ITEM
-                    as u8,
-                value,
+                pumpkin_protocol::bedrock::client::set_actor_data::MetadataValue::Long(
+                    self.entity.bedrock_flags.load(Ordering::Relaxed),
+                ),
             );
             meta
         });
 
         self.entity.send_meta_data(
             &[Metadata::new(
-                TrackedData::LIVING_ENTITY_FLAGS,
-                MetaDataType::BYTE,
+                tracked_data::living_entity::DATA_LIVING_ENTITY_FLAGS,
                 b,
             )],
             bedrock_meta.as_ref(),
@@ -335,6 +397,21 @@ impl LivingEntity {
 
     pub fn heal(&self, additional_health: f32) {
         assert!(additional_health > 0.0);
+        let mut event =
+            crate::plugin::api::events::entity::entity_regain_health::EntityRegainHealthEvent::new(
+                self.entity.entity_id,
+                additional_health,
+            );
+        if let Some(server) = self.entity.world.load().server.upgrade() {
+            tokio::task::block_in_place(|| {
+                tokio::runtime::Handle::current().block_on(async {
+                    server.plugin_manager.fire(&server, &mut event).await;
+                });
+            });
+            if event.cancelled {
+                return;
+            }
+        }
         self.set_health(self.health.load() + additional_health);
     }
 
@@ -346,8 +423,7 @@ impl LivingEntity {
         // tell everyone entities health changed
         self.entity.send_meta_data(
             &[Metadata::new(
-                TrackedData::HEALTH_ID,
-                MetaDataType::FLOAT,
+                tracked_data::living_entity::DATA_HEALTH_ID,
                 clamped,
             )],
             None,
@@ -400,29 +476,15 @@ impl LivingEntity {
         .await;
 
         // Send absorption metadata for players (visual yellow hearts)
-        if let Some(tracked_id) = self.player_absorption_id() {
+        if self.entity.entity_type == &EntityType::PLAYER {
             self.entity.send_meta_data(
-                &[Metadata::new(tracked_id, MetaDataType::FLOAT, new_abs)],
+                &[Metadata::new(
+                    tracked_data::player::DATA_PLAYER_ABSORPTION_ID,
+                    new_abs,
+                )],
                 None,
             );
         }
-    }
-
-    /// Returns the absorption ID for this (player) entity
-    /// TODO: don't hardcode these here?
-    fn player_absorption_id(&self) -> Option<TrackedId> {
-        (self.entity.entity_type == &EntityType::PLAYER).then_some(TrackedId {
-            v1_21: 17u8,
-            v1_21_2: 17u8,
-            v1_21_4: 17u8,
-            v1_21_5: 17u8,
-            v1_21_6: 17u8,
-            v1_21_7: 17u8,
-            v1_21_9: 17u8,
-            v1_21_11: 17u8,
-            v26_1: 17u8, // ?
-            v26_2: 17u8,
-        })
     }
 
     /// Convenience helper to mutate an attribute instance. Automatically inserts
@@ -527,7 +589,22 @@ impl LivingEntity {
         self.entity.entity_id
     }
 
+    #[expect(clippy::too_many_lines)]
     pub async fn add_effect(&self, effect: Effect) {
+        let mut effect_event =
+            crate::plugin::api::events::entity::entity_potion_effect::EntityPotionEffectEvent::new(
+                self.entity.entity_id,
+                effect.effect_type.translation_key.to_string(),
+                effect.duration,
+                effect.amplifier,
+            );
+        if let Some(server) = self.entity.world.load().server.upgrade() {
+            server.plugin_manager.fire(&server, &mut effect_event).await;
+        }
+        if effect_event.cancelled {
+            return;
+        }
+
         // Apply instant effects immediately before storing
         if effect.effect_type == &StatusEffect::INSTANT_HEALTH {
             let heal_amount = 4.0 * (1 << effect.amplifier) as f32;
@@ -625,7 +702,7 @@ impl LivingEntity {
             flag |= 8;
         }
 
-        let packet = CUpdateMobEffect::new(
+        let je_packet = CUpdateMobEffect::new(
             self.entity.entity_id.into(),
             VarInt(i32::from(effect.effect_type.id)),
             effect.amplifier.into(),
@@ -633,7 +710,57 @@ impl LivingEntity {
             flag,
         );
 
-        self.entity.world.load().broadcast_packet_all(&packet);
+        let be_packet = pumpkin_protocol::bedrock::client::CMobEffect::new(
+            VarULong(self.entity.entity_id as u64),
+            pumpkin_protocol::bedrock::client::CMobEffect::EVENT_ADD,
+            VarInt(effect.effect_type.to_bedrock_id()),
+            VarInt(i32::from(effect.amplifier)),
+            effect.show_particles,
+            VarInt(effect.duration),
+            VarULong(0),
+            effect.ambient,
+        );
+
+        let chunk_pos = self.entity.chunk_pos.load();
+        self.entity
+            .world
+            .load()
+            .broadcast_to_chunk_editioned_sync(chunk_pos, &je_packet, &be_packet);
+        self.sync_effect_particles().await;
+    }
+
+    async fn sync_effect_particles(&self) {
+        let effects = self.active_effects.lock().await;
+        let has_effects = !effects.is_empty();
+        let particles = EffectParticles(
+            effects
+                .values()
+                .filter(|effect| effect.show_particles)
+                .map(EffectParticle::from_effect)
+                .collect(),
+        );
+        let ambient = effects
+            .values()
+            .filter(|effect| effect.show_particles)
+            .all(|effect| effect.ambient);
+        drop(effects);
+
+        self.entity.send_meta_data(
+            &[Metadata::new(
+                tracked_data::living_entity::EFFECT_PARTICLES,
+                particles,
+            )],
+            None,
+        );
+        if has_effects {
+            self.entity.send_meta_data(
+                &[Metadata::new(
+                    tracked_data::living_entity::EFFECT_AMBIENCE_ID,
+                    ambient,
+                )],
+                None,
+            );
+        }
     }
 
     pub async fn remove_effect(&self, effect_type: &'static StatusEffect) -> bool {
@@ -701,6 +828,10 @@ impl LivingEntity {
         // If glowing effect removed, disable glowing
         if effect_type == &StatusEffect::GLOWING {
             self.entity.set_glowing(false).await;
+        }
+
+        if succeeded {
+            self.sync_effect_particles().await;
         }
 
         succeeded
@@ -1311,7 +1442,12 @@ impl LivingEntity {
         fall_distance: f32,
         damage_per_distance: f32,
     ) {
-        if self.is_immune_to_fall_damage() {
+        let may_fly = if let Some(player) = caller.get_player() {
+            player.abilities.lock().await.allow_flying
+        } else {
+            false
+        };
+        if may_fly || self.is_immune_to_fall_damage() {
             return;
         }
 
@@ -1779,6 +1915,20 @@ impl LivingEntity {
 
             // Clear the stack and use the totem of undying
             if stack.get_data_component::<DeathProtectionImpl>().is_some() {
+                let mut resurrect_event =
+                    crate::plugin::api::events::entity::entity_resurrect::EntityResurrectEvent::new(
+                        self.entity.entity_id,
+                    );
+                if let Some(server) = self.entity.world.load().server.upgrade() {
+                    server
+                        .plugin_manager
+                        .fire(&server, &mut resurrect_event)
+                        .await;
+                }
+                if resurrect_event.cancelled {
+                    return false;
+                }
+
                 stack.clear();
                 let slot = match hand {
                     Hand::Right => EquipmentSlot::MAIN_HAND,
@@ -1960,8 +2110,7 @@ impl LivingEntity {
         // Send health metadata
         self.entity.send_meta_data(
             &[Metadata::new(
-                TrackedData::HEALTH_ID,
-                MetaDataType::FLOAT,
+                tracked_data::living_entity::DATA_HEALTH_ID,
                 max_health,
             )],
             None,
@@ -2072,10 +2221,9 @@ impl LivingEntity {
     }
 }
 
-impl NBTStorage for LivingEntity {
-    fn write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
+impl LivingEntity {
+    pub fn write_living_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async move {
-            self.entity.write_nbt(nbt).await;
             nbt.put("Health", NbtTag::Float(self.health.load()));
             // Avoid persisting a lethal fall distance when the entity is dead to prevent death loops
             let fall_distance = if self.dead.load(Relaxed) {
@@ -2085,7 +2233,7 @@ impl NBTStorage for LivingEntity {
             };
             // Persist current absorption amount
             nbt.put("AbsorptionAmount", NbtTag::Float(self.absorption.load()));
-            nbt.put("fall_distance", NbtTag::Float(fall_distance));
+            nbt.put("FallDistance", NbtTag::Float(fall_distance));
             {
                 let effects = self.active_effects.lock().await;
                 if !effects.is_empty() {
@@ -2104,9 +2252,8 @@ impl NBTStorage for LivingEntity {
         })
     }
 
-    fn read_nbt_non_mut<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
+    pub fn read_living_nbt_non_mut<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async {
-            self.entity.read_nbt_non_mut(nbt).await;
             self.health.store(nbt.get_float("Health").unwrap_or(0.0));
 
             // Clamp any persisted absorption to the entity's configured max
@@ -2117,7 +2264,10 @@ impl NBTStorage for LivingEntity {
 
             // Load fall distance, but if this entity is currently marked dead ensure we don't restore
             // a lethal fall distance that would immediately re-kill on spawn.
-            let fd = nbt.get_float("fall_distance").unwrap_or(0.0);
+            let fd = nbt
+                .get_float("FallDistance")
+                .or_else(|| nbt.get_float("fall_distance"))
+                .unwrap_or(0.0);
             if self.dead.load(Relaxed) {
                 self.fall_distance.store(0.0);
             } else {
@@ -2172,6 +2322,20 @@ impl EntityBase for LivingEntity {
             if amount < 0.0 {
                 return false;
             }
+
+            let mut damage_event =
+                crate::plugin::api::events::entity::entity_damage::EntityDamageEvent::new(
+                    self.entity.entity_id,
+                    damage_type,
+                    amount,
+                );
+            if let Some(server) = self.entity.world.load().server.upgrade() {
+                server.plugin_manager.fire(&server, &mut damage_event).await;
+            }
+            if damage_event.cancelled {
+                return false;
+            }
+            amount = damage_event.damage;
 
             let world = self.entity.world.load();
             let is_fire_damage = damage_type == DamageType::IN_FIRE
@@ -2473,6 +2637,7 @@ impl EntityBase for LivingEntity {
                         &hurt_event,
                     )
                     .await;
+                world.broadcast_packet_all(&CEntityStatus::new(entity_id, 2));
             }
 
             world.broadcast_packet_all(&CDamageEvent::new(
@@ -2592,6 +2757,31 @@ impl EntityBase for LivingEntity {
             if clamped_health <= 0.0
                 && (bypasses_cooldown_protection || !self.try_use_death_protector(caller).await)
             {
+                let mut death_event =
+                    crate::plugin::api::events::entity::entity_death::EntityDeathEvent::new(
+                        self.entity.entity_id,
+                        0,
+                    );
+                if let Some(server) = world.server.upgrade() {
+                    server.plugin_manager.fire(&server, &mut death_event).await;
+                }
+                if let Some(player) = caller.get_player()
+                    && let Some(player_arc) = world.get_player_by_uuid(player.gameprofile.id)
+                {
+                    let mut player_death_event =
+                        crate::plugin::api::events::entity::entity_death::PlayerDeathEvent::new(
+                            player_arc,
+                            pumpkin_util::text::TextComponent::text("Died"),
+                            0,
+                        );
+                    if let Some(server) = world.server.upgrade() {
+                        server
+                            .plugin_manager
+                            .fire(&server, &mut player_death_event)
+                            .await;
+                    }
+                }
+
                 self.on_death(damage_type, source, cause).await;
             }
 
@@ -2707,6 +2897,11 @@ impl EntityBase for LivingEntity {
                             .hunger_manager
                             .eat(player, food.nutrition as u8, food.saturation)
                             .await;
+                        self.entity.world.load().play_bedrock_level_sound(
+                            "burp",
+                            &self.entity.pos.load(),
+                            -1,
+                        );
                     }
 
                     self.apply_consumable_effects(item).await;
@@ -2813,7 +3008,16 @@ impl EntityBase for LivingEntity {
                 self.hurt_cooldown.fetch_sub(1, Relaxed);
             }
             if self.health.load() <= 0.0 {
-                let time = self.death_time.fetch_add(1, Relaxed);
+                let time = self
+                    .death_time
+                    .fetch_update(Relaxed, Relaxed, |time| Some(time.saturating_add(1)))
+                    .unwrap_or_else(|time| time)
+                    .saturating_add(1);
+                // Players remain part of the world until their client requests a
+                // respawn. Removing one here breaks reconnecting while dead.
+                if self.entity.entity_type == &EntityType::PLAYER {
+                    return;
+                }
                 // Only send death particles once (on the exact tick death_time reaches 20)
                 // and then remove the entity, preventing entity_event spam.
                 if time == 20 && !self.entity.removed.swap(true, Ordering::Relaxed) {
@@ -2841,10 +3045,6 @@ impl EntityBase for LivingEntity {
     }
 
     fn cast_any(&self) -> &dyn std::any::Any {
-        self
-    }
-
-    fn as_nbt_storage(&self) -> &dyn NBTStorage {
         self
     }
 }
@@ -3097,5 +3297,32 @@ mod tests {
             LivingEntity::hurt_sound_for_entity(&EntityType::CREEPER),
             Sound::EntityGenericHurt
         );
+    }
+
+    #[test]
+    fn regeneration_particle_metadata_uses_vanilla_argb_color() {
+        let effect = Effect {
+            effect_type: &StatusEffect::REGENERATION,
+            duration: 200,
+            amplifier: 0,
+            ambient: false,
+            show_particles: true,
+            show_icon: true,
+            blend: false,
+        };
+        let metadata = Metadata::new(
+            tracked_data::living_entity::EFFECT_PARTICLES,
+            EffectParticles(vec![EffectParticle::from_effect(&effect)]),
+        );
+        let mut bytes = Vec::new();
+
+        metadata
+            .write(
+                &mut bytes,
+                &pumpkin_util::version::JavaMinecraftVersion::V_26_2,
+            )
+            .unwrap();
+
+        assert_eq!(bytes, [10, 17, 1, 28, 0xff, 0xcd, 0x5c, 0xab]);
     }
 }

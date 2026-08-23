@@ -15,7 +15,7 @@ use pumpkin_util::GameMode;
 use rand;
 use std::borrow::Cow;
 use std::cmp::{max, min};
-use std::num::NonZeroI32;
+use std::num::NonZero;
 use std::sync::atomic::{AtomicU32, Ordering};
 
 mod categories;
@@ -42,7 +42,7 @@ pub struct ItemStack {
 
     // unique ID for Bedrock network; don't serialize
     // Should always be a positive value for non-empty stacks
-    pub uid: NonZeroI32,
+    pub uid: NonZero<i32>,
 }
 
 // impl Hash for ItemStack {
@@ -71,14 +71,14 @@ impl ItemStackIdGenerator {
         }
     }
 
-    pub fn next_id(&self) -> NonZeroI32 {
+    pub fn next_id(&self) -> NonZero<i32> {
         // Wraps on overflow, which is what we want.
         let value = self.counter.fetch_add(1, Ordering::Relaxed);
 
         // Negative values are invalid; cycle through the positives
         let masked = value & 0x7FFFFFFF;
 
-        if let Some(id) = NonZeroI32::new(masked as i32) {
+        if let Some(id) = NonZero::new(masked as i32) {
             id
         } else {
             // If we fetched 0 or 0x80000000, that's masked out as 0
@@ -133,7 +133,7 @@ impl ItemStack {
             item,
             patch: Vec::new(),
 
-            uid: match NonZeroI32::new(1) {
+            uid: match NonZero::new(1) {
                 Some(v) => v,
                 None => panic!("1 is non-zero"),
             },
@@ -211,7 +211,7 @@ impl ItemStack {
         item: &Item::AIR,
         patch: Vec::new(),
 
-        uid: NonZeroI32::MIN, // white lie - Bedrock `uid` is never sent if the stack is empty
+        uid: NonZero::<i32>::MIN, // white lie - Bedrock `uid` is never sent if the stack is empty
     };
 
     #[must_use]
@@ -415,7 +415,8 @@ impl ItemStack {
         }
     }
 
-    fn custom_data_compound(&self) -> Option<&NbtCompound> {
+    #[must_use]
+    pub fn custom_data_compound(&self) -> Option<&NbtCompound> {
         self.get_data_component::<CustomDataImpl>()
             .map(|custom_data| &custom_data.data)
     }
@@ -743,7 +744,8 @@ mod tests {
     use super::*;
     use crate::data_component::DataComponent;
     use crate::data_component_impl::{
-        CustomDataImpl, CustomNameImpl, DataComponentImpl, EnchantmentsImpl, UnbreakableImpl,
+        CustomDataImpl, CustomNameImpl, DataComponentImpl, EnchantmentsImpl, ItemNameImpl,
+        UnbreakableImpl,
     };
 
     /// Helper: creates a fresh Iron Sword (max_damage 250, damage 0).
@@ -926,6 +928,32 @@ mod tests {
             Some(NbtTag::String("pos1".into()))
         );
         assert!(decoded.get_data_component::<UnbreakableImpl>().is_some());
+    }
+
+    #[test]
+    fn translated_item_name_survives_item_stack_nbt_roundtrip() {
+        let mut stack = ItemStack::new(1, &Item::FILLED_MAP);
+        stack.patch.push((
+            DataComponent::ItemName,
+            Some(
+                ItemNameImpl {
+                    name: Cow::Borrowed("filled_map.mansion"),
+                }
+                .to_dyn(),
+            ),
+        ));
+
+        let mut compound = NbtCompound::new();
+        stack.write_item_stack(&mut compound);
+        let decoded = ItemStack::read_item_stack(&compound).expect("stack should decode");
+
+        assert_eq!(
+            decoded
+                .get_data_component::<ItemNameImpl>()
+                .expect("item name should decode")
+                .name,
+            "filled_map.mansion"
+        );
     }
 
     // ── damage_item ───────────────────────────────────────────────

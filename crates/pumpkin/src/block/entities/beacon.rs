@@ -75,6 +75,51 @@ impl BeaconBlockEntity {
         self.mark_dirty();
     }
 
+    #[must_use]
+    pub const fn is_valid_primary_effect(effect_id: i32, levels: i32) -> bool {
+        match effect_id {
+            // Speed (1), Haste (3)
+            1 | 3 => levels >= 1,
+            // Resistance (11), Jump Boost (8)
+            11 | 8 => levels >= 2,
+            // Strength (5)
+            5 => levels >= 3,
+            _ => false,
+        }
+    }
+
+    #[must_use]
+    pub const fn is_valid_secondary_effect(
+        primary_id: i32,
+        secondary_id: i32,
+        levels: i32,
+    ) -> bool {
+        if secondary_id <= 0 {
+            return true;
+        }
+        if levels < 4 {
+            return false;
+        }
+        // Regeneration (10) or tier II upgrade matching primary
+        secondary_id == 10 || secondary_id == primary_id
+    }
+
+    #[must_use]
+    pub fn validate_effects(primary: Option<i32>, secondary: Option<i32>, levels: i32) -> bool {
+        let primary_id = primary.unwrap_or(0);
+        let secondary_id = secondary.unwrap_or(0);
+
+        if primary_id > 0 && !Self::is_valid_primary_effect(primary_id, levels) {
+            return false;
+        }
+
+        if secondary_id > 0 && !Self::is_valid_secondary_effect(primary_id, secondary_id, levels) {
+            return false;
+        }
+
+        true
+    }
+
     /// Replicates Java's `updateBase` logic
     fn update_base(&self, world: &Arc<World>) -> i32 {
         let mut levels = 0;

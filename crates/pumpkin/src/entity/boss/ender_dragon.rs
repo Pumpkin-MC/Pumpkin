@@ -9,7 +9,7 @@ use std::sync::atomic::Ordering;
 use tokio::sync::Mutex;
 
 use crate::entity::{
-    Entity, EntityBase, EntityBaseFuture, NBTStorage,
+    Entity, EntityBase, EntityBaseFuture,
     living::LivingEntity,
     mob::{Mob, MobEntity},
     player::Player,
@@ -156,8 +156,6 @@ impl EnderDragonPart {
     }
 }
 
-impl NBTStorage for EnderDragonPart {}
-
 impl EntityBase for EnderDragonPart {
     fn get_entity(&self) -> &Entity {
         &self.entity
@@ -190,11 +188,6 @@ impl EntityBase for EnderDragonPart {
     fn get_living_entity(&self) -> Option<&LivingEntity> {
         None
     }
-
-    fn as_nbt_storage(&self) -> &dyn NBTStorage {
-        self
-    }
-
     fn can_hit(&self) -> bool {
         true
     }
@@ -781,8 +774,6 @@ impl EnderDragonEntity {
         }
     }
 }
-
-impl NBTStorage for EnderDragonEntity {}
 
 impl Mob for EnderDragonEntity {
     fn get_mob_entity(&self) -> &MobEntity {

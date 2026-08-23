@@ -387,7 +387,61 @@ pub struct ToolImpl {
     pub damage_per_block: u32,
     pub can_destroy_blocks_in_creative: bool,
 }
+impl ToolImpl {
+    pub fn read_data(data: &NbtTag) -> Option<Self> {
+        let compound = data.extract_compound()?;
+        let mut rules = Vec::new();
+        if let Some(list) = compound.get_list("rules") {
+            for rule_tag in list {
+                if let Some(rule_compound) = rule_tag.extract_compound()
+                    && let Some(blocks_tag) = rule_compound.get("blocks")
+                    && let Some(blocks) = IDSet::<Block>::read(blocks_tag)
+                {
+                    rules.push(ToolRule {
+                        blocks,
+                        speed: rule_compound.get_float("speed"),
+                        correct_for_drops: rule_compound.get_bool("correct_for_drops"),
+                    });
+                }
+            }
+        }
+        let default_mining_speed = compound.get_float("default_mining_speed").unwrap_or(1.0);
+        let damage_per_block = compound.get_int("damage_per_block").unwrap_or(1).max(0) as u32;
+        let can_destroy_blocks_in_creative = compound
+            .get_bool("can_destroy_blocks_in_creative")
+            .unwrap_or(true);
+        Some(Self {
+            rules: Cow::Owned(rules),
+            default_mining_speed,
+            damage_per_block,
+            can_destroy_blocks_in_creative,
+        })
+    }
+}
 impl DataComponentImpl for ToolImpl {
+    fn write_data(&self) -> NbtTag {
+        let mut compound = NbtCompound::new();
+        let mut rules_list = Vec::new();
+        for rule in self.rules.iter() {
+            let mut rule_compound = NbtCompound::new();
+            rule.blocks.write(&mut rule_compound, "blocks");
+            if let Some(speed) = rule.speed {
+                rule_compound.put_float("speed", speed);
+            }
+            if let Some(correct_for_drops) = rule.correct_for_drops {
+                rule_compound.put_bool("correct_for_drops", correct_for_drops);
+            }
+            rules_list.push(NbtTag::Compound(rule_compound));
+        }
+        compound.put_list("rules", rules_list);
+        compound.put_float("default_mining_speed", self.default_mining_speed);
+        compound.put_int("damage_per_block", self.damage_per_block as i32);
+        compound.put_bool(
+            "can_destroy_blocks_in_creative",
+            self.can_destroy_blocks_in_creative,
+        );
+        NbtTag::Compound(compound)
+    }
     default_impl!(Tool);
 }
 impl Hash for ToolImpl {
@@ -437,7 +491,19 @@ impl DataComponentImpl for AttackRangeImpl {
 pub struct EnchantableImpl {
     pub value: i32,
 }
+impl EnchantableImpl {
+    pub fn read_data(data: &NbtTag) -> Option<Self> {
+        let compound = data.extract_compound()?;
+        let value = compound.get_int("value")?;
+        Some(Self { value })
+    }
+}
 impl DataComponentImpl for EnchantableImpl {
+    fn write_data(&self) -> NbtTag {
+        let mut compound = NbtCompound::new();
+        compound.put_int("value", self.value);
+        NbtTag::Compound(compound)
+    }
     default_impl!(Enchantable);
 }
 

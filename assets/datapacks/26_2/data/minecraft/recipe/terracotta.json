@@ -1,0 +1,9 @@
+{
+  "type": "minecraft:smelting",
+  "category": "blocks",
+  "experience": 0.35,
+  "ingredient": "minecraft:clay",
+  "result": {
+    "id": "minecraft:terracotta"
+  }
+}

@@ -4,16 +4,13 @@ use std::sync::atomic::AtomicBool;
 use crate::plugin::player::egg_throw::PlayerEggThrowEvent;
 use crate::{
     entity::{
-        Entity, EntityBase, EntityBaseFuture, NBTStorage, projectile::ThrownItemEntity,
-        r#type::from_type,
+        Entity, EntityBase, EntityBaseFuture, projectile::ThrownItemEntity, r#type::from_type,
     },
     server::Server,
 };
 use pumpkin_data::entity::{EntityStatus, EntityType};
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
-use pumpkin_data::meta_data_type::MetaDataType;
-use pumpkin_data::tracked_data::TrackedData;
 use pumpkin_protocol::bedrock::server::actor_event::ActorEventType;
 use pumpkin_protocol::codec::item_stack_seralizer::ItemStackSerializer;
 use pumpkin_protocol::java::client::play::Metadata;
@@ -65,8 +62,6 @@ impl EggEntity {
     }
 }
 
-impl NBTStorage for EggEntity {}
-
 impl EntityBase for EggEntity {
     fn init_data_tracker(&self) -> EntityBaseFuture<'_, ()> {
         Box::pin(async move {
@@ -76,8 +71,7 @@ impl EntityBase for EggEntity {
             // Sync the item stack so the client renders the correct color/variant
             entity.send_meta_data(
                 &[Metadata::new(
-                    TrackedData::ITEM_STACK,
-                    MetaDataType::ITEM_STACK,
+                    pumpkin_data::tracked_data::egg::ITEM_STACK,
                     &ItemStackSerializer::from(stack.clone()),
                 )],
                 None,
@@ -100,11 +94,6 @@ impl EntityBase for EggEntity {
     fn get_living_entity(&self) -> Option<&crate::entity::living::LivingEntity> {
         None
     }
-
-    fn as_nbt_storage(&self) -> &dyn NBTStorage {
-        self
-    }
-
     fn on_hit(&self, hit: crate::entity::projectile::ProjectileHit) -> EntityBaseFuture<'_, ()> {
         Box::pin(async move {
             let world = self.get_entity().world.load();

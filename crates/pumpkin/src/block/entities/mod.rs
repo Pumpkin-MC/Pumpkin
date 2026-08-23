@@ -30,6 +30,7 @@ pub mod hopper;
 pub mod jigsaw_block;
 pub mod jukebox;
 pub mod lectern;
+pub mod map;
 pub mod mob_spawner;
 pub mod piston;
 pub mod shulker_box;
@@ -123,6 +124,11 @@ pub trait BlockEntity: Any + Send + Sync {
 
     /// Obtain NBT data for sending to the client in `ChunkData`
     fn chunk_data_nbt(&self) -> Option<NbtCompound> {
+        None
+    }
+
+    /// Obtain block actor NBT for fields Bedrock does not include in its block state.
+    fn bedrock_block_actor_data(&self, _state_id: BlockStateId) -> Option<NbtCompound> {
         None
     }
 
@@ -272,6 +278,7 @@ pub fn block_entity_from_nbt(nbt: &NbtCompound) -> Option<Arc<dyn BlockEntity>> 
         conduit::ConduitBlockEntity::ID => {
             Some(Arc::new(conduit::ConduitBlockEntity::from_nbt(nbt, pos)))
         }
+        map::MAP_BLOCK_ENTITY_ID => Some(Arc::new(map::MapBlockEntity::from_nbt(nbt, pos))),
         campfire::CampfireBlockEntity::ID => {
             Some(Arc::new(campfire::CampfireBlockEntity::from_nbt(nbt, pos)))
         }
@@ -356,6 +363,10 @@ pub fn create_block_entity(
         "creaking_heart" => Some(Arc::new(creaking_heart::CreakingHeartBlockEntity::new(
             position,
         ))),
+        "piston" => Some(Arc::new(piston::PistonBlockEntity::from_nbt(
+            &pumpkin_nbt::compound::NbtCompound::new(),
+            position,
+        ))),
         "brewing_stand" => Some(Arc::new(brewing_stand::BrewingStandBlockEntity::new(
             position,
         ))),
@@ -430,6 +441,7 @@ pub fn create_block_entity(
         "potent_sulfur" => Some(Arc::new(potent_sulfur::PotentSulfurBlockEntity::new(
             position,
         ))),
+        "map" => Some(Arc::new(map::MapBlockEntity::new(position, 0))),
         _ => None,
     }
 }

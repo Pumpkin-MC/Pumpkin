@@ -12,7 +12,7 @@ use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 
 use crate::entity::{
-    Entity, EntityBase, NBTStorage, NbtFuture,
+    Entity, EntityBase, NbtFuture,
     ai::control::{Control, MoveControlTrait},
     ai::goal::{Goal, GoalFuture, active_target::ActiveTargetGoal},
     mob::{Mob, MobEntity},
@@ -264,18 +264,16 @@ impl SlimeEntity {
     }
 }
 
-impl NBTStorage for SlimeEntity {
-    fn write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
+impl Mob for SlimeEntity {
+    fn mob_write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async move {
-            self.entity.living_entity.write_nbt(nbt).await;
             nbt.put_int("Size", self.get_size() - 1);
             nbt.put_bool("wasOnGround", self.was_on_ground.load(Ordering::Relaxed));
         })
     }
 
-    fn read_nbt_non_mut<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
+    fn mob_read_nbt<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async move {
-            self.entity.living_entity.read_nbt_non_mut(nbt).await;
             self.set_size(nbt.get_int("Size").unwrap_or(0) + 1, false);
             self.was_on_ground.store(
                 nbt.get_bool("wasOnGround").unwrap_or(false),
@@ -283,9 +281,7 @@ impl NBTStorage for SlimeEntity {
             );
         })
     }
-}
 
-impl Mob for SlimeEntity {
     fn get_mob_entity(&self) -> &MobEntity {
         &self.entity
     }

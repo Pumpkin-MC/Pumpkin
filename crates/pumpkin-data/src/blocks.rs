@@ -4,7 +4,8 @@ use crate::{
 };
 use pumpkin_util::{
     loot_table::LootTable,
-    math::experience::Experience,
+    math::{experience::Experience, position::BlockPos, vector3::Vector3},
+    random::hash_block_pos,
     resource_location::{FromResourceLocation, ResourceLocation, ToResourceLocation},
 };
 use std::hash::{Hash, Hasher};
@@ -122,6 +123,35 @@ impl FromResourceLocation for &'static Block {
 }
 
 impl Block {
+    pub(crate) fn shape_offset_delta(&self, pos: &BlockPos) -> Vector3<f64> {
+        let Some(shape_offset) = self.shape_offset() else {
+            return Vector3::new(0.0, 0.0, 0.0);
+        };
+
+        let seed = hash_block_pos(pos.0.x, 0, pos.0.z) as u64;
+        let max_horizontal = f64::from(shape_offset.max_horizontal);
+        let x = (f64::from((seed & 15) as f32 / 15.0) - 0.5) * 0.5;
+        let x = x.clamp(-max_horizontal, max_horizontal);
+        let z = (f64::from(((seed >> 8) & 15) as f32 / 15.0) - 0.5) * 0.5;
+        let z = z.clamp(-max_horizontal, max_horizontal);
+        let y = match shape_offset.offset_type {
+            ShapeOffsetType::Xz => 0.0,
+            ShapeOffsetType::Xyz => {
+                (f64::from(((seed >> 4) & 15) as f32 / 15.0) - 1.0)
+                    * f64::from(shape_offset.max_vertical)
+            }
+        };
+
+        // Extracted shapes are sampled at BlockPos::ZERO, where vanilla uses the
+        // negative horizontal limits and, for XYZ offsets, the negative vertical
+        // limit. Return only the delta from that sample.
+        Vector3::new(
+            x + max_horizontal,
+            y + shape_offset.offset_type.origin_y(shape_offset.max_vertical),
+            z + max_horizontal,
+        )
+    }
+
     #[must_use]
     pub fn is_waterlogged(&self, id: BlockStateId) -> bool {
         self.properties(id).is_some_and(|properties| {
@@ -193,6 +223,28 @@ impl Block {
         _rotation: crate::block_rotation::Rotation,
     ) -> &'static BlockState {
         BlockState::from_id(id)
+    }
+}
+
+#[derive(Clone, Copy)]
+pub(crate) enum ShapeOffsetType {
+    Xz,
+    Xyz,
+}
+
+#[derive(Clone, Copy)]
+pub(crate) struct ShapeOffset {
+    pub offset_type: ShapeOffsetType,
+    pub max_horizontal: f32,
+    pub max_vertical: f32,
+}
+
+impl ShapeOffsetType {
+    fn origin_y(self, max_vertical: f32) -> f64 {
+        match self {
+            Self::Xz => 0.0,
+            Self::Xyz => f64::from(max_vertical),
+        }
     }
 }
 
@@ -268,4 +320,79 @@ impl std::fmt::Display for BlockId {
 pub struct Flammable {
     pub spread_chance: u8,
     pub burn_chance: u8,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Block, BlockId, ShapeOffsetType};
+    use pumpkin_util::math::position::BlockPos;
+
+    fn assert_close(actual: f64, expected: f64) {
+        assert!((actual - expected).abs() < 1.0e-6, "{actual} != {expected}");
+    }
+
+    #[test]
+    fn shape_offset_registry_matches_vanilla_26_2() {
+        let mut xz = 0;
+        let mut xyz = 0;
+
+        for raw_id in 0..BlockId::BLOCK_COUNT {
+            match Block::from_id(BlockId::new(raw_id).unwrap())
+                .shape_offset()
+                .map(|offset| offset.offset_type)
+            {
+                Some(ShapeOffsetType::Xz) => xz += 1,
+                Some(ShapeOffsetType::Xyz) => xyz += 1,
+                None => {}
+            }
+        }
+
+        assert_eq!(xz, 34);
+        assert_eq!(xyz, 5);
+    }
+
+    #[test]
+    fn shape_offset_limits_match_vanilla_26_2() {
+        let bamboo = Block::BAMBOO.shape_offset().unwrap();
+        assert_eq!(bamboo.max_horizontal, 0.25);
+        assert_eq!(bamboo.max_vertical, 0.2);
+
+        let pointed_dripstone = Block::POINTED_DRIPSTONE.shape_offset().unwrap();
+        assert_eq!(pointed_dripstone.max_horizontal, 0.125);
+
+        let small_dripleaf = Block::SMALL_DRIPLEAF.shape_offset().unwrap();
+        assert_eq!(small_dripleaf.max_vertical, 0.1);
+    }
+
+    #[test]
+    fn shape_offset_delta_matches_vanilla_coordinate_hash() {
+        let origin = BlockPos::new(0, 64, 0);
+        let positive_extreme = BlockPos::new(-18, 64, -7);
+
+        let origin_delta = Block::BAMBOO.shape_offset_delta(&origin);
+        assert_eq!(origin_delta.x, 0.0);
+        assert_eq!(origin_delta.y, 0.0);
+        assert_eq!(origin_delta.z, 0.0);
+
+        let bamboo_delta = Block::BAMBOO.shape_offset_delta(&positive_extreme);
+        assert_eq!(bamboo_delta.x, 0.5);
+        assert_eq!(bamboo_delta.y, 0.0);
+        assert_eq!(bamboo_delta.z, 0.5);
+
+        let speleothem_delta = Block::POINTED_DRIPSTONE.shape_offset_delta(&positive_extreme);
+        assert_eq!(speleothem_delta.x, 0.25);
+        assert_eq!(speleothem_delta.y, 0.0);
+        assert_eq!(speleothem_delta.z, 0.25);
+        assert_eq!(
+            Block::SULFUR_SPIKE.shape_offset_delta(&positive_extreme),
+            speleothem_delta
+        );
+
+        let xyz_delta = Block::SHORT_GRASS.shape_offset_delta(&positive_extreme);
+        assert_eq!(xyz_delta.x, 0.5);
+        assert_close(xyz_delta.y, 0.08);
+        assert_eq!(xyz_delta.z, 0.5);
+
+        assert_eq!(Block::STONE.shape_offset_delta(&positive_extreme).x, 0.0);
+    }
 }

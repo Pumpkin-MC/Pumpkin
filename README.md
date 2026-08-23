@@ -113,3 +113,9 @@ Consider joining [our Discord server](https://discord.gg/wT8XjrjKkf) to stay up-
 ## Funding
 
 If you want to fund me and help the project, check out the [Donation Page](https://pumpkinmc.org/donate/).
+
+## License & Attribution
+
+* **Pumpkin Server**: Licensed under the [GNU General Public License v3.0 (GPLv3)](LICENSE).
+* **Plugin API (`pumpkin-plugin-api` & `pumpkin-plugin-wit`)**: Dual-licensed under [MIT](crates/pumpkin-plugin-api/LICENSE-MIT) OR [Apache-2.0](crates/pumpkin-plugin-api/LICENSE-APACHE) for maximum flexibility when writing plugins.
+* **Third-Party Assets & Data**: Bedrock mappings, protocol conversion data, and Minecraft assets are subject to their respective licenses and attribution terms. See [assets/NOTICE.md](assets/NOTICE.md) for full details.

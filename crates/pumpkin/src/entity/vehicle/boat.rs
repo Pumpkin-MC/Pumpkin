@@ -4,13 +4,11 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use crossbeam::atomic::AtomicCell;
 
 use crate::entity::player::Player;
-use crate::entity::{Entity, EntityBase, EntityBaseFuture, NBTStorage, living::LivingEntity};
+use crate::entity::{Entity, EntityBase, EntityBaseFuture, living::LivingEntity};
 use crate::server::Server;
 
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::item_stack::ItemStack;
-use pumpkin_data::meta_data_type::MetaDataType;
-use pumpkin_data::tracked_data::TrackedData;
 
 use pumpkin_protocol::java::client::play::Metadata;
 
@@ -41,8 +39,8 @@ impl BoatEntity {
 
         self.vehicle.entity.send_meta_data(
             &[
-                Metadata::new(TrackedData::ID_PADDLE_LEFT, MetaDataType::BOOLEAN, left),
-                Metadata::new(TrackedData::ID_PADDLE_RIGHT, MetaDataType::BOOLEAN, right),
+                Metadata::new(pumpkin_data::tracked_data::boat::ID_PADDLE_LEFT, left),
+                Metadata::new(pumpkin_data::tracked_data::boat::ID_PADDLE_RIGHT, right),
             ],
             None,
         );
@@ -52,8 +50,6 @@ impl BoatEntity {
         self.vehicle.send_wobble_metadata();
     }
 }
-
-impl NBTStorage for BoatEntity {}
 
 impl EntityBase for BoatEntity {
     fn get_entity(&self) -> &Entity {
@@ -152,11 +148,6 @@ impl EntityBase for BoatEntity {
             self.set_paddles(left, right);
         })
     }
-
-    fn as_nbt_storage(&self) -> &dyn NBTStorage {
-        self
-    }
-
     fn cast_any(&self) -> &dyn std::any::Any {
         self
     }

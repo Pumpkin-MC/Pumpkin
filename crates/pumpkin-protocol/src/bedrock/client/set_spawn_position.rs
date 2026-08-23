@@ -1,11 +1,9 @@
-use std::io::{Error, Write};
-
 use pumpkin_macros::packet;
 use pumpkin_util::math::position::BlockPos;
 
 use crate::{codec::var_int::VarInt, serial::PacketWrite};
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PacketWrite)]
 #[packet(43)]
 pub struct CSetSpawnPosition {
     pub spawn_type: VarInt,
@@ -28,15 +26,5 @@ impl CSetSpawnPosition {
             dimension: VarInt(dimension),
             spawn_position,
         }
-    }
-}
-
-impl PacketWrite for CSetSpawnPosition {
-    fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
-        self.spawn_type.write(writer)?;
-        self.position.write(writer)?;
-        self.dimension.write(writer)?;
-        self.spawn_position.write(writer)?;
-        Ok(())
     }
 }

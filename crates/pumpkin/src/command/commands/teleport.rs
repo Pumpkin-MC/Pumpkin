@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use pumpkin_data::translation;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
@@ -62,12 +64,24 @@ fn resolve_sender_world(
         .expect("Server should have at least one world")
 }
 
+async fn success_key_and_arg(
+    targets: &[Arc<dyn EntityBase>],
+    single_key: &'static str,
+    multiple_key: &'static str,
+) -> (&'static str, TextComponent) {
+    if targets.len() == 1 {
+        (single_key, targets[0].get_display_name().await)
+    } else {
+        (multiple_key, TextComponent::text(targets.len().to_string()))
+    }
+}
+
 struct EntitiesToEntityExecutor;
 
 impl CommandExecutor for EntitiesToEntityExecutor {
     fn execute<'a>(
         &'a self,
-        _sender: &'a CommandSender,
+        sender: &'a CommandSender,
         _server: &'a crate::server::Server,
         args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
@@ -93,6 +107,20 @@ impl CommandExecutor for EntitiesToEntityExecutor {
                     .teleport(pos, Some(yaw), Some(pitch), world.clone())
                     .await;
             }
+
+            let (key, target_arg) = success_key_and_arg(
+                targets,
+                translation::java::COMMANDS_TELEPORT_SUCCESS_ENTITY_SINGLE,
+                translation::java::COMMANDS_TELEPORT_SUCCESS_ENTITY_MULTIPLE,
+            )
+            .await;
+            sender
+                .send_message(TextComponent::translate_cross(
+                    key,
+                    translation::bedrock::COMMANDS_TP_SUCCESSVICTIM,
+                    [target_arg, destination.get_display_name().await],
+                ))
+                .await;
 
             Ok(targets.len() as i32)
         })
@@ -129,6 +157,25 @@ impl CommandExecutor for EntitiesToPosFacingPosExecutor {
                     .teleport(pos, Some(yaw), Some(pitch), world.clone())
                     .await;
             }
+
+            let (key, target_arg) = success_key_and_arg(
+                targets,
+                translation::java::COMMANDS_TELEPORT_SUCCESS_LOCATION_SINGLE,
+                translation::java::COMMANDS_TELEPORT_SUCCESS_LOCATION_MULTIPLE,
+            )
+            .await;
+            sender
+                .send_message(TextComponent::translate_cross(
+                    key,
+                    translation::bedrock::COMMANDS_TP_SUCCESS_COORDINATES,
+                    [
+                        target_arg,
+                        TextComponent::text(pos.x.to_string()),
+                        TextComponent::text(pos.y.to_string()),
+                        TextComponent::text(pos.z.to_string()),
+                    ],
+                ))
+                .await;
 
             Ok(targets.len() as i32)
         })
@@ -167,6 +214,25 @@ impl CommandExecutor for EntitiesToPosFacingEntityExecutor {
                     .await;
             }
 
+            let (key, target_arg) = success_key_and_arg(
+                targets,
+                translation::java::COMMANDS_TELEPORT_SUCCESS_LOCATION_SINGLE,
+                translation::java::COMMANDS_TELEPORT_SUCCESS_LOCATION_MULTIPLE,
+            )
+            .await;
+            sender
+                .send_message(TextComponent::translate_cross(
+                    key,
+                    translation::bedrock::COMMANDS_TP_SUCCESS_COORDINATES,
+                    [
+                        target_arg,
+                        TextComponent::text(pos.x.to_string()),
+                        TextComponent::text(pos.y.to_string()),
+                        TextComponent::text(pos.z.to_string()),
+                    ],
+                ))
+                .await;
+
             Ok(targets.len() as i32)
         })
     }
@@ -204,6 +270,25 @@ impl CommandExecutor for EntitiesToPosWithRotationExecutor {
                     .await;
             }
 
+            let (key, target_arg) = success_key_and_arg(
+                targets,
+                translation::java::COMMANDS_TELEPORT_SUCCESS_LOCATION_SINGLE,
+                translation::java::COMMANDS_TELEPORT_SUCCESS_LOCATION_MULTIPLE,
+            )
+            .await;
+            sender
+                .send_message(TextComponent::translate_cross(
+                    key,
+                    translation::bedrock::COMMANDS_TP_SUCCESS_COORDINATES,
+                    [
+                        target_arg,
+                        TextComponent::text(pos.x.to_string()),
+                        TextComponent::text(pos.y.to_string()),
+                        TextComponent::text(pos.z.to_string()),
+                    ],
+                ))
+                .await;
+
             Ok(targets.len() as i32)
         })
     }
@@ -239,6 +324,25 @@ impl CommandExecutor for EntitiesToPosExecutor {
                     .await;
             }
 
+            let (key, target_arg) = success_key_and_arg(
+                targets,
+                translation::java::COMMANDS_TELEPORT_SUCCESS_LOCATION_SINGLE,
+                translation::java::COMMANDS_TELEPORT_SUCCESS_LOCATION_MULTIPLE,
+            )
+            .await;
+            sender
+                .send_message(TextComponent::translate_cross(
+                    key,
+                    translation::bedrock::COMMANDS_TP_SUCCESS_COORDINATES,
+                    [
+                        target_arg,
+                        TextComponent::text(pos.x.to_string()),
+                        TextComponent::text(pos.y.to_string()),
+                        TextComponent::text(pos.z.to_string()),
+                    ],
+                ))
+                .await;
+
             Ok(targets.len() as i32)
         })
     }
@@ -273,6 +377,17 @@ impl CommandExecutor for SelfToEntityExecutor {
                     player
                         .clone()
                         .teleport(pos, Some(yaw), Some(pitch), world)
+                        .await;
+
+                    sender
+                        .send_message(TextComponent::translate_cross(
+                            translation::java::COMMANDS_TELEPORT_SUCCESS_ENTITY_SINGLE,
+                            translation::bedrock::COMMANDS_TP_SUCCESSVICTIM,
+                            [
+                                player.get_display_name().await,
+                                destination.get_display_name().await,
+                            ],
+                        ))
                         .await;
 
                     Ok(1)
@@ -311,6 +426,19 @@ impl CommandExecutor for SelfToPosExecutor {
                     player
                         .clone()
                         .teleport(pos, Some(yaw), Some(pitch), player.world().clone())
+                        .await;
+
+                    sender
+                        .send_message(TextComponent::translate_cross(
+                            translation::java::COMMANDS_TELEPORT_SUCCESS_LOCATION_SINGLE,
+                            translation::bedrock::COMMANDS_TP_SUCCESS_COORDINATES,
+                            [
+                                player.get_display_name().await,
+                                TextComponent::text(pos.x.to_string()),
+                                TextComponent::text(pos.y.to_string()),
+                                TextComponent::text(pos.z.to_string()),
+                            ],
+                        ))
                         .await;
 
                     Ok(1)

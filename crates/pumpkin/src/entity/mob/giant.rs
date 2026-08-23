@@ -3,7 +3,7 @@ use std::sync::Arc;
 use pumpkin_data::entity::EntityType;
 
 use crate::entity::{
-    Entity, NBTStorage,
+    Entity,
     ai::goal::{
         active_target::ActiveTargetGoal, look_around::RandomLookAroundGoal,
         melee_attack::MeleeAttackGoal, swim::SwimGoal, wander_around::WanderAroundGoal,
@@ -47,8 +47,6 @@ impl GiantEntity {
         mob_arc
     }
 }
-
-impl NBTStorage for GiantEntity {}
 
 impl Mob for GiantEntity {
     fn get_mob_entity(&self) -> &MobEntity {

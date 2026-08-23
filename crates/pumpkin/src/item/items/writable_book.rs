@@ -26,8 +26,7 @@ impl ItemBehaviour for WritableBookItem {
         Box::pin(async move {
             if item.id == Item::WRITTEN_BOOK.id {
                 player
-                    .client
-                    .enqueue_packet(&COpenBook::new(VarInt(0))) // 0 = main hand
+                    .send_client_packet(&COpenBook::new(VarInt(0))) // 0 = main hand
                     .await;
                 player.world().play_sound(
                     Sound::ItemBookPageTurn,

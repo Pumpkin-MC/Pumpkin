@@ -1,0 +1,27 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "group": "carpet_dye",
+  "ingredients": [
+    "minecraft:pink_dye",
+    [
+      "minecraft:white_carpet",
+      "minecraft:orange_carpet",
+      "minecraft:magenta_carpet",
+      "minecraft:light_blue_carpet",
+      "minecraft:yellow_carpet",
+      "minecraft:lime_carpet",
+      "minecraft:gray_carpet",
+      "minecraft:light_gray_carpet",
+      "minecraft:cyan_carpet",
+      "minecraft:purple_carpet",
+      "minecraft:blue_carpet",
+      "minecraft:brown_carpet",
+      "minecraft:green_carpet",
+      "minecraft:red_carpet",
+      "minecraft:black_carpet"
+    ]
+  ],
+  "result": {
+    "id": "minecraft:pink_carpet"
+  }
+}

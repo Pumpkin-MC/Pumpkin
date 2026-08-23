@@ -1,0 +1,32 @@
+{
+  "parent": "minecraft:recipes/root",
+  "criteria": {
+    "has_cooked_rabbit": {
+      "conditions": {
+        "items": [
+          {
+            "items": "minecraft:cooked_rabbit"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    },
+    "has_the_recipe": {
+      "conditions": {
+        "recipe": "minecraft:rabbit_stew_from_red_mushroom"
+      },
+      "trigger": "minecraft:recipe_unlocked"
+    }
+  },
+  "requirements": [
+    [
+      "has_the_recipe",
+      "has_cooked_rabbit"
+    ]
+  ],
+  "rewards": {
+    "recipes": [
+      "minecraft:rabbit_stew_from_red_mushroom"
+    ]
+  }
+}

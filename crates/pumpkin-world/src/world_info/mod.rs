@@ -340,6 +340,18 @@ impl LevelData {
         }
     }
 
+    #[must_use]
+    pub fn from_world_generator(
+        seed: Seed,
+        generator: &crate::generation::generator::VanillaGenerator,
+    ) -> Self {
+        let mut data = Self::default(seed);
+        let spawn_pos = generator.find_spawn_position();
+        data.spawn_x = spawn_pos.0.x;
+        data.spawn_z = spawn_pos.0.z;
+        data
+    }
+
     pub const fn set_pos(&mut self, x: i32, z: i32) {
         self.spawn_x = x;
         self.spawn_z = z;

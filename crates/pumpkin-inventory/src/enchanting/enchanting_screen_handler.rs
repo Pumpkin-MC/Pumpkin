@@ -93,7 +93,7 @@ impl EnchantingTableScreenHandler {
         handler
     }
 
-    pub async fn update_enchantments(&mut self, _player: &dyn InventoryPlayer) {
+    pub async fn update_enchantments(&mut self, player: &dyn InventoryPlayer) {
         let item = self.inventory.get_stack(0).await;
 
         if item.is_empty() || item.has_enchantments() {
@@ -141,6 +141,23 @@ impl EnchantingTableScreenHandler {
                             self.enchantment_level[i] = clue.1;
                         }
                     } else {
+                        self.enchantment_id[i] = -1;
+                        self.enchantment_level[i] = -1;
+                    }
+                }
+
+                if player
+                    .fire_prepare_item_enchant_event(
+                        &item,
+                        &mut self.level_requirements,
+                        &mut self.enchantment_id,
+                        &mut self.enchantment_level,
+                        self.bookshelf_count,
+                    )
+                    .await
+                {
+                    for i in 0..3 {
+                        self.level_requirements[i] = 0;
                         self.enchantment_id[i] = -1;
                         self.enchantment_level[i] = -1;
                     }
@@ -367,10 +384,18 @@ impl ScreenHandler for EnchantingTableScreenHandler {
             }
 
             let mut random = self.create_enchantment_random(id as usize);
-            let enchantments =
+            let mut enchantments =
                 Self::get_enchantment_list(&mut random, &item_stack, id as usize, level_req);
 
             if enchantments.is_empty() {
+                return false;
+            }
+
+            if player
+                .fire_enchant_item_event(&item_stack, id, level_req, &mut enchantments)
+                .await
+                || enchantments.is_empty()
+            {
                 return false;
             }
 

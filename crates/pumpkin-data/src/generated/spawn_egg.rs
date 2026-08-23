@@ -1,5 +1,6 @@
 /* This file is generated. Do not edit manually. */
 use crate::entity_type::EntityType;
+#[must_use]
 pub fn entity_from_egg(id: u16) -> Option<&'static EntityType> {
     match id {
         1159u16 => Some(&EntityType::CHICKEN),
@@ -93,6 +94,7 @@ pub fn entity_from_egg(id: u16) -> Option<&'static EntityType> {
         _ => None,
     }
 }
+#[must_use]
 pub fn spawn_egg_ids() -> Box<[u16]> {
     [
         1159u16, 1160u16, 1161u16, 1162u16, 1163u16, 1164u16, 1165u16, 1166u16, 1167u16, 1168u16,

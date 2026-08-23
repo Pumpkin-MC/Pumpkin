@@ -9,7 +9,7 @@ use pumpkin_util::math::vector3::Vector3;
 
 use crate::{entity::EntityBaseFuture, server::Server, world::World};
 
-use super::{Entity, EntityBase, NBTStorage, living::LivingEntity, player::Player};
+use super::{Entity, EntityBase, living::LivingEntity, player::Player};
 
 pub struct ExperienceOrbEntity {
     entity: Entity,
@@ -64,8 +64,6 @@ impl ExperienceOrbEntity {
         }
     }
 }
-
-impl NBTStorage for ExperienceOrbEntity {}
 
 impl EntityBase for ExperienceOrbEntity {
     fn tick<'a>(
@@ -130,11 +128,6 @@ impl EntityBase for ExperienceOrbEntity {
     fn get_living_entity(&self) -> Option<&LivingEntity> {
         None
     }
-
-    fn as_nbt_storage(&self) -> &dyn NBTStorage {
-        self
-    }
-
     fn get_gravity(&self) -> f64 {
         0.03
     }

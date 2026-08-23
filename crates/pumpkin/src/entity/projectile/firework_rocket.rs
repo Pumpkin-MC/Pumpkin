@@ -1,9 +1,9 @@
 use crate::{
-    entity::{Entity, EntityBase, EntityBaseFuture, NBTStorage, projectile::ThrownItemEntity},
+    entity::{Entity, EntityBase, EntityBaseFuture, projectile::ThrownItemEntity},
     server::Server,
     world::World,
 };
-use pumpkin_data::{entity::EntityStatus, meta_data_type::MetaDataType, tracked_data::TrackedData};
+use pumpkin_data::entity::EntityStatus;
 use pumpkin_protocol::bedrock::server::actor_event::ActorEventType;
 use pumpkin_protocol::{codec::optional_int::OptionalInt, java::client::play::Metadata};
 use pumpkin_util::{
@@ -71,8 +71,7 @@ impl FireworkRocketEntity {
         // Set shooter metadata
         rocket.entity.entity.send_meta_data(
             &[Metadata::new(
-                TrackedData::ATTACHED_TO_TARGET,
-                MetaDataType::OPTIONAL_INT,
+                pumpkin_data::tracked_data::firework_rocket::ATTACHED_TO_TARGET,
                 OptionalInt(Some(shooter.entity_id)),
             )],
             None,
@@ -94,8 +93,6 @@ impl FireworkRocketEntity {
         entity.remove().await;
     }
 }
-
-impl NBTStorage for FireworkRocketEntity {}
 
 impl EntityBase for FireworkRocketEntity {
     fn tick<'a>(
@@ -152,11 +149,6 @@ impl EntityBase for FireworkRocketEntity {
     fn get_living_entity(&self) -> Option<&crate::entity::living::LivingEntity> {
         None
     }
-
-    fn as_nbt_storage(&self) -> &dyn crate::entity::NBTStorage {
-        self
-    }
-
     fn cast_any(&self) -> &dyn std::any::Any {
         self
     }

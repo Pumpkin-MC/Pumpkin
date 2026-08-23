@@ -73,13 +73,25 @@ impl BlockBehaviour for FarmlandBlock {
             if is_water_nearby(args.world, args.position) {
                 let mut props = FarmlandProperties::default(args.block);
                 props.moisture = 7;
-                args.world
-                    .set_block_state(
-                        args.position,
-                        props.to_state_id(args.block),
-                        BlockFlags::NOTIFY_NEIGHBORS,
-                    )
-                    .await;
+                let mut event = crate::plugin::block::moisture_change::MoistureChangeEvent {
+                    block_pos: *args.position,
+                    world: args.world.clone(),
+                    new_moisture: 7,
+                    cancelled: false,
+                };
+                if let Some(server) = args.world.server.upgrade() {
+                    server.plugin_manager.fire(&server, &mut event).await;
+                }
+                if !event.cancelled {
+                    props.moisture = (event.new_moisture.clamp(0, 7)) as u8;
+                    args.world
+                        .set_block_state(
+                            args.position,
+                            props.to_state_id(args.block),
+                            BlockFlags::NOTIFY_NEIGHBORS,
+                        )
+                        .await;
+                }
             } else {
                 let state_id = args.world.get_block_state_id(args.position);
                 let mut props = FarmlandProperties::from_state_id(state_id, args.block);
@@ -89,6 +101,18 @@ impl BlockBehaviour for FarmlandBlock {
                         .get_block(&args.position.up())
                         .has_tag(&tag::Block::MINECRAFT_MAINTAINS_FARMLAND)
                     {
+                        let mut event =
+                            crate::plugin::api::events::block::block_fade::BlockFadeEvent::new(
+                                *args.position,
+                                &Block::DIRT,
+                            );
+                        if let Some(server) = args.world.server.upgrade() {
+                            server.plugin_manager.fire(&server, &mut event).await;
+                        }
+                        if event.cancelled {
+                            return;
+                        }
+
                         //TODO push entities up
                         args.world
                             .set_block_state(
@@ -99,14 +123,25 @@ impl BlockBehaviour for FarmlandBlock {
                             .await;
                     }
                 } else {
-                    props.moisture -= 1;
-                    args.world
-                        .set_block_state(
-                            args.position,
-                            props.to_state_id(args.block),
-                            BlockFlags::NOTIFY_NEIGHBORS,
-                        )
-                        .await;
+                    let mut event = crate::plugin::block::moisture_change::MoistureChangeEvent {
+                        block_pos: *args.position,
+                        world: args.world.clone(),
+                        new_moisture: (props.moisture as i32) - 1,
+                        cancelled: false,
+                    };
+                    if let Some(server) = args.world.server.upgrade() {
+                        server.plugin_manager.fire(&server, &mut event).await;
+                    }
+                    if !event.cancelled {
+                        props.moisture = (event.new_moisture.clamp(0, 7)) as u8;
+                        args.world
+                            .set_block_state(
+                                args.position,
+                                props.to_state_id(args.block),
+                                BlockFlags::NOTIFY_NEIGHBORS,
+                            )
+                            .await;
+                    }
                 }
             }
         })

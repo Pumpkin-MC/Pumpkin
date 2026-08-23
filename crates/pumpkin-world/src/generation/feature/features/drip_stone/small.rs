@@ -61,7 +61,7 @@ impl SmallDripstoneFeature {
         random: &mut RandomGenerator,
     ) {
         super::gen_dripstone(chunk, pos);
-        for dir in BlockDirection::horizontal() {
+        for dir in BlockDirection::horizontal_worldgen() {
             if random.next_f32() > self.directional_spread {
                 continue;
             }
