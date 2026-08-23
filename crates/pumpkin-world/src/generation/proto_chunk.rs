@@ -149,6 +149,7 @@ pub struct ProtoChunk {
     pub blending_data: Option<crate::generation::blender::blending_data::BlendingData>,
     pub pending_block_entities: Vec<NbtCompound>,
     pending_structure_entities: Vec<NbtCompound>,
+    pub block_ticks: Vec<ScheduledTick<&'static Block>>,
     pub fluid_ticks: Vec<ScheduledTick<&'static Fluid>>,
 }
 
@@ -257,6 +258,7 @@ impl ProtoChunk {
             blending_data: None,
             pending_block_entities: Vec::new(),
             pending_structure_entities: Vec::new(),
+            block_ticks: Vec::new(),
             fluid_ticks: Vec::new(),
         }
     }
@@ -276,6 +278,15 @@ impl ProtoChunk {
         proto_chunk
             .blending_data
             .clone_from(&chunk_data.blending_data);
+
+        let pending_block_entities_guard = chunk_data
+            .pending_block_entities
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        proto_chunk.pending_block_entities =
+            pending_block_entities_guard.values().cloned().collect();
+        proto_chunk.block_ticks = chunk_data.block_ticks.to_vec();
+        proto_chunk.fluid_ticks = chunk_data.fluid_ticks.to_vec();
 
         let section_data = &chunk_data.section;
         let heightmap_data = chunk_data
@@ -414,6 +425,15 @@ impl ProtoChunk {
 
     fn take_pending_structure_entities(&mut self) -> Vec<NbtCompound> {
         std::mem::take(&mut self.pending_structure_entities)
+    }
+
+    pub fn schedule_block_tick(&mut self, x: i32, y: i32, z: i32, block: &'static Block) {
+        self.block_ticks.push(ScheduledTick {
+            delay: 0,
+            priority: TickPriority::Normal,
+            position: BlockPos::new(x, y, z),
+            value: block,
+        });
     }
 
     pub fn schedule_fluid_tick(&mut self, x: i32, y: i32, z: i32, fluid: &'static Fluid) {

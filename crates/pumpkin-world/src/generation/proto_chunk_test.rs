@@ -7,6 +7,100 @@ mod test {
     use pumpkin_util::world_seed::Seed;
 
     #[test]
+    fn pending_block_entities_and_ticks_survive_proto_chunk_round_trip() {
+        use crate::chunk_system::chunk_state::Chunk;
+        use crate::tick::{ScheduledTick, TickPriority};
+        use pumpkin_config::lighting::LightingEngineConfig;
+        use pumpkin_data::Block;
+        use pumpkin_data::fluid::Fluid;
+        use pumpkin_nbt::compound::NbtCompound;
+        use pumpkin_util::math::position::BlockPos;
+
+        let seed = Seed(0);
+        let world_gen = get_world_gen(seed, Dimension::OVERWORLD, true, Vec::new(), String::new());
+
+        let proto = ProtoChunk::new(0, 0, &world_gen);
+        let mut staged = Chunk::Proto(Box::new(proto));
+        staged.upgrade_to_level_chunk(&Dimension::OVERWORLD, &LightingEngineConfig::Default);
+        let Chunk::Level(chunk_data) = staged else {
+            unreachable!()
+        };
+
+        // Add a block entity (e.g., chest)
+        let mut chest_nbt = NbtCompound::new();
+        chest_nbt.put_string("id", "minecraft:chest".to_string());
+        chest_nbt.put_int("x", 5);
+        chest_nbt.put_int("y", 64);
+        chest_nbt.put_int("z", 7);
+        chunk_data
+            .pending_block_entities
+            .lock()
+            .unwrap()
+            .insert(BlockPos::new(5, 64, 7), chest_nbt.clone());
+
+        // Add a scheduled block tick
+        chunk_data.block_ticks.schedule_tick(
+            &ScheduledTick {
+                delay: 2,
+                priority: TickPriority::Normal,
+                position: BlockPos::new(5, 64, 7),
+                value: &Block::REPEATER,
+            },
+            0,
+        );
+
+        // Add a scheduled fluid tick
+        chunk_data.fluid_ticks.schedule_tick(
+            &ScheduledTick {
+                delay: 1,
+                priority: TickPriority::High,
+                position: BlockPos::new(1, 60, 2),
+                value: &Fluid::WATER,
+            },
+            0,
+        );
+
+        // Convert chunk_data -> ProtoChunk
+        let proto = ProtoChunk::from_chunk_data(&chunk_data, &world_gen);
+        assert_eq!(proto.pending_block_entities.len(), 1);
+        assert_eq!(
+            proto.pending_block_entities[0].get_string("id"),
+            Some("minecraft:chest")
+        );
+        assert_eq!(proto.block_ticks.len(), 1);
+        assert_eq!(proto.block_ticks[0].value, &Block::REPEATER);
+        assert_eq!(proto.fluid_ticks.len(), 1);
+        assert_eq!(proto.fluid_ticks[0].value.id, Fluid::WATER.id);
+
+        // Upgrade ProtoChunk -> LevelChunk (ChunkData)
+        let mut staged = Chunk::Proto(Box::new(proto));
+        staged.upgrade_to_level_chunk(&Dimension::OVERWORLD, &LightingEngineConfig::Default);
+        let Chunk::Level(rebuilt) = staged else {
+            panic!("upgrade_to_level_chunk did not produce a level chunk");
+        };
+
+        // Verify pending block entities preserved
+        let rebuilt_entities = rebuilt.pending_block_entities.lock().unwrap();
+        assert_eq!(rebuilt_entities.len(), 1);
+        let entity = rebuilt_entities
+            .get(&BlockPos::new(5, 64, 7))
+            .expect("chest block entity must be preserved");
+        assert_eq!(entity.get_string("id"), Some("minecraft:chest"));
+
+        // Verify block ticks preserved
+        let rebuilt_block_ticks = rebuilt.block_ticks.to_vec();
+        assert_eq!(rebuilt_block_ticks.len(), 1);
+        assert_eq!(rebuilt_block_ticks[0].value, &Block::REPEATER);
+        assert_eq!(rebuilt_block_ticks[0].position, BlockPos::new(5, 64, 7));
+
+        // Verify fluid ticks preserved
+        let rebuilt_fluid_ticks = rebuilt.fluid_ticks.to_vec();
+        assert_eq!(rebuilt_fluid_ticks.len(), 1);
+        assert_eq!(rebuilt_fluid_ticks[0].value.id, Fluid::WATER.id);
+        assert_eq!(rebuilt_fluid_ticks[0].position, BlockPos::new(1, 60, 2));
+    }
+
+    #[test]
     fn structure_references_are_rebuilt_when_resuming_generation() {
         use crate::chunk_system::chunk_state::Chunk;
         use pumpkin_config::lighting::LightingEngineConfig;
