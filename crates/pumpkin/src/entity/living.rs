@@ -2234,6 +2234,9 @@ impl LivingEntity {
             // Persist current absorption amount
             nbt.put("AbsorptionAmount", NbtTag::Float(self.absorption.load()));
             nbt.put("FallDistance", NbtTag::Float(fall_distance));
+            nbt.put_short("HurtTime", self.hurt_cooldown.load(Relaxed).max(0) as i16);
+            nbt.put_short("DeathTime", i16::from(self.death_time.load(Relaxed)));
+            nbt.put_bool("FallFlying", self.entity.is_fall_flying());
             {
                 let effects = self.active_effects.lock().await;
                 if !effects.is_empty() {
@@ -2254,7 +2257,7 @@ impl LivingEntity {
 
     pub fn read_living_nbt_non_mut<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async {
-            self.health.store(nbt.get_float("Health").unwrap_or(0.0));
+            self.health.store(nbt.get_float("Health").unwrap_or(20.0));
 
             // Clamp any persisted absorption to the entity's configured max
             let raw_abs = nbt.get_float("AbsorptionAmount").unwrap_or(0.0);
@@ -2273,6 +2276,15 @@ impl LivingEntity {
             } else {
                 self.fall_distance.store(fd);
             }
+            if let Some(hurt_time) = nbt.get_short("HurtTime") {
+                self.hurt_cooldown.store(i32::from(hurt_time), Relaxed);
+            }
+            if let Some(death_time) = nbt.get_short("DeathTime") {
+                self.death_time.store(death_time as u8, Relaxed);
+            }
+            self.entity
+                .fall_flying
+                .store(nbt.get_bool("FallFlying").unwrap_or(false), Relaxed);
             {
                 let mut active_effects = self.active_effects.lock().await;
                 let nbt_effects = nbt.get_list("active_effects");

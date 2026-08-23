@@ -420,9 +420,11 @@ pub fn register_plugin(build_plugin: fn() -> Box<dyn Plugin>) {
 /// If called before [`register_plugin`] has initialized `PLUGIN`.
 fn plugin() -> &'static mut dyn Plugin {
     #[expect(static_mut_refs)]
-    #[allow(clippy::unwrap_used)]
+    #[allow(clippy::expect_used)]
     unsafe {
-        PLUGIN.as_deref_mut().unwrap()
+        PLUGIN
+            .as_deref_mut()
+            .expect("PLUGIN must be initialized with register_plugin before use")
     }
 }
 

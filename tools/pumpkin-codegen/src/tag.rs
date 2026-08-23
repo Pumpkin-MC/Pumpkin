@@ -119,6 +119,10 @@ impl ToTokens for EnumCreator {
                         Self::Enchantment | Self::Potion => {
                             (version as u32) >= (JavaMinecraftVersion::V_1_20_5 as u32)
                         }
+                        Self::Dialog => (version as u32) >= (JavaMinecraftVersion::V_1_21_6 as u32),
+                        Self::Timeline => {
+                            (version as u32) >= (JavaMinecraftVersion::V_1_21_11 as u32)
+                        }
                         _ => (version as u32) >= (JavaMinecraftVersion::V_26_1 as u32),
                     }
                 }

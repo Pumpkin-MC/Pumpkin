@@ -798,6 +798,9 @@ pub struct Player {
     pub enchantment_seed: AtomicI32,
     pub fishing_bobber: AtomicI32,
     pub bedrock_skin: arc_swap::ArcSwap<pumpkin_protocol::bedrock::client::Skin>,
+    pub seen_credits: AtomicBool,
+    pub score: AtomicI32,
+    pub spawn_extra_particles_on_fall: AtomicBool,
 }
 
 use base64::prelude::*;
@@ -1063,6 +1066,9 @@ impl Player {
             hidden_players: Mutex::new(std::collections::HashSet::new()),
             fishing_bobber: AtomicI32::new(-1),
             bedrock_skin: ArcSwap::new(Arc::new(bedrock_skin)),
+            seen_credits: AtomicBool::new(false),
+            score: AtomicI32::new(0),
+            spawn_extra_particles_on_fall: AtomicBool::new(false),
         }
     }
 
@@ -5617,31 +5623,38 @@ impl NBTStorage for PlayerInventory {
 
             let mut equipment_compound = NbtCompound::new();
             let equipment_guard = self.entity_equipment.lock().await;
-            for slot in self.equipment_slots.values() {
-                if let Some(stack) = equipment_guard.equipment.get(slot)
-                    && !stack.is_empty()
-                {
+            for (slot, stack) in &equipment_guard.equipment {
+                if !stack.is_empty() {
                     let mut item_compound = NbtCompound::new();
                     stack.write_item_stack(&mut item_compound);
-                    match slot {
-                        EquipmentSlot::OffHand(_) => {
-                            equipment_compound.put_compound("offhand", item_compound);
-                        }
+                    let vanilla_slot = match slot {
                         EquipmentSlot::Feet(_) => {
-                            equipment_compound.put_compound("feet", item_compound);
+                            equipment_compound.put_compound("feet", item_compound.clone());
+                            Some(100i8)
                         }
                         EquipmentSlot::Legs(_) => {
-                            equipment_compound.put_compound("legs", item_compound);
+                            equipment_compound.put_compound("legs", item_compound.clone());
+                            Some(101i8)
                         }
                         EquipmentSlot::Chest(_) => {
-                            equipment_compound.put_compound("chest", item_compound);
+                            equipment_compound.put_compound("chest", item_compound.clone());
+                            Some(102i8)
                         }
                         EquipmentSlot::Head(_) => {
-                            equipment_compound.put_compound("head", item_compound);
+                            equipment_compound.put_compound("head", item_compound.clone());
+                            Some(103i8)
                         }
-                        _ => {
-                            warn!("Invalid equipment slot for a player");
+                        EquipmentSlot::OffHand(_) => {
+                            equipment_compound.put_compound("offhand", item_compound.clone());
+                            Some(-106i8)
                         }
+                        _ => None,
+                    };
+                    if let Some(slot_byte) = vanilla_slot {
+                        let mut inv_item_compound = NbtCompound::new();
+                        inv_item_compound.put_byte("Slot", slot_byte);
+                        stack.write_item_stack(&mut inv_item_compound);
+                        items.push(NbtTag::Compound(inv_item_compound));
                     }
                 }
             }
@@ -5660,7 +5673,15 @@ impl NBTStorage for PlayerInventory {
                     if let Some(item_compound) = tag.extract_compound()
                         && let Some(slot_byte) = item_compound.get_byte("Slot")
                     {
-                        let slot = slot_byte as usize;
+                        let slot = match slot_byte {
+                            100 => 36,  // feet
+                            101 => 37,  // legs
+                            102 => 38,  // chest
+                            103 => 39,  // head
+                            -106 => 40, // offhand
+                            s if (0..=40).contains(&s) => s as usize,
+                            _ => continue,
+                        };
                         if let Some(item_stack) = ItemStack::read_item_stack(item_compound) {
                             self.set_stack(slot, item_stack).await;
                         }
@@ -5903,12 +5924,23 @@ impl EntityBase for Player {
             let total_exp =
                 experience::points_to_level(self.experience_level.load(Ordering::Relaxed))
                     + self.experience_points.load(Ordering::Relaxed);
+            nbt.put_float("XpP", self.experience_progress.load());
+            nbt.put_int("XpLevel", self.experience_level.load(Ordering::Relaxed));
             nbt.put_int("XpTotal", total_exp);
-            nbt.put_byte("playerGameType", self.gamemode.load() as i8);
+            nbt.put_int("XpSeed", self.enchantment_seed.load(Ordering::Relaxed));
+            nbt.put_int("Score", self.score.load(Ordering::Relaxed));
+            nbt.put_short("SleepTimer", self.sleeping_since.load().unwrap_or(0) as i16);
+
+            nbt.put_int("playerGameType", self.gamemode.load() as i32);
             if let Some(previous_gamemode) = self.previous_gamemode.load() {
-                nbt.put_byte("previousPlayerGameType", previous_gamemode as i8);
+                nbt.put_int("previousPlayerGameType", previous_gamemode as i32);
             }
 
+            nbt.put_bool("seenCredits", self.seen_credits.load(Ordering::Relaxed));
+            nbt.put_bool(
+                "spawn_extra_particles_on_fall",
+                self.spawn_extra_particles_on_fall.load(Ordering::Relaxed),
+            );
             nbt.put_bool(
                 "HasPlayedBefore",
                 self.has_played_before.load(Ordering::Relaxed),
@@ -5917,13 +5949,13 @@ impl EntityBase for Player {
             // Store food level, saturation, exhaustion, and tick timer
             self.hunger_manager.write_nbt(nbt).await;
 
-            nbt.put_int(
-                "AirSupply",
-                self.breath_manager
-                    .air_supply
-                    .load(Ordering::Relaxed)
-                    .clamp(0, super::breath::MAX_AIR),
-            );
+            let air_supply = self
+                .breath_manager
+                .air_supply
+                .load(Ordering::Relaxed)
+                .clamp(0, super::breath::MAX_AIR);
+            nbt.put_short("Air", air_supply as i16);
+            nbt.put_int("AirSupply", air_supply);
             nbt.put_int(
                 "DrowningTick",
                 self.breath_manager
@@ -5946,8 +5978,23 @@ impl EntityBase for Player {
                     respawn.dimension.minecraft_name.to_owned(),
                 );
                 nbt.put_bool("SpawnForced", respawn.force);
+
+                let mut respawn_compound = NbtCompound::new();
+                respawn_compound
+                    .put_string("dimension", respawn.dimension.minecraft_name.to_string());
+                respawn_compound.put(
+                    "pos",
+                    NbtTag::IntArray(vec![
+                        respawn.position.0.x,
+                        respawn.position.0.y,
+                        respawn.position.0.z,
+                    ]),
+                );
+                respawn_compound.put_float("angle", respawn.yaw);
+                respawn_compound.put_bool("forced", respawn.force);
+                nbt.put_compound("respawn", respawn_compound);
             }
-            nbt.put_int("XpSeed", self.enchantment_seed.load(Ordering::Relaxed));
+
             let vehicle_uuid = self
                 .living_entity
                 .entity
@@ -5964,28 +6011,84 @@ impl EntityBase for Player {
         })
     }
 
+    #[expect(clippy::too_many_lines)]
     fn read_custom_nbt<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async move {
             self.inventory.read_nbt_non_mut(nbt).await;
             self.ender_chest_inventory.read_nbt_non_mut(nbt).await;
-            self.abilities.lock().await.read_nbt_non_mut(nbt).await;
 
-            // Load from total XP
+            let xp_p = nbt.get_float("XpP").unwrap_or(0.0);
+            let xp_level = nbt.get_int("XpLevel");
             let total_exp = nbt.get_int("XpTotal").unwrap_or(0);
-            let (level, points) = experience::total_to_level_and_points(total_exp);
-            let progress = experience::progress_in_level(level, points);
-            self.experience_level.store(level, Ordering::Relaxed);
-            self.experience_progress.store(progress);
-            self.experience_points.store(points, Ordering::Relaxed);
 
-            self.gamemode.store(
-                GameMode::try_from(nbt.get_byte("playerGameType").unwrap_or(0))
-                    .unwrap_or(GameMode::Survival),
+            if let Some(level) = xp_level {
+                self.experience_level.store(level, Ordering::Relaxed);
+                self.experience_progress.store(xp_p);
+                let points = (xp_p * experience::points_in_level(level) as f32).round() as i32;
+                self.experience_points.store(points, Ordering::Relaxed);
+            } else {
+                let (level, points) = experience::total_to_level_and_points(total_exp);
+                let progress = experience::progress_in_level(level, points);
+                self.experience_level.store(level, Ordering::Relaxed);
+                self.experience_progress.store(progress);
+                self.experience_points.store(points, Ordering::Relaxed);
+            }
+
+            self.enchantment_seed.store(
+                nbt.get_int("XpSeed").unwrap_or_else(rand::random),
+                Ordering::Relaxed,
             );
 
+            self.score
+                .store(nbt.get_int("Score").unwrap_or(0), Ordering::Relaxed);
+            if let Some(sleep_timer) = nbt.get_short("SleepTimer")
+                && sleep_timer > 0
+            {
+                self.sleeping_since.store(Some(sleep_timer as u8));
+            }
+
+            self.seen_credits.store(
+                nbt.get_bool("seenCredits").unwrap_or(false),
+                Ordering::Relaxed,
+            );
+            self.spawn_extra_particles_on_fall.store(
+                nbt.get_bool("spawn_extra_particles_on_fall")
+                    .unwrap_or(false),
+                Ordering::Relaxed,
+            );
+
+            let gamemode = nbt
+                .get_int("playerGameType")
+                .or_else(|| nbt.get_byte("playerGameType").map(i32::from))
+                .and_then(|val| GameMode::try_from(val).ok())
+                .unwrap_or_else(|| self.gamemode.load());
+
+            self.gamemode.store(gamemode);
+
             self.previous_gamemode.store(
-                nbt.get_byte("previousPlayerGameType")
-                    .and_then(|byte| GameMode::try_from(byte).ok()),
+                nbt.get_int("previousPlayerGameType")
+                    .or_else(|| nbt.get_byte("previousPlayerGameType").map(i32::from))
+                    .and_then(|val| GameMode::try_from(val).ok()),
+            );
+
+            {
+                let mut abilities = self.abilities.lock().await;
+                abilities.set_for_gamemode(gamemode);
+                abilities.read_nbt(nbt);
+                if gamemode == GameMode::Creative {
+                    abilities.allow_flying = true;
+                    abilities.creative = true;
+                    abilities.invulnerable = true;
+                } else if gamemode == GameMode::Spectator {
+                    abilities.allow_flying = true;
+                    abilities.creative = false;
+                    abilities.invulnerable = true;
+                }
+            }
+
+            self.living_entity.entity.invulnerable.store(
+                matches!(gamemode, GameMode::Creative | GameMode::Spectator),
+                Ordering::Relaxed,
             );
 
             self.has_played_before.store(
@@ -5995,7 +6098,11 @@ impl EntityBase for Player {
 
             self.hunger_manager.read_nbt_non_mut(nbt).await;
 
-            if let Some(air) = nbt.get_int("AirSupply") {
+            if let Some(air) = nbt
+                .get_short("Air")
+                .map(i32::from)
+                .or_else(|| nbt.get_int("AirSupply"))
+            {
                 self.breath_manager
                     .air_supply
                     .store(air.clamp(0, super::breath::MAX_AIR), Ordering::Relaxed);
@@ -6007,8 +6114,28 @@ impl EntityBase for Player {
                 );
             }
 
-            // Load any saved spawnpoint data (SpawnX/SpawnY/SpawnZ, SpawnDimension, SpawnForced)
-            if let (Some(x), Some(y), Some(z)) = (
+            // Load any saved spawnpoint data (both vanilla "respawn" compound and legacy SpawnX/SpawnY/SpawnZ)
+            if let Some(respawn_compound) = nbt.get_compound("respawn") {
+                let dim = respawn_compound
+                    .get_string("dimension")
+                    .and_then(|s| Dimension::from_name(s).cloned())
+                    .unwrap_or_else(|| self.world().dimension.clone());
+                let pos = if let Some(pos_array) = respawn_compound.get_int_array("pos")
+                    && pos_array.len() >= 3
+                {
+                    BlockPos(Vector3::new(pos_array[0], pos_array[1], pos_array[2]))
+                } else {
+                    BlockPos(Vector3::new(0, 0, 0))
+                };
+                let yaw = respawn_compound.get_float("angle").unwrap_or(0.0);
+                let force = respawn_compound.get_bool("forced").unwrap_or(false);
+                *self.respawn_point.lock().await = Some(RespawnPoint {
+                    dimension: dim,
+                    position: pos,
+                    yaw,
+                    force,
+                });
+            } else if let (Some(x), Some(y), Some(z)) = (
                 nbt.get_int("SpawnX"),
                 nbt.get_int("SpawnY"),
                 nbt.get_int("SpawnZ"),
@@ -6025,10 +6152,6 @@ impl EntityBase for Player {
                     force,
                 });
             }
-            self.enchantment_seed.store(
-                nbt.get_int("XpSeed").unwrap_or(rand::random()),
-                Ordering::Relaxed,
-            );
             self.root_vehicle_uuid.store(read_root_vehicle(nbt));
             self.stats.lock().await.read_nbt(nbt);
         })
@@ -6091,15 +6214,7 @@ impl NBTStorage for Abilities {
 
     fn read_nbt<'a>(&'a mut self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async move {
-            if let Some(component) = nbt.get_compound("abilities") {
-                self.invulnerable = component.get_bool("invulnerable").unwrap_or(false);
-                self.flying = component.get_bool("flying").unwrap_or(false);
-                self.allow_flying = component.get_bool("mayfly").unwrap_or(false);
-                self.creative = component.get_bool("instabuild").unwrap_or(false);
-                self.allow_modify_world = component.get_bool("mayBuild").unwrap_or(false);
-                self.fly_speed = component.get_float("flySpeed").unwrap_or(0.05);
-                self.walk_speed = component.get_float("walkSpeed").unwrap_or(0.1);
-            }
+            self.read_nbt(nbt);
         })
     }
 }
@@ -6121,6 +6236,18 @@ impl Default for Abilities {
 }
 
 impl Abilities {
+    pub fn read_nbt(&mut self, nbt: &NbtCompound) {
+        if let Some(component) = nbt.get_compound("abilities") {
+            self.invulnerable = component.get_bool("invulnerable").unwrap_or(false);
+            self.flying = component.get_bool("flying").unwrap_or(false);
+            self.allow_flying = component.get_bool("mayfly").unwrap_or(false);
+            self.creative = component.get_bool("instabuild").unwrap_or(false);
+            self.allow_modify_world = component.get_bool("mayBuild").unwrap_or(true);
+            self.fly_speed = component.get_float("flySpeed").unwrap_or(0.05);
+            self.walk_speed = component.get_float("walkSpeed").unwrap_or(0.1);
+        }
+    }
+
     pub const fn set_for_gamemode(&mut self, gamemode: GameMode) {
         match gamemode {
             GameMode::Creative => {

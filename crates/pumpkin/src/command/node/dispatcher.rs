@@ -352,13 +352,8 @@ impl CommandDispatcher {
     /// Executes a given result that has already been parsed from an input.
     pub async fn execute(&self, parsed: ParsingResult<'_>) -> Result<i32, CommandSyntaxError> {
         if parsed.reader.peek().is_some() {
-            return if parsed.errors.len() == 1 {
-                Err(parsed
-                    .errors
-                    .values()
-                    .next()
-                    .expect("Errors length is 1, so next should exist")
-                    .clone())
+            return if let Some(err) = parsed.errors.values().next() {
+                Err(err.clone())
             } else if parsed.context.range.is_empty() {
                 Err(DISPATCHER_UNKNOWN_COMMAND.create(&parsed.reader))
             } else {
@@ -1076,10 +1071,7 @@ impl CommandDispatcher {
                             }
                         }
                         if child_usages.len() == 1 {
-                            let mut child_usage = child_usages
-                                .into_iter()
-                                .next()
-                                .expect("Child usages length is 1, so next should exist");
+                            let mut child_usage = child_usages.pop().unwrap_or_default();
                             if is_optional {
                                 child_usage = format!(
                                     "{USAGE_OPTIONAL_OPEN}{child_usage}{USAGE_OPTIONAL_CLOSE}"

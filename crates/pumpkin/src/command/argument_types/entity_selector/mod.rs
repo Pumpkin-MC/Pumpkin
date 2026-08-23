@@ -165,12 +165,10 @@ impl EntitySelector {
         &self,
         source: &CommandSource,
     ) -> Result<Arc<Player>, CommandSyntaxError> {
-        let list = self.find_players(source).await?;
+        let mut list = self.find_players(source).await?;
         if list.len() == 1 {
-            Ok(list
-                .first()
-                .expect("List length is 1, so first should exist")
-                .clone())
+            list.pop()
+                .ok_or_else(|| entity::NO_PLAYERS_ERROR_TYPE.create_without_context())
         } else {
             Err(entity::NO_PLAYERS_ERROR_TYPE.create_without_context())
         }

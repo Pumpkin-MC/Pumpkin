@@ -39,6 +39,10 @@ pub enum PluginInitError {
     CallInitPluginFailed(wasmtime::Error),
     #[error("Calling `get_metadata` failed: {0}")]
     CallGetMetadataFailed(wasmtime::Error),
+    #[error("Failed to get absolute path: {0}")]
+    PathResolutionFailed(std::io::Error),
+    #[error("Failed to create cache: {0}")]
+    CacheCreationFailed(wasmtime::Error),
 }
 
 pub struct PluginRuntime {
@@ -61,14 +65,14 @@ impl PluginRuntime {
         let mut config = wasmtime::Config::new();
         config.wasm_component_model(true);
         config.wasm_component_model_async(true);
-        let mut path = std::path::absolute(path.as_ref()).expect("Failed to get absolute path");
+        let mut path =
+            std::path::absolute(path.as_ref()).map_err(PluginInitError::PathResolutionFailed)?;
         path.pop();
         path.push("cache");
         let mut cache_config = CacheConfig::new();
         cache_config.with_directory(&path);
-        config.cache(Some(
-            Cache::new(cache_config).expect("Failed to create cache"),
-        ));
+        let cache = Cache::new(cache_config).map_err(PluginInitError::CacheCreationFailed)?;
+        config.cache(Some(cache));
 
         config.gc_support(true);
         config.wasm_gc(true);

@@ -152,18 +152,6 @@ impl IceSocket {
     pub async fn send_to(&self, buffer: &[u8], target: SocketAddr) -> Result<usize, Error> {
         self.socket.send_to(buffer, target).await
     }
-
-    #[cfg(test)]
-    pub(super) fn for_test(socket: Arc<UdpSocket>) -> (Self, mpsc::Sender<(Bytes, SocketAddr)>) {
-        let (packets, receiver) = mpsc::channel(1024);
-        (
-            Self {
-                socket,
-                packets: Mutex::new(receiver),
-            },
-            packets,
-        )
-    }
 }
 
 pub async fn handle_packet(

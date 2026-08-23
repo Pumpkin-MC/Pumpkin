@@ -135,7 +135,7 @@ futures = { version = "0.3", default-features = false, features = ["executor"] }
 rayon = { version = "1.12", default-features = false }
 crossbeam = { version = "0.8", default-features = false, features = ["std"] }
 
-uuid = { version = "1.24", default-features = false, features = ["serde", "v3", "v4", "std"] }
+uuid = { version = "1.25", default-features = false, features = ["serde", "v3", "v4", "std"] }
 serde = { version = "1.0", default-features = false, features = ["derive", "std"] }
 serde_repr = { version = "0.1", default-features = false }
 serde_json = { version = "1.0", default-features = false, features = ["std"] }
@@ -213,7 +213,7 @@ notify = { version = "8.2.0", default-features = false, features = ["macos_fseve
 
 sysinfo = { version = "0.39", default-features = false, features = ["system"] }
 rustc_version_runtime = { version = "0.3", default-features = false }
-ordered-float = { version = "5.3", default-features = false, features = ["std"] }
+ordered-float = { version = "5.4", default-features = false, features = ["std"] }
 xxhash-rust = { version = "0.8", default-features = false, features = ["xxh64"] }
 
 wasmtime = { version = "47.0", default-features = false, features = ["runtime", "component-model", "async", "cache", "cranelift", "gc", "gc-drc", "threads", "std"] }
@@ -222,7 +222,7 @@ wasmtime-wasi-http = { version = "47.0", default-features = false, features = ["
 # needed for interacting with wasmtime-wasi-http - keep in sync
 hyper = { version = "^1.11", default-features = false }
 axum = { version = "0.8.9", default-features = false, features = ["http1", "tokio"] }
-webrtc = { version = "0.20.2" }
+webrtc = { version = "0.20.3" }
 async-trait = "0.1"
 wit-bindgen = { version = "0.60", default-features = false, features = ["macros"] }
 

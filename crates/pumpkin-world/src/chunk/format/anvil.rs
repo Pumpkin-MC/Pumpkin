@@ -546,6 +546,10 @@ impl<S: SingleChunkDataSerializer + 'static> ChunkSerializer for AnvilChunkFile<
     fn read(r: Bytes) -> Result<Self, ChunkReadingError> {
         let mut raw_file_bytes = r;
 
+        if raw_file_bytes.is_empty() {
+            return Ok(Self::default());
+        }
+
         if raw_file_bytes.len() < SECTOR_BYTES * 2 {
             return Err(ChunkReadingError::InvalidHeader);
         }
