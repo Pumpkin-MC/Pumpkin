@@ -61,6 +61,26 @@ impl PacketWrite for CUnconnectedPong {
     }
 }
 
+#[derive(PacketWrite)]
+#[packet(0x19)]
+pub struct CIncompatibleProtocolVersion {
+    protocol_version: u8,
+    magic: [u8; 16],
+    #[serial(big_endian)]
+    server_guid: u64,
+}
+
+impl CIncompatibleProtocolVersion {
+    #[must_use]
+    pub const fn new(protocol_version: u8, server_guid: u64) -> Self {
+        Self {
+            protocol_version,
+            magic: OFFLINE_MESSAGE_MAGIC,
+            server_guid,
+        }
+    }
+}
+
 pub struct ServerInfo<'a> {
     pub motd: &'a str,
     pub protocol: u32,
@@ -119,5 +139,17 @@ mod tests {
             info.to_string(),
             "MCPE;Pumpkin;2168;1.26.40;2;20;42;world;Creative;1;19132;19133;0;"
         );
+    }
+
+    #[test]
+    fn encodes_raknet_incompatible_protocol_response() {
+        let mut response = Vec::new();
+        CIncompatibleProtocolVersion::new(12, 42)
+            .write(&mut response)
+            .unwrap();
+
+        assert_eq!(response[0], 12);
+        assert_eq!(response[1..17], OFFLINE_MESSAGE_MAGIC);
+        assert_eq!(response[17..], 42u64.to_be_bytes());
     }
 }
