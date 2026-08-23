@@ -1,4 +1,4 @@
-use pumpkin_data::Block;
+﻿use pumpkin_data::Block;
 use pumpkin_data::BlockStateId;
 use pumpkin_data::block_properties::{BlockProperties, NetherWartLikeProperties};
 use pumpkin_macros::pumpkin_block;
@@ -25,7 +25,7 @@ impl BlockBehaviour for BeetrootBlock {
     }
 
     fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
-        <Self as CropBlockBase>::can_plant_on_top(self, args.block_accessor, &args.position.down())
+        <Self as PlantBlockBase>::can_place_at(self, args.block_accessor, args.position)
     }
 
     fn get_state_for_neighbor_update(
@@ -51,7 +51,7 @@ impl PlantBlockBase for BeetrootBlock {
     // Crops require farmland below; without this override the generic plant
     // survival check (`supports_vegetation`) keeps them alive on dirt.
     fn can_plant_on_top(&self, block_accessor: &dyn BlockAccessor, pos: &BlockPos) -> bool {
-        <Self as CropBlockBase>::can_plant_on_top(self, block_accessor, pos)
+        <Self as CropBlockBase>::can_plant_crop_on_top(self, block_accessor, pos)
     }
 }
 

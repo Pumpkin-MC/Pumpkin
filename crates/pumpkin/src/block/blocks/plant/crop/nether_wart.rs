@@ -1,4 +1,4 @@
-use std::sync::Arc;
+﻿use std::sync::Arc;
 
 use pumpkin_data::{
     Block, BlockStateId,
@@ -55,7 +55,7 @@ impl PlantBlockBase for NetherWartBlock {
 }
 
 impl CropBlockBase for NetherWartBlock {
-    fn can_plant_on_top(&self, block_accessor: &dyn BlockAccessor, pos: &BlockPos) -> bool {
+    fn can_plant_crop_on_top(&self, block_accessor: &dyn BlockAccessor, pos: &BlockPos) -> bool {
         <Self as PlantBlockBase>::can_plant_on_top(self, block_accessor, pos)
     }
 
