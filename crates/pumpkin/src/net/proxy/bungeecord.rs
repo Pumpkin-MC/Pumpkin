@@ -100,7 +100,10 @@ pub fn bungeecord_login(
                      ({} parts, property names: {:?})",
                     BUNGEEGUARD_TOKEN_PROPERTY,
                     server_address.split('\0').count(),
-                    properties.iter().map(|p| p.name.as_ref()).collect::<Vec<_>>()
+                    properties
+                        .iter()
+                        .map(|p| p.name.as_ref())
+                        .collect::<Vec<_>>()
                 );
                 return Err(BungeeCordError::MissingToken);
             }
