@@ -166,7 +166,7 @@ pub struct LevelSettings {
 
 #[derive(Default)]
 pub struct Experiments {
-    pub toggles: Vec<ExprimentToggle>,
+    pub toggles: Vec<ExperimentToggle>,
     pub experiments_ever_toggled: bool,
 }
 
@@ -183,7 +183,7 @@ impl PacketWrite for Experiments {
 }
 
 #[derive(PacketWrite)]
-pub struct ExprimentToggle {
+pub struct ExperimentToggle {
     pub name: String,
     pub enabled: bool,
 }
