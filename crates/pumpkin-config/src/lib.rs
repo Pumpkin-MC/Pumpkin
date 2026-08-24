@@ -88,7 +88,9 @@ impl LoadConfiguration for PumpkinConfig {
         self.basic.validate();
         self.advanced.validate();
 
-        let min_vd = NonZero::<u8>::MIN;
+        let Some(min_vd) = NonZero::new(2) else {
+            return;
+        };
         let Some(max_vd) = NonZero::new(64) else {
             return;
         };
@@ -413,4 +415,38 @@ pub trait LoadConfiguration {
 
     /// Validates the configuration after loading or merging.
     fn validate(&self);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn config_with_view_distances(java: u8, bedrock: u8) -> PumpkinConfig {
+        let mut config = PumpkinConfig::default();
+        config.advanced.networking.java.view_distance = NonZero::new(java).unwrap();
+        config.advanced.networking.bedrock.view_distance = NonZero::new(bedrock).unwrap();
+        config
+    }
+
+    #[test]
+    fn default_config_is_valid() {
+        PumpkinConfig::default().validate();
+    }
+
+    #[test]
+    fn view_distance_of_two_is_accepted() {
+        config_with_view_distances(2, 2).validate();
+    }
+
+    #[test]
+    #[should_panic(expected = "Java View distance must be at least 2")]
+    fn java_view_distance_below_minimum_is_rejected() {
+        config_with_view_distances(1, 16).validate();
+    }
+
+    #[test]
+    #[should_panic(expected = "Bedrock View distance must be at least 2")]
+    fn bedrock_view_distance_below_minimum_is_rejected() {
+        config_with_view_distances(16, 1).validate();
+    }
 }
