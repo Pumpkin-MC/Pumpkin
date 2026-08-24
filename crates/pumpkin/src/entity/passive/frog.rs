@@ -6,16 +6,14 @@ use std::sync::{
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
-use pumpkin_data::meta_data_type::MetaDataType;
 use pumpkin_data::sound::Sound;
 use pumpkin_data::tag::{self, Taggable};
-use pumpkin_data::tracked_data::TrackedData;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::java::client::play::Metadata;
 
 use crate::entity::{
-    Entity, EntityBase, EntityBaseFuture, NBTStorage, NbtFuture,
+    Entity, EntityBase, EntityBaseFuture, NbtFuture,
     ageable::{AgeableData, AgeableMob},
     ai::goal::{
         look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal, swim::SwimGoal,
@@ -126,8 +124,7 @@ impl FrogEntity {
         let entity = self.get_entity();
         entity.send_meta_data(
             &[Metadata::new(
-                TrackedData::VARIANT,
-                MetaDataType::FROG_VARIANT,
+                pumpkin_data::tracked_data::frog::VARIANT,
                 VarInt(variant.id()),
             )],
             None,
@@ -148,29 +145,29 @@ impl Animal for FrogEntity {
     }
 }
 
-impl NBTStorage for FrogEntity {
-    fn write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
+impl Mob for FrogEntity {
+    fn as_ageable(&self) -> Option<&dyn AgeableMob> {
+        Some(self)
+    }
+
+    fn as_animal(&self) -> Option<&dyn Animal> {
+        Some(self)
+    }
+
+    fn mob_write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async move {
-            self.mob_entity.living_entity.write_nbt(nbt).await;
-            self.write_ageable_nbt(nbt);
-            self.write_animal_nbt(nbt);
             nbt.put_string("variant", self.get_variant().as_str().to_string());
         })
     }
 
-    fn read_nbt_non_mut<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
+    fn mob_read_nbt<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async move {
-            self.mob_entity.living_entity.read_nbt_non_mut(nbt).await;
-            self.read_ageable_nbt(nbt);
-            self.read_animal_nbt(nbt);
             if let Some(variant_str) = nbt.get_string("variant") {
                 self.set_variant(FrogVariant::from_name(variant_str));
             }
         })
     }
-}
 
-impl Mob for FrogEntity {
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
     }
@@ -192,8 +189,7 @@ impl Mob for FrogEntity {
             if is_baby {
                 entity.send_meta_data(
                     &[Metadata::new(
-                        TrackedData::BABY_ID,
-                        MetaDataType::BOOLEAN,
+                        pumpkin_data::tracked_data::frog::BABY_ID,
                         true,
                     )],
                     None,
@@ -201,8 +197,7 @@ impl Mob for FrogEntity {
             }
             entity.send_meta_data(
                 &[Metadata::new(
-                    TrackedData::VARIANT,
-                    MetaDataType::FROG_VARIANT,
+                    pumpkin_data::tracked_data::frog::VARIANT,
                     VarInt(self.get_variant().id()),
                 )],
                 None,

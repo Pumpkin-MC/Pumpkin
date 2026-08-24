@@ -2,7 +2,7 @@ use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 use std::sync::{Arc, Weak};
 
 use crate::entity::{
-    Entity, NBTStorage,
+    Entity,
     ai::goal::{Controls, Goal, GoalFuture},
     mob::{Mob, MobEntity},
 };
@@ -50,8 +50,6 @@ impl GhastEntity {
         self.is_charging.load(Ordering::Relaxed)
     }
 }
-
-impl NBTStorage for GhastEntity {}
 
 impl Mob for GhastEntity {
     fn get_mob_entity(&self) -> &MobEntity {

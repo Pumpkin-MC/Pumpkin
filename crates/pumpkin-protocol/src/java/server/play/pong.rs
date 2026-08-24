@@ -1,4 +1,4 @@
-use pumpkin_data::packet::serverbound::PLAY_PONG;
+use pumpkin_data::packet::serverbound::play::PONG;
 use pumpkin_macros::java_packet;
 
 use crate::{
@@ -7,7 +7,7 @@ use crate::{
 };
 use pumpkin_util::version::JavaMinecraftVersion;
 
-#[java_packet(PLAY_PONG)]
+#[java_packet(PONG)]
 pub struct SPlayPong {
     pub id: i32,
 }

@@ -15,11 +15,16 @@ pub struct CUpdateBlock {
 impl CUpdateBlock {
     #[must_use]
     pub const fn new(position: BlockPos, block_runtime_id: u32) -> Self {
+        Self::with_layer(position, block_runtime_id, 0)
+    }
+
+    #[must_use]
+    pub const fn with_layer(position: BlockPos, block_runtime_id: u32, layer: u32) -> Self {
         Self {
             position,
             block_runtime_id: VarUInt(block_runtime_id),
             flags: VarUInt(0x3), // neighbors | network
-            layer: VarUInt(0),
+            layer: VarUInt(layer),
         }
     }
 }

@@ -4,10 +4,7 @@ use std::sync::{
 };
 use tokio::sync::Mutex;
 
-use pumpkin_data::{
-    damage::DamageType, item_stack::ItemStack, meta_data_type::MetaDataType,
-    tracked_data::TrackedData,
-};
+use pumpkin_data::{damage::DamageType, item_stack::ItemStack};
 use pumpkin_nbt::{compound::NbtCompound, tag::NbtTag};
 use pumpkin_protocol::{
     codec::{item_stack_seralizer::ItemStackSerializer, var_int::VarInt},
@@ -17,7 +14,7 @@ use pumpkin_protocol::{
 use pumpkin_util::{math::vector3::Vector3, text::TextComponent};
 
 use crate::{
-    entity::{Entity, EntityBase, EntityBaseFuture, NBTStorage, NbtFuture, living::LivingEntity},
+    entity::{Entity, EntityBase, EntityBaseFuture, NbtFuture, living::LivingEntity},
     server::Server,
 };
 
@@ -25,7 +22,11 @@ use crate::{
 pub struct Vector3fSerializer(pub f32, pub f32, pub f32);
 
 impl MetadataSerializer for Vector3fSerializer {
-    fn write_metadata(&self, writer: &mut impl std::io::Write) -> Result<(), WritingError> {
+    fn write_metadata(
+        &self,
+        writer: &mut impl std::io::Write,
+        _version: &pumpkin_util::version::JavaMinecraftVersion,
+    ) -> Result<(), WritingError> {
         writer.write_f32(self.0)?;
         writer.write_f32(self.1)?;
         writer.write_f32(self.2)
@@ -36,7 +37,11 @@ impl MetadataSerializer for Vector3fSerializer {
 pub struct QuaternionfSerializer(pub f32, pub f32, pub f32, pub f32);
 
 impl MetadataSerializer for QuaternionfSerializer {
-    fn write_metadata(&self, writer: &mut impl std::io::Write) -> Result<(), WritingError> {
+    fn write_metadata(
+        &self,
+        writer: &mut impl std::io::Write,
+        _version: &pumpkin_util::version::JavaMinecraftVersion,
+    ) -> Result<(), WritingError> {
         writer.write_f32(self.0)?;
         writer.write_f32(self.1)?;
         writer.write_f32(self.2)?;
@@ -95,8 +100,7 @@ impl DisplayEntity {
             .store(ticks, Ordering::Relaxed);
         self.entity.send_meta_data(
             &[Metadata::new(
-                TrackedData::START_INTERPOLATION,
-                MetaDataType::INT,
+                pumpkin_data::tracked_data::display::START_INTERPOLATION,
                 VarInt(ticks),
             )],
             None,
@@ -112,8 +116,7 @@ impl DisplayEntity {
             .store(duration, Ordering::Relaxed);
         self.entity.send_meta_data(
             &[Metadata::new(
-                TrackedData::INTERPOLATION_DURATION,
-                MetaDataType::INT,
+                pumpkin_data::tracked_data::display::INTERPOLATION_DURATION,
                 VarInt(duration),
             )],
             None,
@@ -128,8 +131,7 @@ impl DisplayEntity {
         self.teleport_duration.store(duration, Ordering::Relaxed);
         self.entity.send_meta_data(
             &[Metadata::new(
-                TrackedData::TELEPORT_DURATION,
-                MetaDataType::INT,
+                pumpkin_data::tracked_data::display::TELEPORT_DURATION,
                 VarInt(duration),
             )],
             None,
@@ -144,8 +146,7 @@ impl DisplayEntity {
         *self.translation.lock().await = translation;
         self.entity.send_meta_data(
             &[Metadata::new(
-                TrackedData::TRANSLATION,
-                MetaDataType::VECTOR_3F,
+                pumpkin_data::tracked_data::display::TRANSLATION,
                 Vector3fSerializer(translation.x, translation.y, translation.z),
             )],
             None,
@@ -160,8 +161,7 @@ impl DisplayEntity {
         *self.scale.lock().await = scale;
         self.entity.send_meta_data(
             &[Metadata::new(
-                TrackedData::SCALE,
-                MetaDataType::VECTOR_3F,
+                pumpkin_data::tracked_data::display::SCALE,
                 Vector3fSerializer(scale.x, scale.y, scale.z),
             )],
             None,
@@ -176,8 +176,7 @@ impl DisplayEntity {
         *self.left_rotation.lock().await = left_rotation;
         self.entity.send_meta_data(
             &[Metadata::new(
-                TrackedData::LEFT_ROTATION,
-                MetaDataType::QUATERNION_F,
+                pumpkin_data::tracked_data::display::LEFT_ROTATION,
                 QuaternionfSerializer(
                     left_rotation[0],
                     left_rotation[1],
@@ -197,8 +196,7 @@ impl DisplayEntity {
         *self.right_rotation.lock().await = right_rotation;
         self.entity.send_meta_data(
             &[Metadata::new(
-                TrackedData::RIGHT_ROTATION,
-                MetaDataType::QUATERNION_F,
+                pumpkin_data::tracked_data::display::RIGHT_ROTATION,
                 QuaternionfSerializer(
                     right_rotation[0],
                     right_rotation[1],
@@ -218,8 +216,7 @@ impl DisplayEntity {
         self.billboard.store(billboard, Ordering::Relaxed);
         self.entity.send_meta_data(
             &[Metadata::new(
-                TrackedData::BILLBOARD,
-                MetaDataType::BYTE,
+                pumpkin_data::tracked_data::display::BILLBOARD,
                 billboard,
             )],
             None,
@@ -234,8 +231,7 @@ impl DisplayEntity {
         self.brightness.store(brightness, Ordering::Relaxed);
         self.entity.send_meta_data(
             &[Metadata::new(
-                TrackedData::BRIGHTNESS,
-                MetaDataType::INT,
+                pumpkin_data::tracked_data::display::BRIGHTNESS,
                 VarInt(brightness),
             )],
             None,
@@ -250,8 +246,7 @@ impl DisplayEntity {
         *self.view_range.lock().await = view_range;
         self.entity.send_meta_data(
             &[Metadata::new(
-                TrackedData::VIEW_RANGE,
-                MetaDataType::FLOAT,
+                pumpkin_data::tracked_data::display::VIEW_RANGE,
                 view_range,
             )],
             None,
@@ -266,8 +261,7 @@ impl DisplayEntity {
         *self.shadow_radius.lock().await = shadow_radius;
         self.entity.send_meta_data(
             &[Metadata::new(
-                TrackedData::SHADOW_RADIUS,
-                MetaDataType::FLOAT,
+                pumpkin_data::tracked_data::display::SHADOW_RADIUS,
                 shadow_radius,
             )],
             None,
@@ -282,8 +276,7 @@ impl DisplayEntity {
         *self.shadow_strength.lock().await = shadow_strength;
         self.entity.send_meta_data(
             &[Metadata::new(
-                TrackedData::SHADOW_STRENGTH,
-                MetaDataType::FLOAT,
+                pumpkin_data::tracked_data::display::SHADOW_STRENGTH,
                 shadow_strength,
             )],
             None,
@@ -298,8 +291,7 @@ impl DisplayEntity {
         *self.width.lock().await = width;
         self.entity.send_meta_data(
             &[Metadata::new(
-                TrackedData::WIDTH,
-                MetaDataType::FLOAT,
+                pumpkin_data::tracked_data::display::WIDTH,
                 width,
             )],
             None,
@@ -314,8 +306,7 @@ impl DisplayEntity {
         *self.height.lock().await = height;
         self.entity.send_meta_data(
             &[Metadata::new(
-                TrackedData::HEIGHT,
-                MetaDataType::FLOAT,
+                pumpkin_data::tracked_data::display::HEIGHT,
                 height,
             )],
             None,
@@ -330,8 +321,7 @@ impl DisplayEntity {
         self.glow_color_override.store(color, Ordering::Relaxed);
         self.entity.send_meta_data(
             &[Metadata::new(
-                TrackedData::GLOW_COLOR_OVERRIDE,
-                MetaDataType::INT,
+                pumpkin_data::tracked_data::display::GLOW_COLOR_OVERRIDE,
                 VarInt(color),
             )],
             None,
@@ -352,40 +342,35 @@ impl DisplayEntity {
 
         self.entity.send_meta_data(
             &[Metadata::new(
-                TrackedData::START_INTERPOLATION,
-                MetaDataType::INT,
+                pumpkin_data::tracked_data::display::START_INTERPOLATION,
                 VarInt(self.interpolation_start_delta_ticks.load(Ordering::Relaxed)),
             )],
             None,
         );
         self.entity.send_meta_data(
             &[Metadata::new(
-                TrackedData::INTERPOLATION_DURATION,
-                MetaDataType::INT,
+                pumpkin_data::tracked_data::display::INTERPOLATION_DURATION,
                 VarInt(self.interpolation_duration.load(Ordering::Relaxed)),
             )],
             None,
         );
         self.entity.send_meta_data(
             &[Metadata::new(
-                TrackedData::TRANSLATION,
-                MetaDataType::VECTOR_3F,
+                pumpkin_data::tracked_data::display::TRANSLATION,
                 Vector3fSerializer(translation.x, translation.y, translation.z),
             )],
             None,
         );
         self.entity.send_meta_data(
             &[Metadata::new(
-                TrackedData::SCALE,
-                MetaDataType::VECTOR_3F,
+                pumpkin_data::tracked_data::display::SCALE,
                 Vector3fSerializer(scale.x, scale.y, scale.z),
             )],
             None,
         );
         self.entity.send_meta_data(
             &[Metadata::new(
-                TrackedData::LEFT_ROTATION,
-                MetaDataType::QUATERNION_F,
+                pumpkin_data::tracked_data::display::LEFT_ROTATION,
                 QuaternionfSerializer(
                     left_rotation[0],
                     left_rotation[1],
@@ -397,8 +382,7 @@ impl DisplayEntity {
         );
         self.entity.send_meta_data(
             &[Metadata::new(
-                TrackedData::RIGHT_ROTATION,
-                MetaDataType::QUATERNION_F,
+                pumpkin_data::tracked_data::display::RIGHT_ROTATION,
                 QuaternionfSerializer(
                     right_rotation[0],
                     right_rotation[1],
@@ -410,72 +394,63 @@ impl DisplayEntity {
         );
         self.entity.send_meta_data(
             &[Metadata::new(
-                TrackedData::BILLBOARD,
-                MetaDataType::BYTE,
+                pumpkin_data::tracked_data::display::BILLBOARD,
                 self.billboard.load(Ordering::Relaxed),
             )],
             None,
         );
         self.entity.send_meta_data(
             &[Metadata::new(
-                TrackedData::BRIGHTNESS,
-                MetaDataType::INT,
+                pumpkin_data::tracked_data::display::BRIGHTNESS,
                 VarInt(self.brightness.load(Ordering::Relaxed)),
             )],
             None,
         );
         self.entity.send_meta_data(
             &[Metadata::new(
-                TrackedData::VIEW_RANGE,
-                MetaDataType::FLOAT,
+                pumpkin_data::tracked_data::display::VIEW_RANGE,
                 view_range,
             )],
             None,
         );
         self.entity.send_meta_data(
             &[Metadata::new(
-                TrackedData::SHADOW_RADIUS,
-                MetaDataType::FLOAT,
+                pumpkin_data::tracked_data::display::SHADOW_RADIUS,
                 shadow_radius,
             )],
             None,
         );
         self.entity.send_meta_data(
             &[Metadata::new(
-                TrackedData::SHADOW_STRENGTH,
-                MetaDataType::FLOAT,
+                pumpkin_data::tracked_data::display::SHADOW_STRENGTH,
                 shadow_strength,
             )],
             None,
         );
         self.entity.send_meta_data(
             &[Metadata::new(
-                TrackedData::WIDTH,
-                MetaDataType::FLOAT,
+                pumpkin_data::tracked_data::display::WIDTH,
                 width,
             )],
             None,
         );
         self.entity.send_meta_data(
             &[Metadata::new(
-                TrackedData::HEIGHT,
-                MetaDataType::FLOAT,
+                pumpkin_data::tracked_data::display::HEIGHT,
                 height,
             )],
             None,
         );
         self.entity.send_meta_data(
             &[Metadata::new(
-                TrackedData::TELEPORT_DURATION,
-                MetaDataType::INT,
+                pumpkin_data::tracked_data::display::TELEPORT_DURATION,
                 VarInt(self.teleport_duration.load(Ordering::Relaxed)),
             )],
             None,
         );
         self.entity.send_meta_data(
             &[Metadata::new(
-                TrackedData::GLOW_COLOR_OVERRIDE,
-                MetaDataType::INT,
+                pumpkin_data::tracked_data::display::GLOW_COLOR_OVERRIDE,
                 VarInt(self.glow_color_override.load(Ordering::Relaxed)),
             )],
             None,
@@ -483,7 +458,6 @@ impl DisplayEntity {
     }
 
     pub async fn write_display_nbt(&self, nbt: &mut NbtCompound) {
-        self.entity.write_nbt(nbt).await;
         nbt.put_int(
             "interpolation_duration",
             self.interpolation_duration.load(Ordering::Relaxed),
@@ -549,8 +523,6 @@ impl DisplayEntity {
     }
 
     pub async fn read_display_nbt(&self, nbt: &NbtCompound) {
-        self.entity.read_nbt_non_mut(nbt).await;
-
         if let Some(dur) = nbt.get_int("interpolation_duration") {
             self.interpolation_duration.store(dur, Ordering::Relaxed);
         }
@@ -646,8 +618,7 @@ impl BlockDisplayEntity {
         self.block_state.store(block_state, Ordering::Relaxed);
         self.display.entity.send_meta_data(
             &[Metadata::new(
-                TrackedData::BLOCK_STATE,
-                MetaDataType::BLOCK_STATE,
+                pumpkin_data::tracked_data::block_display::BLOCK_STATE,
                 VarInt(block_state),
             )],
             None,
@@ -655,21 +626,15 @@ impl BlockDisplayEntity {
     }
 }
 
-impl NBTStorage for BlockDisplayEntity {
-    fn write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
+impl EntityBase for BlockDisplayEntity {
+    fn write_custom_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async move {
             self.display.write_display_nbt(nbt).await;
             nbt.put_int("block_state", self.block_state.load(Ordering::Relaxed));
         })
     }
 
-    fn read_nbt<'a>(&'a mut self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
-        Box::pin(async move {
-            self.read_nbt_non_mut(nbt).await;
-        })
-    }
-
-    fn read_nbt_non_mut<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
+    fn read_custom_nbt<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async move {
             self.display.read_display_nbt(nbt).await;
             if let Some(state) = nbt.get_int("block_state") {
@@ -677,9 +642,7 @@ impl NBTStorage for BlockDisplayEntity {
             }
         })
     }
-}
 
-impl EntityBase for BlockDisplayEntity {
     fn tick<'a>(
         &'a self,
         _caller: &'a Arc<dyn EntityBase>,
@@ -693,8 +656,7 @@ impl EntityBase for BlockDisplayEntity {
             self.display.init_display_data_tracker().await;
             self.display.entity.send_meta_data(
                 &[Metadata::new(
-                    TrackedData::BLOCK_STATE,
-                    MetaDataType::BLOCK_STATE,
+                    pumpkin_data::tracked_data::block_display::BLOCK_STATE,
                     VarInt(self.block_state.load(Ordering::Relaxed)),
                 )],
                 None,
@@ -708,10 +670,6 @@ impl EntityBase for BlockDisplayEntity {
 
     fn get_living_entity(&self) -> Option<&LivingEntity> {
         None
-    }
-
-    fn as_nbt_storage(&self) -> &dyn NBTStorage {
-        self
     }
 
     fn cast_any(&self) -> &dyn std::any::Any {
@@ -770,8 +728,7 @@ impl ItemDisplayEntity {
         *self.item_stack.lock().await = item.clone();
         self.display.entity.send_meta_data(
             &[Metadata::new(
-                TrackedData::ITEM,
-                MetaDataType::ITEM_STACK,
+                pumpkin_data::tracked_data::item_display::ITEM,
                 ItemStackSerializer::from(item),
             )],
             None,
@@ -786,8 +743,7 @@ impl ItemDisplayEntity {
         self.item_display.store(mode, Ordering::Relaxed);
         self.display.entity.send_meta_data(
             &[Metadata::new(
-                TrackedData::ITEM_DISPLAY,
-                MetaDataType::BYTE,
+                pumpkin_data::tracked_data::item_display::ITEM_DISPLAY,
                 mode,
             )],
             None,
@@ -795,8 +751,8 @@ impl ItemDisplayEntity {
     }
 }
 
-impl NBTStorage for ItemDisplayEntity {
-    fn write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
+impl EntityBase for ItemDisplayEntity {
+    fn write_custom_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async move {
             self.display.write_display_nbt(nbt).await;
             let display_mode_str = match self.item_display.load(Ordering::Relaxed) {
@@ -814,13 +770,7 @@ impl NBTStorage for ItemDisplayEntity {
         })
     }
 
-    fn read_nbt<'a>(&'a mut self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
-        Box::pin(async move {
-            self.read_nbt_non_mut(nbt).await;
-        })
-    }
-
-    fn read_nbt_non_mut<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
+    fn read_custom_nbt<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async move {
             self.display.read_display_nbt(nbt).await;
             if let Some(mode_str) = nbt.get_string("item_display") {
@@ -839,9 +789,7 @@ impl NBTStorage for ItemDisplayEntity {
             }
         })
     }
-}
 
-impl EntityBase for ItemDisplayEntity {
     fn tick<'a>(
         &'a self,
         _caller: &'a Arc<dyn EntityBase>,
@@ -855,16 +803,14 @@ impl EntityBase for ItemDisplayEntity {
             self.display.init_display_data_tracker().await;
             self.display.entity.send_meta_data(
                 &[Metadata::new(
-                    TrackedData::ITEM,
-                    MetaDataType::ITEM_STACK,
+                    pumpkin_data::tracked_data::item_display::ITEM,
                     ItemStackSerializer::from(self.item_stack.lock().await.clone()),
                 )],
                 None,
             );
             self.display.entity.send_meta_data(
                 &[Metadata::new(
-                    TrackedData::ITEM_DISPLAY,
-                    MetaDataType::BYTE,
+                    pumpkin_data::tracked_data::item_display::ITEM_DISPLAY,
                     self.item_display.load(Ordering::Relaxed),
                 )],
                 None,
@@ -878,10 +824,6 @@ impl EntityBase for ItemDisplayEntity {
 
     fn get_living_entity(&self) -> Option<&LivingEntity> {
         None
-    }
-
-    fn as_nbt_storage(&self) -> &dyn NBTStorage {
-        self
     }
 
     fn cast_any(&self) -> &dyn std::any::Any {
@@ -946,8 +888,7 @@ impl TextDisplayEntity {
         *self.text.lock().await = text.clone();
         self.display.entity.send_meta_data(
             &[Metadata::new(
-                TrackedData::TEXT,
-                MetaDataType::COMPONENT,
+                pumpkin_data::tracked_data::text_display::TEXT,
                 text,
             )],
             None,
@@ -962,8 +903,7 @@ impl TextDisplayEntity {
         self.line_width.store(width, Ordering::Relaxed);
         self.display.entity.send_meta_data(
             &[Metadata::new(
-                TrackedData::LINE_WIDTH,
-                MetaDataType::INT,
+                pumpkin_data::tracked_data::text_display::LINE_WIDTH,
                 VarInt(width),
             )],
             None,
@@ -978,8 +918,7 @@ impl TextDisplayEntity {
         self.background.store(color, Ordering::Relaxed);
         self.display.entity.send_meta_data(
             &[Metadata::new(
-                TrackedData::BACKGROUND,
-                MetaDataType::INT,
+                pumpkin_data::tracked_data::text_display::BACKGROUND,
                 VarInt(color),
             )],
             None,
@@ -994,8 +933,7 @@ impl TextDisplayEntity {
         self.text_opacity.store(opacity, Ordering::Relaxed);
         self.display.entity.send_meta_data(
             &[Metadata::new(
-                TrackedData::TEXT_OPACITY,
-                MetaDataType::BYTE,
+                pumpkin_data::tracked_data::text_display::TEXT_OPACITY,
                 opacity as u8,
             )],
             None,
@@ -1016,8 +954,7 @@ impl TextDisplayEntity {
         self.flags.store(flags, Ordering::Relaxed);
         self.display.entity.send_meta_data(
             &[Metadata::new(
-                TrackedData::TEXT_DISPLAY_FLAGS,
-                MetaDataType::BYTE,
+                pumpkin_data::tracked_data::text_display::TEXT_DISPLAY_FLAGS,
                 flags,
             )],
             None,
@@ -1038,8 +975,7 @@ impl TextDisplayEntity {
         self.flags.store(flags, Ordering::Relaxed);
         self.display.entity.send_meta_data(
             &[Metadata::new(
-                TrackedData::TEXT_DISPLAY_FLAGS,
-                MetaDataType::BYTE,
+                pumpkin_data::tracked_data::text_display::TEXT_DISPLAY_FLAGS,
                 flags,
             )],
             None,
@@ -1060,8 +996,7 @@ impl TextDisplayEntity {
         self.flags.store(flags, Ordering::Relaxed);
         self.display.entity.send_meta_data(
             &[Metadata::new(
-                TrackedData::TEXT_DISPLAY_FLAGS,
-                MetaDataType::BYTE,
+                pumpkin_data::tracked_data::text_display::TEXT_DISPLAY_FLAGS,
                 flags,
             )],
             None,
@@ -1089,8 +1024,7 @@ impl TextDisplayEntity {
         self.flags.store(flags, Ordering::Relaxed);
         self.display.entity.send_meta_data(
             &[Metadata::new(
-                TrackedData::TEXT_DISPLAY_FLAGS,
-                MetaDataType::BYTE,
+                pumpkin_data::tracked_data::text_display::TEXT_DISPLAY_FLAGS,
                 flags,
             )],
             None,
@@ -1098,8 +1032,8 @@ impl TextDisplayEntity {
     }
 }
 
-impl NBTStorage for TextDisplayEntity {
-    fn write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
+impl EntityBase for TextDisplayEntity {
+    fn write_custom_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async move {
             self.display.write_display_nbt(nbt).await;
             let text_json_res = pumpkin_util::serde_json::to_string(&*self.text.lock().await);
@@ -1125,13 +1059,7 @@ impl NBTStorage for TextDisplayEntity {
         })
     }
 
-    fn read_nbt<'a>(&'a mut self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
-        Box::pin(async move {
-            self.read_nbt_non_mut(nbt).await;
-        })
-    }
-
-    fn read_nbt_non_mut<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
+    fn read_custom_nbt<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async move {
             self.display.read_display_nbt(nbt).await;
             if let Some(text_json) = nbt.get_string("text")
@@ -1169,9 +1097,7 @@ impl NBTStorage for TextDisplayEntity {
             self.flags.store(flags, Ordering::Relaxed);
         })
     }
-}
 
-impl EntityBase for TextDisplayEntity {
     fn tick<'a>(
         &'a self,
         _caller: &'a Arc<dyn EntityBase>,
@@ -1186,40 +1112,35 @@ impl EntityBase for TextDisplayEntity {
             let text = self.text.lock().await.clone();
             self.display.entity.send_meta_data(
                 &[Metadata::new(
-                    TrackedData::TEXT,
-                    MetaDataType::COMPONENT,
+                    pumpkin_data::tracked_data::text_display::TEXT,
                     text,
                 )],
                 None,
             );
             self.display.entity.send_meta_data(
                 &[Metadata::new(
-                    TrackedData::LINE_WIDTH,
-                    MetaDataType::INT,
+                    pumpkin_data::tracked_data::text_display::LINE_WIDTH,
                     VarInt(self.line_width.load(Ordering::Relaxed)),
                 )],
                 None,
             );
             self.display.entity.send_meta_data(
                 &[Metadata::new(
-                    TrackedData::BACKGROUND,
-                    MetaDataType::INT,
+                    pumpkin_data::tracked_data::text_display::BACKGROUND,
                     VarInt(self.background.load(Ordering::Relaxed)),
                 )],
                 None,
             );
             self.display.entity.send_meta_data(
                 &[Metadata::new(
-                    TrackedData::TEXT_OPACITY,
-                    MetaDataType::BYTE,
+                    pumpkin_data::tracked_data::text_display::TEXT_OPACITY,
                     self.text_opacity.load(Ordering::Relaxed) as u8,
                 )],
                 None,
             );
             self.display.entity.send_meta_data(
                 &[Metadata::new(
-                    TrackedData::TEXT_DISPLAY_FLAGS,
-                    MetaDataType::BYTE,
+                    pumpkin_data::tracked_data::text_display::TEXT_DISPLAY_FLAGS,
                     self.flags.load(Ordering::Relaxed),
                 )],
                 None,
@@ -1233,10 +1154,6 @@ impl EntityBase for TextDisplayEntity {
 
     fn get_living_entity(&self) -> Option<&LivingEntity> {
         None
-    }
-
-    fn as_nbt_storage(&self) -> &dyn NBTStorage {
-        self
     }
 
     fn cast_any(&self) -> &dyn std::any::Any {

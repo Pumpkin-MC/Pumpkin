@@ -1,0 +1,9 @@
+{
+  "width": 2,
+  "height": 2,
+  "asset_id": "minecraft:fire",
+  "title": {
+    "translate": "painting.minecraft.fire.title",
+    "color": "yellow"
+  }
+}

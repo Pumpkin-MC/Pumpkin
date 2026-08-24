@@ -1,10 +1,11 @@
 use crate::entity::player::statistics::StatisticCategory;
 use crate::{entity::EntityBaseFuture, server::Server};
 use core::f32;
+use pumpkin_data::damage::DamageType;
 use pumpkin_data::data_component_impl::DamageResistantImpl;
 use pumpkin_data::data_component_impl::DamageResistantType;
 use pumpkin_data::item_stack::ItemStack;
-use pumpkin_data::{damage::DamageType, meta_data_type::MetaDataType, tracked_data::TrackedData};
+use pumpkin_data::packet::CURRENT_MC_VERSION;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::bedrock::client::CAddItemActor;
 use pumpkin_protocol::bedrock::network_item::ItemStackWrapper;
@@ -25,7 +26,7 @@ use std::sync::{
 };
 use tokio::sync::Mutex;
 
-use super::{Entity, EntityBase, NBTStorage, NbtFuture, living::LivingEntity, player::Player};
+use super::{Entity, EntityBase, NbtFuture, living::LivingEntity, player::Player};
 
 pub struct ItemEntity {
     entity: Entity,
@@ -423,53 +424,6 @@ impl ItemEntity {
     }
 }
 
-impl NBTStorage for ItemEntity {
-    fn write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
-        Box::pin(async move {
-            self.entity.write_nbt(nbt).await;
-
-            let item = self.item_stack.lock().await;
-            let mut item_compound = NbtCompound::new();
-            item.write_item_stack(&mut item_compound);
-            nbt.put_compound("Item", item_compound);
-
-            nbt.put_short("Age", self.item_age.load(Ordering::Relaxed) as i16);
-            nbt.put_short(
-                "PickupDelay",
-                self.pickup_delay.load(Ordering::Relaxed) as i16,
-            );
-            nbt.put_short("Health", self.health.load(Relaxed) as i16);
-        })
-    }
-
-    fn read_nbt_non_mut<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
-        Box::pin(async {
-            self.entity.read_nbt_non_mut(nbt).await;
-
-            // Restore the item stack from the "Item" compound
-            if let Some(item_compound) = nbt.get_compound("Item")
-                && let Some(stack) = ItemStack::read_item_stack(item_compound)
-            {
-                *self.item_stack.lock().await = stack;
-            }
-
-            // Vanilla stores Age as a short
-            self.item_age
-                .store(nbt.get_short("Age").unwrap_or(0) as u32, Ordering::Relaxed);
-
-            // Vanilla stores PickupDelay as a short
-            if let Some(delay) = nbt.get_short("PickupDelay") {
-                self.pickup_delay.store(delay as u8, Ordering::Relaxed);
-            }
-
-            // Vanilla stores Health as a short
-            if let Some(health) = nbt.get_short("Health") {
-                self.health.store(health as f32, Relaxed);
-            }
-        })
-    }
-}
-
 impl EntityBase for ItemEntity {
     fn tick<'a>(
         &'a self,
@@ -508,8 +462,7 @@ impl EntityBase for ItemEntity {
         Box::pin(async {
             self.entity.send_meta_data(
                 &[Metadata::new(
-                    TrackedData::ITEM,
-                    MetaDataType::ITEM_STACK,
+                    pumpkin_data::tracked_data::item::ITEM,
                     &ItemStackSerializer::from(self.item_stack.lock().await.clone()),
                 )],
                 None,
@@ -631,8 +584,45 @@ impl EntityBase for ItemEntity {
         0.04
     }
 
-    fn as_nbt_storage(&self) -> &dyn NBTStorage {
-        self
+    fn write_custom_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
+        Box::pin(async move {
+            let item = self.item_stack.lock().await;
+            let mut item_compound = NbtCompound::new();
+            item.write_item_stack(&mut item_compound);
+            nbt.put_compound("Item", item_compound);
+
+            nbt.put_short("Age", self.item_age.load(Ordering::Relaxed) as i16);
+            nbt.put_short(
+                "PickupDelay",
+                self.pickup_delay.load(Ordering::Relaxed) as i16,
+            );
+            nbt.put_short("Health", self.health.load(Relaxed) as i16);
+        })
+    }
+
+    fn read_custom_nbt<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
+        Box::pin(async {
+            // Restore the item stack from the "Item" compound
+            if let Some(item_compound) = nbt.get_compound("Item")
+                && let Some(stack) = ItemStack::read_item_stack(item_compound)
+            {
+                *self.item_stack.lock().await = stack;
+            }
+
+            // Vanilla stores Age as a short
+            self.item_age
+                .store(nbt.get_short("Age").unwrap_or(0) as u32, Ordering::Relaxed);
+
+            // Vanilla stores PickupDelay as a short
+            if let Some(delay) = nbt.get_short("PickupDelay") {
+                self.pickup_delay.store(delay as u8, Ordering::Relaxed);
+            }
+
+            // Vanilla stores Health as a short
+            if let Some(health) = nbt.get_short("Health") {
+                self.health.store(health as f32, Relaxed);
+            }
+        })
     }
 
     fn cast_any(&self) -> &dyn std::any::Any {
@@ -656,7 +646,9 @@ impl EntityBase for ItemEntity {
                 metadata: entity.bedrock_metadata(),
                 from_fishing: false,
             };
-            client.send_game_packet(&packet).await;
+            if let Ok(data) = client.serialize_packet(&packet) {
+                client.send_game_packet(data).await;
+            }
         })
     }
 
@@ -665,24 +657,25 @@ impl EntityBase for ItemEntity {
         client: &'a crate::net::java::JavaClient,
     ) -> EntityBaseFuture<'a, ()> {
         Box::pin(async move {
-            client
-                .enqueue_packet(&self.entity.create_spawn_packet())
-                .await;
+            let spawn_packet = self.entity.create_spawn_packet();
+            if let Ok(data) = client.serialize_packet(&spawn_packet) {
+                client.enqueue_packet(data).await;
+            }
 
-            let metadata = Metadata::new(
-                TrackedData::ITEM,
-                MetaDataType::ITEM_STACK,
-                ItemStackSerializer::from(self.item_stack.lock().await.clone()),
-            );
-            let mut data = Vec::new();
-            if metadata.write(&mut data, &client.version.load()).is_ok() {
-                data.push(255);
-                client
-                    .enqueue_packet(&CSetEntityMetadata::new(
-                        self.entity.entity_id.into(),
-                        data.into(),
-                    ))
-                    .await;
+            if client.version.load() >= CURRENT_MC_VERSION {
+                let metadata = Metadata::new(
+                    pumpkin_data::tracked_data::item::ITEM,
+                    ItemStackSerializer::from(self.item_stack.lock().await.clone()),
+                );
+                let mut data = Vec::new();
+                if metadata.write(&mut data, &client.version.load()).is_ok() {
+                    data.push(255);
+                    let meta_packet =
+                        CSetEntityMetadata::new(self.entity.entity_id.into(), data.into());
+                    if let Ok(meta_data) = client.serialize_packet(&meta_packet) {
+                        client.enqueue_packet(meta_data).await;
+                    }
+                }
             }
         })
     }

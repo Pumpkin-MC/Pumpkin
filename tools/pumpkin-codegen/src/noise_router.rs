@@ -1870,11 +1870,557 @@ macro_rules! fix_final_density {
     }};
 }
 
-/// Reads `density_function.json` and emits the complete noise-router constants `TokenStream`.
+fn load_df_json(base_df_dir: &std::path::Path, name: &str) -> serde_json::Value {
+    let clean = name.strip_prefix("minecraft:").unwrap_or(name);
+    let path = base_df_dir.join(format!("{clean}.json"));
+    let content = fs::read_to_string(&path).unwrap_or_else(|err| {
+        panic!(
+            "Failed to read density function at {}: {err}",
+            path.display()
+        )
+    });
+    serde_json::from_str(&content).unwrap_or_else(|err| {
+        panic!(
+            "Failed to parse density function at {}: {err}",
+            path.display()
+        )
+    })
+}
+
+fn clean_noise_name(n: &str) -> String {
+    n.strip_prefix("minecraft:").unwrap_or(n).to_string()
+}
+
+fn parse_vanilla_df(base_df_dir: &std::path::Path, val: &serde_json::Value) -> DensityFunctionRepr {
+    match val {
+        serde_json::Value::Number(n) => DensityFunctionRepr::Constant {
+            value: HashableF64(n.as_f64().unwrap_or(0.0)),
+        },
+        serde_json::Value::String(s) => {
+            if s == "minecraft:y" {
+                DensityFunctionRepr::ClampedYGradient {
+                    data: ClampedYGradientData {
+                        from_y: -4064,
+                        to_y: 4062,
+                        from_value: HashableF64(-4064.0),
+                        to_value: HashableF64(4062.0),
+                    },
+                }
+            } else if s == "minecraft:zero" {
+                DensityFunctionRepr::Constant {
+                    value: HashableF64(0.0),
+                }
+            } else {
+                let loaded = load_df_json(base_df_dir, s);
+                parse_vanilla_df(base_df_dir, &loaded)
+            }
+        }
+        serde_json::Value::Object(obj) => {
+            let type_str = obj
+                .get("type")
+                .and_then(|t| t.as_str())
+                .unwrap_or_else(|| panic!("Density function object missing type: {val:?}"));
+            let clean_type = type_str.strip_prefix("minecraft:").unwrap_or(type_str);
+
+            match clean_type {
+                "constant" => {
+                    let num = obj
+                        .get("value")
+                        .or_else(|| obj.get("argument"))
+                        .and_then(|v| v.as_f64())
+                        .unwrap_or(0.0);
+                    DensityFunctionRepr::Constant {
+                        value: HashableF64(num),
+                    }
+                }
+                "y_clamped_gradient" => {
+                    let from_y = obj.get("from_y").and_then(|v| v.as_i64()).unwrap_or(-64) as i32;
+                    let to_y = obj.get("to_y").and_then(|v| v.as_i64()).unwrap_or(320) as i32;
+                    let from_value = obj
+                        .get("from_value")
+                        .and_then(|v| v.as_f64())
+                        .unwrap_or(0.0);
+                    let to_value = obj.get("to_value").and_then(|v| v.as_f64()).unwrap_or(0.0);
+                    DensityFunctionRepr::ClampedYGradient {
+                        data: ClampedYGradientData {
+                            from_y,
+                            to_y,
+                            from_value: HashableF64(from_value),
+                            to_value: HashableF64(to_value),
+                        },
+                    }
+                }
+                "old_blended_noise" => {
+                    let xz_scale = obj.get("xz_scale").and_then(|v| v.as_f64()).unwrap_or(0.25);
+                    let y_scale = obj.get("y_scale").and_then(|v| v.as_f64()).unwrap_or(0.125);
+                    let xz_factor = obj
+                        .get("xz_factor")
+                        .and_then(|v| v.as_f64())
+                        .unwrap_or(80.0);
+                    let y_factor = obj
+                        .get("y_factor")
+                        .and_then(|v| v.as_f64())
+                        .unwrap_or(160.0);
+                    let smear_scale_multiplier = obj
+                        .get("smear_scale_multiplier")
+                        .and_then(|v| v.as_f64())
+                        .unwrap_or(8.0);
+                    let max_value = obj
+                        .get("max_value")
+                        .and_then(|v| v.as_f64())
+                        .unwrap_or(f64::INFINITY);
+
+                    let scaled_xz_scale = xz_scale;
+                    let scaled_y_scale = y_scale * (y_factor / xz_factor);
+
+                    DensityFunctionRepr::InterpolatedNoiseSampler {
+                        data: InterpolatedNoiseSamplerData {
+                            scaled_xz_scale: HashableF64(scaled_xz_scale),
+                            scaled_y_scale: HashableF64(scaled_y_scale),
+                            xz_factor: HashableF64(xz_factor),
+                            y_factor: HashableF64(y_factor),
+                            smear_scale_multiplier: HashableF64(smear_scale_multiplier),
+                            max_value: HashableF64(max_value),
+                        },
+                    }
+                }
+                "add" | "mul" | "min" | "max" => {
+                    let arg1 = parse_vanilla_df(
+                        base_df_dir,
+                        obj.get("argument1").expect("Missing argument1"),
+                    );
+                    let arg2 = parse_vanilla_df(
+                        base_df_dir,
+                        obj.get("argument2").expect("Missing argument2"),
+                    );
+                    let min_value = obj
+                        .get("min_value")
+                        .and_then(|v| v.as_f64())
+                        .unwrap_or(f64::NEG_INFINITY);
+                    let max_value = obj
+                        .get("max_value")
+                        .and_then(|v| v.as_f64())
+                        .unwrap_or(f64::INFINITY);
+
+                    if clean_type == "add" || clean_type == "mul" {
+                        let linear_op = if clean_type == "add" {
+                            LinearOperation::Add
+                        } else {
+                            LinearOperation::Mul
+                        };
+
+                        if let DensityFunctionRepr::Constant { value: c } = arg1 {
+                            return DensityFunctionRepr::Linear {
+                                input: Box::new(arg2),
+                                data: LinearData {
+                                    operation: linear_op,
+                                    argument: c,
+                                    min_value: HashableF64(min_value),
+                                    max_value: HashableF64(max_value),
+                                },
+                            };
+                        } else if let DensityFunctionRepr::Constant { value: c } = arg2 {
+                            return DensityFunctionRepr::Linear {
+                                input: Box::new(arg1),
+                                data: LinearData {
+                                    operation: linear_op,
+                                    argument: c,
+                                    min_value: HashableF64(min_value),
+                                    max_value: HashableF64(max_value),
+                                },
+                            };
+                        }
+                    }
+
+                    let op = match clean_type {
+                        "add" => BinaryOperation::Add,
+                        "mul" => BinaryOperation::Mul,
+                        "min" => BinaryOperation::Min,
+                        "max" => BinaryOperation::Max,
+                        _ => unreachable!(),
+                    };
+
+                    DensityFunctionRepr::Binary {
+                        argument1: Box::new(arg1),
+                        argument2: Box::new(arg2),
+                        data: BinaryData {
+                            operation: op,
+                            min_value: HashableF64(min_value),
+                            max_value: HashableF64(max_value),
+                        },
+                    }
+                }
+                "abs" | "square" | "cube" | "half_negative" | "quarter_negative" | "squeeze"
+                | "invert" => {
+                    let op = match clean_type {
+                        "abs" => UnaryOperation::Abs,
+                        "square" => UnaryOperation::Square,
+                        "cube" => UnaryOperation::Cube,
+                        "half_negative" => UnaryOperation::HalfNegative,
+                        "quarter_negative" => UnaryOperation::QuarterNegative,
+                        "squeeze" => UnaryOperation::Squeeze,
+                        "invert" => UnaryOperation::Invert,
+                        _ => unreachable!(),
+                    };
+                    let input_node = obj
+                        .get("argument")
+                        .or_else(|| obj.get("input"))
+                        .expect("Missing argument/input");
+                    let input = parse_vanilla_df(base_df_dir, input_node);
+                    let min_value = obj
+                        .get("min_value")
+                        .and_then(|v| v.as_f64())
+                        .unwrap_or(f64::NEG_INFINITY);
+                    let max_value = obj
+                        .get("max_value")
+                        .and_then(|v| v.as_f64())
+                        .unwrap_or(f64::INFINITY);
+                    DensityFunctionRepr::Unary {
+                        input: Box::new(input),
+                        data: UnaryData {
+                            operation: op,
+                            min_value: HashableF64(min_value),
+                            max_value: HashableF64(max_value),
+                        },
+                    }
+                }
+                "clamp" => {
+                    let input_node = obj
+                        .get("input")
+                        .or_else(|| obj.get("argument"))
+                        .expect("Missing input");
+                    let input = parse_vanilla_df(base_df_dir, input_node);
+                    let min_val = obj
+                        .get("min")
+                        .and_then(|v| v.as_f64())
+                        .unwrap_or(f64::NEG_INFINITY);
+                    let max_val = obj
+                        .get("max")
+                        .and_then(|v| v.as_f64())
+                        .unwrap_or(f64::INFINITY);
+                    DensityFunctionRepr::Clamp {
+                        input: Box::new(input),
+                        data: ClampData {
+                            min_value: HashableF64(min_val),
+                            max_value: HashableF64(max_val),
+                        },
+                    }
+                }
+                "range_choice" => {
+                    let input =
+                        parse_vanilla_df(base_df_dir, obj.get("input").expect("Missing input"));
+                    let min_inc = obj
+                        .get("min_inclusive")
+                        .and_then(|v| v.as_f64())
+                        .unwrap_or(f64::NEG_INFINITY);
+                    let max_exc = obj
+                        .get("max_exclusive")
+                        .and_then(|v| v.as_f64())
+                        .unwrap_or(f64::INFINITY);
+                    let when_in = parse_vanilla_df(
+                        base_df_dir,
+                        obj.get("when_in_range").expect("Missing when_in_range"),
+                    );
+                    let when_out = parse_vanilla_df(
+                        base_df_dir,
+                        obj.get("when_out_of_range")
+                            .expect("Missing when_out_of_range"),
+                    );
+                    DensityFunctionRepr::RangeChoice {
+                        input: Box::new(input),
+                        when_in_range: Box::new(when_in),
+                        when_out_range: Box::new(when_out),
+                        data: RangeChoiceData {
+                            min_inclusive: HashableF64(min_inc),
+                            max_exclusive: HashableF64(max_exc),
+                        },
+                    }
+                }
+                "interval_select" => {
+                    let input =
+                        parse_vanilla_df(base_df_dir, obj.get("input").expect("Missing input"));
+                    let thresholds: Vec<HashableF64> = obj
+                        .get("thresholds")
+                        .and_then(|v| v.as_array())
+                        .expect("Missing thresholds array")
+                        .iter()
+                        .map(|v| HashableF64(v.as_f64().unwrap_or(0.0)))
+                        .collect();
+                    let funcs: Vec<DensityFunctionRepr> = obj
+                        .get("functions")
+                        .and_then(|v| v.as_array())
+                        .expect("Missing functions array")
+                        .iter()
+                        .map(|v| parse_vanilla_df(base_df_dir, v))
+                        .collect();
+
+                    DensityFunctionRepr::IntervalSelect {
+                        input: Box::new(input),
+                        thresholds: thresholds.into_boxed_slice(),
+                        functions: funcs.into_boxed_slice(),
+                    }
+                }
+                "spline" => {
+                    let spline_node = obj.get("spline").expect("Missing spline");
+                    let spline = parse_vanilla_spline(base_df_dir, spline_node);
+                    let min_value = obj
+                        .get("min_value")
+                        .and_then(|v| v.as_f64())
+                        .unwrap_or(f64::NEG_INFINITY);
+                    let max_value = obj
+                        .get("max_value")
+                        .and_then(|v| v.as_f64())
+                        .unwrap_or(f64::INFINITY);
+                    DensityFunctionRepr::Spline {
+                        spline,
+                        data: SplineData {
+                            min_value: HashableF64(min_value),
+                            max_value: HashableF64(max_value),
+                        },
+                    }
+                }
+                "noise" => {
+                    let noise_name = obj
+                        .get("noise")
+                        .and_then(|v| v.as_str())
+                        .expect("Missing noise name");
+                    let xz_scale = obj.get("xz_scale").and_then(|v| v.as_f64()).unwrap_or(1.0);
+                    let y_scale = obj.get("y_scale").and_then(|v| v.as_f64()).unwrap_or(1.0);
+                    DensityFunctionRepr::Noise {
+                        data: NoiseData {
+                            noise_id: clean_noise_name(noise_name),
+                            xz_scale: HashableF64(xz_scale),
+                            y_scale: HashableF64(y_scale),
+                        },
+                    }
+                }
+                "shifted_noise" => {
+                    let shift_x =
+                        parse_vanilla_df(base_df_dir, obj.get("shift_x").expect("Missing shift_x"));
+                    let shift_y =
+                        parse_vanilla_df(base_df_dir, obj.get("shift_y").expect("Missing shift_y"));
+                    let shift_z =
+                        parse_vanilla_df(base_df_dir, obj.get("shift_z").expect("Missing shift_z"));
+                    let noise_name = obj
+                        .get("noise")
+                        .and_then(|v| v.as_str())
+                        .expect("Missing noise name");
+                    let xz_scale = obj.get("xz_scale").and_then(|v| v.as_f64()).unwrap_or(1.0);
+                    let y_scale = obj.get("y_scale").and_then(|v| v.as_f64()).unwrap_or(1.0);
+                    DensityFunctionRepr::ShiftedNoise {
+                        shift_x: Box::new(shift_x),
+                        shift_y: Box::new(shift_y),
+                        shift_z: Box::new(shift_z),
+                        data: ShiftedNoiseData {
+                            noise_id: clean_noise_name(noise_name),
+                            xz_scale: HashableF64(xz_scale),
+                            y_scale: HashableF64(y_scale),
+                        },
+                    }
+                }
+                "shift_a" => {
+                    let offset_noise = obj
+                        .get("argument")
+                        .and_then(|v| v.as_str())
+                        .expect("Missing argument");
+                    DensityFunctionRepr::ShiftA {
+                        noise_id: clean_noise_name(offset_noise),
+                    }
+                }
+                "shift_b" => {
+                    let offset_noise = obj
+                        .get("argument")
+                        .and_then(|v| v.as_str())
+                        .expect("Missing argument");
+                    DensityFunctionRepr::ShiftB {
+                        noise_id: clean_noise_name(offset_noise),
+                    }
+                }
+                "shift" => {
+                    let offset_noise = obj
+                        .get("argument")
+                        .and_then(|v| v.as_str())
+                        .expect("Missing argument");
+                    DensityFunctionRepr::ShiftA {
+                        noise_id: clean_noise_name(offset_noise),
+                    }
+                }
+                "blend_alpha" => DensityFunctionRepr::BlendAlpha,
+                "blend_offset" => DensityFunctionRepr::BlendOffset,
+                "blend_density" => {
+                    let input = parse_vanilla_df(
+                        base_df_dir,
+                        obj.get("argument").expect("Missing argument"),
+                    );
+                    DensityFunctionRepr::BlendDensity {
+                        input: Box::new(input),
+                    }
+                }
+                "end_islands" => DensityFunctionRepr::EndIslands,
+                "beardifier" => DensityFunctionRepr::Beardifier,
+                "interpolated" | "flat_cache" | "cache_flat" | "cache_2d" | "cache_once"
+                | "cache_all_in_cell" => {
+                    let wrapper = match clean_type {
+                        "interpolated" => WrapperType::Interpolated,
+                        "flat_cache" | "cache_flat" => WrapperType::CacheFlat,
+                        "cache_2d" => WrapperType::Cache2D,
+                        "cache_once" => WrapperType::CacheOnce,
+                        "cache_all_in_cell" => WrapperType::CellCache,
+                        _ => unreachable!(),
+                    };
+                    let input = parse_vanilla_df(
+                        base_df_dir,
+                        obj.get("argument").expect("Missing argument"),
+                    );
+                    DensityFunctionRepr::Wrapper {
+                        input: Box::new(input),
+                        wrapper,
+                    }
+                }
+                "find_top_surface" | "weird_utility_density" => {
+                    let density =
+                        parse_vanilla_df(base_df_dir, obj.get("density").expect("Missing density"));
+                    let upper_bound = parse_vanilla_df(
+                        base_df_dir,
+                        obj.get("upper_bound").expect("Missing upper_bound"),
+                    );
+                    let lower_bound = obj
+                        .get("lower_bound")
+                        .and_then(|v| v.as_i64())
+                        .unwrap_or(-64) as i32;
+                    let cell_height =
+                        obj.get("cell_height").and_then(|v| v.as_i64()).unwrap_or(8) as i32;
+                    DensityFunctionRepr::FindTopSurface {
+                        density: Box::new(density),
+                        upper_bound: Box::new(upper_bound),
+                        data: FindTopSurfaceData {
+                            lower_bound,
+                            cell_height,
+                        },
+                    }
+                }
+                other => panic!("Unknown density function type in datapack: {other}"),
+            }
+        }
+        _ => panic!("Unsupported JSON value in density function: {val:?}"),
+    }
+}
+
+fn parse_vanilla_spline(base_df_dir: &std::path::Path, val: &serde_json::Value) -> SplineRepr {
+    if let Some(n) = val.as_f64() {
+        return SplineRepr::Fixed {
+            value: HashableF32(n as f32),
+        };
+    }
+    if let Some(obj) = val.as_object() {
+        if obj.contains_key("value") && !obj.contains_key("points") {
+            return parse_vanilla_spline(base_df_dir, &obj["value"]);
+        }
+        let loc_fn = parse_vanilla_df(
+            base_df_dir,
+            obj.get("coordinate").expect("Missing coordinate in spline"),
+        );
+        let points = obj
+            .get("points")
+            .and_then(|v| v.as_array())
+            .expect("Missing points array in spline");
+
+        let mut locations = Vec::new();
+        let mut values = Vec::new();
+        let mut derivatives = Vec::new();
+
+        for pt in points {
+            locations.push(HashableF32(pt["location"].as_f64().unwrap() as f32));
+            values.push(parse_vanilla_spline(base_df_dir, &pt["value"]));
+            derivatives.push(HashableF32(pt["derivative"].as_f64().unwrap() as f32));
+        }
+
+        return SplineRepr::Standard {
+            location_function: Box::new(loc_fn),
+            locations: locations.into_boxed_slice(),
+            values: values.into_boxed_slice(),
+            derivatives: derivatives.into_boxed_slice(),
+        };
+    }
+    panic!("Unsupported spline node: {val:?}");
+}
+
+fn load_vanilla_noise_router(
+    base_ns_dir: &std::path::Path,
+    base_df_dir: &std::path::Path,
+    dim_name: &str,
+) -> NoiseRouterRepr {
+    let path = base_ns_dir.join(format!("{dim_name}.json"));
+    let content = fs::read_to_string(&path)
+        .unwrap_or_else(|err| panic!("Failed to read noise_settings at {}: {err}", path.display()));
+    let val: serde_json::Value = serde_json::from_str(&content).unwrap_or_else(|err| {
+        panic!(
+            "Failed to parse noise_settings at {}: {err}",
+            path.display()
+        )
+    });
+    let nr = val
+        .get("noise_router")
+        .expect("Missing noise_router in noise_settings");
+
+    let zero = serde_json::Value::Number(serde_json::Number::from_f64(0.0).unwrap());
+
+    NoiseRouterRepr {
+        barrier_noise: parse_vanilla_df(base_df_dir, nr.get("barrier").unwrap_or(&zero)),
+        fluid_level_floodedness_noise: parse_vanilla_df(
+            base_df_dir,
+            nr.get("fluid_level_floodedness").unwrap_or(&zero),
+        ),
+        fluid_level_spread_noise: parse_vanilla_df(
+            base_df_dir,
+            nr.get("fluid_level_spread").unwrap_or(&zero),
+        ),
+        lava_noise: parse_vanilla_df(base_df_dir, nr.get("lava").unwrap_or(&zero)),
+        temperature: parse_vanilla_df(base_df_dir, nr.get("temperature").unwrap_or(&zero)),
+        vegetation: parse_vanilla_df(base_df_dir, nr.get("vegetation").unwrap_or(&zero)),
+        continents: parse_vanilla_df(base_df_dir, nr.get("continents").unwrap_or(&zero)),
+        erosion: parse_vanilla_df(base_df_dir, nr.get("erosion").unwrap_or(&zero)),
+        depth: parse_vanilla_df(base_df_dir, nr.get("depth").unwrap_or(&zero)),
+        ridges: parse_vanilla_df(base_df_dir, nr.get("ridges").unwrap_or(&zero)),
+        preliminary_surface_level: parse_vanilla_df(
+            base_df_dir,
+            nr.get("preliminary_surface_level").unwrap_or(&zero),
+        ),
+        final_density: parse_vanilla_df(base_df_dir, nr.get("final_density").unwrap_or(&zero)),
+        vein_toggle: parse_vanilla_df(base_df_dir, nr.get("vein_toggle").unwrap_or(&zero)),
+        vein_ridged: parse_vanilla_df(base_df_dir, nr.get("vein_ridged").unwrap_or(&zero)),
+        vein_gap: parse_vanilla_df(base_df_dir, nr.get("vein_gap").unwrap_or(&zero)),
+    }
+}
+
+fn load_vanilla_noise_routers() -> NoiseRouterReprs {
+    let base_ns_dir =
+        std::path::Path::new("../../assets/datapacks/26_2/data/minecraft/worldgen/noise_settings");
+    let base_df_dir = std::path::Path::new(
+        "../../assets/datapacks/26_2/data/minecraft/worldgen/density_function",
+    );
+
+    let overworld = load_vanilla_noise_router(base_ns_dir, base_df_dir, "overworld");
+    let overworld_large_biomes =
+        load_vanilla_noise_router(base_ns_dir, base_df_dir, "large_biomes");
+    let overworld_amplified = load_vanilla_noise_router(base_ns_dir, base_df_dir, "amplified");
+    let nether = load_vanilla_noise_router(base_ns_dir, base_df_dir, "nether");
+    let end = load_vanilla_noise_router(base_ns_dir, base_df_dir, "end");
+    let end_islands = load_vanilla_noise_router(base_ns_dir, base_df_dir, "floating_islands");
+
+    NoiseRouterReprs {
+        overworld,
+        overworld_large_biomes,
+        overworld_amplified,
+        nether,
+        end,
+        end_islands,
+    }
+}
+
+/// Reads vanilla datapack noise_settings and density_function files and emits the complete noise-router constants `TokenStream`.
 pub fn build() -> TokenStream {
-    let mut reprs: NoiseRouterReprs =
-        serde_json5::from_str(&fs::read_to_string("../../assets/density_function.json").unwrap())
-            .expect("could not deserialize density_function.json");
+    let mut reprs: NoiseRouterReprs = load_vanilla_noise_routers();
 
     // The `final_density` function is mutated at runtime for the aquifer generator in Java.
     fix_final_density!(reprs.overworld);

@@ -208,7 +208,7 @@ pub async fn send_c_commands_packet(
     }
 
     let packet = CCommands::new(proto_nodes.into(), VarInt(root_node_index as i32));
-    player.client.enqueue_packet(&packet).await;
+    player.send_client_packet(&packet).await;
 }
 
 fn resolve_node_id(node_id: NodeId, node_id_offset: usize, root_node_index: usize) -> usize {
@@ -257,7 +257,11 @@ fn nodes_to_proto_node_builders<'a>(
     for i in children {
         let node = &nodes[*i];
         match &node.node_type {
-            NodeType::Argument { name, consumer } => {
+            NodeType::Argument {
+                name,
+                consumer,
+                suggestion_provider,
+            } => {
                 let (node_is_executable, node_children) =
                     nodes_to_proto_node_builders(cmd_src, nodes, &node.children);
                 child_nodes.push(ProtoNodeBuilder {
@@ -267,8 +271,11 @@ fn nodes_to_proto_node_builders<'a>(
                         is_executable: node_is_executable,
                         redirect_target: None,
                         parser: consumer.get_client_side_parser(),
-                        override_suggestion_type: consumer
-                            .get_client_side_suggestion_type_override(),
+                        override_suggestion_type: if suggestion_provider.is_some() {
+                            Some(SuggestionProviders::AskServer)
+                        } else {
+                            consumer.get_client_side_suggestion_type_override()
+                        },
                         restricted: false,
                     },
                 });
@@ -435,7 +442,7 @@ pub async fn send_bedrock_commands_packet(
     };
 
     if let crate::net::ClientPlatform::Bedrock(bedrock_client) = player.client.as_ref() {
-        bedrock_client.send_game_packet(&packet).await;
+        bedrock_client.send_packet(&packet).await;
     }
 }
 
@@ -488,7 +495,7 @@ fn collect_overloads_from_nodes(
                 });
                 collect_overloads_from_nodes(nodes, &node.children, &mut params, overloads, ctx);
             }
-            NodeType::Argument { name, consumer } => {
+            NodeType::Argument { name, consumer, .. } => {
                 let mut params = current_params.clone();
                 params.push(CommandParameter {
                     name: name.clone(),

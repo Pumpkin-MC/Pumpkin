@@ -1,0 +1,7 @@
+{
+  "type": "minecraft:crafting_special_bannerduplicate",
+  "banner": "minecraft:white_banner",
+  "result": {
+    "id": "minecraft:white_banner"
+  }
+}

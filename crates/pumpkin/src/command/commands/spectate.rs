@@ -45,8 +45,7 @@ impl CommandExecutor for StopSpectateExecutor {
 
             player.camera_target_id.store(None);
             player
-                .client
-                .send_packet_now(&CSetCamera::new(player.entity_id().into()))
+                .send_client_packet(&CSetCamera::new(player.entity_id().into()))
                 .await;
 
             sender
@@ -110,8 +109,7 @@ impl CommandExecutor for SpectateTargetSelfExecutor {
             let target_id = target_entity.entity_id;
             player.camera_target_id.store(Some(target_id));
             player
-                .client
-                .send_packet_now(&CSetCamera::new(target_id.into()))
+                .send_client_packet(&CSetCamera::new(target_id.into()))
                 .await;
 
             let pos = target_entity.pos.load();
@@ -189,8 +187,7 @@ impl CommandExecutor for SpectateTargetOtherExecutor {
                 let target_id = target_entity.entity_id;
                 player.camera_target_id.store(Some(target_id));
                 player
-                    .client
-                    .send_packet_now(&CSetCamera::new(target_id.into()))
+                    .send_client_packet(&CSetCamera::new(target_id.into()))
                     .await;
 
                 let pos = target_entity.pos.load();

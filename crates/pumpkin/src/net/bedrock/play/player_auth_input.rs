@@ -1,5 +1,6 @@
 #[allow(clippy::wildcard_imports)]
 use super::*;
+use pumpkin_data::entity::EntityPose;
 
 impl BedrockClient {
     #[expect(clippy::too_many_lines)]
@@ -160,6 +161,12 @@ impl BedrockClient {
             entity.set_sneaking(true).await;
         } else if input_data.get(InputData::StopSneaking as usize) {
             entity.set_sneaking(false).await;
+        }
+
+        if input_data.get(InputData::StartCrawling as usize) {
+            entity.set_pose(EntityPose::Swimming);
+        } else if input_data.get(InputData::StopCrawling as usize) {
+            player.update_player_pose().await;
         }
 
         if input_data.get(InputData::StartFlying as usize) {

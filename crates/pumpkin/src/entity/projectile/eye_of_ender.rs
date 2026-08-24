@@ -3,12 +3,12 @@ use crate::entity::living::LivingEntity;
 use crate::entity::player::Player;
 use crate::{entity::EntityBaseFuture, server::Server};
 use core::f64;
+use pumpkin_data::damage::DamageType;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::Sound;
 use pumpkin_data::world::WorldEvent;
-use pumpkin_data::{damage::DamageType, meta_data_type::MetaDataType, tracked_data::TrackedData};
 use pumpkin_protocol::{
     codec::item_stack_seralizer::ItemStackSerializer, java::client::play::Metadata,
 };
@@ -19,7 +19,7 @@ use std::sync::{
 };
 use tokio::sync::Mutex;
 
-use super::{Entity, EntityBase, NBTStorage};
+use super::{Entity, EntityBase};
 
 /// Maximum horizontal distance the eye will travel before signalling at an elevated height.
 const TOO_FAR_DISTANCE: f64 = 12.0;
@@ -118,8 +118,6 @@ fn lerp(t: f64, start: f64, end: f64) -> f64 {
     start + t * (end - start)
 }
 
-impl NBTStorage for EyeOfEnder {}
-
 impl EntityBase for EyeOfEnder {
     fn tick<'a>(
         &'a self,
@@ -174,8 +172,7 @@ impl EntityBase for EyeOfEnder {
         Box::pin(async {
             self.entity.send_meta_data(
                 &[Metadata::new(
-                    TrackedData::ITEM,
-                    MetaDataType::ITEM_STACK,
+                    pumpkin_data::tracked_data::eye_of_ender::ITEM_STACK,
                     &ItemStackSerializer::from(self.item_stack.lock().await.clone()),
                 )],
                 None,
@@ -213,11 +210,37 @@ impl EntityBase for EyeOfEnder {
         None
     }
 
-    fn as_nbt_storage(&self) -> &dyn NBTStorage {
+    fn cast_any(&self) -> &dyn std::any::Any {
         self
     }
 
-    fn cast_any(&self) -> &dyn std::any::Any {
-        self
+    fn send_java_spawn_packet<'a>(
+        &'a self,
+        client: &'a crate::net::java::JavaClient,
+    ) -> EntityBaseFuture<'a, ()> {
+        Box::pin(async move {
+            let spawn_packet = self.entity.create_spawn_packet();
+            if let Ok(data) = client.serialize_packet(&spawn_packet) {
+                client.enqueue_packet(data).await;
+            }
+
+            if client.version.load() >= pumpkin_data::packet::CURRENT_MC_VERSION {
+                let metadata = Metadata::new(
+                    pumpkin_data::tracked_data::eye_of_ender::ITEM_STACK,
+                    ItemStackSerializer::from(self.item_stack.lock().await.clone()),
+                );
+                let mut data = Vec::new();
+                if metadata.write(&mut data, &client.version.load()).is_ok() {
+                    data.push(255);
+                    let meta_packet = pumpkin_protocol::java::client::play::CSetEntityMetadata::new(
+                        self.entity.entity_id.into(),
+                        data.into(),
+                    );
+                    if let Ok(meta_data) = client.serialize_packet(&meta_packet) {
+                        client.enqueue_packet(meta_data).await;
+                    }
+                }
+            }
+        })
     }
 }

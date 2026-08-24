@@ -25,8 +25,7 @@ impl JavaClient {
             let target_id = target_player.living_entity.entity.entity_id;
             player.camera_target_id.store(Some(target_id));
             player
-                .client
-                .send_packet_now(&CSetCamera::new(target_id.into()))
+                .send_client_packet(&CSetCamera::new(target_id.into()))
                 .await;
 
             player

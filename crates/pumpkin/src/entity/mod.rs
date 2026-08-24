@@ -21,9 +21,9 @@ use pumpkin_data::dimension::Dimension;
 use pumpkin_data::entity::EntityStatus;
 use pumpkin_data::fluid::Fluid;
 use pumpkin_data::item_stack::ItemStack;
-use pumpkin_data::meta_data_type::MetaDataType;
+use pumpkin_data::packet::CURRENT_MC_VERSION;
 use pumpkin_data::tag::{self, Taggable};
-use pumpkin_data::tracked_data::TrackedData;
+use pumpkin_data::tracked_data;
 use pumpkin_data::{Block, BlockDirection};
 use pumpkin_data::{
     block_properties::{Facing, HorizontalFacing},
@@ -54,7 +54,8 @@ use pumpkin_protocol::{
     codec::var_ulong::VarULong,
     java::client::play::{
         CEntityPositionSync, CEntityVelocity, CHeadRot, CPlayerPosition, CSetEntityMetadata,
-        CSetPassengers, CSpawnEntity, CUpdateEntityRot, Metadata, MetadataSerializer,
+        CSetPassengers, CSpawnEntity, CSpawnLivingEntity, CUpdateEntityRot, Metadata,
+        MetadataSerializer,
     },
 };
 use pumpkin_util::math::vector3::Axis;
@@ -68,6 +69,7 @@ use pumpkin_util::math::{
 };
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::hover::HoverEvent;
+use pumpkin_util::version::JavaMinecraftVersion;
 use std::collections::{BTreeMap, HashSet};
 use std::pin::Pin;
 use std::sync::{
@@ -134,7 +136,34 @@ pub type EntityBaseFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 
 pub type TeleportFuture = Pin<Box<dyn Future<Output = ()> + Send>>;
 
-pub trait EntityBase: Send + Sync + NBTStorage + std::any::Any {
+pub trait EntityBase: Send + Sync + std::any::Any {
+    fn write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
+        Box::pin(async move {
+            self.get_entity().write_nbt(nbt).await;
+            if let Some(living) = self.get_living_entity() {
+                living.write_living_nbt(nbt).await;
+            }
+            self.write_custom_nbt(nbt).await;
+        })
+    }
+
+    fn write_custom_nbt<'a>(&'a self, _nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
+        Box::pin(async {})
+    }
+
+    fn read_nbt_non_mut<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
+        Box::pin(async move {
+            self.get_entity().read_nbt_non_mut(nbt).await;
+            if let Some(living) = self.get_living_entity() {
+                living.read_living_nbt_non_mut(nbt).await;
+            }
+            self.read_custom_nbt(nbt).await;
+        })
+    }
+
+    fn read_custom_nbt<'a>(&'a self, _nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
+        Box::pin(async {})
+    }
     /// Called every tick for this entity.
     ///
     /// The `caller` parameter is a reference to the entity that initiated the tick.
@@ -195,11 +224,7 @@ pub trait EntityBase: Send + Sync + NBTStorage + std::any::Any {
                 let mut bedrock_meta = EntityMetadata::new();
                 bedrock_meta.set_flag(entity_data_key::FLAGS, entity_data_flag::BABY as u8, true);
                 entity.send_meta_data(
-                    &[Metadata::new(
-                        TrackedData::BABY_ID,
-                        MetaDataType::BOOLEAN,
-                        true,
-                    )],
+                    &[Metadata::new(tracked_data::ageable_mob::DATA_BABY_ID, true)],
                     Some(&bedrock_meta),
                 );
             }
@@ -309,10 +334,20 @@ pub trait EntityBase: Send + Sync + NBTStorage + std::any::Any {
         Box::pin(async move {
             let entity = self.get_entity();
             let runtime_id = entity.entity_id as u64;
+            let identifier = self
+                .get_mob()
+                .and_then(mob::Mob::mob_bedrock_identifier)
+                .unwrap_or(entity.entity_type.resource_name);
+            let mut metadata = entity.bedrock_metadata();
+            if let Some(mob) = self.get_mob()
+                && let Some(mob_metadata) = mob.mob_bedrock_spawn_metadata().await
+            {
+                metadata.0.extend(mob_metadata.0);
+            }
             let packet = CAddActor::new(
                 VarLong(runtime_id as i64),
                 VarULong(runtime_id),
-                self.get_entity().entity_type.resource_name.to_string(),
+                identifier.to_string(),
                 entity.pos.load().to_f32_lossy(),
                 entity.velocity.load().to_f32_lossy(),
                 entity.pitch.load(),
@@ -320,22 +355,56 @@ pub trait EntityBase: Send + Sync + NBTStorage + std::any::Any {
                 entity.head_yaw.load(),
                 entity.body_yaw.load(),
                 Vec::new(),
-                entity.bedrock_metadata(),
+                metadata,
                 PropertySyncData {
                     int_properties: std::collections::HashMap::new(),
                     float_properties: std::collections::HashMap::new(),
                 },
                 Vec::new(),
             );
-            client.send_game_packet(&packet).await;
+            if let Ok(data) = client.serialize_packet(&packet) {
+                client.send_game_packet(data).await;
+            }
         })
     }
 
     fn send_java_spawn_packet<'a>(&'a self, client: &'a JavaClient) -> EntityBaseFuture<'a, ()> {
         Box::pin(async move {
-            client
-                .enqueue_packet(&self.get_entity().create_spawn_packet())
-                .await;
+            let entity = self.get_entity();
+            let version = client.version.load();
+            let is_mob = entity.entity_type.mob || self.get_mob().is_some();
+            if version < JavaMinecraftVersion::V_1_19 && is_mob {
+                let metadata = if let Some(mob) = self.get_mob() {
+                    mob.mob_java_spawn_metadata(version).await
+                } else {
+                    None
+                };
+                let spawn_packet = entity.create_spawn_living_packet(metadata.clone());
+                if let Ok(data) = client.serialize_packet(&spawn_packet) {
+                    client.enqueue_packet(data).await;
+                }
+                if version >= JavaMinecraftVersion::V_1_15
+                    && let Some(meta) = metadata
+                {
+                    let meta_packet = CSetEntityMetadata::new(entity.entity_id.into(), meta);
+                    if let Ok(meta_data) = client.serialize_packet(&meta_packet) {
+                        client.enqueue_packet(meta_data).await;
+                    }
+                }
+            } else {
+                let spawn_packet = entity.create_spawn_packet();
+                if let Ok(data) = client.serialize_packet(&spawn_packet) {
+                    client.enqueue_packet(data).await;
+                }
+                if let Some(mob) = self.get_mob()
+                    && let Some(metadata) = mob.mob_java_spawn_metadata(version).await
+                {
+                    let meta_packet = CSetEntityMetadata::new(entity.entity_id.into(), metadata);
+                    if let Ok(meta_data) = client.serialize_packet(&meta_packet) {
+                        client.enqueue_packet(meta_data).await;
+                    }
+                }
+            }
         })
     }
 
@@ -718,9 +787,6 @@ pub trait EntityBase: Send + Sync + NBTStorage + std::any::Any {
             }
         })
     }
-
-    /// Returns itself as the nbt storage for saving and loading data.
-    fn as_nbt_storage(&self) -> &dyn NBTStorage;
 
     fn get_experience_reward(&self, _killer: Option<&dyn EntityBase>) -> u32 {
         0
@@ -1130,8 +1196,7 @@ impl Entity {
         );
         self.send_meta_data(
             &[Metadata::new(
-                TrackedData::CUSTOM_NAME,
-                MetaDataType::OPTIONAL_TEXT_COMPONENT,
+                tracked_data::entity::DATA_CUSTOM_NAME,
                 Some(name),
             )],
             Some(&bedrock_meta),
@@ -1159,8 +1224,7 @@ impl Entity {
         );
         self.send_meta_data(
             &[Metadata::new(
-                TrackedData::CUSTOM_NAME_VISIBLE,
-                MetaDataType::BOOLEAN,
+                tracked_data::entity::DATA_CUSTOM_NAME_VISIBLE,
                 visible,
             )],
             Some(&bedrock_meta),
@@ -1174,11 +1238,7 @@ impl Entity {
     pub fn set_silent(&self, silent: bool) {
         self.silent.store(silent, Ordering::Relaxed);
         self.send_meta_data(
-            &[Metadata::new(
-                TrackedData::SILENT,
-                MetaDataType::BOOLEAN,
-                silent,
-            )],
+            &[Metadata::new(tracked_data::entity::DATA_SILENT, silent)],
             None,
         );
     }
@@ -1191,8 +1251,7 @@ impl Entity {
         self.has_no_gravity.store(no_gravity, Ordering::Relaxed);
         self.send_meta_data(
             &[Metadata::new(
-                TrackedData::NO_GRAVITY,
-                MetaDataType::BOOLEAN,
+                tracked_data::entity::DATA_NO_GRAVITY,
                 no_gravity,
             )],
             None,
@@ -1853,15 +1912,7 @@ impl Entity {
             0,
         );
         let world = self.world.load();
-        for player in world.players.load().iter() {
-            let center = player.get_entity().chunk_pos.load();
-            let view_distance = crate::world::chunker::get_view_distance(player).get() as i32;
-            if is_within_view_distance(chunk_pos, center, view_distance)
-                && let ClientPlatform::Bedrock(client) = player.client.as_ref()
-            {
-                client.try_enqueue_packet(&packet);
-            }
-        }
+        world.broadcast_to_chunk_bedrock(chunk_pos, &packet);
     }
 
     pub fn update_last_pos(&self) -> Vector3<f64> {
@@ -2595,8 +2646,7 @@ impl Entity {
             );
             self.send_meta_data(
                 &[Metadata::new(
-                    TrackedData::TICKS_FROZEN,
-                    MetaDataType::INTEGER,
+                    tracked_data::entity::DATA_TICKS_FROZEN,
                     VarInt(new_frozen_ticks),
                 )],
                 Some(&bedrock_meta),
@@ -2643,6 +2693,22 @@ impl Entity {
             entity_vel,
         )
     }
+
+    pub fn create_spawn_living_packet(&self, metadata: Option<Box<[u8]>>) -> CSpawnLivingEntity {
+        let entity_loc = self.pos.load();
+        let entity_vel = self.velocity.load();
+        CSpawnLivingEntity::new(
+            VarInt(self.entity_id),
+            self.entity_uuid,
+            VarInt(i32::from(self.entity_type.id)),
+            entity_loc,
+            self.pitch.load(),
+            self.yaw.load(),
+            self.head_yaw.load(),
+            entity_vel,
+            metadata,
+        )
+    }
     pub fn width(&self) -> f32 {
         self.entity_dimension.load().width
     }
@@ -2676,10 +2742,11 @@ impl Entity {
         ));
     }
 
+    #[expect(clippy::unused_async)]
     pub async fn set_sneaking(&self, sneaking: bool) {
         //assert!(self.sneaking.load(Relaxed) != sneaking);
         self.sneaking.store(sneaking, Relaxed);
-        self.set_flag(Flag::Sneaking, sneaking).await;
+        self.set_flag(Flag::Sneaking, sneaking);
     }
     pub fn is_sneaking(&self) -> bool {
         self.sneaking.load(Ordering::Relaxed)
@@ -2699,31 +2766,37 @@ impl Entity {
                 return;
             }
             self.swimming.store(event.is_swimming, Relaxed);
-            self.set_flag(Flag::Swimming, event.is_swimming).await;
+            self.set_flag(Flag::Swimming, event.is_swimming);
         }
     }
 
     /// Sets whether the entity is invisible and sends updated metadata.
+    #[expect(clippy::unused_async)]
+    #[allow(clippy::unused_async_trait_impl)]
     pub async fn set_invisible(&self, invisible: bool) {
         if self.invisible.load(Ordering::Relaxed) != invisible {
             self.invisible.store(invisible, Relaxed);
-            self.set_flag(Flag::Invisible, invisible).await;
+            self.set_flag(Flag::Invisible, invisible);
         }
     }
 
     /// Sets whether the entity is glowing and sends updated metadata.
+    #[expect(clippy::unused_async)]
+    #[allow(clippy::unused_async_trait_impl)]
     pub async fn set_glowing(&self, glowing: bool) {
         if self.glowing.load(Ordering::Relaxed) != glowing {
             self.glowing.store(glowing, Ordering::Relaxed);
-            self.set_flag(Flag::Glowing, glowing).await;
+            self.set_flag(Flag::Glowing, glowing);
         }
     }
 
     /// Sets whether the entity is on fire for visual and damage purposes. This is separate from `fire_ticks` which tracks the damage aspect of being on fire.
+    #[expect(clippy::unused_async)]
+    #[allow(clippy::unused_async_trait_impl)]
     pub async fn set_on_fire(&self, on_fire: bool) {
         if self.has_visual_fire.load(Ordering::Relaxed) != on_fire {
             self.has_visual_fire.store(on_fire, Ordering::Relaxed);
-            self.set_flag(Flag::OnFire, on_fire).await;
+            self.set_flag(Flag::OnFire, on_fire);
         }
     }
 
@@ -2832,10 +2905,11 @@ impl Entity {
         ]
     }
 
+    #[expect(clippy::unused_async)]
     pub async fn set_sprinting(&self, sprinting: bool) {
         //assert!(self.sprinting.load(Relaxed) != sprinting);
         self.sprinting.store(sprinting, Relaxed);
-        self.set_flag(Flag::Sprinting, sprinting).await;
+        self.set_flag(Flag::Sprinting, sprinting);
     }
 
     pub fn is_sprinting(&self) -> bool {
@@ -2845,16 +2919,17 @@ impl Entity {
         !self.on_ground.load(Relaxed)
     }
 
+    #[expect(clippy::unused_async)]
     pub async fn set_fall_flying(&self, fall_flying: bool) {
         assert_ne!(self.fall_flying.load(Relaxed), fall_flying);
         self.fall_flying.store(fall_flying, Relaxed);
-        self.set_flag(Flag::FallFlying, fall_flying).await;
+        self.set_flag(Flag::FallFlying, fall_flying);
     }
     pub fn is_fall_flying(&self) -> bool {
         self.fall_flying.load(Ordering::Relaxed)
     }
 
-    async fn set_flag(&self, flag: Flag, value: bool) {
+    fn set_flag(&self, flag: Flag, value: bool) {
         let index = flag as u8;
         let mask = (1i8).wrapping_shl(index as u32);
         let new_je_flags = if value {
@@ -2865,8 +2940,7 @@ impl Entity {
 
         self.send_meta_data(
             &[Metadata::new(
-                TrackedData::SHARED_FLAGS_ID,
-                MetaDataType::BYTE,
+                tracked_data::entity::DATA_SHARED_FLAGS_ID,
                 new_je_flags,
             )],
             None,
@@ -2897,36 +2971,25 @@ impl Entity {
 
             let world = self.world.load();
             let chunk_pos = self.chunk_pos.load();
-            for player in world.players.load().iter() {
-                if let ClientPlatform::Bedrock(client) = player.client.as_ref() {
-                    let center = player.get_entity().chunk_pos.load();
-                    let view_distance =
-                        crate::world::chunker::get_view_distance(player).get() as i32;
-
-                    if is_within_view_distance(chunk_pos, center, view_distance) {
-                        let mut metadata = EntityMetadata(std::collections::HashMap::new());
-                        metadata.set(
-                            entity_data_key::FLAGS,
-                            MetadataValue::Long(self.bedrock_flags.load(Ordering::Relaxed)),
-                        );
-                        metadata.set(
-                            entity_data_key::FLAGS_TWO,
-                            MetadataValue::Long(self.bedrock_flags_two.load(Ordering::Relaxed)),
-                        );
-                        client
-                            .enqueue_packet(&CSetActorData {
-                                actor_runtime_id: VarULong(self.entity_id as u64),
-                                metadata,
-                                synced_properties: PropertySyncData {
-                                    int_properties: std::collections::HashMap::new(),
-                                    float_properties: std::collections::HashMap::new(),
-                                },
-                                tick: VarULong(0),
-                            })
-                            .await;
-                    }
-                }
-            }
+            let mut metadata = EntityMetadata(std::collections::HashMap::new());
+            metadata.set(
+                entity_data_key::FLAGS,
+                MetadataValue::Long(self.bedrock_flags.load(Ordering::Relaxed)),
+            );
+            metadata.set(
+                entity_data_key::FLAGS_TWO,
+                MetadataValue::Long(self.bedrock_flags_two.load(Ordering::Relaxed)),
+            );
+            let packet = CSetActorData {
+                actor_runtime_id: VarULong(self.entity_id as u64),
+                metadata,
+                synced_properties: PropertySyncData {
+                    int_properties: std::collections::HashMap::new(),
+                    float_properties: std::collections::HashMap::new(),
+                },
+                tick: VarULong(0),
+            };
+            world.broadcast_to_chunk_bedrock(chunk_pos, &packet);
         }
     }
 
@@ -2944,45 +3007,56 @@ impl Entity {
     ) {
         let world = self.world.load();
         let chunk_pos = self.chunk_pos.load();
+        let players = world.players.load();
 
-        for player in world.players.load().iter() {
-            match player.client.as_ref() {
-                ClientPlatform::Java(client) => {
-                    // Apply Chebyshev distance check
-                    let center = player.get_entity().chunk_pos.load();
-                    let view_distance =
-                        crate::world::chunker::get_view_distance(player).get() as i32;
+        let mut java_recipients = Vec::new();
+        let mut bedrock_recipients = Vec::new();
 
-                    if is_within_view_distance(chunk_pos, center, view_distance) {
-                        let mut buf = Vec::new();
-                        for m in meta {
-                            let _ = m.write(&mut buf, &client.version.load());
-                        }
-                        buf.put_u8(255);
-                        player.client.try_enqueue_packet(&CSetEntityMetadata::new(
-                            self.entity_id.into(),
-                            buf.into(),
-                        ));
-                    }
+        for player in players.iter() {
+            let center = player.get_entity().chunk_pos.load();
+            let view_distance = crate::world::chunker::get_view_distance(player).get() as i32;
+
+            if is_within_view_distance(chunk_pos, center, view_distance) {
+                match player.client.as_ref() {
+                    ClientPlatform::Java(_) => java_recipients.push(player),
+                    ClientPlatform::Bedrock(client) => bedrock_recipients.push(client),
                 }
-                ClientPlatform::Bedrock(client) => {
-                    if let Some(bedrock_meta) = bedrock_meta {
-                        let center = player.get_entity().chunk_pos.load();
-                        let view_distance =
-                            crate::world::chunker::get_view_distance(player).get() as i32;
+            }
+        }
 
-                        if is_within_view_distance(chunk_pos, center, view_distance) {
-                            client.try_enqueue_packet(&CSetActorData {
-                                actor_runtime_id: VarULong(self.entity_id as u64),
-                                metadata: EntityMetadata(bedrock_meta.0.clone()),
-                                synced_properties: PropertySyncData {
-                                    int_properties: std::collections::HashMap::new(),
-                                    float_properties: std::collections::HashMap::new(),
-                                },
-                                tick: VarULong(0),
-                            });
-                        }
-                    }
+        let recipients_by_version =
+            World::collect_java_recipients_by_version(java_recipients.into_iter());
+
+        for (version, recipients) in recipients_by_version {
+            if version < CURRENT_MC_VERSION {
+                continue;
+            }
+            let mut buf = Vec::new();
+            for m in meta {
+                let _ = m.write(&mut buf, &version);
+            }
+            buf.put_u8(255);
+            let packet = CSetEntityMetadata::new(self.entity_id.into(), buf.into());
+            if let Ok(packet_data) = JavaClient::serialize_packet_for_version(&packet, version) {
+                for recipient in recipients {
+                    recipient.try_enqueue_packet(packet_data.clone());
+                }
+            }
+        }
+
+        if let Some(bedrock_meta) = bedrock_meta {
+            let packet = CSetActorData {
+                actor_runtime_id: VarULong(self.entity_id as u64),
+                metadata: EntityMetadata(bedrock_meta.0.clone()),
+                synced_properties: PropertySyncData {
+                    int_properties: std::collections::HashMap::new(),
+                    float_properties: std::collections::HashMap::new(),
+                },
+                tick: VarULong(0),
+            };
+            for recipient in bedrock_recipients {
+                if let Ok(packet_data) = recipient.serialize_packet(&packet) {
+                    recipient.try_enqueue_packet(packet_data);
                 }
             }
         }
@@ -3025,11 +3099,7 @@ impl Entity {
                 MetadataValue::Float(dimension.height),
             );
             self.send_meta_data(
-                &[Metadata::new(
-                    TrackedData::POSE,
-                    MetaDataType::ENTITY_POSE,
-                    VarInt(pose),
-                )],
+                &[Metadata::new(tracked_data::entity::DATA_POSE, VarInt(pose))],
                 Some(&bedrock_meta),
             );
         }
@@ -3197,6 +3267,7 @@ impl Entity {
         let je_packet = pumpkin_protocol::java::client::play::CSetEntityLink::new(
             self.entity_id,
             holder_entity.entity_id,
+            true,
         );
         let be_packet = pumpkin_protocol::bedrock::client::CSetActorLink {
             link: pumpkin_protocol::bedrock::client::common::EntityLink {
@@ -3225,7 +3296,7 @@ impl Entity {
         }
 
         let je_packet =
-            pumpkin_protocol::java::client::play::CSetEntityLink::new(self.entity_id, -1);
+            pumpkin_protocol::java::client::play::CSetEntityLink::new(self.entity_id, -1, true);
         let be_packet = pumpkin_protocol::bedrock::client::CSetActorLink {
             link: pumpkin_protocol::bedrock::client::common::EntityLink {
                 ridden_unique_id: pumpkin_protocol::codec::var_long::VarLong(self.entity_id as i64),
@@ -3440,7 +3511,7 @@ impl Entity {
             let world = self.world.load();
             let passengers_packet = CSetPassengers::new(VarInt(self.entity_id), &passenger_ids);
             if let Some(player) = passenger.get_player() {
-                player.client.enqueue_packet(&passengers_packet).await;
+                player.send_client_packet(&passengers_packet).await;
                 world.broadcast_to_chunk_except(
                     chunk_pos,
                     &[player.get_entity().entity_uuid],
@@ -3621,18 +3692,21 @@ impl Entity {
                 }
             };
 
+            // Clean up any remaining reference to the dismounted passenger.
+            passenger_entity.set_pos(dismount_pos);
+
+            // Phase 2: Teleport to safety (unblocks movement)
             if let Some(player) = passenger.get_player() {
                 if let Some(id) = teleport_id {
                     player.get_entity().set_pos(dismount_pos);
                     // Update awaiting_teleport with the real dismount position
                     *player.awaiting_teleport.lock().await = Some((id.into(), dismount_pos));
-                    // Use enqueue_packet (not send_packet_now) so the teleport goes through
+                    // Use send_client_packet so the teleport goes through
                     // the same packet queue as CSetPassengers, preserving send order.
                     // Vanilla uses DELTA | ROT flags: position absolute, delta/rotation relative.
                     // With rotation relative and yaw/pitch=0, the client preserves its current look.
                     player
-                        .client
-                        .enqueue_packet(&CPlayerPosition::new(
+                        .send_client_packet(&CPlayerPosition::new(
                             id.into(),
                             dismount_pos,
                             Vector3::new(0.0, 0.0, 0.0),
@@ -3752,8 +3826,8 @@ impl Entity {
     }
 }
 
-impl NBTStorage for Entity {
-    fn write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
+impl Entity {
+    pub fn write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async move {
             let position = self.pos.load();
             nbt.put_string(
@@ -3818,7 +3892,7 @@ impl NBTStorage for Entity {
         })
     }
 
-    fn read_nbt_non_mut<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
+    pub fn read_nbt_non_mut<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async {
             if let Some(position) = nbt.get_list("Pos")
                 && position.len() >= 3
@@ -3976,9 +4050,15 @@ impl EntityBase for Entity {
     fn cast_any(&self) -> &dyn std::any::Any {
         self
     }
+}
 
-    fn as_nbt_storage(&self) -> &dyn NBTStorage {
-        self
+impl<T: EntityBase + ?Sized> NBTStorage for T {
+    fn write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
+        EntityBase::write_nbt(self, nbt)
+    }
+
+    fn read_nbt_non_mut<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
+        EntityBase::read_nbt_non_mut(self, nbt)
     }
 }
 

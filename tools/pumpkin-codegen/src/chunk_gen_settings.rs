@@ -39,6 +39,36 @@ pub struct GenerationSettingsStruct {
     pub shape: GenerationShapeConfigStruct,
     /// Hierarchical surface material rule determining which block is placed at each surface point.
     pub surface_rule: MaterialRuleStruct,
+    /// Target points for finding player spawn positions.
+    #[serde(default)]
+    pub spawn_target: Vec<ParameterPointStruct>,
+}
+
+/// Deserialized parameter point for spawn target configuration.
+#[derive(Deserialize)]
+pub struct ParameterPointStruct {
+    pub temperature: ParameterStruct,
+    pub humidity: ParameterStruct,
+    pub continentalness: ParameterStruct,
+    pub erosion: ParameterStruct,
+    pub depth: ParameterStruct,
+    pub weirdness: ParameterStruct,
+    #[serde(default)]
+    pub offset: ParameterStruct,
+}
+
+/// Deserialized parameter interval or point.
+#[derive(Deserialize, Clone)]
+#[serde(untagged)]
+pub enum ParameterStruct {
+    Point(f32),
+    Span([f32; 2]),
+}
+
+impl Default for ParameterStruct {
+    fn default() -> Self {
+        Self::Point(0.0)
+    }
 }
 
 /// Deserialized noise-shape configuration controlling terrain cell dimensions.
@@ -238,6 +268,52 @@ impl ToTokens for BlockStateCodecStruct {
     }
 }
 
+impl ToTokens for ParameterStruct {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        match self {
+            Self::Point(val) => {
+                let quantized = (*val * 10000.0) as i64;
+                tokens.extend(quote!(
+                    crate::biome::Parameter::new(#quantized, #quantized)
+                ));
+            }
+            Self::Span([min, max]) => {
+                let min_q = (*min * 10000.0) as i64;
+                let max_q = (*max * 10000.0) as i64;
+                tokens.extend(quote!(
+                    crate::biome::Parameter::new(#min_q, #max_q)
+                ));
+            }
+        }
+    }
+}
+
+impl ToTokens for ParameterPointStruct {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let temp = &self.temperature;
+        let hum = &self.humidity;
+        let cont = &self.continentalness;
+        let erosion = &self.erosion;
+        let depth = &self.depth;
+        let weirdness = &self.weirdness;
+        let offset = match self.offset {
+            ParameterStruct::Point(val) => (val * 10000.0) as i64,
+            ParameterStruct::Span([min, _]) => (min * 10000.0) as i64,
+        };
+        tokens.extend(quote!(
+            crate::biome::ParameterPoint {
+                temperature: #temp,
+                humidity: #hum,
+                continentalness: #cont,
+                erosion: #erosion,
+                depth: #depth,
+                weirdness: #weirdness,
+                offset: #offset,
+            }
+        ));
+    }
+}
+
 impl ToTokens for GenerationSettingsStruct {
     /// Emits a `GenerationSettings` struct literal with all fields populated from the deserialized data.
     fn to_tokens(&self, tokens: &mut TokenStream) {
@@ -249,6 +325,7 @@ impl ToTokens for GenerationSettingsStruct {
         let block = &self.default_block;
         let shape = &self.shape;
         let rule = &self.surface_rule;
+        let spawn_target = &self.spawn_target;
 
         tokens.extend(quote!(
             GenerationSettings {
@@ -260,6 +337,7 @@ impl ToTokens for GenerationSettingsStruct {
                 shape: #shape,
                 surface_rule: #rule,
                 default_block: #block,
+                spawn_target: &[#(#spawn_target),*],
             }
         ));
     }
@@ -464,11 +542,26 @@ impl ToTokens for MaterialRuleStruct {
     }
 }
 
-/// Reads `chunk_gen_settings.json` and emits the complete chunk generation settings `TokenStream`.
+/// Reads noise_settings files from the 26.2 datapack and emits the complete chunk generation settings `TokenStream`.
 pub fn build() -> TokenStream {
-    let json: BTreeMap<String, GenerationSettingsStruct> =
-        serde_json::from_str(&fs::read_to_string("../../assets/chunk_gen_settings.json").unwrap())
-            .expect("Failed to parse settings.json");
+    let dir =
+        std::path::Path::new("../../assets/datapacks/26_2/data/minecraft/worldgen/noise_settings");
+    let mut json: BTreeMap<String, GenerationSettingsStruct> = BTreeMap::new();
+    let mut entries: Vec<_> = fs::read_dir(dir)
+        .expect("Missing worldgen/noise_settings directory")
+        .flatten()
+        .filter(|e| e.path().extension().is_some_and(|ext| ext == "json"))
+        .collect();
+    entries.sort_by_key(|e| e.path());
+
+    for entry in entries {
+        let path = entry.path();
+        let stem = path.file_stem().unwrap().to_string_lossy().into_owned();
+        let content = fs::read_to_string(&path).expect("Failed to read noise_settings file");
+        let settings: GenerationSettingsStruct =
+            serde_json::from_str(&content).expect("Failed to parse noise_settings JSON");
+        json.insert(stem, settings);
+    }
 
     let mut const_defs = TokenStream::new();
 
@@ -489,7 +582,7 @@ pub fn build() -> TokenStream {
         use std::cell::RefCell;
         use pumpkin_util::random::RandomDeriver;
         use pumpkin_util::y_offset::YOffset;
-        use crate::biome::Biome;
+        use crate::biome::{Biome, Parameter, ParameterPoint};
         use pumpkin_util::y_offset::Absolute;
 
         pub struct GenerationSettings {
@@ -501,6 +594,7 @@ pub fn build() -> TokenStream {
             pub shape: GenerationShapeConfig,
             pub surface_rule: MaterialRule,
             pub default_block: &'static BlockState,
+            pub spawn_target: &'static [ParameterPoint],
         }
 
         pub struct GenerationShapeConfig {

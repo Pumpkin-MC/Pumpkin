@@ -1,11 +1,8 @@
-//! License validation, offline verification, and online leasing.
+//! License validation, leasing, and offline grace periods.
 
 use crate::{
-    crypto::{CryptoError, verify_signature},
     http::{HttpClient, HttpError},
     models::{CheckLicenseResponse, LicenseLease, LicenseStatus, PumpkinMetadata},
-    resolver::{PublicKeyResolver, ResolveError},
-    wasm::{WasmError, extract_sections, find_self_wasm},
 };
 use std::{
     path::{Path, PathBuf},
@@ -17,15 +14,6 @@ use tracing::{debug, info};
 /// License checking and verification errors.
 #[derive(Debug, Error)]
 pub enum LicenseError {
-    /// WASM extraction error.
-    #[error("WASM inspection failed: {0}")]
-    Wasm(#[from] WasmError),
-    /// Cryptographic signature verification error.
-    #[error("Cryptographic verification failed: {0}")]
-    Crypto(#[from] CryptoError),
-    /// Public key resolution error.
-    #[error("Public key resolution failed: {0}")]
-    Resolver(#[from] ResolveError),
     /// HTTP communication error with marketplace.
     #[error("Marketplace HTTP error: {0}")]
     Http(#[from] HttpError),
@@ -44,6 +32,9 @@ pub enum LicenseError {
     /// JSON serialization error.
     #[error("JSON serialization error: {0}")]
     Json(#[from] serde_json::Error),
+    /// Plugin is unsigned or missing marketplace metadata.
+    #[error("Plugin is unsigned or missing marketplace metadata")]
+    UnsignedPlugin,
     /// Plugin has not been initialized.
     #[error(
         "Plugin-utils has not been initialized (call pumpkin_plugin_utils::init(context) first)"
@@ -51,10 +42,9 @@ pub enum LicenseError {
     NotInitialized,
 }
 
-/// Manages fast offline signature checks and background online license validation.
+/// Manages license checks, cached leases, and offline grace periods.
 pub struct LicenseChecker {
     data_folder: PathBuf,
-    resolver: PublicKeyResolver,
     http_client: HttpClient,
 }
 
@@ -65,7 +55,6 @@ impl LicenseChecker {
         let folder = data_folder.as_ref().to_path_buf();
         Self {
             data_folder: folder,
-            resolver: PublicKeyResolver::new(),
             http_client: HttpClient::default(),
         }
     }
@@ -109,72 +98,22 @@ impl LicenseChecker {
             .as_secs()
     }
 
-    /// Performs an instant, offline cryptographic verification of the given WASM bytes.
-    ///
-    /// # Errors
-    ///
-    /// Returns `LicenseError` if parsing, public key resolution, or signature verification fails.
-    pub fn verify_offline(&self, wasm_bytes: &[u8]) -> Result<PumpkinMetadata, LicenseError> {
-        // 1. Extract custom sections and clean WASM binary
-        let extracted = extract_sections(wasm_bytes)?;
-
-        // 2. Validate metadata fields
-        if extracted.metadata.is_paid && extracted.metadata.license_key.is_none() {
-            return Err(LicenseError::MetadataMismatch(
-                "Paid plugin metadata missing license_key".to_string(),
-            ));
+    /// Evaluates the complete license status (metadata + lease cache + grace period).
+    #[must_use]
+    pub fn evaluate_license(
+        &self,
+        metadata: &PumpkinMetadata,
+        grace_period_days: u32,
+    ) -> LicenseStatus {
+        // Free/Open-Source plugins are always valid
+        if !metadata.is_paid {
+            return LicenseStatus::Valid(metadata.clone());
         }
 
-        // 3. Resolve public key (Host WIT -> Local Cache -> HTTPS fetch)
-        let public_key = self
-            .resolver
-            .resolve_public_key(&extracted.metadata.marketplace_url)?;
-
-        // 4. Verify Ed25519 signature over clean_wasm + metadata_raw
-        verify_signature(
-            &extracted.clean_wasm,
-            &extracted.metadata_raw,
-            &extracted.signature_envelope,
-            &public_key,
-        )?;
-
-        debug!(
-            "Successfully verified offline signature for plugin '{}' (User ID: {})",
-            extracted.metadata.plugin_name, extracted.metadata.user_id
-        );
-
-        Ok(extracted.metadata)
-    }
-
-    /// Locates the plugin's WASM file on disk and verifies its signature offline.
-    ///
-    /// # Errors
-    ///
-    /// Returns `LicenseError` if reading the file or signature verification fails.
-    pub fn verify_self_offline(&self) -> Result<PumpkinMetadata, LicenseError> {
-        let bytes = find_self_wasm(&self.data_folder)?;
-        self.verify_offline(&bytes)
-    }
-
-    /// Evaluates the complete license status (offline check + lease cache + grace period).
-    #[must_use]
-    pub fn evaluate_license(&self, wasm_bytes: &[u8], grace_period_days: u32) -> LicenseStatus {
-        let metadata = match self.verify_offline(wasm_bytes) {
-            Ok(m) => m,
-            Err(e) => {
-                if matches!(
-                    e,
-                    LicenseError::Wasm(WasmError::MissingMetadata | WasmError::MissingSignature)
-                ) {
-                    return LicenseStatus::Unsigned;
-                }
-                return LicenseStatus::Invalid(e.to_string());
-            }
-        };
-
-        // Free/Open-Source plugins with valid signatures are always valid
-        if !metadata.is_paid {
-            return LicenseStatus::Valid(metadata);
+        if metadata.license_key.is_none() {
+            return LicenseStatus::Invalid(
+                "Paid plugin metadata is missing a license_key".to_string(),
+            );
         }
 
         // For paid plugins, inspect cached lease
@@ -186,7 +125,7 @@ impl LicenseChecker {
                 && lease.status == "valid"
                 && now <= lease.expires_timestamp
             {
-                return LicenseStatus::Valid(metadata);
+                return LicenseStatus::Valid(metadata.clone());
             }
 
             // Check if within grace period
@@ -196,7 +135,7 @@ impl LicenseChecker {
                     (lease.last_verified_timestamp + grace_seconds).saturating_sub(now);
                 let days_remaining = (seconds_left / 86400).max(1) as u32;
                 return LicenseStatus::GracePeriod {
-                    metadata,
+                    metadata: metadata.clone(),
                     days_remaining,
                     reason: "Operating in offline grace period with previous valid lease"
                         .to_string(),
@@ -205,7 +144,7 @@ impl LicenseChecker {
         }
 
         // If no cached lease exists yet (first run) and offline, allow initial valid state
-        LicenseStatus::Valid(metadata)
+        LicenseStatus::Valid(metadata.clone())
     }
 
     /// Checks the license online against the marketplace REST API:

@@ -4,6 +4,7 @@ use std::{
     net::SocketAddr,
 };
 
+use pumpkin_nbt::{Nbt, NbtCompound};
 use pumpkin_util::{
     GameMode,
     math::{position::BlockPos, vector2::Vector2, vector3::Vector3},
@@ -205,5 +206,11 @@ impl PacketWrite for GameMode {
 impl PacketWrite for Cow<'_, str> {
     fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
         self.as_ref().write(writer)
+    }
+}
+
+impl PacketWrite for NbtCompound {
+    fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
+        writer.write_all(&Nbt::from(self.clone()).write_bedrock())
     }
 }

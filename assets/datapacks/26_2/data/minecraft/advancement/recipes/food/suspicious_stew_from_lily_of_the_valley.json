@@ -1,0 +1,32 @@
+{
+  "parent": "minecraft:recipes/root",
+  "criteria": {
+    "has_lily_of_the_valley": {
+      "conditions": {
+        "items": [
+          {
+            "items": "minecraft:lily_of_the_valley"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    },
+    "has_the_recipe": {
+      "conditions": {
+        "recipe": "minecraft:suspicious_stew_from_lily_of_the_valley"
+      },
+      "trigger": "minecraft:recipe_unlocked"
+    }
+  },
+  "requirements": [
+    [
+      "has_the_recipe",
+      "has_lily_of_the_valley"
+    ]
+  ],
+  "rewards": {
+    "recipes": [
+      "minecraft:suspicious_stew_from_lily_of_the_valley"
+    ]
+  }
+}

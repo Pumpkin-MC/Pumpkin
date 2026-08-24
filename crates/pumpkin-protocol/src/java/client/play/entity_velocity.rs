@@ -1,6 +1,6 @@
 use std::io::Write;
 
-use pumpkin_data::packet::clientbound::PLAY_SET_ENTITY_MOTION;
+use pumpkin_data::packet::clientbound::play::SET_ENTITY_MOTION;
 use pumpkin_macros::java_packet;
 use pumpkin_util::{math::vector3::Vector3, version::JavaMinecraftVersion};
 
@@ -12,7 +12,7 @@ use crate::{
 ///
 /// This packet informs the client of a sudden change in an entity's movement,
 /// such as knockback from an attack, explosions, or being launched by a piston.
-#[java_packet(PLAY_SET_ENTITY_MOTION)]
+#[java_packet(SET_ENTITY_MOTION)]
 pub struct CEntityVelocity {
     /// The Entity ID of the entity whose velocity is being set
     pub entity_id: VarInt,
@@ -38,7 +38,11 @@ impl ClientPacket for CEntityVelocity {
     ) -> Result<(), WritingError> {
         let mut write = write;
 
-        write.write_var_int(&self.entity_id)?;
+        if *version <= JavaMinecraftVersion::V_1_7_6 {
+            write.write_i32_be(self.entity_id.0)?;
+        } else {
+            write.write_var_int(&self.entity_id)?;
+        }
 
         // Protocol 773+ uses packed velocity; 772 and below use three i16 components.
         if version >= &JavaMinecraftVersion::V_1_21_9 {

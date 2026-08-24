@@ -18,7 +18,7 @@ use crate::net::bedrock::{
 };
 use crate::net::java::JavaClient;
 use crate::net::java::pending::PendingConnection;
-use crate::net::{ClientPlatform, DisconnectReason, PacketHandlerResult};
+use crate::net::{ClientPlatform, DisconnectReason, PacketHandlerResult, PacketRateLimiter};
 use crate::net::{lan_broadcast::LANBroadcast, query, rcon::RCONServer};
 use crate::plugin::server::server_command::ServerCommandEvent;
 use crate::server::{Server, ticker::Ticker};
@@ -542,7 +542,15 @@ impl PumpkinServer {
                         let server_clone = self.server.clone();
 
                         tasks.spawn(async move {
-                            let mut pending = PendingConnection::new(connection, client_addr, client_id);
+                            let packet_limiter = PacketRateLimiter::from_config(
+                                &server_clone.advanced_config.networking.java.packet_limiter,
+                            );
+                            let mut pending = PendingConnection::new(
+                                connection,
+                                client_addr,
+                                client_id,
+                                packet_limiter,
+                            );
                             let login_result = pending.handle_login_sequence(&server_clone).await;
 
                             match login_result {
@@ -552,16 +560,19 @@ impl PumpkinServer {
                                 PacketHandlerResult::ReadyToPlay(profile, config) => {
                                      let mut java_client = JavaClient::from_pending(pending, profile.clone(), config.clone());
                                      java_client.start_outgoing_packet_task();
+
                                      if let Some((player, world)) = server_clone
                                      .add_player(Arc::new(ClientPlatform::Java(java_client)), profile, Some(config))
                                           .await
                                 {
+
                                     if let ClientPlatform::Java(client) = player.client.as_ref() {
                                         client.set_player(player.clone());
                                     }
                                     world
                                         .spawn_java_player(&server_clone.basic_config, &player, &server_clone)
                                         .await;
+
                                     if let ClientPlatform::Java(client) = player.client.as_ref() {
                                         client.progress_player_packets(&player, &server_clone).await;
 
@@ -609,10 +620,14 @@ impl PumpkinServer {
                 if let Some((session, client_addr)) = nethernet_result {
                     *master_client_id_counter += 1;
                     let be_clients = bedrock_clients.clone();
+                    let packet_limiter = PacketRateLimiter::from_config(
+                        &self.server.advanced_config.networking.bedrock.packet_limiter,
+                    );
                     let client = Arc::new(BedrockClient::new(
                         session.clone(),
                         client_addr,
                         be_clients,
+                        packet_limiter,
                     ));
                     client.start_outgoing_packet_task();
                     bedrock_clients.lock().await.insert(client_addr, client.clone());
@@ -710,8 +725,7 @@ fn setup_stdin_console(server: Arc<Server>) {
             if !event.cancelled {
                 server
                     .command_dispatcher
-                    .read()
-                    .await
+                    .load()
                     .handle_command(
                         &command::CommandSender::Console.into_source(&server).await,
                         command.as_str(),
@@ -783,8 +797,7 @@ fn setup_console(mut rl: Editor<PumpkinCommandCompleter, FileHistory>, server: A
                 if !event.cancelled {
                     server
                         .command_dispatcher
-                        .read()
-                        .await
+                        .load()
                         .handle_command(
                             &command::CommandSender::Console.into_source(&server).await,
                             &line,

@@ -90,7 +90,7 @@ impl BedrockClient {
         player.living_entity.send_equipment_changes(equipment);
 
         // Sync bedrock inventory updates
-        self.enqueue_packet(&CInventoryContent {
+        self.enqueue_client_packet(&CInventoryContent {
             container_id: VarUInt(0),
             slots: player
                 .inventory()

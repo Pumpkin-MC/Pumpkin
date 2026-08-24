@@ -1,4 +1,4 @@
-use super::{Entity, EntityBase, NBTStorage, ai::pathfinder::Navigator, living::LivingEntity};
+use super::{Entity, EntityBase, NbtFuture, ai::pathfinder::Navigator, living::LivingEntity};
 use crate::entity::EntityBaseFuture;
 use crate::entity::ai::control::MoveControlTrait;
 use crate::entity::ai::control::look_control::LookControl;
@@ -11,9 +11,9 @@ use crossbeam::atomic::AtomicCell;
 use pumpkin_data::attributes::Attributes;
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::item_stack::ItemStack;
-use pumpkin_data::meta_data_type::MetaDataType;
 use pumpkin_data::tag::{self, Taggable};
-use pumpkin_data::tracked_data::TrackedData;
+use pumpkin_data::tracked_data;
+use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::java::client::play::{CHeadRot, CUpdateEntityRot, Metadata};
 use pumpkin_util::Difficulty;
 use pumpkin_util::math::boundingbox::BoundingBox;
@@ -22,6 +22,7 @@ use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::random::xoroshiro128::Xoroshiro;
 use pumpkin_util::random::{RandomGenerator, get_seed};
+use pumpkin_util::version::JavaMinecraftVersion;
 use rand::RngExt;
 use std::pin::Pin;
 use std::sync::Arc;
@@ -187,6 +188,30 @@ impl MobEntity {
         }
     }
 
+    pub fn write_mob_nbt(&self, nbt: &mut NbtCompound) {
+        if self.is_no_ai() {
+            nbt.put_bool("NoAI", true);
+        }
+        if self.is_left_handed() {
+            nbt.put_bool("LeftHanded", true);
+        }
+        if self.can_pick_up_loot() {
+            nbt.put_bool("CanPickUpLoot", true);
+        }
+    }
+
+    pub fn read_mob_nbt(&self, nbt: &NbtCompound) {
+        if let Some(no_ai) = nbt.get_bool("NoAI") {
+            self.set_no_ai(no_ai);
+        }
+        if let Some(left_handed) = nbt.get_bool("LeftHanded") {
+            self.set_left_handed(left_handed);
+        }
+        if let Some(can_pick_up_loot) = nbt.get_bool("CanPickUpLoot") {
+            self.set_can_pick_up_loot(can_pick_up_loot);
+        }
+    }
+
     pub fn add_goal<G: crate::entity::ai::goal::Goal + 'static>(&self, priority: u8, goal: G) {
         self.goals_selector
             .lock()
@@ -223,11 +248,7 @@ impl MobEntity {
             self.mob_flags.store(new_b, Ordering::Relaxed);
 
             self.living_entity.entity.send_meta_data(
-                &[Metadata::new(
-                    TrackedData::MOB_FLAGS_ID,
-                    MetaDataType::BYTE,
-                    new_b,
-                )],
+                &[Metadata::new(tracked_data::mob::DATA_MOB_FLAGS_ID, new_b)],
                 None,
             );
         }
@@ -496,7 +517,41 @@ pub trait Mob: EntityBase + Send + Sync {
 
     fn get_mob_entity(&self) -> &MobEntity;
 
+    fn mob_bedrock_identifier(&self) -> Option<&'static str> {
+        None
+    }
+
+    /// Metadata which must accompany this mob whenever it is spawned for a Java client.
+    fn mob_java_spawn_metadata(
+        &self,
+        _version: JavaMinecraftVersion,
+    ) -> EntityBaseFuture<'_, Option<Box<[u8]>>> {
+        Box::pin(async { None })
+    }
+
+    /// Metadata which must accompany this mob whenever it is spawned for a Bedrock client.
+    fn mob_bedrock_spawn_metadata(
+        &self,
+    ) -> EntityBaseFuture<
+        '_,
+        Option<pumpkin_protocol::bedrock::client::set_actor_data::EntityMetadata>,
+    > {
+        Box::pin(async { None })
+    }
+
     fn get_job_site(&self) -> Option<BlockPos> {
+        None
+    }
+
+    fn is_job_site_pending(&self) -> EntityBaseFuture<'_, bool> {
+        Box::pin(async { false })
+    }
+
+    fn release_pending_job_site(&self, _position: BlockPos) -> EntityBaseFuture<'_, ()> {
+        Box::pin(async {})
+    }
+
+    fn get_trading_player(&self) -> Option<Arc<Player>> {
         None
     }
 
@@ -567,6 +622,26 @@ pub trait Mob: EntityBase + Send + Sync {
 
     fn get_mob_y_velocity_drag(&self) -> Option<f64> {
         None
+    }
+
+    fn as_ageable(&self) -> Option<&dyn crate::entity::ageable::AgeableMob> {
+        None
+    }
+
+    fn as_animal(&self) -> Option<&dyn crate::entity::passive::animal::Animal> {
+        None
+    }
+
+    fn as_tamable(&self) -> Option<&dyn crate::entity::passive::tamable::TamableAnimal> {
+        None
+    }
+
+    fn mob_write_nbt<'a>(&'a self, _nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
+        Box::pin(async {})
+    }
+
+    fn mob_read_nbt<'a>(&'a self, _nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
+        Box::pin(async {})
     }
 
     /// Set or clear the mob's target. Override to add side effects when targeting changes.
@@ -735,11 +810,13 @@ pub trait Mob: EntityBase + Send + Sync {
     }
 
     fn get_owner_uuid(&self) -> Option<Uuid> {
-        None
+        self.as_tamable()
+            .and_then(crate::entity::passive::tamable::TamableAnimal::get_owner)
     }
 
     fn is_sitting(&self) -> bool {
-        false
+        self.as_tamable()
+            .is_some_and(crate::entity::passive::tamable::TamableAnimal::is_in_sitting_pose)
     }
 
     fn get_base_experience_reward(&self) -> u32 {
@@ -752,11 +829,7 @@ pub trait Mob: EntityBase + Send + Sync {
             let is_baby = entity.age.load(std::sync::atomic::Ordering::Relaxed) < 0;
             if is_baby {
                 entity.send_meta_data(
-                    &[Metadata::new(
-                        TrackedData::BABY_ID,
-                        MetaDataType::BOOLEAN,
-                        true,
-                    )],
+                    &[Metadata::new(tracked_data::ageable_mob::DATA_BABY_ID, true)],
                     None,
                 );
             }
@@ -1067,8 +1140,36 @@ impl<T: Mob + Send + 'static> EntityBase for T {
         <T as Mob>::get_home(self)
     }
 
-    fn as_nbt_storage(&self) -> &dyn NBTStorage {
-        self
+    fn write_custom_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
+        Box::pin(async move {
+            self.get_mob_entity().write_mob_nbt(nbt);
+            if let Some(ageable) = self.as_ageable() {
+                ageable.write_ageable_nbt(nbt);
+            }
+            if let Some(animal) = self.as_animal() {
+                animal.write_animal_nbt(nbt);
+            }
+            if let Some(tamable) = self.as_tamable() {
+                tamable.write_tamable_nbt(nbt);
+            }
+            self.mob_write_nbt(nbt).await;
+        })
+    }
+
+    fn read_custom_nbt<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
+        Box::pin(async move {
+            self.get_mob_entity().read_mob_nbt(nbt);
+            if let Some(ageable) = self.as_ageable() {
+                ageable.read_ageable_nbt(nbt);
+            }
+            if let Some(animal) = self.as_animal() {
+                animal.read_animal_nbt(nbt);
+            }
+            if let Some(tamable) = self.as_tamable() {
+                tamable.read_tamable_nbt(nbt);
+            }
+            self.mob_read_nbt(nbt).await;
+        })
     }
 
     fn get_gravity(&self) -> f64 {

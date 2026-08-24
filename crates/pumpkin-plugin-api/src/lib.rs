@@ -67,8 +67,11 @@
 //! ```
 
 use crate::{
-    commands::COMMAND_HANDLERS, events::EVENT_HANDLERS, logging::WitSubscriber,
-    scheduler::TASK_HANDLERS, text::TextComponent,
+    commands::{COMMAND_HANDLERS, COMMAND_SUGGESTION_HANDLERS},
+    events::EVENT_HANDLERS,
+    logging::WitSubscriber,
+    scheduler::TASK_HANDLERS,
+    text::TextComponent,
 };
 
 /// Plugin command registration and handling utilities.
@@ -98,22 +101,22 @@ pub mod worldgen;
 /// Command WIT API re-exports.
 pub mod command {
     pub use crate::wit::pumpkin::plugin::command::{
-        Arg, ArgumentType, Command, CommandError, CommandNode, CommandSender, ConsumedArgs,
-        StringType,
+        Arg, ArgumentType, Command, CommandError, CommandNode, CommandSender, CommandSuggestion,
+        CommandSuggestions, ConsumedArgs, StringType, SuggestionRequest,
     };
 }
 
 pub use wit::pumpkin::plugin::{
     advancement as advancement_wit, bedrock_packets, block_entity, boss_bar,
     command as command_wit, common,
-    context::{Context, Server},
+    context::{self, Context, MarketplaceMetadata, Server},
     damage_types as damage_types_wit, data_components, display as display_wit,
     enchantments as enchantments_wit, entity,
     entity_types::EntityType,
     event::{self as events_wit, EventType},
-    gui, i18n, ipc, item_stack, java_dialogs, java_packets, marketplace, particles, permission,
-    player, recipe as recipe_wit, scoreboard, screens as screens_wit, server,
-    statistics as statistics_wit, text, uuid, world,
+    gui, i18n, ipc, item_stack, java_dialogs, java_packets, particles, permission, player,
+    recipe as recipe_wit, scoreboard, screens as screens_wit, server, statistics as statistics_wit,
+    text, uuid, world,
 };
 
 // Convenience re-exports of commonly-used plugin types so plugin authors can
@@ -247,6 +250,27 @@ impl wit::Guest for Component {
             },
             |handler| handler.handle(sender, server, args),
         )
+    }
+
+    /// WIT entry point — dispatches an incoming command suggestion request to the registered handler.
+    fn handle_command_suggestion(
+        handler_id: u32,
+        sender: command::CommandSender,
+        server: Server,
+        request: command::SuggestionRequest,
+    ) -> command::CommandSuggestions {
+        let handlers = COMMAND_SUGGESTION_HANDLERS
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        if let Some(handler) = handlers.get(&handler_id) {
+            handler.suggest(sender, server, request)
+        } else {
+            command::CommandSuggestions {
+                start: request.start,
+                length: 0,
+                values: Vec::new(),
+            }
+        }
     }
 
     /// WIT entry point — dispatches a scheduled task invocation to the registered handler for `handler_id`.
@@ -396,9 +420,11 @@ pub fn register_plugin(build_plugin: fn() -> Box<dyn Plugin>) {
 /// If called before [`register_plugin`] has initialized `PLUGIN`.
 fn plugin() -> &'static mut dyn Plugin {
     #[expect(static_mut_refs)]
-    #[allow(clippy::unwrap_used)]
+    #[allow(clippy::expect_used)]
     unsafe {
-        PLUGIN.as_deref_mut().unwrap()
+        PLUGIN
+            .as_deref_mut()
+            .expect("PLUGIN must be initialized with register_plugin before use")
     }
 }
 

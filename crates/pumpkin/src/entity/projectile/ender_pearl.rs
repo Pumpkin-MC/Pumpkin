@@ -4,8 +4,8 @@ use std::sync::atomic::AtomicBool;
 use crate::entity::projectile::ProjectileHit;
 use crate::{
     entity::{
-        Entity, EntityBase, EntityBaseFuture, EntityType, NBTStorage,
-        mob::endermite::EndermiteEntity, projectile::ThrownItemEntity,
+        Entity, EntityBase, EntityBaseFuture, EntityType, mob::endermite::EndermiteEntity,
+        projectile::ThrownItemEntity,
     },
     server::Server,
 };
@@ -46,8 +46,6 @@ impl EnderPearlEntity {
     }
 }
 
-impl NBTStorage for EnderPearlEntity {}
-
 impl EntityBase for EnderPearlEntity {
     fn tick<'a>(
         &'a self,
@@ -64,11 +62,6 @@ impl EntityBase for EnderPearlEntity {
     fn get_living_entity(&self) -> Option<&crate::entity::living::LivingEntity> {
         None
     }
-
-    fn as_nbt_storage(&self) -> &dyn NBTStorage {
-        self
-    }
-
     fn cast_any(&self) -> &dyn std::any::Any {
         self
     }

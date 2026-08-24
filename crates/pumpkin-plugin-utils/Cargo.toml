@@ -3,21 +3,17 @@ name = "pumpkin-plugin-utils"
 version = "0.1.0"
 edition.workspace = true
 license = "MIT OR Apache-2.0"
-description = "Utilities for Pumpkin plugins: licensing, signature verification, and update checks."
+description = "Utilities for Pumpkin plugins: licensing, lease caching, and update checks."
 
 [dependencies]
 pumpkin-plugin-api = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
-ed25519-dalek = { workspace = true }
-hex = { workspace = true }
-wasmparser = { workspace = true }
 tracing = { workspace = true }
 thiserror = { workspace = true }
 ureq = { workspace = true, features = ["json"] }
 
 [dev-dependencies]
-wasm-encoder = "0.256"
 tempfile = { workspace = true }
 
 [lints]

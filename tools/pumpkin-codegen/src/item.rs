@@ -213,7 +213,7 @@ impl ToTokens for ItemComponents {
         let item_name = LitStr::new(&text, Span::call_site());
         tokens.extend(quote! {
             (ItemName, &ItemNameImpl {
-                name: #item_name,
+                name: Cow::Borrowed(#item_name),
             }),
         });
 
@@ -802,7 +802,7 @@ impl ToTokens for ItemComponents {
             tokens.extend(quote! { (KineticWeapon, &KineticWeaponImpl), });
         }
         if self.lore.is_some() {
-            tokens.extend(quote! { (Lore, &LoreImpl), });
+            tokens.extend(quote! { (Lore, &LoreImpl { lines: Vec::new() }), });
         }
         if self.map_color.is_some() {
             tokens.extend(quote! { (MapColor, &MapColorImpl), });
@@ -861,7 +861,7 @@ impl ToTokens for ItemComponents {
             tokens.extend(quote! { (StoredEnchantments, &StoredEnchantmentsImpl { enchantment: Cow::Borrowed(&[]) }), });
         }
         if self.suspicious_stew_effects.is_some() {
-            tokens.extend(quote! { (SuspiciousStewEffects, &SuspiciousStewEffectsImpl), });
+            tokens.extend(quote! { (SuspiciousStewEffects, &SuspiciousStewEffectsImpl::EMPTY), });
         }
         if self.swing_animation.is_some() {
             tokens.extend(quote! { (SwingAnimation, &SwingAnimationImpl), });
@@ -1143,13 +1143,6 @@ pub fn build() -> TokenStream {
         serde_json::from_str(&fs::read_to_string("../../assets/items.json").unwrap())
             .expect("Failed to parse items.json");
 
-    let eggs: HashSet<u16> = serde_json::from_str::<BTreeMap<u16, String>>(
-        &fs::read_to_string("../../assets/spawn_egg.json").unwrap(),
-    )
-    .expect("Failed to parse spawn_egg.json")
-    .into_keys()
-    .collect::<HashSet<_>>();
-
     let be_item_components: BTreeMap<String, Option<NbtCompound>> = {
         let data = fs::read("../../assets/bedrock/item_components.nbt").unwrap();
         let mut cursor = Cursor::new(data);
@@ -1314,7 +1307,7 @@ pub fn build() -> TokenStream {
                 } else {
                     None
                 },
-                is_entity_placer: eggs.contains(&item.id)
+                is_entity_placer: item.components.entity_data.is_some()
                     || matches!(
                         &**name,
                         "firework_rocket"
@@ -1621,7 +1614,9 @@ pub fn build() -> TokenStream {
                     .iter()
                     .find_map(|(id, data)| {
                         if id == &ItemName {
-                            data.as_any().downcast_ref::<ItemNameImpl>().map(|n| n.name)
+                            data.as_any()
+                                .downcast_ref::<ItemNameImpl>()
+                                .map(|name| name.name.as_ref())
                         } else {
                             None
                         }

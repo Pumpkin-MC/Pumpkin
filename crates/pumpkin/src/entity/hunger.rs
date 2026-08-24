@@ -185,7 +185,7 @@ impl NBTStorage for HungerManager {
         })
     }
 
-    fn read_nbt<'a>(&'a mut self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
+    fn read_nbt_non_mut<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async move {
             self.level
                 .store(nbt.get_int("foodLevel").unwrap_or(20) as u8);

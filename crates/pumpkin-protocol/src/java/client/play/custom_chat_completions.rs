@@ -1,10 +1,10 @@
-use pumpkin_data::packet::clientbound::PLAY_CUSTOM_CHAT_COMPLETIONS;
+use pumpkin_data::packet::clientbound::play::CUSTOM_CHAT_COMPLETIONS;
 use pumpkin_macros::java_packet;
 
 use crate::{ClientPacket, codec::var_int::VarInt, ser::NetworkWriteExt};
 use pumpkin_util::version::JavaMinecraftVersion;
 
-#[java_packet(PLAY_CUSTOM_CHAT_COMPLETIONS)]
+#[java_packet(CUSTOM_CHAT_COMPLETIONS)]
 pub struct CCustomChatCompletions<'a> {
     pub action: VarInt,
     pub entries: &'a [&'a str],

@@ -58,10 +58,10 @@ fn yaw_pitch_facing_position(
 fn resolve_sender_world(
     sender: &CommandSender,
     server: &crate::server::Server,
-) -> std::sync::Arc<World> {
+) -> Result<std::sync::Arc<World>, CommandError> {
     sender
         .world_or_first(server)
-        .expect("Server should have at least one world")
+        .ok_or(CommandError::InvalidRequirement)
 }
 
 async fn success_key_and_arg(
@@ -149,7 +149,7 @@ impl CommandExecutor for EntitiesToPosFacingPosExecutor {
             }
             let facing_pos = Position3DArgumentConsumer::find_arg(args, ARG_FACING_LOCATION)?;
             let (yaw, pitch) = yaw_pitch_facing_position(&pos, &facing_pos);
-            let world = resolve_sender_world(sender, server);
+            let world = resolve_sender_world(sender, server)?;
 
             for target in targets {
                 target
@@ -205,7 +205,7 @@ impl CommandExecutor for EntitiesToPosFacingEntityExecutor {
             let facing_entity = EntityArgumentConsumer::find_arg(args, ARG_FACING_ENTITY)?;
             let (yaw, pitch) =
                 yaw_pitch_facing_position(&pos, &facing_entity.get_entity().pos.load());
-            let world = resolve_sender_world(sender, server);
+            let world = resolve_sender_world(sender, server)?;
 
             for target in targets {
                 target
@@ -261,7 +261,7 @@ impl CommandExecutor for EntitiesToPosWithRotationExecutor {
             // Note: Rotation returns (yaw, is_yaw_relative, pitch, is_pitch_relative)
             // For teleport, we use absolute values only (ignore relative flags)
             let (yaw, _, pitch, _) = RotationArgumentConsumer::find_arg(args, ARG_ROTATION)?;
-            let world = resolve_sender_world(sender, server);
+            let world = resolve_sender_world(sender, server)?;
 
             for target in targets {
                 target
@@ -314,7 +314,7 @@ impl CommandExecutor for EntitiesToPosExecutor {
                     [],
                 )));
             }
-            let world = resolve_sender_world(sender, server);
+            let world = resolve_sender_world(sender, server)?;
             for target in targets {
                 let yaw = target.get_entity().yaw.load();
                 let pitch = target.get_entity().pitch.load();

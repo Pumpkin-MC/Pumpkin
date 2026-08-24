@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use crate::entity::mob::zombie::ZombieEntityBase;
 use crate::entity::{
-    Entity, NBTStorage,
+    Entity,
     mob::{Mob, MobEntity},
 };
 
@@ -17,8 +17,6 @@ impl HuskEntity {
         Arc::new(zombie)
     }
 }
-
-impl NBTStorage for HuskEntity {}
 
 impl Mob for HuskEntity {
     fn get_mob_entity(&self) -> &MobEntity {

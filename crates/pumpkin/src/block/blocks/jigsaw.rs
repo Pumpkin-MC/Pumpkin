@@ -4,19 +4,22 @@ use crate::block::entities::jigsaw_block::JigsawBlockEntity;
 use crate::block::registry::BlockActionResult;
 use crate::block::{BlockBehaviour, BlockFuture, NormalUseArgs, OnPlaceArgs, PlacedArgs};
 use crate::entity::EntityBase;
-use pumpkin_data::BlockStateId;
 use pumpkin_data::block_properties::{
-    BlockProperties, Facing, HorizontalFacing, JigsawLikeProperties, Orientation,
+    BlockProperties, HorizontalFacing, JigsawLikeProperties, Orientation,
 };
 use pumpkin_data::block_rotation::{Mirror, Rotation};
+use pumpkin_data::{BlockDirection, BlockStateId};
 use pumpkin_macros::pumpkin_block;
-use pumpkin_util::{BlockDirection, GameMode, PermissionLvl};
+use pumpkin_util::{GameMode, PermissionLvl};
+
+use pumpkin_world::generation::structure::structures::jigsaw::JigsawJointType;
 
 #[pumpkin_block("minecraft:jigsaw")]
 pub struct JigsawBlock;
 
 impl JigsawBlock {
-    const fn from_front_top(front: BlockDirection, top: BlockDirection) -> Orientation {
+    #[must_use]
+    pub const fn from_front_top(front: BlockDirection, top: BlockDirection) -> Orientation {
         match (front, top) {
             (BlockDirection::Down, BlockDirection::East) => Orientation::DownEast,
             (BlockDirection::Down, BlockDirection::North) => Orientation::DownNorth,
@@ -33,7 +36,8 @@ impl JigsawBlock {
         }
     }
 
-    const fn to_front_top(orientation: Orientation) -> (BlockDirection, BlockDirection) {
+    #[must_use]
+    pub const fn to_front_top(orientation: Orientation) -> (BlockDirection, BlockDirection) {
         match orientation {
             Orientation::DownEast => (BlockDirection::Down, BlockDirection::East),
             Orientation::DownNorth => (BlockDirection::Down, BlockDirection::North),
@@ -49,15 +53,58 @@ impl JigsawBlock {
             Orientation::SouthUp => (BlockDirection::South, BlockDirection::Up),
         }
     }
+
+    #[must_use]
+    pub const fn get_front_facing(orientation: Orientation) -> BlockDirection {
+        Self::to_front_top(orientation).0
+    }
+
+    #[must_use]
+    pub const fn get_top_facing(orientation: Orientation) -> BlockDirection {
+        Self::to_front_top(orientation).1
+    }
+
+    #[must_use]
+    pub fn get_front_facing_from_state(
+        block: &pumpkin_data::Block,
+        state_id: BlockStateId,
+    ) -> BlockDirection {
+        let props = JigsawLikeProperties::from_state_id(state_id, block);
+        Self::get_front_facing(props.r#orientation)
+    }
+
+    #[must_use]
+    pub fn get_top_facing_from_state(
+        block: &pumpkin_data::Block,
+        state_id: BlockStateId,
+    ) -> BlockDirection {
+        let props = JigsawLikeProperties::from_state_id(state_id, block);
+        Self::get_top_facing(props.r#orientation)
+    }
+
+    #[must_use]
+    pub fn can_attach(
+        source_front: BlockDirection,
+        source_top: BlockDirection,
+        source_joint: JigsawJointType,
+        source_target: &str,
+        target_front: BlockDirection,
+        target_top: BlockDirection,
+        target_name: &str,
+    ) -> bool {
+        let rollable = source_joint == JigsawJointType::Rollable;
+        source_front == target_front.opposite()
+            && (rollable || source_top == target_top)
+            && source_target == target_name
+    }
 }
 
 impl BlockBehaviour for JigsawBlock {
     fn on_place<'a>(&'a self, args: OnPlaceArgs<'a>) -> BlockFuture<'a, BlockStateId> {
         Box::pin(async move {
             let mut props = JigsawLikeProperties::default(args.block);
-            let facing = args.player.get_entity().get_facing();
-            let front = facing_to_dir(facing).opposite();
-            let top = if facing == Facing::Up || facing == Facing::Down {
+            let front = args.direction;
+            let top = if front == BlockDirection::Up || front == BlockDirection::Down {
                 horizontal_facing_to_dir(args.player.get_entity().get_horizontal_facing())
                     .opposite()
             } else {
@@ -128,17 +175,6 @@ impl BlockBehaviour for JigsawBlock {
 
         props.r#orientation = Self::from_front_top(new_front, new_top);
         pumpkin_data::BlockState::from_id(props.to_state_id(block))
-    }
-}
-
-const fn facing_to_dir(facing: Facing) -> BlockDirection {
-    match facing {
-        Facing::North => BlockDirection::North,
-        Facing::East => BlockDirection::East,
-        Facing::South => BlockDirection::South,
-        Facing::West => BlockDirection::West,
-        Facing::Up => BlockDirection::Up,
-        Facing::Down => BlockDirection::Down,
     }
 }
 

@@ -1,0 +1,6 @@
+{
+  "wild_texture": "minecraft:entity/wolf/wolf_spotted",
+  "tame_texture": "minecraft:entity/wolf/wolf_spotted_tame",
+  "angry_texture": "minecraft:entity/wolf/wolf_spotted_angry",
+  "biomes": "#minecraft:is_savanna"
+}

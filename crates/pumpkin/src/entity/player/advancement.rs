@@ -394,8 +394,7 @@ impl PlayerAdvancement {
                 let first_packet = self.is_first_packet;
                 tokio::spawn(async move {
                     player
-                        .client
-                        .send_packet_now(&CUpdateAdvancements::new(
+                        .send_client_packet(&CUpdateAdvancements::new(
                             first_packet,
                             added,
                             parsed_progress,
@@ -516,8 +515,7 @@ impl PlayerAdvancement {
             && let Some(player) = self.player.upgrade()
         {
             player
-                .client
-                .send_packet_now(&CSelectAdvancementsTab::new(
+                .send_client_packet(&CSelectAdvancementsTab::new(
                     self.last_selected_tab.map(|adv| adv.id.clone()),
                 ))
                 .await;

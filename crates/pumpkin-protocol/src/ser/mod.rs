@@ -11,6 +11,7 @@ use crate::{
 
 use pumpkin_nbt::{serializer::NbtWriteHelperJava, tag::NbtTag};
 use pumpkin_util::math::position::BlockPos;
+use pumpkin_util::{text::TextComponent, version::JavaMinecraftVersion};
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -37,6 +38,8 @@ pub enum WritingError {
     IoError(#[from] std::io::Error),
     #[error("Serde failure: {0}")]
     Serde(String),
+    #[error("Packet is not supported in Minecraft version {0:?}")]
+    UnsupportedVersion(JavaMinecraftVersion),
     #[error("Failed to serialize packet: {0}")]
     Message(String),
 }
@@ -111,6 +114,21 @@ pub trait NetworkReadExt {
     fn get_fixed_bitset(&mut self, bits: usize) -> Result<FixedBitSet, ReadingError>;
 
     #[inline]
+    fn get_block_pos(&mut self, version: &JavaMinecraftVersion) -> Result<BlockPos, ReadingError> {
+        let val = self.get_i64_be()?;
+        Ok(BlockPos::from_long_for_version(val, version))
+    }
+
+    #[inline]
+    fn get_container_id(&mut self, version: &JavaMinecraftVersion) -> Result<VarInt, ReadingError> {
+        if *version >= JavaMinecraftVersion::V_1_21_2 {
+            self.get_var_int()
+        } else {
+            Ok(VarInt(i32::from(self.get_u8()?)))
+        }
+    }
+
+    #[inline]
     fn get_option<G>(
         &mut self,
         parse: impl FnOnce(&mut Self) -> Result<G, ReadingError>,
@@ -144,6 +162,17 @@ pub trait NetworkReadExt {
 }
 
 pub trait NetworkReadSliceExt<'a> {
+    fn get_component_borrowed(
+        &mut self,
+        version: &JavaMinecraftVersion,
+    ) -> Result<TextComponent, ReadingError>;
+    #[inline]
+    fn get_component(
+        &mut self,
+        version: &JavaMinecraftVersion,
+    ) -> Result<TextComponent, ReadingError> {
+        self.get_component_borrowed(version)
+    }
     fn get_str_borrowed(&mut self) -> Result<&'a str, ReadingError>;
     fn get_str_bounded_borrowed(&mut self, bound: usize) -> Result<&'a str, ReadingError>;
     fn read_slice_borrowed(&mut self, count: usize) -> Result<&'a [u8], ReadingError>;
@@ -227,9 +256,44 @@ impl<'a> NetworkReadSliceExt<'a> for &'a [u8] {
     fn get_str_borrowed(&mut self) -> Result<&'a str, ReadingError> {
         self.get_str_bounded_borrowed(32767)
     }
+
+    #[inline]
+    fn get_component_borrowed(
+        &mut self,
+        version: &JavaMinecraftVersion,
+    ) -> Result<TextComponent, ReadingError> {
+        if *version < JavaMinecraftVersion::V_1_20_3 {
+            let max_len = if *version >= JavaMinecraftVersion::V_1_13 {
+                262144
+            } else {
+                32767
+            };
+            let json = self.get_str_bounded_borrowed(max_len)?;
+            serde_json::from_str(json)
+                .map_err(|e| ReadingError::Message(format!("Invalid component JSON: {e}")))
+        } else {
+            let mut cursor = std::io::Cursor::new(*self);
+            let mut nbt_reader = pumpkin_nbt::deserializer::NbtReadHelperJava::new(&mut cursor);
+            let nbt = NbtTag::deserialize(&mut nbt_reader)
+                .map_err(|e| ReadingError::Message(format!("Invalid component NBT: {e}")))?;
+            let bytes_read = cursor.position() as usize;
+            *self = &self[bytes_read..];
+            let json_value = nbt_tag_to_json(&nbt);
+            serde_json::from_value(json_value).map_err(|e| {
+                ReadingError::Message(format!("Failed to parse component from NBT: {e}"))
+            })
+        }
+    }
 }
 
 impl<'a, R: NetworkReadSliceExt<'a> + ?Sized> NetworkReadSliceExt<'a> for &mut R {
+    #[inline]
+    fn get_component_borrowed(
+        &mut self,
+        version: &JavaMinecraftVersion,
+    ) -> Result<TextComponent, ReadingError> {
+        (**self).get_component_borrowed(version)
+    }
     #[inline]
     fn get_str_borrowed(&mut self) -> Result<&'a str, ReadingError> {
         (**self).get_str_borrowed()
@@ -370,6 +434,46 @@ impl<R: Read> NetworkReadExt for R {
     }
 }
 
+fn nbt_tag_to_json(tag: &NbtTag) -> serde_json::Value {
+    match tag {
+        NbtTag::End => serde_json::Value::Null,
+        NbtTag::Byte(b) => serde_json::Value::Number((*b).into()),
+        NbtTag::Short(s) => serde_json::Value::Number((*s).into()),
+        NbtTag::Int(i) => serde_json::Value::Number((*i).into()),
+        NbtTag::Long(l) => serde_json::Value::Number((*l).into()),
+        NbtTag::Float(f) => serde_json::Number::from_f64(f64::from(*f))
+            .map_or(serde_json::Value::Null, serde_json::Value::Number),
+        NbtTag::Double(d) => serde_json::Number::from_f64(*d)
+            .map_or(serde_json::Value::Null, serde_json::Value::Number),
+        NbtTag::ByteArray(bytes) => serde_json::Value::Array(
+            bytes
+                .iter()
+                .map(|b| serde_json::Value::Number((*b).into()))
+                .collect(),
+        ),
+        NbtTag::String(s) => serde_json::Value::String(s.to_string()),
+        NbtTag::List(list) => serde_json::Value::Array(list.iter().map(nbt_tag_to_json).collect()),
+        NbtTag::Compound(compound) => {
+            let mut map = serde_json::Map::new();
+            for (k, v) in &compound.child_tags {
+                map.insert(k.to_string(), nbt_tag_to_json(v));
+            }
+            serde_json::Value::Object(map)
+        }
+        NbtTag::IntArray(ints) => serde_json::Value::Array(
+            ints.iter()
+                .map(|i| serde_json::Value::Number((*i).into()))
+                .collect(),
+        ),
+        NbtTag::LongArray(longs) => serde_json::Value::Array(
+            longs
+                .iter()
+                .map(|l| serde_json::Value::Number((*l).into()))
+                .collect(),
+        ),
+    }
+}
+
 #[inline]
 pub fn read_remaining_bytes(read: &mut impl Read, bound: usize) -> Result<Box<[u8]>, ReadingError> {
     let mut return_buf = Vec::with_capacity(bound.min(1024));
@@ -387,6 +491,24 @@ pub fn read_remaining_bytes(read: &mut impl Read, bound: usize) -> Result<Box<[u
 }
 
 pub trait NetworkWriteExt {
+    fn write_component(
+        &mut self,
+        component: &TextComponent,
+        version: &JavaMinecraftVersion,
+    ) -> Result<(), WritingError> {
+        if *version < JavaMinecraftVersion::V_1_20_3 {
+            let json = component.to_json_for_version(version);
+            let max_len = if *version >= JavaMinecraftVersion::V_1_13 {
+                262144
+            } else {
+                32767
+            };
+            self.write_string_bounded(&json, max_len)
+        } else {
+            self.write_slice(&component.encode_for_version(version))
+        }
+    }
+
     fn write_i8(&mut self, data: i8) -> Result<(), WritingError>;
     fn write_u8(&mut self, data: u8) -> Result<(), WritingError>;
     fn write_i16_be(&mut self, data: i16) -> Result<(), WritingError>;
@@ -448,7 +570,24 @@ pub trait NetworkWriteExt {
     fn write_var_long(&mut self, data: &VarLong) -> Result<(), WritingError>;
     fn write_string_bounded(&mut self, data: &str, bound: usize) -> Result<(), WritingError>;
     fn write_string(&mut self, data: &str) -> Result<(), WritingError>;
-    fn write_block_pos(&mut self, pos: &BlockPos) -> Result<(), WritingError>;
+    fn write_block_pos(
+        &mut self,
+        pos: &BlockPos,
+        version: &JavaMinecraftVersion,
+    ) -> Result<(), WritingError>;
+
+    #[inline]
+    fn write_container_id(
+        &mut self,
+        container_id: &VarInt,
+        version: &JavaMinecraftVersion,
+    ) -> Result<(), WritingError> {
+        if *version >= JavaMinecraftVersion::V_1_21_2 {
+            self.write_var_int(container_id)
+        } else {
+            self.write_u8(container_id.0 as u8)
+        }
+    }
 
     fn write_uuid(&mut self, data: &uuid::Uuid) -> Result<(), WritingError> {
         let (first, second) = data.as_u64_pair();
@@ -577,8 +716,12 @@ impl<W: Write> NetworkWriteExt for W {
         self.write_string_bounded(data, i16::MAX as usize)
     }
 
-    fn write_block_pos(&mut self, pos: &BlockPos) -> Result<(), WritingError> {
-        self.write_i64_be(pos.as_long())
+    fn write_block_pos(
+        &mut self,
+        pos: &BlockPos,
+        version: &JavaMinecraftVersion,
+    ) -> Result<(), WritingError> {
+        self.write_i64_be(pos.as_long_for_version(version))
     }
 
     fn write_bitset(&mut self, data: &BitSet) -> Result<(), WritingError> {

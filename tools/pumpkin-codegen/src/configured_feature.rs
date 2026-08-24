@@ -2,6 +2,7 @@ use heck::ToPascalCase;
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use serde_json::Value;
+use std::collections::BTreeMap;
 use std::fs;
 
 use crate::placed_feature::{
@@ -9,19 +10,37 @@ use crate::placed_feature::{
     value_to_block_state_codec, value_to_height_provider, value_to_int_provider,
 };
 
-/// Reads `configured_features.json` and emits the complete `ConfiguredFeature` enum `TokenStream`.
+fn load_configured_features() -> BTreeMap<String, Value> {
+    let dir = std::path::Path::new(
+        "../../assets/datapacks/26_2/data/minecraft/worldgen/configured_feature",
+    );
+    let mut map = BTreeMap::new();
+    let mut entries: Vec<_> = fs::read_dir(dir)
+        .expect("Missing worldgen/configured_feature directory")
+        .flatten()
+        .filter(|e| e.path().extension().is_some_and(|ext| ext == "json"))
+        .collect();
+    entries.sort_by_key(|e| e.path());
+
+    for entry in entries {
+        let path = entry.path();
+        let stem = path.file_stem().unwrap().to_string_lossy().into_owned();
+        let content = fs::read_to_string(&path).expect("Failed to read configured_feature file");
+        let val: Value =
+            serde_json::from_str(&content).expect("Failed to parse configured_feature JSON");
+        map.insert(stem, val);
+    }
+    map
+}
+
+/// Reads configured_feature files from 26.2 datapack and emits the complete `ConfiguredFeature` enum `TokenStream`.
 pub fn build_enum() -> TokenStream {
-    let json_content = fs::read_to_string("../../assets/configured_features.json")
-        .expect("Failed to read configured_features.json");
-    let json: Value =
-        serde_json::from_str(&json_content).expect("Failed to parse configured_features.json");
+    let json = load_configured_features();
 
     let mut from_name_arms = Vec::new();
     let mut to_name_arms = Vec::new();
 
     let variants: Vec<TokenStream> = json
-        .as_object()
-        .unwrap()
         .iter()
         .map(|(name, _)| {
             let variant_name = format_ident!("{}", name.to_pascal_case());
@@ -61,16 +80,11 @@ pub fn build_enum() -> TokenStream {
     }
 }
 
-/// Reads `configured_features.json` and emits a `build_configured_features()` function `TokenStream`.
+/// Reads configured_feature files from 26.2 datapack and emits a `build_configured_features()` function `TokenStream`.
 pub fn build() -> TokenStream {
-    let json_content = fs::read_to_string("../../assets/configured_features.json")
-        .expect("Failed to read configured_features.json");
-    let json: Value =
-        serde_json::from_str(&json_content).expect("Failed to parse configured_features.json");
+    let json = load_configured_features();
 
     let entries: Vec<TokenStream> = json
-        .as_object()
-        .unwrap()
         .iter()
         .map(|(name, value)| {
             let cf = value_to_configured_feature(value);

@@ -1,6 +1,6 @@
 use std::io::Write;
 
-use pumpkin_data::packet::clientbound::PLAY_PLAYER_CHAT;
+use pumpkin_data::packet::clientbound::play::PLAYER_CHAT;
 use pumpkin_macros::java_packet;
 use pumpkin_util::{text::TextComponent, version::JavaMinecraftVersion};
 
@@ -14,7 +14,7 @@ use crate::{
 ///
 /// This packet is the backbone of the modern secure chat system. It includes
 /// tracking indices, digital signatures, and context for reporting.
-#[java_packet(PLAY_PLAYER_CHAT)]
+#[java_packet(PLAYER_CHAT)]
 pub struct CPlayerChatMessage {
     /// Incremental index for messages sent TO this specific client.
     /// Starts at 0 on login; client disconnects if the sequence is broken.
@@ -90,11 +90,9 @@ impl CPlayerChatMessage {
 impl ClientPacket for CPlayerChatMessage {
     fn write_packet_data(
         &self,
-        write: impl Write,
-        _version: &JavaMinecraftVersion,
+        mut write: impl Write,
+        version: &JavaMinecraftVersion,
     ) -> Result<(), WritingError> {
-        let mut write = write;
-
         write.write_var_int(&self.global_index)?;
         write.write_uuid(&self.sender)?;
         write.write_var_int(&self.index)?;
@@ -109,15 +107,15 @@ impl ClientPacket for CPlayerChatMessage {
             }
             Ok(())
         })?;
-        write.write_option(&self.unsigned_content, |p, v| p.write_slice(&v.encode()))?;
+        write.write_option(&self.unsigned_content, |p, v| p.write_component(v, version))?;
         write.write_var_int(&VarInt(match self.filter_type {
             FilterType::PassThrough => 0,
             FilterType::FullyFiltered => 1,
             FilterType::PartiallyFiltered(_) => 2,
         }))?;
         write.write_var_int(&self.chat_type)?;
-        write.write_slice(&self.sender_name.encode())?;
-        write.write_option(&self.target_name, |p, v| p.write_slice(&v.encode()))?;
+        write.write_component(&self.sender_name, version)?;
+        write.write_option(&self.target_name, |p, v| p.write_component(v, version))?;
         Ok(())
     }
 }

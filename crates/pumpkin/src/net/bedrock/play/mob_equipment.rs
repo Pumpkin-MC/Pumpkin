@@ -23,7 +23,7 @@ impl BedrockClient {
                 event.cancelled()
             };
             if is_cancelled {
-                self.enqueue_packet(&CPlayerHotbar {
+                self.enqueue_client_packet(&CPlayerHotbar {
                     selected_slot: VarUInt(previous_slot as u32),
                     container_id: 0,
                     should_select_block: true,

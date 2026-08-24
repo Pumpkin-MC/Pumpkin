@@ -1,4 +1,4 @@
-use pumpkin_data::packet::clientbound::PLAY_UPDATE_MOB_EFFECT;
+use pumpkin_data::packet::clientbound::play::UPDATE_MOB_EFFECT;
 use pumpkin_macros::java_packet;
 
 use crate::ClientPacket;
@@ -6,7 +6,7 @@ use crate::codec::var_int::VarInt;
 use crate::ser::NetworkWriteExt;
 use pumpkin_util::version::JavaMinecraftVersion;
 
-#[java_packet(PLAY_UPDATE_MOB_EFFECT)]
+#[java_packet(UPDATE_MOB_EFFECT)]
 pub struct CUpdateMobEffect {
     pub entity_id: VarInt,
     pub effect_id: VarInt,

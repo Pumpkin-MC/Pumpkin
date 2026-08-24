@@ -3,7 +3,7 @@ use std::sync::{Arc, Weak};
 use pumpkin_data::entity::EntityType;
 
 use crate::entity::{
-    Entity, NBTStorage,
+    Entity,
     ai::goal::{
         active_target::ActiveTargetGoal, look_around::RandomLookAroundGoal,
         look_at_entity::LookAtEntityGoal, melee_attack::MeleeAttackGoal, swim::SwimGoal,
@@ -65,8 +65,6 @@ impl PillagerEntity {
         mob_arc
     }
 }
-
-impl NBTStorage for PillagerEntity {}
 
 impl Mob for PillagerEntity {
     fn get_mob_entity(&self) -> &MobEntity {

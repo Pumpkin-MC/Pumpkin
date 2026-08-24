@@ -248,7 +248,7 @@ impl LootFunctionExt for LootFunction {
                         Block::properties(Block::from_state_id(state.id), state.id)
                 {
                     let actual_props = props_data.to_props();
-                    let mut properties_to_copy = std::collections::HashMap::new();
+                    let mut properties_to_copy = std::collections::BTreeMap::new();
                     for &prop_name in *properties {
                         if let Some((_, value)) = actual_props.iter().find(|(k, _)| k == &prop_name)
                         {

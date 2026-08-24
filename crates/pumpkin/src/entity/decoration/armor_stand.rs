@@ -1,8 +1,6 @@
 use std::sync::atomic::{AtomicI32, AtomicI64, AtomicU8, Ordering};
 
-use crate::entity::{
-    Entity, EntityBase, EntityBaseFuture, NBTStorage, NbtFuture, living::LivingEntity,
-};
+use crate::entity::{Entity, EntityBase, EntityBaseFuture, NbtFuture, living::LivingEntity};
 use crossbeam::atomic::AtomicCell;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::{
@@ -232,10 +230,9 @@ impl ArmorStandEntity {
     }
 }
 
-impl NBTStorage for ArmorStandEntity {
-    fn write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
+impl EntityBase for ArmorStandEntity {
+    fn write_custom_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async {
-            self.living_entity.write_nbt(nbt).await;
             let disabled_slots = self.disabled_slots.load(Ordering::Relaxed);
             // ...
 
@@ -252,9 +249,8 @@ impl NBTStorage for ArmorStandEntity {
         })
     }
 
-    fn read_nbt_non_mut<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
+    fn read_custom_nbt<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async {
-            self.living_entity.read_nbt_non_mut(nbt).await;
             let mut flags = 0u8;
             // ...
 
@@ -302,19 +298,13 @@ impl NBTStorage for ArmorStandEntity {
             }
         })
     }
-}
 
-impl EntityBase for ArmorStandEntity {
     fn get_entity(&self) -> &Entity {
         &self.living_entity.entity
     }
 
     fn get_living_entity(&self) -> Option<&LivingEntity> {
         Some(&self.living_entity)
-    }
-
-    fn as_nbt_storage(&self) -> &dyn NBTStorage {
-        self
     }
 
     fn kill<'a>(&'a self, _caller: &'a dyn EntityBase) -> EntityBaseFuture<'a, ()> {

@@ -2,13 +2,6 @@
 
 use serde::{Deserialize, Serialize};
 
-/// Custom section names used in Pumpkin WASM plugin binaries.
-pub const PUMPKIN_METADATA_SECTION: &str = "pumpkin.metadata";
-/// Custom section name for the W3C/Pumpkin Ed25519 signature.
-pub const WASM_SIGNATURE_SECTION: &str = "wasm_signature";
-/// Legacy section name for signature backwards-compatibility.
-pub const LEGACY_SIGNATURE_SECTION: &str = "pumpkin.signature";
-
 /// Default Pumpkin Marketplace URL.
 pub const DEFAULT_MARKETPLACE_URL: &str = "https://market.pumpkinmc.org";
 
@@ -37,27 +30,31 @@ pub struct PumpkinMetadata {
     pub issued_at: String,
 }
 
-/// Standard W3C Wasm-Sign signature envelope structure.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct WasmSignatureEnvelope {
-    /// Signature envelope schema version.
-    pub version: u8,
-    /// Signature algorithm (e.g. "Ed25519").
-    pub algorithm: String,
-    /// Hex-encoded public key of the signer.
-    pub public_key_hex: String,
-    /// Hex-encoded signature bytes.
-    pub signature_hex: String,
+impl From<pumpkin_plugin_api::MarketplaceMetadata> for PumpkinMetadata {
+    fn from(m: pumpkin_plugin_api::MarketplaceMetadata) -> Self {
+        Self {
+            marketplace_url: m.marketplace_url,
+            plugin_id: m.plugin_id,
+            plugin_name: m.plugin_name,
+            version: m.version,
+            dev_id: m.dev_id,
+            dev_name: m.dev_name,
+            is_paid: m.is_paid,
+            user_id: m.user_id,
+            license_key: m.license_key,
+            issued_at: m.issued_at,
+        }
+    }
 }
 
 /// Result of evaluating a plugin's license.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum LicenseStatus {
-    /// The license is completely valid and verified.
+    /// The license is completely valid.
     Valid(PumpkinMetadata),
     /// Operating in an offline grace period with valid cached lease.
     GracePeriod {
-        /// The verified metadata.
+        /// The metadata.
         metadata: PumpkinMetadata,
         /// Remaining days in the grace period.
         days_remaining: u32,
@@ -101,13 +98,4 @@ pub struct CheckUpdateResponse {
     pub update_available: bool,
     /// The latest stable version string, if one exists.
     pub latest_version: Option<String>,
-}
-
-/// Response returned by the marketplace `/api/v1/rest/public-key` endpoint.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct MarketplacePublicKeyResponse {
-    /// Cryptographic algorithm (e.g. "Ed25519").
-    pub algorithm: String,
-    /// Hex-encoded public key.
-    pub public_key_hex: String,
 }

@@ -2,14 +2,14 @@ use crate::{
     ServerPacket,
     ser::{NetworkReadExt, ReadingError},
 };
-use pumpkin_data::packet::serverbound::PLAY_PLAYER_ACTION;
+use pumpkin_data::packet::serverbound::play::PLAYER_ACTION;
 use pumpkin_macros::java_packet;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::version::JavaMinecraftVersion;
 
 use crate::VarInt;
 
-#[java_packet(PLAY_PLAYER_ACTION)]
+#[java_packet(PLAYER_ACTION)]
 pub struct SPlayerAction {
     pub status: VarInt,
     pub position: BlockPos,
@@ -18,15 +18,25 @@ pub struct SPlayerAction {
 }
 
 impl<'a> ServerPacket<'a> for SPlayerAction {
-    fn read(
-        bytebuf: &mut &'a [u8],
-        _protocol_version: &JavaMinecraftVersion,
-    ) -> Result<Self, ReadingError> {
+    fn read(bytebuf: &mut &'a [u8], version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+        let status = if version >= &JavaMinecraftVersion::V_1_9 {
+            bytebuf.get_var_int()?
+        } else {
+            VarInt(i32::from(bytebuf.get_u8()?))
+        };
+        let position = bytebuf.get_block_pos(version)?;
+        let face = bytebuf.get_u8()?;
+        let sequence = if version >= &JavaMinecraftVersion::V_1_19 {
+            bytebuf.get_var_int()?
+        } else {
+            VarInt(0)
+        };
+
         Ok(Self {
-            status: bytebuf.get_var_int()?,
-            position: BlockPos::from_i64(bytebuf.get_i64_be()?),
-            face: bytebuf.get_u8()?,
-            sequence: bytebuf.get_var_int()?,
+            status,
+            position,
+            face,
+            sequence,
         })
     }
 }
@@ -35,13 +45,19 @@ impl crate::ClientPacket for SPlayerAction {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        _version: &JavaMinecraftVersion,
+        version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         use crate::ser::NetworkWriteExt;
-        write.write_var_int(&self.status)?;
-        write.write_block_pos(&self.position)?;
+        if version >= &JavaMinecraftVersion::V_1_9 {
+            write.write_var_int(&self.status)?;
+        } else {
+            write.write_u8(self.status.0 as u8)?;
+        }
+        write.write_block_pos(&self.position, version)?;
         write.write_u8(self.face)?;
-        write.write_var_int(&self.sequence)?;
+        if version >= &JavaMinecraftVersion::V_1_19 {
+            write.write_var_int(&self.sequence)?;
+        }
         Ok(())
     }
 }
