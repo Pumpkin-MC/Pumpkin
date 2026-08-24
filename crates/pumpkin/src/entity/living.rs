@@ -3131,6 +3131,8 @@ impl LivingEntity {
                     let destination = self.entity.pos.load();
                     if destination != center {
                         self.fall_distance.store(0.0);
+                        // Vanilla broadcasts entity event 46 (teleport particles) on success.
+                        world.send_entity_status(&self.entity, EntityStatus::Teleport, None);
                         world.emit_game_event("teleport", center).await;
                         world.play_sound(
                             Sound::ItemChorusFruitTeleport,
