@@ -1,0 +1,13 @@
+{
+  "asset_id": "minecraft:fighters",
+  "author": {
+    "color": "gray",
+    "translate": "painting.minecraft.fighters.author"
+  },
+  "height": 2,
+  "title": {
+    "color": "yellow",
+    "translate": "painting.minecraft.fighters.title"
+  },
+  "width": 4
+}

@@ -1,0 +1,8 @@
+{
+  "asset_name": "lapis",
+  "ingredient": "minecraft:lapis_lazuli",
+  "description": {
+    "translate": "trim_material.minecraft.lapis",
+    "color": "#416E97"
+  }
+}

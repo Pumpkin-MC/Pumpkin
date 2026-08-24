@@ -1,0 +1,23 @@
+{
+  "values": [
+    "minecraft:on_fire",
+    "minecraft:in_wall",
+    "minecraft:cramming",
+    "minecraft:drown",
+    "minecraft:fly_into_wall",
+    "minecraft:generic",
+    "minecraft:wither",
+    "minecraft:dragon_breath",
+    "minecraft:starve",
+    "minecraft:fall",
+    "minecraft:ender_pearl",
+    "minecraft:freeze",
+    "minecraft:stalagmite",
+    "minecraft:magic",
+    "minecraft:indirect_magic",
+    "minecraft:out_of_world",
+    "minecraft:generic_kill",
+    "minecraft:sonic_boom",
+    "minecraft:outside_border"
+  ]
+}

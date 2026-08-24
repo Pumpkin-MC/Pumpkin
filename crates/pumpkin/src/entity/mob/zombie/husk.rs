@@ -1,0 +1,25 @@
+use std::sync::Arc;
+
+use crate::entity::mob::zombie::ZombieEntityBase;
+use crate::entity::{
+    Entity,
+    mob::{Mob, MobEntity},
+};
+
+pub struct HuskEntity {
+    entity: Arc<ZombieEntityBase>,
+}
+
+impl HuskEntity {
+    pub fn new(entity: Entity) -> Arc<Self> {
+        let entity = ZombieEntityBase::new(entity);
+        let zombie = Self { entity };
+        Arc::new(zombie)
+    }
+}
+
+impl Mob for HuskEntity {
+    fn get_mob_entity(&self) -> &MobEntity {
+        &self.entity.mob_entity
+    }
+}
