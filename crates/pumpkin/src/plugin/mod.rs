@@ -8,6 +8,7 @@ use std::{
     path::{Path, PathBuf},
     pin::Pin,
     sync::{Arc, atomic::AtomicBool},
+    thread::ThreadId,
     time::Duration,
 };
 use thiserror::Error;
@@ -183,6 +184,9 @@ pub struct PluginManager {
     // Background task for hot reloading
     hot_reload_task: RwLock<Option<JoinHandle<()>>>,
     hot_reload_enabled: AtomicBool,
+    // Thread ID of the thread that created the plugin manager.
+    // Permission prompts use rustyline, which is only safe on this thread.
+    main_thread_id: ThreadId,
 }
 
 /// Represents a successfully loaded plugin
@@ -235,6 +239,7 @@ impl PluginManager {
             state_notify: Arc::new(Notify::new()),
             hot_reload_task: RwLock::new(None),
             hot_reload_enabled: AtomicBool::new(false),
+            main_thread_id: std::thread::current().id(),
         }
     }
 
@@ -438,13 +443,29 @@ impl PluginManager {
     }
 
     /// Ask the server owner if they allow the permissions requested by a plugin
+    ///
+    /// This must only be called from the main thread, because the underlying
+    /// `rustyline` console handle is neither `Send` nor `Sync`. Calling it from a
+    /// different thread (e.g. the hot-reload watcher task) will panic.
     #[expect(clippy::print_stdout)]
-    fn ask_permission_confirmation(metadata: &PluginMetadata) -> (bool, std::time::Duration) {
+    fn ask_permission_confirmation(
+        &self,
+        metadata: &PluginMetadata,
+    ) -> (bool, std::time::Duration) {
         use colored::Colorize;
-        use rustyline::DefaultEditor;
 
         if metadata.permissions.is_empty() {
             return (true, std::time::Duration::ZERO);
+        }
+
+        if std::thread::current().id() != self.main_thread_id {
+            warn!(
+                "Plugin \"{}\" ({}) requests permissions from a non-main thread. \
+                 Permission prompts are only supported on the main thread. \
+                 Denying permissions. To load this plugin interactively, restart the server.",
+                metadata.name, metadata.version
+            );
+            return (false, Duration::ZERO);
         }
 
         let start_time = std::time::Instant::now();
@@ -484,12 +505,11 @@ impl PluginManager {
                 let input = line.trim().to_lowercase();
                 input == "y" || input == "yes"
             })
-        } else if let Ok(mut rl) = DefaultEditor::new() {
-            rl.readline(&prompt).is_ok_and(|line| {
-                let input = line.trim().to_lowercase();
-                input == "y" || input == "yes"
-            })
         } else {
+            warn!(
+                "Console readline is not available; cannot prompt for plugin \"{}\" permissions",
+                metadata.name
+            );
             false
         };
 
@@ -842,7 +862,7 @@ impl PluginManager {
             return (true, std::time::Duration::ZERO);
         }
 
-        let (allowed, wait_time) = Self::ask_permission_confirmation(metadata);
+        let (allowed, wait_time) = self.ask_permission_confirmation(metadata);
         cache.entries.insert(
             hash,
             cache::PermissionCacheEntry {
