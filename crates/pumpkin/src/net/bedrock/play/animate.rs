@@ -22,7 +22,7 @@ impl BedrockClient {
             let je_packet = CEntityAnimation::new(VarInt(entity.entity_id), animation);
             let be_packet = SAnimate {
                 action: packet.action,
-                runtime_entity_id: VarULong(entity.entity_id as u64),
+                target_actor_runtime_id: VarULong(entity.entity_id as u64),
                 data: 0.0,
                 swing_source: None,
             };

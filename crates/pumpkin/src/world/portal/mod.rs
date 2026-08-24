@@ -146,12 +146,12 @@ impl PortalType {
                                 crate::net::ClientPlatform::Bedrock(client) => {
                                     client
                                         .send_packet(
-                                            &pumpkin_protocol::bedrock::client::CShowCredits::new(
-                                                pumpkin_protocol::codec::var_ulong::VarULong(
-                                                    caller.get_entity().entity_id as u64,
-                                                ),
-                                                pumpkin_protocol::codec::var_int::VarInt(0),
-                                            ),
+                                            &pumpkin_protocol::bedrock::client::CShowCredits {
+                                                player_runtime_id: (caller.get_entity().entity_id
+                                                    as u64)
+                                                    .into(),
+                                                credits_state: 0.into(),
+                                            },
                                         )
                                         .await;
                                 }

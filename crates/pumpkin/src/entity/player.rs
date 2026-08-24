@@ -23,13 +23,19 @@ use pumpkin_protocol::bedrock::client::play_status::CPlayStatus;
 use pumpkin_protocol::bedrock::client::set_time::CSetTime;
 use pumpkin_protocol::bedrock::client::update_abilities::{Ability, CUpdateAbilities};
 use pumpkin_protocol::bedrock::client::{
-    AbilityLayer,
-    move_player::CMovePlayer as CBedrockMovePlayer,
-    respawn::CRespawn as CBedrockRespawn,
-    update_attributes::{Attribute as BedrockAttribute, CUpdateAttributes as CBedrockAttributes},
+    CommandPermissionLevel, PlayerPermissionLevel, SerializedAbilitiesData,
 };
-use pumpkin_protocol::bedrock::respawn::RespawnState;
-use pumpkin_protocol::bedrock::server::text::SText;
+use pumpkin_protocol::bedrock::client::{
+    SerializedAbilitiesDataSerializedLayer,
+    move_player::CMovePlayer as CBedrockMovePlayer,
+    update_attributes::{
+        AttributeData as BedrockAttribute, CUpdateAttributes as CBedrockAttributes,
+    },
+};
+use pumpkin_protocol::bedrock::server::{
+    respawn::{RespawnState, SRespawn as SBedrockRespawn},
+    text::SText,
+};
 use pumpkin_protocol::codec::item_stack_seralizer::ItemStackSerializer;
 use pumpkin_util::translation::Locale;
 use pumpkin_util::version::JavaMinecraftVersion;
@@ -229,7 +235,7 @@ use pumpkin_nbt::tag::NbtTag;
 use pumpkin_protocol::IdOr;
 use pumpkin_protocol::SoundEvent;
 use pumpkin_protocol::bedrock::client::container_open::CContainerOpen;
-use pumpkin_protocol::bedrock::server::actor_event::{ActorEventType, SActorEvent};
+use pumpkin_protocol::bedrock::server::actor_event::{ActorEventID, SActorEvent};
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::codec::var_long::VarLong;
 use pumpkin_protocol::codec::var_ulong::VarULong;
@@ -1745,12 +1751,13 @@ impl Player {
                     pitch,
                     dimension.minecraft_name.to_owned(),
                 ),
-                &pumpkin_protocol::bedrock::client::CSetSpawnPosition::new(
-                    0, // Player spawn
-                    block_pos,
-                    bedrock_dimension,
-                    block_pos,
-                ),
+                &pumpkin_protocol::bedrock::client::CSetSpawnPosition {
+                    spawn_position_type:
+                        pumpkin_protocol::bedrock::client::SpawnPositionType::PlayerRespawn,
+                    block_position: block_pos,
+                    dimension_type: bedrock_dimension.into(),
+                    spawn_block_pos: block_pos,
+                },
             )
             .await;
 
@@ -2202,7 +2209,7 @@ impl Player {
                     .enqueue_packet_editioned(
                         &CTitleText::new(text),
                         &pumpkin_protocol::bedrock::client::set_title::CSetTitle::new(
-                            2,
+                            pumpkin_protocol::bedrock::client::TitleType::Title,
                             text.clone().get_text(),
                             0,
                             0,
@@ -2216,7 +2223,7 @@ impl Player {
                     .enqueue_packet_editioned(
                         &CSubtitle::new(text),
                         &pumpkin_protocol::bedrock::client::set_title::CSetTitle::new(
-                            3,
+                            pumpkin_protocol::bedrock::client::TitleType::Subtitle,
                             text.clone().get_text(),
                             0,
                             0,
@@ -2230,7 +2237,7 @@ impl Player {
                     .enqueue_packet_editioned(
                         &CActionBar::new(text),
                         &pumpkin_protocol::bedrock::client::set_title::CSetTitle::new(
-                            4,
+                            pumpkin_protocol::bedrock::client::TitleType::Actionbar,
                             text.clone().get_text(),
                             0,
                             0,
@@ -2246,7 +2253,7 @@ impl Player {
         self.enqueue_packet_editioned(
             &CTitleAnimation::new(fade_in, stay, fade_out),
             &pumpkin_protocol::bedrock::client::set_title::CSetTitle::new(
-                5,
+                pumpkin_protocol::bedrock::client::TitleType::Times,
                 String::new(),
                 fade_in,
                 stay,
@@ -2748,8 +2755,16 @@ impl Player {
                 let is_spectator = self.gamemode.load() == GameMode::Spectator;
 
                 // 1. Permission Mapping
-                let player_perm = if is_op { 2 } else { 1 }; // 1: Member, 2: Operator
-                let command_perm = u8::from(is_op); // 0: Normal, 1: Operator
+                let player_perm = if is_op {
+                    PlayerPermissionLevel::Operator
+                } else {
+                    PlayerPermissionLevel::Member
+                };
+                let command_perm = if is_op {
+                    CommandPermissionLevel::GameDirectors
+                } else {
+                    CommandPermissionLevel::Any
+                };
 
                 // 2. Build the Ability Bitmask
                 let mut ability_value: u32 = 0;
@@ -2787,7 +2802,7 @@ impl Player {
                 set_ability(Ability::NoClip, is_spectator);
 
                 // 3. Construct the Layers
-                let mut layers = vec![AbilityLayer {
+                let mut layers = vec![SerializedAbilitiesDataSerializedLayer {
                     serialized_layer: 0, // LAYER_BASE
                     // 0x3FFFF defines the first 18 bits as "provided" by this packet
                     abilities_set: (1 << Ability::AbilityCount as u32) - 1,
@@ -2798,7 +2813,7 @@ impl Player {
                 }];
 
                 if is_spectator {
-                    layers.push(AbilityLayer {
+                    layers.push(SerializedAbilitiesDataSerializedLayer {
                         serialized_layer: 1,
                         abilities_set: 1 << (Ability::Flying as u32),
                         ability_value: 1 << (Ability::Flying as u32),
@@ -2809,10 +2824,12 @@ impl Player {
                 }
 
                 let packet = CUpdateAbilities {
-                    target_player_raw_id: self.entity_id().into(),
-                    player_permission: player_perm,
-                    command_permission: command_perm,
-                    layers,
+                    data: SerializedAbilitiesData {
+                        target_player_raw_id: self.entity_id().into(),
+                        player_permissions: player_perm,
+                        command_permissions: command_perm,
+                        layers,
+                    },
                 };
 
                 if let Ok(data) = bedrock.serialize_packet(&packet) {
@@ -2979,9 +2996,9 @@ impl Player {
         self.client
             .enqueue_packet_editioned(
                 &CChangeDifficulty::new(level_info.difficulty as u8, level_info.difficulty_locked),
-                &pumpkin_protocol::bedrock::client::CSetDifficulty::new(
-                    level_info.difficulty as u32,
-                ),
+                &pumpkin_protocol::bedrock::client::CSetDifficulty {
+                    difficulty: (level_info.difficulty as u32).into(),
+                },
             )
             .await;
     }
@@ -3440,11 +3457,12 @@ impl Player {
                             0
                         };
                         let pos_f32 = Vector3::new(position.x as f32, position.y as f32, position.z as f32);
-                        let change_dim_packet = pumpkin_protocol::bedrock::client::CChangeDimension::new(
-                            bedrock_dimension,
-                            pos_f32,
-                            false,
-                        );
+                        let change_dim_packet = pumpkin_protocol::bedrock::client::CChangeDimension {
+                            dimension_id: bedrock_dimension.into(),
+                            position: pos_f32,
+                            respawn: false,
+                            loading_screen_id: None
+                        };
                         if let Ok(data) = bedrock.serialize_packet(&change_dim_packet) {
                             bedrock.enqueue_packet(data).await;
                         }
@@ -3698,7 +3716,7 @@ impl Player {
             default_max_value: max_value,
             default_value,
             name: name.to_string(),
-            modifiers_list_size: pumpkin_protocol::codec::var_uint::VarUInt(0),
+            modifiers: Vec::new(),
         };
 
         self.enqueue_packet_editioned(
@@ -3708,8 +3726,8 @@ impl Player {
                 self.hunger_manager.saturation.load(),
             ),
             &CBedrockAttributes {
-                runtime_id: VarULong(self.entity_id() as u64),
-                attributes: vec![
+                target_runtime_id: VarULong(self.entity_id() as u64),
+                attribute_list: vec![
                     attribute(
                         "minecraft:health",
                         self.living_entity.health.load(),
@@ -3729,7 +3747,7 @@ impl Player {
                         5.0,
                     ),
                 ],
-                player_tick: VarULong(self.tick_counter.load(Ordering::Relaxed).max(0) as u64),
+                tick: VarULong(self.tick_counter.load(Ordering::Relaxed).max(0) as u64),
             },
         )
         .await;
@@ -3740,15 +3758,15 @@ impl Player {
             let entity = self.get_entity();
             let position = entity.pos.load();
             client
-                .send_packet(&CBedrockRespawn::new(
-                    Vector3::new(
+                .send_packet(&SBedrockRespawn {
+                    position: Vector3::new(
                         position.x as f32,
                         position.y as f32 + entity.entity_type.eye_height,
                         position.z as f32,
                     ),
                     state,
-                    VarULong(self.entity_id() as u64),
-                ))
+                    player_runtime_id: VarULong(self.entity_id() as u64),
+                })
                 .await;
         }
     }
@@ -4072,9 +4090,9 @@ impl Player {
             .send_packet_now_editioned(
                 &CCombatDeath::new(self.entity_id().into(), &death_msg),
                 &SActorEvent {
-                    entity_runtime_id: VarULong(self.entity_id() as u64),
-                    event_type: ActorEventType::Death,
-                    event_data: VarInt(0),
+                    target_runtime_id: VarULong(self.entity_id() as u64),
+                    event_id: ActorEventID::Death,
+                    data: VarInt(0),
                     fire_at_position: None,
                 },
             )
@@ -4163,8 +4181,8 @@ impl Player {
                 self.client
                     .enqueue_packet_editioned(
                         &CGameEvent::new(GameEvent::ChangeGameMode, gamemode as i32 as f32),
-                        &pumpkin_protocol::bedrock::client::set_player_gamemode::CSetPlayerGamemode {
-                            gamemode,
+                        &pumpkin_protocol::bedrock::client::set_player_gamemode::CSetPlayerGameType {
+                            player_game_type: gamemode.into(),
                         },
                     )
                     .await;
@@ -4816,7 +4834,7 @@ impl Player {
                 &pumpkin_protocol::bedrock::server::container_close::SContainerClose {
                     container_id: sync_id,
                     container_type: bedrock_window_type,
-                    server_initiated: true,
+                    server_initiated_close: true,
                 },
             )
             .await;
@@ -5441,7 +5459,7 @@ impl Player {
 
         let be_packet = pumpkin_protocol::bedrock::server::animate::SAnimate {
             action: pumpkin_protocol::bedrock::server::animate::AnimateAction::SwingArm,
-            runtime_entity_id: pumpkin_protocol::codec::var_ulong::VarULong(entity_id as u64),
+            target_actor_runtime_id: pumpkin_protocol::codec::var_ulong::VarULong(entity_id as u64),
             data: 0.0,
             swing_source: None,
         };
@@ -6780,13 +6798,13 @@ impl InventoryPlayer for Player {
                         if let Some(slot_idx) = bedrock_inventory_slot(packet.slot) {
                             let item_desc = NetworkItemStackDescriptor::from(&*packet.slot_data.0);
                             let bedrock_packet = CInventorySlot {
-                                window_id: VarUInt(0),
-                                inventory_slot: VarUInt(slot_idx),
-                                container_name: Some(FullContainerName {
+                                container_id: VarUInt(0),
+                                slot: VarUInt(slot_idx),
+                                full_container_name: Some(FullContainerName {
                                     container_name: ContainerName::Inventory,
                                     dynamic_id: None,
                                 }),
-                                storage: None,
+                                storage_item: None,
                                 item: item_desc,
                             };
                             if let Ok(data) = bedrock.serialize_packet(&bedrock_packet) {
@@ -6826,13 +6844,13 @@ impl InventoryPlayer for Player {
 
                         if let Some((container_name, slot_id)) = bedrock_info {
                             let bedrock_packet = CInventorySlot {
-                                window_id: VarUInt(window_id as u32),
-                                inventory_slot: VarUInt(slot_id as u32),
-                                container_name: Some(FullContainerName {
+                                container_id: VarUInt(window_id as u32),
+                                slot: VarUInt(slot_id as u32),
+                                full_container_name: Some(FullContainerName {
                                     container_name,
                                     dynamic_id: None,
                                 }),
-                                storage: None,
+                                storage_item: None,
                                 item: item_desc,
                             };
                             if let Ok(data) = bedrock.serialize_packet(&bedrock_packet) {
@@ -6917,13 +6935,13 @@ impl InventoryPlayer for Player {
                     let item_stack = &*packet.item.0;
                     let item_desc = NetworkItemStackDescriptor::from(item_stack);
                     let bedrock_packet = CInventorySlot {
-                        window_id: VarUInt(0),
-                        inventory_slot: VarUInt(packet.slot.0 as u32),
-                        container_name: Some(FullContainerName {
+                        container_id: VarUInt(0),
+                        slot: VarUInt(packet.slot.0 as u32),
+                        full_container_name: Some(FullContainerName {
                             container_name: ContainerName::Inventory,
                             dynamic_id: None,
                         }),
-                        storage: None,
+                        storage_item: None,
                         item: item_desc,
                     };
                     if let Ok(data) = bedrock.serialize_packet(&bedrock_packet) {
@@ -6947,7 +6965,7 @@ impl InventoryPlayer for Player {
                             packet.slot as u32,
                         ),
                         container_id: 0,
-                        should_select_block: true,
+                        should_select_slot: true,
                     },
                 )
                 .await;

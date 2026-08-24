@@ -5,10 +5,7 @@ use std::{
 };
 
 use pumpkin_nbt::{Nbt, NbtCompound};
-use pumpkin_util::{
-    GameMode,
-    math::{position::BlockPos, vector2::Vector2, vector3::Vector3},
-};
+use pumpkin_util::math::{position::BlockPos, vector2::Vector2, vector3::Vector3};
 
 use crate::{
     codec::{var_int::VarInt, var_uint::VarUInt},
@@ -119,6 +116,15 @@ impl<T: PacketWrite> PacketWrite for Vec<T> {
     }
 }
 
+impl<T: PacketWrite> PacketWrite for &[T] {
+    fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
+        for item in *self {
+            item.write(writer)?;
+        }
+        Ok(())
+    }
+}
+
 impl PacketWrite for String {
     fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
         VarUInt(self.len() as u32).write(writer)?;
@@ -187,19 +193,6 @@ impl PacketWrite for SocketAddr {
                 addr.scope_id().write_be(writer)
             }
         }
-    }
-}
-
-impl PacketWrite for GameMode {
-    fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
-        VarInt(match self {
-            Self::Survival => 0,
-            Self::Creative => 1,
-            Self::Adventure => 2,
-            // I have no idea why
-            Self::Spectator => 6,
-        })
-        .write(writer)
     }
 }
 

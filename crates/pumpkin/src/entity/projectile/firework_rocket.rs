@@ -4,7 +4,7 @@ use crate::{
     world::World,
 };
 use pumpkin_data::entity::EntityStatus;
-use pumpkin_protocol::bedrock::server::actor_event::ActorEventType;
+use pumpkin_protocol::bedrock::server::actor_event::ActorEventID;
 use pumpkin_protocol::{codec::optional_int::OptionalInt, java::client::play::Metadata};
 use pumpkin_util::{
     math::vector3::Vector3,
@@ -85,7 +85,7 @@ impl FireworkRocketEntity {
         world.send_entity_status(
             entity,
             EntityStatus::FireworksExplode,
-            Some(ActorEventType::FireworksExplode),
+            Some(ActorEventID::FireworksExplode),
         );
 
         // TODO: Explode/colors

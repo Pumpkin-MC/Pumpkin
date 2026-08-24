@@ -9,7 +9,7 @@ impl BedrockClient {
         packet: pumpkin_protocol::bedrock::server::item_stack_request::SItemStackRequest,
     ) {
         use pumpkin_protocol::bedrock::client::item_stack_response::{
-            CItemStackResponse, ItemStackResponse, ItemStackResponseContainerInfo,
+            CItemStackResponse, ItemStackResponseContainerInfo, ItemStackResponseInfo,
             ItemStackResponseSlotInfo,
         };
         use pumpkin_protocol::bedrock::server::item_stack_request::ItemStackRequestAction;
@@ -462,15 +462,15 @@ impl BedrockClient {
                 for update in updates {
                     let container_info = container_infos.iter_mut().find(
                         |info: &&mut ItemStackResponseContainerInfo| {
-                            info.container_name == update.container_name
+                            info.full_container_name == update.container_name
                         },
                     );
 
                     let slot_info = ItemStackResponseSlotInfo {
+                        requested_slot: update.slot_id,
                         slot: update.slot_id,
-                        hotbar_slot: update.slot_id,
-                        count: update.count,
-                        item_stack_id: update.stack_id,
+                        amount: update.count,
+                        item_stack_net_id: update.stack_id,
                         custom_name: String::new(),
                         filtered_custom_name: String::new(),
                         durability_correction: VarInt(0),
@@ -480,17 +480,17 @@ impl BedrockClient {
                         info.slots.push(slot_info);
                     } else {
                         container_infos.push(ItemStackResponseContainerInfo {
-                            container_name: update.container_name,
+                            full_container_name: update.container_name,
                             slots: vec![slot_info],
                         });
                     }
                 }
             }
 
-            responses.push(ItemStackResponse {
+            responses.push(ItemStackResponseInfo {
                 result,
-                request_id: request.request_id,
-                container_infos,
+                client_request_id: request.request_id,
+                containers: container_infos,
             });
         }
 
@@ -501,11 +501,11 @@ impl BedrockClient {
         let mut inventory_updated = false;
         for response in &responses {
             if response.result == 0 {
-                for info in &response.container_infos {
-                    if info.container_name.container_name == ContainerName::Inventory
-                        || info.container_name.container_name
+                for info in &response.containers {
+                    if info.full_container_name.container_name == ContainerName::Inventory
+                        || info.full_container_name.container_name
                             == ContainerName::CombinedHotBarAndInventory
-                        || info.container_name.container_name == ContainerName::HotBar
+                        || info.full_container_name.container_name == ContainerName::HotBar
                     {
                         inventory_updated = true;
                     }
