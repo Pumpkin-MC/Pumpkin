@@ -15,6 +15,8 @@ pub enum BungeeCordError {
     FailedParseProperties,
     #[error("Failed to make offline UUID")]
     FailedMakeOfflineUUID,
+    #[error("Invalid BungeeGuard token")]
+    InvalidToken,
 }
 
 /// Attempts to login a player via `BungeeCord`.
@@ -26,6 +28,11 @@ pub enum BungeeCordError {
 /// 1. IP address (if `ip_forward` is enabled on the `BungeeCord` server)
 /// 2. UUID (if `ip_forward` is enabled on the `BungeeCord` server)
 /// 3. Game profile properties (if `ip_forward` and `online_mode` are enabled on the `BungeeCord` server)
+/// 4. A secret token (if the `BungeeGuard` plugin is installed on the `BungeeCord` server)
+///
+/// If a `secret` is configured, the token must be present and match it,
+/// otherwise the connection is rejected. This also blocks players connecting
+/// directly to this server, bypassing the proxy.
 ///
 /// If any of the optional data is missing, the function will attempt to
 /// determine the player's information locally.
@@ -33,6 +40,7 @@ pub fn bungeecord_login(
     client_address: &SocketAddr,
     server_address: &str,
     name: String,
+    secret: &str,
 ) -> Result<(IpAddr, GameProfile), BungeeCordError> {
     let mut parts = server_address.split('\0');
 
@@ -59,6 +67,12 @@ pub fn bungeecord_login(
         }
         _ => Vec::new(),
     };
+
+    // BungeeGuard appends the shared token after the forwarded data. When a
+    // secret is configured, the token must be present and match it.
+    if !secret.is_empty() && parts.next() != Some(secret) {
+        return Err(BungeeCordError::InvalidToken);
+    }
 
     Ok((
         ip,
@@ -110,6 +124,7 @@ mod tests {
             &client_address,
             &handshake.server_address,
             "Steve".to_string(),
+            "",
         )
         .expect("the forwarded address should produce a game profile");
 
@@ -128,5 +143,74 @@ mod tests {
         assert_eq!(&*properties[0].name, "textures");
         assert_eq!(&*properties[0].value, textures.as_str());
         assert_eq!(properties[0].signature.as_deref(), Some(signature.as_str()));
+    }
+
+    const SECRET: &str = "bungeeguard-token";
+    const FORWARDED_ADDRESS: &str = concat!(
+        // Split at the digits so the `\0` is not read as an octal escape.
+        "mc.example.com\0",
+        "192.0.2.10\0",
+        "d8f4a1e0-0f1b-4c3a-9f2e-1a2b3c4d5e6f\0[]"
+    );
+
+    fn client_address() -> SocketAddr {
+        SocketAddr::from(([10, 0, 0, 1], 51234))
+    }
+
+    #[test]
+    fn accepts_matching_bungeeguard_token() {
+        let address = format!("{FORWARDED_ADDRESS}\0{SECRET}");
+
+        let (ip, profile) =
+            bungeecord_login(&client_address(), &address, "Steve".to_string(), SECRET)
+                .expect("a matching token should be accepted");
+
+        assert_eq!(ip, IpAddr::from([192, 0, 2, 10]));
+        assert_eq!(profile.name, "Steve");
+    }
+
+    #[test]
+    fn rejects_missing_bungeeguard_token() {
+        let result = bungeecord_login(
+            &client_address(),
+            FORWARDED_ADDRESS,
+            "Steve".to_string(),
+            SECRET,
+        );
+
+        assert!(matches!(result, Err(BungeeCordError::InvalidToken)));
+    }
+
+    #[test]
+    fn rejects_mismatched_bungeeguard_token() {
+        let address = format!("{FORWARDED_ADDRESS}\0wrong-token");
+
+        let result = bungeecord_login(&client_address(), &address, "Steve".to_string(), SECRET);
+
+        assert!(matches!(result, Err(BungeeCordError::InvalidToken)));
+    }
+
+    #[test]
+    fn rejects_direct_connection_when_secret_is_configured() {
+        let result = bungeecord_login(
+            &client_address(),
+            "mc.example.com",
+            "Steve".to_string(),
+            SECRET,
+        );
+
+        assert!(matches!(result, Err(BungeeCordError::InvalidToken)));
+    }
+
+    #[test]
+    fn ignores_token_when_no_secret_is_configured() {
+        let address = format!("{FORWARDED_ADDRESS}\0{SECRET}");
+
+        let result = bungeecord_login(&client_address(), &address, "Steve".to_string(), "");
+
+        assert!(
+            result.is_ok(),
+            "an unconfigured secret must not reject logins"
+        );
     }
 }
