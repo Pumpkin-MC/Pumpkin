@@ -1,7 +1,9 @@
 use arc_swap::ArcSwap;
+use sha2::{Digest, Sha256};
 use std::sync::Arc;
 use std::{net::IpAddr, net::SocketAddr};
 use thiserror::Error;
+use tracing::warn;
 
 use crate::net::{GameProfile, offline_uuid};
 use pumpkin_protocol::Property;
@@ -92,8 +94,33 @@ pub fn bungeecord_login(
             [token] if token.value.as_ref() == secret => {
                 properties.retain(|property| property.name.as_ref() != BUNGEEGUARD_TOKEN_PROPERTY);
             }
-            [] => return Err(BungeeCordError::MissingToken),
-            _ => return Err(BungeeCordError::InvalidToken),
+            [] => {
+                warn!(
+                    "Rejecting login: forwarded data has no `{}` property \
+                     ({} parts, property names: {:?})",
+                    BUNGEEGUARD_TOKEN_PROPERTY,
+                    server_address.split('\0').count(),
+                    properties.iter().map(|p| p.name.as_ref()).collect::<Vec<_>>()
+                );
+                return Err(BungeeCordError::MissingToken);
+            }
+            _ => {
+                // Log only SHA-256 hashes: one-way, so the secret never leaks,
+                // but enough to tell a mismatch from duplicated tokens apart.
+                let token_hashes: Vec<String> = token_props
+                    .iter()
+                    .map(|property| hex::encode(Sha256::digest(property.value.as_bytes())))
+                    .collect();
+                warn!(
+                    "Rejecting login: expected exactly one matching `{}` property, \
+                     found {} (token hashes: {token_hashes:?}, configured secret \
+                     hash: {})",
+                    BUNGEEGUARD_TOKEN_PROPERTY,
+                    token_props.len(),
+                    hex::encode(Sha256::digest(secret.as_bytes()))
+                );
+                return Err(BungeeCordError::InvalidToken);
+            }
         }
     }
 
