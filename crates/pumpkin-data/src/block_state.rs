@@ -233,6 +233,9 @@ impl BlockStateId {
     // depends on generated impl:
     // pub(crate) const STATE_COUNT: u16;
 
+    /// The total count of all registered block states.
+    pub const COUNT: u16 = Self::STATE_COUNT;
+
     // SAFETY: There must never be a BlockStateId where self.0 >= BlockStateId::STATE_COUNT
 
     #[inline]

@@ -66,7 +66,6 @@ use pumpkin_util::text::TextComponent;
 use rand::RngExt;
 use std::sync::RwLock;
 use tokio::sync::Mutex;
-use uuid::Uuid;
 
 /// Represents a living entity within the game world.
 ///
@@ -1611,6 +1610,20 @@ impl LivingEntity {
             self.broadcast_death_message(&*dyn_self, damage_type, source, cause)
                 .await;
 
+            // Trigger on_mob_death for active status effects
+            let active_effects_vec: Vec<_> = {
+                let effects = self.active_effects.lock().await;
+                effects
+                    .values()
+                    .map(|e| (e.effect_type, e.amplifier))
+                    .collect()
+            };
+            for (effect_type, amplifier) in active_effects_vec {
+                if let Some(mob_effect) = crate::entity::effect::get_mob_effect(effect_type) {
+                    mob_effect.on_mob_death(self, amplifier, &damage_type).await;
+                }
+            }
+
             self.reset_effects_and_attributes().await;
         }
     }
@@ -1790,8 +1803,10 @@ impl LivingEntity {
                     effect.duration
                 };
 
-                if Self::should_apply_effect_tick(effect, tick_duration) {
-                    effects_to_apply.push((effect.effect_type, effect.amplifier));
+                if let Some(mob_effect) = crate::entity::effect::get_mob_effect(effect.effect_type)
+                    && mob_effect.should_apply_effect_tick(tick_duration, effect.amplifier)
+                {
+                    effects_to_apply.push((mob_effect, effect.amplifier));
                 }
 
                 if effect.duration != -1 {
@@ -1801,110 +1816,12 @@ impl LivingEntity {
         }
 
         // Call the central removal function for each expired effect
-        // This will now trigger your logs and absorption resets!
         for effect_type in effects_to_remove {
             self.remove_effect(effect_type).await;
         }
 
-        for (effect_type, amplifier) in effects_to_apply {
-            self.apply_effect_tick(effect_type, amplifier).await;
-        }
-    }
-
-    /// Determines if an effect should apply its tick effect this frame
-    /// Based on vanilla Minecraft's effect tick frequencies
-    ///
-    /// TODO: villager, beacon, and other effects.
-    fn should_apply_effect_tick(effect: &pumpkin_data::potion::Effect, duration: i32) -> bool {
-        let effect_type = effect.effect_type;
-
-        if effect_type == &StatusEffect::REGENERATION {
-            if duration <= 0 {
-                return false;
-            }
-            let tick_rate = 50 >> effect.amplifier.min(4);
-            duration % tick_rate == 0
-        } else if effect_type == &StatusEffect::POISON {
-            if duration <= 0 {
-                return false;
-            }
-            let tick_rate = 25 >> effect.amplifier.min(4);
-            duration % tick_rate == 0
-        } else if effect_type == &StatusEffect::WITHER {
-            if duration <= 0 {
-                return false;
-            }
-            let tick_rate = 40 >> effect.amplifier.min(4);
-            duration % tick_rate == 0
-        } else if effect_type == &StatusEffect::HUNGER {
-            // Hunger every 20 ticks
-            duration % 20 == 0
-        } else if effect_type == &StatusEffect::SATURATION {
-            // Saturation every tick
-            true
-        } else {
-            // Other effects that don't tick
-            false
-        }
-    }
-
-    /// Applies the actual effect to the entity
-    /// This is called by `tick_effects` when an effect should trigger this tick
-    async fn apply_effect_tick(&self, effect_type: &'static StatusEffect, amplifier: u8) {
-        if effect_type == &StatusEffect::REGENERATION {
-            let current_health = self.health.load();
-            let max_health = self.get_max_health();
-            if current_health < max_health && current_health > 0.0 {
-                self.heal(1.0);
-            }
-        } else if effect_type == &StatusEffect::POISON {
-            let current_health = self.health.load();
-            if current_health > 1.0
-                && let Some(dyn_self) = self
-                    .entity
-                    .world
-                    .load()
-                    .get_entity_by_id(self.entity.entity_id)
-            {
-                let damage_amount = (current_health - 1.0).min(1.0);
-                if damage_amount > 0.0 {
-                    dyn_self
-                        .damage(&*dyn_self, damage_amount, DamageType::MAGIC)
-                        .await;
-                }
-            }
-        } else if effect_type == &StatusEffect::WITHER {
-            let damage_amount = 1.0;
-            let dyn_self = self
-                .entity
-                .world
-                .load()
-                .get_entity_by_id(self.entity.entity_id);
-            if let Some(dyn_self) = dyn_self {
-                dyn_self
-                    .damage(&*dyn_self, damage_amount, DamageType::WITHER)
-                    .await;
-            }
-        } else if effect_type == &StatusEffect::HUNGER {
-            let world = self.entity.world.load();
-            if let Some(entity) = world.get_entity_by_id(self.entity.entity_id)
-                && let Some(player) = entity.get_player()
-            {
-                // Add exhaustion to trigger hunger decrease
-                let exhaustion = 0.1 * (amplifier as f32 + 1.0);
-                player.hunger_manager.add_exhaustion(exhaustion);
-            }
-            drop(world);
-        } else if effect_type == &StatusEffect::SATURATION {
-            let world = self.entity.world.load();
-            if let Some(entity) = world.get_entity_by_id(self.entity.entity_id)
-                && let Some(player) = entity.get_player()
-            {
-                // Add hunger and saturation
-                let hunger = amplifier + 1;
-                player.hunger_manager.add_hunger(hunger);
-                player.hunger_manager.add_saturation(hunger as f32 * 2.0);
-            }
+        for (mob_effect, amplifier) in effects_to_apply {
+            mob_effect.apply_effect_tick(self, amplifier).await;
         }
     }
 
@@ -2144,63 +2061,6 @@ impl LivingEntity {
         }
 
         self.dead.store(false, Relaxed);
-    }
-
-    /// Try to spawn silverfish when this entity is infested and hurt.
-    async fn try_spawn_infested_silverfish(&self) {
-        if !self.has_effect(&StatusEffect::INFESTED).await {
-            return;
-        }
-
-        // Wither, ender dragon and silverfish are immune
-        if self.entity.entity_type == &EntityType::WITHER
-            || self.entity.entity_type == &EntityType::ENDER_DRAGON
-            || self.entity.entity_type == &EntityType::SILVERFISH
-        {
-            return;
-        }
-
-        let world = self.entity.world.load();
-
-        // 10% chance
-        if rand::rng().random::<f32>() <= 0.1 {
-            let count = rand::rng().random_range(1..3);
-            for _ in 0..count {
-                // Spawn at center of entity
-                let bbox = self.entity.bounding_box.load();
-                let center = Vector3::new(
-                    f64::midpoint(bbox.min.x, bbox.max.x),
-                    f64::midpoint(bbox.min.y, bbox.max.y),
-                    f64::midpoint(bbox.min.z, bbox.max.z),
-                );
-
-                // Random direction
-                let yaw_rad = self.entity.yaw.load().to_radians() as f64;
-                let random_angle = rand::rng().random::<f64>() * std::f64::consts::PI
-                    - std::f64::consts::FRAC_PI_2;
-                let angle = yaw_rad + random_angle;
-                let speed = 0.3f64;
-                let dx = -angle.sin() * speed;
-                let dz = angle.cos() * speed;
-                let dy = 0.1f64;
-
-                // Spawn
-                let silver = crate::entity::r#type::from_type(
-                    &EntityType::SILVERFISH,
-                    center,
-                    &world,
-                    Uuid::new_v4(),
-                );
-
-                silver.get_entity().set_pos(center);
-                silver.get_entity().velocity.store(Vector3::new(dx, dy, dz));
-
-                world.spawn_entity(silver).await;
-
-                // Play sound
-                world.play_sound(Sound::EntitySilverfishHurt, SoundCategory::Players, &center);
-            }
-        }
     }
 
     pub fn is_player(&self) -> bool {
@@ -2660,8 +2520,21 @@ impl EntityBase for LivingEntity {
                 position,
             ));
 
-            // Try to spawn infested silverfish
-            self.try_spawn_infested_silverfish().await;
+            // Trigger on_mob_hurt for active status effects
+            let active_effects_vec: Vec<_> = {
+                let effects = self.active_effects.lock().await;
+                effects
+                    .values()
+                    .map(|e| (e.effect_type, e.amplifier))
+                    .collect()
+            };
+            for (effect_type, amplifier) in active_effects_vec {
+                if let Some(mob_effect) = crate::entity::effect::get_mob_effect(effect_type) {
+                    mob_effect
+                        .on_mob_hurt(self, amplifier, &damage_type, amount)
+                        .await;
+                }
+            }
 
             if play_sound {
                 world.play_sound(

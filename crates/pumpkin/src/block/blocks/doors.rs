@@ -160,6 +160,66 @@ async fn get_hinge(
 #[pumpkin_block_from_tag("minecraft:doors")]
 pub struct DoorBlock;
 
+impl DoorBlock {
+    #[must_use]
+    pub fn is_wooden_door(world: &World, block_pos: &BlockPos) -> bool {
+        let block = world.get_block(block_pos);
+        block.has_tag(&tag::Block::MINECRAFT_WOODEN_DOORS)
+    }
+
+    #[must_use]
+    pub fn is_open(world: &World, block_pos: &BlockPos) -> bool {
+        let (block, block_state) = world.get_block_and_state_id(block_pos);
+        if !block.has_tag(&tag::Block::MINECRAFT_DOORS) {
+            return false;
+        }
+        let door_props = DoorProperties::from_state_id(block_state, block);
+        door_props.open
+    }
+
+    pub async fn set_open(world: &Arc<World>, block_pos: &BlockPos, open: bool) {
+        let (block, block_state) = world.get_block_and_state_id(block_pos);
+        if !block.has_tag(&tag::Block::MINECRAFT_DOORS) {
+            return;
+        }
+        let mut door_props = DoorProperties::from_state_id(block_state, block);
+        if door_props.open == open {
+            return;
+        }
+        door_props.open = open;
+
+        let other_half = match door_props.half {
+            DoubleBlockHalf::Upper => BlockDirection::Down,
+            DoubleBlockHalf::Lower => BlockDirection::Up,
+        };
+        let other_pos = block_pos.offset(other_half.to_offset());
+
+        let (other_block, other_state_id) = world.get_block_and_state_id(&other_pos);
+
+        world.play_block_sound(get_sound(block, open), SoundCategory::Blocks, *block_pos);
+
+        world
+            .set_block_state(
+                block_pos,
+                door_props.to_state_id(block),
+                BlockFlags::NOTIFY_LISTENERS,
+            )
+            .await;
+
+        if other_block.id == block.id {
+            let mut other_door_props = DoorProperties::from_state_id(other_state_id, other_block);
+            other_door_props.open = open;
+            world
+                .set_block_state(
+                    &other_pos,
+                    other_door_props.to_state_id(other_block),
+                    BlockFlags::NOTIFY_LISTENERS,
+                )
+                .await;
+        }
+    }
+}
+
 impl BlockBehaviour for DoorBlock {
     fn on_place<'a>(&'a self, args: OnPlaceArgs<'a>) -> BlockFuture<'a, BlockStateId> {
         Box::pin(async move {

@@ -145,7 +145,10 @@ pub use wit::pumpkin::plugin::item_stack::ItemStack;
 pub use wit::pumpkin::plugin::player::Player;
 pub use wit::pumpkin::plugin::scoreboard::{CollisionRule, NametagVisibility, TeamSettings};
 pub use wit::pumpkin::plugin::server::Dimension;
-pub use wit::pumpkin::plugin::world::World;
+pub use wit::pumpkin::plugin::world::{
+    Block, BlockDirection, BlockState, BlockStateInfo, Entity, Flammable, RayTraceBlockResult,
+    RayTraceEntityResult, RaycastResult, World, WorldBorder,
+};
 pub use worldgen::{ChunkBuffer, ChunkGenerator, GenerationPhase, GeneratorManager};
 
 /// Advancement WIT API re-exports.
@@ -157,7 +160,11 @@ pub mod advancement {
 
 /// Java dialog WIT API re-exports.
 pub mod java_dialog {
-    pub use crate::wit::pumpkin::plugin::java_dialogs::{ActionButton, DialogBody, DialogType};
+    pub use crate::wit::pumpkin::plugin::java_dialogs::{
+        Action, ActionButton, AfterAction, CustomClickAction, Dialog, DialogBody, DialogInput,
+        DialogInputBool, DialogInputNumberRange, DialogInputSingleOption, DialogInputText,
+        DialogType, Link, LinkLabel, LinkType,
+    };
 }
 
 /// WIT-based logging subscriber.

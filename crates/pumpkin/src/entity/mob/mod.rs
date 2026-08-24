@@ -47,10 +47,12 @@ pub mod guardian;
 pub mod hoglin;
 pub mod illusioner;
 pub mod magma_cube;
+pub mod patrol;
 pub mod phantom;
 pub mod piglin;
 pub mod piglin_brute;
 pub mod pillager;
+pub mod raider;
 pub mod ravager;
 pub mod shulker;
 pub mod silverfish;
@@ -91,8 +93,8 @@ pub struct MobEntity {
 ///
 /// TODO: Replace with `EnvironmentAttributes::MONSTERS_BURN` lookup once the
 /// `EnvironmentAttributeSystem` is implemented in `pumpkin-data`.
-const NIGHT_START: i64 = 12542;
-const NIGHT_END: i64 = 23459;
+pub(crate) const NIGHT_START: i64 = 12542;
+pub(crate) const NIGHT_END: i64 = 23459;
 
 impl MobEntity {
     const AI_DISABLED_FLAG: u8 = 1;
@@ -120,6 +122,10 @@ impl MobEntity {
             last_sent_pitch: AtomicU8::new(0),
             last_sent_head_yaw: AtomicU8::new(0),
         }
+    }
+
+    pub fn has_position_target(&self) -> bool {
+        self.position_target_range.load(Relaxed) != -1
     }
 
     pub fn is_in_position_target_range(&self) -> bool {
@@ -636,6 +642,18 @@ pub trait Mob: EntityBase + Send + Sync {
         None
     }
 
+    fn as_patrolling_monster(&self) -> Option<&dyn patrol::PatrollingMonster> {
+        None
+    }
+
+    fn as_raider(&self) -> Option<&dyn raider::Raider> {
+        None
+    }
+
+    fn as_iron_golem(&self) -> Option<&crate::entity::passive::iron_golem::IronGolemEntity> {
+        None
+    }
+
     fn mob_write_nbt<'a>(&'a self, _nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async {})
     }
@@ -817,6 +835,11 @@ pub trait Mob: EntityBase + Send + Sync {
     fn is_sitting(&self) -> bool {
         self.as_tamable()
             .is_some_and(crate::entity::passive::tamable::TamableAnimal::is_in_sitting_pose)
+    }
+
+    fn is_tamed(&self) -> bool {
+        self.as_tamable()
+            .is_some_and(crate::entity::passive::tamable::TamableAnimal::is_tame)
     }
 
     fn get_base_experience_reward(&self) -> u32 {
@@ -1245,4 +1268,12 @@ pub trait PathAwareEntity: Mob + Send + Sync {
     fn get_follow_leash_speed(&self) -> f32 {
         1.0
     }
+}
+
+pub trait RangedAttackMob: Mob + Send + Sync {
+    fn perform_ranged_attack<'a>(
+        &'a self,
+        target: &'a Arc<dyn EntityBase>,
+        power: f32,
+    ) -> EntityBaseFuture<'a, ()>;
 }

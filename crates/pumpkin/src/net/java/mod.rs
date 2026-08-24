@@ -1042,7 +1042,7 @@ impl JavaClient {
                     &mut payload,
                     &version,
                 )?;
-                let mut event = crate::plugin::api::events::player::custom_click_action::CustomClickActionEvent::new(
+                let mut event = crate::plugin::api::events::dialog::dialog_click_action::DialogClickActionEvent::new(
                     player.clone(),
                     packet.action_id.to_string(),
                     packet.payload.map(Bytes::copy_from_slice),

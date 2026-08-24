@@ -23,32 +23,40 @@ impl GoalSelector {
     }
 
     pub async fn remove_goal<G: Goal + 'static>(&mut self, mob: &dyn Mob) {
-        let mut goals_to_remove = Vec::with_capacity(2);
-        for (i, prioritized_goal) in &mut self.goals.iter_mut().enumerate() {
-            if TypeId::of::<G>() == prioritized_goal.type_id {
-                if prioritized_goal.running {
-                    prioritized_goal.stop(mob).await;
+        let mut stopped = self.remove_goal_sync::<G>();
+        for goal in &mut stopped {
+            goal.stop(mob).await;
+        }
+    }
+
+    pub fn remove_goal_sync<G: Goal + 'static>(&mut self) -> Vec<PrioritizedGoal> {
+        self.remove_goal_by_type_id(TypeId::of::<G>())
+    }
+
+    pub fn remove_goal_by_type_id(&mut self, type_id: TypeId) -> Vec<PrioritizedGoal> {
+        let mut stopped = Vec::new();
+        let mut i = 0;
+        while i < self.goals.len() {
+            if self.goals[i].type_id == type_id {
+                let goal = self.goals.swap_remove(i);
+                for slot in &mut self.goals_by_control {
+                    if *slot == usize::MAX {
+                        continue;
+                    }
+                    if *slot == i {
+                        *slot = usize::MAX;
+                    } else if *slot == self.goals.len() {
+                        *slot = i;
+                    }
                 }
-                goals_to_remove.push(i);
+                if goal.running {
+                    stopped.push(goal);
+                }
+            } else {
+                i += 1;
             }
         }
-
-        for goal_idx in goals_to_remove {
-            self.goals.swap_remove(goal_idx);
-
-            // This is very fast because arrays are on the stack and the compiler knows the size
-            for slot in &mut self.goals_by_control {
-                if *slot == usize::MAX {
-                    continue;
-                }
-                // Update the idx
-                if *slot == goal_idx {
-                    *slot = usize::MAX;
-                } else if *slot > goal_idx {
-                    *slot -= 1;
-                }
-            }
-        }
+        stopped
     }
 
     pub fn clear(&mut self) -> Vec<PrioritizedGoal> {
