@@ -22,9 +22,9 @@ pub struct BungeeCordConfig {
     pub enabled: bool,
     /// Shared secret for authenticating connections from the `BungeeCord`
     /// proxy, as provided by the `BungeeGuard` plugin. When set, the forwarded
-    /// handshake data must end with a matching token, otherwise the connection
-    /// is rejected. This also blocks players connecting directly instead of
-    /// through the proxy.
+    /// profile properties must contain a `bungeeguard-token` property holding
+    /// this secret, otherwise the connection is rejected. This also blocks
+    /// players connecting directly instead of through the proxy.
     pub secret: String,
 }
 

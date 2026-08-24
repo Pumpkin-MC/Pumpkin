@@ -4,6 +4,11 @@ use std::{net::IpAddr, net::SocketAddr};
 use thiserror::Error;
 
 use crate::net::{GameProfile, offline_uuid};
+use pumpkin_protocol::Property;
+
+/// The property name the `BungeeGuard` plugin uses to forward its shared
+/// secret inside the profile properties.
+const BUNGEEGUARD_TOKEN_PROPERTY: &str = "bungeeguard-token";
 
 #[derive(Error, Debug)]
 pub enum BungeeCordError {
@@ -15,6 +20,8 @@ pub enum BungeeCordError {
     FailedParseProperties,
     #[error("Failed to make offline UUID")]
     FailedMakeOfflineUUID,
+    #[error("No BungeeGuard token in forwarded data")]
+    MissingToken,
     #[error("Invalid BungeeGuard token")]
     InvalidToken,
 }
@@ -28,11 +35,12 @@ pub enum BungeeCordError {
 /// 1. IP address (if `ip_forward` is enabled on the `BungeeCord` server)
 /// 2. UUID (if `ip_forward` is enabled on the `BungeeCord` server)
 /// 3. Game profile properties (if `ip_forward` and `online_mode` are enabled on the `BungeeCord` server)
-/// 4. A secret token (if the `BungeeGuard` plugin is installed on the `BungeeCord` server)
 ///
-/// If a `secret` is configured, the token must be present and match it,
-/// otherwise the connection is rejected. This also blocks players connecting
-/// directly to this server, bypassing the proxy.
+/// If a `secret` is configured, the properties must contain a property named
+/// `bungeeguard-token` holding the secret, as injected by the `BungeeGuard`
+/// plugin. The token property is stripped from the profile, and a missing or
+/// mismatched token rejects the connection. This also blocks players
+/// connecting directly to this server, bypassing the proxy.
 ///
 /// If any of the optional data is missing, the function will attempt to
 /// determine the player's information locally.
@@ -61,17 +69,32 @@ pub fn bungeecord_login(
         _ => offline_uuid(&name).map_err(|_| BungeeCordError::FailedMakeOfflineUUID)?,
     };
 
-    let properties = match parts.next() {
+    let mut properties: Vec<Property> = match parts.next() {
         Some(json_str) if !json_str.is_empty() => {
             serde_json::from_str(json_str).map_err(|_| BungeeCordError::FailedParseProperties)?
         }
         _ => Vec::new(),
     };
 
-    // BungeeGuard appends the shared token after the forwarded data. When a
-    // secret is configured, the token must be present and match it.
-    if !secret.is_empty() && parts.next() != Some(secret) {
-        return Err(BungeeCordError::InvalidToken);
+    // The `BungeeGuard` plugin injects the shared secret as a property named
+    // `bungeeguard-token` inside the forwarded profile properties. When a
+    // secret is configured, that property must be present and hold the
+    // secret; the property is then stripped so it never reaches the game
+    // profile. This also blocks players connecting directly instead of
+    // through the proxy.
+    if !secret.is_empty() {
+        let token_props: Vec<&Property> = properties
+            .iter()
+            .filter(|property| property.name.as_ref() == BUNGEEGUARD_TOKEN_PROPERTY)
+            .collect();
+
+        match token_props.as_slice() {
+            [token] if token.value.as_ref() == secret => {
+                properties.retain(|property| property.name.as_ref() != BUNGEEGUARD_TOKEN_PROPERTY);
+            }
+            [] => return Err(BungeeCordError::MissingToken),
+            _ => return Err(BungeeCordError::InvalidToken),
+        }
     }
 
     Ok((
@@ -146,44 +169,76 @@ mod tests {
     }
 
     const SECRET: &str = "bungeeguard-token";
-    const FORWARDED_ADDRESS: &str = concat!(
+    const FORWARDED_HOST: &str = concat!(
         // Split at the digits so the `\0` is not read as an octal escape.
         "mc.example.com\0",
         "192.0.2.10\0",
-        "d8f4a1e0-0f1b-4c3a-9f2e-1a2b3c4d5e6f\0[]"
+        "d8f4a1e0-0f1b-4c3a-9f2e-1a2b3c4d5e6f"
     );
 
     fn client_address() -> SocketAddr {
         SocketAddr::from(([10, 0, 0, 1], 51234))
     }
 
+    /// The forwarded address with the given profile `properties` as its
+    /// fourth part, as `BungeeCord` puts them on the wire.
+    fn forwarded_address(properties: &str) -> String {
+        format!("{FORWARDED_HOST}\0{properties}")
+    }
+
+    /// The `BungeeGuard` token property alone, as the plugin injects it into
+    /// the forwarded profile properties.
+    fn token_property(token: &str) -> String {
+        format!(r#"{{"name":"bungeeguard-token","value":"{token}","signature":""}}"#)
+    }
+
+    /// A properties array containing the given property objects.
+    fn properties_array(properties: &[&str]) -> String {
+        format!("[{}]", properties.join(","))
+    }
+
     #[test]
     fn accepts_matching_bungeeguard_token() {
-        let address = format!("{FORWARDED_ADDRESS}\0{SECRET}");
+        let properties = format!(
+            r#"[{{"name":"textures","value":"skin","signature":"sig"}},{{"name":"bungeeguard-token","value":"{SECRET}","signature":""}}]"#
+        );
+        let address = forwarded_address(&properties);
 
         let (ip, profile) =
             bungeecord_login(&client_address(), &address, "Steve".to_string(), SECRET)
                 .expect("a matching token should be accepted");
 
         assert_eq!(ip, IpAddr::from([192, 0, 2, 10]));
-        assert_eq!(profile.name, "Steve");
+
+        // The token property is stripped so it never reaches the game profile.
+        let properties = profile.properties.load();
+        assert_eq!(properties.len(), 1);
+        assert_eq!(&*properties[0].name, "textures");
     }
 
     #[test]
     fn rejects_missing_bungeeguard_token() {
-        let result = bungeecord_login(
-            &client_address(),
-            FORWARDED_ADDRESS,
-            "Steve".to_string(),
-            SECRET,
-        );
+        let address =
+            forwarded_address(r#"[{"name":"textures","value":"skin","signature":"sig"}]"#);
+
+        let result = bungeecord_login(&client_address(), &address, "Steve".to_string(), SECRET);
+
+        assert!(matches!(result, Err(BungeeCordError::MissingToken)));
+    }
+
+    #[test]
+    fn rejects_mismatched_bungeeguard_token() {
+        let address = forwarded_address(&properties_array(&[&token_property("wrong-token")]));
+
+        let result = bungeecord_login(&client_address(), &address, "Steve".to_string(), SECRET);
 
         assert!(matches!(result, Err(BungeeCordError::InvalidToken)));
     }
 
     #[test]
-    fn rejects_mismatched_bungeeguard_token() {
-        let address = format!("{FORWARDED_ADDRESS}\0wrong-token");
+    fn rejects_multiple_bungeeguard_tokens() {
+        let properties = properties_array(&[&token_property(SECRET), &token_property(SECRET)]);
+        let address = forwarded_address(&properties);
 
         let result = bungeecord_login(&client_address(), &address, "Steve".to_string(), SECRET);
 
@@ -199,12 +254,12 @@ mod tests {
             SECRET,
         );
 
-        assert!(matches!(result, Err(BungeeCordError::InvalidToken)));
+        assert!(matches!(result, Err(BungeeCordError::MissingToken)));
     }
 
     #[test]
     fn ignores_token_when_no_secret_is_configured() {
-        let address = format!("{FORWARDED_ADDRESS}\0{SECRET}");
+        let address = forwarded_address(&properties_array(&[&token_property(SECRET)]));
 
         let result = bungeecord_login(&client_address(), &address, "Steve".to_string(), "");
 
