@@ -13,7 +13,7 @@ use pumpkin_protocol::java::client::play::Metadata;
 use rand::RngExt;
 
 use crate::entity::{
-    Entity, EntityBase, EntityBaseFuture, NBTStorage, NbtFuture,
+    Entity, EntityBase, EntityBaseFuture, NbtFuture,
     ai::goal::{
         active_target::ActiveTargetGoal, avoid_entity::AvoidEntityGoal, breed::BreedGoal,
         escape_danger::EscapeDangerGoal, follow_parent::FollowParentGoal,
@@ -119,26 +119,6 @@ impl OcelotEntity {
     }
 }
 
-impl NBTStorage for OcelotEntity {
-    fn write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
-        Box::pin(async {
-            self.mob_entity.living_entity.write_nbt(nbt).await;
-            self.write_animal_nbt(nbt);
-            nbt.put_bool("Trusting", self.is_trusting.load(Ordering::Relaxed));
-        })
-    }
-
-    fn read_nbt_non_mut<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
-        Box::pin(async {
-            self.mob_entity.living_entity.read_nbt_non_mut(nbt).await;
-            self.read_animal_nbt(nbt);
-            if let Some(trusting) = nbt.get_bool("Trusting") {
-                self.is_trusting.store(trusting, Ordering::Relaxed);
-            }
-        })
-    }
-}
-
 impl Animal for OcelotEntity {
     fn is_food(&self, item_stack: &ItemStack) -> bool {
         let item = item_stack.get_item();
@@ -149,6 +129,24 @@ impl Animal for OcelotEntity {
 }
 
 impl Mob for OcelotEntity {
+    fn as_animal(&self) -> Option<&dyn Animal> {
+        Some(self)
+    }
+
+    fn mob_write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
+        Box::pin(async {
+            nbt.put_bool("Trusting", self.is_trusting.load(Ordering::Relaxed));
+        })
+    }
+
+    fn mob_read_nbt<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
+        Box::pin(async {
+            if let Some(trusting) = nbt.get_bool("Trusting") {
+                self.is_trusting.store(trusting, Ordering::Relaxed);
+            }
+        })
+    }
+
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
     }

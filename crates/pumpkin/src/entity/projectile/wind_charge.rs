@@ -9,8 +9,8 @@ use std::{
 
 use crate::{
     entity::{
-        Entity, EntityBase, EntityBaseFuture, NBTStorage, living::LivingEntity,
-        projectile::ThrownItemEntity, projectile_deflection::ProjectileDeflectionType,
+        Entity, EntityBase, EntityBaseFuture, living::LivingEntity, projectile::ThrownItemEntity,
+        projectile_deflection::ProjectileDeflectionType,
     },
     server::Server,
 };
@@ -129,8 +129,6 @@ impl WindChargeEntity {
     }
 }
 
-impl NBTStorage for WindChargeEntity {}
-
 impl EntityBase for WindChargeEntity {
     fn tick<'a>(
         &'a self,
@@ -156,11 +154,6 @@ impl EntityBase for WindChargeEntity {
     fn get_living_entity(&self) -> Option<&LivingEntity> {
         None
     }
-
-    fn as_nbt_storage(&self) -> &dyn NBTStorage {
-        self
-    }
-
     fn cast_any(&self) -> &dyn std::any::Any {
         self
     }

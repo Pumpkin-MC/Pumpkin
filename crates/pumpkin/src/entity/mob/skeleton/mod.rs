@@ -3,7 +3,7 @@ use std::sync::{Arc, Weak};
 use pumpkin_data::entity::EntityType;
 
 use crate::entity::{
-    Entity, NBTStorage, NbtFuture,
+    Entity,
     ai::goal::{
         active_target::ActiveTargetGoal, bow_attack::BowAttackGoal,
         look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal,
@@ -12,7 +12,6 @@ use crate::entity::{
     },
     mob::{Mob, MobEntity},
 };
-use pumpkin_nbt::compound::NbtCompound;
 
 pub mod bogged;
 pub mod parched;
@@ -64,16 +63,6 @@ impl SkeletonEntityBase {
         };
 
         mob_arc
-    }
-}
-
-impl NBTStorage for SkeletonEntityBase {
-    fn write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
-        self.mob_entity.living_entity.write_nbt(nbt)
-    }
-
-    fn read_nbt_non_mut<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
-        self.mob_entity.living_entity.read_nbt_non_mut(nbt)
     }
 }
 

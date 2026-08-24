@@ -3,7 +3,7 @@ use std::sync::{Arc, Weak};
 use pumpkin_data::{entity::EntityType, item::Item};
 
 use crate::entity::{
-    Entity, NBTStorage,
+    Entity,
     ai::goal::{
         breed::BreedGoal, escape_danger::EscapeDangerGoal, follow_parent::FollowParentGoal,
         look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal, swim::SwimGoal,
@@ -51,8 +51,6 @@ impl RabbitEntity {
         mob_arc
     }
 }
-
-impl NBTStorage for RabbitEntity {}
 
 impl Mob for RabbitEntity {
     fn get_mob_entity(&self) -> &MobEntity {

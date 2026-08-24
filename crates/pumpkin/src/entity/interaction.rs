@@ -15,8 +15,7 @@ use pumpkin_util::math::{
 
 use crate::{
     entity::{
-        Entity, EntityBase, EntityBaseFuture, NBTStorage, NbtFuture, living::LivingEntity,
-        player::Player,
+        Entity, EntityBase, EntityBaseFuture, NbtFuture, living::LivingEntity, player::Player,
     },
     server::Server,
 };
@@ -138,10 +137,9 @@ impl InteractionEntity {
     }
 }
 
-impl NBTStorage for InteractionEntity {
-    fn write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
+impl EntityBase for InteractionEntity {
+    fn write_custom_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async move {
-            self.entity.write_nbt(nbt).await;
             nbt.put_float("width", *self.width.lock().await);
             nbt.put_float("height", *self.height.lock().await);
             nbt.put_bool("response", self.response.load(Ordering::Relaxed));
@@ -158,16 +156,8 @@ impl NBTStorage for InteractionEntity {
         })
     }
 
-    fn read_nbt<'a>(&'a mut self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
+    fn read_custom_nbt<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async move {
-            self.read_nbt_non_mut(nbt).await;
-        })
-    }
-
-    fn read_nbt_non_mut<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
-        Box::pin(async move {
-            self.entity.read_nbt_non_mut(nbt).await;
-
             let width = nbt.get_float("width").unwrap_or(1.0);
             let height = nbt.get_float("height").unwrap_or(1.0);
             let response = nbt.get_bool("response").unwrap_or(false);
@@ -190,9 +180,7 @@ impl NBTStorage for InteractionEntity {
             }
         })
     }
-}
 
-impl EntityBase for InteractionEntity {
     fn tick<'a>(
         &'a self,
         _caller: &'a Arc<dyn EntityBase>,
@@ -237,10 +225,6 @@ impl EntityBase for InteractionEntity {
 
     fn get_living_entity(&self) -> Option<&LivingEntity> {
         None
-    }
-
-    fn as_nbt_storage(&self) -> &dyn NBTStorage {
-        self
     }
 
     fn cast_any(&self) -> &dyn std::any::Any {

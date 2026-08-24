@@ -35,11 +35,11 @@ use tokio::sync::Mutex;
 
 use crate::entity::player::Player;
 use crate::entity::{
-    Entity, EntityBase, NBTStorage,
+    Entity, EntityBase,
     ai::{
         goal::{
             avoid_entity::AvoidEntityGoal, look_around::RandomLookAroundGoal,
-            look_at_entity::LookAtEntityGoal, swim::SwimGoal,
+            look_at_entity::LookAtEntityGoal, open_door::OpenDoorGoal, swim::SwimGoal,
             trade_with_player::TradeWithPlayerGoal, wander_around::WanderAroundGoal,
             work_at_job_site::WorkAtJobSiteGoal,
         },
@@ -57,7 +57,7 @@ pub use data::{
     get_food_points,
 };
 
-async fn trigger_trade_advancement(player: &Player) {
+pub(crate) async fn trigger_trade_advancement(player: &Player) {
     player
         .trigger_advancement(
             crate::entity::player::advancement::trigger::AdvancementTrigger::TradedWithVillager,
@@ -166,7 +166,7 @@ fn enchant_trade_item(
     Some((stack, additional_cost))
 }
 
-fn apply_random_dye(rng: &mut impl rand::Rng, stack: &mut ItemStack) {
+pub(crate) fn apply_random_dye(rng: &mut impl rand::Rng, stack: &mut ItemStack) {
     use pumpkin_data::data_component::DataComponent;
     use pumpkin_data::data_component_impl::{DataComponentImpl, DyedColorImpl};
     use rand::RngExt;
@@ -199,7 +199,7 @@ fn apply_random_dye(rng: &mut impl rand::Rng, stack: &mut ItemStack) {
     ));
 }
 
-fn apply_random_stew_effect(rng: &mut impl rand::Rng, stack: &mut ItemStack) {
+pub(crate) fn apply_random_stew_effect(rng: &mut impl rand::Rng, stack: &mut ItemStack) {
     use pumpkin_data::data_component::DataComponent;
     use pumpkin_data::data_component_impl::{
         DataComponentImpl, SuspiciousStewEffect, SuspiciousStewEffectsImpl,
@@ -230,7 +230,7 @@ fn apply_random_stew_effect(rng: &mut impl rand::Rng, stack: &mut ItemStack) {
     ));
 }
 
-fn apply_potion(stack: &mut ItemStack, potion_name: &str) {
+pub(crate) fn apply_potion(stack: &mut ItemStack, potion_name: &str) {
     use pumpkin_data::data_component::DataComponent;
     use pumpkin_data::data_component_impl::{DataComponentImpl, PotionContentsImpl};
 
@@ -371,6 +371,7 @@ impl VillagerEntity {
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
 
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
+            goal_selector.add_goal(0, Box::new(OpenDoorGoal::new(true)));
             // Villagers avoid threats
             goal_selector.add_goal(
                 1,
@@ -1410,11 +1411,10 @@ impl ScreenHandlerFactory for VillagerEntity {
     }
 }
 
-impl NBTStorage for VillagerEntity {
+impl Mob for VillagerEntity {
     #[expect(clippy::too_many_lines)]
-    fn write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> crate::entity::NbtFuture<'a, ()> {
+    fn mob_write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> crate::entity::NbtFuture<'a, ()> {
         Box::pin(async move {
-            self.mob_entity.living_entity.entity.write_nbt(nbt).await;
             let data = self.villager_data.lock().await;
             let mut villager_data_nbt = NbtCompound::new();
             villager_data_nbt.put_int("Type", data.r#type.0);
@@ -1535,13 +1535,8 @@ impl NBTStorage for VillagerEntity {
     }
 
     #[allow(clippy::too_many_lines)]
-    fn read_nbt_non_mut<'a>(&'a self, nbt: &'a NbtCompound) -> crate::entity::NbtFuture<'a, ()> {
+    fn mob_read_nbt<'a>(&'a self, nbt: &'a NbtCompound) -> crate::entity::NbtFuture<'a, ()> {
         Box::pin(async move {
-            self.mob_entity
-                .living_entity
-                .entity
-                .read_nbt_non_mut(nbt)
-                .await;
             if let Some(villager_data_nbt) = nbt.get_compound("VillagerData") {
                 let mut data = self.villager_data.lock().await;
                 if let Some(t) = villager_data_nbt.get_int("Type") {
@@ -1704,9 +1699,7 @@ impl NBTStorage for VillagerEntity {
             }
         })
     }
-}
 
-impl Mob for VillagerEntity {
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
     }

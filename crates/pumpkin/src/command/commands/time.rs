@@ -69,7 +69,7 @@ impl CommandExecutor for QueryExecutor {
     ) -> CommandResult<'a> {
         Box::pin(async move {
             let clock_name = ResourceLocationArgumentConsumer::find_arg(args, ARG_CLOCK)
-                .unwrap_or(DEFAULT_CLOCK);
+                .map_or_else(|_| DEFAULT_CLOCK.to_string(), ToString::to_string);
             let mode = self.0;
             let worlds = server.worlds.load();
             let world = worlds.first().ok_or(CommandError::InvalidRequirement)?;
@@ -93,7 +93,7 @@ impl CommandExecutor for QueryExecutor {
                         .send_message(pumpkin_macros::translate_cross!(
                             translation::java::COMMANDS_TIME_QUERY_ABSOLUTE,
                             translation::bedrock::COMMANDS_TIME_QUERY_DAYTIME,
-                            TextComponent::text(clock_name.to_string()),
+                            TextComponent::text(clock_name.clone()),
                             TextComponent::text(total_ticks.to_string())
                         ))
                         .await;
@@ -137,7 +137,7 @@ impl CommandExecutor for ActionExecutor {
     ) -> CommandResult<'a> {
         Box::pin(async move {
             let clock_name = ResourceLocationArgumentConsumer::find_arg(args, ARG_CLOCK)
-                .unwrap_or(DEFAULT_CLOCK);
+                .map_or_else(|_| DEFAULT_CLOCK.to_string(), ToString::to_string);
             let action = self.0;
             let worlds = server.worlds.load();
             let world = worlds.first().ok_or(CommandError::InvalidRequirement)?;
@@ -156,7 +156,7 @@ impl CommandExecutor for ActionExecutor {
                         .send_message(pumpkin_macros::translate_cross!(
                             translation::java::COMMANDS_TIME_SET_ABSOLUTE,
                             translation::bedrock::COMMANDS_TIME_SET,
-                            TextComponent::text(clock_name.to_string()),
+                            TextComponent::text(clock_name.clone()),
                             TextComponent::text(time_count.to_string())
                         ))
                         .await;
@@ -171,7 +171,7 @@ impl CommandExecutor for ActionExecutor {
                         .send_message(pumpkin_macros::translate_cross!(
                             translation::java::COMMANDS_TIME_SET_ABSOLUTE,
                             translation::bedrock::COMMANDS_TIME_ADDED,
-                            TextComponent::text(clock_name.to_string()),
+                            TextComponent::text(clock_name.clone()),
                             TextComponent::text(total_ticks.to_string())
                         ))
                         .await;
@@ -184,7 +184,7 @@ impl CommandExecutor for ActionExecutor {
                         .send_message(pumpkin_macros::translate_cross!(
                             translation::java::COMMANDS_TIME_PAUSE,
                             translation::bedrock::COMMANDS_TIME_STOP,
-                            TextComponent::text(clock_name.to_string())
+                            TextComponent::text(clock_name.clone())
                         ))
                         .await;
                     Ok(1)
@@ -196,7 +196,7 @@ impl CommandExecutor for ActionExecutor {
                         .send_message(pumpkin_macros::translate_cross!(
                             translation::java::COMMANDS_TIME_RESUME,
                             translation::bedrock::COMMANDS_TIME_SET,
-                            TextComponent::text(clock_name.to_string())
+                            TextComponent::text(clock_name.clone())
                         ))
                         .await;
                     Ok(1)
@@ -213,7 +213,7 @@ impl CommandExecutor for ActionExecutor {
                         .send_message(pumpkin_macros::translate_cross!(
                             translation::java::COMMANDS_TIME_RATE,
                             translation::bedrock::COMMANDS_TIME_SET,
-                            TextComponent::text(clock_name.to_string()),
+                            TextComponent::text(clock_name.clone()),
                             TextComponent::text(rate.to_string())
                         ))
                         .await;

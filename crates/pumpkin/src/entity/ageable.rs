@@ -98,7 +98,10 @@ pub trait AgeableMob: Mob {
     }
 
     #[must_use]
-    fn get_speed_up_seconds_when_feeding(ticks_until_adult: i32) -> i32 {
+    fn get_speed_up_seconds_when_feeding(ticks_until_adult: i32) -> i32
+    where
+        Self: Sized,
+    {
         (ticks_until_adult as f32 / 20.0 * 0.1) as i32
     }
 

@@ -1,8 +1,102 @@
-use crate::entity::{NBTInitFuture, NBTStorage, NBTStorageInit, NbtFuture};
+pub mod hunger;
+pub mod infested;
+pub mod oozing;
+pub mod poison;
+pub mod raid_omen;
+pub mod regeneration;
+pub mod saturation;
+pub mod weaving;
+pub mod wind_charged;
+pub mod wither;
+
+use std::future::Future;
+use std::pin::Pin;
+
+use pumpkin_data::damage::DamageType;
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
 use tracing::warn;
+
+use crate::entity::living::LivingEntity;
+use crate::entity::{NBTInitFuture, NBTStorage, NBTStorageInit, NbtFuture};
+
+pub type EffectFuture<'a, T = ()> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
+
+pub trait MobEffect: Send + Sync {
+    /// Returns true if `apply_effect_tick` should be called for the current tick and duration.
+    fn should_apply_effect_tick(&self, _duration: i32, _amplifier: u8) -> bool {
+        false
+    }
+
+    /// Applies periodic/tick-based effect logic on a living entity.
+    fn apply_effect_tick<'a>(
+        &'a self,
+        _living: &'a LivingEntity,
+        _amplifier: u8,
+    ) -> EffectFuture<'a, ()> {
+        Box::pin(async move {})
+    }
+
+    /// Called when an entity carrying this effect is hurt.
+    fn on_mob_hurt<'a>(
+        &'a self,
+        _living: &'a LivingEntity,
+        _amplifier: u8,
+        _damage_type: &'a DamageType,
+        _damage_amount: f32,
+    ) -> EffectFuture<'a, ()> {
+        Box::pin(async move {})
+    }
+
+    /// Called when an entity carrying this effect dies.
+    fn on_mob_death<'a>(
+        &'a self,
+        _living: &'a LivingEntity,
+        _amplifier: u8,
+        _damage_type: &'a DamageType,
+    ) -> EffectFuture<'a, ()> {
+        Box::pin(async move {})
+    }
+}
+
+pub static REGENERATION: regeneration::RegenerationMobEffect = regeneration::RegenerationMobEffect;
+pub static POISON: poison::PoisonMobEffect = poison::PoisonMobEffect;
+pub static WITHER: wither::WitherMobEffect = wither::WitherMobEffect;
+pub static HUNGER: hunger::HungerMobEffect = hunger::HungerMobEffect;
+pub static SATURATION: saturation::SaturationMobEffect = saturation::SaturationMobEffect;
+pub static RAID_OMEN: raid_omen::RaidOmenMobEffect = raid_omen::RaidOmenMobEffect;
+pub static INFESTED: infested::InfestedMobEffect = infested::InfestedMobEffect;
+pub static OOZING: oozing::OozingMobEffect = oozing::OozingMobEffect;
+pub static WEAVING: weaving::WeavingMobEffect = weaving::WeavingMobEffect;
+pub static WIND_CHARGED: wind_charged::WindChargedMobEffect = wind_charged::WindChargedMobEffect;
+
+#[must_use]
+pub fn get_mob_effect(effect: &'static StatusEffect) -> Option<&'static dyn MobEffect> {
+    if effect == &StatusEffect::REGENERATION {
+        Some(&REGENERATION)
+    } else if effect == &StatusEffect::POISON {
+        Some(&POISON)
+    } else if effect == &StatusEffect::WITHER {
+        Some(&WITHER)
+    } else if effect == &StatusEffect::HUNGER {
+        Some(&HUNGER)
+    } else if effect == &StatusEffect::SATURATION {
+        Some(&SATURATION)
+    } else if effect == &StatusEffect::RAID_OMEN {
+        Some(&RAID_OMEN)
+    } else if effect == &StatusEffect::INFESTED {
+        Some(&INFESTED)
+    } else if effect == &StatusEffect::OOZING {
+        Some(&OOZING)
+    } else if effect == &StatusEffect::WEAVING {
+        Some(&WEAVING)
+    } else if effect == &StatusEffect::WIND_CHARGED {
+        Some(&WIND_CHARGED)
+    } else {
+        None
+    }
+}
 
 impl NBTStorage for pumpkin_data::potion::Effect {
     fn write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {

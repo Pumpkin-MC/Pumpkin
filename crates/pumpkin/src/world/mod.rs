@@ -24,6 +24,7 @@ pub mod explosion;
 pub mod loot;
 pub mod map;
 pub mod portal;
+pub mod raid;
 pub mod time;
 pub mod villager_poi;
 
@@ -38,7 +39,7 @@ use crate::{
         {OnNeighborUpdateArgs, OnScheduledTickArgs},
     },
     command::client_suggestions,
-    entity::{Entity, EntityBase, NBTStorage, RemovalReason, player::Player, r#type::from_type},
+    entity::{Entity, EntityBase, RemovalReason, player::Player, r#type::from_type},
     error::PumpkinError,
     net::{ClientPlatform, bedrock::BedrockClient, java::JavaClient},
     plugin::{
@@ -52,7 +53,7 @@ use crate::{
 };
 use arc_swap::ArcSwap;
 use border::Worldborder;
-use bytes::{BufMut, Bytes};
+use bytes::BufMut;
 pub use explosion::{
     BlockInteraction, DefaultExplosionDamageCalculator, Explosion, ExplosionDamageCalculator,
     ExplosionInteraction, SimpleExplosionDamageCalculator,
@@ -90,7 +91,7 @@ use pumpkin_protocol::bedrock::client::set_actor_data::{CSetActorData, PropertyS
 use pumpkin_protocol::bedrock::client::start_game::{CStartGame, ServerTelemetryData};
 use pumpkin_protocol::java::client::play::{
     CBlockUpdate, CChunkBatchEnd, CChunkBatchStart, CChunkData, CDisguisedChatMessage, CExplosion,
-    CRespawn, CSetBlockDestroyStage, CWorldEvent, PlayerSpawnData,
+    CLightUpdate, CRespawn, CSetBlockDestroyStage, CWorldEvent, PlayerSpawnData,
 };
 use pumpkin_protocol::java::client::play::{
     CPlayerSpawnPosition, CRecipeBookAdd, CRecipeBookSettings, CSystemChatMessage,
@@ -274,6 +275,8 @@ pub struct World {
     pub portal_poi: Mutex<portal::PortalPoiStorage>,
     /// Villager job sites and their current owners.
     pub villager_poi: Mutex<villager_poi::VillagerPoiStorage>,
+    /// Active raids in this world.
+    pub raids: Mutex<raid::Raids>,
     /// End Dragon fight manager (only present in `THE_END` dimension).
     pub dragon_fight: Option<Mutex<dragon_fight::DragonFight>>,
     pub spawn_state: ArcSwap<SpawnState>,
@@ -393,6 +396,7 @@ impl World {
             unsent_block_changes: Mutex::new(HashMap::new()),
             portal_poi: Mutex::new(portal_poi),
             villager_poi: Mutex::new(villager_poi::VillagerPoiStorage::default()),
+            raids: Mutex::new(raid::Raids::default()),
             dragon_fight,
             spawn_state: ArcSwap::new(Arc::new(SpawnState::empty())),
             active_chunks: ArcSwap::new(Arc::new(FxHashSet::default())),
@@ -454,6 +458,17 @@ impl World {
             .file_name()
             .and_then(|n| n.to_str())
             .unwrap_or("world")
+    }
+
+    /// Returns the configured shared world spawn block position and rotation.
+    #[must_use]
+    pub fn get_spawn_location(&self) -> (BlockPos, f32, f32) {
+        let level_info = self.level_info.load();
+        (
+            BlockPos::new(level_info.spawn_x, level_info.spawn_y, level_info.spawn_z),
+            level_info.spawn_yaw,
+            level_info.spawn_pitch,
+        )
     }
 
     pub async fn shutdown(&self) {
@@ -702,6 +717,9 @@ impl World {
         for (version, recipients) in recipients_by_version {
             let packet_data = match JavaClient::serialize_packet_for_version(packet, version) {
                 Ok(packet_data) => packet_data,
+                Err(pumpkin_protocol::ser::WritingError::UnsupportedVersion(_)) => {
+                    continue;
+                }
                 Err(err) => {
                     error!(
                         "Failed to serialize packet {} for version {:?}: {}",
@@ -723,21 +741,17 @@ impl World {
         packet: &P,
         recipients: impl Iterator<Item = &'a Arc<BedrockClient>>,
     ) {
-        let packet_data = match pumpkin_protocol::bedrock::packet_encoder::serialize_packet(packet)
-        {
-            Ok(packet_data) => packet_data,
-            Err(err) => {
-                error!(
-                    "Failed to serialize bedrock packet {}: {}",
-                    std::any::type_name::<P>(),
-                    err
-                );
-                return;
-            }
-        };
-
         for recipient in recipients {
-            recipient.try_enqueue_packet(packet_data.clone());
+            match recipient.serialize_packet(packet) {
+                Ok(packet_data) => recipient.try_enqueue_packet(packet_data),
+                Err(err) => {
+                    error!(
+                        "Failed to serialize bedrock packet {}: {}",
+                        std::any::type_name::<P>(),
+                        err
+                    );
+                }
+            }
         }
     }
 
@@ -745,21 +759,8 @@ impl World {
         packet: &P,
         recipients: impl Iterator<Item = &'a Arc<BedrockClient>>,
     ) {
-        let packet_data = match pumpkin_protocol::bedrock::packet_encoder::serialize_packet(packet)
-        {
-            Ok(packet_data) => packet_data,
-            Err(err) => {
-                error!(
-                    "Failed to serialize bedrock packet {}: {}",
-                    std::any::type_name::<P>(),
-                    err
-                );
-                return;
-            }
-        };
-
         for recipient in recipients {
-            recipient.enqueue_packet(packet_data.clone()).await;
+            recipient.enqueue_client_packet(packet).await;
         }
     }
 
@@ -886,11 +887,24 @@ impl World {
             }
 
             if let Some(signature) = chat_message.signature {
-                recipient
-                    .signature_cache
-                    .lock()
-                    .await
-                    .add_seen_signature(signature);
+                let mut cache = recipient.signature_cache.lock().await;
+                cache.add_seen_signature(signature);
+                cache.last_seen_validator.add_pending(signature);
+                let tracked_count = cache.last_seen_validator.tracked_messages_count();
+                drop(cache);
+
+                if tracked_count > 4096 {
+                    recipient
+                        .kick(
+                            crate::net::DisconnectReason::Kicked,
+                            TextComponent::translate_cross(
+                                pumpkin_data::translation::java::MULTIPLAYER_DISCONNECT_TOO_MANY_PENDING_CHATS,
+                                pumpkin_data::translation::java::MULTIPLAYER_DISCONNECT_TOO_MANY_PENDING_CHATS,
+                                [],
+                            ),
+                        )
+                        .await;
+                }
             }
 
             if recipient.gameprofile.id != sender.gameprofile.id {
@@ -1096,13 +1110,12 @@ impl World {
         };
         let chunk_pos = BlockPos::floored_v(*position).chunk_position();
 
-        if let Ok(data) = pumpkin_protocol::bedrock::packet_encoder::serialize_packet(&packet) {
-            for player in self.players.load().iter() {
-                if is_within_view_distance(chunk_pos, player.get_entity().chunk_pos.load(), 1)
-                    && let ClientPlatform::Bedrock(client) = player.client.as_ref()
-                {
-                    client.try_enqueue_packet(data.clone());
-                }
+        for player in self.players.load().iter() {
+            if is_within_view_distance(chunk_pos, player.get_entity().chunk_pos.load(), 1)
+                && let ClientPlatform::Bedrock(client) = player.client.as_ref()
+                && let Ok(data) = client.serialize_packet(&packet)
+            {
+                client.try_enqueue_packet(data);
             }
         }
     }
@@ -1205,6 +1218,7 @@ impl World {
         self.flush_synced_block_events().await;
         self.update_active_chunks();
         self.tick_environment().await;
+        self.raids.lock().await.tick(self).await;
 
         let world_for_chunks = self.clone();
         let chunk_future = async move {
@@ -1462,29 +1476,17 @@ impl World {
                     is_within_view_distance(chunk_pos, center, view_distance)
                 });
 
-                let mut bedrock_packets: Vec<Bytes> = Vec::new();
+                let mut bedrock_packets = Vec::new();
                 for (block_pos, block_state_id) in &updates {
                     let be_block_id = BlockState::to_be_network_id(*block_state_id);
                     let update_packet = pumpkin_protocol::bedrock::client::CUpdateBlock::new(
                         *block_pos,
                         be_block_id as u32,
                     );
-                    if let Ok(data) =
-                        pumpkin_protocol::bedrock::packet_encoder::serialize_packet(&update_packet)
-                    {
-                        bedrock_packets.push(data);
-                    }
-                    if let Some(data) = self.bedrock_block_entity_data(*block_state_id, *block_pos)
-                    {
-                        let actor_packet = CBlockActorData::new(*block_pos, data);
-                        if let Ok(data) =
-                            pumpkin_protocol::bedrock::packet_encoder::serialize_packet(
-                                &actor_packet,
-                            )
-                        {
-                            bedrock_packets.push(data);
-                        }
-                    }
+                    let actor_packet = self
+                        .bedrock_block_entity_data(*block_state_id, *block_pos)
+                        .map(|data| CBlockActorData::new(*block_pos, data));
+                    bedrock_packets.push((update_packet, actor_packet));
                 }
 
                 let mut bedrock_recipients = Vec::new();
@@ -1498,8 +1500,15 @@ impl World {
                 }
 
                 for be_client in bedrock_recipients {
-                    for packet_data in &bedrock_packets {
-                        be_client.try_enqueue_packet(packet_data.clone());
+                    for (update_packet, actor_packet) in &bedrock_packets {
+                        if let Ok(data) = be_client.serialize_packet(update_packet) {
+                            be_client.try_enqueue_packet(data);
+                        }
+                        if let Some(actor_packet) = actor_packet
+                            && let Ok(data) = be_client.serialize_packet(actor_packet)
+                        {
+                            be_client.try_enqueue_packet(data);
+                        }
                     }
                 }
 
@@ -1527,7 +1536,7 @@ impl World {
                 }
             }
 
-            let mut bedrock_water_packets: Vec<Bytes> = Vec::new();
+            let mut bedrock_water_packets = Vec::new();
             for (block_pos, block_state_id) in &updates {
                 let water_state = bedrock_water_state(*block_state_id);
                 let packet = pumpkin_protocol::bedrock::client::CUpdateBlock::with_layer(
@@ -1535,11 +1544,7 @@ impl World {
                     u32::from(BlockState::to_be_network_id(water_state)),
                     1,
                 );
-                if let Ok(data) =
-                    pumpkin_protocol::bedrock::packet_encoder::serialize_packet(&packet)
-                {
-                    bedrock_water_packets.push(data);
-                }
+                bedrock_water_packets.push(packet);
             }
 
             if !bedrock_water_packets.is_empty() {
@@ -1551,8 +1556,10 @@ impl World {
                 });
                 for player in recipients {
                     if let ClientPlatform::Bedrock(client) = player.client.as_ref() {
-                        for packet_data in &bedrock_water_packets {
-                            client.try_enqueue_packet(packet_data.clone());
+                        for packet in &bedrock_water_packets {
+                            if let Ok(data) = client.serialize_packet(packet) {
+                                client.try_enqueue_packet(data);
+                            }
                         }
                     }
                 }
@@ -1769,34 +1776,6 @@ impl World {
                 chunk.inhabited_time.fetch_add(1, Relaxed);
             }
         }
-    }
-
-    pub fn get_fluid_collisions(self: &Arc<Self>, bounding_box: BoundingBox) -> Vec<&Fluid> {
-        let mut collisions = Vec::new();
-
-        let min = bounding_box.min_block_pos();
-
-        let max = bounding_box.max_block_pos();
-
-        for x in min.0.x..=max.0.x {
-            for y in min.0.y..=max.0.y {
-                for z in min.0.z..=max.0.z {
-                    let pos = BlockPos::new(x, y, z);
-
-                    let (fluid, state) = self.get_fluid_and_fluid_state(&pos);
-
-                    if fluid.id != Fluid::EMPTY.id {
-                        let height = f64::from(state.height);
-
-                        if height >= bounding_box.min.y {
-                            collisions.push(fluid);
-                        }
-                    }
-                }
-            }
-        }
-
-        collisions
     }
 
     pub fn check_fluid_collision(self: &Arc<Self>, bounding_box: BoundingBox) -> bool {
@@ -2313,7 +2292,12 @@ impl World {
             let spawn_position = Vector2::new(level_info.spawn_x, level_info.spawn_z);
             let chunk_pos = Vector2::new(level_info.spawn_x >> 4, level_info.spawn_z >> 4);
             self.level.get_or_fetch_chunk(chunk_pos, |_| ()).await;
-            let pos_y = self.get_top_block(spawn_position) + 1; // +1 to spawn on top of the block
+            let top = self.get_top_block(spawn_position);
+            let pos_y = if top > self.dimension.min_y {
+                top + 1
+            } else {
+                level_info.spawn_y
+            };
 
             let position = Vector3::new(
                 f64::from(level_info.spawn_x) + 0.5,
@@ -3128,7 +3112,9 @@ impl World {
 
             client_suggestions::send_c_commands_packet(player, server, &command_dispatcher).await;
         };
-        if client.version.load() < JavaMinecraftVersion::V_1_20_2 {
+        if client.version.load() < JavaMinecraftVersion::V_1_20_2
+            && client.version.load() >= JavaMinecraftVersion::V_1_13
+        {
             let mut tags = Vec::new();
             let version = client.version.load();
             for &key in pumpkin_data::tag::RegistryKey::NETWORK_KEYS {
@@ -3156,7 +3142,12 @@ impl World {
             let spawn_position = Vector2::new(info.spawn_x, info.spawn_z);
             let chunk_pos = Vector2::new(info.spawn_x >> 4, info.spawn_z >> 4);
             self.level.get_or_fetch_chunk(chunk_pos, |_| ()).await;
-            let pos_y = self.get_top_block(spawn_position) + 1; // +1 to spawn on top of the block
+            let top = self.get_top_block(spawn_position);
+            let pos_y = if top > self.dimension.min_y {
+                top + 1
+            } else {
+                info.spawn_y
+            };
 
             let position = Vector3::new(
                 f64::from(info.spawn_x) + 0.5,
@@ -3189,6 +3180,12 @@ impl World {
             client.send_packet(&CChunkBatchStart).await;
         }
         client.send_packet(&CChunkData(&chunk)).await;
+        if client.version.load() >= JavaMinecraftVersion::V_1_14
+            && client.version.load() < JavaMinecraftVersion::V_1_18
+            && let Ok(light_packet) = CLightUpdate::from_chunk(&chunk, client.version.load())
+        {
+            client.send_packet(&light_packet).await;
+        }
         if client.version.load() >= JavaMinecraftVersion::V_1_20_2 {
             client.send_packet(&CChunkBatchEnd::new(1u16)).await;
         }
@@ -3687,11 +3684,17 @@ impl World {
                 .await;
         }
 
-        // if let Some(bossbars) = self..lock().get_player_bars(&player.gameprofile.id) {
-        //     for bossbar in bossbars {
-        //         player.send_bossbar(bossbar);
-        //     }
-        // }
+        let player_bossbars = server
+            .bossbars
+            .lock()
+            .await
+            .get_player_bars(&player.gameprofile.id)
+            .map(|bars| bars.into_iter().cloned().collect::<Vec<_>>());
+        if let Some(bossbars) = player_bossbars {
+            for bossbar in &bossbars {
+                player.send_bossbar(bossbar).await;
+            }
+        }
 
         player.has_played_before.store(true, Ordering::Relaxed);
         player
@@ -4194,6 +4197,13 @@ impl World {
                 java_client.send_packet(&CChunkBatchStart).await;
             }
             java_client.send_packet(&CChunkData(&chunk)).await;
+            if java_client.version.load() >= JavaMinecraftVersion::V_1_14
+                && java_client.version.load() < JavaMinecraftVersion::V_1_18
+                && let Ok(light_packet) =
+                    CLightUpdate::from_chunk(&chunk, java_client.version.load())
+            {
+                java_client.send_packet(&light_packet).await;
+            }
             if java_client.version.load() >= JavaMinecraftVersion::V_1_20_2 {
                 java_client.send_packet(&CChunkBatchEnd::new(1u16)).await;
             }
@@ -4808,7 +4818,7 @@ impl World {
             let view_distance = get_view_distance(player).get() as i32;
 
             if is_within_view_distance(chunk_pos, center, view_distance) {
-                //  player.client.try_enqueue_spawn_packet(entity);
+                player.client.try_enqueue_spawn_packet(entity);
             }
         }
     }
@@ -4962,6 +4972,8 @@ impl World {
     }
 
     /// Sets a block and returns the old block id
+    ///
+    /// **DO NOT LOCK `world.portal_poi` BEFORE RUNNING THIS, AS IT WILL CAUSE A DEADLOCK**
     #[expect(clippy::too_many_lines)]
     pub async fn set_block_state(
         self: &Arc<Self>,
@@ -5467,6 +5479,12 @@ impl World {
             chunk_pos,
             &CWorldEvent::new(world_event as i32, position, data, false),
         );
+    }
+
+    pub fn set_block_destroy_stage(&self, entity_id: i32, location: BlockPos, stage: i8) {
+        let chunk_pos = location.chunk_position();
+        let packet = CSetBlockDestroyStage::new(entity_id.into(), location, stage);
+        self.broadcast_to_chunk(chunk_pos, &packet);
     }
     #[must_use]
     pub fn is_valid(dest: BlockPos) -> bool {
@@ -6016,12 +6034,13 @@ impl World {
         });
     }
 
-    fn intersects_aabb_with_direction(
+    #[must_use]
+    pub fn intersects_aabb_with_hit(
         from: Vector3<f64>,
         to: Vector3<f64>,
         min: Vector3<f64>,
         max: Vector3<f64>,
-    ) -> Option<BlockDirection> {
+    ) -> Option<(f64, BlockDirection, Vector3<f64>)> {
         let dir = to.sub(&from);
         let mut tmin: f64 = 0.0;
         let mut tmax: f64 = 1.0;
@@ -6030,7 +6049,7 @@ impl World {
         let mut hit_is_min = false;
 
         macro_rules! check_axis {
-            ($axis:ident, $dir_axis:ident, $min_axis:ident, $max_axis:ident, $direction_min:expr, $direction_max:expr) => {{
+            ($axis:ident, $dir_axis:ident, $min_axis:ident, $max_axis:ident) => {{
                 if dir.$dir_axis.abs() < 1e-8 {
                     if from.$dir_axis < min.$min_axis || from.$dir_axis > max.$max_axis {
                         return None;
@@ -6040,7 +6059,6 @@ impl World {
                     let t_near = (min.$min_axis - from.$dir_axis) * inv_d;
                     let t_far = (max.$max_axis - from.$dir_axis) * inv_d;
 
-                    // Determine entry and exit points based on ray direction
                     let (t_entry, t_exit, is_min_face) = if inv_d >= 0.0 {
                         (t_near, t_far, true)
                     } else {
@@ -6060,19 +6078,70 @@ impl World {
             }};
         }
 
-        check_axis!(x, x, x, x, BlockDirection::West, BlockDirection::East);
-        check_axis!(y, y, y, y, BlockDirection::Down, BlockDirection::Up);
-        check_axis!(z, z, z, z, BlockDirection::North, BlockDirection::South);
+        check_axis!(x, x, x, x);
+        check_axis!(y, y, y, y);
+        check_axis!(z, z, z, z);
 
-        match (hit_axis, hit_is_min) {
-            (Some("x"), true) => Some(BlockDirection::West),
-            (Some("x"), false) => Some(BlockDirection::East),
-            (Some("y"), true) => Some(BlockDirection::Down),
-            (Some("y"), false) => Some(BlockDirection::Up),
-            (Some("z"), true) => Some(BlockDirection::North),
-            (Some("z"), false) => Some(BlockDirection::South),
-            _ => None,
+        if tmax < 0.0 || tmin > 1.0 {
+            return None;
         }
+
+        let direction = match (hit_axis, hit_is_min) {
+            (Some("x"), true) => BlockDirection::West,
+            (Some("x"), false) => BlockDirection::East,
+            (Some("y"), true) => BlockDirection::Down,
+            (Some("y"), false) => BlockDirection::Up,
+            (Some("z"), true) => BlockDirection::North,
+            (Some("z"), false) => BlockDirection::South,
+            _ => {
+                if dir.y < 0.0 {
+                    BlockDirection::Up
+                } else if dir.y > 0.0 {
+                    BlockDirection::Down
+                } else {
+                    BlockDirection::North
+                }
+            }
+        };
+
+        let t_hit = tmin.max(0.0);
+        let hit_pos = from + dir * t_hit;
+        Some((t_hit, direction, hit_pos))
+    }
+
+    pub fn ray_outline_check_detailed(
+        &self,
+        block_pos: &BlockPos,
+        from: Vector3<f64>,
+        to: Vector3<f64>,
+    ) -> Option<(BlockDirection, Vector3<f64>)> {
+        let state = self.get_block_state(block_pos);
+
+        if state.outline_shapes.is_empty() {
+            let block_min = block_pos.0.to_f64();
+            let block_max = block_min.add_raw(1.0, 1.0, 1.0);
+            return Self::intersects_aabb_with_hit(from, to, block_min, block_max)
+                .map(|(_, dir, hit_pos)| (dir, hit_pos));
+        }
+
+        let bounding_boxes = state.get_block_outline_shapes_at(block_pos);
+        let mut closest_hit: Option<(f64, BlockDirection, Vector3<f64>)> = None;
+
+        for shape in bounding_boxes {
+            let world_min = shape.min.add(&block_pos.0.to_f64());
+            let world_max = shape.max.add(&block_pos.0.to_f64());
+
+            if let Some((t, dir, hit_pos)) =
+                Self::intersects_aabb_with_hit(from, to, world_min, world_max)
+                && closest_hit
+                    .as_ref()
+                    .is_none_or(|(closest_t, _, _)| t < *closest_t)
+            {
+                closest_hit = Some((t, dir, hit_pos));
+            }
+        }
+
+        closest_hit.map(|(_, dir, hit_pos)| (dir, hit_pos))
     }
 
     fn ray_outline_check(
@@ -6081,25 +6150,201 @@ impl World {
         from: Vector3<f64>,
         to: Vector3<f64>,
     ) -> (bool, Option<BlockDirection>) {
-        let state = self.get_block_state(block_pos);
+        if let Some((dir, _)) = self.ray_outline_check_detailed(block_pos, from, to) {
+            (true, Some(dir))
+        } else {
+            let state = self.get_block_state(block_pos);
+            if state.outline_shapes.is_empty() {
+                (true, None)
+            } else {
+                (false, None)
+            }
+        }
+    }
 
-        if state.outline_shapes.is_empty() {
-            return (true, None);
+    #[allow(clippy::too_many_lines)]
+    pub fn ray_trace_block(
+        &self,
+        start_pos: Vector3<f64>,
+        end_pos: Vector3<f64>,
+        include_fluids: bool,
+    ) -> Option<(BlockPos, BlockDirection, Vector3<f64>)> {
+        if start_pos == end_pos {
+            return None;
         }
 
-        let bounding_boxes = state.get_block_outline_shapes_at(block_pos);
+        let adjust = -1.0e-7f64;
+        let to = end_pos.lerp(&start_pos, adjust);
+        let from = start_pos.lerp(&end_pos, adjust);
 
-        for shape in bounding_boxes {
-            let world_min = shape.min.add(&block_pos.0.to_f64());
-            let world_max = shape.max.add(&block_pos.0.to_f64());
+        let mut block = BlockPos::floored(from.x, from.y, from.z);
 
-            let direction = Self::intersects_aabb_with_direction(from, to, world_min, world_max);
-            if direction.is_some() {
-                return (true, direction);
+        let state = self.get_block_state(&block);
+        let valid_start = if include_fluids {
+            !state.is_air()
+        } else {
+            !state.is_air() && !state.is_liquid()
+        };
+        if valid_start
+            && let Some((dir, hit_pos)) = self.ray_outline_check_detailed(&block, from, to)
+        {
+            return Some((block, dir, hit_pos));
+        }
+
+        let difference = to.sub(&from);
+        let step = difference.sign();
+
+        let delta = Vector3::new(
+            if step.x == 0 {
+                f64::MAX
+            } else {
+                (f64::from(step.x)) / difference.x
+            },
+            if step.y == 0 {
+                f64::MAX
+            } else {
+                (f64::from(step.y)) / difference.y
+            },
+            if step.z == 0 {
+                f64::MAX
+            } else {
+                (f64::from(step.z)) / difference.z
+            },
+        );
+
+        let mut next = Vector3::new(
+            delta.x
+                * (if step.x > 0 {
+                    1.0 - (from.x - from.x.floor())
+                } else {
+                    from.x - from.x.floor()
+                }),
+            delta.y
+                * (if step.y > 0 {
+                    1.0 - (from.y - from.y.floor())
+                } else {
+                    from.y - from.y.floor()
+                }),
+            delta.z
+                * (if step.z > 0 {
+                    1.0 - (from.z - from.z.floor())
+                } else {
+                    from.z - from.z.floor()
+                }),
+        );
+
+        while next.x <= 1.0 || next.y <= 1.0 || next.z <= 1.0 {
+            let block_direction = match (next.x, next.y, next.z) {
+                (x, y, z) if x < y && x < z => {
+                    block.0.x += step.x;
+                    next.x += delta.x;
+                    if step.x > 0 {
+                        BlockDirection::West
+                    } else {
+                        BlockDirection::East
+                    }
+                }
+                (_, y, z) if y < z => {
+                    block.0.y += step.y;
+                    next.y += delta.y;
+                    if step.y > 0 {
+                        BlockDirection::Down
+                    } else {
+                        BlockDirection::Up
+                    }
+                }
+                _ => {
+                    block.0.z += step.z;
+                    next.z += delta.z;
+                    if step.z > 0 {
+                        BlockDirection::North
+                    } else {
+                        BlockDirection::South
+                    }
+                }
+            };
+
+            let state = self.get_block_state(&block);
+            let hit = if include_fluids {
+                !state.is_air()
+            } else {
+                !state.is_air() && !state.is_liquid()
+            };
+
+            if hit {
+                if let Some((dir, hit_pos)) = self.ray_outline_check_detailed(&block, from, to) {
+                    return Some((block, dir, hit_pos));
+                }
+                let block_min = block.0.to_f64();
+                let block_max = block_min.add_raw(1.0, 1.0, 1.0);
+                if let Some((_, dir, hit_pos)) =
+                    Self::intersects_aabb_with_hit(from, to, block_min, block_max)
+                {
+                    return Some((block, dir, hit_pos));
+                }
+                return Some((block, block_direction, to));
             }
         }
 
-        (false, None)
+        None
+    }
+
+    pub fn ray_trace_entities(
+        &self,
+        start: Vector3<f64>,
+        end: Vector3<f64>,
+    ) -> Vec<(Arc<dyn EntityBase>, Vector3<f64>, f64)> {
+        if start == end {
+            return Vec::new();
+        }
+
+        let min_x = start.x.min(end.x) - 1.0;
+        let max_x = start.x.max(end.x) + 1.0;
+        let min_y = start.y.min(end.y) - 1.0;
+        let max_y = start.y.max(end.y) + 1.0;
+        let min_z = start.z.min(end.z) - 1.0;
+        let max_z = start.z.max(end.z) + 1.0;
+        let ray_box = BoundingBox::new(
+            Vector3::new(min_x, min_y, min_z),
+            Vector3::new(max_x, max_y, max_z),
+        );
+
+        let mut hits = Vec::new();
+
+        for entity in self.entities.load().iter() {
+            let bb = entity.get_entity().bounding_box.load();
+            if bb.intersects(&ray_box)
+                && let Some((t, _, hit_pos)) =
+                    Self::intersects_aabb_with_hit(start, end, bb.min, bb.max)
+            {
+                let distance = (hit_pos - start).length();
+                hits.push((entity.clone(), hit_pos, distance, t));
+            }
+        }
+
+        for player in self.players.load().iter() {
+            let bb = player.get_entity().bounding_box.load();
+            if bb.intersects(&ray_box)
+                && let Some((t, _, hit_pos)) =
+                    Self::intersects_aabb_with_hit(start, end, bb.min, bb.max)
+            {
+                let distance = (hit_pos - start).length();
+                hits.push((player.clone() as Arc<dyn EntityBase>, hit_pos, distance, t));
+            }
+        }
+
+        hits.sort_by(|a, b| a.3.partial_cmp(&b.3).unwrap_or(std::cmp::Ordering::Equal));
+        hits.into_iter()
+            .map(|(ent, hit_pos, dist, _)| (ent, hit_pos, dist))
+            .collect()
+    }
+
+    pub fn ray_trace_entity(
+        &self,
+        start: Vector3<f64>,
+        end: Vector3<f64>,
+    ) -> Option<(Arc<dyn EntityBase>, Vector3<f64>, f64)> {
+        self.ray_trace_entities(start, end).into_iter().next()
     }
 
     pub async fn raycast(

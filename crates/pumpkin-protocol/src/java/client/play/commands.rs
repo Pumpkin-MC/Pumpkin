@@ -262,13 +262,22 @@ impl ArgumentType {
 
     #[must_use]
     #[expect(clippy::match_same_arms)]
-    pub const fn legacy_identifier_name(&self) -> (&'static str, bool) {
+    pub fn legacy_identifier_name_for_version(
+        &self,
+        version: &JavaMinecraftVersion,
+    ) -> (&'static str, bool) {
         match self {
             Self::Bool => ("brigadier:bool", false),
             Self::Float { .. } => ("brigadier:float", false),
             Self::Double { .. } => ("brigadier:double", false),
             Self::Integer { .. } => ("brigadier:integer", false),
-            Self::Long { .. } => ("brigadier:long", false),
+            Self::Long { .. } => {
+                if *version >= JavaMinecraftVersion::V_1_14 {
+                    ("brigadier:long", false)
+                } else {
+                    ("brigadier:integer", false)
+                }
+            }
             Self::String(_) => ("brigadier:string", true),
             Self::Entity { .. } => ("minecraft:entity", false),
             Self::GameProfile => ("minecraft:game_profile", false),
@@ -283,14 +292,32 @@ impl ArgumentType {
             Self::Color => ("minecraft:color", false),
             Self::Component => ("minecraft:component", false),
             Self::Message => ("minecraft:message", false),
-            Self::NbtCompound => ("minecraft:nbt_compound_tag", false),
-            Self::NbtTag => ("minecraft:nbt_tag", false),
+            Self::NbtCompound => {
+                if *version >= JavaMinecraftVersion::V_1_14 {
+                    ("minecraft:nbt_compound_tag", false)
+                } else {
+                    ("minecraft:nbt", false)
+                }
+            }
+            Self::NbtTag => {
+                if *version >= JavaMinecraftVersion::V_1_14 {
+                    ("minecraft:nbt_tag", false)
+                } else {
+                    ("minecraft:nbt", false)
+                }
+            }
             Self::NbtPath => ("minecraft:nbt_path", false),
             Self::Objective => ("minecraft:objective", false),
             Self::ObjectiveCriteria => ("minecraft:objective_criteria", false),
             Self::Operation => ("minecraft:operation", false),
             Self::Particle => ("minecraft:particle", false),
-            Self::Angle => ("minecraft:angle", false),
+            Self::Angle => {
+                if *version >= JavaMinecraftVersion::V_1_16 {
+                    ("minecraft:angle", false)
+                } else {
+                    ("brigadier:string", true)
+                }
+            }
             Self::Rotation => ("minecraft:rotation", false),
             Self::ScoreboardSlot => ("minecraft:scoreboard_slot", false),
             Self::ScoreHolder { .. } => ("minecraft:score_holder", false),
@@ -301,15 +328,44 @@ impl ArgumentType {
             Self::Function => ("minecraft:function", false),
             Self::EntityAnchor => ("minecraft:entity_anchor", false),
             Self::IntRange => ("minecraft:int_range", false),
-            Self::FloatRange => ("minecraft:float_range", false),
+            Self::FloatRange => {
+                if *version >= JavaMinecraftVersion::V_1_14 {
+                    ("minecraft:float_range", false)
+                } else {
+                    ("brigadier:string", true)
+                }
+            }
             Self::Dimension => ("minecraft:dimension", false),
-            Self::Gamemode => ("minecraft:gamemode", false),
-            Self::Time { .. } => ("minecraft:time", false),
-            Self::TemplateMirror => ("minecraft:template_mirror", false),
-            Self::TemplateRotation => ("minecraft:template_rotation", false),
-            Self::Uuid => ("minecraft:uuid", false),
+            Self::Gamemode => ("brigadier:string", true),
+            Self::Time { .. } => {
+                if *version >= JavaMinecraftVersion::V_1_14 {
+                    ("minecraft:time", false)
+                } else {
+                    ("brigadier:string", true)
+                }
+            }
+            Self::TemplateMirror => {
+                if *version >= JavaMinecraftVersion::V_1_19 {
+                    ("minecraft:template_mirror", false)
+                } else {
+                    ("brigadier:string", true)
+                }
+            }
+            Self::TemplateRotation => {
+                if *version >= JavaMinecraftVersion::V_1_19 {
+                    ("minecraft:template_rotation", false)
+                } else {
+                    ("brigadier:string", true)
+                }
+            }
+            Self::Uuid if *version >= JavaMinecraftVersion::V_1_16 => ("minecraft:uuid", false),
             _ => ("brigadier:string", true),
         }
+    }
+
+    #[must_use]
+    pub fn legacy_identifier_name(&self) -> (&'static str, bool) {
+        self.legacy_identifier_name_for_version(&JavaMinecraftVersion::V_1_18_2)
     }
 
     #[expect(clippy::match_same_arms)]
@@ -356,7 +412,8 @@ impl ArgumentType {
                 _ => Ok(()),
             }
         } else {
-            let (identifier, is_remapped_to_string) = self.legacy_identifier_name();
+            let (identifier, is_remapped_to_string) =
+                self.legacy_identifier_name_for_version(version);
             write.write_string(identifier)?;
             if is_remapped_to_string {
                 let behavior_val = match self {
@@ -372,7 +429,15 @@ impl ArgumentType {
                 Self::Float { min, max } => Self::write_number_arg(*min, *max, write),
                 Self::Double { min, max } => Self::write_number_arg(*min, *max, write),
                 Self::Integer { min, max } => Self::write_number_arg(*min, *max, write),
-                Self::Long { min, max } => Self::write_number_arg(*min, *max, write),
+                Self::Long { min, max } => {
+                    if *version >= JavaMinecraftVersion::V_1_14 {
+                        Self::write_number_arg(*min, *max, write)
+                    } else {
+                        let min_i32 = min.map(|v| v.clamp(i32::MIN as i64, i32::MAX as i64) as i32);
+                        let max_i32 = max.map(|v| v.clamp(i32::MIN as i64, i32::MAX as i64) as i32);
+                        Self::write_number_arg(min_i32, max_i32, write)
+                    }
+                }
                 Self::Entity { flags } => Self::write_with_flags(*flags, write),
                 Self::ScoreHolder { flags } => Self::write_with_flags(*flags, write),
                 Self::Time { .. } => Ok(()),

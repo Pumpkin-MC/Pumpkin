@@ -4,7 +4,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use crossbeam::atomic::AtomicCell;
 
 use crate::entity::player::Player;
-use crate::entity::{Entity, EntityBase, EntityBaseFuture, NBTStorage, living::LivingEntity};
+use crate::entity::{Entity, EntityBase, EntityBaseFuture, living::LivingEntity};
 use crate::server::Server;
 
 use pumpkin_data::damage::DamageType;
@@ -50,8 +50,6 @@ impl BoatEntity {
         self.vehicle.send_wobble_metadata();
     }
 }
-
-impl NBTStorage for BoatEntity {}
 
 impl EntityBase for BoatEntity {
     fn get_entity(&self) -> &Entity {
@@ -150,11 +148,6 @@ impl EntityBase for BoatEntity {
             self.set_paddles(left, right);
         })
     }
-
-    fn as_nbt_storage(&self) -> &dyn NBTStorage {
-        self
-    }
-
     fn cast_any(&self) -> &dyn std::any::Any {
         self
     }

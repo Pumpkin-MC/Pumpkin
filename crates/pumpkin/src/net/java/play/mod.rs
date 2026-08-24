@@ -60,7 +60,7 @@ use pumpkin_protocol::java::client::play::{
     CBlockUpdate, CCommandSuggestions, CEntityPositionSync, CHeadRot, COpenSignEditor,
     CPingResponse, CPlayerInfoUpdate, CPlayerPosition, CSetCamera, CSetSelectedSlot,
     CSystemChatMessage, CUpdateEntityPos, CUpdateEntityPosRot, CUpdateEntityRot, InitChat,
-    PlayerAction,
+    PlayerAction, PlayerInfoFlags,
 };
 use pumpkin_protocol::java::server::play::{
     Action, ActionType, CommandBlockMode, FLAG_ON_GROUND, SAttack, SBundleItemSelected,
@@ -219,7 +219,9 @@ impl PumpkinError for ChatError {
 
 pub mod attack;
 pub mod bundle_item_selected;
+pub mod change_difficulty;
 pub mod change_game_mode;
+pub mod chat_ack;
 pub mod chat_command;
 pub mod chat_message;
 pub mod chunk_batch;
@@ -257,6 +259,7 @@ pub mod recipe_book_seen_recipe;
 pub mod resource_pack_response;
 pub mod seen_advancement;
 pub mod select_trade;
+pub mod set_beacon;
 pub mod set_command_block;
 pub mod set_command_minecart;
 pub mod set_creative_slot;

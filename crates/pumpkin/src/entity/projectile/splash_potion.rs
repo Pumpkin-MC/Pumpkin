@@ -2,7 +2,7 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 
 use crate::{
-    entity::{Entity, EntityBase, EntityBaseFuture, NBTStorage, projectile::ThrownItemEntity},
+    entity::{Entity, EntityBase, EntityBaseFuture, projectile::ThrownItemEntity},
     server::Server,
 };
 use pumpkin_data::item_stack::ItemStack;
@@ -52,8 +52,6 @@ impl SplashPotionEntity {
         *write = item_stack;
     }
 }
-
-impl NBTStorage for SplashPotionEntity {}
 
 fn is_water_potion(stack: &ItemStack) -> bool {
     stack
@@ -134,11 +132,6 @@ impl EntityBase for SplashPotionEntity {
     fn get_living_entity(&self) -> Option<&crate::entity::living::LivingEntity> {
         None
     }
-
-    fn as_nbt_storage(&self) -> &dyn NBTStorage {
-        self
-    }
-
     fn cast_any(&self) -> &dyn std::any::Any {
         self
     }

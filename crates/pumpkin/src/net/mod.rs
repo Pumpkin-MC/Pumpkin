@@ -253,9 +253,19 @@ impl ClientPlatform {
     pub fn try_enqueue_spawn_packet(&self, entity: &Arc<dyn crate::entity::EntityBase>) {
         match self {
             Self::Java(java) => {
-                let packet = entity.get_entity().create_spawn_packet();
-                if let Ok(data) = java.serialize_packet(&packet) {
-                    java.try_enqueue_packet(data);
+                let ent = entity.get_entity();
+                let version = java.version.load();
+                let is_mob = ent.entity_type.mob || entity.get_mob().is_some();
+                if version < JavaMinecraftVersion::V_1_19 && is_mob {
+                    let packet = ent.create_spawn_living_packet(None);
+                    if let Ok(data) = java.serialize_packet(&packet) {
+                        java.try_enqueue_packet(data);
+                    }
+                } else {
+                    let packet = ent.create_spawn_packet();
+                    if let Ok(data) = java.serialize_packet(&packet) {
+                        java.try_enqueue_packet(data);
+                    }
                 }
             }
             Self::Bedrock(bedrock) => bedrock.enqueue_spawn_packet(entity.clone()),
@@ -391,6 +401,10 @@ pub enum EncryptionError {
     SharedWrongLength,
     #[error("encryption is already enabled")]
     AlreadyEncrypted,
+    #[error("no encryption request is pending")]
+    NoPendingVerifyToken,
+    #[error("verify token does not match")]
+    VerifyTokenMismatch,
 }
 
 fn is_valid_player_name(name: &str) -> bool {

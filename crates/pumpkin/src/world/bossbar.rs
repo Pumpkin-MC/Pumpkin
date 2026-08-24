@@ -1,8 +1,13 @@
 use crate::entity::player::Player;
 use crate::net::ClientPlatform;
 use bitflags::bitflags;
-use pumpkin_protocol::bedrock::client::boss_event::{BossEventAction, CBossEvent as BBossEvent};
-use pumpkin_protocol::codec::var_int::VarInt;
+use pumpkin_protocol::bedrock::client::boss_event::{
+    BOSS_EVENT_COLOUR_BLUE, BOSS_EVENT_COLOUR_GREEN, BOSS_EVENT_COLOUR_PINK,
+    BOSS_EVENT_COLOUR_PURPLE, BOSS_EVENT_COLOUR_RED, BOSS_EVENT_COLOUR_WHITE,
+    BOSS_EVENT_COLOUR_YELLOW, BOSS_EVENT_OVERLAY_NOTCHED_6, BOSS_EVENT_OVERLAY_NOTCHED_10,
+    BOSS_EVENT_OVERLAY_NOTCHED_12, BOSS_EVENT_OVERLAY_NOTCHED_20, BOSS_EVENT_OVERLAY_PROGRESS,
+    CBossEvent as BBossEvent,
+};
 use pumpkin_protocol::codec::var_long::VarLong;
 use pumpkin_protocol::java::client::play::{BosseventAction, CBossEvent};
 use pumpkin_util::text::TextComponent;
@@ -21,15 +26,15 @@ pub enum BossbarColor {
 
 impl BossbarColor {
     #[must_use]
-    pub const fn to_bedrock(self) -> VarInt {
+    pub const fn to_bedrock(self) -> u8 {
         match self {
-            Self::Pink => VarInt(0),
-            Self::Blue => VarInt(1),
-            Self::Red => VarInt(2),
-            Self::Green => VarInt(3),
-            Self::Yellow => VarInt(4),
-            Self::Purple => VarInt(5),
-            Self::White => VarInt(6),
+            Self::Pink => BOSS_EVENT_COLOUR_PINK,
+            Self::Blue => BOSS_EVENT_COLOUR_BLUE,
+            Self::Red => BOSS_EVENT_COLOUR_RED,
+            Self::Green => BOSS_EVENT_COLOUR_GREEN,
+            Self::Yellow => BOSS_EVENT_COLOUR_YELLOW,
+            Self::Purple => BOSS_EVENT_COLOUR_PURPLE,
+            Self::White => BOSS_EVENT_COLOUR_WHITE,
         }
     }
 }
@@ -45,13 +50,13 @@ pub enum BossbarDivisions {
 
 impl BossbarDivisions {
     #[must_use]
-    pub const fn to_bedrock(self) -> VarInt {
+    pub const fn to_bedrock(self) -> u8 {
         match self {
-            Self::NoDivision => VarInt(0),
-            Self::Notches6 => VarInt(1),
-            Self::Notches10 => VarInt(2),
-            Self::Notches12 => VarInt(3),
-            Self::Notches20 => VarInt(4),
+            Self::NoDivision => BOSS_EVENT_OVERLAY_PROGRESS,
+            Self::Notches6 => BOSS_EVENT_OVERLAY_NOTCHED_6,
+            Self::Notches10 => BOSS_EVENT_OVERLAY_NOTCHED_10,
+            Self::Notches12 => BOSS_EVENT_OVERLAY_NOTCHED_12,
+            Self::Notches20 => BOSS_EVENT_OVERLAY_NOTCHED_20,
         }
     }
 }
@@ -91,6 +96,14 @@ impl Bossbar {
     }
 }
 
+#[inline]
+#[must_use]
+pub const fn bossbar_bedrock_id(uuid: &Uuid) -> VarLong {
+    let (high, low) = uuid.as_u64_pair();
+    let id = (high ^ low) & 0x7FFF_FFFF_FFFF_FFFF;
+    VarLong(id as i64)
+}
+
 /// Extra methods for [`Player`] to send and manage the bossbar.
 impl Player {
     pub async fn send_bossbar(&self, bossbar: &Bossbar) {
@@ -108,16 +121,20 @@ impl Player {
                 java.enqueue_client_packet(&packet).await;
             }
             ClientPlatform::Bedrock(bedrock) => {
-                let packet = BBossEvent {
-                    boss_entity_id: VarLong(bossbar.uuid.as_u128() as i64),
-                    action: BossEventAction::Add {
-                        title: bossbar.title.clone().get_text(),
-                        health_percent: bossbar.health,
-                        color: bossbar.color.to_bedrock(),
-                        overlay: bossbar.division.to_bedrock(),
-                    },
-                };
+                let boss_id = bossbar_bedrock_id(&bossbar.uuid);
+                let player_id = VarLong(self.entity_id() as i64);
+                let packet = BBossEvent::show(
+                    boss_id,
+                    player_id,
+                    bossbar.title.clone().get_text(),
+                    bossbar.health,
+                    bossbar.color.to_bedrock(),
+                    bossbar.division.to_bedrock(),
+                );
                 bedrock.send_packet(&packet).await;
+
+                let register_packet = BBossEvent::register_player(boss_id, player_id);
+                bedrock.send_packet(&register_packet).await;
             }
         }
     }
@@ -131,10 +148,12 @@ impl Player {
                 java.enqueue_client_packet(&packet).await;
             }
             ClientPlatform::Bedrock(bedrock) => {
-                let packet = BBossEvent {
-                    boss_entity_id: VarLong(uuid.as_u128() as i64),
-                    action: BossEventAction::Remove,
-                };
+                let boss_id = bossbar_bedrock_id(&uuid);
+                let player_id = VarLong(self.entity_id() as i64);
+                let unregister_packet = BBossEvent::unregister_player(boss_id, player_id);
+                bedrock.send_packet(&unregister_packet).await;
+
+                let packet = BBossEvent::hide(boss_id);
                 bedrock.send_packet(&packet).await;
             }
         }
@@ -149,10 +168,8 @@ impl Player {
                 java.enqueue_client_packet(&packet).await;
             }
             ClientPlatform::Bedrock(bedrock) => {
-                let packet = BBossEvent {
-                    boss_entity_id: VarLong(uuid.as_u128() as i64),
-                    action: BossEventAction::UpdateHealth(health),
-                };
+                let boss_id = bossbar_bedrock_id(uuid);
+                let packet = BBossEvent::update_health(boss_id, health);
                 bedrock.send_packet(&packet).await;
             }
         }
@@ -167,10 +184,8 @@ impl Player {
                 java.enqueue_client_packet(&packet).await;
             }
             ClientPlatform::Bedrock(bedrock) => {
-                let packet = BBossEvent {
-                    boss_entity_id: VarLong(uuid.as_u128() as i64),
-                    action: BossEventAction::UpdateTitle(title.get_text()),
-                };
+                let boss_id = bossbar_bedrock_id(uuid);
+                let packet = BBossEvent::update_title(boss_id, title.get_text());
                 bedrock.send_packet(&packet).await;
             }
         }
@@ -194,13 +209,12 @@ impl Player {
                 java.enqueue_client_packet(&packet).await;
             }
             ClientPlatform::Bedrock(bedrock) => {
-                let packet = BBossEvent {
-                    boss_entity_id: VarLong(uuid.as_u128() as i64),
-                    action: BossEventAction::UpdateProperties {
-                        color: color.to_bedrock(),
-                        overlay: dividers.to_bedrock(),
-                    },
-                };
+                let boss_id = bossbar_bedrock_id(uuid);
+                let packet = BBossEvent::update_properties(
+                    boss_id,
+                    color.to_bedrock(),
+                    dividers.to_bedrock(),
+                );
                 bedrock.send_packet(&packet).await;
             }
         }
@@ -215,18 +229,8 @@ impl Player {
                 java.enqueue_client_packet(&packet).await;
             }
             ClientPlatform::Bedrock(bedrock) => {
-                // For Bedrock, flags are part of properties (screen darken)
-                // We don't have color and dividers here, so we might need more info or just skip if not critical
-                // Actually, properties includes screen_darken, color, and overlay.
-                // Since this method only has flags, we might need to store the current color/division on the player
-                // or retrieve them from the bossbar if we had a reference to it.
-                let packet = BBossEvent {
-                    boss_entity_id: VarLong(uuid.as_u128() as i64),
-                    action: BossEventAction::UpdateProperties {
-                        color: VarInt(0),
-                        overlay: VarInt(0),
-                    },
-                };
+                let boss_id = bossbar_bedrock_id(uuid);
+                let packet = BBossEvent::update_properties(boss_id, 0, 0);
                 bedrock.send_packet(&packet).await;
             }
         }

@@ -4,8 +4,7 @@ use std::sync::atomic::AtomicBool;
 use crate::plugin::player::egg_throw::PlayerEggThrowEvent;
 use crate::{
     entity::{
-        Entity, EntityBase, EntityBaseFuture, NBTStorage, projectile::ThrownItemEntity,
-        r#type::from_type,
+        Entity, EntityBase, EntityBaseFuture, projectile::ThrownItemEntity, r#type::from_type,
     },
     server::Server,
 };
@@ -63,8 +62,6 @@ impl EggEntity {
     }
 }
 
-impl NBTStorage for EggEntity {}
-
 impl EntityBase for EggEntity {
     fn init_data_tracker(&self) -> EntityBaseFuture<'_, ()> {
         Box::pin(async move {
@@ -97,11 +94,6 @@ impl EntityBase for EggEntity {
     fn get_living_entity(&self) -> Option<&crate::entity::living::LivingEntity> {
         None
     }
-
-    fn as_nbt_storage(&self) -> &dyn NBTStorage {
-        self
-    }
-
     fn on_hit(&self, hit: crate::entity::projectile::ProjectileHit) -> EntityBaseFuture<'_, ()> {
         Box::pin(async move {
             let world = self.get_entity().world.load();

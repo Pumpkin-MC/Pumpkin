@@ -12,7 +12,7 @@ use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::java::client::play::Metadata;
 
 use crate::entity::{
-    Entity, EntityBase, EntityBaseFuture, NBTStorage, NbtFuture,
+    Entity, EntityBase, EntityBaseFuture, NbtFuture,
     ageable::{AgeableData, AgeableMob},
     ai::goal::{
         look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal, swim::SwimGoal,
@@ -118,31 +118,6 @@ impl AgeableMob for HappyGhastEntity {
     }
 }
 
-impl NBTStorage for HappyGhastEntity {
-    fn write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
-        Box::pin(async move {
-            self.mob_entity.living_entity.write_nbt(nbt).await;
-            self.write_ageable_nbt(nbt);
-            self.write_animal_nbt(nbt);
-            nbt.put_int(
-                "still_timeout",
-                self.server_still_timeout.load(Ordering::Relaxed),
-            );
-        })
-    }
-
-    fn read_nbt_non_mut<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
-        Box::pin(async move {
-            self.mob_entity.living_entity.read_nbt_non_mut(nbt).await;
-            self.read_ageable_nbt(nbt);
-            self.read_animal_nbt(nbt);
-            if let Some(timeout) = nbt.get_int("still_timeout") {
-                self.set_server_still_timeout(timeout);
-            }
-        })
-    }
-}
-
 impl Animal for HappyGhastEntity {
     fn is_food(&self, item_stack: &ItemStack) -> bool {
         item_stack
@@ -153,6 +128,31 @@ impl Animal for HappyGhastEntity {
 }
 
 impl Mob for HappyGhastEntity {
+    fn as_ageable(&self) -> Option<&dyn AgeableMob> {
+        Some(self)
+    }
+
+    fn as_animal(&self) -> Option<&dyn Animal> {
+        Some(self)
+    }
+
+    fn mob_write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
+        Box::pin(async move {
+            nbt.put_int(
+                "still_timeout",
+                self.server_still_timeout.load(Ordering::Relaxed),
+            );
+        })
+    }
+
+    fn mob_read_nbt<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
+        Box::pin(async move {
+            if let Some(timeout) = nbt.get_int("still_timeout") {
+                self.set_server_still_timeout(timeout);
+            }
+        })
+    }
+
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
     }

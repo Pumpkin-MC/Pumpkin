@@ -222,7 +222,7 @@ impl CommandExecutor for PlaceJigsawExecutor {
                     false,
                     false,
                     &MaxDistance::new(128),
-                    &DimensionPadding::ZERO,
+                    DimensionPadding::ZERO,
                     LiquidSettings::ApplyWaterlog,
                     &PoolAliasLookup::default(),
                 )
@@ -241,7 +241,7 @@ impl CommandExecutor for PlaceJigsawExecutor {
                     if let Some(jigsaw_piece) =
                         piece.as_any().downcast_ref::<PoolElementStructurePiece>()
                     {
-                        place_pool_element_templates(jigsaw_piece, &mut placer, None);
+                        place_pool_element_templates(jigsaw_piece, &mut placer, None, false);
                     }
                 }
 
@@ -312,7 +312,9 @@ impl CommandExecutor for PlaceStructureExecutor {
                             .create_without_context(TextComponent::text(structure_name.clone()))
                     })?;
 
-                    let random = RandomGenerator::Legacy(LegacyRand::from_seed(seed));
+                    let mut random = RandomGenerator::Legacy(LegacyRand::from_seed(seed));
+                    let pool_alias_lookup =
+                        PoolAliasLookup::from_bindings(structure.pool_aliases, &mut random);
 
                     let position = JigsawPlacement::add_pieces(
                         &mut StructureGeneratorContext {
@@ -332,9 +334,9 @@ impl CommandExecutor for PlaceStructureExecutor {
                         structure.use_expansion_hack.unwrap_or(false),
                         structure.project_start_to_heightmap.is_some(),
                         &MaxDistance::new(structure.max_distance_from_center.unwrap_or(128)),
-                        &DimensionPadding::ZERO,
+                        DimensionPadding::ZERO,
                         LiquidSettings::ApplyWaterlog,
-                        &PoolAliasLookup::default(),
+                        &pool_alias_lookup,
                     )
                     .ok_or_else(|| {
                         JIGSAW_FAILED
@@ -352,7 +354,7 @@ impl CommandExecutor for PlaceStructureExecutor {
                         if let Some(jigsaw_piece) =
                             piece.as_any().downcast_ref::<PoolElementStructurePiece>()
                         {
-                            place_pool_element_templates(jigsaw_piece, &mut placer, None);
+                            place_pool_element_templates(jigsaw_piece, &mut placer, None, false);
                         }
                     }
 
@@ -392,7 +394,7 @@ impl CommandExecutor for PlaceStructureExecutor {
                         if let Some(jigsaw_piece) =
                             piece.as_any().downcast_ref::<PoolElementStructurePiece>()
                         {
-                            place_pool_element_templates(jigsaw_piece, &mut placer, None);
+                            place_pool_element_templates(jigsaw_piece, &mut placer, None, false);
                         }
                     }
 

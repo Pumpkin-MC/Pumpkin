@@ -597,7 +597,7 @@ impl Completer for PumpkinCommandCompleter {
                             candidates.push(string.clone());
                         }
                     }
-                    NodeType::Argument { name, consumer } => {
+                    NodeType::Argument { name, consumer, .. } => {
                         let suggest_future = consumer.suggest(&src, server, typing);
 
                         if let Ok(Some(suggestions)) = suggest_future.await {

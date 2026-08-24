@@ -252,6 +252,9 @@ impl BlockId {
     // depends on generated impl:
     // pub(crate) const BLOCK_COUNT: u16;
 
+    /// The total count of all registered blocks.
+    pub const COUNT: u16 = Self::BLOCK_COUNT;
+
     // SAFETY: There must never be a BlockId where self.0 >= BlockId::BLOCK_COUNT
 
     #[inline]

@@ -77,7 +77,7 @@ impl ClientPacket for CPlayerPosition {
             write.write_f64_be(self.position.z)?;
             write.write_f32_be(self.yaw)?;
             write.write_f32_be(self.pitch)?;
-            if version >= &JavaMinecraftVersion::V_1_9 {
+            if version >= &JavaMinecraftVersion::V_1_8 {
                 // Relative flags added in 1.8
                 write.write_u8(PositionFlag::get_bitfield(self.relatives.as_slice()) as u8)?;
             } else {
@@ -128,7 +128,13 @@ impl<'a> ServerPacket<'a> for CPlayerPosition {
             let z = read.get_f64_be()?;
             let yaw = read.get_f32_be()?;
             let pitch = read.get_f32_be()?;
-            let relatives_bits = i32::from(read.get_u8()?);
+            let relatives = if version >= &JavaMinecraftVersion::V_1_8 {
+                let relatives_bits = i32::from(read.get_u8()?);
+                PositionFlag::from_bitfield(relatives_bits)
+            } else {
+                let _on_ground = read.get_bool()?;
+                Vec::new()
+            };
             let teleport_id = if version >= &JavaMinecraftVersion::V_1_9 {
                 read.get_var_int()?
             } else {
@@ -143,7 +149,7 @@ impl<'a> ServerPacket<'a> for CPlayerPosition {
                 delta: Vector3::new(0.0, 0.0, 0.0),
                 yaw,
                 pitch,
-                relatives: PositionFlag::from_bitfield(relatives_bits),
+                relatives,
             })
         }
     }

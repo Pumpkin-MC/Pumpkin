@@ -3,7 +3,7 @@ use std::sync::atomic::AtomicBool;
 
 use crate::entity::projectile::splash_potion::extinguish_fire_if_water_potion;
 use crate::{
-    entity::{Entity, EntityBase, EntityBaseFuture, NBTStorage, projectile::ThrownItemEntity},
+    entity::{Entity, EntityBase, EntityBaseFuture, projectile::ThrownItemEntity},
     server::Server,
 };
 use pumpkin_data::entity::EntityStatus;
@@ -61,8 +61,6 @@ impl LingeringPotionEntity {
     }
 }
 
-impl NBTStorage for LingeringPotionEntity {}
-
 impl EntityBase for LingeringPotionEntity {
     fn init_data_tracker(&self) -> EntityBaseFuture<'_, ()> {
         Box::pin(async move {
@@ -97,11 +95,6 @@ impl EntityBase for LingeringPotionEntity {
     fn get_living_entity(&self) -> Option<&crate::entity::living::LivingEntity> {
         None
     }
-
-    fn as_nbt_storage(&self) -> &dyn NBTStorage {
-        self
-    }
-
     fn cast_any(&self) -> &dyn std::any::Any {
         self
     }

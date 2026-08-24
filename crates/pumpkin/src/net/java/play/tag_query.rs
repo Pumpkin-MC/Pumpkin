@@ -1,5 +1,6 @@
 #[allow(clippy::wildcard_imports)]
 use super::*;
+use pumpkin_nbt::{Nbt, compound::NbtCompound};
 use pumpkin_protocol::java::{
     client::play::CTagQueryResponse,
     server::play::{SBlockEntityTagQuery, SEntityTagQuery},
@@ -15,9 +16,13 @@ impl JavaClient {
             return;
         }
 
-        // Empty NBT compound (TAG_End = 0)
-        let empty_nbt = [0u8];
-        self.send_packet(&CTagQueryResponse::new(packet.transaction_id, &empty_nbt))
+        let mut compound = NbtCompound::new();
+        if let Some(block_entity) = player.world().get_block_entity(&packet.location) {
+            block_entity.write_nbt(&mut compound).await;
+        }
+
+        let nbt_bytes = Nbt::new(String::new(), compound).write_unnamed();
+        self.send_packet(&CTagQueryResponse::new(packet.transaction_id, &nbt_bytes))
             .await;
     }
 
@@ -26,9 +31,13 @@ impl JavaClient {
             return;
         }
 
-        // Empty NBT compound (TAG_End = 0)
-        let empty_nbt = [0u8];
-        self.send_packet(&CTagQueryResponse::new(packet.transaction_id, &empty_nbt))
+        let mut compound = NbtCompound::new();
+        if let Some(entity) = player.world().get_entity_by_id(packet.entity_id.0) {
+            entity.write_nbt(&mut compound).await;
+        }
+
+        let nbt_bytes = Nbt::new(String::new(), compound).write_unnamed();
+        self.send_packet(&CTagQueryResponse::new(packet.transaction_id, &nbt_bytes))
             .await;
     }
 }

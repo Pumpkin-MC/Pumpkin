@@ -19,7 +19,7 @@ use std::sync::{
 };
 use tokio::sync::Mutex;
 
-use super::{Entity, EntityBase, NBTStorage};
+use super::{Entity, EntityBase};
 
 /// Maximum horizontal distance the eye will travel before signalling at an elevated height.
 const TOO_FAR_DISTANCE: f64 = 12.0;
@@ -118,8 +118,6 @@ fn lerp(t: f64, start: f64, end: f64) -> f64 {
     start + t * (end - start)
 }
 
-impl NBTStorage for EyeOfEnder {}
-
 impl EntityBase for EyeOfEnder {
     fn tick<'a>(
         &'a self,
@@ -212,11 +210,37 @@ impl EntityBase for EyeOfEnder {
         None
     }
 
-    fn as_nbt_storage(&self) -> &dyn NBTStorage {
+    fn cast_any(&self) -> &dyn std::any::Any {
         self
     }
 
-    fn cast_any(&self) -> &dyn std::any::Any {
-        self
+    fn send_java_spawn_packet<'a>(
+        &'a self,
+        client: &'a crate::net::java::JavaClient,
+    ) -> EntityBaseFuture<'a, ()> {
+        Box::pin(async move {
+            let spawn_packet = self.entity.create_spawn_packet();
+            if let Ok(data) = client.serialize_packet(&spawn_packet) {
+                client.enqueue_packet(data).await;
+            }
+
+            if client.version.load() >= pumpkin_data::packet::CURRENT_MC_VERSION {
+                let metadata = Metadata::new(
+                    pumpkin_data::tracked_data::eye_of_ender::ITEM_STACK,
+                    ItemStackSerializer::from(self.item_stack.lock().await.clone()),
+                );
+                let mut data = Vec::new();
+                if metadata.write(&mut data, &client.version.load()).is_ok() {
+                    data.push(255);
+                    let meta_packet = pumpkin_protocol::java::client::play::CSetEntityMetadata::new(
+                        self.entity.entity_id.into(),
+                        data.into(),
+                    );
+                    if let Ok(meta_data) = client.serialize_packet(&meta_packet) {
+                        client.enqueue_packet(meta_data).await;
+                    }
+                }
+            }
+        })
     }
 }

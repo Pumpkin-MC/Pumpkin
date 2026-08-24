@@ -1,4 +1,4 @@
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::too_many_lines)]
 
 use std::env;
 use std::fmt::Write;
@@ -13,6 +13,8 @@ fn main() {
         "
         #[allow(clippy::too_many_lines)]
         #[allow(clippy::match_same_arms)]
+        #[allow(clippy::missing_const_for_fn)]
+        #[allow(clippy::match_single_binding)]
         #[must_use]
         pub fn get_template_bytes(path: &str) -> Option<&'static [u8]> {\n    match path {\n",
     );
@@ -20,6 +22,8 @@ fn main() {
         "
         #[allow(clippy::too_many_lines)]
         #[allow(clippy::match_same_arms)]
+        #[allow(clippy::missing_const_for_fn)]
+        #[allow(clippy::match_single_binding)]
         #[must_use]
         pub fn get_pool_elements(pool_id: &str) -> Option<&'static [&'static str]> {\n    match pool_id {\n",
     );
@@ -27,6 +31,8 @@ fn main() {
         "
         #[allow(clippy::too_many_lines)]
         #[allow(clippy::match_same_arms)]
+        #[allow(clippy::missing_const_for_fn)]
+        #[allow(clippy::match_single_binding)]
         #[must_use]
         pub fn get_template_pool_json(path: &str) -> Option<&'static str> {\n    match path {\n",
     );
@@ -34,18 +40,21 @@ fn main() {
         "
         #[allow(clippy::too_many_lines)]
         #[allow(clippy::match_same_arms)]
+        #[allow(clippy::missing_const_for_fn)]
+        #[allow(clippy::match_single_binding)]
         #[must_use]
         pub fn get_processor_list_json(path: &str) -> Option<&'static str> {\n    match path {\n",
     );
 
     let manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
-    let assets_dir = Path::new(&manifest_dir).join("assets/structures");
+    let datapack_dir = Path::new(&manifest_dir).join("../../assets/datapacks/26_2/data/minecraft");
+    let structures_dir = datapack_dir.join("structure");
     let mut all_template_names: Vec<String> = Vec::new();
     let mut all_pool_names: Vec<String> = Vec::new();
-    if assets_dir.exists() {
+    if structures_dir.exists() {
         let mut pools = std::collections::BTreeMap::new();
         process_dir(
-            &assets_dir,
+            &structures_dir,
             "",
             &mut code,
             &mut pools,
@@ -89,7 +98,7 @@ fn main() {
     pool_code.push_str("        _ => None,\n");
     pool_code.push_str("    }\n}\n");
 
-    let worldgen_dir = Path::new(&manifest_dir).join("assets/worldgen");
+    let worldgen_dir = datapack_dir.join("worldgen");
     process_json_dir(
         &worldgen_dir.join("template_pool"),
         "",
@@ -112,8 +121,13 @@ fn main() {
         format!("{code}\n{pool_code}\n{template_pool_json_code}\n{processor_list_json_code}"),
     )
     .unwrap();
-    println!("cargo:rerun-if-changed=assets/structures");
-    println!("cargo:rerun-if-changed=assets/worldgen");
+    println!("cargo:rerun-if-changed=../../assets/datapacks/26_2/data/minecraft/structure");
+    println!(
+        "cargo:rerun-if-changed=../../assets/datapacks/26_2/data/minecraft/worldgen/template_pool"
+    );
+    println!(
+        "cargo:rerun-if-changed=../../assets/datapacks/26_2/data/minecraft/worldgen/processor_list"
+    );
 }
 
 fn process_dir(
@@ -123,8 +137,13 @@ fn process_dir(
     pools: &mut std::collections::BTreeMap<String, Vec<String>>,
     names: &mut Vec<String>,
 ) {
-    for entry in fs::read_dir(dir).unwrap() {
-        let entry = entry.unwrap();
+    let mut entries = fs::read_dir(dir)
+        .unwrap()
+        .map(Result::unwrap)
+        .collect::<Vec<_>>();
+    entries.sort_by_key(std::fs::DirEntry::file_name);
+
+    for entry in entries {
         let path = entry.path();
         let name = entry.file_name().into_string().unwrap();
 

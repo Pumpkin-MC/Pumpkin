@@ -54,7 +54,8 @@ use pumpkin_protocol::{
     codec::var_ulong::VarULong,
     java::client::play::{
         CEntityPositionSync, CEntityVelocity, CHeadRot, CPlayerPosition, CSetEntityMetadata,
-        CSetPassengers, CSpawnEntity, CUpdateEntityRot, Metadata, MetadataSerializer,
+        CSetPassengers, CSpawnEntity, CSpawnLivingEntity, CUpdateEntityRot, Metadata,
+        MetadataSerializer,
     },
 };
 use pumpkin_util::math::vector3::Axis;
@@ -68,6 +69,7 @@ use pumpkin_util::math::{
 };
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::hover::HoverEvent;
+use pumpkin_util::version::JavaMinecraftVersion;
 use std::collections::{BTreeMap, HashSet};
 use std::pin::Pin;
 use std::sync::{
@@ -134,7 +136,34 @@ pub type EntityBaseFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 
 pub type TeleportFuture = Pin<Box<dyn Future<Output = ()> + Send>>;
 
-pub trait EntityBase: Send + Sync + NBTStorage + std::any::Any {
+pub trait EntityBase: Send + Sync + std::any::Any {
+    fn write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
+        Box::pin(async move {
+            self.get_entity().write_nbt(nbt).await;
+            if let Some(living) = self.get_living_entity() {
+                living.write_living_nbt(nbt).await;
+            }
+            self.write_custom_nbt(nbt).await;
+        })
+    }
+
+    fn write_custom_nbt<'a>(&'a self, _nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
+        Box::pin(async {})
+    }
+
+    fn read_nbt_non_mut<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
+        Box::pin(async move {
+            self.get_entity().read_nbt_non_mut(nbt).await;
+            if let Some(living) = self.get_living_entity() {
+                living.read_living_nbt_non_mut(nbt).await;
+            }
+            self.read_custom_nbt(nbt).await;
+        })
+    }
+
+    fn read_custom_nbt<'a>(&'a self, _nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
+        Box::pin(async {})
+    }
     /// Called every tick for this entity.
     ///
     /// The `caller` parameter is a reference to the entity that initiated the tick.
@@ -341,17 +370,39 @@ pub trait EntityBase: Send + Sync + NBTStorage + std::any::Any {
 
     fn send_java_spawn_packet<'a>(&'a self, client: &'a JavaClient) -> EntityBaseFuture<'a, ()> {
         Box::pin(async move {
-            let spawn_packet = self.get_entity().create_spawn_packet();
-            if let Ok(data) = client.serialize_packet(&spawn_packet) {
-                client.enqueue_packet(data).await;
-            }
-            if let Some(mob) = self.get_mob()
-                && let Some(metadata) = mob.mob_java_spawn_metadata(client.version.load()).await
-            {
-                let meta_packet =
-                    CSetEntityMetadata::new(self.get_entity().entity_id.into(), metadata);
-                if let Ok(meta_data) = client.serialize_packet(&meta_packet) {
-                    client.enqueue_packet(meta_data).await;
+            let entity = self.get_entity();
+            let version = client.version.load();
+            let is_mob = entity.entity_type.mob || self.get_mob().is_some();
+            if version < JavaMinecraftVersion::V_1_19 && is_mob {
+                let metadata = if let Some(mob) = self.get_mob() {
+                    mob.mob_java_spawn_metadata(version).await
+                } else {
+                    None
+                };
+                let spawn_packet = entity.create_spawn_living_packet(metadata.clone());
+                if let Ok(data) = client.serialize_packet(&spawn_packet) {
+                    client.enqueue_packet(data).await;
+                }
+                if version >= JavaMinecraftVersion::V_1_15
+                    && let Some(meta) = metadata
+                {
+                    let meta_packet = CSetEntityMetadata::new(entity.entity_id.into(), meta);
+                    if let Ok(meta_data) = client.serialize_packet(&meta_packet) {
+                        client.enqueue_packet(meta_data).await;
+                    }
+                }
+            } else {
+                let spawn_packet = entity.create_spawn_packet();
+                if let Ok(data) = client.serialize_packet(&spawn_packet) {
+                    client.enqueue_packet(data).await;
+                }
+                if let Some(mob) = self.get_mob()
+                    && let Some(metadata) = mob.mob_java_spawn_metadata(version).await
+                {
+                    let meta_packet = CSetEntityMetadata::new(entity.entity_id.into(), metadata);
+                    if let Ok(meta_data) = client.serialize_packet(&meta_packet) {
+                        client.enqueue_packet(meta_data).await;
+                    }
                 }
             }
         })
@@ -736,9 +787,6 @@ pub trait EntityBase: Send + Sync + NBTStorage + std::any::Any {
             }
         })
     }
-
-    /// Returns itself as the nbt storage for saving and loading data.
-    fn as_nbt_storage(&self) -> &dyn NBTStorage;
 
     fn get_experience_reward(&self, _killer: Option<&dyn EntityBase>) -> u32 {
         0
@@ -2645,6 +2693,22 @@ impl Entity {
             entity_vel,
         )
     }
+
+    pub fn create_spawn_living_packet(&self, metadata: Option<Box<[u8]>>) -> CSpawnLivingEntity {
+        let entity_loc = self.pos.load();
+        let entity_vel = self.velocity.load();
+        CSpawnLivingEntity::new(
+            VarInt(self.entity_id),
+            self.entity_uuid,
+            VarInt(i32::from(self.entity_type.id)),
+            entity_loc,
+            self.pitch.load(),
+            self.yaw.load(),
+            self.head_yaw.load(),
+            entity_vel,
+            metadata,
+        )
+    }
     pub fn width(&self) -> f32 {
         self.entity_dimension.load().width
     }
@@ -2708,6 +2772,7 @@ impl Entity {
 
     /// Sets whether the entity is invisible and sends updated metadata.
     #[expect(clippy::unused_async)]
+    #[allow(clippy::unused_async_trait_impl)]
     pub async fn set_invisible(&self, invisible: bool) {
         if self.invisible.load(Ordering::Relaxed) != invisible {
             self.invisible.store(invisible, Relaxed);
@@ -2717,6 +2782,7 @@ impl Entity {
 
     /// Sets whether the entity is glowing and sends updated metadata.
     #[expect(clippy::unused_async)]
+    #[allow(clippy::unused_async_trait_impl)]
     pub async fn set_glowing(&self, glowing: bool) {
         if self.glowing.load(Ordering::Relaxed) != glowing {
             self.glowing.store(glowing, Ordering::Relaxed);
@@ -2726,6 +2792,7 @@ impl Entity {
 
     /// Sets whether the entity is on fire for visual and damage purposes. This is separate from `fire_ticks` which tracks the damage aspect of being on fire.
     #[expect(clippy::unused_async)]
+    #[allow(clippy::unused_async_trait_impl)]
     pub async fn set_on_fire(&self, on_fire: bool) {
         if self.has_visual_fire.load(Ordering::Relaxed) != on_fire {
             self.has_visual_fire.store(on_fire, Ordering::Relaxed);
@@ -2987,11 +3054,9 @@ impl Entity {
                 },
                 tick: VarULong(0),
             };
-            if let Ok(packet_data) =
-                pumpkin_protocol::bedrock::packet_encoder::serialize_packet(&packet)
-            {
-                for recipient in bedrock_recipients {
-                    recipient.try_enqueue_packet(packet_data.clone());
+            for recipient in bedrock_recipients {
+                if let Ok(packet_data) = recipient.serialize_packet(&packet) {
+                    recipient.try_enqueue_packet(packet_data);
                 }
             }
         }
@@ -3202,6 +3267,7 @@ impl Entity {
         let je_packet = pumpkin_protocol::java::client::play::CSetEntityLink::new(
             self.entity_id,
             holder_entity.entity_id,
+            true,
         );
         let be_packet = pumpkin_protocol::bedrock::client::CSetActorLink {
             link: pumpkin_protocol::bedrock::client::common::EntityLink {
@@ -3230,7 +3296,7 @@ impl Entity {
         }
 
         let je_packet =
-            pumpkin_protocol::java::client::play::CSetEntityLink::new(self.entity_id, -1);
+            pumpkin_protocol::java::client::play::CSetEntityLink::new(self.entity_id, -1, true);
         let be_packet = pumpkin_protocol::bedrock::client::CSetActorLink {
             link: pumpkin_protocol::bedrock::client::common::EntityLink {
                 ridden_unique_id: pumpkin_protocol::codec::var_long::VarLong(self.entity_id as i64),
@@ -3776,8 +3842,8 @@ impl Entity {
     }
 }
 
-impl NBTStorage for Entity {
-    fn write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
+impl Entity {
+    pub fn write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async move {
             let position = self.pos.load();
             nbt.put_string(
@@ -3842,7 +3908,7 @@ impl NBTStorage for Entity {
         })
     }
 
-    fn read_nbt_non_mut<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
+    pub fn read_nbt_non_mut<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async {
             if let Some(position) = nbt.get_list("Pos")
                 && position.len() >= 3
@@ -4000,9 +4066,15 @@ impl EntityBase for Entity {
     fn cast_any(&self) -> &dyn std::any::Any {
         self
     }
+}
 
-    fn as_nbt_storage(&self) -> &dyn NBTStorage {
-        self
+impl<T: EntityBase + ?Sized> NBTStorage for T {
+    fn write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
+        EntityBase::write_nbt(self, nbt)
+    }
+
+    fn read_nbt_non_mut<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
+        EntityBase::read_nbt_non_mut(self, nbt)
     }
 }
 

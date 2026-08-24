@@ -126,7 +126,8 @@ pub fn remap_block_entity_type_id_for_version(
     version: JavaMinecraftVersion,
 ) -> u32 {
     match version {
-        pumpkin_util::version::JavaMinecraftVersion::V_1_7_6 => {
+        pumpkin_util::version::JavaMinecraftVersion::V_1_7_2
+        | pumpkin_util::version::JavaMinecraftVersion::V_1_7_6 => {
             BLOCK_ENTITY_TYPE_ID_REMAP_V_26_2_TO_V_1_7_6
                 .get(block_entity_type_id as usize)
                 .copied()
@@ -138,7 +139,10 @@ pub fn remap_block_entity_type_id_for_version(
                 .copied()
                 .unwrap_or(block_entity_type_id)
         }
-        pumpkin_util::version::JavaMinecraftVersion::V_1_9 => {
+        pumpkin_util::version::JavaMinecraftVersion::V_1_9
+        | pumpkin_util::version::JavaMinecraftVersion::V_1_9_1
+        | pumpkin_util::version::JavaMinecraftVersion::V_1_9_2
+        | pumpkin_util::version::JavaMinecraftVersion::V_1_9_3 => {
             BLOCK_ENTITY_TYPE_ID_REMAP_V_26_2_TO_V_1_9
                 .get(block_entity_type_id as usize)
                 .copied()
@@ -150,19 +154,23 @@ pub fn remap_block_entity_type_id_for_version(
                 .copied()
                 .unwrap_or(block_entity_type_id)
         }
-        pumpkin_util::version::JavaMinecraftVersion::V_1_11 => {
+        pumpkin_util::version::JavaMinecraftVersion::V_1_11
+        | pumpkin_util::version::JavaMinecraftVersion::V_1_11_1 => {
             BLOCK_ENTITY_TYPE_ID_REMAP_V_26_2_TO_V_1_11
                 .get(block_entity_type_id as usize)
                 .copied()
                 .unwrap_or(block_entity_type_id)
         }
-        pumpkin_util::version::JavaMinecraftVersion::V_1_12 => {
+        pumpkin_util::version::JavaMinecraftVersion::V_1_12
+        | pumpkin_util::version::JavaMinecraftVersion::V_1_12_1
+        | pumpkin_util::version::JavaMinecraftVersion::V_1_12_2 => {
             BLOCK_ENTITY_TYPE_ID_REMAP_V_26_2_TO_V_1_12
                 .get(block_entity_type_id as usize)
                 .copied()
                 .unwrap_or(block_entity_type_id)
         }
-        pumpkin_util::version::JavaMinecraftVersion::V_1_13 => {
+        pumpkin_util::version::JavaMinecraftVersion::V_1_13
+        | pumpkin_util::version::JavaMinecraftVersion::V_1_13_1 => {
             BLOCK_ENTITY_TYPE_ID_REMAP_V_26_2_TO_V_1_13
                 .get(block_entity_type_id as usize)
                 .copied()
@@ -174,43 +182,55 @@ pub fn remap_block_entity_type_id_for_version(
                 .copied()
                 .unwrap_or(block_entity_type_id)
         }
-        pumpkin_util::version::JavaMinecraftVersion::V_1_14 => {
+        pumpkin_util::version::JavaMinecraftVersion::V_1_14
+        | pumpkin_util::version::JavaMinecraftVersion::V_1_14_1
+        | pumpkin_util::version::JavaMinecraftVersion::V_1_14_2
+        | pumpkin_util::version::JavaMinecraftVersion::V_1_14_3
+        | pumpkin_util::version::JavaMinecraftVersion::V_1_14_4 => {
             BLOCK_ENTITY_TYPE_ID_REMAP_V_26_2_TO_V_1_14
                 .get(block_entity_type_id as usize)
                 .copied()
                 .unwrap_or(block_entity_type_id)
         }
-        pumpkin_util::version::JavaMinecraftVersion::V_1_15 => {
+        pumpkin_util::version::JavaMinecraftVersion::V_1_15
+        | pumpkin_util::version::JavaMinecraftVersion::V_1_15_1
+        | pumpkin_util::version::JavaMinecraftVersion::V_1_15_2 => {
             BLOCK_ENTITY_TYPE_ID_REMAP_V_26_2_TO_V_1_15
                 .get(block_entity_type_id as usize)
                 .copied()
                 .unwrap_or(block_entity_type_id)
         }
-        pumpkin_util::version::JavaMinecraftVersion::V_1_16 => {
+        pumpkin_util::version::JavaMinecraftVersion::V_1_16
+        | pumpkin_util::version::JavaMinecraftVersion::V_1_16_1 => {
             BLOCK_ENTITY_TYPE_ID_REMAP_V_26_2_TO_V_1_16
                 .get(block_entity_type_id as usize)
                 .copied()
                 .unwrap_or(block_entity_type_id)
         }
-        pumpkin_util::version::JavaMinecraftVersion::V_1_16_2 => {
+        pumpkin_util::version::JavaMinecraftVersion::V_1_16_2
+        | pumpkin_util::version::JavaMinecraftVersion::V_1_16_3
+        | pumpkin_util::version::JavaMinecraftVersion::V_1_16_4 => {
             BLOCK_ENTITY_TYPE_ID_REMAP_V_26_2_TO_V_1_16_2
                 .get(block_entity_type_id as usize)
                 .copied()
                 .unwrap_or(block_entity_type_id)
         }
-        pumpkin_util::version::JavaMinecraftVersion::V_1_17 => {
+        pumpkin_util::version::JavaMinecraftVersion::V_1_17
+        | pumpkin_util::version::JavaMinecraftVersion::V_1_17_1 => {
             BLOCK_ENTITY_TYPE_ID_REMAP_V_26_2_TO_V_1_17
                 .get(block_entity_type_id as usize)
                 .copied()
                 .unwrap_or(block_entity_type_id)
         }
-        pumpkin_util::version::JavaMinecraftVersion::V_1_18 => {
+        pumpkin_util::version::JavaMinecraftVersion::V_1_18
+        | pumpkin_util::version::JavaMinecraftVersion::V_1_18_2 => {
             BLOCK_ENTITY_TYPE_ID_REMAP_V_26_2_TO_V_1_18
                 .get(block_entity_type_id as usize)
                 .copied()
                 .unwrap_or(block_entity_type_id)
         }
-        pumpkin_util::version::JavaMinecraftVersion::V_1_19 => {
+        pumpkin_util::version::JavaMinecraftVersion::V_1_19
+        | pumpkin_util::version::JavaMinecraftVersion::V_1_19_1 => {
             BLOCK_ENTITY_TYPE_ID_REMAP_V_26_2_TO_V_1_19
                 .get(block_entity_type_id as usize)
                 .copied()

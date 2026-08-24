@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::{
-    entity::{Entity, EntityBase, EntityBaseFuture, NBTStorage},
+    entity::{Entity, EntityBase, EntityBaseFuture},
     server::Server,
 };
 use pumpkin_data::effect::StatusEffect;
@@ -106,13 +106,7 @@ impl AreaEffectCloudEntity {
     }
 }
 
-impl NBTStorage for AreaEffectCloudEntity {}
-
 impl EntityBase for AreaEffectCloudEntity {
-    fn as_nbt_storage(&self) -> &dyn NBTStorage {
-        self
-    }
-
     fn init_data_tracker(&self) -> EntityBaseFuture<'_, ()> {
         Box::pin(async move {
             // Send initial radius and particle (color) so clients render correctly

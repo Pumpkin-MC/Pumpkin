@@ -39,6 +39,10 @@ pub enum PluginInitError {
     CallInitPluginFailed(wasmtime::Error),
     #[error("Calling `get_metadata` failed: {0}")]
     CallGetMetadataFailed(wasmtime::Error),
+    #[error("Failed to get absolute path: {0}")]
+    PathResolutionFailed(std::io::Error),
+    #[error("Failed to create cache: {0}")]
+    CacheCreationFailed(wasmtime::Error),
 }
 
 pub struct PluginRuntime {
@@ -61,14 +65,14 @@ impl PluginRuntime {
         let mut config = wasmtime::Config::new();
         config.wasm_component_model(true);
         config.wasm_component_model_async(true);
-        let mut path = std::path::absolute(path.as_ref()).expect("Failed to get absolute path");
+        let mut path =
+            std::path::absolute(path.as_ref()).map_err(PluginInitError::PathResolutionFailed)?;
         path.pop();
         path.push("cache");
         let mut cache_config = CacheConfig::new();
         cache_config.with_directory(&path);
-        config.cache(Some(
-            Cache::new(cache_config).expect("Failed to create cache"),
-        ));
+        let cache = Cache::new(cache_config).map_err(PluginInitError::CacheCreationFailed)?;
+        config.cache(Some(cache));
 
         config.gc_support(true);
         config.wasm_gc(true);
@@ -89,29 +93,36 @@ impl PluginRuntime {
     pub async fn init_plugin<P: AsRef<Path>>(
         &self,
         path: P,
+        verify_signatures: bool,
     ) -> Result<(Arc<WasmPlugin>, PluginMetadata), PluginInitError> {
         let wasm_bytes = std::fs::read(&path).map_err(PluginInitError::FileReadFailed)?;
-
-        let verification =
-            signature::verify_wasm_plugin(&wasm_bytes, &path.as_ref().to_string_lossy());
-        let marketplace_metadata = if verification.is_signed && verification.is_valid {
-            verification.metadata.map(|m| {
-                wit::v0_1::pumpkin::plugin::context::MarketplaceMetadata {
-                    marketplace_url: m.marketplace_url,
-                    plugin_id: m.plugin_id,
-                    plugin_name: m.plugin_name,
-                    version: m.version,
-                    dev_id: m.dev_id,
-                    dev_name: m.dev_name,
-                    is_paid: m.is_paid,
-                    user_id: m.user_id,
-                    license_key: m.license_key,
-                    issued_at: m.issued_at,
+        let marketplace_metadata = maybe_verify_wasm_plugin(
+            &wasm_bytes,
+            &path.as_ref().to_string_lossy(),
+            verify_signatures,
+            |bytes, path_str| {
+                let verification = signature::verify_wasm_plugin(bytes, path_str);
+                if verification.is_signed && verification.is_valid {
+                    verification.metadata.map(|m| {
+                        wit::v0_1::pumpkin::plugin::context::MarketplaceMetadata {
+                            marketplace_url: m.marketplace_url,
+                            plugin_id: m.plugin_id,
+                            plugin_name: m.plugin_name,
+                            version: m.version,
+                            dev_id: m.dev_id,
+                            dev_name: m.dev_name,
+                            is_paid: m.is_paid,
+                            user_id: m.user_id,
+                            license_key: m.license_key,
+                            issued_at: m.issued_at,
+                        }
+                    })
+                } else {
+                    None
                 }
-            })
-        } else {
-            None
-        };
+            },
+        )
+        .flatten();
 
         let wasm_bytes = signature::strip_pumpkin_sections(&wasm_bytes).unwrap_or(wasm_bytes);
 
@@ -137,6 +148,18 @@ impl PluginRuntime {
         };
         Ok((wasm_plugin, metadata))
     }
+}
+
+fn maybe_verify_wasm_plugin<T, F>(
+    wasm_bytes: &[u8],
+    path_str: &str,
+    verify_signatures: bool,
+    verify: F,
+) -> Option<T>
+where
+    F: FnOnce(&[u8], &str) -> T,
+{
+    verify_signatures.then(|| verify(wasm_bytes, path_str))
 }
 
 fn setup_linker(engine: &Engine) -> wasmtime::Result<Linker<PluginHostState>> {

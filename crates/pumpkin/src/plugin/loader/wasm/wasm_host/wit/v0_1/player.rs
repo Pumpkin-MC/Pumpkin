@@ -5,9 +5,7 @@ use wasmtime::component::Resource;
 
 use crate::plugin::api::gui::PluginScreenHandler;
 use crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::forms::Form;
-use crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::java_dialogs::{
-    Action, AfterAction, Dialog, DialogBody, DialogInput, LinkLabel, LinkType,
-};
+use crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::java_dialogs::Dialog;
 use crate::{
     entity::{EntityBase, player::TitleMode},
     net::DisconnectReason,
@@ -39,10 +37,7 @@ use crate::{
 use pumpkin_inventory::player::player_inventory::PlayerInventory;
 use pumpkin_protocol::Property;
 use pumpkin_protocol::bedrock::client::modal_form_request::CModalFormRequest;
-use pumpkin_protocol::java::client::dialog::{
-    ActionButton as ProtocolActionButton, Dialog as ProtocolDialog, DialogAction,
-    DialogBody as ProtocolDialogBody, DialogInput as ProtocolDialogInput, DialogLink, DialogNBT,
-};
+use pumpkin_protocol::java::client::dialog::DialogNBT;
 use pumpkin_util::permission::PermissionLvl;
 use pumpkin_util::translation::Locale;
 use std::str::FromStr;
@@ -1956,6 +1951,69 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         Ok(player.has_item_cooldown(&item_id).await)
     }
 
+    async fn ray_trace_block(
+        &mut self,
+        player: Resource<Player>,
+        max_distance: f64,
+        include_fluids: bool,
+    ) -> wasmtime::Result<Option<pumpkin::plugin::world::RayTraceBlockResult>> {
+        let player = player_from_resource(self, &player)?;
+        let start = player.living_entity.entity.get_eye_pos();
+        let direction = player.living_entity.entity.get_looking_vector();
+        let end = start + direction * max_distance;
+        let world = player.living_entity.entity.world.load_full();
+
+        let hit = world.ray_trace_block(start, end, include_fluids);
+
+        Ok(hit.map(|(pos, face, hit_pos)| pumpkin::plugin::world::RayTraceBlockResult {
+            pos: pumpkin::plugin::world::BlockPos {
+                x: pos.0.x,
+                y: pos.0.y,
+                z: pos.0.z,
+            },
+            face: crate::plugin::loader::wasm::wasm_host::wit::v0_1::world::to_wasm_block_direction(face),
+            hit_pos: to_wasm_position(hit_pos),
+        }))
+    }
+
+    async fn ray_trace_entity(
+        &mut self,
+        player: Resource<Player>,
+        max_distance: f64,
+    ) -> wasmtime::Result<Option<pumpkin::plugin::world::RayTraceEntityResult>> {
+        let player = player_from_resource(self, &player)?;
+        let start = player.living_entity.entity.get_eye_pos();
+        let direction = player.living_entity.entity.get_looking_vector();
+        let end = start + direction * max_distance;
+        let world = player.living_entity.entity.world.load_full();
+        let self_id = player.living_entity.entity.entity_id;
+
+        let hits = world.ray_trace_entities(start, end);
+        for (hit_entity, hit_pos, distance) in hits {
+            if hit_entity.get_entity().entity_id != self_id {
+                let entity_res = self
+                    .add_entity(hit_entity)
+                    .map_err(|_| wasmtime::Error::msg("failed to add entity resource"))?;
+                return Ok(Some(pumpkin::plugin::world::RayTraceEntityResult {
+                    entity: entity_res,
+                    hit_pos: to_wasm_position(hit_pos),
+                    distance,
+                }));
+            }
+        }
+
+        Ok(None)
+    }
+
+    async fn get_target_entity(
+        &mut self,
+        player: Resource<Player>,
+        max_distance: f64,
+    ) -> wasmtime::Result<Option<Resource<pumpkin::plugin::world::Entity>>> {
+        let res = self.ray_trace_entity(player, max_distance).await?;
+        Ok(res.map(|r| r.entity))
+    }
+
     async fn get_target_block(
         &mut self,
         player: Resource<Player>,
@@ -1980,6 +2038,16 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
             );
             to_wasm_position(vec3)
         }))
+    }
+
+    async fn get_target_block_exact(
+        &mut self,
+        player: Resource<Player>,
+        max_distance: f64,
+        include_fluids: bool,
+    ) -> wasmtime::Result<Option<pumpkin::plugin::world::RayTraceBlockResult>> {
+        self.ray_trace_block(player, max_distance, include_fluids)
+            .await
     }
 
     async fn launch_projectile(
@@ -2963,129 +3031,18 @@ impl pumpkin::plugin::player::HostJavaPlayer for PluginHostState {
             .provider
             .clone();
 
-        let title = text_component_from_resource(self, &dialog.title);
+        let protocol_dialog = super::events::dialog::protocol_dialog_from_wasm(self, &dialog);
 
-        let body: Vec<_> = dialog
-            .body
-            .iter()
-            .map(|b| match b {
-                DialogBody::PlainMessage(c) => ProtocolDialogBody::PlainMessage {
-                    contents: text_component_from_resource(self, c),
-                },
-                DialogBody::Item(_i) => {
-                    // TODO: Map ItemStack correctly
-                    ProtocolDialogBody::Item { item: 0 }
-                }
-            })
-            .collect();
-
-        let inputs: Vec<_> = dialog
-            .inputs
-            .iter()
-            .map(|i| match i {
-                DialogInput::Bool(b) => ProtocolDialogInput::Boolean {
-                    label: text_component_from_resource(self, &b.label),
-                    default_value: b.default_value,
-                },
-                DialogInput::Text(t) => ProtocolDialogInput::Text {
-                    label: text_component_from_resource(self, &t.label),
-                    placeholder: text_component_from_resource(self, &t.placeholder),
-                    default_value: t.default_value.clone(),
-                },
-                DialogInput::NumberRange(n) => ProtocolDialogInput::NumberRange {
-                    label: text_component_from_resource(self, &n.label),
-                    min: n.min_value,
-                    max: n.max_value,
-                    initial: n.initial_value,
-                    step: n.step,
-                    label_format: n.label_format.clone(),
-                },
-                DialogInput::SingleOption(s) => ProtocolDialogInput::SingleOption {
-                    label: text_component_from_resource(self, &s.label),
-                    options: s
-                        .options
-                        .iter()
-                        .map(|o| text_component_from_resource(self, o))
-                        .collect(),
-                    initial_index: s.initial_index,
-                },
-            })
-            .collect();
-
-        let buttons: Vec<_> = dialog
-            .buttons
-            .iter()
-            .map(|b| ProtocolActionButton {
-                text: text_component_from_resource(self, &b.text),
-                tooltip: b
-                    .tooltip
-                    .as_ref()
-                    .map(|t| text_component_from_resource(self, t)),
-                width: b.width,
-                action: match &b.action {
-                    Action::OpenUrl(u) => DialogAction::OpenUrl { url: u.clone() },
-                    Action::CustomClick(c) => DialogAction::Custom {
-                        id: c.id.clone(),
-                        payload: c.payload.clone(),
-                    },
-                },
-            })
-            .collect();
-
-        let links: Vec<_> = dialog
-            .links
-            .iter()
-            .map(|l| {
-                let label = match &l.label {
-                    LinkLabel::BuiltIn(t) => {
-                        let link_type = match t {
-                            LinkType::BugReport => pumpkin_protocol::LinkType::BugReport,
-                            LinkType::CommunityGuidelines => {
-                                pumpkin_protocol::LinkType::CommunityGuidelines
-                            }
-                            LinkType::Support => pumpkin_protocol::LinkType::Support,
-                            LinkType::Status => pumpkin_protocol::LinkType::Status,
-                            LinkType::Feedback => pumpkin_protocol::LinkType::Feedback,
-                            LinkType::Community => pumpkin_protocol::LinkType::Community,
-                            LinkType::Website => pumpkin_protocol::LinkType::Website,
-                            LinkType::Forums => pumpkin_protocol::LinkType::Forums,
-                            LinkType::News => pumpkin_protocol::LinkType::News,
-                            LinkType::Announcements => pumpkin_protocol::LinkType::Announcements,
-                        };
-                        pumpkin_protocol::Label::BuiltIn(link_type)
-                    }
-                    LinkLabel::Custom(c) => pumpkin_protocol::Label::TextComponent(Box::new(
-                        text_component_from_resource(self, c),
-                    )),
-                };
-                DialogLink {
-                    label,
-                    url: l.url.clone(),
-                }
-            })
-            .collect();
-
-        let protocol_dialog = ProtocolDialog {
-            r#type: match dialog.type_ {
-                crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::java_dialogs::DialogType::Notice => "minecraft:notice".to_string(),
-                crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::java_dialogs::DialogType::Confirmation => "minecraft:confirmation".to_string(),
-                crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::java_dialogs::DialogType::MultiAction => "minecraft:multi_action".to_string(),
-                crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::java_dialogs::DialogType::DialogList => "minecraft:dialog_list".to_string(),
-                crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::java_dialogs::DialogType::ServerLinks => "minecraft:server_links".to_string(),
-            },
-            title,
-            body,
-            inputs,
-            buttons,
-            links,
-            exit_action: None, // TODO
-            after_action: dialog.after_action.map(|a| match a {
-                AfterAction::Peek => "peek".to_string(),
-                AfterAction::Pop => "pop".to_string(),
-            }),
-            can_close_with_escape: dialog.can_close_with_escape,
-            external_title: dialog.external_title.as_ref().map(|t| text_component_from_resource(self, t)),
-        };
+        if let Some(server) = player.world().server.upgrade() {
+            let mut event = crate::plugin::api::events::dialog::dialog_show::DialogShowEvent::new(
+                player.clone(),
+                protocol_dialog.clone(),
+            );
+            server.plugin_manager.fire(&server, &mut event).await;
+            if event.cancelled {
+                return Ok(());
+            }
+        }
 
         if let crate::net::ClientPlatform::Java(client) = player.client.as_ref() {
             match client.connection_state.load() {
@@ -3126,6 +3083,16 @@ impl pumpkin::plugin::player::HostJavaPlayer for PluginHostState {
             .map_err(|_| wasmtime::Error::msg("invalid java-player resource handle"))?
             .provider
             .clone();
+
+        if let Some(server) = player.world().server.upgrade() {
+            let mut event = crate::plugin::api::events::dialog::dialog_clear::DialogClearEvent::new(
+                player.clone(),
+            );
+            server.plugin_manager.fire(&server, &mut event).await;
+            if event.cancelled {
+                return Ok(());
+            }
+        }
 
         if let crate::net::ClientPlatform::Java(client) = player.client.as_ref() {
             match client.connection_state.load() {

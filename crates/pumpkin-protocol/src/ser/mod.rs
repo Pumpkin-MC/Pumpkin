@@ -38,6 +38,8 @@ pub enum WritingError {
     IoError(#[from] std::io::Error),
     #[error("Serde failure: {0}")]
     Serde(String),
+    #[error("Packet is not supported in Minecraft version {0:?}")]
+    UnsupportedVersion(JavaMinecraftVersion),
     #[error("Failed to serialize packet: {0}")]
     Message(String),
 }

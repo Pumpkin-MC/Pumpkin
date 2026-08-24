@@ -64,7 +64,7 @@ impl CustomBossbars {
     pub fn get_player_bars(&self, uuid: &Uuid) -> Option<Vec<&Bossbar>> {
         let mut player_bars: Vec<&Bossbar> = Vec::new();
         for bossbar in &self.custom_bossbars {
-            if bossbar.1.players.contains(uuid) {
+            if bossbar.1.visible && bossbar.1.players.contains(uuid) {
                 player_bars.push(&bossbar.1.bossbar_data);
             }
         }
@@ -139,6 +139,96 @@ impl CustomBossbars {
     #[must_use]
     pub fn has_bossbar(&self, resource_location: &str) -> bool {
         self.custom_bossbars.contains_key(resource_location)
+    }
+
+    pub async fn update_value(
+        &mut self,
+        server: &Server,
+        resource_location: String,
+        value: i32,
+    ) -> Result<(), BossbarUpdateError> {
+        let bossbar = self.custom_bossbars.get_mut(&resource_location);
+        if let Some(bossbar) = bossbar {
+            if bossbar.value == value {
+                return Err(BossbarUpdateError::NoChanges("value", None));
+            }
+
+            let ratio = f64::from(value) / f64::from(bossbar.max);
+            let health: f32 = if ratio < 0.0 {
+                0.0
+            } else if ratio > 1.0 {
+                1.0
+            } else {
+                ratio as f32
+            };
+
+            bossbar.value = value;
+            bossbar.bossbar_data.health = health;
+
+            if !bossbar.visible {
+                return Ok(());
+            }
+
+            let players: Vec<Arc<Player>> = server.get_all_players();
+            let matching_players = players
+                .iter()
+                .filter(|player| bossbar.players.contains(&player.gameprofile.id));
+            for player in matching_players {
+                player
+                    .update_bossbar_health(&bossbar.bossbar_data.uuid, bossbar.bossbar_data.health)
+                    .await;
+            }
+
+            return Ok(());
+        }
+        Err(BossbarUpdateError::InvalidResourceLocation(
+            resource_location,
+        ))
+    }
+
+    pub async fn update_max(
+        &mut self,
+        server: &Server,
+        resource_location: String,
+        max_value: i32,
+    ) -> Result<(), BossbarUpdateError> {
+        let bossbar = self.custom_bossbars.get_mut(&resource_location);
+        if let Some(bossbar) = bossbar {
+            if bossbar.max == max_value {
+                return Err(BossbarUpdateError::NoChanges("max", None));
+            }
+
+            let ratio = f64::from(bossbar.value) / f64::from(max_value);
+            let health: f32 = if ratio < 0.0 {
+                0.0
+            } else if ratio > 1.0 {
+                1.0
+            } else {
+                ratio as f32
+            };
+
+            bossbar.max = max_value;
+            bossbar.bossbar_data.health = health;
+
+            if !bossbar.visible {
+                return Ok(());
+            }
+
+            let players: Vec<Arc<Player>> = server.get_all_players();
+            let matching_players = players
+                .iter()
+                .filter(|player| bossbar.players.contains(&player.gameprofile.id));
+            for player in matching_players {
+                player
+                    .update_bossbar_health(&bossbar.bossbar_data.uuid, bossbar.bossbar_data.health)
+                    .await;
+            }
+
+            return Ok(());
+        }
+        Err(BossbarUpdateError::InvalidResourceLocation(
+            resource_location,
+        ))
     }
 
     pub async fn update_health(

@@ -13,7 +13,7 @@ use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::java::client::play::Metadata;
 
 use crate::entity::{
-    Entity, EntityBase, EntityBaseFuture, NBTStorage, NbtFuture,
+    Entity, EntityBase, EntityBaseFuture, NbtFuture,
     ai::goal::{
         look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal, swim::SwimGoal,
         wander_around::WanderAroundGoal,
@@ -202,10 +202,9 @@ impl CopperGolemEntity {
     }
 }
 
-impl NBTStorage for CopperGolemEntity {
-    fn write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
+impl Mob for CopperGolemEntity {
+    fn mob_write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async move {
-            self.mob_entity.living_entity.write_nbt(nbt).await;
             nbt.put_long(
                 "next_weather_age",
                 self.next_weathering_tick.load(Ordering::Relaxed),
@@ -214,9 +213,8 @@ impl NBTStorage for CopperGolemEntity {
         })
     }
 
-    fn read_nbt_non_mut<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
+    fn mob_read_nbt<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async move {
-            self.mob_entity.living_entity.read_nbt_non_mut(nbt).await;
             if let Some(next) = nbt.get_long("next_weather_age") {
                 self.next_weathering_tick.store(next, Ordering::Relaxed);
             }
@@ -225,9 +223,7 @@ impl NBTStorage for CopperGolemEntity {
             }
         })
     }
-}
 
-impl Mob for CopperGolemEntity {
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
     }

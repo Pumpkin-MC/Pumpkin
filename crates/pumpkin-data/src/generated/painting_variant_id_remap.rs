@@ -62,7 +62,8 @@ pub fn remap_painting_variant_id_for_version(
     version: JavaMinecraftVersion,
 ) -> u32 {
     match version {
-        pumpkin_util::version::JavaMinecraftVersion::V_1_7_6 => {
+        pumpkin_util::version::JavaMinecraftVersion::V_1_7_2
+        | pumpkin_util::version::JavaMinecraftVersion::V_1_7_6 => {
             PAINTING_VARIANT_ID_REMAP_V_26_2_TO_V_1_7_6
                 .get(painting_variant_id as usize)
                 .copied()
@@ -74,7 +75,10 @@ pub fn remap_painting_variant_id_for_version(
                 .copied()
                 .unwrap_or(painting_variant_id)
         }
-        pumpkin_util::version::JavaMinecraftVersion::V_1_9 => {
+        pumpkin_util::version::JavaMinecraftVersion::V_1_9
+        | pumpkin_util::version::JavaMinecraftVersion::V_1_9_1
+        | pumpkin_util::version::JavaMinecraftVersion::V_1_9_2
+        | pumpkin_util::version::JavaMinecraftVersion::V_1_9_3 => {
             PAINTING_VARIANT_ID_REMAP_V_26_2_TO_V_1_9
                 .get(painting_variant_id as usize)
                 .copied()
@@ -86,19 +90,23 @@ pub fn remap_painting_variant_id_for_version(
                 .copied()
                 .unwrap_or(painting_variant_id)
         }
-        pumpkin_util::version::JavaMinecraftVersion::V_1_11 => {
+        pumpkin_util::version::JavaMinecraftVersion::V_1_11
+        | pumpkin_util::version::JavaMinecraftVersion::V_1_11_1 => {
             PAINTING_VARIANT_ID_REMAP_V_26_2_TO_V_1_11
                 .get(painting_variant_id as usize)
                 .copied()
                 .unwrap_or(painting_variant_id)
         }
-        pumpkin_util::version::JavaMinecraftVersion::V_1_12 => {
+        pumpkin_util::version::JavaMinecraftVersion::V_1_12
+        | pumpkin_util::version::JavaMinecraftVersion::V_1_12_1
+        | pumpkin_util::version::JavaMinecraftVersion::V_1_12_2 => {
             PAINTING_VARIANT_ID_REMAP_V_26_2_TO_V_1_12
                 .get(painting_variant_id as usize)
                 .copied()
                 .unwrap_or(painting_variant_id)
         }
-        pumpkin_util::version::JavaMinecraftVersion::V_1_13 => {
+        pumpkin_util::version::JavaMinecraftVersion::V_1_13
+        | pumpkin_util::version::JavaMinecraftVersion::V_1_13_1 => {
             PAINTING_VARIANT_ID_REMAP_V_26_2_TO_V_1_13
                 .get(painting_variant_id as usize)
                 .copied()
@@ -110,37 +118,48 @@ pub fn remap_painting_variant_id_for_version(
                 .copied()
                 .unwrap_or(painting_variant_id)
         }
-        pumpkin_util::version::JavaMinecraftVersion::V_1_14 => {
+        pumpkin_util::version::JavaMinecraftVersion::V_1_14
+        | pumpkin_util::version::JavaMinecraftVersion::V_1_14_1
+        | pumpkin_util::version::JavaMinecraftVersion::V_1_14_2
+        | pumpkin_util::version::JavaMinecraftVersion::V_1_14_3
+        | pumpkin_util::version::JavaMinecraftVersion::V_1_14_4 => {
             PAINTING_VARIANT_ID_REMAP_V_26_2_TO_V_1_14
                 .get(painting_variant_id as usize)
                 .copied()
                 .unwrap_or(painting_variant_id)
         }
-        pumpkin_util::version::JavaMinecraftVersion::V_1_15 => {
+        pumpkin_util::version::JavaMinecraftVersion::V_1_15
+        | pumpkin_util::version::JavaMinecraftVersion::V_1_15_1
+        | pumpkin_util::version::JavaMinecraftVersion::V_1_15_2 => {
             PAINTING_VARIANT_ID_REMAP_V_26_2_TO_V_1_15
                 .get(painting_variant_id as usize)
                 .copied()
                 .unwrap_or(painting_variant_id)
         }
-        pumpkin_util::version::JavaMinecraftVersion::V_1_16 => {
+        pumpkin_util::version::JavaMinecraftVersion::V_1_16
+        | pumpkin_util::version::JavaMinecraftVersion::V_1_16_1 => {
             PAINTING_VARIANT_ID_REMAP_V_26_2_TO_V_1_16
                 .get(painting_variant_id as usize)
                 .copied()
                 .unwrap_or(painting_variant_id)
         }
-        pumpkin_util::version::JavaMinecraftVersion::V_1_16_2 => {
+        pumpkin_util::version::JavaMinecraftVersion::V_1_16_2
+        | pumpkin_util::version::JavaMinecraftVersion::V_1_16_3
+        | pumpkin_util::version::JavaMinecraftVersion::V_1_16_4 => {
             PAINTING_VARIANT_ID_REMAP_V_26_2_TO_V_1_16_2
                 .get(painting_variant_id as usize)
                 .copied()
                 .unwrap_or(painting_variant_id)
         }
-        pumpkin_util::version::JavaMinecraftVersion::V_1_17 => {
+        pumpkin_util::version::JavaMinecraftVersion::V_1_17
+        | pumpkin_util::version::JavaMinecraftVersion::V_1_17_1 => {
             PAINTING_VARIANT_ID_REMAP_V_26_2_TO_V_1_17
                 .get(painting_variant_id as usize)
                 .copied()
                 .unwrap_or(painting_variant_id)
         }
-        pumpkin_util::version::JavaMinecraftVersion::V_1_18 => {
+        pumpkin_util::version::JavaMinecraftVersion::V_1_18
+        | pumpkin_util::version::JavaMinecraftVersion::V_1_18_2 => {
             PAINTING_VARIANT_ID_REMAP_V_26_2_TO_V_1_18
                 .get(painting_variant_id as usize)
                 .copied()

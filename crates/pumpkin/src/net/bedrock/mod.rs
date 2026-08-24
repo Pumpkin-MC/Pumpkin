@@ -463,22 +463,25 @@ impl BedrockClient {
     }
 
     pub fn serialize_packet<P: BClientPacket>(&self, packet: &P) -> Result<Bytes, Error> {
-        let encoder = self.network_writer.try_read();
-        encoder.map_or_else(
-            |_| pumpkin_protocol::bedrock::packet_encoder::serialize_packet(packet),
-            |encoder| encoder.serialize_packet(packet),
-        )
+        self.network_writer
+            .try_read()
+            .map_err(|_| Error::other("Bedrock packet encoder is busy"))?
+            .serialize_packet(packet)
     }
 
     pub async fn send_packet<P: BClientPacket>(&self, packet: &P) {
-        if let Ok(data) = self.serialize_packet(packet) {
-            self.send_game_packet(data).await;
+        let mut data = Vec::new();
+        match self.write_game_packet(packet, &mut data).await {
+            Ok(()) => self.send_game_packet(data.into()).await,
+            Err(err) => error!("Failed to serialize Bedrock packet: {err}"),
         }
     }
 
     pub async fn enqueue_client_packet<P: BClientPacket>(&self, packet: &P) {
-        if let Ok(data) = self.serialize_packet(packet) {
-            self.enqueue_packet(data).await;
+        let mut data = Vec::new();
+        match self.write_game_packet(packet, &mut data).await {
+            Ok(()) => self.enqueue_packet(data.into()).await,
+            Err(err) => error!("Failed to serialize Bedrock packet: {err}"),
         }
     }
 
@@ -774,18 +777,21 @@ impl BedrockClient {
         if packet.miss_hashes.is_empty() {
             return;
         }
-        let cache = self.blob_cache.lock().await;
-        let mut missing_blobs = Vec::with_capacity(packet.miss_hashes.len());
-        for hash in packet.miss_hashes {
-            if let Some(payload) = cache.get(&hash) {
-                missing_blobs.push(CacheBlob {
-                    hash,
-                    payload: payload.clone(),
-                });
-            } else {
-                warn!("Client requested missing blob {hash:#x} not found in server cache");
+        let missing_blobs = {
+            let cache = self.blob_cache.lock().await;
+            let mut missing_blobs = Vec::with_capacity(packet.miss_hashes.len());
+            for hash in packet.miss_hashes {
+                if let Some(payload) = cache.get(&hash) {
+                    missing_blobs.push(CacheBlob {
+                        hash,
+                        payload: payload.clone(),
+                    });
+                } else {
+                    warn!("Client requested missing blob {hash:#x} not found in server cache");
+                }
             }
-        }
+            missing_blobs
+        };
         if !missing_blobs.is_empty() {
             self.send_packet(&CClientCacheMissResponse {
                 blobs: &missing_blobs,

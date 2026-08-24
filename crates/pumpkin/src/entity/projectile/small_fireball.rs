@@ -3,7 +3,7 @@ use std::sync::atomic::AtomicBool;
 
 use crate::{
     entity::{
-        Entity, EntityBase, EntityBaseFuture, NBTStorage,
+        Entity, EntityBase, EntityBaseFuture,
         projectile::{ProjectileHit, ThrownItemEntity},
     },
     server::Server,
@@ -36,8 +36,6 @@ impl SmallFireballEntity {
     }
 }
 
-impl NBTStorage for SmallFireballEntity {}
-
 impl EntityBase for SmallFireballEntity {
     fn tick<'a>(
         &'a self,
@@ -54,11 +52,6 @@ impl EntityBase for SmallFireballEntity {
     fn get_living_entity(&self) -> Option<&crate::entity::living::LivingEntity> {
         None
     }
-
-    fn as_nbt_storage(&self) -> &dyn NBTStorage {
-        self
-    }
-
     fn cast_any(&self) -> &dyn std::any::Any {
         self
     }

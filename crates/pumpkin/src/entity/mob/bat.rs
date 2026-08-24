@@ -12,7 +12,7 @@ use rand::RngExt;
 use tokio::sync::Mutex;
 
 use crate::entity::mob::{Mob, MobEntity};
-use crate::entity::{Entity, EntityBase, EntityBaseFuture, NBTStorage, NbtFuture};
+use crate::entity::{Entity, EntityBase, EntityBaseFuture, NbtFuture};
 use crate::world::World;
 
 const ROOSTING_FLAG: u8 = 1;
@@ -33,14 +33,10 @@ impl BatEntity {
         let bat = Self {
             mob_entity,
             hanging_position: Mutex::new(None),
-            roosting: AtomicBool::new(true),
+            roosting: AtomicBool::new(false),
             ambient_sound_chance: AtomicI32::new(MIN_AMBIENT_SOUND_DELAY),
         };
-        let mob_arc = Arc::new(bat);
-
-        Self::set_roosting_metadata(true);
-
-        mob_arc
+        Arc::new(bat)
     }
 
     pub fn check_bat_spawn_rules(world: &World, pos: &BlockPos) -> bool {
@@ -64,18 +60,14 @@ impl BatEntity {
         true
     }
 
-    fn is_roosting(&self) -> bool {
+    pub fn is_roosting(&self) -> bool {
         self.roosting.load(Relaxed)
     }
 
-    fn set_roosting(&self, roosting: bool) {
+    pub fn set_roosting(&self, roosting: bool) {
         self.roosting.store(roosting, Relaxed);
-        Self::set_roosting_metadata(roosting);
-    }
-
-    const fn set_roosting_metadata(_roosting: bool) {
-        // TODO
-        // let flags: u8 = if roosting { ROOSTING_FLAG } else { 0 };
+        // TODO:
+        // let flags = if roosting { ROOSTING_FLAG } else { 0 };
         // self.mob_entity
         //     .living_entity
         //     .entity
@@ -88,26 +80,22 @@ impl BatEntity {
     }
 }
 
-impl NBTStorage for BatEntity {
-    fn write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
+impl Mob for BatEntity {
+    fn mob_write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async move {
-            self.mob_entity.living_entity.write_nbt(nbt).await;
             let flags: u8 = if self.is_roosting() { ROOSTING_FLAG } else { 0 };
             nbt.put_byte("BatFlags", flags as i8);
         })
     }
 
-    fn read_nbt_non_mut<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
+    fn mob_read_nbt<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async move {
-            self.mob_entity.living_entity.read_nbt_non_mut(nbt).await;
             let flags = nbt.get_byte("BatFlags").unwrap_or(0) as u8;
             let roosting = (flags & ROOSTING_FLAG) != 0;
             self.set_roosting(roosting);
         })
     }
-}
 
-impl Mob for BatEntity {
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
     }

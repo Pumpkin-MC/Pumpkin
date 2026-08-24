@@ -2,9 +2,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 
 use crate::entity::player::Player;
-use crate::entity::{
-    Entity, EntityBase, EntityBaseFuture, NBTStorage, NbtFuture, living::LivingEntity,
-};
+use crate::entity::{Entity, EntityBase, EntityBaseFuture, NbtFuture, living::LivingEntity};
 use crossbeam::atomic::AtomicCell;
 use pumpkin_data::BlockDirection;
 use pumpkin_data::damage::DamageType;
@@ -264,11 +262,9 @@ impl ItemFrameEntity {
     }
 }
 
-impl NBTStorage for ItemFrameEntity {
-    fn write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
+impl EntityBase for ItemFrameEntity {
+    fn write_custom_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async move {
-            self.entity.write_nbt(nbt).await;
-
             let item = self.item_stack.lock().await;
             if !item.is_empty() {
                 let mut item_compound = NbtCompound::new();
@@ -283,10 +279,8 @@ impl NBTStorage for ItemFrameEntity {
         })
     }
 
-    fn read_nbt_non_mut<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
+    fn read_custom_nbt<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async {
-            self.entity.read_nbt_non_mut(nbt).await;
-
             if let Some(item_compound) = nbt.get_compound("Item")
                 && let Some(stack) = ItemStack::read_item_stack(item_compound)
             {
@@ -310,9 +304,7 @@ impl NBTStorage for ItemFrameEntity {
                 .store(nbt.get_bool("Fixed").unwrap_or(false), Ordering::Relaxed);
         })
     }
-}
 
-impl EntityBase for ItemFrameEntity {
     fn get_entity(&self) -> &Entity {
         &self.entity
     }
@@ -456,10 +448,6 @@ impl EntityBase for ItemFrameEntity {
             }
             true
         })
-    }
-
-    fn as_nbt_storage(&self) -> &dyn NBTStorage {
-        self
     }
 
     fn cast_any(&self) -> &dyn std::any::Any {

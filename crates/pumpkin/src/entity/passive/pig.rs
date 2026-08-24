@@ -5,7 +5,7 @@ use pumpkin_data::sound::Sound;
 use pumpkin_data::{entity::EntityType, item::Item};
 
 use crate::entity::{
-    Entity, EntityBaseFuture, NBTStorage, NbtFuture,
+    Entity, EntityBaseFuture, NbtFuture,
     ageable::AgeableMob,
     ai::goal::{
         breed::BreedGoal, escape_danger::EscapeDangerGoal, follow_parent::FollowParentGoal,
@@ -77,35 +77,13 @@ impl PigEntity {
     }
 }
 
-impl crate::entity::ageable::AgeableMob for PigEntity {
+impl AgeableMob for PigEntity {
     fn get_ageable_data(&self) -> &crate::entity::ageable::AgeableData {
         &self.ageable_data
     }
 }
 
-impl NBTStorage for PigEntity {
-    fn write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
-        Box::pin(async move {
-            self.mob_entity.living_entity.write_nbt(nbt).await;
-            self.write_ageable_nbt(nbt);
-            self.write_animal_nbt(nbt);
-            nbt.put_bool("Saddle", self.is_saddled());
-        })
-    }
-
-    fn read_nbt_non_mut<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
-        Box::pin(async move {
-            self.mob_entity.living_entity.read_nbt_non_mut(nbt).await;
-            self.read_ageable_nbt(nbt);
-            self.read_animal_nbt(nbt);
-            if let Some(saddle) = nbt.get_byte("Saddle") {
-                self.set_saddled(saddle == 1);
-            }
-        })
-    }
-}
-
-impl super::animal::Animal for PigEntity {
+impl Animal for PigEntity {
     fn is_food(&self, item_stack: &ItemStack) -> bool {
         use pumpkin_data::tag::Taggable;
         item_stack
@@ -116,6 +94,28 @@ impl super::animal::Animal for PigEntity {
 }
 
 impl Mob for PigEntity {
+    fn as_ageable(&self) -> Option<&dyn AgeableMob> {
+        Some(self)
+    }
+
+    fn as_animal(&self) -> Option<&dyn Animal> {
+        Some(self)
+    }
+
+    fn mob_write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
+        Box::pin(async move {
+            nbt.put_bool("Saddle", self.is_saddled());
+        })
+    }
+
+    fn mob_read_nbt<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
+        Box::pin(async move {
+            if let Some(saddle) = nbt.get_byte("Saddle") {
+                self.set_saddled(saddle == 1);
+            }
+        })
+    }
+
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
     }

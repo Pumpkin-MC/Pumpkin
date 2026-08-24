@@ -1,5 +1,5 @@
 use crate::entity::player::Player;
-use crate::entity::{Entity, EntityBase, EntityBaseFuture, NBTStorage, living::LivingEntity};
+use crate::entity::{Entity, EntityBase, EntityBaseFuture, living::LivingEntity};
 use crate::world::World;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item_stack::ItemStack;
@@ -83,8 +83,6 @@ impl LeashKnotEntity {
         world.play_sound(Sound::ItemLeadTied, SoundCategory::Neutral, &pos);
     }
 }
-
-impl NBTStorage for LeashKnotEntity {}
 
 impl EntityBase for LeashKnotEntity {
     fn get_entity(&self) -> &Entity {
@@ -205,11 +203,6 @@ impl EntityBase for LeashKnotEntity {
             }
         })
     }
-
-    fn as_nbt_storage(&self) -> &dyn NBTStorage {
-        self
-    }
-
     fn cast_any(&self) -> &dyn std::any::Any {
         self
     }

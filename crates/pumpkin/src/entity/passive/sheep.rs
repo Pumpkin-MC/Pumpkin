@@ -8,7 +8,7 @@ use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::java::client::play::Metadata;
 
 use crate::entity::{
-    Entity, EntityBaseFuture, NBTStorage, NbtFuture,
+    Entity, EntityBaseFuture, NbtFuture,
     ageable::AgeableMob,
     ai::goal::{
         breed::BreedGoal, eat_grass::EatGrassGoal, escape_danger::EscapeDangerGoal,
@@ -108,40 +108,13 @@ impl SheepEntity {
     }
 }
 
-impl crate::entity::ageable::AgeableMob for SheepEntity {
+impl AgeableMob for SheepEntity {
     fn get_ageable_data(&self) -> &crate::entity::ageable::AgeableData {
         &self.ageable_data
     }
 }
 
-impl NBTStorage for SheepEntity {
-    fn write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
-        Box::pin(async {
-            self.mob_entity.living_entity.write_nbt(nbt).await;
-            self.write_ageable_nbt(nbt);
-            self.write_animal_nbt(nbt);
-            nbt.put_bool("Sheared", self.is_sheared());
-            nbt.put_byte("Color", self.get_color() as i8);
-        })
-    }
-
-    fn read_nbt_non_mut<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
-        Box::pin(async {
-            self.mob_entity.living_entity.read_nbt_non_mut(nbt).await;
-            self.read_ageable_nbt(nbt);
-            self.read_animal_nbt(nbt);
-            let sheared = nbt
-                .get_bool("Sheared")
-                .or_else(|| nbt.get_byte("Sheared").map(|b| b == 1))
-                .unwrap_or(false);
-            let color = nbt.get_byte("Color").unwrap_or(0) as u8;
-            let byte = (color & 0x0F) | if sheared { 0x10 } else { 0 };
-            self.color_and_sheared.store(byte, Ordering::Relaxed);
-        })
-    }
-}
-
-impl super::animal::Animal for SheepEntity {
+impl Animal for SheepEntity {
     fn is_food(&self, item_stack: &ItemStack) -> bool {
         use pumpkin_data::tag::Taggable;
         item_stack
@@ -152,6 +125,33 @@ impl super::animal::Animal for SheepEntity {
 }
 
 impl Mob for SheepEntity {
+    fn as_ageable(&self) -> Option<&dyn AgeableMob> {
+        Some(self)
+    }
+
+    fn as_animal(&self) -> Option<&dyn Animal> {
+        Some(self)
+    }
+
+    fn mob_write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
+        Box::pin(async {
+            nbt.put_bool("Sheared", self.is_sheared());
+            nbt.put_byte("Color", self.get_color() as i8);
+        })
+    }
+
+    fn mob_read_nbt<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
+        Box::pin(async {
+            let sheared = nbt
+                .get_bool("Sheared")
+                .or_else(|| nbt.get_byte("Sheared").map(|b| b == 1))
+                .unwrap_or(false);
+            let color = nbt.get_byte("Color").unwrap_or(0) as u8;
+            let byte = (color & 0x0F) | if sheared { 0x10 } else { 0 };
+            self.color_and_sheared.store(byte, Ordering::Relaxed);
+        })
+    }
+
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
     }

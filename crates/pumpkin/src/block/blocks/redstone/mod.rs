@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 /**
  * This implementation is heavily based on <https://github.com/MCHPR/MCHPRS>
  * Updated to fit pumpkin by 4lve
@@ -31,31 +29,10 @@ pub mod sculk_sensor;
 pub mod target_block;
 pub mod tripwire;
 pub mod tripwire_hook;
-pub mod turbo;
 
 // abstract
 pub mod abstract_redstone_gate;
 pub mod dispenser;
-
-pub async fn update_wire_neighbors(world: &Arc<World>, pos: &BlockPos) {
-    for direction in BlockDirection::all() {
-        let neighbor_pos = pos.offset(direction.to_offset());
-        let block = world.get_block(&neighbor_pos);
-        world
-            .block_registry
-            .on_neighbor_update(world, block, &neighbor_pos, block, true)
-            .await;
-
-        for n_direction in BlockDirection::all() {
-            let n_neighbor_pos = neighbor_pos.offset(n_direction.to_offset());
-            let block = world.get_block(&n_neighbor_pos);
-            world
-                .block_registry
-                .on_neighbor_update(world, block, &n_neighbor_pos, block, true)
-                .await;
-        }
-    }
-}
 
 pub async fn is_emitting_redstone_power(
     block: &Block,
