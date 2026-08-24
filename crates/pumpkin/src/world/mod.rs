@@ -4811,6 +4811,9 @@ impl World {
     pub fn broadcast_entity_spawn(&self, entity: &Arc<dyn EntityBase>) {
         let base_entity = entity.get_entity();
         let chunk_pos = base_entity.chunk_pos.load();
+        let Some(server) = self.server.upgrade() else {
+            return;
+        };
 
         let players = self.players.load();
         for player in players.iter() {
@@ -4818,7 +4821,18 @@ impl World {
             let view_distance = get_view_distance(player).get() as i32;
 
             if is_within_view_distance(chunk_pos, center, view_distance) {
-                player.client.try_enqueue_spawn_packet(entity);
+                // Send the complete entity-specific spawn sequence. This is intentionally
+                // dispatched asynchronously because item entities need their stack metadata
+                // after the base spawn packet; sending only the generic packet leaves the
+                // entity server-side and pickable but invisible to the client.
+                let client = player.client.clone();
+                let entity = entity.clone();
+                // Natural chunk spawning reaches this path on a Rayon Gen-Pool worker.
+                // Dispatch through the server's stored Tokio handle so packet sequencing does
+                // not require the generation thread itself to have an active Tokio reactor.
+                server.spawn_task(async move {
+                    client.enqueue_spawn_packet(&entity).await;
+                });
             }
         }
     }

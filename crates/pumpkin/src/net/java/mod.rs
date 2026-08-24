@@ -1144,3 +1144,98 @@ impl JavaClient {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod spawn_sequence_tests {
+    use super::*;
+    use crate::{
+        entity::{Entity, EntityBase, EntityBaseFuture, living::LivingEntity},
+        net::{ClientPlatform, GameProfile, PacketRateLimiter, PlayerConfig},
+    };
+    use std::{any::Any, sync::Arc, time::Duration};
+    use uuid::Uuid;
+
+    struct SpawnSequenceProbe;
+
+    impl EntityBase for SpawnSequenceProbe {
+        fn get_entity(&self) -> &Entity {
+            panic!("the complete spawn path must dispatch through the entity override")
+        }
+
+        fn get_living_entity(&self) -> Option<&LivingEntity> {
+            None
+        }
+
+        fn cast_any(&self) -> &dyn Any {
+            self
+        }
+
+        fn send_java_spawn_packet<'a>(
+            &'a self,
+            client: &'a JavaClient,
+        ) -> EntityBaseFuture<'a, ()> {
+            Box::pin(async move {
+                // Distinct payloads model an entity's base packet followed by its required
+                // metadata packet without coupling this dispatch test to one entity codec.
+                client.enqueue_packet(Bytes::from_static(b"spawn")).await;
+                client.enqueue_packet(Bytes::from_static(b"metadata")).await;
+            })
+        }
+    }
+
+    async fn java_client_with_packet_receiver() -> (ClientPlatform, Receiver<OutgoingPacket>) {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("the test listener should bind");
+        let address = listener
+            .local_addr()
+            .expect("the test listener should expose its address");
+        let (client_stream, accepted_stream) =
+            tokio::join!(tokio::net::TcpStream::connect(address), listener.accept());
+        let client_stream = client_stream.expect("the loopback client should connect");
+        let _accepted_stream = accepted_stream
+            .expect("the loopback server should accept the client")
+            .0;
+
+        let pending = PendingConnection::new(
+            client_stream,
+            address,
+            1,
+            PacketRateLimiter::new(false, 0.0, 0.0),
+        );
+        let profile = GameProfile {
+            id: Uuid::nil(),
+            name: "spawn-sequence-test".to_string(),
+            properties: ArcSwap::from_pointee(Vec::new()),
+            profile_actions: None,
+        };
+        let mut client = JavaClient::from_pending(pending, profile, PlayerConfig::default());
+        let receiver = client
+            .outgoing_packet_queue_recv
+            .take()
+            .expect("the test client should own its packet receiver");
+
+        (ClientPlatform::Java(client), receiver)
+    }
+
+    #[tokio::test]
+    async fn complete_spawn_sequence_preserves_entity_specific_packet_order() {
+        let (client, mut receiver) = java_client_with_packet_receiver().await;
+        let entity: Arc<dyn EntityBase> = Arc::new(SpawnSequenceProbe);
+
+        client.enqueue_spawn_packet(&entity).await;
+
+        let base_packet = tokio::time::timeout(Duration::from_secs(1), receiver.recv())
+            .await
+            .expect("the base spawn packet should arrive before timeout")
+            .expect("the packet queue should remain open");
+        let metadata_packet = tokio::time::timeout(Duration::from_secs(1), receiver.recv())
+            .await
+            .expect("the metadata packet should arrive before timeout")
+            .expect("the packet queue should remain open");
+
+        assert_eq!(base_packet.data, Bytes::from_static(b"spawn"));
+        assert_eq!(metadata_packet.data, Bytes::from_static(b"metadata"));
+        assert!(receiver.try_recv().is_err());
+    }
+}
