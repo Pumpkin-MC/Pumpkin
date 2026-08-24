@@ -116,15 +116,6 @@ impl<T: PacketWrite> PacketWrite for Vec<T> {
     }
 }
 
-impl<T: PacketWrite> PacketWrite for &[T] {
-    fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
-        for item in *self {
-            item.write(writer)?;
-        }
-        Ok(())
-    }
-}
-
 impl PacketWrite for String {
     fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
         VarUInt(self.len() as u32).write(writer)?;

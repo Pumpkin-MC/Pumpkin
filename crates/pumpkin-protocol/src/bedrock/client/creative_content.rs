@@ -6,11 +6,25 @@ use crate::{
     bedrock::network_item::NetworkItemDescriptor, codec::var_uint::VarUInt, serial::PacketWrite,
 };
 
-#[derive(PacketWrite)]
 #[packet(145)]
 pub struct CCreativeContent<'a> {
     pub groups: &'a [CreativeGroupInfoPayload],
     pub entries: &'a [CreativeItemEntryPayload],
+}
+
+impl PacketWrite for CCreativeContent<'_> {
+    fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
+        VarUInt(self.groups.len() as u32).write(writer)?;
+        for group in self.groups {
+            group.write(writer)?;
+        }
+
+        VarUInt(self.entries.len() as u32).write(writer)?;
+        for entry in self.entries {
+            entry.write(writer)?;
+        }
+        Ok(())
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -54,7 +68,6 @@ impl PacketWrite for CreativeGroupInfoPayload {
     }
 }
 
-#[derive(PacketWrite)]
 pub struct CreativeItemEntryPayload {
     pub id: VarUInt,
 
@@ -62,4 +75,12 @@ pub struct CreativeItemEntryPayload {
     pub item: NetworkItemDescriptor,
 
     pub group_index: VarUInt,
+}
+
+impl PacketWrite for CreativeItemEntryPayload {
+    fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
+        self.id.write(writer)?;
+        self.item.write_item_instance(writer)?;
+        self.group_index.write(writer)
+    }
 }
