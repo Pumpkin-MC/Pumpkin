@@ -1,3 +1,4 @@
+mod advancement_pack;
 pub mod nethernet;
 pub mod play;
 pub mod status;
@@ -38,6 +39,7 @@ use pumpkin_protocol::{
             player_auth_input::SPlayerAuthInput, request_ability::SRequestAbility,
             request_chunk_radius::SRequestChunkRadius,
             request_network_settings::SRequestNetworkSettings,
+            resource_pack_chunk_request::SResourcePackChunkRequest,
             resource_pack_client_response::SResourcePackClientResponse, respawn::SRespawn,
             set_local_player_as_initialized::SSetLocalPlayerAsInitialized,
             set_player_inventory_options::SSetPlayerInventoryOptions, text::SText,
@@ -118,6 +120,8 @@ pub struct BedrockClient {
     pub inventory_opened: AtomicBool,
     pub client_cache_supported: AtomicBool,
     pub blob_cache: Mutex<HashMap<u64, Vec<u8>>>,
+    /// Cancelled once Bedrock confirms that the local player finished loading.
+    client_initialized: CancellationToken,
     /// An notifier that is triggered when this client is closed.
     close_token: CancellationToken,
     last_seen: Arc<AtomicCell<std::time::Instant>>,
@@ -158,12 +162,21 @@ impl BedrockClient {
             inventory_opened: AtomicBool::new(false),
             client_cache_supported: AtomicBool::new(false),
             blob_cache: Mutex::new(HashMap::new()),
+            client_initialized: CancellationToken::new(),
             close_token: CancellationToken::new(),
             last_seen: Arc::new(AtomicCell::new(std::time::Instant::now())),
             incoming_game_packet_send: incoming_send,
             incoming_game_packet_recv: Mutex::new(Some(incoming_recv)),
             packet_limiter,
         }
+    }
+
+    pub async fn await_initialized(&self) {
+        self.client_initialized.cancelled().await;
+    }
+
+    pub fn set_initialized(&self) {
+        self.client_initialized.cancel();
     }
 
     pub async fn get_packet(&self) -> Option<RawPacket> {
@@ -672,6 +685,10 @@ impl BedrockClient {
             }
             SResourcePackClientResponse::PACKET_ID => {
                 self.handle_resource_pack_response(SResourcePackClientResponse::read(reader)?, server)
+                    .await;
+            }
+            SResourcePackChunkRequest::PACKET_ID => {
+                self.handle_resource_pack_chunk_request(SResourcePackChunkRequest::read(reader)?)
                     .await;
             }
             SPlayerAuthInput::PACKET_ID => {

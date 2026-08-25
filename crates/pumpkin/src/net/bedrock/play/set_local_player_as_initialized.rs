@@ -12,6 +12,7 @@ impl BedrockClient {
             player.gameprofile.name, packet.player_id.0
         );
         // This is sent when the client has finished loading and rendering the world.
+        self.set_initialized();
         player.set_client_loaded(true);
     }
 }
