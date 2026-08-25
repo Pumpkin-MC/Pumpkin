@@ -21,7 +21,6 @@ use pumpkin_data::dimension::Dimension;
 use pumpkin_data::entity::EntityStatus;
 use pumpkin_data::fluid::Fluid;
 use pumpkin_data::item_stack::ItemStack;
-use pumpkin_data::packet::CURRENT_MC_VERSION;
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_data::tracked_data;
 use pumpkin_data::{Block, BlockDirection};
@@ -3026,11 +3025,8 @@ impl Entity {
         let recipients_by_version =
             World::collect_java_recipients_by_version(java_recipients.into_iter());
 
+        let mut buf = Vec::new();
         for (version, recipients) in recipients_by_version {
-            if version < CURRENT_MC_VERSION {
-                continue;
-            }
-            let mut buf = Vec::new();
             for m in meta {
                 let _ = m.write(&mut buf, &version);
             }

@@ -9,7 +9,6 @@ use pumpkin_data::damage::DamageType;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
-use pumpkin_data::packet::CURRENT_MC_VERSION;
 use pumpkin_data::sound::Sound;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::codec::item_stack_seralizer::ItemStackSerializer;
@@ -346,28 +345,26 @@ impl EntityBase for ItemFrameEntity {
             }
 
             let ver = client.version.load();
-            if ver >= CURRENT_MC_VERSION {
-                let item_serializer =
-                    ItemStackSerializer::from(self.item_stack.lock().await.clone());
-                let rotation = self.get_rotation() as i32;
+            let item_serializer =
+                ItemStackSerializer::from(self.item_stack.lock().await.clone());
+            let rotation = self.get_rotation() as i32;
 
-                let mut data = Vec::new();
-                let meta_item = Metadata::new(
-                    pumpkin_data::tracked_data::item_frame::ITEM,
-                    item_serializer,
-                );
-                let meta_rot =
-                    Metadata::new(pumpkin_data::tracked_data::item_frame::ROTATION, rotation);
+            let mut data = Vec::new();
+            let meta_item = Metadata::new(
+                pumpkin_data::tracked_data::item_frame::ITEM,
+                item_serializer,
+            );
+            let meta_rot =
+                Metadata::new(pumpkin_data::tracked_data::item_frame::ROTATION, rotation);
 
-                if meta_item.write(&mut data, &ver).is_ok()
-                    && meta_rot.write(&mut data, &ver).is_ok()
-                {
-                    data.push(255);
-                    let meta_packet =
-                        CSetEntityMetadata::new(self.entity.entity_id.into(), data.into());
-                    if let Ok(meta_data) = client.serialize_packet(&meta_packet) {
-                        client.enqueue_packet(meta_data).await;
-                    }
+            if meta_item.write(&mut data, &ver).is_ok()
+                && meta_rot.write(&mut data, &ver).is_ok()
+            {
+                data.push(255);
+                let meta_packet =
+                    CSetEntityMetadata::new(self.entity.entity_id.into(), data.into());
+                if let Ok(meta_data) = client.serialize_packet(&meta_packet) {
+                    client.enqueue_packet(meta_data).await;
                 }
             }
         })

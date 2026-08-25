@@ -224,21 +224,19 @@ impl EntityBase for EyeOfEnder {
                 client.enqueue_packet(data).await;
             }
 
-            if client.version.load() >= pumpkin_data::packet::CURRENT_MC_VERSION {
-                let metadata = Metadata::new(
-                    pumpkin_data::tracked_data::eye_of_ender::ITEM_STACK,
-                    ItemStackSerializer::from(self.item_stack.lock().await.clone()),
+            let metadata = Metadata::new(
+                pumpkin_data::tracked_data::eye_of_ender::ITEM_STACK,
+                ItemStackSerializer::from(self.item_stack.lock().await.clone()),
+            );
+            let mut data = Vec::new();
+            if metadata.write(&mut data, &client.version.load()).is_ok() {
+                data.push(255);
+                let meta_packet = pumpkin_protocol::java::client::play::CSetEntityMetadata::new(
+                    self.entity.entity_id.into(),
+                    data.into(),
                 );
-                let mut data = Vec::new();
-                if metadata.write(&mut data, &client.version.load()).is_ok() {
-                    data.push(255);
-                    let meta_packet = pumpkin_protocol::java::client::play::CSetEntityMetadata::new(
-                        self.entity.entity_id.into(),
-                        data.into(),
-                    );
-                    if let Ok(meta_data) = client.serialize_packet(&meta_packet) {
-                        client.enqueue_packet(meta_data).await;
-                    }
+                if let Ok(meta_data) = client.serialize_packet(&meta_packet) {
+                    client.enqueue_packet(meta_data).await;
                 }
             }
         })
