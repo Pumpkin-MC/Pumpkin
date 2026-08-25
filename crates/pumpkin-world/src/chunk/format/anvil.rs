@@ -37,6 +37,12 @@ pub const CHUNK_COUNT: usize = REGION_SIZE * REGION_SIZE;
 /// The number of bytes in a sector (4 KiB)
 const SECTOR_BYTES: usize = 4096;
 
+/// Hard cap on a chunk's sector count in the Anvil location table
+/// (`(offset << 8) | sector_count`): one byte, so 255. Vanilla spills a larger chunk into a
+/// companion `c.<x>.<z>.mcc` file. Pumpkin has no such fallback; writing the count anyway
+/// overflows into the neighbouring offset field and the region is unparseable from that point on.
+const MAX_SECTORS_PER_CHUNK: u32 = 0xFF;
+
 // 26.2
 pub const WORLD_DATA_VERSION: i32 = 4903;
 
@@ -626,6 +632,19 @@ impl<S: SingleChunkDataSerializer + 'static> ChunkSerializer for AnvilChunkFile<
             .and_then(|chunk_data| chunk_data.serialized_data.compression);
         let new_chunk_data =
             AnvilChunkData::from_chunk(chunk, compression_type, chunk_config).await?;
+
+        // Cap check before `chunks_data`: a sector count above `MAX_SECTORS_PER_CHUNK` cannot
+        // be encoded, so the write is refused and the chunk stays dirty for a retry. The region
+        // file already on disk stays readable.
+        if new_chunk_data.sector_count() > MAX_SECTORS_PER_CHUNK {
+            return Err(ChunkWritingError::IoError(std::io::Error::other(format!(
+                "Chunk {:?} serializes to {} sectors, more than the {MAX_SECTORS_PER_CHUNK} a \
+                 region file can address for one chunk; it cannot be saved (oversized `.mcc` \
+                 chunks are not supported yet)",
+                chunk.position(),
+                new_chunk_data.sector_count(),
+            ))));
+        }
 
         let mut write_action = self.write_action.lock().await;
         if !chunk_config.write_in_place {

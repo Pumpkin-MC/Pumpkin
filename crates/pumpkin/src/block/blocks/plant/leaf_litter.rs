@@ -34,7 +34,8 @@ impl BlockBehaviour for LeafLitterBlock {
     ) -> BlockFuture<'a, BlockStateId> {
         Box::pin(async move {
             if args.direction == BlockDirection::Down {
-                let block_below_state = args.world.get_block_state(&args.position.down());
+                let block_below_state =
+                    args.world.get_block_state_for_support(&args.position.down());
                 if !block_below_state.is_side_solid(BlockDirection::Up) {
                     return Block::AIR.default_state.id;
                 }

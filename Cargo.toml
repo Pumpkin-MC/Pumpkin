@@ -108,6 +108,14 @@ edition = "2024"
 rust-version = "1.95"
 license = "GPL-3.0"
 
+# Debug: opt-level 1 so a loaded world can hold 20 TPS. Tick-timed behaviour
+# (piston animations, redstone, minecarts, piston_batch.rs) depends on that budget.
+[profile.dev]
+opt-level = 1
+
+[profile.dev.package."*"]
+opt-level = 3
+
 [profile.release]
 lto = true
 strip = "debuginfo"

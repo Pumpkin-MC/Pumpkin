@@ -67,7 +67,15 @@ pub struct ScheduledTick<T> {
 #[derive(Clone)]
 pub struct OrderedTick<T> {
     pub priority: TickPriority,
-    pub sub_tick_order: u64,
+    /// Vanilla `ScheduledTick.subTickOrder`: the tiebreak that makes two ticks due on the same
+    /// game tick at the same priority run in a defined order. Live ticks take it from
+    /// `Level::schedule_tick_counts`, counting up from 0 for the lifetime of the level.
+    ///
+    /// Signed because ticks restored from a chunk's NBT get *negative* orders (see
+    /// `ChunkTickScheduler::from_iter`, vanilla `LevelChunkTicks.unpack`): they were due before
+    /// anything scheduled since the level came up, so they have to sort ahead of every live
+    /// tick, and they still need a strict order among themselves.
+    pub sub_tick_order: i64,
 
     pub position: BlockPos,
     pub value: T,

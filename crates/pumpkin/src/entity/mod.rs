@@ -471,6 +471,12 @@ pub trait EntityBase: Send + Sync + std::any::Any {
         Box::pin(async {})
     }
 
+    /// When true, [`Self::on_player_collision`] uses the player's real hitbox instead of
+    /// the inflated item/XP pickup range (`expand(1.0, 0.5, 1.0)`).
+    fn requires_precise_player_collision(&self) -> bool {
+        false
+    }
+
     fn is_passenger(&self) -> EntityBaseFuture<'_, bool> {
         Box::pin(async move { self.get_entity().has_vehicle().await })
     }
@@ -851,6 +857,9 @@ pub struct Entity {
     pub supporting_block_pos: AtomicCell<Option<BlockPos>>,
     /// The chunk coordinates of the entity's current position
     pub chunk_pos: AtomicCell<Vector2<i32>>,
+    /// The chunk coordinates for which spawn/despawn visibility has last been synced to every
+    /// player (see `World::tick`'s per-tick visibility pass).
+    pub synced_chunk_pos: AtomicCell<Vector2<i32>>,
     /// Indicates whether the entity is sneaking
     pub sneaking: AtomicBool,
     /// Indicates whether the entity is sprinting
@@ -943,6 +952,20 @@ pub struct Entity {
     pub bedrock_flags_two: std::sync::atomic::AtomicI64,
     /// If true, the entity cannot collide with anything (e.g. spectator)
     pub no_clip: AtomicBool,
+    /// Total piston-caused displacement already applied to this entity this tick, per axis
+    /// (`[x, y, z]`). Vanilla's `Entity.pistonDeltas`; see [`Entity::limit_piston_movement`].
+    pub piston_deltas: AtomicCell<[f64; 3]>,
+    /// The world age the values in [`Self::piston_deltas`] belong to; they are zeroed as soon as
+    /// a piston move arrives for a later tick. Vanilla's `Entity.pistonDeltasGameTime`.
+    pub piston_deltas_game_time: AtomicCell<i64>,
+    /// Set for the duration of a single piston-driven move to the direction that piston is
+    /// moving in, and cleared again afterwards. While it is set, every `MOVING_PISTON` cell
+    /// travelling in that same direction reports itself as non-solid to this entity's collision
+    /// query, so the entity is not blocked by the very structure that is carrying it. Vanilla
+    /// keeps the same value in `PistonMovingBlockEntity.NOCLIP`, a `ThreadLocal` scoped to
+    /// exactly one `moveEntityByPiston` call; per-entity is the same scope here, and unlike a
+    /// thread-local it stays correct with entities ticking concurrently.
+    pub piston_noclip: AtomicCell<Option<BlockDirection>>,
     /// Multiplies movement for one tick before being reset
     pub movement_multiplier: AtomicCell<Vector3<f64>>,
     /// Determines whether the entity's velocity needs to be sent
@@ -957,6 +980,15 @@ pub struct Entity {
     pub last_sent_pos: AtomicCell<Vector3<f64>>,
     /// Cache for the last sent head yaw byte
     pub last_sent_head_yaw: AtomicU8,
+    /// Cache for the velocity last put on the wire, so [`Entity::send_velocity`] can skip a
+    /// packet when nothing actually changed. Vanilla: `ServerEntity.lastSentMovement`.
+    pub last_sent_velocity: AtomicCell<Vector3<f64>>,
+    /// Set whenever [`Entity::send_meta_data`] pushes a tracked-data change, mirroring vanilla's
+    /// `SynchedEntityData.isDirty()`. `ServerEntity.sendChanges` ORs this into its periodic
+    /// resync gate, so an entity whose tracked data changes every tick (`PrimedTnt`'s fuse)
+    /// gets position and velocity re-verified every tick too, not just on the `updateInterval`
+    /// cadence. See [`Entity::send_tracked_position`].
+    pub entity_data_dirty: AtomicBool,
     /// Persistent custom data container for plugins (matching Bukkit's `PersistentDataHolder`)
     pub custom_data: Mutex<NbtCompound>,
 }
@@ -1025,6 +1057,10 @@ impl Entity {
                 get_section_cord(floor_x),
                 get_section_cord(floor_z),
             )),
+            synced_chunk_pos: AtomicCell::new(Vector2::new(
+                get_section_cord(floor_x),
+                get_section_cord(floor_z),
+            )),
             sneaking: AtomicBool::new(false),
             swimming: AtomicBool::new(false),
             invisible: AtomicBool::new(false),
@@ -1074,6 +1110,9 @@ impl Entity {
             has_no_gravity: AtomicBool::new(false),
             scoreboard_tags: Mutex::new(HashSet::new()),
             no_clip: AtomicBool::new(false),
+            piston_deltas: AtomicCell::new([0.0; 3]),
+            piston_deltas_game_time: AtomicCell::new(-1),
+            piston_noclip: AtomicCell::new(None),
             movement_multiplier: AtomicCell::new(Vector3::default()),
             velocity_dirty: AtomicBool::new(true),
             removed: AtomicBool::new(false),
@@ -1081,6 +1120,8 @@ impl Entity {
             last_sent_pitch: AtomicU8::new(0),
             last_sent_head_yaw: AtomicU8::new(0),
             last_sent_pos: AtomicCell::new(position),
+            last_sent_velocity: AtomicCell::new(Vector3::new(0.0, 0.0, 0.0)),
+            entity_data_dirty: AtomicBool::new(false),
             custom_data: Mutex::new(NbtCompound::new()),
         }
     }
@@ -1257,8 +1298,20 @@ impl Entity {
         );
     }
 
+    /// Vanilla only puts a motion packet on the wire when `getDeltaMovement()` has actually
+    /// moved since `lastSentMovement` (`ServerEntity.sendChanges`'s `diff > 1.0E-7` check),
+    /// with one exception: a delta that lands exactly on zero is always reported, even if the
+    /// step that got it there was tiny, so the client is told a client-simulated entity (TNT, a
+    /// falling block, a thrown item) has come to rest instead of coasting on stale momentum.
     pub fn send_velocity(&self) {
         let velocity = self.velocity.load();
+        let last_sent = self.last_sent_velocity.load();
+        let diff = (velocity - last_sent).length_squared();
+        if diff <= 1.0e-7 && !(diff > 0.0 && velocity.length_squared() == 0.0) {
+            return;
+        }
+        self.last_sent_velocity.store(velocity);
+
         let chunk_pos = self.chunk_pos.load();
         self.world.load().broadcast_to_chunk_editioned_sync(
             chunk_pos,
@@ -1319,10 +1372,14 @@ impl Entity {
                 if get_section_cord(floor_x) != chunk_pos.x
                     || get_section_cord(floor_z) != chunk_pos.y
                 {
-                    self.chunk_pos.store(Vector2::new(
+                    let new_chunk = Vector2::new(
                         get_section_cord(new_block_pos.x),
                         get_section_cord(new_block_pos.z),
-                    ));
+                    );
+                    self.chunk_pos.store(new_chunk);
+                    self.world
+                        .load()
+                        .relocate_entity(self.entity_id, chunk_pos, new_chunk);
                 }
             }
         }
@@ -1440,6 +1497,13 @@ impl Entity {
 
         let mut adjusted_movement = movement;
 
+        // The box each axis sweeps from, matching vanilla `Entity.collideWithShapes`'
+        // `boundingBox.move(resolvedMovement)`: it accumulates only the FULL, already-resolved
+        // offset of axes processed so far. The axis currently being solved is swept forward
+        // from here by `calculate_collision_time`; the other two axes must stay fixed at this
+        // box's position for that sweep, not drift with the sweep's own time fraction.
+        let mut resolved_box = bounding_box;
+
         // Y-Axis adjustment
         if movement.get_axis(Axis::Y) != 0.0 {
             let mut max_time = 1.0;
@@ -1456,9 +1520,9 @@ impl Entity {
                         position = next_pos;
                     }
 
-                    if let Some(collision_time) = bounding_box.calculate_collision_time(
+                    if let Some(collision_time) = resolved_box.calculate_collision_time(
                         inert_box,
-                        adjusted_movement,
+                        adjusted_movement.get_axis(Axis::Y),
                         Axis::Y,
                         max_time,
                     ) {
@@ -1482,9 +1546,24 @@ impl Entity {
             }
         }
 
+        let mut y_only = Vector3::default();
+        y_only.set_axis(Axis::Y, adjusted_movement.get_axis(Axis::Y));
+        resolved_box = resolved_box.shift(y_only);
+
         let mut horizontal_collision = false;
 
-        for axis in Axis::horizontal() {
+        // Vanilla `Direction.axisStepOrder`: the horizontal axis with the LARGER movement
+        // magnitude is resolved first (right after Y), the smaller one last. A fixed X-then-Z
+        // order (as opposed to this magnitude-dependent order) lets a corner clip incorrectly
+        // when movement is dominated by one axis, since the resolution order determines which
+        // shape "wins" the corner.
+        let horizontal_order = if movement.x.abs() < movement.z.abs() {
+            [Axis::Z, Axis::X]
+        } else {
+            [Axis::X, Axis::Z]
+        };
+
+        for axis in horizontal_order {
             if movement.get_axis(axis) == 0.0 {
                 continue;
             }
@@ -1492,9 +1571,9 @@ impl Entity {
             let mut max_time = 1.0;
 
             for inert_box in &collisions {
-                if let Some(collision_time) = bounding_box.calculate_collision_time(
+                if let Some(collision_time) = resolved_box.calculate_collision_time(
                     inert_box,
-                    adjusted_movement,
+                    adjusted_movement.get_axis(axis),
                     axis,
                     max_time,
                 ) {
@@ -1507,6 +1586,10 @@ impl Entity {
                 adjusted_movement.set_axis(axis, changed_component);
                 horizontal_collision = true;
             }
+
+            let mut axis_only = Vector3::default();
+            axis_only.set_axis(axis, adjusted_movement.get_axis(axis));
+            resolved_box = resolved_box.shift(axis_only);
         }
 
         self.horizontal_collision
@@ -1711,16 +1794,40 @@ impl Entity {
         suffocating
     }
 
+    /// Periodic leg of vanilla's `ServerEntity.sendChanges`: every `update_interval` ticks the
+    /// tracker resends where the entity is and how fast it is moving.
+    ///
+    /// A correction channel. The client simulates TNT, falling blocks and items itself, so an
+    /// entity only broadcast when its velocity is explicitly changed has nothing to correct
+    /// against. Gravity and drag update velocity every tick, so vanilla resends both
+    /// `getDeltaMovement()` and position from the same gated block. See
+    /// [`Entity::send_velocity`] for the unchanged-velocity guard.
+    ///
+    /// `update_interval` is vanilla's per-type `EntityType.Builder.updateInterval` (10 for TNT,
+    /// 20 for items and falling blocks), keyed off the entity's own age like vanilla's per
+    /// tracker `tickCount`. `sendChanges` also fires on `entityData.isDirty()`, so an entity
+    /// whose tracked data changes every tick (TNT fuse) rides that instead of waiting for its
+    /// interval. See [`Entity::entity_data_dirty`].
+    pub fn send_tracked_position(&self, update_interval: i32) {
+        let on_interval =
+            update_interval > 0 && self.age.load(Relaxed).rem_euclid(update_interval) == 0;
+        let data_dirty = self.entity_data_dirty.swap(false, Relaxed);
+        if on_interval || data_dirty {
+            self.send_pos_rot();
+            self.send_velocity();
+        }
+    }
+
     #[expect(clippy::too_many_lines)]
     pub fn send_pos_rot(&self) {
         let old = self.last_sent_pos.load();
         let new = self.pos.load();
         let chunk_pos = self.chunk_pos.load();
 
-        let converted = Vector3::new(
-            new.x.mul_add(4096.0, -(old.x * 4096.0)) as i16,
-            new.y.mul_add(4096.0, -(old.y * 4096.0)) as i16,
-            new.z.mul_add(4096.0, -(old.z * 4096.0)) as i16,
+        let raw_delta = Vector3::new(
+            new.x.mul_add(4096.0, -(old.x * 4096.0)),
+            new.y.mul_add(4096.0, -(old.y * 4096.0)),
+            new.z.mul_add(4096.0, -(old.z * 4096.0)),
         );
 
         let yaw = self.yaw.load();
@@ -1730,7 +1837,7 @@ impl Entity {
         let pitch = (pitch * 256.0 / 360.0).rem_euclid(256.0) as u8;
 
         // Only broadcast when position or rotation has actually changed.
-        let pos_changed = converted.x != 0 || converted.y != 0 || converted.z != 0;
+        let pos_changed = raw_delta.x != 0.0 || raw_delta.y != 0.0 || raw_delta.z != 0.0;
         let rot_changed =
             yaw != self.last_sent_yaw.load(Relaxed) || pitch != self.last_sent_pitch.load(Relaxed);
 
@@ -1741,6 +1848,58 @@ impl Entity {
         self.last_sent_pos.store(new);
         self.last_sent_yaw.store(yaw, Relaxed);
         self.last_sent_pitch.store(pitch, Relaxed);
+
+        // The relative-move packets below encode the delta as an i16 (vanilla's
+        // `ClientboundMoveEntityPacket`, `VecDeltaCodec` at 4096 units/block, about 8 blocks of
+        // range). A bigger jump between two resyncs (explosion, a long fall) does not fit, and
+        // truncating it would tell the client the entity moved less far than it did. Vanilla's
+        // `ServerEntity.sendChanges` checks this (`deltaTooBig`) and substitutes an absolute
+        // `ClientboundEntityPositionSyncPacket`.
+        let delta_too_big = !(-32768.0..=32767.0).contains(&raw_delta.x)
+            || !(-32768.0..=32767.0).contains(&raw_delta.y)
+            || !(-32768.0..=32767.0).contains(&raw_delta.z);
+        if delta_too_big {
+            self.world.load().broadcast_to_chunk(
+                chunk_pos,
+                &CEntityPositionSync::new(
+                    self.entity_id.into(),
+                    new,
+                    self.velocity.load(),
+                    self.yaw.load(),
+                    self.pitch.load(),
+                    self.on_ground.load(Relaxed),
+                ),
+            );
+            if self.entity_type != &EntityType::PLAYER {
+                self.world.load().broadcast_to_chunk_bedrock(
+                    chunk_pos,
+                    &CMoveActorDelta::new(
+                        VarULong(self.entity_id as u64),
+                        MOVE_ACTOR_DELTA_FLAG_HAS_X
+                            | MOVE_ACTOR_DELTA_FLAG_HAS_Y
+                            | MOVE_ACTOR_DELTA_FLAG_HAS_Z
+                            | MOVE_ACTOR_DELTA_FLAG_HAS_PITCH
+                            | MOVE_ACTOR_DELTA_FLAG_HAS_YAW
+                            | MOVE_ACTOR_DELTA_FLAG_HAS_HEAD_YAW
+                            | if self.on_ground.load(Relaxed) {
+                                MOVE_ACTOR_DELTA_FLAG_ON_GROUND
+                            } else {
+                                0
+                            },
+                        new.x as f32,
+                        new.y as f32,
+                        new.z as f32,
+                        pitch,
+                        yaw,
+                        yaw,
+                    ),
+                );
+            }
+            self.send_head_rot(yaw);
+            return;
+        }
+
+        let converted = Vector3::new(raw_delta.x as i16, raw_delta.y as i16, raw_delta.z as i16);
 
         // Dynamically pick the most efficient packet
         if pos_changed && rot_changed {
@@ -2235,7 +2394,7 @@ impl Entity {
     }
 
     #[expect(clippy::float_cmp)]
-    fn get_velocity_multiplier(&self) -> f32 {
+    pub(crate) fn get_velocity_multiplier(&self) -> f32 {
         let block = self.world.load().get_block(&self.block_pos.load());
 
         let multiplier = block.velocity_multiplier;
@@ -2328,6 +2487,139 @@ impl Entity {
                 .update_entity_movement_after_fall_on(block, caller.as_ref())
                 .await;
         }
+    }
+
+    /// Displaces the entity by `motion`, clipped against collisions like `move_entity`, but
+    /// without treating the displacement as the entity's own velocity. Vanilla:
+    /// `MoverType.PISTON`. `move_entity` writes the clipped result back into `self.velocity`,
+    /// which is correct for a self-driven mover. An external displacement (a piston carrying
+    /// an entity that is not moving under its own power) leaves `velocity` alone, so a
+    /// minecart's next rail tick does not re-integrate that impulse. Also skips fall-damage
+    /// accounting: being carried is not falling.
+    pub async fn move_entity_external(&self, caller: &Arc<dyn EntityBase>, motion: Vector3<f64>) {
+        if caller.get_player().is_some() {
+            return;
+        }
+
+        if self.no_clip.load(Ordering::Relaxed) {
+            self.move_pos(motion);
+            return;
+        }
+
+        let final_move = self
+            .adjust_movement_for_collisions(motion, caller.as_ref())
+            .await;
+        self.move_pos(final_move);
+    }
+
+    /// Whether pistons pass straight through this entity instead of pushing it. Vanilla:
+    /// `getPistonPushReaction() == PushReaction.IGNORE`.
+    ///
+    /// The entities that answer yes have no physical presence: markers, display entities, the
+    /// interaction hitbox, the ominous item spawner, and the area effect cloud. They are
+    /// positioned by whatever placed them, so a piston sweeping past must leave them where
+    /// they are.
+    #[must_use]
+    pub const fn ignores_piston_push(&self) -> bool {
+        matches!(
+            self.entity_type.id,
+            id if id == EntityType::MARKER.id
+                || id == EntityType::INTERACTION.id
+                || id == EntityType::BLOCK_DISPLAY.id
+                || id == EntityType::ITEM_DISPLAY.id
+                || id == EntityType::TEXT_DISPLAY.id
+                || id == EntityType::AREA_EFFECT_CLOUD.id
+                || id == EntityType::OMINOUS_ITEM_SPAWNER.id
+        )
+    }
+
+    /// How much of a piston-caused displacement this entity is still allowed to take this tick.
+    ///
+    /// Vanilla: `limitPistonMovement` + `applyPistonMovementRestriction`. Both are safety
+    /// limits, not physics:
+    ///
+    /// * The displacement is reduced to a **single axis** (the first non-zero of x, y, z). A
+    ///   piston only ever pushes along one axis; vanilla drops the other components.
+    /// * Accumulated displacement per axis over one tick is clamped to ±0.51 (just over half
+    ///   a block). Each individual displacement is still collision-clipped, but a sequence of
+    ///   them in one tick can walk an entity past a thin obstacle one clipped step at a time.
+    ///
+    /// Returns the (possibly reduced) displacement, or zero when nothing is left of the
+    /// budget. The caller must skip a zero move: even a zero move has side effects (position
+    /// packets, collision flags).
+    fn limit_piston_movement(&self, motion: Vector3<f64>, game_time: i64) -> Vector3<f64> {
+        const MAX_PISTON_MOVEMENT_PER_TICK: f64 = 0.51;
+        /// Below this the remaining budget is not worth a move at all; vanilla's threshold.
+        const EPSILON: f64 = 1.0e-5;
+
+        if motion.length_squared() <= 1.0e-7 {
+            return motion;
+        }
+
+        // A new tick resets the budget. The stored timestamp is the tick the current numbers
+        // belong to, so a piston acting on an entity that was last pushed ticks ago starts over.
+        let mut deltas = if self.piston_deltas_game_time.load() == game_time {
+            self.piston_deltas.load()
+        } else {
+            self.piston_deltas_game_time.store(game_time);
+            [0.0; 3]
+        };
+
+        let axis = if motion.x != 0.0 {
+            Axis::X
+        } else if motion.y != 0.0 {
+            Axis::Y
+        } else if motion.z != 0.0 {
+            Axis::Z
+        } else {
+            self.piston_deltas.store(deltas);
+            return Vector3::default();
+        };
+
+        let index = match axis {
+            Axis::X => 0,
+            Axis::Y => 1,
+            Axis::Z => 2,
+        };
+
+        let clamped = (motion.get_axis(axis) + deltas[index])
+            .clamp(-MAX_PISTON_MOVEMENT_PER_TICK, MAX_PISTON_MOVEMENT_PER_TICK);
+        let allowed = clamped - deltas[index];
+        deltas[index] = clamped;
+        self.piston_deltas.store(deltas);
+
+        if allowed.abs() <= EPSILON {
+            return Vector3::default();
+        }
+
+        let mut limited = Vector3::default();
+        limited.set_axis(axis, allowed);
+        limited
+    }
+
+    /// Displaces the entity the way a piston does. Vanilla: `Entity.move(MoverType.PISTON, ...)`.
+    ///
+    /// On top of [`Self::move_entity_external`] this adds the two things that make the mover
+    /// type distinct: the per-tick displacement budget of [`Self::limit_piston_movement`], and
+    /// the no-clip window during which moving-piston cells travelling the same way stop
+    /// colliding with the entity they are carrying. Without the latter, an entity shoved out
+    /// of a retracting piston head immediately collides with that head's placeholder and stays
+    /// stuck inside it.
+    pub async fn move_entity_piston(
+        &self,
+        caller: &Arc<dyn EntityBase>,
+        motion: Vector3<f64>,
+        piston_direction: BlockDirection,
+        game_time: i64,
+    ) {
+        let motion = self.limit_piston_movement(motion, game_time);
+        if motion == Vector3::default() {
+            return;
+        }
+
+        self.piston_noclip.store(Some(piston_direction));
+        self.move_entity_external(caller, motion).await;
+        self.piston_noclip.store(None);
     }
 
     pub fn push_out_of_blocks(&self, center_pos: Vector3<f64>) {
@@ -3004,6 +3296,8 @@ impl Entity {
         meta: &[Metadata<T>],
         bedrock_meta: Option<&SyncedActorDataList>,
     ) {
+        self.entity_data_dirty.store(true, Relaxed);
+
         let world = self.world.load();
         let chunk_pos = self.chunk_pos.load();
         let players = world.players.load();

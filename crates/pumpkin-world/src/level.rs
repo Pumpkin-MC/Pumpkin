@@ -30,7 +30,7 @@ use std::sync::{Arc, Mutex, Weak};
 use std::time::Duration;
 use std::{
     path::PathBuf,
-    sync::atomic::{AtomicBool, AtomicU64, Ordering},
+    sync::atomic::{AtomicBool, AtomicI64, Ordering},
     thread,
 };
 use tokio::time::timeout;
@@ -75,7 +75,11 @@ pub struct Level {
     pub lighting_config: LightingEngineConfig,
 
     /// Counts the number of ticks that have been scheduled for this world
-    schedule_tick_counts: AtomicU64,
+    /// Vanilla `LevelTicks.nextSubTickCount`: hands out `ScheduledTick.subTickOrder`, the
+    /// tiebreak between ticks due on the same game tick at the same priority. Counts up from 0
+    /// for the level's lifetime; ticks restored from a chunk's NBT get negative orders instead
+    /// (see `ChunkTickScheduler::from_iter`) so they always sort ahead of these.
+    schedule_tick_counts: AtomicI64,
 
     // Chunks that are paired with chunk watchers. When a chunk is no longer watched, it is removed
     // from the loaded chunks map and sent to the underlying ChunkIO
@@ -263,7 +267,7 @@ impl Level {
             light_engine: DynamicLightEngine::new(),
             chunk_saver,
             entity_saver,
-            schedule_tick_counts: AtomicU64::new(0),
+            schedule_tick_counts: AtomicI64::new(0),
             loaded_chunks: Arc::new(DashMap::new()),
             loaded_entity_chunks: Arc::new(DashMap::new()),
             chunks_with_scheduled_ticks: Arc::new(dashmap::DashSet::new()),
@@ -591,12 +595,25 @@ impl Level {
 
         // 2. Process chunks with scheduled ticks
         // We collect keys first to avoid holding DashSet shard lock while accessing loaded_chunks (deadlock risk)
-        let scheduled_chunk_pos: Vec<_> = self
+        let mut scheduled_chunk_pos: Vec<_> = self
             .chunks_with_scheduled_ticks
             .iter()
             .map(|p| *p)
             .collect();
+        // A `DashSet` iterates in hash order, which decides the order equal-comparing ticks end
+        // up in below. Ticks restored from different chunks' NBT can compare equal (each chunk
+        // numbers its own restored ticks from `-len`, see `ChunkTickScheduler::from_iter`), so
+        // without a fixed order here a construction spanning two chunks would run its ticks in a
+        // different sequence on every load.
+        scheduled_chunk_pos.sort_unstable_by_key(|pos| (pos.x, pos.y));
         for pos in scheduled_chunk_pos {
+            // Same skip as the entity-tick pass in `World::tick`: a chunk outside `active_chunks`
+            // is not ticked this call, so its `ChunkTickScheduler` stays queued. `step_tick()`
+            // pops only the current ring-buffer slot; skipping the chunk leaves that slot for a
+            // later call when entities are ticked too.
+            if !active_chunks.contains(&pos) {
+                continue;
+            }
             if let Some(chunk) = self.loaded_chunks.get(&pos) {
                 let chunk = chunk.value();
                 ticks.block_ticks.append(&mut chunk.block_ticks.step_tick());
@@ -611,8 +628,11 @@ impl Level {
             }
         }
 
-        ticks.block_ticks.sort_unstable();
-        ticks.fluid_ticks.sort_unstable();
+        // Stable: `OrderedTick`'s ordering is only (priority, sub_tick_order), so ties are
+        // possible across chunks and a stable sort keeps them in the fixed collection order
+        // established above instead of an arbitrary one.
+        ticks.block_ticks.sort();
+        ticks.fluid_ticks.sort();
 
         ticks
     }

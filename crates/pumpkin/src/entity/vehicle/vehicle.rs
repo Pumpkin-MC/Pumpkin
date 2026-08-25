@@ -26,7 +26,7 @@ impl VehicleEntity {
         }
     }
 
-    pub fn tick(&self) {
+    pub async fn tick(&self) {
         let current_hurt = self.hurt_time.load(Ordering::Relaxed);
         if current_hurt > 0 {
             self.hurt_time.store(current_hurt - 1, Ordering::Relaxed);
@@ -37,17 +37,14 @@ impl VehicleEntity {
             self.damage.store(current_damage - 1.0);
         }
 
+        let Some(server) = self.entity.world.load().server.upgrade() else {
+            return;
+        };
         let mut update_event =
             crate::plugin::api::events::vehicle::vehicle_update::VehicleUpdateEvent::new(
                 self.entity.entity_id,
             );
-        if let Some(server) = self.entity.world.load().server.upgrade() {
-            tokio::task::block_in_place(|| {
-                tokio::runtime::Handle::current().block_on(async {
-                    server.plugin_manager.fire(&server, &mut update_event).await;
-                });
-            });
-        }
+        server.plugin_manager.fire(&server, &mut update_event).await;
     }
 
     pub async fn create(&self) {

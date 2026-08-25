@@ -48,7 +48,7 @@ impl<'a, T: std::hash::Hash + Eq> ChunkTickScheduler<&'a T> {
         res
     }
 
-    pub fn schedule_tick(&self, tick: &ScheduledTick<&'a T>, sub_tick_order: u64) {
+    pub fn schedule_tick(&self, tick: &ScheduledTick<&'a T>, sub_tick_order: i64) {
         let offset = self.offset.load(Ordering::SeqCst);
         let mut inner_guard = self
             .inner
@@ -104,7 +104,14 @@ impl<'a, T: std::hash::Hash + Eq> ChunkTickScheduler<&'a T> {
 
         for i in 0..MAX_TICK_DELAY {
             let index = (offset + i) % MAX_TICK_DELAY;
-            res.extend(inner.tick_queue[index].iter().map(|x| ScheduledTick {
+            // Emitted in execution order, not in the order they happened to be pushed. Ticks
+            // are scheduled from concurrently running tasks, so the bucket's own order does not
+            // reliably follow `sub_tick_order`; `from_iter` renumbers strictly by list position
+            // when this comes back, so whatever order is written here is the order the chunk
+            // will run in after a reload.
+            let mut bucket: Vec<&OrderedTick<&'a T>> = inner.tick_queue[index].iter().collect();
+            bucket.sort_by(|a, b| std::cmp::Ord::cmp(*a, *b));
+            res.extend(bucket.into_iter().map(|x| ScheduledTick {
                 delay: i as u8,
                 priority: x.priority,
                 position: x.position,
@@ -120,10 +127,9 @@ impl<'a, T: std::hash::Hash + Eq + 'static> FromIterator<ScheduledTick<&'a T>>
 {
     fn from_iter<I: IntoIterator<Item = ScheduledTick<&'a T>>>(iter: I) -> Self {
         let scheduler = Self::default();
-        let iter = iter.into_iter();
+        let ticks: Vec<ScheduledTick<&'a T>> = iter.into_iter().collect();
 
-        let (lower, _) = iter.size_hint();
-        if lower > 0 {
+        if !ticks.is_empty() {
             let mut inner_guard = scheduler
                 .inner
                 .lock()
@@ -134,11 +140,16 @@ impl<'a, T: std::hash::Hash + Eq + 'static> FromIterator<ScheduledTick<&'a T>>
                     queued_ticks: FxHashSet::default(),
                 })
             });
-            inner.queued_ticks.reserve(lower);
+            inner.queued_ticks.reserve(ticks.len());
         }
 
-        for tick in iter {
-            scheduler.schedule_tick(&tick, 0);
+        // Vanilla `LevelChunkTicks.unpack`: `int i = -this.pendingTicks.size()` then `i++` per
+        // restored tick. Orders stay strictly increasing in save order, so same-tick same-priority
+        // ticks keep the sequence they had. They are negative, so they sort ahead of anything
+        // `Level::schedule_tick_counts` has handed out since this level came up.
+        let first_order = -(i64::try_from(ticks.len()).unwrap_or(i64::MAX));
+        for (sub_tick_order, tick) in (first_order..).zip(ticks.iter()) {
+            scheduler.schedule_tick(tick, sub_tick_order);
         }
         scheduler
     }

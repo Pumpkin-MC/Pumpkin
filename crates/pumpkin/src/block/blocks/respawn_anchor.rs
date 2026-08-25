@@ -7,13 +7,27 @@ use pumpkin_macros::pumpkin_block;
 use pumpkin_world::world::BlockFlags;
 
 use crate::block::registry::BlockActionResult;
-use crate::block::{BlockBehaviour, BlockFuture, NormalUseArgs, UseWithItemArgs};
+use crate::block::{
+    BlockBehaviour, BlockFuture, GetComparatorOutputArgs, NormalUseArgs, UseWithItemArgs,
+};
 use crate::entity::EntityBase;
 
 #[pumpkin_block("minecraft:respawn_anchor")]
 pub struct RespawnAnchorBlock;
 
 impl BlockBehaviour for RespawnAnchorBlock {
+    // Vanilla `RespawnAnchorBlock.getAnalogOutputSignal`/`getScaledChargeLevel`:
+    // 0, 3, 7, 11, 15 for charge 0-4.
+    fn get_comparator_output<'a>(
+        &'a self,
+        args: GetComparatorOutputArgs<'a>,
+    ) -> BlockFuture<'a, Option<u8>> {
+        Box::pin(async move {
+            let state_id = args.world.get_block_state_id(args.position);
+            let props = RespawnAnchorLikeProperties::from_state_id(state_id, args.block);
+            Some((u16::from(props.charges) * 15 / 4) as u8)
+        })
+    }
     fn use_with_item<'a>(
         &'a self,
         args: UseWithItemArgs<'a>,

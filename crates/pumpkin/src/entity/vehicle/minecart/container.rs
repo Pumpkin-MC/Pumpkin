@@ -24,6 +24,7 @@ pub(super) struct MinecartInventory {
     size: usize,
     loot_table: Mutex<Option<(String, i64)>>,
     drops_claimed: AtomicBool,
+    dirty: AtomicBool,
 }
 
 impl MinecartInventory {
@@ -33,11 +34,20 @@ impl MinecartInventory {
             size,
             loot_table: Mutex::new(None),
             drops_claimed: AtomicBool::new(false),
+            dirty: AtomicBool::new(false),
         }
     }
 
     pub(super) fn claim_drops(&self) -> bool {
         !self.drops_claimed.swap(true, Ordering::AcqRel)
+    }
+
+    /// Whether the cargo has changed since the last call. Vanilla `DetectorRailBlock.checkPressed`
+    /// re-pokes a comparator every 20 ticks while a cart sits powering it, the only reason a
+    /// parked container minecart's reading ever refreshes (`AbstractMinecartContainer.setChanged()`
+    /// is a vanilla no-op). Skipping that poke when nothing changed.
+    pub(super) fn take_dirty(&self) -> bool {
+        self.dirty.swap(false, Ordering::Relaxed)
     }
 
     pub(super) async fn read_nbt(&self, nbt: &NbtCompound) {
@@ -107,25 +117,34 @@ impl Inventory for MinecartInventory {
     fn remove_stack(&self, slot: usize) -> InventoryFuture<'_, ItemStack> {
         Box::pin(async move {
             let mut items = self.items.write().await;
-            std::mem::replace(&mut items[slot], ItemStack::EMPTY.clone())
+            let removed = std::mem::replace(&mut items[slot], ItemStack::EMPTY.clone());
+            self.mark_dirty();
+            removed
         })
     }
 
     fn remove_stack_specific(&self, slot: usize, amount: u8) -> InventoryFuture<'_, ItemStack> {
         Box::pin(async move {
             let mut items = self.items.write().await;
-            if !items[slot].is_empty() && amount > 0 {
+            let removed = if !items[slot].is_empty() && amount > 0 {
                 items[slot].split(amount)
             } else {
                 ItemStack::EMPTY.clone()
-            }
+            };
+            self.mark_dirty();
+            removed
         })
     }
 
     fn set_stack(&self, slot: usize, stack: ItemStack) -> InventoryFuture<'_, ()> {
         Box::pin(async move {
             self.items.write().await[slot] = stack;
+            self.mark_dirty();
         })
+    }
+
+    fn mark_dirty(&self) {
+        self.dirty.store(true, Ordering::Relaxed);
     }
 
     fn as_any(&self) -> &dyn Any {

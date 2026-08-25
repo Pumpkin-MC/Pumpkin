@@ -20,6 +20,7 @@ pub struct ShulkerBoxBlockEntity {
     pub position: BlockPos,
     pub items: RwLock<[ItemStack; Self::INVENTORY_SIZE]>,
     pub dirty: AtomicBool,
+    comparator_dirty: AtomicBool,
 
     // Viewer
     pub viewers: ViewerCountTracker,
@@ -42,6 +43,7 @@ impl BlockEntity for ShulkerBoxBlockEntity {
             position,
             items: RwLock::new(from_fn(|_| ItemStack::EMPTY.clone())),
             dirty: AtomicBool::new(false),
+            comparator_dirty: AtomicBool::new(false),
             viewers: ViewerCountTracker::new(),
         };
 
@@ -88,6 +90,14 @@ impl BlockEntity for ShulkerBoxBlockEntity {
 
     fn clear_dirty(&self) {
         self.dirty.store(false, Ordering::Relaxed);
+    }
+
+    fn is_comparator_dirty(&self) -> bool {
+        self.comparator_dirty.load(Ordering::Relaxed)
+    }
+
+    fn clear_comparator_dirty(&self) {
+        self.comparator_dirty.store(false, Ordering::Relaxed);
     }
 
     fn chunk_data_nbt(&self) -> Option<NbtCompound> {
@@ -151,6 +161,7 @@ impl ShulkerBoxBlockEntity {
             position,
             items: RwLock::new(from_fn(|_| ItemStack::EMPTY.clone())),
             dirty: AtomicBool::new(false),
+            comparator_dirty: AtomicBool::new(false),
             viewers: ViewerCountTracker::new(),
         }
     }
@@ -234,6 +245,7 @@ impl Inventory for ShulkerBoxBlockEntity {
 
     fn mark_dirty(&self) {
         self.dirty.store(true, Ordering::Relaxed);
+        self.comparator_dirty.store(true, Ordering::Relaxed);
     }
 
     fn as_any(&self) -> &dyn Any {

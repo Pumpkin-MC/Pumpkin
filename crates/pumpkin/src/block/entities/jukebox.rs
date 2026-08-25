@@ -24,6 +24,7 @@ pub struct JukeboxBlockEntity {
     /// Length of the current song in ticks (0 if not playing)
     song_length_ticks: AtomicU64,
     dirty: AtomicBool,
+    comparator_dirty: AtomicBool,
 }
 
 const RECORD_ITEM_NBT_KEY: &str = "RecordItem";
@@ -56,6 +57,7 @@ impl BlockEntity for JukeboxBlockEntity {
             ticks_since_song_started: AtomicU64::new(ticks_since_song_started),
             song_length_ticks: AtomicU64::new(0), // Will be set when playing starts
             dirty: AtomicBool::new(false),
+            comparator_dirty: AtomicBool::new(false),
         }
     }
 
@@ -100,6 +102,14 @@ impl BlockEntity for JukeboxBlockEntity {
         self.dirty.load(Ordering::Relaxed)
     }
 
+    fn is_comparator_dirty(&self) -> bool {
+        self.comparator_dirty.load(Ordering::Relaxed)
+    }
+
+    fn clear_comparator_dirty(&self) {
+        self.comparator_dirty.store(false, Ordering::Relaxed);
+    }
+
     fn chunk_data_nbt(&self) -> Option<NbtCompound> {
         let mut nbt = NbtCompound::new();
         if let Ok(record) = self.record_stack.try_lock()
@@ -136,6 +146,7 @@ impl JukeboxBlockEntity {
             ticks_since_song_started: AtomicU64::new(0),
             song_length_ticks: AtomicU64::new(0),
             dirty: AtomicBool::new(false),
+            comparator_dirty: AtomicBool::new(false),
         }
     }
 
@@ -188,6 +199,7 @@ impl JukeboxBlockEntity {
 
     fn mark_dirty(&self) {
         self.dirty.store(true, Ordering::Relaxed);
+        self.comparator_dirty.store(true, Ordering::Relaxed);
     }
 }
 
@@ -230,6 +242,7 @@ impl Inventory for JukeboxBlockEntity {
 
     fn mark_dirty(&self) {
         self.dirty.store(true, Ordering::Relaxed);
+        self.comparator_dirty.store(true, Ordering::Relaxed);
     }
 
     fn as_any(&self) -> &dyn Any {

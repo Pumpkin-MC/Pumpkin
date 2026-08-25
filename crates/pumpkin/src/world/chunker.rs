@@ -82,9 +82,13 @@ pub async fn update_position(player: &Arc<Player>) {
 
     // Use the chunk_manager's world reference, which is updated on dimension change.
     // This ensures we load chunks from the correct world after portal teleportation.
-    let world = {
+    let world = { player.chunk_manager.lock().await.world().clone() };
+    // Before releasing this player's tickets on the unloading chunks below: that can let
+    // `GenerationSchedule` evict their raw block data before the tick loop persists any live
+    // BE in them. See `World::flush_block_entities`.
+    world.flush_block_entities(&unloading_chunks).await;
+    {
         let mut chunk_manager = player.chunk_manager.lock().await;
-        let world = chunk_manager.world().clone();
         chunk_manager.update_center_and_view_distance(
             new_chunk_center,
             view_distance.into(),
@@ -92,9 +96,17 @@ pub async fn update_position(player: &Arc<Player>) {
             &loading_chunks,
             &unloading_chunks,
         );
-        world
     };
     player.watched_section.store(new_cylindrical);
+
+    // Drop the entities of the leaving chunks on this client before unwatching them: past that
+    // point the player is no longer a chunk watcher, so no chunk-scoped broadcast can reach them.
+    // Covers every unloading chunk, not just those with zero watchers. Visibility is per player
+    // (`ChunkMap.TrackedEntity::removePairing`), so a chunk another player still watches must
+    // equally stop being rendered here.
+    world
+        .despawn_entities_in_chunks_for_player(player, &unloading_chunks)
+        .await;
 
     if let ClientPlatform::Java(client) = player.client.as_ref() {
         for chunk in &unloading_chunks {
@@ -115,10 +127,9 @@ pub async fn update_position(player: &Arc<Player>) {
         .mark_chunks_as_not_watched(&unloading_chunks)
         .await;
 
-    if !chunks_to_clean.is_empty() {
-        world.remove_entities_in_chunks(&chunks_to_clean).await;
-        world.level.clean_entity_chunks(&chunks_to_clean);
-    }
+    // Queued rather than removed here: this runs from the player's own task, not the tick
+    // loop. See `World::pending_chunk_removals`.
+    world.queue_chunk_removal(&chunks_to_clean);
 
     if !loading_chunks.is_empty() {
         world.spawn_world_entity_chunks(player.clone(), loading_chunks, new_chunk_center);

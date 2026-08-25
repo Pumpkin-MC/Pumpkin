@@ -13,6 +13,10 @@ use crate::{
     world::World,
 };
 
+/// Vanilla `EntityTypes.FALLING_BLOCK`'s `updateInterval(20)`. See
+/// [`Entity::send_tracked_position`].
+const UPDATE_INTERVAL: i32 = 20;
+
 pub struct FallingEntity {
     entity: Entity,
     block_state_id: BlockStateId,
@@ -84,6 +88,8 @@ impl EntityBase for FallingEntity {
             if entity.velocity_dirty.swap(false, Ordering::SeqCst) {
                 entity.send_pos_rot();
                 entity.send_velocity();
+            } else {
+                entity.send_tracked_position(UPDATE_INTERVAL);
             }
         })
     }

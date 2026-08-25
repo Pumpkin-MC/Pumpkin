@@ -206,6 +206,17 @@ impl HostBlockEntity for PluginHostState {
         Ok(())
     }
 
+    async fn is_comparator_dirty(&mut self, res: Resource<BlockEntity>) -> wasmtime::Result<bool> {
+        let entity = block_entity_from_resource(self, &res)?;
+        Ok(entity.is_comparator_dirty())
+    }
+
+    async fn clear_comparator_dirty(&mut self, res: Resource<BlockEntity>) -> wasmtime::Result<()> {
+        let entity = block_entity_from_resource(self, &res)?;
+        entity.clear_comparator_dirty();
+        Ok(())
+    }
+
     async fn set_custom_data(
         &mut self,
         res: Resource<BlockEntity>,

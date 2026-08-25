@@ -14,6 +14,7 @@ pub struct DropperBlockEntity {
     pub position: BlockPos,
     pub items: tokio::sync::RwLock<[ItemStack; Self::INVENTORY_SIZE]>,
     pub dirty: AtomicBool,
+    comparator_dirty: AtomicBool,
 }
 
 impl BlockEntity for DropperBlockEntity {
@@ -32,6 +33,7 @@ impl BlockEntity for DropperBlockEntity {
             position,
             items: tokio::sync::RwLock::new(from_fn(|_| ItemStack::EMPTY.clone())),
             dirty: AtomicBool::new(false),
+            comparator_dirty: AtomicBool::new(false),
         };
 
         pumpkin_world::inventory::sync_read_items_from_nbt(nbt, dropper.items.get_mut());
@@ -59,6 +61,14 @@ impl BlockEntity for DropperBlockEntity {
         self.dirty.store(false, Ordering::Relaxed);
     }
 
+    fn is_comparator_dirty(&self) -> bool {
+        self.comparator_dirty.load(Ordering::Relaxed)
+    }
+
+    fn clear_comparator_dirty(&self) {
+        self.comparator_dirty.store(false, Ordering::Relaxed);
+    }
+
     fn chunk_data_nbt(&self) -> Option<NbtCompound> {
         let mut nbt = NbtCompound::new();
         let items = futures::executor::block_on(self.items.read());
@@ -81,6 +91,7 @@ impl DropperBlockEntity {
             position,
             items: tokio::sync::RwLock::new(from_fn(|_| ItemStack::EMPTY.clone())),
             dirty: AtomicBool::new(false),
+            comparator_dirty: AtomicBool::new(false),
         }
     }
 
@@ -152,6 +163,7 @@ impl Inventory for DropperBlockEntity {
 
     fn mark_dirty(&self) {
         self.dirty.store(true, Ordering::Relaxed);
+        self.comparator_dirty.store(true, Ordering::Relaxed);
     }
 
     fn as_any(&self) -> &dyn Any {

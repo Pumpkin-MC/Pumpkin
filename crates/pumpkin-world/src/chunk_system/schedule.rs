@@ -10,7 +10,7 @@ use super::{
 };
 use crate::chunk::io::Dirtiable;
 use crate::level::{Level, SyncChunk};
-use dashmap::DashMap;
+use dashmap::{DashMap, DashSet};
 use pumpkin_config::lighting::LightingEngineConfig;
 use pumpkin_data::chunk_gen_settings::GenerationSettings;
 use pumpkin_util::math::vector2::Vector2;
@@ -57,6 +57,11 @@ pub struct GenerationSchedule {
     send_level: Arc<LevelChannel>,
 
     public_chunk_map: Arc<DashMap<Vector2<i32>, SyncChunk>>,
+    /// Mirrors `Level::chunks_with_scheduled_ticks`, the index `Level::get_tick_data` walks
+    /// every tick to know which loaded chunks' `ChunkTickScheduler`s to step. A chunk that
+    /// arrives already carrying restored `block_ticks`/`fluid_ticks` (NBT, not scheduled live)
+    /// is added here too, or those ticks sit un-stepped. See `receive_chunk`.
+    chunks_with_scheduled_ticks: Arc<DashSet<Vector2<i32>>>,
     chunk_map: HashMap<ChunkPos, ChunkHolder>,
     unload_chunks: HashSetType<ChunkPos>,
 
@@ -155,6 +160,7 @@ impl GenerationSchedule {
                     last_high_priority: Vec::new(),
                     send_level: level_channel,
                     public_chunk_map: level_sched.loaded_chunks.clone(),
+                    chunks_with_scheduled_ticks: level_sched.chunks_with_scheduled_ticks.clone(),
                     unload_chunks: HashSetType::default(),
                     waiting_for_chunks: HashSetType::default(),
                     io_lock,
@@ -930,6 +936,12 @@ impl GenerationSchedule {
                                 pos
                             );
                         }
+                        // Ticks restored from this chunk's NBT (a detector rail's recurring
+                        // recheck, a pending crop growth) need to be in the live tick index too,
+                        // or `Level::get_tick_data` never steps them. See field doc above.
+                        if data.block_ticks.has_ticks() || data.fluid_ticks.has_ticks() {
+                            self.chunks_with_scheduled_ticks.insert(pos);
+                        }
                         holder.public = true;
                         trace!(
                             "Notifying players: chunk {:?} loaded from disk (Full status)",
@@ -992,8 +1004,19 @@ impl GenerationSchedule {
                                 let was_public = holder.public;
                                 self.apply_lighting_override(&chunk);
                                 let public_chunk = chunk.clone();
+                                let carries_ticks =
+                                    chunk.block_ticks.has_ticks() || chunk.fluid_ticks.has_ticks();
                                 if was_public {
                                     self.public_chunk_map.insert(new_pos, public_chunk);
+                                    // Same check as the `RecvChunk::IO` branch above: ticks
+                                    // carried over from before this regeneration stay in the live
+                                    // tick index so `Level::get_tick_data` still steps them.
+                                    // Inserted only after `public_chunk_map` so a concurrent
+                                    // `get_tick_data` never observes this position as scheduled
+                                    // before it is actually loaded.
+                                    if carries_ticks {
+                                        self.chunks_with_scheduled_ticks.insert(new_pos);
+                                    }
                                     info!(
                                         "Notifying players: regenerated chunk at {:?} (was already public)",
                                         new_pos
@@ -1005,6 +1028,12 @@ impl GenerationSchedule {
                                     let result =
                                         self.public_chunk_map.insert(new_pos, public_chunk);
                                     holder.public = true;
+                                    // Same ordering as above: only after the chunk is visible in
+                                    // `public_chunk_map` does it become safe to mark as having
+                                    // scheduled ticks.
+                                    if carries_ticks {
+                                        self.chunks_with_scheduled_ticks.insert(new_pos);
+                                    }
                                     if result.is_some() {
                                         warn!(
                                             "public_chunk_map.insert returned existing chunk for {new_pos:?}"

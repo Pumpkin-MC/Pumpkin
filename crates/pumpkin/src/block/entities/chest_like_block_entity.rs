@@ -26,6 +26,7 @@ macro_rules! impl_block_entity_for_chest {
                     position,
                     items: tokio::sync::RwLock::new(std::array::from_fn(|_| ItemStack::EMPTY.clone())),
                     dirty: std::sync::atomic::AtomicBool::new(false),
+                    comparator_dirty: std::sync::atomic::AtomicBool::new(false),
                     viewers: $crate::block::viewer::ViewerCountTracker::new(),
                     loot_table: StdMutex::new(loot_table_key),
                     loot_table_seed,
@@ -95,6 +96,15 @@ macro_rules! impl_block_entity_for_chest {
 
             fn clear_dirty(&self) {
                 self.dirty
+                    .store(false, std::sync::atomic::Ordering::Relaxed);
+            }
+
+            fn is_comparator_dirty(&self) -> bool {
+                self.comparator_dirty.load(std::sync::atomic::Ordering::Relaxed)
+            }
+
+            fn clear_comparator_dirty(&self) {
+                self.comparator_dirty
                     .store(false, std::sync::atomic::Ordering::Relaxed);
             }
 
@@ -209,6 +219,8 @@ macro_rules! impl_inventory_for_chest {
 
             fn mark_dirty(&self) {
                 self.dirty.store(true, std::sync::atomic::Ordering::Relaxed);
+                self.comparator_dirty
+                    .store(true, std::sync::atomic::Ordering::Relaxed);
             }
 
             fn as_any(&self) -> &dyn std::any::Any {
@@ -323,6 +335,7 @@ macro_rules! impl_chest_helper_methods {
                     position,
                     items: tokio::sync::RwLock::new(from_fn(|_| ItemStack::EMPTY.clone())),
                     dirty: AtomicBool::new(false),
+                    comparator_dirty: AtomicBool::new(false),
                     viewers: $crate::block::viewer::ViewerCountTracker::new(),
                     loot_table: StdMutex::new(None),
                     loot_table_seed: 0,

@@ -66,7 +66,7 @@ impl EntityBase for BoatEntity {
         _server: &'a Server,
     ) -> EntityBaseFuture<'a, ()> {
         Box::pin(async move {
-            self.vehicle.tick();
+            self.vehicle.tick().await;
 
             let underwater = self.ticks_underwater.load();
             if self.vehicle.entity.touching_water.load(Ordering::Relaxed) {

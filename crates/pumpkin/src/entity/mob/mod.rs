@@ -1282,6 +1282,10 @@ impl<T: Mob + Send + 'static> EntityBase for T {
         Box::pin(async move { self.mob_player_collision(player).await })
     }
 
+    fn requires_precise_player_collision(&self) -> bool {
+        true
+    }
+
     fn get_entity(&self) -> &Entity {
         &self.get_mob_entity().living_entity.entity
     }

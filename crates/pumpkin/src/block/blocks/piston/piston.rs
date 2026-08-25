@@ -40,13 +40,22 @@ impl BlockMetadata for PistonBlock {
 impl PistonBlock {
     #[must_use]
     pub fn is_movable(
+        world: &World,
+        pos: &BlockPos,
         block: &Block,
         state: &BlockState,
         dir: BlockDirection,
         can_break: bool,
         piston_dir: BlockDirection,
     ) -> bool {
-        // TODO: more checks
+        // Vanilla: height limit before the air check. An empty cell outside the world is
+        // unpushable, so a sticky line stops at the ceiling/floor instead of dropping the block.
+        if !world.is_in_height_limit(pos.0.y)
+            || (dir == BlockDirection::Down && pos.0.y == world.get_bottom_y())
+            || (dir == BlockDirection::Up && pos.0.y == world.get_top_y())
+        {
+            return false;
+        }
         if state.is_air() {
             return true;
         }
@@ -232,12 +241,9 @@ impl BlockBehaviour for PistonBlock {
                 PistonType::Normal
             };
 
+            let moving_piston_state_id = props.to_state_id(&Block::MOVING_PISTON);
             world
-                .set_block_state(
-                    pos,
-                    props.to_state_id(&Block::MOVING_PISTON),
-                    BlockFlags::FORCE_STATE,
-                )
+                .set_block_state(pos, moving_piston_state_id, BlockFlags::FORCE_STATE)
                 .await;
 
             let mut props = PistonProps::default(block);
@@ -253,9 +259,22 @@ impl BlockBehaviour for PistonBlock {
                 last_progress: 0.0.into(),
                 extending: false,
                 source: true,
+                last_ticked: (-1i64).into(),
             }));
 
             world.update_neighbors(pos, None).await;
+            // Vanilla `movingPistonState.updateNeighbourShapes(level, pos, 2)` after
+            // `updateNeighborsAt`. `FORCE_STATE` skipped the automatic shape pass (vanilla
+            // flag 276 / UPDATE_KNOWN_SHAPE).
+            world
+                .block_registry
+                .update_neighbors(
+                    world,
+                    pos,
+                    Block::from_state_id(moving_piston_state_id),
+                    BlockFlags::NOTIFY_LISTENERS,
+                )
+                .await;
             if sticky {
                 let pull_pos = pos.offset_dir(dir.to_offset(), 2);
                 let (block, state) = world.get_block_and_state(&pull_pos);
@@ -271,9 +290,19 @@ impl BlockBehaviour for PistonBlock {
                     false
                 };
                 if !piston_piece {
+                    // Vanilla `isPushable(..., direction.getOpposite(), false, direction)`:
+                    // travel towards the piston. `PUSH_ONLY` is `direction == connectionDirection`.
                     if r#type == 1
                         && !state.is_air()
-                        && Self::is_movable(block, state, dir, false, dir)
+                        && Self::is_movable(
+                            world,
+                            &pull_pos,
+                            block,
+                            state,
+                            dir.opposite(),
+                            false,
+                            dir,
+                        )
                         && (state.piston_behavior == PistonBehavior::Normal
                             || block == &Block::PISTON
                             || block == &Block::STICKY_PISTON)
@@ -326,8 +355,9 @@ async fn should_extend(world: &World, block_pos: &BlockPos, piston_dir: BlockDir
         }
         return true;
     }
-    let neighbor_pos = block_pos.offset(BlockDirection::Down.to_offset());
-    let (block, state) = world.get_block_and_state(&neighbor_pos);
+    // Vanilla `getNeighborSignal`: `level.hasSignal(pos, Direction.DOWN)` on this cell.
+    // Solid cells fold in `getDirectSignalTo` (quasi-connectivity from the skip face).
+    let (block, state) = world.get_block_and_state(block_pos);
     if is_emitting_redstone_power(block, state, world, block_pos, BlockDirection::Down).await {
         return true;
     }
@@ -372,8 +402,12 @@ pub async fn try_move(world: &Arc<World>, block: &Block, block_pos: &BlockPos) {
                 let Some(piston) = entity.as_any().downcast_ref::<PistonBlockEntity>() else {
                     return;
                 };
-                if piston.extending && piston.current_progress.load() < 0.5
-                // TODO: more stuff...
+                // Vanilla `checkIfExtend`: progress, `lastTicked == level.getGameTime()`,
+                // or `isHandlingTick` (0-tick: the placeholder has not ticked this game tick).
+                if piston.extending
+                    && (piston.current_progress.load() < 0.5
+                        || piston.last_ticked.load() == world.get_world_age().await
+                        || world.is_handling_tick())
                 {
                     // Piston reduced too quickly, if its a stick piston no blocks will be dragged
                     r#type = 2;
@@ -459,6 +493,7 @@ async fn move_piston(
                 last_progress: 0.0.into(),
                 extending: extend,
                 source: false,
+                last_ticked: (-1i64).into(),
             }));
         }
         affected_block_states.push(block_state);
@@ -492,6 +527,7 @@ async fn move_piston(
             last_progress: 0.0.into(),
             extending: true,
             source: true,
+            last_ticked: (-1i64).into(),
         }));
     }
 
@@ -517,7 +553,12 @@ async fn move_piston(
                 BlockFlags::NOTIFY_LISTENERS,
             )
             .await;
-        world.update_neighbors(pos, None).await;
+        // Vanilla `air.updateNeighbourShapes(level, pos, 2)`: shape only. Block updates
+        // wait for the `moved_blocks` loop after every placeholder and air fill is written.
+        world
+            .block_registry
+            .update_neighbors(world, pos, &Block::AIR, BlockFlags::NOTIFY_LISTENERS)
+            .await;
         world
             .block_registry
             .prepare(
@@ -552,15 +593,32 @@ async fn move_piston(
                     BlockFlags::NOTIFY_LISTENERS,
                 )
                 .await;
-            world.update_neighbors(&broken_block_pos, None).await;
+            // Vanilla `updateNeighborsAt(pos, toUpdate[i].getBlock())`: the captured pre-break
+            // block, not air.
+            world
+                .update_neighbors_from(
+                    &broken_block_pos,
+                    Block::from_state_id(block_state.id),
+                    None,
+                )
+                .await;
         }
     }
-    for &moved_block_pos in moved_blocks.iter().rev() {
-        world.update_neighbors(&moved_block_pos, None).await;
+    for (index, &moved_block_pos) in moved_blocks.iter().rev().enumerate() {
+        // Captured pre-move state; the cell is air or another placeholder by now.
+        if let Some(block_state) = affected_block_states.get(broken_blocks.len() + index) {
+            world
+                .update_neighbors_from(&moved_block_pos, Block::from_state_id(block_state.id), None)
+                .await;
+        }
     }
 
     if extend {
-        world.update_neighbors(&extended_pos, None).await;
+        // Vanilla `level.updateNeighborsAt(armPos, Blocks.PISTON_HEAD)`: the arm is still
+        // MOVING_PISTON, so the source is explicit.
+        world
+            .update_neighbors_from(&extended_pos, &Block::PISTON_HEAD, None)
+            .await;
     }
 
     true

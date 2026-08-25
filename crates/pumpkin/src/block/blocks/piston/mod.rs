@@ -52,13 +52,20 @@ impl<'a> PistonHandler<'a> {
         let (block, block_state) = self.world.get_block_and_state(&self.pos_to);
 
         if !PistonBlock::is_movable(
+            self.world,
+            &self.pos_to,
             block,
             block_state,
             self.motion_direction,
             false,
             self.piston_direction,
         ) {
-            if self.retracted && block_state.piston_behavior == PistonBehavior::Destroy {
+            // Vanilla gates this on the direction (`if (this.extending && nextState
+            // .getPistonPushReaction() == PushReaction.DESTROY)`). The retract path cannot
+            // reach this branch: `PistonBlock::on_synced_block_event` already ran
+            // `is_movable(.., can_break: false, ..)` on the same cell, and a `Destroy` block
+            // answers `false` there, so the retract becomes a plain head removal.
+            if block_state.piston_behavior == PistonBehavior::Destroy {
                 self.broken_blocks.push(self.pos_to);
                 return true;
             }
@@ -67,7 +74,12 @@ impl<'a> PistonHandler<'a> {
         if !self.try_move(self.pos_to, self.motion_direction).await {
             return false;
         }
-        for i in 0..self.moved_blocks.len() {
+        // `while i < len()`, not `for i in 0..len()`: vanilla's `resolve()` uses
+        // `for (i = 0; i < toPush.size(); i++)`, which re-evaluates `size()` every iteration,
+        // so a block appended here (by `try_move_adjacent_block`'s stickiness discovery) is
+        // still swept for its own branches. A Rust `0..len()` range is frozen up front.
+        let mut i = 0;
+        while i < self.moved_blocks.len() {
             let block_pos = self.moved_blocks[i];
             let block = self.world.get_block(&block_pos);
             if Self::is_block_sticky(block)
@@ -75,6 +87,7 @@ impl<'a> PistonHandler<'a> {
             {
                 return false;
             }
+            i += 1;
         }
         true
     }
@@ -98,12 +111,23 @@ impl<'a> PistonHandler<'a> {
             || (!self.retracted && pos == self.pos_from.offset(self.piston_direction.to_offset()))
     }
 
+    // A line-for-line port of vanilla's `PistonStructureResolver.addBlockLine`; splitting it
+    // would only make the correspondence harder to check against the original.
+    #[expect(clippy::too_many_lines)]
     async fn try_move(&mut self, pos: BlockPos, dir: BlockDirection) -> bool {
         let (mut block, block_state) = self.world.get_block_and_state(&pos);
         if block_state.is_air() {
             return true;
         }
-        if !PistonBlock::is_movable(block, block_state, self.motion_direction, false, dir) {
+        if !PistonBlock::is_movable(
+            self.world,
+            &pos,
+            block,
+            block_state,
+            self.motion_direction,
+            false,
+            dir,
+        ) {
             return true;
         }
         if self.is_piston_head_or_base(pos) {
@@ -123,6 +147,8 @@ impl<'a> PistonHandler<'a> {
             if next_state.is_air()
                 || !Self::is_adjacent_block_stuck(block2, next_block)
                 || !PistonBlock::is_movable(
+                    self.world,
+                    &block_pos,
                     next_block,
                     next_state,
                     self.motion_direction,
@@ -169,6 +195,8 @@ impl<'a> PistonHandler<'a> {
                 return true;
             }
             if !PistonBlock::is_movable(
+                self.world,
+                &block_pos2,
                 block,
                 block_state,
                 self.motion_direction,

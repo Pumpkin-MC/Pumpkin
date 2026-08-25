@@ -1272,11 +1272,16 @@ impl Player {
         world.remove_player(self, true).await;
 
         let cylindrical = self.watched_section.load();
-        self.chunk_manager.lock().await.clean_up(&world.level);
 
         // Radial chunks are all of the chunks the player is theoretically viewing.
         // Given enough time, all of these chunks will be in memory.
-        let radial_chunks = cylindrical.all_chunks_within();
+        let radial_chunks: Vec<_> = cylindrical.all_chunks_within().collect();
+
+        // Before `clean_up` below: releasing this player's chunk tickets can let
+        // `GenerationSchedule` evict a chunk's raw block data immediately (it force-sets
+        // `Level::should_unload` and notifies the scheduler).
+        world.flush_block_entities(&radial_chunks).await;
+        self.chunk_manager.lock().await.clean_up(&world.level);
 
         debug!(
             "Removing player {}, unwatching {} chunks",
@@ -1288,16 +1293,16 @@ impl Player {
 
         // Decrement the value of watched chunks
         let chunks_to_clean = level.mark_chunks_as_not_watched(radial_chunks).await;
-        // Remove chunks with no watchers from the cache
+        // Remove chunks with no watchers from the cache. Queued rather than removed here: this
+        // runs from the disconnecting player's own task, not the tick loop. See
+        // `World::pending_chunk_removals`.
         if !chunks_to_clean.is_empty() {
-            world.remove_entities_in_chunks(&chunks_to_clean).await;
-            level.clean_entity_chunks(&chunks_to_clean);
+            world.queue_chunk_removal(&chunks_to_clean);
         }
         // Remove left over entries from all possiblily loaded chunks
         let cleaned_chunks = level.clean_memory();
         if !cleaned_chunks.is_empty() {
-            world.remove_entities_in_chunks(&cleaned_chunks).await;
-            level.clean_entity_chunks(&cleaned_chunks);
+            world.queue_chunk_removal(&cleaned_chunks);
         }
 
         debug!(
@@ -3362,12 +3367,22 @@ impl Player {
     }
 
     pub async fn unload_watched_chunks(&self, world: &World) {
-        let radial_chunks = self.watched_section.load().all_chunks_within();
+        let radial_chunks: Vec<_> = self.watched_section.load().all_chunks_within().collect();
+        // Same reasoning as the incremental unload in `chunker::update_position`: the client has to
+        // be told to forget these chunks' entities while it is still a watcher, otherwise it keeps
+        // ghosts whose ids the server no longer knows.
+        world
+            .despawn_entities_in_chunks_for_player(self, &radial_chunks)
+            .await;
+        // See `World::flush_block_entities`: persist live block entities before this player's
+        // tickets on these chunks can be released below.
+        world.flush_block_entities(&radial_chunks).await;
         let level = &world.level;
         let chunks_to_clean = level.mark_chunks_as_not_watched(radial_chunks).await;
+        // Queued rather than removed here: this runs from the player's own task, not the tick
+        // loop.
         if !chunks_to_clean.is_empty() {
-            world.remove_entities_in_chunks(&chunks_to_clean).await;
-            level.clean_entity_chunks(&chunks_to_clean);
+            world.queue_chunk_removal(&chunks_to_clean);
         }
         for chunk in &chunks_to_clean {
             self.send_client_packet(&CUnloadChunk::new(chunk.x, chunk.y))
@@ -6172,25 +6187,20 @@ impl EntityBase for Player {
                     .and_then(|val| GameMode::try_from(val).ok()),
             );
 
-            {
-                let mut abilities = self.abilities.lock().await;
-                abilities.set_for_gamemode(gamemode);
-                abilities.read_nbt(nbt);
-                if gamemode == GameMode::Creative {
-                    abilities.allow_flying = true;
-                    abilities.creative = true;
-                    abilities.invulnerable = true;
-                } else if gamemode == GameMode::Spectator {
-                    abilities.allow_flying = true;
-                    abilities.creative = false;
-                    abilities.invulnerable = true;
-                }
-            }
-
             self.living_entity.entity.invulnerable.store(
                 matches!(gamemode, GameMode::Creative | GameMode::Spectator),
                 Ordering::Relaxed,
             );
+
+            // Abilities are restored and only then re-derived from the gamemode. Vanilla
+            // order in `ServerPlayer.readAdditionalSaveData`: load player data first,
+            // `setGameModeForPlayer` (`GameType.updatePlayerAbilities`) after. Saved values
+            // carry what a gamemode does not imply (fly/walk speed, mid-flight); the gamemode
+            // then has the final say on `mayfly`, `instabuild` and `invulnerable`.
+            let mut abilities = self.abilities.lock().await;
+            abilities.read_nbt(nbt);
+            abilities.set_for_gamemode(gamemode);
+            drop(abilities);
 
             self.has_played_before.store(
                 nbt.get_bool("HasPlayedBefore").unwrap_or(false),
@@ -6349,10 +6359,16 @@ impl Abilities {
         }
     }
 
+    /// Vanilla `GameType.updatePlayerAbilities`: derives the ability flags a gamemode implies.
+    ///
+    /// Run after anything that sets the gamemode, including restoring it from player data:
+    /// these flags are what the client actually obeys. The gamemode itself only decides what
+    /// the client displays; whether you can fly, insta-break and place without consuming
+    /// comes from here. `flying` is left alone in the creative branch (vanilla does the same),
+    /// so switching to creative does not yank a player out of flight.
     pub const fn set_for_gamemode(&mut self, gamemode: GameMode) {
         match gamemode {
             GameMode::Creative => {
-                // self.flying = false; // Start not flying
                 self.allow_flying = true;
                 self.creative = true;
                 self.invulnerable = true;
@@ -6370,6 +6386,8 @@ impl Abilities {
                 self.invulnerable = false;
             }
         }
+        // Vanilla's `mayBuild = !gameType.isBlockPlacingRestricted()`.
+        self.allow_modify_world = !matches!(gamemode, GameMode::Adventure | GameMode::Spectator);
     }
 }
 

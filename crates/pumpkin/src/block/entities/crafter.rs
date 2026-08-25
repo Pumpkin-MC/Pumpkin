@@ -15,6 +15,7 @@ pub struct CrafterBlockEntity {
     pub crafting_ticks_remaining: AtomicI32,
     pub triggered: AtomicBool,
     pub dirty: AtomicBool,
+    comparator_dirty: AtomicBool,
 }
 
 impl BlockEntity for CrafterBlockEntity {
@@ -45,6 +46,7 @@ impl BlockEntity for CrafterBlockEntity {
             ),
             triggered: AtomicBool::new(nbt.get_bool("triggered").unwrap_or(false)),
             dirty: AtomicBool::new(false),
+            comparator_dirty: AtomicBool::new(false),
         };
 
         // Note: read_data needs to be adapted or handled via NBT accessors
@@ -69,6 +71,14 @@ impl BlockEntity for CrafterBlockEntity {
 
     fn clear_dirty(&self) {
         self.dirty.store(false, Ordering::Relaxed);
+    }
+
+    fn is_comparator_dirty(&self) -> bool {
+        self.comparator_dirty.load(Ordering::Relaxed)
+    }
+
+    fn clear_comparator_dirty(&self) {
+        self.comparator_dirty.store(false, Ordering::Relaxed);
     }
 
     fn chunk_data_nbt(&self) -> Option<NbtCompound> {
@@ -100,6 +110,7 @@ impl CrafterBlockEntity {
             crafting_ticks_remaining: AtomicI32::new(0),
             triggered: AtomicBool::new(false),
             dirty: AtomicBool::new(false),
+            comparator_dirty: AtomicBool::new(false),
         }
     }
 }
@@ -155,6 +166,7 @@ impl Inventory for CrafterBlockEntity {
 
     fn mark_dirty(&self) {
         self.dirty.store(true, Ordering::Relaxed);
+        self.comparator_dirty.store(true, Ordering::Relaxed);
     }
 
     fn as_any(&self) -> &dyn Any {

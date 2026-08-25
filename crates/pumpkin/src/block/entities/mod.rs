@@ -82,6 +82,17 @@ pub trait BlockEntity: Any + Send + Sync {
     fn resource_location(&self) -> &'static str;
     fn get_position(&self) -> BlockPos;
 
+    /// Whether this block entity's tick order relative to its neighbours is observable.
+    ///
+    /// Vanilla ticks every block entity from one list, in creation order, on one thread.
+    /// Pumpkin ticks them concurrently, which is fine for furnaces, chests, spawners, and
+    /// almost everything else. `true` takes this entity out of that pass and into
+    /// `world::piston_batch`, which ticks in vanilla's creation order. Only return `true`
+    /// where that order is actually observable: it serialises the tick for the whole batch.
+    fn is_tick_order_sensitive(&self) -> bool {
+        false
+    }
+
     /// Atomically takes the pending loot-table key and seed from this block entity.
     ///
     /// Returns `Some((key, seed))` if a deferred loot table was set, clearing it in the
@@ -135,7 +146,11 @@ pub trait BlockEntity: Any + Send + Sync {
     fn get_inventory(self: Arc<Self>) -> Option<Arc<dyn Inventory>> {
         None
     }
-    fn set_block_state(&mut self, _block_state: BlockStateId) {}
+    /// Called with the block's actual, current state right after this block entity is attached
+    /// to the world, on fresh placement and when it is (re)loaded from a chunk. NBT often does
+    /// not carry state-derived facts like facing (they live in the block state), so this is the
+    /// hook implementors use to pick those up.
+    fn set_block_state(&self, _block_state: BlockStateId) {}
     fn on_block_replaced<'a>(
         self: Arc<Self>,
         world: Arc<World>,
@@ -159,6 +174,16 @@ pub trait BlockEntity: Any + Send + Sync {
         // Default implementation does nothing
         // Override in implementations that have a dirty flag
     }
+
+    /// Same idea as [`Self::is_dirty`]/[`Self::clear_dirty`], tracked separately. Consumed every
+    /// tick to re-poke a comparator reading this block entity (see `World`'s block-entity tick
+    /// loop). `is_dirty`/`clear_dirty` are also reachable from the WASM plugin API, which may
+    /// consume them on its own schedule.
+    fn is_comparator_dirty(&self) -> bool {
+        false
+    }
+
+    fn clear_comparator_dirty(&self) {}
 
     fn as_any(&self) -> &dyn Any;
     fn to_property_delegate(self: Arc<Self>) -> Option<Arc<dyn PropertyDelegate>> {

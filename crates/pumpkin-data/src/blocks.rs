@@ -195,6 +195,30 @@ impl Block {
         None
     }
 
+    /// Returns a new [`BlockState`] reference for the given [`BlockStateId`] with the
+    /// `waterlogged` property forced to `false`, or `None` if the block does not expose a
+    /// `waterlogged` property. A state that is already not waterlogged is returned unchanged.
+    #[must_use]
+    pub fn without_waterlogged(&self, id: BlockStateId) -> Option<&'static BlockState> {
+        let props_source = self.properties(id)?;
+        let mut props: Vec<(&str, &str)> = props_source
+            .to_props()
+            .iter()
+            .map(|(k, v)| (*k, *v))
+            .collect();
+
+        let idx = props.iter().position(|(k, _)| *k == "waterlogged")?;
+
+        if props[idx].1 == "false" {
+            return Some(BlockState::from_id(id));
+        }
+
+        props[idx] = ("waterlogged", "false");
+
+        let new_state_id = self.from_properties(&props).to_state_id(self);
+        Some(BlockState::from_id(new_state_id))
+    }
+
     /// Returns whether this block is solid (based on default state)
     #[must_use]
     pub const fn is_solid(&self) -> bool {

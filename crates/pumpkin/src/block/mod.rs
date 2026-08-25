@@ -451,7 +451,11 @@ pub struct GetInsideCollisionShapeArgs<'a> {
     pub position: &'a BlockPos,
 }
 
-#[derive(Clone)]
+/// A queued block event.
+/// Vanilla keeps pending block events in an `ObjectLinkedOpenHashSet`, so queueing an event
+/// that is already pending is a no-op. Two redstone updates reaching the same piston in one
+/// tick therefore fire it once.
+#[derive(Clone, PartialEq, Eq, Hash)]
 pub struct BlockEvent {
     pub pos: BlockPos,
     pub r#type: u8,

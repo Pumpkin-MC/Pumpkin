@@ -15,6 +15,10 @@ use std::{
     },
 };
 
+/// Vanilla `EntityTypes.TNT`'s `updateInterval(10)`: how often the entity tracker resyncs the
+/// client's own simulation of this entity. See [`Entity::send_tracked_position`].
+const UPDATE_INTERVAL: i32 = 10;
+
 pub struct TNTEntity {
     entity: Entity,
     power: f32,
@@ -46,25 +50,40 @@ impl EntityBase for TNTEntity {
             entity.move_entity(caller, velo).await;
             entity.tick_block_collisions(caller, server).await;
 
-            // Read back what actually happened instead of reusing the pre-move
-            // value: `move_entity` clamps on collision, and an explosion may have
-            // pushed us while we were awaiting above
-            let velo = entity.velocity.load();
-            if entity.on_ground.load(Ordering::Relaxed) {
-                entity.velocity.store(velo.multiply(0.7, -0.5, 0.7));
+            // Vanilla scales by air drag (0.98) unconditionally every tick, then multiplies by
+            // (0.7, -0.5, 0.7) on top of that when on the ground. The two are cumulative, not
+            // an either/or choice.
+            let velo = entity.velocity.load().multiply(0.98, 0.98, 0.98);
+            let velo = if entity.on_ground.load(Ordering::Relaxed) {
+                velo.multiply(0.7, -0.5, 0.7)
             } else {
-                entity.velocity.store(velo.multiply(0.98, 0.98, 0.98));
-            }
+                velo
+            };
+            entity.velocity.store(velo);
+
+            // Vanilla's `PrimedTnt.tick()` calls `setFuse()` unconditionally every tick, which
+            // marks its `SynchedEntityData` dirty every tick, and `ServerEntity.sendChanges`
+            // ORs that dirty flag into the same gate that guards position/velocity resync. TNT
+            // therefore tracks almost every tick via the fuse, not on the 10-tick interval.
+            // Push the metadata first so `entity_data_dirty` is set before the resync check
+            // below observes it.
+            let fuse = self.fuse.load(Relaxed).saturating_sub(1);
+            entity.send_meta_data(
+                &[Metadata::new(
+                    pumpkin_data::tracked_data::tnt::FUSE_ID,
+                    VarInt(fuse as i32),
+                )],
+                None,
+            );
 
             if entity.velocity_dirty.swap(false, Ordering::SeqCst) {
                 entity.send_pos_rot();
                 entity.send_velocity();
+            } else {
+                entity.send_tracked_position(UPDATE_INTERVAL);
             }
 
-            // FIX: Prevent fuse underflow (vanilla parity)
-            let fuse = self.fuse.load(Relaxed);
-
-            if fuse <= 1 {
+            if fuse == 0 {
                 // TNT explodes now
                 self.entity.remove().await;
                 let world = self.entity.world.load();
@@ -78,8 +97,7 @@ impl EntityBase for TNTEntity {
                         .await;
                 }
             } else {
-                // Safe decrement
-                self.fuse.store(fuse - 1, Relaxed);
+                self.fuse.store(fuse, Relaxed);
                 entity.update_fluid_state(caller).await;
             }
         })

@@ -177,6 +177,25 @@ impl BlockState {
             .map(|&id| COLLISION_SHAPES[id as usize])
     }
 
+    /// Whether any collision box of this state reaches outside its own block cell.
+    /// Vanilla: `BlockStateBase.Cache.largeCollisionShape`.
+    ///
+    /// A fence or wall post is 1.5 blocks tall, so a query that only looks at cells the box
+    /// overlaps never sees the originating cell and misses the overhang.
+    /// `World::get_block_collisions` uses this to decide which blocks in the one-cell margin
+    /// around that region are worth examining.
+    #[must_use]
+    pub fn has_large_collision_shape(&self) -> bool {
+        self.get_block_collision_shapes().any(|shape| {
+            shape.min.x < 0.0
+                || shape.max.x > 1.0
+                || shape.min.y < 0.0
+                || shape.max.y > 1.0
+                || shape.min.z < 0.0
+                || shape.max.z > 1.0
+        })
+    }
+
     /// Returns block-local collision shapes with vanilla's coordinate-derived offset applied.
     pub fn get_block_collision_shapes_at(
         &self,
@@ -361,6 +380,28 @@ mod tests {
         assert_close(shifted_shape.max.x, 0.84375);
         assert_close(shifted_shape.min.z, 0.65625);
         assert_close(shifted_shape.max.z, 0.84375);
+    }
+
+    /// The one-cell collider margin in `World::get_block_collisions` only pays off if the
+    /// blocks it exists for actually report themselves through this predicate: a fence post
+    /// stands 1.5 blocks tall and reaches into the cell above, while a full cube does not.
+    #[test]
+    fn tall_blocks_report_a_large_collision_shape() {
+        for block in [Block::OAK_FENCE, Block::COBBLESTONE_WALL] {
+            assert!(
+                block.default_state.has_large_collision_shape(),
+                "{} should reach outside its own cell",
+                block.name
+            );
+        }
+
+        for block in [Block::STONE, Block::OAK_SLAB, Block::AIR] {
+            assert!(
+                !block.default_state.has_large_collision_shape(),
+                "{} should stay inside its own cell",
+                block.name
+            );
+        }
     }
 
     #[test]

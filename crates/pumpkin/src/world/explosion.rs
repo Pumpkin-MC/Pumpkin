@@ -5,7 +5,7 @@ use pumpkin_data::{
     damage::DamageType,
     entity::EntityType,
     fluid::Fluid,
-    tag::{Tag, Taggable},
+    tag::{self, Tag, Taggable},
 };
 use pumpkin_util::math::{boundingbox::BoundingBox, position::BlockPos, vector3::Vector3};
 use pumpkin_world::chunk::ChunkData;
@@ -220,14 +220,9 @@ impl Explosion {
     }
 
     fn protects_rail(&self, world: &World, pos: &BlockPos, block: &Block) -> bool {
-        self.preserve_rails && (Self::is_rail(block) || Self::is_rail(world.get_block(&pos.up())))
-    }
-
-    fn is_rail(block: &Block) -> bool {
-        block.id == Block::RAIL.id
-            || block.id == Block::POWERED_RAIL.id
-            || block.id == Block::DETECTOR_RAIL.id
-            || block.id == Block::ACTIVATOR_RAIL.id
+        self.preserve_rails
+            && (block.has_tag(&tag::Block::MINECRAFT_RAILS)
+                || world.get_block(&pos.up()).has_tag(&tag::Block::MINECRAFT_RAILS))
     }
 
     #[allow(clippy::too_many_lines)]
@@ -590,8 +585,10 @@ impl Explosion {
 
 #[cfg(test)]
 mod tests {
-    use super::Explosion;
-    use pumpkin_data::Block;
+    use pumpkin_data::{
+        Block,
+        tag::{self, Taggable},
+    };
 
     #[test]
     fn tnt_minecart_rail_protection_covers_every_rail_type() {
@@ -601,8 +598,8 @@ mod tests {
             &Block::DETECTOR_RAIL,
             &Block::ACTIVATOR_RAIL,
         ] {
-            assert!(Explosion::is_rail(rail));
+            assert!(rail.has_tag(&tag::Block::MINECRAFT_RAILS));
         }
-        assert!(!Explosion::is_rail(&Block::STONE));
+        assert!(!Block::STONE.has_tag(&tag::Block::MINECRAFT_RAILS));
     }
 }
