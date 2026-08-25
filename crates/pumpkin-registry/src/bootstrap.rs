@@ -1,4 +1,4 @@
-use crate::error::BootstrapError;
+use crate::{RegistryConfig, error::BootstrapError};
 pub use linkme::{self as __linkme, distributed_slice};
 use pumpkin_util::identifier::Identifier;
 use rayon::iter::{IntoParallelRefIterator as _, ParallelIterator as _};
@@ -244,6 +244,17 @@ impl BootstrapManager {
     where
         T: Send + 'static,
     {
+        self.populate_with_config(registry, RegistryConfig::default())
+    }
+
+    pub fn populate_with_config<T>(
+        &self,
+        registry: &Identifier,
+        config: RegistryConfig,
+    ) -> Result<(Vec<T>, FxHashMap<Identifier, usize>), BootstrapError>
+    where
+        T: Send + 'static,
+    {
         let sources: Vec<_> = self.sources.iter().filter_map(Weak::upgrade).collect();
 
         let builtin_entries = populate_providers::<T>(&PROVIDERS, registry)?;
@@ -266,15 +277,20 @@ impl BootstrapManager {
 
         for source_entries in builtin_entries.into_iter().chain(added_entries) {
             for entry in source_entries {
-                let id = entries.len();
+                if let Some(&id) = mapping.get(&entry.identifier) {
+                    if !config.allow_overwrites {
+                        return Err(BootstrapError::DuplicateEntry {
+                            registry: registry.clone(),
+                            identifier: entry.identifier,
+                        });
+                    }
 
-                if mapping.insert(entry.identifier.clone(), id).is_some() {
-                    return Err(BootstrapError::DuplicateEntry {
-                        registry: registry.clone(),
-                        identifier: entry.identifier,
-                    });
+                    entries[id] = entry.value;
+                    continue;
                 }
 
+                let id = entries.len();
+                mapping.insert(entry.identifier, id);
                 entries.push(entry.value);
             }
         }

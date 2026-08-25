@@ -11,32 +11,12 @@ use crate::{
 /// An immutable registry holding heap-allocated data.
 pub struct FrozenRegistry<T: Send + Sync + 'static> {
     entries: Box<[T]>,
-    identifiers: Box<[Identifier]>,
     mapping: FxHashMap<Identifier, usize>,
 }
 
 impl<T: Send + Sync + 'static> FrozenRegistry<T> {
-    pub(crate) fn new(entries: Box<[T]>, mapping: FxHashMap<Identifier, usize>) -> Self {
-        let mut identifiers: Vec<_> = mapping
-            .iter()
-            .map(|(identifier, &id)| (id, identifier.clone()))
-            .collect();
-        identifiers.sort_unstable_by_key(|(id, _)| *id);
-        let identifiers = identifiers
-            .into_iter()
-            .map(|(_, identifier)| identifier)
-            .collect::<Vec<_>>()
-            .into_boxed_slice();
-
-        Self {
-            entries,
-            identifiers,
-            mapping,
-        }
-    }
-
-    pub(crate) fn identifier_by_id(&self, id: usize) -> Option<&Identifier> {
-        self.identifiers.get(id)
+    pub(crate) const fn new(entries: Box<[T]>, mapping: FxHashMap<Identifier, usize>) -> Self {
+        Self { entries, mapping }
     }
 }
 
@@ -60,14 +40,10 @@ impl<T: Send + Sync + 'static> Registry for FrozenRegistry<T> {
     }
 
     fn iter_erased(&self) -> ErasedRegistryIterator<'_> {
-        Box::new(
-            self.identifiers
-                .iter()
-                .zip(self.entries.iter())
-                .map(|(identifier, value)| {
-                    (identifier.clone(), ErasedRegistryRef::Borrowed(value))
-                }),
-        )
+        Box::new(self.mapping.iter().filter_map(|(id, index)| {
+            self.by_id(*index)
+                .map(|v| (id.clone(), ErasedRegistryRef::Borrowed(v)))
+        }))
     }
 }
 
@@ -81,6 +57,10 @@ impl<'a, T: Send + Sync + 'static> TypedRegistry<'a> for FrozenRegistry<T> {
     }
 
     fn iter(&'a self) -> Self::Iter {
-        DynIterator::new(self.identifiers.iter().zip(self.entries.iter()))
+        DynIterator::new(
+            self.mapping
+                .iter()
+                .filter_map(|(id, index)| self.by_id(*index).map(|v| (id, v))),
+        )
     }
 }

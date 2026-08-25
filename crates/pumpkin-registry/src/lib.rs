@@ -4,6 +4,7 @@ use std::any::{Any, TypeId};
 use std::sync::{Arc, OnceLock};
 
 mod builder;
+mod config;
 mod immutable;
 mod mutable;
 mod resolvable;
@@ -21,6 +22,7 @@ pub use crate::resolvable::{RegistryResolvable, RegistryResolvableSet};
 pub use crate::r#static::StaticRegistry;
 pub use crate::value::{DataKeyRef, ErasedRegistryRef};
 pub use builder::RegistryBuilder;
+pub use config::RegistryConfig;
 
 pub static BOOTSTRAP: OnceLock<BootstrapManager> = OnceLock::new();
 

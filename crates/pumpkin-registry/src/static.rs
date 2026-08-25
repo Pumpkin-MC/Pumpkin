@@ -30,6 +30,10 @@ impl<T: Send + Sync + 'static> StaticRegistry<T> {
             .iter()
             .filter_map(|(identifier, &id)| self.by_id(id).map(|value| (identifier, value)))
     }
+
+    pub(crate) const fn mapping(&self) -> &FxHashMap<Identifier, usize> {
+        &self.mapping
+    }
 }
 
 impl<T: Send + Sync + 'static> Registry for StaticRegistry<T> {

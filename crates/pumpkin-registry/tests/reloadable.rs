@@ -15,9 +15,12 @@ bootstrap_provider! {
 #[test]
 fn reload_keeps_existing_snapshot_refs_alive() {
     let _ = BOOTSTRAP.set(BootstrapManager::new());
-    let registry =
-        RegistryBuilder::<u32>::reloadable(&Identifier::parse_static("test:reloadable_values"))
-            .unwrap();
+    let registry = RegistryBuilder::<u32>::reloadable(
+        &Identifier::parse_static("test:reloadable_values"),
+        &[],
+        &[],
+    )
+    .unwrap();
 
     let before = registry.get(&Identifier::parse_static("test:one")).unwrap();
 
@@ -33,9 +36,12 @@ fn reload_keeps_existing_snapshot_refs_alive() {
 #[test]
 fn reloadable_iteration_uses_a_stable_snapshot() {
     let _ = BOOTSTRAP.set(BootstrapManager::new());
-    let registry =
-        RegistryBuilder::<u32>::reloadable(&Identifier::parse_static("test:reloadable_values"))
-            .unwrap();
+    let registry = RegistryBuilder::<u32>::reloadable(
+        &Identifier::parse_static("test:reloadable_values"),
+        &[],
+        &[],
+    )
+    .unwrap();
 
     let mut iter = registry.iter();
     let first = iter.next().unwrap();

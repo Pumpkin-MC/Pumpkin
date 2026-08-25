@@ -1,4 +1,4 @@
-use crate::{FrozenRegistry, TypedRegistry as _};
+use crate::{StaticRegistry, TypedRegistry as _};
 use std::{any::Any, marker::PhantomData, ops::Deref, sync::Arc};
 
 pub enum ErasedRegistryRef<'a> {
@@ -10,7 +10,7 @@ pub enum ErasedRegistryRef<'a> {
 }
 
 impl ErasedRegistryRef<'_> {
-    pub(crate) fn from_snapshot<T>(snapshot: Arc<FrozenRegistry<T>>, id: usize) -> Option<Self>
+    pub(crate) fn from_snapshot<T>(snapshot: Arc<StaticRegistry<T>>, id: usize) -> Option<Self>
     where
         T: Send + Sync + 'static,
     {
@@ -34,7 +34,7 @@ impl Deref for ErasedRegistryRef<'_> {
             Self::Snapshot { value, .. } => {
                 // SAFETY:
                 //
-                // `value` points into `_snapshot`, which owns the FrozenRegistry
+                // `value` points into `_snapshot`, which owns the StaticRegistry
                 // containing the value for the entire lifetime of this reference.
                 unsafe { &**value }
             }
@@ -47,14 +47,14 @@ where
     T: Send + Sync + 'static,
 {
     value: *const T,
-    _snapshot: Arc<FrozenRegistry<T>>,
+    _snapshot: Arc<StaticRegistry<T>>,
 }
 
 impl<T> SnapshotRef<T>
 where
     T: Send + Sync + 'static,
 {
-    pub(crate) fn new(snapshot: Arc<FrozenRegistry<T>>, id: usize) -> Option<Self> {
+    pub(crate) fn new(snapshot: Arc<StaticRegistry<T>>, id: usize) -> Option<Self> {
         let value = std::ptr::from_ref(snapshot.by_id(id)?);
         Some(Self {
             value,
