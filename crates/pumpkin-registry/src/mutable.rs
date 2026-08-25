@@ -5,7 +5,7 @@ use crate::{
 };
 use arc_swap::ArcSwap;
 use pumpkin_util::identifier::Identifier;
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxBuildHasher, FxHashMap};
 use std::{
     any::{TypeId, type_name},
     marker::PhantomData,
@@ -39,6 +39,33 @@ impl<T: Send + Sync + 'static> ReloadableRegistry<T> {
             .ok_or(BootstrapError::Uninitialized)
             .and_then(|manager| manager.populate_with_config::<T>(&self.name, self.config))?;
         let replacement = StaticRegistry::new(&[], entries.into_boxed_slice(), mapping);
+        self.inner.store(Arc::new(replacement));
+        Ok(())
+    }
+
+    /// Atomically replaces all entries while preserving caller-provided order.
+    ///
+    /// If validation fails, the existing registry snapshot remains unchanged.
+    pub fn replace_entries<I>(&self, entries: I) -> Result<(), BootstrapError>
+    where
+        I: IntoIterator<Item = (Identifier, T)>,
+    {
+        let entries: Vec<_> = entries.into_iter().collect();
+        let mut values = Vec::with_capacity(entries.len());
+        let mut mapping = FxHashMap::with_capacity_and_hasher(entries.len(), FxBuildHasher);
+
+        for (identifier, value) in entries {
+            let id = values.len();
+            if mapping.insert(identifier.clone(), id).is_some() {
+                return Err(BootstrapError::DuplicateEntry {
+                    registry: self.name.clone(),
+                    identifier,
+                });
+            }
+            values.push(value);
+        }
+
+        let replacement = StaticRegistry::new(&[], values.into_boxed_slice(), mapping);
         self.inner.store(Arc::new(replacement));
         Ok(())
     }
