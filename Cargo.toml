@@ -224,7 +224,7 @@ hyper = { version = "^1.11", default-features = false }
 axum = { version = "0.8.9", default-features = false, features = ["http1", "tokio"] }
 webrtc = { version = "0.20.3" }
 async-trait = "0.1"
-wit-bindgen = { version = "0.60", default-features = false, features = ["macros"] }
+wit-bindgen = { version = "0.61", default-features = false, features = ["macros"] }
 
 postcard = { version = "1.1", default-features = false, features = ["alloc"] }
 tracing-serde-structured = { version = "0.4", default-features = false }

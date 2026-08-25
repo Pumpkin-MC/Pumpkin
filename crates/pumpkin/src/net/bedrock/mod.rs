@@ -596,7 +596,9 @@ impl BedrockClient {
                             continue;
                         }
                     };
-                    self.handle_request_network_settings(packet, server).await;
+                    if !self.handle_request_network_settings(packet, server).await {
+                        return PacketHandlerResult::Stop;
+                    }
                 }
                 SLogin::PACKET_ID => {
                     let packet = match SLogin::read(payload) {

@@ -1217,6 +1217,8 @@ impl World {
 
     #[expect(clippy::too_many_lines)]
     pub async fn tick(self: &Arc<Self>, server: Arc<Server>) {
+        const ENTITY_TICK_BATCH_SIZE: usize = 16;
+
         let start = tokio::time::Instant::now();
 
         self.flush_block_updates().await;
@@ -1277,7 +1279,8 @@ impl World {
 
         let entity_future = async move {
             let t = tokio::time::Instant::now();
-            let mut tasks = tokio::task::JoinSet::new();
+
+            let mut tickable = Vec::new();
             for entity in entities_to_tick.iter() {
                 // Only tick entities that sit in an active (ticking) chunk — the
                 // same set block-entity ticking and mob spawning already use, and
@@ -1302,28 +1305,35 @@ impl World {
                     continue;
                 }
 
-                let e_clone = entity.clone();
+                tickable.push((entity.clone(), entity_chunk));
+            }
+
+            let mut tasks = tokio::task::JoinSet::new();
+            for entity_batch in tickable.chunks(ENTITY_TICK_BATCH_SIZE) {
+                let batch = entity_batch.to_vec();
                 let s_clone = server_for_entities.clone();
                 let p_cache = players_cache.clone();
 
                 tasks.spawn(async move {
-                    e_clone.get_entity().age.fetch_add(1, Relaxed);
-                    e_clone.tick(&e_clone, &s_clone).await;
+                    for (entity, entity_chunk) in batch {
+                        entity.get_entity().age.fetch_add(1, Relaxed);
+                        entity.tick(&entity, &s_clone).await;
 
-                    let entity_inner = e_clone.get_entity();
-                    let entity_pos = entity_inner.pos.load();
-                    let entity_bb = entity_inner.bounding_box.load();
+                        let entity_inner = entity.get_entity();
+                        let entity_pos = entity_inner.pos.load();
+                        let entity_bb = entity_inner.bounding_box.load();
 
-                    for (player, player_pos, player_bb, player_chunk) in p_cache.iter() {
-                        if (player_chunk.x - entity_chunk.x).abs() <= 1
-                            && (player_chunk.y - entity_chunk.y).abs() <= 1
-                            && (player_pos.x - entity_pos.x).abs() < 5.0
-                            && (player_pos.y - entity_pos.y).abs() < 5.0
-                            && (player_pos.z - entity_pos.z).abs() < 5.0
-                            && player_bb.intersects(&entity_bb)
-                        {
-                            e_clone.on_player_collision(player).await;
-                            break;
+                        for (player, player_pos, player_bb, player_chunk) in p_cache.iter() {
+                            if (player_chunk.x - entity_chunk.x).abs() <= 1
+                                && (player_chunk.y - entity_chunk.y).abs() <= 1
+                                && (player_pos.x - entity_pos.x).abs() < 5.0
+                                && (player_pos.y - entity_pos.y).abs() < 5.0
+                                && (player_pos.z - entity_pos.z).abs() < 5.0
+                                && player_bb.intersects(&entity_bb)
+                            {
+                                entity.on_player_collision(player).await;
+                                break;
+                            }
                         }
                     }
                 });
