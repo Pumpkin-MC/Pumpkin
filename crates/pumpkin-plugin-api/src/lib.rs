@@ -176,7 +176,11 @@ mod wit {
         skip: ["init-plugin"],
         path: "../pumpkin-plugin-wit/v0.1",
         world: "plugin",
-        enable_method_chaining: true
+        chainable_methods: [
+            "pumpkin:plugin/command@0.1.0#command",
+            "pumpkin:plugin/command@0.1.0#command-node",
+            "pumpkin:plugin/text@0.1.0#text-component"
+        ]
     });
 
     use super::Component;
