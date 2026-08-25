@@ -467,16 +467,3 @@ pub mod persistent_data;
 pub use persistent_data::PersistentDataHolder;
 /// Game rules definitions and values.
 pub use wit::pumpkin::plugin::game_rules::{GameRule, GameRuleValue};
-
-/// Stub for component model `cabi_realloc`
-/// Remove me after bytecodealliance/wit-bindgen#1697 makes it to release
-#[cfg(not(target_arch = "wasm32"))]
-#[unsafe(no_mangle)]
-pub extern "C" fn cabi_realloc(
-    _old_ptr: *mut u8,
-    _old_len: usize,
-    _align: usize,
-    _new_len: usize,
-) -> *mut u8 {
-    panic!("Call to cabi_realloc on native?")
-}
