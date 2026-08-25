@@ -934,9 +934,10 @@ impl pumpkin::plugin::world::HostWorld for PluginHostState {
         count: i32,
     ) -> wasmtime::Result<()> {
         let world_ref = self.get_world_res(&world)?;
-        let particle_name = format!("{particle:?}").to_lowercase().replace('_', "-");
-        let particle_data = pumpkin_data::particle::Particle::from_name(&particle_name)
-            .ok_or_else(|| wasmtime::Error::msg(format!("Unknown particle: {particle_name}")))?;
+        let particle_data =
+            pumpkin_data::particle::Particle::from_id(particle as u16).ok_or_else(|| {
+                wasmtime::Error::msg(format!("Unknown particle ID: {}", particle as u16))
+            })?;
 
         world_ref.provider.spawn_particle(
             pumpkin_util::math::vector3::Vector3::new(pos.0, pos.1, pos.2),
@@ -2254,5 +2255,35 @@ impl pumpkin_world::generation::generator::CustomChunkGenerator for WasmChunkGen
         let chunk = cache.chunks[mid].get_proto_chunk_mut();
         self.invoke_phase(pumpkin::plugin::world::GenerationPhase::Features, chunk);
         chunk.stage = pumpkin_world::chunk_system::StagedChunkEnum::Features;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::pumpkin;
+
+    #[test]
+    fn wit_particle_ids_match_internal_particle_ids() {
+        let cases = [
+            (
+                pumpkin::plugin::particles::Particle::AngryVillager,
+                pumpkin_data::particle::Particle::AngryVillager,
+            ),
+            (
+                pumpkin::plugin::particles::Particle::HappyVillager,
+                pumpkin_data::particle::Particle::HappyVillager,
+            ),
+            (
+                pumpkin::plugin::particles::Particle::SulfurCubeGoo,
+                pumpkin_data::particle::Particle::SulfurCubeGoo,
+            ),
+        ];
+
+        for (wit, internal) in cases {
+            assert_eq!(
+                pumpkin_data::particle::Particle::from_id(wit as u16),
+                Some(internal)
+            );
+        }
     }
 }
