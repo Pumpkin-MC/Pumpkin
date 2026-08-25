@@ -26,7 +26,7 @@ use pumpkin_data::entity::EntityType;
 use pumpkin_registry::RegistryBuilder;
 use pumpkin_registry::error::RootInitError;
 use pumpkin_util::identifier::Identifier;
-use pumpkin_util::permission::{PermissionManager, PermissionRegistry};
+use pumpkin_util::permission::PermissionManager;
 use pumpkin_util::text::color::NamedColor;
 use pumpkin_world::generation::generator::GeneratorInit;
 use pumpkin_world::world::WorldPortalExt;
@@ -156,7 +156,7 @@ pub struct Server {
 impl Server {
     #[expect(clippy::too_many_lines)]
     #[must_use]
-    pub async fn new(
+    pub fn new(
         basic_config: BasicConfiguration,
         advanced_config: AdvancedConfiguration,
         vanilla_data: VanillaData,
@@ -242,7 +242,7 @@ impl Server {
             advanced_config.player_data.save_player_data,
         );
         let advancement_manager = Arc::new(AdvancementManager::new(
-            players_dir.clone(),
+            players_dir,
             advanced_config.advancement.save_advancements,
         ));
         let white_list = AtomicBool::new(basic_config.white_list);
@@ -288,7 +288,7 @@ impl Server {
             worlds: ArcSwap::from_pointee(vec![]),
             dimensions,
             command_dispatcher,
-            block_registry: block_registry.clone(),
+            block_registry,
             item_registry: super::item::items::default_registry(),
             key_store: OnceCell::new(),
             bedrock_oidc_keys: Arc::new(OnceCell::new()),
@@ -317,16 +317,6 @@ impl Server {
             world_path,
         };
         let server = Arc::new(server);
-
-        let gen_pool = Arc::new(
-            rayon::ThreadPoolBuilder::new()
-                .thread_name(|i| format!("Gen-Pool-{i}"))
-                .build()
-                .unwrap_or_else(|err| {
-                    error!("Failed to build generation thread pool: {err}");
-                    std::process::exit(1);
-                }),
-        );
 
         // Fetch / generate keys in background tasks to avoid blocking startup
         let server_clone = server.clone();
@@ -408,6 +398,7 @@ impl Server {
                 .thread_name(|i| format!("Gen-Pool-{i}"))
                 .build()
                 .unwrap_or_else(|err| {
+                    error!("Failed to build generation thread pool: {err}");
                     std::process::exit(1);
                 }),
         );
@@ -429,7 +420,13 @@ impl Server {
                         .color_named(NamedColor::DarkGreen)
                         .to_pretty_console()
                 );
-                let level = pumpkin_world::dimension::into_level(dim.clone(), &config, path, seed, Some(pool));
+                let level = pumpkin_world::dimension::into_level(
+                    dim.clone(),
+                    &config,
+                    path,
+                    seed,
+                    Some(pool),
+                );
                 let world = Arc::new(World::load(level.clone(), l_info, dim, registry, weak));
                 let portal: Arc<dyn WorldPortalExt> = Arc::new(WorldPortal(world.clone()));
                 level.world_portal.store(Arc::new(Some(portal)));
@@ -459,17 +456,11 @@ impl Server {
         for world in &worlds_vec {
             let mut world_init_event =
                 crate::plugin::api::events::world::world_init::WorldInitEvent::new(world.clone());
-            self
-                .plugin_manager
-                .fire(&self, &mut world_init_event)
-                .await;
+            self.plugin_manager.fire(&self, &mut world_init_event).await;
 
             let mut world_load_event =
                 crate::plugin::api::events::world::world_load::WorldLoadEvent::new(world.clone());
-            self
-                .plugin_manager
-                .fire(&self, &mut world_load_event)
-                .await;
+            self.plugin_manager.fire(&self, &mut world_load_event).await;
         }
 
         self.worlds.store(Arc::new(worlds_vec));
@@ -477,8 +468,7 @@ impl Server {
         info!("All worlds loaded successfully.");
 
         let enabled_packs = self.level_info.load().data_packs.enabled.clone();
-        self
-            .datapack_manager
+        self.datapack_manager
             .load_all(&self.world_path, &enabled_packs, &self.recipe_manager)
             .await;
 

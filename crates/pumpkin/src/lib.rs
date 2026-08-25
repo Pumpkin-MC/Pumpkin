@@ -235,7 +235,7 @@ impl PumpkinServer {
         advanced_config: AdvancedConfiguration,
         vanilla_data: VanillaData,
     ) -> Self {
-        let server = Server::new(basic_config, advanced_config, vanilla_data).await;
+        let server = Server::new(basic_config, advanced_config, vanilla_data);
 
         let rcon = server.advanced_config.networking.rcon.clone();
 
