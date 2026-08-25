@@ -3,7 +3,6 @@
 use crate::Block;
 use crate::BlockId;
 use crate::data_component::DataComponent;
-use crate::effect::StatusEffect;
 use crate::entity_type::EntityType;
 use crate::sound::Sound;
 use crate::tag::Taggable;
@@ -43,22 +42,36 @@ impl Clone for Box<dyn DataComponentImpl> {
 pub fn get<T: DataComponentImpl + 'static>(value: &dyn DataComponentImpl) -> &T {
     value.as_any().downcast_ref::<T>().unwrap_or_else(|| {
         panic!(
-            "you are trying to cast {} to {}",
+            "you are trying to cast {} ({}) to {} ({})",
             value.get_self_enum().to_name(),
-            T::get_enum().to_name()
+            std::any::type_name_of_val(value),
+            T::get_enum().to_name(),
+            std::any::type_name::<T>()
         )
     })
 }
 
 #[inline]
 pub fn get_mut<T: DataComponentImpl + 'static>(value: &mut dyn DataComponentImpl) -> &mut T {
-    value.as_mut_any().downcast_mut::<T>().unwrap()
+    let name = value.get_self_enum().to_name();
+    let val_type = std::any::type_name_of_val(value);
+    value.as_mut_any().downcast_mut::<T>().unwrap_or_else(|| {
+        panic!(
+            "you are trying to cast {name} ({val_type}) to {} ({})",
+            T::get_enum().to_name(),
+            std::any::type_name::<T>()
+        )
+    })
 }
 
 macro_rules! default_impl {
     ($t: ident) => {
         fn equal(&self, other: &dyn crate::data_component_impl::DataComponentImpl) -> bool {
-            self == crate::data_component_impl::get::<Self>(other)
+            if let Some(other) = other.as_any().downcast_ref::<Self>() {
+                self == other
+            } else {
+                false
+            }
         }
         #[inline]
         fn get_enum() -> crate::data_component::DataComponent
@@ -84,8 +97,6 @@ macro_rules! default_impl {
         }
     };
 }
-
-pub(crate) use default_impl;
 
 pub fn get_str_hash(val: &str) -> u32 {
     let mut digest = Digest::new(Crc32Iscsi);
@@ -154,9 +165,9 @@ pub fn get_idor(nbt: &NbtCompound, key: &str, default: Sound) -> IdOr<basic::Sou
         let sound = sound.strip_prefix("minecraft:").unwrap_or(sound);
         IdOr::Id(Sound::from_name(sound).unwrap_or(default))
     } else if let Some(sound_compound) = nbt.get_compound(key) {
-        let sound_name = sound_compound
-            .get_string("sound_id")
-            .expect("SoundEvent compound must have a 'sound_id' field");
+        let Some(sound_name) = sound_compound.get_string("sound_id") else {
+            return IdOr::Id(default);
+        };
         let range = sound_compound.get_float("range");
         IdOr::Value(basic::SoundEvent {
             sound_name: sound_name.to_string(),
@@ -512,15 +523,24 @@ pub fn read_data(id: DataComponent, data: &NbtTag) -> Option<Box<dyn DataCompone
         DataComponent::CustomData => Some(CustomDataImpl::read_data(data)?.to_dyn()),
         DataComponent::Enchantments => Some(EnchantmentsImpl::read_data(data)?.to_dyn()),
         DataComponent::Damage => Some(DamageImpl::read_data(data)?.to_dyn()),
+        DataComponent::MaxDamage => Some(MaxDamageImpl::read_data(data)?.to_dyn()),
         DataComponent::Unbreakable => Some(UnbreakableImpl::read_data(data)?.to_dyn()),
+        DataComponent::Food => Some(FoodImpl::read_data(data)?.to_dyn()),
+        DataComponent::Tool => Some(ToolImpl::read_data(data)?.to_dyn()),
+        DataComponent::Enchantable => Some(EnchantableImpl::read_data(data)?.to_dyn()),
         DataComponent::DamageResistant => Some(DamageResistantImpl::read_data(data)?.to_dyn()),
         DataComponent::PotionContents => Some(PotionContentsImpl::read_data(data)?.to_dyn()),
         DataComponent::PotionDurationScale => {
             Some(PotionDurationScaleImpl::read_data(data)?.to_dyn())
         }
+        DataComponent::SuspiciousStewEffects => {
+            Some(SuspiciousStewEffectsImpl::read_data(data)?.to_dyn())
+        }
         DataComponent::Fireworks => Some(FireworksImpl::read_data(data)?.to_dyn()),
         DataComponent::FireworkExplosion => Some(FireworkExplosionImpl::read_data(data)?.to_dyn()),
         DataComponent::CustomName => Some(CustomNameImpl::read_data(data)?.to_dyn()),
+        DataComponent::Lore => Some(LoreImpl::read_data(data)?.to_dyn()),
+        DataComponent::ItemName => Some(ItemNameImpl::read_data(data)?.to_dyn()),
         DataComponent::ItemModel => Some(ItemModelImpl::read_data(data)?.to_dyn()),
         DataComponent::Consumable => Some(ConsumableImpl::read_data(data)?.to_dyn()),
         DataComponent::Equippable => Some(EquippableImpl::read_data(data)?.to_dyn()),
@@ -629,6 +649,60 @@ mod tests {
     ) {
         let restored = read(&value.write_data()).expect("read_data returned None");
         assert!(value.equal(&restored));
+    }
+
+    #[test]
+    fn max_damage_round_trip() {
+        assert_round_trip(MaxDamageImpl { max_damage: 1561 }, MaxDamageImpl::read_data);
+    }
+
+    #[test]
+    fn enchantable_round_trip() {
+        assert_round_trip(EnchantableImpl { value: 14 }, EnchantableImpl::read_data);
+    }
+
+    #[test]
+    fn food_round_trip() {
+        assert_round_trip(
+            FoodImpl {
+                nutrition: 4,
+                saturation: 2.4,
+                can_always_eat: true,
+            },
+            FoodImpl::read_data,
+        );
+    }
+
+    #[test]
+    fn block_entity_data_round_trip() {
+        let mut nbt = NbtCompound::new();
+        nbt.put_string("id", "minecraft:chest".to_string());
+        nbt.put_int("x", 12);
+        assert_round_trip(BlockEntityDataImpl { nbt }, BlockEntityDataImpl::read_data);
+    }
+
+    #[test]
+    fn tool_round_trip() {
+        assert_round_trip(
+            ToolImpl {
+                rules: Cow::Owned(vec![
+                    ToolRule {
+                        blocks: IDSet::Tag(Cow::Borrowed("mineable/pickaxe")),
+                        speed: Some(6.0),
+                        correct_for_drops: Some(true),
+                    },
+                    ToolRule {
+                        blocks: IDSet::Tag(Cow::Borrowed("incorrect_for_wooden_tool")),
+                        speed: None,
+                        correct_for_drops: Some(false),
+                    },
+                ]),
+                default_mining_speed: 1.0,
+                damage_per_block: 2,
+                can_destroy_blocks_in_creative: false,
+            },
+            ToolImpl::read_data,
+        );
     }
 
     #[test]
@@ -741,5 +815,34 @@ mod tests {
             CanPlaceOnImpl::read_data,
         );
         assert_round_trip(LockImpl { predicate }, LockImpl::read_data);
+    }
+
+    #[test]
+    fn equal_with_different_types_returns_false() {
+        let enc = EnchantmentsImpl {
+            enchantment: Cow::Borrowed(&[(&crate::Enchantment::SHARPNESS, 2)]),
+        };
+        let max_stack = MaxStackSizeImpl { size: 64 };
+        assert!(!enc.equal(&max_stack));
+    }
+
+    #[test]
+    fn enchantments_read_data_formats() {
+        let mut direct = NbtCompound::new();
+        direct.put_int("sharpness", 2);
+        let enc1 = EnchantmentsImpl::read_data(&NbtTag::Compound(direct)).unwrap();
+        assert!(enc1.enchantment[0].0 == &crate::Enchantment::SHARPNESS);
+        assert_eq!(enc1.enchantment[0].1, 2);
+
+        let mut levels = NbtCompound::new();
+        levels.put_int("minecraft:sharpness", 2);
+        let mut wrapped = NbtCompound::new();
+        wrapped
+            .child_tags
+            .insert("levels".into(), NbtTag::Compound(levels));
+        let enc2 = EnchantmentsImpl::read_data(&NbtTag::Compound(wrapped)).unwrap();
+        assert_eq!(enc2.enchantment.len(), 1);
+        assert!(enc2.enchantment[0].0 == &crate::Enchantment::SHARPNESS);
+        assert_eq!(enc2.enchantment[0].1, 2);
     }
 }

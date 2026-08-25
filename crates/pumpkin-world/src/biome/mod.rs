@@ -8,6 +8,14 @@ pub mod end;
 pub mod multi_noise;
 pub mod position_finder;
 
+pub use position_finder::{
+    Climate, ClimateSampler, DistanceMetric, FittestPositionFinder, FittestPositionFinderResult,
+    ParameterList, RTree, RTreeLeaf, RTreeNode, RTreeSubTree, SpawnFinder, SpawnFinderResult,
+};
+pub use pumpkin_data::chunk::{
+    Parameter, ParameterPoint, ParameterRange, TargetPoint, quantize_coord, unquantize_coord,
+};
+
 thread_local! {
     /// A shortcut; check if last used biome is what we should use
     static LAST_RESULT_NODE: RefCell<Option<&'static BiomeTree>> = const {RefCell::new(None) };
@@ -43,7 +51,9 @@ pub fn hash_seed(seed: u64) -> i64 {
     let mut hasher = Sha256::new();
     hasher.update(seed.to_le_bytes());
     let result = hasher.finalize();
-    i64::from_le_bytes(result[..8].try_into().unwrap())
+    let mut bytes = [0u8; 8];
+    bytes.copy_from_slice(&result[..8]);
+    i64::from_le_bytes(bytes)
 }
 
 #[cfg(test)]

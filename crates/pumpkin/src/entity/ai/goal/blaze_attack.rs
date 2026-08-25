@@ -208,7 +208,7 @@ impl Goal for BlazeShootFireballGoal {
                     .entity
                     .look_control
                     .lock()
-                    .unwrap()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
                     .look_at_entity(&*blaze, &target);
             } else if self.last_seen < 5 {
                 // TODO: set wanted position to target

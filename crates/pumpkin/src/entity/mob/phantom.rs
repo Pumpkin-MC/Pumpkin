@@ -3,7 +3,7 @@ use std::sync::{Arc, Weak};
 use pumpkin_data::entity::EntityType;
 
 use crate::entity::{
-    Entity, NBTStorage,
+    Entity,
     ai::goal::{look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal},
     mob::{Mob, MobEntity},
 };
@@ -23,7 +23,11 @@ impl PhantomEntity {
         };
 
         {
-            let mut goal_selector = mob_arc.mob_entity.goals_selector.lock().unwrap();
+            let mut goal_selector = mob_arc
+                .mob_entity
+                .goals_selector
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
 
             // TODO: PhantomCircleAroundAnchorGoal, PhantomSweepAttackGoal
             goal_selector.add_goal(
@@ -36,8 +40,6 @@ impl PhantomEntity {
         mob_arc
     }
 }
-
-impl NBTStorage for PhantomEntity {}
 
 impl Mob for PhantomEntity {
     fn get_mob_entity(&self) -> &MobEntity {

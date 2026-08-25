@@ -3,10 +3,11 @@ use std::sync::{Arc, Weak};
 use pumpkin_data::{entity::EntityType, item::Item};
 
 use crate::entity::{
-    Entity, NBTStorage,
+    Entity,
     ai::goal::{
         breed::BreedGoal, look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal,
-        swim::SwimGoal, tempt::TemptGoal, wander_around::WanderAroundGoal,
+        swim::SwimGoal, tempt::TemptGoal, try_find_water::TryFindWaterGoal,
+        wander_around::WanderAroundGoal,
     },
     mob::{Mob, MobEntity},
 };
@@ -28,8 +29,13 @@ impl TurtleEntity {
         };
 
         {
-            let mut goal_selector = mob_arc.mob_entity.goals_selector.lock().unwrap();
+            let mut goal_selector = mob_arc
+                .mob_entity
+                .goals_selector
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
 
+            goal_selector.add_goal(0, Box::new(TryFindWaterGoal));
             goal_selector.add_goal(1, Box::new(SwimGoal::default()));
             goal_selector.add_goal(2, BreedGoal::new(1.0));
             goal_selector.add_goal(3, Box::new(TemptGoal::new(1.1, TEMPT_ITEMS)));
@@ -44,8 +50,6 @@ impl TurtleEntity {
         mob_arc
     }
 }
-
-impl NBTStorage for TurtleEntity {}
 
 impl Mob for TurtleEntity {
     fn get_mob_entity(&self) -> &MobEntity {

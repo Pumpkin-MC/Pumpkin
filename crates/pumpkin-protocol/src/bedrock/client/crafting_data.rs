@@ -5,24 +5,25 @@ use crate::{
 };
 use pumpkin_macros::packet;
 use std::io::{Error, Write};
+use uuid::Uuid;
 
 #[derive(Clone, Debug)]
 pub struct ItemDescriptorCount {
-    pub network_id: i16,
-    pub metadata_value: i16,
+    pub item_identifier: String,
+    pub metadata_value: i32,
     pub count: i32,
 }
 
 impl PacketWrite for ItemDescriptorCount {
     fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
-        if self.network_id == 0 {
-            // Invalid item descriptor (type 0)
-            0u8.write(writer)?;
+        if self.item_identifier.is_empty() {
+            VarUInt(0).write(writer)?;
+            VarInt(32767).write(writer)?;
         } else {
-            // Default item descriptor (type 1)
-            1u8.write(writer)?;
-            self.network_id.write(writer)?;
-            self.metadata_value.write(writer)?;
+            VarUInt(1).write(writer)?;
+            "name".write(writer)?;
+            self.item_identifier.write(writer)?;
+            VarInt(self.metadata_value).write(writer)?;
         }
         VarInt(self.count).write(writer)?;
         Ok(())
@@ -31,13 +32,15 @@ impl PacketWrite for ItemDescriptorCount {
 
 #[derive(Clone, Debug)]
 pub struct RecipeUnlockRequirement {
-    pub context: u8,
+    pub context: i32,
 }
 
 impl PacketWrite for RecipeUnlockRequirement {
     fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
-        self.context.write(writer)?;
-        Ok(())
+        VarInt(self.context).write(writer)?;
+        // Context NONE carries an optional ingredient list; Pumpkin currently
+        // sends ALWAYS for its generated recipes.
+        false.write(writer)
     }
 }
 
@@ -46,7 +49,7 @@ pub struct BedrockShapelessRecipe {
     pub recipe_id: String,
     pub input: Vec<ItemDescriptorCount>,
     pub output: Vec<NetworkItemDescriptor>,
-    pub uuid: [u8; 16],
+    pub uuid: Uuid,
     pub block: String,
     pub priority: VarInt,
     pub unlock_requirement: RecipeUnlockRequirement,
@@ -66,11 +69,11 @@ impl PacketWrite for BedrockShapelessRecipe {
         // output slice with VarUInt length prefix
         VarUInt(self.output.len() as u32).write(writer)?;
         for item in &self.output {
-            item.write(writer)?;
+            item.write_item_instance(writer)?;
         }
 
         // uuid
-        writer.write_all(&self.uuid)?;
+        self.uuid.write(writer)?;
 
         // block
         self.block.write(writer)?;
@@ -78,7 +81,7 @@ impl PacketWrite for BedrockShapelessRecipe {
         // priority
         self.priority.write(writer)?;
 
-        // unlock_requirement
+        true.write(writer)?;
         self.unlock_requirement.write(writer)?;
 
         // recipe_network_id
@@ -95,7 +98,7 @@ pub struct BedrockShapedRecipe {
     pub height: VarInt,
     pub input: Vec<ItemDescriptorCount>,
     pub output: Vec<NetworkItemDescriptor>,
-    pub uuid: [u8; 16],
+    pub uuid: Uuid,
     pub block: String,
     pub priority: VarInt,
     pub assume_symmetry: bool,
@@ -109,7 +112,7 @@ impl PacketWrite for BedrockShapedRecipe {
         self.width.write(writer)?;
         self.height.write(writer)?;
 
-        // input slice: width * height elements sequentially (no count prefix)
+        VarUInt(self.input.len() as u32).write(writer)?;
         for item in &self.input {
             item.write(writer)?;
         }
@@ -117,11 +120,11 @@ impl PacketWrite for BedrockShapedRecipe {
         // output slice with VarUInt length prefix
         VarUInt(self.output.len() as u32).write(writer)?;
         for item in &self.output {
-            item.write(writer)?;
+            item.write_item_instance(writer)?;
         }
 
         // uuid
-        writer.write_all(&self.uuid)?;
+        self.uuid.write(writer)?;
 
         // block
         self.block.write(writer)?;
@@ -132,7 +135,7 @@ impl PacketWrite for BedrockShapedRecipe {
         // assume_symmetry
         self.assume_symmetry.write(writer)?;
 
-        // unlock_requirement
+        true.write(writer)?;
         self.unlock_requirement.write(writer)?;
 
         // recipe_network_id
@@ -172,18 +175,36 @@ pub struct CCraftingData {
 
 impl PacketWrite for CCraftingData {
     fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
-        // recipes slice with VarUInt prefix
-        VarUInt(self.recipes.len() as u32).write(writer)?;
-        for recipe in &self.recipes {
+        let shaped = self
+            .recipes
+            .iter()
+            .filter_map(|recipe| match recipe {
+                BedrockRecipe::Shaped(recipe) => Some(recipe),
+                BedrockRecipe::Shapeless(_) => None,
+            })
+            .collect::<Vec<_>>();
+        VarUInt(shaped.len() as u32).write(writer)?;
+        for recipe in shaped {
             recipe.write(writer)?;
         }
 
-        // potion recipes count prefix (0)
-        VarUInt(0).write(writer)?;
-        // potion container change recipes count prefix (0)
-        VarUInt(0).write(writer)?;
-        // material reducers count prefix (0)
-        VarUInt(0).write(writer)?;
+        let shapeless = self
+            .recipes
+            .iter()
+            .filter_map(|recipe| match recipe {
+                BedrockRecipe::Shapeless(recipe) => Some(recipe),
+                BedrockRecipe::Shaped(_) => None,
+            })
+            .collect::<Vec<_>>();
+        VarUInt(shapeless.len() as u32).write(writer)?;
+        for recipe in shapeless {
+            recipe.write(writer)?;
+        }
+
+        // Multi, user, chemistry, smithing, potion, container and material arrays.
+        for _ in 0..9 {
+            VarUInt(0).write(writer)?;
+        }
 
         // clean_recipes
         self.clean_recipes.write(writer)?;

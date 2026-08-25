@@ -88,9 +88,10 @@ pub trait FlowingFluid: Send + Sync {
             }
 
             let waterlogged = block.is_waterlogged(current_block_state_id);
-            let current_fluid_state = self
-                .get_effective_props(fluid, current_block_state_id)
-                .unwrap();
+            let Some(current_fluid_state) = self.get_effective_props(fluid, current_block_state_id)
+            else {
+                return;
+            };
             let is_source = current_fluid_state.level == Level::L8
                 && current_fluid_state.falling != Falling::True;
             let state_for_spreading: FlowingFluidProperties;
@@ -369,6 +370,18 @@ pub trait FlowingFluid: Send + Sync {
                 if block.id != Block::AIR.id {
                     world.break_block(pos, None, BlockFlags::NOTIFY_ALL).await;
                 }
+            }
+
+            let mut event = crate::plugin::api::events::block::block_from_to::BlockFromToEvent::new(
+                *pos,
+                *pos,
+                &pumpkin_data::Block::WATER,
+            );
+            if let Some(server) = world.server.upgrade() {
+                server.plugin_manager.fire(&server, &mut event).await;
+            }
+            if event.cancelled {
+                return;
             }
 
             world

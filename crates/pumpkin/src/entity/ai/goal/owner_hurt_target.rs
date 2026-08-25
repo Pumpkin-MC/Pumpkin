@@ -24,7 +24,7 @@ impl OwnerHurtTargetGoal {
 impl Goal for OwnerHurtTargetGoal {
     fn can_start<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
         Box::pin(async {
-            if mob.is_sitting() {
+            if !mob.is_tamed() || mob.is_sitting() {
                 return false;
             }
 
@@ -103,5 +103,16 @@ impl Goal for OwnerHurtTargetGoal {
 
     fn controls(&self) -> Controls {
         Controls::TARGET
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn owner_hurt_target_goal_controls() {
+        let goal = OwnerHurtTargetGoal::new();
+        assert!(goal.controls().get(Controls::TARGET));
     }
 }

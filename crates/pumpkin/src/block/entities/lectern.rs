@@ -159,8 +159,8 @@ impl Inventory for LecternBlockEntity {
         Box::pin(async move { self.book.lock().await.is_empty() })
     }
 
-    fn get_stack(&self, _slot: usize) -> InventoryFuture<'_, Arc<Mutex<ItemStack>>> {
-        Box::pin(async move { self.book.clone() })
+    fn get_stack(&self, _slot: usize) -> InventoryFuture<'_, ItemStack> {
+        Box::pin(async move { self.book.lock().await.clone() })
     }
 
     fn remove_stack(&self, _slot: usize) -> InventoryFuture<'_, ItemStack> {

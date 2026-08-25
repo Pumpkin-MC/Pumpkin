@@ -1,5 +1,4 @@
 use pumpkin_data::translation;
-use pumpkin_protocol::java::client::play::CommandSuggestion;
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::click::ClickEvent;
 use pumpkin_util::text::color::NamedColor;
@@ -15,8 +14,12 @@ use crate::command::dispatcher::CommandError::{
     CommandFailed, InvalidConsumption, InvalidRequirement, PermissionDenied, SyntaxError,
 };
 use crate::command::tree::{Command, CommandTree, NodeType, RawArg, RawArgs};
+use crate::command::{
+    context::string_range::StringRange,
+    suggestion::{Suggestion, suggestions::Suggestions},
+};
 use crate::server::Server;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 #[derive(Debug)]
 pub enum CommandError {
@@ -228,7 +231,7 @@ fn path_failure(
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct CommandDispatcher {
     pub commands: FxHashMap<String, Command>,
     pub permissions: FxHashMap<String, String>,
@@ -268,10 +271,10 @@ impl CommandDispatcher {
         src: &'a CommandSender,
         server: &'a Server,
         cmd: &'a str,
-    ) -> Vec<CommandSuggestion> {
+    ) -> Suggestions {
         let mut parts = cmd.split_whitespace();
         let Some(key) = parts.next() else {
-            return Vec::new();
+            return Suggestions::empty();
         };
         let mut raw_args: RawArgs<'a> = parts
             .rev()
@@ -284,7 +287,7 @@ impl CommandDispatcher {
             .collect();
 
         let Ok(tree) = self.get_tree(key) else {
-            return Vec::new();
+            return Suggestions::empty();
         };
 
         // Gate suggestions on command permissions, mirroring `dispatch`. Many
@@ -293,14 +296,14 @@ impl CommandDispatcher {
         // consumers would leak privileged data (e.g. banned/op/whitelisted
         // player names) to unprivileged players via tab-complete.
         let Some(permission) = self.permissions.get(key) else {
-            return Vec::new();
+            return Suggestions::empty();
         };
 
         if !src.has_permission(server, permission.as_str()).await {
-            return Vec::new();
+            return Suggestions::empty();
         }
 
-        let mut suggestions = HashSet::new();
+        let mut suggestions = Vec::new();
 
         // try paths and collect the nodes that fail
         // todo: make this more fine-grained
@@ -312,27 +315,27 @@ impl CommandDispatcher {
                     debug!(
                         "Error while parsing command \"{cmd}\": {s:?} was consumed, but couldn't be parsed"
                     );
-                    return Vec::new();
+                    return Suggestions::empty();
                 }
                 Err(InvalidRequirement) => {
                     debug!(
                         "Error while parsing command \"{cmd}\": a requirement that was expected was not met."
                     );
-                    return Vec::new();
+                    return Suggestions::empty();
                 }
                 Err(PermissionDenied) => {
                     debug!("Permission denied for command \"{cmd}\"");
-                    return Vec::new();
+                    return Suggestions::empty();
                 }
                 Err(CommandFailed(_)) => {
                     debug!("Command failed");
-                    return Vec::new();
+                    return Suggestions::empty();
                 }
                 Err(SyntaxError(_)) => {
-                    return Vec::new();
+                    return Suggestions::empty();
                 }
                 Ok(Some(new_suggestions)) => {
-                    suggestions.extend(new_suggestions);
+                    suggestions.push(new_suggestions);
                 }
                 Ok(None) => {
                     debug!("Command none");
@@ -340,9 +343,7 @@ impl CommandDispatcher {
             }
         }
 
-        let mut suggestions = Vec::from_iter(suggestions);
-        suggestions.sort_by(|a, b| a.suggestion.cmp(&b.suggestion));
-        suggestions
+        Suggestions::merge(cmd, suggestions)
     }
 
     #[allow(clippy::too_many_lines)]
@@ -621,7 +622,7 @@ impl CommandDispatcher {
         tree: &'a CommandTree,
         raw_args: &mut RawArgs<'a>,
         input: &'a str,
-    ) -> Result<Option<Vec<CommandSuggestion>>, CommandError> {
+    ) -> Result<Option<Suggestions>, CommandError> {
         //let mut parsed_args: ConsumedArgs = HashMap::new();
 
         for node in path.iter().map(|&i| &tree.nodes[i]) {
@@ -634,15 +635,50 @@ impl CommandDispatcher {
                         return Ok(None);
                     }
                 }
-                NodeType::Argument { consumer, name: _ } => {
+                NodeType::Argument {
+                    consumer,
+                    suggestion_provider,
+                    name: _,
+                } => {
                     match consumer.consume_with_syntax(src, server, raw_args).await {
                         Ok(Some(_consumed)) => {
                             //parsed_args.insert(name, consumed);
                         }
                         Ok(None) => {
                             return if raw_args.is_empty() {
-                                let suggestions = consumer.suggest(src, server, input).await?;
-                                Ok(suggestions)
+                                let start = input
+                                    .char_indices()
+                                    .rfind(|(_, c)| c.is_whitespace())
+                                    .map_or(0, |(index, c)| index + c.len_utf8());
+                                if let Some(provider) = suggestion_provider {
+                                    Ok(Some(
+                                        provider
+                                            .suggest(src, server, input, start, input.len())
+                                            .await,
+                                    ))
+                                } else {
+                                    let suggestions = consumer.suggest(src, server, input).await?;
+                                    let range = StringRange::between(start, input.len());
+                                    Ok(suggestions.map(|suggestions| {
+                                        Suggestions::new(
+                                            range,
+                                            suggestions
+                                                .into_iter()
+                                                .map(|suggestion| match suggestion.tooltip {
+                                                    Some(tooltip) => Suggestion::with_tooltip(
+                                                        range,
+                                                        suggestion.suggestion,
+                                                        tooltip,
+                                                    ),
+                                                    None => Suggestion::without_tooltip(
+                                                        range,
+                                                        suggestion.suggestion,
+                                                    ),
+                                                })
+                                                .collect(),
+                                        )
+                                    }))
+                                }
                             } else {
                                 Ok(None)
                             };
@@ -663,20 +699,61 @@ impl CommandDispatcher {
 
     /// Register a command with the dispatcher.
     pub fn register<P: Into<String>>(&mut self, tree: CommandTree, permission: P) {
-        let mut names = tree.names.iter();
+        let names = tree.names.clone();
+        let mut names_iter = names.iter();
         let permission = permission.into();
 
-        let primary_name = names.next().expect("at least one name must be provided");
+        let Some(primary_name) = names_iter.next() else {
+            tracing::warn!("Command registration skipped: command tree has no names");
+            return;
+        };
 
-        for name in names {
+        for name in names_iter {
             self.commands
                 .insert(name.clone(), Command::Alias(primary_name.clone()));
             self.permissions.insert(name.clone(), permission.clone());
+
+            // For double-slash or slash-prefixed commands (like WorldEdit's //set or /set),
+            // automatically register the alternate slash variant as an alias.
+            if let Some(stripped) = name.strip_prefix("//") {
+                let single_slash = format!("/{stripped}");
+                if !self.commands.contains_key(&single_slash) && &single_slash != primary_name {
+                    self.commands
+                        .insert(single_slash.clone(), Command::Alias(primary_name.clone()));
+                    self.permissions.insert(single_slash, permission.clone());
+                }
+            } else if let Some(stripped) = name.strip_prefix('/') {
+                let double_slash = format!("//{stripped}");
+                if !self.commands.contains_key(&double_slash) && &double_slash != primary_name {
+                    self.commands
+                        .insert(double_slash.clone(), Command::Alias(primary_name.clone()));
+                    self.permissions.insert(double_slash, permission.clone());
+                }
+            }
         }
 
-        self.permissions.insert(primary_name.clone(), permission);
+        self.permissions
+            .insert(primary_name.clone(), permission.clone());
         self.commands
             .insert(primary_name.clone(), Command::Tree(tree));
+
+        // For double-slash or slash-prefixed primary commands (like //set or /set),
+        // automatically register the alternate slash variant as an alias.
+        if let Some(stripped) = primary_name.strip_prefix("//") {
+            let single_slash = format!("/{stripped}");
+            if !self.commands.contains_key(&single_slash) {
+                self.commands
+                    .insert(single_slash.clone(), Command::Alias(primary_name.clone()));
+                self.permissions.insert(single_slash, permission);
+            }
+        } else if let Some(stripped) = primary_name.strip_prefix('/') {
+            let double_slash = format!("//{stripped}");
+            if !self.commands.contains_key(&double_slash) {
+                self.commands
+                    .insert(double_slash.clone(), Command::Alias(primary_name.clone()));
+                self.permissions.insert(double_slash, permission);
+            }
+        }
     }
 
     /// Remove a command from the dispatcher by its primary name.
@@ -692,6 +769,30 @@ impl CommandDispatcher {
             }
         }
 
+        if let Some(stripped) = name.strip_prefix("//") {
+            let single_slash = format!("/{stripped}");
+            for (key, value) in &self.commands {
+                if key == &single_slash {
+                    to_remove.push(key.clone());
+                } else if let Command::Alias(target) = value
+                    && target == &single_slash
+                {
+                    to_remove.push(key.clone());
+                }
+            }
+        } else if let Some(stripped) = name.strip_prefix('/') {
+            let double_slash = format!("//{stripped}");
+            for (key, value) in &self.commands {
+                if key == &double_slash {
+                    to_remove.push(key.clone());
+                } else if let Command::Alias(target) = value
+                    && target == &double_slash
+                {
+                    to_remove.push(key.clone());
+                }
+            }
+        }
+
         for key in to_remove {
             self.commands.remove(&key);
             self.permissions.remove(&key);
@@ -703,11 +804,10 @@ impl CommandDispatcher {
 mod test {
     use pumpkin_config::BasicConfiguration;
     use pumpkin_data::translation;
-    use pumpkin_util::permission::PermissionRegistry;
+    use pumpkin_util::permission::PermissionManager;
     use pumpkin_util::text::TextContent;
     use pumpkin_util::text::click::ClickEvent;
     use pumpkin_util::text::color::{Color, NamedColor};
-    use tokio::sync::RwLock;
 
     use super::{
         PathParsingFailure, render_syntax_error_messages, select_parse_error,
@@ -724,15 +824,31 @@ mod test {
         }
     }
 
-    #[tokio::test]
-    async fn dynamic_command() {
+    #[test]
+    fn dynamic_command() {
         let config = BasicConfiguration::default();
-        let registry = RwLock::new(PermissionRegistry::new());
-        let mut dispatcher = default_dispatcher(&registry, &config)
-            .await
-            .fallback_dispatcher;
+        let commands_config = pumpkin_config::CommandsConfig::default();
+        let manager = PermissionManager::new();
+        let mut dispatcher =
+            default_dispatcher(&manager, &config, &commands_config).fallback_dispatcher;
         let tree = CommandTree::new(["test"], "test_desc");
         dispatcher.register(tree, "minecraft:test");
+    }
+
+    #[test]
+    fn pumpkin_command_aliases() {
+        let config = BasicConfiguration::default();
+        let commands_config = pumpkin_config::CommandsConfig::default();
+        let manager = PermissionManager::new();
+        let dispatcher =
+            default_dispatcher(&manager, &config, &commands_config).fallback_dispatcher;
+
+        let pumpkin_tree = dispatcher.get_tree("pumpkin").unwrap();
+        let version_tree = dispatcher.get_tree("version").unwrap();
+        let ver_tree = dispatcher.get_tree("ver").unwrap();
+
+        assert_eq!(pumpkin_tree.description, version_tree.description);
+        assert_eq!(pumpkin_tree.description, ver_tree.description);
     }
 
     #[test]
@@ -846,5 +962,21 @@ mod test {
         );
 
         assert!(selected.is(&error_types::DISPATCHER_UNKNOWN_COMMAND));
+    }
+
+    #[test]
+    fn double_slash_command_registration_and_lookup() {
+        let mut dispatcher = super::CommandDispatcher::default();
+        let tree = CommandTree::new(["//set", "/set"], "WorldEdit set block");
+        dispatcher.register(tree, "worldedit.set");
+
+        assert!(dispatcher.commands.contains_key("//set"));
+        assert!(dispatcher.commands.contains_key("/set"));
+        assert!(dispatcher.get_tree("//set").is_ok());
+        assert!(dispatcher.get_tree("/set").is_ok());
+
+        dispatcher.unregister("//set");
+        assert!(!dispatcher.commands.contains_key("//set"));
+        assert!(!dispatcher.commands.contains_key("/set"));
     }
 }

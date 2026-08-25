@@ -40,9 +40,9 @@ impl tracing::Subscriber for WitSubscriber {
 
     /// Serialises the tracing event with `postcard` and sends it to the host via WIT.
     fn event(&self, event: &tracing::Event<'_>) {
-        let serialized =
-            postcard::to_allocvec(&event.as_serde()).expect("failed to serialize tracing event");
-        wit::pumpkin::plugin::logging::log_tracing(&serialized);
+        if let Ok(serialized) = postcard::to_allocvec(&event.as_serde()) {
+            wit::pumpkin::plugin::logging::log_tracing(&serialized);
+        }
     }
 
     /// No-op — span entry is not tracked.

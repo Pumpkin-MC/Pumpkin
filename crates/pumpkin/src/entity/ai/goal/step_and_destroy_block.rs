@@ -131,12 +131,12 @@ impl<S: Stepping + Send + Sync, M: MoveToTargetPos + Send + Sync> Goal
             let world = mob.get_entity().world.load_full();
             let block_pos = mob.get_entity().block_pos.load();
 
-            let tweak_pos = self.tweak_to_proper_pos(block_pos, &world);
-            // TODO: drop world?
-            if !self.move_to_target_pos_goal.reached || tweak_pos.is_none() {
+            let Some(tweak_pos) = self.tweak_to_proper_pos(block_pos, &world) else {
+                return;
+            };
+            if !self.move_to_target_pos_goal.reached {
                 return;
             }
-            let tweak_pos = tweak_pos.unwrap();
             let counter = self.counter;
 
             if counter > 0 {

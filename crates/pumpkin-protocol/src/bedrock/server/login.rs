@@ -7,6 +7,7 @@ use crate::{MAX_PACKET_DATA_SIZE, codec::var_uint::VarUInt, serial::PacketRead};
 #[packet(1)]
 pub struct SLogin {
     // https://mojang.github.io/bedrock-protocol-docs/html/LoginPacket.html
+    //#[serial(big_endian)]
     pub protocol_version: i32,
 
     // https://mojang.github.io/bedrock-protocol-docs/html/connectionRequest.html
@@ -71,7 +72,9 @@ mod tests {
         let connection_request_len = 4 + jwt.len() + 4 + client_token.len();
         let mut input = Vec::new();
 
-        975i32.write_be(&mut input).expect("write protocol version");
+        2168i32
+            .write_be(&mut input)
+            .expect("write protocol version");
         VarUInt(connection_request_len as u32)
             .write(&mut input)
             .expect("write connection request length");
@@ -86,7 +89,7 @@ mod tests {
 
         let packet = SLogin::read(&mut Cursor::new(input)).expect("read login packet");
 
-        assert_eq!(packet.protocol_version, 975);
+        assert_eq!(packet.protocol_version, 2168);
         assert_eq!(packet.jwt, jwt);
         assert_eq!(packet.raw_token.len(), RAW_TOKEN_LEN);
         assert_eq!(packet.raw_token, client_token);

@@ -217,6 +217,7 @@ pub fn build() -> TokenStream {
     let mut consts = TokenStream::new();
     let mut type_from_raw_id_arms = TokenStream::new();
     let mut type_from_name = TokenStream::new();
+    let mut all_variants = TokenStream::new();
 
     for (name, entity) in &json {
         let id = entity.id as u8;
@@ -236,6 +237,10 @@ pub fn build() -> TokenStream {
         type_from_name.extend(quote! {
             #name => Some(&Self::#upper_name),
         });
+
+        all_variants.extend(quote! {
+            &Self::#upper_name,
+        })
     }
     quote! {
         use crate::data_component_impl::IDSetContent;
@@ -401,6 +406,8 @@ pub fn build() -> TokenStream {
 
         impl EntityType {
             #consts
+
+            pub const ALL: &'static [&'static Self] = &[#all_variants];
 
             pub const fn from_raw(id: u16) -> Option<&'static Self> {
                 match id {

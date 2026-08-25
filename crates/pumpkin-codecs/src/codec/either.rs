@@ -67,8 +67,8 @@ impl<L: Decode, R: Decode> Decode for Either<L, R> {
 
         DataResult::new_error(format!(
             "Failed to parse either. First: {}; Second: {}",
-            left.get_message().unwrap(),
-            right.get_message().unwrap()
+            left.get_message().as_deref().unwrap_or("unknown error"),
+            right.get_message().as_deref().unwrap_or("unknown error")
         ))
     }
 }

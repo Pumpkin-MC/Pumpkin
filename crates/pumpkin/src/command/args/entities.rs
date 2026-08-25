@@ -186,7 +186,7 @@ impl TargetSelector {
 
     #[must_use]
     pub fn includes_entities(&self) -> bool {
-        let player_type = EntityType::from_name("player").expect("entity type player must exist");
+        let player_type = &EntityType::PLAYER;
         let mut includes_entities = self.base_includes_entities();
 
         for condition in &self.conditions {

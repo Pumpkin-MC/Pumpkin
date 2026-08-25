@@ -1,3 +1,19 @@
+#![allow(dead_code, unused)]
+#![allow(
+    clippy::all,
+    clippy::pedantic,
+    clippy::nursery,
+    clippy::cargo,
+    clippy::print_stdout,
+    clippy::print_stderr,
+    clippy::empty_structs_with_brackets,
+    clippy::semicolon_outside_block,
+    clippy::unreachable,
+    clippy::undocumented_unsafe_blocks,
+    clippy::needless_return,
+    clippy::collapsible_if
+)]
+
 use heck::ToPascalCase;
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
@@ -11,6 +27,7 @@ use std::{
 
 mod advancement;
 mod attributes;
+mod bedrock_biome;
 mod bedrock_creative;
 mod biome;
 mod bitsets;
@@ -25,6 +42,7 @@ mod configured_feature;
 mod damage_type;
 mod data_component;
 mod dimension;
+mod dye_color;
 mod effect;
 mod enchantments;
 mod entity_pose;
@@ -38,6 +56,8 @@ mod game_rules;
 mod item;
 mod jukebox_song;
 pub mod loot;
+mod map_color;
+mod map_decoration;
 mod message_type;
 mod meta_data_type;
 mod noise_parameter;
@@ -81,6 +101,7 @@ pub fn main() {
 
     let mut build_functions: Vec<(BuilderFn, &str)> = vec![
         (advancement::build, "advancement.rs"),
+        (bedrock_biome::build, "bedrock_biome.rs"),
         (bedrock_creative::build, "bedrock_creative.rs"),
         (packet::build, "packet.rs"),
         (screen::build, "screen.rs"),
@@ -142,6 +163,9 @@ pub fn main() {
         ),
         (carver::build, "carver.rs"),
         (chest_loot::build, "chest_loot.rs"),
+        (map_color::build, "map_color.rs"),
+        (map_decoration::build, "map_decoration.rs"),
+        (dye_color::build, "dye_color.rs"),
     ];
     build_functions.extend(remap::build());
 
@@ -215,6 +239,7 @@ pub fn write_generated_file(new_code: &str, out_file: &str) {
 }
 
 /// Error returned when `rustfmt` is unavailable or fails to format code.
+#[derive(Debug)]
 pub struct RustFmtError;
 
 /// Formats a Rust source string by piping it through `rustfmt`.

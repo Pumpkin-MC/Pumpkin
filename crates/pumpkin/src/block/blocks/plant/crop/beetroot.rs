@@ -16,6 +16,16 @@ type BeetrootProperties = NetherWartLikeProperties;
 pub struct BeetrootBlock;
 
 impl BlockBehaviour for BeetrootBlock {
+    fn is_valid_bonemeal_target(&self, args: crate::block::BonemealArgs<'_>) -> bool {
+        <Self as CropBlockBase>::is_valid_bonemeal_target(self, args.world, args.position)
+    }
+
+    fn perform_bonemeal<'a>(&'a self, args: crate::block::BonemealArgs<'a>) -> BlockFuture<'a, ()> {
+        Box::pin(async move {
+            <Self as CropBlockBase>::perform_bonemeal(self, args.world, args.position).await;
+        })
+    }
+
     fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
         <Self as CropBlockBase>::can_plant_on_top(self, args.block_accessor, &args.position.down())
     }
@@ -47,6 +57,10 @@ impl BlockBehaviour for BeetrootBlock {
 impl PlantBlockBase for BeetrootBlock {}
 
 impl CropBlockBase for BeetrootBlock {
+    fn bonemeal_age_increase(&self) -> i32 {
+        rand::rng().random_range(2..=5) / 3
+    }
+
     fn max_age(&self) -> i32 {
         3
     }

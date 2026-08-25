@@ -175,7 +175,7 @@ impl CommandExecutor for CloneExecutor {
                             MaskMode::Masked => !pumpkin_data::block_properties::is_air(state_id),
                             MaskMode::Filtered => {
                                 let block = Block::from_state_id(state_id);
-                                block.id == filter_block.unwrap().id
+                                filter_block.is_some_and(|f| block.id == f.id)
                             }
                         };
 
@@ -264,7 +264,7 @@ impl CommandExecutor for CloneExecutor {
     }
 }
 
-pub fn register(dispatcher: &mut CommandDispatcher, registry: &mut PermissionRegistry) {
+pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistry) {
     registry.register_permission_or_panic(Permission::new(
         PERMISSION,
         DESCRIPTION,

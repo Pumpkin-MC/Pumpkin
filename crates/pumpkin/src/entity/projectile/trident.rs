@@ -3,9 +3,7 @@ use std::sync::atomic::{AtomicBool, AtomicU8, AtomicU32, Ordering};
 use tokio::sync::Mutex;
 
 use crate::{
-    entity::{
-        Entity, EntityBase, EntityBaseFuture, NBTStorage, living::LivingEntity, player::Player,
-    },
+    entity::{Entity, EntityBase, EntityBaseFuture, living::LivingEntity, player::Player},
     server::Server,
 };
 use pumpkin_data::damage::DamageType;
@@ -154,8 +152,6 @@ impl TridentEntity {
     }
 }
 
-impl NBTStorage for TridentEntity {}
-
 impl EntityBase for TridentEntity {
     fn tick<'a>(
         &'a self,
@@ -299,11 +295,6 @@ impl EntityBase for TridentEntity {
     fn get_living_entity(&self) -> Option<&LivingEntity> {
         None
     }
-
-    fn as_nbt_storage(&self) -> &dyn NBTStorage {
-        self
-    }
-
     fn cast_any(&self) -> &dyn std::any::Any {
         self
     }
@@ -317,7 +308,10 @@ impl EntityBase for TridentEntity {
                 ProjectileHit::Block { pos, hit_pos, .. } => {
                     self.in_ground.store(true, Ordering::Relaxed);
                     self.shake_time.store(7, Ordering::Relaxed);
-                    *self.last_block_pos.write().unwrap() = Some(pos);
+                    *self
+                        .last_block_pos
+                        .write()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(pos);
 
                     // Stop the trident
                     entity.velocity.store(Vector3::new(0.0, 0.0, 0.0));

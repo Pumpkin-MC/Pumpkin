@@ -5,8 +5,7 @@ use tokio::sync::RwLock;
 use crate::entity::projectile::ProjectileHit;
 use crate::{
     entity::{
-        Entity, EntityBase, EntityBaseFuture, NBTStorage, NbtFuture, living::LivingEntity,
-        player::Player,
+        Entity, EntityBase, EntityBaseFuture, NbtFuture, living::LivingEntity, player::Player,
     },
     server::Server,
 };
@@ -116,7 +115,18 @@ impl ArrowEntity {
         let mut owner_pos = shooter.pos.load();
         owner_pos.y = owner_pos.y + f64::from(shooter.entity_dimension.load().eye_height) - 0.1;
         entity.pos.store(owner_pos);
-        entity.set_velocity(Vector3::new(0.0, 0.1, 0.0));
+        let mut launch_event =
+            crate::plugin::api::events::entity::projectile_launch::ProjectileLaunchEvent::new(
+                entity.entity_id,
+                Some(shooter.entity_id),
+            );
+        if let Some(server) = entity.world.load().server.upgrade() {
+            tokio::task::block_in_place(|| {
+                tokio::runtime::Handle::current().block_on(async {
+                    server.plugin_manager.fire(&server, &mut launch_event).await;
+                });
+            });
+        }
 
         Self {
             entity,
@@ -262,32 +272,27 @@ impl ArrowEntity {
     }
 }
 
-impl NBTStorage for ArrowEntity {
-    fn write_nbt<'a>(
+impl EntityBase for ArrowEntity {
+    fn write_custom_nbt<'a>(
         &'a self,
         nbt: &'a mut pumpkin_nbt::compound::NbtCompound,
     ) -> NbtFuture<'a, ()> {
         Box::pin(async move {
-            self.entity.write_nbt(nbt).await;
             let item_stack = self.item_stack.read().await;
             Self::write_item_stack_nbt(&item_stack, nbt);
         })
     }
 
-    fn read_nbt_non_mut<'a>(
+    fn read_custom_nbt<'a>(
         &'a self,
         nbt: &'a pumpkin_nbt::compound::NbtCompound,
     ) -> NbtFuture<'a, ()> {
         Box::pin(async move {
-            self.entity.read_nbt_non_mut(nbt).await;
             if let Some(item_stack) = Self::read_item_stack_nbt(nbt) {
                 *self.item_stack.write().await = item_stack;
             }
         })
     }
-}
-
-impl EntityBase for ArrowEntity {
     #[allow(clippy::too_many_lines)]
     fn tick<'a>(
         &'a self,
@@ -440,8 +445,30 @@ impl EntityBase for ArrowEntity {
         })
     }
 
+    #[allow(clippy::too_many_lines)]
     fn on_hit(&self, hit: ProjectileHit) -> EntityBaseFuture<'_, ()> {
         Box::pin(async move {
+            let (hit_pos, hit_entity) = match hit {
+                ProjectileHit::Block { hit_pos, .. } => (hit_pos, None),
+                ProjectileHit::Entity {
+                    ref entity,
+                    hit_pos,
+                    ..
+                } => (hit_pos, Some(entity.get_entity().entity_id)),
+            };
+            let mut hit_event =
+                crate::plugin::api::events::entity::projectile_hit::ProjectileHitEvent::new(
+                    self.entity.entity_id,
+                    hit_pos,
+                    hit_entity,
+                );
+            if let Some(server) = self.entity.world.load().server.upgrade() {
+                server.plugin_manager.fire(&server, &mut hit_event).await;
+            }
+            if hit_event.cancelled {
+                return;
+            }
+
             let entity = self.get_entity();
             let world = entity.world.load();
 
@@ -455,7 +482,10 @@ impl EntityBase for ArrowEntity {
                     // Arrow hit a block - stick into it
                     self.in_ground.store(true, Ordering::Relaxed);
                     self.shake_time.store(7, Ordering::Relaxed);
-                    *self.last_block_pos.write().unwrap() = Some(pos);
+                    *self
+                        .last_block_pos
+                        .write()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(pos);
 
                     let block = world.get_block(&pos);
                     if block == &pumpkin_data::Block::TARGET {
@@ -504,7 +534,14 @@ impl EntityBase for ArrowEntity {
                     }
 
                     let damage_succeeded = target
-                        .damage(&*target, damage as f32, DamageType::ARROW)
+                        .damage_with_context(
+                            &*target,
+                            damage as f32,
+                            DamageType::ARROW,
+                            Some(hit_pos),
+                            None,
+                            Some(self),
+                        )
                         .await;
 
                     if let Some(living) = target.get_living_entity() {
@@ -571,11 +608,6 @@ impl EntityBase for ArrowEntity {
     #[allow(dead_code, clippy::unused_self)]
     fn get_living_entity(&self) -> Option<&LivingEntity> {
         None
-    }
-
-    #[allow(dead_code, clippy::unused_self)]
-    fn as_nbt_storage(&self) -> &dyn NBTStorage {
-        self
     }
 
     fn on_player_collision<'a>(&'a self, player: &'a Arc<Player>) -> EntityBaseFuture<'a, ()> {

@@ -1,3 +1,6 @@
+#![deny(clippy::unwrap_used)]
+#![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used, clippy::panic))]
+
 use std::{
     io::{Error, Read, Write},
     pin::Pin,
@@ -26,6 +29,7 @@ pub mod java;
 pub mod packet;
 #[cfg(feature = "query")]
 pub mod query;
+pub mod rcon;
 pub mod ser;
 pub mod serial;
 
@@ -251,6 +255,18 @@ pub trait ClientPacket: MultiVersionJavaPacket {
         write: impl Write,
         version: &JavaMinecraftVersion,
     ) -> Result<(), WritingError>;
+
+    fn write_packet(
+        &self,
+        version: &JavaMinecraftVersion,
+        write: impl Write,
+    ) -> Result<(), WritingError> {
+        crate::java::packet_encoder::write_packet(self, version, write)
+    }
+
+    fn serialize_packet(&self, version: &JavaMinecraftVersion) -> Result<Bytes, WritingError> {
+        crate::java::packet_encoder::serialize_packet(self, version)
+    }
 }
 
 pub trait ServerPacket<'a>: MultiVersionJavaPacket + Sized {
@@ -259,6 +275,10 @@ pub trait ServerPacket<'a>: MultiVersionJavaPacket + Sized {
 
 pub trait BClientPacket: Packet {
     fn write_packet(&self, writer: impl Write) -> Result<(), Error>;
+
+    fn serialize_packet(&self) -> Result<Bytes, Error> {
+        crate::bedrock::packet_encoder::serialize_packet(self)
+    }
 }
 
 pub trait BServerPacket: Packet + Sized {
@@ -310,7 +330,7 @@ pub struct StatusResponse {
     /// Information about currently connected players. (Optional)
     pub players: Option<Players>,
     /// The description displayed, also called MOTD (Message of the Day). (Optional)
-    pub description: String,
+    pub description: TextComponent,
     /// The icon displayed. (Optional)
     pub favicon: Option<String>,
     /// Whether players are forced to use secure chat.
@@ -382,7 +402,7 @@ impl KnownPack<'_> {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum NumberFormat {
     /// Show nothing.
     Blank,
@@ -443,8 +463,27 @@ impl PositionFlag {
     pub fn get_bitfield(flags: &[Self]) -> i32 {
         flags.iter().fold(0, |acc, flag| acc | flag.get_mask())
     }
+
+    #[must_use]
+    pub fn from_bitfield(bits: i32) -> Vec<Self> {
+        let all = [
+            Self::X,
+            Self::Y,
+            Self::Z,
+            Self::YRot,
+            Self::XRot,
+            Self::DeltaX,
+            Self::DeltaY,
+            Self::DeltaZ,
+            Self::RotateDelta,
+        ];
+        all.into_iter()
+            .filter(|flag| (bits & flag.get_mask()) != 0)
+            .collect()
+    }
 }
 
+#[derive(Clone, Debug)]
 pub enum Label {
     BuiltIn(LinkType),
     TextComponent(Box<TextComponent>),
@@ -485,7 +524,7 @@ impl<'a> Link<'a> {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 #[repr(i32)]
 pub enum LinkType {
     BugReport = 0,

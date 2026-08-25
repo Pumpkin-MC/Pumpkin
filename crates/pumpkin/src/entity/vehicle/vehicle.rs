@@ -6,8 +6,7 @@ use pumpkin_protocol::java::client::play::Metadata;
 
 use crate::entity::EntityBase;
 use crate::world::loot::{LootContextParameters, LootTableExt};
-use pumpkin_data::meta_data_type::MetaDataType;
-use pumpkin_data::tracked_data::TrackedData;
+use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_util::GameMode;
 
 pub struct VehicleEntity {
@@ -36,6 +35,80 @@ impl VehicleEntity {
         let current_damage = self.damage.load();
         if current_damage > 0.0 {
             self.damage.store(current_damage - 1.0);
+        }
+
+        let mut update_event =
+            crate::plugin::api::events::vehicle::vehicle_update::VehicleUpdateEvent::new(
+                self.entity.entity_id,
+            );
+        if let Some(server) = self.entity.world.load().server.upgrade() {
+            tokio::task::block_in_place(|| {
+                tokio::runtime::Handle::current().block_on(async {
+                    server.plugin_manager.fire(&server, &mut update_event).await;
+                });
+            });
+        }
+    }
+
+    pub async fn create(&self) {
+        let mut create_event =
+            crate::plugin::api::events::vehicle::vehicle_create::VehicleCreateEvent::new(
+                self.entity.entity_id,
+            );
+        if let Some(server) = self.entity.world.load().server.upgrade() {
+            server.plugin_manager.fire(&server, &mut create_event).await;
+        }
+    }
+
+    pub async fn move_vehicle(
+        &self,
+        from: pumpkin_util::math::vector3::Vector3<f64>,
+        to: pumpkin_util::math::vector3::Vector3<f64>,
+    ) {
+        let mut move_event =
+            crate::plugin::api::events::vehicle::vehicle_move::VehicleMoveEvent::new(
+                self.entity.entity_id,
+                from,
+                to,
+            );
+        if let Some(server) = self.entity.world.load().server.upgrade() {
+            server.plugin_manager.fire(&server, &mut move_event).await;
+        }
+    }
+
+    pub async fn collide_entity(&self, collided_entity_id: i32) {
+        let mut base_event =
+            crate::plugin::api::events::vehicle::vehicle_collision::VehicleCollisionEvent::new(
+                self.entity.entity_id,
+            );
+        let mut collide_event = crate::plugin::api::events::vehicle::vehicle_entity_collision::VehicleEntityCollisionEvent::new(
+            self.entity.entity_id,
+            collided_entity_id,
+        );
+        if let Some(server) = self.entity.world.load().server.upgrade() {
+            server.plugin_manager.fire(&server, &mut base_event).await;
+            server
+                .plugin_manager
+                .fire(&server, &mut collide_event)
+                .await;
+        }
+    }
+
+    pub async fn collide_block(&self, block_pos: pumpkin_util::math::position::BlockPos) {
+        let mut base_event =
+            crate::plugin::api::events::vehicle::vehicle_collision::VehicleCollisionEvent::new(
+                self.entity.entity_id,
+            );
+        let mut collide_event = crate::plugin::api::events::vehicle::vehicle_block_collision::VehicleBlockCollisionEvent::new(
+            self.entity.entity_id,
+            block_pos,
+        );
+        if let Some(server) = self.entity.world.load().server.upgrade() {
+            server.plugin_manager.fire(&server, &mut base_event).await;
+            server
+                .plugin_manager
+                .fire(&server, &mut collide_event)
+                .await;
         }
     }
 
@@ -67,22 +140,19 @@ impl VehicleEntity {
         self.entity.send_meta_data(
             &[
                 Metadata::new(
-                    TrackedData::ID_HURT,
-                    MetaDataType::INTEGER,
-                    self.get_hurt_time(),
+                    pumpkin_data::tracked_data::boat::ID_HURT,
+                    VarInt(self.get_hurt_time()),
                 ),
                 Metadata::new(
-                    TrackedData::ID_HURTDIR,
-                    MetaDataType::INTEGER,
-                    self.get_hurt_dir(),
+                    pumpkin_data::tracked_data::boat::ID_HURTDIR,
+                    VarInt(self.get_hurt_dir()),
                 ),
             ],
             None,
         );
         self.entity.send_meta_data(
             &[Metadata::new(
-                TrackedData::ID_DAMAGE,
-                MetaDataType::FLOAT,
+                pumpkin_data::tracked_data::boat::ID_DAMAGE,
                 self.get_damage(),
             )],
             None,
@@ -116,6 +186,55 @@ impl VehicleEntity {
             return true;
         }
 
+        let attacker_id = source.map(|s| s.get_entity().entity_id);
+        let mut damage_event =
+            crate::plugin::api::events::vehicle::vehicle_damage::VehicleDamageEvent::new(
+                self.entity.entity_id,
+                amount,
+                attacker_id,
+            );
+        if let Some(server) = self.entity.world.load().server.upgrade() {
+            server.plugin_manager.fire(&server, &mut damage_event).await;
+        }
+        if damage_event.cancelled {
+            return false;
+        }
+
+        let new_strength = self.apply_damage_wobble(amount);
+
+        let is_creative = source
+            .and_then(|s| s.get_player())
+            .is_some_and(|p| p.gamemode.load() == GameMode::Creative);
+
+        if is_creative || new_strength > 40.0 {
+            let mut destroy_event =
+                crate::plugin::api::events::vehicle::vehicle_destroy::VehicleDestroyEvent::new(
+                    self.entity.entity_id,
+                    attacker_id,
+                );
+            if let Some(server) = self.entity.world.load().server.upgrade() {
+                server
+                    .plugin_manager
+                    .fire(&server, &mut destroy_event)
+                    .await;
+            }
+            if destroy_event.cancelled {
+                return false;
+            }
+
+            if is_creative {
+                self.entity.remove().await;
+            } else {
+                self.kill_and_drop_self().await;
+            }
+        }
+
+        true
+    }
+
+    /// Applies the standard minecart damage wobble without destroying the vehicle.
+    /// TNT minecarts use this before deciding whether damage primes or breaks them.
+    pub fn apply_damage_wobble(&self, amount: f32) -> f32 {
         let current_side = self.get_hurt_dir();
         self.set_hurt_dir(-current_side);
         self.set_hurt_time(10);
@@ -126,19 +245,38 @@ impl VehicleEntity {
         self.set_damage(new_strength);
 
         self.send_wobble_metadata();
+        new_strength
+    }
+}
 
-        let is_creative = source
-            .and_then(|s| s.get_player())
-            .is_some_and(|p| p.gamemode.load() == GameMode::Creative);
+#[cfg(test)]
+mod tests {
+    use pumpkin_protocol::codec::var_int::VarInt;
+    use pumpkin_protocol::java::client::play::Metadata;
+    use pumpkin_util::version::JavaMinecraftVersion;
 
-        if is_creative || new_strength > 40.0 {
-            if is_creative {
-                self.entity.remove().await;
-            } else {
-                self.kill_and_drop_self().await;
-            }
+    fn wobble_integer_metadata(version: JavaMinecraftVersion) -> Vec<u8> {
+        let mut bytes = Vec::new();
+        for metadata in [
+            Metadata::new(pumpkin_data::tracked_data::boat::ID_HURT, VarInt(10)),
+            Metadata::new(pumpkin_data::tracked_data::boat::ID_HURTDIR, VarInt(-1)),
+        ] {
+            metadata.write(&mut bytes, &version).unwrap();
         }
+        bytes
+    }
 
-        true
+    #[test]
+    fn wobble_integers_serialize_for_legacy_and_current_clients() {
+        let expected = vec![8, 1, 10, 9, 1, 0xff, 0xff, 0xff, 0xff, 0x0f];
+
+        assert_eq!(
+            wobble_integer_metadata(JavaMinecraftVersion::V_1_21_11),
+            expected
+        );
+        assert_eq!(
+            wobble_integer_metadata(JavaMinecraftVersion::V_26_2),
+            expected
+        );
     }
 }

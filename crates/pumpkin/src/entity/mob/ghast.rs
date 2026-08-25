@@ -2,7 +2,7 @@ use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 use std::sync::{Arc, Weak};
 
 use crate::entity::{
-    Entity, NBTStorage,
+    Entity,
     ai::goal::{Controls, Goal, GoalFuture},
     mob::{Mob, MobEntity},
 };
@@ -29,7 +29,11 @@ impl GhastEntity {
         };
 
         {
-            let mut goal_selector = mob_arc.mob_entity.goals_selector.lock().unwrap();
+            let mut goal_selector = mob_arc
+                .mob_entity
+                .goals_selector
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
 
             goal_selector.add_goal(7, Box::new(GhastLookGoal::new(mob_weak.clone())));
         };
@@ -46,8 +50,6 @@ impl GhastEntity {
         self.is_charging.load(Ordering::Relaxed)
     }
 }
-
-impl NBTStorage for GhastEntity {}
 
 impl Mob for GhastEntity {
     fn get_mob_entity(&self) -> &MobEntity {
@@ -94,7 +96,10 @@ impl Goal for GhastLookGoal {
                 let target_pos = target.get_entity().pos.load();
 
                 if mob_pos.squared_distance_to_vec(&target_pos) < 4096.0 {
-                    let mut look_control = mob_entity.look_control.lock().unwrap();
+                    let mut look_control = mob_entity
+                        .look_control
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner);
                     look_control.look_at(mob, target_pos.x, target_pos.y, target_pos.z);
                 }
             } else {

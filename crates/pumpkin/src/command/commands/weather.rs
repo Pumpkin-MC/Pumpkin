@@ -96,7 +96,7 @@ pub fn init_command_tree() -> CommandTree {
         .then(
             literal("clear")
                 .then(
-                    argument(ARG_DURATION, TimeArgumentConsumer).execute(Executor {
+                    argument(ARG_DURATION, TimeArgumentConsumer::new()).execute(Executor {
                         mode: WeatherMode::Clear,
                     }),
                 )
@@ -107,7 +107,7 @@ pub fn init_command_tree() -> CommandTree {
         .then(
             literal("rain")
                 .then(
-                    argument(ARG_DURATION, TimeArgumentConsumer).execute(Executor {
+                    argument(ARG_DURATION, TimeArgumentConsumer::new()).execute(Executor {
                         mode: WeatherMode::Rain,
                     }),
                 )
@@ -118,7 +118,7 @@ pub fn init_command_tree() -> CommandTree {
         .then(
             literal("thunder")
                 .then(
-                    argument(ARG_DURATION, TimeArgumentConsumer).execute(Executor {
+                    argument(ARG_DURATION, TimeArgumentConsumer::new()).execute(Executor {
                         mode: WeatherMode::Thunder,
                     }),
                 )

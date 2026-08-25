@@ -1,11 +1,13 @@
 use std::{
+    borrow::Cow,
     io::{Error, Write},
     net::SocketAddr,
 };
 
+use pumpkin_nbt::{Nbt, NbtCompound};
 use pumpkin_util::{
     GameMode,
-    math::{position::BlockPos, vector3::Vector3},
+    math::{position::BlockPos, vector2::Vector2, vector3::Vector3},
 };
 
 use crate::{
@@ -139,6 +141,13 @@ impl<T: PacketWrite> PacketWrite for Vector3<T> {
     }
 }
 
+impl<T: PacketWrite> PacketWrite for Vector2<T> {
+    fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
+        self.x.write(writer)?;
+        self.y.write(writer)
+    }
+}
+
 impl PacketWrite for BlockPos {
     fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
         VarInt(self.0.x).write(writer)?;
@@ -191,5 +200,17 @@ impl PacketWrite for GameMode {
             Self::Spectator => 6,
         })
         .write(writer)
+    }
+}
+
+impl PacketWrite for Cow<'_, str> {
+    fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
+        self.as_ref().write(writer)
+    }
+}
+
+impl PacketWrite for NbtCompound {
+    fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
+        writer.write_all(&Nbt::from(self.clone()).write_bedrock())
     }
 }

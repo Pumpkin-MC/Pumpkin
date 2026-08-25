@@ -9,7 +9,7 @@ use std::sync::atomic::Ordering;
 use tokio::sync::Mutex;
 
 use crate::entity::{
-    Entity, EntityBase, EntityBaseFuture, NBTStorage,
+    Entity, EntityBase, EntityBaseFuture,
     living::LivingEntity,
     mob::{Mob, MobEntity},
     player::Player,
@@ -156,8 +156,6 @@ impl EnderDragonPart {
     }
 }
 
-impl NBTStorage for EnderDragonPart {}
-
 impl EntityBase for EnderDragonPart {
     fn get_entity(&self) -> &Entity {
         &self.entity
@@ -190,11 +188,6 @@ impl EntityBase for EnderDragonPart {
     fn get_living_entity(&self) -> Option<&LivingEntity> {
         None
     }
-
-    fn as_nbt_storage(&self) -> &dyn NBTStorage {
-        self
-    }
-
     fn can_hit(&self) -> bool {
         true
     }
@@ -379,7 +372,7 @@ impl EnderDragonEntity {
             .iter()
             .enumerate()
             .filter_map(|(i, n)| n.map(|n| (i, n.dist_sq_vec(pos))))
-            .min_by(|a, b| a.1.partial_cmp(&b.1).unwrap())
+            .min_by(|a, b| a.1.total_cmp(&b.1))
             .map_or(0, |(i, _)| i)
     }
 
@@ -544,8 +537,7 @@ impl EnderDragonEntity {
                 let b_pos = b.living_entity.entity.pos.load();
                 a_pos
                     .distance_squared(pos)
-                    .partial_cmp(&b_pos.distance_squared(pos))
-                    .unwrap()
+                    .total_cmp(&b_pos.distance_squared(pos))
             })
             .cloned()
     }
@@ -782,8 +774,6 @@ impl EnderDragonEntity {
         }
     }
 }
-
-impl NBTStorage for EnderDragonEntity {}
 
 impl Mob for EnderDragonEntity {
     fn get_mob_entity(&self) -> &MobEntity {

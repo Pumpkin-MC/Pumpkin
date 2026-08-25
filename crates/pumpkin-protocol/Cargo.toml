@@ -13,11 +13,12 @@ query = []
 
 [dependencies]
 pumpkin-nbt.workspace = true
-pumpkin-data = { workspace = true, features = ["packet", "item_id_remap", "entity_id_remap", "sound_id_remap", "particle_id_remap", "recipes", "bedrock_creative"] }
+pumpkin-data = { workspace = true, features = ["packet", "item_id_remap", "entity_id_remap", "sound_id_remap", "particle_id_remap", "menu_id_remap", "recipe_serializer_id_remap", "argument_type_id_remap", "attribute_id_remap", "block_entity_type_id_remap", "custom_stat_id_remap", "data_component_type_id_remap", "enchantment_id_remap", "environment_attribute_id_remap", "painting_variant_id_remap", "slot_display_id_remap", "recipes", "bedrock_creative", "bedrock_biome"] }
 pumpkin-macros.workspace = true
 pumpkin-world.workspace = true
 pumpkin-util.workspace = true
 serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
 
 uuid.workspace = true
 thiserror.workspace = true
@@ -27,8 +28,6 @@ bytes.workspace = true
 # encryption
 aes.workspace = true
 cfb8.workspace = true
-ctr.workspace = true
-sha2.workspace = true
 hybrid-array = "0.4"
 
 # compression
@@ -36,6 +35,7 @@ async-compression = { workspace = true, features = ["tokio", "zlib", "deflate"] 
 flate2.workspace = true
 
 bitflags.workspace = true
+xxhash-rust.workspace = true
 
 [dev-dependencies]
 # Validate correctness

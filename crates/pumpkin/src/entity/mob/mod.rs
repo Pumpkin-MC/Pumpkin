@@ -1,4 +1,4 @@
-use super::{Entity, EntityBase, NBTStorage, ai::pathfinder::Navigator, living::LivingEntity};
+use super::{Entity, EntityBase, NbtFuture, ai::pathfinder::Navigator, living::LivingEntity};
 use crate::entity::EntityBaseFuture;
 use crate::entity::ai::control::MoveControlTrait;
 use crate::entity::ai::control::look_control::LookControl;
@@ -11,9 +11,9 @@ use crossbeam::atomic::AtomicCell;
 use pumpkin_data::attributes::Attributes;
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::item_stack::ItemStack;
-use pumpkin_data::meta_data_type::MetaDataType;
 use pumpkin_data::tag::{self, Taggable};
-use pumpkin_data::tracked_data::TrackedData;
+use pumpkin_data::tracked_data;
+use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::java::client::play::{CHeadRot, CUpdateEntityRot, Metadata};
 use pumpkin_util::Difficulty;
 use pumpkin_util::math::boundingbox::BoundingBox;
@@ -22,6 +22,7 @@ use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::random::xoroshiro128::Xoroshiro;
 use pumpkin_util::random::{RandomGenerator, get_seed};
+use pumpkin_util::version::JavaMinecraftVersion;
 use rand::RngExt;
 use std::pin::Pin;
 use std::sync::Arc;
@@ -46,10 +47,12 @@ pub mod guardian;
 pub mod hoglin;
 pub mod illusioner;
 pub mod magma_cube;
+pub mod patrol;
 pub mod phantom;
 pub mod piglin;
 pub mod piglin_brute;
 pub mod pillager;
+pub mod raider;
 pub mod ravager;
 pub mod shulker;
 pub mod silverfish;
@@ -90,8 +93,8 @@ pub struct MobEntity {
 ///
 /// TODO: Replace with `EnvironmentAttributes::MONSTERS_BURN` lookup once the
 /// `EnvironmentAttributeSystem` is implemented in `pumpkin-data`.
-const NIGHT_START: i64 = 12542;
-const NIGHT_END: i64 = 23459;
+pub(crate) const NIGHT_START: i64 = 12542;
+pub(crate) const NIGHT_END: i64 = 23459;
 
 impl MobEntity {
     const AI_DISABLED_FLAG: u8 = 1;
@@ -119,6 +122,10 @@ impl MobEntity {
             last_sent_pitch: AtomicU8::new(0),
             last_sent_head_yaw: AtomicU8::new(0),
         }
+    }
+
+    pub fn has_position_target(&self) -> bool {
+        self.position_target_range.load(Relaxed) != -1
     }
 
     pub fn is_in_position_target_range(&self) -> bool {
@@ -168,21 +175,53 @@ impl MobEntity {
     }
 
     pub async fn clear_ai_goals(&self, mob: &dyn Mob) {
-        let running_goals = self.goals_selector.lock().unwrap().clear();
+        let running_goals = self
+            .goals_selector
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clear();
         for mut goal in running_goals {
             goal.goal.stop(mob).await;
         }
 
-        let running_target_goals = self.target_selector.lock().unwrap().clear();
+        let running_target_goals = self
+            .target_selector
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clear();
         for mut goal in running_target_goals {
             goal.goal.stop(mob).await;
+        }
+    }
+
+    pub fn write_mob_nbt(&self, nbt: &mut NbtCompound) {
+        if self.is_no_ai() {
+            nbt.put_bool("NoAI", true);
+        }
+        if self.is_left_handed() {
+            nbt.put_bool("LeftHanded", true);
+        }
+        if self.can_pick_up_loot() {
+            nbt.put_bool("CanPickUpLoot", true);
+        }
+    }
+
+    pub fn read_mob_nbt(&self, nbt: &NbtCompound) {
+        if let Some(no_ai) = nbt.get_bool("NoAI") {
+            self.set_no_ai(no_ai);
+        }
+        if let Some(left_handed) = nbt.get_bool("LeftHanded") {
+            self.set_left_handed(left_handed);
+        }
+        if let Some(can_pick_up_loot) = nbt.get_bool("CanPickUpLoot") {
+            self.set_can_pick_up_loot(can_pick_up_loot);
         }
     }
 
     pub fn add_goal<G: crate::entity::ai::goal::Goal + 'static>(&self, priority: u8, goal: G) {
         self.goals_selector
             .lock()
-            .unwrap()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
             .add_goal(priority, Box::new(goal));
     }
 
@@ -193,7 +232,7 @@ impl MobEntity {
     ) {
         self.target_selector
             .lock()
-            .unwrap()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
             .add_goal(priority, Box::new(goal));
     }
 
@@ -215,11 +254,7 @@ impl MobEntity {
             self.mob_flags.store(new_b, Ordering::Relaxed);
 
             self.living_entity.entity.send_meta_data(
-                &[Metadata::new(
-                    TrackedData::MOB_FLAGS_ID,
-                    MetaDataType::BYTE,
-                    new_b,
-                )],
+                &[Metadata::new(tracked_data::mob::DATA_MOB_FLAGS_ID, new_b)],
                 None,
             );
         }
@@ -488,7 +523,41 @@ pub trait Mob: EntityBase + Send + Sync {
 
     fn get_mob_entity(&self) -> &MobEntity;
 
+    fn mob_bedrock_identifier(&self) -> Option<&'static str> {
+        None
+    }
+
+    /// Metadata which must accompany this mob whenever it is spawned for a Java client.
+    fn mob_java_spawn_metadata(
+        &self,
+        _version: JavaMinecraftVersion,
+    ) -> EntityBaseFuture<'_, Option<Box<[u8]>>> {
+        Box::pin(async { None })
+    }
+
+    /// Metadata which must accompany this mob whenever it is spawned for a Bedrock client.
+    fn mob_bedrock_spawn_metadata(
+        &self,
+    ) -> EntityBaseFuture<
+        '_,
+        Option<pumpkin_protocol::bedrock::client::set_actor_data::EntityMetadata>,
+    > {
+        Box::pin(async { None })
+    }
+
     fn get_job_site(&self) -> Option<BlockPos> {
+        None
+    }
+
+    fn is_job_site_pending(&self) -> EntityBaseFuture<'_, bool> {
+        Box::pin(async { false })
+    }
+
+    fn release_pending_job_site(&self, _position: BlockPos) -> EntityBaseFuture<'_, ()> {
+        Box::pin(async {})
+    }
+
+    fn get_trading_player(&self) -> Option<Arc<Player>> {
         None
     }
 
@@ -499,6 +568,20 @@ pub trait Mob: EntityBase + Send + Sync {
     fn get_path_aware_entity(&self) -> Option<&dyn PathAwareEntity> {
         None
     }
+
+    fn get_item_steerable(&self) -> Option<&dyn crate::entity::item_steerable::ItemSteerable> {
+        None
+    }
+
+    fn is_saddled(&self) -> bool {
+        false
+    }
+
+    fn can_be_saddled(&self) -> bool {
+        false
+    }
+
+    fn set_saddled(&self, _saddled: bool) {}
 
     /// Per-mob tick hook called each tick before AI runs. Override for mob-specific logic.
     fn mob_tick<'a>(&'a self, _caller: &'a Arc<dyn EntityBase>) -> EntityBaseFuture<'a, ()> {
@@ -547,10 +630,55 @@ pub trait Mob: EntityBase + Send + Sync {
         None
     }
 
+    fn as_ageable(&self) -> Option<&dyn crate::entity::ageable::AgeableMob> {
+        None
+    }
+
+    fn as_animal(&self) -> Option<&dyn crate::entity::passive::animal::Animal> {
+        None
+    }
+
+    fn as_tamable(&self) -> Option<&dyn crate::entity::passive::tamable::TamableAnimal> {
+        None
+    }
+
+    fn as_patrolling_monster(&self) -> Option<&dyn patrol::PatrollingMonster> {
+        None
+    }
+
+    fn as_raider(&self) -> Option<&dyn raider::Raider> {
+        None
+    }
+
+    fn as_iron_golem(&self) -> Option<&crate::entity::passive::iron_golem::IronGolemEntity> {
+        None
+    }
+
+    fn mob_write_nbt<'a>(&'a self, _nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
+        Box::pin(async {})
+    }
+
+    fn mob_read_nbt<'a>(&'a self, _nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
+        Box::pin(async {})
+    }
+
     /// Set or clear the mob's target. Override to add side effects when targeting changes.
     fn set_mob_target(&self, target: Option<Arc<dyn EntityBase>>) -> EntityBaseFuture<'_, ()> {
         Box::pin(async move {
-            let mut mob_target = self.get_mob_entity().target.lock().await;
+            let target_id = target.as_ref().map(|t| t.get_entity().entity_id);
+            let mob = self.get_mob_entity();
+            let mut event =
+                crate::plugin::api::events::entity::entity_target::EntityTargetEvent::new(
+                    mob.living_entity.entity.entity_id,
+                    target_id,
+                );
+            if let Some(server) = mob.living_entity.entity.world.load().server.upgrade() {
+                server.plugin_manager.fire(&server, &mut event).await;
+            }
+            if event.cancelled {
+                return;
+            }
+            let mut mob_target = mob.target.lock().await;
             *mob_target = target;
         })
     }
@@ -563,16 +691,155 @@ pub trait Mob: EntityBase + Send + Sync {
         Box::pin(async move { self.get_mob_entity().mob_interact(player, item_stack).await })
     }
 
+    fn tame<'a>(&'a self, player: &'a Arc<Player>) -> EntityBaseFuture<'a, ()> {
+        Box::pin(async move {
+            let mob = self.get_mob_entity();
+            let mut event = crate::plugin::api::events::entity::entity_tame::EntityTameEvent::new(
+                mob.living_entity.entity.entity_id,
+                player.clone(),
+            );
+            if let Some(server) = mob.living_entity.entity.world.load().server.upgrade() {
+                server.plugin_manager.fire(&server, &mut event).await;
+            }
+        })
+    }
+
+    fn breed(&self, father_id: i32, mother_id: i32, child_id: i32) -> EntityBaseFuture<'_, ()> {
+        Box::pin(async move {
+            let mob = self.get_mob_entity();
+            let mut event = crate::plugin::api::events::entity::entity_breed::EntityBreedEvent::new(
+                father_id, mother_id, child_id,
+            );
+            if let Some(server) = mob.living_entity.entity.world.load().server.upgrade() {
+                server.plugin_manager.fire(&server, &mut event).await;
+            }
+        })
+    }
+
+    fn dye<'a>(
+        &'a self,
+        color: crate::plugin::api::events::entity::entity_dye::DyeColor,
+        player: Option<&'a Arc<Player>>,
+    ) -> EntityBaseFuture<'a, ()> {
+        Box::pin(async move {
+            let mob = self.get_mob_entity();
+            let mut event = crate::plugin::api::events::entity::entity_dye::EntityDyeEvent::new(
+                mob.living_entity.entity.entity_id,
+                color,
+                player.cloned(),
+            );
+            if let Some(server) = mob.living_entity.entity.world.load().server.upgrade() {
+                server.plugin_manager.fire(&server, &mut event).await;
+            }
+        })
+    }
+
+    fn enter_love_mode(
+        &self,
+        human_entity_id: Option<i32>,
+        ticks_in_love: i32,
+    ) -> EntityBaseFuture<'_, ()> {
+        Box::pin(async move {
+            let mob = self.get_mob_entity();
+            let mut event = crate::plugin::api::events::entity::entity_enter_love_mode::EntityEnterLoveModeEvent::new(
+                mob.living_entity.entity.entity_id,
+                human_entity_id,
+                ticks_in_love,
+            );
+            if let Some(server) = mob.living_entity.entity.world.load().server.upgrade() {
+                server.plugin_manager.fire(&server, &mut event).await;
+            }
+        })
+    }
+
+    fn transform(&self, new_entity_id: i32, transform_reason: String) -> EntityBaseFuture<'_, ()> {
+        Box::pin(async move {
+            let mob = self.get_mob_entity();
+            let mut event =
+                crate::plugin::api::events::entity::entity_transform::EntityTransformEvent::new(
+                    mob.living_entity.entity.entity_id,
+                    new_entity_id,
+                    transform_reason,
+                );
+            if let Some(server) = mob.living_entity.entity.world.load().server.upgrade() {
+                server.plugin_manager.fire(&server, &mut event).await;
+            }
+        })
+    }
+
+    fn break_door(&self, block_pos: BlockPos) -> EntityBaseFuture<'_, ()> {
+        Box::pin(async move {
+            let mob = self.get_mob_entity();
+            let mut event =
+                crate::plugin::api::events::entity::entity_break_door::EntityBreakDoorEvent::new(
+                    mob.living_entity.entity.entity_id,
+                    block_pos,
+                );
+            if let Some(server) = mob.living_entity.entity.world.load().server.upgrade() {
+                server.plugin_manager.fire(&server, &mut event).await;
+            }
+        })
+    }
+
+    fn enter_block(&self, block_pos: BlockPos) -> EntityBaseFuture<'_, ()> {
+        Box::pin(async move {
+            let mob = self.get_mob_entity();
+            let mut event =
+                crate::plugin::api::events::entity::entity_enter_block::EntityEnterBlockEvent::new(
+                    mob.living_entity.entity.entity_id,
+                    block_pos,
+                );
+            if let Some(server) = mob.living_entity.entity.world.load().server.upgrade() {
+                server.plugin_manager.fire(&server, &mut event).await;
+            }
+        })
+    }
+
+    fn interact(&self, block_pos: BlockPos) -> EntityBaseFuture<'_, ()> {
+        Box::pin(async move {
+            let mob = self.get_mob_entity();
+            let mut event =
+                crate::plugin::api::events::entity::entity_interact::EntityInteractEvent::new(
+                    mob.living_entity.entity.entity_id,
+                    block_pos,
+                );
+            if let Some(server) = mob.living_entity.entity.world.load().server.upgrade() {
+                server.plugin_manager.fire(&server, &mut event).await;
+            }
+        })
+    }
+
+    fn place_block(&self, block_pos: BlockPos, block_name: String) -> EntityBaseFuture<'_, ()> {
+        Box::pin(async move {
+            let mob = self.get_mob_entity();
+            let mut event = crate::plugin::api::events::entity::entity_place::EntityPlaceEvent::new(
+                mob.living_entity.entity.entity_id,
+                block_pos,
+                block_name,
+            );
+            if let Some(server) = mob.living_entity.entity.world.load().server.upgrade() {
+                server.plugin_manager.fire(&server, &mut event).await;
+            }
+        })
+    }
+
     fn mob_player_collision<'a>(&'a self, _player: &'a Arc<Player>) -> EntityBaseFuture<'a, ()> {
         Box::pin(async {})
     }
 
     fn get_owner_uuid(&self) -> Option<Uuid> {
-        None
+        self.as_tamable()
+            .and_then(crate::entity::passive::tamable::TamableAnimal::get_owner)
     }
 
     fn is_sitting(&self) -> bool {
-        false
+        self.as_tamable()
+            .is_some_and(crate::entity::passive::tamable::TamableAnimal::is_in_sitting_pose)
+    }
+
+    fn is_tamed(&self) -> bool {
+        self.as_tamable()
+            .is_some_and(crate::entity::passive::tamable::TamableAnimal::is_tame)
     }
 
     fn get_base_experience_reward(&self) -> u32 {
@@ -585,11 +852,7 @@ pub trait Mob: EntityBase + Send + Sync {
             let is_baby = entity.age.load(std::sync::atomic::Ordering::Relaxed) < 0;
             if is_baby {
                 entity.send_meta_data(
-                    &[Metadata::new(
-                        TrackedData::BABY_ID,
-                        MetaDataType::BOOLEAN,
-                        true,
-                    )],
+                    &[Metadata::new(tracked_data::ageable_mob::DATA_BABY_ID, true)],
                     None,
                 );
             }
@@ -597,10 +860,41 @@ pub trait Mob: EntityBase + Send + Sync {
     }
 
     fn mob_set_variant_name(&self, _name: &str) {}
+
+    fn get_sheep(&self) -> Option<&crate::entity::passive::sheep::SheepEntity> {
+        None
+    }
+
+    fn mob_on_lightning_strike<'a>(
+        &'a self,
+        caller: &'a dyn EntityBase,
+        lightning: &'a crate::entity::lightning::LightningBoltEntity,
+    ) -> EntityBaseFuture<'a, ()> {
+        Box::pin(async move {
+            self.get_mob_entity()
+                .living_entity
+                .on_lightning_strike(caller, lightning)
+                .await;
+        })
+    }
 }
 impl<T: Mob + Send + 'static> EntityBase for T {
     fn get_mob(&self) -> Option<&dyn Mob> {
         Some(self)
+    }
+
+    fn on_lightning_strike<'a>(
+        &'a self,
+        caller: &'a dyn EntityBase,
+        lightning: &'a crate::entity::lightning::LightningBoltEntity,
+    ) -> EntityBaseFuture<'a, ()> {
+        Box::pin(async move {
+            self.mob_on_lightning_strike(caller, lightning).await;
+        })
+    }
+
+    fn get_item_steerable(&self) -> Option<&dyn crate::entity::item_steerable::ItemSteerable> {
+        Mob::get_item_steerable(self)
     }
 
     fn init_data_tracker(&self) -> EntityBaseFuture<'_, ()> {
@@ -629,6 +923,7 @@ impl<T: Mob + Send + 'static> EntityBase for T {
         self.mob_set_variant_name(name);
     }
 
+    #[allow(clippy::too_many_lines)]
     fn tick<'a>(
         &'a self,
         caller: &'a Arc<dyn EntityBase>,
@@ -666,11 +961,17 @@ impl<T: Mob + Send + 'static> EntityBase for T {
 
             // 1. "Take" selectors out of the mutexes
             let mut target_selector = {
-                let mut guard = mob_entity.target_selector.lock().unwrap();
+                let mut guard = mob_entity
+                    .target_selector
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
                 std::mem::take(&mut *guard)
             };
             let mut goals_selector = {
-                let mut guard = mob_entity.goals_selector.lock().unwrap();
+                let mut guard = mob_entity
+                    .goals_selector
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
                 std::mem::take(&mut *guard)
             };
 
@@ -685,30 +986,48 @@ impl<T: Mob + Send + 'static> EntityBase for T {
 
             // 3. "Put back" selectors
             {
-                *mob_entity.target_selector.lock().unwrap() = target_selector;
-                *mob_entity.goals_selector.lock().unwrap() = goals_selector;
+                *mob_entity
+                    .target_selector
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner) = target_selector;
+                *mob_entity
+                    .goals_selector
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner) = goals_selector;
             };
 
             // 4. Repeat for Navigator
             let mut navigator = {
-                let mut guard = mob_entity.navigator.lock().unwrap();
+                let mut guard = mob_entity
+                    .navigator
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
                 std::mem::take(&mut *guard)
             };
 
             navigator.tick(&mob_entity.living_entity).await;
 
             {
-                *mob_entity.navigator.lock().unwrap() = navigator;
+                *mob_entity
+                    .navigator
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner) = navigator;
             };
 
             // Controllers are synchronous, so we can just use normal blocks
             {
-                let mut look_control = mob_entity.look_control.lock().unwrap();
+                let mut look_control = mob_entity
+                    .look_control
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
                 look_control.tick(self);
             };
 
             {
-                let mut move_control = mob_entity.move_control.lock().unwrap();
+                let mut move_control = mob_entity
+                    .move_control
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
                 move_control.tick(self);
             };
 
@@ -844,8 +1163,36 @@ impl<T: Mob + Send + 'static> EntityBase for T {
         <T as Mob>::get_home(self)
     }
 
-    fn as_nbt_storage(&self) -> &dyn NBTStorage {
-        self
+    fn write_custom_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
+        Box::pin(async move {
+            self.get_mob_entity().write_mob_nbt(nbt);
+            if let Some(ageable) = self.as_ageable() {
+                ageable.write_ageable_nbt(nbt);
+            }
+            if let Some(animal) = self.as_animal() {
+                animal.write_animal_nbt(nbt);
+            }
+            if let Some(tamable) = self.as_tamable() {
+                tamable.write_tamable_nbt(nbt);
+            }
+            self.mob_write_nbt(nbt).await;
+        })
+    }
+
+    fn read_custom_nbt<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
+        Box::pin(async move {
+            self.get_mob_entity().read_mob_nbt(nbt);
+            if let Some(ageable) = self.as_ageable() {
+                ageable.read_ageable_nbt(nbt);
+            }
+            if let Some(animal) = self.as_animal() {
+                animal.read_animal_nbt(nbt);
+            }
+            if let Some(tamable) = self.as_tamable() {
+                tamable.read_tamable_nbt(nbt);
+            }
+            self.mob_read_nbt(nbt).await;
+        })
     }
 
     fn get_gravity(&self) -> f64 {
@@ -892,7 +1239,11 @@ pub trait PathAwareEntity: Mob + Send + Sync {
 
     fn is_navigation<'a>(&'a self) -> Pin<Box<dyn Future<Output = bool> + Send + 'a>> {
         Box::pin(async {
-            let navigator = self.get_mob_entity().navigator.lock().unwrap();
+            let navigator = self
+                .get_mob_entity()
+                .navigator
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
             !navigator.is_idle()
         })
     }
@@ -917,4 +1268,12 @@ pub trait PathAwareEntity: Mob + Send + Sync {
     fn get_follow_leash_speed(&self) -> f32 {
         1.0
     }
+}
+
+pub trait RangedAttackMob: Mob + Send + Sync {
+    fn perform_ranged_attack<'a>(
+        &'a self,
+        target: &'a Arc<dyn EntityBase>,
+        power: f32,
+    ) -> EntityBaseFuture<'a, ()>;
 }

@@ -1,0 +1,32 @@
+{
+  "parent": "minecraft:recipes/root",
+  "criteria": {
+    "has_stripped_warped_stem": {
+      "conditions": {
+        "items": [
+          {
+            "items": "minecraft:stripped_warped_stem"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    },
+    "has_the_recipe": {
+      "conditions": {
+        "recipe": "minecraft:warped_shelf"
+      },
+      "trigger": "minecraft:recipe_unlocked"
+    }
+  },
+  "requirements": [
+    [
+      "has_the_recipe",
+      "has_stripped_warped_stem"
+    ]
+  ],
+  "rewards": {
+    "recipes": [
+      "minecraft:warped_shelf"
+    ]
+  }
+}

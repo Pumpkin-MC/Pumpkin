@@ -1,7 +1,10 @@
 //! Configuration management and serialization for the Pumpkin Minecraft server.
 #![deny(missing_docs)]
+#![deny(clippy::unwrap_used)]
+#![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used, clippy::panic))]
 
 use fun::FunConfig;
+
 use logging::LoggingConfig;
 use pumpkin_util::world_seed::Seed;
 use pumpkin_util::{Difficulty, GameMode, PermissionLvl, random};
@@ -9,8 +12,8 @@ use recipe::RecipeConfig;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
 use std::path::PathBuf;
-use std::{fs, num::NonZeroU8, path::Path};
-use tracing::{debug, warn};
+use std::{fs, num::NonZero, path::Path};
+use tracing::{debug, error, warn};
 
 /// Fun and experimental configuration options.
 pub mod fun;
@@ -26,15 +29,16 @@ pub mod recipe;
 /// Resource pack configuration options.
 pub mod resource_pack;
 
-pub use chat::ChatConfig;
-pub use commands::CommandsConfig;
+pub use chat::{AntiSpamConfig, ChatConfig};
+pub use commands::{CommandOverride, CommandsConfig};
 pub use networking::auth::AuthenticationConfig;
 pub use networking::bedrock::BedrockConfig;
 pub use networking::compression::CompressionConfig;
 pub use networking::java::JavaConfig;
 pub use networking::lan_broadcast::LANBroadcastConfig;
+pub use networking::packet_limiter::PacketLimiterConfig;
 pub use networking::rcon::RCONConfig;
-pub use plugins::PluginsConfig;
+pub use plugins::{PluginOverride, PluginsConfig};
 pub use pvp::PVPConfig;
 pub use server_links::ServerLinksConfig;
 
@@ -84,10 +88,16 @@ impl LoadConfiguration for PumpkinConfig {
         self.basic.validate();
         self.advanced.validate();
 
-        let min_vd = NonZeroU8::new(2).unwrap();
-        let max_vd = NonZeroU8::new(64).unwrap();
+        let min_vd = NonZero::<u8>::MIN;
+        let Some(max_vd) = NonZero::new(64) else {
+            return;
+        };
 
         // Validate Java
+        assert!(
+            self.advanced.networking.java.keep_alive_time > 0,
+            "Java Keep alive time must be greater than 0"
+        );
         assert!(
             self.advanced.networking.java.view_distance >= min_vd,
             "Java View distance must be at least 2"
@@ -112,13 +122,6 @@ impl LoadConfiguration for PumpkinConfig {
             self.advanced.networking.bedrock.view_distance <= max_vd,
             "Bedrock View distance must be less than 64"
         );
-        if self.advanced.networking.bedrock.online_mode {
-            assert!(
-                self.advanced.networking.bedrock.encryption,
-                "When online mode is enabled, bedrock_encryption must be enabled"
-            );
-        }
-
         if self.basic.allow_chat_reports {
             assert!(
                 self.advanced.networking.java.online_mode,
@@ -264,48 +267,83 @@ pub trait LoadConfiguration {
     {
         if !config_dir.exists() {
             debug!("creating new config root folder");
-            fs::create_dir(config_dir).expect("Failed to create config root folder");
+            let _ = fs::create_dir(config_dir);
         }
         let path = config_dir.join(Self::get_path());
 
         let config = if path.exists() {
-            let file_content = fs::read_to_string(&path).unwrap_or_else(|_| {
-                panic!("Couldn't read configuration file at {}", path.display())
-            });
+            let file_content = match fs::read_to_string(&path) {
+                Ok(content) => content,
+                Err(err) => {
+                    error!(
+                        "Couldn't read configuration file at {}: {err}",
+                        path.display()
+                    );
+                    return Self::default();
+                }
+            };
 
-            let parsed_toml_value: toml::Value = toml::from_str(&file_content)
-                .unwrap_or_else(|err| {
-                    panic!(
-                        "Couldn't parse TOML at {}. Reason: {}. This is probably caused by invalid TOML syntax",
-                        path.display(), err
-                    )
-                });
+            let parsed_toml_value: toml::Value = match toml::from_str(&file_content) {
+                Ok(val) => val,
+                Err(err) => {
+                    error!(
+                        "Couldn't parse TOML at {}. Reason: {err}. Using default config.",
+                        path.display()
+                    );
+                    return Self::default();
+                }
+            };
 
             let (merged_config, changed) = Self::merge_with_default_toml(parsed_toml_value);
 
             if changed {
-                println!(
-                    "{} changed because values were missing. The missing values were filled with default values.",
-                    path.file_name().unwrap().display()
+                let file_name = path.file_name().map_or_else(
+                    || path.display().to_string(),
+                    |f| f.to_string_lossy().into_owned(),
                 );
-                if let Err(err) = fs::write(&path, toml::to_string(&merged_config).unwrap()) {
-                    warn!(
-                        "Couldn't write merged config to {}. Reason: {}",
-                        path.display(),
-                        err
-                    );
+                println!(
+                    "{file_name} changed because values were missing. The missing values were filled with default values."
+                );
+                match toml::to_string(&merged_config) {
+                    Ok(toml_str) => {
+                        if let Err(err) = fs::write(&path, toml_str) {
+                            warn!(
+                                "Couldn't write merged config to {}. Reason: {}",
+                                path.display(),
+                                err
+                            );
+                        }
+                    }
+                    Err(err) => {
+                        warn!(
+                            "Couldn't serialize merged config for {}. Reason: {}",
+                            path.display(),
+                            err
+                        );
+                    }
                 }
             }
 
             merged_config
         } else {
             let content = Self::default();
-            if let Err(err) = fs::write(&path, toml::to_string(&content).unwrap()) {
-                warn!(
-                    "Couldn't write default config to {:?}. Reason: {}",
-                    path.display(),
-                    err
-                );
+            match toml::to_string(&content) {
+                Ok(toml_str) => {
+                    if let Err(err) = fs::write(&path, toml_str) {
+                        warn!(
+                            "Couldn't write default config to {:?}. Reason: {}",
+                            path.display(),
+                            err
+                        );
+                    }
+                }
+                Err(err) => {
+                    warn!(
+                        "Couldn't serialize default config for {:?}. Reason: {}",
+                        path.display(),
+                        err
+                    );
+                }
             }
 
             content
@@ -325,14 +363,13 @@ pub trait LoadConfiguration {
     {
         let default_config = Self::default();
 
-        let default_toml_value =
-            toml::Value::try_from(default_config).expect("Failed to parse default config");
+        let Ok(default_toml_value) = toml::Value::try_from(&default_config) else {
+            return (default_config, false);
+        };
 
         let (merged_value, changed) = Self::merge_toml_values(default_toml_value, parsed_toml);
 
-        let config = merged_value
-            .try_into()
-            .expect("Failed to convert merged config");
+        let config = merged_value.try_into().unwrap_or_else(|_| Self::default());
 
         (config, changed)
     }

@@ -1,3 +1,5 @@
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+
 use std::{fs, path::Path, sync::Arc};
 use thiserror::Error;
 use tokio::sync::Mutex;
@@ -37,6 +39,10 @@ pub enum PluginInitError {
     CallInitPluginFailed(wasmtime::Error),
     #[error("Calling `get_metadata` failed: {0}")]
     CallGetMetadataFailed(wasmtime::Error),
+    #[error("Failed to get absolute path: {0}")]
+    PathResolutionFailed(std::io::Error),
+    #[error("Failed to create cache: {0}")]
+    CacheCreationFailed(wasmtime::Error),
 }
 
 pub struct PluginRuntime {
@@ -58,14 +64,15 @@ impl PluginRuntime {
     pub fn new<P: AsRef<Path>>(path: P) -> Result<Self, PluginInitError> {
         let mut config = wasmtime::Config::new();
         config.wasm_component_model(true);
-        let mut path = std::path::absolute(path.as_ref()).expect("Failed to get absolute path");
+        config.wasm_component_model_async(true);
+        let mut path =
+            std::path::absolute(path.as_ref()).map_err(PluginInitError::PathResolutionFailed)?;
         path.pop();
         path.push("cache");
         let mut cache_config = CacheConfig::new();
         cache_config.with_directory(&path);
-        config.cache(Some(
-            Cache::new(cache_config).expect("Failed to create cache"),
-        ));
+        let cache = Cache::new(cache_config).map_err(PluginInitError::CacheCreationFailed)?;
+        config.cache(Some(cache));
 
         config.gc_support(true);
         config.wasm_gc(true);
@@ -86,10 +93,36 @@ impl PluginRuntime {
     pub async fn init_plugin<P: AsRef<Path>>(
         &self,
         path: P,
+        verify_signatures: bool,
     ) -> Result<(Arc<WasmPlugin>, PluginMetadata), PluginInitError> {
         let wasm_bytes = std::fs::read(&path).map_err(PluginInitError::FileReadFailed)?;
-
-        signature::verify_wasm_plugin(&wasm_bytes, &path.as_ref().to_string_lossy());
+        let marketplace_metadata = maybe_verify_wasm_plugin(
+            &wasm_bytes,
+            &path.as_ref().to_string_lossy(),
+            verify_signatures,
+            |bytes, path_str| {
+                let verification = signature::verify_wasm_plugin(bytes, path_str);
+                if verification.is_signed && verification.is_valid {
+                    verification.metadata.map(|m| {
+                        wit::v0_1::pumpkin::plugin::context::MarketplaceMetadata {
+                            marketplace_url: m.marketplace_url,
+                            plugin_id: m.plugin_id,
+                            plugin_name: m.plugin_name,
+                            version: m.version,
+                            dev_id: m.dev_id,
+                            dev_name: m.dev_name,
+                            is_paid: m.is_paid,
+                            user_id: m.user_id,
+                            license_key: m.license_key,
+                            issued_at: m.issued_at,
+                        }
+                    })
+                } else {
+                    None
+                }
+            },
+        )
+        .flatten();
 
         let wasm_bytes = signature::strip_pumpkin_sections(&wasm_bytes).unwrap_or(wasm_bytes);
 
@@ -108,15 +141,33 @@ impl PluginRuntime {
         };
 
         let wasm_plugin = Arc::new(wasm_plugin);
-        wasm_plugin.store.lock().await.data_mut().plugin = Some(Arc::downgrade(&wasm_plugin));
+        {
+            let mut store = wasm_plugin.store.lock().await;
+            store.data_mut().plugin = Some(Arc::downgrade(&wasm_plugin));
+            store.data_mut().marketplace_metadata = marketplace_metadata;
+        };
         Ok((wasm_plugin, metadata))
     }
+}
+
+fn maybe_verify_wasm_plugin<T, F>(
+    wasm_bytes: &[u8],
+    path_str: &str,
+    verify_signatures: bool,
+    verify: F,
+) -> Option<T>
+where
+    F: FnOnce(&[u8], &str) -> T,
+{
+    verify_signatures.then(|| verify(wasm_bytes, path_str))
 }
 
 fn setup_linker(engine: &Engine) -> wasmtime::Result<Linker<PluginHostState>> {
     let mut linker = Linker::<PluginHostState>::new(engine);
     wasmtime_wasi::p2::add_to_linker_async(&mut linker)?;
     wasmtime_wasi_http::p2::add_only_http_to_linker_async(&mut linker)?;
+    wasmtime_wasi::p3::add_to_linker(&mut linker)?;
+    wasmtime_wasi_http::p3::add_to_linker(&mut linker)?;
     wit::v0_1::add_to_linker(&mut linker)?;
     Ok(linker)
 }
@@ -153,6 +204,7 @@ fn load_component(
 }
 
 impl WasmPlugin {
+    #[allow(clippy::too_many_lines)]
     pub async fn on_load(
         &self,
         context: Arc<Context>,
@@ -165,12 +217,18 @@ impl WasmPlugin {
         builder.inherit_stderr();
 
         let metadata = context.get_metadata();
-        let blocked_permissions = &context.server.advanced_config.plugins.blocked_permissions;
+        let plugin_config = &context.server.advanced_config.plugins;
+        let plugin_override = plugin_config.overrides.get(&metadata.name);
+
+        let is_blocked = |p: &str| {
+            plugin_config.blocked_permissions.iter().any(|b| b == p)
+                || plugin_override.is_some_and(|o| o.blocked_permissions.iter().any(|b| b == p))
+        };
 
         let filtered_permissions: Vec<String> = metadata
             .permissions
             .iter()
-            .filter(|p| !blocked_permissions.iter().any(|blocked| blocked == *p))
+            .filter(|p| !is_blocked(p))
             .cloned()
             .collect();
 
@@ -189,7 +247,10 @@ impl WasmPlugin {
         let udp_outgoing_datagram =
             udp_allowed || has_permission(permissions::NETWORK_UDP_OUTGOING_DATAGRAM);
 
-        let loopback_only = has_permission(permissions::NETWORK_LOOPBACK);
+        let loopback_only = plugin_override
+            .and_then(|o| o.loopback_only)
+            .unwrap_or(plugin_config.loopback_only)
+            || has_permission(permissions::NETWORK_LOOPBACK);
 
         builder.allow_tcp(tcp_connect || tcp_bind);
         builder.allow_udp(udp_connect || udp_bind);
@@ -216,10 +277,10 @@ impl WasmPlugin {
             builder.inherit_network();
         }
 
-        // --- System Permissions ---
+        // --- System Permissions & Environment Variables ---
 
         // Environment Variables
-        if has_permission(permissions::SYS_ENV) {
+        if plugin_config.inherit_env || has_permission(permissions::SYS_ENV) {
             builder.inherit_env();
         } else {
             for (key, value) in std::env::vars() {
@@ -227,6 +288,13 @@ impl WasmPlugin {
                 if has_permission(&perm) {
                     builder.env(key, value);
                 }
+            }
+        }
+
+        // Injected environment variables from plugin override
+        if let Some(plugin_override) = plugin_override {
+            for (key, value) in &plugin_override.environment {
+                builder.env(key, value);
             }
         }
 
@@ -255,8 +323,15 @@ impl WasmPlugin {
             },
         )?;
 
-        if has_permission(permissions::HTTP_OUTBOUND) {
-            store.data_mut().wasi_http_hooks.allow_outbound = true;
+        let max_memory_mb = plugin_override
+            .and_then(|o| o.max_memory_mb)
+            .or(plugin_config.max_memory_mb);
+
+        if let Some(mb) = max_memory_mb {
+            let limit_bytes = (mb as usize).saturating_mul(1024 * 1024);
+            store.data_mut().limits = wasmtime::StoreLimitsBuilder::new()
+                .memory_size(limit_bytes)
+                .build();
         }
 
         store.data_mut().permissions = filtered_permissions;
@@ -264,10 +339,20 @@ impl WasmPlugin {
 
         store.data_mut().server = Some(context.server.clone());
 
+        store.data_mut().name = Some(metadata.name.clone());
+
         match self.plugin_instance {
             PluginInstance::V0_1(ref plugin) => {
-                let context = store.data_mut().add_context(context)?;
-                plugin.call_on_load(&mut *store, context).await
+                let context_res = store.data_mut().add_context(context)?;
+                let context_rep = context_res.rep();
+                let res = plugin.call_on_load(&mut *store, context_res).await;
+                let _ = store
+                    .data_mut()
+                    .resource_table
+                    .delete::<crate::plugin::loader::wasm::wasm_host::state::ContextResource>(
+                    wasmtime::component::Resource::new_own(context_rep),
+                );
+                res
             }
         }
     }
@@ -290,8 +375,32 @@ impl WasmPlugin {
 
         match self.plugin_instance {
             PluginInstance::V0_1(ref plugin) => {
-                let context = store.data_mut().add_context(context)?;
-                plugin.call_on_unload(&mut *store, context).await
+                let context_res = store.data_mut().add_context(context)?;
+                let context_rep = context_res.rep();
+                let res = plugin.call_on_unload(&mut *store, context_res).await;
+                let _ = store
+                    .data_mut()
+                    .resource_table
+                    .delete::<crate::plugin::loader::wasm::wasm_host::state::ContextResource>(
+                    wasmtime::component::Resource::new_own(context_rep),
+                );
+                res
+            }
+        }
+    }
+
+    pub async fn handle_ipc_message(
+        &self,
+        sender: &String,
+        message: &Vec<u8>,
+    ) -> Result<Result<Vec<u8>, String>, wasmtime::Error> {
+        let mut store = self.store.lock().await;
+
+        match self.plugin_instance {
+            PluginInstance::V0_1(ref plugin) => {
+                plugin
+                    .call_handle_ipc_message(&mut *store, sender, message)
+                    .await
             }
         }
     }

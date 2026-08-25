@@ -538,6 +538,7 @@ pub const SLOT_RANGE_SINGLE_SLOT_NAMES: [&str; 156usize] = [
     "weapon.mainhand",
     "weapon.offhand",
 ];
+#[allow(clippy::match_same_arms)]
 #[must_use]
 pub fn get_slot_range(name: &str) -> Option<&'static [usize]> {
     match name {

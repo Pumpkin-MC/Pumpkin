@@ -1,0 +1,26 @@
+{
+  "type": "minecraft:ocean_monument",
+  "biomes": "#minecraft:has_structure/ocean_monument",
+  "spawn_overrides": {
+    "axolotls": {
+      "bounding_box": "full",
+      "spawns": []
+    },
+    "monster": {
+      "bounding_box": "full",
+      "spawns": [
+        {
+          "type": "minecraft:guardian",
+          "maxCount": 4,
+          "minCount": 2,
+          "weight": 1
+        }
+      ]
+    },
+    "underground_water_creature": {
+      "bounding_box": "full",
+      "spawns": []
+    }
+  },
+  "step": "surface_structures"
+}

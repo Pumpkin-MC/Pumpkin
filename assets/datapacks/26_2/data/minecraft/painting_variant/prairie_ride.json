@@ -1,0 +1,13 @@
+{
+  "asset_id": "minecraft:prairie_ride",
+  "author": {
+    "color": "gray",
+    "translate": "painting.minecraft.prairie_ride.author"
+  },
+  "height": 2,
+  "title": {
+    "color": "yellow",
+    "translate": "painting.minecraft.prairie_ride.title"
+  },
+  "width": 1
+}

@@ -3,7 +3,7 @@ use std::sync::{Arc, Weak};
 use pumpkin_data::{entity::EntityType, item::Item};
 
 use crate::entity::{
-    Entity, NBTStorage,
+    Entity,
     ai::goal::{
         breed::BreedGoal, escape_danger::EscapeDangerGoal, follow_parent::FollowParentGoal,
         look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal, swim::SwimGoal,
@@ -29,7 +29,11 @@ impl RabbitEntity {
         };
 
         {
-            let mut goal_selector = mob_arc.mob_entity.goals_selector.lock().unwrap();
+            let mut goal_selector = mob_arc
+                .mob_entity
+                .goals_selector
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
 
             goal_selector.add_goal(1, Box::new(SwimGoal::default()));
             goal_selector.add_goal(1, EscapeDangerGoal::new(2.2));
@@ -47,8 +51,6 @@ impl RabbitEntity {
         mob_arc
     }
 }
-
-impl NBTStorage for RabbitEntity {}
 
 impl Mob for RabbitEntity {
     fn get_mob_entity(&self) -> &MobEntity {

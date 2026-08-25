@@ -9,8 +9,10 @@ pub fn build() -> TokenStream {
     .unwrap();
 
     let mut java_constants = TokenStream::new();
+    let mut java_match_arms = TokenStream::new();
     for (name, value) in &java_json {
         let ident = to_valid_ident(name);
+        let ident_str = ident.to_string();
         let doc = if !value.is_empty() {
             quote!(#[doc = #value])
         } else {
@@ -20,11 +22,15 @@ pub fn build() -> TokenStream {
             #doc
             pub const #ident: &str = #name;
         });
+        java_match_arms.extend(quote! {
+            #ident_str => Some(#ident),
+        });
     }
 
     let bedrock_content =
         fs::read_to_string("../../assets/en_us_bedrock.lang").expect("en_us_bedrock is missing");
     let mut bedrock_constants = TokenStream::new();
+    let mut bedrock_match_arms = TokenStream::new();
 
     for line in bedrock_content.lines() {
         let line = line.trim();
@@ -36,6 +42,7 @@ pub fn build() -> TokenStream {
             let name = name.trim();
             let value = value.trim();
             let ident = to_valid_ident(name);
+            let ident_str = ident.to_string();
 
             let doc = if !value.is_empty() {
                 quote!(#[doc = #value])
@@ -46,6 +53,32 @@ pub fn build() -> TokenStream {
                 #doc
                 pub const #ident: &str = #name;
             });
+            bedrock_match_arms.extend(quote! {
+                #ident_str => Some(#ident),
+            });
+        }
+    }
+
+    let mut java_value_match_arms = TokenStream::new();
+    for (name, value) in &java_json {
+        java_value_match_arms.extend(quote! {
+            #name => Some(#value),
+        });
+    }
+
+    let mut bedrock_value_match_arms = TokenStream::new();
+    for line in bedrock_content.lines() {
+        let line = line.trim();
+        if line.is_empty() || line.starts_with('#') || line.starts_with('/') {
+            continue;
+        }
+
+        if let Some((name, value)) = line.split_once('=') {
+            let name = name.trim();
+            let value = value.trim();
+            bedrock_value_match_arms.extend(quote! {
+                #name => Some(#value),
+            });
         }
     }
 
@@ -54,9 +87,33 @@ pub fn build() -> TokenStream {
         #![allow(clippy::doc_markdown)]
         pub mod java {
             #java_constants
+            pub fn get(const_name: &str) -> Option<&'static str> {
+                match const_name {
+                    #java_match_arms
+                    _ => None,
+                }
+            }
+            pub fn get_value(key: &str) -> Option<&'static str> {
+                match key {
+                    #java_value_match_arms
+                    _ => None,
+                }
+            }
         }
         pub mod bedrock {
             #bedrock_constants
+            pub fn get(const_name: &str) -> Option<&'static str> {
+                match const_name {
+                    #bedrock_match_arms
+                    _ => None,
+                }
+            }
+            pub fn get_value(key: &str) -> Option<&'static str> {
+                match key {
+                    #bedrock_value_match_arms
+                    _ => None,
+                }
+            }
         }
     }
 }

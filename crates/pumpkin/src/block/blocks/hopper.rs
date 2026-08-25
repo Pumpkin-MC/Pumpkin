@@ -45,10 +45,9 @@ impl ScreenHandlerFactory for HopperBlockScreenFactory {
     }
 
     fn get_display_name(&self) -> TextComponent {
-        TextComponent::translate_cross(
+        pumpkin_macros::translate_cross!(
             translation::java::CONTAINER_HOPPER,
-            translation::bedrock::CONTAINER_HOPPER,
-            &[],
+            translation::bedrock::CONTAINER_HOPPER
         )
     }
 }

@@ -1,3 +1,5 @@
+#![allow(clippy::unwrap_used)]
+
 use criterion::{Criterion, criterion_group, criterion_main};
 use pumpkin_nbt::{Nbt, NbtCompound, deserializer, tag::NbtTag};
 use std::io::Cursor;

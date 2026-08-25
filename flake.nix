@@ -9,18 +9,12 @@
       flake = false;
     };
 
-    naersk = {
-      url = "github:nix-community/naersk";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
-
     self.submodules = true;
   };
 
   outputs =
     inputs@{
       flake-parts,
-      naersk,
       nixpkgs,
       ...
     }:
@@ -34,40 +28,34 @@
           ...
         }:
         let
-          naersk' = pkgs.callPackage naersk { };
-
-          manifest = (lib.importTOML ./pumpkin/Cargo.toml).package;
+          manifest = (lib.importTOML ./crates/pumpkin/Cargo.toml).package;
           workspace-manifest = (lib.importTOML ./Cargo.toml).workspace.package;
         in
         {
-          packages.default = naersk'.buildPackage {
+          packages.default = pkgs.rustPlatform.buildRustPackage {
             pname = manifest.name;
             inherit (workspace-manifest) version;
 
-            nativeBuildInputs = [ pkgs.rustfmt ];
+            src = lib.cleanSource ./.;
 
-            src = lib.fileset.toSource {
-              root = ./.;
-              fileset = lib.fileset.unions [
-                ./Cargo.lock
-                ./Cargo.toml
-
-                ./assets
-                ./pumpkin
-                ./pumpkin-api-macros
-                ./pumpkin-codecs
-                ./pumpkin-config
-                ./pumpkin-data
-                ./pumpkin-inventory
-                ./pumpkin-macros
-                ./pumpkin-nbt
-                ./pumpkin-plugin-api
-                ./pumpkin-plugin-wit
-                ./pumpkin-protocol
-                ./pumpkin-util
-                ./pumpkin-world
-              ];
+            cargoLock = {
+              lockFile = ./Cargo.lock;
             };
+
+            nativeBuildInputs = [
+              pkgs.rustfmt
+              pkgs.pkg-config
+            ];
+
+            cargoBuildFlags = [
+              "--package"
+              "pumpkin"
+            ];
+
+            CARGO_PROFILE_RELEASE_LTO = "thin";
+            CARGO_PROFILE_RELEASE_CODEGEN_UNITS = "16";
+
+            doCheck = false;
           };
 
           devShells.default = pkgs.mkShell {
@@ -77,6 +65,7 @@
               rust-analyzer
               rustc
               rustfmt
+              pkg-config
             ];
           };
 

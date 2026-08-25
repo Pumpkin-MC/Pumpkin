@@ -1,0 +1,12 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "building",
+  "group": "waxed_weathered_cut_copper_stairs",
+  "ingredients": [
+    "minecraft:weathered_cut_copper_stairs",
+    "minecraft:honeycomb"
+  ],
+  "result": {
+    "id": "minecraft:waxed_weathered_cut_copper_stairs"
+  }
+}

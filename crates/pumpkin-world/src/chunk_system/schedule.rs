@@ -182,7 +182,10 @@ impl GenerationSchedule {
     fn apply_lighting_override(&self, chunk: &SyncChunk) {
         match self.lighting_config {
             LightingEngineConfig::Full => {
-                let mut engine = chunk.light_engine.lock().unwrap();
+                let mut engine = chunk
+                    .light_engine
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
                 for section in &mut engine.block_light {
                     section.fill(15);
                 }
@@ -192,7 +195,10 @@ impl GenerationSchedule {
                 chunk.dirty.store(true, Relaxed);
             }
             LightingEngineConfig::Dark => {
-                let mut engine = chunk.light_engine.lock().unwrap();
+                let mut engine = chunk
+                    .light_engine
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
                 for section in &mut engine.block_light {
                     section.fill(0);
                 }
@@ -262,9 +268,10 @@ impl GenerationSchedule {
 
         let mut ready = Vec::new();
         for (key, node) in &mut graph.nodes {
-            node.in_queue = false;
             if node.stage == StagedChunkEnum::None
                 || node.in_degree != 0
+                || node.in_queue
+                || node.in_flight
                 || waiting_for_chunks.contains(&key)
             {
                 continue;
@@ -502,17 +509,23 @@ impl GenerationSchedule {
                         }
                     }
                 }
-                if new_stage == StagedChunkEnum::None
-                    && holder.dependency_stage == StagedChunkEnum::None
-                {
-                    self.unload_chunks.insert(pos);
+                if new_stage == StagedChunkEnum::None {
+                    if holder.dependency_stage != StagedChunkEnum::None {
+                        let has_valid_task = self.graph.prune_edge_chain(&mut holder.occupied_by);
+                        if !has_valid_task {
+                            holder.dependency_stage = StagedChunkEnum::None;
+                        }
+                    }
+                    if holder.dependency_stage == StagedChunkEnum::None {
+                        self.unload_chunks.insert(pos);
+                    }
                 }
             } else {
                 if old_stage == StagedChunkEnum::None {
                     self.unload_chunks.remove(&pos);
                     if holder.current_stage == StagedChunkEnum::Full && !holder.public {
                         holder.public = true;
-                        match holder.chunk.as_ref().unwrap() {
+                        match holder.chunk.as_ref().expect("chunk exists") {
                             Chunk::Level(chunk) => {
                                 self.apply_lighting_override(chunk);
                                 self.public_chunk_map.insert(pos, chunk.clone());
@@ -568,7 +581,7 @@ impl GenerationSchedule {
                             }
                         }
                     }
-                    let node = self.graph.nodes.get_mut(task).unwrap();
+                    let node = self.graph.nodes.get_mut(task).expect("node exists");
                     if node.in_degree == 0 && !node.in_queue {
                         node.in_queue = true;
                         self.queue.push(TaskHeapNode(0, task));
@@ -582,52 +595,140 @@ impl GenerationSchedule {
         true
     }
 
-    fn garbage_collect_dependencies(&mut self) {
-        // Garbage collect stranded dependencies
-        let mut stranded = Vec::new();
-        for (pos, holder) in &self.chunk_map {
-            if holder.target_stage == StagedChunkEnum::None
-                && holder.dependency_stage != StagedChunkEnum::None
+    fn recompute_dependency_stages(&mut self) {
+        let mut required: HashMapType<ChunkPos, StagedChunkEnum> = HashMapType::default();
+        let mut worklist: Vec<(ChunkPos, StagedChunkEnum)> = self
+            .chunk_map
+            .iter()
+            .filter(|(_, holder)| holder.target_stage != StagedChunkEnum::None)
+            .map(|(pos, holder)| (*pos, holder.target_stage))
+            .collect();
+
+        while let Some((pos, req)) = worklist.pop() {
+            let entry = required.entry(pos).or_insert(StagedChunkEnum::None);
+            if *entry >= req {
+                continue;
+            }
+            let start = *entry as u8 + 1;
+            *entry = req;
+
+            // Only expand the stages that were not already accounted for.
+            for i in start..=(req as u8) {
+                let stage = StagedChunkEnum::from(i);
+                let radius = stage.get_direct_radius();
+                if radius == 0 {
+                    continue;
+                }
+                let dependencies = stage.get_direct_dependencies();
+                for dx in -radius..=radius {
+                    for dz in -radius..=radius {
+                        if dx == 0 && dz == 0 {
+                            continue;
+                        }
+                        let neighbor = pos.add_raw(dx, dz);
+                        worklist.push((neighbor, dependencies[dx.abs().max(dz.abs()) as usize]));
+                    }
+                }
+            }
+        }
+
+        let mut nodes_to_drop = Vec::new();
+        let mut newly_unused = Vec::new();
+        for (pos, holder) in &mut self.chunk_map {
+            let new_dependency = required.get(pos).copied().unwrap_or(StagedChunkEnum::None);
+            if new_dependency >= holder.dependency_stage {
+                continue;
+            }
+            holder.dependency_stage = new_dependency;
+
+            let effective_target = holder.target_stage.max(new_dependency);
+            for i in (effective_target as usize + 1)..StagedChunkEnum::COUNT {
+                let task = holder.tasks[i];
+                if !task.is_null() {
+                    nodes_to_drop.push((*pos, i, task));
+                }
+            }
+            if effective_target == StagedChunkEnum::None {
+                newly_unused.push(*pos);
+            }
+        }
+        self.unload_chunks.extend(newly_unused);
+
+        for (pos, index, task) in nodes_to_drop {
+            if self
+                .graph
+                .nodes
+                .get(task)
+                .is_some_and(|node| node.in_flight)
             {
-                stranded.push(*pos);
+                continue;
+            }
+            self.waiting_for_chunks.remove(&task);
+            self.drop_node(task);
+            if let Some(holder) = self.chunk_map.get_mut(&pos) {
+                holder.tasks[index] = NodeKey::null();
+            }
+        }
+
+        self.purge_dropped_queue_entries();
+    }
+
+    /// Drop heap entries whose node has been cancelled. They are skipped when popped,
+    /// but a saturated queue is never drained, so without this the heap keeps every
+    /// cancelled task of every chunk the player has flown past and `sort_queue` gets
+    /// slower on each level change.
+    fn purge_dropped_queue_entries(&mut self) {
+        if self.queue.is_empty() {
+            return;
+        }
+        let graph = &self.graph;
+        let tasks: Vec<_> = self
+            .queue
+            .drain()
+            .filter(|task| graph.nodes.contains_key(task.1))
+            .collect();
+        self.queue = BinaryHeap::from(tasks);
+    }
+
+    fn garbage_collect_dependencies(&mut self) {
+        self.recompute_dependency_stages();
+
+        // Garbage collect stranded dependencies and empty holders
+        let mut stranded = Vec::new();
+        let mut empty_holders = Vec::new();
+
+        for (pos, holder) in &self.chunk_map {
+            if holder.target_stage == StagedChunkEnum::None {
+                if holder.dependency_stage != StagedChunkEnum::None {
+                    stranded.push(*pos);
+                } else if holder.current_stage == StagedChunkEnum::None
+                    && holder.chunk.is_none()
+                    && holder.occupied.is_null()
+                    && holder.tasks.iter().all(Key::is_null)
+                    && !holder.public
+                {
+                    empty_holders.push(*pos);
+                }
             }
         }
 
         for pos in stranded {
-            let holder = self.chunk_map.get_mut(&pos).unwrap();
+            let holder = self.chunk_map.get_mut(&pos).expect("holder exists");
             if !holder.occupied.is_null() && self.graph.nodes.contains_key(holder.occupied) {
                 continue;
             }
 
-            let mut cur_edge = holder.occupied_by;
-            let mut prev_edge = EdgeKey::null();
-            let mut change_head = None;
-            let mut has_valid_task = false;
-
-            while !cur_edge.is_null() {
-                let edge = self.graph.edges.get(cur_edge).unwrap();
-                if self.graph.nodes.contains_key(edge.to) {
-                    prev_edge = cur_edge;
-                    cur_edge = edge.next;
-                    has_valid_task = true;
-                } else {
-                    let next = edge.next;
-                    self.graph.edges.remove(cur_edge);
-                    cur_edge = next;
-                    if prev_edge.is_null() {
-                        change_head = Some(next);
-                    } else {
-                        self.graph.edges.get_mut(prev_edge).unwrap().next = next;
-                    }
-                }
-            }
-            if let Some(next) = change_head {
-                holder.occupied_by = next;
-            }
-
+            let has_valid_task = self.graph.prune_edge_chain(&mut holder.occupied_by);
             if !has_valid_task {
                 holder.dependency_stage = StagedChunkEnum::None;
                 self.unload_chunks.insert(pos);
+            }
+        }
+
+        for pos in empty_holders {
+            if let Some(mut holder) = self.chunk_map.remove(&pos) {
+                self.graph.drop_edge_chain(holder.occupied_by);
+                holder.occupied_by = EdgeKey::null();
             }
         }
     }
@@ -661,6 +762,9 @@ impl GenerationSchedule {
                 }
             }
 
+            self.graph.drop_edge_chain(holder.occupied_by);
+            holder.occupied_by = EdgeKey::null();
+
             if holder.public {
                 self.public_chunk_map.remove(&pos);
                 holder.public = false;
@@ -683,7 +787,11 @@ impl GenerationSchedule {
         if chunks.is_empty() {
             return;
         }
-        let mut data = self.io_lock.0.lock().unwrap();
+        let mut data = self
+            .io_lock
+            .0
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         for (pos, _chunk) in &chunks {
             *data.entry(*pos).or_insert(0) += 1;
         }
@@ -716,7 +824,7 @@ impl GenerationSchedule {
                 if should_save {
                     let chunk_to_save = match chunk {
                         Chunk::Level(sync_chunk) => Chunk::Level(sync_chunk.clone()),
-                        Chunk::Proto(_) => holder.chunk.take().unwrap(),
+                        Chunk::Proto(_) => holder.chunk.take().expect("proto chunk exists"),
                     };
                     chunks.push((*pos, chunk_to_save));
                 }
@@ -733,7 +841,11 @@ impl GenerationSchedule {
             self.chunk_map.len()
         );
 
-        let mut data = self.io_lock.0.lock().unwrap();
+        let mut data = self
+            .io_lock
+            .0
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         for (pos, _) in &chunks {
             *data.entry(*pos).or_insert(0) += 1;
         }
@@ -750,7 +862,7 @@ impl GenerationSchedule {
         };
         let mut edge = old.edge;
         while !edge.is_null() {
-            let cur = self.graph.edges.remove(edge).unwrap();
+            let cur = self.graph.edges.remove(edge).expect("edge exists");
             if let Some(node) = self.graph.nodes.get_mut(cur.to) {
                 debug_assert!(node.in_degree >= 1);
                 node.in_degree -= 1;
@@ -792,7 +904,7 @@ impl GenerationSchedule {
     fn receive_chunk(&mut self, pos: ChunkPos, data: RecvChunk) {
         match data {
             RecvChunk::IO(chunk) => {
-                let mut holder = self.chunk_map.remove(&pos).unwrap();
+                let mut holder = self.chunk_map.remove(&pos).expect("holder exists");
                 if holder.chunk.is_some() {
                     warn!(
                         "receive_chunk(IO): holder already has chunk at {:?}; replacing",
@@ -836,6 +948,15 @@ impl GenerationSchedule {
                         }
                     }
                 }
+                // If this chunk was only loaded for a dependency or cancelled
+                // and is no longer needed, clear dependency_stage and queue unload.
+                if holder.target_stage == StagedChunkEnum::None
+                    && holder.current_stage >= holder.dependency_stage
+                {
+                    holder.dependency_stage = StagedChunkEnum::None;
+                    self.unload_chunks.insert(pos);
+                }
+
                 holder.chunk = Some(chunk);
                 self.chunk_map.insert(pos, holder);
 
@@ -849,7 +970,8 @@ impl GenerationSchedule {
                     let new_pos = ChunkPos::new(data.x + dx, data.z + dy);
                     match chunk {
                         Chunk::Level(chunk) => {
-                            let mut holder = self.chunk_map.remove(&new_pos).unwrap();
+                            let mut holder =
+                                self.chunk_map.remove(&new_pos).expect("holder exists");
                             let stage = StagedChunkEnum::Full;
                             if new_pos == pos {
                                 if holder.current_stage != StagedChunkEnum::Spawn {
@@ -926,7 +1048,8 @@ impl GenerationSchedule {
                             self.chunk_map.insert(new_pos, holder);
                         }
                         Chunk::Proto(chunk) => {
-                            let mut holder = self.chunk_map.remove(&new_pos).unwrap();
+                            let mut holder =
+                                self.chunk_map.remove(&new_pos).expect("holder exists");
 
                             let stage = StagedChunkEnum::from(chunk.stage_id());
                             self.drop_satisfied_tasks(&mut holder, stage);
@@ -1067,13 +1190,15 @@ impl GenerationSchedule {
             }
 
             // 1. Get latest world state (player moves, etc)
-            self.resort_work(self.send_level.get());
+            if self.resort_work(self.send_level.get()) {
+                self.garbage_collect_dependencies();
+            }
 
             // Process unload queue periodically (every 1 second) to batch writes together
             // and act as a brief memory cache if a player walks back into the chunk.
-            if !self.unload_chunks.is_empty()
-                && self.last_unload.elapsed() >= std::time::Duration::from_secs(1)
-            {
+            // This must run even when the queue is empty: `garbage_collect_dependencies`
+            // is what puts stale dependency holders into the queue in the first place.
+            if self.last_unload.elapsed() >= std::time::Duration::from_secs(1) {
                 self.garbage_collect_dependencies();
                 self.process_unload_queue();
                 self.last_unload = std::time::Instant::now();
@@ -1110,6 +1235,7 @@ impl GenerationSchedule {
                     self.receive_chunk(pos, data);
                     if self.resort_work(self.send_level.get()) {
                         // If world state changed, we MUST re-sort before continuing
+                        self.garbage_collect_dependencies();
                         self.queue.push(task);
                         self.queue_dirty = true;
                         break 'out2;
@@ -1117,8 +1243,8 @@ impl GenerationSchedule {
                 }
 
                 if let Some(node) = self.graph.nodes.get_mut(task.1) {
+                    node.in_queue = false;
                     if node.in_degree != 0 {
-                        node.in_queue = false;
                         continue;
                     }
                     node.in_flight = true;
@@ -1157,6 +1283,12 @@ impl GenerationSchedule {
                         });
 
                     if node.stage > effective_target {
+                        if let Some(holder) = self.chunk_map.get_mut(&node.pos) {
+                            let task_slot = &mut holder.tasks[node.stage as usize];
+                            if *task_slot == task.1 {
+                                *task_slot = NodeKey::null();
+                            }
+                        }
                         self.waiting_for_chunks.remove(&task.1);
                         self.drop_node(task.1);
                         continue;
@@ -1164,7 +1296,7 @@ impl GenerationSchedule {
 
                     if node.stage == StagedChunkEnum::Empty {
                         self.running_task_count += 1;
-                        let holder = self.chunk_map.get_mut(&node.pos).unwrap();
+                        let holder = self.chunk_map.get_mut(&node.pos).expect("holder exists");
                         debug_assert!(holder.occupied.is_null());
                         debug_assert_eq!(holder.current_stage, StagedChunkEnum::None);
                         let occupy = self.graph.nodes.insert(Node::new(
@@ -1246,7 +1378,8 @@ impl GenerationSchedule {
                         for dx in -write_radius..=write_radius {
                             for dy in -write_radius..=write_radius {
                                 let new_pos = node.pos.add_raw(dx, dy);
-                                let holder = self.chunk_map.get_mut(&new_pos).unwrap();
+                                let holder =
+                                    self.chunk_map.get_mut(&new_pos).expect("holder exists");
                                 let mut tmp = None;
                                 swap(&mut tmp, &mut holder.chunk);
                                 let Some(tmp) = tmp else {
@@ -1270,7 +1403,7 @@ impl GenerationSchedule {
                                 let mut prev_edge = EdgeKey::null();
                                 let mut change_head = None;
                                 while !cur_edge.is_null() {
-                                    let edge = self.graph.edges.get(cur_edge).unwrap();
+                                    let edge = self.graph.edges.get(cur_edge).expect("edge exists");
                                     if self.graph.nodes.contains_key(edge.to) {
                                         prev_edge = cur_edge;
                                         cur_edge = edge.next;
@@ -1282,8 +1415,11 @@ impl GenerationSchedule {
                                         if prev_edge.is_null() {
                                             change_head = Some(next);
                                         } else {
-                                            self.graph.edges.get_mut(prev_edge).unwrap().next =
-                                                next;
+                                            self.graph
+                                                .edges
+                                                .get_mut(prev_edge)
+                                                .expect("edge exists")
+                                                .next = next;
                                         }
                                     }
                                 }
@@ -1301,8 +1437,9 @@ impl GenerationSchedule {
                             let stage = node.stage;
                             let send_chunk = self.send_chunk.clone();
                             let level = level.clone();
-                            let settings =
-                                GenerationSettings::from_dimension(level.world_gen.dimension());
+                            let settings = GenerationSettings::from_dimension(
+                                level.world_gen.load().dimension(),
+                            );
 
                             pool.spawn(move || {
                                 let result = crate::chunk_system::worker_logic::run_generation(
@@ -1333,11 +1470,15 @@ impl GenerationSchedule {
                     match self.recv_chunk.recv_timeout(Duration::from_millis(5)) {
                         Ok((pos, data)) => {
                             self.receive_chunk(pos, data);
-                            self.resort_work(self.send_level.get());
+                            if self.resort_work(self.send_level.get()) {
+                                self.garbage_collect_dependencies();
+                            }
                         }
                         Err(crossfire::compat::RecvTimeoutError::Timeout) => {
                             // Periodically check LevelChannel for new requests
-                            self.resort_work(self.send_level.get());
+                            if self.resort_work(self.send_level.get()) {
+                                self.garbage_collect_dependencies();
+                            }
                         }
                         Err(crossfire::compat::RecvTimeoutError::Disconnected) => break,
                     }
@@ -1352,12 +1493,16 @@ impl GenerationSchedule {
                         &self.waiting_for_chunks,
                     );
                     if restored > 0 {
-                        warn!("Restored {restored} stranded ready chunk tasks to generation queue");
+                        debug!(
+                            "Restored {restored} stranded ready chunk tasks to generation queue"
+                        );
                         continue;
                     }
                     debug_assert!(self.debug_check());
                     debug_assert_eq!(self.running_task_count, 0);
-                    self.resort_work(self.send_level.wait_and_get(level));
+                    if self.resort_work(self.send_level.wait_and_get(level)) {
+                        self.garbage_collect_dependencies();
+                    }
                 }
                 if self.queue_dirty {
                     self.sort_queue();
@@ -1412,6 +1557,9 @@ impl GenerationSchedule {
                     nodes_to_drop.push(holder.occupied);
                     holder.occupied = NodeKey::null();
                 }
+
+                self.graph.drop_edge_chain(holder.occupied_by);
+                holder.occupied_by = EdgeKey::null();
             }
 
             for node_key in nodes_to_drop {
@@ -1455,7 +1603,7 @@ impl GenerationSchedule {
             debug_assert!(holder.occupied.is_null());
             if holder.current_stage != StagedChunkEnum::None {
                 debug_assert_eq!(
-                    holder.chunk.as_ref().unwrap().get_stage_id(),
+                    holder.chunk.as_ref().expect("chunk exists").get_stage_id(),
                     holder.current_stage as u8
                 );
             }

@@ -106,9 +106,8 @@ impl DynamicOps for JsonOps {
     }
 
     fn get_string(&self, input: &Self::Value) -> DataResult<String> {
-        if let Value::String(_) = input {
-            // Unwrapping is fine as only strings are possible here.
-            DataResult::new_success(Self::get_as_string(input).unwrap())
+        if let Value::String(s) = input {
+            DataResult::new_success(s.clone())
         } else {
             DataResult::new_error(format!("Not a string: {input}"))
         }
@@ -194,13 +193,14 @@ impl DynamicOps for JsonOps {
         if !Self::is_valid_key(&key) {
             return DataResult::new_partial_error(format!("Key is not a string: {key}"), map);
         }
-
         let mut output_map = Map::new();
 
         if let Value::Object(mut m) = map {
             output_map.append(&mut m);
         }
-        output_map.insert(Self::get_as_string(&key).unwrap(), value);
+        if let Some(key_str) = Self::get_as_string(&key) {
+            output_map.insert(key_str, value);
+        }
 
         DataResult::new_success(Value::Object(output_map))
     }
@@ -225,23 +225,19 @@ impl DynamicOps for JsonOps {
             let mut missed = vec![];
 
             for entry in other_map_like.iter() {
-                if Self::is_valid_key(&entry.0) {
-                    output_map.insert(Self::get_as_string(&entry.0).unwrap(), entry.1.clone());
+                if let Some(key_str) = Self::get_as_string(&entry.0) {
+                    output_map.insert(key_str, entry.1.clone());
                 } else {
                     missed.push(entry.0);
                 }
             }
 
             let object = Value::Object(output_map);
-            let pretty_missed = serde_json::to_string_pretty(&missed);
             if missed.is_empty() {
                 DataResult::new_success(object)
             } else {
                 DataResult::new_partial_error(
-                    format!(
-                        "Some keys are not strings{}",
-                        pretty_missed.map_or_else(|_| String::new(), |r| format!(": {r}"))
-                    ),
+                    format!("Some keys are not valid: {missed:?}"),
                     object,
                 )
             }
@@ -375,10 +371,9 @@ impl StructBuilder for JsonStructBuilder {
 
 impl StringStructBuilder for JsonStructBuilder {
     fn append(&self, key: &str, value: Self::Value, mut builder: Self::Result) -> Self::Result {
-        builder
-            .as_object_mut()
-            .unwrap()
-            .insert(key.to_string(), value);
+        if let Some(obj) = builder.as_object_mut() {
+            obj.insert(key.to_string(), value);
+        }
         builder
     }
 }

@@ -1,4 +1,4 @@
-use pumpkin_data::BlockState;
+use pumpkin_data::{Block, BlockState};
 use pumpkin_util::{
     DoublePerlinNoiseParametersCodec,
     math::{
@@ -27,6 +27,22 @@ pub enum BlockStateProvider {
 }
 
 impl BlockStateProvider {
+    pub fn get_for_bonemeal(
+        &self,
+        random: &mut RandomGenerator,
+        pos: BlockPos,
+    ) -> Option<&'static BlockState> {
+        match self {
+            Self::NoiseThreshold(provider) => Some(provider.get(random, pos)),
+            Self::NoiseProvider(provider) => Some(provider.get(pos)),
+            Self::Simple(provider) => Some(provider.get(pos)),
+            Self::Weighted(provider) => Some(provider.get(random)),
+            Self::DualNoise(provider) => Some(provider.get(pos)),
+            Self::Pillar(provider) => Some(provider.get(pos)),
+            Self::RandomizedInt(_) | Self::Rule(_) => None,
+        }
+    }
+
     pub fn get<T: GenerationCache>(
         &self,
         random: &mut RandomGenerator,
@@ -199,7 +215,9 @@ pub struct WeightedBlockStateProvider {
 
 impl WeightedBlockStateProvider {
     pub fn get(&self, random: &mut RandomGenerator) -> &'static BlockState {
-        Pool::get(&self.entries, random).unwrap()
+        Pool::get(&self.entries, random)
+            .copied()
+            .unwrap_or(Block::AIR.default_state)
     }
 }
 

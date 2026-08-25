@@ -2,6 +2,10 @@ mod award_stats;
 pub use award_stats::*;
 mod acknowledge_block;
 mod actionbar;
+mod add_resource_pack;
+pub use add_resource_pack::*;
+mod remove_resource_pack;
+pub use remove_resource_pack::*;
 mod block_destroy_stage;
 mod block_entity_data;
 mod block_event;
@@ -44,6 +48,7 @@ mod login;
 mod map_item_data;
 mod merchant_offers;
 mod multi_block_update;
+mod open_book;
 mod open_screen;
 mod open_sign_editor;
 mod particle;
@@ -87,6 +92,8 @@ mod set_title_animation;
 mod show_dialog;
 mod sound_effect;
 mod spawn_entity;
+mod spawn_living_entity;
+mod spawn_painting;
 mod stop_sound;
 mod store_cookie;
 mod subtitle;
@@ -106,6 +113,7 @@ mod update_entity_rot;
 mod update_mob_effect;
 mod update_objectives;
 mod update_score;
+mod use_bed;
 mod worldevent;
 
 pub use acknowledge_block::*;
@@ -152,6 +160,7 @@ pub use login::*;
 pub use map_item_data::*;
 pub use merchant_offers::*;
 pub use multi_block_update::*;
+pub use open_book::*;
 pub use open_screen::*;
 pub use open_sign_editor::*;
 pub use particle::*;
@@ -198,6 +207,8 @@ pub use set_title_animation::*;
 pub use show_dialog::*;
 pub use sound_effect::*;
 pub use spawn_entity::*;
+pub use spawn_living_entity::*;
+pub use spawn_painting::*;
 pub use stop_sound::*;
 pub use store_cookie::*;
 pub use subtitle::*;
@@ -217,7 +228,101 @@ pub use update_entity_rot::*;
 pub use update_mob_effect::*;
 pub use update_objectives::*;
 pub use update_score::*;
+pub use use_bed::*;
 pub use worldevent::*;
+
+mod waypoint;
+pub use waypoint::*;
 
 mod debug_sample;
 pub use debug_sample::*;
+
+mod bundle_delimiter;
+pub use bundle_delimiter::*;
+
+mod chunks_biomes;
+pub use chunks_biomes::*;
+
+mod combat_event;
+pub use combat_event::*;
+
+mod custom_chat_completions;
+pub use custom_chat_completions::*;
+
+mod custom_report_details;
+pub use custom_report_details::*;
+
+mod delete_chat;
+pub use delete_chat::*;
+
+mod game_rule_values;
+pub use game_rule_values::*;
+
+mod low_disk_space_warning;
+pub use low_disk_space_warning::*;
+
+mod move_minecart_along_track;
+pub use move_minecart_along_track::*;
+
+mod open_mount_screen;
+pub use open_mount_screen::*;
+
+mod ping;
+pub use ping::*;
+
+mod place_ghost_recipe;
+pub use place_ghost_recipe::*;
+
+mod player_look_at;
+pub use player_look_at::*;
+
+mod player_rotation;
+pub use player_rotation::*;
+
+mod projectile_power;
+pub use projectile_power::*;
+
+mod server_data;
+pub use server_data::*;
+
+mod start_configuration;
+pub use start_configuration::*;
+
+mod tag_query;
+pub use tag_query::*;
+
+mod update_tags;
+pub use update_tags::*;
+
+mod set_chunk_cache_radius;
+pub use set_chunk_cache_radius::*;
+
+mod set_simulation_distance;
+pub use set_simulation_distance::*;
+
+mod move_vehicle;
+pub use move_vehicle::*;
+
+mod recipe_book_remove;
+pub use recipe_book_remove::*;
+
+mod update_recipes;
+pub use update_recipes::*;
+
+mod debug_block_value;
+pub use debug_block_value::*;
+
+mod debug_chunk_value;
+pub use debug_chunk_value::*;
+
+mod debug_entity_value;
+pub use debug_entity_value::*;
+
+mod debug_event;
+pub use debug_event::*;
+
+mod game_test_highlight_pos;
+pub use game_test_highlight_pos::*;
+
+mod test_instance_block_status;
+pub use test_instance_block_status::*;

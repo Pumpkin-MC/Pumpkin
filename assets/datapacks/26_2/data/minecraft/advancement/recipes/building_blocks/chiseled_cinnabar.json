@@ -1,0 +1,32 @@
+{
+  "parent": "minecraft:recipes/root",
+  "criteria": {
+    "has_slab": {
+      "conditions": {
+        "items": [
+          {
+            "items": "minecraft:cinnabar_slab"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    },
+    "has_the_recipe": {
+      "conditions": {
+        "recipe": "minecraft:chiseled_cinnabar"
+      },
+      "trigger": "minecraft:recipe_unlocked"
+    }
+  },
+  "requirements": [
+    [
+      "has_the_recipe",
+      "has_slab"
+    ]
+  ],
+  "rewards": {
+    "recipes": [
+      "minecraft:chiseled_cinnabar"
+    ]
+  }
+}

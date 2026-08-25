@@ -1,3 +1,5 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
+
 use heck::ToShoutySnakeCase;
 use proc_macro::TokenStream;
 use proc_macro_error2::{abort, abort_call_site};
@@ -507,8 +509,18 @@ pub fn derive_serialize(input: TokenStream) -> TokenStream {
             .into();
     };
 
+    let type_generic = match input.generics.params.len() {
+        0 => quote! {},
+        1 => quote! { <'_> },
+        _ => {
+            return syn::Error::new(name.span(), "Only up to one lifetime parameter is supported.")
+            .to_compile_error()
+            .into();
+        }
+    };
+
     let expanded = quote! {
-        impl PacketWrite for #name {
+        impl PacketWrite for #name #type_generic {
             fn write<W: std::io::Write>(&self, writer: &mut W) -> Result<(), std::io::Error> {
                 #(#fields)*
                 Ok(())
@@ -535,26 +547,19 @@ pub fn derive_deserialize(input: TokenStream) -> TokenStream {
             let (is_big_endian, no_prefix) = check_serial_attributes(&f.attrs);
             let is_vec = is_vec(&f.ty);
 
-            if is_vec && !no_prefix {
-                // Vec with prefix: read VarUInt length, then data
+            if is_vec && no_prefix {
+                return syn::Error::new(name.span(), "Cannot handle non-prefixed vecs")
+                    .to_compile_error();
+            }
+
+            // Non-Vec or Vec without no_prefix: read directly
+            if is_big_endian {
                 quote! {
-                    #ident: {
-                        let len = crate::codec::var_uint::VarUInt::read(reader)?.0 as usize;
-                        let mut buf = vec![0u8; len];
-                        reader.read_exact(&mut buf)?;
-                        buf
-                    }
+                    #ident: PacketRead::read_be(reader)?
                 }
             } else {
-                // Non-Vec or Vec with no_prefix: read directly
-                if is_big_endian {
-                    quote! {
-                        #ident: PacketRead::read_be(reader)?
-                    }
-                } else {
-                    quote! {
-                        #ident: PacketRead::read(reader)?
-                    }
+                quote! {
+                    #ident: PacketRead::read(reader)?
                 }
             }
         })
@@ -564,9 +569,70 @@ pub fn derive_deserialize(input: TokenStream) -> TokenStream {
             .into();
     };
 
+
+    let type_generic = match input.generics.params.len() {
+        0 => quote! {},
+        1 => quote! { <'static> },
+        _ => {
+            return syn::Error::new(name.span(), "Only up to one lifetime parameter is supported.")
+            .to_compile_error()
+            .into();
+        }
+    };
+
     let expanded = quote! {
-        impl PacketRead for #name {
+        impl PacketRead for #name #type_generic {
             fn read<R: std::io::Read>(reader: &mut R) -> std::io::Result<Self> {
+                Ok(Self {
+                    #(#fields),*
+                })
+            }
+        }
+    };
+
+    expanded.into()
+}
+
+/// Derives the `PacketReadSlice` trait for a struct, enabling deserialization from a slice.
+///
+/// # Arguments
+/// - `input` – The input `TokenStream` representing the struct to derive `PacketReadSlice` for.
+#[rustfmt::skip]
+#[proc_macro_derive(PacketReadSlice, attributes(serial))]
+pub fn derive_deserialize_from_slice(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as DeriveInput);
+    let name = &input.ident;
+
+    let fields = if let syn::Data::Struct(data) = &input.data {
+        data.fields.iter().map(|f| {
+            let ident = f.ident.as_ref().unwrap();
+            let (is_big_endian, no_prefix) = check_serial_attributes(&f.attrs);
+            let is_vec = is_vec(&f.ty);
+
+            if is_vec && no_prefix {
+                return syn::Error::new(name.span(), "Cannot handle non-prefixed vecs.")
+                    .to_compile_error();
+            }
+
+            // Non-Vec or Vec without no_prefix: read directly
+            if is_big_endian {
+                return syn::Error::new(name.span(), "Cannot handle big-endian encoded fields")
+                    .to_compile_error();
+            }
+
+            quote! {
+                #ident: PacketReadSlice::read_slice(buf)?
+            }
+        })
+    } else {
+        return syn::Error::new(name.span(), "Only structs are supported")
+            .to_compile_error()
+            .into();
+    };
+
+    let expanded = quote! {
+        impl<'a> PacketReadSlice<'a> for #name<'a> {
+            fn read_slice(buf: &mut &'a [u8]) -> std::io::Result<Self> {
                 Ok(Self {
                     #(#fields),*
                 })
@@ -623,4 +689,216 @@ fn is_vec(ty: &Type) -> bool {
     } else {
         false
     }
+}
+
+struct TranslateCrossInput {
+    java_expr: syn::Expr,
+    bedrock_expr: syn::Expr,
+    args: Vec<syn::Expr>,
+}
+
+impl syn::parse::Parse for TranslateCrossInput {
+    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        let java_expr: syn::Expr = input.parse()?;
+        let _ = input.parse::<syn::Token![,]>()?;
+        let bedrock_expr: syn::Expr = input.parse()?;
+
+        let mut args = Vec::new();
+        while !input.is_empty() {
+            let _ = input.parse::<syn::Token![,]>()?;
+            if input.is_empty() {
+                break;
+            }
+            args.push(input.parse()?);
+        }
+
+        Ok(Self {
+            java_expr,
+            bedrock_expr,
+            args,
+        })
+    }
+}
+
+fn eval_translation_key_expr(expr: &syn::Expr) -> Option<(&'static str, proc_macro2::Span)> {
+    match expr {
+        syn::Expr::Path(expr_path) => {
+            let segments: Vec<String> = expr_path
+                .path
+                .segments
+                .iter()
+                .map(|s| s.ident.to_string())
+                .collect();
+            let seg_refs: Vec<&str> = segments.iter().map(String::as_str).collect();
+
+            let (is_java, const_ident) = match seg_refs.as_slice() {
+                ["translation", "java", ident]
+                | ["pumpkin_data" | "crate", "translation", "java", ident] => (true, *ident),
+                ["translation", "bedrock", ident]
+                | ["pumpkin_data" | "crate", "translation", "bedrock", ident] => (false, *ident),
+                _ => return None,
+            };
+
+            let key = if is_java {
+                pumpkin_data::translation::java::get(const_ident)
+                    .and_then(pumpkin_data::translation::java::get_value)
+            } else {
+                pumpkin_data::translation::bedrock::get(const_ident)
+                    .and_then(pumpkin_data::translation::bedrock::get_value)
+            };
+
+            key.map(|k| (k, expr.span()))
+        }
+        syn::Expr::Lit(syn::ExprLit {
+            lit: syn::Lit::Str(lit_str),
+            ..
+        }) => {
+            // Leaking string slice here is fine since this runs during compilation inside proc macro
+            let s = Box::leak(lit_str.value().into_boxed_str());
+            Some((s, lit_str.span()))
+        }
+        _ => None,
+    }
+}
+
+const fn count_placeholders(format_str: &str) -> usize {
+    let mut count = 0;
+    let bytes = format_str.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'%' && i + 1 < bytes.len() {
+            if bytes[i + 1] == b'%' {
+                i += 2;
+                continue;
+            }
+            // Handle positional specifiers like %1$s, %2$d
+            let mut j = i + 1;
+            while j < bytes.len() && bytes[j].is_ascii_digit() {
+                j += 1;
+            }
+            if j < bytes.len() && bytes[j] == b'$' {
+                count += 1;
+                i = j + 2; // skip past specifier character following $ (e.g., $s)
+                continue;
+            }
+            // Handle optional width/flags before specifier type like %s, %d, %f, %1s
+            count += 1;
+            i = j + 1; // skip past specifier character
+            continue;
+        }
+        i += 1;
+    }
+    count
+}
+
+/// Validates translation keys and arguments at compile-time and returns a `TextComponent`.
+#[proc_macro]
+pub fn translate_cross(input: TokenStream) -> TokenStream {
+    let TranslateCrossInput {
+        java_expr,
+        bedrock_expr,
+        args,
+    } = parse_macro_input!(input as TranslateCrossInput);
+
+    if let Some((java_str, span)) = eval_translation_key_expr(&java_expr) {
+        let expected = count_placeholders(java_str);
+        // Java translation keys from generated constants might differ from Bedrock key placeholder formats
+        if expected != args.len() && matches!(java_expr, syn::Expr::Lit(_)) {
+            return syn::Error::new(
+                span,
+                format!(
+                    "Java translation key `{}` expects {} argument(s), but {} were provided",
+                    java_str,
+                    expected,
+                    args.len()
+                ),
+            )
+            .to_compile_error()
+            .into();
+        }
+    }
+
+    if let Some((bedrock_str, span)) = eval_translation_key_expr(&bedrock_expr) {
+        let expected = count_placeholders(bedrock_str);
+        if expected != args.len() && matches!(bedrock_expr, syn::Expr::Lit(_)) {
+            return syn::Error::new(
+                span,
+                format!(
+                    "Bedrock translation key `{}` expects {} argument(s), but {} were provided",
+                    bedrock_str,
+                    expected,
+                    args.len()
+                ),
+            )
+            .to_compile_error()
+            .into();
+        }
+    }
+
+    let expanded = quote! {
+        {
+            #[allow(deprecated)]
+            pumpkin_util::text::TextComponent::translate_cross(#java_expr, #bedrock_expr, vec![#(#args),*])
+        }
+    };
+
+    expanded.into()
+}
+
+struct TranslateJavaInput {
+    java_expr: syn::Expr,
+    args: Vec<syn::Expr>,
+}
+
+impl syn::parse::Parse for TranslateJavaInput {
+    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        let java_expr: syn::Expr = input.parse()?;
+
+        let mut args = Vec::new();
+        while !input.is_empty() {
+            let _ = input.parse::<syn::Token![,]>()?;
+            if input.is_empty() {
+                break;
+            }
+            args.push(input.parse()?);
+        }
+
+        Ok(Self { java_expr, args })
+    }
+}
+
+/// Validates Java translation keys and arguments at compile-time and returns a `TextComponent`.
+#[deprecated(
+    since = "0.1.0",
+    note = "Use `pumpkin_macros::translate_cross!` macro instead for cross-platform (Java & Bedrock) translation support."
+)]
+#[proc_macro]
+pub fn translate_java(input: TokenStream) -> TokenStream {
+    let TranslateJavaInput { java_expr, args } = parse_macro_input!(input as TranslateJavaInput);
+
+    if let Some((java_str, span)) = eval_translation_key_expr(&java_expr) {
+        let expected = count_placeholders(java_str);
+        if expected != args.len() {
+            return syn::Error::new(
+                span,
+                format!(
+                    "Java translation key `{}` expects {} argument(s), but {} were provided",
+                    java_str,
+                    expected,
+                    args.len()
+                ),
+            )
+            .to_compile_error()
+            .into();
+        }
+    }
+
+    let expanded = quote! {
+        {
+            #[allow(deprecated)]
+            pumpkin_util::text::TextComponent::translate(#java_expr, vec![#(#args),*])
+        }
+    };
+
+    expanded.into()
 }

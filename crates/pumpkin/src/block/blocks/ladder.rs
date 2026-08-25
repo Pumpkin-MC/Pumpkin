@@ -43,11 +43,10 @@ impl BlockBehaviour for LadderBlock {
                 if !can_place_ladder_at(args.world, args.position, dir.to_block_direction()) {
                     continue;
                 }
-                props.facing = dir
-                    .opposite()
-                    .to_horizontal_facing()
-                    .expect("Opposite of horizontal direction should be horizontal");
-                return props.to_state_id(args.block);
+                if let Some(facing) = dir.opposite().to_horizontal_facing() {
+                    props.facing = facing;
+                    return props.to_state_id(args.block);
+                }
             }
             Block::AIR.default_state.id
         })

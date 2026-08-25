@@ -22,6 +22,7 @@ use crate::world::World;
 
 pub struct EmptyBucketItem;
 pub struct FilledBucketItem;
+pub struct MilkBucketItem;
 
 impl ItemMetadata for EmptyBucketItem {
     fn ids() -> Box<[u16]> {
@@ -46,11 +47,11 @@ impl ItemMetadata for FilledBucketItem {
     }
 }
 
-// impl ItemMetadata for MilkBucketItem {
-//     fn ids() -> Box<[u16]> {
-//         [Item::MILK_BUCKET.id].into()
-//     }
-// }
+impl ItemMetadata for MilkBucketItem {
+    fn ids() -> Box<[u16]> {
+        [Item::MILK_BUCKET.id].into()
+    }
+}
 
 fn get_start_and_end_pos(player: &Player) -> (Vector3<f64>, Vector3<f64>) {
     let start_pos = player.eye_position();
@@ -83,7 +84,10 @@ fn is_waterlogged(block: &Block, state: BlockStateId) -> bool {
 }
 
 fn set_waterlogged(block: &Block, state: BlockStateId, waterlogged: bool) -> BlockStateId {
-    let original_props = &block.properties(state).unwrap().to_props();
+    let Some(props) = block.properties(state) else {
+        return state;
+    };
+    let original_props = &props.to_props();
     let waterlogged = waterlogged.to_string();
     let props: Vec<(&str, &str)> = original_props
         .iter()
@@ -100,11 +104,13 @@ fn set_waterlogged(block: &Block, state: BlockStateId, waterlogged: bool) -> Blo
 
 async fn give_player_bucket_item(player: &Player, item: &'static Item) {
     if player.gamemode.load() == GameMode::Creative {
-        for i in 0..player.inventory.main_inventory.len() {
-            if player.inventory.main_inventory[i].lock().await.item.id == item.id {
+        let inv = player.inventory.main_inventory.read().await;
+        for stack in inv.iter() {
+            if stack.item.id == item.id {
                 return;
             }
         }
+        drop(inv);
         let mut item_stack = ItemStack::new(1, item);
         player
             .inventory
@@ -112,14 +118,13 @@ async fn give_player_bucket_item(player: &Player, item: &'static Item) {
             .await;
     } else {
         let item_stack = ItemStack::new(1, item);
-        let held_item = player.inventory.held_item();
-        let mut held_stack = held_item.lock().await;
+        let mut held_stack = player.inventory.held_item().await;
 
         if held_stack.item_count == 1 {
-            *held_stack = item_stack;
+            player.inventory.set_held_item(item_stack).await;
         } else {
             held_stack.decrement(1);
-            drop(held_stack);
+            player.inventory.set_held_item(held_stack).await;
             player
                 .inventory
                 .offer_or_drop_stack(item_stack, player)
@@ -128,10 +133,11 @@ async fn give_player_bucket_item(player: &Player, item: &'static Item) {
     }
 }
 
-async fn try_pickup_bucket_item(
+/// Tries to pick up powder snow, a waterlogged block, or a fluid source block at `block_pos`,
+/// returning the matching filled bucket item on success.
+pub(crate) async fn try_pickup_fluid_at(
     world: &Arc<World>,
     block_pos: BlockPos,
-    direction: BlockDirection,
 ) -> Option<&'static Item> {
     let (block, state) = world.get_block_and_state_id(&block_pos);
 
@@ -173,6 +179,18 @@ async fn try_pickup_bucket_item(
         });
     }
 
+    None
+}
+
+async fn try_pickup_bucket_item(
+    world: &Arc<World>,
+    block_pos: BlockPos,
+    direction: BlockDirection,
+) -> Option<&'static Item> {
+    if let Some(item) = try_pickup_fluid_at(world, block_pos).await {
+        return Some(item);
+    }
+
     let target_pos = block_pos.offset(direction.to_offset());
     let (block, state) = world.get_block_and_state_id(&target_pos);
     if waterlogged_check(block, state).is_some() {
@@ -187,17 +205,17 @@ async fn try_pickup_bucket_item(
     None
 }
 
-fn should_evaporate_in_nether(item: &Item, world: &World) -> bool {
+pub(crate) fn should_evaporate_in_nether(item: &Item, world: &World) -> bool {
     item.id != Item::LAVA_BUCKET.id
         && item.id != Item::POWDER_SNOW_BUCKET.id
         && world.dimension == Dimension::THE_NETHER
 }
 
-fn play_bucket_evaporation(world: &Arc<World>, player: &Player) {
+pub(crate) fn play_bucket_evaporation(world: &Arc<World>, position: &Vector3<f64>) {
     world.play_sound_raw(
         Sound::BlockFireExtinguish as u16,
         SoundCategory::Blocks,
-        &player.position(),
+        position,
         0.5,
         (rand::random::<f32>() - rand::random::<f32>()).mul_add(0.8, 2.6),
     );
@@ -228,7 +246,7 @@ async fn try_place_powder_snow(
     true
 }
 
-async fn try_place_filled_bucket(
+pub(crate) async fn try_place_filled_bucket(
     world: &Arc<World>,
     item: &Item,
     pos: BlockPos,
@@ -360,7 +378,7 @@ impl ItemBehaviour for FilledBucketItem {
             };
 
             if should_evaporate_in_nether(item, &world) {
-                play_bucket_evaporation(&world, player);
+                play_bucket_evaporation(&world, &player.position());
                 return;
             }
             if !try_place_filled_bucket(&world, item, pos, direction).await {
@@ -395,4 +413,37 @@ impl ItemBehaviour for FilledBucketItem {
     }
 }
 
-//TODO: Implement MilkBucketItem
+impl ItemBehaviour for MilkBucketItem {
+    fn normal_use<'a>(
+        &'a self,
+        _item: &'a Item,
+        player: &'a Player,
+    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
+        Box::pin(async move {
+            let stack = player.inventory().held_item().await;
+            player
+                .living_entity
+                .set_active_hand(pumpkin_util::Hand::Right, stack, 32)
+                .await;
+        })
+    }
+
+    fn on_stopped_using<'a>(
+        &'a self,
+        _stack: &'a ItemStack,
+        player: &'a Player,
+    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
+        Box::pin(async move {
+            player.living_entity.reset_effects_and_attributes().await;
+            give_player_bucket_item(player, &Item::BUCKET).await;
+        })
+    }
+
+    fn get_use_duration(&self) -> i32 {
+        32
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+}

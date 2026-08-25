@@ -76,6 +76,7 @@ impl BlockEntity for DecoratedPotBlockEntity {
 
 impl DecoratedPotBlockEntity {
     pub const ID: &'static str = "minecraft:decorated_pot";
+
     #[must_use]
     pub const fn new(position: BlockPos) -> Self {
         Self {
@@ -83,5 +84,46 @@ impl DecoratedPotBlockEntity {
             sherds: Mutex::const_new(None),
             item: Mutex::const_new(None),
         }
+    }
+
+    pub async fn get_item(&self) -> Option<ItemStack> {
+        self.item.lock().await.clone()
+    }
+
+    pub async fn take_item(&self) -> Option<ItemStack> {
+        self.item.lock().await.take()
+    }
+
+    pub async fn try_insert_item(&self, stack: &mut ItemStack, count: u8) -> bool {
+        let mut item_guard = self.item.lock().await;
+        if let Some(existing) = item_guard.as_mut() {
+            if existing.item.id == stack.item.id {
+                let add = count.min(64 - existing.item_count);
+                if add > 0 {
+                    existing.item_count += add;
+                    stack.item_count -= add;
+                    return true;
+                }
+            }
+            false
+        } else {
+            let insert_count = count.min(stack.item_count);
+            let mut inserted = stack.clone();
+            inserted.item_count = insert_count;
+            *item_guard = Some(inserted);
+            stack.item_count -= insert_count;
+            true
+        }
+    }
+
+    pub async fn get_comparator_output(&self) -> u8 {
+        self.item.lock().await.as_ref().map_or(0, |item| {
+            if item.item_count == 0 {
+                0
+            } else {
+                let max_count = 64f32;
+                1 + ((item.item_count as f32 / max_count) * 14.0).floor() as u8
+            }
+        })
     }
 }

@@ -1,34 +1,13 @@
-use serde::{Deserialize, Serialize};
+pub use pumpkin_data::chunk::{
+    Parameter, ParameterPoint, ParameterRange, TargetPoint, quantize_coord, unquantize_coord,
+};
 
 #[must_use]
 pub const fn to_long(float: f32) -> i64 {
-    (float * 10000f32) as i64
+    quantize_coord(float)
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
-pub struct NoiseValuePoint {
-    pub temperature: i64,
-    pub humidity: i64,
-    pub continentalness: i64,
-    pub erosion: i64,
-    pub depth: i64,
-    pub weirdness: i64,
-}
-
-impl NoiseValuePoint {
-    #[must_use]
-    pub const fn convert_to_list(&self) -> [i64; 7] {
-        [
-            self.temperature,
-            self.humidity,
-            self.continentalness,
-            self.erosion,
-            self.depth,
-            self.weirdness,
-            0,
-        ]
-    }
-}
+pub type NoiseValuePoint = TargetPoint;
 
 #[cfg(test)]
 mod test {

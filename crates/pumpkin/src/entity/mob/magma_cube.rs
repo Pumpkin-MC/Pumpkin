@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use crate::entity::{
-    Entity, NBTStorage,
+    Entity,
     mob::{Mob, MobEntity, slime::SlimeEntity},
 };
 
@@ -15,8 +15,6 @@ impl MagmaCubeEntity {
         Arc::new(Self { slime })
     }
 }
-
-impl NBTStorage for MagmaCubeEntity {}
 
 impl Mob for MagmaCubeEntity {
     fn get_mob_entity(&self) -> &MobEntity {

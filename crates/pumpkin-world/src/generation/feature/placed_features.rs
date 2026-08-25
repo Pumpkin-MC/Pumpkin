@@ -28,10 +28,11 @@ pub enum PlacedFeatureWrapper {
 }
 
 impl PlacedFeatureWrapper {
-    pub fn get(&self) -> &PlacedFeature {
+    #[must_use]
+    pub fn get(&self) -> Option<&PlacedFeature> {
         match self {
-            Self::Named(name) => PLACED_FEATURES.get(name).unwrap(),
-            Self::Direct(feature) => feature,
+            Self::Named(name) => PLACED_FEATURES.get(name),
+            Self::Direct(feature) => Some(feature),
         }
     }
 }
@@ -56,17 +57,17 @@ impl PlacedFeature {
         random: &mut RandomGenerator,
         pos: BlockPos,
     ) -> bool {
-        let feature = match &self.feature {
-            Feature::Named(name) => CONFIGURED_FEATURES
-                .get(name)
-                .expect("Name: {name:?} not found"),
-            Feature::Inlined(feature) => feature,
+        let Some(feature) = (match &self.feature {
+            Feature::Named(name) => CONFIGURED_FEATURES.get(name),
+            Feature::Inlined(feature) => Some(feature.as_ref()),
+        }) else {
+            return false;
         };
         if let ConfiguredFeature::SculkPatch(feature) = feature {
             feature.generate_in_proto_chunk(chunk, random, pos)
         } else {
-            let min_y = chunk.bottom_y();
-            let height = chunk.height();
+            let min_y = chunk.generation_bottom_y();
+            let height = chunk.generation_height();
             self.generate(
                 chunk,
                 block_registry,
@@ -90,11 +91,11 @@ impl PlacedFeature {
         random: &mut RandomGenerator,
         pos: BlockPos,
     ) -> bool {
-        let feature = match &self.feature {
-            Feature::Named(name) => CONFIGURED_FEATURES
-                .get(name)
-                .expect("Name: {name:?} not found"),
-            Feature::Inlined(feature) => feature,
+        let Some(feature) = (match &self.feature {
+            Feature::Named(name) => CONFIGURED_FEATURES.get(name),
+            Feature::Inlined(feature) => Some(feature.as_ref()),
+        }) else {
+            return false;
         };
 
         self.generate_at(

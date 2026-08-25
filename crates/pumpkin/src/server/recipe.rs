@@ -26,6 +26,21 @@ impl RecipeManager {
         recipes.push(recipe);
     }
 
+    pub async fn add_recipes(&self, new_recipes: impl IntoIterator<Item = DynamicRecipe>) {
+        let mut recipes = self.dynamic_recipes.write().await;
+        recipes.extend(new_recipes);
+    }
+
+    pub async fn set_recipes(&self, new_recipes: Vec<DynamicRecipe>) {
+        let mut recipes = self.dynamic_recipes.write().await;
+        *recipes = new_recipes;
+    }
+
+    pub async fn clear(&self) {
+        let mut recipes = self.dynamic_recipes.write().await;
+        recipes.clear();
+    }
+
     pub async fn get_dynamic_recipes_internal(&self) -> Vec<DynamicRecipe> {
         self.dynamic_recipes.read().await.clone()
     }

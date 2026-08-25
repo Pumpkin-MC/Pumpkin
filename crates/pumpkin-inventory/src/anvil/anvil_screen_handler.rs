@@ -53,10 +53,7 @@ impl AnvilScreenHandler {
     }
 
     pub async fn update_result_slot(&mut self) {
-        let input_a = {
-            let lock = self.inventory.get_stack(0).await;
-            lock.lock().await.clone()
-        };
+        let input_a = self.inventory.get_stack(0).await;
 
         if input_a.is_empty() {
             self.inventory.set_stack(2, ItemStack::EMPTY.clone()).await;
@@ -130,7 +127,7 @@ impl ScreenHandler for AnvilScreenHandler {
 
     fn quick_move<'a>(
         &'a mut self,
-        _player: &'a dyn InventoryPlayer,
+        player: &'a dyn InventoryPlayer,
         slot_index: i32,
     ) -> ItemStackFuture<'a> {
         Box::pin(async move {
@@ -138,40 +135,31 @@ impl ScreenHandler for AnvilScreenHandler {
             let slot = self.get_behaviour().slots[slot_index as usize].clone();
 
             if slot.has_stack().await {
-                let slot_stack_lock = slot.get_stack().await;
-                let slot_stack_guard = slot_stack_lock.lock().await;
-                stack_left = slot_stack_guard.clone();
-                drop(slot_stack_guard);
-
-                let mut slot_stack_mut = slot_stack_lock.lock().await;
+                let mut slot_stack = slot.get_stack().await;
+                stack_left = slot_stack.clone();
 
                 if slot_index < 3 {
                     // From anvil to player
-                    if !self
-                        .insert_item(
-                            &mut slot_stack_mut,
-                            3,
-                            self.get_behaviour().slots.len() as i32,
-                            true,
-                        )
-                        .await
-                    {
+                    if !self.insert_item(&mut slot_stack, 3, 39, true).await {
                         return ItemStack::EMPTY.clone();
                     }
+                    slot.on_quick_move_crafted(slot_stack.clone(), stack_left.clone())
+                        .await;
                 } else {
-                    // From player to anvil input 0 and 1
-                    if !self.insert_item(&mut slot_stack_mut, 0, 2, false).await {
+                    // From player to anvil
+                    if !self.insert_item(&mut slot_stack, 0, 2, false).await {
                         return ItemStack::EMPTY.clone();
                     }
                 }
 
-                if slot_stack_mut.is_empty() {
-                    drop(slot_stack_mut);
-                    slot.set_stack(ItemStack::EMPTY.clone()).await;
-                } else {
-                    drop(slot_stack_mut);
-                    slot.mark_dirty().await;
+                if slot_stack.item_count == stack_left.item_count {
+                    return ItemStack::EMPTY.clone();
                 }
+
+                slot.set_stack_prev(slot_stack.clone(), stack_left.clone())
+                    .await;
+                slot.on_take_item(player, &slot_stack).await;
+                slot.mark_dirty().await;
             }
 
             stack_left

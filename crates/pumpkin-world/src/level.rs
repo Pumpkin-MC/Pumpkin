@@ -89,7 +89,7 @@ pub struct Level {
     pub chunk_saver: Arc<ChunkSaver>,
     entity_saver: Arc<EntitySaver>,
 
-    pub world_gen: Arc<WorldGenerator>,
+    pub world_gen: ArcSwap<WorldGenerator>,
 
     /// Handles runtime lighting updates
     pub light_engine: DynamicLightEngine,
@@ -148,26 +148,40 @@ impl Level {
         dimension: Dimension,
         gen_pool: Option<Arc<rayon::ThreadPool>>,
     ) -> Arc<Self> {
-        let dim_folder = if dimension.minecraft_name == Dimension::OVERWORLD.minecraft_name
-            || dimension.minecraft_name == Dimension::THE_NETHER.minecraft_name
-            || dimension.minecraft_name == Dimension::THE_END.minecraft_name
+        let (namespace, name) = match dimension.minecraft_name.split_once(':') {
+            Some((ns, n)) => (ns, n),
+            None => ("minecraft", dimension.minecraft_name),
+        };
+
+        // 26.2 canonical layout: root_folder/dimensions/<namespace>/<name>
+        let canonical_dim_folder = root_folder.join("dimensions").join(namespace).join(name);
+
+        // Check if canonical 26.2 folder exists, or fall back to pre-26.2 legacy folders
+        let dim_folder = if canonical_dim_folder.exists() {
+            canonical_dim_folder
+        } else if dimension.minecraft_name == Dimension::OVERWORLD.minecraft_name
+            && root_folder.join("region").exists()
         {
             root_folder.clone()
+        } else if dimension.minecraft_name == Dimension::THE_NETHER.minecraft_name
+            && root_folder.join("DIM-1").join("region").exists()
+        {
+            root_folder.join("DIM-1")
+        } else if dimension.minecraft_name == Dimension::THE_END.minecraft_name
+            && root_folder.join("DIM1").join("region").exists()
+        {
+            root_folder.join("DIM1")
         } else {
-            let (namespace, name) = match dimension.minecraft_name.split_once(':') {
-                Some((ns, n)) => (ns, n),
-                None => ("minecraft", dimension.minecraft_name),
-            };
-            root_folder.join("dimensions").join(namespace).join(name)
+            canonical_dim_folder
         };
 
         let region_folder = dim_folder.join("region");
         let entities_folder = dim_folder.join("entities");
         let poi_folder = dim_folder.join("poi");
 
-        std::fs::create_dir_all(&region_folder).expect("Failed to create Region folder");
-        std::fs::create_dir_all(&entities_folder).expect("Failed to create Entities folder");
-        std::fs::create_dir_all(&poi_folder).expect("Failed to create POI folder");
+        let _ = std::fs::create_dir_all(&region_folder);
+        let _ = std::fs::create_dir_all(&entities_folder);
+        let _ = std::fs::create_dir_all(&poi_folder);
 
         let level_folder = Arc::new(LevelFolder {
             root_folder,
@@ -177,21 +191,13 @@ impl Level {
             poi_folder,
         });
 
-        let main_folder = if dimension.minecraft_name == Dimension::OVERWORLD.minecraft_name {
-            level_folder.root_folder.clone()
-        } else {
-            level_folder
-                .root_folder
-                .parent()
-                .unwrap_or(&level_folder.root_folder)
-                .to_path_buf()
-        };
+        let main_folder = &level_folder.root_folder;
 
         let mut is_flat = false;
         let mut flat_layers = Vec::new();
         let mut flat_biome = "minecraft:plains".to_string();
 
-        if let Some(wgs) = crate::world_info::data_files::read_world_gen_settings(&main_folder)
+        if let Some(wgs) = crate::world_info::data_files::read_world_gen_settings(main_folder)
             && let Some(dim_settings) = wgs.dimensions.get(dimension.minecraft_name)
             && dim_settings.generator.generator_type == "minecraft:flat"
         {
@@ -251,7 +257,7 @@ impl Level {
         let level_ref = Arc::new(Self {
             seed,
             world_portal: ArcSwap::new(Arc::new(None)),
-            world_gen,
+            world_gen: ArcSwap::new(world_gen),
             level_folder,
             lighting_config: level_config.lighting,
             light_engine: DynamicLightEngine::new(),
@@ -291,11 +297,24 @@ impl Level {
             level_ref.clone(),
             level_channel,
             listener,
-            level_ref.thread_tracker.lock().unwrap().as_mut(),
+            level_ref
+                .thread_tracker
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .as_mut(),
             gen_pool,
         );
 
         level_ref
+    }
+
+    pub fn set_world_gen(&self, generator: Arc<WorldGenerator>) {
+        self.world_gen.store(generator);
+    }
+
+    #[must_use]
+    pub fn world_gen(&self) -> Arc<WorldGenerator> {
+        self.world_gen.load_full()
     }
 
     pub fn spawn_entity_generation(self: &Arc<Self>, pos: Vector2<i32>) {
@@ -320,7 +339,7 @@ impl Level {
         } else {
             // Fallback to spawning a new thread if no pool is available (should not happen in production)
             let level_clone = level;
-            thread::Builder::new()
+            let _ = thread::Builder::new()
                 .name(format!("Entity Gen {pos:?}"))
                 .spawn(move || {
                     let arc_chunk = Arc::new(ChunkEntityData {
@@ -340,8 +359,7 @@ impl Level {
                             let _ = tx.send(arc_chunk.clone());
                         }
                     }
-                })
-                .expect("Failed to spawn entity generation thread");
+                });
         }
     }
 
@@ -366,7 +384,10 @@ impl Level {
         self.chunk_system_tasks.close();
 
         let handles = {
-            let mut lock = self.thread_tracker.lock().unwrap();
+            let mut lock = self
+                .thread_tracker
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
             lock.drain(..).collect::<Vec<_>>()
         };
 
@@ -530,7 +551,11 @@ impl Level {
                 // Use the bitmask to skip sections
                 let mask = chunk.section.randomly_ticking_mask.load(Ordering::Relaxed);
                 if mask != 0 {
-                    let sections = chunk.section.block_sections.read().unwrap();
+                    let sections = chunk
+                        .section
+                        .block_sections
+                        .read()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner);
                     let min_y = chunk.section.min_y;
 
                     for i in 0..section_count {
@@ -618,6 +643,10 @@ impl Level {
             self.chunk_watchers.shrink_to_fit();
         }
 
+        if self.loaded_chunks.capacity() - self.loaded_chunks.len() >= 4096 {
+            self.loaded_chunks.shrink_to_fit();
+        }
+
         if self.loaded_entity_chunks.capacity() - self.loaded_entity_chunks.len() >= 4096 {
             self.loaded_entity_chunks.shrink_to_fit();
         }
@@ -641,17 +670,23 @@ impl Level {
         let recv = self.chunk_listener.add_single_chunk_listener(pos);
 
         {
-            let mut lock = self.chunk_loading.lock().unwrap();
+            let mut lock = self
+                .chunk_loading
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
             lock.add_ticket(pos, 31);
             lock.send_change();
         };
 
         let chunk = recv
             .await
-            .expect("Chunk listener dropped without sending chunk");
+            .unwrap_or_else(|_| ChunkData::empty_sync(pos.x, pos.y));
 
         {
-            let mut lock = self.chunk_loading.lock().unwrap();
+            let mut lock = self
+                .chunk_loading
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
             lock.remove_ticket(pos, 31);
             lock.send_change();
         };
@@ -768,7 +803,14 @@ impl Level {
                     self.spawn_entity_generation(pos);
                 }
             }
-            rx.await.expect("Entity generation worker dropped")
+            rx.await.unwrap_or_else(|_| {
+                Arc::new(ChunkEntityData {
+                    x: pos.x,
+                    z: pos.y,
+                    data: tokio::sync::Mutex::new(Vec::new()),
+                    dirty: AtomicBool::new(false),
+                })
+            })
         }
     }
 
@@ -967,5 +1009,69 @@ impl Level {
             chunk.fluid_ticks.is_scheduled(*block_pos, fluid)
         })
         .unwrap_or(false)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pumpkin_config::world::LevelConfig;
+    use tempfile::TempDir;
+
+    #[tokio::test]
+    async fn dimension_paths_26_2() {
+        let temp_dir = TempDir::new().unwrap();
+        let root = temp_dir.path().to_path_buf();
+        let config = LevelConfig::default();
+
+        let overworld_level =
+            Level::from_root_folder(&config, root.clone(), 0, Dimension::OVERWORLD, None);
+        assert_eq!(
+            overworld_level.level_folder.dim_folder,
+            root.join("dimensions").join("minecraft").join("overworld")
+        );
+        assert_eq!(
+            overworld_level.level_folder.region_folder,
+            root.join("dimensions")
+                .join("minecraft")
+                .join("overworld")
+                .join("region")
+        );
+
+        let nether_level =
+            Level::from_root_folder(&config, root.clone(), 0, Dimension::THE_NETHER, None);
+        assert_eq!(
+            nether_level.level_folder.dim_folder,
+            root.join("dimensions").join("minecraft").join("the_nether")
+        );
+
+        let end_level = Level::from_root_folder(&config, root.clone(), 0, Dimension::THE_END, None);
+        assert_eq!(
+            end_level.level_folder.dim_folder,
+            root.join("dimensions").join("minecraft").join("the_end")
+        );
+    }
+
+    #[tokio::test]
+    async fn legacy_dimension_fallback() {
+        let temp_dir = TempDir::new().unwrap();
+        let root = temp_dir.path().to_path_buf();
+        let config = LevelConfig::default();
+
+        // Create legacy directories
+        std::fs::create_dir_all(root.join("region")).unwrap();
+        std::fs::create_dir_all(root.join("DIM-1").join("region")).unwrap();
+        std::fs::create_dir_all(root.join("DIM1").join("region")).unwrap();
+
+        let overworld_level =
+            Level::from_root_folder(&config, root.clone(), 0, Dimension::OVERWORLD, None);
+        assert_eq!(overworld_level.level_folder.dim_folder, root);
+
+        let nether_level =
+            Level::from_root_folder(&config, root.clone(), 0, Dimension::THE_NETHER, None);
+        assert_eq!(nether_level.level_folder.dim_folder, root.join("DIM-1"));
+
+        let end_level = Level::from_root_folder(&config, root.clone(), 0, Dimension::THE_END, None);
+        assert_eq!(end_level.level_folder.dim_folder, root.join("DIM1"));
     }
 }

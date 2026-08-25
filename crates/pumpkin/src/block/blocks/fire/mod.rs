@@ -106,7 +106,7 @@ impl FireBlockBase {
             direction
                 .rotate_counter_clockwise()
                 .to_horizontal_axis()
-                .unwrap()
+                .unwrap_or(pumpkin_data::block_properties::HorizontalAxis::X)
         } else {
             BlockDirection::random_horizontal(&mut RandomGenerator::Xoroshiro(
                 Xoroshiro::from_seed(rand::rng().random()),

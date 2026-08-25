@@ -23,9 +23,10 @@ use key_store::KeyStore;
 use pumpkin_config::{AdvancedConfiguration, BasicConfiguration};
 use pumpkin_data::dimension::Dimension;
 use pumpkin_data::entity::EntityType;
-use pumpkin_util::permission::{PermissionManager, PermissionRegistry};
+use pumpkin_util::permission::PermissionManager;
 use pumpkin_util::text::color::NamedColor;
 use pumpkin_world::dimension::into_level;
+use pumpkin_world::generation::generator::GeneratorInit;
 use pumpkin_world::world::WorldPortalExt;
 use tracing::{debug, error, info, warn};
 
@@ -47,11 +48,13 @@ use std::net::IpAddr;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicI32, AtomicI64, AtomicU32};
 use std::{future::Future, sync::atomic::Ordering, time::Duration};
-use tokio::sync::{Mutex, OnceCell, RwLock};
+use tokio::sync::{Mutex, OnceCell};
 use tokio::task::{JoinHandle, JoinSet};
 use tokio_util::task::TaskTracker;
 
 mod connection_cache;
+pub(crate) mod debug_profiler;
+pub mod enchantment;
 mod key_store;
 pub mod recipe;
 pub mod scheduler;
@@ -78,14 +81,12 @@ pub struct Server {
     pub plugin_manager: Arc<PluginManager>,
 
     /// Permission manager for the server.
-    pub permission_manager: Arc<RwLock<PermissionManager>>,
-    /// Permission registry for the server.
-    pub permission_registry: Arc<RwLock<PermissionRegistry>>,
+    pub permission_manager: Arc<PermissionManager>,
 
     /// Handles cryptographic keys for secure communication.
     key_store: OnceCell<Arc<KeyStore>>,
     /// Bedrock OIDC provider keys, fetched on startup for 1.26.10+ token validation.
-    pub bedrock_oidc_keys: OnceCell<(String, pumpkin_util::jwt::Jwks)>,
+    pub bedrock_oidc_keys: Arc<OnceCell<(String, pumpkin_util::jwt::Jwks)>>,
     /// Cached Bedrock server private key (process-lifetime). Generated on first Bedrock login and reused.
     pub bedrock_private_key: OnceCell<Arc<pumpkin_util::p384::ecdsa::SigningKey>>,
     /// Manages server status information.
@@ -93,7 +94,7 @@ pub struct Server {
     /// Saves server branding information.
     branding: CachedBranding,
     /// Saves and dispatches commands to appropriate handlers.
-    pub command_dispatcher: RwLock<CommandDispatcher>,
+    pub command_dispatcher: ArcSwap<CommandDispatcher>,
     /// Block behaviour.
     pub block_registry: Arc<BlockRegistry>,
     /// Item behaviour.
@@ -105,6 +106,8 @@ pub struct Server {
     /// Assigns unique IDs to containers.
     container_id: AtomicU32,
     pub recipe_manager: Arc<recipe::RecipeManager>,
+    pub datapack_manager: Arc<crate::data::datapack::DatapackManager>,
+    pub enchantment_manager: Arc<enchantment::EnchantmentManager>,
     /// Assigns unique IDs to maps.
     map_id: AtomicI32,
     /// Mojang's public keys, used for chat session signing
@@ -130,6 +133,8 @@ pub struct Server {
     pub aggregated_tick_times_nanos: AtomicI64,
     /// Total number of ticks processed by the server
     pub tick_count: AtomicI32,
+    /// Owns the server-wide tick profiling session used by `/debug`.
+    pub(crate) debug_profiler: debug_profiler::DebugProfiler,
     /// Random unique Server ID used by Bedrock Edition
     pub server_guid: u64,
     /// Player idle timeout in minutes (0 = disabled)
@@ -152,10 +157,13 @@ impl Server {
         advanced_config: AdvancedConfiguration,
         vanilla_data: VanillaData,
     ) -> Arc<Self> {
-        let permission_registry = Arc::new(RwLock::new(PermissionRegistry::new()));
+        let permission_manager = Arc::new(PermissionManager::new());
         // First register the default commands. After that, plugins can put in their own.
-        let command_dispatcher =
-            RwLock::new(default_dispatcher(&permission_registry, &basic_config).await);
+        let command_dispatcher = ArcSwap::from_pointee(default_dispatcher(
+            &permission_manager,
+            &basic_config,
+            &advanced_config.commands,
+        ));
 
         crate::command::set_broadcast_console_to_ops(
             advanced_config.commands.broadcast_console_to_ops,
@@ -165,36 +173,53 @@ impl Server {
 
         let block_registry = super::block::registry::default_registry();
 
-        let level_info = AnvilLevelInfo.read_world_info(&world_path);
-        if let Err(error) = &level_info {
-            match error {
-                // If it doesn't exist, just make a new one
-                WorldInfoError::InfoNotFound => (),
-                WorldInfoError::UnsupportedDataVersion(_version)
-                | WorldInfoError::UnsupportedLevelVersion(_version) => {
-                    error!("Failed to load world info!");
-                    error!("{error}");
-                    panic!("Unsupported world version! See the logs for more info.");
+        let level_info = match AnvilLevelInfo.read_world_info(&world_path) {
+            Ok(level_info) => {
+                let dat_path = world_path.join(LEVEL_DAT_FILE_NAME);
+                if dat_path.exists() {
+                    let backup_path = world_path.join(LEVEL_DAT_BACKUP_FILE_NAME);
+                    if let Err(err) = fs::copy(&dat_path, &backup_path) {
+                        warn!("Failed to create backup {LEVEL_DAT_BACKUP_FILE_NAME}: {err}");
+                    }
                 }
-                e => {
-                    panic!("World Error {e}");
+                level_info
+            }
+            Err(WorldInfoError::InfoNotFound) => {
+                warn!(
+                    "No {LEVEL_DAT_FILE_NAME} in {}, creating a new world with seed {}",
+                    world_path.display(),
+                    basic_config.seed.0 as i64
+                );
+                let overworld_gen = pumpkin_world::generation::generator::VanillaGenerator::new(
+                    basic_config.seed,
+                    Dimension::OVERWORLD,
+                );
+                let default_data =
+                    LevelData::from_world_generator(basic_config.seed, &overworld_gen);
+                if let Err(err) = AnvilLevelInfo.write_world_info(&default_data, &world_path) {
+                    error!("Failed to save level.dat: {err}");
                 }
+                default_data
             }
-        } else {
-            let dat_path = world_path.join(LEVEL_DAT_FILE_NAME);
-            if dat_path.exists() {
-                let backup_path = world_path.join(LEVEL_DAT_BACKUP_FILE_NAME);
-                fs::copy(dat_path, backup_path).unwrap();
+            Err(
+                error @ (WorldInfoError::UnsupportedDataVersion(_)
+                | WorldInfoError::UnsupportedLevelVersion(_)),
+            ) => {
+                error!("Failed to load world info!");
+                error!("{error}");
+                error!("Unsupported world version! See the logs for more info.");
+                std::process::exit(1);
             }
-        }
-        let level_info = level_info.unwrap_or_else(|err| {
-            warn!("Failed to get level_info, using default instead: {err}");
-            let default_data = LevelData::default(basic_config.seed);
-            if let Err(err) = AnvilLevelInfo.write_world_info(&default_data, &world_path) {
-                error!("Failed to save level.dat: {err}");
+            Err(error) => {
+                error!("Failed to load the world data in {}!", world_path.display());
+                error!("{error}");
+                error!(
+                    "Refusing to continue: a default world would generate different terrain on top of the existing region files. Restore {LEVEL_DAT_FILE_NAME} from {LEVEL_DAT_BACKUP_FILE_NAME}, which also holds a copy of the world seed, or move the world folder aside to start a new world."
+                );
+                error!("Failed to load the world data! See the logs for more info.");
+                std::process::exit(1);
             }
-            default_data
-        });
+        };
 
         let seed = level_info.world_gen_settings.seed;
         let level_info = Arc::new(ArcSwap::new(Arc::new(level_info)));
@@ -221,21 +246,6 @@ impl Server {
 
         let tick_rate_manager = Arc::new(ServerTickRateManager::new(basic_config.tps));
 
-        let mojang_keys_task = tokio::spawn({
-            let auth_config = advanced_config.networking.java.authentication.clone();
-            let allow_chat = basic_config.allow_chat_reports;
-            async move {
-                if allow_chat {
-                    fetch_mojang_public_keys(&auth_config).unwrap_or_else(|e| {
-                        error!("Failed to fetch Mojang keys: {e}");
-                        Vec::new()
-                    })
-                } else {
-                    Vec::new()
-                }
-            }
-        });
-
         let dimensions = {
             let mut dimensions = vec![Dimension::OVERWORLD];
             if basic_config.allow_nether {
@@ -254,17 +264,23 @@ impl Server {
                 .collect::<Vec<_>>()
         );
 
+        let verify_plugin_signatures = advanced_config.plugins.verify_signatures;
+        if !verify_plugin_signatures {
+            warn!(
+                "Plugin signature verification is disabled. Only do this if you fully trust your plugins and their sources, because unsigned or tampered WASM plugins will be loaded without verification."
+            );
+        }
+
         let server = Self {
             basic_config,
             advanced_config,
             data: vanilla_data,
-            plugin_manager: Arc::new(PluginManager::new()),
-            permission_manager: Arc::new(RwLock::new(PermissionManager::new(
-                permission_registry.clone(),
-            ))),
-            permission_registry,
+            plugin_manager: Arc::new(PluginManager::new(verify_plugin_signatures)),
+            permission_manager,
             container_id: 0.into(),
             recipe_manager: Arc::new(recipe::RecipeManager::new()),
+            datapack_manager: Arc::new(crate::data::datapack::DatapackManager::new()),
+            enchantment_manager: Arc::new(enchantment::EnchantmentManager::new()),
             map_id: level_info.load().map_id.into(),
             worlds: ArcSwap::from_pointee(vec![]),
             dimensions,
@@ -272,7 +288,7 @@ impl Server {
             block_registry: block_registry.clone(),
             item_registry: super::item::items::default_registry(),
             key_store: OnceCell::new(),
-            bedrock_oidc_keys: OnceCell::new(),
+            bedrock_oidc_keys: Arc::new(OnceCell::new()),
             bedrock_private_key: OnceCell::new(),
             listing,
             branding: CachedBranding::new(),
@@ -286,6 +302,7 @@ impl Server {
             tick_times_nanos: Mutex::new([0; 100]),
             aggregated_tick_times_nanos: AtomicI64::new(0),
             tick_count: AtomicI32::new(0),
+            debug_profiler: debug_profiler::DebugProfiler::new(),
             tasks: TaskTracker::new(),
             runtime: tokio::runtime::Handle::current(),
             task_scheduler: Arc::new(TaskScheduler::new()),
@@ -301,16 +318,80 @@ impl Server {
             rayon::ThreadPoolBuilder::new()
                 .thread_name(|i| format!("Gen-Pool-{i}"))
                 .build()
-                .expect("Failed to build generation thread pool"),
+                .unwrap_or_else(|err| {
+                    error!("Failed to build generation thread pool: {err}");
+                    std::process::exit(1);
+                }),
         );
 
+        // Fetch / generate keys in background tasks to avoid blocking startup
         let server_clone = server.clone();
         tokio::spawn(async move {
-            server_clone
-                .key_store
-                .get_or_init(|| async { Arc::new(KeyStore::new()) })
-                .await;
+            let key_store = tokio::task::spawn_blocking(|| Arc::new(KeyStore::new()))
+                .await
+                .unwrap_or_else(|_| Arc::new(KeyStore::new()));
+            let _ = server_clone.key_store.set(key_store);
         });
+
+        if server.basic_config.allow_chat_reports {
+            let server_clone = server.clone();
+            tokio::spawn(async move {
+                let auth_config = server_clone
+                    .advanced_config
+                    .networking
+                    .java
+                    .authentication
+                    .clone();
+                let keys = tokio::task::spawn_blocking(move || {
+                    fetch_mojang_public_keys(&auth_config).unwrap_or_else(|e| {
+                        error!("Failed to fetch Mojang keys: {e}");
+                        Vec::new()
+                    })
+                })
+                .await
+                .unwrap_or_default();
+                server_clone.mojang_public_keys.store(Arc::new(keys));
+            });
+        }
+
+        if server.advanced_config.networking.bedrock.online_mode
+            && server
+                .advanced_config
+                .networking
+                .bedrock
+                .authentication
+                .enabled
+        {
+            let server_clone = server.clone();
+            tokio::spawn(async move {
+                let auth = server_clone
+                    .advanced_config
+                    .networking
+                    .bedrock
+                    .authentication
+                    .clone();
+                let keys = match tokio::task::spawn_blocking(move || {
+                    pumpkin_util::jwt::fetch_oidc_jwks(
+                        auth.url.as_deref(),
+                        auth.connect_timeout,
+                        auth.read_timeout,
+                    )
+                })
+                .await
+                {
+                    Ok(Ok(keys)) => keys,
+                    Ok(Err(error)) => {
+                        error!("Failed to fetch Bedrock OIDC keys: {error}");
+                        (String::new(), pumpkin_util::jwt::Jwks { keys: Vec::new() })
+                    }
+                    Err(join_err) => {
+                        error!("Bedrock OIDC key task failed: {join_err}");
+                        (String::new(), pumpkin_util::jwt::Jwks { keys: Vec::new() })
+                    }
+                };
+                let _ = server_clone.bedrock_oidc_keys.set(keys);
+            });
+        }
 
         let world_loader = |dim: Dimension| {
             let path = world_path.clone();
@@ -341,47 +422,50 @@ impl Server {
             world_futures.push(world_loader(dim.clone()));
         }
 
-        let (worlds_results, keys) =
-            tokio::join!(futures::future::join_all(world_futures), mojang_keys_task);
+        let worlds_results = futures::future::join_all(world_futures).await;
 
         let mut worlds_vec = Vec::new();
-        for world_result in worlds_results {
-            worlds_vec.push(world_result.expect("World loading panicked"));
+        for world in worlds_results.into_iter().flatten() {
+            worlds_vec.push(world);
+        }
+
+        for world in &worlds_vec {
+            let mut world_init_event =
+                crate::plugin::api::events::world::world_init::WorldInitEvent::new(world.clone());
+            server
+                .plugin_manager
+                .fire(&server, &mut world_init_event)
+                .await;
+
+            let mut world_load_event =
+                crate::plugin::api::events::world::world_load::WorldLoadEvent::new(world.clone());
+            server
+                .plugin_manager
+                .fire(&server, &mut world_load_event)
+                .await;
         }
 
         server.worlds.store(Arc::new(worlds_vec));
-        if let Ok(k) = keys {
-            server.mojang_public_keys.store(Arc::new(k));
-        }
 
         info!("All worlds loaded successfully.");
 
-        if server.advanced_config.networking.bedrock.online_mode {
-            let server_clone = server.clone();
-            tokio::spawn(async move {
-                server_clone
-                    .bedrock_oidc_keys
-                    .get_or_init(|| async {
-                        tokio::task::block_in_place(|| {
-                            let auth = &server_clone
-                                .advanced_config
-                                .networking
-                                .bedrock
-                                .authentication;
-                            pumpkin_util::jwt::fetch_oidc_jwks(
-                                auth.url.as_deref(),
-                                auth.connect_timeout,
-                                auth.read_timeout,
-                            )
-                            .unwrap_or_else(|e| {
-                                error!("Failed to fetch Bedrock OIDC keys: {e}");
-                                (String::new(), pumpkin_util::jwt::Jwks { keys: Vec::new() })
-                            })
-                        })
-                    })
-                    .await;
-            });
-        }
+        let enabled_packs = server.level_info.load().data_packs.enabled.clone();
+        server
+            .datapack_manager
+            .load_all(&world_path, &enabled_packs, &server.recipe_manager)
+            .await;
+
+        let server_for_load = server.clone();
+        tokio::spawn(async move {
+            let source = crate::command::CommandSender::Console
+                .into_source(&server_for_load)
+                .await;
+            let _ = server_for_load
+                .datapack_manager
+                .execute_function(&server_for_load, &source, "#minecraft:load")
+                .await;
+        });
+
         server
     }
 
@@ -396,28 +480,27 @@ impl Server {
     }
 
     pub fn get_world_from_dimension(&self, dimension: &Dimension) -> Arc<World> {
-        self.worlds
-            .load()
+        let worlds = self.worlds.load();
+        worlds
             .iter()
             .find(|w| w.dimension.minecraft_name == dimension.minecraft_name)
             .cloned()
+            .or_else(|| worlds.first().cloned())
             .unwrap_or_else(|| {
-                self.worlds
-                    .load()
-                    .first()
-                    .expect("Default world should exist")
-                    .clone()
+                error!("No default world exists");
+                std::process::exit(1);
             })
     }
 
     pub async fn create_world(self: &Arc<Self>, name: String, dimension: Dimension) -> Arc<World> {
         {
             let worlds = self.worlds.load();
-            if let Some(world) = worlds
+            let world = worlds
                 .iter()
                 .find(|w| w.get_world_name() == name && w.dimension == dimension)
-            {
-                return world.clone();
+                .cloned();
+            if let Some(world) = world {
+                return world;
             }
         }
 
@@ -457,7 +540,105 @@ impl Server {
             world
         })
         .await
-        .expect("World creation panicked")
+        .unwrap_or_else(|_| {
+            error!("World creation failed");
+            std::process::exit(1);
+        })
+    }
+
+    pub async fn unload_world(&self, name: &str) -> Result<(), String> {
+        let worlds = self.worlds.load();
+        let world_to_unload = worlds
+            .iter()
+            .find(|w| w.get_world_name() == name || w.dimension.minecraft_name == name)
+            .cloned()
+            .ok_or_else(|| format!("World '{name}' not found"))?;
+
+        if let Some(first_world) = worlds.first()
+            && Arc::ptr_eq(first_world, &world_to_unload)
+        {
+            return Err("Cannot unload the primary/default world".to_string());
+        }
+
+        let player_count = world_to_unload.players.load().len();
+        if player_count > 0 {
+            return Err(format!(
+                "Cannot unload world '{name}': {player_count} players are still in this world"
+            ));
+        }
+
+        world_to_unload.shutdown().await;
+        world_to_unload.unload().await;
+
+        self.worlds.rcu(|w_list| {
+            let mut new_list = (**w_list).clone();
+            new_list.retain(|w| !Arc::ptr_eq(w, &world_to_unload));
+            new_list
+        });
+
+        Ok(())
+    }
+
+    pub fn save_world_info(&self) -> Result<(), WorldInfoError> {
+        let level_data = self.level_info.load();
+        self.world_info_writer
+            .write_world_info(&level_data, &self.basic_config.get_world_path())
+    }
+
+    pub async fn reload_datapacks(&self, server: &Arc<Self>) {
+        let enabled_packs = self.level_info.load().data_packs.enabled.clone();
+        let world_path = self.basic_config.get_world_path();
+        self.datapack_manager
+            .load_all(&world_path, &enabled_packs, &self.recipe_manager)
+            .await;
+
+        let source = crate::command::CommandSender::Console
+            .into_source(server)
+            .await;
+        let _ = self
+            .datapack_manager
+            .execute_function(server, &source, "#minecraft:load")
+            .await;
+
+        let dynamic_recipes = self.recipe_manager.get_dynamic_recipes_internal().await;
+        for player in self.get_all_players() {
+            if let crate::net::ClientPlatform::Java(java_client) = player.client.as_ref() {
+                let add_packet = pumpkin_protocol::java::client::play::CRecipeBookAdd::new(
+                    true,
+                    &dynamic_recipes,
+                );
+                if let Ok(data) = java_client.serialize_packet(&add_packet) {
+                    java_client.send_packet_now(data).await;
+                }
+            }
+        }
+    }
+
+    pub async fn save_all(&self) -> Result<(), String> {
+        if let Err(err) = self.save_world_info() {
+            error!("Failed to save world info: {err}");
+            return Err(format!("Failed to save world info: {err}"));
+        }
+
+        if let Err(err) = self.player_data_storage.save_all_players(self).await {
+            error!("Failed to save player data: {err}");
+            return Err(format!("Failed to save player data: {err}"));
+        }
+
+        if let Err(err) = self
+            .advancement_manager
+            .save_all_players(&self.get_all_players())
+            .await
+        {
+            error!("Failed to save player advancements: {err}");
+            return Err(format!("Failed to save player advancements: {err}"));
+        }
+
+        for world in self.worlds.load().iter() {
+            world.save().await;
+        }
+
+        Ok(())
     }
 
     /// Adds a new player to the server.
@@ -493,6 +674,8 @@ impl Server {
     ) -> Option<(Arc<Player>, Arc<World>)> {
         let gamemode = self.defaultgamemode.lock().await.gamemode;
 
+        let first_world = self.worlds.load().first().cloned()?;
+
         let (world, nbt) =
             if let Ok(Some(data)) = self.player_data_storage.load_data(&profile.id).await {
                 if let Some(dimension_key) = data.get_string("Dimension") {
@@ -501,33 +684,15 @@ impl Server {
                         (world, Some(data))
                     } else {
                         warn!("Invalid dimension key in player data: {dimension_key}");
-                        let default_world = self
-                            .worlds
-                            .load()
-                            .first()
-                            .expect("Default world should exist")
-                            .clone();
-                        (default_world, Some(data))
+                        (first_world, Some(data))
                     }
                 } else {
                     // Player data exists but doesn't have a "Dimension" key.
-                    let default_world = self
-                        .worlds
-                        .load()
-                        .first()
-                        .expect("Default world should exist")
-                        .clone();
-                    (default_world, Some(data))
+                    (first_world, Some(data))
                 }
             } else {
                 // No player data found or an error occurred, default to the Overworld.
-                let default_world = self
-                    .worlds
-                    .load()
-                    .first()
-                    .expect("Default world should exist")
-                    .clone();
-                (default_world, None)
+                (first_world, None)
             };
 
         let mut player = Player::new(
@@ -541,6 +706,9 @@ impl Server {
 
         if let Some(mut nbt_data) = nbt {
             player.read_nbt(&mut nbt_data).await;
+            // The data file itself proves this is a returning player. Older Bedrock
+            // sessions could persist HasPlayedBefore as false and mask a valid Pos.
+            player.has_played_before.store(true, Ordering::Relaxed);
         }
 
         // Wrap in Arc after data is loaded
@@ -642,8 +810,8 @@ impl Server {
             for player in world.players.load().iter() {
                 *player.tab_list_header.lock().await = header.clone();
                 *player.tab_list_footer.lock().await = footer.clone();
-                player.client.enqueue_packet(&packet).await;
             }
+            world.broadcast_packet_all(&packet);
         }
     }
 
@@ -708,6 +876,24 @@ impl Server {
 
         for world in self.worlds.load().iter() {
             world.set_difficulty(difficulty);
+            world
+                .broadcast_editioned(
+                    &CChangeDifficulty::new(difficulty as u8, locked),
+                    &pumpkin_protocol::bedrock::client::CSetDifficulty::new(difficulty as u32),
+                )
+                .await;
+        }
+    }
+
+    /// Sets the difficulty lock status of the server and broadcasts the update to all players.
+    pub async fn set_difficulty_locked(&self, locked: bool) {
+        let current_info = self.level_info.load();
+        let mut new_info = (**current_info).clone();
+        new_info.difficulty_locked = locked;
+        let difficulty = new_info.difficulty;
+        self.level_info.store(Arc::new(new_info));
+
+        for world in self.worlds.load().iter() {
             world
                 .broadcast_editioned(
                     &CChangeDifficulty::new(difficulty as u8, locked),
@@ -847,7 +1033,7 @@ impl Server {
         id
     }
 
-    pub fn get_branding(&self) -> CPluginMessage<'_> {
+    pub const fn get_branding(&self) -> CPluginMessage<'_> {
         self.branding.get_branding()
     }
 
@@ -964,13 +1150,15 @@ impl Server {
             pumpkin_protocol::codec::var_int::VarInt(0),
         );
         for world in self.worlds.load().iter() {
-            for player in world.players.load().iter() {
-                if player.subscribed_debug_sample.load(Ordering::Relaxed)
-                    && player.permission_lvl.load() >= pumpkin_util::PermissionLvl::Two
-                {
-                    player.client.try_enqueue_packet(&packet);
-                }
-            }
+            let players = world.players.load();
+            let recipients = players
+                .iter()
+                .filter(|player| {
+                    player.subscribed_debug_sample.load(Ordering::Relaxed)
+                        && player.permission_lvl.load() >= pumpkin_util::PermissionLvl::Two
+                })
+                .filter_map(|player| player.client.java());
+            World::broadcast_java_clients(&packet, recipients);
         }
     }
 
@@ -1028,7 +1216,7 @@ impl Server {
                 .map_or_else(Vec::new, |player| vec![player]),
         };
 
-        let player_type = EntityType::from_name("player").expect("entity type player must exist");
+        let player_type = &EntityType::PLAYER;
         let type_included = target_selector
             .conditions
             .iter()
@@ -1204,5 +1392,50 @@ impl Server {
                 entities.into_iter().take(limit).collect()
             }
         }
+    }
+
+    pub async fn execute_remote_command(self: &Arc<Self>, command: String) {
+        let mut remote_event = crate::plugin::api::events::server::remote_server_command::RemoteServerCommandEvent::new(
+            command,
+        );
+        self.plugin_manager.fire(self, &mut remote_event).await;
+    }
+
+    pub async fn register_service(self: &Arc<Self>, service_name: String) {
+        let mut service_event =
+            crate::plugin::api::events::server::service_register::ServiceRegisterEvent::new(
+                service_name,
+            );
+        self.plugin_manager.fire(self, &mut service_event).await;
+    }
+
+    pub async fn unregister_service(self: &Arc<Self>, service_name: String) {
+        let mut service_event =
+            crate::plugin::api::events::server::service_unregister::ServiceUnregisterEvent::new(
+                service_name,
+            );
+        self.plugin_manager.fire(self, &mut service_event).await;
+    }
+
+    pub async fn tab_complete(self: &Arc<Self>, buffer: String, completions: Vec<String>) {
+        let mut tab_event = crate::plugin::api::events::server::tab_complete::TabCompleteEvent::new(
+            buffer,
+            completions,
+        );
+        self.plugin_manager.fire(self, &mut tab_event).await;
+    }
+
+    pub async fn enable_plugin(self: &Arc<Self>, plugin_name: String) {
+        let mut enable_event =
+            crate::plugin::api::events::server::plugin_enable::PluginEnableEvent::new(plugin_name);
+        self.plugin_manager.fire(self, &mut enable_event).await;
+    }
+
+    pub async fn disable_plugin(self: &Arc<Self>, plugin_name: String) {
+        let mut disable_event =
+            crate::plugin::api::events::server::plugin_disable::PluginDisableEvent::new(
+                plugin_name,
+            );
+        self.plugin_manager.fire(self, &mut disable_event).await;
     }
 }

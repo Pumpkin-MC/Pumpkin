@@ -5,9 +5,7 @@ use crossbeam::atomic::AtomicCell;
 use pumpkin_data::BlockDirection;
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::entity::EntityType;
-use pumpkin_data::meta_data_type::MetaDataType;
 use pumpkin_data::sound::{Sound, SoundCategory};
-use pumpkin_data::tracked_data::TrackedData;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::java::client::play::{CEntityPositionSync, Metadata};
@@ -23,7 +21,7 @@ use crate::entity::ai::goal::revenge::RevengeGoal;
 use crate::entity::ai::goal::{Controls, Goal, GoalFuture};
 use crate::entity::mob::{Mob, MobEntity};
 use crate::entity::projectile::shulker_bullet::ShulkerBulletEntity;
-use crate::entity::{Entity, EntityBase, EntityBaseFuture, NBTStorage, NbtFuture};
+use crate::entity::{Entity, EntityBase, EntityBaseFuture, NbtFuture};
 
 const DEFAULT_ATTACH_FACE: BlockDirection = BlockDirection::Down;
 const NO_COLOR: u8 = 16;
@@ -81,8 +79,16 @@ impl ShulkerEntity {
         };
 
         {
-            let mut goal_selector = mob_arc.mob_entity.goals_selector.lock().unwrap();
-            let mut target_selector = mob_arc.mob_entity.target_selector.lock().unwrap();
+            let mut goal_selector = mob_arc
+                .mob_entity
+                .goals_selector
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let mut target_selector = mob_arc
+                .mob_entity
+                .target_selector
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
 
             goal_selector.add_goal(
                 1,
@@ -112,8 +118,7 @@ impl ShulkerEntity {
         let entity = &self.mob_entity.living_entity.entity;
         entity.send_meta_data(
             &[Metadata::new(
-                TrackedData::ATTACH_FACE_ID,
-                MetaDataType::DIRECTION,
+                pumpkin_data::tracked_data::shulker::ATTACH_FACE_ID,
                 VarInt(face as i32),
             )],
             None,
@@ -153,8 +158,7 @@ impl ShulkerEntity {
 
         entity.send_meta_data(
             &[Metadata::new(
-                TrackedData::PEEK_ID,
-                MetaDataType::BYTE,
+                pumpkin_data::tracked_data::shulker::PEEK_ID,
                 amount,
             )],
             None,
@@ -317,19 +321,17 @@ impl ShulkerEntity {
     }
 }
 
-impl NBTStorage for ShulkerEntity {
-    fn write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
+impl Mob for ShulkerEntity {
+    fn mob_write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async move {
-            self.mob_entity.living_entity.write_nbt(nbt).await;
             nbt.put_byte("AttachFace", self.attach_face.load(Ordering::Relaxed) as i8);
             nbt.put_byte("PeekAmount", self.peek_amount.load(Ordering::Relaxed) as i8);
             nbt.put_byte("Color", self.color.load(Ordering::Relaxed) as i8);
         })
     }
 
-    fn read_nbt_non_mut<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
+    fn mob_read_nbt<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async move {
-            self.mob_entity.living_entity.read_nbt_non_mut(nbt).await;
             if let Some(face) = nbt.get_byte("AttachFace") {
                 self.attach_face.store(face as u8, Ordering::Relaxed);
             }
@@ -341,9 +343,7 @@ impl NBTStorage for ShulkerEntity {
             }
         })
     }
-}
 
-impl Mob for ShulkerEntity {
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
     }

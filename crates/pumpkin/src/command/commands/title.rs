@@ -44,7 +44,7 @@ impl CommandExecutor for ClearOrResetExecutor {
             let reset = self.0;
 
             for target in targets {
-                target.client.enqueue_packet(&CClearTitle::new(reset)).await;
+                target.send_client_packet(&CClearTitle::new(reset)).await;
             }
             sender
                 .send_message(if targets.len() == 1 {
@@ -187,12 +187,15 @@ pub fn init_command_tree() -> CommandTree {
                         .execute(TitleExecutor(TitleMode::ActionBar)),
                 ),
             )
-            .then(literal("times").then(
-                argument(ARG_FADE_IN, TimeArgumentConsumer).then(
-                    argument(ARG_STAY, TimeArgumentConsumer).then(
-                        argument(ARG_FADE_OUT, TimeArgumentConsumer).execute(TimesTitleExecutor),
+            .then(
+                literal("times").then(
+                    argument(ARG_FADE_IN, TimeArgumentConsumer::new()).then(
+                        argument(ARG_STAY, TimeArgumentConsumer::new()).then(
+                            argument(ARG_FADE_OUT, TimeArgumentConsumer::new())
+                                .execute(TimesTitleExecutor),
+                        ),
                     ),
                 ),
-            )),
+            ),
     )
 }

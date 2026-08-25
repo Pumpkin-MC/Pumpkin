@@ -237,7 +237,10 @@ impl GenerationCache for Cache {
         debug_assert!(dx >= 0 && dy >= 0);
         match &self.chunks[(dx * self.size + dy) as usize] {
             Chunk::Level(data) => {
-                let heightmap = data.heightmap.lock().unwrap();
+                let heightmap = data
+                    .heightmap
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
                 let min_y = data.section.min_y;
 
                 heightmap.get(ChunkHeightmapType::MotionBlocking, x, z, min_y)
@@ -253,7 +256,10 @@ impl GenerationCache for Cache {
         debug_assert!(dx >= 0 && dy >= 0);
         match &self.chunks[(dx * self.size + dy) as usize] {
             Chunk::Level(data) => {
-                let heightmap = data.heightmap.lock().unwrap();
+                let heightmap = data
+                    .heightmap
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
                 let min_y = data.section.min_y;
                 heightmap.get(ChunkHeightmapType::MotionBlockingNoLeaves, x, z, min_y)
             }
@@ -268,7 +274,10 @@ impl GenerationCache for Cache {
         debug_assert!(dx >= 0 && dy >= 0);
         match &self.chunks[(dx * self.size + dy) as usize] {
             Chunk::Level(data) => {
-                let heightmap = data.heightmap.lock().unwrap();
+                let heightmap = data
+                    .heightmap
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
                 let min_y = data.section.min_y;
                 heightmap.get(ChunkHeightmapType::WorldSurface, x, z, min_y) // can we return this?
             }
@@ -308,7 +317,7 @@ impl GenerationCache for Cache {
                         .get_rough_biome_absolute_y((x & 15) as usize, y, (z & 15) as usize)
                         .unwrap_or(0),
                 )
-                .unwrap()
+                .unwrap_or(&Biome::PLAINS)
             }
             Chunk::Proto(data) => data.get_terrain_gen_biome(x, y, z),
         }
@@ -372,6 +381,9 @@ impl Cache {
                         .set_structure_starts(noise_gen);
                 }
                 generator::WorldGenerator::Flat(_) => {}
+                generator::WorldGenerator::Custom(custom_gen) => {
+                    custom_gen.set_structure_starts(self.chunks[index].get_proto_chunk_mut());
+                }
             },
             StagedChunkEnum::StructureReferences => match generator {
                 generator::WorldGenerator::Noise(noise_gen) => {
@@ -380,6 +392,9 @@ impl Cache {
                         .set_structure_references(noise_gen);
                 }
                 generator::WorldGenerator::Flat(_) => {}
+                generator::WorldGenerator::Custom(custom_gen) => {
+                    custom_gen.set_structure_references(self.chunks[index].get_proto_chunk_mut());
+                }
             },
             StagedChunkEnum::Biomes => match generator {
                 generator::WorldGenerator::Noise(noise_gen) => {
@@ -389,6 +404,9 @@ impl Cache {
                 }
                 generator::WorldGenerator::Flat(flat_gen) => {
                     flat_gen.step_to_biomes(self.chunks[index].get_proto_chunk_mut());
+                }
+                generator::WorldGenerator::Custom(custom_gen) => {
+                    custom_gen.step_to_biomes(self.chunks[index].get_proto_chunk_mut());
                 }
             },
             _ => {}
@@ -404,6 +422,7 @@ impl Cache {
             chunks: Vec::with_capacity((size * size) as usize),
         }
     }
+    #[allow(clippy::too_many_lines)]
     pub fn advance(
         &mut self,
         stage: StagedChunkEnum,
@@ -425,7 +444,13 @@ impl Cache {
                         .get_proto_chunk_mut()
                         .set_structure_starts(noise_gen);
                 }
-                generator::WorldGenerator::Flat(_) => {}
+                generator::WorldGenerator::Flat(_) => {
+                    self.chunks[mid].get_proto_chunk_mut().stage = StagedChunkEnum::StructureStart;
+                }
+                generator::WorldGenerator::Custom(custom_gen) => {
+                    custom_gen.set_structure_starts(self.chunks[mid].get_proto_chunk_mut());
+                    self.chunks[mid].get_proto_chunk_mut().stage = StagedChunkEnum::StructureStart;
+                }
             },
             StagedChunkEnum::StructureReferences => match generator {
                 generator::WorldGenerator::Noise(noise_gen) => {
@@ -433,7 +458,15 @@ impl Cache {
                         .get_proto_chunk_mut()
                         .set_structure_references(noise_gen);
                 }
-                generator::WorldGenerator::Flat(_) => {}
+                generator::WorldGenerator::Flat(_) => {
+                    self.chunks[mid].get_proto_chunk_mut().stage =
+                        StagedChunkEnum::StructureReferences;
+                }
+                generator::WorldGenerator::Custom(custom_gen) => {
+                    custom_gen.set_structure_references(self.chunks[mid].get_proto_chunk_mut());
+                    self.chunks[mid].get_proto_chunk_mut().stage =
+                        StagedChunkEnum::StructureReferences;
+                }
             },
             StagedChunkEnum::Biomes => match generator {
                 generator::WorldGenerator::Noise(noise_gen) => {
@@ -443,6 +476,9 @@ impl Cache {
                 }
                 generator::WorldGenerator::Flat(flat_gen) => {
                     flat_gen.step_to_biomes(self.chunks[mid].get_proto_chunk_mut());
+                }
+                generator::WorldGenerator::Custom(custom_gen) => {
+                    custom_gen.step_to_biomes(self.chunks[mid].get_proto_chunk_mut());
                 }
             },
             StagedChunkEnum::Noise => match generator {
@@ -454,6 +490,9 @@ impl Cache {
                 generator::WorldGenerator::Flat(flat_gen) => {
                     flat_gen.step_to_noise(self.chunks[mid].get_proto_chunk_mut());
                 }
+                generator::WorldGenerator::Custom(custom_gen) => {
+                    custom_gen.step_to_noise(self.chunks[mid].get_proto_chunk_mut());
+                }
             },
             StagedChunkEnum::Surface => match generator {
                 generator::WorldGenerator::Noise(noise_gen) => {
@@ -464,6 +503,9 @@ impl Cache {
                 generator::WorldGenerator::Flat(flat_gen) => {
                     flat_gen.step_to_surface(self.chunks[mid].get_proto_chunk_mut());
                 }
+                generator::WorldGenerator::Custom(custom_gen) => {
+                    custom_gen.step_to_surface(self.chunks[mid].get_proto_chunk_mut());
+                }
             },
             StagedChunkEnum::Carvers => match generator {
                 generator::WorldGenerator::Noise(noise_gen) => {
@@ -473,6 +515,9 @@ impl Cache {
                 }
                 generator::WorldGenerator::Flat(flat_gen) => {
                     flat_gen.step_to_carvers(self.chunks[mid].get_proto_chunk_mut());
+                }
+                generator::WorldGenerator::Custom(custom_gen) => {
+                    custom_gen.step_to_carvers(self.chunks[mid].get_proto_chunk_mut());
                 }
             },
             StagedChunkEnum::Features => match generator {
@@ -485,6 +530,9 @@ impl Cache {
                 }
                 generator::WorldGenerator::Flat(_) => {
                     self.chunks[mid].get_proto_chunk_mut().stage = StagedChunkEnum::Features;
+                }
+                generator::WorldGenerator::Custom(custom_gen) => {
+                    custom_gen.step_to_features(self, block_registry);
                 }
             },
             StagedChunkEnum::Lighting => {

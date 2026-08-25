@@ -1,6 +1,4 @@
-use crate::data_component_impl::{
-    DataComponentImpl, default_impl, get_f32_hash, get_i32_hash, get_str_hash,
-};
+use crate::data_component_impl::{DataComponentImpl, get_i32_hash, get_str_hash};
 use crc_fast::CrcAlgorithm::Crc32Iscsi;
 use crc_fast::Digest;
 use pumpkin_nbt::compound::NbtCompound;
@@ -162,6 +160,15 @@ impl BundleContentsImpl {
     }
 }
 impl DataComponentImpl for BundleContentsImpl {
+    fn write_data(&self) -> NbtTag {
+        let mut list = Vec::new();
+        for stack in &self.items {
+            let mut item_compound = NbtCompound::new();
+            stack.write_item_stack(&mut item_compound);
+            list.push(NbtTag::Compound(item_compound));
+        }
+        NbtTag::List(list)
+    }
     default_impl!(BundleContents);
 }
 

@@ -1,16 +1,16 @@
 use crate::{
-    codec::{var_long::VarLong, var_uint::VarUInt, var_ulong::VarULong},
+    codec::{var_long::VarLong, var_ulong::VarULong},
     serial::PacketWrite,
 };
 use pumpkin_macros::packet;
 use pumpkin_util::math::vector3::Vector3;
-use std::io::{Error, Write};
 
 use super::{
     common::EntityLink,
     set_actor_data::{EntityMetadata, PropertySyncData},
 };
 
+#[derive(PacketWrite)]
 #[packet(13)]
 pub struct CAddActor {
     pub entity_unique_id: VarLong,
@@ -26,31 +26,6 @@ pub struct CAddActor {
     pub metadata: EntityMetadata,
     pub synced_properties: PropertySyncData,
     pub links: Vec<EntityLink>,
-}
-
-impl PacketWrite for CAddActor {
-    fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
-        self.entity_unique_id.write(writer)?;
-        self.entity_runtime_id.write(writer)?;
-        self.entity_type.write(writer)?;
-        self.position.write(writer)?;
-        self.velocity.write(writer)?;
-        self.pitch.write(writer)?;
-        self.yaw.write(writer)?;
-        self.head_yaw.write(writer)?;
-        self.body_yaw.write(writer)?;
-        VarUInt(self.attributes.len() as u32).write(writer)?;
-        for attr in &self.attributes {
-            attr.write(writer)?;
-        }
-        self.metadata.write(writer)?;
-        self.synced_properties.write(writer)?;
-        VarUInt(self.links.len() as u32).write(writer)?;
-        for link in &self.links {
-            link.write(writer)?;
-        }
-        Ok(())
-    }
 }
 
 impl CAddActor {

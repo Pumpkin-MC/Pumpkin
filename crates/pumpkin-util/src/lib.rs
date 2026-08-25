@@ -1,3 +1,8 @@
+//! Utility functions and shared types for the Pumpkin server.
+
+#![deny(clippy::unwrap_used)]
+#![cfg_attr(test, allow(clippy::unwrap_used, clippy::panic))]
+
 use serde::{Deserialize, Serialize};
 use std::ops::{Index, IndexMut};
 
@@ -30,7 +35,7 @@ pub mod y_offset;
 
 pub mod identifier;
 pub mod jwt;
-pub mod resource_key;
+pub mod resource;
 pub mod uuid;
 
 /// Represents the different types of height maps used for terrain generation and collision checks.
@@ -57,13 +62,12 @@ macro_rules! global_path {
     ($path:expr) => {{
         use std::path::Path;
         Path::new(env!("CARGO_MANIFEST_DIR"))
-            .parent()
-            .unwrap()
-            .parent()
-            .unwrap()
+            .ancestors()
+            .nth(2)
+            .unwrap_or_else(|| Path::new("."))
             .join(file!())
             .parent()
-            .unwrap()
+            .unwrap_or_else(|| Path::new("."))
             .join($path)
     }};
 }
@@ -188,11 +192,12 @@ impl<'a, T> MutableSplitSlice<'a, T> {
     ///
     /// # Panics
     /// * if `index` is out of bounds of the base slice.
+    #[allow(clippy::expect_used, clippy::panic)]
     pub const fn extract_ith(base: &'a mut [T], index: usize) -> (&'a mut T, Self) {
         let (start, end_inclusive) = base.split_at_mut(index);
-        let (value, end) = end_inclusive
-            .split_first_mut()
-            .expect("Index is not in base slice");
+        let Some((value, end)) = end_inclusive.split_first_mut() else {
+            panic!("Index is not in base slice");
+        };
 
         (value, Self { start, end })
     }
@@ -214,6 +219,7 @@ impl<T> Index<usize> for MutableSplitSlice<'_, T> {
     type Output = T;
 
     #[expect(clippy::comparison_chain)]
+    #[allow(clippy::panic)]
     fn index(&self, index: usize) -> &Self::Output {
         if index < self.start.len() {
             &self.start[index]
@@ -239,6 +245,7 @@ pub struct DoublePerlinNoiseParametersCodec {
 
 impl<T> IndexMut<usize> for MutableSplitSlice<'_, T> {
     #[expect(clippy::comparison_chain)]
+    #[allow(clippy::panic)]
     fn index_mut(&mut self, index: usize) -> &mut Self::Output {
         if index < self.start.len() {
             &mut self.start[index]
@@ -263,6 +270,21 @@ impl Hand {
     #[must_use]
     pub const fn all() -> [Self; 2] {
         [Self::Right, Self::Left]
+    }
+
+    /// Converts the `hand` field of a play packet, where `0` is the main hand.
+    ///
+    /// This is the opposite of [`TryFrom<i32>`], which reads the dominant hand
+    /// out of the client settings, where `0` is the left hand.
+    ///
+    /// # Errors
+    /// Returns `InvalidHand` if the value is not 0 or 1.
+    pub const fn from_packet_id(value: i32) -> Result<Self, InvalidHand> {
+        match value {
+            0 => Ok(Self::Right),
+            1 => Ok(Self::Left),
+            _ => Err(InvalidHand),
+        }
     }
 }
 

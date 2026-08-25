@@ -30,6 +30,7 @@ pub mod hopper;
 pub mod jigsaw_block;
 pub mod jukebox;
 pub mod lectern;
+pub mod map;
 pub mod mob_spawner;
 pub mod piston;
 pub mod shulker_box;
@@ -110,21 +111,24 @@ pub trait BlockEntity: Any + Send + Sync {
         })
     }
     fn get_id(&self) -> u32 {
+        let name = self
+            .resource_location()
+            .split(':')
+            .next_back()
+            .unwrap_or("");
         pumpkin_data::block_properties::BLOCK_ENTITY_TYPES
             .iter()
-            .position(|block_entity_name| {
-                *block_entity_name
-                    == self
-                        .resource_location()
-                        .split(':')
-                        .next_back()
-                        .expect("Resource location should have a name")
-            })
-            .expect("Block entity type should be registered") as u32
+            .position(|block_entity_name| *block_entity_name == name)
+            .unwrap_or(0) as u32
     }
 
     /// Obtain NBT data for sending to the client in `ChunkData`
     fn chunk_data_nbt(&self) -> Option<NbtCompound> {
+        None
+    }
+
+    /// Obtain block actor NBT for fields Bedrock does not include in its block state.
+    fn bedrock_block_actor_data(&self, _state_id: BlockStateId) -> Option<NbtCompound> {
         None
     }
 
@@ -167,9 +171,9 @@ pub trait BlockEntity: Any + Send + Sync {
 
 #[must_use]
 pub fn block_entity_from_generic<T: BlockEntity>(nbt: &NbtCompound) -> T {
-    let x = nbt.get_int("x").expect("NBT should have x coordinate");
-    let y = nbt.get_int("y").expect("NBT should have y coordinate");
-    let z = nbt.get_int("z").expect("NBT should have z coordinate");
+    let x = nbt.get_int("x").unwrap_or(0);
+    let y = nbt.get_int("y").unwrap_or(0);
+    let z = nbt.get_int("z").unwrap_or(0);
     T::from_nbt(nbt, BlockPos::new(x, y, z))
 }
 
@@ -274,6 +278,7 @@ pub fn block_entity_from_nbt(nbt: &NbtCompound) -> Option<Arc<dyn BlockEntity>> 
         conduit::ConduitBlockEntity::ID => {
             Some(Arc::new(conduit::ConduitBlockEntity::from_nbt(nbt, pos)))
         }
+        map::MAP_BLOCK_ENTITY_ID => Some(Arc::new(map::MapBlockEntity::from_nbt(nbt, pos))),
         campfire::CampfireBlockEntity::ID => {
             Some(Arc::new(campfire::CampfireBlockEntity::from_nbt(nbt, pos)))
         }
@@ -358,6 +363,10 @@ pub fn create_block_entity(
         "creaking_heart" => Some(Arc::new(creaking_heart::CreakingHeartBlockEntity::new(
             position,
         ))),
+        "piston" => Some(Arc::new(piston::PistonBlockEntity::from_nbt(
+            &pumpkin_nbt::compound::NbtCompound::new(),
+            position,
+        ))),
         "brewing_stand" => Some(Arc::new(brewing_stand::BrewingStandBlockEntity::new(
             position,
         ))),
@@ -432,6 +441,44 @@ pub fn create_block_entity(
         "potent_sulfur" => Some(Arc::new(potent_sulfur::PotentSulfurBlockEntity::new(
             position,
         ))),
+        "map" => Some(Arc::new(map::MapBlockEntity::new(position, 0))),
         _ => None,
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::{BlockEntity, block_entity_from_nbt, furnace::FurnaceBlockEntity};
+    use pumpkin_data::{item::Item, item_stack::ItemStack};
+    use pumpkin_nbt::compound::NbtCompound;
+    use pumpkin_util::math::position::BlockPos;
+    use pumpkin_world::inventory::Inventory;
+    use std::sync::Arc;
+
+    /// A loaded block entity is serialized back into its chunk with
+    /// `write_internal`, so whatever it holds has to survive that round trip or
+    /// it is gone the next time the chunk is read.
+    #[tokio::test]
+    async fn furnace_contents_survive_a_chunk_round_trip() {
+        let position = BlockPos::new(0, 100, 0);
+        let furnace = Arc::new(FurnaceBlockEntity::new(position));
+        furnace
+            .set_stack(0, ItemStack::new(5, &Item::DIAMOND))
+            .await;
+
+        let mut nbt = NbtCompound::new();
+        furnace.write_internal(&mut nbt).await;
+
+        let inventory = block_entity_from_nbt(&nbt).and_then(BlockEntity::get_inventory);
+        assert!(
+            inventory.is_some(),
+            "furnace should be readable back from its own NBT"
+        );
+
+        if let Some(inventory) = inventory {
+            let stack = inventory.get_stack(0).await;
+            assert_eq!(stack.get_item().id, Item::DIAMOND.id);
+            assert_eq!(stack.item_count, 5);
+        }
     }
 }

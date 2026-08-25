@@ -1,6 +1,6 @@
 use std::{
     io::{Error, ErrorKind, Read, Write},
-    num::NonZeroUsize,
+    num::NonZero,
     ops::Deref,
 };
 
@@ -20,8 +20,7 @@ pub type VarIntType = i32;
 pub struct VarInt(pub VarIntType);
 
 impl VarInt {
-    /// The maximum number of bytes a `VarInt` can occupy.
-    pub const MAX_SIZE: NonZeroUsize = NonZeroUsize::new(5).unwrap();
+    pub const MAX_SIZE: NonZero<usize> = NonZero::new(5).expect("5 is non-zero");
 
     #[must_use]
     #[inline]
@@ -74,7 +73,15 @@ impl VarInt {
         let mut val = 0;
         for i in 0..Self::MAX_SIZE.get() {
             let byte = read.read_u8().await.map_err(|err| {
-                if i == 0 && matches!(err.kind(), ErrorKind::UnexpectedEof) {
+                if i == 0
+                    && matches!(
+                        err.kind(),
+                        ErrorKind::UnexpectedEof
+                            | ErrorKind::ConnectionReset
+                            | ErrorKind::ConnectionAborted
+                            | ErrorKind::BrokenPipe
+                    )
+                {
                     ReadingError::CleanEOF("VarInt".to_string())
                 } else {
                     ReadingError::Incomplete(err.to_string())
@@ -173,14 +180,31 @@ impl PacketWrite for VarInt {
 
 impl PacketRead for VarInt {
     fn read<W: Read>(read: &mut W) -> Result<Self, Error> {
-        let mut val = 0;
+        let mut val = 0u32;
         for i in 0..Self::MAX_SIZE.get() {
             let byte = u8::read(read)?;
-            val |= (i32::from(byte) & 0x7F) << (i * 7);
+            val |= u32::from(byte & 0x7F) << (i * 7);
             if byte & 0x80 == 0 {
-                return Ok(Self((val >> 1) ^ (val << 31)));
+                return Ok(Self(((val >> 1) as i32) ^ -((val & 1) as i32)));
             }
         }
         Err(Error::new(ErrorKind::InvalidData, ""))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn bedrock_zig_zag_round_trip() {
+        for value in [i32::MIN, -2, -1, 0, 1, 2, i32::MAX] {
+            let mut encoded = Vec::new();
+            VarInt(value).write(&mut encoded).unwrap();
+            assert_eq!(
+                VarInt::read(&mut encoded.as_slice()).unwrap(),
+                VarInt(value)
+            );
+        }
     }
 }

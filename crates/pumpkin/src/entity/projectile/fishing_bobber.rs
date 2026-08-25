@@ -3,15 +3,11 @@ use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 
 use crate::entity::projectile::{ProjectileHit, is_projectile};
 use crate::{
-    entity::{
-        Entity, EntityBase, EntityBaseFuture, NBTStorage, living::LivingEntity, player::Player,
-    },
+    entity::{Entity, EntityBase, EntityBaseFuture, living::LivingEntity, player::Player},
     server::Server,
 };
 use pumpkin_data::item_stack::ItemStack;
-use pumpkin_data::meta_data_type::MetaDataType;
 use pumpkin_data::sound::{Sound, SoundCategory};
-use pumpkin_data::tracked_data::TrackedData;
 use pumpkin_protocol::java::client::play::Metadata;
 use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::vector3::Vector3;
@@ -77,8 +73,16 @@ impl FishingBobberEntity {
                 .await;
 
             // TODO: Use actual loot tables. For now, just give a raw cod.
-            let _item_stack = ItemStack::new(1, &Item::COD);
+            let item_stack = ItemStack::new(1, &Item::COD);
             // player.inventory().add_item(item_stack).await; // Need public add_item
+
+            player
+                .trigger_advancement(
+                    crate::entity::player::advancement::trigger::AdvancementTrigger::FishedItem {
+                        item_id: format!("minecraft:{}", item_stack.item.registry_key),
+                    },
+                )
+                .await;
 
             world.play_sound(
                 Sound::EntityExperienceOrbPickup,
@@ -209,8 +213,7 @@ impl FishingBobberEntity {
                     .store(cand.get_entity().entity_id, Ordering::Relaxed);
                 entity.send_meta_data(
                     &[Metadata::new(
-                        TrackedData::HOOKED_ENTITY,
-                        MetaDataType::INT,
+                        pumpkin_data::tracked_data::fishing_bobber::HOOKED_ENTITY,
                         cand.get_entity().entity_id + 1,
                     )],
                     None,
@@ -220,8 +223,6 @@ impl FishingBobberEntity {
         }
     }
 }
-
-impl NBTStorage for FishingBobberEntity {}
 
 impl EntityBase for FishingBobberEntity {
     fn get_entity(&self) -> &Entity {
@@ -235,11 +236,6 @@ impl EntityBase for FishingBobberEntity {
     fn cast_any(&self) -> &dyn std::any::Any {
         self
     }
-
-    fn as_nbt_storage(&self) -> &dyn NBTStorage {
-        self
-    }
-
     fn on_hit(&self, _hit: ProjectileHit) -> EntityBaseFuture<'_, ()> {
         Box::pin(async move {
             self.has_hit.store(true, Ordering::Relaxed);

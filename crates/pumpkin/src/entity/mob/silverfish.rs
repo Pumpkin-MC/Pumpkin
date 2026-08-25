@@ -3,7 +3,7 @@ use std::sync::{Arc, Weak};
 use pumpkin_data::entity::EntityType;
 
 use crate::entity::{
-    Entity, NBTStorage,
+    Entity,
     ai::goal::{
         active_target::ActiveTargetGoal, look_around::RandomLookAroundGoal,
         look_at_entity::LookAtEntityGoal, melee_attack::MeleeAttackGoal, swim::SwimGoal,
@@ -27,8 +27,16 @@ impl SilverfishEntity {
         };
 
         {
-            let mut goal_selector = mob_arc.entity.goals_selector.lock().unwrap();
-            let mut target_selector = mob_arc.entity.target_selector.lock().unwrap();
+            let mut goal_selector = mob_arc
+                .entity
+                .goals_selector
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let mut target_selector = mob_arc
+                .entity
+                .target_selector
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
 
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
             goal_selector.add_goal(4, Box::new(MeleeAttackGoal::new(1.0, false)));
@@ -48,8 +56,6 @@ impl SilverfishEntity {
         mob_arc
     }
 }
-
-impl NBTStorage for SilverfishEntity {}
 
 impl Mob for SilverfishEntity {
     fn get_mob_entity(&self) -> &MobEntity {

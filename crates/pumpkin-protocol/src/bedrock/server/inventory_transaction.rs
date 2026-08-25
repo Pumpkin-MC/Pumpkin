@@ -10,6 +10,19 @@ use crate::{
 };
 use pumpkin_util::math::vector3::Vector3;
 
+const MAX_COLLECTION_LENGTH: u32 = 1024;
+
+fn collection_length<R: Read>(reader: &mut R, name: &str) -> Result<usize, Error> {
+    let len = VarUInt::read(reader)?.0;
+    if len > MAX_COLLECTION_LENGTH {
+        return Err(Error::new(
+            ErrorKind::InvalidData,
+            format!("{name} length {len} exceeds {MAX_COLLECTION_LENGTH}"),
+        ));
+    }
+    Ok(len as usize)
+}
+
 pub const WINDOW_ID_INVENTORY: i32 = 0;
 pub const WINDOW_ID_OFF_HAND: i32 = 119;
 pub const WINDOW_ID_ARMOUR: i32 = 120;
@@ -45,10 +58,25 @@ pub enum TransactionData {
     ReleaseItem(ReleaseItemTransactionData),
 }
 
-#[derive(Debug, PacketRead)]
+#[derive(Debug)]
 pub struct LegacySetItemSlot {
     pub container_id: u8,
     pub slots: Vec<u8>,
+}
+
+impl PacketRead for LegacySetItemSlot {
+    fn read<R: Read>(reader: &mut R) -> Result<Self, Error> {
+        let container_id = u8::read(reader)?;
+        let len = collection_length(reader, "legacy item slots")?;
+        let mut slots = Vec::with_capacity(len);
+        for _ in 0..len {
+            slots.push(u8::read(reader)?);
+        }
+        Ok(Self {
+            container_id,
+            slots,
+        })
+    }
 }
 
 #[derive(Debug)]
@@ -63,22 +91,19 @@ pub struct InventoryAction {
 
 impl PacketRead for InventoryAction {
     fn read<R: Read>(buf: &mut R) -> Result<Self, Error> {
-        let source_type = VarULong::read(buf)?.0 as u32;
+        let source_type = VarUInt::read(buf)?.0;
+        let window_id = if bool::read(buf)? && bool::read(buf)? {
+            Some(i32::from(i8::read(buf)?))
+        } else {
+            None
+        };
+        let source_flags = if bool::read(buf)? && bool::read(buf)? {
+            Some(VarUInt::read(buf)?.0)
+        } else {
+            None
+        };
 
-        let mut window_id = None;
-        let mut source_flags = None;
-
-        match InventoryActionSource::from(source_type) {
-            InventoryActionSource::Container | InventoryActionSource::Todo => {
-                window_id = Some(VarInt::read(buf)?.0);
-            }
-            InventoryActionSource::World => {
-                source_flags = Some(VarULong::read(buf)?.0 as u32);
-            }
-            _ => {}
-        }
-
-        let inventory_slot = VarULong::read(buf)?.0 as u32;
+        let inventory_slot = VarUInt::read(buf)?.0;
 
         let old_item = NetworkItemDescriptor::read(buf)?;
         let new_item = NetworkItemDescriptor::read(buf)?;
@@ -100,12 +125,12 @@ pub struct NormalTransactionData;
 #[derive(Debug, PacketRead)]
 pub struct MismatchTransactionData;
 
-#[derive(Debug)]
+#[derive(Debug, PacketRead)]
 pub struct UseItemTransactionData {
-    pub action_type: VarUInt,
+    pub action_type: VarInt,
     pub trigger_type: u8,
     pub block_position: BlockPos,
-    pub block_face: i32,
+    pub block_face: u8,
     pub hot_bar_slot: VarInt,
     pub item_in_hand: NetworkItemDescriptor,
     pub player_position: Vector3<f32>,
@@ -115,64 +140,22 @@ pub struct UseItemTransactionData {
     pub client_cooldown_state: u8,
 }
 
-impl PacketRead for UseItemTransactionData {
-    fn read<R: Read>(buf: &mut R) -> Result<Self, Error> {
-        Ok(Self {
-            action_type: VarUInt::read(buf)?,
-            trigger_type: u8::read(buf)?,
-            block_position: BlockPos::read(buf)?,
-            block_face: i32::from(u8::read(buf)?),
-            hot_bar_slot: VarInt::read(buf)?,
-            item_in_hand: NetworkItemDescriptor::read(buf)?,
-            player_position: Vector3::read(buf)?,
-            click_position: Vector3::read(buf)?,
-            block_runtime_id: VarUInt::read(buf)?,
-            client_prediction: u8::read(buf)?,
-            client_cooldown_state: u8::read(buf)?,
-        })
-    }
-}
-
-#[derive(Debug)]
+#[derive(Debug, PacketRead)]
 pub struct UseItemOnEntityTransactionData {
     pub target_entity_runtime_id: VarULong,
-    pub action_type: VarUInt,
+    pub action_type: VarInt,
     pub hot_bar_slot: VarInt,
     pub item_in_hand: NetworkItemDescriptor,
     pub player_position: Vector3<f32>,
     pub click_position: Vector3<f32>,
 }
 
-impl PacketRead for UseItemOnEntityTransactionData {
-    fn read<R: Read>(buf: &mut R) -> Result<Self, Error> {
-        Ok(Self {
-            target_entity_runtime_id: VarULong::read(buf)?,
-            action_type: VarUInt::read(buf)?,
-            hot_bar_slot: VarInt::read(buf)?,
-            item_in_hand: NetworkItemDescriptor::read(buf)?,
-            player_position: Vector3::read(buf)?,
-            click_position: Vector3::read(buf)?,
-        })
-    }
-}
-
-#[derive(Debug)]
+#[derive(Debug, PacketRead)]
 pub struct ReleaseItemTransactionData {
-    pub action_type: VarUInt,
+    pub action_type: VarInt,
     pub hot_bar_slot: VarInt,
     pub item_in_hand: NetworkItemDescriptor,
     pub head_position: Vector3<f32>,
-}
-
-impl PacketRead for ReleaseItemTransactionData {
-    fn read<R: Read>(buf: &mut R) -> Result<Self, Error> {
-        Ok(Self {
-            action_type: VarUInt::read(buf)?,
-            hot_bar_slot: VarInt::read(buf)?,
-            item_in_hand: NetworkItemDescriptor::read(buf)?,
-            head_position: Vector3::read(buf)?,
-        })
-    }
 }
 
 #[derive(Debug)]
@@ -193,25 +176,33 @@ impl PacketRead for SInventoryTransaction {
         let has_legacy_slots = bool::read(buf)?;
         let mut legacy_set_item_slots = Vec::new();
         if has_legacy_slots {
-            let len = VarUInt::read(buf)?.0;
+            let len = collection_length(buf, "legacy item slot groups")?;
+            legacy_set_item_slots.reserve(len);
             for _ in 0..len {
                 legacy_set_item_slots.push(LegacySetItemSlot::read(buf)?);
             }
         }
 
-        let _has_transaction_type = bool::read(buf)?;
+        if !bool::read(buf)? {
+            return Err(Error::new(
+                ErrorKind::InvalidData,
+                "missing inventory transaction type",
+            ));
+        }
         let transaction_type = VarUInt::read(buf)?;
 
-        let _has_tr_data = bool::read(buf)?;
-
-        let has_value = bool::read(buf)?;
-        let mut actions = Vec::new();
-        if has_value {
-            let actions_len = VarUInt::read(buf)?.0;
-            for _ in 0..actions_len {
-                actions.push(InventoryAction::read(buf)?);
-            }
+        if !bool::read(buf)? {
+            return Err(Error::new(
+                ErrorKind::InvalidData,
+                "missing inventory action data",
+            ));
         }
+        let actions_len = collection_length(buf, "inventory actions")?;
+        let mut actions = Vec::with_capacity(actions_len);
+        for _ in 0..actions_len {
+            actions.push(InventoryAction::read(buf)?);
+        }
+        let has_value = !actions.is_empty();
 
         let transaction_data = match transaction_type.0 {
             0 => TransactionData::Normal(NormalTransactionData::read(buf)?),
@@ -235,5 +226,60 @@ impl PacketRead for SInventoryTransaction {
             transaction_type,
             transaction_data,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn decodes_use_item_transaction_with_empty_hand() {
+        let payload = [
+            0x00, 0x00, 0x01, 0x02, 0x01, 0x00, 0x00, 0x01, 0xec, 0x04, 0x80, 0x01, 0xcb, 0x06,
+            0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x8c, 0xf6, 0x9b, 0x43,
+            0x72, 0x3d, 0x83, 0x42, 0xf3, 0xe1, 0xd1, 0xc3, 0x00, 0x90, 0x61, 0x3f, 0x00, 0x8d,
+            0x26, 0x3f, 0x00, 0x00, 0x80, 0x3f, 0xfd, 0x59, 0x01, 0x00,
+        ];
+        let mut reader = payload.as_slice();
+
+        let packet = SInventoryTransaction::read(&mut reader).unwrap();
+        let TransactionData::UseItem(data) = packet.transaction_data else {
+            panic!("expected use-item transaction");
+        };
+
+        assert_eq!(data.action_type.0, 0);
+        assert_eq!(data.item_in_hand.id.0, 0);
+        assert_eq!(data.block_face, 3);
+        assert!(reader.is_empty());
+    }
+
+    #[test]
+    fn decodes_use_item_transaction_with_crafting_table() {
+        let payload = [
+            0x00, 0x00, 0x01, 0x02, 0x01, 0x01, 0x00, 0x01, 0x01, 0x00, 0x01, 0x00, 0x02, 0x3a,
+            0x00, 0x01, 0x00, 0x00, 0x00, 0xfd, 0x59, 0x0a, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01,
+            0xa6, 0x05, 0x7e, 0xd9, 0x06, 0x01, 0x04, 0x3a, 0x00, 0x01, 0x00, 0x00, 0x00, 0xfd,
+            0x59, 0x0a, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x5f, 0x0f,
+            0xaa, 0x43, 0x72, 0x3d, 0x83, 0x42, 0xb8, 0x39, 0xd5, 0xc3, 0x00, 0x16, 0x15, 0x3f,
+            0x00, 0x00, 0x80, 0x3f, 0x00, 0xc8, 0x81, 0x3e, 0xb6, 0x5e, 0x01, 0x00,
+        ];
+        let mut reader = payload.as_slice();
+        let packet = SInventoryTransaction::read(&mut reader).unwrap();
+        let TransactionData::UseItem(data) = packet.transaction_data else {
+            panic!("expected use-item transaction");
+        };
+
+        assert_eq!(packet.actions.len(), 1);
+        assert_eq!(packet.actions[0].old_item.id.0, 58);
+        assert_eq!(packet.actions[0].new_item.id.0, 0);
+        assert_eq!(data.action_type.0, 0);
+        assert_eq!(data.block_face, 1);
+        assert_eq!(data.hot_bar_slot.0, 2);
+        assert_eq!(data.item_in_hand.id.0, 58);
+        assert_eq!(data.item_in_hand.stack_size, 1);
+        assert_eq!(data.item_in_hand.block_runtime_id.0, 11_517);
+        assert!(reader.is_empty());
     }
 }

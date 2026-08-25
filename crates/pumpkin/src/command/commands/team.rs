@@ -122,7 +122,7 @@ impl CommandExecutor for TeamAddExecutor {
                 players: vec![],
             };
 
-            scoreboard.add_team(world, new_team);
+            scoreboard.add_team(world, new_team).await;
 
             context
                 .source
@@ -158,7 +158,7 @@ impl CommandExecutor for TeamRemoveExecutor {
 
             let team_display_name = team.display_name.clone();
 
-            scoreboard.remove_team(world, team_name);
+            scoreboard.remove_team(world, team_name).await;
 
             context
                 .source
@@ -200,7 +200,9 @@ impl CommandExecutor for TeamEmptyExecutor {
             }
 
             for player in &players_to_remove {
-                scoreboard.remove_player_from_team(world, team_name, player);
+                scoreboard
+                    .remove_player_from_team(world, team_name, player)
+                    .await;
             }
 
             context
@@ -262,7 +264,9 @@ impl CommandExecutor for TeamJoinExecutor {
 
             let count = entity_names.len();
             for name in &entity_names {
-                scoreboard.add_player_to_team(world, team_name, name.clone());
+                scoreboard
+                    .add_player_to_team(world, team_name, name.clone())
+                    .await;
             }
 
             let msg = if count == 1 {
@@ -327,7 +331,9 @@ impl CommandExecutor for TeamLeaveExecutor {
                     }
                 }
                 if let Some(team_name) = found_team {
-                    scoreboard.remove_player_from_team(world, &team_name, name);
+                    scoreboard
+                        .remove_player_from_team(world, &team_name, name)
+                        .await;
                     removed_count += 1;
                 }
             }
@@ -449,6 +455,50 @@ impl CommandExecutor for TeamListExecutor {
     }
 }
 
+struct TeamModifyColorResetExecutor;
+
+impl CommandExecutor for TeamModifyColorResetExecutor {
+    fn execute<'a>(&'a self, context: &'a CommandContext) -> CommandExecutorResult<'a> {
+        Box::pin(async move {
+            let team_name = TeamArgumentType::get(context, ARG_TEAM)?;
+
+            let world = context.world();
+            let mut scoreboard = world.scoreboard.lock().await;
+
+            let mut team = scoreboard
+                .get_teams()
+                .get(team_name)
+                .ok_or_else(|| {
+                    TEAM_NOT_FOUND_ERROR
+                        .create_without_context(TextComponent::text(team_name.to_string()))
+                })?
+                .clone();
+
+            if team.color == NamedColor::White {
+                return Err(COLOR_UNCHANGED_ERROR.create_without_context());
+            }
+
+            team.color = NamedColor::White;
+            let team_display_name = team.display_name.clone();
+            scoreboard.update_team(world, team).await;
+
+            context
+                .source
+                .send_feedback(
+                    TextComponent::translate_cross(
+                        translation::java::COMMANDS_TEAM_OPTION_COLOR_CLEAR_SUCCESS,
+                        translation::java::COMMANDS_TEAM_OPTION_COLOR_CLEAR_SUCCESS,
+                        [team_display_name],
+                    ),
+                    true,
+                )
+                .await;
+
+            Ok(1)
+        })
+    }
+}
+
 struct TeamModifyColorExecutor;
 
 impl CommandExecutor for TeamModifyColorExecutor {
@@ -475,7 +525,7 @@ impl CommandExecutor for TeamModifyColorExecutor {
 
             team.color = new_color;
             let team_display_name = team.display_name.clone();
-            scoreboard.update_team(world, team);
+            scoreboard.update_team(world, team).await;
 
             context
                 .source
@@ -483,10 +533,7 @@ impl CommandExecutor for TeamModifyColorExecutor {
                     TextComponent::translate_cross(
                         translation::java::COMMANDS_TEAM_OPTION_COLOR_SUCCESS,
                         translation::java::COMMANDS_TEAM_OPTION_COLOR_SUCCESS,
-                        [
-                            team_display_name,
-                            TextComponent::text(format!("{new_color:?}").to_lowercase()),
-                        ],
+                        [team_display_name, TextComponent::text(new_color.name())],
                     ),
                     true,
                 )
@@ -524,7 +571,7 @@ impl CommandExecutor for TeamModifyDisplayNameExecutor {
 
             team.display_name = new_display_name.clone();
             let team_display_name = team.display_name.clone();
-            scoreboard.update_team(world, team);
+            scoreboard.update_team(world, team).await;
 
             context
                 .source
@@ -566,7 +613,7 @@ impl CommandExecutor for TeamModifyPrefixExecutor {
             let new_prefix = TextComponent::text(new_prefix_str.to_string());
             team.player_prefix = new_prefix.clone();
             let team_display_name = team.display_name.clone();
-            scoreboard.update_team(world, team);
+            scoreboard.update_team(world, team).await;
 
             context
                 .source
@@ -608,7 +655,7 @@ impl CommandExecutor for TeamModifySuffixExecutor {
             let new_suffix = TextComponent::text(new_suffix_str.to_string());
             team.player_suffix = new_suffix.clone();
             let team_display_name = team.display_name.clone();
-            scoreboard.update_team(world, team);
+            scoreboard.update_team(world, team).await;
 
             context
                 .source
@@ -662,7 +709,7 @@ impl CommandExecutor for TeamModifyFriendlyFireExecutor {
             }
 
             let team_display_name = team.display_name.clone();
-            scoreboard.update_team(world, team);
+            scoreboard.update_team(world, team).await;
 
             let key = if value {
                 translation::java::COMMANDS_TEAM_OPTION_FRIENDLYFIRE_ENABLED
@@ -720,7 +767,7 @@ impl CommandExecutor for TeamModifySeeFriendlyInvisiblesExecutor {
             }
 
             let team_display_name = team.display_name.clone();
-            scoreboard.update_team(world, team);
+            scoreboard.update_team(world, team).await;
 
             let key = if value {
                 translation::java::COMMANDS_TEAM_OPTION_SEEFRIENDLYINVISIBLES_ENABLED
@@ -788,7 +835,7 @@ impl CommandExecutor for TeamModifyNametagVisibilityExecutor {
             };
 
             let team_display_name = team.display_name.clone();
-            scoreboard.update_team(world, team);
+            scoreboard.update_team(world, team).await;
 
             context
                 .source
@@ -890,7 +937,7 @@ impl CommandExecutor for TeamModifyCollisionRuleExecutor {
             };
 
             let team_display_name = team.display_name.clone();
-            scoreboard.update_team(world, team);
+            scoreboard.update_team(world, team).await;
 
             context
                 .source
@@ -962,13 +1009,17 @@ fn list_branch() -> LiteralArgumentBuilder {
         .then(argument(ARG_TEAM, TeamArgumentType).executes(TeamListExecutor { has_team: true }))
 }
 
+#[expect(clippy::too_many_lines)]
 fn modify_branch() -> LiteralArgumentBuilder {
     literal("modify").then(
         argument(ARG_TEAM, TeamArgumentType)
             .then(
-                literal("color").then(
-                    argument(ARG_VALUE, TeamColorArgumentType).executes(TeamModifyColorExecutor),
-                ),
+                literal("color")
+                    .then(literal("reset").executes(TeamModifyColorResetExecutor))
+                    .then(
+                        argument(ARG_VALUE, TeamColorArgumentType)
+                            .executes(TeamModifyColorExecutor),
+                    ),
             )
             .then(
                 literal("displayName").then(
@@ -1063,7 +1114,7 @@ fn modify_branch() -> LiteralArgumentBuilder {
     )
 }
 
-pub fn register(dispatcher: &mut CommandDispatcher, registry: &mut PermissionRegistry) {
+pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistry) {
     registry.register_permission_or_panic(Permission::new(
         PERMISSION,
         DESCRIPTION,

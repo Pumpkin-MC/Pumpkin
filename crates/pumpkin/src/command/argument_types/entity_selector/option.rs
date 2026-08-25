@@ -10,6 +10,7 @@ use crate::command::suggestion::suggestions::SuggestionsBuilder;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::translation;
 use pumpkin_util::GameMode;
+use pumpkin_util::identifier::{Identifier, VANILLA_NAMESPACE};
 use pumpkin_util::math::bounds::{DoubleBounds, FloatDegreeBounds, IntBounds};
 use pumpkin_util::text::TextComponent;
 use std::str::FromStr;
@@ -291,11 +292,20 @@ impl EntitySelectorOption {
                     parser.reader.set_cursor(start);
                     return Err(self.inapplicable_error(parser.reader));
                 }
-                let mut string = parser.reader.read_unquoted_string();
-                if let Some(stripped) = string.strip_prefix("minecraft:") {
-                    string = stripped.to_string();
+                let type_start = parser.reader.cursor();
+                while let Some(c) = parser.reader.peek()
+                    && Identifier::is_valid_char(c)
+                {
+                    parser.reader.skip();
                 }
-                if let Some(entity_type) = EntityType::from_name(&string) {
+                let string = parser.reader.string()[type_start..parser.reader.cursor()].to_string();
+
+                let entity_type = Identifier::parse(&string)
+                    .ok()
+                    .filter(|identifier| identifier.namespace() == VANILLA_NAMESPACE)
+                    .and_then(|identifier| EntityType::from_name(identifier.path()));
+
+                if let Some(entity_type) = entity_type {
                     if entity_type.id == EntityType::PLAYER.id && !invert {
                         parser.limit_to_players();
                     }

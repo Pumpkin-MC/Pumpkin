@@ -1,4 +1,7 @@
-use std::{collections::HashMap, sync::LazyLock};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::LazyLock,
+};
 
 use pumpkin_util::{math::position::BlockPos, random::RandomGenerator};
 
@@ -74,6 +77,19 @@ use crate::world::WorldPortalExt;
 pub static CONFIGURED_FEATURES: LazyLock<
     HashMap<pumpkin_data::configured_feature::ConfiguredFeature, ConfiguredFeature>,
 > = LazyLock::new(build_configured_features);
+
+pub static BONE_MEAL_FEATURES: LazyLock<
+    HashSet<pumpkin_data::configured_feature::ConfiguredFeature>,
+> = LazyLock::new(|| {
+    pumpkin_data::tag::get_tag_values(
+        pumpkin_data::tag::RegistryKey::WorldgenConfiguredFeature,
+        "minecraft:can_spawn_from_bone_meal",
+    )
+    .into_iter()
+    .flatten()
+    .filter_map(|name| pumpkin_data::configured_feature::ConfiguredFeature::from_name(name))
+    .collect()
+});
 
 pub enum ConfiguredFeature {
     NoOp,
@@ -457,3 +473,42 @@ impl ConfiguredFeature {
 // generated code is now placed alongside other codegen outputs
 // in `src/generated` so we don’t hide it deep under `generation/feature`.
 include!("../../../../pumpkin-data/src/generated/configured_features_generated.rs");
+
+#[cfg(test)]
+mod tests {
+    use super::{BONE_MEAL_FEATURES, CONFIGURED_FEATURES, ConfiguredFeature};
+    use pumpkin_util::{
+        math::position::BlockPos,
+        random::{RandomGenerator, xoroshiro128::Xoroshiro},
+    };
+
+    #[test]
+    fn bonemeal_feature_tag_resolves_to_placeable_blocks() {
+        assert_eq!(BONE_MEAL_FEATURES.len(), 8);
+        let mut random = RandomGenerator::Xoroshiro(Xoroshiro::from_seed(0));
+        for key in BONE_MEAL_FEATURES.iter() {
+            let Some(ConfiguredFeature::SimpleBlock(feature)) = CONFIGURED_FEATURES.get(key) else {
+                panic!("bonemeal feature {key:?} must place a block");
+            };
+            assert!(
+                feature
+                    .to_place
+                    .get_for_bonemeal(&mut random, BlockPos::new(0, 64, 0))
+                    .is_some()
+            );
+        }
+    }
+
+    #[test]
+    fn bonemeal_features_use_tag_output() {
+        let tag_values = pumpkin_data::tag::get_tag_values(
+            pumpkin_data::tag::RegistryKey::WorldgenConfiguredFeature,
+            "minecraft:can_spawn_from_bone_meal",
+        );
+        assert!(tag_values.is_some());
+        let values = tag_values.unwrap();
+        assert_eq!(values.len(), 8);
+        assert!(values.contains(&"flower_default"));
+        assert!(values.contains(&"wildflower"));
+    }
+}

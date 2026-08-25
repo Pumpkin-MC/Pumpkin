@@ -16,16 +16,15 @@ impl<'a> DialogNBT<'a> {
         Self(DialogNBTSource::Nbt(compound))
     }
 
-    #[allow(clippy::todo)]
     pub fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
         _version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         match &self.0 {
-            DialogNBTSource::Struct(_dialog) => {
-                todo!("Serialize Dialog to NbtCompound manually")
-            }
+            DialogNBTSource::Struct(_dialog) => Err(crate::ser::WritingError::Message(
+                "Serializing Dialog struct to NBT is not supported".to_string(),
+            )),
             DialogNBTSource::Nbt(nbt) => {
                 let tag = pumpkin_nbt::tag::NbtTag::Compound((*nbt).clone());
                 write.write_nbt(tag)?;
@@ -40,6 +39,7 @@ pub enum DialogNBTSource<'a> {
     Nbt(&'a pumpkin_nbt::compound::NbtCompound),
 }
 
+#[derive(Clone, Debug)]
 pub struct Dialog {
     pub r#type: String,
     pub title: TextComponent,
@@ -53,11 +53,13 @@ pub struct Dialog {
     pub external_title: Option<TextComponent>,
 }
 
+#[derive(Clone, Debug)]
 pub enum DialogBody {
     PlainMessage { contents: TextComponent },
     Item { item: i32 }, // TODO: ItemStack serialization to NBT
 }
 
+#[derive(Clone, Debug)]
 pub enum DialogInput {
     Boolean {
         label: TextComponent,
@@ -83,6 +85,7 @@ pub enum DialogInput {
     },
 }
 
+#[derive(Clone, Debug)]
 pub struct ActionButton {
     pub text: TextComponent,
     pub tooltip: Option<TextComponent>,
@@ -90,6 +93,7 @@ pub struct ActionButton {
     pub action: DialogAction,
 }
 
+#[derive(Clone, Debug)]
 pub enum DialogAction {
     OpenUrl {
         url: String,
@@ -100,6 +104,7 @@ pub enum DialogAction {
     },
 }
 
+#[derive(Clone, Debug)]
 pub struct DialogLink {
     pub label: crate::Label,
     pub url: String,

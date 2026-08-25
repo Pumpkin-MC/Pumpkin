@@ -3,7 +3,7 @@ use std::sync::{Arc, Weak};
 use pumpkin_data::entity::EntityType;
 
 use crate::entity::{
-    Entity, NBTStorage,
+    Entity,
     ai::goal::{
         active_target::ActiveTargetGoal, look_around::RandomLookAroundGoal,
         look_at_entity::LookAtEntityGoal, swim::SwimGoal, wander_around::WanderAroundGoal,
@@ -25,8 +25,16 @@ impl BlazeEntity {
             Arc::downgrade(&mob_arc)
         };
         {
-            let mut goal_selector = mob_arc.entity.goals_selector.lock().unwrap();
-            let mut target_selector = mob_arc.entity.target_selector.lock().unwrap();
+            let mut goal_selector = mob_arc
+                .entity
+                .goals_selector
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let mut target_selector = mob_arc
+                .entity
+                .target_selector
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
 
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
 
@@ -68,15 +76,13 @@ impl BlazeEntity {
         //     .living_entity
         //     .entity
         //     .send_meta_data(&[Metadata::new(
-        //         TrackedData::FLAGS_ID,
+        //         pumpkin_data::tracked_data::blaze::FLAGS_ID,
         //         MetaDataType::BYTE,
         //         new_je_flags,
         //     )])
         //     .await;
     }
 }
-
-impl NBTStorage for BlazeEntity {}
 
 impl Mob for BlazeEntity {
     fn get_mob_entity(&self) -> &MobEntity {

@@ -98,7 +98,11 @@ impl Goal for TeleportTowardsPlayerGoal {
                     return false;
                 }
                 let player_pos = player.get_entity().pos.load();
-                let mut look_control = mob.get_mob_entity().look_control.lock().unwrap();
+                let mut look_control = mob
+                    .get_mob_entity()
+                    .look_control
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
                 look_control.look_at_with_range(
                     player_pos.x,
                     player_pos.y + PLAYER_EYE_HEIGHT,

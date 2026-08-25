@@ -3,7 +3,7 @@ use std::sync::{Arc, Weak};
 use pumpkin_data::entity::EntityType;
 
 use crate::entity::{
-    Entity, NBTStorage,
+    Entity,
     ai::goal::{
         look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal,
         melee_attack::MeleeAttackGoal, swim::SwimGoal, wander_around::WanderAroundGoal,
@@ -26,7 +26,11 @@ impl ZombifiedPiglinEntity {
         };
 
         {
-            let mut goal_selector = mob_arc.mob_entity.goals_selector.lock().unwrap();
+            let mut goal_selector = mob_arc
+                .mob_entity
+                .goals_selector
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
 
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
             goal_selector.add_goal(2, Box::new(MeleeAttackGoal::new(1.0, true)));
@@ -37,7 +41,11 @@ impl ZombifiedPiglinEntity {
             );
             goal_selector.add_goal(7, Box::new(RandomLookAroundGoal::default()));
 
-            let _target_selector = mob_arc.mob_entity.target_selector.lock().unwrap();
+            let _target_selector = mob_arc
+                .mob_entity
+                .target_selector
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
             // Zombified piglins are neutral by default (only attack if hit),
             // but for now we give it ActiveTargetGoal for players to make them hostile
             // (or we can leave it empty for neutral behavior).
@@ -47,8 +55,6 @@ impl ZombifiedPiglinEntity {
         mob_arc
     }
 }
-
-impl NBTStorage for ZombifiedPiglinEntity {}
 
 impl Mob for ZombifiedPiglinEntity {
     fn get_mob_entity(&self) -> &MobEntity {

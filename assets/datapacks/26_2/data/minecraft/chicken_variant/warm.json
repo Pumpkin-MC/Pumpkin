@@ -1,0 +1,13 @@
+{
+  "asset_id": "minecraft:entity/chicken/chicken_warm",
+  "baby_asset_id": "minecraft:entity/chicken/chicken_warm_baby",
+  "spawn_conditions": [
+    {
+      "condition": {
+        "type": "minecraft:biome",
+        "biomes": "#minecraft:spawns_warm_variant_farm_animals"
+      },
+      "priority": 1
+    }
+  ]
+}

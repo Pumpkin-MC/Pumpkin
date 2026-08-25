@@ -12,7 +12,7 @@ use crate::entity::ai::pathfinder::pathfinding_context::PathfindingContext;
 use crate::entity::ai::pathfinder::walk_node_evaluator::WalkNodeEvaluator;
 use pumpkin_data::attributes::Attributes;
 use pumpkin_util::math::wrap_degrees;
-use std::collections::HashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 use std::sync::atomic::{AtomicBool, Ordering};
 
 pub mod binary_heap;
@@ -53,7 +53,7 @@ pub struct Navigator {
     last_node_index: usize,
     total_ticks: u32,
     path_start_pos: Option<Vector3<f64>>,
-    path_type_overrides: HashMap<PathType, f32>,
+    path_type_overrides: FxHashMap<PathType, f32>,
     mob_width: f32,
     mob_height: f32,
     // Smart re-pathing cooldown
@@ -76,7 +76,7 @@ impl Default for Navigator {
             last_node_index: 0,
             total_ticks: 0,
             path_start_pos: None,
-            path_type_overrides: HashMap::new(),
+            path_type_overrides: FxHashMap::default(),
             mob_width: 0.6,
             mob_height: 1.95,
             repath_cooldown: 0,
@@ -123,9 +123,28 @@ impl Navigator {
         self.path_type_overrides.insert(path_type, malus);
     }
 
+    #[must_use]
+    pub fn get_pathfinding_malus(&self, path_type: PathType) -> f32 {
+        self.path_type_overrides
+            .get(&path_type)
+            .copied()
+            .unwrap_or_else(|| path_type.get_malus())
+    }
+
     pub const fn set_mob_dimensions(&mut self, width: f32, height: f32) {
         self.mob_width = width;
         self.mob_height = height;
+    }
+
+    pub async fn can_reach_within(
+        &mut self,
+        entity: &LivingEntity,
+        destination: Vector3<f64>,
+        distance: f32,
+    ) -> bool {
+        self.compute_path(entity, destination)
+            .await
+            .is_some_and(|path| path.can_reach() || path.get_dist_to_target() <= distance)
     }
 
     #[allow(clippy::too_many_lines)]
@@ -170,7 +189,7 @@ impl Navigator {
         let start_pos = start_node.pos.0;
 
         // Map to store closed nodes for path reconstruction
-        let mut closed_set: HashMap<Vector3<i32>, Node> = HashMap::new();
+        let mut closed_set: FxHashMap<Vector3<i32>, Node> = FxHashMap::default();
 
         // Reuse the navigator's open_set and neighbors_buf
         self.open_set.clear();
@@ -254,8 +273,7 @@ impl Navigator {
             let mut path_nodes: Vec<Node> = Vec::new();
             let mut current_pos = best_node.pos.0;
             path_nodes.push(best_node);
-            let mut visited: std::collections::HashSet<Vector3<i32>> =
-                std::collections::HashSet::new();
+            let mut visited: FxHashSet<Vector3<i32>> = FxHashSet::default();
             visited.insert(current_pos);
             while let Some(node) = closed_set.get(&current_pos) {
                 if let Some(prev_pos) = node.came_from {
@@ -454,5 +472,15 @@ impl Navigator {
     #[must_use]
     pub fn is_idle(&self) -> bool {
         self.is_idle.load(Ordering::Relaxed)
+    }
+
+    #[must_use]
+    pub const fn get_path(&self) -> Option<&Path> {
+        self.current_path.as_ref()
+    }
+
+    #[must_use]
+    pub const fn get_path_mut(&mut self) -> Option<&mut Path> {
+        self.current_path.as_mut()
     }
 }

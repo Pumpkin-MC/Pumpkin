@@ -7,7 +7,6 @@ use std::{
     hash::{Hash, Hasher},
     sync::Arc,
 };
-use tokio::sync::{Mutex, OwnedMutexGuard};
 
 pub type InventoryFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 
@@ -16,7 +15,7 @@ pub trait Inventory: Send + Sync + Clearable {
 
     fn is_empty(&self) -> InventoryFuture<'_, bool>;
 
-    fn get_stack(&self, slot: usize) -> InventoryFuture<'_, Arc<Mutex<ItemStack>>>;
+    fn get_stack(&self, slot: usize) -> InventoryFuture<'_, ItemStack>;
 
     fn remove_stack(&self, slot: usize) -> InventoryFuture<'_, ItemStack>;
 
@@ -36,8 +35,7 @@ pub trait Inventory: Send + Sync + Clearable {
             let mut count = 0;
 
             for i in 0..self.size() {
-                let slot = self.get_stack(i).await;
-                let stack = slot.lock().await;
+                let stack = self.get_stack(i).await;
                 if stack.get_item().id == item.id {
                     count += stack.item_count;
                 }
@@ -49,13 +47,12 @@ pub trait Inventory: Send + Sync + Clearable {
 
     fn contains_any_predicate<'a>(
         &'a self,
-        predicate: &'a (dyn Fn(OwnedMutexGuard<ItemStack>) -> bool + Sync),
+        predicate: &'a (dyn Fn(&ItemStack) -> bool + Sync),
     ) -> InventoryFuture<'a, bool> {
         Box::pin(async move {
             for i in 0..self.size() {
-                let slot = self.get_stack(i).await;
-                let stack = slot.lock_owned().await;
-                if predicate(stack) {
+                let stack = self.get_stack(i).await;
+                if predicate(&stack) {
                     return true;
                 }
             }
@@ -83,8 +80,7 @@ pub trait Inventory: Send + Sync + Clearable {
             let size = self.size();
 
             for i in 0..size {
-                let stack_lock = self.get_stack(i).await;
-                let stack = stack_lock.lock().await;
+                let stack = self.get_stack(i).await;
 
                 if !stack.is_empty() {
                     let mut item_compound = NbtCompound::new();
@@ -106,21 +102,8 @@ pub trait Inventory: Send + Sync + Clearable {
 
     fn mark_dirty(&self) {}
 
-    fn read_data(&self, nbt: &NbtCompound, stacks: &[Arc<Mutex<ItemStack>>]) {
-        if let Some(inventory_list) = nbt.get_list("Items") {
-            for tag in inventory_list {
-                if let Some(item_compound) = tag.extract_compound()
-                    && let Some(slot_byte) = item_compound.get_byte("Slot")
-                {
-                    let slot = slot_byte as usize;
-                    if slot < stacks.len()
-                        && let Some(item_stack) = ItemStack::read_item_stack(item_compound)
-                    {
-                        *stacks[slot].try_lock().unwrap() = item_stack;
-                    }
-                }
-            }
-        }
+    fn read_data(&self, nbt: &NbtCompound, stacks: &mut [ItemStack]) {
+        sync_read_items_from_nbt(nbt, stacks);
     }
 
     fn is_valid_slot_for(&self, _slot: usize, _stack: &ItemStack) -> bool {
@@ -143,22 +126,31 @@ pub trait Clearable {
     fn clear(&self) -> Pin<Box<dyn Future<Output = ()> + Send + '_>>;
 }
 
-pub fn sync_write_items_to_nbt(items: &[Arc<Mutex<ItemStack>>], nbt: &mut NbtCompound) {
+pub fn sync_read_items_from_nbt(nbt: &NbtCompound, stacks: &mut [ItemStack]) {
+    if let Some(inventory_list) = nbt.get_list("Items") {
+        for tag in inventory_list {
+            if let Some(item_compound) = tag.extract_compound()
+                && let Some(slot_byte) = item_compound.get_byte("Slot")
+            {
+                let slot = slot_byte as usize;
+                if slot < stacks.len()
+                    && let Some(item_stack) = ItemStack::read_item_stack(item_compound)
+                {
+                    stacks[slot] = item_stack;
+                }
+            }
+        }
+    }
+}
+
+pub fn sync_write_items_to_nbt(items: &[ItemStack], nbt: &mut NbtCompound) {
     let mut slots = Vec::new();
-    for (i, item) in items.iter().enumerate() {
-        match item.try_lock() {
-            Ok(stack) if !stack.is_empty() => {
-                let mut item_nbt = NbtCompound::new();
-                item_nbt.put_byte("Slot", i as i8);
-                stack.write_item_stack(&mut item_nbt);
-                slots.push(NbtTag::Compound(item_nbt));
-            }
-            Ok(_) => {}
-            Err(_) => {
-                tracing::warn!(
-                    "Skipping contended inventory slot {i} while serializing block entity data"
-                );
-            }
+    for (i, stack) in items.iter().enumerate() {
+        if !stack.is_empty() {
+            let mut item_nbt = NbtCompound::new();
+            item_nbt.put_byte("Slot", i as i8);
+            stack.write_item_stack(&mut item_nbt);
+            slots.push(NbtTag::Compound(item_nbt));
         }
     }
     if !slots.is_empty() {

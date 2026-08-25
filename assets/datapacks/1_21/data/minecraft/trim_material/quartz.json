@@ -1,0 +1,9 @@
+{
+  "item_model_index": 0.1,
+  "description": {
+    "translate": "trim_material.minecraft.quartz",
+    "color": "#E3D4C4"
+  },
+  "asset_name": "quartz",
+  "ingredient": "minecraft:quartz"
+}
