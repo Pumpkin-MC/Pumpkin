@@ -125,7 +125,7 @@ pub enum Arg<'a> {
     CommandTree(CommandTree),
     Item(&'a str),
     ItemPredicate(&'a str),
-    ResourceLocation(&'a str),
+    ResourceLocation(pumpkin_util::identifier::Identifier),
     Block(&'a str),
     BlockPredicate(&'a str),
     BossbarColor(BossbarColor),

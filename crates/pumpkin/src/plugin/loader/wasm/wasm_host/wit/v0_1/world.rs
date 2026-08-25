@@ -1,6 +1,6 @@
 use pumpkin_data::block_properties::NoteblockInstrument as InternalNoteblockInstrument;
 use pumpkin_data::block_state::PistonBehavior;
-use pumpkin_data::{BlockDirection as InternalBlockDirection, BlockStateId};
+use pumpkin_data::{BlockDirection as InternalBlockDirection, BlockId, BlockStateId};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::chunk::ChunkHeightmapType;
 use pumpkin_world::chunk::io::Dirtiable;
@@ -64,11 +64,13 @@ use crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::game_rul
     GameRule as WitGameRule, GameRuleValue as WitGameRuleValue,
 };
 use crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::world::{
-    BlockDirection as WitBlockDirection, BlockEntity, BlockEntityType, BlockFlags as WitBlockFlags,
-    BlockPos as WitBlockPos, BlockState as WitBlockState, BlockStateInfo as WitBlockStateInfo,
-    BoundingBox as WitBoundingBox, Chunk as WitChunk,
-    NoteblockInstrument as WitNoteblockInstrument, PistonBehavior as WitPistonBehavior,
-    WorldBorder as WitWorldBorder,
+    Block as WitBlock, BlockDirection as WitBlockDirection, BlockEntity, BlockEntityType,
+    BlockFlags as WitBlockFlags, BlockPos as WitBlockPos, BlockState as WitBlockState,
+    BlockStateInfo as WitBlockStateInfo, BoundingBox as WitBoundingBox, Chunk as WitChunk,
+    Flammable as WitFlammable, NoteblockInstrument as WitNoteblockInstrument,
+    PistonBehavior as WitPistonBehavior, RayTraceBlockResult as WitRayTraceBlockResult,
+    RayTraceEntityResult as WitRayTraceEntityResult, WorldBorder as WitWorldBorder,
+    WorldSpawnLocation as WitWorldSpawnLocation,
 };
 use crate::plugin::loader::wasm::wasm_host::{
     state::{
@@ -151,6 +153,93 @@ pub(crate) const fn to_wit_bounding_box(
     WitBoundingBox {
         min: (bb.min.x, bb.min.y, bb.min.z),
         max: (bb.max.x, bb.max.y, bb.max.z),
+    }
+}
+
+pub(crate) fn to_wit_block(block: &pumpkin_data::Block) -> WitBlock {
+    WitBlock {
+        id: block.id.as_u16(),
+        name: block.name.to_string(),
+        hardness: block.hardness,
+        blast_resistance: block.blast_resistance,
+        map_color: block.map_color,
+        slipperiness: block.slipperiness,
+        velocity_multiplier: block.velocity_multiplier,
+        jump_velocity_multiplier: block.jump_velocity_multiplier,
+        item_id: block.item_id,
+        default_state_id: block.default_state.id.as_u16(),
+        state_ids: block.states.iter().map(|s| s.id.as_u16()).collect(),
+        is_solid: block.is_solid(),
+        is_air: block.is_air(),
+        is_flammable: block.flammable.is_some(),
+        flammable: block.flammable.as_ref().map(|f| WitFlammable {
+            spread_chance: f.spread_chance,
+            burn_chance: f.burn_chance,
+        }),
+    }
+}
+
+pub(crate) fn to_wit_block_state(
+    state: &pumpkin_data::BlockState,
+    pos: Option<&BlockPos>,
+) -> WitBlockState {
+    let dummy_pos = BlockPos::new(0, 0, 0);
+    let internal_pos = pos.unwrap_or(&dummy_pos);
+    let block = pumpkin_data::Block::from_state_id(state.id);
+    let properties = block
+        .properties(state.id)
+        .map(|p| {
+            p.to_props()
+                .into_iter()
+                .map(|(k, v)| (k.to_string(), v.to_string()))
+                .collect()
+        })
+        .unwrap_or_default();
+
+    WitBlockState {
+        id: state.id.as_u16(),
+        block_id: block.id.as_u16(),
+        block_name: block.name.to_string(),
+        luminance: state.luminance,
+        opacity: state.opacity,
+        hardness: state.hardness,
+        is_air: state.is_air(),
+        is_liquid: state.is_liquid(),
+        is_solid: state.is_solid(),
+        is_full_cube: state.is_full_cube(),
+        has_random_ticks: state.has_random_ticks(),
+        piston_behavior: match state.piston_behavior {
+            PistonBehavior::Normal => WitPistonBehavior::Normal,
+            PistonBehavior::Destroy => WitPistonBehavior::Destroy,
+            PistonBehavior::Block => WitPistonBehavior::Block,
+            PistonBehavior::Ignore => WitPistonBehavior::Ignore,
+            PistonBehavior::PushOnly => WitPistonBehavior::PushOnly,
+        },
+        burnable: state.burnable(),
+        tool_required: state.tool_required(),
+        sided_transparency: state.sided_transparency(),
+        replaceable: state.replaceable(),
+        is_solid_block: state.is_solid_block(),
+        block_entity_type: state.block_entity_type,
+        instrument: to_wit_noteblock_instrument(state.instrument),
+        collision_shapes: state
+            .get_block_collision_shapes_at(internal_pos)
+            .map(to_wit_bounding_box)
+            .collect(),
+        outline_shapes: state
+            .get_block_outline_shapes_at(internal_pos)
+            .map(to_wit_bounding_box)
+            .collect(),
+        down_side_solid: state.is_side_solid(InternalBlockDirection::Down),
+        up_side_solid: state.is_side_solid(InternalBlockDirection::Up),
+        north_side_solid: state.is_side_solid(InternalBlockDirection::North),
+        south_side_solid: state.is_side_solid(InternalBlockDirection::South),
+        west_side_solid: state.is_side_solid(InternalBlockDirection::West),
+        east_side_solid: state.is_side_solid(InternalBlockDirection::East),
+        down_center_solid: state.is_center_solid(InternalBlockDirection::Down),
+        up_center_solid: state.is_center_solid(InternalBlockDirection::Up),
+        map_color: block.map_color,
+        properties,
     }
 }
 
@@ -331,6 +420,141 @@ impl pumpkin::plugin::world::Host for PluginHostState {
         }));
         Ok(result.ok())
     }
+
+    async fn get_block_by_id(&mut self, id: u16) -> wasmtime::Result<Option<WitBlock>> {
+        let block_id = BlockId::new(id);
+        Ok(block_id.map(|id| to_wit_block(pumpkin_data::Block::from_id(id))))
+    }
+
+    async fn get_block_by_name(&mut self, name: String) -> wasmtime::Result<Option<WitBlock>> {
+        Ok(pumpkin_data::Block::from_name(&name).map(to_wit_block))
+    }
+
+    async fn get_all_blocks(&mut self) -> wasmtime::Result<Vec<WitBlock>> {
+        let mut blocks = Vec::with_capacity(BlockId::COUNT as usize);
+        for raw_id in 0..BlockId::COUNT {
+            if let Some(id) = BlockId::new(raw_id) {
+                blocks.push(to_wit_block(pumpkin_data::Block::from_id(id)));
+            }
+        }
+        Ok(blocks)
+    }
+
+    async fn get_all_block_names(&mut self) -> wasmtime::Result<Vec<String>> {
+        let mut names = Vec::with_capacity(BlockId::COUNT as usize);
+        for raw_id in 0..BlockId::COUNT {
+            if let Some(id) = BlockId::new(raw_id) {
+                names.push(pumpkin_data::Block::from_id(id).name.to_string());
+            }
+        }
+        Ok(names)
+    }
+
+    async fn get_block_count(&mut self) -> wasmtime::Result<u32> {
+        Ok(BlockId::COUNT as u32)
+    }
+
+    async fn get_block_state_count(&mut self) -> wasmtime::Result<u32> {
+        Ok(BlockStateId::COUNT as u32)
+    }
+
+    async fn get_states_for_block(
+        &mut self,
+        block: WitBlock,
+    ) -> wasmtime::Result<Vec<WitBlockState>> {
+        let block_id = BlockId::new_or_air(block.id);
+        let block_ref = pumpkin_data::Block::from_id(block_id);
+        Ok(block_ref
+            .states
+            .iter()
+            .map(|s| to_wit_block_state(s, None))
+            .collect())
+    }
+
+    async fn get_states_for_block_id(
+        &mut self,
+        block_id: u16,
+    ) -> wasmtime::Result<Vec<WitBlockState>> {
+        let Some(id) = BlockId::new(block_id) else {
+            return Ok(Vec::new());
+        };
+        let block_ref = pumpkin_data::Block::from_id(id);
+        Ok(block_ref
+            .states
+            .iter()
+            .map(|s| to_wit_block_state(s, None))
+            .collect())
+    }
+
+    async fn get_state_ids_for_block_id(&mut self, block_id: u16) -> wasmtime::Result<Vec<u16>> {
+        let Some(id) = BlockId::new(block_id) else {
+            return Ok(Vec::new());
+        };
+        let block_ref = pumpkin_data::Block::from_id(id);
+        Ok(block_ref.states.iter().map(|s| s.id.as_u16()).collect())
+    }
+
+    async fn get_block_properties(
+        &mut self,
+        state_id: u16,
+    ) -> wasmtime::Result<Vec<(String, String)>> {
+        let bsid = BlockStateId::new_or_air(state_id);
+        let block = pumpkin_data::Block::from_state_id(bsid);
+        let props = block
+            .properties(bsid)
+            .map(|p| {
+                p.to_props()
+                    .into_iter()
+                    .map(|(k, v)| (k.to_string(), v.to_string()))
+                    .collect()
+            })
+            .unwrap_or_default();
+        Ok(props)
+    }
+
+    async fn get_block_from_state_id(
+        &mut self,
+        state_id: u16,
+    ) -> wasmtime::Result<Option<WitBlock>> {
+        let bsid = BlockStateId::new(state_id);
+        Ok(bsid.map(|id| to_wit_block(pumpkin_data::Block::from_state_id(id))))
+    }
+
+    async fn get_block_from_state(&mut self, state: WitBlockState) -> wasmtime::Result<WitBlock> {
+        let bsid = BlockStateId::new_or_air(state.id);
+        Ok(to_wit_block(pumpkin_data::Block::from_state_id(bsid)))
+    }
+
+    async fn get_default_state_from_block(
+        &mut self,
+        block: WitBlock,
+    ) -> wasmtime::Result<WitBlockState> {
+        let block_id = BlockId::new_or_air(block.id);
+        let block_ref = pumpkin_data::Block::from_id(block_id);
+        Ok(to_wit_block_state(block_ref.default_state, None))
+    }
+
+    async fn get_default_state_from_block_id(
+        &mut self,
+        block_id: u16,
+    ) -> wasmtime::Result<Option<WitBlockState>> {
+        let block_id = BlockId::new(block_id);
+        Ok(block_id.map(|id| {
+            let block = pumpkin_data::Block::from_id(id);
+            to_wit_block_state(block.default_state, None)
+        }))
+    }
+
+    async fn get_block_state_by_id(
+        &mut self,
+        state_id: u16,
+    ) -> wasmtime::Result<Option<WitBlockState>> {
+        let bsid = BlockStateId::new(state_id);
+        Ok(bsid.map(|id| {
+            let state = pumpkin_data::BlockState::from_id(id);
+            to_wit_block_state(state, None)
+        }))
+    }
 }
 impl pumpkin::plugin::particles::Host for PluginHostState {}
 impl pumpkin::plugin::sounds::Host for PluginHostState {}
@@ -344,12 +568,35 @@ impl pumpkin::plugin::world::HostWorld for PluginHostState {
             .to_string())
     }
 
+    async fn get_border(
+        &mut self,
+        world: Resource<World>,
+    ) -> wasmtime::Result<Resource<WitWorldBorder>> {
+        self.get_world_border(world).await
+    }
+
     async fn get_world_border(
         &mut self,
         world: Resource<World>,
     ) -> wasmtime::Result<Resource<WitWorldBorder>> {
         let world_res = self.get_world_res(&world)?;
         self.add_world_border(world_res.provider.clone())
+    }
+
+    async fn get_spawn_location(
+        &mut self,
+        world: Resource<World>,
+    ) -> wasmtime::Result<WitWorldSpawnLocation> {
+        let (pos, yaw, pitch) = self.get_world_res(&world)?.provider.get_spawn_location();
+        Ok(WitWorldSpawnLocation {
+            pos: WitBlockPos {
+                x: pos.0.x,
+                y: pos.0.y,
+                z: pos.0.z,
+            },
+            yaw,
+            pitch,
+        })
     }
 
     async fn get_chunk(
@@ -396,49 +643,78 @@ impl pumpkin::plugin::world::HostWorld for PluginHostState {
         let world_ref = self.get_world_res(&world)?;
         let internal_pos = BlockPos::new(pos.x, pos.y, pos.z);
         let state = world_ref.provider.get_block_state(&internal_pos);
+        Ok(to_wit_block_state(state, Some(&internal_pos)))
+    }
 
-        Ok(WitBlockState {
-            id: state.id.as_u16(),
-            luminance: state.luminance,
-            opacity: state.opacity,
-            hardness: state.hardness,
-            is_air: state.is_air(),
-            is_liquid: state.is_liquid(),
-            is_solid: state.is_solid(),
-            is_full_cube: state.is_full_cube(),
-            has_random_ticks: state.has_random_ticks(),
-            piston_behavior: match state.piston_behavior {
-                PistonBehavior::Normal => WitPistonBehavior::Normal,
-                PistonBehavior::Destroy => WitPistonBehavior::Destroy,
-                PistonBehavior::Block => WitPistonBehavior::Block,
-                PistonBehavior::Ignore => WitPistonBehavior::Ignore,
-                PistonBehavior::PushOnly => WitPistonBehavior::PushOnly,
-            },
-            burnable: state.burnable(),
-            tool_required: state.tool_required(),
-            sided_transparency: state.sided_transparency(),
-            replaceable: state.replaceable(),
-            is_solid_block: state.is_solid_block(),
-            block_entity_type: state.block_entity_type,
-            instrument: to_wit_noteblock_instrument(state.instrument),
-            collision_shapes: state
-                .get_block_collision_shapes_at(&internal_pos)
-                .map(to_wit_bounding_box)
-                .collect(),
-            outline_shapes: state
-                .get_block_outline_shapes_at(&internal_pos)
-                .map(to_wit_bounding_box)
-                .collect(),
-            down_side_solid: state.is_side_solid(InternalBlockDirection::Down),
-            up_side_solid: state.is_side_solid(InternalBlockDirection::Up),
-            north_side_solid: state.is_side_solid(InternalBlockDirection::North),
-            south_side_solid: state.is_side_solid(InternalBlockDirection::South),
-            west_side_solid: state.is_side_solid(InternalBlockDirection::West),
-            east_side_solid: state.is_side_solid(InternalBlockDirection::East),
-            down_center_solid: state.is_center_solid(InternalBlockDirection::Down),
-            up_center_solid: state.is_center_solid(InternalBlockDirection::Up),
-            map_color: pumpkin_data::Block::from_state_id(state.id).map_color,
-        })
+    async fn get_block(
+        &mut self,
+        world: Resource<World>,
+        pos: WitBlockPos,
+    ) -> wasmtime::Result<WitBlock> {
+        let world_ref = self.get_world_res(&world)?;
+        let internal_pos = BlockPos::new(pos.x, pos.y, pos.z);
+        let state = world_ref.provider.get_block_state(&internal_pos);
+        let block = pumpkin_data::Block::from_state_id(state.id);
+        Ok(to_wit_block(block))
+    }
+
+    async fn get_block_id(
+        &mut self,
+        world: Resource<World>,
+        pos: WitBlockPos,
+    ) -> wasmtime::Result<u16> {
+        let world_ref = self.get_world_res(&world)?;
+        let internal_pos = BlockPos::new(pos.x, pos.y, pos.z);
+        let state = world_ref.provider.get_block_state(&internal_pos);
+        Ok(pumpkin_data::BlockId::from_state_id(state.id).as_u16())
+    }
+
+    async fn set_block(
+        &mut self,
+        world: Resource<World>,
+        pos: WitBlockPos,
+        block: WitBlock,
+        update_flags: WitBlockFlags,
+    ) -> wasmtime::Result<()> {
+        let block_id = BlockId::new_or_air(block.id);
+        let default_state_id = pumpkin_data::Block::from_id(block_id)
+            .default_state
+            .id
+            .as_u16();
+        self.set_block_state(world, pos, default_state_id, update_flags)
+            .await
+    }
+
+    async fn set_block_by_id(
+        &mut self,
+        world: Resource<World>,
+        pos: WitBlockPos,
+        block_id: u16,
+        update_flags: WitBlockFlags,
+    ) -> wasmtime::Result<()> {
+        let Some(id) = BlockId::new(block_id) else {
+            return Err(wasmtime::Error::msg("Invalid BlockId"));
+        };
+        let default_state_id = pumpkin_data::Block::from_id(id).default_state.id.as_u16();
+        self.set_block_state(world, pos, default_state_id, update_flags)
+            .await
+    }
+
+    async fn set_block_by_name(
+        &mut self,
+        world: Resource<World>,
+        pos: WitBlockPos,
+        name: String,
+        update_flags: WitBlockFlags,
+    ) -> wasmtime::Result<bool> {
+        if let Some(block) = pumpkin_data::Block::from_name(&name) {
+            let default_state_id = block.default_state.id.as_u16();
+            self.set_block_state(world, pos, default_state_id, update_flags)
+                .await?;
+            Ok(true)
+        } else {
+            Ok(false)
+        }
     }
 
     async fn set_block_state(
@@ -658,9 +934,10 @@ impl pumpkin::plugin::world::HostWorld for PluginHostState {
         count: i32,
     ) -> wasmtime::Result<()> {
         let world_ref = self.get_world_res(&world)?;
-        let particle_name = format!("{particle:?}").to_lowercase().replace('_', "-");
-        let particle_data = pumpkin_data::particle::Particle::from_name(&particle_name)
-            .ok_or_else(|| wasmtime::Error::msg(format!("Unknown particle: {particle_name}")))?;
+        let particle_data =
+            pumpkin_data::particle::Particle::from_id(particle as u16).ok_or_else(|| {
+                wasmtime::Error::msg(format!("Unknown particle ID: {}", particle as u16))
+            })?;
 
         world_ref.provider.spawn_particle(
             pumpkin_util::math::vector3::Vector3::new(pos.0, pos.1, pos.2),
@@ -864,6 +1141,77 @@ impl pumpkin::plugin::world::HostWorld for PluginHostState {
                 f64::from(p.0.z),
             ))
         }))
+    }
+
+    async fn ray_trace_block(
+        &mut self,
+        world: Resource<World>,
+        start: WitPosition,
+        end: WitPosition,
+        include_fluids: bool,
+    ) -> wasmtime::Result<Option<WitRayTraceBlockResult>> {
+        let world_provider = self.get_world_res(&world)?.provider.clone();
+        let start_pos = super::events::from_wasm_position(start);
+        let end_pos = super::events::from_wasm_position(end);
+        let res = world_provider.ray_trace_block(start_pos, end_pos, include_fluids);
+        Ok(res.map(|(pos, face, hit_pos)| WitRayTraceBlockResult {
+            pos: WitBlockPos {
+                x: pos.0.x,
+                y: pos.0.y,
+                z: pos.0.z,
+            },
+            face: to_wasm_block_direction(face),
+            hit_pos: super::events::to_wasm_position(hit_pos),
+        }))
+    }
+
+    async fn ray_trace_entity(
+        &mut self,
+        world: Resource<World>,
+        start: WitPosition,
+        end: WitPosition,
+    ) -> wasmtime::Result<Option<WitRayTraceEntityResult>> {
+        let world_provider = self.get_world_res(&world)?.provider.clone();
+        let start_pos = super::events::from_wasm_position(start);
+        let end_pos = super::events::from_wasm_position(end);
+        if let Some((entity, hit_pos, distance)) =
+            world_provider.ray_trace_entity(start_pos, end_pos)
+        {
+            let entity_res = self
+                .add_entity(entity)
+                .map_err(|_| wasmtime::Error::msg("failed to add entity resource"))?;
+            Ok(Some(WitRayTraceEntityResult {
+                entity: entity_res,
+                hit_pos: super::events::to_wasm_position(hit_pos),
+                distance,
+            }))
+        } else {
+            Ok(None)
+        }
+    }
+
+    async fn ray_trace_entities(
+        &mut self,
+        world: Resource<World>,
+        start: WitPosition,
+        end: WitPosition,
+    ) -> wasmtime::Result<Vec<WitRayTraceEntityResult>> {
+        let world_provider = self.get_world_res(&world)?.provider.clone();
+        let start_pos = super::events::from_wasm_position(start);
+        let end_pos = super::events::from_wasm_position(end);
+        let hits = world_provider.ray_trace_entities(start_pos, end_pos);
+        let mut results = Vec::with_capacity(hits.len());
+        for (entity, hit_pos, distance) in hits {
+            let entity_res = self
+                .add_entity(entity)
+                .map_err(|_| wasmtime::Error::msg("failed to add entity resource"))?;
+            results.push(WitRayTraceEntityResult {
+                entity: entity_res,
+                hit_pos: super::events::to_wasm_position(hit_pos),
+                distance,
+            });
+        }
+        Ok(results)
     }
 
     async fn get_block_entity(
@@ -1097,49 +1445,52 @@ impl pumpkin::plugin::world::HostChunk for PluginHostState {
             .unwrap_or(BlockStateId::AIR);
         let state = id.to_state();
         let world_pos = BlockPos::new(chunk_data.x * 16 + pos.x, pos.y, chunk_data.z * 16 + pos.z);
+        Ok(to_wit_block_state(state, Some(&world_pos)))
+    }
 
-        Ok(WitBlockState {
-            id: id.as_u16(),
-            luminance: state.luminance,
-            opacity: state.opacity,
-            hardness: state.hardness,
-            is_air: state.is_air(),
-            is_liquid: state.is_liquid(),
-            is_solid: state.is_solid(),
-            is_full_cube: state.is_full_cube(),
-            has_random_ticks: state.has_random_ticks(),
-            piston_behavior: match state.piston_behavior {
-                PistonBehavior::Normal => WitPistonBehavior::Normal,
-                PistonBehavior::Destroy => WitPistonBehavior::Destroy,
-                PistonBehavior::Block => WitPistonBehavior::Block,
-                PistonBehavior::Ignore => WitPistonBehavior::Ignore,
-                PistonBehavior::PushOnly => WitPistonBehavior::PushOnly,
-            },
-            burnable: state.burnable(),
-            tool_required: state.tool_required(),
-            sided_transparency: state.sided_transparency(),
-            replaceable: state.replaceable(),
-            is_solid_block: state.is_solid_block(),
-            block_entity_type: state.block_entity_type,
-            instrument: to_wit_noteblock_instrument(state.instrument),
-            collision_shapes: state
-                .get_block_collision_shapes_at(&world_pos)
-                .map(to_wit_bounding_box)
-                .collect(),
-            outline_shapes: state
-                .get_block_outline_shapes_at(&world_pos)
-                .map(to_wit_bounding_box)
-                .collect(),
-            down_side_solid: state.is_side_solid(InternalBlockDirection::Down),
-            up_side_solid: state.is_side_solid(InternalBlockDirection::Up),
-            north_side_solid: state.is_side_solid(InternalBlockDirection::North),
-            south_side_solid: state.is_side_solid(InternalBlockDirection::South),
-            west_side_solid: state.is_side_solid(InternalBlockDirection::West),
-            east_side_solid: state.is_side_solid(InternalBlockDirection::East),
-            down_center_solid: state.is_center_solid(InternalBlockDirection::Down),
-            up_center_solid: state.is_center_solid(InternalBlockDirection::Up),
-            map_color: pumpkin_data::Block::from_state_id(state.id).map_color,
-        })
+    async fn get_block(
+        &mut self,
+        chunk: Resource<WitChunk>,
+        pos: WitBlockPos,
+    ) -> wasmtime::Result<WitBlock> {
+        let chunk_res = self.get_chunk_res(&chunk)?;
+        let (_, chunk_data) = &chunk_res.provider;
+        let Some(chunk_data) = chunk_data.upgrade() else {
+            return Err(wasmtime::Error::msg("Chunk unloaded"));
+        };
+        let id = chunk_data
+            .section
+            .get_block_absolute_y(pos.x as usize, pos.y, pos.z as usize)
+            .unwrap_or(BlockStateId::AIR);
+        let block = pumpkin_data::Block::from_state_id(id);
+        Ok(to_wit_block(block))
+    }
+
+    async fn set_block(
+        &mut self,
+        chunk: Resource<WitChunk>,
+        pos: WitBlockPos,
+        block: WitBlock,
+    ) -> wasmtime::Result<()> {
+        let block_id = BlockId::new_or_air(block.id);
+        let default_state_id = pumpkin_data::Block::from_id(block_id)
+            .default_state
+            .id
+            .as_u16();
+        self.set_block_state(chunk, pos, default_state_id).await
+    }
+
+    async fn set_block_by_id(
+        &mut self,
+        chunk: Resource<WitChunk>,
+        pos: WitBlockPos,
+        block_id: u16,
+    ) -> wasmtime::Result<()> {
+        let Some(id) = BlockId::new(block_id) else {
+            return Err(wasmtime::Error::msg("Invalid BlockId"));
+        };
+        let default_state_id = pumpkin_data::Block::from_id(id).default_state.id.as_u16();
+        self.set_block_state(chunk, pos, default_state_id).await
     }
 
     async fn set_block_state(
@@ -1355,6 +1706,17 @@ impl pumpkin::plugin::world::HostWorldBorder for PluginHostState {
         Ok(border_res.provider.worldborder.lock().await.center_z)
     }
 
+    async fn get_center(
+        &mut self,
+        border: Resource<WitWorldBorder>,
+    ) -> wasmtime::Result<WitPosition> {
+        let border_res = self.get_world_border_res(&border)?;
+        let guard = border_res.provider.worldborder.lock().await;
+        Ok(super::events::to_wasm_position(
+            pumpkin_util::math::vector3::Vector3::new(guard.center_x, 0.0, guard.center_z),
+        ))
+    }
+
     async fn set_center(
         &mut self,
         border: Resource<WitWorldBorder>,
@@ -1372,6 +1734,10 @@ impl pumpkin::plugin::world::HostWorldBorder for PluginHostState {
         Ok(border_res.provider.worldborder.lock().await.new_diameter)
     }
 
+    async fn get_size(&mut self, border: Resource<WitWorldBorder>) -> wasmtime::Result<f64> {
+        self.get_diameter(border).await
+    }
+
     async fn set_diameter(
         &mut self,
         border: Resource<WitWorldBorder>,
@@ -1386,6 +1752,41 @@ impl pumpkin::plugin::world::HostWorldBorder for PluginHostState {
             .await
             .set_diameter(&world, diameter, speed.map(|s| s as i64));
         Ok(())
+    }
+
+    async fn set_size(
+        &mut self,
+        border: Resource<WitWorldBorder>,
+        size: f64,
+    ) -> wasmtime::Result<()> {
+        self.set_diameter(border, size, None).await
+    }
+
+    async fn set_size_transition(
+        &mut self,
+        border: Resource<WitWorldBorder>,
+        new_size: f64,
+        time_seconds: u64,
+    ) -> wasmtime::Result<()> {
+        let speed_millis = time_seconds.saturating_mul(1000);
+        self.set_diameter(border, new_size, Some(speed_millis))
+            .await
+    }
+
+    async fn get_target_diameter(
+        &mut self,
+        border: Resource<WitWorldBorder>,
+    ) -> wasmtime::Result<f64> {
+        let border_res = self.get_world_border_res(&border)?;
+        Ok(border_res.provider.worldborder.lock().await.new_diameter)
+    }
+
+    async fn get_target_speed(
+        &mut self,
+        border: Resource<WitWorldBorder>,
+    ) -> wasmtime::Result<i64> {
+        let border_res = self.get_world_border_res(&border)?;
+        Ok(border_res.provider.worldborder.lock().await.speed)
     }
 
     async fn get_warning_distance(
@@ -1434,6 +1835,76 @@ impl pumpkin::plugin::world::HostWorldBorder for PluginHostState {
         Ok(())
     }
 
+    async fn get_warning_time(
+        &mut self,
+        border: Resource<WitWorldBorder>,
+    ) -> wasmtime::Result<i32> {
+        self.get_warning_delay(border).await
+    }
+
+    async fn set_warning_time(
+        &mut self,
+        border: Resource<WitWorldBorder>,
+        time: i32,
+    ) -> wasmtime::Result<()> {
+        self.set_warning_delay(border, time).await
+    }
+
+    async fn get_damage_buffer(
+        &mut self,
+        border: Resource<WitWorldBorder>,
+    ) -> wasmtime::Result<f64> {
+        let border_res = self.get_world_border_res(&border)?;
+        Ok(f64::from(
+            border_res.provider.worldborder.lock().await.buffer,
+        ))
+    }
+
+    async fn set_damage_buffer(
+        &mut self,
+        border: Resource<WitWorldBorder>,
+        buffer: f64,
+    ) -> wasmtime::Result<()> {
+        let border_res = self.get_world_border_res(&border)?;
+        border_res
+            .provider
+            .worldborder
+            .lock()
+            .await
+            .set_damage_buffer(buffer as f32);
+        Ok(())
+    }
+
+    async fn get_damage_amount(
+        &mut self,
+        border: Resource<WitWorldBorder>,
+    ) -> wasmtime::Result<f64> {
+        let border_res = self.get_world_border_res(&border)?;
+        Ok(f64::from(
+            border_res
+                .provider
+                .worldborder
+                .lock()
+                .await
+                .damage_per_block,
+        ))
+    }
+
+    async fn set_damage_amount(
+        &mut self,
+        border: Resource<WitWorldBorder>,
+        damage: f64,
+    ) -> wasmtime::Result<()> {
+        let border_res = self.get_world_border_res(&border)?;
+        border_res
+            .provider
+            .worldborder
+            .lock()
+            .await
+            .set_damage_per_block(damage as f32);
+        Ok(())
+    }
+
     async fn contains(
         &mut self,
         border: Resource<WitWorldBorder>,
@@ -1442,6 +1913,27 @@ impl pumpkin::plugin::world::HostWorldBorder for PluginHostState {
     ) -> wasmtime::Result<bool> {
         let border_res = self.get_world_border_res(&border)?;
         Ok(border_res.provider.worldborder.lock().await.contains(x, z))
+    }
+
+    async fn contains_pos(
+        &mut self,
+        border: Resource<WitWorldBorder>,
+        pos: WitPosition,
+    ) -> wasmtime::Result<bool> {
+        let border_res = self.get_world_border_res(&border)?;
+        Ok(border_res
+            .provider
+            .worldborder
+            .lock()
+            .await
+            .contains(pos.0, pos.2))
+    }
+
+    async fn reset(&mut self, border: Resource<WitWorldBorder>) -> wasmtime::Result<()> {
+        let border_res = self.get_world_border_res(&border)?;
+        let world = border_res.provider.clone();
+        world.worldborder.lock().await.reset(&world);
+        Ok(())
     }
 
     async fn drop(&mut self, rep: Resource<WitWorldBorder>) -> wasmtime::Result<()> {
@@ -1763,5 +2255,35 @@ impl pumpkin_world::generation::generator::CustomChunkGenerator for WasmChunkGen
         let chunk = cache.chunks[mid].get_proto_chunk_mut();
         self.invoke_phase(pumpkin::plugin::world::GenerationPhase::Features, chunk);
         chunk.stage = pumpkin_world::chunk_system::StagedChunkEnum::Features;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::pumpkin;
+
+    #[test]
+    fn wit_particle_ids_match_internal_particle_ids() {
+        let cases = [
+            (
+                pumpkin::plugin::particles::Particle::AngryVillager,
+                pumpkin_data::particle::Particle::AngryVillager,
+            ),
+            (
+                pumpkin::plugin::particles::Particle::HappyVillager,
+                pumpkin_data::particle::Particle::HappyVillager,
+            ),
+            (
+                pumpkin::plugin::particles::Particle::SulfurCubeGoo,
+                pumpkin_data::particle::Particle::SulfurCubeGoo,
+            ),
+        ];
+
+        for (wit, internal) in cases {
+            assert_eq!(
+                pumpkin_data::particle::Particle::from_id(wit as u16),
+                Some(internal)
+            );
+        }
     }
 }

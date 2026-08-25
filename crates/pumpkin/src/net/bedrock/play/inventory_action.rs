@@ -410,7 +410,7 @@ impl BedrockClient {
 
         if packet.legacy_request_id.0 != 0 {
             use pumpkin_protocol::bedrock::client::item_stack_response::{
-                CItemStackResponse, ItemStackResponse, ItemStackResponseContainerInfo,
+                CItemStackResponse, ItemStackResponseContainerInfo, ItemStackResponseInfo,
                 ItemStackResponseSlotInfo,
             };
 
@@ -419,15 +419,15 @@ impl BedrockClient {
                 for update in updates {
                     let container_info = container_infos.iter_mut().find(
                         |info: &&mut ItemStackResponseContainerInfo| {
-                            info.container_name == update.container_name
+                            info.full_container_name == update.container_name
                         },
                     );
 
                     let slot_info = ItemStackResponseSlotInfo {
+                        requested_slot: update.slot_id,
                         slot: update.slot_id,
-                        hotbar_slot: update.slot_id,
-                        count: update.count,
-                        item_stack_id: update.stack_id,
+                        amount: update.count,
+                        item_stack_net_id: update.stack_id,
                         custom_name: String::new(),
                         filtered_custom_name: String::new(),
                         durability_correction: VarInt(0),
@@ -437,7 +437,7 @@ impl BedrockClient {
                         info.slots.push(slot_info);
                     } else {
                         container_infos.push(ItemStackResponseContainerInfo {
-                            container_name: update.container_name.clone(),
+                            full_container_name: update.container_name.clone(),
                             slots: vec![slot_info],
                         });
                     }
@@ -445,10 +445,10 @@ impl BedrockClient {
             }
 
             self.enqueue_client_packet(&CItemStackResponse {
-                responses: vec![ItemStackResponse {
+                responses: vec![ItemStackResponseInfo {
                     result,
-                    request_id: packet.legacy_request_id,
-                    container_infos,
+                    client_request_id: packet.legacy_request_id,
+                    containers: container_infos,
                 }],
             })
             .await;

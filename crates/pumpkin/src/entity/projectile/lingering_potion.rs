@@ -8,7 +8,7 @@ use crate::{
 };
 use pumpkin_data::entity::EntityStatus;
 use pumpkin_data::item_stack::ItemStack;
-use pumpkin_protocol::bedrock::server::actor_event::ActorEventType;
+use pumpkin_protocol::bedrock::server::actor_event::ActorEventID;
 use pumpkin_protocol::java::client::play::CWorldEvent;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector2::{Vector2, to_chunk_pos};
@@ -112,7 +112,7 @@ impl EntityBase for LingeringPotionEntity {
             world.send_entity_status(
                 self.get_entity(),
                 EntityStatus::Death,
-                Some(ActorEventType::Death),
+                Some(ActorEventID::Death),
             );
 
             // Read stored item stack and compute potion effects

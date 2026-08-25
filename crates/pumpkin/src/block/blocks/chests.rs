@@ -317,6 +317,40 @@ impl BlockBehaviour for ChestBlock {
 #[pumpkin_block_from_tag("minecraft:copper_chests")]
 pub struct CopperChestBlock;
 
+impl
+    crate::block::blocks::weathering_copper::ChangeOverTimeBlock<
+        crate::block::blocks::weathering_copper::WeatherState,
+    > for CopperChestBlock
+{
+    fn get_age(
+        &self,
+        block: &Block,
+    ) -> Option<crate::block::blocks::weathering_copper::WeatherState> {
+        crate::block::blocks::weathering_copper::get_weather_state(block)
+    }
+
+    fn get_chance_modifier(
+        &self,
+        age: crate::block::blocks::weathering_copper::WeatherState,
+    ) -> f32 {
+        crate::block::blocks::weathering_copper::get_chance_modifier(age)
+    }
+
+    fn get_next(&self, block: &Block) -> Option<&'static Block> {
+        crate::block::blocks::weathering_copper::get_next(block)
+    }
+
+    fn get_previous(&self, block: &Block) -> Option<&'static Block> {
+        crate::block::blocks::weathering_copper::get_previous(block)
+    }
+
+    fn get_first(&self, block: &Block) -> Option<&'static Block> {
+        crate::block::blocks::weathering_copper::get_first(block)
+    }
+}
+
+impl crate::block::blocks::weathering_copper::WeatheringCopper for CopperChestBlock {}
+
 impl BlockBehaviour for CopperChestBlock {
     fn on_place<'a>(&'a self, args: OnPlaceArgs<'a>) -> BlockFuture<'a, BlockStateId> {
         Box::pin(async move { on_place_chest_impl(&args) })
@@ -363,8 +397,12 @@ impl BlockBehaviour for CopperChestBlock {
                 return;
             }
 
-            // Try to oxidize the copper chest
-            try_oxidize_copper_chest(args.world, args.position, args.block, chest_props).await;
+            crate::block::blocks::weathering_copper::change_over_time(
+                args.world,
+                args.position,
+                args.block,
+            )
+            .await;
         })
     }
 
@@ -374,142 +412,6 @@ impl BlockBehaviour for CopperChestBlock {
     ) -> BlockFuture<'a, Option<u8>> {
         Box::pin(async move { get_chest_comparator_output(args).await })
     }
-}
-
-/// Copper oxidation levels with their ordinal values
-const COPPER_CHEST_OXIDATION: &[(&Block, &Block, u8)] = &[
-    (&Block::COPPER_CHEST, &Block::EXPOSED_COPPER_CHEST, 0),
-    (
-        &Block::EXPOSED_COPPER_CHEST,
-        &Block::WEATHERED_COPPER_CHEST,
-        1,
-    ),
-    (
-        &Block::WEATHERED_COPPER_CHEST,
-        &Block::OXIDIZED_COPPER_CHEST,
-        2,
-    ),
-];
-
-/// Get the oxidation level ordinal for a block (None if not oxidizable copper chest)
-fn get_oxidation_level(block: &Block) -> Option<u8> {
-    // Check non-waxed variants
-    if block == &Block::COPPER_CHEST {
-        return Some(0);
-    }
-    if block == &Block::EXPOSED_COPPER_CHEST {
-        return Some(1);
-    }
-    if block == &Block::WEATHERED_COPPER_CHEST {
-        return Some(2);
-    }
-    if block == &Block::OXIDIZED_COPPER_CHEST {
-        return Some(3);
-    }
-    // Waxed variants don't oxidize
-    None
-}
-
-/// Try to oxidize a copper chest to its next oxidation level.
-/// Uses vanilla's degradation algorithm with neighbor checking.
-async fn try_oxidize_copper_chest(
-    world: &Arc<World>,
-    position: &BlockPos,
-    current_block: &Block,
-    chest_props: ChestLikeProperties,
-) {
-    use rand::RngExt;
-
-    // Base chance per random tick: ~5.69%
-    const BASE_DEGRADATION_CHANCE: f32 = 0.056_888_89;
-
-    // First roll: only ~5.69% chance to even attempt oxidation
-    if rand::rng().random::<f32>() >= BASE_DEGRADATION_CHANCE {
-        return;
-    }
-
-    // Find the next oxidation level
-    let (next_block, current_level) = match COPPER_CHEST_OXIDATION
-        .iter()
-        .find(|(from, _, _)| *from == current_block)
-    {
-        Some((_, to, level)) => (*to, *level),
-        None => return, // Already fully oxidized or waxed
-    };
-
-    // Scan neighbors in 4-block Manhattan distance to calculate oxidation chance
-    let (same_level_count, higher_level_count) =
-        count_neighbor_oxidation_levels(world, position, current_level);
-
-    // If we found any neighbors at a LOWER level, oxidation is blocked
-    // (This is handled in count_neighbor_oxidation_levels by returning early)
-
-    // Calculate weighted probability: ((higher + 1) / (higher + same + 1))^2 * multiplier
-    let ratio =
-        (higher_level_count + 1) as f32 / (higher_level_count + same_level_count + 1) as f32;
-    // Multiplier is 0.75 for UNAFFECTED (level 0), 1.0 for others
-    let multiplier = if current_level == 0 { 0.75 } else { 1.0 };
-    let final_chance = ratio * ratio * multiplier;
-
-    if rand::rng().random::<f32>() >= final_chance {
-        return;
-    }
-
-    // Apply oxidation with same properties
-    let new_state_id = chest_props.to_state_id(next_block);
-    world
-        .set_block_state(position, new_state_id, BlockFlags::NOTIFY_LISTENERS)
-        .await;
-}
-
-/// Count copper blocks at same and higher oxidation levels within 4-block Manhattan distance.
-/// Returns (same, higher) counts, or (0, 0) if a lower-level neighbor was found (blocking oxidation).
-fn count_neighbor_oxidation_levels(
-    world: &Arc<World>,
-    center: &BlockPos,
-    current_level: u8,
-) -> (i32, i32) {
-    use std::cmp::Ordering;
-
-    let mut same_level_count = 0i32;
-    let mut higher_level_count = 0i32;
-
-    // Iterate in a 4-block Manhattan distance (9x9x9 cube checked with distance filter)
-    for dx in -4i32..=4 {
-        for dy in -4i32..=4 {
-            for dz in -4i32..=4 {
-                let manhattan_dist = dx.abs() + dy.abs() + dz.abs();
-                if manhattan_dist > 4 || manhattan_dist == 0 {
-                    continue;
-                }
-
-                let neighbor_pos = BlockPos(pumpkin_util::math::vector3::Vector3::new(
-                    center.0.x + dx,
-                    center.0.y + dy,
-                    center.0.z + dz,
-                ));
-
-                let neighbor_block = world.get_block(&neighbor_pos);
-
-                if let Some(neighbor_level) = get_oxidation_level(neighbor_block) {
-                    match neighbor_level.cmp(&current_level) {
-                        Ordering::Less => {
-                            // Found a neighbor at lower oxidation level - block oxidation entirely
-                            return (0, 0);
-                        }
-                        Ordering::Greater => {
-                            higher_level_count += 1;
-                        }
-                        Ordering::Equal => {
-                            same_level_count += 1;
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    (same_level_count, higher_level_count)
 }
 
 /// Trapped chests have the same behavior as wooden chests but also emit redstone power based on viewer count.

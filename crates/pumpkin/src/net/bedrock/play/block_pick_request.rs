@@ -4,12 +4,12 @@ use super::*;
 impl BedrockClient {
     #[allow(clippy::too_many_lines)]
     pub async fn handle_block_pick_request(&self, player: &Arc<Player>, packet: SBlockPickRequest) {
-        if !player.can_interact_with_block_at(&packet.block_pos, 1.0) {
+        if !player.can_interact_with_block_at(&packet.position, 1.0) {
             return;
         }
 
         let world = player.world();
-        let block = world.get_block(&packet.block_pos);
+        let block = world.get_block(&packet.position);
 
         if block.item_id == 0 {
             return;
@@ -20,7 +20,7 @@ impl BedrockClient {
         };
         let stack = ItemStack::new(1, item);
 
-        let target_hotbar_slot = packet.hotbar_slot as usize;
+        let target_hotbar_slot = packet.max_slots as usize;
         if target_hotbar_slot >= 9 {
             return;
         }
@@ -71,7 +71,7 @@ impl BedrockClient {
                 &CPlayerHotbar {
                     selected_slot: VarUInt(player.inventory.get_selected_slot() as u32),
                     container_id: 0,
-                    should_select_block: true,
+                    should_select_slot: true,
                 },
             )
             .await;

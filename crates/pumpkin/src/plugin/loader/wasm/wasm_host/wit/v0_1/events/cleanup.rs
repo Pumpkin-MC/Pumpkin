@@ -164,8 +164,52 @@ pub fn cleanup_event(event: &Event, state: &mut PluginHostState) {
         Event::BedrockFormResponseEvent(data) => {
             cleanup_player(state, &data.player);
         }
-        Event::CustomClickActionEvent(data) => {
+        Event::DialogClickActionEvent(data) => {
             cleanup_player(state, &data.player);
+        }
+        Event::DialogClearEvent(data) => {
+            cleanup_player(state, &data.player);
+        }
+        Event::DialogShowEvent(data) => {
+            cleanup_player(state, &data.player);
+            cleanup_text_component(state, &data.dialog.title);
+            for body in &data.dialog.body {
+                match body {
+                    crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::java_dialogs::DialogBody::PlainMessage(c) => cleanup_text_component(state, c),
+                    crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::java_dialogs::DialogBody::Item(item) => cleanup_item_stack(state, item),
+                }
+            }
+            for input in &data.dialog.inputs {
+                use crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::java_dialogs::DialogInput;
+                match input {
+                    DialogInput::Bool(b) => cleanup_text_component(state, &b.label),
+                    DialogInput::Text(t) => {
+                        cleanup_text_component(state, &t.label);
+                        cleanup_text_component(state, &t.placeholder);
+                    }
+                    DialogInput::NumberRange(n) => cleanup_text_component(state, &n.label),
+                    DialogInput::SingleOption(s) => {
+                        cleanup_text_component(state, &s.label);
+                        for opt in &s.options {
+                            cleanup_text_component(state, opt);
+                        }
+                    }
+                }
+            }
+            for button in &data.dialog.buttons {
+                cleanup_text_component(state, &button.text);
+                if let Some(tooltip) = &button.tooltip {
+                    cleanup_text_component(state, tooltip);
+                }
+            }
+            for link in &data.dialog.links {
+                if let crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::java_dialogs::LinkLabel::Custom(c) = &link.label {
+                    cleanup_text_component(state, c);
+                }
+            }
+            if let Some(ext_title) = &data.dialog.external_title {
+                cleanup_text_component(state, ext_title);
+            }
         }
         Event::ServerCommandEvent(_) => {}
         Event::ServerListPingEvent(data) => {

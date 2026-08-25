@@ -6,16 +6,6 @@ use crate::{
 };
 use pumpkin_macros::packet;
 
-#[derive(PacketWrite)]
-#[packet(107)]
-pub struct CSetDisplayObjective {
-    pub display_slot: String,
-    pub objective_name: String,
-    pub display_name: String,
-    pub criteria_name: String,
-    pub sort_order: VarInt,
-}
-
 #[packet(108)]
 pub struct CSetScore {
     pub action: VarInt, // 0 = change, 1 = remove
@@ -90,19 +80,5 @@ impl ScoreEntry {
             _ => {}
         }
         Ok(())
-    }
-}
-
-#[derive(PacketWrite)]
-#[packet(106)]
-pub struct CRemoveObjective {
-    pub objective_name: String,
-}
-
-impl CRemoveObjective {
-    pub fn new(objective_name: impl Into<String>) -> Self {
-        Self {
-            objective_name: objective_name.into(),
-        }
     }
 }

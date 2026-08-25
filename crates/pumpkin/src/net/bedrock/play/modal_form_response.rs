@@ -13,7 +13,7 @@ impl BedrockClient {
                 player.clone(),
                 packet.form_id.0,
                 packet
-                    .form_data
+                    .json_response
                     .filter(|data| data != "null")
                     .map(std::borrow::Cow::into_owned),
             );

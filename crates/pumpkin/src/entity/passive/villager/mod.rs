@@ -22,8 +22,8 @@ use pumpkin_inventory::screen_handler::{
 };
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::bedrock::{
-    client::set_actor_data::{EntityMetadata, MetadataValue, entity_data_key},
-    server::actor_event::ActorEventType,
+    client::set_actor_data::{MetadataValue, SyncedActorDataList, entity_data_key},
+    server::actor_event::ActorEventID,
 };
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::java::client::play::{CMerchantOffers, Metadata};
@@ -39,7 +39,7 @@ use crate::entity::{
     ai::{
         goal::{
             avoid_entity::AvoidEntityGoal, look_around::RandomLookAroundGoal,
-            look_at_entity::LookAtEntityGoal, swim::SwimGoal,
+            look_at_entity::LookAtEntityGoal, open_door::OpenDoorGoal, swim::SwimGoal,
             trade_with_player::TradeWithPlayerGoal, wander_around::WanderAroundGoal,
             work_at_job_site::WorkAtJobSiteGoal,
         },
@@ -57,7 +57,7 @@ pub use data::{
     get_food_points,
 };
 
-async fn trigger_trade_advancement(player: &Player) {
+pub(crate) async fn trigger_trade_advancement(player: &Player) {
     player
         .trigger_advancement(
             crate::entity::player::advancement::trigger::AdvancementTrigger::TradedWithVillager,
@@ -166,7 +166,7 @@ fn enchant_trade_item(
     Some((stack, additional_cost))
 }
 
-fn apply_random_dye(rng: &mut impl rand::Rng, stack: &mut ItemStack) {
+pub(crate) fn apply_random_dye(rng: &mut impl rand::Rng, stack: &mut ItemStack) {
     use pumpkin_data::data_component::DataComponent;
     use pumpkin_data::data_component_impl::{DataComponentImpl, DyedColorImpl};
     use rand::RngExt;
@@ -199,7 +199,7 @@ fn apply_random_dye(rng: &mut impl rand::Rng, stack: &mut ItemStack) {
     ));
 }
 
-fn apply_random_stew_effect(rng: &mut impl rand::Rng, stack: &mut ItemStack) {
+pub(crate) fn apply_random_stew_effect(rng: &mut impl rand::Rng, stack: &mut ItemStack) {
     use pumpkin_data::data_component::DataComponent;
     use pumpkin_data::data_component_impl::{
         DataComponentImpl, SuspiciousStewEffect, SuspiciousStewEffectsImpl,
@@ -230,7 +230,7 @@ fn apply_random_stew_effect(rng: &mut impl rand::Rng, stack: &mut ItemStack) {
     ));
 }
 
-fn apply_potion(stack: &mut ItemStack, potion_name: &str) {
+pub(crate) fn apply_potion(stack: &mut ItemStack, potion_name: &str) {
     use pumpkin_data::data_component::DataComponent;
     use pumpkin_data::data_component_impl::{DataComponentImpl, PotionContentsImpl};
 
@@ -283,11 +283,11 @@ pub struct VillagerEntity {
 }
 
 impl VillagerEntity {
-    fn bedrock_metadata(data: VillagerData, xp: i32) -> EntityMetadata {
+    fn bedrock_metadata(data: VillagerData, xp: i32) -> SyncedActorDataList {
         const PROFESSIONS: [i32; 15] = [0, 8, 11, 6, 7, 1, 2, 4, 12, 5, 13, 14, 3, 10, 9];
         const REGIONS: [i32; 7] = [1, 2, 0, 3, 4, 5, 6];
 
-        let mut metadata = EntityMetadata::new();
+        let mut metadata = SyncedActorDataList::new();
         metadata.set(
             entity_data_key::VARIANT,
             MetadataValue::Int(
@@ -371,6 +371,7 @@ impl VillagerEntity {
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
 
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
+            goal_selector.add_goal(0, Box::new(OpenDoorGoal::new(true)));
             // Villagers avoid threats
             goal_selector.add_goal(
                 1,
@@ -1130,7 +1131,7 @@ impl VillagerEntity {
                 world.send_entity_status(
                     self.get_entity(),
                     pumpkin_data::entity::EntityStatus::VillagerHappy,
-                    Some(ActorEventType::VillagerHappy),
+                    Some(ActorEventID::VillagerHappy),
                 );
                 self.job_site_pending.store(false, Ordering::Relaxed);
                 if profession == VillagerProfession::None {
@@ -1155,7 +1156,7 @@ impl VillagerEntity {
         entity.world.load().send_entity_status(
             entity,
             pumpkin_data::entity::EntityStatus::VillagerAngry,
-            Some(ActorEventType::VillagerAngry),
+            Some(ActorEventID::VillagerAngry),
         );
         entity.play_sound(pumpkin_data::sound::Sound::EntityVillagerNo);
     }
@@ -1726,7 +1727,7 @@ impl Mob for VillagerEntity {
 
     fn mob_bedrock_spawn_metadata(
         &self,
-    ) -> crate::entity::EntityBaseFuture<'_, Option<EntityMetadata>> {
+    ) -> crate::entity::EntityBaseFuture<'_, Option<SyncedActorDataList>> {
         Box::pin(async move {
             Some(Self::bedrock_metadata(
                 *self.villager_data.lock().await,
@@ -1832,7 +1833,7 @@ impl Mob for VillagerEntity {
             self.get_entity().world.load().send_entity_status(
                 self.get_entity(),
                 pumpkin_data::entity::EntityStatus::VillagerAngry,
-                Some(ActorEventType::VillagerAngry),
+                Some(ActorEventID::VillagerAngry),
             );
         })
     }
@@ -1877,7 +1878,7 @@ impl Mob for VillagerEntity {
                 world.send_entity_status(
                     self.get_entity(),
                     pumpkin_data::entity::EntityStatus::VillagerHappy,
-                    Some(ActorEventType::VillagerHappy),
+                    Some(ActorEventID::VillagerHappy),
                 );
             }
 

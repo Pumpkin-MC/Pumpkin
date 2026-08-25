@@ -368,7 +368,10 @@ async fn build_peer(
     advertised_ip: Option<IpAddr>,
 ) -> Result<Arc<dyn PeerConnection>, String> {
     let ice_bind_addr = if direct_ip {
-        SocketAddr::new(IpAddr::V4(std::net::Ipv4Addr::UNSPECIFIED), 0)
+        // Direct connections are relayed through the router's loopback socket.
+        // Binding every interface would make the inner ICE source differ from
+        // the loopback route registered after SDP generation.
+        SocketAddr::new(state.ice_router.internal_addr().ip(), 0)
     } else {
         SocketAddr::new(state.ice_local_addr.ip(), 0)
     };

@@ -4,13 +4,13 @@ use crate::{codec::var_uint::VarUInt, serial::PacketRead};
 use pumpkin_macros::packet;
 
 #[packet(8)]
-pub struct SResourcePackResponse {
+pub struct SResourcePackClientResponse {
     pub response: u8,
     pub download_size: u16,
     pub pack_ids: Vec<String>,
 }
 
-impl PacketRead for SResourcePackResponse {
+impl PacketRead for SResourcePackClientResponse {
     fn read<R: Read>(reader: &mut R) -> Result<Self, Error> {
         let encoded_status = VarUInt::read(reader)?.0;
         let response = encoded_status
@@ -47,7 +47,7 @@ impl PacketRead for SResourcePackResponse {
     }
 }
 
-impl SResourcePackResponse {
+impl SResourcePackClientResponse {
     pub const STATUS_REFUSED: u8 = 1;
     pub const STATUS_SEND_PACKS: u8 = 2;
     pub const STATUS_HAVE_ALL_PACKS: u8 = 3;

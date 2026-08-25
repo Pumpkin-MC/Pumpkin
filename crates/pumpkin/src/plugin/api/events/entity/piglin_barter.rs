@@ -14,3 +14,15 @@ pub struct PiglinBarterEvent {
     /// The outcome item stacks produced by the barter.
     pub outcome: Vec<ItemStack>,
 }
+
+impl PiglinBarterEvent {
+    #[must_use]
+    pub const fn new(entity_id: i32, input_item: ItemStack, outcome: Vec<ItemStack>) -> Self {
+        Self {
+            cancelled: false,
+            entity_id,
+            input_item,
+            outcome,
+        }
+    }
+}

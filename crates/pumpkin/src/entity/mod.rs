@@ -46,7 +46,7 @@ use pumpkin_protocol::{
         },
         move_player::CMovePlayer,
         set_actor_data::{
-            CSetActorData, EntityMetadata, MetadataValue, PropertySyncData, entity_data_flag,
+            CSetActorData, MetadataValue, PropertySyncData, SyncedActorDataList, entity_data_flag,
             entity_data_key,
         },
     },
@@ -221,7 +221,7 @@ pub trait EntityBase: Send + Sync + std::any::Any {
             let is_baby = entity.age.load(Ordering::Relaxed) < 0;
 
             if is_baby {
-                let mut bedrock_meta = EntityMetadata::new();
+                let mut bedrock_meta = SyncedActorDataList::new();
                 bedrock_meta.set_flag(entity_data_key::FLAGS, entity_data_flag::BABY as u8, true);
                 entity.send_meta_data(
                     &[Metadata::new(tracked_data::ageable_mob::DATA_BABY_ID, true)],
@@ -344,24 +344,23 @@ pub trait EntityBase: Send + Sync + std::any::Any {
             {
                 metadata.0.extend(mob_metadata.0);
             }
-            let packet = CAddActor::new(
-                VarLong(runtime_id as i64),
-                VarULong(runtime_id),
-                identifier.to_string(),
-                entity.pos.load().to_f32_lossy(),
-                entity.velocity.load().to_f32_lossy(),
-                entity.pitch.load(),
-                entity.yaw.load(),
-                entity.head_yaw.load(),
-                entity.body_yaw.load(),
-                Vec::new(),
-                metadata,
-                PropertySyncData {
-                    int_properties: std::collections::HashMap::new(),
-                    float_properties: std::collections::HashMap::new(),
+            let packet = CAddActor {
+                target_actor_id: VarLong(runtime_id as i64),
+                target_runtime_id: VarULong(runtime_id),
+                actor_type: identifier.to_string(),
+                position: entity.pos.load().to_f32_lossy(),
+                velocity: entity.velocity.load().to_f32_lossy(),
+                rotation: Vector2::new(entity.pitch.load(), entity.yaw.load()),
+                y_head_rotation: entity.head_yaw.load(),
+                y_body_rotation: entity.body_yaw.load(),
+                attributes_list: Vec::new(),
+                actor_data: metadata,
+                synced_properties: PropertySyncData {
+                    int_entries_list: std::collections::HashMap::new(),
+                    float_entries_list: std::collections::HashMap::new(),
                 },
-                Vec::new(),
-            );
+                actor_links: Vec::new(),
+            };
             if let Ok(data) = client.serialize_packet(&packet) {
                 client.send_game_packet(data).await;
             }
@@ -1101,7 +1100,7 @@ impl Entity {
         self.world.store(world);
     }
 
-    pub fn bedrock_metadata(&self) -> EntityMetadata {
+    pub fn bedrock_metadata(&self) -> SyncedActorDataList {
         if self.bedrock_flags.load(Ordering::Relaxed) == 0 {
             self.bedrock_flags.fetch_or(
                 (1i64 << entity_data_flag::HAS_GRAVITY)
@@ -1112,7 +1111,7 @@ impl Entity {
             );
         }
 
-        let mut metadata = EntityMetadata::new();
+        let mut metadata = SyncedActorDataList::new();
         metadata.set(
             entity_data_key::WIDTH,
             MetadataValue::Float(self.entity_type.dimension[0]),
@@ -1124,11 +1123,11 @@ impl Entity {
         metadata.set(entity_data_key::SCALE, MetadataValue::Float(1.0));
         metadata.set(
             entity_data_key::FLAGS,
-            MetadataValue::Long(self.bedrock_flags.load(Ordering::Relaxed)),
+            MetadataValue::Int64(self.bedrock_flags.load(Ordering::Relaxed)),
         );
         metadata.set(
             entity_data_key::FLAGS_TWO,
-            MetadataValue::Long(self.bedrock_flags_two.load(Ordering::Relaxed)),
+            MetadataValue::Int64(self.bedrock_flags_two.load(Ordering::Relaxed)),
         );
 
         if let Some(name) = &**self.custom_name.load() {
@@ -1178,7 +1177,7 @@ impl Entity {
     /// Sets a custom name for the entity, typically used with nametags
     pub fn set_custom_name(&self, name: TextComponent) {
         self.custom_name.store(Arc::new(Some(name.clone())));
-        let mut bedrock_meta = EntityMetadata::new();
+        let mut bedrock_meta = SyncedActorDataList::new();
         bedrock_meta.set(
             entity_data_key::NAME,
             MetadataValue::String(name.clone().get_text()),
@@ -1205,7 +1204,7 @@ impl Entity {
 
     pub fn set_custom_name_visible(&self, visible: bool) {
         self.custom_name_visible.store(visible, Ordering::Relaxed);
-        let mut bedrock_meta = EntityMetadata::new();
+        let mut bedrock_meta = SyncedActorDataList::new();
         if let Some(name) = &**self.custom_name.load() {
             bedrock_meta.set(
                 entity_data_key::NAME,
@@ -1264,11 +1263,11 @@ impl Entity {
         self.world.load().broadcast_to_chunk_editioned_sync(
             chunk_pos,
             &CEntityVelocity::new(self.entity_id.into(), velocity),
-            &CSetActorMotion::new(
-                VarULong(self.entity_id as u64),
-                Vector3::new(velocity.x as f32, velocity.y as f32, velocity.z as f32),
-                VarULong(0),
-            ),
+            &CSetActorMotion {
+                target_runtime_id: VarULong(self.entity_id as u64),
+                motion: Vector3::new(velocity.x as f32, velocity.y as f32, velocity.z as f32),
+                tick: VarULong(0),
+            },
         );
     }
 
@@ -2639,7 +2638,7 @@ impl Entity {
         // Only update and send metadata if the value changed
         if new_frozen_ticks != old_frozen_ticks {
             self.frozen_ticks.store(new_frozen_ticks, Ordering::Relaxed);
-            let mut bedrock_meta = EntityMetadata::new();
+            let mut bedrock_meta = SyncedActorDataList::new();
             bedrock_meta.set(
                 entity_data_key::FREEZING_EFFECT_STRENGTH,
                 MetadataValue::Float(new_frozen_ticks as f32),
@@ -2971,21 +2970,21 @@ impl Entity {
 
             let world = self.world.load();
             let chunk_pos = self.chunk_pos.load();
-            let mut metadata = EntityMetadata(std::collections::HashMap::new());
+            let mut metadata = SyncedActorDataList(std::collections::HashMap::new());
             metadata.set(
                 entity_data_key::FLAGS,
-                MetadataValue::Long(self.bedrock_flags.load(Ordering::Relaxed)),
+                MetadataValue::Int64(self.bedrock_flags.load(Ordering::Relaxed)),
             );
             metadata.set(
                 entity_data_key::FLAGS_TWO,
-                MetadataValue::Long(self.bedrock_flags_two.load(Ordering::Relaxed)),
+                MetadataValue::Int64(self.bedrock_flags_two.load(Ordering::Relaxed)),
             );
             let packet = CSetActorData {
-                actor_runtime_id: VarULong(self.entity_id as u64),
-                metadata,
+                target_runtime_id: VarULong(self.entity_id as u64),
+                actor_data: metadata,
                 synced_properties: PropertySyncData {
-                    int_properties: std::collections::HashMap::new(),
-                    float_properties: std::collections::HashMap::new(),
+                    int_entries_list: std::collections::HashMap::new(),
+                    float_entries_list: std::collections::HashMap::new(),
                 },
                 tick: VarULong(0),
             };
@@ -3003,7 +3002,7 @@ impl Entity {
     pub fn send_meta_data<T: MetadataSerializer>(
         &self,
         meta: &[Metadata<T>],
-        bedrock_meta: Option<&EntityMetadata>,
+        bedrock_meta: Option<&SyncedActorDataList>,
     ) {
         let world = self.world.load();
         let chunk_pos = self.chunk_pos.load();
@@ -3046,19 +3045,17 @@ impl Entity {
 
         if let Some(bedrock_meta) = bedrock_meta {
             let packet = CSetActorData {
-                actor_runtime_id: VarULong(self.entity_id as u64),
-                metadata: EntityMetadata(bedrock_meta.0.clone()),
+                target_runtime_id: VarULong(self.entity_id as u64),
+                actor_data: SyncedActorDataList(bedrock_meta.0.clone()),
                 synced_properties: PropertySyncData {
-                    int_properties: std::collections::HashMap::new(),
-                    float_properties: std::collections::HashMap::new(),
+                    int_entries_list: std::collections::HashMap::new(),
+                    float_entries_list: std::collections::HashMap::new(),
                 },
                 tick: VarULong(0),
             };
-            if let Ok(packet_data) =
-                pumpkin_protocol::bedrock::packet_encoder::serialize_packet(&packet)
-            {
-                for recipient in bedrock_recipients {
-                    recipient.try_enqueue_packet(packet_data.clone());
+            for recipient in bedrock_recipients {
+                if let Ok(packet_data) = recipient.serialize_packet(&packet) {
+                    recipient.try_enqueue_packet(packet_data);
                 }
             }
         }
@@ -3090,7 +3087,7 @@ impl Entity {
             self.bounding_box.store(aabb);
             self.entity_dimension.store(dimension);
             let pose = pose as i32;
-            let mut bedrock_meta = EntityMetadata::new();
+            let mut bedrock_meta = SyncedActorDataList::new();
             bedrock_meta.set(entity_data_key::POSE_INDEX, MetadataValue::Int(pose));
             bedrock_meta.set(
                 entity_data_key::WIDTH,
@@ -3272,7 +3269,7 @@ impl Entity {
             true,
         );
         let be_packet = pumpkin_protocol::bedrock::client::CSetActorLink {
-            link: pumpkin_protocol::bedrock::client::common::EntityLink {
+            link: pumpkin_protocol::bedrock::client::common::ActorLink {
                 ridden_unique_id: pumpkin_protocol::codec::var_long::VarLong(self.entity_id as i64),
                 rider_unique_id: pumpkin_protocol::codec::var_long::VarLong(
                     holder_entity.entity_id as i64,
@@ -3300,7 +3297,7 @@ impl Entity {
         let je_packet =
             pumpkin_protocol::java::client::play::CSetEntityLink::new(self.entity_id, -1, true);
         let be_packet = pumpkin_protocol::bedrock::client::CSetActorLink {
-            link: pumpkin_protocol::bedrock::client::common::EntityLink {
+            link: pumpkin_protocol::bedrock::client::common::ActorLink {
                 ridden_unique_id: pumpkin_protocol::codec::var_long::VarLong(self.entity_id as i64),
                 rider_unique_id: pumpkin_protocol::codec::var_long::VarLong(-1),
                 link_type: 0, // Unlink
@@ -3438,8 +3435,16 @@ impl Entity {
         );
     }
 
-    #[allow(clippy::too_many_lines)]
     pub async fn remove_passenger(&self, passenger_id: i32) {
+        self.remove_passenger_internal(passenger_id, true).await;
+    }
+
+    pub async fn remove_passenger_before_teleport(&self, passenger_id: i32) {
+        self.remove_passenger_internal(passenger_id, false).await;
+    }
+
+    #[allow(clippy::too_many_lines)]
+    async fn remove_passenger_internal(&self, passenger_id: i32, reposition: bool) {
         let mut dismount_event =
             crate::plugin::api::events::entity::entity_dismount::EntityDismountEvent::new(
                 passenger_id,
@@ -3489,7 +3494,7 @@ impl Entity {
             // CSetPassengers. This prevents a race condition where the client receives
             // the dismount packet, sends stale position packets from the old riding
             // position, and the server processes them before the teleport arrives.
-            let teleport_id = if let Some(player) = passenger.get_player() {
+            let teleport_id = if reposition && let Some(player) = passenger.get_player() {
                 let id = player
                     .teleport_id_count
                     .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
@@ -3507,13 +3512,17 @@ impl Entity {
             passenger_entity.riding_cooldown.store(60, Relaxed);
             // TODO: world.emitGameEvent(passenger, GameEvent.ENTITY_DISMOUNT, vehicle.pos)
 
-            // Now send CSetPassengers — client movement is already blocked.
-            // Vanilla sends this directly to the dismounting player's connection,
-            // then broadcasts to other players separately.
+            // Send CSetPassengers directly to the dismounting player before broadcasting it.
             let world = self.world.load();
             let passengers_packet = CSetPassengers::new(VarInt(self.entity_id), &passenger_ids);
             if let Some(player) = passenger.get_player() {
-                player.send_client_packet(&passengers_packet).await;
+                if reposition {
+                    player.send_client_packet(&passengers_packet).await;
+                } else if let ClientPlatform::Java(client) = player.client.as_ref()
+                    && let Ok(data) = client.serialize_packet(&passengers_packet)
+                {
+                    client.send_packet_now(data).await;
+                }
                 world.broadcast_to_chunk_except(
                     chunk_pos,
                     &[player.get_entity().entity_uuid],
@@ -3521,6 +3530,10 @@ impl Entity {
                 );
             } else {
                 world.broadcast_to_chunk(chunk_pos, &passengers_packet);
+            }
+
+            if !reposition {
+                return;
             }
 
             // Calculate dismount directions and offsets (vanilla DismountHelper)

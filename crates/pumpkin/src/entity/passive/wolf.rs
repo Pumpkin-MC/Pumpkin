@@ -175,6 +175,54 @@ impl Mob for WolfEntity {
         Some(self)
     }
 
+    fn can_attack_with_owner(&self, target: &dyn EntityBase, owner: &dyn EntityBase) -> bool {
+        let target_entity = target.get_entity();
+        let target_type = target_entity.entity_type;
+        if *target_type == EntityType::CREEPER
+            || *target_type == EntityType::GHAST
+            || *target_type == EntityType::ARMOR_STAND
+        {
+            return false;
+        }
+
+        if *target_type == EntityType::WOLF {
+            if let Some(target_mob) = target.get_mob()
+                && let Some(tamable) = target_mob.as_tamable()
+                && tamable.is_tame()
+                && let Some(target_owner) = tamable.get_owner()
+                && let Some(owner_player) = owner.get_player()
+                && target_owner == owner_player.gameprofile.id
+            {
+                return false;
+            }
+            return true;
+        }
+
+        if *target_type == EntityType::PLAYER {
+            if let Some(owner_player) = owner.get_player()
+                && let Some(target_player) = target.get_player()
+            {
+                if owner_player.gameprofile.id == target_player.gameprofile.id {
+                    return false;
+                }
+                let world = target_player.world();
+                if !world.level_info.load().game_rules.pvp {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        if let Some(target_mob) = target.get_mob()
+            && let Some(tamable) = target_mob.as_tamable()
+            && tamable.is_tame()
+        {
+            return false;
+        }
+
+        true
+    }
+
     fn mob_write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async {
             let variant_str = match self.variant.load(Ordering::Relaxed) {

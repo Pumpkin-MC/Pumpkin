@@ -8,7 +8,7 @@ use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_nbt::compound::NbtCompound;
-use pumpkin_protocol::bedrock::server::actor_event::ActorEventType;
+use pumpkin_protocol::bedrock::server::actor_event::ActorEventID;
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::java::client::play::Metadata;
 use rand::RngExt;
@@ -485,13 +485,13 @@ impl Mob for CatEntity {
                     self.get_entity().world.load().send_entity_status(
                         self.get_entity(),
                         EntityStatus::TamingSucceeded,
-                        Some(ActorEventType::TamingSucceeded),
+                        Some(ActorEventID::TamingSucceeded),
                     );
                 } else {
                     self.get_entity().world.load().send_entity_status(
                         self.get_entity(),
                         EntityStatus::TamingFailed,
-                        Some(ActorEventType::TamingFailed),
+                        Some(ActorEventID::TamingFailed),
                     );
                 }
 

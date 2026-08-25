@@ -6,7 +6,8 @@ use crate::entity::{
     Entity,
     ai::goal::{
         breed::BreedGoal, look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal,
-        swim::SwimGoal, tempt::TemptGoal, wander_around::WanderAroundGoal,
+        swim::SwimGoal, tempt::TemptGoal, try_find_water::TryFindWaterGoal,
+        wander_around::WanderAroundGoal,
     },
     mob::{Mob, MobEntity},
 };
@@ -34,6 +35,7 @@ impl TurtleEntity {
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
 
+            goal_selector.add_goal(0, Box::new(TryFindWaterGoal));
             goal_selector.add_goal(1, Box::new(SwimGoal::default()));
             goal_selector.add_goal(2, BreedGoal::new(1.0));
             goal_selector.add_goal(3, Box::new(TemptGoal::new(1.1, TEMPT_ITEMS)));

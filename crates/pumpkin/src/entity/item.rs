@@ -638,13 +638,13 @@ impl EntityBase for ItemEntity {
             let runtime_id = entity.entity_id as u64;
             let item_stack = self.item_stack.lock().await;
             let packet = CAddItemActor {
-                entity_unique_id: VarLong(runtime_id as i64),
-                entity_runtime_id: VarULong(runtime_id),
+                target_actor_id: VarLong(runtime_id as i64),
+                target_runtime_id: VarULong(runtime_id),
                 item: ItemStackWrapper::from(&*item_stack),
                 position: entity.pos.load().to_f32_lossy(),
                 velocity: entity.velocity.load().to_f32_lossy(),
-                metadata: entity.bedrock_metadata(),
-                from_fishing: false,
+                entity_data: entity.bedrock_metadata(),
+                is_from_fishing: false,
             };
             if let Ok(data) = client.serialize_packet(&packet) {
                 client.send_game_packet(data).await;
