@@ -1,3 +1,4 @@
+use crate::net::bedrock::advancement_pack;
 use crate::{
     net::{
         DisconnectReason, GameProfile, PacketHandlerResult, PlayerConfig, bedrock::BedrockClient,
@@ -15,7 +16,10 @@ use pumpkin_protocol::bedrock::{
 };
 use pumpkin_protocol::bedrock::{
     client::{resource_pack_stack::PackInstanceId, resource_packs_info::PackInfoData},
-    server::{login::ClientData, resource_pack_client_response::SResourcePackClientResponse},
+    server::{
+        login::ClientData, resource_pack_chunk_request::SResourcePackChunkRequest,
+        resource_pack_client_response::SResourcePackClientResponse,
+    },
 };
 use pumpkin_util::jwt::AuthError;
 use pumpkin_util::version::BedrockMinecraftVersion;

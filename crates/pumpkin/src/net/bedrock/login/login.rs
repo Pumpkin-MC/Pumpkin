@@ -85,7 +85,7 @@ impl BedrockClient {
         self.enqueue_client_packet(&CPlayStatus::LoginSuccess).await;
         let br_config = &server.advanced_config.resource_pack.bedrock;
 
-        let mut entries = Vec::new();
+        let mut entries = vec![advancement_pack::info_entry()];
         if br_config.enabled {
             for pack in &br_config.packs {
                 entries.push(PackInfoData {
@@ -103,7 +103,7 @@ impl BedrockClient {
         }
 
         let packs_info = CResourcePacksInfo {
-            resource_pack_required: br_config.force,
+            resource_pack_required: true,
             has_addon_packs: false,
             has_scripts: false,
             force_disable_vibrant_visuals: false,

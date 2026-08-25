@@ -19,29 +19,35 @@ impl BedrockClient {
                 .await;
             }
             SResourcePackClientResponse::STATUS_SEND_PACKS => {
-                debug!("Bedrock: SResourcePackResponse::STATUS_SEND_PACKS");
-                // TODO: send packs
+                debug!(packs = ?packet.pack_ids, "Bedrock: SResourcePackResponse::STATUS_SEND_PACKS");
+                if packet
+                    .pack_ids
+                    .iter()
+                    .any(|id| advancement_pack::matches(id))
+                {
+                    self.enqueue_client_packet(&advancement_pack::data_info())
+                        .await;
+                }
             }
             SResourcePackClientResponse::STATUS_HAVE_ALL_PACKS => {
                 debug!("Bedrock: SResourcePackResponse::STATUS_HAVE_ALL_PACKS");
                 let br_config = &server.advanced_config.resource_pack.bedrock;
                 // Convert your config packs into protocol stack entries
-                let resource_packs = if br_config.enabled {
-                    br_config
-                        .packs
-                        .iter()
-                        .map(|pack| PackInstanceId {
-                            pack_id: pack.uuid.to_string(),
-                            version: pack.version.clone(),
-                            sub_pack_name: String::new(),
-                        })
-                        .collect()
-                } else {
-                    Vec::new()
-                };
+                let mut resource_packs = vec![PackInstanceId {
+                    pack_id: advancement_pack::ID.to_string(),
+                    version: advancement_pack::VERSION.to_owned(),
+                    sub_pack_name: String::new(),
+                }];
+                if br_config.enabled {
+                    resource_packs.extend(br_config.packs.iter().map(|pack| PackInstanceId {
+                        pack_id: pack.uuid.to_string(),
+                        version: pack.version.clone(),
+                        sub_pack_name: String::new(),
+                    }));
+                }
 
                 self.enqueue_client_packet(&CResourcePackStackPacket {
-                    texture_pack_required: br_config.force,
+                    texture_pack_required: true,
                     texture_pack_list: resource_packs,
                     base_game_version: CURRENT_BEDROCK_MC_VERSION.to_string(),
                     experiments: Experiments {
@@ -73,6 +79,15 @@ impl BedrockClient {
                 self.kick(DisconnectReason::Disconnected, String::new())
                     .await;
             }
+        }
+    }
+
+    pub async fn handle_resource_pack_chunk_request(&self, packet: SResourcePackChunkRequest) {
+        if let Some(chunk) = advancement_pack::matches(&packet.resource_name)
+            .then(|| advancement_pack::chunk(packet.chunk))
+            .flatten()
+        {
+            self.enqueue_client_packet(&chunk).await;
         }
     }
 }
