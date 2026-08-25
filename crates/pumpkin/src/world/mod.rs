@@ -4754,12 +4754,13 @@ impl World {
     }
 
     fn index_remove_entity(&self, chunk: Vector2<i32>, entity_id: i32) {
-        let empty = if let Some(mut bucket) = self.entities_by_chunk.get_mut(&chunk) {
-            bucket.remove(&entity_id);
-            bucket.is_empty()
-        } else {
-            false
-        };
+        let empty = self
+            .entities_by_chunk
+            .get_mut(&chunk)
+            .is_some_and(|mut bucket| {
+                bucket.remove(&entity_id);
+                bucket.is_empty()
+            });
         if empty {
             self.entities_by_chunk
                 .remove_if(&chunk, |_, v| v.is_empty());
@@ -5187,7 +5188,7 @@ impl World {
             new_entities.push(entity.clone());
             new_entities
         });
-        self.index_insert_entity(&entity);
+        self.index_insert_entity(entity);
     }
 
     pub async fn spawn_entity(self: &Arc<Self>, entity: Arc<dyn EntityBase>) {
@@ -7517,7 +7518,7 @@ impl World {
 /// Chunk columns a box can overlap, plus one column of slack so an entity whose origin sits
 /// in a neighbour chunk but whose AABB reaches in is still found. Vanilla walks
 /// `entitySectionStorage` the same way (`Level.getEntities`).
-fn overlapping_entity_chunks(aabb: &BoundingBox) -> (i32, i32, i32, i32) {
+const fn overlapping_entity_chunks(aabb: &BoundingBox) -> (i32, i32, i32, i32) {
     const SLACK: i32 = 1;
     (
         (aabb.min.x.floor() as i32 >> 4) - SLACK,

@@ -54,8 +54,10 @@ pub const fn is_minecart(entity_type: &EntityType) -> bool {
 }
 
 /// Vanilla `MinecartCollisionContext.setupContext`: ignore the cell under the rail, and on a
-/// slope the cell the rail climbs into. Recomputed from current position (a piston-carried
-/// cart moves through `Entity::move_entity_piston`, not this `tick`).
+/// slope the cell the rail climbs into.
+///
+/// Recomputed from current position (a piston-carried cart moves through
+/// `Entity::move_entity_piston`, not this `tick`).
 pub fn rail_collision_ignore_positions(
     world: &World,
     entity_pos: Vector3<f64>,
