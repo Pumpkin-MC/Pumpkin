@@ -3,12 +3,12 @@ use std::sync::atomic::AtomicBool;
 
 use crate::entity::projectile::ProjectileHit;
 use crate::{
-    entity::{Entity, EntityBase, EntityBaseFuture, NBTStorage, projectile::ThrownItemEntity},
+    entity::{Entity, EntityBase, EntityBaseFuture, projectile::ThrownItemEntity},
     server::Server,
 };
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::entity::{EntityStatus, EntityType};
-use pumpkin_protocol::bedrock::server::actor_event::ActorEventType;
+use pumpkin_protocol::bedrock::server::actor_event::ActorEventID;
 use pumpkin_util::math::vector3::Vector3;
 
 const GRAVITY: f64 = 0.03;
@@ -41,8 +41,6 @@ impl SnowballEntity {
     }
 }
 
-impl NBTStorage for SnowballEntity {}
-
 impl EntityBase for SnowballEntity {
     fn tick<'a>(
         &'a self,
@@ -59,11 +57,6 @@ impl EntityBase for SnowballEntity {
     fn get_living_entity(&self) -> Option<&crate::entity::living::LivingEntity> {
         None
     }
-
-    fn as_nbt_storage(&self) -> &dyn NBTStorage {
-        self
-    }
-
     fn cast_any(&self) -> &dyn std::any::Any {
         self
     }
@@ -76,7 +69,7 @@ impl EntityBase for SnowballEntity {
             world.send_entity_status(
                 self.get_entity(),
                 EntityStatus::Death,
-                Some(ActorEventType::Death),
+                Some(ActorEventID::Death),
             );
 
             // Handle entity-specific damage

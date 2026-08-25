@@ -15,7 +15,7 @@ use rand::RngExt;
 
 use crate::block::blocks::fire::FireBlockBase;
 use crate::entity::player::Player;
-use crate::entity::{Entity, EntityBase, EntityBaseFuture, NBTStorage};
+use crate::entity::{Entity, EntityBase, EntityBaseFuture};
 use crate::server::Server;
 use crate::world::World;
 
@@ -200,8 +200,6 @@ impl LightningBoltEntity {
     }
 }
 
-impl NBTStorage for LightningBoltEntity {}
-
 impl EntityBase for LightningBoltEntity {
     fn tick<'a>(
         &'a self,
@@ -297,11 +295,6 @@ impl EntityBase for LightningBoltEntity {
     fn get_living_entity(&self) -> Option<&crate::entity::living::LivingEntity> {
         None
     }
-
-    fn as_nbt_storage(&self) -> &dyn NBTStorage {
-        self
-    }
-
     fn cast_any(&self) -> &dyn std::any::Any {
         self
     }

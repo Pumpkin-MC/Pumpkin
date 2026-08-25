@@ -3,7 +3,7 @@ use pumpkin_util::{Hand, PermissionLvl};
 use rsa::pkcs1v15::{Signature as RsaPkcs1v15Signature, VerifyingKey};
 use rsa::signature::Verifier;
 use sha1::Sha1;
-use std::num::NonZeroU8;
+use std::num::NonZero;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -60,7 +60,7 @@ use pumpkin_protocol::java::client::play::{
     CBlockUpdate, CCommandSuggestions, CEntityPositionSync, CHeadRot, COpenSignEditor,
     CPingResponse, CPlayerInfoUpdate, CPlayerPosition, CSetCamera, CSetSelectedSlot,
     CSystemChatMessage, CUpdateEntityPos, CUpdateEntityPosRot, CUpdateEntityRot, InitChat,
-    PlayerAction,
+    PlayerAction, PlayerInfoFlags,
 };
 use pumpkin_protocol::java::server::play::{
     Action, ActionType, CommandBlockMode, FLAG_ON_GROUND, SAttack, SBundleItemSelected,
@@ -219,7 +219,9 @@ impl PumpkinError for ChatError {
 
 pub mod attack;
 pub mod bundle_item_selected;
+pub mod change_difficulty;
 pub mod change_game_mode;
+pub mod chat_ack;
 pub mod chat_command;
 pub mod chat_message;
 pub mod chunk_batch;
@@ -257,6 +259,7 @@ pub mod recipe_book_seen_recipe;
 pub mod resource_pack_response;
 pub mod seen_advancement;
 pub mod select_trade;
+pub mod set_beacon;
 pub mod set_command_block;
 pub mod set_command_minecart;
 pub mod set_creative_slot;

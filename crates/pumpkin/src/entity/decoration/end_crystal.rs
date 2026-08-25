@@ -1,11 +1,9 @@
 use core::f32;
 
-use crate::entity::{Entity, EntityBase, EntityBaseFuture, NBTStorage, living::LivingEntity};
+use crate::entity::{Entity, EntityBase, EntityBaseFuture, living::LivingEntity};
 use pumpkin_data::{
     damage::DamageType,
-    meta_data_type::MetaDataType,
     tag::{self, Taggable},
-    tracked_data::TrackedData,
 };
 use pumpkin_protocol::java::client::play::Metadata;
 use pumpkin_util::math::vector3::Vector3;
@@ -24,16 +22,13 @@ impl EndCrystalEntity {
     pub fn set_show_bottom(&self, show_bottom: bool) {
         self.entity.send_meta_data(
             &[Metadata::new(
-                TrackedData::SHOW_BOTTOM,
-                MetaDataType::BOOLEAN,
+                pumpkin_data::tracked_data::end_crystal::SHOW_BOTTOM,
                 show_bottom,
             )],
             None,
         );
     }
 }
-
-impl NBTStorage for EndCrystalEntity {}
 
 impl EntityBase for EndCrystalEntity {
     fn get_entity(&self) -> &Entity {
@@ -59,7 +54,11 @@ impl EntityBase for EndCrystalEntity {
                 self.entity
                     .world
                     .load()
-                    .explode(self.entity.pos.load(), 6.0)
+                    .explode(
+                        self.entity.pos.load(),
+                        6.0,
+                        crate::world::ExplosionInteraction::Block,
+                    )
                     .await;
             }
 
@@ -67,11 +66,6 @@ impl EntityBase for EndCrystalEntity {
             true
         })
     }
-
-    fn as_nbt_storage(&self) -> &dyn NBTStorage {
-        self
-    }
-
     fn cast_any(&self) -> &dyn std::any::Any {
         self
     }

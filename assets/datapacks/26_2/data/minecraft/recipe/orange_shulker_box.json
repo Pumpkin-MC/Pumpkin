@@ -1,0 +1,9 @@
+{
+  "type": "minecraft:crafting_transmute",
+  "group": "shulker_box_dye",
+  "input": "#minecraft:shulker_boxes",
+  "material": "minecraft:orange_dye",
+  "result": {
+    "id": "minecraft:orange_shulker_box"
+  }
+}

@@ -86,6 +86,44 @@ impl BedrockBatchEncoder {
 
         Ok(())
     }
+
+    pub fn write_packet<P: crate::BClientPacket + ?Sized>(
+        &self,
+        packet: &P,
+        writer: impl Write,
+    ) -> Result<(), Error> {
+        let mut packet_payload = Vec::new();
+        packet.write_packet(&mut packet_payload)?;
+        self.write_game_packet(
+            P::PACKET_ID as u16,
+            SubClient::Main,
+            SubClient::Main,
+            &packet_payload,
+            writer,
+        )
+    }
+
+    pub fn serialize_packet<P: crate::BClientPacket + ?Sized>(
+        &self,
+        packet: &P,
+    ) -> Result<bytes::Bytes, Error> {
+        let mut buf = Vec::new();
+        self.write_packet(packet, &mut buf)?;
+        Ok(buf.into())
+    }
+}
+
+pub fn write_packet<P: crate::BClientPacket + ?Sized>(
+    packet: &P,
+    writer: impl Write,
+) -> Result<(), Error> {
+    BedrockBatchEncoder::new().write_packet(packet, writer)
+}
+
+pub fn serialize_packet<P: crate::BClientPacket + ?Sized>(
+    packet: &P,
+) -> Result<bytes::Bytes, Error> {
+    BedrockBatchEncoder::new().serialize_packet(packet)
 }
 
 #[cfg(test)]

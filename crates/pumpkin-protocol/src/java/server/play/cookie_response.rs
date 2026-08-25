@@ -1,4 +1,4 @@
-use pumpkin_data::packet::serverbound::PLAY_COOKIE_RESPONSE;
+use pumpkin_data::packet::serverbound::play::COOKIE_RESPONSE;
 use pumpkin_macros::java_packet;
 use pumpkin_util::version::JavaMinecraftVersion;
 
@@ -7,7 +7,7 @@ use crate::{
     ser::{NetworkReadExt, NetworkReadSliceExt, ReadingError},
 };
 
-#[java_packet(PLAY_COOKIE_RESPONSE)]
+#[java_packet(COOKIE_RESPONSE)]
 /// Response to a `CCookieRequest` (play) from the server.
 /// The Notchian (vanilla) server only accepts responses of up to 5 KiB in size.
 pub struct SCookieResponse<'a> {
@@ -37,5 +37,24 @@ impl<'a> ServerPacket<'a> for SCookieResponse<'a> {
             key,
             payload: Some(payload),
         })
+    }
+}
+
+impl crate::ClientPacket for SCookieResponse<'_> {
+    fn write_packet_data(
+        &self,
+        mut write: impl std::io::Write,
+        _version: &JavaMinecraftVersion,
+    ) -> Result<(), crate::ser::WritingError> {
+        use crate::{VarInt, ser::NetworkWriteExt};
+        write.write_string(self.key)?;
+        if let Some(payload) = self.payload {
+            write.write_bool(true)?;
+            write.write_var_int(&VarInt(payload.len() as i32))?;
+            write.write_slice(payload)?;
+        } else {
+            write.write_bool(false)?;
+        }
+        Ok(())
     }
 }

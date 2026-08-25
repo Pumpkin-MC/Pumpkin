@@ -76,7 +76,8 @@ impl BlockBehaviour for ChorusPlantBlock {
     }
 }
 
-fn get_state_with_connections(
+#[must_use]
+pub fn get_state_with_connections(
     block_accessor: &dyn BlockAccessor,
     block: &Block,
     pos: &BlockPos,

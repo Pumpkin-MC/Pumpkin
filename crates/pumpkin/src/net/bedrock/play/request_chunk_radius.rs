@@ -22,10 +22,10 @@ impl BedrockClient {
 
         let view_distance = chunk_radius.clamp(
             2,
-            NonZeroI32::from(server.advanced_config.networking.bedrock.view_distance).get(),
+            NonZero::<i32>::from(server.advanced_config.networking.bedrock.view_distance).get(),
         );
 
-        self.enqueue_packet(&CChunkRadiusUpdate {
+        self.enqueue_client_packet(&CChunkRadiusUpdated {
             chunk_radius: VarInt(view_distance),
         })
         .await;

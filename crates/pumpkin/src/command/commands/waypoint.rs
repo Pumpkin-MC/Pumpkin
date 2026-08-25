@@ -9,7 +9,7 @@ use crate::command::args::{
 };
 use crate::command::tree::builder::{argument, literal};
 use crate::command::{
-    CommandExecutor, CommandResult, CommandSender, ConsumedArgs, tree::CommandTree,
+    CommandError, CommandExecutor, CommandResult, CommandSender, ConsumedArgs, tree::CommandTree,
 };
 
 const NAMES: [&str; 1] = ["waypoint"];
@@ -29,9 +29,7 @@ impl CommandExecutor for ListExecutor {
     ) -> CommandResult<'a> {
         Box::pin(async move {
             let worlds = server.worlds.load();
-            let world = worlds
-                .first()
-                .expect("There should always be at least one world");
+            let world = worlds.first().ok_or(CommandError::InvalidRequirement)?;
             let dimension = world.dimension.minecraft_name.to_string();
 
             sender
@@ -92,7 +90,7 @@ impl CommandExecutor for ColorExecutor {
             );
 
             if let Some(player) = sender.as_player() {
-                player.client.enqueue_packet(&packet).await;
+                player.send_client_packet(&packet).await;
             }
 
             match self.0 {
@@ -157,13 +155,14 @@ impl CommandExecutor for StyleExecutor {
             );
             let uuid = entity.entity_uuid;
 
-            let style_str = match self.0 {
+            let style_owned = match self.0 {
                 StyleAction::Set => {
                     let style = ResourceLocationArgumentConsumer::find_arg(args, ARG_STYLE)?;
-                    Some(style)
+                    Some(style.to_string())
                 }
                 StyleAction::Reset => None,
             };
+            let style_str = style_owned.as_deref();
 
             let packet = CWaypoint::update_position(
                 uuid,
@@ -175,7 +174,7 @@ impl CommandExecutor for StyleExecutor {
             );
 
             if let Some(player) = sender.as_player() {
-                player.client.enqueue_packet(&packet).await;
+                player.send_client_packet(&packet).await;
             }
 
             sender

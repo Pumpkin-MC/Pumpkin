@@ -1,5 +1,5 @@
 use crate::{ServerPacket, ser::ReadingError};
-use pumpkin_data::packet::serverbound::STATUS_STATUS_REQUEST;
+use pumpkin_data::packet::serverbound::status::STATUS_REQUEST;
 use pumpkin_macros::java_packet;
 use pumpkin_util::version::JavaMinecraftVersion;
 
@@ -7,7 +7,7 @@ use pumpkin_util::version::JavaMinecraftVersion;
 ///
 /// This is the first packet sent during the "Status" state.
 /// The server should respond with `CStatusResponse`.
-#[java_packet(STATUS_STATUS_REQUEST)]
+#[java_packet(STATUS_REQUEST)]
 pub struct SStatusRequest;
 
 impl<'a> ServerPacket<'a> for SStatusRequest {

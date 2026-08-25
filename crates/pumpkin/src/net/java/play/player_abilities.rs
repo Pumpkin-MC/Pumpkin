@@ -14,7 +14,7 @@ impl JavaClient {
         };
 
         // Set the flying ability
-        let new_flying = player_abilities.flags & 0x02 != 0 && allow_flying;
+        let new_flying = player_abilities.is_flying() && allow_flying;
         if flying != new_flying {
             send_cancellable! {{
                 server;

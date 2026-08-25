@@ -24,8 +24,7 @@ impl JavaClient {
         server.plugin_manager.fire(server, &mut event).await;
         if event.cancelled {
             player
-                .client
-                .enqueue_packet(&CSetSelectedSlot::new(previous_slot as i8))
+                .send_client_packet(&CSetSelectedSlot::new(previous_slot as i8))
                 .await;
             return;
         }

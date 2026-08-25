@@ -1,0 +1,24 @@
+{
+  "chat": {
+    "decoration": {
+      "translation_key": "chat.type.team.text",
+      "style": {},
+      "parameters": [
+        "team_name",
+        "sender",
+        "content"
+      ]
+    }
+  },
+  "narration": {
+    "priority": "chat",
+    "decoration": {
+      "translation_key": "chat.type.text.narrate",
+      "style": {},
+      "parameters": [
+        "sender",
+        "content"
+      ]
+    }
+  }
+}

@@ -1,0 +1,368 @@
+{
+  "type": "minecraft:entity",
+  "pools": [
+    {
+      "entries": [
+        {
+          "type": "minecraft:item",
+          "functions": [
+            {
+              "count": {
+                "type": "minecraft:uniform",
+                "max": 2.0,
+                "min": 1.0
+              },
+              "function": "minecraft:set_count"
+            },
+            {
+              "conditions": [
+                {
+                  "condition": "minecraft:any_of",
+                  "terms": [
+                    {
+                      "condition": "minecraft:entity_properties",
+                      "entity": "this",
+                      "predicate": {
+                        "minecraft:flags": {
+                          "is_on_fire": true
+                        }
+                      }
+                    },
+                    {
+                      "condition": "minecraft:entity_properties",
+                      "entity": "direct_attacker",
+                      "predicate": {
+                        "minecraft:equipment": {
+                          "mainhand": {
+                            "predicates": {
+                              "minecraft:enchantments": [
+                                {
+                                  "enchantments": "#minecraft:smelts_loot"
+                                }
+                              ]
+                            }
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              ],
+              "function": "minecraft:furnace_smelt"
+            },
+            {
+              "count": {
+                "type": "minecraft:uniform",
+                "max": 1.0,
+                "min": 0.0
+              },
+              "enchantment": "minecraft:looting",
+              "function": "minecraft:enchanted_count_increase"
+            }
+          ],
+          "name": "minecraft:mutton"
+        }
+      ],
+      "rolls": 1.0
+    },
+    {
+      "entries": [
+        {
+          "type": "minecraft:alternatives",
+          "children": [
+            {
+              "type": "minecraft:loot_table",
+              "conditions": [
+                {
+                  "condition": "minecraft:entity_properties",
+                  "entity": "this",
+                  "predicate": {
+                    "minecraft:components": {
+                      "minecraft:sheep/color": "white"
+                    },
+                    "minecraft:type_specific/sheep": {
+                      "sheared": false
+                    }
+                  }
+                }
+              ],
+              "value": "minecraft:entities/sheep/white"
+            },
+            {
+              "type": "minecraft:loot_table",
+              "conditions": [
+                {
+                  "condition": "minecraft:entity_properties",
+                  "entity": "this",
+                  "predicate": {
+                    "minecraft:components": {
+                      "minecraft:sheep/color": "orange"
+                    },
+                    "minecraft:type_specific/sheep": {
+                      "sheared": false
+                    }
+                  }
+                }
+              ],
+              "value": "minecraft:entities/sheep/orange"
+            },
+            {
+              "type": "minecraft:loot_table",
+              "conditions": [
+                {
+                  "condition": "minecraft:entity_properties",
+                  "entity": "this",
+                  "predicate": {
+                    "minecraft:components": {
+                      "minecraft:sheep/color": "magenta"
+                    },
+                    "minecraft:type_specific/sheep": {
+                      "sheared": false
+                    }
+                  }
+                }
+              ],
+              "value": "minecraft:entities/sheep/magenta"
+            },
+            {
+              "type": "minecraft:loot_table",
+              "conditions": [
+                {
+                  "condition": "minecraft:entity_properties",
+                  "entity": "this",
+                  "predicate": {
+                    "minecraft:components": {
+                      "minecraft:sheep/color": "light_blue"
+                    },
+                    "minecraft:type_specific/sheep": {
+                      "sheared": false
+                    }
+                  }
+                }
+              ],
+              "value": "minecraft:entities/sheep/light_blue"
+            },
+            {
+              "type": "minecraft:loot_table",
+              "conditions": [
+                {
+                  "condition": "minecraft:entity_properties",
+                  "entity": "this",
+                  "predicate": {
+                    "minecraft:components": {
+                      "minecraft:sheep/color": "yellow"
+                    },
+                    "minecraft:type_specific/sheep": {
+                      "sheared": false
+                    }
+                  }
+                }
+              ],
+              "value": "minecraft:entities/sheep/yellow"
+            },
+            {
+              "type": "minecraft:loot_table",
+              "conditions": [
+                {
+                  "condition": "minecraft:entity_properties",
+                  "entity": "this",
+                  "predicate": {
+                    "minecraft:components": {
+                      "minecraft:sheep/color": "lime"
+                    },
+                    "minecraft:type_specific/sheep": {
+                      "sheared": false
+                    }
+                  }
+                }
+              ],
+              "value": "minecraft:entities/sheep/lime"
+            },
+            {
+              "type": "minecraft:loot_table",
+              "conditions": [
+                {
+                  "condition": "minecraft:entity_properties",
+                  "entity": "this",
+                  "predicate": {
+                    "minecraft:components": {
+                      "minecraft:sheep/color": "pink"
+                    },
+                    "minecraft:type_specific/sheep": {
+                      "sheared": false
+                    }
+                  }
+                }
+              ],
+              "value": "minecraft:entities/sheep/pink"
+            },
+            {
+              "type": "minecraft:loot_table",
+              "conditions": [
+                {
+                  "condition": "minecraft:entity_properties",
+                  "entity": "this",
+                  "predicate": {
+                    "minecraft:components": {
+                      "minecraft:sheep/color": "gray"
+                    },
+                    "minecraft:type_specific/sheep": {
+                      "sheared": false
+                    }
+                  }
+                }
+              ],
+              "value": "minecraft:entities/sheep/gray"
+            },
+            {
+              "type": "minecraft:loot_table",
+              "conditions": [
+                {
+                  "condition": "minecraft:entity_properties",
+                  "entity": "this",
+                  "predicate": {
+                    "minecraft:components": {
+                      "minecraft:sheep/color": "light_gray"
+                    },
+                    "minecraft:type_specific/sheep": {
+                      "sheared": false
+                    }
+                  }
+                }
+              ],
+              "value": "minecraft:entities/sheep/light_gray"
+            },
+            {
+              "type": "minecraft:loot_table",
+              "conditions": [
+                {
+                  "condition": "minecraft:entity_properties",
+                  "entity": "this",
+                  "predicate": {
+                    "minecraft:components": {
+                      "minecraft:sheep/color": "cyan"
+                    },
+                    "minecraft:type_specific/sheep": {
+                      "sheared": false
+                    }
+                  }
+                }
+              ],
+              "value": "minecraft:entities/sheep/cyan"
+            },
+            {
+              "type": "minecraft:loot_table",
+              "conditions": [
+                {
+                  "condition": "minecraft:entity_properties",
+                  "entity": "this",
+                  "predicate": {
+                    "minecraft:components": {
+                      "minecraft:sheep/color": "purple"
+                    },
+                    "minecraft:type_specific/sheep": {
+                      "sheared": false
+                    }
+                  }
+                }
+              ],
+              "value": "minecraft:entities/sheep/purple"
+            },
+            {
+              "type": "minecraft:loot_table",
+              "conditions": [
+                {
+                  "condition": "minecraft:entity_properties",
+                  "entity": "this",
+                  "predicate": {
+                    "minecraft:components": {
+                      "minecraft:sheep/color": "blue"
+                    },
+                    "minecraft:type_specific/sheep": {
+                      "sheared": false
+                    }
+                  }
+                }
+              ],
+              "value": "minecraft:entities/sheep/blue"
+            },
+            {
+              "type": "minecraft:loot_table",
+              "conditions": [
+                {
+                  "condition": "minecraft:entity_properties",
+                  "entity": "this",
+                  "predicate": {
+                    "minecraft:components": {
+                      "minecraft:sheep/color": "brown"
+                    },
+                    "minecraft:type_specific/sheep": {
+                      "sheared": false
+                    }
+                  }
+                }
+              ],
+              "value": "minecraft:entities/sheep/brown"
+            },
+            {
+              "type": "minecraft:loot_table",
+              "conditions": [
+                {
+                  "condition": "minecraft:entity_properties",
+                  "entity": "this",
+                  "predicate": {
+                    "minecraft:components": {
+                      "minecraft:sheep/color": "green"
+                    },
+                    "minecraft:type_specific/sheep": {
+                      "sheared": false
+                    }
+                  }
+                }
+              ],
+              "value": "minecraft:entities/sheep/green"
+            },
+            {
+              "type": "minecraft:loot_table",
+              "conditions": [
+                {
+                  "condition": "minecraft:entity_properties",
+                  "entity": "this",
+                  "predicate": {
+                    "minecraft:components": {
+                      "minecraft:sheep/color": "red"
+                    },
+                    "minecraft:type_specific/sheep": {
+                      "sheared": false
+                    }
+                  }
+                }
+              ],
+              "value": "minecraft:entities/sheep/red"
+            },
+            {
+              "type": "minecraft:loot_table",
+              "conditions": [
+                {
+                  "condition": "minecraft:entity_properties",
+                  "entity": "this",
+                  "predicate": {
+                    "minecraft:components": {
+                      "minecraft:sheep/color": "black"
+                    },
+                    "minecraft:type_specific/sheep": {
+                      "sheared": false
+                    }
+                  }
+                }
+              ],
+              "value": "minecraft:entities/sheep/black"
+            }
+          ]
+        }
+      ],
+      "rolls": 1.0
+    }
+  ],
+  "random_sequence": "minecraft:entities/sheep"
+}

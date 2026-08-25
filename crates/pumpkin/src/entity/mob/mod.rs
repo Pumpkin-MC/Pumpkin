@@ -1,4 +1,4 @@
-use super::{Entity, EntityBase, NBTStorage, ai::pathfinder::Navigator, living::LivingEntity};
+use super::{Entity, EntityBase, NbtFuture, ai::pathfinder::Navigator, living::LivingEntity};
 use crate::entity::EntityBaseFuture;
 use crate::entity::ai::control::MoveControlTrait;
 use crate::entity::ai::control::look_control::LookControl;
@@ -10,10 +10,12 @@ use crate::world::World;
 use crossbeam::atomic::AtomicCell;
 use pumpkin_data::attributes::Attributes;
 use pumpkin_data::damage::DamageType;
+use pumpkin_data::data_component_impl::EquipmentSlot;
+use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
-use pumpkin_data::meta_data_type::MetaDataType;
 use pumpkin_data::tag::{self, Taggable};
-use pumpkin_data::tracked_data::TrackedData;
+use pumpkin_data::tracked_data;
+use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::java::client::play::{CHeadRot, CUpdateEntityRot, Metadata};
 use pumpkin_util::Difficulty;
 use pumpkin_util::math::boundingbox::BoundingBox;
@@ -22,6 +24,7 @@ use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::random::xoroshiro128::Xoroshiro;
 use pumpkin_util::random::{RandomGenerator, get_seed};
+use pumpkin_util::version::JavaMinecraftVersion;
 use rand::RngExt;
 use std::pin::Pin;
 use std::sync::Arc;
@@ -35,6 +38,7 @@ pub mod breeze;
 pub mod cave_spider;
 pub mod creaking;
 pub mod creeper;
+pub mod crossbow_attack_mob;
 pub mod elder_guardian;
 pub mod enderman;
 pub mod endermite;
@@ -46,10 +50,13 @@ pub mod guardian;
 pub mod hoglin;
 pub mod illusioner;
 pub mod magma_cube;
+pub mod patrol;
 pub mod phantom;
 pub mod piglin;
+pub mod piglin_ai;
 pub mod piglin_brute;
 pub mod pillager;
+pub mod raider;
 pub mod ravager;
 pub mod shulker;
 pub mod silverfish;
@@ -90,14 +97,73 @@ pub struct MobEntity {
 ///
 /// TODO: Replace with `EnvironmentAttributes::MONSTERS_BURN` lookup once the
 /// `EnvironmentAttributeSystem` is implemented in `pumpkin-data`.
-const NIGHT_START: i64 = 12542;
-const NIGHT_END: i64 = 23459;
+pub(crate) const NIGHT_START: i64 = 12542;
+pub(crate) const NIGHT_END: i64 = 23459;
 
 impl MobEntity {
     const AI_DISABLED_FLAG: u8 = 1;
     const LEFT_HANDED_FLAG: u8 = 2;
     const ATTACKING_FLAG: u8 = 4;
     const CAN_PICK_UP_LOOT_FLAG: u8 = 8;
+
+    pub const MAX_WEARING_ARMOR_CHANCE: f32 = 0.15;
+    pub const WEARING_ARMOR_UPGRADE_MATERIAL_CHANCE: f32 = 0.1087;
+    pub const WEARING_ARMOR_UPGRADE_MATERIAL_ATTEMPTS: f32 = 3.0;
+    pub const MAX_PICKUP_LOOT_CHANCE: f32 = 0.55;
+    pub const MAX_ENCHANTED_ARMOR_CHANCE: f32 = 0.5;
+    pub const MAX_ENCHANTED_WEAPON_CHANCE: f32 = 0.25;
+    pub const EQUIPMENT_POPULATION_ORDER: [EquipmentSlot; 4] = [
+        EquipmentSlot::HEAD,
+        EquipmentSlot::CHEST,
+        EquipmentSlot::LEGS,
+        EquipmentSlot::FEET,
+    ];
+
+    #[must_use]
+    pub const fn get_equipment_for_slot(
+        slot: &EquipmentSlot,
+        armor_type: i32,
+    ) -> Option<&'static Item> {
+        match slot {
+            EquipmentSlot::Head(_) => match armor_type {
+                0 => Some(&Item::LEATHER_HELMET),
+                1 => Some(&Item::COPPER_HELMET),
+                2 => Some(&Item::GOLDEN_HELMET),
+                3 => Some(&Item::CHAINMAIL_HELMET),
+                4 => Some(&Item::IRON_HELMET),
+                5 => Some(&Item::DIAMOND_HELMET),
+                _ => None,
+            },
+            EquipmentSlot::Chest(_) => match armor_type {
+                0 => Some(&Item::LEATHER_CHESTPLATE),
+                1 => Some(&Item::COPPER_CHESTPLATE),
+                2 => Some(&Item::GOLDEN_CHESTPLATE),
+                3 => Some(&Item::CHAINMAIL_CHESTPLATE),
+                4 => Some(&Item::IRON_CHESTPLATE),
+                5 => Some(&Item::DIAMOND_CHESTPLATE),
+                _ => None,
+            },
+            EquipmentSlot::Legs(_) => match armor_type {
+                0 => Some(&Item::LEATHER_LEGGINGS),
+                1 => Some(&Item::COPPER_LEGGINGS),
+                2 => Some(&Item::GOLDEN_LEGGINGS),
+                3 => Some(&Item::CHAINMAIL_LEGGINGS),
+                4 => Some(&Item::IRON_LEGGINGS),
+                5 => Some(&Item::DIAMOND_LEGGINGS),
+                _ => None,
+            },
+            EquipmentSlot::Feet(_) => match armor_type {
+                0 => Some(&Item::LEATHER_BOOTS),
+                1 => Some(&Item::COPPER_BOOTS),
+                2 => Some(&Item::GOLDEN_BOOTS),
+                3 => Some(&Item::CHAINMAIL_BOOTS),
+                4 => Some(&Item::IRON_BOOTS),
+                5 => Some(&Item::DIAMOND_BOOTS),
+                _ => None,
+            },
+            _ => None,
+        }
+    }
 
     #[must_use]
     pub fn new(entity: Entity) -> Self {
@@ -119,6 +185,10 @@ impl MobEntity {
             last_sent_pitch: AtomicU8::new(0),
             last_sent_head_yaw: AtomicU8::new(0),
         }
+    }
+
+    pub fn has_position_target(&self) -> bool {
+        self.position_target_range.load(Relaxed) != -1
     }
 
     pub fn is_in_position_target_range(&self) -> bool {
@@ -187,6 +257,30 @@ impl MobEntity {
         }
     }
 
+    pub fn write_mob_nbt(&self, nbt: &mut NbtCompound) {
+        if self.is_no_ai() {
+            nbt.put_bool("NoAI", true);
+        }
+        if self.is_left_handed() {
+            nbt.put_bool("LeftHanded", true);
+        }
+        if self.can_pick_up_loot() {
+            nbt.put_bool("CanPickUpLoot", true);
+        }
+    }
+
+    pub fn read_mob_nbt(&self, nbt: &NbtCompound) {
+        if let Some(no_ai) = nbt.get_bool("NoAI") {
+            self.set_no_ai(no_ai);
+        }
+        if let Some(left_handed) = nbt.get_bool("LeftHanded") {
+            self.set_left_handed(left_handed);
+        }
+        if let Some(can_pick_up_loot) = nbt.get_bool("CanPickUpLoot") {
+            self.set_can_pick_up_loot(can_pick_up_loot);
+        }
+    }
+
     pub fn add_goal<G: crate::entity::ai::goal::Goal + 'static>(&self, priority: u8, goal: G) {
         self.goals_selector
             .lock()
@@ -223,11 +317,7 @@ impl MobEntity {
             self.mob_flags.store(new_b, Ordering::Relaxed);
 
             self.living_entity.entity.send_meta_data(
-                &[Metadata::new(
-                    TrackedData::MOB_FLAGS_ID,
-                    MetaDataType::BYTE,
-                    new_b,
-                )],
+                &[Metadata::new(tracked_data::mob::DATA_MOB_FLAGS_ID, new_b)],
                 None,
             );
         }
@@ -496,7 +586,41 @@ pub trait Mob: EntityBase + Send + Sync {
 
     fn get_mob_entity(&self) -> &MobEntity;
 
+    fn mob_bedrock_identifier(&self) -> Option<&'static str> {
+        None
+    }
+
+    /// Metadata which must accompany this mob whenever it is spawned for a Java client.
+    fn mob_java_spawn_metadata(
+        &self,
+        _version: JavaMinecraftVersion,
+    ) -> EntityBaseFuture<'_, Option<Box<[u8]>>> {
+        Box::pin(async { None })
+    }
+
+    /// Metadata which must accompany this mob whenever it is spawned for a Bedrock client.
+    fn mob_bedrock_spawn_metadata(
+        &self,
+    ) -> EntityBaseFuture<
+        '_,
+        Option<pumpkin_protocol::bedrock::client::set_actor_data::SyncedActorDataList>,
+    > {
+        Box::pin(async { None })
+    }
+
     fn get_job_site(&self) -> Option<BlockPos> {
+        None
+    }
+
+    fn is_job_site_pending(&self) -> EntityBaseFuture<'_, bool> {
+        Box::pin(async { false })
+    }
+
+    fn release_pending_job_site(&self, _position: BlockPos) -> EntityBaseFuture<'_, ()> {
+        Box::pin(async {})
+    }
+
+    fn get_trading_player(&self) -> Option<Arc<Player>> {
         None
     }
 
@@ -567,6 +691,137 @@ pub trait Mob: EntityBase + Send + Sync {
 
     fn get_mob_y_velocity_drag(&self) -> Option<f64> {
         None
+    }
+
+    fn as_ageable(&self) -> Option<&dyn crate::entity::ageable::AgeableMob> {
+        None
+    }
+
+    fn as_animal(&self) -> Option<&dyn crate::entity::passive::animal::Animal> {
+        None
+    }
+
+    fn as_tamable(&self) -> Option<&dyn crate::entity::passive::tamable::TamableAnimal> {
+        None
+    }
+
+    fn as_patrolling_monster(&self) -> Option<&dyn patrol::PatrollingMonster> {
+        None
+    }
+
+    fn as_raider(&self) -> Option<&dyn raider::Raider> {
+        None
+    }
+
+    fn as_iron_golem(&self) -> Option<&crate::entity::passive::iron_golem::IronGolemEntity> {
+        None
+    }
+
+    fn as_crossbow_attack_mob(&self) -> Option<&dyn crossbow_attack_mob::CrossbowAttackMob> {
+        None
+    }
+
+    fn populate_default_equipment_slots<'a>(
+        &'a self,
+        _world: &'a Arc<World>,
+        difficulty: &'a crate::entity::mob::equipment::RegionalDifficulty,
+    ) -> EntityBaseFuture<'a, ()> {
+        Box::pin(async move {
+            if rand::random::<f32>()
+                < MobEntity::MAX_WEARING_ARMOR_CHANCE * difficulty.special_multiplier
+            {
+                let mut armor_type = rand::random_range(0..3);
+                for _ in 1..=3 {
+                    if rand::random::<f32>() < MobEntity::WEARING_ARMOR_UPGRADE_MATERIAL_CHANCE {
+                        armor_type += 1;
+                    }
+                }
+
+                let partial_chance = if difficulty.base_difficulty == Difficulty::Hard {
+                    0.1f32
+                } else {
+                    0.25f32
+                };
+
+                let living = &self.get_mob_entity().living_entity;
+                let mut equipment = living.entity_equipment.lock().await;
+                let mut first = true;
+
+                for slot in &MobEntity::EQUIPMENT_POPULATION_ORDER {
+                    let current = equipment.get(slot);
+                    if !first && rand::random::<f32>() < partial_chance {
+                        break;
+                    }
+                    first = false;
+                    if current.is_empty()
+                        && let Some(item) = MobEntity::get_equipment_for_slot(slot, armor_type)
+                    {
+                        equipment.put(slot, ItemStack::new(1, item));
+                    }
+                }
+            }
+        })
+    }
+
+    fn populate_default_equipment_enchantments<'a>(
+        &'a self,
+        difficulty: &'a crate::entity::mob::equipment::RegionalDifficulty,
+    ) -> EntityBaseFuture<'a, ()> {
+        Box::pin(async move {
+            self.enchant_spawned_weapon(difficulty).await;
+            for slot in &MobEntity::EQUIPMENT_POPULATION_ORDER {
+                self.enchant_spawned_armor(slot, difficulty).await;
+            }
+        })
+    }
+
+    fn enchant_spawned_weapon<'a>(
+        &'a self,
+        difficulty: &'a crate::entity::mob::equipment::RegionalDifficulty,
+    ) -> EntityBaseFuture<'a, ()> {
+        self.enchant_spawned_equipment(
+            &EquipmentSlot::MAIN_HAND,
+            MobEntity::MAX_ENCHANTED_WEAPON_CHANCE,
+            difficulty,
+        )
+    }
+
+    fn enchant_spawned_armor<'a>(
+        &'a self,
+        slot: &'a EquipmentSlot,
+        difficulty: &'a crate::entity::mob::equipment::RegionalDifficulty,
+    ) -> EntityBaseFuture<'a, ()> {
+        self.enchant_spawned_equipment(slot, MobEntity::MAX_ENCHANTED_ARMOR_CHANCE, difficulty)
+    }
+
+    fn enchant_spawned_equipment<'a>(
+        &'a self,
+        slot: &'a EquipmentSlot,
+        chance: f32,
+        difficulty: &'a crate::entity::mob::equipment::RegionalDifficulty,
+    ) -> EntityBaseFuture<'a, ()> {
+        Box::pin(async move {
+            let living = &self.get_mob_entity().living_entity;
+            let mut equipment = living.entity_equipment.lock().await;
+            if let Some(stack) = equipment.equipment.get_mut(slot)
+                && !stack.is_empty()
+                && rand::random::<f32>() < chance * difficulty.special_multiplier
+            {
+                crate::entity::mob::equipment::apply_vanilla_enchantments(
+                    stack,
+                    slot,
+                    difficulty.special_multiplier,
+                );
+            }
+        })
+    }
+
+    fn mob_write_nbt<'a>(&'a self, _nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
+        Box::pin(async {})
+    }
+
+    fn mob_read_nbt<'a>(&'a self, _nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
+        Box::pin(async {})
     }
 
     /// Set or clear the mob's target. Override to add side effects when targeting changes.
@@ -735,11 +990,18 @@ pub trait Mob: EntityBase + Send + Sync {
     }
 
     fn get_owner_uuid(&self) -> Option<Uuid> {
-        None
+        self.as_tamable()
+            .and_then(crate::entity::passive::tamable::TamableAnimal::get_owner)
     }
 
     fn is_sitting(&self) -> bool {
-        false
+        self.as_tamable()
+            .is_some_and(crate::entity::passive::tamable::TamableAnimal::is_in_sitting_pose)
+    }
+
+    fn is_tamed(&self) -> bool {
+        self.as_tamable()
+            .is_some_and(crate::entity::passive::tamable::TamableAnimal::is_tame)
     }
 
     fn get_base_experience_reward(&self) -> u32 {
@@ -752,11 +1014,7 @@ pub trait Mob: EntityBase + Send + Sync {
             let is_baby = entity.age.load(std::sync::atomic::Ordering::Relaxed) < 0;
             if is_baby {
                 entity.send_meta_data(
-                    &[Metadata::new(
-                        TrackedData::BABY_ID,
-                        MetaDataType::BOOLEAN,
-                        true,
-                    )],
+                    &[Metadata::new(tracked_data::ageable_mob::DATA_BABY_ID, true)],
                     None,
                 );
             }
@@ -1067,8 +1325,36 @@ impl<T: Mob + Send + 'static> EntityBase for T {
         <T as Mob>::get_home(self)
     }
 
-    fn as_nbt_storage(&self) -> &dyn NBTStorage {
-        self
+    fn write_custom_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
+        Box::pin(async move {
+            self.get_mob_entity().write_mob_nbt(nbt);
+            if let Some(ageable) = self.as_ageable() {
+                ageable.write_ageable_nbt(nbt);
+            }
+            if let Some(animal) = self.as_animal() {
+                animal.write_animal_nbt(nbt);
+            }
+            if let Some(tamable) = self.as_tamable() {
+                tamable.write_tamable_nbt(nbt);
+            }
+            self.mob_write_nbt(nbt).await;
+        })
+    }
+
+    fn read_custom_nbt<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
+        Box::pin(async move {
+            self.get_mob_entity().read_mob_nbt(nbt);
+            if let Some(ageable) = self.as_ageable() {
+                ageable.read_ageable_nbt(nbt);
+            }
+            if let Some(animal) = self.as_animal() {
+                animal.read_animal_nbt(nbt);
+            }
+            if let Some(tamable) = self.as_tamable() {
+                tamable.read_tamable_nbt(nbt);
+            }
+            self.mob_read_nbt(nbt).await;
+        })
     }
 
     fn get_gravity(&self) -> f64 {
@@ -1144,4 +1430,12 @@ pub trait PathAwareEntity: Mob + Send + Sync {
     fn get_follow_leash_speed(&self) -> f32 {
         1.0
     }
+}
+
+pub trait RangedAttackMob: Mob + Send + Sync {
+    fn perform_ranged_attack<'a>(
+        &'a self,
+        target: &'a Arc<dyn EntityBase>,
+        power: f32,
+    ) -> EntityBaseFuture<'a, ()>;
 }

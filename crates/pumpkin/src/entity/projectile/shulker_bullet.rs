@@ -15,7 +15,7 @@ use rand::RngExt;
 use uuid::Uuid;
 
 use crate::entity::mob::shulker::Axis;
-use crate::entity::{Entity, EntityBase, EntityBaseFuture, NBTStorage};
+use crate::entity::{Entity, EntityBase, EntityBaseFuture};
 use crate::server::Server;
 
 // Direction ordinal constants
@@ -271,8 +271,6 @@ impl ShulkerBulletEntity {
     }
 }
 
-impl NBTStorage for ShulkerBulletEntity {}
-
 impl EntityBase for ShulkerBulletEntity {
     fn get_entity(&self) -> &Entity {
         &self.entity
@@ -281,11 +279,6 @@ impl EntityBase for ShulkerBulletEntity {
     fn get_living_entity(&self) -> Option<&crate::entity::living::LivingEntity> {
         None
     }
-
-    fn as_nbt_storage(&self) -> &dyn NBTStorage {
-        self
-    }
-
     fn cast_any(&self) -> &dyn std::any::Any {
         self
     }

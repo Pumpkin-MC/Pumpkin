@@ -1,0 +1,97 @@
+{
+  "aquifers_enabled": false,
+  "default_block": {
+    "Name": "minecraft:end_stone"
+  },
+  "default_fluid": {
+    "Name": "minecraft:air"
+  },
+  "disable_mob_generation": true,
+  "legacy_random_source": true,
+  "noise": {
+    "height": 128,
+    "min_y": 0,
+    "size_horizontal": 2,
+    "size_vertical": 1
+  },
+  "noise_router": {
+    "barrier": 0.0,
+    "continents": 0.0,
+    "depth": 0.0,
+    "erosion": {
+      "type": "minecraft:cache_2d",
+      "argument": {
+        "type": "minecraft:end_islands"
+      }
+    },
+    "final_density": {
+      "type": "minecraft:squeeze",
+      "argument": {
+        "type": "minecraft:interpolated",
+        "argument": {
+          "type": "minecraft:mul",
+          "argument1": 0.64,
+          "argument2": {
+            "type": "minecraft:blend_density",
+            "argument": {
+              "type": "minecraft:add",
+              "argument1": -0.234375,
+              "argument2": {
+                "type": "minecraft:mul",
+                "argument1": {
+                  "type": "minecraft:y_clamped_gradient",
+                  "from_value": 0.0,
+                  "from_y": 4,
+                  "to_value": 1.0,
+                  "to_y": 32
+                },
+                "argument2": {
+                  "type": "minecraft:add",
+                  "argument1": 0.234375,
+                  "argument2": {
+                    "type": "minecraft:add",
+                    "argument1": -23.4375,
+                    "argument2": {
+                      "type": "minecraft:mul",
+                      "argument1": {
+                        "type": "minecraft:y_clamped_gradient",
+                        "from_value": 1.0,
+                        "from_y": 56,
+                        "to_value": 0.0,
+                        "to_y": 312
+                      },
+                      "argument2": {
+                        "type": "minecraft:add",
+                        "argument1": 23.4375,
+                        "argument2": "minecraft:end/sloped_cheese"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "fluid_level_floodedness": 0.0,
+    "fluid_level_spread": 0.0,
+    "lava": 0.0,
+    "preliminary_surface_level": 0.0,
+    "ridges": 0.0,
+    "temperature": 0.0,
+    "vegetation": 0.0,
+    "vein_gap": 0.0,
+    "vein_ridged": 0.0,
+    "vein_toggle": 0.0
+  },
+  "ore_veins_enabled": false,
+  "sea_level": 0,
+  "spawn_target": [],
+  "surface_rule": {
+    "type": "minecraft:block",
+    "result_state": {
+      "Name": "minecraft:end_stone"
+    }
+  }
+}

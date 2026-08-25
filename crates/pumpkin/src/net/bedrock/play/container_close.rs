@@ -8,15 +8,15 @@ impl BedrockClient {
         }
         player.on_handled_screen_closed().await;
 
-        self.enqueue_packet(&SContainerClose {
+        self.enqueue_client_packet(&SContainerClose {
             container_id: packet.container_id,
             container_type: packet.container_type,
-            server_initiated: false,
+            server_initiated_close: false,
         })
         .await;
 
         // Sync the cursor (make it empty) to Bedrock client
-        self.enqueue_packet(&CInventoryContent {
+        self.enqueue_client_packet(&CInventoryContent {
             container_id: VarUInt(59), // Cursor container ID
             slots: vec![NetworkItemStackDescriptor::default()],
             full_container_name: FullContainerName {
@@ -28,7 +28,7 @@ impl BedrockClient {
         .await;
 
         // Sync the inventory content to Bedrock client
-        self.enqueue_packet(&CInventoryContent {
+        self.enqueue_client_packet(&CInventoryContent {
             container_id: VarUInt(0), // player inventory
             slots: player
                 .inventory()

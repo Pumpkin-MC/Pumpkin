@@ -1,13 +1,8 @@
-use pumpkin_data::Block;
 use pumpkin_data::BlockStateId;
-use pumpkin_data::dimension::Dimension;
 use pumpkin_macros::pumpkin_block_from_tag;
-use pumpkin_world::world::BlockFlags;
 
 use crate::block::blocks::plant::PlantBlockBase;
 use crate::block::{BlockBehaviour, BlockFuture, CanPlaceAtArgs, GetStateForNeighborUpdateArgs};
-
-use crate::block::RandomTickArgs;
 
 #[pumpkin_block_from_tag("minecraft:small_flowers")]
 pub struct FlowerBlock;
@@ -29,36 +24,6 @@ impl BlockBehaviour for FlowerBlock {
                 args.state_id,
             )
             .await
-        })
-    }
-
-    fn random_tick<'a>(&'a self, args: RandomTickArgs<'a>) -> BlockFuture<'a, ()> {
-        Box::pin(async move {
-            //TODO add trail particule
-            if (args.world.dimension.eq(&Dimension::OVERWORLD)
-                || args.world.dimension.eq(&Dimension::OVERWORLD_CAVES))
-                && args.block.eq(&Block::CLOSED_EYEBLOSSOM)
-                && args.world.level_time.lock().await.time_of_day % 24000 > 14500
-            {
-                args.world
-                    .set_block_state(
-                        args.position,
-                        Block::OPEN_EYEBLOSSOM.default_state.id,
-                        BlockFlags::NOTIFY_ALL,
-                    )
-                    .await;
-            }
-            if args.block.eq(&Block::OPEN_EYEBLOSSOM)
-                && args.world.level_time.lock().await.time_of_day % 24000 <= 14500
-            {
-                args.world
-                    .set_block_state(
-                        args.position,
-                        Block::CLOSED_EYEBLOSSOM.default_state.id,
-                        BlockFlags::NOTIFY_ALL,
-                    )
-                    .await;
-            }
         })
     }
 }

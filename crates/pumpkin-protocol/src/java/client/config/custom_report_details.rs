@@ -1,4 +1,4 @@
-use pumpkin_data::packet::clientbound::CONFIG_CUSTOM_REPORT_DETAILS;
+use pumpkin_data::packet::clientbound::config::CUSTOM_REPORT_DETAILS;
 use pumpkin_macros::java_packet;
 
 use crate::ClientPacket;
@@ -6,7 +6,7 @@ use crate::codec::var_int::VarInt;
 use crate::ser::NetworkWriteExt;
 use pumpkin_util::version::JavaMinecraftVersion;
 
-#[java_packet(CONFIG_CUSTOM_REPORT_DETAILS)]
+#[java_packet(CUSTOM_REPORT_DETAILS)]
 pub struct CConfigCustomReportDetails<'a> {
     pub details: &'a [(&'a str, &'a str)],
 }

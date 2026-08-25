@@ -334,7 +334,7 @@ impl JavaClient {
     pub async fn force_tp(&self, player: &Arc<Player>, position: Vector3<f64>) {
         let teleport_id = player.teleport_id_count.fetch_add(1, Ordering::Relaxed) + 1;
         *player.awaiting_teleport.lock().await = Some((teleport_id.into(), position));
-        self.enqueue_packet(&CPlayerPosition::new(
+        self.enqueue_client_packet(&CPlayerPosition::new(
             teleport_id.into(),
             player.get_entity().pos.load(),
             Vector3::new(0.0, 0.0, 0.0),

@@ -5,7 +5,7 @@ use crate::{
     ser::{NetworkWriteExt, WritingError},
 };
 use pumpkin_data::block_state_remap::remap_block_state_for_version;
-use pumpkin_data::packet::clientbound::PLAY_LEVEL_EVENT;
+use pumpkin_data::packet::clientbound::play::LEVEL_EVENT;
 use pumpkin_data::world::WorldEvent;
 use pumpkin_macros::java_packet;
 use pumpkin_util::math::position::BlockPos;
@@ -16,7 +16,7 @@ use pumpkin_util::version::JavaMinecraftVersion;
 /// This packet handles a wide variety of "world-level" events, such as
 /// block breaking particles, firework explosions, or ambient sounds
 /// like doors opening and portals humming.
-#[java_packet(PLAY_LEVEL_EVENT)]
+#[java_packet(LEVEL_EVENT)]
 pub struct CLevelEvent {
     /// The ID of the event to trigger.
     /// Event IDs are generally divided into Sound Events (1000s) and
@@ -57,7 +57,7 @@ impl ClientPacket for CLevelEvent {
     ) -> Result<(), WritingError> {
         let mut write = write;
         write.write_i32_be(self.event)?;
-        write.write_block_pos(&self.location)?;
+        write.write_block_pos(&self.location, version)?;
 
         let data = if self.event == WorldEvent::ParticlesDestroyBlock as i32 {
             u16::try_from(self.data).map_or(self.data, |state_id| {

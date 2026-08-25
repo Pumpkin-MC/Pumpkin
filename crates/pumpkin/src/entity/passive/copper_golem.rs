@@ -6,16 +6,14 @@ use std::sync::{
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
-use pumpkin_data::meta_data_type::MetaDataType;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::{self, Taggable};
-use pumpkin_data::tracked_data::TrackedData;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::java::client::play::Metadata;
 
 use crate::entity::{
-    Entity, EntityBase, EntityBaseFuture, NBTStorage, NbtFuture,
+    Entity, EntityBase, EntityBaseFuture, NbtFuture,
     ai::goal::{
         look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal, swim::SwimGoal,
         wander_around::WanderAroundGoal,
@@ -152,8 +150,7 @@ impl CopperGolemEntity {
         let entity = self.get_entity();
         entity.send_meta_data(
             &[Metadata::new(
-                TrackedData::WEATHER_STATE,
-                MetaDataType::WEATHERING_COPPER_STATE,
+                pumpkin_data::tracked_data::copper_golem::WEATHER_STATE,
                 VarInt(state.id()),
             )],
             None,
@@ -170,8 +167,7 @@ impl CopperGolemEntity {
         let entity = self.get_entity();
         entity.send_meta_data(
             &[Metadata::new(
-                TrackedData::COPPER_GOLEM_STATE,
-                MetaDataType::COPPER_GOLEM_STATE,
+                pumpkin_data::tracked_data::copper_golem::COPPER_GOLEM_STATE,
                 VarInt(state.id()),
             )],
             None,
@@ -206,10 +202,9 @@ impl CopperGolemEntity {
     }
 }
 
-impl NBTStorage for CopperGolemEntity {
-    fn write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
+impl Mob for CopperGolemEntity {
+    fn mob_write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async move {
-            self.mob_entity.living_entity.write_nbt(nbt).await;
             nbt.put_long(
                 "next_weather_age",
                 self.next_weathering_tick.load(Ordering::Relaxed),
@@ -218,9 +213,8 @@ impl NBTStorage for CopperGolemEntity {
         })
     }
 
-    fn read_nbt_non_mut<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
+    fn mob_read_nbt<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async move {
-            self.mob_entity.living_entity.read_nbt_non_mut(nbt).await;
             if let Some(next) = nbt.get_long("next_weather_age") {
                 self.next_weathering_tick.store(next, Ordering::Relaxed);
             }
@@ -229,9 +223,7 @@ impl NBTStorage for CopperGolemEntity {
             }
         })
     }
-}
 
-impl Mob for CopperGolemEntity {
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
     }
@@ -256,13 +248,11 @@ impl Mob for CopperGolemEntity {
             entity.send_meta_data(
                 &[
                     Metadata::new(
-                        TrackedData::WEATHER_STATE,
-                        MetaDataType::WEATHERING_COPPER_STATE,
+                        pumpkin_data::tracked_data::copper_golem::WEATHER_STATE,
                         VarInt(self.get_weather_state().id()),
                     ),
                     Metadata::new(
-                        TrackedData::COPPER_GOLEM_STATE,
-                        MetaDataType::COPPER_GOLEM_STATE,
+                        pumpkin_data::tracked_data::copper_golem::COPPER_GOLEM_STATE,
                         VarInt(self.get_state().id()),
                     ),
                 ],

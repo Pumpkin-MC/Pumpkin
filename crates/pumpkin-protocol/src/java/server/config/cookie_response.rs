@@ -1,4 +1,4 @@
-use pumpkin_data::packet::serverbound::CONFIG_COOKIE_RESPONSE;
+use pumpkin_data::packet::serverbound::config::COOKIE_RESPONSE;
 use pumpkin_macros::java_packet;
 use pumpkin_util::version::JavaMinecraftVersion;
 
@@ -14,7 +14,7 @@ const MAX_COOKIE_LENGTH: usize = 5120;
 ///
 /// Cookies allow servers to store small amounts of data on the client side,
 /// which can be retrieved later (e.g., for session tracking or preferences)
-#[java_packet(CONFIG_COOKIE_RESPONSE)]
+#[java_packet(COOKIE_RESPONSE)]
 pub struct SConfigCookieResponse<'a> {
     /// The unique identifier for the cookie being returned
     pub key: &'a str,
@@ -48,5 +48,24 @@ impl<'a> ServerPacket<'a> for SConfigCookieResponse<'a> {
             has_payload,
             payload: Some(payload),
         })
+    }
+}
+
+impl crate::ClientPacket for SConfigCookieResponse<'_> {
+    fn write_packet_data(
+        &self,
+        mut write: impl std::io::Write,
+        _version: &JavaMinecraftVersion,
+    ) -> Result<(), crate::ser::WritingError> {
+        use crate::{VarInt, ser::NetworkWriteExt};
+        write.write_string(self.key)?;
+        if let Some(payload) = self.payload {
+            write.write_bool(true)?;
+            write.write_var_int(&VarInt(payload.len() as i32))?;
+            write.write_slice(payload)?;
+        } else {
+            write.write_bool(false)?;
+        }
+        Ok(())
     }
 }

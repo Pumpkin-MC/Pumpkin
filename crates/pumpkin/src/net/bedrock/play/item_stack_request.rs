@@ -9,7 +9,7 @@ impl BedrockClient {
         packet: pumpkin_protocol::bedrock::server::item_stack_request::SItemStackRequest,
     ) {
         use pumpkin_protocol::bedrock::client::item_stack_response::{
-            CItemStackResponse, ItemStackResponse, ItemStackResponseContainerInfo,
+            CItemStackResponse, ItemStackResponseContainerInfo, ItemStackResponseInfo,
             ItemStackResponseSlotInfo,
         };
         use pumpkin_protocol::bedrock::server::item_stack_request::ItemStackRequestAction;
@@ -101,6 +101,71 @@ impl BedrockClient {
                                 );
                                 result = 1;
                                 break;
+                            }
+
+                            let merchant_result = screen_handler.window_type()
+                                == Some(pumpkin_data::screen::WindowType::Merchant)
+                                && matches!(
+                                    source.container_name.container_name,
+                                    ContainerName::CreatedOutput
+                                        | ContainerName::TradeResultPreview
+                                        | ContainerName::Trade2ResultPreview
+                                );
+                            if merchant_result {
+                                if count != source_stack.item_count {
+                                    result = 1;
+                                    break;
+                                }
+                                let Some(handler) = screen_handler
+                                    .as_any_mut()
+                                    .downcast_mut::<pumpkin_inventory::merchant::merchant_screen_handler::MerchantScreenHandler>()
+                                else {
+                                    result = 1;
+                                    break;
+                                };
+                                if !handler.complete_bedrock_trade(player.as_ref()).await {
+                                    result = 1;
+                                    break;
+                                }
+
+                                update_slot_stack(
+                                    player,
+                                    handler,
+                                    &destination,
+                                    dest_stack.clone(),
+                                )
+                                .await;
+                                for (container_name, slot_id, screen_slot) in [
+                                    (ContainerName::Trade2Ingredient1, 4, 0),
+                                    (ContainerName::Trade2Ingredient2, 5, 1),
+                                    (ContainerName::Trade2ResultPreview, 50, 2),
+                                ] {
+                                    let stack = handler.get_behaviour().slots[screen_slot]
+                                        .get_cloned_stack()
+                                        .await;
+                                    record_update(
+                                        &mut updates,
+                                        FullContainerName {
+                                            container_name,
+                                            dynamic_id: None,
+                                        },
+                                        slot_id,
+                                        &stack,
+                                    );
+                                }
+                                record_update(
+                                    &mut updates,
+                                    source.container_name.clone(),
+                                    source.slot_id,
+                                    ItemStack::EMPTY,
+                                );
+                                record_update(
+                                    &mut updates,
+                                    destination.container_name.clone(),
+                                    destination.slot_id,
+                                    &dest_stack,
+                                );
+                                continue;
                             }
 
                             source_stack.decrement(count);
@@ -212,6 +277,20 @@ impl BedrockClient {
                     }
                     ItemStackRequestAction::Destroy { count, source }
                     | ItemStackRequestAction::Consume { count, source } => {
+                        if screen_handler.window_type()
+                            == Some(pumpkin_data::screen::WindowType::Merchant)
+                            && matches!(
+                                source.container_name.container_name,
+                                ContainerName::TradeIngredient1
+                                    | ContainerName::TradeIngredient2
+                                    | ContainerName::Trade2Ingredient1
+                                    | ContainerName::Trade2Ingredient2
+                            )
+                        {
+                            // MerchantScreenHandler consumes both payment slots atomically when
+                            // Bedrock subsequently takes the CreatedOutput result.
+                            continue;
+                        }
                         if crafting_inputs_consumed
                             && source.container_name.container_name == ContainerName::CraftingInput
                         {
@@ -259,14 +338,50 @@ impl BedrockClient {
                         }
                     }
                     ItemStackRequestAction::CraftRecipe {
-                        recipe_id: _,
+                        recipe_id,
                         repetitions,
                     }
                     | ItemStackRequestAction::CraftRecipeAuto {
-                        recipe_id: _,
+                        recipe_id,
                         repetitions,
-                        ..
                     } => {
+                        if screen_handler.window_type()
+                            == Some(pumpkin_data::screen::WindowType::Merchant)
+                        {
+                            let Some(handler) = screen_handler
+                                .as_any_mut()
+                                .downcast_mut::<pumpkin_inventory::merchant::merchant_screen_handler::MerchantScreenHandler>()
+                            else {
+                                result = 1;
+                                break;
+                            };
+                            let trade = recipe_id.0.saturating_sub(1) as usize;
+                            if trade >= handler.offers.len() {
+                                result = 1;
+                                break;
+                            }
+                            handler.set_selected_offer(trade).await;
+                            for (container_name, slot_id, screen_slot) in [
+                                (ContainerName::Trade2Ingredient1, 4, 0),
+                                (ContainerName::Trade2Ingredient2, 5, 1),
+                                (ContainerName::Trade2ResultPreview, 50, 2),
+                            ] {
+                                let stack = handler.get_behaviour().slots[screen_slot]
+                                    .get_cloned_stack()
+                                    .await;
+                                record_update(
+                                    &mut updates,
+                                    FullContainerName {
+                                        container_name,
+                                        dynamic_id: None,
+                                    },
+                                    slot_id,
+                                    &stack,
+                                );
+                            }
+                            continue;
+                        }
+
                         if repetitions > 0 {
                             screen_handler.update_to_client().await;
 
@@ -347,15 +462,15 @@ impl BedrockClient {
                 for update in updates {
                     let container_info = container_infos.iter_mut().find(
                         |info: &&mut ItemStackResponseContainerInfo| {
-                            info.container_name == update.container_name
+                            info.full_container_name == update.container_name
                         },
                     );
 
                     let slot_info = ItemStackResponseSlotInfo {
+                        requested_slot: update.slot_id,
                         slot: update.slot_id,
-                        hotbar_slot: update.slot_id,
-                        count: update.count,
-                        item_stack_id: update.stack_id,
+                        amount: update.count,
+                        item_stack_net_id: update.stack_id,
                         custom_name: String::new(),
                         filtered_custom_name: String::new(),
                         durability_correction: VarInt(0),
@@ -365,17 +480,17 @@ impl BedrockClient {
                         info.slots.push(slot_info);
                     } else {
                         container_infos.push(ItemStackResponseContainerInfo {
-                            container_name: update.container_name,
+                            full_container_name: update.container_name,
                             slots: vec![slot_info],
                         });
                     }
                 }
             }
 
-            responses.push(ItemStackResponse {
+            responses.push(ItemStackResponseInfo {
                 result,
-                request_id: request.request_id,
-                container_infos,
+                client_request_id: request.request_id,
+                containers: container_infos,
             });
         }
 
@@ -386,11 +501,11 @@ impl BedrockClient {
         let mut inventory_updated = false;
         for response in &responses {
             if response.result == 0 {
-                for info in &response.container_infos {
-                    if info.container_name.container_name == ContainerName::Inventory
-                        || info.container_name.container_name
+                for info in &response.containers {
+                    if info.full_container_name.container_name == ContainerName::Inventory
+                        || info.full_container_name.container_name
                             == ContainerName::CombinedHotBarAndInventory
-                        || info.container_name.container_name == ContainerName::HotBar
+                        || info.full_container_name.container_name == ContainerName::HotBar
                     {
                         inventory_updated = true;
                     }
@@ -399,10 +514,11 @@ impl BedrockClient {
         }
 
         // Send Bedrock specific responses and updates
-        self.enqueue_packet(&CItemStackResponse { responses }).await;
+        self.enqueue_client_packet(&CItemStackResponse { responses })
+            .await;
 
         if inventory_updated {
-            self.enqueue_packet(&CInventoryContent {
+            self.enqueue_client_packet(&CInventoryContent {
                 container_id: VarUInt(0),
                 slots: player
                     .inventory()

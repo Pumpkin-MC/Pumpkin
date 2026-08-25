@@ -13,12 +13,10 @@ use pumpkin_data::{
     data_component_impl::EquipmentSlot,
     entity::EntityType,
     item::Item,
-    meta_data_type::MetaDataType,
     particle::Particle,
     sound::{Sound, SoundCategory},
     tag,
     tag::Taggable,
-    tracked_data::TrackedData,
 };
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::{
@@ -29,7 +27,7 @@ use pumpkin_util::math::{boundingbox::BoundingBox, position::BlockPos, vector3::
 use rand::RngExt;
 
 use crate::entity::{
-    Entity, EntityBase, NBTStorage, NbtFuture,
+    Entity, EntityBase, NbtFuture,
     ai::{
         goal::{
             GoalFuture, active_target::ActiveTargetGoal, chase_player::ChasePlayerGoal,
@@ -316,8 +314,7 @@ impl EndermanEntity {
         self.angry.store(angry, Ordering::Relaxed);
         self.mob_entity.living_entity.entity.send_meta_data(
             &[Metadata::new(
-                TrackedData::CREEPY,
-                MetaDataType::BOOLEAN,
+                pumpkin_data::tracked_data::enderman::CREEPY,
                 angry,
             )],
             None,
@@ -332,8 +329,7 @@ impl EndermanEntity {
         self.provoked.store(provoked, Ordering::Relaxed);
         self.mob_entity.living_entity.entity.send_meta_data(
             &[Metadata::new(
-                TrackedData::STARED_AT,
-                MetaDataType::BOOLEAN,
+                pumpkin_data::tracked_data::enderman::STARED_AT,
                 provoked,
             )],
             None,
@@ -345,8 +341,7 @@ impl EndermanEntity {
         let value = block_state.map_or(VarInt(0), |id| VarInt(id.as_u16() as i32));
         self.mob_entity.living_entity.entity.send_meta_data(
             &[Metadata::new(
-                TrackedData::CARRY_STATE,
-                MetaDataType::OPTIONAL_BLOCK_STATE,
+                pumpkin_data::tracked_data::enderman::CARRY_STATE,
                 value,
             )],
             None,
@@ -417,27 +412,23 @@ impl EndermanEntity {
     }
 }
 
-impl NBTStorage for EndermanEntity {
-    fn write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
+impl Mob for EndermanEntity {
+    fn mob_write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async {
-            self.mob_entity.living_entity.write_nbt(nbt).await;
             if let Some(block_state) = self.carried_block.load() {
                 nbt.put_int("carriedBlockState", block_state.as_u16() as i32);
             }
         })
     }
 
-    fn read_nbt_non_mut<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
+    fn mob_read_nbt<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async {
-            self.mob_entity.living_entity.read_nbt_non_mut(nbt).await;
             if let Some(block_state) = nbt.get_int("carriedBlockState") {
                 self.set_carried_block(BlockStateId::new(block_state as u16));
             }
         })
     }
-}
 
-impl Mob for EndermanEntity {
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
     }

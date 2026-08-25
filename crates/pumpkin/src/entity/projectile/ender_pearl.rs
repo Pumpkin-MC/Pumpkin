@@ -4,8 +4,8 @@ use std::sync::atomic::AtomicBool;
 use crate::entity::projectile::ProjectileHit;
 use crate::{
     entity::{
-        Entity, EntityBase, EntityBaseFuture, EntityType, NBTStorage,
-        mob::endermite::EndermiteEntity, projectile::ThrownItemEntity,
+        Entity, EntityBase, EntityBaseFuture, EntityType, mob::endermite::EndermiteEntity,
+        projectile::ThrownItemEntity,
     },
     server::Server,
 };
@@ -13,7 +13,7 @@ use pumpkin_data::damage::DamageType;
 use pumpkin_data::entity::{EntityPose, EntityStatus};
 use pumpkin_data::particle::Particle;
 use pumpkin_data::sound::{Sound, SoundCategory};
-use pumpkin_protocol::bedrock::server::actor_event::ActorEventType;
+use pumpkin_protocol::bedrock::server::actor_event::ActorEventID;
 use pumpkin_util::math::vector3::Vector3;
 
 const GRAVITY: f64 = 0.03;
@@ -46,8 +46,6 @@ impl EnderPearlEntity {
     }
 }
 
-impl NBTStorage for EnderPearlEntity {}
-
 impl EntityBase for EnderPearlEntity {
     fn tick<'a>(
         &'a self,
@@ -64,11 +62,6 @@ impl EntityBase for EnderPearlEntity {
     fn get_living_entity(&self) -> Option<&crate::entity::living::LivingEntity> {
         None
     }
-
-    fn as_nbt_storage(&self) -> &dyn NBTStorage {
-        self
-    }
-
     fn cast_any(&self) -> &dyn std::any::Any {
         self
     }
@@ -178,7 +171,7 @@ impl EntityBase for EnderPearlEntity {
                     .await;
             }
 
-            world.send_entity_status(entity, EntityStatus::Death, Some(ActorEventType::Death));
+            world.send_entity_status(entity, EntityStatus::Death, Some(ActorEventID::Death));
         })
     }
 }

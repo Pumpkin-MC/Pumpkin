@@ -1,10 +1,10 @@
-use pumpkin_data::packet::clientbound::PLAY_PING;
+use pumpkin_data::packet::clientbound::play::PING;
 use pumpkin_macros::java_packet;
 
 use crate::{ClientPacket, ser::NetworkWriteExt};
 use pumpkin_util::version::JavaMinecraftVersion;
 
-#[java_packet(PLAY_PING)]
+#[java_packet(PING)]
 pub struct CPlayPing {
     pub id: i32,
 }

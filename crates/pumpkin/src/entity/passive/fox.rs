@@ -6,16 +6,14 @@ use std::sync::{
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
-use pumpkin_data::meta_data_type::MetaDataType;
 use pumpkin_data::sound::Sound;
 use pumpkin_data::tag::{self, Taggable};
-use pumpkin_data::tracked_data::TrackedData;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::java::client::play::Metadata;
 
 use crate::entity::{
-    Entity, EntityBase, EntityBaseFuture, NBTStorage, NbtFuture,
+    Entity, EntityBase, EntityBaseFuture, NbtFuture,
     ageable::{AgeableData, AgeableMob},
     ai::goal::{
         breed::BreedGoal, escape_danger::EscapeDangerGoal, follow_parent::FollowParentGoal,
@@ -126,8 +124,7 @@ impl FoxEntity {
         let entity = self.get_entity();
         entity.send_meta_data(
             &[Metadata::new(
-                TrackedData::TYPE_ID,
-                MetaDataType::INT,
+                pumpkin_data::tracked_data::fox::TYPE_ID,
                 VarInt(variant.id()),
             )],
             None,
@@ -149,8 +146,7 @@ impl FoxEntity {
         let entity = self.get_entity();
         entity.send_meta_data(
             &[Metadata::new(
-                TrackedData::FLAGS_ID,
-                MetaDataType::BYTE,
+                pumpkin_data::tracked_data::fox::FLAGS_ID,
                 new_flags,
             )],
             None,
@@ -243,12 +239,17 @@ impl Animal for FoxEntity {
     }
 }
 
-impl NBTStorage for FoxEntity {
-    fn write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
+impl Mob for FoxEntity {
+    fn as_ageable(&self) -> Option<&dyn AgeableMob> {
+        Some(self)
+    }
+
+    fn as_animal(&self) -> Option<&dyn Animal> {
+        Some(self)
+    }
+
+    fn mob_write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async move {
-            self.mob_entity.living_entity.write_nbt(nbt).await;
-            self.write_ageable_nbt(nbt);
-            self.write_animal_nbt(nbt);
             nbt.put_string("Type", self.get_variant().as_str().to_string());
             nbt.put_bool("Sleeping", self.is_sleeping());
             nbt.put_bool("Sitting", self.is_sitting());
@@ -256,11 +257,8 @@ impl NBTStorage for FoxEntity {
         })
     }
 
-    fn read_nbt_non_mut<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
+    fn mob_read_nbt<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async move {
-            self.mob_entity.living_entity.read_nbt_non_mut(nbt).await;
-            self.read_ageable_nbt(nbt);
-            self.read_animal_nbt(nbt);
             if let Some(variant_str) = nbt.get_string("Type") {
                 self.set_variant(FoxVariant::from_name(variant_str));
             }
@@ -275,9 +273,7 @@ impl NBTStorage for FoxEntity {
             }
         })
     }
-}
 
-impl Mob for FoxEntity {
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
     }
@@ -299,8 +295,7 @@ impl Mob for FoxEntity {
             if is_baby {
                 entity.send_meta_data(
                     &[Metadata::new(
-                        TrackedData::BABY_ID,
-                        MetaDataType::BOOLEAN,
+                        pumpkin_data::tracked_data::fox::BABY_ID,
                         true,
                     )],
                     None,
@@ -308,16 +303,14 @@ impl Mob for FoxEntity {
             }
             entity.send_meta_data(
                 &[Metadata::new(
-                    TrackedData::TYPE_ID,
-                    MetaDataType::INT,
+                    pumpkin_data::tracked_data::fox::TYPE_ID,
                     VarInt(self.get_variant().id()),
                 )],
                 None,
             );
             entity.send_meta_data(
                 &[Metadata::new(
-                    TrackedData::FLAGS_ID,
-                    MetaDataType::BYTE,
+                    pumpkin_data::tracked_data::fox::FLAGS_ID,
                     self.flags.load(Ordering::Relaxed),
                 )],
                 None,

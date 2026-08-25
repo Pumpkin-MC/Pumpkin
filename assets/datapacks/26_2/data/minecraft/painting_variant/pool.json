@@ -1,0 +1,13 @@
+{
+  "asset_id": "minecraft:pool",
+  "author": {
+    "color": "gray",
+    "translate": "painting.minecraft.pool.author"
+  },
+  "height": 1,
+  "title": {
+    "color": "yellow",
+    "translate": "painting.minecraft.pool.title"
+  },
+  "width": 2
+}

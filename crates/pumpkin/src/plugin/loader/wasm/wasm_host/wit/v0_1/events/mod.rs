@@ -24,6 +24,8 @@ use crate::{
 };
 
 pub mod block;
+pub mod cleanup;
+pub mod dialog;
 pub mod enchantment;
 pub mod entity;
 pub mod hanging;
@@ -33,6 +35,8 @@ pub mod raid;
 pub mod server;
 pub mod vehicle;
 pub mod world;
+
+pub use cleanup::*;
 
 impl pumpkin::plugin::event::Host for PluginHostState {}
 
@@ -95,7 +99,7 @@ pub(super) fn to_wasm_block_name(block: &'static Block) -> String {
 
 pub(super) fn from_wasm_block_name(block_name: &str) -> &'static Block {
     Block::from_registry_key(block_name.strip_prefix("minecraft:").unwrap_or(block_name))
-        .expect("invalid block name")
+        .unwrap_or(&Block::AIR)
 }
 
 pub(super) fn to_wasm_entity_type(entity_type: &'static EntityType) -> String {
@@ -103,7 +107,12 @@ pub(super) fn to_wasm_entity_type(entity_type: &'static EntityType) -> String {
 }
 
 pub(super) fn from_wasm_entity_type(entity_type: &str) -> &'static EntityType {
-    EntityType::from_name(entity_type).expect("invalid entity type")
+    EntityType::from_name(
+        entity_type
+            .strip_prefix("minecraft:")
+            .unwrap_or(entity_type),
+    )
+    .unwrap_or(&EntityType::PLAYER)
 }
 
 pub(super) const fn to_wasm_hand(hand: Hand) -> pumpkin::plugin::common::Hand {
@@ -121,7 +130,7 @@ pub(super) const fn from_wasm_hand(hand: pumpkin::plugin::common::Hand) -> Hand 
 }
 
 pub(super) const fn to_wasm_entity_interaction_action(
-    action: &ActionType,
+    action: ActionType,
 ) -> pumpkin::plugin::event::EntityInteractionAction {
     match action {
         ActionType::Interact => pumpkin::plugin::event::EntityInteractionAction::Interact,
@@ -225,16 +234,32 @@ impl<E: Payload + ToFromWasmEvent> EventHandler<E> for WasmPluginEventHandler {
     fn handle<'a>(&'a self, server: &'a Arc<Server>, event: &'a E) -> BoxFuture<'a, ()> {
         Box::pin(async {
             let mut store = self.plugin.store.lock().await;
-            let event = event.to_wasm_event(store.data_mut());
+            let wasm_event = event.to_wasm_event(store.data_mut());
             match self.plugin.plugin_instance {
                 PluginInstance::V0_1(ref plugin) => {
-                    let server = store
-                        .data_mut()
-                        .add_server(server.clone())
-                        .expect("valid server");
-                    let _ = plugin
-                        .call_handle_event(&mut *store, self.handler_id, server, &event)
+                    let Ok(server_res) = store.data_mut().add_server(server.clone()) else {
+                        cleanup_event(&wasm_event, store.data_mut());
+                        return;
+                    };
+                    let server_rep = server_res.rep();
+                    let result = plugin
+                        .call_handle_event(&mut *store, self.handler_id, server_res, &wasm_event)
                         .await;
+                    match result {
+                        Ok(returned_event) => {
+                            cleanup_event(&returned_event, store.data_mut());
+                            cleanup_event(&wasm_event, store.data_mut());
+                        }
+                        Err(_) => {
+                            cleanup_event(&wasm_event, store.data_mut());
+                        }
+                    }
+                    let _ = store
+                        .data_mut()
+                        .resource_table
+                        .delete::<crate::plugin::loader::wasm::wasm_host::state::ServerResource>(
+                        wasmtime::component::Resource::new_own(server_rep),
+                    );
                 }
             }
         })
@@ -250,16 +275,29 @@ impl<E: Payload + ToFromWasmEvent> EventHandler<E> for WasmPluginEventHandler {
             let wasm_event = event.to_wasm_event(store.data_mut());
             match self.plugin.plugin_instance {
                 PluginInstance::V0_1(ref plugin) => {
-                    let server = store
-                        .data_mut()
-                        .add_server(server.clone())
-                        .expect("valid server");
-                    if let Ok(returned_event) = plugin
-                        .call_handle_event(&mut *store, self.handler_id, server, &wasm_event)
-                        .await
-                    {
-                        event.apply_wasm_event(returned_event, store.data_mut());
+                    let Ok(server_res) = store.data_mut().add_server(server.clone()) else {
+                        cleanup_event(&wasm_event, store.data_mut());
+                        return;
+                    };
+                    let server_rep = server_res.rep();
+                    let result = plugin
+                        .call_handle_event(&mut *store, self.handler_id, server_res, &wasm_event)
+                        .await;
+                    match result {
+                        Ok(returned_event) => {
+                            event.apply_wasm_event(returned_event, store.data_mut());
+                            cleanup_event(&wasm_event, store.data_mut());
+                        }
+                        Err(_) => {
+                            cleanup_event(&wasm_event, store.data_mut());
+                        }
                     }
+                    let _ = store
+                        .data_mut()
+                        .resource_table
+                        .delete::<crate::plugin::loader::wasm::wasm_host::state::ServerResource>(
+                        wasmtime::component::Resource::new_own(server_rep),
+                    );
                 }
             }
         })

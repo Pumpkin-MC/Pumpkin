@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::{
-    entity::{Entity, EntityBase, EntityBaseFuture, NBTStorage},
+    entity::{Entity, EntityBase, EntityBaseFuture},
     server::Server,
 };
 use pumpkin_data::effect::StatusEffect;
@@ -22,6 +22,7 @@ impl pumpkin_protocol::java::client::play::MetadataSerializer for ParticleMeta<'
     fn write_metadata(
         &self,
         writer: &mut impl std::io::Write,
+        _version: &pumpkin_util::version::JavaMinecraftVersion,
     ) -> Result<(), pumpkin_protocol::ser::WritingError> {
         use pumpkin_protocol::ser::NetworkWriteExt;
         writer.write_var_int(&self.particle_id)?;
@@ -105,13 +106,7 @@ impl AreaEffectCloudEntity {
     }
 }
 
-impl NBTStorage for AreaEffectCloudEntity {}
-
 impl EntityBase for AreaEffectCloudEntity {
-    fn as_nbt_storage(&self) -> &dyn NBTStorage {
-        self
-    }
-
     fn init_data_tracker(&self) -> EntityBaseFuture<'_, ()> {
         Box::pin(async move {
             // Send initial radius and particle (color) so clients render correctly
@@ -175,8 +170,7 @@ impl EntityBase for AreaEffectCloudEntity {
             // Send initial particle and radius
             self.entity.send_meta_data(
                 &[pumpkin_protocol::java::client::play::Metadata::new(
-                    pumpkin_data::tracked_data::TrackedData::PARTICLE,
-                    pumpkin_data::meta_data_type::MetaDataType::PARTICLE,
+                    pumpkin_data::tracked_data::area_effect_cloud::PARTICLE,
                     &meta,
                 )],
                 None,
@@ -184,8 +178,7 @@ impl EntityBase for AreaEffectCloudEntity {
 
             self.entity.send_meta_data(
                 &[pumpkin_protocol::java::client::play::Metadata::new(
-                    pumpkin_data::tracked_data::TrackedData::RADIUS,
-                    pumpkin_data::meta_data_type::MetaDataType::FLOAT,
+                    pumpkin_data::tracked_data::area_effect_cloud::RADIUS,
                     radius,
                 )],
                 None,
@@ -196,8 +189,7 @@ impl EntityBase for AreaEffectCloudEntity {
             let is_waiting = 0 < wait_time;
             self.entity.send_meta_data(
                 &[pumpkin_protocol::java::client::play::Metadata::new(
-                    pumpkin_data::tracked_data::TrackedData::WAITING,
-                    pumpkin_data::meta_data_type::MetaDataType::BOOLEAN,
+                    pumpkin_data::tracked_data::area_effect_cloud::WAITING,
                     is_waiting,
                 )],
                 None,
@@ -233,8 +225,7 @@ impl EntityBase for AreaEffectCloudEntity {
             if age == wait_time && wait_time > 0 {
                 self.entity.send_meta_data(
                     &[pumpkin_protocol::java::client::play::Metadata::new(
-                        pumpkin_data::tracked_data::TrackedData::WAITING,
-                        pumpkin_data::meta_data_type::MetaDataType::BOOLEAN,
+                        pumpkin_data::tracked_data::area_effect_cloud::WAITING,
                         false,
                     )],
                     None,
@@ -261,8 +252,7 @@ impl EntityBase for AreaEffectCloudEntity {
                 drop(radius);
                 self.entity.send_meta_data(
                     &[pumpkin_protocol::java::client::play::Metadata::new(
-                        pumpkin_data::tracked_data::TrackedData::RADIUS,
-                        pumpkin_data::meta_data_type::MetaDataType::FLOAT,
+                        pumpkin_data::tracked_data::area_effect_cloud::RADIUS,
                         current_radius,
                     )],
                     None,
@@ -392,8 +382,7 @@ impl EntityBase for AreaEffectCloudEntity {
                     // Send updated radius to clients
                     self.entity.send_meta_data(
                         &[pumpkin_protocol::java::client::play::Metadata::new(
-                            pumpkin_data::tracked_data::TrackedData::RADIUS,
-                            pumpkin_data::meta_data_type::MetaDataType::FLOAT,
+                            pumpkin_data::tracked_data::area_effect_cloud::RADIUS,
                             current_radius,
                         )],
                         None,

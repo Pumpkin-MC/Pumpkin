@@ -1,4 +1,4 @@
-use std::{num::NonZeroU8, sync::Arc, sync::atomic::Ordering};
+use std::{num::NonZero, sync::Arc, sync::atomic::Ordering};
 
 use crate::{
     entity::player::ChatMode,
@@ -9,7 +9,7 @@ use crate::{
     server::Server,
 };
 use core::str;
-use pumpkin_data::{registry::Registry, translation};
+use pumpkin_data::registry::Registry;
 use pumpkin_protocol::{
     ConnectionState, KnownPack,
     java::{
@@ -20,7 +20,7 @@ use pumpkin_protocol::{
         },
     },
 };
-use pumpkin_util::{Hand, text::TextComponent, version::JavaMinecraftVersion};
+use pumpkin_util::{Hand, text::TextComponent};
 use tracing::{debug, trace, warn};
 
 const BRAND_CHANNEL_PREFIX: &str = "minecraft:brand";

@@ -203,6 +203,24 @@ impl JavaMinecraftVersion {
             _ => Self::Unknown,
         }
     }
+
+    #[inline]
+    #[must_use]
+    pub const fn supports_configuration_state(&self) -> bool {
+        self.protocol_version() >= Self::V_1_20_2.protocol_version()
+    }
+
+    #[inline]
+    #[must_use]
+    pub const fn is_modern(&self) -> bool {
+        self.protocol_version() >= Self::V_1_13.protocol_version()
+    }
+
+    #[inline]
+    #[must_use]
+    pub const fn has_registries(&self) -> bool {
+        self.protocol_version() >= Self::V_1_16.protocol_version()
+    }
 }
 
 impl std::fmt::Display for JavaMinecraftVersion {

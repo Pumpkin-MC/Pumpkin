@@ -1,0 +1,67 @@
+{
+  "description": {
+    "translate": "enchantment.minecraft.fire_protection"
+  },
+  "min_cost": {
+    "base": 10,
+    "per_level_above_first": 8
+  },
+  "max_cost": {
+    "base": 18,
+    "per_level_above_first": 8
+  },
+  "anvil_cost": 2,
+  "slots": [
+    "armor"
+  ],
+  "supported_items": "#minecraft:enchantable/armor",
+  "weight": 5,
+  "max_level": 4,
+  "exclusive_set": "#minecraft:exclusive_set/armor",
+  "effects": {
+    "minecraft:attributes": [
+      {
+        "id": "minecraft:enchantment.fire_protection",
+        "attribute": "minecraft:burning_time",
+        "amount": {
+          "base": -0.15,
+          "per_level_above_first": -0.15,
+          "type": "minecraft:linear"
+        },
+        "operation": "add_multiplied_base"
+      }
+    ],
+    "minecraft:damage_protection": [
+      {
+        "effect": {
+          "value": {
+            "base": 2.0,
+            "per_level_above_first": 2.0,
+            "type": "minecraft:linear"
+          },
+          "type": "minecraft:add"
+        },
+        "requirements": {
+          "terms": [
+            {
+              "predicate": {
+                "tags": [
+                  {
+                    "id": "minecraft:is_fire",
+                    "expected": true
+                  },
+                  {
+                    "id": "minecraft:bypasses_invulnerability",
+                    "expected": false
+                  }
+                ]
+              },
+              "condition": "minecraft:damage_source_properties"
+            }
+          ],
+          "condition": "minecraft:all_of"
+        }
+      }
+    ]
+  }
+}

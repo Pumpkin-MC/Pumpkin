@@ -67,10 +67,11 @@ use crate::plugin::{
     loader::wasm::wasm_host::{
         state::PluginHostState,
         wit::v0_1::{
+            entity::{from_wit_damage_type, to_wit_damage_type},
             events::{
-                ToFromWasmEvent, consume_player, consume_text_component, consume_world,
-                from_wasm_block_position, from_wasm_position, to_wasm_block_position,
-                to_wasm_position,
+                ToFromWasmEvent, cleanup_event, consume_player, consume_text_component,
+                consume_world, from_wasm_block_position, from_wasm_position,
+                to_wasm_block_position, to_wasm_position,
             },
             pumpkin::plugin::event::{
                 AreaEffectCloudApplyEventData, ArrowBodyCountChangeEventData,
@@ -112,7 +113,7 @@ impl ToFromWasmEvent for EntityDamageEvent {
         Event::EntityDamageEvent(EntityDamageEventData {
             entity_id: self.entity_id,
             damage: self.damage,
-            cause: self.cause.clone(),
+            damage_type: to_wit_damage_type(&self.damage_type),
             cancelled: self.cancelled,
         })
     }
@@ -122,7 +123,7 @@ impl ToFromWasmEvent for EntityDamageEvent {
             Event::EntityDamageEvent(data) => Self {
                 entity_id: data.entity_id,
                 damage: data.damage,
-                cause: data.cause,
+                damage_type: from_wit_damage_type(data.damage_type),
                 cancelled: data.cancelled,
             },
             _ => panic!("unexpected event type"),
@@ -655,7 +656,8 @@ impl ToFromWasmEvent for CreatureSpawnEvent {
         })
     }
 
-    fn apply_wasm_event(&mut self, event: Event, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
+        cleanup_event(&event, state);
         if let Event::CreatureSpawnEvent(data) = event {
             self.cancelled = data.cancelled;
         }
@@ -686,7 +688,8 @@ impl ToFromWasmEvent for EnderDragonChangePhaseEvent {
         })
     }
 
-    fn apply_wasm_event(&mut self, event: Event, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
+        cleanup_event(&event, state);
         if let Event::EnderDragonChangePhaseEvent(data) = event {
             self.cancelled = data.cancelled;
             self.new_phase = data.new_phase;
@@ -715,7 +718,8 @@ impl ToFromWasmEvent for EntityBreakDoorEvent {
         })
     }
 
-    fn apply_wasm_event(&mut self, event: Event, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
+        cleanup_event(&event, state);
         if let Event::EntityBreakDoorEvent(data) = event {
             self.cancelled = data.cancelled;
         }
@@ -743,7 +747,8 @@ impl ToFromWasmEvent for EntityChangeBlockEvent {
         })
     }
 
-    fn apply_wasm_event(&mut self, event: Event, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
+        cleanup_event(&event, state);
         if let Event::EntityChangeBlockEvent(data) = event {
             self.cancelled = data.cancelled;
             self.new_block = data.new_block;
@@ -774,7 +779,8 @@ impl ToFromWasmEvent for EntityDamageByBlockEvent {
         })
     }
 
-    fn apply_wasm_event(&mut self, event: Event, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
+        cleanup_event(&event, state);
         if let Event::EntityDamageByBlockEvent(data) = event {
             self.cancelled = data.cancelled;
             self.damage = data.damage;
@@ -806,7 +812,8 @@ impl ToFromWasmEvent for EntityDamageByEntityEvent {
         })
     }
 
-    fn apply_wasm_event(&mut self, event: Event, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
+        cleanup_event(&event, state);
         if let Event::EntityDamageByEntityEvent(data) = event {
             self.cancelled = data.cancelled;
             self.damage = data.damage;
@@ -837,7 +844,8 @@ impl ToFromWasmEvent for EntityDropItemEvent {
         })
     }
 
-    fn apply_wasm_event(&mut self, event: Event, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
+        cleanup_event(&event, state);
         if let Event::EntityDropItemEvent(data) = event {
             self.cancelled = data.cancelled;
         }
@@ -865,7 +873,8 @@ impl ToFromWasmEvent for EntityEnterBlockEvent {
         })
     }
 
-    fn apply_wasm_event(&mut self, event: Event, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
+        cleanup_event(&event, state);
         if let Event::EntityEnterBlockEvent(data) = event {
             self.cancelled = data.cancelled;
         }
@@ -892,7 +901,8 @@ impl ToFromWasmEvent for EntityExhaustionEvent {
         })
     }
 
-    fn apply_wasm_event(&mut self, event: Event, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
+        cleanup_event(&event, state);
         if let Event::EntityExhaustionEvent(data) = event {
             self.cancelled = data.cancelled;
             self.exhaustion = data.exhaustion;
@@ -920,7 +930,8 @@ impl ToFromWasmEvent for EntityInteractEvent {
         })
     }
 
-    fn apply_wasm_event(&mut self, event: Event, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
+        cleanup_event(&event, state);
         if let Event::EntityInteractEvent(data) = event {
             self.cancelled = data.cancelled;
         }
@@ -948,7 +959,8 @@ impl ToFromWasmEvent for EntityKnockbackEvent {
         })
     }
 
-    fn apply_wasm_event(&mut self, event: Event, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
+        cleanup_event(&event, state);
         if let Event::EntityKnockbackEvent(data) = event {
             self.cancelled = data.cancelled;
             self.knockback = from_wasm_position(data.knockback);
@@ -978,7 +990,8 @@ impl ToFromWasmEvent for EntityPlaceEvent {
         })
     }
 
-    fn apply_wasm_event(&mut self, event: Event, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
+        cleanup_event(&event, state);
         if let Event::EntityPlaceEvent(data) = event {
             self.cancelled = data.cancelled;
         }
@@ -1006,7 +1019,8 @@ impl ToFromWasmEvent for EntityPoseChangeEvent {
         })
     }
 
-    fn apply_wasm_event(&mut self, event: Event, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
+        cleanup_event(&event, state);
         if let Event::EntityPoseChangeEvent(data) = event {
             self.cancelled = data.cancelled;
             self.pose = data.pose;
@@ -1036,7 +1050,8 @@ impl ToFromWasmEvent for EntityPotionEffectEvent {
         })
     }
 
-    fn apply_wasm_event(&mut self, event: Event, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
+        cleanup_event(&event, state);
         if let Event::EntityPotionEffectEvent(data) = event {
             self.cancelled = data.cancelled;
             self.duration = data.duration;
@@ -1067,7 +1082,8 @@ impl ToFromWasmEvent for EntitySpellCastEvent {
         })
     }
 
-    fn apply_wasm_event(&mut self, event: Event, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
+        cleanup_event(&event, state);
         if let Event::EntitySpellCastEvent(data) = event {
             self.cancelled = data.cancelled;
             self.spell = data.spell;
@@ -1096,7 +1112,8 @@ impl ToFromWasmEvent for EntityTargetLivingEntityEvent {
         })
     }
 
-    fn apply_wasm_event(&mut self, event: Event, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
+        cleanup_event(&event, state);
         if let Event::EntityTargetLivingEntityEvent(data) = event {
             self.cancelled = data.cancelled;
             self.target_id = data.target_id;
@@ -1125,7 +1142,8 @@ impl ToFromWasmEvent for EntityToggleSwimEvent {
         })
     }
 
-    fn apply_wasm_event(&mut self, event: Event, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
+        cleanup_event(&event, state);
         if let Event::EntityToggleSwimEvent(data) = event {
             self.cancelled = data.cancelled;
             self.is_swimming = data.is_swimming;
@@ -1154,7 +1172,8 @@ impl ToFromWasmEvent for ExplosionPrimeEvent {
         })
     }
 
-    fn apply_wasm_event(&mut self, event: Event, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
+        cleanup_event(&event, state);
         if let Event::ExplosionPrimeEvent(data) = event {
             self.cancelled = data.cancelled;
             self.radius = data.radius;
@@ -1183,7 +1202,8 @@ impl ToFromWasmEvent for FireworkExplodeEvent {
         })
     }
 
-    fn apply_wasm_event(&mut self, event: Event, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
+        cleanup_event(&event, state);
         if let Event::FireworkExplodeEvent(data) = event {
             self.cancelled = data.cancelled;
         }
@@ -1209,7 +1229,8 @@ impl ToFromWasmEvent for FoodLevelChangeEvent {
         })
     }
 
-    fn apply_wasm_event(&mut self, event: Event, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
+        cleanup_event(&event, state);
         if let Event::FoodLevelChangeEvent(data) = event {
             self.cancelled = data.cancelled;
             self.food_level = data.food_level;
@@ -1236,7 +1257,8 @@ impl ToFromWasmEvent for ItemDespawnEvent {
         })
     }
 
-    fn apply_wasm_event(&mut self, event: Event, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
+        cleanup_event(&event, state);
         if let Event::ItemDespawnEvent(data) = event {
             self.cancelled = data.cancelled;
         }
@@ -1262,7 +1284,8 @@ impl ToFromWasmEvent for ItemMergeEvent {
         })
     }
 
-    fn apply_wasm_event(&mut self, event: Event, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
+        cleanup_event(&event, state);
         if let Event::ItemMergeEvent(data) = event {
             self.cancelled = data.cancelled;
         }
@@ -1290,7 +1313,8 @@ impl ToFromWasmEvent for ItemSpawnEvent {
         })
     }
 
-    fn apply_wasm_event(&mut self, event: Event, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
+        cleanup_event(&event, state);
         if let Event::ItemSpawnEvent(data) = event {
             self.cancelled = data.cancelled;
         }
@@ -1331,7 +1355,8 @@ impl ToFromWasmEvent for PiglinBarterEvent {
         })
     }
 
-    fn apply_wasm_event(&mut self, event: Event, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
+        cleanup_event(&event, state);
         if let Event::PiglinBarterEvent(data) = event {
             self.cancelled = data.cancelled;
         }
@@ -1355,7 +1380,8 @@ impl ToFromWasmEvent for ProjectileHitEvent {
         })
     }
 
-    fn apply_wasm_event(&mut self, event: Event, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
+        cleanup_event(&event, state);
         if let Event::ProjectileHitEvent(data) = event {
             self.cancelled = data.cancelled;
         }
@@ -1383,7 +1409,8 @@ impl ToFromWasmEvent for ProjectileLaunchEvent {
         })
     }
 
-    fn apply_wasm_event(&mut self, event: Event, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
+        cleanup_event(&event, state);
         if let Event::ProjectileLaunchEvent(data) = event {
             self.cancelled = data.cancelled;
         }
@@ -1411,7 +1438,8 @@ impl ToFromWasmEvent for SheepDyeWoolEvent {
         })
     }
 
-    fn apply_wasm_event(&mut self, event: Event, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
+        cleanup_event(&event, state);
         if let Event::SheepDyeWoolEvent(data) = event {
             self.cancelled = data.cancelled;
             self.dye_color = data.dye_color;
@@ -1439,7 +1467,8 @@ impl ToFromWasmEvent for SheepRegrowWoolEvent {
         })
     }
 
-    fn apply_wasm_event(&mut self, event: Event, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
+        cleanup_event(&event, state);
         if let Event::SheepRegrowWoolEvent(data) = event {
             self.cancelled = data.cancelled;
         }
@@ -1465,7 +1494,8 @@ impl ToFromWasmEvent for SlimeSplitEvent {
         })
     }
 
-    fn apply_wasm_event(&mut self, event: Event, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
+        cleanup_event(&event, state);
         if let Event::SlimeSplitEvent(data) = event {
             self.cancelled = data.cancelled;
             self.count = data.count;
@@ -1493,7 +1523,8 @@ impl ToFromWasmEvent for StriderTemperatureChangeEvent {
         })
     }
 
-    fn apply_wasm_event(&mut self, event: Event, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
+        cleanup_event(&event, state);
         if let Event::StriderTemperatureChangeEvent(data) = event {
             self.cancelled = data.cancelled;
             self.is_shivering = data.is_shivering;
@@ -1521,7 +1552,8 @@ impl ToFromWasmEvent for VillagerAcquireTradeEvent {
         })
     }
 
-    fn apply_wasm_event(&mut self, event: Event, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
+        cleanup_event(&event, state);
         if let Event::VillagerAcquireTradeEvent(data) = event {
             self.cancelled = data.cancelled;
             self.recipe_index = data.recipe_index;
@@ -1550,7 +1582,8 @@ impl ToFromWasmEvent for VillagerCareerChangeEvent {
         })
     }
 
-    fn apply_wasm_event(&mut self, event: Event, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
+        cleanup_event(&event, state);
         if let Event::VillagerCareerChangeEvent(data) = event {
             self.cancelled = data.cancelled;
             self.profession = data.profession;
@@ -1579,7 +1612,8 @@ impl ToFromWasmEvent for VillagerReplenishTradeEvent {
         })
     }
 
-    fn apply_wasm_event(&mut self, event: Event, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
+        cleanup_event(&event, state);
         if let Event::VillagerReplenishTradeEvent(data) = event {
             self.cancelled = data.cancelled;
             self.restock_quantity = data.restock_quantity;
@@ -1609,7 +1643,8 @@ impl ToFromWasmEvent for WardenAngerChangeEvent {
         })
     }
 
-    fn apply_wasm_event(&mut self, event: Event, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
+        cleanup_event(&event, state);
         if let Event::WardenAngerChangeEvent(data) = event {
             self.cancelled = data.cancelled;
             self.new_anger = data.new_anger;
@@ -1639,7 +1674,8 @@ impl ToFromWasmEvent for AreaEffectCloudApplyEvent {
         })
     }
 
-    fn apply_wasm_event(&mut self, event: Event, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
+        cleanup_event(&event, state);
         if let Event::AreaEffectCloudApplyEvent(data) = event {
             self.cancelled = data.cancelled;
         }
@@ -1667,7 +1703,8 @@ impl ToFromWasmEvent for ArrowBodyCountChangeEvent {
         })
     }
 
-    fn apply_wasm_event(&mut self, event: Event, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
+        cleanup_event(&event, state);
         if let Event::ArrowBodyCountChangeEvent(data) = event {
             self.cancelled = data.cancelled;
             self.new_amount = data.new_amount;
@@ -1696,7 +1733,8 @@ impl ToFromWasmEvent for BatToggleSleepEvent {
         })
     }
 
-    fn apply_wasm_event(&mut self, event: Event, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
+        cleanup_event(&event, state);
         if let Event::BatToggleSleepEvent(data) = event {
             self.cancelled = data.cancelled;
         }
@@ -1724,7 +1762,8 @@ impl ToFromWasmEvent for CreeperPowerEvent {
         })
     }
 
-    fn apply_wasm_event(&mut self, event: Event, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
+        cleanup_event(&event, state);
         if let Event::CreeperPowerEvent(data) = event {
             self.cancelled = data.cancelled;
         }
@@ -1753,7 +1792,8 @@ impl ToFromWasmEvent for EntityCombustByBlockEvent {
         })
     }
 
-    fn apply_wasm_event(&mut self, event: Event, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
+        cleanup_event(&event, state);
         if let Event::EntityCombustByBlockEvent(data) = event {
             self.cancelled = data.cancelled;
             self.duration = data.duration;
@@ -1783,7 +1823,8 @@ impl ToFromWasmEvent for EntityCombustByEntityEvent {
         })
     }
 
-    fn apply_wasm_event(&mut self, event: Event, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
+        cleanup_event(&event, state);
         if let Event::EntityCombustByEntityEvent(data) = event {
             self.cancelled = data.cancelled;
             self.duration = data.duration;
@@ -1815,7 +1856,8 @@ impl ToFromWasmEvent for EntityKnockbackByEntityEvent {
         })
     }
 
-    fn apply_wasm_event(&mut self, event: Event, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
+        cleanup_event(&event, state);
         if let Event::EntityKnockbackByEntityEvent(data) = event {
             self.cancelled = data.cancelled;
             self.force = data.force;
@@ -1848,7 +1890,8 @@ impl ToFromWasmEvent for EntityPortalEnterEvent {
         })
     }
 
-    fn apply_wasm_event(&mut self, event: Event, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
+        cleanup_event(&event, state);
         if let Event::EntityPortalEnterEvent(data) = event {
             self.cancelled = data.cancelled;
         }
@@ -1876,7 +1919,8 @@ impl ToFromWasmEvent for EntityPortalExitEvent {
         })
     }
 
-    fn apply_wasm_event(&mut self, event: Event, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
+        cleanup_event(&event, state);
         if let Event::EntityPortalExitEvent(data) = event {
             self.cancelled = data.cancelled;
             self.to_pos = data.to_pos.map(from_wasm_block_position);
@@ -1905,7 +1949,8 @@ impl ToFromWasmEvent for EntityRemoveEvent {
         })
     }
 
-    fn apply_wasm_event(&mut self, event: Event, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
+        cleanup_event(&event, state);
         if let Event::EntityRemoveEvent(data) = event {
             self.cancelled = data.cancelled;
             self.cause = data.cause;
@@ -1933,7 +1978,8 @@ impl ToFromWasmEvent for EntityTargetBlockEvent {
         })
     }
 
-    fn apply_wasm_event(&mut self, event: Event, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
+        cleanup_event(&event, state);
         if let Event::EntityTargetBlockEvent(data) = event {
             self.cancelled = data.cancelled;
         }
@@ -1960,7 +2006,8 @@ impl ToFromWasmEvent for EntityUnleashEvent {
         })
     }
 
-    fn apply_wasm_event(&mut self, event: Event, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
+        cleanup_event(&event, state);
         if let Event::EntityUnleashEvent(data) = event {
             self.cancelled = data.cancelled;
             self.reason = data.reason;
@@ -1990,7 +2037,8 @@ impl ToFromWasmEvent for ExpBottleEvent {
         })
     }
 
-    fn apply_wasm_event(&mut self, event: Event, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
+        cleanup_event(&event, state);
         if let Event::ExpBottleEvent(data) = event {
             self.cancelled = data.cancelled;
             self.experience = data.experience;
@@ -2021,7 +2069,8 @@ impl ToFromWasmEvent for HorseJumpEvent {
         })
     }
 
-    fn apply_wasm_event(&mut self, event: Event, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
+        cleanup_event(&event, state);
         if let Event::HorseJumpEvent(data) = event {
             self.cancelled = data.cancelled;
             self.power = data.power;
@@ -2050,7 +2099,8 @@ impl ToFromWasmEvent for LingeringPotionSplashEvent {
         })
     }
 
-    fn apply_wasm_event(&mut self, event: Event, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
+        cleanup_event(&event, state);
         if let Event::LingeringPotionSplashEvent(data) = event {
             self.cancelled = data.cancelled;
         }
@@ -2079,7 +2129,8 @@ impl ToFromWasmEvent for PigZapEvent {
         })
     }
 
-    fn apply_wasm_event(&mut self, event: Event, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
+        cleanup_event(&event, state);
         if let Event::PigZapEvent(data) = event {
             self.cancelled = data.cancelled;
         }
@@ -2108,7 +2159,8 @@ impl ToFromWasmEvent for PigZombieAngerEvent {
         })
     }
 
-    fn apply_wasm_event(&mut self, event: Event, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
+        cleanup_event(&event, state);
         if let Event::PigZombieAngerEvent(data) = event {
             self.cancelled = data.cancelled;
             self.new_anger = data.new_anger;
@@ -2139,7 +2191,8 @@ impl ToFromWasmEvent for PotionSplashEvent {
         })
     }
 
-    fn apply_wasm_event(&mut self, event: Event, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
+        cleanup_event(&event, state);
         if let Event::PotionSplashEvent(data) = event {
             self.cancelled = data.cancelled;
         }
@@ -2168,7 +2221,8 @@ impl ToFromWasmEvent for SpawnerSpawnEvent {
         })
     }
 
-    fn apply_wasm_event(&mut self, event: Event, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
+        cleanup_event(&event, state);
         if let Event::SpawnerSpawnEvent(data) = event {
             self.cancelled = data.cancelled;
         }
@@ -2195,7 +2249,8 @@ impl ToFromWasmEvent for TrialSpawnerSpawnEvent {
         })
     }
 
-    fn apply_wasm_event(&mut self, event: Event, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
+        cleanup_event(&event, state);
         if let Event::TrialSpawnerSpawnEvent(data) = event {
             self.cancelled = data.cancelled;
         }
@@ -2223,7 +2278,8 @@ impl ToFromWasmEvent for VillagerReputationChangeEvent {
         })
     }
 
-    fn apply_wasm_event(&mut self, event: Event, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
+        cleanup_event(&event, state);
         if let Event::VillagerReputationChangeEvent(data) = event {
             self.cancelled = data.cancelled;
             self.reputation_change = data.reputation_change;

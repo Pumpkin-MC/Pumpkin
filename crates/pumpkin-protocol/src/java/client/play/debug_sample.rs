@@ -1,11 +1,11 @@
-use pumpkin_data::packet::clientbound::PLAY_DEBUG_SAMPLE;
+use pumpkin_data::packet::clientbound::play::DEBUG_SAMPLE;
 use pumpkin_macros::java_packet;
 use pumpkin_util::version::JavaMinecraftVersion;
 
 use crate::ser::NetworkWriteExt;
 use crate::{ClientPacket, VarInt};
 
-#[java_packet(PLAY_DEBUG_SAMPLE)]
+#[java_packet(DEBUG_SAMPLE)]
 pub struct CDebugSample<'a> {
     pub sample: &'a [i64],
     pub sample_type: VarInt,

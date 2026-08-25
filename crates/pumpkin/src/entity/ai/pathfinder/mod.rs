@@ -136,6 +136,17 @@ impl Navigator {
         self.mob_height = height;
     }
 
+    pub async fn can_reach_within(
+        &mut self,
+        entity: &LivingEntity,
+        destination: Vector3<f64>,
+        distance: f32,
+    ) -> bool {
+        self.compute_path(entity, destination)
+            .await
+            .is_some_and(|path| path.can_reach() || path.get_dist_to_target() <= distance)
+    }
+
     #[allow(clippy::too_many_lines)]
     async fn compute_path(
         &mut self,
@@ -461,5 +472,15 @@ impl Navigator {
     #[must_use]
     pub fn is_idle(&self) -> bool {
         self.is_idle.load(Ordering::Relaxed)
+    }
+
+    #[must_use]
+    pub const fn get_path(&self) -> Option<&Path> {
+        self.current_path.as_ref()
+    }
+
+    #[must_use]
+    pub const fn get_path_mut(&mut self) -> Option<&mut Path> {
+        self.current_path.as_mut()
     }
 }

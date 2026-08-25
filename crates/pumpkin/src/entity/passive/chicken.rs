@@ -4,15 +4,13 @@ use std::sync::{
 };
 
 use pumpkin_data::item_stack::ItemStack;
-use pumpkin_data::meta_data_type::MetaDataType;
 use pumpkin_data::sound::Sound;
-use pumpkin_data::tracked_data::TrackedData;
 use pumpkin_data::{entity::EntityType, item::Item};
 use pumpkin_protocol::codec::var_int::VarInt;
 use rand::RngExt;
 
 use crate::entity::{
-    Entity, EntityBase, EntityBaseFuture, NBTStorage, NbtFuture,
+    Entity, EntityBase, EntityBaseFuture, NbtFuture,
     ageable::AgeableMob,
     ai::goal::{
         breed::BreedGoal, escape_danger::EscapeDangerGoal, follow_parent::FollowParentGoal,
@@ -84,18 +82,33 @@ impl ChickenEntity {
     }
 }
 
-impl crate::entity::ageable::AgeableMob for ChickenEntity {
+impl AgeableMob for ChickenEntity {
     fn get_ageable_data(&self) -> &crate::entity::ageable::AgeableData {
         &self.ageable_data
     }
 }
 
-impl NBTStorage for ChickenEntity {
-    fn write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
+impl Animal for ChickenEntity {
+    fn is_food(&self, item_stack: &ItemStack) -> bool {
+        use pumpkin_data::tag::Taggable;
+        item_stack
+            .item
+            .has_tag(&pumpkin_data::tag::Item::MINECRAFT_CHICKEN_FOOD)
+            || TEMPT_ITEMS.iter().any(|i| i.id == item_stack.item.id)
+    }
+}
+
+impl Mob for ChickenEntity {
+    fn as_ageable(&self) -> Option<&dyn AgeableMob> {
+        Some(self)
+    }
+
+    fn as_animal(&self) -> Option<&dyn Animal> {
+        Some(self)
+    }
+
+    fn mob_write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async {
-            self.mob_entity.living_entity.write_nbt(nbt).await;
-            self.write_ageable_nbt(nbt);
-            self.write_animal_nbt(nbt);
             nbt.put_int("EggLayTime", self.egg_lay_time.load(Ordering::Relaxed));
             let variant_str = match self.variant.load(Ordering::Relaxed) {
                 0 => "minecraft:cold",
@@ -106,11 +119,8 @@ impl NBTStorage for ChickenEntity {
         })
     }
 
-    fn read_nbt_non_mut<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
+    fn mob_read_nbt<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async {
-            self.mob_entity.living_entity.read_nbt_non_mut(nbt).await;
-            self.read_ageable_nbt(nbt);
-            self.read_animal_nbt(nbt);
             self.egg_lay_time
                 .store(nbt.get_int("EggLayTime").unwrap_or(6000), Ordering::Relaxed);
             if let Some(variant_str) = nbt.get_string("variant") {
@@ -126,19 +136,7 @@ impl NBTStorage for ChickenEntity {
             }
         })
     }
-}
 
-impl super::animal::Animal for ChickenEntity {
-    fn is_food(&self, item_stack: &ItemStack) -> bool {
-        use pumpkin_data::tag::Taggable;
-        item_stack
-            .item
-            .has_tag(&pumpkin_data::tag::Item::MINECRAFT_CHICKEN_FOOD)
-            || TEMPT_ITEMS.iter().any(|i| i.id == item_stack.item.id)
-    }
-}
-
-impl Mob for ChickenEntity {
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
     }
@@ -159,8 +157,7 @@ impl Mob for ChickenEntity {
             if is_baby {
                 entity.send_meta_data(
                     &[pumpkin_protocol::java::client::play::Metadata::new(
-                        TrackedData::BABY_ID,
-                        MetaDataType::BOOLEAN,
+                        pumpkin_data::tracked_data::chicken::BABY_ID,
                         true,
                     )],
                     None,
@@ -168,8 +165,7 @@ impl Mob for ChickenEntity {
             }
             entity.send_meta_data(
                 &[pumpkin_protocol::java::client::play::Metadata::new(
-                    TrackedData::VARIANT,
-                    MetaDataType::CHICKEN_VARIANT,
+                    pumpkin_data::tracked_data::chicken::VARIANT,
                     VarInt(self.variant.load(Ordering::Relaxed) as i32),
                 )],
                 None,
