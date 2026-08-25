@@ -1,5 +1,6 @@
 pub mod nethernet;
 pub mod play;
+pub(crate) mod recipe;
 pub mod status;
 use crossbeam::atomic::AtomicCell;
 use std::{

@@ -7,23 +7,73 @@ use pumpkin_macros::packet;
 use std::io::{Error, Write};
 use uuid::Uuid;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum RecipeItemDescriptor {
+    Empty,
+    Item {
+        identifier: String,
+        metadata_value: i32,
+    },
+    Tag(String),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ItemDescriptorCount {
-    pub item_identifier: String,
-    pub metadata_value: i32,
+    pub descriptor: RecipeItemDescriptor,
     pub count: i32,
+}
+
+impl ItemDescriptorCount {
+    #[must_use]
+    pub const fn empty() -> Self {
+        Self {
+            descriptor: RecipeItemDescriptor::Empty,
+            count: 0,
+        }
+    }
+
+    #[must_use]
+    pub const fn item(identifier: String, metadata_value: i32) -> Self {
+        Self {
+            descriptor: RecipeItemDescriptor::Item {
+                identifier,
+                metadata_value,
+            },
+            count: 1,
+        }
+    }
+
+    #[must_use]
+    pub const fn tag(identifier: String) -> Self {
+        Self {
+            descriptor: RecipeItemDescriptor::Tag(identifier),
+            count: 1,
+        }
+    }
 }
 
 impl PacketWrite for ItemDescriptorCount {
     fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
-        if self.item_identifier.is_empty() {
-            VarUInt(0).write(writer)?;
-            VarInt(32767).write(writer)?;
-        } else {
-            VarUInt(1).write(writer)?;
-            "name".write(writer)?;
-            self.item_identifier.write(writer)?;
-            VarInt(self.metadata_value).write(writer)?;
+        match &self.descriptor {
+            RecipeItemDescriptor::Empty => {
+                VarUInt(0).write(writer)?;
+                VarInt(32767).write(writer)?;
+            }
+            RecipeItemDescriptor::Item {
+                identifier,
+                metadata_value,
+            } => {
+                VarUInt(1).write(writer)?;
+                "name".write(writer)?;
+                identifier.write(writer)?;
+                VarInt(*metadata_value).write(writer)?;
+            }
+            RecipeItemDescriptor::Tag(identifier) => {
+                VarUInt(1).write(writer)?;
+                "item_tag".write(writer)?;
+                identifier.write(writer)?;
+                VarInt(32767).write(writer)?;
+            }
         }
         VarInt(self.count).write(writer)?;
         Ok(())
@@ -210,5 +260,27 @@ impl PacketWrite for CCraftingData {
         self.clean_recipes.write(writer)?;
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::serial::PacketWrite;
+
+    use super::ItemDescriptorCount;
+
+    #[test]
+    fn item_tag_descriptor_uses_bedrock_recipe_wire_format() {
+        let mut encoded = Vec::new();
+        ItemDescriptorCount::tag("minecraft:planks".to_string())
+            .write(&mut encoded)
+            .unwrap();
+
+        let mut expected = vec![1, 8];
+        expected.extend_from_slice(b"item_tag");
+        expected.push(16);
+        expected.extend_from_slice(b"minecraft:planks");
+        expected.extend_from_slice(&[0xfe, 0xff, 0x03, 0x02]);
+        assert_eq!(encoded, expected);
     }
 }
