@@ -11,7 +11,7 @@ impl BedrockClient {
         self.enqueue_client_packet(&SContainerClose {
             container_id: packet.container_id,
             container_type: packet.container_type,
-            server_initiated: false,
+            server_initiated_close: false,
         })
         .await;
 

@@ -1,5 +1,11 @@
 use crate::block::blocks::redstone::block_receives_redstone_power;
-use crate::block::{BlockBehaviour, BlockFuture, BlockMetadata, OnNeighborUpdateArgs, OnPlaceArgs};
+use crate::block::blocks::weathering_copper::{
+    ChangeOverTimeBlock, WeatherState, WeatheringCopper, change_over_time, get_chance_modifier,
+    get_first, get_next, get_previous, get_weather_state,
+};
+use crate::block::{
+    BlockBehaviour, BlockFuture, BlockMetadata, OnNeighborUpdateArgs, OnPlaceArgs, RandomTickArgs,
+};
 use pumpkin_data::BlockId;
 use pumpkin_data::BlockStateId;
 use pumpkin_data::block_properties::BlockProperties;
@@ -9,6 +15,30 @@ use pumpkin_world::world::BlockFlags;
 type CopperBulbLikeProperties = pumpkin_data::block_properties::CopperBulbLikeProperties;
 
 pub struct CopperBulbBlock;
+
+impl ChangeOverTimeBlock<WeatherState> for CopperBulbBlock {
+    fn get_age(&self, block: &pumpkin_data::Block) -> Option<WeatherState> {
+        get_weather_state(block)
+    }
+
+    fn get_chance_modifier(&self, age: WeatherState) -> f32 {
+        get_chance_modifier(age)
+    }
+
+    fn get_next(&self, block: &pumpkin_data::Block) -> Option<&'static pumpkin_data::Block> {
+        get_next(block)
+    }
+
+    fn get_previous(&self, block: &pumpkin_data::Block) -> Option<&'static pumpkin_data::Block> {
+        get_previous(block)
+    }
+
+    fn get_first(&self, block: &pumpkin_data::Block) -> Option<&'static pumpkin_data::Block> {
+        get_first(block)
+    }
+}
+
+impl WeatheringCopper for CopperBulbBlock {}
 
 impl BlockMetadata for CopperBulbBlock {
     fn ids() -> Box<[BlockId]> {
@@ -71,6 +101,12 @@ impl BlockBehaviour for CopperBulbBlock {
                     )
                     .await;
             }
+        })
+    }
+
+    fn random_tick<'a>(&'a self, args: RandomTickArgs<'a>) -> BlockFuture<'a, ()> {
+        Box::pin(async move {
+            change_over_time(args.world, args.position, args.block).await;
         })
     }
 }

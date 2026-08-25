@@ -44,6 +44,7 @@ impl PendingConnection {
                     &self.address,
                     &self.server_address,
                     login_start.name.into_string(),
+                    &proxy.bungeecord.secret,
                 ) {
                     Ok((_ip, profile)) => {
                         self.gameprofile = Some(profile.clone());

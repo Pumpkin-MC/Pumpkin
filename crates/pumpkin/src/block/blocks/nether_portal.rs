@@ -1,28 +1,32 @@
-use std::sync::Arc;
+use std::sync::{Arc, atomic::Ordering};
 
-use crate::block::{
-    BlockBehaviour, BlockFuture, GetStateForNeighborUpdateArgs, OnEntityCollisionArgs,
-    OnStateReplacedArgs,
+use pumpkin_data::{
+    Block, BlockDirection, BlockState, BlockStateId, Rotation,
+    block_properties::{Axis, BlockProperties, HorizontalAxis, NetherPortalLikeProperties},
+    dimension::Dimension,
+    entity::EntityType,
 };
-use crate::entity::EntityBase;
-use crate::world::World;
-use crate::world::portal::nether::NetherPortal;
-use pumpkin_data::Block;
-use pumpkin_data::BlockStateId;
-use pumpkin_data::block_properties::{
-    Axis, BlockProperties, HorizontalAxis, NetherPortalLikeProperties,
-};
-use pumpkin_data::dimension::Dimension;
-use pumpkin_data::entity::EntityType;
 use pumpkin_macros::pumpkin_block;
-use pumpkin_util::GameMode;
+use pumpkin_util::{Difficulty, GameMode, math::vector3::Vector3};
+use rand::RngExt;
+use uuid::Uuid;
+
+use crate::{
+    block::{
+        BlockBehaviour, BlockFuture, GetStateForNeighborUpdateArgs, OnEntityCollisionArgs,
+        OnStateReplacedArgs, RandomTickArgs,
+    },
+    entity::{EntityBase, r#type::from_type},
+    world::{World, portal::nether::NetherPortal},
+};
 
 #[pumpkin_block("minecraft:nether_portal")]
 pub struct NetherPortalBlock;
 
 impl NetherPortalBlock {
     /// Gets the portal delay time based on entity type and gamemode
-    fn get_portal_time(world: &Arc<World>, entity: &dyn EntityBase) -> u32 {
+    #[must_use]
+    pub fn get_portal_time(world: &Arc<World>, entity: &dyn EntityBase) -> u32 {
         let entity_type = entity.get_entity().entity_type;
         let level_info = world.level_info.load();
         match entity_type.id {
@@ -68,6 +72,62 @@ impl BlockBehaviour for NetherPortalBlock {
         })
     }
 
+    fn random_tick<'a>(&'a self, args: RandomTickArgs<'a>) -> BlockFuture<'a, ()> {
+        Box::pin(async move {
+            let level_info = args.world.level_info.load();
+            let difficulty = level_info.difficulty;
+            if !level_info.game_rules.spawn_monsters
+                || !level_info.game_rules.spawn_mobs
+                || difficulty == Difficulty::Peaceful
+                || (args.world.dimension != Dimension::OVERWORLD
+                    && args.world.dimension != Dimension::OVERWORLD_CAVES)
+            {
+                return;
+            }
+
+            let difficulty_id = difficulty as u32;
+            let roll = rand::rng().random_range(0..2000);
+            if roll >= difficulty_id {
+                return;
+            }
+
+            let player_close = args
+                .world
+                .get_closest_player(args.position.to_centered_f64(), 128.0)
+                .is_some();
+            if !player_close {
+                return;
+            }
+
+            let mut bottom_pos = *args.position;
+            while args.world.get_block(&bottom_pos) == &Block::NETHER_PORTAL {
+                bottom_pos = bottom_pos.down();
+            }
+
+            if args
+                .world
+                .get_block_state(&bottom_pos)
+                .is_side_solid(BlockDirection::Up)
+            {
+                let spawn_pos = Vector3::new(
+                    bottom_pos.0.x as f64 + 0.5,
+                    (bottom_pos.0.y + 1) as f64,
+                    bottom_pos.0.z as f64 + 0.5,
+                );
+                let mob = from_type(
+                    &EntityType::ZOMBIFIED_PIGLIN,
+                    spawn_pos,
+                    args.world,
+                    Uuid::new_v4(),
+                );
+                mob.get_entity()
+                    .portal_cooldown
+                    .store(300, Ordering::Relaxed);
+                args.world.spawn_entity(mob).await;
+            }
+        })
+    }
+
     fn on_entity_collision<'a>(&'a self, args: OnEntityCollisionArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
             let target_world =
@@ -101,5 +161,25 @@ impl BlockBehaviour for NetherPortalBlock {
             let mut poi_storage = args.world.portal_poi.lock().await;
             poi_storage.remove(args.position);
         })
+    }
+
+    fn rotate(
+        &self,
+        block: &Block,
+        state_id: BlockStateId,
+        rotation: Rotation,
+    ) -> &'static BlockState {
+        match rotation {
+            Rotation::Clockwise90 | Rotation::CounterClockwise90 => {
+                let mut props = NetherPortalLikeProperties::from_state_id(state_id, block);
+                props.axis = match props.axis {
+                    HorizontalAxis::X => HorizontalAxis::Z,
+                    HorizontalAxis::Z => HorizontalAxis::X,
+                };
+                let new_state_id = props.to_state_id(block);
+                BlockState::from_id(new_state_id)
+            }
+            _ => BlockState::from_id(state_id),
+        }
     }
 }

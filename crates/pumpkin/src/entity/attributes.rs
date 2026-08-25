@@ -94,10 +94,10 @@ pub async fn send_attribute_updates_for_living(
     attributes: Vec<Attributes>,
 ) {
     use pumpkin_protocol::bedrock::client::update_attributes::{
-        Attribute as BeAttribute, CUpdateAttributes as BePacket,
+        AttributeData as BeAttribute, CUpdateAttributes as BePacket,
     };
     use pumpkin_protocol::codec::var_int::VarInt;
-    use pumpkin_protocol::codec::{var_uint::VarUInt, var_ulong::VarULong};
+    use pumpkin_protocol::codec::var_ulong::VarULong;
     use pumpkin_protocol::java::client::play::AttributeModifier as JeAttrMod;
     use pumpkin_protocol::java::client::play::CUpdateAttributes as JePacket;
     use pumpkin_protocol::java::client::play::Property as JeProperty;
@@ -157,7 +157,7 @@ pub async fn send_attribute_updates_for_living(
             name,
             // Bedrock receives the already-computed effective value above. Do not advertise
             // modifier entries until their payload is encoded as well.
-            modifiers_list_size: VarUInt(0),
+            modifiers: Vec::new(),
         };
 
         be_attributes.push(be_attribute);
@@ -167,9 +167,9 @@ pub async fn send_attribute_updates_for_living(
 
     let runtime_id = living.entity.entity_id as u64;
     let be_packet = BePacket {
-        runtime_id: VarULong(runtime_id),
-        attributes: be_attributes,
-        player_tick: VarULong(0),
+        target_runtime_id: VarULong(runtime_id),
+        attribute_list: be_attributes,
+        tick: VarULong(0),
     };
 
     living

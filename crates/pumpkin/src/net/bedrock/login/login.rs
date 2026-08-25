@@ -1,3 +1,5 @@
+use pumpkin_protocol::bedrock::client::PackIdVersion;
+
 #[allow(clippy::wildcard_imports)]
 use super::*;
 
@@ -86,17 +88,16 @@ impl BedrockClient {
         let mut entries = Vec::new();
         if br_config.enabled {
             for pack in &br_config.packs {
-                entries.push(ResourcePackEntry {
-                    uuid: pack.uuid,
-                    version: pack.version.clone(),
-                    size: pack.size,
-                    download_url: pack.download_url.clone(),
+                entries.push(PackInfoData {
+                    pack_id_version: PackIdVersion::new(pack.uuid, pack.version.clone()),
+                    pack_size: pack.size,
+                    cdn_url: pack.download_url.clone(),
                     content_key: pack.content_key.clone(),
-                    sub_pack_name: pack.sub_pack_name.clone(),
-                    content_id: pack.content_id.clone(),
+                    subpack_name: pack.sub_pack_name.clone(),
+                    content_identity: pack.content_id.clone(),
                     has_scripts: pack.has_scripts,
-                    addon_pack: pack.addon_pack,
-                    rtx_enabled: pack.rtx_enabled,
+                    is_addon_pack: pack.addon_pack,
+                    is_ray_tracing_capable: pack.rtx_enabled,
                 });
             }
         }
@@ -105,9 +106,8 @@ impl BedrockClient {
             resource_pack_required: br_config.force,
             has_addon_packs: false,
             has_scripts: false,
-            is_vibrant_visuals_force_disabled: false,
-            world_template_id: uuid::Uuid::nil(),
-            world_template_version: String::new(),
+            force_disable_vibrant_visuals: false,
+            world_template_id_and_version: PackIdVersion::new(uuid::Uuid::nil(), String::new()),
             resource_packs: entries,
         };
         self.enqueue_client_packet(&packs_info).await;

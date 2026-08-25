@@ -23,7 +23,9 @@ use crate::plugin::loader::wasm::wasm_host::{
         uuid::Uuid,
         world::{
             BlockPos as WitBlockPos, BoundingBox as WitBoundingBox, Entity,
-            EquipmentSlot as WitEquipmentSlot, HostEntity, RaycastResult as WitRaycastResult,
+            EquipmentSlot as WitEquipmentSlot, HostEntity,
+            RayTraceBlockResult as WitRayTraceBlockResult,
+            RayTraceEntityResult as WitRayTraceEntityResult, RaycastResult as WitRaycastResult,
             World,
         },
     },
@@ -1281,7 +1283,7 @@ impl HostEntity for PluginHostState {
         &mut self,
         entity: Resource<Entity>,
         max_distance: f64,
-        _fluid_handling: bool,
+        fluid_handling: bool,
     ) -> wasmtime::Result<Option<WitRaycastResult>> {
         let entity = entity_from_resource(self, &entity)?;
         let start = entity.get_eye_pos();
@@ -1289,22 +1291,9 @@ impl HostEntity for PluginHostState {
         let end = start + direction * max_distance;
         let world = entity.get_entity().world.load_full();
 
-        let hit = world
-            .raycast(
-                start,
-                end,
-                |pos: &pumpkin_util::math::position::BlockPos, w: &Arc<crate::world::World>| {
-                    let pos = *pos;
-                    let world = w.clone();
-                    async move {
-                        let block = world.get_block_state(&pos);
-                        !block.is_air()
-                    }
-                },
-            )
-            .await;
+        let hit = world.ray_trace_block(start, end, fluid_handling);
 
-        Ok(hit.map(|(pos, face)| WitRaycastResult {
+        Ok(hit.map(|(pos, face, _)| WitRaycastResult {
             pos: WitBlockPos {
                 x: pos.0.x,
                 y: pos.0.y,
@@ -1312,6 +1301,69 @@ impl HostEntity for PluginHostState {
             },
             face: to_wasm_block_direction(face),
         }))
+    }
+
+    async fn ray_trace_block(
+        &mut self,
+        entity: Resource<Entity>,
+        max_distance: f64,
+        include_fluids: bool,
+    ) -> wasmtime::Result<Option<WitRayTraceBlockResult>> {
+        let entity = entity_from_resource(self, &entity)?;
+        let start = entity.get_eye_pos();
+        let direction = entity.get_looking_vector();
+        let end = start + direction * max_distance;
+        let world = entity.get_entity().world.load_full();
+
+        let hit = world.ray_trace_block(start, end, include_fluids);
+
+        Ok(hit.map(|(pos, face, hit_pos)| WitRayTraceBlockResult {
+            pos: WitBlockPos {
+                x: pos.0.x,
+                y: pos.0.y,
+                z: pos.0.z,
+            },
+            face: to_wasm_block_direction(face),
+            hit_pos: to_wasm_position(hit_pos),
+        }))
+    }
+
+    async fn ray_trace_entity(
+        &mut self,
+        entity: Resource<Entity>,
+        max_distance: f64,
+    ) -> wasmtime::Result<Option<WitRayTraceEntityResult>> {
+        let entity_base = entity_from_resource(self, &entity)?;
+        let start = entity_base.get_eye_pos();
+        let direction = entity_base.get_looking_vector();
+        let end = start + direction * max_distance;
+        let world = entity_base.get_entity().world.load_full();
+        let self_id = entity_base.get_entity().entity_id;
+
+        let hits = world.ray_trace_entities(start, end);
+        for (hit_entity, hit_pos, distance) in hits {
+            if hit_entity.get_entity().entity_id != self_id {
+                let entity_res = self
+                    .add_entity(hit_entity)
+                    .map_err(|_| wasmtime::Error::msg("failed to add entity resource"))?;
+                return Ok(Some(WitRayTraceEntityResult {
+                    entity: entity_res,
+                    hit_pos: to_wasm_position(hit_pos),
+                    distance,
+                }));
+            }
+        }
+
+        Ok(None)
+    }
+
+    async fn get_target_entity(
+        &mut self,
+        entity: Resource<Entity>,
+        max_distance: f64,
+    ) -> wasmtime::Result<Option<Resource<Entity>>> {
+        let res = self.ray_trace_entity(entity, max_distance).await?;
+        Ok(res.map(|r| r.entity))
     }
 
     async fn set_custom_data(

@@ -1,18 +1,19 @@
+// Last verified for v2169
+
 use pumpkin_macros::packet;
 use std::io::{Error, Write};
 
 use crate::{codec::var_int::VarInt, serial::PacketWrite};
 
 #[packet(5)]
-pub struct CDisconnectPlayer {
-    // https://mojang.github.io/bedrock-protocol-docs/html/DisconnectPacket.html
+pub struct CDisconnect {
     pub reason: VarInt,
     pub skip_message: bool,
     pub message: String,
     pub filtered_message: String,
 }
 
-impl CDisconnectPlayer {
+impl CDisconnect {
     #[must_use]
     pub const fn new(reason: i32, message: String) -> Self {
         Self {
@@ -24,7 +25,7 @@ impl CDisconnectPlayer {
     }
 }
 
-impl PacketWrite for CDisconnectPlayer {
+impl PacketWrite for CDisconnect {
     fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
         self.reason.write(writer)?;
         self.skip_message.write(writer)?;

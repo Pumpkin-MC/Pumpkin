@@ -3,11 +3,9 @@ use dashmap::DashMap;
 use pumpkin_data::attributes::Attributes;
 use pumpkin_data::chunk::Biome;
 use pumpkin_data::item::{BedrockItem, BedrockItemVersion};
-use pumpkin_protocol::bedrock::client::item_registry::{CItemRegistry, ItemDefinition};
+use pumpkin_protocol::bedrock::client::item_registry::{CItemRegistry, ItemData};
 use pumpkin_protocol::bedrock::client::level_event::{CLevelEvent, LevelEvent};
-use pumpkin_protocol::bedrock::client::{
-    CBiomeDefinitionList, EntityProperties, block_actor_data::CBlockActorData,
-};
+use pumpkin_protocol::bedrock::client::{CBiomeDefinitionList, block_actor_data::CBlockActorData};
 use pumpkin_protocol::bedrock::network_item::{NetworkItemDescriptor, NetworkItemStackDescriptor};
 use pumpkin_protocol::codec::data_component::data_to_proto_sound;
 use pumpkin_world::generation::proto_chunk::GenerationCache;
@@ -24,6 +22,7 @@ pub mod explosion;
 pub mod loot;
 pub mod map;
 pub mod portal;
+pub mod raid;
 pub mod time;
 pub mod villager_poi;
 
@@ -52,7 +51,7 @@ use crate::{
 };
 use arc_swap::ArcSwap;
 use border::Worldborder;
-use bytes::{BufMut, Bytes};
+use bytes::BufMut;
 pub use explosion::{
     BlockInteraction, DefaultExplosionDamageCalculator, Explosion, ExplosionDamageCalculator,
     ExplosionInteraction, SimpleExplosionDamageCalculator,
@@ -103,16 +102,18 @@ use pumpkin_protocol::{
             add_player::CAddPlayer,
             block_event::CBlockEvent as CBedrockBlockEvent,
             common::BuildPlatform,
-            creative_content::{CCreativeContent, CreativeCategory, Entry, Group},
-            gamerules_changed::GameRules,
+            creative_content::{
+                CCreativeContent, CreativeCategory, CreativeGroupInfoPayload,
+                CreativeItemEntryPayload,
+            },
             level_sound_event::CLevelSoundEvent,
             player_list::{CPlayerList, PlayerListEntry, Skin},
             remove_actor::CRemoveActor,
             start_game::{Experiments, GamePublishSetting, LevelSettings},
-            update_attributes::{Attribute, CUpdateAttributes},
+            update_attributes::{AttributeData, CUpdateAttributes},
         },
         server::{
-            actor_event::{ActorEventType, SActorEvent},
+            actor_event::{ActorEventID, SActorEvent},
             text::SText,
         },
     },
@@ -132,7 +133,6 @@ use pumpkin_protocol::{
     codec::item_stack_seralizer::ItemStackSerializer,
     java::client::play::{CBlockEvent, CRemoveMobEffect, CSetEquipment, CUpdateMobEffect},
 };
-use pumpkin_util::GameMode;
 use pumpkin_util::resource_location::ResourceLocation;
 use pumpkin_util::text::{TextComponent, color::NamedColor};
 use pumpkin_util::version::JavaMinecraftVersion;
@@ -274,6 +274,8 @@ pub struct World {
     pub portal_poi: Mutex<portal::PortalPoiStorage>,
     /// Villager job sites and their current owners.
     pub villager_poi: Mutex<villager_poi::VillagerPoiStorage>,
+    /// Active raids in this world.
+    pub raids: Mutex<raid::Raids>,
     /// End Dragon fight manager (only present in `THE_END` dimension).
     pub dragon_fight: Option<Mutex<dragon_fight::DragonFight>>,
     pub spawn_state: ArcSwap<SpawnState>,
@@ -393,6 +395,7 @@ impl World {
             unsent_block_changes: Mutex::new(HashMap::new()),
             portal_poi: Mutex::new(portal_poi),
             villager_poi: Mutex::new(villager_poi::VillagerPoiStorage::default()),
+            raids: Mutex::new(raid::Raids::default()),
             dragon_fight,
             spawn_state: ArcSwap::new(Arc::new(SpawnState::empty())),
             active_chunks: ArcSwap::new(Arc::new(FxHashSet::default())),
@@ -454,6 +457,17 @@ impl World {
             .file_name()
             .and_then(|n| n.to_str())
             .unwrap_or("world")
+    }
+
+    /// Returns the configured shared world spawn block position and rotation.
+    #[must_use]
+    pub fn get_spawn_location(&self) -> (BlockPos, f32, f32) {
+        let level_info = self.level_info.load();
+        (
+            BlockPos::new(level_info.spawn_x, level_info.spawn_y, level_info.spawn_z),
+            level_info.spawn_yaw,
+            level_info.spawn_pitch,
+        )
     }
 
     pub async fn shutdown(&self) {
@@ -530,15 +544,15 @@ impl World {
         &self,
         entity: &Entity,
         java_status: EntityStatus,
-        bedrock_status: Option<ActorEventType>,
+        bedrock_status: Option<ActorEventID>,
     ) {
         let chunk_pos = entity.chunk_pos.load();
         let je_packet = CEntityStatus::new(entity.entity_id, java_status as i8);
         if let Some(be_event) = bedrock_status {
             let be_packet = SActorEvent {
-                entity_runtime_id: VarULong(entity.entity_id as u64),
-                event_type: be_event,
-                event_data: VarInt(0),
+                target_runtime_id: VarULong(entity.entity_id as u64),
+                event_id: be_event,
+                data: VarInt(0),
                 fire_at_position: None,
             };
             self.broadcast_to_chunk_editioned_sync(chunk_pos, &je_packet, &be_packet);
@@ -551,16 +565,17 @@ impl World {
         let chunk_pos = entity.chunk_pos.load();
         let je_packet =
             CRemoveMobEffect::new(entity.entity_id.into(), VarInt(i32::from(effect_type.id)));
-        let be_packet = pumpkin_protocol::bedrock::client::CMobEffect::new(
-            VarULong(entity.entity_id as u64),
-            pumpkin_protocol::bedrock::client::CMobEffect::EVENT_REMOVE,
-            VarInt(effect_type.to_bedrock_id()),
-            VarInt(0),
-            false,
-            VarInt(0),
-            VarULong(0),
-            false,
-        );
+
+        let be_packet = pumpkin_protocol::bedrock::client::CMobEffect {
+            target_runtime_id: VarULong(entity.entity_id as u64),
+            event_id: pumpkin_protocol::bedrock::client::CMobEffect::EVENT_REMOVE,
+            effect_id: VarInt(effect_type.to_bedrock_id()),
+            effect_amplifier: VarInt(0),
+            show_particles: false,
+            effect_duration_ticks: VarInt(0),
+            tick: VarULong(0),
+            ambient: false,
+        };
         self.broadcast_to_chunk_editioned_sync(chunk_pos, &je_packet, &be_packet);
     }
 
@@ -584,16 +599,17 @@ impl World {
             VarInt(effect.duration),
             flags,
         );
-        let be_packet = pumpkin_protocol::bedrock::client::CMobEffect::new(
-            VarULong(entity.entity_id as u64),
-            pumpkin_protocol::bedrock::client::CMobEffect::EVENT_ADD,
-            VarInt(effect.effect_type.to_bedrock_id()),
-            VarInt(i32::from(effect.amplifier)),
-            effect.show_particles,
-            VarInt(effect.duration),
-            VarULong(0),
-            effect.ambient,
-        );
+
+        let be_packet = pumpkin_protocol::bedrock::client::CMobEffect {
+            target_runtime_id: VarULong(entity.entity_id as u64),
+            event_id: pumpkin_protocol::bedrock::client::CMobEffect::EVENT_ADD,
+            effect_id: VarInt(effect.effect_type.to_bedrock_id()),
+            effect_amplifier: VarInt(i32::from(effect.amplifier)),
+            show_particles: effect.show_particles,
+            effect_duration_ticks: VarInt(effect.duration),
+            tick: VarULong(0),
+            ambient: effect.ambient,
+        };
 
         self.broadcast_to_chunk_editioned_sync(chunk_pos, &je_packet, &be_packet);
     }
@@ -659,7 +675,11 @@ impl World {
                     event.data,
                     VarInt(block.id.as_u16() as i32),
                 ),
-                &CBedrockBlockEvent::new(event.pos, i32::from(event.r#type), i32::from(event.data)),
+                &CBedrockBlockEvent {
+                    block_position: event.pos,
+                    event_type: event.r#type.into(),
+                    event_value: event.data.into(),
+                },
             );
         }
     }
@@ -726,21 +746,17 @@ impl World {
         packet: &P,
         recipients: impl Iterator<Item = &'a Arc<BedrockClient>>,
     ) {
-        let packet_data = match pumpkin_protocol::bedrock::packet_encoder::serialize_packet(packet)
-        {
-            Ok(packet_data) => packet_data,
-            Err(err) => {
-                error!(
-                    "Failed to serialize bedrock packet {}: {}",
-                    std::any::type_name::<P>(),
-                    err
-                );
-                return;
-            }
-        };
-
         for recipient in recipients {
-            recipient.try_enqueue_packet(packet_data.clone());
+            match recipient.serialize_packet(packet) {
+                Ok(packet_data) => recipient.try_enqueue_packet(packet_data),
+                Err(err) => {
+                    error!(
+                        "Failed to serialize bedrock packet {}: {}",
+                        std::any::type_name::<P>(),
+                        err
+                    );
+                }
+            }
         }
     }
 
@@ -748,21 +764,8 @@ impl World {
         packet: &P,
         recipients: impl Iterator<Item = &'a Arc<BedrockClient>>,
     ) {
-        let packet_data = match pumpkin_protocol::bedrock::packet_encoder::serialize_packet(packet)
-        {
-            Ok(packet_data) => packet_data,
-            Err(err) => {
-                error!(
-                    "Failed to serialize bedrock packet {}: {}",
-                    std::any::type_name::<P>(),
-                    err
-                );
-                return;
-            }
-        };
-
         for recipient in recipients {
-            recipient.enqueue_packet(packet_data.clone()).await;
+            recipient.enqueue_client_packet(packet).await;
         }
     }
 
@@ -1101,24 +1104,23 @@ impl World {
         extra_data: i32,
     ) {
         let packet = CLevelSoundEvent {
-            sound_id: sound_id.to_string(),
+            sound_event: sound_id.to_string(),
             position: Vector3::new(position.x as f32, position.y as f32, position.z as f32),
-            extra_data: VarInt(extra_data),
-            entity_type: String::new(),
-            is_baby_mob: false,
+            data: VarInt(extra_data),
+            actor_identifier: String::new(),
+            is_baby: false,
             is_global: false,
             actor_unique_id: 0,
             fire_at_position: None,
         };
         let chunk_pos = BlockPos::floored_v(*position).chunk_position();
 
-        if let Ok(data) = pumpkin_protocol::bedrock::packet_encoder::serialize_packet(&packet) {
-            for player in self.players.load().iter() {
-                if is_within_view_distance(chunk_pos, player.get_entity().chunk_pos.load(), 1)
-                    && let ClientPlatform::Bedrock(client) = player.client.as_ref()
-                {
-                    client.try_enqueue_packet(data.clone());
-                }
+        for player in self.players.load().iter() {
+            if is_within_view_distance(chunk_pos, player.get_entity().chunk_pos.load(), 1)
+                && let ClientPlatform::Bedrock(client) = player.client.as_ref()
+                && let Ok(data) = client.serialize_packet(&packet)
+            {
+                client.try_enqueue_packet(data);
             }
         }
     }
@@ -1215,12 +1217,15 @@ impl World {
 
     #[expect(clippy::too_many_lines)]
     pub async fn tick(self: &Arc<Self>, server: Arc<Server>) {
+        const ENTITY_TICK_BATCH_SIZE: usize = 16;
+
         let start = tokio::time::Instant::now();
 
         self.flush_block_updates().await;
         self.flush_synced_block_events().await;
         self.update_active_chunks();
         self.tick_environment().await;
+        self.raids.lock().await.tick(self).await;
 
         let world_for_chunks = self.clone();
         let chunk_future = async move {
@@ -1274,7 +1279,8 @@ impl World {
 
         let entity_future = async move {
             let t = tokio::time::Instant::now();
-            let mut tasks = tokio::task::JoinSet::new();
+
+            let mut tickable = Vec::new();
             for entity in entities_to_tick.iter() {
                 // Only tick entities that sit in an active (ticking) chunk — the
                 // same set block-entity ticking and mob spawning already use, and
@@ -1299,28 +1305,35 @@ impl World {
                     continue;
                 }
 
-                let e_clone = entity.clone();
+                tickable.push((entity.clone(), entity_chunk));
+            }
+
+            let mut tasks = tokio::task::JoinSet::new();
+            for entity_batch in tickable.chunks(ENTITY_TICK_BATCH_SIZE) {
+                let batch = entity_batch.to_vec();
                 let s_clone = server_for_entities.clone();
                 let p_cache = players_cache.clone();
 
                 tasks.spawn(async move {
-                    e_clone.get_entity().age.fetch_add(1, Relaxed);
-                    e_clone.tick(&e_clone, &s_clone).await;
+                    for (entity, entity_chunk) in batch {
+                        entity.get_entity().age.fetch_add(1, Relaxed);
+                        entity.tick(&entity, &s_clone).await;
 
-                    let entity_inner = e_clone.get_entity();
-                    let entity_pos = entity_inner.pos.load();
-                    let entity_bb = entity_inner.bounding_box.load();
+                        let entity_inner = entity.get_entity();
+                        let entity_pos = entity_inner.pos.load();
+                        let entity_bb = entity_inner.bounding_box.load();
 
-                    for (player, player_pos, player_bb, player_chunk) in p_cache.iter() {
-                        if (player_chunk.x - entity_chunk.x).abs() <= 1
-                            && (player_chunk.y - entity_chunk.y).abs() <= 1
-                            && (player_pos.x - entity_pos.x).abs() < 5.0
-                            && (player_pos.y - entity_pos.y).abs() < 5.0
-                            && (player_pos.z - entity_pos.z).abs() < 5.0
-                            && player_bb.intersects(&entity_bb)
-                        {
-                            e_clone.on_player_collision(player).await;
-                            break;
+                        for (player, player_pos, player_bb, player_chunk) in p_cache.iter() {
+                            if (player_chunk.x - entity_chunk.x).abs() <= 1
+                                && (player_chunk.y - entity_chunk.y).abs() <= 1
+                                && (player_pos.x - entity_pos.x).abs() < 5.0
+                                && (player_pos.y - entity_pos.y).abs() < 5.0
+                                && (player_pos.z - entity_pos.z).abs() < 5.0
+                                && player_bb.intersects(&entity_bb)
+                            {
+                                entity.on_player_collision(player).await;
+                                break;
+                            }
                         }
                     }
                 });
@@ -1478,29 +1491,17 @@ impl World {
                     is_within_view_distance(chunk_pos, center, view_distance)
                 });
 
-                let mut bedrock_packets: Vec<Bytes> = Vec::new();
+                let mut bedrock_packets = Vec::new();
                 for (block_pos, block_state_id) in &updates {
                     let be_block_id = BlockState::to_be_network_id(*block_state_id);
                     let update_packet = pumpkin_protocol::bedrock::client::CUpdateBlock::new(
                         *block_pos,
                         be_block_id as u32,
                     );
-                    if let Ok(data) =
-                        pumpkin_protocol::bedrock::packet_encoder::serialize_packet(&update_packet)
-                    {
-                        bedrock_packets.push(data);
-                    }
-                    if let Some(data) = self.bedrock_block_entity_data(*block_state_id, *block_pos)
-                    {
-                        let actor_packet = CBlockActorData::new(*block_pos, data);
-                        if let Ok(data) =
-                            pumpkin_protocol::bedrock::packet_encoder::serialize_packet(
-                                &actor_packet,
-                            )
-                        {
-                            bedrock_packets.push(data);
-                        }
-                    }
+                    let actor_packet = self
+                        .bedrock_block_entity_data(*block_state_id, *block_pos)
+                        .map(|data| CBlockActorData::new(*block_pos, data));
+                    bedrock_packets.push((update_packet, actor_packet));
                 }
 
                 let mut bedrock_recipients = Vec::new();
@@ -1514,8 +1515,15 @@ impl World {
                 }
 
                 for be_client in bedrock_recipients {
-                    for packet_data in &bedrock_packets {
-                        be_client.try_enqueue_packet(packet_data.clone());
+                    for (update_packet, actor_packet) in &bedrock_packets {
+                        if let Ok(data) = be_client.serialize_packet(update_packet) {
+                            be_client.try_enqueue_packet(data);
+                        }
+                        if let Some(actor_packet) = actor_packet
+                            && let Ok(data) = be_client.serialize_packet(actor_packet)
+                        {
+                            be_client.try_enqueue_packet(data);
+                        }
                     }
                 }
 
@@ -1543,7 +1551,7 @@ impl World {
                 }
             }
 
-            let mut bedrock_water_packets: Vec<Bytes> = Vec::new();
+            let mut bedrock_water_packets = Vec::new();
             for (block_pos, block_state_id) in &updates {
                 let water_state = bedrock_water_state(*block_state_id);
                 let packet = pumpkin_protocol::bedrock::client::CUpdateBlock::with_layer(
@@ -1551,11 +1559,7 @@ impl World {
                     u32::from(BlockState::to_be_network_id(water_state)),
                     1,
                 );
-                if let Ok(data) =
-                    pumpkin_protocol::bedrock::packet_encoder::serialize_packet(&packet)
-                {
-                    bedrock_water_packets.push(data);
-                }
+                bedrock_water_packets.push(packet);
             }
 
             if !bedrock_water_packets.is_empty() {
@@ -1567,8 +1571,10 @@ impl World {
                 });
                 for player in recipients {
                     if let ClientPlatform::Bedrock(client) = player.client.as_ref() {
-                        for packet_data in &bedrock_water_packets {
-                            client.try_enqueue_packet(packet_data.clone());
+                        for packet in &bedrock_water_packets {
+                            if let Ok(data) = client.serialize_packet(packet) {
+                                client.try_enqueue_packet(data);
+                            }
                         }
                     }
                 }
@@ -2281,8 +2287,10 @@ impl World {
         player: Arc<Player>,
         server: &Arc<Server>,
     ) {
-        static CREATIVE_CONTENT: std::sync::OnceLock<(Vec<Group>, Vec<Entry>)> =
-            std::sync::OnceLock::new();
+        static CREATIVE_CONTENT: std::sync::OnceLock<(
+            Vec<CreativeGroupInfoPayload>,
+            Vec<CreativeItemEntryPayload>,
+        )> = std::sync::OnceLock::new();
 
         static BEDROCK_CRAFTING_DATA: std::sync::OnceLock<
             Vec<pumpkin_protocol::bedrock::client::BedrockRecipe>,
@@ -2329,7 +2337,7 @@ impl World {
             custom_biome_name: String::new(),
             dimension: VarInt(0),
             generator_type: VarInt(1),
-            world_gamemode: server.defaultgamemode.lock().await.gamemode,
+            world_gamemode: server.defaultgamemode.lock().await.gamemode.into(),
             hardcore: base_config.hardcore,
             difficulty: VarInt(level_info.difficulty as i32),
             spawn_position: BlockPos::new(
@@ -2354,11 +2362,9 @@ impl World {
             platform_broadcast_setting: GamePublishSetting::Public,
             commands_enabled: level_info.allow_commands,
             is_texture_packs_required: false,
-            rule_data: GameRules {
-                list_size: VarUInt(0),
-            },
+            rule_data: Vec::new(),
             experiments: Experiments {
-                names_size: 0,
+                toggles: Vec::new(),
                 experiments_ever_toggled: false,
             },
             bonus_chest: false,
@@ -2404,7 +2410,7 @@ impl World {
         let start_game = CStartGame {
             entity_id: VarLong(runtime_id as _),
             runtime_entity_id: VarULong(runtime_id),
-            player_gamemode: player.gamemode.load(),
+            player_gamemode: player.gamemode.load().into(),
             // Bedrock represents the local player at eye height; Pumpkin stores feet position.
             position: Vector3::new(
                 position.x as f32,
@@ -2454,10 +2460,10 @@ impl World {
         let item_registry = CItemRegistry {
             items: BedrockItem::ALL_BEDROCK_ITEMS
                 .iter()
-                .map(|b| ItemDefinition {
-                    name: b.registry_key.into(),
-                    id: b.id,
-                    component_based: b.component_based,
+                .map(|b| ItemData {
+                    item_name: b.registry_key.into(),
+                    item_id: b.id,
+                    is_component_based: b.component_based,
                     item_version: VarInt::from(match b.version {
                         BedrockItemVersion::Legacy => 0,
                         BedrockItemVersion::DataDriven => 1,
@@ -2480,7 +2486,7 @@ impl World {
                         2 => CreativeCategory::Nature,
                         3 => CreativeCategory::Equipment,
                         4 => CreativeCategory::Items,
-                        5 => CreativeCategory::CommandOnly,
+                        5 => CreativeCategory::ItemCommandOnly,
                         _ => CreativeCategory::Undefined,
                     };
                     let icon_item = if g.icon_item_id != 0 {
@@ -2498,10 +2504,10 @@ impl World {
                         NetworkItemDescriptor::default()
                     };
 
-                    Group {
+                    CreativeGroupInfoPayload {
                         creative_category,
                         name: g.name.to_string(),
-                        icon_item,
+                        group_icon_item: icon_item,
                     }
                 })
                 .collect::<Vec<_>>();
@@ -2509,7 +2515,7 @@ impl World {
             let entries = pumpkin_data::bedrock_creative::CREATIVE_ENTRIES
                 .iter()
                 .enumerate()
-                .map(|(i, e)| Entry {
+                .map(|(i, e)| CreativeItemEntryPayload {
                     id: VarUInt((i + 1) as u32),
                     item: NetworkItemDescriptor {
                         id: VarInt::from(e.item_id),
@@ -2725,11 +2731,11 @@ impl World {
         let metadata = entity.bedrock_metadata();
 
         let actor_data = CSetActorData {
-            actor_runtime_id: VarULong(runtime_id),
-            metadata,
+            target_runtime_id: VarULong(runtime_id),
+            actor_data: metadata,
             synced_properties: PropertySyncData {
-                int_properties: HashMap::new(),
-                float_properties: HashMap::new(),
+                int_entries_list: HashMap::new(),
+                float_entries_list: HashMap::new(),
             },
             tick: VarULong(0),
         };
@@ -2746,9 +2752,9 @@ impl World {
 
         client
             .enqueue_client_packet(&CUpdateAttributes {
-                runtime_id: VarULong(runtime_id),
-                attributes: vec![
-                    Attribute {
+                target_runtime_id: VarULong(runtime_id),
+                attribute_list: vec![
+                    AttributeData {
                         min_value: 0.0,
                         max_value: 3.402_823_5E38,
                         current_value: 0.1,
@@ -2756,9 +2762,9 @@ impl World {
                         default_max_value: 3.402_823_5E38,
                         default_value: 0.1,
                         name: "minecraft:movement".to_string(),
-                        modifiers_list_size: VarUInt(0),
+                        modifiers: Vec::new(),
                     },
-                    Attribute {
+                    AttributeData {
                         min_value: 0.0,
                         max_value: 3.402_823_5E38,
                         current_value: 0.02,
@@ -2766,9 +2772,9 @@ impl World {
                         default_max_value: 3.402_823_5E38,
                         default_value: 0.02,
                         name: "minecraft:underwater_movement".to_string(),
-                        modifiers_list_size: VarUInt(0),
+                        modifiers: Vec::new(),
                     },
-                    Attribute {
+                    AttributeData {
                         min_value: 0.0,
                         max_value: 1.0,
                         current_value: 0.08,
@@ -2776,9 +2782,9 @@ impl World {
                         default_max_value: 1.0,
                         default_value: 0.08,
                         name: "minecraft:gravity".to_string(),
-                        modifiers_list_size: VarUInt(0),
+                        modifiers: Vec::new(),
                     },
-                    Attribute {
+                    AttributeData {
                         min_value: 0.0,
                         max_value: 400.0,
                         current_value: 400.0,
@@ -2786,9 +2792,9 @@ impl World {
                         default_max_value: 400.0,
                         default_value: 400.0,
                         name: "minecraft:air".to_string(),
-                        modifiers_list_size: VarUInt(0),
+                        modifiers: Vec::new(),
                     },
-                    Attribute {
+                    AttributeData {
                         min_value: 0.0,
                         max_value: 20.0,
                         current_value: player.living_entity.health.load(),
@@ -2796,9 +2802,9 @@ impl World {
                         default_max_value: 20.0,
                         default_value: 20.0,
                         name: "minecraft:health".to_string(),
-                        modifiers_list_size: VarUInt(0),
+                        modifiers: Vec::new(),
                     },
-                    Attribute {
+                    AttributeData {
                         min_value: 0.0,
                         max_value: 20.0,
                         current_value: player.hunger_manager.level.load().into(),
@@ -2806,10 +2812,10 @@ impl World {
                         default_max_value: 20.0,
                         default_value: 20.0,
                         name: "minecraft:player.hunger".to_string(),
-                        modifiers_list_size: VarUInt(0),
+                        modifiers: Vec::new(),
                     },
                 ],
-                player_tick: VarULong(0),
+                tick: VarULong(0),
             })
             .await;
 
@@ -2867,37 +2873,34 @@ impl World {
 
         let bedrock_add_player = CAddPlayer {
             uuid: gameprofile.id,
-            username: gameprofile.name.clone(),
-            entity_runtime_id: VarULong(runtime_id),
+            player_name: gameprofile.name.clone(),
+            target_runtime_id: VarULong(runtime_id),
             platform_chat_id: String::new(),
             position: Vector3::new(position.x as f32, position.y as f32, position.z as f32),
             velocity: Vector3::new(velocity.x as f32, velocity.y as f32, velocity.z as f32),
-            pitch,
-            yaw,
-            head_yaw: yaw,
-            held_item: NetworkItemDescriptor::default(),
-            game_mode: VarInt(match player.gamemode.load() {
-                GameMode::Survival => 0,
-                GameMode::Creative => 1,
-                GameMode::Adventure => 2,
-                GameMode::Spectator => 6,
-            }),
-            metadata: entity.bedrock_metadata(),
-            properties: EntityProperties::default(),
-            ability_data: pumpkin_protocol::bedrock::client::add_player::AbilityData {
-                entity_unique_id: runtime_id as i64,
-                player_permissions: 0,
-                command_permissions: 0,
-                layers: vec![pumpkin_protocol::bedrock::client::AbilityLayer {
-                    serialized_layer: 0,
-                    abilities_set: 0,
-                    ability_value: 0,
-                    fly_speed: 0.05,
-                    vertical_fly_speed: 0.05,
-                    walk_speed: 0.1,
-                }],
+            rotation: Vector2::new(pitch, yaw),
+            y_head_rotation: yaw,
+            carried_item: NetworkItemStackDescriptor::default(),
+            player_game_type: player.gamemode.load().into(),
+            entity_data: entity.bedrock_metadata(),
+            synced_properties: PropertySyncData::default(),
+            abilities_data: pumpkin_protocol::bedrock::client::SerializedAbilitiesData {
+                target_player_raw_id: runtime_id as i64,
+                player_permissions:
+                    pumpkin_protocol::bedrock::client::PlayerPermissionLevel::Visitor,
+                command_permissions: pumpkin_protocol::bedrock::client::CommandPermissionLevel::Any,
+                layers: vec![
+                    pumpkin_protocol::bedrock::client::SerializedAbilitiesDataSerializedLayer {
+                        serialized_layer: 0,
+                        abilities_set: 0,
+                        ability_value: 0,
+                        fly_speed: 0.05,
+                        vertical_fly_speed: 0.05,
+                        walk_speed: 0.1,
+                    },
+                ],
             },
-            links: Vec::new(),
+            actor_links: Vec::new(),
             device_id: String::new(),
             build_platform: BuildPlatform::Unknown,
         };
@@ -2963,37 +2966,35 @@ impl World {
 
             let ex_add_player = CAddPlayer {
                 uuid: ex_profile.id,
-                username: ex_profile.name.clone(),
-                entity_runtime_id: VarULong(existing_player.entity_id() as u64),
+                player_name: ex_profile.name.clone(),
+                target_runtime_id: VarULong(existing_player.entity_id() as u64),
                 platform_chat_id: String::new(),
                 position: Vector3::new(ex_pos.x as f32, ex_pos.y as f32, ex_pos.z as f32),
                 velocity: Vector3::new(ex_vel.x as f32, ex_vel.y as f32, ex_vel.z as f32),
-                pitch: ex_entity.pitch.load(),
-                yaw: ex_entity.yaw.load(),
-                head_yaw: ex_entity.head_yaw.load(),
-                held_item: NetworkItemDescriptor::default(),
-                game_mode: VarInt(match existing_player.gamemode.load() {
-                    GameMode::Survival => 0,
-                    GameMode::Creative => 1,
-                    GameMode::Adventure => 2,
-                    GameMode::Spectator => 6,
-                }),
-                metadata: ex_entity.bedrock_metadata(),
-                properties: EntityProperties::default(),
-                ability_data: pumpkin_protocol::bedrock::client::add_player::AbilityData {
-                    entity_unique_id: existing_player.entity_id() as i64,
-                    player_permissions: 0,
-                    command_permissions: 0,
-                    layers: vec![pumpkin_protocol::bedrock::client::AbilityLayer {
-                        serialized_layer: 0,
-                        abilities_set: 0,
-                        ability_value: 0,
-                        fly_speed: 0.05,
-                        vertical_fly_speed: 0.05,
-                        walk_speed: 0.1,
-                    }],
+                rotation: Vector2::new(ex_entity.pitch.load(), ex_entity.yaw.load()),
+                y_head_rotation: ex_entity.head_yaw.load(),
+                carried_item: NetworkItemStackDescriptor::default(),
+                player_game_type: existing_player.gamemode.load().into(),
+                entity_data: ex_entity.bedrock_metadata(),
+                synced_properties: PropertySyncData::default(),
+                abilities_data: pumpkin_protocol::bedrock::client::SerializedAbilitiesData {
+                    target_player_raw_id: existing_player.entity_id() as i64,
+                    player_permissions:
+                        pumpkin_protocol::bedrock::client::PlayerPermissionLevel::Visitor,
+                    command_permissions:
+                        pumpkin_protocol::bedrock::client::CommandPermissionLevel::Any,
+                    layers: vec![
+                        pumpkin_protocol::bedrock::client::SerializedAbilitiesDataSerializedLayer {
+                            serialized_layer: 0,
+                            abilities_set: 0,
+                            ability_value: 0,
+                            fly_speed: 0.05,
+                            vertical_fly_speed: 0.05,
+                            walk_speed: 0.1,
+                        },
+                    ],
                 },
-                links: Vec::new(),
+                actor_links: Vec::new(),
                 device_id: String::new(),
                 build_platform: BuildPlatform::Unknown,
             };
@@ -3002,13 +3003,13 @@ impl World {
 
             let ex_held_item = existing_player.inventory().held_item().await;
 
-            let ex_be_mob_equipment = pumpkin_protocol::bedrock::client::CMobEquipment::new(
-                existing_player.entity_id() as u64,
-                NetworkItemStackDescriptor::from(&ex_held_item),
-                0,
-                0,
-                0,
-            );
+            let ex_be_mob_equipment = pumpkin_protocol::bedrock::client::CMobEquipment {
+                target_runtime_id: (existing_player.entity_id() as u64).into(),
+                item: (&ex_held_item).into(),
+                slot: 0,
+                selected_slot: 0,
+                container_id: 0,
+            };
 
             client.send_packet(&ex_be_mob_equipment).await;
         }
@@ -3367,37 +3368,34 @@ impl World {
 
         let bedrock_add_player = CAddPlayer {
             uuid: gameprofile.id,
-            username: gameprofile.name.clone(),
-            entity_runtime_id: VarULong(entity_id as u64),
+            player_name: gameprofile.name.clone(),
+            target_runtime_id: VarULong(entity_id as u64),
             platform_chat_id: String::new(),
             position: Vector3::new(position.x as f32, position.y as f32, position.z as f32),
             velocity: Vector3::new(velocity.x as f32, velocity.y as f32, velocity.z as f32),
-            pitch,
-            yaw,
-            head_yaw: yaw,
-            held_item: NetworkItemDescriptor::default(),
-            game_mode: VarInt(match player.gamemode.load() {
-                GameMode::Survival => 0,
-                GameMode::Creative => 1,
-                GameMode::Adventure => 2,
-                GameMode::Spectator => 6,
-            }),
-            metadata: player.get_entity().bedrock_metadata(),
-            properties: EntityProperties::default(),
-            ability_data: pumpkin_protocol::bedrock::client::add_player::AbilityData {
-                entity_unique_id: entity_id as i64,
-                player_permissions: 0,
-                command_permissions: 0,
-                layers: vec![pumpkin_protocol::bedrock::client::AbilityLayer {
-                    serialized_layer: 0,
-                    abilities_set: 0,
-                    ability_value: 0,
-                    fly_speed: 0.05,
-                    vertical_fly_speed: 0.05,
-                    walk_speed: 0.1,
-                }],
+            rotation: Vector2::new(pitch, yaw),
+            y_head_rotation: yaw,
+            carried_item: NetworkItemStackDescriptor::default(),
+            player_game_type: player.gamemode.load().into(),
+            entity_data: player.get_entity().bedrock_metadata(),
+            synced_properties: PropertySyncData::default(),
+            abilities_data: pumpkin_protocol::bedrock::client::SerializedAbilitiesData {
+                target_player_raw_id: entity_id as i64,
+                player_permissions:
+                    pumpkin_protocol::bedrock::client::PlayerPermissionLevel::Visitor,
+                command_permissions: pumpkin_protocol::bedrock::client::CommandPermissionLevel::Any,
+                layers: vec![
+                    pumpkin_protocol::bedrock::client::SerializedAbilitiesDataSerializedLayer {
+                        serialized_layer: 0,
+                        abilities_set: 0,
+                        ability_value: 0,
+                        fly_speed: 0.05,
+                        vertical_fly_speed: 0.05,
+                        walk_speed: 0.1,
+                    },
+                ],
             },
-            links: Vec::new(),
+            actor_links: Vec::new(),
             device_id: String::new(),
             build_platform: BuildPlatform::Unknown,
         };
@@ -3429,11 +3427,11 @@ impl World {
             entity_id,
             skin_parts,
             &CSetActorData {
-                actor_runtime_id: VarULong(entity_id as u64),
-                metadata: player.get_entity().bedrock_metadata(),
+                target_runtime_id: VarULong(entity_id as u64),
+                actor_data: player.get_entity().bedrock_metadata(),
                 synced_properties: PropertySyncData {
-                    int_properties: HashMap::new(),
-                    float_properties: HashMap::new(),
+                    int_entries_list: HashMap::new(),
+                    float_entries_list: HashMap::new(),
                 },
                 tick: VarULong(0),
             },
@@ -3452,8 +3450,8 @@ impl World {
             let gameprofile = &existing_player.gameprofile;
             let bedrock_add_player = CAddPlayer {
                 uuid: gameprofile.id,
-                username: gameprofile.name.clone(),
-                entity_runtime_id: VarULong(existing_player.entity_id() as u64),
+                player_name: gameprofile.name.clone(),
+                target_runtime_id: VarULong(existing_player.entity_id() as u64),
                 platform_chat_id: String::new(),
                 position: Vector3::new(pos.x as f32, pos.y as f32, pos.z as f32),
                 velocity: Vector3::new(
@@ -3461,32 +3459,30 @@ impl World {
                     entity.velocity.load().y as f32,
                     entity.velocity.load().z as f32,
                 ),
-                pitch: entity.pitch.load(),
-                yaw: entity.yaw.load(),
-                head_yaw: entity.head_yaw.load(),
-                held_item: NetworkItemDescriptor::default(),
-                game_mode: VarInt(match existing_player.gamemode.load() {
-                    GameMode::Survival => 0,
-                    GameMode::Creative => 1,
-                    GameMode::Adventure => 2,
-                    GameMode::Spectator => 6,
-                }),
-                metadata: entity.bedrock_metadata(),
-                properties: EntityProperties::default(),
-                ability_data: pumpkin_protocol::bedrock::client::add_player::AbilityData {
-                    entity_unique_id: existing_player.entity_id() as i64,
-                    player_permissions: 0,
-                    command_permissions: 0,
-                    layers: vec![pumpkin_protocol::bedrock::client::AbilityLayer {
-                        serialized_layer: 0,
-                        abilities_set: 0,
-                        ability_value: 0,
-                        fly_speed: 0.05,
-                        vertical_fly_speed: 0.05,
-                        walk_speed: 0.1,
-                    }],
+                rotation: Vector2::new(entity.pitch.load(), entity.yaw.load()),
+                y_head_rotation: entity.head_yaw.load(),
+                carried_item: NetworkItemStackDescriptor::default(),
+                player_game_type: existing_player.gamemode.load().into(),
+                entity_data: entity.bedrock_metadata(),
+                synced_properties: PropertySyncData::default(),
+                abilities_data: pumpkin_protocol::bedrock::client::SerializedAbilitiesData {
+                    target_player_raw_id: existing_player.entity_id() as i64,
+                    player_permissions:
+                        pumpkin_protocol::bedrock::client::PlayerPermissionLevel::Visitor,
+                    command_permissions:
+                        pumpkin_protocol::bedrock::client::CommandPermissionLevel::Any,
+                    layers: vec![
+                        pumpkin_protocol::bedrock::client::SerializedAbilitiesDataSerializedLayer {
+                            serialized_layer: 0,
+                            abilities_set: 0,
+                            ability_value: 0,
+                            fly_speed: 0.05,
+                            vertical_fly_speed: 0.05,
+                            walk_speed: 0.1,
+                        },
+                    ],
                 },
-                links: Vec::new(),
+                actor_links: Vec::new(),
                 device_id: String::new(),
                 build_platform: BuildPlatform::Unknown,
             };
@@ -3607,13 +3603,13 @@ impl World {
 
                 let je_packet = CSetEquipment::new(existing_player.entity_id().into(), equipment);
 
-                let be_mob_equipment = pumpkin_protocol::bedrock::client::CMobEquipment::new(
-                    existing_player.entity_id() as u64,
-                    NetworkItemStackDescriptor::from(&held_item),
-                    0,
-                    0,
-                    0,
-                );
+                let be_mob_equipment = pumpkin_protocol::bedrock::client::CMobEquipment {
+                    target_runtime_id: (existing_player.entity_id() as u64).into(),
+                    item: (&held_item).into(),
+                    slot: 0,
+                    selected_slot: 0,
+                    container_id: 0,
+                };
 
                 player
                     .client
@@ -3693,11 +3689,17 @@ impl World {
                 .await;
         }
 
-        // if let Some(bossbars) = self..lock().get_player_bars(&player.gameprofile.id) {
-        //     for bossbar in bossbars {
-        //         player.send_bossbar(bossbar);
-        //     }
-        // }
+        let player_bossbars = server
+            .bossbars
+            .lock()
+            .await
+            .get_player_bars(&player.gameprofile.id)
+            .map(|bars| bars.into_iter().cloned().collect::<Vec<_>>());
+        if let Some(bossbars) = player_bossbars {
+            for bossbar in &bossbars {
+                player.send_bossbar(bossbar).await;
+            }
+        }
 
         player.has_played_before.store(true, Ordering::Relaxed);
         player
@@ -3755,13 +3757,13 @@ impl World {
             .collect();
         let je_packet = CSetEquipment::new(from.entity_id().into(), equipment);
 
-        let be_mob_equipment = pumpkin_protocol::bedrock::client::CMobEquipment::new(
-            from.entity_id() as u64,
-            NetworkItemStackDescriptor::from(&held_item),
-            0,
-            0,
-            0,
-        );
+        let be_mob_equipment = pumpkin_protocol::bedrock::client::CMobEquipment {
+            target_runtime_id: (from.entity_id() as u64).into(),
+            item: (&held_item).into(),
+            slot: 0,
+            selected_slot: 0,
+            container_id: 0,
+        };
 
         let chunk_pos = from.get_entity().chunk_pos.load();
         self.broadcast_to_chunk_except_editioned(
@@ -3938,11 +3940,18 @@ impl World {
 
         let data_kept = u8::from(alive);
 
-        // Copy spawn info from level_info to avoid holding lock across await
-        let (spawn_x, spawn_z, spawn_yaw, spawn_pitch, keep_inventory) = {
-            let info = self.level_info.load();
+        let server = self.server.upgrade();
+        let default_world = server.as_ref().map_or_else(
+            || self.clone(),
+            |s| s.get_world_from_dimension(&Dimension::OVERWORLD),
+        );
+
+        // Copy spawn info from default world level_info to avoid holding lock across await
+        let (spawn_x, spawn_y, spawn_z, spawn_yaw, spawn_pitch, keep_inventory) = {
+            let info = default_world.level_info.load();
             (
                 info.spawn_x,
+                info.spawn_y,
                 info.spawn_z,
                 info.spawn_yaw,
                 info.spawn_pitch,
@@ -3951,48 +3960,62 @@ impl World {
         };
 
         // Get respawn position and dimension
-        let (position, yaw, pitch, respawn_dimension) =
-            if let Some(respawn) = player.calculate_respawn_point().await {
-                (
-                    respawn.position,
-                    respawn.yaw,
-                    respawn.pitch,
-                    respawn.dimension,
-                )
-            } else {
-                // No valid respawn point - send notification and use world spawn
+        let (position, yaw, pitch, respawn_dimension) = if let Some(respawn) =
+            player.calculate_respawn_point().await
+        {
+            (
+                respawn.position,
+                respawn.yaw,
+                respawn.pitch,
+                respawn.dimension,
+            )
+        } else {
+            // No valid respawn point - send notification if player had one set
+            if player.respawn_point.lock().await.is_some() {
                 player
                     .send_client_packet(&CGameEvent::new(GameEvent::NoRespawnBlockAvailable, 0.0))
                     .await;
+                let mut guard = player.respawn_point.lock().await;
+                if let Some(point) = guard.as_ref()
+                    && !point.force
+                {
+                    *guard = None;
+                }
+            }
 
-                // FIXME: This spawn position calculation is incorrect. Should use vanilla's
-                // proper spawn position calculation (see #1381). The y-level calculation
-                // needs to account for spawn radius and find a safe spawn position.
-                let chunk_pos = Vector2::new(spawn_x >> 4, spawn_z >> 4);
-                self.level.get_or_fetch_chunk(chunk_pos, |_| ()).await;
-                let top = self.get_top_block(Vector2::new(spawn_x, spawn_z));
-
-                (
-                    Vector3::new(
-                        f64::from(spawn_x) + 0.5,
-                        (top + 1).into(),
-                        f64::from(spawn_z) + 0.5,
-                    ),
-                    spawn_yaw,
-                    spawn_pitch,
-                    self.dimension.clone(),
-                )
+            // FIXME: This spawn position calculation is incorrect. Should use vanilla's
+            // proper spawn position calculation (see #1381). The y-level calculation
+            // needs to account for spawn radius and find a safe spawn position.
+            let chunk_pos = Vector2::new(spawn_x >> 4, spawn_z >> 4);
+            default_world
+                .level
+                .get_or_fetch_chunk(chunk_pos, |_| ())
+                .await;
+            let top = default_world.get_top_block(Vector2::new(spawn_x, spawn_z));
+            let pos_y = if top > default_world.dimension.min_y {
+                top + 1
+            } else {
+                spawn_y
             };
+
+            (
+                Vector3::new(
+                    f64::from(spawn_x) + 0.5,
+                    f64::from(pos_y),
+                    f64::from(spawn_z) + 0.5,
+                ),
+                spawn_yaw,
+                spawn_pitch,
+                default_world.dimension.clone(),
+            )
+        };
 
         let mut spawn_loc_event = crate::plugin::api::events::player::player_spawn_location::PlayerSpawnLocationEvent::new(
             player.clone(),
             position,
         );
-        if let Some(server) = self.server.upgrade() {
-            server
-                .plugin_manager
-                .fire(&server, &mut spawn_loc_event)
-                .await;
+        if let Some(ref s) = server {
+            s.plugin_manager.fire(s, &mut spawn_loc_event).await;
         }
         let position = spawn_loc_event.spawn_pos;
 
@@ -4000,13 +4023,13 @@ impl World {
         let candidate_world = if respawn_dimension == self.dimension {
             None
         } else {
-            self.server.upgrade().map_or_else(
+            server.as_ref().map_or_else(
                 || {
                     warn!("Could not get server for cross-dimension respawn");
                     None
                 },
-                |server| {
-                    let worlds = server.worlds.load();
+                |s| {
+                    let worlds = s.worlds.load();
                     worlds
                         .iter()
                         .find(|w| w.dimension == respawn_dimension)
@@ -4018,7 +4041,7 @@ impl World {
         // Fire PlayerChangeWorldEvent (cancellable) before the transfer; it runs before
         // the non-cancellable PlayerRespawnEvent, which observes the resolved world.
         let (resolved_world, position, yaw, pitch) = if let Some(new_world) = candidate_world {
-            if let Some(server) = self.server.upgrade() {
+            if let Some(ref s) = server {
                 let mut event = PlayerChangeWorldEvent {
                     player: player.clone(),
                     previous_world: self.clone(),
@@ -4028,7 +4051,7 @@ impl World {
                     pitch,
                     cancelled: false,
                 };
-                server.plugin_manager.fire(&server, &mut event).await;
+                s.plugin_manager.fire(s, &mut event).await;
 
                 if event.cancelled {
                     (None, position, yaw, pitch)
@@ -4080,23 +4103,10 @@ impl World {
 
         // Cancelled or unresolved cross-dimension respawns fall back to the current
         // world's spawn below; otherwise the resolved values from the event apply.
-        let (target_world, position, yaw, pitch) = if let Some(ref new_world) = resolved_world {
-            (new_world.clone(), position, yaw, pitch)
-        } else if respawn_dimension != self.dimension {
-            // FIXME: This spawn position calculation is incorrect. Should use vanilla's
-            // proper spawn position calculation (see #1381).
-            let chunk_pos = Vector2::new(spawn_x >> 4, spawn_z >> 4);
-            self.level.get_or_fetch_chunk(chunk_pos, |_| ()).await;
-            let top = self.get_top_block(Vector2::new(spawn_x, spawn_z));
-            let fallback_pos = Vector3::new(
-                f64::from(spawn_x) + 0.5,
-                (top + 1).into(),
-                f64::from(spawn_z) + 0.5,
-            );
-            (self.clone(), fallback_pos, spawn_yaw, spawn_pitch)
-        } else {
-            (self.clone(), position, yaw, pitch)
-        };
+        let (target_world, position, yaw, pitch) = resolved_world.as_ref().map_or_else(
+            || (self.clone(), position, yaw, pitch),
+            |new_world| (new_world.clone(), position, yaw, pitch),
+        );
 
         // Notify plugins that the player has respawned (non-cancellable).
         if let Some(server) = self.server.upgrade() {
@@ -4156,12 +4166,13 @@ impl World {
                     pitch,
                     target_world.dimension.minecraft_name.to_string(),
                 ),
-                &pumpkin_protocol::bedrock::client::CSetSpawnPosition::new(
-                    1, // World spawn
+                &pumpkin_protocol::bedrock::client::CSetSpawnPosition {
+                    spawn_position_type:
+                        pumpkin_protocol::bedrock::client::SpawnPositionType::WorldRespawn,
+                    block_position: spawn_block_pos,
+                    dimension_type: bedrock_dimension.into(),
                     spawn_block_pos,
-                    bedrock_dimension,
-                    spawn_block_pos,
-                ),
+                },
             )
             .await;
 
@@ -5483,6 +5494,12 @@ impl World {
             &CWorldEvent::new(world_event as i32, position, data, false),
         );
     }
+
+    pub fn set_block_destroy_stage(&self, entity_id: i32, location: BlockPos, stage: i8) {
+        let chunk_pos = location.chunk_position();
+        let packet = CSetBlockDestroyStage::new(entity_id.into(), location, stage);
+        self.broadcast_to_chunk(chunk_pos, &packet);
+    }
     #[must_use]
     pub fn is_valid(dest: BlockPos) -> bool {
         Self::is_valid_horizontally(dest) && Self::is_valid_vertically(dest.0.y)
@@ -6031,12 +6048,13 @@ impl World {
         });
     }
 
-    fn intersects_aabb_with_direction(
+    #[must_use]
+    pub fn intersects_aabb_with_hit(
         from: Vector3<f64>,
         to: Vector3<f64>,
         min: Vector3<f64>,
         max: Vector3<f64>,
-    ) -> Option<BlockDirection> {
+    ) -> Option<(f64, BlockDirection, Vector3<f64>)> {
         let dir = to.sub(&from);
         let mut tmin: f64 = 0.0;
         let mut tmax: f64 = 1.0;
@@ -6045,7 +6063,7 @@ impl World {
         let mut hit_is_min = false;
 
         macro_rules! check_axis {
-            ($axis:ident, $dir_axis:ident, $min_axis:ident, $max_axis:ident, $direction_min:expr, $direction_max:expr) => {{
+            ($axis:ident, $dir_axis:ident, $min_axis:ident, $max_axis:ident) => {{
                 if dir.$dir_axis.abs() < 1e-8 {
                     if from.$dir_axis < min.$min_axis || from.$dir_axis > max.$max_axis {
                         return None;
@@ -6055,7 +6073,6 @@ impl World {
                     let t_near = (min.$min_axis - from.$dir_axis) * inv_d;
                     let t_far = (max.$max_axis - from.$dir_axis) * inv_d;
 
-                    // Determine entry and exit points based on ray direction
                     let (t_entry, t_exit, is_min_face) = if inv_d >= 0.0 {
                         (t_near, t_far, true)
                     } else {
@@ -6075,19 +6092,70 @@ impl World {
             }};
         }
 
-        check_axis!(x, x, x, x, BlockDirection::West, BlockDirection::East);
-        check_axis!(y, y, y, y, BlockDirection::Down, BlockDirection::Up);
-        check_axis!(z, z, z, z, BlockDirection::North, BlockDirection::South);
+        check_axis!(x, x, x, x);
+        check_axis!(y, y, y, y);
+        check_axis!(z, z, z, z);
 
-        match (hit_axis, hit_is_min) {
-            (Some("x"), true) => Some(BlockDirection::West),
-            (Some("x"), false) => Some(BlockDirection::East),
-            (Some("y"), true) => Some(BlockDirection::Down),
-            (Some("y"), false) => Some(BlockDirection::Up),
-            (Some("z"), true) => Some(BlockDirection::North),
-            (Some("z"), false) => Some(BlockDirection::South),
-            _ => None,
+        if tmax < 0.0 || tmin > 1.0 {
+            return None;
         }
+
+        let direction = match (hit_axis, hit_is_min) {
+            (Some("x"), true) => BlockDirection::West,
+            (Some("x"), false) => BlockDirection::East,
+            (Some("y"), true) => BlockDirection::Down,
+            (Some("y"), false) => BlockDirection::Up,
+            (Some("z"), true) => BlockDirection::North,
+            (Some("z"), false) => BlockDirection::South,
+            _ => {
+                if dir.y < 0.0 {
+                    BlockDirection::Up
+                } else if dir.y > 0.0 {
+                    BlockDirection::Down
+                } else {
+                    BlockDirection::North
+                }
+            }
+        };
+
+        let t_hit = tmin.max(0.0);
+        let hit_pos = from + dir * t_hit;
+        Some((t_hit, direction, hit_pos))
+    }
+
+    pub fn ray_outline_check_detailed(
+        &self,
+        block_pos: &BlockPos,
+        from: Vector3<f64>,
+        to: Vector3<f64>,
+    ) -> Option<(BlockDirection, Vector3<f64>)> {
+        let state = self.get_block_state(block_pos);
+
+        if state.outline_shapes.is_empty() {
+            let block_min = block_pos.0.to_f64();
+            let block_max = block_min.add_raw(1.0, 1.0, 1.0);
+            return Self::intersects_aabb_with_hit(from, to, block_min, block_max)
+                .map(|(_, dir, hit_pos)| (dir, hit_pos));
+        }
+
+        let bounding_boxes = state.get_block_outline_shapes_at(block_pos);
+        let mut closest_hit: Option<(f64, BlockDirection, Vector3<f64>)> = None;
+
+        for shape in bounding_boxes {
+            let world_min = shape.min.add(&block_pos.0.to_f64());
+            let world_max = shape.max.add(&block_pos.0.to_f64());
+
+            if let Some((t, dir, hit_pos)) =
+                Self::intersects_aabb_with_hit(from, to, world_min, world_max)
+                && closest_hit
+                    .as_ref()
+                    .is_none_or(|(closest_t, _, _)| t < *closest_t)
+            {
+                closest_hit = Some((t, dir, hit_pos));
+            }
+        }
+
+        closest_hit.map(|(_, dir, hit_pos)| (dir, hit_pos))
     }
 
     fn ray_outline_check(
@@ -6096,25 +6164,201 @@ impl World {
         from: Vector3<f64>,
         to: Vector3<f64>,
     ) -> (bool, Option<BlockDirection>) {
-        let state = self.get_block_state(block_pos);
+        if let Some((dir, _)) = self.ray_outline_check_detailed(block_pos, from, to) {
+            (true, Some(dir))
+        } else {
+            let state = self.get_block_state(block_pos);
+            if state.outline_shapes.is_empty() {
+                (true, None)
+            } else {
+                (false, None)
+            }
+        }
+    }
 
-        if state.outline_shapes.is_empty() {
-            return (true, None);
+    #[allow(clippy::too_many_lines)]
+    pub fn ray_trace_block(
+        &self,
+        start_pos: Vector3<f64>,
+        end_pos: Vector3<f64>,
+        include_fluids: bool,
+    ) -> Option<(BlockPos, BlockDirection, Vector3<f64>)> {
+        if start_pos == end_pos {
+            return None;
         }
 
-        let bounding_boxes = state.get_block_outline_shapes_at(block_pos);
+        let adjust = -1.0e-7f64;
+        let to = end_pos.lerp(&start_pos, adjust);
+        let from = start_pos.lerp(&end_pos, adjust);
 
-        for shape in bounding_boxes {
-            let world_min = shape.min.add(&block_pos.0.to_f64());
-            let world_max = shape.max.add(&block_pos.0.to_f64());
+        let mut block = BlockPos::floored(from.x, from.y, from.z);
 
-            let direction = Self::intersects_aabb_with_direction(from, to, world_min, world_max);
-            if direction.is_some() {
-                return (true, direction);
+        let state = self.get_block_state(&block);
+        let valid_start = if include_fluids {
+            !state.is_air()
+        } else {
+            !state.is_air() && !state.is_liquid()
+        };
+        if valid_start
+            && let Some((dir, hit_pos)) = self.ray_outline_check_detailed(&block, from, to)
+        {
+            return Some((block, dir, hit_pos));
+        }
+
+        let difference = to.sub(&from);
+        let step = difference.sign();
+
+        let delta = Vector3::new(
+            if step.x == 0 {
+                f64::MAX
+            } else {
+                (f64::from(step.x)) / difference.x
+            },
+            if step.y == 0 {
+                f64::MAX
+            } else {
+                (f64::from(step.y)) / difference.y
+            },
+            if step.z == 0 {
+                f64::MAX
+            } else {
+                (f64::from(step.z)) / difference.z
+            },
+        );
+
+        let mut next = Vector3::new(
+            delta.x
+                * (if step.x > 0 {
+                    1.0 - (from.x - from.x.floor())
+                } else {
+                    from.x - from.x.floor()
+                }),
+            delta.y
+                * (if step.y > 0 {
+                    1.0 - (from.y - from.y.floor())
+                } else {
+                    from.y - from.y.floor()
+                }),
+            delta.z
+                * (if step.z > 0 {
+                    1.0 - (from.z - from.z.floor())
+                } else {
+                    from.z - from.z.floor()
+                }),
+        );
+
+        while next.x <= 1.0 || next.y <= 1.0 || next.z <= 1.0 {
+            let block_direction = match (next.x, next.y, next.z) {
+                (x, y, z) if x < y && x < z => {
+                    block.0.x += step.x;
+                    next.x += delta.x;
+                    if step.x > 0 {
+                        BlockDirection::West
+                    } else {
+                        BlockDirection::East
+                    }
+                }
+                (_, y, z) if y < z => {
+                    block.0.y += step.y;
+                    next.y += delta.y;
+                    if step.y > 0 {
+                        BlockDirection::Down
+                    } else {
+                        BlockDirection::Up
+                    }
+                }
+                _ => {
+                    block.0.z += step.z;
+                    next.z += delta.z;
+                    if step.z > 0 {
+                        BlockDirection::North
+                    } else {
+                        BlockDirection::South
+                    }
+                }
+            };
+
+            let state = self.get_block_state(&block);
+            let hit = if include_fluids {
+                !state.is_air()
+            } else {
+                !state.is_air() && !state.is_liquid()
+            };
+
+            if hit {
+                if let Some((dir, hit_pos)) = self.ray_outline_check_detailed(&block, from, to) {
+                    return Some((block, dir, hit_pos));
+                }
+                let block_min = block.0.to_f64();
+                let block_max = block_min.add_raw(1.0, 1.0, 1.0);
+                if let Some((_, dir, hit_pos)) =
+                    Self::intersects_aabb_with_hit(from, to, block_min, block_max)
+                {
+                    return Some((block, dir, hit_pos));
+                }
+                return Some((block, block_direction, to));
             }
         }
 
-        (false, None)
+        None
+    }
+
+    pub fn ray_trace_entities(
+        &self,
+        start: Vector3<f64>,
+        end: Vector3<f64>,
+    ) -> Vec<(Arc<dyn EntityBase>, Vector3<f64>, f64)> {
+        if start == end {
+            return Vec::new();
+        }
+
+        let min_x = start.x.min(end.x) - 1.0;
+        let max_x = start.x.max(end.x) + 1.0;
+        let min_y = start.y.min(end.y) - 1.0;
+        let max_y = start.y.max(end.y) + 1.0;
+        let min_z = start.z.min(end.z) - 1.0;
+        let max_z = start.z.max(end.z) + 1.0;
+        let ray_box = BoundingBox::new(
+            Vector3::new(min_x, min_y, min_z),
+            Vector3::new(max_x, max_y, max_z),
+        );
+
+        let mut hits = Vec::new();
+
+        for entity in self.entities.load().iter() {
+            let bb = entity.get_entity().bounding_box.load();
+            if bb.intersects(&ray_box)
+                && let Some((t, _, hit_pos)) =
+                    Self::intersects_aabb_with_hit(start, end, bb.min, bb.max)
+            {
+                let distance = (hit_pos - start).length();
+                hits.push((entity.clone(), hit_pos, distance, t));
+            }
+        }
+
+        for player in self.players.load().iter() {
+            let bb = player.get_entity().bounding_box.load();
+            if bb.intersects(&ray_box)
+                && let Some((t, _, hit_pos)) =
+                    Self::intersects_aabb_with_hit(start, end, bb.min, bb.max)
+            {
+                let distance = (hit_pos - start).length();
+                hits.push((player.clone() as Arc<dyn EntityBase>, hit_pos, distance, t));
+            }
+        }
+
+        hits.sort_by(|a, b| a.3.partial_cmp(&b.3).unwrap_or(std::cmp::Ordering::Equal));
+        hits.into_iter()
+            .map(|(ent, hit_pos, dist, _)| (ent, hit_pos, dist))
+            .collect()
+    }
+
+    pub fn ray_trace_entity(
+        &self,
+        start: Vector3<f64>,
+        end: Vector3<f64>,
+    ) -> Option<(Arc<dyn EntityBase>, Vector3<f64>, f64)> {
+        self.ray_trace_entities(start, end).into_iter().next()
     }
 
     pub async fn raycast(

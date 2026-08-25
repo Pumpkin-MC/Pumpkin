@@ -1,3 +1,5 @@
+// Last verified for v2169
+
 use pumpkin_macros::packet;
 use pumpkin_util::math::{vector2::Vector2, vector3::Vector3};
 
@@ -5,8 +7,7 @@ use crate::{codec::var_ulong::VarULong, serial::PacketWrite};
 
 #[derive(PacketWrite)]
 #[packet(161)]
-pub struct CCorrectPlayerMove {
-    // https://mojang.github.io/bedrock-protocol-docs/html/CorrectPlayerMovePredictionPacket.html
+pub struct CCorrectPlayerMovePrediction {
     pub prediction_type: u8,
     pub pos: Vector3<f32>,
     pub pos_delta: Vector3<f32>,

@@ -17,7 +17,7 @@ impl BedrockClient {
         let world = entity.world.load();
 
         let mut broadcast_packet = packet;
-        broadcast_packet.runtime_entity_id = VarULong(entity.entity_id as u64);
+        broadcast_packet.actor_runtime_id = VarULong(entity.entity_id as u64);
         broadcast_packet.flags |= pumpkin_protocol::bedrock::server::emote::EMOTE_FLAG_SERVER_SIDE;
 
         world

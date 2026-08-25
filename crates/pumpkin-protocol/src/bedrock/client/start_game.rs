@@ -1,15 +1,12 @@
 use std::io::{Error, Write};
 
 use crate::{
-    bedrock::client::gamerules_changed::GameRules,
+    bedrock::client::{GameType, gamerules_changed::GameRule},
     codec::{var_int::VarInt, var_long::VarLong, var_uint::VarUInt, var_ulong::VarULong},
     serial::PacketWrite,
 };
 use pumpkin_macros::packet;
-use pumpkin_util::{
-    GameMode,
-    math::{position::BlockPos, vector3::Vector3},
-};
+use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 use uuid::Uuid;
 
 #[derive(PacketWrite)]
@@ -22,7 +19,7 @@ pub struct CStartGame {
     // The runtime ID is unique for each world session, and
     // entities are generally identified in packets using this runtime ID.
     pub runtime_entity_id: VarULong,
-    pub player_gamemode: GameMode,
+    pub player_gamemode: GameType,
     pub position: Vector3<f32>,
     pub pitch: f32,
     pub yaw: f32,
@@ -113,7 +110,7 @@ pub struct LevelSettings {
 
     // Level Settings
     pub generator_type: VarInt,
-    pub world_gamemode: GameMode,
+    pub world_gamemode: GameType,
     pub hardcore: bool,
     pub difficulty: VarInt,
     pub spawn_position: BlockPos,
@@ -135,7 +132,7 @@ pub struct LevelSettings {
     pub commands_enabled: bool,
     pub is_texture_packs_required: bool,
 
-    pub rule_data: GameRules,
+    pub rule_data: Vec<GameRule>,
     pub experiments: Experiments,
 
     pub bonus_chest: bool,
@@ -167,11 +164,28 @@ pub struct LevelSettings {
     pub allow_anonymous_block_drops_in_editor_worlds: bool,
 }
 
-#[derive(Default, PacketWrite)]
+#[derive(Default)]
 pub struct Experiments {
-    //TODO! https://mojang.github.io/bedrock-protocol-docs/html/Experiments.html
-    pub names_size: u32,
+    pub toggles: Vec<ExperimentToggle>,
     pub experiments_ever_toggled: bool,
+}
+
+impl PacketWrite for Experiments {
+    fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
+        (self.toggles.len() as u32).write(writer)?;
+        for toggle in &self.toggles {
+            toggle.write(writer)?;
+        }
+        self.experiments_ever_toggled.write(writer)?;
+
+        Ok(())
+    }
+}
+
+#[derive(PacketWrite)]
+pub struct ExperimentToggle {
+    pub name: String,
+    pub enabled: bool,
 }
 
 #[derive(Clone, Copy)]

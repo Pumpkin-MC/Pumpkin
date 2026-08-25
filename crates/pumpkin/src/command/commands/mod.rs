@@ -53,8 +53,10 @@ mod playsound;
 mod plugin;
 mod plugins;
 mod pumpkin;
+mod raid;
 mod random;
 mod recipe;
+mod reload;
 mod ride;
 mod rotate;
 mod saveall;
@@ -156,6 +158,7 @@ pub fn default_dispatcher(
     dispatcher.register(spectate::init_command_tree(), "minecraft:command.spectate");
     dispatcher.register(data::init_command_tree(), "minecraft:command.data");
     dispatcher.register(waypoint::init_command_tree(), "minecraft:command.waypoint");
+    dispatcher.register(raid::init_command_tree(), "minecraft:command.raid");
     // Three
     dispatcher.register(deop::init_command_tree(), "minecraft:command.deop");
     dispatcher.register(kick::init_command_tree(), "minecraft:command.kick");
@@ -187,6 +190,7 @@ pub fn default_dispatcher(
     forceload::register(&mut dispatcher, registry);
     ride::register(&mut dispatcher, registry);
     recipe::register(&mut dispatcher, registry);
+    reload::register(&mut dispatcher, registry);
     help::register(&mut dispatcher, registry);
     kill::register(&mut dispatcher, registry);
     op::register(&mut dispatcher, registry);

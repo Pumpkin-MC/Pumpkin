@@ -155,13 +155,14 @@ impl CommandExecutor for StyleExecutor {
             );
             let uuid = entity.entity_uuid;
 
-            let style_str = match self.0 {
+            let style_owned = match self.0 {
                 StyleAction::Set => {
                     let style = ResourceLocationArgumentConsumer::find_arg(args, ARG_STYLE)?;
-                    Some(style)
+                    Some(style.to_string())
                 }
                 StyleAction::Reset => None,
             };
+            let style_str = style_owned.as_deref();
 
             let packet = CWaypoint::update_position(
                 uuid,
