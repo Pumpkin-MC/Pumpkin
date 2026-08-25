@@ -35,11 +35,13 @@ impl PistonBlockEntity {
     /// `.await`: a re-trigger can replace it. Live-map only; `get_block_entity` would rebuild
     /// from NBT and restart the animation.
     fn is_current(&self, world: &World) -> bool {
-        world.get_live_block_entity(&self.position).is_some_and(|be| {
-            be.as_any()
-                .downcast_ref::<Self>()
-                .is_some_and(|piston| std::ptr::eq(piston, self))
-        })
+        world
+            .get_live_block_entity(&self.position)
+            .is_some_and(|be| {
+                be.as_any()
+                    .downcast_ref::<Self>()
+                    .is_some_and(|piston| std::ptr::eq(piston, self))
+            })
     }
 
     const fn movement_direction(&self) -> BlockDirection {

@@ -208,7 +208,8 @@ impl MinecartEntity {
 
     /// Cargo changed since last call. Always `false` without a container ([`MinecartInventory::take_dirty`]).
     pub fn take_container_dirty(&self) -> bool {
-        self.container().is_some_and(|inventory| inventory.take_dirty())
+        self.container()
+            .is_some_and(|inventory| inventory.take_dirty())
     }
 
     const fn drop_item(&self) -> Option<&'static Item> {

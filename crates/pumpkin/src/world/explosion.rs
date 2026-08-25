@@ -222,7 +222,9 @@ impl Explosion {
     fn protects_rail(&self, world: &World, pos: &BlockPos, block: &Block) -> bool {
         self.preserve_rails
             && (block.has_tag(&tag::Block::MINECRAFT_RAILS)
-                || world.get_block(&pos.up()).has_tag(&tag::Block::MINECRAFT_RAILS))
+                || world
+                    .get_block(&pos.up())
+                    .has_tag(&tag::Block::MINECRAFT_RAILS))
     }
 
     #[allow(clippy::too_many_lines)]

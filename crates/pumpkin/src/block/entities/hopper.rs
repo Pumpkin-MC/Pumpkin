@@ -276,7 +276,8 @@ impl HopperBlockEntity {
     async fn eject_items(&self, world: &Arc<World>) -> bool {
         // TODO getEntityContainer
 
-        if let Some(entity) = world.get_block_entity(&self.position.offset(to_offset(&self.facing.load())))
+        if let Some(entity) =
+            world.get_block_entity(&self.position.offset(to_offset(&self.facing.load())))
             && let Some(container) = entity.get_inventory()
         {
             // TODO check WorldlyContainer

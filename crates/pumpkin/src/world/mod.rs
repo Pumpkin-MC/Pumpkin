@@ -4761,13 +4761,19 @@ impl World {
             false
         };
         if empty {
-            self.entities_by_chunk.remove_if(&chunk, |_, v| v.is_empty());
+            self.entities_by_chunk
+                .remove_if(&chunk, |_, v| v.is_empty());
         }
     }
 
     /// Moves an entity from one chunk-column bucket to another. No-op if it is not yet indexed
     /// (spawn writes the bucket after construction).
-    pub fn relocate_entity(&self, entity_id: i32, old_chunk: Vector2<i32>, new_chunk: Vector2<i32>) {
+    pub fn relocate_entity(
+        &self,
+        entity_id: i32,
+        old_chunk: Vector2<i32>,
+        new_chunk: Vector2<i32>,
+    ) {
         if old_chunk == new_chunk {
             return;
         }
@@ -5404,7 +5410,8 @@ impl World {
             self.entity_ready_chunks.remove(chunk_pos);
         }
 
-        self.save_entities(&entities_to_remove, &rebuilt_chunks).await;
+        self.save_entities(&entities_to_remove, &rebuilt_chunks)
+            .await;
 
         for entity in entities_to_remove {
             self.spawn_state.load().remove_entity(self, entity.as_ref());
