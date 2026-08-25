@@ -40,7 +40,7 @@ const SECTOR_BYTES: usize = 4096;
 /// Hard cap on a chunk's sector count in the Anvil location table
 /// (`(offset << 8) | sector_count`): one byte, so 255. Vanilla spills a larger chunk into a
 /// companion `c.<x>.<z>.mcc` file. Pumpkin has no such fallback; writing the count anyway
-/// overflows into the neighbouring offset field and the region is unparseable from that point on.
+/// overflows into the neighbouring offset field and the region is unparsable from that point on.
 const MAX_SECTORS_PER_CHUNK: u32 = 0xFF;
 
 // 26.2
