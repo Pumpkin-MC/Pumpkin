@@ -447,15 +447,18 @@ impl PluginManager {
     /// This must only be called from the main thread, because the underlying
     /// `rustyline` console handle is neither `Send` nor `Sync`. Calling it from a
     /// different thread (e.g. the hot-reload watcher task) will panic.
+    ///
+    /// Returns `(allowed, wait_time, cacheable)`. Non-main-thread denials are not
+    /// cacheable so the user gets prompted again on the next cold load.
     #[expect(clippy::print_stdout)]
     fn ask_permission_confirmation(
         &self,
         metadata: &PluginMetadata,
-    ) -> (bool, std::time::Duration) {
+    ) -> (bool, std::time::Duration, bool) {
         use colored::Colorize;
 
         if metadata.permissions.is_empty() {
-            return (true, std::time::Duration::ZERO);
+            return (true, std::time::Duration::ZERO, true);
         }
 
         if std::thread::current().id() != self.main_thread_id {
@@ -465,7 +468,7 @@ impl PluginManager {
                  Denying permissions. To load this plugin interactively, restart the server.",
                 metadata.name, metadata.version
             );
-            return (false, Duration::ZERO);
+            return (false, Duration::ZERO, false);
         }
 
         let start_time = std::time::Instant::now();
@@ -517,7 +520,7 @@ impl PluginManager {
             wrapper.return_readline(rl);
         }
 
-        (result, start_time.elapsed())
+        (result, start_time.elapsed(), true)
     }
 
     /// Spawn initialization for a single plugin
@@ -862,15 +865,17 @@ impl PluginManager {
             return (true, std::time::Duration::ZERO);
         }
 
-        let (allowed, wait_time) = self.ask_permission_confirmation(metadata);
-        cache.entries.insert(
-            hash,
-            cache::PermissionCacheEntry {
-                permissions_requested: metadata.permissions.clone(),
-                approved: allowed,
-            },
-        );
-        let _ = cache.save(cache_path).await;
+        let (allowed, wait_time, cacheable) = self.ask_permission_confirmation(metadata);
+        if cacheable {
+            cache.entries.insert(
+                hash,
+                cache::PermissionCacheEntry {
+                    permissions_requested: metadata.permissions.clone(),
+                    approved: allowed,
+                },
+            );
+            let _ = cache.save(cache_path).await;
+        }
         (allowed, wait_time)
     }
 
