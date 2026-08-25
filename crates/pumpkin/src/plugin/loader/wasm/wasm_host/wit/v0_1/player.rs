@@ -1,3 +1,4 @@
+use pumpkin_protocol::bedrock::client::PackIdVersion;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use tokio::sync::Mutex;
@@ -43,7 +44,7 @@ use pumpkin_util::translation::Locale;
 use std::str::FromStr;
 
 use pumpkin_protocol::bedrock::client::set_actor_data::{
-    CSetActorData, EntityMetadata, MetadataValue, PropertySyncData, entity_data_key,
+    CSetActorData, MetadataValue, PropertySyncData, SyncedActorDataList, entity_data_key,
 };
 use pumpkin_protocol::codec::var_ulong::VarULong;
 use pumpkin_util::version::{BedrockMinecraftVersion, JavaMinecraftVersion};
@@ -3473,10 +3474,10 @@ impl pumpkin::plugin::player::HostBedrockPlayer for PluginHostState {
                 .store(flags, Ordering::Relaxed);
         }
 
-        let mut metadata = EntityMetadata(std::collections::HashMap::new());
+        let mut metadata = SyncedActorDataList(std::collections::HashMap::new());
         metadata.set(
             entity_data_key::FLAGS,
-            MetadataValue::Long(
+            MetadataValue::Int64(
                 player
                     .living_entity
                     .entity
@@ -3486,7 +3487,7 @@ impl pumpkin::plugin::player::HostBedrockPlayer for PluginHostState {
         );
         metadata.set(
             entity_data_key::FLAGS_TWO,
-            MetadataValue::Long(
+            MetadataValue::Int64(
                 player
                     .living_entity
                     .entity
@@ -3496,11 +3497,11 @@ impl pumpkin::plugin::player::HostBedrockPlayer for PluginHostState {
         );
 
         let packet = CSetActorData {
-            actor_runtime_id: VarULong(player.get_entity().entity_id as u64),
-            metadata,
+            target_runtime_id: VarULong(player.get_entity().entity_id as u64),
+            actor_data: metadata,
             synced_properties: PropertySyncData {
-                int_properties: std::collections::HashMap::new(),
-                float_properties: std::collections::HashMap::new(),
+                int_entries_list: std::collections::HashMap::new(),
+                float_entries_list: std::collections::HashMap::new(),
             },
             tick: VarULong(0),
         };
@@ -3612,7 +3613,7 @@ impl pumpkin::plugin::player::HostBedrockPlayer for PluginHostState {
             client
                 .send_packet(&CModalFormRequest {
                     form_id: pumpkin_protocol::codec::var_uint::VarUInt(form_id),
-                    form_data: form_json.to_string(),
+                    form_ui_json: form_json.to_string(),
                 })
                 .await;
 
@@ -3671,20 +3672,19 @@ impl pumpkin::plugin::player::HostBedrockPlayer for PluginHostState {
             let entries = info
                 .packs
                 .into_iter()
-                .map(|p| {
-                    pumpkin_protocol::bedrock::client::resource_packs_info::ResourcePackEntry {
-                        uuid: Uuid::from_wit(&p.id),
-                        version: p.version,
-                        size: p.size,
-                        download_url: p.download_url,
+                .map(
+                    |p| pumpkin_protocol::bedrock::client::resource_packs_info::PackInfoData {
+                        pack_id_version: PackIdVersion::new(Uuid::from_wit(&p.id), p.version),
+                        pack_size: p.size,
+                        cdn_url: p.download_url,
                         content_key: p.content_key.unwrap_or_default(),
-                        sub_pack_name: p.sub_pack_name.unwrap_or_default(),
-                        content_id: p.content_id.unwrap_or_default(),
+                        subpack_name: p.sub_pack_name.unwrap_or_default(),
+                        content_identity: p.content_id.unwrap_or_default(),
                         has_scripts: p.has_scripts,
-                        addon_pack: p.addon_pack,
-                        rtx_enabled: p.rtx_enabled,
-                    }
-                })
+                        is_addon_pack: p.addon_pack,
+                        is_ray_tracing_capable: p.rtx_enabled,
+                    },
+                )
                 .collect();
 
             let world_template_id = info
@@ -3696,9 +3696,11 @@ impl pumpkin::plugin::player::HostBedrockPlayer for PluginHostState {
                     resource_pack_required: info.required,
                     has_addon_packs: info.has_addon_packs,
                     has_scripts: info.has_scripts,
-                    is_vibrant_visuals_force_disabled: info.is_vibrant_visuals_force_disabled,
-                    world_template_id,
-                    world_template_version: info.world_template_version.unwrap_or_default(),
+                    force_disable_vibrant_visuals: info.is_vibrant_visuals_force_disabled,
+                    world_template_id_and_version: PackIdVersion::new(
+                        world_template_id,
+                        info.world_template_version.unwrap_or_default(),
+                    ),
                     resource_packs: entries,
                 };
 

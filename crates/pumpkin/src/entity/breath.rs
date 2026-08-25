@@ -166,7 +166,7 @@ impl BreathManager {
         let air = self.air_supply.load(Ordering::Relaxed).clamp(0, MAX_AIR);
 
         let mut bedrock_meta =
-            pumpkin_protocol::bedrock::client::set_actor_data::EntityMetadata::new();
+            pumpkin_protocol::bedrock::client::set_actor_data::SyncedActorDataList::new();
         bedrock_meta.set(
             pumpkin_protocol::bedrock::client::set_actor_data::entity_data_key::AIR_SUPPLY,
             pumpkin_protocol::bedrock::client::set_actor_data::MetadataValue::Short(air as i16),

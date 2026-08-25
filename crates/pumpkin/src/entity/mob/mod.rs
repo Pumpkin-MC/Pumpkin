@@ -603,7 +603,7 @@ pub trait Mob: EntityBase + Send + Sync {
         &self,
     ) -> EntityBaseFuture<
         '_,
-        Option<pumpkin_protocol::bedrock::client::set_actor_data::EntityMetadata>,
+        Option<pumpkin_protocol::bedrock::client::set_actor_data::SyncedActorDataList>,
     > {
         Box::pin(async { None })
     }

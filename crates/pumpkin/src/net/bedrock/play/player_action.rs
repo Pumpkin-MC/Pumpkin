@@ -20,10 +20,10 @@ impl BedrockClient {
         player.update_last_action_time();
 
         match packet.action {
-            PlayerAction::StartBreak
-            | PlayerAction::CreativePlayerDestroyBlock
+            PlayerAction::StartDestroyBlock
+            | PlayerAction::CreativeDestroyBlock
             | PlayerAction::ContinueDestroyBlock => {
-                let location = packet.block_pos;
+                let location = packet.block_position;
                 if !player.can_interact_with_block_at(&location, 1.0) {
                     return;
                 }
@@ -123,8 +123,8 @@ impl BedrockClient {
                     }
                 }
             }
-            action @ (PlayerAction::PredictDestroyBlock | PlayerAction::StopBreak) => {
-                let location = packet.block_pos;
+            action @ (PlayerAction::PredictDestroyBlock | PlayerAction::StopDestroyBlock) => {
+                let location = packet.block_position;
                 if !player.can_interact_with_block_at(&location, 1.0) {
                     return;
                 }
@@ -169,7 +169,7 @@ impl BedrockClient {
                         let runtime_id = pumpkin_data::BlockState::to_be_network_id(state.id);
                         self.enqueue_client_packet(&CUpdateBlock::new(location, runtime_id as u32))
                             .await;
-                        if matches!(action, PlayerAction::StopBreak) {
+                        if matches!(action, PlayerAction::StopDestroyBlock) {
                             player.stop_mining().await;
                         } else {
                             world
@@ -186,15 +186,15 @@ impl BedrockClient {
                                 .await;
                         }
                     }
-                } else if matches!(action, PlayerAction::StopBreak) {
+                } else if matches!(action, PlayerAction::StopDestroyBlock) {
                     player.stop_mining().await;
                 }
             }
-            PlayerAction::CrackBreak => {
+            PlayerAction::CrackBlock => {
                 // Don't do anything for this action. It is no longer used. Block
                 // cracking is done fully server-side.
             }
-            PlayerAction::AbortBreak => {
+            PlayerAction::AbortDestroyBlock => {
                 player.stop_mining().await;
             }
             PlayerAction::DropItem => {

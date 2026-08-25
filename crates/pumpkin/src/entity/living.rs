@@ -7,7 +7,7 @@ use pumpkin_inventory::build_equipment_slots;
 use pumpkin_inventory::player::player_inventory::PlayerInventory;
 use pumpkin_inventory::screen_handler::InventoryPlayer;
 use pumpkin_protocol::bedrock::client::take_item_actor::CTakeItemActor;
-use pumpkin_protocol::bedrock::server::actor_event::{ActorEventType, SActorEvent};
+use pumpkin_protocol::bedrock::server::actor_event::{ActorEventID, SActorEvent};
 use pumpkin_protocol::codec::var_ulong::VarULong;
 use pumpkin_util::GameMode;
 use pumpkin_util::Hand;
@@ -249,15 +249,16 @@ impl LivingEntity {
                 } else {
                     0
                 };
-                let be_packet = pumpkin_protocol::bedrock::client::CMobEquipment::new(
-                    self.entity_id() as u64,
-                    pumpkin_protocol::bedrock::network_item::NetworkItemStackDescriptor::from(
+
+                let be_packet = pumpkin_protocol::bedrock::client::CMobEquipment {
+                    target_runtime_id: (self.entity_id() as u64).into(),
+                    item: pumpkin_protocol::bedrock::network_item::NetworkItemStackDescriptor::from(
                         stack,
                     ),
-                    0,
-                    0,
-                    window_id,
-                );
+                    slot: 0,
+                    selected_slot: 0,
+                    container_id: window_id,
+                };
                 self.entity
                     .world
                     .load()
@@ -305,10 +306,10 @@ impl LivingEntity {
                 self.entity.entity_id.into(),
                 VarInt(stack_amount as i32),
             ),
-            &CTakeItemActor::new(
-                VarULong(item.entity_id as u64),
-                VarULong(self.entity.entity_id as u64),
-            ),
+            &CTakeItemActor {
+                item_runtime_id: VarULong(item.entity_id as u64),
+                actor_runtime_id: VarULong(self.entity.entity_id as u64),
+            },
         );
     }
 
@@ -343,10 +344,11 @@ impl LivingEntity {
                     .fetch_and(!mask, Ordering::Relaxed);
             }
 
-            let mut meta = pumpkin_protocol::bedrock::client::set_actor_data::EntityMetadata::new();
+            let mut meta =
+                pumpkin_protocol::bedrock::client::set_actor_data::SyncedActorDataList::new();
             meta.set(
                 pumpkin_protocol::bedrock::client::set_actor_data::entity_data_key::FLAGS,
-                pumpkin_protocol::bedrock::client::set_actor_data::MetadataValue::Long(
+                pumpkin_protocol::bedrock::client::set_actor_data::MetadataValue::Int64(
                     self.entity.bedrock_flags.load(Ordering::Relaxed),
                 ),
             );
@@ -712,16 +714,16 @@ impl LivingEntity {
             flag,
         );
 
-        let be_packet = pumpkin_protocol::bedrock::client::CMobEffect::new(
-            VarULong(self.entity.entity_id as u64),
-            pumpkin_protocol::bedrock::client::CMobEffect::EVENT_ADD,
-            VarInt(effect.effect_type.to_bedrock_id()),
-            VarInt(i32::from(effect.amplifier)),
-            effect.show_particles,
-            VarInt(effect.duration),
-            VarULong(0),
-            effect.ambient,
-        );
+        let be_packet = pumpkin_protocol::bedrock::client::CMobEffect {
+            target_runtime_id: VarULong(self.entity.entity_id as u64),
+            event_id: pumpkin_protocol::bedrock::client::CMobEffect::EVENT_ADD,
+            effect_id: VarInt(effect.effect_type.to_bedrock_id()),
+            effect_amplifier: VarInt(i32::from(effect.amplifier)),
+            show_particles: effect.show_particles,
+            effect_duration_ticks: VarInt(effect.duration),
+            tick: VarULong(0),
+            ambient: effect.ambient,
+        };
 
         let chunk_pos = self.entity.chunk_pos.load();
         self.entity
@@ -964,7 +966,7 @@ impl LivingEntity {
         );
         let be_packet = pumpkin_protocol::bedrock::server::animate::SAnimate {
             action: pumpkin_protocol::bedrock::server::animate::AnimateAction::SwingArm,
-            runtime_entity_id: pumpkin_protocol::codec::var_ulong::VarULong(entity_id as u64),
+            target_actor_runtime_id: pumpkin_protocol::codec::var_ulong::VarULong(entity_id as u64),
             data: 0.0,
             swing_source: None,
         };
@@ -1542,11 +1544,7 @@ impl LivingEntity {
             self.update_death_stats(&*dyn_self, cause).await;
 
             // Plays the death sound
-            world.send_entity_status(
-                &self.entity,
-                EntityStatus::Death,
-                Some(ActorEventType::Death),
-            );
+            world.send_entity_status(&self.entity, EntityStatus::Death, Some(ActorEventID::Death));
             let looting_level;
             let tool = if let Some(cause_ent) = cause {
                 if let Some(player) = cause_ent
@@ -1873,7 +1871,7 @@ impl LivingEntity {
                 self.entity.world.load().send_entity_status(
                     &self.entity,
                     EntityStatus::ProtectedFromDeath,
-                    Some(ActorEventType::InstantDeath),
+                    Some(ActorEventID::InstantDeath),
                 );
 
                 // Set Absorption, Regeneration, and Fire Resistance effects
@@ -2501,9 +2499,9 @@ impl EntityBase for LivingEntity {
                         - self.entity.yaw.load()
                 });
                 let hurt_event = SActorEvent {
-                    entity_runtime_id: VarULong(entity_id as u64),
-                    event_type: ActorEventType::Hurt,
-                    event_data: VarInt(0),
+                    target_runtime_id: VarULong(entity_id as u64),
+                    event_id: ActorEventID::Hurt,
+                    data: VarInt(0),
                     fire_at_position: None,
                 };
                 world
@@ -2912,7 +2910,7 @@ impl EntityBase for LivingEntity {
                     self.entity.world.load().send_entity_status(
                         &self.entity,
                         EntityStatus::Death,
-                        Some(ActorEventType::Death),
+                        Some(ActorEventID::Death),
                     );
                     self.entity.remove().await;
                 }

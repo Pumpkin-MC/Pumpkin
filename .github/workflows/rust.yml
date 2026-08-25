@@ -28,7 +28,6 @@ jobs:
   machete:
     name: Detect unused dependencies
     runs-on: ubuntu-latest
-    needs: [format]
     strategy:
       matrix:
         toolchain:
@@ -42,7 +41,6 @@ jobs:
   clippy_debug:
     name: Run lints (debug)
     runs-on: ubuntu-latest
-    needs: [machete]
     strategy:
       matrix:
         toolchain:
@@ -59,7 +57,6 @@ jobs:
   clippy_release:
     name: Run lints (release)
     runs-on: ubuntu-latest
-    needs: [machete]
     strategy:
       matrix:
         toolchain:
@@ -76,7 +73,7 @@ jobs:
   build_and_test:
     name: Build project and test
     runs-on: ${{ matrix.os }}
-    needs: [clippy_debug, clippy_release]
+    needs: [format, machete, clippy_debug, clippy_release]
     strategy:
       matrix:
         os:
@@ -124,17 +121,41 @@ jobs:
       - run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
       - uses: Swatinem/rust-cache@v2
       
+      - name: Install musl-tools (Linux only)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y musl-tools
+
       - name: Build Release
         shell: bash
         run: |
           cargo build --verbose --release
+          if [ "${{ runner.os }}" == "Linux" ]; then
+            if [ "${{ runner.arch }}" == "X64" ]; then
+              TARGET="x86_64-unknown-linux-musl"
+            elif [ "${{ runner.arch }}" == "ARM64" ]; then
+              TARGET="aarch64-unknown-linux-musl"
+            fi
+            rustup target add "$TARGET"
+            cargo build --verbose --release --target "$TARGET"
+          fi
           
       - name: Prepare artifacts
         shell: bash
         run: |
           mkdir -p dist
+          EXT=""
           if [ "${{ runner.os }}" == "Windows" ]; then EXT=".exe"; fi
           cp "target/release/pumpkin$EXT" "dist/pumpkin-${{ runner.arch }}-${{ runner.os }}$EXT"
+          if [ "${{ runner.os }}" == "Linux" ]; then
+            if [ "${{ runner.arch }}" == "X64" ]; then
+              TARGET="x86_64-unknown-linux-musl"
+            elif [ "${{ runner.arch }}" == "ARM64" ]; then
+              TARGET="aarch64-unknown-linux-musl"
+            fi
+            cp "target/$TARGET/release/pumpkin" "dist/pumpkin-${{ runner.arch }}-${{ runner.os }}-musl"
+          fi
       - name: Export executable
         uses: actions/upload-artifact@v7
         with:

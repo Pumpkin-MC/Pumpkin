@@ -21,8 +21,8 @@ use pumpkin_protocol::{
     bedrock::{
         BEDROCK_GAME_PACKET, SubClient,
         client::{
-            client_cache_miss_response::{CClientCacheMissResponse, CacheBlob},
-            disconnect_player::CDisconnectPlayer,
+            client_cache_miss_response::{CClientCacheMissResponse, MissingBlobData},
+            disconnect::CDisconnect,
             level_chunk::CLevelChunk,
         },
         packet_decoder::BedrockBatchDecoder,
@@ -32,13 +32,13 @@ use pumpkin_protocol::{
             client_cache_blob_status::SClientCacheBlobStatus,
             client_cache_status::SClientCacheStatus, command_request::SCommandRequest,
             container_close::SContainerClose, emote::SEmote, emote_list::SEmoteList,
-            interaction::SInteraction, inventory_transaction::SInventoryTransaction,
+            interact::SInteract, inventory_transaction::SInventoryTransaction,
             loading_screen::SLoadingScreen, login::SLogin, mob_equipment::SMobEquipment,
             packet_violation_warning::SPacketViolationWarning, player_action::SPlayerAction,
             player_auth_input::SPlayerAuthInput, request_ability::SRequestAbility,
             request_chunk_radius::SRequestChunkRadius,
             request_network_settings::SRequestNetworkSettings,
-            resource_pack_response::SResourcePackResponse, respawn::SRespawn,
+            resource_pack_client_response::SResourcePackClientResponse, respawn::SRespawn,
             set_local_player_as_initialized::SSetLocalPlayerAsInitialized,
             set_player_inventory_options::SSetPlayerInventoryOptions, text::SText,
         },
@@ -270,7 +270,7 @@ impl BedrockClient {
     }
 
     pub async fn kick(&self, reason: DisconnectReason, message: String) {
-        self.send_packet(&CDisconnectPlayer::new(reason as i32, message))
+        self.send_packet(&CDisconnect::new(reason as i32, message))
             .await;
         self.close().await;
     }
@@ -284,7 +284,7 @@ impl BedrockClient {
         send_packet: bool,
     ) {
         if send_packet {
-            self.send_packet(&CDisconnectPlayer {
+            self.send_packet(&CDisconnect {
                 reason: pumpkin_protocol::codec::var_int::VarInt(reason as i32),
                 skip_message,
                 message,
@@ -664,14 +664,14 @@ impl BedrockClient {
             SClientCacheStatus::PACKET_ID => {
                 let packet = SClientCacheStatus::read(reader)?;
                 self.client_cache_supported
-                    .store(packet.cache_supported, Ordering::Relaxed);
+                    .store(packet.is_cache_supported, Ordering::Relaxed);
             }
             SClientCacheBlobStatus::PACKET_ID => {
                 self.handle_client_cache_blob_status(SClientCacheBlobStatus::read(reader)?)
                     .await;
             }
-            SResourcePackResponse::PACKET_ID => {
-                self.handle_resource_pack_response(SResourcePackResponse::read(reader)?, server)
+            SResourcePackClientResponse::PACKET_ID => {
+                self.handle_resource_pack_response(SResourcePackClientResponse::read(reader)?, server)
                     .await;
             }
             SPlayerAuthInput::PACKET_ID => {
@@ -688,8 +688,8 @@ impl BedrockClient {
             pumpkin_protocol::bedrock::server::item_stack_request::SItemStackRequest::PACKET_ID => {
                 self.handle_item_stack_request(player, pumpkin_protocol::bedrock::server::item_stack_request::SItemStackRequest::read(reader)?).await;
             }
-            SInteraction::PACKET_ID => {
-                self.handle_interaction(player, SInteraction::read(reader)?, server)
+            SInteract::PACKET_ID => {
+                self.handle_interaction(player, SInteract::read(reader)?, server)
                     .await;
             }
             SContainerClose::PACKET_ID => {
@@ -762,9 +762,9 @@ impl BedrockClient {
                 let warning = SPacketViolationWarning::read(reader)?;
                 warn!(
                     violation_type = warning.violation_type.0,
-                    severity = warning.severity.0,
-                    packet_id = warning.packet_id.0,
-                    context = %warning.context,
+                    violation_severity = warning.violation_severity.0,
+                    violation_packet_id = warning.violation_packet_id.0,
+                    violation_context = %warning.violation_context,
                     "Bedrock client rejected a server packet"
                 );
             }
@@ -784,9 +784,9 @@ impl BedrockClient {
             let mut missing_blobs = Vec::with_capacity(packet.miss_hashes.len());
             for hash in packet.miss_hashes {
                 if let Some(payload) = cache.get(&hash) {
-                    missing_blobs.push(CacheBlob {
-                        hash,
-                        payload: payload.clone(),
+                    missing_blobs.push(MissingBlobData {
+                        blob_id: hash,
+                        blob_data: payload.clone(),
                     });
                 } else {
                     warn!("Client requested missing blob {hash:#x} not found in server cache");
@@ -795,10 +795,8 @@ impl BedrockClient {
             missing_blobs
         };
         if !missing_blobs.is_empty() {
-            self.send_packet(&CClientCacheMissResponse {
-                blobs: &missing_blobs,
-            })
-            .await;
+            self.send_packet(&CClientCacheMissResponse { missing_blobs })
+                .await;
         }
     }
 
