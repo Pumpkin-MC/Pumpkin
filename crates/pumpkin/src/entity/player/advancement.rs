@@ -491,8 +491,8 @@ impl PlayerAdvancement {
                 };
                 player
                     .send_packet(&CToastRequest {
-                        title: &TextComponent::translate(title_key, []).get_text(),
-                        content: &display.get_title().get_text(),
+                        title: TextComponent::translate(title_key, []).get_text(),
+                        content: display.get_title().get_text(),
                     })
                     .await;
             }

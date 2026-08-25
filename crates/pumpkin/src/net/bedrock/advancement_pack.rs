@@ -36,13 +36,13 @@ pub fn matches(resource_name: &str) -> bool {
     resource_name == ID_STRING || resource_name == RESOURCE_NAME
 }
 
-pub fn data_info() -> CResourcePackDataInfo<'static> {
+pub fn data_info() -> CResourcePackDataInfo {
     CResourcePackDataInfo {
-        resource_name: RESOURCE_NAME,
+        resource_name: RESOURCE_NAME.to_owned(),
         chunk_size: CHUNK_SIZE_U32,
         number_of_chunks: u32::try_from(DATA.len().div_ceil(CHUNK_SIZE)).unwrap_or(u32::MAX),
         file_size: u64::try_from(DATA.len()).unwrap_or(u64::MAX),
-        file_hash: HASH.as_slice(),
+        file_hash: HASH.to_vec(),
         is_premium_pack: false,
         pack_type: RESOURCE_TYPE,
     }

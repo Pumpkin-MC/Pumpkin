@@ -7,8 +7,8 @@ use crate::serial::PacketWrite;
 impl PacketWrite for Uuid {
     fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
         let uuid = self.as_u128();
-        writer.write_all(&((uuid >> 64) as u64).to_le_bytes())?;
-        writer.write_all(&(uuid as u64).to_le_bytes())
+        ((uuid >> 64) as u64).write(writer)?;
+        (uuid as u64).write(writer)
     }
 }
 

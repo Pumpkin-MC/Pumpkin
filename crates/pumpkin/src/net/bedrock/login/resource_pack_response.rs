@@ -39,12 +39,10 @@ impl BedrockClient {
                     sub_pack_name: String::new(),
                 }];
                 if br_config.enabled {
-                    resource_packs.extend(br_config.packs.iter().map(|pack| {
-                        PackInstanceId {
-                            pack_id: pack.uuid.to_string(),
-                            version: pack.version.clone(),
-                            sub_pack_name: String::new(),
-                        }
+                    resource_packs.extend(br_config.packs.iter().map(|pack| PackInstanceId {
+                        pack_id: pack.uuid.to_string(),
+                        version: pack.version.clone(),
+                        sub_pack_name: String::new(),
                     }));
                 }
 
