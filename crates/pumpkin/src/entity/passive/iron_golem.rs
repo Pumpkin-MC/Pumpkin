@@ -3,7 +3,7 @@ use std::sync::{
     atomic::{AtomicBool, AtomicI32, Ordering},
 };
 
-use pumpkin_data::entity::EntityType;
+use pumpkin_data::entity::{EntityStatus, EntityType};
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::{Sound, SoundCategory};
@@ -15,8 +15,8 @@ use crate::entity::{
     Entity, EntityBase, EntityBaseFuture, NbtFuture,
     ai::goal::{
         active_target::ActiveTargetGoal, look_around::RandomLookAroundGoal,
-        look_at_entity::LookAtEntityGoal, melee_attack::MeleeAttackGoal, revenge::RevengeGoal,
-        wander_around::WanderAroundGoal,
+        look_at_entity::LookAtEntityGoal, melee_attack::MeleeAttackGoal,
+        offer_flower::OfferFlowerGoal, revenge::RevengeGoal, wander_around::WanderAroundGoal,
     },
     mob::{Mob, MobEntity},
     player::Player,
@@ -60,6 +60,7 @@ impl IronGolemEntity {
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
 
             goal_selector.add_goal(1, Box::new(MeleeAttackGoal::new(1.0, true)));
+            goal_selector.add_goal(5, Box::new(OfferFlowerGoal::new()));
             goal_selector.add_goal(6, Box::new(WanderAroundGoal::new(0.6)));
             goal_selector.add_goal(
                 7,
@@ -98,9 +99,29 @@ impl IronGolemEntity {
             None,
         );
     }
+
+    pub fn offer_flower(&self, offer: bool) {
+        let entity = self.get_entity();
+        let world = entity.world.load();
+        if offer {
+            self.offer_flower_tick.store(400, Ordering::Relaxed);
+            world.send_entity_status(entity, EntityStatus::OfferFlower, None);
+        } else {
+            self.offer_flower_tick.store(0, Ordering::Relaxed);
+            world.send_entity_status(entity, EntityStatus::StopOfferFlower, None);
+        }
+    }
+
+    #[must_use]
+    pub fn get_offer_flower_tick(&self) -> i32 {
+        self.offer_flower_tick.load(Ordering::Relaxed)
+    }
 }
 
 impl Mob for IronGolemEntity {
+    fn as_iron_golem(&self) -> Option<&IronGolemEntity> {
+        Some(self)
+    }
     fn mob_write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async move {
             nbt.put_bool("PlayerCreated", self.is_player_created());

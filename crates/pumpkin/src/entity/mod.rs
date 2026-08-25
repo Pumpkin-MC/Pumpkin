@@ -3436,8 +3436,16 @@ impl Entity {
         );
     }
 
-    #[allow(clippy::too_many_lines)]
     pub async fn remove_passenger(&self, passenger_id: i32) {
+        self.remove_passenger_internal(passenger_id, true).await;
+    }
+
+    pub async fn remove_passenger_before_teleport(&self, passenger_id: i32) {
+        self.remove_passenger_internal(passenger_id, false).await;
+    }
+
+    #[allow(clippy::too_many_lines)]
+    async fn remove_passenger_internal(&self, passenger_id: i32, reposition: bool) {
         let mut dismount_event =
             crate::plugin::api::events::entity::entity_dismount::EntityDismountEvent::new(
                 passenger_id,
@@ -3487,7 +3495,7 @@ impl Entity {
             // CSetPassengers. This prevents a race condition where the client receives
             // the dismount packet, sends stale position packets from the old riding
             // position, and the server processes them before the teleport arrives.
-            let teleport_id = if let Some(player) = passenger.get_player() {
+            let teleport_id = if reposition && let Some(player) = passenger.get_player() {
                 let id = player
                     .teleport_id_count
                     .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
@@ -3505,13 +3513,17 @@ impl Entity {
             passenger_entity.riding_cooldown.store(60, Relaxed);
             // TODO: world.emitGameEvent(passenger, GameEvent.ENTITY_DISMOUNT, vehicle.pos)
 
-            // Now send CSetPassengers — client movement is already blocked.
-            // Vanilla sends this directly to the dismounting player's connection,
-            // then broadcasts to other players separately.
+            // Send CSetPassengers directly to the dismounting player before broadcasting it.
             let world = self.world.load();
             let passengers_packet = CSetPassengers::new(VarInt(self.entity_id), &passenger_ids);
             if let Some(player) = passenger.get_player() {
-                player.send_client_packet(&passengers_packet).await;
+                if reposition {
+                    player.send_client_packet(&passengers_packet).await;
+                } else if let ClientPlatform::Java(client) = player.client.as_ref()
+                    && let Ok(data) = client.serialize_packet(&passengers_packet)
+                {
+                    client.send_packet_now(data).await;
+                }
                 world.broadcast_to_chunk_except(
                     chunk_pos,
                     &[player.get_entity().entity_uuid],
@@ -3519,6 +3531,10 @@ impl Entity {
                 );
             } else {
                 world.broadcast_to_chunk(chunk_pos, &passengers_packet);
+            }
+
+            if !reposition {
+                return;
             }
 
             // Calculate dismount directions and offsets (vanilla DismountHelper)

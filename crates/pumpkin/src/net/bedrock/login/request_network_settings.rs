@@ -6,13 +6,19 @@ impl BedrockClient {
         &self,
         packet: SRequestNetworkSettings,
         server: &Server,
-    ) {
-        if packet.protocol_version < CURRENT_BEDROCK_MC_PROTOCOL as i32 {
-            self.send_packet(&CPlayStatus::OutdatedClient).await;
-            return;
-        } else if packet.protocol_version > CURRENT_BEDROCK_MC_PROTOCOL as i32 {
-            self.send_packet(&CPlayStatus::OutdatedServer).await;
-            return;
+    ) -> bool {
+        let status = match packet
+            .protocol_version
+            .cmp(&(CURRENT_BEDROCK_MC_PROTOCOL as i32))
+        {
+            std::cmp::Ordering::Less => Some(CPlayStatus::OutdatedClient),
+            std::cmp::Ordering::Greater => Some(CPlayStatus::OutdatedServer),
+            std::cmp::Ordering::Equal => None,
+        };
+        if let Some(status) = status {
+            self.send_packet(&status).await;
+            self.close().await;
+            return false;
         }
 
         self.version.store(BedrockMinecraftVersion::from_protocol(
@@ -35,5 +41,6 @@ impl BedrockClient {
         ))
         .await;
         self.set_compression(compression).await;
+        true
     }
 }

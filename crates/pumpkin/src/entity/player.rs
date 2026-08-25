@@ -712,6 +712,8 @@ pub struct Player {
     pub open_container: AtomicCell<Option<u64>>,
     /// The block position of the currently open container screen (if any).
     pub open_container_pos: AtomicCell<Option<BlockPos>>,
+    /// The village position where Raid Omen was triggered.
+    pub raid_omen_position: AtomicCell<Option<BlockPos>>,
     /// The item currently being held by the player.
     pub carried_item: Mutex<Option<ItemStack>>,
     /// The player's abilities and special powers.
@@ -978,6 +980,7 @@ impl Player {
             enchantment_seed: AtomicI32::new(rand::random()),
             open_container: AtomicCell::new(None),
             open_container_pos: AtomicCell::new(None),
+            raid_omen_position: AtomicCell::new(None),
             tick_counter: AtomicI32::new(0),
             start_mining_time: AtomicI32::new(0),
             last_input: AtomicI8::new(0),
@@ -1781,8 +1784,29 @@ impl Player {
 
         let respawn_guard = self.respawn_point.lock().await;
         let respawn_point = respawn_guard.as_ref()?;
-        let world = self.world();
+        let world = if self.world().dimension == respawn_point.dimension {
+            self.world()
+        } else if let Some(server) = self.world().server.upgrade() {
+            server.get_world_from_dimension(&respawn_point.dimension)
+        } else {
+            self.world()
+        };
         let pos = &respawn_point.position;
+
+        // Ensure chunks around the spawn position are fetched
+        let min_chunk_x = (pos.0.x - 2) >> 4;
+        let max_chunk_x = (pos.0.x + 2) >> 4;
+        let min_chunk_z = (pos.0.z - 2) >> 4;
+        let max_chunk_z = (pos.0.z + 2) >> 4;
+        for cx in min_chunk_x..=max_chunk_x {
+            for cz in min_chunk_z..=max_chunk_z {
+                world
+                    .level
+                    .get_or_fetch_chunk(Vector2::new(cx, cz), |_| ())
+                    .await;
+            }
+        }
+
         let (block, state_id) = world.get_block_and_state_id(pos);
 
         // If force is set (from /spawnpoint command), validate position is safe
@@ -2503,6 +2527,7 @@ impl Player {
         // experience handling
         self.tick_experience().await;
         self.tick_health().await;
+        self.tick_raid_omen().await;
         self.tick_maps(server).await;
 
         // Anti-spam counter decay
@@ -3771,6 +3796,51 @@ impl Player {
         }
     }
 
+    pub async fn tick_raid_omen(&self) {
+        if self.is_spectator() {
+            return;
+        }
+
+        if let Some(bad_omen) = self.get_effect(&StatusEffect::BAD_OMEN).await
+            && !self.has_effect(&StatusEffect::RAID_OMEN).await
+        {
+            let world = self.world();
+            let player_pos = self.living_entity.entity.block_pos.load();
+            let pos_f64 = self.living_entity.entity.pos.load();
+
+            let village_pos = world
+                .villager_poi
+                .lock()
+                .await
+                .get_nearest_job_site(player_pos, 64)
+                .or_else(|| {
+                    world.raids.try_lock().ok().and_then(|raids| {
+                        raids
+                            .get_nearby_raid(&player_pos, 64.0 * 64.0)
+                            .map(|r| r.center)
+                    })
+                });
+
+            if let Some(pos) = village_pos {
+                self.living_entity
+                    .remove_effect(&StatusEffect::BAD_OMEN)
+                    .await;
+                self.set_raid_omen_position(pos);
+                let effect = Effect {
+                    effect_type: &StatusEffect::RAID_OMEN,
+                    duration: 600,
+                    amplifier: bad_omen.amplifier,
+                    ambient: false,
+                    show_particles: true,
+                    show_icon: true,
+                    blend: true,
+                };
+                self.add_effect(effect).await;
+                world.play_sound(Sound::BlockBellResonate, SoundCategory::Neutral, &pos_f64);
+            }
+        }
+    }
+
     pub async fn set_health(&self, health: f32) {
         self.living_entity.set_health(health);
         self.send_health().await;
@@ -4530,6 +4600,19 @@ impl Player {
     pub async fn get_active_effects(&self) -> Vec<Effect> {
         let effects = self.living_entity.active_effects.lock().await;
         effects.values().cloned().collect()
+    }
+
+    #[must_use]
+    pub fn get_raid_omen_position(&self) -> Option<BlockPos> {
+        self.raid_omen_position.load()
+    }
+
+    pub fn set_raid_omen_position(&self, pos: BlockPos) {
+        self.raid_omen_position.store(Some(pos));
+    }
+
+    pub fn clear_raid_omen_position(&self) {
+        self.raid_omen_position.store(None);
     }
 
     pub async fn send_active_effects(&self) {

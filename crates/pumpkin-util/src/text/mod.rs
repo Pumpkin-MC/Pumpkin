@@ -1383,6 +1383,47 @@ impl TextComponent {
         })
     }
 
+    /// Creates a new text component displaying the name of one or more entities found by a selector.
+    ///
+    /// # Arguments
+    /// - `selector` – The entity selector string (e.g. `@e[type=pig]`).
+    /// - `separator` – Optional separator string between multiple entity names.
+    ///
+    /// # Returns
+    /// A new `TextComponent` displaying entity names.
+    #[must_use]
+    pub fn entity_names<S: Into<Cow<'static, str>>, P: Into<Cow<'static, str>>>(
+        selector: S,
+        separator: Option<P>,
+    ) -> Self {
+        Self(TextComponentBase {
+            content: Box::new(TextContent::EntityNames {
+                selector: selector.into(),
+                separator: separator.map(Into::into),
+            }),
+            style: Box::new(Style::default()),
+            extra: vec![],
+        })
+    }
+
+    /// Creates a new text component displaying a keybind identifier.
+    ///
+    /// # Arguments
+    /// - `keybind` – The keybind identifier (e.g. `key.jump`, `key.forward`).
+    ///
+    /// # Returns
+    /// A new `TextComponent` displaying the configured key.
+    #[must_use]
+    pub fn keybind<K: Into<Cow<'static, str>>>(keybind: K) -> Self {
+        Self(TextComponentBase {
+            content: Box::new(TextContent::Keybind {
+                keybind: keybind.into(),
+            }),
+            style: Box::new(Style::default()),
+            extra: vec![],
+        })
+    }
+
     /// Appends a child component to this component.
     ///
     /// # Arguments

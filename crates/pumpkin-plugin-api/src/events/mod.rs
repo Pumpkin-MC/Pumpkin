@@ -18,6 +18,8 @@ use crate::{Context, Result, Server, wit::pumpkin::plugin::event::EventType};
 
 /// Block events.
 pub mod block;
+/// Dialog events.
+pub mod dialog;
 /// Enchantment events.
 pub mod enchantment;
 /// Entity events.
@@ -40,6 +42,7 @@ pub mod vehicle;
 pub mod world;
 
 pub use block::*;
+pub use dialog::*;
 pub use enchantment::*;
 pub use entity::*;
 pub use hanging::*;

@@ -483,6 +483,7 @@ impl PositionFlag {
     }
 }
 
+#[derive(Clone, Debug)]
 pub enum Label {
     BuiltIn(LinkType),
     TextComponent(Box<TextComponent>),
@@ -523,7 +524,7 @@ impl<'a> Link<'a> {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 #[repr(i32)]
 pub enum LinkType {
     BugReport = 0,

@@ -473,4 +473,14 @@ impl Navigator {
     pub fn is_idle(&self) -> bool {
         self.is_idle.load(Ordering::Relaxed)
     }
+
+    #[must_use]
+    pub const fn get_path(&self) -> Option<&Path> {
+        self.current_path.as_ref()
+    }
+
+    #[must_use]
+    pub const fn get_path_mut(&mut self) -> Option<&mut Path> {
+        self.current_path.as_mut()
+    }
 }

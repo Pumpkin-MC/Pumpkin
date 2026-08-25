@@ -25,6 +25,7 @@ use crate::{
 
 pub mod block;
 pub mod cleanup;
+pub mod dialog;
 pub mod enchantment;
 pub mod entity;
 pub mod hanging;

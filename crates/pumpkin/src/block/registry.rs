@@ -1,4 +1,4 @@
-use crate::block::blocks::amethyst::AmethystBlock;
+use crate::block::blocks::amethyst::{AmethystBlock, BuddingAmethystBlock};
 use crate::block::blocks::anvil::AnvilBlock;
 use crate::block::blocks::banners::BannerBlock;
 use crate::block::blocks::barrel::BarrelBlock;
@@ -46,15 +46,18 @@ use crate::block::blocks::glazed_terracotta::GlazedTerracottaBlock;
 use crate::block::blocks::grass_block::GrassBlock;
 use crate::block::blocks::grindstone::GrindstoneBlock;
 use crate::block::blocks::hay::HayBlock;
+use crate::block::blocks::ice::{FrostedIceBlock, IceBlock};
 use crate::block::blocks::infested::InfestedBlock;
 use crate::block::blocks::iron_bars::IronBarsBlock;
 use crate::block::blocks::jigsaw::JigsawBlock;
+use crate::block::blocks::leaves::LeavesBlock;
 use crate::block::blocks::logs::LogBlock;
 use crate::block::blocks::loom::LoomBlock;
 use crate::block::blocks::magma::MagmaBlock;
 use crate::block::blocks::mangrove_roots::MangroveRootsBlock;
 use crate::block::blocks::nether_portal::NetherPortalBlock;
 use crate::block::blocks::note::NoteBlock;
+use crate::block::blocks::nylium::NyliumBlock;
 use crate::block::blocks::piston::piston::PistonBlock;
 use crate::block::blocks::piston::piston_extension::PistonExtensionBlock;
 use crate::block::blocks::piston::piston_head::PistonHeadBlock;
@@ -67,6 +70,7 @@ use crate::block::blocks::plant::cactus::CactusBlock;
 use crate::block::blocks::plant::cactus_flower::CactusFlowerBlock;
 use crate::block::blocks::plant::chorus_flower::ChorusFlowerBlock;
 use crate::block::blocks::plant::chorus_plant::ChorusPlantBlock;
+use crate::block::blocks::plant::cocoa::CocoaBlock;
 use crate::block::blocks::plant::crop::beetroot::BeetrootBlock;
 use crate::block::blocks::plant::crop::carrot::CarrotBlock;
 use crate::block::blocks::plant::crop::nether_wart::NetherWartBlock;
@@ -75,12 +79,14 @@ use crate::block::blocks::plant::crop::sweet_berry_bush::SweetBerryBushBlock;
 use crate::block::blocks::plant::crop::torch_flower::TorchFlowerBlock;
 use crate::block::blocks::plant::crop::wheat::WheatBlock;
 use crate::block::blocks::plant::dry_vegetation::DryVegetationBlock;
+use crate::block::blocks::plant::eyeblossom::EyeblossomBlock;
 use crate::block::blocks::plant::flower::FlowerBlock;
 use crate::block::blocks::plant::flowerbed::FlowerbedBlock;
 use crate::block::blocks::plant::fungus::FungusBlock;
 use crate::block::blocks::plant::kelp::KelpBlock;
 use crate::block::blocks::plant::leaf_litter::LeafLitterBlock;
 use crate::block::blocks::plant::lily_pad::LilyPadBlock;
+use crate::block::blocks::plant::mangrove_propagule::MangrovePropaguleBlock;
 use crate::block::blocks::plant::mushroom_plant::MushroomPlantBlock;
 use crate::block::blocks::plant::nether_sprouts::NetherSproutsBlock;
 use crate::block::blocks::plant::roots::RootsBlock;
@@ -203,6 +209,10 @@ use crate::block::blocks::shulker_box::ShulkerBoxBlock;
 use crate::block::blocks::skull_block::SkullBlock;
 use crate::block::blocks::smoker::SmokerBlock;
 use crate::block::blocks::stonecutter::StonecutterBlock;
+use crate::block::blocks::weathering_copper::{
+    WeatheringCopperBlock, WeatheringCopperDoorBlock, WeatheringCopperGrateBlock,
+    WeatheringCopperSlabBlock, WeatheringCopperStairBlock, WeatheringCopperTrapDoorBlock,
+};
 
 #[must_use]
 #[expect(clippy::too_many_lines)]
@@ -214,9 +224,11 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(BeaconBlock);
     manager.register(BedBlock);
     manager.register(SaplingBlock);
+    manager.register(MangrovePropaguleBlock);
     manager.register(CactusBlock);
     manager.register(ChorusFlowerBlock);
     manager.register(ChorusPlantBlock);
+    manager.register(CocoaBlock);
     manager.register(CarpetBlock);
     manager.register(CarvedPumpkinBlock);
     manager.register(WitherSkeletonSkullBlock);
@@ -243,10 +255,13 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(GlazedTerracottaBlock);
     manager.register(HayBlock);
     manager.register(GrindstoneBlock);
+    manager.register(IceBlock);
+    manager.register(FrostedIceBlock);
     manager.register(IronBarsBlock);
     manager.register(InfestedBlock);
     manager.register(JukeboxBlock);
     manager.register(LogBlock);
+    manager.register(LeavesBlock);
     manager.register(BambooBlock);
     manager.register(BambooSaplingBlock);
     manager.register(BannerBlock);
@@ -275,6 +290,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(BrushableBlock);
     manager.register(BushBlock);
     manager.register(FlowerBlock);
+    manager.register(EyeblossomBlock);
     manager.register(PotatoBlock);
     manager.register(BeetrootBlock);
     manager.register(TorchFlowerBlock);
@@ -299,6 +315,14 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(SpongeBlock);
     manager.register(PumpkinBlock);
     manager.register(WetSpongeBlock);
+
+    // Weathering copper blocks
+    manager.register(WeatheringCopperBlock);
+    manager.register(WeatheringCopperDoorBlock);
+    manager.register(WeatheringCopperGrateBlock);
+    manager.register(WeatheringCopperSlabBlock);
+    manager.register(WeatheringCopperStairBlock);
+    manager.register(WeatheringCopperTrapDoorBlock);
     manager.register(CommandBlock);
     manager.register(JigsawBlock);
     manager.register(ComposterBlock);
@@ -344,8 +368,10 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(CoralPlantBlock);
     manager.register(CoralBlock);
     manager.register(AmethystBlock);
+    manager.register(BuddingAmethystBlock);
     manager.register(GrassBlock);
     manager.register(RootedDirtBlock);
+    manager.register(NyliumBlock);
     manager.register(BubbleColumnBlock);
 
     manager.register(FallingBlock);

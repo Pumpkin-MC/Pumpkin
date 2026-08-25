@@ -16,7 +16,14 @@ use crate::entity::{
         look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal, swim::SwimGoal,
         wander_around::WanderAroundGoal,
     },
-    mob::{Mob, MobEntity},
+    mob::{
+        Mob, MobEntity,
+        patrol::{PatrolData, PatrollingMonster},
+        raider::{
+            ObtainRaidLeaderBannerGoal, PathfindToRaidGoal, Raider, RaiderCelebrationGoal,
+            RaiderData, RaiderMoveThroughVillageGoal,
+        },
+    },
     projectile::evoker_fangs::EvokerFangsEntity,
     r#type::from_type,
 };
@@ -48,6 +55,7 @@ impl IllagerSpell {
 
 pub struct EvokerEntity {
     pub mob_entity: MobEntity,
+    pub raider_data: RaiderData,
     spell_casting_tick_count: AtomicI32,
     current_spell: AtomicU8,
     wololo_target_id: Arc<Mutex<Option<i32>>>,
@@ -58,6 +66,7 @@ impl EvokerEntity {
         let mob_entity = MobEntity::new(entity);
         let evoker = Self {
             mob_entity,
+            raider_data: RaiderData::default(),
             spell_casting_tick_count: AtomicI32::new(0),
             current_spell: AtomicU8::new(IllagerSpell::None as u8),
             wololo_target_id: Arc::new(Mutex::new(None)),
@@ -78,9 +87,13 @@ impl EvokerEntity {
 
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
             goal_selector.add_goal(1, Box::new(EvokerCastingSpellGoal::new(mob_weak.clone())));
+            goal_selector.add_goal(2, Box::new(ObtainRaidLeaderBannerGoal));
+            goal_selector.add_goal(3, Box::new(RaiderMoveThroughVillageGoal::new(1.05)));
+            goal_selector.add_goal(3, Box::new(PathfindToRaidGoal::default()));
             goal_selector.add_goal(4, Box::new(EvokerSummonSpellGoal::new(mob_weak.clone())));
             goal_selector.add_goal(5, Box::new(EvokerAttackSpellGoal::new(mob_weak.clone())));
             goal_selector.add_goal(6, Box::new(EvokerWololoSpellGoal::new(mob_weak)));
+            goal_selector.add_goal(7, Box::new(RaiderCelebrationGoal));
             goal_selector.add_goal(8, Box::new(WanderAroundGoal::new(0.6)));
             goal_selector.add_goal(
                 9,
@@ -141,14 +154,24 @@ impl EvokerEntity {
 }
 
 impl Mob for EvokerEntity {
+    fn as_patrolling_monster(&self) -> Option<&dyn PatrollingMonster> {
+        Some(self)
+    }
+
+    fn as_raider(&self) -> Option<&dyn Raider> {
+        Some(self)
+    }
+
     fn mob_write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async move {
+            self.write_raider_nbt(nbt);
             nbt.put_int("SpellTicks", self.get_spell_casting_time());
         })
     }
 
     fn mob_read_nbt<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async move {
+            self.read_raider_nbt(nbt);
             if let Some(ticks) = nbt.get_int("SpellTicks") {
                 self.set_spell_casting_time(ticks);
             }
@@ -167,6 +190,22 @@ impl Mob for EvokerEntity {
                     .store(ticks - 1, Ordering::Relaxed);
             }
         })
+    }
+}
+
+impl PatrollingMonster for EvokerEntity {
+    fn get_patrol_data(&self) -> &PatrolData {
+        &self.raider_data.patrol_data
+    }
+}
+
+impl Raider for EvokerEntity {
+    fn get_raider_data(&self) -> &RaiderData {
+        &self.raider_data
+    }
+
+    fn get_celebrate_sound(&self) -> Sound {
+        Sound::EntityEvokerCelebrate
     }
 }
 

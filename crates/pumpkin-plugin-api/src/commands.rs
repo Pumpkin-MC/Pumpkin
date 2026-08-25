@@ -109,9 +109,7 @@ impl Command {
             .unwrap_or_else(|e| e.into_inner())
             .insert(id, Box::new(handler));
 
-        self.execute_with_handler_id(id);
-
-        self
+        self.execute_with_handler_id(id)
     }
 }
 
@@ -129,9 +127,7 @@ impl CommandNode {
             .unwrap_or_else(|e| e.into_inner())
             .insert(id, Box::new(handler));
 
-        self.execute_with_handler_id(id);
-
-        self
+        self.execute_with_handler_id(id)
     }
 
     /// Attaches a server-side suggestion handler to this argument node.
@@ -147,9 +143,7 @@ impl CommandNode {
             .unwrap_or_else(|e| e.into_inner())
             .insert(id, Box::new(handler));
 
-        self.suggest_with_handler_id(id);
-
-        self
+        self.suggest_with_handler_id(id)
     }
 }
 

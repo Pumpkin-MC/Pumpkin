@@ -111,12 +111,14 @@ use crate::entity::projectile::eye_of_ender::EyeOfEnder;
 use crate::entity::projectile::fireball::FireballEntity;
 use crate::entity::projectile::firework_rocket::FireworkRocketEntity;
 use crate::entity::projectile::lingering_potion::LingeringPotionEntity;
+use crate::entity::projectile::llama_spit::LlamaSpitEntity;
 use crate::entity::projectile::shulker_bullet::ShulkerBulletEntity;
 use crate::entity::projectile::small_fireball::SmallFireballEntity;
 use crate::entity::projectile::snowball::SnowballEntity;
 use crate::entity::projectile::splash_potion::SplashPotionEntity;
 use crate::entity::projectile::trident::TridentEntity;
 use crate::entity::projectile::wind_charge::{WIND_CHARGE_GRAVITY, WindChargeEntity};
+use crate::entity::projectile::wither_skull::WitherSkullEntity;
 use crate::entity::tnt::TNTEntity;
 use crate::entity::vehicle::boat::BoatEntity;
 use crate::entity::vehicle::minecart::MinecartEntity;
@@ -275,6 +277,7 @@ pub fn from_type(
         }
         id if id == EntityType::FIREBALL.id => Arc::new(FireballEntity::new(entity)),
         id if id == EntityType::SMALL_FIREBALL.id => Arc::new(SmallFireballEntity::new(entity)),
+        id if id == EntityType::WITHER_SKULL.id => Arc::new(WitherSkullEntity::new(entity)),
         id if id == EntityType::WIND_CHARGE.id => {
             let thrown = ThrownItemEntity {
                 entity,
@@ -301,6 +304,7 @@ pub fn from_type(
         id if id == EntityType::FIREWORK_ROCKET.id => Arc::new(FireworkRocketEntity::new(entity)),
         id if id == EntityType::SPLASH_POTION.id => Arc::new(SplashPotionEntity::new(entity)),
         id if id == EntityType::LINGERING_POTION.id => Arc::new(LingeringPotionEntity::new(entity)),
+        id if id == EntityType::LLAMA_SPIT.id => Arc::new(LlamaSpitEntity::new(entity)),
         id if id == EntityType::EYE_OF_ENDER.id => Arc::new(EyeOfEnder::new(entity)),
         id if id == EntityType::ACACIA_BOAT.id
             || id == EntityType::ACACIA_CHEST_BOAT.id

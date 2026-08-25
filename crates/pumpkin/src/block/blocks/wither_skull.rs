@@ -88,6 +88,7 @@ impl BlockBehaviour for WitherSkeletonSkullBlock {
                             &EntityType::WITHER,
                         );
                         let wither = WitherEntity::new(entity);
+                        wither.make_invulnerable();
                         world.spawn_entity(wither).await;
                         return;
                     }
