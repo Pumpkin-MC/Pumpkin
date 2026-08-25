@@ -1587,6 +1587,12 @@ impl World {
         block_entities.par_chunks(16).for_each(|batch| {
             let _guard = be_handle.enter();
             for be in batch {
+                let Some(block_state) = self.get_block_state_if_loaded(&be.get_position()) else {
+                    continue;
+                };
+                if !be.is_valid_for_block_state(block_state) {
+                    continue;
+                }
                 be.tick(self);
             }
         });
@@ -6177,17 +6183,34 @@ impl World {
             return Some(entity);
         }
 
-        let nbt = self
+        let relative = block_pos.chunk_relative_position();
+        let (nbt, state_id) = self
             .level
             .read_chunk_sync(&chunk_pos, |chunk| {
-                chunk
+                let nbt = chunk
                     .pending_block_entities
                     .lock()
                     .unwrap_or_else(std::sync::PoisonError::into_inner)
                     .get(block_pos)
-                    .cloned()
+                    .cloned()?;
+                let state_id = chunk.section.get_block_absolute_y(
+                    relative.x as usize,
+                    relative.y,
+                    relative.z as usize,
+                )?;
+                Some((nbt, state_id))
             })
             .flatten()?;
+        let mut entity = block_entity_from_nbt(&nbt)?;
+        let block_state = BlockState::from_id(state_id);
+        if !entity.is_valid_for_block_state(block_state) {
+            debug!(
+                "Ignoring block entity {} at {block_pos:?}: block state {state_id} belongs to {}",
+                entity.resource_location(),
+                Block::from_state_id(state_id).name,
+            );
+            return None;
+        }
         if let Some(custom_data) = nbt
             .get_compound("PumpkinCustomData")
             .or_else(|| nbt.get_compound("BukkitValues"))
@@ -6195,7 +6218,9 @@ impl World {
             self.custom_block_entity_data
                 .insert(*block_pos, custom_data.clone());
         }
-        let entity = block_entity_from_nbt(&nbt)?;
+        if let Some(entity) = Arc::get_mut(&mut entity) {
+            entity.set_block_state(state_id);
+        }
         self.block_entities
             .entry(chunk_pos)
             .or_default()

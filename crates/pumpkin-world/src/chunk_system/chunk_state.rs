@@ -327,7 +327,7 @@ impl Chunk {
             x: proto_chunk.x,
             z: proto_chunk.z,
             dirty: AtomicBool::new(true),
-            block_ticks: ChunkTickScheduler::default(),
+            block_ticks: ChunkTickScheduler::from_iter(proto_chunk.block_ticks),
             fluid_ticks: ChunkTickScheduler::from_iter(proto_chunk.fluid_ticks),
             pending_block_entities: Mutex::new(pending_block_entities),
             status: proto_chunk.stage.into(),

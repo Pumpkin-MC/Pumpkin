@@ -155,7 +155,7 @@ pub async fn io_read_work(
                         break;
                     }
                 }
-                LoadedData::Missing(pos) | LoadedData::Error((pos, _)) => {
+                LoadedData::Missing(pos) => {
                     if send
                         .send((
                             pos,
@@ -164,6 +164,23 @@ pub async fn io_read_work(
                                 pos.y,
                                 &level.world_gen.load(),
                             )))),
+                        ))
+                        .is_err()
+                    {
+                        break;
+                    }
+                }
+                LoadedData::Error((pos, error)) => {
+                    let error = format!("Failed to read chunk from disk: {error}");
+                    tracing::error!("Chunk {pos:?} was not loaded: {error}");
+                    if send
+                        .send((
+                            pos,
+                            RecvChunk::GenerationFailure {
+                                pos,
+                                stage: StagedChunkEnum::Empty,
+                                error,
+                            },
                         ))
                         .is_err()
                     {

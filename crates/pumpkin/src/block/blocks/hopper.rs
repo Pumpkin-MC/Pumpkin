@@ -13,7 +13,7 @@ use crate::block::{
 use crate::world::World;
 
 use crate::block::entities::hopper::HopperBlockEntity;
-use pumpkin_data::block_properties::FacingHopper;
+use pumpkin_data::block_properties::{BlockProperties, FacingHopper};
 use pumpkin_data::{Block, BlockDirection, BlockState, BlockStateId, translation};
 use pumpkin_inventory::generic_container_screen_handler::create_hopper;
 use pumpkin_inventory::player::player_inventory::PlayerInventory;
@@ -134,6 +134,9 @@ impl BlockBehaviour for HopperBlock {
 
 fn check_powered_state(world: &Arc<World>, pos: &BlockPos, state_id: BlockStateId, block: &Block) {
     let signal = !block_receives_redstone_power(world, pos);
+    if !HopperLikeProperties::handles_block_id(Block::from_state_id(state_id).id) {
+        return;
+    }
     let mut state = HopperLikeProperties::from_state_id(state_id);
     if signal != state.enabled {
         state.enabled = signal;

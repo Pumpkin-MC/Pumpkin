@@ -103,6 +103,104 @@ mod test {
     }
 
     #[test]
+    fn loaded_chunk_state_survives_proto_chunk_round_trip() {
+        use crate::chunk_system::chunk_state::Chunk;
+        use crate::tick::{ScheduledTick, TickPriority};
+        use pumpkin_config::lighting::LightingEngineConfig;
+        use pumpkin_data::{
+            Block,
+            block_properties::{FacingHopper, HopperLikeProperties},
+            fluid::Fluid,
+        };
+        use pumpkin_nbt::compound::NbtCompound;
+        use pumpkin_util::math::position::BlockPos;
+
+        let world_gen = get_world_gen(
+            Seed(0),
+            Dimension::OVERWORLD,
+            true,
+            Vec::new(),
+            String::new(),
+        );
+        let mut staged = Chunk::Proto(Box::new(ProtoChunk::new(0, 0, &world_gen)));
+        staged.upgrade_to_level_chunk(&Dimension::OVERWORLD, &LightingEngineConfig::Default);
+        let Chunk::Level(chunk) = staged else {
+            unreachable!()
+        };
+
+        let hopper_pos = BlockPos::new(5, 64, 7);
+        let hopper_state = HopperLikeProperties {
+            enabled: true,
+            facing: FacingHopper::East,
+        }
+        .to_state_id(&Block::HOPPER);
+        chunk.set_block_absolute_y(5, 64, 7, hopper_state);
+        let mut hopper_nbt = NbtCompound::new();
+        hopper_nbt.put_string("id", "minecraft:hopper".to_string());
+        hopper_nbt.put_int("x", hopper_pos.0.x);
+        hopper_nbt.put_int("y", hopper_pos.0.y);
+        hopper_nbt.put_int("z", hopper_pos.0.z);
+        chunk
+            .pending_block_entities
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .insert(hopper_pos, hopper_nbt);
+        chunk.block_ticks.schedule_tick(
+            &ScheduledTick {
+                delay: 2,
+                priority: TickPriority::Normal,
+                position: hopper_pos,
+                value: &Block::HOPPER,
+            },
+            0,
+        );
+        let fluid_pos = BlockPos::new(1, 60, 2);
+        chunk.fluid_ticks.schedule_tick(
+            &ScheduledTick {
+                delay: 1,
+                priority: TickPriority::High,
+                position: fluid_pos,
+                value: &Fluid::WATER,
+            },
+            1,
+        );
+
+        let mut rebuilt = Chunk::Proto(Box::new(ProtoChunk::from_chunk_data(&chunk, &world_gen)));
+        rebuilt.upgrade_to_level_chunk(&Dimension::OVERWORLD, &LightingEngineConfig::Default);
+        let Chunk::Level(rebuilt) = rebuilt else {
+            unreachable!()
+        };
+
+        assert_eq!(
+            rebuilt.section.get_block_absolute_y(5, 64, 7),
+            Some(hopper_state)
+        );
+
+        let entities = rebuilt
+            .pending_block_entities
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        assert_eq!(entities.len(), 1);
+        assert_eq!(
+            entities
+                .get(&hopper_pos)
+                .and_then(|nbt| nbt.get_string("id")),
+            Some("minecraft:hopper")
+        );
+        drop(entities);
+
+        let block_ticks = rebuilt.block_ticks.to_vec();
+        assert_eq!(block_ticks.len(), 1);
+        assert_eq!(block_ticks[0].position, hopper_pos);
+        assert_eq!(block_ticks[0].value, &Block::HOPPER);
+
+        let fluid_ticks = rebuilt.fluid_ticks.to_vec();
+        assert_eq!(fluid_ticks.len(), 1);
+        assert_eq!(fluid_ticks[0].position, fluid_pos);
+        assert_eq!(fluid_ticks[0].value.id, Fluid::WATER.id);
+    }
+
+    #[test]
     fn structure_references_are_rebuilt_when_resuming_generation() {
         use crate::chunk_system::chunk_state::Chunk;
         use pumpkin_config::lighting::LightingEngineConfig;

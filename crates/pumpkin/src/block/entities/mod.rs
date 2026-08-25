@@ -1,6 +1,6 @@
 use std::{any::Any, sync::Arc};
 
-use pumpkin_data::{Block, block_properties::BLOCK_ENTITY_TYPES};
+use pumpkin_data::{Block, BlockState, block_properties::BLOCK_ENTITY_TYPES};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
 
@@ -109,6 +109,17 @@ pub trait BlockEntity: Any + Send + Sync {
             .iter()
             .position(|block_entity_name| *block_entity_name == name)
             .unwrap_or(0) as u32
+    }
+
+    fn is_valid_for_block_state(&self, block_state: &BlockState) -> bool {
+        BLOCK_ENTITY_TYPES
+            .get(block_state.block_entity_type as usize)
+            .is_some_and(|expected| {
+                self.resource_location()
+                    .split(':')
+                    .next_back()
+                    .is_some_and(|actual| actual == *expected)
+            })
     }
 
     /// Obtain NBT data for sending to the client in `ChunkData`
@@ -427,8 +438,10 @@ pub fn create_block_entity(
 
 #[cfg(test)]
 mod test {
-    use super::{BlockEntity, block_entity_from_nbt, furnace::FurnaceBlockEntity};
-    use pumpkin_data::{item::Item, item_stack::ItemStack};
+    use super::{
+        BlockEntity, block_entity_from_nbt, furnace::FurnaceBlockEntity, hopper::HopperBlockEntity,
+    };
+    use pumpkin_data::{Block, block_properties::FacingHopper, item::Item, item_stack::ItemStack};
     use pumpkin_nbt::compound::NbtCompound;
     use pumpkin_util::math::position::BlockPos;
     use pumpkin_world::inventory::Inventory;
@@ -457,5 +470,13 @@ mod test {
             assert_eq!(stack.get_item().id, Item::DIAMOND.id);
             assert_eq!(stack.item_count, 5);
         }
+    }
+
+    #[test]
+    fn block_entity_type_must_match_block_state() {
+        let hopper = HopperBlockEntity::new(BlockPos::new(0, 64, 0), FacingHopper::Down);
+
+        assert!(hopper.is_valid_for_block_state(Block::HOPPER.default_state));
+        assert!(!hopper.is_valid_for_block_state(Block::AIR.default_state));
     }
 }

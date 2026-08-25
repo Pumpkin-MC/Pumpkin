@@ -156,6 +156,7 @@ pub struct ProtoChunk {
     pub blending_data: Option<crate::generation::blender::blending_data::BlendingData>,
     pub pending_block_entities: Vec<NbtCompound>,
     pending_structure_entities: Vec<NbtCompound>,
+    pub block_ticks: Vec<ScheduledTick<&'static Block>>,
     pub fluid_ticks: Vec<ScheduledTick<&'static Fluid>>,
 }
 
@@ -269,6 +270,7 @@ impl ProtoChunk {
             blending_data: None,
             pending_block_entities: Vec::new(),
             pending_structure_entities: Vec::new(),
+            block_ticks: Vec::new(),
             fluid_ticks: Vec::new(),
         }
     }
@@ -288,6 +290,15 @@ impl ProtoChunk {
         proto_chunk
             .blending_data
             .clone_from(&chunk_data.blending_data);
+        proto_chunk.pending_block_entities = chunk_data
+            .pending_block_entities
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .values()
+            .cloned()
+            .collect();
+        proto_chunk.block_ticks = chunk_data.block_ticks.to_vec();
+        proto_chunk.fluid_ticks = chunk_data.fluid_ticks.to_vec();
 
         let section_data = &chunk_data.section;
         let heightmap_data = chunk_data
