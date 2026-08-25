@@ -353,39 +353,56 @@ impl BedrockClient {
                 }
             }
             TransactionData::UseItemOnEntity(data) => {
-                let target_runtime_id = data.target_entity_runtime_id.0 as i32;
-                // TODO: replace with consts, i'm too lazy
-                match data.action_type.0 {
-                    // Interact / Item Interact
-                    0 | 2 => {
-                        let world = player.world();
-                        if let Some(target) = world.get_entity_by_id(target_runtime_id) {
-                            let mut stack = player.inventory().held_item();
-                            if !target.interact(player, &mut stack) {
-                                let Some(server) = world.server.upgrade() else {
-                                    return;
-                                };
-                                server
-                                    .item_registry
-                                    .use_on_entity(&mut stack, player, target);
-                                player.inventory().set_held_item(stack);
-                            }
+                let action = match data.action_type.0 {
+                    // Bedrock does not distinguish an entity hit position here. ItemInteract is
+                    // therefore exposed as the general Interact action rather than InteractAt.
+                    0 | 2 => ActionType::Interact,
+                    1 => ActionType::Attack,
+                    action => {
+                        tracing::warn!("invalid UseItemOnEntity action type {action}");
+                        return;
+                    }
+                };
+                let Ok(target_runtime_id) = i32::try_from(data.target_entity_runtime_id.0) else {
+                    tracing::warn!(
+                        "invalid UseItemOnEntity target runtime ID {}",
+                        data.target_entity_runtime_id.0
+                    );
+                    return;
+                };
+
+                let world = player.world();
+                let Some(target) = world.get_entity_by_id(target_runtime_id) else {
+                    return;
+                };
+                let Some(server) = world.server.upgrade() else {
+                    return;
+                };
+
+                let mut event = PlayerInteractEntityEvent::new(
+                    player,
+                    target.clone(),
+                    action,
+                    None,
+                    player.get_entity().is_sneaking(),
+                );
+                server.plugin_manager.fire_blocking(&server, &mut event);
+                if event.cancelled {
+                    return;
+                }
+
+                match action {
+                    ActionType::Interact => {
+                        let mut stack = player.inventory().held_item();
+                        if !target.interact(player, &mut stack) {
+                            server
+                                .item_registry
+                                .use_on_entity(&mut stack, player, target);
+                            player.inventory().set_held_item(stack);
                         }
                     }
-                    // Attack
-                    1 => {
-                        let world = player.world();
-                        if let Some(target) = world.get_entity_by_id(target_runtime_id) {
-                            player.attack(&target);
-                        }
-                    }
-                    _ => {
-                        tracing::warn!(
-                            "invalid UseItemOnEntity action type {}",
-                            data.action_type.0
-                        );
-                        // Kick?
-                    }
+                    ActionType::Attack => player.attack(&target),
+                    ActionType::InteractAt => unreachable!("Bedrock does not send InteractAt"),
                 }
             }
             TransactionData::ReleaseItem(_data) => {
