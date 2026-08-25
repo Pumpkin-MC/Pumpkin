@@ -104,7 +104,7 @@ impl FireBlock {
 
         for dir in BlockDirection::all() {
             let neighbor_block = world.get_block(&pos.offset(dir.to_offset()));
-            if world.get_fluid(&pos.offset(dir.to_offset())).name != Fluid::EMPTY.name {
+            if *world.get_fluid(&pos.offset(dir.to_offset())) != Fluid::EMPTY {
                 continue; // Skip if there is a fluid
             }
             if let Some(flammable) = &neighbor_block.flammable {
