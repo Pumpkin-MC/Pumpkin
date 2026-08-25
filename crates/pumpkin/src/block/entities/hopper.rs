@@ -1,11 +1,11 @@
 use crate::block::entities::BlockEntity;
 use crate::entity::experience_orb::ExperienceOrbEntity;
 use crate::world::World;
-use pumpkin_data::{Block, BlockStateId};
 use pumpkin_data::block_properties::{BlockProperties, FacingHopper, HopperLikeProperties};
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::tag;
 use pumpkin_data::tag::Taggable;
+use pumpkin_data::{Block, BlockStateId};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
 use pumpkin_util::math::position::BlockPos;
