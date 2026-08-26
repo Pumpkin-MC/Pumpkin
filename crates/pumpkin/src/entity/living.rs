@@ -426,10 +426,10 @@ impl LivingEntity {
         self.health.store(clamped);
         // tell everyone entities health changed
         self.entity.send_meta_data(
-            &[Metadata::new(
-                tracked_data::living_entity::DATA_HEALTH_ID,
-                clamped,
-            )],
+            &[
+                Metadata::new(tracked_data::living_entity::DATA_HEALTH_ID, clamped),
+                Metadata::new(tracked_data::living_entity::HEALTH, clamped),
+            ],
             None,
         );
     }
@@ -479,13 +479,13 @@ impl LivingEntity {
         )
         .await;
 
-        // Send absorption metadata for players (visual yellow hearts)
+        // Send absorption metadata for players (visual yellow hearts).
         if self.entity.entity_type == &EntityType::PLAYER {
             self.entity.send_meta_data(
-                &[Metadata::new(
-                    tracked_data::player::DATA_PLAYER_ABSORPTION_ID,
-                    new_abs,
-                )],
+                &[
+                    Metadata::new(tracked_data::player::DATA_PLAYER_ABSORPTION_ID, new_abs),
+                    Metadata::new(tracked_data::player::ABSORPTION_AMOUNT, new_abs),
+                ],
                 None,
             );
         }
@@ -2027,10 +2027,16 @@ impl LivingEntity {
         self.absorption.store(0.0);
         // Send health metadata
         self.entity.send_meta_data(
-            &[Metadata::new(
-                tracked_data::living_entity::DATA_HEALTH_ID,
-                max_health,
-            )],
+            &[
+                Metadata::new(
+                    tracked_data::living_entity::DATA_HEALTH_ID,
+                    max_health,
+                ),
+                Metadata::new(
+                    tracked_data::living_entity::HEALTH,
+                    max_health,
+                ),
+            ],
             None,
         );
 
