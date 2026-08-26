@@ -114,19 +114,22 @@ jobs:
       - name: Install cargo-ndk
         run: cargo install cargo-ndk
       - uses: Swatinem/rust-cache@v2
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
       - name: Start Android emulator (API 24)
         uses: reactivecircus/android-emulator-runner@v2
+        env:
+          CARGO_NDK_PLATFORM: 24
         with:
           api-level: 24
           arch: arm64-v8a
           profile: Nexus 6
           target: google_apis
           disable-animations: true
-          script: echo "Emulator ready"
-      - name: Run tests with cargo ndk
-        env:
-          CARGO_NDK_PLATFORM: 24
-        run: cargo ndk-test -t arm64-v8a -- --verbose
+          script: cargo ndk-test -t arm64-v8a -- --verbose
   build_release:
     name: Build project in release
     runs-on: ${{ matrix.os }}
