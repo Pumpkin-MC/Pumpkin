@@ -227,7 +227,7 @@ jobs:
   draft_release:
     permissions:
       contents: write
-    needs: [build_release]
+    needs: [build_release, build_android_release]
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && github.ref == 'refs/heads/master'
     steps:

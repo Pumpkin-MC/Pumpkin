@@ -148,7 +148,7 @@ jobs:
     name: Publish GitHub Release
     permissions:
       contents: write
-    needs: [build_release]
+    needs: [build_release, build_android_release]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
