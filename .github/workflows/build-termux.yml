@@ -26,12 +26,15 @@ jobs:
         with:
           ndk-version: r27c
 
+      - name: Install cargo-ndk
+        run: cargo install cargo-ndk
+
       - name: Cache cargo dependencies
         uses: Swatinem/rust-cache@v2
 
       - name: Build release binary for Android AArch64
         run: |
-          cargo build --target aarch64-linux-android --release --locked
+          cargo ndk -t arm64-v8a build --release --locked
 
       - name: Upload binary artifact
         uses: actions/upload-artifact@v7
