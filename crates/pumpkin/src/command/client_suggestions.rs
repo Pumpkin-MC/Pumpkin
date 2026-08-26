@@ -6,7 +6,7 @@ use crate::command::node::{
 };
 use crate::entity::player::Player;
 use crate::server::Server;
-use futures::{StreamExt, stream};
+use pumpkin_protocol::bedrock::client::CommandPermissionLevel;
 use pumpkin_protocol::bedrock::client::available_commands::{
     CAvailableCommands, CommandData, EnumData, OverloadData, ParamData, arg_flags, arg_types,
 };
@@ -87,7 +87,7 @@ pub fn send_c_commands_packet(
 
     let mut root_node_children_second: Box<[VarInt]> = Box::new([]);
 
-    let source = &cmd_src.clone().into_source(server).await;
+    let source = &cmd_src.clone().into_source(server);
 
     for node in &dispatcher.tree {
         let children: Box<[VarInt]> = node
@@ -103,7 +103,7 @@ pub fn send_c_commands_packet(
             .and_then(|redirection| dispatcher.tree.resolve(redirection))
             .map(|id| resolve_node_id(id, node_id_offset, root_node_index) as i32);
 
-        let satisfies_requirements = node.requirements().evaluate(source).await;
+        let satisfies_requirements = node.requirements().evaluate(source);
 
         match node {
             AttachedNode::Root(_) => {
@@ -112,33 +112,31 @@ pub fn send_c_commands_packet(
                 // entirely. The nodes themselves stay in `proto_nodes` to keep
                 // every other node's indices valid; they simply become
                 // unreachable.
-                root_node_children_second = stream::iter(node.children_ref().values().copied())
-                    .filter_map(async |id| {
-                        let (disabled, requirement, name) = match &dispatcher.tree[id] {
+                root_node_children_second = node
+                    .children_ref()
+                    .values()
+                    .copied()
+                    .filter(|id| {
+                        let (disabled, requirement, name) = match &dispatcher.tree[*id] {
                             AttachedNode::Literal(child) => (
                                 dispatcher.is_disabled(&child.meta.literal_lowercase),
-                                child.owned.requirements.evaluate(source).await,
+                                child.owned.requirements.evaluate(source),
                                 child.meta.literal.as_ref(),
                             ),
                             AttachedNode::Command(child) => (
                                 dispatcher.is_disabled(&child.meta.literal_lowercase),
-                                child.owned.requirements.evaluate(source).await,
+                                child.owned.requirements.evaluate(source),
                                 child.meta.literal.as_ref(),
                             ),
                             _ => (false, true, ""),
                         };
-                        if disabled || !requirement {
-                            return None;
-                        }
-                        if name.starts_with("//") && dispatcher.tree.get(&name[1..]).is_some() {
-                            return None;
-                        }
-                        Some(id)
+                        (!disabled && requirement)
+                            || !name.starts_with("//")
+                            || dispatcher.tree.get(&name[1..]).is_none()
                     })
                     .map(|id| resolve_node_id(id, node_id_offset, root_node_index))
                     .map(|i| VarInt(i as i32))
                     .collect::<Vec<_>>()
-                    .await
                     .into_boxed_slice();
             }
             AttachedNode::Literal(literal_attached_node) => {
