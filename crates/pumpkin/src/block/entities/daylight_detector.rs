@@ -63,6 +63,14 @@ impl DaylightDetectorBlockEntity {
         use std::f32::consts::PI;
 
         let (block, state) = world.get_block_and_state(block_pos);
+        // The block at this position can have been broken/replaced by the time this tick
+        // actually runs (block removal and the world tick loop race on which one observes the
+        // other first), leaving a stale block entity behind until it gets cleaned up. Decoding
+        // properties against the new, unrelated block would either panic (debug) or silently
+        // produce garbage (release), so just skip this update instead.
+        if !DaylightDetectorProperties::handles_block_id(block.id) {
+            return;
+        }
         let mut props = DaylightDetectorProperties::from_state_id(state.id, block);
 
         let level = world.level.clone();

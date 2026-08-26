@@ -5,7 +5,6 @@ use pumpkin_data::damage::DamageType;
 use pumpkin_data::data_component_impl::DamageResistantImpl;
 use pumpkin_data::data_component_impl::DamageResistantType;
 use pumpkin_data::item_stack::ItemStack;
-use pumpkin_data::packet::CURRENT_MC_VERSION;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::bedrock::client::CAddItemActor;
 use pumpkin_protocol::bedrock::network_item::ItemStackWrapper;
@@ -662,19 +661,17 @@ impl EntityBase for ItemEntity {
                 client.enqueue_packet(data).await;
             }
 
-            if client.version.load() >= CURRENT_MC_VERSION {
-                let metadata = Metadata::new(
-                    pumpkin_data::tracked_data::item::ITEM,
-                    ItemStackSerializer::from(self.item_stack.lock().await.clone()),
-                );
-                let mut data = Vec::new();
-                if metadata.write(&mut data, &client.version.load()).is_ok() {
-                    data.push(255);
-                    let meta_packet =
-                        CSetEntityMetadata::new(self.entity.entity_id.into(), data.into());
-                    if let Ok(meta_data) = client.serialize_packet(&meta_packet) {
-                        client.enqueue_packet(meta_data).await;
-                    }
+            let metadata = Metadata::new(
+                pumpkin_data::tracked_data::item::ITEM,
+                ItemStackSerializer::from(self.item_stack.lock().await.clone()),
+            );
+            let mut data = Vec::new();
+            if metadata.write(&mut data, &client.version.load()).is_ok() {
+                data.push(255);
+                let meta_packet =
+                    CSetEntityMetadata::new(self.entity.entity_id.into(), data.into());
+                if let Ok(meta_data) = client.serialize_packet(&meta_packet) {
+                    client.enqueue_packet(meta_data).await;
                 }
             }
         })

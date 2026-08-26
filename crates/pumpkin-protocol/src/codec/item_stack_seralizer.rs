@@ -179,13 +179,24 @@ fn serialize_item_cost_with_id(
     Ok(())
 }
 
-fn read_component_id(read: &mut impl NetworkReadExt) -> Result<DataComponent, ReadingError> {
+fn read_component_id(
+    read: &mut impl NetworkReadExt,
+    version: JavaMinecraftVersion,
+) -> Result<DataComponent, ReadingError> {
     let id_val = read.get_var_int()?.0;
     let id_u8 = id_val
         .try_into()
         .map_err(|_| ReadingError::Message(format!("Invalid component ID: {id_val}")))?;
-    DataComponent::try_from_id(id_u8)
-        .ok_or_else(|| ReadingError::Message(format!("Unknown component ID: {id_val}")))
+    // The `minecraft:data_component_type` registry's wire ids are not stable across protocol
+    // versions: components added since the last pre-26.1 release shift every id after their
+    // insertion point, so an id sent by an older client must be resolved through the legacy
+    // table instead of the (26.1+) table `try_from_id` uses.
+    let component = if version < JavaMinecraftVersion::V_26_1 {
+        DataComponent::try_from_id_legacy(id_u8)
+    } else {
+        DataComponent::try_from_id(id_u8)
+    };
+    component.ok_or_else(|| ReadingError::Message(format!("Unknown component ID: {id_val}")))
 }
 
 fn decode_custom_name(component_data: &[u8]) -> Result<Box<dyn DataComponentImpl>, ReadingError> {
@@ -241,8 +252,9 @@ fn decode_component(
 
 fn read_length_prefixed_component(
     read: &mut impl NetworkReadExt,
+    version: JavaMinecraftVersion,
 ) -> Result<(DataComponent, Box<dyn DataComponentImpl>), ReadingError> {
-    let id = read_component_id(read)?;
+    let id = read_component_id(read, version)?;
     let byte_len = read.get_var_int()?.0;
     let byte_len: usize = byte_len
         .try_into()
@@ -301,6 +313,9 @@ impl ItemStackSerializer<'_> {
             let id = DataComponent::try_from_id(id_val as u8)
                 .ok_or_else(|| ReadingError::Message(format!("Unknown component ID: {id_val}")))?;
 
+            // The plain Slot format has no per-component byte-length prefix (that's only used
+            // by the length-prefixed variant, e.g. Set Creative Mode Slot); reading one here
+            // would desync the rest of the stream.
             let component_impl = deserialize(id, read)?;
             patch.push((id, Some(component_impl)));
         }
@@ -372,6 +387,7 @@ impl ItemStackSerializer<'_> {
 
     pub fn read_length_prefixed_optional(
         read: &mut impl NetworkReadExt,
+        version: &JavaMinecraftVersion,
     ) -> Result<ItemStackSerializer<'static>, ReadingError> {
         const MAX_COMPONENTS: i32 = 256;
 
@@ -405,12 +421,12 @@ impl ItemStackSerializer<'_> {
         let mut patch = Vec::with_capacity(total_components as usize);
 
         for _ in 0..num_to_add {
-            let (id, component_impl) = read_length_prefixed_component(read)?;
+            let (id, component_impl) = read_length_prefixed_component(read, *version)?;
             patch.push((id, Some(component_impl)));
         }
 
         for _ in 0..num_to_remove {
-            patch.push((read_component_id(read)?, None));
+            patch.push((read_component_id(read, *version)?, None));
         }
 
         let item_id_u16 = item_id
@@ -673,5 +689,41 @@ impl ItemStackTemplateSerializer<'_> {
 impl From<ItemStack> for ItemStackTemplateSerializer<'_> {
     fn from(item: ItemStack) -> Self {
         ItemStackTemplateSerializer(Cow::Owned(item))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pumpkin_data::data_component_impl::FireworksImpl;
+
+    // Regression test for a real 1.21.11 client's Set Creative Mode Slot packet: a plain
+    // firework rocket (flight_duration=3, no explosions) was misdecoded because component wire
+    // ids shifted between the pre-26.1 and 26.1+ `minecraft:data_component_type` registries -
+    // id 67 means `fireworks` on 1.21.11 but `lodestone_tracker` on 26.1+, and Pumpkin's id
+    // table only tracked the newer numbering until the legacy table was added.
+    #[test]
+    fn legacy_client_firework_component_id_resolves_correctly() {
+        // Captured bytes after the leading 2-byte slot field: item_count, item_id, num_to_add,
+        // num_to_remove, then one added component (id=67, len=2, data=[flight_duration=3,
+        // explosions_len=0]).
+        let mut bytes: &[u8] = &[0x40, 0xda, 0x09, 0x01, 0x00, 0x43, 0x02, 0x03, 0x00];
+
+        let stack = ItemStackSerializer::read_length_prefixed_optional(
+            &mut bytes,
+            &JavaMinecraftVersion::V_1_21_11,
+        )
+        .expect("legacy client's firework component should decode")
+        .to_stack();
+
+        let fireworks = stack
+            .patch
+            .iter()
+            .find(|(id, _)| *id == DataComponent::Fireworks)
+            .and_then(|(_, data)| data.as_ref())
+            .and_then(|data| data.as_any().downcast_ref::<FireworksImpl>())
+            .expect("component id 67 resolved to Fireworks, not LodestoneTracker");
+        assert_eq!(fireworks.flight_duration, 3);
+        assert!(fireworks.explosions.is_empty());
     }
 }
