@@ -21,59 +21,57 @@ const ARG_TARGETS: &str = "targets";
 struct Executor;
 
 impl CommandExecutor for Executor {
-    fn execute<'a>(
-        &'a self,
-        sender: &'a CommandSender,
-        server: &'a crate::server::Server,
-        args: &'a ConsumedArgs<'a>,
-    ) -> CommandResult<'a> {
-        Box::pin(async move {
-            let mut config = server.data.operator_config.write().await;
+    fn execute(
+        &self,
+        sender: &CommandSender,
+        server: &crate::server::Server,
+        args: &ConsumedArgs,
+    ) -> CommandResult {
+        let mut config = server.data.operator_config.write().unwrap();
 
-            let Some(Arg::GameProfiles(targets)) = args.get(&ARG_TARGETS) else {
-                return Err(InvalidConsumption(Some(ARG_TARGETS.into())));
-            };
+        let Some(Arg::GameProfiles(targets)) = args.get(&ARG_TARGETS) else {
+            return Err(InvalidConsumption(Some(ARG_TARGETS.into())));
+        };
 
-            let mut succeeded_deops: i32 = 0;
-            for profile in targets {
-                if let Some(op_index) = config.ops.iter().position(|o| o.uuid == profile.id) {
-                    config.ops.remove(op_index);
-                    succeeded_deops += 1;
+        let mut succeeded_deops: i32 = 0;
+        for profile in targets {
+            if let Some(op_index) = config.ops.iter().position(|o| o.uuid == profile.id) {
+                config.ops.remove(op_index);
+                succeeded_deops += 1;
 
-                    if let Some(player) = server.get_player_by_uuid(profile.id) {
-                        let command_dispatcher = server.command_dispatcher.load();
-                        player
-                            .set_permission_lvl(
-                                server,
-                                pumpkin_util::PermissionLvl::Zero,
-                                &command_dispatcher,
-                            )
-                            .await;
-                    }
-
-                    let msg = TextComponent::translate_cross(
-                        pumpkin_data::translation::java::COMMANDS_DEOP_SUCCESS,
-                        pumpkin_data::translation::bedrock::COMMANDS_DEOP_SUCCESS,
-                        [TextComponent::text(profile.name.clone())],
+                if let Some(player) = server.get_player_by_uuid(profile.id)
+                    && let Some(server_arc) = player.world().server.upgrade()
+                {
+                    let command_dispatcher = server_arc.command_dispatcher.load();
+                    player.set_permission_lvl(
+                        &server_arc,
+                        pumpkin_util::PermissionLvl::Zero,
+                        &command_dispatcher,
                     );
-                    sender.send_message(msg).await;
                 }
-            }
 
-            if succeeded_deops > 0 {
-                config.save();
+                let msg = TextComponent::translate_cross(
+                    pumpkin_data::translation::java::COMMANDS_DEOP_SUCCESS,
+                    pumpkin_data::translation::bedrock::COMMANDS_DEOP_SUCCESS,
+                    [TextComponent::text(profile.name.clone())],
+                );
+                sender.send_message(msg);
             }
+        }
 
-            if succeeded_deops == 0 {
-                Err(CommandError::CommandFailed(TextComponent::translate_cross(
-                    pumpkin_data::translation::java::COMMANDS_DEOP_FAILED,
-                    pumpkin_data::translation::bedrock::COMMANDS_DEOP_FAILED,
-                    [],
-                )))
-            } else {
-                Ok(succeeded_deops)
-            }
-        })
+        if succeeded_deops > 0 {
+            config.save();
+        }
+
+        if succeeded_deops == 0 {
+            Err(CommandError::CommandFailed(TextComponent::translate_cross(
+                pumpkin_data::translation::java::COMMANDS_DEOP_FAILED,
+                pumpkin_data::translation::bedrock::COMMANDS_DEOP_FAILED,
+                [],
+            )))
+        } else {
+            Ok(succeeded_deops)
+        }
     }
 }
 

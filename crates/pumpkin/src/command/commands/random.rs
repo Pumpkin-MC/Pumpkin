@@ -35,56 +35,51 @@ struct RandomExecutor {
 }
 
 impl CommandExecutor for RandomExecutor {
-    fn execute<'a>(&'a self, context: &'a CommandContext) -> CommandExecutorResult<'a> {
-        Box::pin(async move {
-            let bounds = IntRangeArgumentType::get(context, ARG_RANGE)?;
-            let min = bounds.min().unwrap_or(i32::MIN);
-            let max = bounds.max().unwrap_or(i32::MAX);
+    fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
+        let bounds = IntRangeArgumentType::get(context, ARG_RANGE)?;
+        let min = bounds.min().unwrap_or(i32::MIN);
+        let max = bounds.max().unwrap_or(i32::MAX);
 
-            let span = i64::from(max) - i64::from(min);
-            if span == 0 {
-                return Err(RANGE_TOO_SMALL_ERROR_TYPE.create_without_context());
+        let span = i64::from(max) - i64::from(min);
+        if span == 0 {
+            return Err(RANGE_TOO_SMALL_ERROR_TYPE.create_without_context());
+        }
+        if span >= MAX_RANGE_SPAN {
+            return Err(RANGE_TOO_LARGE_ERROR_TYPE.create_without_context());
+        }
+
+        let result = rand::random_range(min..=max);
+
+        if self.roll {
+            let msg = TextComponent::translate_cross(
+                translation::java::COMMANDS_RANDOM_ROLL,
+                translation::java::COMMANDS_RANDOM_ROLL,
+                [
+                    context.source.display_name.clone(),
+                    TextComponent::text(result.to_string()),
+                    TextComponent::text(min.to_string()),
+                    TextComponent::text(max.to_string()),
+                ],
+            );
+            for player in context.server().get_all_players() {
+                player.send_system_message(&msg);
             }
-            if span >= MAX_RANGE_SPAN {
-                return Err(RANGE_TOO_LARGE_ERROR_TYPE.create_without_context());
+            // Also show the roll on the console (or another non-player source).
+            if context.source.player_or_none().is_none() {
+                context.source.send_message(msg);
             }
+        } else {
+            context.source.send_feedback(
+                TextComponent::translate_cross(
+                    translation::java::COMMANDS_RANDOM_SAMPLE_SUCCESS,
+                    translation::java::COMMANDS_RANDOM_SAMPLE_SUCCESS,
+                    [TextComponent::text(result.to_string())],
+                ),
+                false,
+            );
+        }
 
-            let result = rand::random_range(min..=max);
-
-            if self.roll {
-                let msg = TextComponent::translate_cross(
-                    translation::java::COMMANDS_RANDOM_ROLL,
-                    translation::java::COMMANDS_RANDOM_ROLL,
-                    [
-                        context.source.display_name.clone(),
-                        TextComponent::text(result.to_string()),
-                        TextComponent::text(min.to_string()),
-                        TextComponent::text(max.to_string()),
-                    ],
-                );
-                for player in context.server().get_all_players() {
-                    player.send_system_message(&msg).await;
-                }
-                // Also show the roll on the console (or another non-player source).
-                if context.source.player_or_none().is_none() {
-                    context.source.send_message(msg).await;
-                }
-            } else {
-                context
-                    .source
-                    .send_feedback(
-                        TextComponent::translate_cross(
-                            translation::java::COMMANDS_RANDOM_SAMPLE_SUCCESS,
-                            translation::java::COMMANDS_RANDOM_SAMPLE_SUCCESS,
-                            [TextComponent::text(result.to_string())],
-                        ),
-                        false,
-                    )
-                    .await;
-            }
-
-            Ok(result)
-        })
+        Ok(result)
     }
 }
 

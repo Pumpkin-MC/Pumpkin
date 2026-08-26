@@ -1,4 +1,3 @@
-use std::pin::Pin;
 use std::sync::Arc;
 
 use crossbeam::atomic::AtomicCell;
@@ -38,15 +37,10 @@ impl BlockEntity for CreakingHeartBlockEntity {
         }
     }
 
-    fn write_nbt<'a>(
-        &'a self,
-        nbt: &'a mut NbtCompound,
-    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
-        Box::pin(async move {
-            if let Some(uuid) = self.creaking_uuid.load() {
-                nbt.put_string("creaking_uuid", uuid.to_string());
-            }
-        })
+    fn write_nbt(&self, nbt: &mut NbtCompound) {
+        if let Some(uuid) = self.creaking_uuid.load() {
+            nbt.put_string("creaking_uuid", uuid.to_string());
+        }
     }
 
     fn as_any(&self) -> &dyn std::any::Any {

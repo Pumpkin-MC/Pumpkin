@@ -1,5 +1,5 @@
 use crate::entity::player::Player;
-use crate::entity::{Entity, EntityBase, EntityBaseFuture, living::LivingEntity};
+use crate::entity::{Entity, EntityBase, living::LivingEntity};
 use crate::world::World;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item_stack::ItemStack;
@@ -26,11 +26,11 @@ impl LeashKnotEntity {
         self.pos
     }
 
-    pub async fn get_or_create(world: &Arc<World>, pos: BlockPos) -> Arc<Self> {
+    pub fn get_or_create(world: &Arc<World>, pos: BlockPos) -> Arc<Self> {
         if let Some(existing) = Self::get_knot(world, pos) {
             return existing;
         }
-        Self::create_knot(world, pos).await
+        Self::create_knot(world, pos)
     }
 
     pub fn get_knot(world: &Arc<World>, pos: BlockPos) -> Option<Arc<Self>> {
@@ -60,7 +60,7 @@ impl LeashKnotEntity {
         None
     }
 
-    pub async fn create_knot(world: &Arc<World>, pos: BlockPos) -> Arc<Self> {
+    pub fn create_knot(world: &Arc<World>, pos: BlockPos) -> Arc<Self> {
         let raw_pos = Vector3::new(
             f64::from(pos.0.x) + 0.5,
             f64::from(pos.0.y) + Self::OFFSET_Y,
@@ -69,9 +69,7 @@ impl LeashKnotEntity {
 
         let entity = Entity::new(world.clone(), raw_pos, &EntityType::LEASH_KNOT);
         let knot = Arc::new(Self::new(entity, pos));
-        world
-            .spawn_entity(knot.clone() as Arc<dyn EntityBase>)
-            .await;
+        world.spawn_entity(knot.clone() as Arc<dyn EntityBase>);
 
         world.play_sound(Sound::ItemLeadTied, SoundCategory::Neutral, &raw_pos);
 
@@ -84,6 +82,8 @@ impl LeashKnotEntity {
     }
 }
 
+use crate::server::Server;
+
 impl EntityBase for LeashKnotEntity {
     fn get_entity(&self) -> &Entity {
         &self.entity
@@ -93,65 +93,11 @@ impl EntityBase for LeashKnotEntity {
         None
     }
 
-    fn tick<'a>(
-        &'a self,
-        _caller: &'a Arc<dyn EntityBase>,
-        _server: &'a crate::server::Server,
-    ) -> EntityBaseFuture<'a, ()> {
-        Box::pin(async move {
-            let world = self.entity.world.load();
-            let block = world.get_block(&self.pos);
-            if !block.has_tag(&pumpkin_data::tag::Block::MINECRAFT_FENCES) {
-                let knot_id = self.entity.entity_id;
-                let search_dim = EntityDimensions {
-                    width: 32.0,
-                    height: 32.0,
-                    eye_height: 16.0,
-                };
-                let pos = self.entity.pos.load();
-                let search_box = BoundingBox::new_from_pos(pos.x, pos.y, pos.z, &search_dim);
-                let entities = world.get_entities_at_box(&search_box);
-
-                for entity_base in entities {
-                    let ent = entity_base.get_entity();
-                    let is_attached_to_knot = ent
-                        .leashed_to
-                        .try_lock()
-                        .ok()
-                        .and_then(|guard| {
-                            guard
-                                .as_ref()
-                                .map(|holder| holder.get_entity().entity_id == knot_id)
-                        })
-                        .unwrap_or(false);
-
-                    if is_attached_to_knot {
-                        ent.unleash().await;
-                        let lead_item = pumpkin_data::item_stack::ItemStack::new(
-                            1,
-                            &pumpkin_data::item::Item::LEAD,
-                        );
-                        world.drop_stack(&ent.block_pos.load(), lead_item).await;
-                    }
-                }
-
-                world.play_sound(Sound::ItemLeadUntied, SoundCategory::Neutral, &pos);
-
-                self.entity.remove().await;
-            }
-        })
-    }
-
-    fn interact<'a>(
-        &'a self,
-        player: &'a Arc<Player>,
-        _item_stack: &'a mut ItemStack,
-    ) -> EntityBaseFuture<'a, bool> {
-        Box::pin(async move {
-            let world = player.world();
+    fn tick<'a>(&'a self, _caller: &'a Arc<dyn EntityBase>, _server: &'a Server) {
+        let world = self.entity.world.load();
+        let block = world.get_block(&self.pos);
+        if !block.has_tag(&pumpkin_data::tag::Block::MINECRAFT_FENCES) {
             let knot_id = self.entity.entity_id;
-            let player_id = player.entity_id();
-
             let search_dim = EntityDimensions {
                 width: 32.0,
                 height: 32.0,
@@ -161,47 +107,88 @@ impl EntityBase for LeashKnotEntity {
             let search_box = BoundingBox::new_from_pos(pos.x, pos.y, pos.z, &search_dim);
             let entities = world.get_entities_at_box(&search_box);
 
-            let mut attached_mob = false;
-            let mut player_leashed_mobs = Vec::new();
+            for entity_base in entities {
+                let ent = entity_base.get_entity();
+                let is_attached_to_knot = ent
+                    .leashed_to
+                    .try_lock()
+                    .ok()
+                    .and_then(|guard| {
+                        guard
+                            .as_ref()
+                            .map(|holder| holder.get_entity().entity_id == knot_id)
+                    })
+                    .unwrap_or(false);
 
+                if is_attached_to_knot {
+                    ent.unleash();
+                    let lead_item = pumpkin_data::item_stack::ItemStack::new(
+                        1,
+                        &pumpkin_data::item::Item::LEAD,
+                    );
+                    world.drop_stack(&ent.block_pos.load(), lead_item);
+                }
+            }
+
+            world.play_sound(Sound::ItemLeadUntied, SoundCategory::Neutral, &pos);
+            self.entity.remove();
+        }
+    }
+
+    fn interact(&self, player: &Arc<Player>, _item_stack: &mut ItemStack) -> bool {
+        let world = player.world();
+        let knot_id = self.entity.entity_id;
+        let player_id = player.entity_id();
+
+        let search_dim = EntityDimensions {
+            width: 32.0,
+            height: 32.0,
+            eye_height: 16.0,
+        };
+        let pos = self.entity.pos.load();
+        let search_box = BoundingBox::new_from_pos(pos.x, pos.y, pos.z, &search_dim);
+        let entities = world.get_entities_at_box(&search_box);
+
+        let mut attached_mob = false;
+        let mut player_leashed_mobs = Vec::new();
+
+        for entity_base in &entities {
+            let ent = entity_base.get_entity();
+            if let Ok(guard) = ent.leashed_to.try_lock()
+                && let Some(holder) = guard.as_ref()
+                && holder.get_entity().entity_id == player_id
+            {
+                player_leashed_mobs.push(ent);
+            }
+        }
+
+        if let Some(self_knot) = Self::get_knot(&world, self.pos) {
+            for mob in player_leashed_mobs {
+                mob.leash_to(self_knot.clone() as Arc<dyn EntityBase>);
+                attached_mob = true;
+            }
+        }
+
+        let mut any_dropped = false;
+        if !attached_mob {
             for entity_base in &entities {
                 let ent = entity_base.get_entity();
                 if let Ok(guard) = ent.leashed_to.try_lock()
                     && let Some(holder) = guard.as_ref()
-                    && holder.get_entity().entity_id == player_id
+                    && holder.get_entity().entity_id == knot_id
                 {
-                    player_leashed_mobs.push(ent);
+                    ent.leash_to(player.clone() as Arc<dyn EntityBase>);
+                    any_dropped = true;
                 }
             }
+        }
 
-            if let Some(self_knot) = Self::get_knot(&world, self.pos) {
-                for mob in player_leashed_mobs {
-                    mob.leash_to(self_knot.clone() as Arc<dyn EntityBase>).await;
-                    attached_mob = true;
-                }
-            }
-
-            let mut any_dropped = false;
-            if !attached_mob {
-                for entity_base in &entities {
-                    let ent = entity_base.get_entity();
-                    if let Ok(guard) = ent.leashed_to.try_lock()
-                        && let Some(holder) = guard.as_ref()
-                        && holder.get_entity().entity_id == knot_id
-                    {
-                        ent.leash_to(player.clone() as Arc<dyn EntityBase>).await;
-                        any_dropped = true;
-                    }
-                }
-            }
-
-            if attached_mob || any_dropped {
-                self.play_placement_sound(&world);
-                true
-            } else {
-                false
-            }
-        })
+        if attached_mob || any_dropped {
+            self.play_placement_sound(&world);
+            true
+        } else {
+            false
+        }
     }
     fn cast_any(&self) -> &dyn std::any::Any {
         self

@@ -30,207 +30,201 @@ const UNPRIMED_TRIGGER_ERROR: CommandErrorType<0> = CommandErrorType::new(
 struct SimpleTriggerExecutor;
 
 impl CommandExecutor for SimpleTriggerExecutor {
-    fn execute<'a>(&'a self, context: &'a CommandContext) -> CommandExecutorResult<'a> {
-        Box::pin(async move {
-            let player = context.source.player_or_err()?;
-            let player_name = &player.gameprofile.name;
-            let objective_name = ObjectiveArgumentType::get(context, ARG_OBJECTIVE)?;
+    fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
+        let player = context.source.player_or_err()?;
+        let player_name = player.gameprofile.name.clone();
+        let objective_name = ObjectiveArgumentType::get(context, ARG_OBJECTIVE)?.to_string();
 
-            let world = context.world();
-            let mut scoreboard = world.scoreboard.lock().await;
+        let world = context.world().clone();
 
-            let objective = scoreboard
-                .get_objectives()
-                .get(objective_name)
-                .ok_or_else(|| INVALID_TRIGGER_ERROR.create_without_context())?;
+        let mut scoreboard = world
+            .scoreboard
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
 
-            if objective.criterion != "trigger" {
-                return Err(INVALID_TRIGGER_ERROR.create_without_context());
-            }
+        let Some(objective) = scoreboard.get_objectives().get(&objective_name) else {
+            return Err(INVALID_TRIGGER_ERROR.create_without_context());
+        };
 
-            let objective_display_name = objective.display_name.clone();
+        if objective.criterion != "trigger" {
+            return Err(INVALID_TRIGGER_ERROR.create_without_context());
+        }
 
-            let is_locked = scoreboard
-                .get_scores()
-                .get(objective_name)
-                .and_then(|m| m.get(player_name))
-                .is_none_or(|s| s.locked);
+        let objective_display_name = objective.display_name.clone();
 
-            if is_locked {
-                return Err(UNPRIMED_TRIGGER_ERROR.create_without_context());
-            }
+        let is_locked = scoreboard
+            .get_scores()
+            .get(&objective_name)
+            .and_then(|m| m.get(&player_name))
+            .is_none_or(|s| s.locked);
 
-            let current_value = scoreboard
-                .get_scores()
-                .get(objective_name)
-                .and_then(|m| m.get(player_name))
-                .map_or(0, |s| s.value.0);
+        if is_locked {
+            return Err(UNPRIMED_TRIGGER_ERROR.create_without_context());
+        }
 
-            let new_value = current_value + 1;
+        let current_value = scoreboard
+            .get_scores()
+            .get(&objective_name)
+            .and_then(|m| m.get(&player_name))
+            .map_or(0, |s| s.value.0);
 
-            let updated_score = ScoreboardScore {
-                entity_name: player_name.clone(),
-                objective_name: objective_name.to_string(),
-                value: VarInt(new_value),
-                display_name: None,
-                number_format: None,
-                locked: true,
-            };
+        let new_value = current_value + 1;
 
-            scoreboard.update_score(world, updated_score).await;
+        let updated_score = ScoreboardScore {
+            entity_name: player_name,
+            objective_name: objective_name.clone(),
+            value: VarInt(new_value),
+            display_name: None,
+            number_format: None,
+            locked: true,
+        };
 
-            context
-                .source
-                .send_feedback(
-                    TextComponent::translate_cross(
-                        translation::java::COMMANDS_TRIGGER_SIMPLE_SUCCESS,
-                        translation::java::COMMANDS_TRIGGER_SIMPLE_SUCCESS,
-                        [objective_display_name],
-                    ),
-                    false,
-                )
-                .await;
+        scoreboard.update_score(&world, updated_score);
 
-            Ok(new_value)
-        })
+        context.source.send_feedback(
+            TextComponent::translate_cross(
+                translation::java::COMMANDS_TRIGGER_SIMPLE_SUCCESS,
+                translation::java::COMMANDS_TRIGGER_SIMPLE_SUCCESS,
+                [objective_display_name],
+            ),
+            false,
+        );
+
+        Ok(1)
     }
 }
 
 struct AddTriggerExecutor;
 
 impl CommandExecutor for AddTriggerExecutor {
-    fn execute<'a>(&'a self, context: &'a CommandContext) -> CommandExecutorResult<'a> {
-        Box::pin(async move {
-            let player = context.source.player_or_err()?;
-            let player_name = &player.gameprofile.name;
-            let objective_name = ObjectiveArgumentType::get(context, ARG_OBJECTIVE)?;
-            let value = IntegerArgumentType::get(context, ARG_VALUE)?;
+    fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
+        let player = context.source.player_or_err()?;
+        let player_name = player.gameprofile.name.clone();
+        let objective_name = ObjectiveArgumentType::get(context, ARG_OBJECTIVE)?.to_string();
+        let value = IntegerArgumentType::get(context, ARG_VALUE)?;
 
-            let world = context.world();
-            let mut scoreboard = world.scoreboard.lock().await;
+        let world = context.world().clone();
 
-            let objective = scoreboard
-                .get_objectives()
-                .get(objective_name)
-                .ok_or_else(|| INVALID_TRIGGER_ERROR.create_without_context())?;
+        let mut scoreboard = world
+            .scoreboard
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
 
-            if objective.criterion != "trigger" {
-                return Err(INVALID_TRIGGER_ERROR.create_without_context());
-            }
+        let Some(objective) = scoreboard.get_objectives().get(&objective_name) else {
+            return Err(INVALID_TRIGGER_ERROR.create_without_context());
+        };
 
-            let objective_display_name = objective.display_name.clone();
+        if objective.criterion != "trigger" {
+            return Err(INVALID_TRIGGER_ERROR.create_without_context());
+        }
 
-            let is_locked = scoreboard
-                .get_scores()
-                .get(objective_name)
-                .and_then(|m| m.get(player_name))
-                .is_none_or(|s| s.locked);
+        let objective_display_name = objective.display_name.clone();
 
-            if is_locked {
-                return Err(UNPRIMED_TRIGGER_ERROR.create_without_context());
-            }
+        let is_locked = scoreboard
+            .get_scores()
+            .get(&objective_name)
+            .and_then(|m| m.get(&player_name))
+            .is_none_or(|s| s.locked);
 
-            let current_value = scoreboard
-                .get_scores()
-                .get(objective_name)
-                .and_then(|m| m.get(player_name))
-                .map_or(0, |s| s.value.0);
+        if is_locked {
+            return Err(UNPRIMED_TRIGGER_ERROR.create_without_context());
+        }
 
-            let new_value = current_value + value;
+        let current_value = scoreboard
+            .get_scores()
+            .get(&objective_name)
+            .and_then(|m| m.get(&player_name))
+            .map_or(0, |s| s.value.0);
 
-            let updated_score = ScoreboardScore {
-                entity_name: player_name.clone(),
-                objective_name: objective_name.to_string(),
-                value: VarInt(new_value),
-                display_name: None,
-                number_format: None,
-                locked: true,
-            };
+        let new_value = current_value + value;
 
-            scoreboard.update_score(world, updated_score).await;
+        let updated_score = ScoreboardScore {
+            entity_name: player_name,
+            objective_name: objective_name.clone(),
+            value: VarInt(new_value),
+            display_name: None,
+            number_format: None,
+            locked: true,
+        };
 
-            context
-                .source
-                .send_feedback(
-                    TextComponent::translate_cross(
-                        translation::java::COMMANDS_TRIGGER_ADD_SUCCESS,
-                        translation::java::COMMANDS_TRIGGER_ADD_SUCCESS,
-                        [
-                            objective_display_name,
-                            TextComponent::text(value.to_string()),
-                        ],
-                    ),
-                    false,
-                )
-                .await;
+        scoreboard.update_score(&world, updated_score);
 
-            Ok(new_value)
-        })
+        context.source.send_feedback(
+            TextComponent::translate_cross(
+                translation::java::COMMANDS_TRIGGER_ADD_SUCCESS,
+                translation::java::COMMANDS_TRIGGER_ADD_SUCCESS,
+                [
+                    objective_display_name,
+                    TextComponent::text(value.to_string()),
+                ],
+            ),
+            false,
+        );
+
+        Ok(value)
     }
 }
 
 struct SetTriggerExecutor;
 
 impl CommandExecutor for SetTriggerExecutor {
-    fn execute<'a>(&'a self, context: &'a CommandContext) -> CommandExecutorResult<'a> {
-        Box::pin(async move {
-            let player = context.source.player_or_err()?;
-            let player_name = &player.gameprofile.name;
-            let objective_name = ObjectiveArgumentType::get(context, ARG_OBJECTIVE)?;
-            let value = IntegerArgumentType::get(context, ARG_VALUE)?;
+    fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
+        let player = context.source.player_or_err()?;
+        let player_name = player.gameprofile.name.clone();
+        let objective_name = ObjectiveArgumentType::get(context, ARG_OBJECTIVE)?.to_string();
+        let value = IntegerArgumentType::get(context, ARG_VALUE)?;
 
-            let world = context.world();
-            let mut scoreboard = world.scoreboard.lock().await;
+        let world = context.world().clone();
 
-            let objective = scoreboard
-                .get_objectives()
-                .get(objective_name)
-                .ok_or_else(|| INVALID_TRIGGER_ERROR.create_without_context())?;
+        let mut scoreboard = world
+            .scoreboard
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
 
-            if objective.criterion != "trigger" {
-                return Err(INVALID_TRIGGER_ERROR.create_without_context());
-            }
+        let Some(objective) = scoreboard.get_objectives().get(&objective_name) else {
+            return Err(INVALID_TRIGGER_ERROR.create_without_context());
+        };
 
-            let objective_display_name = objective.display_name.clone();
+        if objective.criterion != "trigger" {
+            return Err(INVALID_TRIGGER_ERROR.create_without_context());
+        }
 
-            let is_locked = scoreboard
-                .get_scores()
-                .get(objective_name)
-                .and_then(|m| m.get(player_name))
-                .is_none_or(|s| s.locked);
+        let objective_display_name = objective.display_name.clone();
 
-            if is_locked {
-                return Err(UNPRIMED_TRIGGER_ERROR.create_without_context());
-            }
+        let is_locked = scoreboard
+            .get_scores()
+            .get(&objective_name)
+            .and_then(|m| m.get(&player_name))
+            .is_none_or(|s| s.locked);
 
-            let updated_score = ScoreboardScore {
-                entity_name: player_name.clone(),
-                objective_name: objective_name.to_string(),
-                value: VarInt(value),
-                display_name: None,
-                number_format: None,
-                locked: true,
-            };
+        if is_locked {
+            return Err(UNPRIMED_TRIGGER_ERROR.create_without_context());
+        }
 
-            scoreboard.update_score(world, updated_score).await;
+        let updated_score = ScoreboardScore {
+            entity_name: player_name,
+            objective_name: objective_name.clone(),
+            value: VarInt(value),
+            display_name: None,
+            number_format: None,
+            locked: true,
+        };
 
-            context
-                .source
-                .send_feedback(
-                    TextComponent::translate_cross(
-                        translation::java::COMMANDS_TRIGGER_SET_SUCCESS,
-                        translation::java::COMMANDS_TRIGGER_SET_SUCCESS,
-                        [
-                            objective_display_name,
-                            TextComponent::text(value.to_string()),
-                        ],
-                    ),
-                    false,
-                )
-                .await;
+        scoreboard.update_score(&world, updated_score);
 
-            Ok(value)
-        })
+        context.source.send_feedback(
+            TextComponent::translate_cross(
+                translation::java::COMMANDS_TRIGGER_SET_SUCCESS,
+                translation::java::COMMANDS_TRIGGER_SET_SUCCESS,
+                [
+                    objective_display_name,
+                    TextComponent::text(value.to_string()),
+                ],
+            ),
+            false,
+        );
+
+        Ok(value)
     }
 }
 

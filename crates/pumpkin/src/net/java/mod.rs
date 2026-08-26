@@ -475,6 +475,35 @@ impl JavaClient {
         }
     }
 
+    pub fn try_kick(&self, reason: &TextComponent) {
+        match self.connection_state.load() {
+            ConnectionState::Login => {
+                let packet = CLoginDisconnect::new(
+                    serde_json::to_string(&reason.0).unwrap_or_else(|_| String::new()),
+                );
+                if let Ok(data) = self.serialize_packet(&packet) {
+                    self.try_enqueue_packet(data);
+                }
+            }
+            ConnectionState::Config => {
+                let reason_text = reason.clone().get_text();
+                let packet = CConfigDisconnect::new(&reason_text);
+                if let Ok(data) = self.serialize_packet(&packet) {
+                    self.try_enqueue_packet(data);
+                }
+            }
+            ConnectionState::Play => {
+                let packet = CPlayDisconnect::new(reason);
+                if let Ok(data) = self.serialize_packet(&packet) {
+                    self.try_enqueue_packet(data);
+                }
+            }
+            _ => {}
+        }
+        debug!("Closing connection for {}", self.id);
+        self.close();
+    }
+
     pub async fn kick(&self, reason: TextComponent) {
         self.kick_explicit(&reason, true).await;
     }
@@ -715,9 +744,8 @@ impl JavaClient {
             id if id == SChangeGameMode::to_id(version) => {
                 self.handle_change_game_mode(
                     player,
-                    SChangeGameMode::read(&mut payload, &version)?,
-                )
-                .await;
+                    &SChangeGameMode::read(&mut payload, &version)?,
+                );
             }
             id if id == SChatAck::to_id(version) => {
                 let packet = SChatAck::read(&mut payload, &version)?;
@@ -775,8 +803,7 @@ impl JavaClient {
                     .await;
             }
             id if id == SPaddleBoat::to_id(version) => {
-                self.handle_paddle_boat(player, SPaddleBoat::read(&mut payload, &version)?)
-                    .await;
+                self.handle_paddle_boat(player, &SPaddleBoat::read(&mut payload, &version)?);
             }
             id if id == SInteract::to_id(version) => {
                 self.handle_interact(player, SInteract::read(&mut payload, &version)?, server)
@@ -902,13 +929,14 @@ impl JavaClient {
             id if id == SSetJigsawBlock::to_id(version) => {
                 self.handle_set_jigsaw_block(
                     player,
-                    SSetJigsawBlock::read(&mut payload, &version)?,
-                )
-                .await;
+                    &SSetJigsawBlock::read(&mut payload, &version)?,
+                );
             }
             id if id == SJigsawGenerate::to_id(version) => {
-                self.handle_jigsaw_generate(player, SJigsawGenerate::read(&mut payload, &version)?)
-                    .await;
+                self.handle_jigsaw_generate(
+                    player,
+                    &SJigsawGenerate::read(&mut payload, &version)?,
+                );
             }
             id if id == SPlayerCommand::to_id(version) => {
                 self.handle_player_command(
@@ -931,9 +959,10 @@ impl JavaClient {
                     .await;
             }
             id if id == SContainerButtonClick::to_id(version) => {
-                player
-                    .on_container_button_click(SContainerButtonClick::read(&mut payload, &version)?)
-                    .await;
+                player.on_container_button_click(&SContainerButtonClick::read(
+                    &mut payload,
+                    &version,
+                )?);
             }
             id if id == SSetHeldItem::to_id(version) => {
                 self.handle_set_held_item(
@@ -959,8 +988,7 @@ impl JavaClient {
                     .await;
             }
             id if id == SEditBook::to_id(version) => {
-                self.handle_edit_book(player, SEditBook::read(&mut payload, &version)?)
-                    .await;
+                self.handle_edit_book(player, &SEditBook::read(&mut payload, &version)?);
             }
             id if id == SUseItemOn::to_id(version) => {
                 self.handle_use_item_on(player, SUseItemOn::read(&mut payload, &version)?, server)
@@ -986,12 +1014,10 @@ impl JavaClient {
                     player,
                     server,
                     SCloseContainer::read(&mut payload, &version)?,
-                )
-                .await;
+                );
             }
             id if id == SChunkBatch::to_id(version) => {
-                self.handle_chunk_batch(player, SChunkBatch::read(&mut payload, &version)?)
-                    .await;
+                self.handle_chunk_batch(player, &SChunkBatch::read(&mut payload, &version)?);
             }
             id if id == SPlayerSession::to_id(version) => {
                 self.handle_chat_session_update(
@@ -1057,8 +1083,7 @@ impl JavaClient {
                 self.handle_seen_advancement(
                     player,
                     SSeenAdvancement::read(&mut payload, &version)?,
-                )
-                .await;
+                );
             }
             id if id == SPlayResourcePack::to_id(version) => {
                 self.handle_play_resource_pack_response(
@@ -1076,16 +1101,14 @@ impl JavaClient {
                     server,
                     player,
                     &SLockDifficulty::read(&mut payload, &version)?,
-                )
-                .await;
+                );
             }
             id if id == SChangeDifficulty::to_id(version) => {
                 self.handle_change_difficulty(
                     server,
                     player,
                     &SChangeDifficulty::read(&mut payload, &version)?,
-                )
-                .await;
+                );
             }
             id if id == SSetBeacon::to_id(version) => {
                 self.handle_set_beacon(player, &SSetBeacon::read(&mut payload, &version)?)

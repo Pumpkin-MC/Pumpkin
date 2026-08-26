@@ -219,6 +219,16 @@ impl ItemStack {
         }
     }
 
+    pub fn set_data_component<T: DataComponentImpl + 'static>(&mut self, component: T) {
+        let to_set_id = T::get_enum();
+        let boxed = Some(Box::new(component) as _);
+        if let Some((_, c)) = self.patch.iter_mut().find(|(id, _)| *id == to_set_id) {
+            *c = boxed;
+        } else {
+            self.patch.push((to_set_id, boxed));
+        }
+    }
+
     pub fn add_lore(&mut self, line: pumpkin_util::text::TextComponent) {
         let mut lines = self
             .get_data_component::<crate::data_component_impl::LoreImpl>()

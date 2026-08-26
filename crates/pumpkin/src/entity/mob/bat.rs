@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, AtomicI32, Ordering::Relaxed};
 
 use pumpkin_data::damage::DamageType;
@@ -11,10 +12,9 @@ use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::chunk::ChunkHeightmapType;
 use rand::RngExt;
-use tokio::sync::Mutex;
 
 use crate::entity::mob::{Mob, MobEntity};
-use crate::entity::{Entity, EntityBase, EntityBaseFuture, NbtFuture};
+use crate::entity::{Entity, EntityBase};
 use crate::world::World;
 
 const ROOSTING_FLAG: u8 = 1;
@@ -131,9 +131,12 @@ impl BatEntity {
         }
     }
 
-    async fn tick_flying(&self, world: &World, above_pos: &BlockPos, pos: &Vector3<f64>) {
+    fn tick_flying(&self, world: &World, above_pos: &BlockPos, pos: &Vector3<f64>) {
         let entity = &self.mob_entity.living_entity.entity;
-        let mut hanging_pos = self.hanging_position.lock().await;
+        let mut hanging_pos = self
+            .hanging_position
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
 
         if let Some(hp) = *hanging_pos {
             let hp_state = world.get_block_state(&hp);
@@ -205,64 +208,54 @@ impl BatEntity {
 }
 
 impl Mob for BatEntity {
-    fn mob_init_data_tracker(&self) -> EntityBaseFuture<'_, ()> {
-        Box::pin(async move {
-            let entity = self.get_entity();
-            let flags: u8 = if self.is_roosting() { ROOSTING_FLAG } else { 0 };
-            entity.send_meta_data(
-                &[Metadata::new(tracked_data::bat::DATA_ID_FLAGS, flags)],
-                None,
-            );
-        })
+    fn mob_init_data_tracker(&self) {
+        let entity = self.get_entity();
+        let flags: u8 = if self.is_roosting() { ROOSTING_FLAG } else { 0 };
+        entity.send_meta_data(
+            &[Metadata::new(tracked_data::bat::DATA_ID_FLAGS, flags)],
+            None,
+        );
     }
 
-    fn mob_write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
-        Box::pin(async move {
-            let flags: u8 = if self.is_roosting() { ROOSTING_FLAG } else { 0 };
-            nbt.put_byte("BatFlags", i8::try_from(flags).unwrap_or(0));
-        })
+    fn mob_write_nbt(&self, nbt: &mut NbtCompound) {
+        let flags: u8 = if self.is_roosting() { ROOSTING_FLAG } else { 0 };
+        nbt.put_byte("BatFlags", i8::try_from(flags).unwrap_or(0));
     }
 
-    fn mob_read_nbt<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
-        Box::pin(async move {
-            let flags = u8::try_from(nbt.get_byte("BatFlags").unwrap_or(0)).unwrap_or(0);
-            let roosting = (flags & ROOSTING_FLAG) != 0;
-            self.set_roosting(roosting);
-        })
+    fn mob_read_nbt(&self, nbt: &NbtCompound) {
+        let flags = u8::try_from(nbt.get_byte("BatFlags").unwrap_or(0)).unwrap_or(0);
+        let roosting = (flags & ROOSTING_FLAG) != 0;
+        self.set_roosting(roosting);
     }
 
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
     }
 
-    fn mob_tick<'a>(&'a self, _caller: &'a Arc<dyn EntityBase>) -> EntityBaseFuture<'a, ()> {
-        Box::pin(async move {
-            let entity = &self.mob_entity.living_entity.entity;
-            let block_pos = entity.block_pos.load();
-            let above_pos = BlockPos::new(block_pos.0.x, block_pos.0.y + 1, block_pos.0.z);
-            let world = entity.world.load();
-            let pos = entity.pos.load();
+    fn mob_tick<'a>(&'a self, _caller: &'a Arc<dyn EntityBase>) {
+        let entity = &self.mob_entity.living_entity.entity;
+        let block_pos = entity.block_pos.load();
+        let above_pos = BlockPos::new(block_pos.0.x, block_pos.0.y + 1, block_pos.0.z);
+        let world = entity.world.load();
+        let pos = entity.pos.load();
 
-            self.tick_ambient_sound(&world, &pos);
+        self.tick_ambient_sound(&world, &pos);
 
-            if self.is_roosting() {
-                self.tick_roosting(&world, &above_pos, &pos);
-            } else {
-                self.tick_flying(&world, &above_pos, &pos).await;
-            }
-        })
+        if self.is_roosting() {
+            self.tick_roosting(&world, &above_pos, &pos);
+        } else {
+            self.tick_flying(&world, &above_pos, &pos);
+        }
     }
 
-    fn post_tick(&self) -> EntityBaseFuture<'_, ()> {
-        Box::pin(async move {
-            if self.is_roosting() {
-                let entity = &self.mob_entity.living_entity.entity;
-                entity.velocity.store(Vector3::new(0.0, 0.0, 0.0));
-                let pos = entity.pos.load();
-                let snapped_y = (pos.y.floor()) + 1.0 - f64::from(entity.height());
-                entity.set_pos(Vector3::new(pos.x, snapped_y, pos.z));
-            }
-        })
+    fn post_tick(&self) {
+        if self.is_roosting() {
+            let entity = &self.mob_entity.living_entity.entity;
+            entity.velocity.store(Vector3::new(0.0, 0.0, 0.0));
+            let pos = entity.pos.load();
+            let snapped_y = (pos.y.floor()) + 1.0 - f64::from(entity.height());
+            entity.set_pos(Vector3::new(pos.x, snapped_y, pos.z));
+        }
     }
 
     fn get_mob_gravity(&self) -> f64 {
@@ -273,24 +266,18 @@ impl Mob for BatEntity {
         Some(0.6)
     }
 
-    fn on_damage<'a>(
-        &'a self,
-        _damage_type: DamageType,
-        _source: Option<&'a dyn EntityBase>,
-    ) -> EntityBaseFuture<'a, ()> {
-        Box::pin(async move {
-            if self.is_roosting() {
-                self.set_roosting(false);
-                let entity = &self.mob_entity.living_entity.entity;
-                let pos = entity.pos.load();
-                entity.world.load().play_sound_fine(
-                    Sound::EntityBatTakeoff,
-                    SoundCategory::Ambient,
-                    &pos,
-                    0.1,
-                    0.95,
-                );
-            }
-        })
+    fn on_damage(&self, _damage_type: DamageType, _source: Option<&dyn EntityBase>) {
+        if self.is_roosting() {
+            self.set_roosting(false);
+            let entity = &self.mob_entity.living_entity.entity;
+            let pos = entity.pos.load();
+            entity.world.load().play_sound_fine(
+                Sound::EntityBatTakeoff,
+                SoundCategory::Ambient,
+                &pos,
+                0.1,
+                0.95,
+            );
+        }
     }
 }

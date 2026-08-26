@@ -1,6 +1,6 @@
+use crate::entity::Entity;
 use crate::entity::mob::zombie::ZombieEntityBase;
 use crate::entity::mob::{Mob, MobEntity};
-use crate::entity::{Entity, NbtFuture};
 use pumpkin_nbt::compound::NbtCompound;
 use std::sync::Arc;
 
@@ -28,15 +28,11 @@ impl Mob for ZombieVillagerEntity {
         &self.mob_entity.mob_entity
     }
 
-    fn mob_write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
-        Box::pin(async move {
-            self.mob_entity.mob_write_nbt(nbt).await;
-        })
+    fn mob_write_nbt(&self, nbt: &mut NbtCompound) {
+        self.mob_entity.mob_write_nbt(nbt);
     }
 
-    fn mob_read_nbt<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
-        Box::pin(async move {
-            self.mob_entity.mob_read_nbt(nbt).await;
-        })
+    fn mob_read_nbt(&self, nbt: &NbtCompound) {
+        self.mob_entity.mob_read_nbt(nbt);
     }
 }

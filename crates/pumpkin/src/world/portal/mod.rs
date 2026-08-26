@@ -68,13 +68,13 @@ impl PortalType {
     }
 
     #[expect(clippy::too_many_lines)]
-    pub async fn get_portal_destination(
+    pub fn get_portal_destination(
         &self,
         current_level: &World,
         dest_world: Arc<World>,
         caller: &Arc<dyn crate::entity::EntityBase>,
         _portal_entry_pos: BlockPos,
-        source_portal: Option<SourcePortalInfo>,
+        source_portal: Option<&SourcePortalInfo>,
     ) -> Option<TeleportTransition> {
         match self {
             Self::End => {
@@ -90,13 +90,6 @@ impl PortalType {
                         let y = if is_player { 49.0 } else { 50.0 };
 
                         // Ensure chunks covering the platform are loaded/generated
-                        dest_world
-                            .get_block_state_async(&BlockPos::new(98, 49, -2))
-                            .await;
-                        dest_world
-                            .get_block_state_async(&BlockPos::new(102, 49, 2))
-                            .await;
-
                         // Generate/regenerate the obsidian platform (5x5 obsidian at Y=48, and 5x5x3 air above it)
                         let platform_pos = BlockPos::new(100, 49, 0);
                         for dx in -2..=2 {
@@ -112,13 +105,11 @@ impl PortalType {
                                         platform_pos.0.y + dy,
                                         platform_pos.0.z + dz,
                                     );
-                                    dest_world
-                                        .set_block_state(
-                                            &target_pos,
-                                            block.default_state.id,
-                                            BlockFlags::NOTIFY_ALL,
-                                        )
-                                        .await;
+                                    dest_world.set_block_state(
+                                        &target_pos,
+                                        block.default_state.id,
+                                        BlockFlags::NOTIFY_ALL,
+                                    );
                                 }
                             }
                         }
@@ -136,24 +127,24 @@ impl PortalType {
                         {
                             match player.client.as_ref() {
                                 crate::net::ClientPlatform::Java(client) => {
-                                    client
-                                        .enqueue_client_packet(&pumpkin_protocol::java::client::play::CGameEvent::new(
-                                            pumpkin_protocol::java::client::play::GameEvent::WinGame,
-                                            1.0,
-                                        ))
-                                        .await;
+                                    if let Ok(data) = client.serialize_packet(&pumpkin_protocol::java::client::play::CGameEvent::new(
+                                        pumpkin_protocol::java::client::play::GameEvent::WinGame,
+                                        1.0,
+                                    )) {
+                                        client.try_enqueue_packet(data);
+                                    }
                                 }
                                 crate::net::ClientPlatform::Bedrock(client) => {
-                                    client
-                                        .send_packet(
-                                            &pumpkin_protocol::bedrock::client::CShowCredits {
-                                                player_runtime_id: (caller.get_entity().entity_id
-                                                    as u64)
-                                                    .into(),
-                                                credits_state: 0.into(),
-                                            },
-                                        )
-                                        .await;
+                                    if let Ok(data) = client.serialize_packet(
+                                        &pumpkin_protocol::bedrock::client::CShowCredits {
+                                            player_runtime_id: (caller.get_entity().entity_id
+                                                as u64)
+                                                .into(),
+                                            credits_state: 0.into(),
+                                        },
+                                    ) {
+                                        client.try_enqueue_packet(data);
+                                    }
                                 }
                             }
                         }
@@ -185,52 +176,64 @@ impl PortalType {
                 let target_pos =
                     BlockPos::floored(pos.x * scale_factor, pos.y, pos.z * scale_factor);
 
-                let source_axis = source_portal.as_ref().map(|p| p.axis);
+                let source_axis = source_portal.map(|p| p.axis);
 
-                let (final_pos, yaw) = if let Some(dest_result) =
-                    NetherPortal::search_for_portal(&dest_world, target_pos).await
-                {
-                    let base_pos = source_portal.as_ref().map_or_else(
-                        || dest_result.get_teleport_position(),
-                        |source| {
-                            let source_result = PortalSearchResult {
-                                lower_corner: source.lower_corner,
-                                axis: source.axis,
-                                width: source.width,
-                                height: source.height,
-                            };
-                            let relative_pos = source_result.entity_pos_in_portal(pos, &dimensions);
-                            dest_result.calculate_exit_position(relative_pos, &dimensions)
+                let (final_pos, yaw) = NetherPortal::search_for_portal(&dest_world, target_pos)
+                    .map_or_else(
+                        || {
+                            if let Some((build_pos, axis, is_fallback)) =
+                                NetherPortal::find_safe_location(
+                                    &dest_world,
+                                    target_pos,
+                                    pumpkin_data::block_properties::HorizontalAxis::X,
+                                )
+                            {
+                                NetherPortal::build_portal_frame(
+                                    &dest_world,
+                                    build_pos,
+                                    axis,
+                                    is_fallback,
+                                );
+                                let new_portal = PortalSearchResult {
+                                    lower_corner: build_pos,
+                                    axis,
+                                    width: 2,
+                                    height: 3,
+                                };
+                                let center_pos = new_portal.get_teleport_position();
+                                let final_pos = new_portal.find_open_position(
+                                    &dest_world,
+                                    center_pos,
+                                    &dimensions,
+                                );
+                                let yaw =
+                                    new_portal.calculate_teleport_yaw(current_yaw, source_axis);
+                                (final_pos, Some(yaw))
+                            } else {
+                                (target_pos.0.to_f64(), None)
+                            }
+                        },
+                        |dest_result| {
+                            let base_pos = source_portal.map_or_else(
+                                || dest_result.get_teleport_position(),
+                                |source| {
+                                    let source_result = PortalSearchResult {
+                                        lower_corner: source.lower_corner,
+                                        axis: source.axis,
+                                        width: source.width,
+                                        height: source.height,
+                                    };
+                                    let relative_pos =
+                                        source_result.entity_pos_in_portal(pos, &dimensions);
+                                    dest_result.calculate_exit_position(relative_pos, &dimensions)
+                                },
+                            );
+                            let final_pos =
+                                dest_result.find_open_position(&dest_world, base_pos, &dimensions);
+                            let yaw = dest_result.calculate_teleport_yaw(current_yaw, source_axis);
+                            (final_pos, Some(yaw))
                         },
                     );
-                    let final_pos =
-                        dest_result.find_open_position(&dest_world, base_pos, &dimensions);
-                    let yaw = dest_result.calculate_teleport_yaw(current_yaw, source_axis);
-                    (final_pos, Some(yaw))
-                } else if let Some((build_pos, axis, is_fallback)) =
-                    NetherPortal::find_safe_location(
-                        &dest_world,
-                        target_pos,
-                        pumpkin_data::block_properties::HorizontalAxis::X,
-                    )
-                    .await
-                {
-                    NetherPortal::build_portal_frame(&dest_world, build_pos, axis, is_fallback)
-                        .await;
-                    let new_portal = PortalSearchResult {
-                        lower_corner: build_pos,
-                        axis,
-                        width: 2,
-                        height: 3,
-                    };
-                    let center_pos = new_portal.get_teleport_position();
-                    let final_pos =
-                        new_portal.find_open_position(&dest_world, center_pos, &dimensions);
-                    let yaw = new_portal.calculate_teleport_yaw(current_yaw, source_axis);
-                    (final_pos, Some(yaw))
-                } else {
-                    (target_pos.0.to_f64(), None)
-                };
 
                 Some(TeleportTransition {
                     new_world: dest_world,

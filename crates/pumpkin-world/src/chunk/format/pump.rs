@@ -129,8 +129,7 @@ where
             let index = (rel_x + rel_z * 32) as usize;
 
             if let Some(chunk_bytes) = self.data.chunks.get(&index.to_string()) {
-                let chunk_bytes = chunk_bytes.clone();
-                let res = tokio::task::spawn_blocking(move || {
+                let res = (|| {
                     let mut decoder = StreamingDecoder::new(&chunk_bytes[..]).map_err(|e| {
                         ChunkReadingError::IoError(std::io::Error::other(e.to_string()))
                     })?;
@@ -139,16 +138,11 @@ where
                         .map_err(ChunkReadingError::IoError)?;
                     let bytes = Bytes::from(decompressed);
                     D::from_bytes(&bytes, pos)
-                })
-                .await;
+                })();
 
                 let data_res = match res {
-                    Ok(Ok(data)) => LoadedData::Loaded(data),
-                    Ok(Err(e)) => LoadedData::Error((pos, e)),
-                    Err(e) => LoadedData::Error((
-                        pos,
-                        ChunkReadingError::IoError(std::io::Error::other(e)),
-                    )),
+                    Ok(data) => LoadedData::Loaded(data),
+                    Err(e) => LoadedData::Error((pos, e)),
                 };
 
                 if stream.send(data_res).await.is_err() {

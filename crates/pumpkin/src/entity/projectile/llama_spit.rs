@@ -6,7 +6,7 @@ use pumpkin_util::math::vector3::Vector3;
 
 use crate::{
     entity::{
-        Entity, EntityBase, EntityBaseFuture,
+        Entity, EntityBase,
         living::LivingEntity,
         projectile::{ProjectileHit, ThrownItemEntity},
     },
@@ -57,18 +57,12 @@ impl LlamaSpitEntity {
 }
 
 impl EntityBase for LlamaSpitEntity {
-    fn tick<'a>(
-        &'a self,
-        caller: &'a Arc<dyn EntityBase>,
-        server: &'a Server,
-    ) -> EntityBaseFuture<'a, ()> {
-        Box::pin(async move {
-            if self.get_entity().touching_water.load(Ordering::Relaxed) {
-                self.get_entity().remove().await;
-                return;
-            }
-            self.thrown.process_tick(caller, server).await;
-        })
+    fn tick<'a>(&'a self, caller: &'a Arc<dyn EntityBase>, server: &'a Server) {
+        if self.get_entity().touching_water.load(Ordering::Relaxed) {
+            self.get_entity().remove();
+            return;
+        }
+        self.thrown.process_tick(caller, server);
     }
 
     fn get_entity(&self) -> &Entity {
@@ -83,32 +77,25 @@ impl EntityBase for LlamaSpitEntity {
         self
     }
 
-    fn on_hit(&self, hit: ProjectileHit) -> EntityBaseFuture<'_, ()> {
-        Box::pin(async move {
-            if let ProjectileHit::Entity {
-                ref entity,
-                hit_pos,
-                ..
-            } = hit
-            {
-                let entity_clone = entity.clone();
-                let world = self.get_entity().world.load();
-                let owner_id = self.thrown.owner_id;
-                let owner = owner_id.and_then(|id| world.get_entity_by_id(id));
+    fn on_hit(&self, hit: ProjectileHit) {
+        if let ProjectileHit::Entity {
+            ref entity,
+            hit_pos,
+            ..
+        } = hit
+        {
+            let world = self.get_entity().world.load();
+            let owner_id = self.thrown.owner_id;
+            let owner = owner_id.and_then(|id| world.get_entity_by_id(id));
 
-                tokio::spawn(async move {
-                    let _ = entity_clone
-                        .damage_with_context(
-                            entity_clone.as_ref(),
-                            1.0,
-                            DamageType::SPIT,
-                            Some(hit_pos),
-                            None,
-                            owner.as_deref(),
-                        )
-                        .await;
-                });
-            }
-        })
+            let _ = entity.damage_with_context(
+                entity.as_ref(),
+                1.0,
+                DamageType::SPIT,
+                Some(hit_pos),
+                None,
+                owner.as_deref(),
+            );
+        }
     }
 }

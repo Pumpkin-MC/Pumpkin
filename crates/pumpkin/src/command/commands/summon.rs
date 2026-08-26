@@ -27,57 +27,53 @@ const ARG_POS: &str = "pos";
 struct Executor;
 
 impl CommandExecutor for Executor {
-    fn execute<'a>(
-        &'a self,
-        sender: &'a CommandSender,
-        server: &'a crate::server::Server,
-        args: &'a ConsumedArgs<'a>,
-    ) -> CommandResult<'a> {
-        Box::pin(async move {
-            let entity_type = SummonableEntitiesArgumentConsumer::find_arg(args, ARG_ENTITY)?;
-            let pos = Position3DArgumentConsumer::find_arg(args, ARG_POS);
-            let (world, pos) = match sender {
-                CommandSender::Console | CommandSender::Rcon(_) | CommandSender::Dummy => {
-                    let guard = server.worlds.load();
-                    let world = guard
-                        .first()
-                        .cloned()
-                        .ok_or(CommandError::InvalidRequirement)?;
-                    let pos = {
-                        let info = &world.level_info.load();
-                        // default position for spawning a player, in this case for mob
-                        pos.unwrap_or(Vector3::new(
-                            f64::from(info.spawn_x) + 0.5,
-                            f64::from(info.spawn_y) + 1.0,
-                            f64::from(info.spawn_z) + 0.5,
-                        ))
-                    };
+    fn execute(
+        &self,
+        sender: &CommandSender,
+        server: &crate::server::Server,
+        args: &ConsumedArgs,
+    ) -> CommandResult {
+        let entity_type = SummonableEntitiesArgumentConsumer::find_arg(args, ARG_ENTITY)?;
+        let pos = Position3DArgumentConsumer::find_arg(args, ARG_POS);
+        let (world, pos) = match sender {
+            CommandSender::Console | CommandSender::Rcon(_) | CommandSender::Dummy => {
+                let guard = server.worlds.load();
+                let world = guard
+                    .first()
+                    .cloned()
+                    .ok_or(CommandError::InvalidRequirement)?;
+                let pos = {
+                    let info = &world.level_info.load();
+                    // default position for spawning a player, in this case for mob
+                    pos.unwrap_or(Vector3::new(
+                        f64::from(info.spawn_x) + 0.5,
+                        f64::from(info.spawn_y) + 1.0,
+                        f64::from(info.spawn_z) + 0.5,
+                    ))
+                };
 
-                    (world, pos)
-                }
-                CommandSender::Player(player) => {
-                    let pos = pos.unwrap_or(player.get_entity().pos.load());
+                (world, pos)
+            }
+            CommandSender::Player(player) => {
+                let pos = pos.unwrap_or(player.get_entity().pos.load());
 
-                    (player.world(), pos)
-                }
-                CommandSender::CommandBlock(c, w) => {
-                    let pos = pos.unwrap_or(c.get_position().to_centered_f64());
-                    (w.clone(), pos)
-                }
-            };
-            let entity = from_type(entity_type, pos, &world, Uuid::new_v4());
-            let name = entity.get_display_name().await;
-            world.spawn_entity(entity).await;
-            sender
-                .send_message(TextComponent::translate_cross(
-                    translation::java::COMMANDS_SUMMON_SUCCESS,
-                    translation::bedrock::COMMANDS_SUMMON_SUCCESS,
-                    [name],
-                ))
-                .await;
+                (player.world(), pos)
+            }
+            CommandSender::CommandBlock(c, w) => {
+                let pos = pos.unwrap_or(c.get_position().to_centered_f64());
+                (w.clone(), pos)
+            }
+        };
+        let entity = from_type(entity_type, pos, &world, Uuid::new_v4());
+        let name = entity.get_display_name();
+        world.spawn_entity(entity);
+        sender.send_message(TextComponent::translate_cross(
+            translation::java::COMMANDS_SUMMON_SUCCESS,
+            translation::bedrock::COMMANDS_SUMMON_SUCCESS,
+            [name],
+        ));
 
-            Ok(1)
-        })
+        Ok(1)
     }
 }
 

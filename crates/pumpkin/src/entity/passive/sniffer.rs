@@ -15,7 +15,7 @@ use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 
 use crate::entity::{
-    Entity, EntityBase, EntityBaseFuture, NbtFuture,
+    Entity, EntityBase,
     ageable::{AgeableData, AgeableMob},
     ai::goal::{
         breed::BreedGoal, follow_parent::FollowParentGoal, look_around::RandomLookAroundGoal,
@@ -263,10 +263,10 @@ impl SnifferEntity {
         explored.insert(0, pos);
     }
 
-    pub async fn drop_seed(&self) {
+    pub fn drop_seed(&self) {
         let entity = self.get_entity();
         let world = entity.world.load();
-        let current_tick = world.level_time.lock().await.world_age as i32;
+        let current_tick = world.get_world_age() as i32;
 
         if self.drop_seed_at_tick.load(Ordering::Relaxed) == current_tick {
             let head_pos = self.get_head_position();
@@ -279,7 +279,7 @@ impl SnifferEntity {
 
             let item_entity = Entity::new(world.clone(), head_pos, &EntityType::ITEM);
             let item_arc = Arc::new(ItemEntity::new(item_entity, item_stack));
-            world.spawn_entity(item_arc).await;
+            world.spawn_entity_non_save(item_arc as Arc<dyn EntityBase>);
 
             world.play_sound(
                 Sound::EntitySnifferDropSeed,
@@ -289,7 +289,7 @@ impl SnifferEntity {
         }
     }
 
-    pub async fn spawn_child_from_breeding(&self, partner: &dyn EntityBase) {
+    pub fn spawn_child_from_breeding(&self, partner: &dyn EntityBase) {
         let entity = self.get_entity();
         let world = entity.world.load();
         let pos = entity.pos.load();
@@ -297,7 +297,7 @@ impl SnifferEntity {
         let item_stack = ItemStack::new(1, &Item::SNIFFER_EGG);
         let egg_entity = Entity::new(world.clone(), pos, &EntityType::ITEM);
         let egg_arc = Arc::new(ItemEntity::new(egg_entity, item_stack));
-        world.spawn_entity(egg_arc).await;
+        world.spawn_entity_non_save(egg_arc as Arc<dyn EntityBase>);
 
         world.play_sound(Sound::BlockSnifferEggPlop, SoundCategory::Neutral, &pos);
 
@@ -336,93 +336,78 @@ impl Mob for SnifferEntity {
         Some(self)
     }
 
-    fn mob_write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
-        Box::pin(async move {
-            nbt.put_int("State", self.get_state().id());
-            nbt.put_int(
-                "DropSeedAtTick",
-                self.drop_seed_at_tick.load(Ordering::Relaxed),
-            );
-        })
+    fn mob_write_nbt(&self, nbt: &mut NbtCompound) {
+        nbt.put_int("State", self.get_state().id());
+        nbt.put_int(
+            "DropSeedAtTick",
+            self.drop_seed_at_tick.load(Ordering::Relaxed),
+        );
     }
 
-    fn mob_read_nbt<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
-        Box::pin(async move {
-            if let Some(state_id) = nbt.get_int("State") {
-                self.state.store(state_id, Ordering::Relaxed);
-            }
-            if let Some(drop_tick) = nbt.get_int("DropSeedAtTick") {
-                self.drop_seed_at_tick.store(drop_tick, Ordering::Relaxed);
-            }
-        })
+    fn mob_read_nbt(&self, nbt: &NbtCompound) {
+        if let Some(state_id) = nbt.get_int("State") {
+            self.state.store(state_id, Ordering::Relaxed);
+        }
+        if let Some(drop_tick) = nbt.get_int("DropSeedAtTick") {
+            self.drop_seed_at_tick.store(drop_tick, Ordering::Relaxed);
+        }
     }
 
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
     }
 
-    fn mob_tick<'a>(&'a self, _caller: &'a Arc<dyn EntityBase>) -> EntityBaseFuture<'a, ()> {
-        Box::pin(async move {
-            self.ageable_ai_step();
-            let state = self.get_state();
-            match state {
-                SnifferState::Searching => {
-                    let entity = self.get_entity();
-                    let world = entity.world.load();
-                    let ticks = world.level_time.lock().await.world_age;
-                    if ticks % 20 == 0 {
-                        world.play_sound(
-                            Sound::EntitySnifferSearching,
-                            SoundCategory::Neutral,
-                            &entity.pos.load(),
-                        );
-                    }
+    fn mob_tick<'a>(&'a self, _caller: &'a Arc<dyn EntityBase>) {
+        self.ageable_ai_step();
+        let state = self.get_state();
+        match state {
+            SnifferState::Searching => {
+                let entity = self.get_entity();
+                let world = entity.world.load();
+                let ticks = world.get_world_age();
+                if ticks % 20 == 0 {
+                    world.play_sound(
+                        Sound::EntitySnifferSearching,
+                        SoundCategory::Neutral,
+                        &entity.pos.load(),
+                    );
                 }
-                SnifferState::Digging => {
-                    self.drop_seed().await;
-                }
-                _ => {}
             }
-        })
+            SnifferState::Digging => {
+                self.drop_seed();
+            }
+            _ => {}
+        }
     }
 
-    fn mob_init_data_tracker(&self) -> EntityBaseFuture<'_, ()> {
-        Box::pin(async move {
-            let entity = self.get_entity();
-            let is_baby = entity.age.load(Ordering::Relaxed) < 0;
-            if is_baby {
-                entity.send_meta_data(
-                    &[Metadata::new(
-                        pumpkin_data::tracked_data::sniffer::BABY_ID,
-                        true,
-                    )],
-                    None,
-                );
-            }
+    fn mob_init_data_tracker(&self) {
+        let entity = self.get_entity();
+        let is_baby = entity.age.load(Ordering::Relaxed) < 0;
+        if is_baby {
             entity.send_meta_data(
-                &[
-                    Metadata::new(
-                        pumpkin_data::tracked_data::sniffer::STATE,
-                        VarInt(self.get_state().id()),
-                    ),
-                    Metadata::new(
-                        pumpkin_data::tracked_data::sniffer::DROP_SEED_AT_TICK,
-                        VarInt(self.drop_seed_at_tick.load(Ordering::Relaxed)),
-                    ),
-                ],
+                &[Metadata::new(
+                    pumpkin_data::tracked_data::sniffer::BABY_ID,
+                    true,
+                )],
                 None,
             );
-        })
+        }
+        entity.send_meta_data(
+            &[
+                Metadata::new(
+                    pumpkin_data::tracked_data::sniffer::STATE,
+                    VarInt(self.get_state().id()),
+                ),
+                Metadata::new(
+                    pumpkin_data::tracked_data::sniffer::DROP_SEED_AT_TICK,
+                    VarInt(self.drop_seed_at_tick.load(Ordering::Relaxed)),
+                ),
+            ],
+            None,
+        );
     }
 
-    fn mob_interact<'a>(
-        &'a self,
-        player: &'a Arc<Player>,
-        item_stack: &'a mut ItemStack,
-    ) -> EntityBaseFuture<'a, bool> {
-        Box::pin(async move {
-            self.animal_interact(player, item_stack, Sound::EntitySnifferEat)
-                .await
-        })
+    fn mob_interact(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {
+        self.animal_interact(player, item_stack, Sound::EntitySnifferEat)
     }
 }

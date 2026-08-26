@@ -1,8 +1,8 @@
 use crate::block::blocks::falling::FallingBlock;
 use crate::block::registry::BlockActionResult;
 use crate::block::{
-    BlockBehaviour, BlockFuture, GetStateForNeighborUpdateArgs, NormalUseArgs, OnPlaceArgs,
-    OnScheduledTickArgs, PlacedArgs,
+    BlockBehaviour, GetStateForNeighborUpdateArgs, NormalUseArgs, OnPlaceArgs, OnScheduledTickArgs,
+    PlacedArgs,
 };
 
 use pumpkin_data::BlockStateId;
@@ -11,89 +11,74 @@ use pumpkin_data::translation;
 use pumpkin_inventory::anvil::AnvilScreenHandler;
 use pumpkin_inventory::player::player_inventory::PlayerInventory;
 use pumpkin_inventory::screen_handler::{
-    BoxFuture, InventoryPlayer, ScreenHandlerFactory, SharedScreenHandler,
+    InventoryPlayer, ScreenHandlerFactory, SharedScreenHandler,
 };
 use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_util::text::TextComponent;
 use pumpkin_world::inventory::SimpleInventory;
 use std::sync::Arc;
-use tokio::sync::Mutex;
+use std::sync::Mutex;
 
 #[pumpkin_block_from_tag("minecraft:anvil")]
 pub struct AnvilBlock;
 
 impl BlockBehaviour for AnvilBlock {
-    fn normal_use<'a>(&'a self, args: NormalUseArgs<'a>) -> BlockFuture<'a, BlockActionResult> {
-        Box::pin(async move {
-            args.player
-                .increment_stat(
-                    pumpkin_data::statistic::StatisticCategory::Custom,
-                    pumpkin_data::statistic::CustomStatistic::InteractWithAnvil as i32,
-                    1,
-                )
-                .await;
-            args.player
-                .open_handled_screen(&AnvilScreenFactory, Some(*args.position))
-                .await;
+    fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
+        args.player.increment_stat(
+            pumpkin_data::statistic::StatisticCategory::Custom,
+            pumpkin_data::statistic::CustomStatistic::InteractWithAnvil as i32,
+            1,
+        );
+        args.player
+            .open_handled_screen(&AnvilScreenFactory, Some(*args.position));
 
-            BlockActionResult::Success
-        })
+        BlockActionResult::Success
     }
 
-    fn placed<'a>(&'a self, args: PlacedArgs<'a>) -> BlockFuture<'a, ()> {
-        Box::pin(async move {
-            FallingBlock::placed(&FallingBlock, args).await;
-        })
+    fn placed(&self, args: PlacedArgs<'_>) {
+        FallingBlock::placed(&FallingBlock, args);
     }
 
-    fn on_place<'a>(&'a self, args: OnPlaceArgs<'a>) -> BlockFuture<'a, BlockStateId> {
-        Box::pin(async move {
-            let dir = args
-                .player
-                .living_entity
-                .entity
-                .get_horizontal_facing()
-                .rotate_clockwise();
+    fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
+        let dir = args
+            .player
+            .living_entity
+            .entity
+            .get_horizontal_facing()
+            .rotate_clockwise();
 
-            let mut props = WallTorchLikeProperties::default(args.block);
+        let mut props = WallTorchLikeProperties::default(args.block);
 
-            props.facing = dir;
-            props.to_state_id(args.block)
-        })
+        props.facing = dir;
+        props.to_state_id(args.block)
     }
 
-    fn on_scheduled_tick<'a>(&'a self, args: OnScheduledTickArgs<'a>) -> BlockFuture<'a, ()> {
-        Box::pin(async move {
-            FallingBlock::on_scheduled_tick(&FallingBlock, args).await;
-        })
+    fn on_scheduled_tick(&self, args: OnScheduledTickArgs<'_>) {
+        FallingBlock::on_scheduled_tick(&FallingBlock, args);
     }
 
-    fn get_state_for_neighbor_update<'a>(
-        &'a self,
-        args: GetStateForNeighborUpdateArgs<'a>,
-    ) -> BlockFuture<'a, BlockStateId> {
-        Box::pin(
-            async move { FallingBlock::get_state_for_neighbor_update(&FallingBlock, args).await },
-        )
+    fn get_state_for_neighbor_update(
+        &self,
+        args: GetStateForNeighborUpdateArgs<'_>,
+    ) -> BlockStateId {
+        FallingBlock::get_state_for_neighbor_update(&FallingBlock, args)
     }
 }
 
 struct AnvilScreenFactory;
 
 impl ScreenHandlerFactory for AnvilScreenFactory {
-    fn create_screen_handler<'a>(
-        &'a self,
+    fn create_screen_handler(
+        &self,
         sync_id: u8,
-        player_inventory: &'a Arc<PlayerInventory>,
-        _player: &'a dyn InventoryPlayer,
-    ) -> BoxFuture<'a, Option<SharedScreenHandler>> {
-        Box::pin(async move {
-            let inventory = Arc::new(SimpleInventory::new(3));
-            let handler = AnvilScreenHandler::new(sync_id, player_inventory, inventory);
-            let concrete_arc = Arc::new(Mutex::new(handler));
+        player_inventory: &Arc<PlayerInventory>,
+        _player: &dyn InventoryPlayer,
+    ) -> Option<SharedScreenHandler> {
+        let inventory = Arc::new(SimpleInventory::new(3));
+        let handler = AnvilScreenHandler::new(sync_id, player_inventory, inventory);
+        let concrete_arc = Arc::new(Mutex::new(handler));
 
-            Some(concrete_arc as SharedScreenHandler)
-        })
+        Some(concrete_arc as SharedScreenHandler)
     }
 
     fn get_display_name(&self) -> TextComponent {

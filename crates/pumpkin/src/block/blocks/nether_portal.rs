@@ -13,8 +13,8 @@ use uuid::Uuid;
 
 use crate::{
     block::{
-        BlockBehaviour, BlockFuture, GetStateForNeighborUpdateArgs, OnEntityCollisionArgs,
-        OnStateReplacedArgs, RandomTickArgs,
+        BlockBehaviour, GetStateForNeighborUpdateArgs, OnEntityCollisionArgs, OnStateReplacedArgs,
+        RandomTickArgs,
     },
     entity::{EntityBase, r#type::from_type},
     world::{World, portal::nether::NetherPortal},
@@ -44,123 +44,116 @@ impl NetherPortalBlock {
 }
 
 impl BlockBehaviour for NetherPortalBlock {
-    fn get_state_for_neighbor_update<'a>(
-        &'a self,
-        args: GetStateForNeighborUpdateArgs<'a>,
-    ) -> BlockFuture<'a, BlockStateId> {
-        Box::pin(async move {
-            let direction_axis = args.direction.to_axis();
-            let state_axis =
-                NetherPortalLikeProperties::from_state_id(args.state_id, &Block::NETHER_PORTAL)
-                    .axis;
-            // Convert HorizontalAxis to Axis for comparison
-            let state_axis_full: Axis = match state_axis {
-                HorizontalAxis::X => Axis::X,
-                HorizontalAxis::Z => Axis::Z,
-            };
-            // Vanilla logic: keep portal if direction is horizontal AND different from portal axis
-            let is_horizontal_and_different =
-                args.direction.is_horizontal() && direction_axis != state_axis_full;
-            if is_horizontal_and_different
-                || args.neighbor_state_id == args.state_id
-                || NetherPortal::get_on_axis(args.world, args.position, state_axis)
-                    .is_some_and(|e| e.was_already_valid())
-            {
-                return args.state_id;
-            }
-            Block::AIR.default_state.id
-        })
+    fn get_state_for_neighbor_update(
+        &self,
+        args: GetStateForNeighborUpdateArgs<'_>,
+    ) -> BlockStateId {
+        let direction_axis = args.direction.to_axis();
+        let state_axis =
+            NetherPortalLikeProperties::from_state_id(args.state_id, &Block::NETHER_PORTAL).axis;
+        // Convert HorizontalAxis to Axis for comparison
+        let state_axis_full: Axis = match state_axis {
+            HorizontalAxis::X => Axis::X,
+            HorizontalAxis::Z => Axis::Z,
+        };
+        // Vanilla logic: keep portal if direction is horizontal AND different from portal axis
+        let is_horizontal_and_different =
+            args.direction.is_horizontal() && direction_axis != state_axis_full;
+        if is_horizontal_and_different
+            || args.neighbor_state_id == args.state_id
+            || NetherPortal::get_on_axis(args.world, args.position, state_axis)
+                .is_some_and(|e| e.was_already_valid())
+        {
+            return args.state_id;
+        }
+        Block::AIR.default_state.id
     }
 
-    fn random_tick<'a>(&'a self, args: RandomTickArgs<'a>) -> BlockFuture<'a, ()> {
-        Box::pin(async move {
-            let level_info = args.world.level_info.load();
-            let difficulty = level_info.difficulty;
-            if !level_info.game_rules.spawn_monsters
-                || !level_info.game_rules.spawn_mobs
-                || difficulty == Difficulty::Peaceful
-                || (args.world.dimension != Dimension::OVERWORLD
-                    && args.world.dimension != Dimension::OVERWORLD_CAVES)
-            {
-                return;
-            }
+    fn random_tick(&self, args: RandomTickArgs<'_>) {
+        let level_info = args.world.level_info.load();
+        let difficulty = level_info.difficulty;
+        if !level_info.game_rules.spawn_mobs
+            || difficulty == Difficulty::Peaceful
+            || (args.world.dimension != Dimension::OVERWORLD
+                && args.world.dimension != Dimension::OVERWORLD_CAVES)
+        {
+            return;
+        }
 
-            let difficulty_id = difficulty as u32;
-            let roll = rand::rng().random_range(0..2000);
-            if roll >= difficulty_id {
-                return;
-            }
+        let difficulty_id = difficulty as u32;
+        let roll = rand::rng().random_range(0..2000);
+        if roll >= difficulty_id {
+            return;
+        }
 
-            let player_close = args
-                .world
-                .get_closest_player(args.position.to_centered_f64(), 128.0)
-                .is_some();
-            if !player_close {
-                return;
-            }
+        let player_close = args
+            .world
+            .get_closest_player(args.position.to_centered_f64(), 128.0)
+            .is_some();
+        if !player_close {
+            return;
+        }
 
-            let mut bottom_pos = *args.position;
-            while args.world.get_block(&bottom_pos) == &Block::NETHER_PORTAL {
-                bottom_pos = bottom_pos.down();
-            }
+        let mut bottom_pos = *args.position;
+        while args.world.get_block(&bottom_pos) == &Block::NETHER_PORTAL {
+            bottom_pos = bottom_pos.down();
+        }
 
-            if args
-                .world
-                .get_block_state(&bottom_pos)
-                .is_side_solid(BlockDirection::Up)
-            {
-                let spawn_pos = Vector3::new(
-                    bottom_pos.0.x as f64 + 0.5,
-                    (bottom_pos.0.y + 1) as f64,
-                    bottom_pos.0.z as f64 + 0.5,
-                );
-                let mob = from_type(
-                    &EntityType::ZOMBIFIED_PIGLIN,
-                    spawn_pos,
-                    args.world,
-                    Uuid::new_v4(),
-                );
-                mob.get_entity()
-                    .portal_cooldown
-                    .store(300, Ordering::Relaxed);
-                args.world.spawn_entity(mob).await;
-            }
-        })
-    }
-
-    fn on_entity_collision<'a>(&'a self, args: OnEntityCollisionArgs<'a>) -> BlockFuture<'a, ()> {
-        Box::pin(async move {
-            let target_world =
-                if args.world.dimension.minecraft_name == Dimension::THE_NETHER.minecraft_name {
-                    args.server.get_world_from_dimension(&Dimension::OVERWORLD)
-                } else {
-                    args.server.get_world_from_dimension(&Dimension::THE_NETHER)
-                };
-
-            if Arc::ptr_eq(&target_world, args.world) {
-                return;
-            }
-
-            tracing::debug!(
-                "Nether portal collision at {:?}, targeting world {:?}",
-                args.position,
-                target_world.dimension.minecraft_name
+        if args
+            .world
+            .get_block_state(&bottom_pos)
+            .is_side_solid(BlockDirection::Up)
+        {
+            let spawn_pos = Vector3::new(
+                bottom_pos.0.x as f64 + 0.5,
+                (bottom_pos.0.y + 1) as f64,
+                bottom_pos.0.z as f64 + 0.5,
             );
-            let portal_delay = Self::get_portal_time(args.world, args.entity);
-
-            args.entity
-                .get_entity()
-                .try_use_portal(portal_delay, target_world, *args.position)
-                .await;
-        })
+            let mob = from_type(
+                &EntityType::ZOMBIFIED_PIGLIN,
+                spawn_pos,
+                args.world,
+                Uuid::new_v4(),
+            );
+            mob.get_entity()
+                .portal_cooldown
+                .store(300, Ordering::Relaxed);
+            args.world.spawn_entity_non_save(mob);
+        }
     }
 
-    fn on_state_replaced<'a>(&'a self, args: OnStateReplacedArgs<'a>) -> BlockFuture<'a, ()> {
-        Box::pin(async move {
-            // Remove from POI storage when portal block is replaced
-            let mut poi_storage = args.world.portal_poi.lock().await;
-            poi_storage.remove(args.position);
-        })
+    fn on_entity_collision(&self, args: OnEntityCollisionArgs<'_>) {
+        let target_world =
+            if args.world.dimension.minecraft_name == Dimension::THE_NETHER.minecraft_name {
+                args.server.get_world_from_dimension(&Dimension::OVERWORLD)
+            } else {
+                args.server.get_world_from_dimension(&Dimension::THE_NETHER)
+            };
+
+        if Arc::ptr_eq(&target_world, args.world) {
+            return;
+        }
+
+        tracing::debug!(
+            "Nether portal collision at {:?}, targeting world {:?}",
+            args.position,
+            target_world.dimension.minecraft_name
+        );
+        let portal_delay = Self::get_portal_time(args.world, args.entity);
+
+        args.entity
+            .get_entity()
+            .try_use_portal(portal_delay, target_world, *args.position);
+    }
+
+    fn on_state_replaced(&self, args: OnStateReplacedArgs<'_>) {
+        // Remove from POI storage when portal block is replaced
+        let mut poi_storage = args
+            .world
+            .portal_poi
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        poi_storage.remove(args.position);
     }
 
     fn rotate(

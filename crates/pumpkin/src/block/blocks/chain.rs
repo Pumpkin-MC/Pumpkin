@@ -1,4 +1,3 @@
-use crate::block::BlockFuture;
 use crate::block::{BlockBehaviour, OnPlaceArgs};
 use pumpkin_data::BlockDirection;
 use pumpkin_data::BlockStateId;
@@ -10,18 +9,16 @@ use pumpkin_macros::pumpkin_block;
 pub struct ChainBlock;
 
 impl BlockBehaviour for ChainBlock {
-    fn on_place<'a>(&'a self, args: OnPlaceArgs<'a>) -> BlockFuture<'a, BlockStateId> {
-        Box::pin(async move {
-            let mut props =
-                pumpkin_data::block_properties::IronChainLikeProperties::default(args.block);
-            props.r#waterlogged = args.replacing.water_source();
-            props.r#axis = match args.direction {
-                BlockDirection::East | BlockDirection::West => Axis::X,
-                BlockDirection::Up | BlockDirection::Down => Axis::Y,
-                BlockDirection::North | BlockDirection::South => Axis::Z,
-            };
+    fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
+        let mut props =
+            pumpkin_data::block_properties::IronChainLikeProperties::default(args.block);
+        props.r#waterlogged = args.replacing.water_source();
+        props.r#axis = match args.direction {
+            BlockDirection::East | BlockDirection::West => Axis::X,
+            BlockDirection::Up | BlockDirection::Down => Axis::Y,
+            BlockDirection::North | BlockDirection::South => Axis::Z,
+        };
 
-            props.to_state_id(args.block)
-        })
+        props.to_state_id(args.block)
     }
 }

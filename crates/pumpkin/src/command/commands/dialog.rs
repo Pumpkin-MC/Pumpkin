@@ -21,28 +21,26 @@ const ARG_DIALOG: &str = "dialog";
 struct DialogClearExecutor;
 
 impl CommandExecutor for DialogClearExecutor {
-    fn execute<'a>(&'a self, context: &'a CommandContext) -> CommandExecutorResult<'a> {
-        Box::pin(async move {
-            let targets = EntityArgumentType::get_players(context, ARG_TARGETS).await?;
+    fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
+        let targets = EntityArgumentType::get_players(context, ARG_TARGETS)?;
 
-            let count = targets.len();
-            let packet = CPlayClearDialog::new();
-            for player in &targets {
-                player.send_client_packet(&packet).await;
-            }
+        let count = targets.len();
+        let packet = CPlayClearDialog::new();
+        for player in &targets {
+            player.try_send_client_packet(&packet);
+        }
 
-            let msg = if count == 1 {
-                TextComponent::text(format!(
-                    "Cleared dialog for {}",
-                    targets[0].gameprofile.name
-                ))
-            } else {
-                TextComponent::text(format!("Cleared dialogs for {count} players"))
-            };
-            context.source.send_feedback(msg, true).await;
+        let msg = if count == 1 {
+            TextComponent::text(format!(
+                "Cleared dialog for {}",
+                targets[0].gameprofile.name
+            ))
+        } else {
+            TextComponent::text(format!("Cleared dialogs for {count} players"))
+        };
+        context.source.send_feedback(msg, true);
 
-            Ok(count as i32)
-        })
+        Ok(count as i32)
     }
 }
 
@@ -53,36 +51,31 @@ static REGISTRY_ERROR: LiteralCommandErrorType = LiteralCommandErrorType::new(
 struct DialogShowExecutor;
 
 impl CommandExecutor for DialogShowExecutor {
-    fn execute<'a>(&'a self, context: &'a CommandContext) -> CommandExecutorResult<'a> {
-        Box::pin(async move {
-            let targets = EntityArgumentType::get_players(context, ARG_TARGETS).await?;
-            let dialog_arg = DialogArgumentType::get(context, ARG_DIALOG)?;
+    fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
+        let targets = EntityArgumentType::get_players(context, ARG_TARGETS)?;
+        let dialog_arg = DialogArgumentType::get(context, ARG_DIALOG)?;
 
-            match dialog_arg {
-                DialogArg::Nbt(compound) => {
-                    let count = targets.len();
-                    let dialog_nbt = DialogNBT::from_nbt(compound);
-                    let packet = CPlayShowDialog::new(IdOr::Value(dialog_nbt));
+        match dialog_arg {
+            DialogArg::Nbt(compound) => {
+                let count = targets.len();
+                let dialog_nbt = DialogNBT::from_nbt(compound);
+                let packet = CPlayShowDialog::new(IdOr::Value(dialog_nbt));
 
-                    for player in &targets {
-                        player.send_client_packet(&packet).await;
-                    }
-
-                    let msg = if count == 1 {
-                        TextComponent::text(format!(
-                            "Showed dialog to {}",
-                            targets[0].gameprofile.name
-                        ))
-                    } else {
-                        TextComponent::text(format!("Showed dialog to {count} players"))
-                    };
-                    context.source.send_feedback(msg, true).await;
-
-                    Ok(count as i32)
+                for player in &targets {
+                    player.try_send_client_packet(&packet);
                 }
-                DialogArg::Id(_id) => Err(REGISTRY_ERROR.create_without_context()),
+
+                let msg = if count == 1 {
+                    TextComponent::text(format!("Showed dialog to {}", targets[0].gameprofile.name))
+                } else {
+                    TextComponent::text(format!("Showed dialog to {count} players"))
+                };
+                context.source.send_feedback(msg, true);
+
+                Ok(count as i32)
             }
-        })
+            DialogArg::Id(_id) => Err(REGISTRY_ERROR.create_without_context()),
+        }
     }
 }
 

@@ -215,7 +215,11 @@ pub async fn handle_packet(
         .players
         .as_ref()
         .map_or(0, |players| players.online) as i32;
-    let game_mode = server.defaultgamemode.lock().await.gamemode;
+    let game_mode = server
+        .defaultgamemode
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .gamemode;
     let info = ServerInfo {
         motd: &server.advanced_config.networking.bedrock.motd,
         protocol: CURRENT_BEDROCK_MC_PROTOCOL,

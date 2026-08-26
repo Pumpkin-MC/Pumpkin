@@ -7,7 +7,7 @@ use pumpkin_data::{
 use pumpkin_world::world::BlockFlags;
 
 use crate::{
-    block::{BlockBehaviour, BlockFuture, BlockMetadata, OnPlaceArgs, PlacedArgs},
+    block::{BlockBehaviour, BlockMetadata, OnPlaceArgs, PlacedArgs},
     entity::{
         Entity,
         passive::{iron_golem::IronGolemEntity, snow_golem::SnowGolemEntity},
@@ -23,35 +23,31 @@ impl BlockMetadata for CarvedPumpkinBlock {
 }
 
 impl BlockBehaviour for CarvedPumpkinBlock {
-    fn on_place<'a>(&'a self, args: OnPlaceArgs<'a>) -> BlockFuture<'a, BlockStateId> {
-        Box::pin(async move {
-            let mut props = WallTorchLikeProperties::default(args.block);
-            props.facing = args
-                .player
-                .living_entity
-                .entity
-                .get_horizontal_facing()
-                .opposite();
-            props.to_state_id(args.block)
-        })
+    fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
+        let mut props = WallTorchLikeProperties::default(args.block);
+        props.facing = args
+            .player
+            .living_entity
+            .entity
+            .get_horizontal_facing()
+            .opposite();
+        props.to_state_id(args.block)
     }
 
-    fn placed<'a>(&'a self, args: PlacedArgs<'a>) -> BlockFuture<'a, ()> {
+    fn placed(&self, args: PlacedArgs<'_>) {
         // Mojang uses some BlockPattern magic, way too complex tbh
-        Box::pin(async {
+        {
             let down_pos = args.position.down();
             let upper = args.world.get_block(&down_pos);
             let lower = args.world.get_block(&down_pos.down());
             if upper == &Block::SNOW_BLOCK && lower == &Block::SNOW_BLOCK {
                 for i in 0..3 {
                     let pos = args.position.down_height(i);
-                    args.world
-                        .set_block_state(
-                            &pos,
-                            Block::AIR.default_state.id,
-                            BlockFlags::NOTIFY_LISTENERS,
-                        )
-                        .await;
+                    args.world.set_block_state(
+                        &pos,
+                        Block::AIR.default_state.id,
+                        BlockFlags::NOTIFY_LISTENERS,
+                    );
                     args.world.sync_world_event(
                         WorldEvent::ParticlesDestroyBlock,
                         pos,
@@ -64,7 +60,7 @@ impl BlockBehaviour for CarvedPumpkinBlock {
                     &EntityType::SNOW_GOLEM,
                 );
                 let golem = SnowGolemEntity::new(entity);
-                args.world.spawn_entity(golem).await;
+                args.world.spawn_entity(golem);
                 return;
             }
 
@@ -80,13 +76,11 @@ impl BlockBehaviour for CarvedPumpkinBlock {
                         let pattern = [*args.position, down_pos, down_pos.down(), arm1, arm2];
 
                         for p in pattern {
-                            args.world
-                                .set_block_state(
-                                    &p,
-                                    Block::AIR.default_state.id,
-                                    BlockFlags::NOTIFY_LISTENERS,
-                                )
-                                .await;
+                            args.world.set_block_state(
+                                &p,
+                                Block::AIR.default_state.id,
+                                BlockFlags::NOTIFY_LISTENERS,
+                            );
                             args.world.sync_world_event(
                                 WorldEvent::ParticlesDestroyBlock,
                                 p,
@@ -100,11 +94,11 @@ impl BlockBehaviour for CarvedPumpkinBlock {
                             &EntityType::IRON_GOLEM,
                         );
                         let golem = IronGolemEntity::new(entity);
-                        args.world.spawn_entity(golem).await;
+                        args.world.spawn_entity(golem);
                         return;
                     }
                 }
             }
-        })
+        }
     }
 }

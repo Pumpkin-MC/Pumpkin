@@ -333,7 +333,7 @@ impl HostContainerBlockEntity for PluginHostState {
             .get::<ContainerBlockEntityResource>(&Resource::new_own(res.rep()))
             .map_err(|_| wasmtime::Error::msg("invalid container block entity resource handle"))?;
         let inventory = container.provider.inventory.clone();
-        Ok(inventory.is_empty().await)
+        Ok(inventory.is_empty())
     }
 
     async fn get_stack(
@@ -346,7 +346,7 @@ impl HostContainerBlockEntity for PluginHostState {
             .get::<ContainerBlockEntityResource>(&Resource::new_own(res.rep()))
             .map_err(|_| wasmtime::Error::msg("invalid container block entity resource handle"))?;
         let inventory = container.provider.inventory.clone();
-        let stack = inventory.get_stack(slot as usize).await;
+        let stack = inventory.get_stack(slot as usize);
         if stack.is_empty() {
             Ok(None)
         } else {
@@ -376,7 +376,7 @@ impl HostContainerBlockEntity for PluginHostState {
             None => pumpkin_data::item_stack::ItemStack::EMPTY.clone(),
         };
 
-        inventory.set_stack(slot as usize, stack).await;
+        inventory.set_stack(slot as usize, stack);
         Ok(())
     }
 
@@ -390,7 +390,7 @@ impl HostContainerBlockEntity for PluginHostState {
             .get::<ContainerBlockEntityResource>(&Resource::new_own(res.rep()))
             .map_err(|_| wasmtime::Error::msg("invalid container block entity resource handle"))?;
         let inventory = container.provider.inventory.clone();
-        let removed = inventory.remove_stack(slot as usize).await;
+        let removed = inventory.remove_stack(slot as usize);
         if removed.is_empty() {
             Ok(None)
         } else {
@@ -406,7 +406,7 @@ impl HostContainerBlockEntity for PluginHostState {
             .get::<ContainerBlockEntityResource>(&Resource::new_own(res.rep()))
             .map_err(|_| wasmtime::Error::msg("invalid container block entity resource handle"))?;
         let inventory = container.provider.inventory.clone();
-        inventory.clear().await;
+        inventory.clear();
         Ok(())
     }
 
@@ -433,11 +433,19 @@ impl HostCommandBlockEntity for PluginHostState {
 
     async fn last_output(&mut self, res: Resource<CommandBlockEntity>) -> wasmtime::Result<String> {
         let entity = block_entity_from_resource(self, &Resource::new_own(res.rep()))?;
-        if let Some(cmd) = entity.as_any().downcast_ref::<InternalCommandBlockEntity>() {
-            Ok(cmd.last_output.lock().await.clone())
-        } else {
-            Err(wasmtime::Error::msg("Not a command block entity"))
-        }
+        entity
+            .as_any()
+            .downcast_ref::<InternalCommandBlockEntity>()
+            .map_or_else(
+                || Err(wasmtime::Error::msg("Not a command block entity")),
+                |cmd| {
+                    Ok(cmd
+                        .last_output
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner)
+                        .clone())
+                },
+            )
     }
 
     async fn track_output(&mut self, res: Resource<CommandBlockEntity>) -> wasmtime::Result<bool> {
@@ -464,11 +472,19 @@ impl HostCommandBlockEntity for PluginHostState {
 
     async fn command(&mut self, res: Resource<CommandBlockEntity>) -> wasmtime::Result<String> {
         let entity = block_entity_from_resource(self, &Resource::new_own(res.rep()))?;
-        if let Some(cmd) = entity.as_any().downcast_ref::<InternalCommandBlockEntity>() {
-            Ok(cmd.command.lock().await.clone())
-        } else {
-            Err(wasmtime::Error::msg("Not a command block entity"))
-        }
+        entity
+            .as_any()
+            .downcast_ref::<InternalCommandBlockEntity>()
+            .map_or_else(
+                || Err(wasmtime::Error::msg("Not a command block entity")),
+                |cmd| {
+                    Ok(cmd
+                        .command
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner)
+                        .clone())
+                },
+            )
     }
 
     async fn auto(&mut self, res: Resource<CommandBlockEntity>) -> wasmtime::Result<bool> {

@@ -27,50 +27,37 @@ impl GetClientSideArgParser for CommandTreeArgumentConsumer {
 }
 
 impl ArgumentConsumer for CommandTreeArgumentConsumer {
-    fn consume<'a, 'b>(
+    fn consume<'a>(
         &'a self,
         _sender: &'a CommandSender,
         server: &'a Server,
-        args: &'b mut RawArgs<'a>,
+        args: &mut RawArgs<'a>,
     ) -> ConsumeResult<'a> {
-        let s_opt: Option<&'a str> = args.pop().map(|arg| arg.value);
+        let s = args.pop().map(|arg| arg.value)?;
 
-        let Some(s) = s_opt else {
-            return Box::pin(async move { None });
-        };
+        let dispatcher = server.command_dispatcher.load();
 
-        Box::pin(async move {
-            let dispatcher = server.command_dispatcher.load();
-
-            dispatcher
-                .fallback_dispatcher
-                .get_tree(s)
-                .ok()
-                .map(|tree| Arg::CommandTree(tree.clone()))
-        })
+        dispatcher
+            .fallback_dispatcher
+            .get_tree(s)
+            .ok()
+            .map(|tree| Arg::CommandTree(tree.clone()))
     }
 
-    fn suggest<'a>(
-        &'a self,
-        _sender: &CommandSender,
-        server: &'a Server,
-        input: &'a str,
-    ) -> SuggestResult<'a> {
-        Box::pin(async move {
-            let Some(input) = input.split_single_whitespace_including_empty_parts().last() else {
-                return Ok(None);
-            };
+    fn suggest(&self, _sender: &CommandSender, server: &Server, input: &str) -> SuggestResult {
+        let Some(input) = input.split_single_whitespace_including_empty_parts().last() else {
+            return Ok(None);
+        };
 
-            let dispatcher = server.command_dispatcher.load();
-            let suggestions = dispatcher
-                .fallback_dispatcher
-                .commands
-                .keys()
-                .filter(|suggestion| suggestion.starts_with(input))
-                .map(|suggestion| CommandSuggestion::new(suggestion.clone(), None))
-                .collect();
-            Ok(Some(suggestions))
-        })
+        let dispatcher = server.command_dispatcher.load();
+        let suggestions = dispatcher
+            .fallback_dispatcher
+            .commands
+            .keys()
+            .filter(|suggestion| suggestion.starts_with(input))
+            .map(|suggestion| CommandSuggestion::new(suggestion.clone(), None))
+            .collect();
+        Ok(Some(suggestions))
     }
 }
 

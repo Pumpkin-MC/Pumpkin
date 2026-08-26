@@ -1,9 +1,8 @@
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU8, AtomicU32, Ordering};
-use tokio::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 use crate::{
-    entity::{Entity, EntityBase, EntityBaseFuture, living::LivingEntity, player::Player},
+    entity::{Entity, EntityBase, living::LivingEntity, player::Player},
     server::Server,
 };
 use pumpkin_data::damage::DamageType;
@@ -153,139 +152,132 @@ impl TridentEntity {
 }
 
 impl EntityBase for TridentEntity {
-    fn tick<'a>(
-        &'a self,
-        caller: &'a Arc<dyn EntityBase>,
-        _server: &'a Server,
-    ) -> EntityBaseFuture<'a, ()> {
-        Box::pin(async move {
-            let entity = self.get_entity();
-            let world = entity.world.load();
+    fn tick<'a>(&'a self, caller: &'a Arc<dyn EntityBase>, _server: &'a Server) {
+        let entity = self.get_entity();
+        let world = entity.world.load();
 
-            // Handle shake time
-            let shake = self.shake_time.load(Ordering::Relaxed);
-            if shake > 0 {
-                self.shake_time.store(shake - 1, Ordering::Relaxed);
+        // Handle shake time
+        let shake = self.shake_time.load(Ordering::Relaxed);
+        if shake > 0 {
+            self.shake_time.store(shake - 1, Ordering::Relaxed);
+        }
+
+        if self.in_ground.load(Ordering::Relaxed) {
+            let _in_ground_time = self.in_ground_time.fetch_add(1, Ordering::Relaxed);
+            let life = self.life.fetch_add(1, Ordering::Relaxed);
+
+            // Despawn after enough time
+            if life >= Self::DESPAWN_TIME {
+                entity.remove();
             }
+            return;
+        }
 
-            if self.in_ground.load(Ordering::Relaxed) {
-                let _in_ground_time = self.in_ground_time.fetch_add(1, Ordering::Relaxed);
-                let life = self.life.fetch_add(1, Ordering::Relaxed);
+        // Trident is flying
+        let start_pos = entity.pos.load();
+        let mut velocity = entity.velocity.load();
 
-                // Despawn after enough time
-                if life >= Self::DESPAWN_TIME {
-                    entity.remove().await;
-                }
-                return;
-            }
+        // Apply gravity
+        velocity.y -= Self::GRAVITY;
 
-            // Trident is flying
-            let start_pos = entity.pos.load();
-            let mut velocity = entity.velocity.load();
+        // Apply inertia (air resistance or water drag)
+        let inertia = if entity.touching_water.load(Ordering::Relaxed) {
+            Self::WATER_INERTIA
+        } else {
+            Self::AIR_INERTIA
+        };
+        velocity = velocity.multiply(inertia, inertia, inertia);
 
-            // Apply gravity
-            velocity.y -= Self::GRAVITY;
+        entity.velocity.store(velocity);
 
-            // Apply inertia (air resistance or water drag)
-            let inertia = if entity.touching_water.load(Ordering::Relaxed) {
-                Self::WATER_INERTIA
-            } else {
-                Self::AIR_INERTIA
-            };
-            velocity = velocity.multiply(inertia, inertia, inertia);
+        // Update rotation based on velocity
+        let len = velocity.horizontal_length();
+        entity.set_rotation(
+            velocity.x.atan2(velocity.z) as f32 * 57.295_776,
+            velocity.y.atan2(len) as f32 * 57.295_776,
+        );
 
-            entity.velocity.store(velocity);
+        // Move trident
+        let new_pos = start_pos.add(&velocity);
+        entity.set_pos(new_pos);
 
-            // Update rotation based on velocity
-            let len = velocity.horizontal_length();
-            entity.set_rotation(
-                velocity.x.atan2(velocity.z) as f32 * 57.295_776,
-                velocity.y.atan2(len) as f32 * 57.295_776,
-            );
+        // Broadcast velocity update
+        let packet = CEntityVelocity::new(entity.entity_id.into(), velocity);
+        let chunk_pos = entity.chunk_pos.load();
+        world.broadcast_to_chunk(chunk_pos, &packet);
 
-            // Move trident
-            let new_pos = start_pos.add(&velocity);
-            entity.set_pos(new_pos);
+        // Check for collisions using raycasting
+        let search_box = BoundingBox::new(
+            Vector3::new(
+                start_pos.x.min(new_pos.x),
+                start_pos.y.min(new_pos.y),
+                start_pos.z.min(new_pos.z),
+            ),
+            Vector3::new(
+                start_pos.x.max(new_pos.x),
+                start_pos.y.max(new_pos.y),
+                start_pos.z.max(new_pos.z),
+            ),
+        )
+        .expand(0.3, 0.3, 0.3);
 
-            // Broadcast velocity update
-            let packet = CEntityVelocity::new(entity.entity_id.into(), velocity);
-            let chunk_pos = entity.chunk_pos.load();
-            world.broadcast_to_chunk(chunk_pos, &packet);
+        let mut closest_t = 1.0f64;
+        let mut hit = None;
 
-            // Check for collisions using raycasting
-            let search_box = BoundingBox::new(
-                Vector3::new(
-                    start_pos.x.min(new_pos.x),
-                    start_pos.y.min(new_pos.y),
-                    start_pos.z.min(new_pos.z),
-                ),
-                Vector3::new(
-                    start_pos.x.max(new_pos.x),
-                    start_pos.y.max(new_pos.y),
-                    start_pos.z.max(new_pos.z),
-                ),
-            )
-            .expand(0.3, 0.3, 0.3);
+        // Block collisions
+        let (block_cols, block_positions) =
+            world.get_block_collisions(search_box, self.get_entity());
+        for (idx, bb) in block_cols.iter().enumerate() {
+            if let Some(t) = calculate_ray_intersection(&start_pos, &velocity, bb)
+                && t < closest_t
+            {
+                closest_t = t;
 
-            let mut closest_t = 1.0f64;
-            let mut hit = None;
-
-            // Block collisions
-            let (block_cols, block_positions) = world
-                .get_block_collisions(search_box, self.get_entity())
-                .await;
-            for (idx, bb) in block_cols.iter().enumerate() {
-                if let Some(t) = calculate_ray_intersection(&start_pos, &velocity, bb)
-                    && t < closest_t
-                {
-                    closest_t = t;
-
-                    // Map back to block pos
-                    let mut curr = 0;
-                    for (len, pos) in &block_positions {
-                        curr += len;
-                        if idx < curr {
-                            let hit_pos = start_pos.add(&velocity.multiply(t, t, t));
-                            hit = Some(ProjectileHit::Block {
-                                pos: *pos,
-                                face: get_hit_face(hit_pos, *pos),
-                                hit_pos,
-                                normal: velocity.normalize().multiply(-1.0, -1.0, -1.0),
-                            });
-                            break;
-                        }
+                // Map back to block pos
+                let mut curr = 0;
+                for (len, pos) in &block_positions {
+                    curr += len;
+                    if idx < curr {
+                        let hit_pos = start_pos.add(&velocity.multiply(t, t, t));
+                        hit = Some(ProjectileHit::Block {
+                            pos: *pos,
+                            face: get_hit_face(hit_pos, *pos),
+                            hit_pos,
+                            normal: velocity.normalize().multiply(-1.0, -1.0, -1.0),
+                        });
+                        break;
                     }
                 }
             }
+        }
 
-            // Entity collisions
-            let candidates = world.get_entities_at_box(&search_box);
-            for cand in candidates {
-                if self.should_skip_collision(entity, &cand) {
-                    continue;
-                }
-
-                let ebb = cand.get_entity().bounding_box.load().expand(0.3, 0.3, 0.3);
-                if let Some(t) = calculate_ray_intersection(&start_pos, &velocity, &ebb)
-                    && t < closest_t
-                {
-                    closest_t = t;
-                    let hit_pos = start_pos.add(&velocity.multiply(t, t, t));
-                    hit = Some(ProjectileHit::Entity {
-                        entity: cand.clone(),
-                        hit_pos,
-                        normal: velocity.normalize().multiply(-1.0, -1.0, -1.0),
-                    });
-                }
+        // Entity collisions
+        let candidates = world.get_entities_at_box(&search_box);
+        for cand in candidates {
+            if self.should_skip_collision(entity, &cand) {
+                continue;
             }
 
-            // Handle hit
-            if let Some(h) = hit
-                && !self.has_hit.swap(true, Ordering::SeqCst)
+            let ebb = cand.get_entity().bounding_box.load().expand(0.3, 0.3, 0.3);
+            if let Some(t) = calculate_ray_intersection(&start_pos, &velocity, &ebb)
+                && t < closest_t
             {
-                caller.on_hit(h).await;
+                closest_t = t;
+                let hit_pos = start_pos.add(&velocity.multiply(t, t, t));
+                hit = Some(ProjectileHit::Entity {
+                    entity: cand.clone(),
+                    hit_pos,
+                    normal: velocity.normalize().multiply(-1.0, -1.0, -1.0),
+                });
             }
-        })
+        }
+
+        // Handle hit
+        if let Some(h) = hit
+            && !self.has_hit.swap(true, Ordering::SeqCst)
+        {
+            caller.on_hit(h);
+        }
     }
 
     fn get_entity(&self) -> &Entity {
@@ -299,107 +291,106 @@ impl EntityBase for TridentEntity {
         self
     }
 
-    fn on_hit(&self, hit: ProjectileHit) -> EntityBaseFuture<'_, ()> {
-        Box::pin(async move {
-            let entity = self.get_entity();
-            let world = entity.world.load();
+    fn on_hit(&self, hit: ProjectileHit) {
+        let entity = self.get_entity();
+        let world = entity.world.load();
 
-            match hit {
-                ProjectileHit::Block { pos, hit_pos, .. } => {
-                    self.in_ground.store(true, Ordering::Relaxed);
-                    self.shake_time.store(7, Ordering::Relaxed);
-                    *self
-                        .last_block_pos
-                        .write()
-                        .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(pos);
+        match hit {
+            ProjectileHit::Block { pos, hit_pos, .. } => {
+                self.in_ground.store(true, Ordering::Relaxed);
+                self.shake_time.store(7, Ordering::Relaxed);
+                *self
+                    .last_block_pos
+                    .write()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(pos);
 
-                    // Stop the trident
-                    entity.velocity.store(Vector3::new(0.0, 0.0, 0.0));
-                    entity.set_pos(hit_pos);
+                // Stop the trident
+                entity.velocity.store(Vector3::new(0.0, 0.0, 0.0));
+                entity.set_pos(hit_pos);
 
-                    // Play sound
-                    let sound_packet = CSoundEffect::new(
-                        IdOr::Id(Sound::ItemTridentHitGround as u16),
-                        SoundCategory::Neutral,
-                        &hit_pos,
-                        1.0,
-                        1.0,
-                        0.0,
-                    );
-                    let chunk_pos = entity.chunk_pos.load();
-                    world.broadcast_to_chunk(chunk_pos, &sound_packet);
-                }
-                ProjectileHit::Entity {
-                    entity: target,
-                    hit_pos,
-                    ..
-                } => {
-                    let mut damage = Self::BASE_DAMAGE;
+                // Play sound
+                let sound_packet = CSoundEffect::new(
+                    IdOr::Id(Sound::ItemTridentHitGround as u16),
+                    SoundCategory::Neutral,
+                    &hit_pos,
+                    1.0,
+                    1.0,
+                    0.0,
+                );
+                let chunk_pos = entity.chunk_pos.load();
+                world.broadcast_to_chunk(chunk_pos, &sound_packet);
+            }
+            ProjectileHit::Entity {
+                entity: target,
+                hit_pos,
+                ..
+            } => {
+                let mut damage = Self::BASE_DAMAGE;
 
-                    // Apply Impaling enchantment extra damage
-                    if let Some(enchantments) = self
-                        .item_stack
-                        .lock()
-                        .await
-                        .get_data_component::<pumpkin_data::data_component_impl::EnchantmentsImpl>(
-                    ) {
-                        for (enchantment, level) in enchantments.enchantment.iter() {
-                            if **enchantment == pumpkin_data::Enchantment::IMPALING {
-                                let in_water =
-                                    target.get_entity().touching_water.load(Ordering::Relaxed);
-                                if in_water {
-                                    damage += 1.25 * f64::from(*level);
-                                }
+                // Apply Impaling enchantment extra damage
+                if let Some(enchantments) = self
+                    .item_stack
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .get_data_component::<pumpkin_data::data_component_impl::EnchantmentsImpl>()
+                {
+                    for (enchantment, level) in enchantments.enchantment.iter() {
+                        if **enchantment == pumpkin_data::Enchantment::IMPALING {
+                            let in_water =
+                                target.get_entity().touching_water.load(Ordering::Relaxed);
+                            if in_water {
+                                damage += 1.25 * f64::from(*level);
                             }
                         }
                     }
-
-                    target
-                        .damage(&*target, damage as f32, DamageType::TRIDENT)
-                        .await;
-
-                    // Play hit sound
-                    let sound_packet = CSoundEffect::new(
-                        IdOr::Id(Sound::ItemTridentHit as u16),
-                        SoundCategory::Neutral,
-                        &hit_pos,
-                        1.0,
-                        1.0,
-                        0.0,
-                    );
-                    world.broadcast_packet_all(&sound_packet);
-
-                    // Standard bounce/fall-back behavior
-                    entity.velocity.store(Vector3::new(0.0, -0.1, 0.0));
-                    self.has_hit.store(false, Ordering::Relaxed); // Let it hit the ground
                 }
+
+                let damage_val = damage as f32;
+                target.damage(&*target, damage_val, DamageType::TRIDENT);
+
+                // Play hit sound
+                let sound_packet = CSoundEffect::new(
+                    IdOr::Id(Sound::ItemTridentHit as u16),
+                    SoundCategory::Neutral,
+                    &hit_pos,
+                    1.0,
+                    1.0,
+                    0.0,
+                );
+                world.broadcast_packet_all(&sound_packet);
+
+                // Standard bounce/fall-back behavior
+                entity.velocity.store(Vector3::new(0.0, -0.1, 0.0));
+                self.has_hit.store(false, Ordering::Relaxed); // Let it hit the ground
             }
-        })
+        }
     }
 
-    fn on_player_collision<'a>(&'a self, player: &'a Arc<Player>) -> EntityBaseFuture<'a, ()> {
-        Box::pin(async move {
-            // Can only pick up when on the ground
-            if !self.in_ground.load(Ordering::Relaxed) {
-                return;
-            }
+    fn on_player_collision(&self, player: &Arc<Player>) {
+        // Can only pick up when on the ground
+        if !self.in_ground.load(Ordering::Relaxed) {
+            return;
+        }
 
-            if player.living_entity.health.load() <= 0.0 {
-                return;
-            }
+        if player.living_entity.health.load() <= 0.0 {
+            return;
+        }
 
-            match self.pickup {
-                ArrowPickup::Disallowed => return,
-                ArrowPickup::CreativeOnly if !player.is_creative() => return,
-                _ => {}
-            }
+        match self.pickup {
+            ArrowPickup::Disallowed => return,
+            ArrowPickup::CreativeOnly if !player.is_creative() => return,
+            _ => {}
+        }
 
-            let mut stack = self.item_stack.lock().await.clone();
-            if player.is_creative() || player.inventory.insert_stack_anywhere(&mut stack).await {
-                player.living_entity.pickup(&self.entity, 1);
-                self.get_entity().remove().await;
-            }
-        })
+        let mut stack = self
+            .item_stack
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone();
+        if player.is_creative() || player.inventory.insert_stack_anywhere(&mut stack) {
+            player.living_entity.pickup(&self.entity, 1);
+            self.get_entity().remove();
+        }
     }
 }
 
