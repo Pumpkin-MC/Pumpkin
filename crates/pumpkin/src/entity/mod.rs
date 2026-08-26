@@ -2999,6 +2999,15 @@ impl Entity {
             .play_sound(sound, SoundCategory::Neutral, &self.pos.load());
     }
 
+    // Returns true when a tracked-data field can be sent to a client on this version.
+    // The generated TrackedId table only contains indices for the current version,
+    // so we cannot remap other fields for older clients. The shared-flags byte is
+    // the only field with the same index and type in every supported Java version,
+    // and it carries the on-fire, sneaking, sprinting, and glowing states.
+    fn can_send_tracked_data(id: tracked_data::TrackedId, version: JavaMinecraftVersion) -> bool {
+        version >= CURRENT_MC_VERSION || id == tracked_data::entity::DATA_SHARED_FLAGS_ID.id
+    }
+
     pub fn send_meta_data<T: MetadataSerializer>(
         &self,
         meta: &[Metadata<T>],
@@ -3027,11 +3036,11 @@ impl Entity {
             World::collect_java_recipients_by_version(java_recipients.into_iter());
 
         for (version, recipients) in recipients_by_version {
-            if version < CURRENT_MC_VERSION {
-                continue;
-            }
             let mut buf = Vec::new();
             for m in meta {
+                if !Self::can_send_tracked_data(m.index, version) {
+                    continue;
+                }
                 let _ = m.write(&mut buf, &version);
             }
             buf.put_u8(255);
