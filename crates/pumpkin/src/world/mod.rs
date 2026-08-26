@@ -181,6 +181,10 @@ type FlowingFluidProperties = pumpkin_data::fluid::FlowingWaterLikeFluidProperti
 
 const MAX_LIGHT_LEVEL: u8 = 15;
 
+/// The maximum radius in blocks around the suggested spawn position to search
+/// for a safe player spawn position, mirroring vanilla's spawn search.
+const PLAYER_SPAWN_SEARCH_RADIUS: i32 = 16;
+
 fn bedrock_chest_block_actor(state_id: BlockStateId, position: BlockPos) -> Option<NbtCompound> {
     let (block, _) = BlockState::from_id_with_block(state_id);
     if !block.has_tag(&pumpkin_data::tag::Block::C_CHESTS_WOODEN)
@@ -2280,6 +2284,158 @@ impl World {
             .unwrap_or(self.min_y)
     }
 
+    /// Mirrors vanilla's `Block#isPossibleToRespawnInThis`: a block is a possible
+    /// respawn location when it is neither solid nor liquid, so it can neither
+    /// obstruct the player nor suffocate, drown, or burn them.
+    pub fn is_possible_to_respawn_in(&self, position: &BlockPos) -> bool {
+        let state = self.get_block_state(position);
+        !state.is_solid() && !state.is_liquid()
+    }
+
+    /// Checks whether a position is safe for a player to spawn at, mirroring
+    /// vanilla's `ServerPlayer#findRespawnAndUseSpawnBlock`:
+    ///
+    /// - the block at the player's feet must not be solid or liquid (no
+    ///   collision, no drowning, no burning),
+    /// - the block at the player's head must not be solid or liquid (no
+    ///   obstruction, no suffocation).
+    pub fn is_safe_player_spawn_position(&self, position: &BlockPos) -> bool {
+        self.is_possible_to_respawn_in(position) && self.is_possible_to_respawn_in(&position.up())
+    }
+
+    /// Moves the spawn position up while it is unsafe and then down until the
+    /// position is just above the ground again, mirroring vanilla's
+    /// `PlayerSpawnFinder#fixupSpawnHeight`. Used as a last resort when no safe
+    /// position could be found around the suggested one.
+    fn fixup_spawn_height(&self, mut position: BlockPos) -> BlockPos {
+        // The head block also has to fit in the world, so the feet can only go
+        // as high as one block below the top.
+        let max_feet_y = self.get_top_y() - 1;
+        while !self.is_safe_player_spawn_position(&position) && position.0.y < max_feet_y {
+            position = position.up();
+        }
+        while self.is_safe_player_spawn_position(&position) && position.0.y > self.dimension.min_y {
+            position = position.down();
+        }
+        position.up()
+    }
+
+    /// Computes the position a player joining the server for the first time
+    /// spawns at, mirroring vanilla's `PlayerSpawnFinder`:
+    ///
+    /// The world spawn column is checked first. When the block at the player's
+    /// feet or the block at the player's head is not safe, the columns around
+    /// the spawn point are searched for a safe position. As a last resort the
+    /// suggested column is fixed up so the player stands on the ground.
+    pub async fn get_safe_player_spawn_position(
+        &self,
+        spawn_x: i32,
+        spawn_z: i32,
+        fallback_y: i32,
+    ) -> Vector3<f64> {
+        let mut loaded_chunks = FxHashSet::default();
+        let suggestion = BlockPos::new(spawn_x, fallback_y, spawn_z);
+
+        let position = match self
+            .check_spawn_column(spawn_x, spawn_z, &mut loaded_chunks)
+            .await
+        {
+            Some(position) => position,
+            None => self
+                .find_safe_player_spawn_position(suggestion, &mut loaded_chunks)
+                .await
+                .unwrap_or_else(|| {
+                    // Vanilla's last resort: place the player on top of the ground
+                    // of the suggested column.
+                    let top = self.get_top_block(Vector2::new(spawn_x, spawn_z));
+                    let position = if top > self.dimension.min_y {
+                        BlockPos::new(spawn_x, top + 1, spawn_z)
+                    } else {
+                        suggestion
+                    };
+                    self.fixup_spawn_height(position)
+                }),
+        };
+
+        Vector3::new(
+            f64::from(position.0.x) + 0.5,
+            f64::from(position.0.y),
+            f64::from(position.0.z) + 0.5,
+        )
+    }
+
+    /// Searches the columns around `suggestion` for a safe player spawn
+    /// position, expanding outward in a square spiral until
+    /// `PLAYER_SPAWN_SEARCH_RADIUS` is reached. Mirrors vanilla's
+    /// `PlayerSpawnFinder`.
+    async fn find_safe_player_spawn_position(
+        &self,
+        suggestion: BlockPos,
+        loaded_chunks: &mut FxHashSet<Vector2<i32>>,
+    ) -> Option<BlockPos> {
+        for radius in 1..=PLAYER_SPAWN_SEARCH_RADIUS {
+            let min_x = suggestion.0.x - radius;
+            let max_x = suggestion.0.x + radius;
+            let min_z = suggestion.0.z - radius;
+            let max_z = suggestion.0.z + radius;
+
+            // Top and bottom edges of the ring.
+            for x in min_x..=max_x {
+                for z in [min_z, max_z] {
+                    if let Some(found) = self.check_spawn_column(x, z, loaded_chunks).await {
+                        return Some(found);
+                    }
+                }
+            }
+
+            // Left and right edges of the ring, corners were already checked.
+            for z in (min_z + 1)..max_z {
+                for x in [min_x, max_x] {
+                    if let Some(found) = self.check_spawn_column(x, z, loaded_chunks).await {
+                        return Some(found);
+                    }
+                }
+            }
+        }
+
+        None
+    }
+
+    /// Checks whether the column at `x`, `z` offers a safe spawn position,
+    /// mirroring vanilla's `PlayerSpawnFinder#getLevelRespawnPos`. The chunk is
+    /// fetched first when it has not been loaded yet.
+    async fn check_spawn_column(
+        &self,
+        x: i32,
+        z: i32,
+        loaded_chunks: &mut FxHashSet<Vector2<i32>>,
+    ) -> Option<BlockPos> {
+        let chunk_pos = Vector2::new(x >> 4, z >> 4);
+        if loaded_chunks.insert(chunk_pos) {
+            self.level.get_or_fetch_chunk(chunk_pos, |_| ()).await;
+        }
+
+        let top = self.get_top_block(Vector2::new(x, z));
+        if top <= self.dimension.min_y {
+            // Unloaded or empty column.
+            return None;
+        }
+
+        let top_state = self.get_block_state(&BlockPos::new(x, top, z));
+        // Skip columns whose surface is a fluid so players do not spawn in the
+        // middle of an ocean, mirroring vanilla's surface/floor check.
+        if top_state.is_liquid() {
+            return None;
+        }
+        // The player needs a block with a solid top face below their feet.
+        if !top_state.is_side_solid(BlockDirection::Up) {
+            return None;
+        }
+
+        let feet = BlockPos::new(x, top + 1, z);
+        self.is_safe_player_spawn_position(&feet).then_some(feet)
+    }
+
     #[allow(clippy::too_many_lines)]
     pub async fn spawn_bedrock_player(
         &self,
@@ -2306,21 +2462,13 @@ impl World {
 
             (position, yaw, pitch)
         } else {
-            let spawn_position = Vector2::new(level_info.spawn_x, level_info.spawn_z);
-            let chunk_pos = Vector2::new(level_info.spawn_x >> 4, level_info.spawn_z >> 4);
-            self.level.get_or_fetch_chunk(chunk_pos, |_| ()).await;
-            let top = self.get_top_block(spawn_position);
-            let pos_y = if top > self.dimension.min_y {
-                top + 1
-            } else {
-                level_info.spawn_y
-            };
-
-            let position = Vector3::new(
-                f64::from(level_info.spawn_x) + 0.5,
-                f64::from(pos_y),
-                f64::from(level_info.spawn_z) + 0.5,
-            );
+            let position = self
+                .get_safe_player_spawn_position(
+                    level_info.spawn_x,
+                    level_info.spawn_z,
+                    level_info.spawn_y,
+                )
+                .await;
             (position, level_info.spawn_yaw, level_info.spawn_pitch)
         };
 
@@ -3149,21 +3297,9 @@ impl World {
             (position, yaw, pitch)
         } else {
             let info = &self.level_info.load();
-            let spawn_position = Vector2::new(info.spawn_x, info.spawn_z);
-            let chunk_pos = Vector2::new(info.spawn_x >> 4, info.spawn_z >> 4);
-            self.level.get_or_fetch_chunk(chunk_pos, |_| ()).await;
-            let top = self.get_top_block(spawn_position);
-            let pos_y = if top > self.dimension.min_y {
-                top + 1
-            } else {
-                info.spawn_y
-            };
-
-            let position = Vector3::new(
-                f64::from(info.spawn_x) + 0.5,
-                f64::from(pos_y),
-                f64::from(info.spawn_z) + 0.5,
-            );
+            let position = self
+                .get_safe_player_spawn_position(info.spawn_x, info.spawn_z, info.spawn_y)
+                .await;
             (position, info.spawn_yaw, info.spawn_pitch)
         };
 
@@ -3983,27 +4119,15 @@ impl World {
                 }
             }
 
-            // FIXME: This spawn position calculation is incorrect. Should use vanilla's
-            // proper spawn position calculation (see #1381). The y-level calculation
-            // needs to account for spawn radius and find a safe spawn position.
-            let chunk_pos = Vector2::new(spawn_x >> 4, spawn_z >> 4);
-            default_world
-                .level
-                .get_or_fetch_chunk(chunk_pos, |_| ())
+            // Mirrors vanilla's `PlayerSpawnFinder`: use the world spawn as the
+            // suggestion and search for a position where the block at the
+            // player's feet and the block at the player's head are safe.
+            let position = default_world
+                .get_safe_player_spawn_position(spawn_x, spawn_z, spawn_y)
                 .await;
-            let top = default_world.get_top_block(Vector2::new(spawn_x, spawn_z));
-            let pos_y = if top > default_world.dimension.min_y {
-                top + 1
-            } else {
-                spawn_y
-            };
 
             (
-                Vector3::new(
-                    f64::from(spawn_x) + 0.5,
-                    f64::from(pos_y),
-                    f64::from(spawn_z) + 0.5,
-                ),
+                position,
                 spawn_yaw,
                 spawn_pitch,
                 default_world.dimension.clone(),
