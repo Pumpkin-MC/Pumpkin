@@ -2028,14 +2028,8 @@ impl LivingEntity {
         // Send health metadata
         self.entity.send_meta_data(
             &[
-                Metadata::new(
-                    tracked_data::living_entity::DATA_HEALTH_ID,
-                    max_health,
-                ),
-                Metadata::new(
-                    tracked_data::living_entity::HEALTH,
-                    max_health,
-                ),
+                Metadata::new(tracked_data::living_entity::DATA_HEALTH_ID, max_health),
+                Metadata::new(tracked_data::living_entity::HEALTH, max_health),
             ],
             None,
         );
