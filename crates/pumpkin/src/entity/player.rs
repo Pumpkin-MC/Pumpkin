@@ -265,8 +265,8 @@ use pumpkin_protocol::java::client::play::{
     CSetContainerProperty, CSetContainerSlot, CSetCursorItem, CSetExperience, CSetHealth,
     CSetPlayerInventory, CSetSelectedSlot, CSoundEffect, CStopSound, CSubtitle, CSystemChatMessage,
     CTabList, CTitleAnimation, CTitleText, CUnloadChunk, CUpdateMobEffect, CUpdateTime, GameEvent,
-    MapIcon, MapPatch, Metadata, PlayerAction, PlayerInfoFlags, PlayerSpawnData, PreviousMessage,
-    Statistic,
+    MapIcon, MapPatch, Metadata, ParticleOptions, PlayerAction, PlayerInfoFlags, PlayerSpawnData,
+    PreviousMessage, Statistic,
 };
 use pumpkin_protocol::java::server::play::{
     SClickSlot, SContainerButtonClick, SRenameItem, SlotActionType,
@@ -2386,6 +2386,42 @@ impl Player {
         if let ClientPlatform::Java(client) = self.client.as_ref()
             && let Ok(data) = client.serialize_packet(&packet)
         {
+            client.try_enqueue_packet(data);
+        }
+    }
+
+    /// Spawns a particle that carries a [`ParticleOptions`] payload.
+    ///
+    /// Particles whose vanilla `ParticleOptions` is not a `SimpleParticleType`
+    /// must be sent with that payload; without it the client cannot decode the
+    /// packet and drops the connection. Clients too old to know the particle are
+    /// skipped, see [`ParticleOptions::is_supported_by`].
+    pub fn spawn_particle_with_options(
+        &self,
+        position: Vector3<f64>,
+        offset: Vector3<f32>,
+        max_speed: f32,
+        particle_count: i32,
+        options: &ParticleOptions,
+    ) {
+        let ClientPlatform::Java(client) = self.client.as_ref() else {
+            return;
+        };
+        let Some(payload) = options.encode_for(client.version.load()) else {
+            return;
+        };
+
+        let packet = CParticle::new(
+            false,
+            false,
+            position,
+            offset,
+            max_speed,
+            particle_count,
+            VarInt(options.particle() as i32),
+            &payload,
+        );
+        if let Ok(data) = client.serialize_packet(&packet) {
             client.try_enqueue_packet(data);
         }
     }

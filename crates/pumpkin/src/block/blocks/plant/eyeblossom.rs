@@ -5,9 +5,9 @@ use pumpkin_data::{
     dimension::Dimension,
     effect::StatusEffect,
     entity::EntityType,
-    particle::Particle,
     sound::{Sound, SoundCategory},
 };
+use pumpkin_protocol::java::client::play::ParticleOptions;
 use pumpkin_util::{
     Difficulty,
     math::{position::BlockPos, vector3::Vector3},
@@ -25,6 +25,10 @@ use crate::{
 
 const EYEBLOSSOM_XZ_RANGE: i32 = 3;
 const EYEBLOSSOM_Y_RANGE: i32 = 2;
+
+/// Trail particle colors from vanilla `EyeblossomBlock.Type.particleColor`.
+const OPEN_PARTICLE_COLOR: i32 = 16_545_810;
+const CLOSED_PARTICLE_COLOR: i32 = 6_250_335;
 
 pub struct EyeblossomBlock;
 
@@ -141,15 +145,9 @@ pub fn try_changing_state(world: &Arc<World>, current_block: &Block, pos: &Block
 
     world.set_block_state(pos, new_block.default_state.id, BlockFlags::NOTIFY_ALL);
 
-    world.spawn_particle(
-        pos.to_centered_f64(),
-        Vector3::new(0.0, 0.0, 0.0),
-        0.0,
-        1,
-        Particle::Trail,
-    );
-
     let mut rng = rand::rng();
+    spawn_transform_particle(world, new_block, pos, &mut rng);
+
     for dx in -EYEBLOSSOM_XZ_RANGE..=EYEBLOSSOM_XZ_RANGE {
         for dy in -EYEBLOSSOM_Y_RANGE..=EYEBLOSSOM_Y_RANGE {
             for dz in -EYEBLOSSOM_XZ_RANGE..=EYEBLOSSOM_XZ_RANGE {
@@ -180,4 +178,95 @@ pub fn try_changing_state(world: &Arc<World>, current_block: &Block, pos: &Block
     }
 
     true
+}
+
+/// Emits the `minecraft:trail` particle that marks a flower changing state,
+/// mirroring vanilla `EyeblossomBlock.Type.spawnTransformParticle`.
+fn spawn_transform_particle(
+    world: &Arc<World>,
+    new_block: &Block,
+    pos: &BlockPos,
+    rng: &mut impl RngExt,
+) {
+    world.spawn_particle_with_options(
+        pos.to_centered_f64(),
+        Vector3::new(0.0, 0.0, 0.0),
+        0.0,
+        1,
+        &transform_particle(new_block, pos, rng),
+    );
+}
+
+/// Builds that particle. Vanilla runs this on the type the flower turned *into*,
+/// so `new_block` is the new state and the color comes from it.
+fn transform_particle(new_block: &Block, pos: &BlockPos, rng: &mut impl RngExt) -> ParticleOptions {
+    let color = if new_block == &Block::OPEN_EYEBLOSSOM {
+        OPEN_PARTICLE_COLOR
+    } else {
+        CLOSED_PARTICLE_COLOR
+    };
+
+    let start = pos.to_centered_f64();
+    let lifetime = 0.5 + rng.random::<f64>();
+    let velocity = Vector3::new(
+        rng.random::<f64>() - 0.5,
+        rng.random::<f64>() + 1.0,
+        rng.random::<f64>() - 0.5,
+    );
+
+    ParticleOptions::Trail {
+        target: start.add(&velocity.multiply(lifetime, lifetime, lifetime)),
+        color,
+        duration: (20.0 * lifetime) as i32,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use pumpkin_protocol::java::client::play::ParticleOptions;
+    use rand::{SeedableRng, rngs::StdRng};
+
+    use super::{Block, BlockPos, CLOSED_PARTICLE_COLOR, OPEN_PARTICLE_COLOR, transform_particle};
+
+    /// Vanilla bounds: `lifetime` is `0.5 + random()`, so it lies in `[0.5, 1.5)`,
+    /// and the velocity components in `[-0.5, 0.5)` and `[1.0, 2.0)`.
+    #[test]
+    fn transform_particle_stays_within_the_vanilla_envelope() {
+        let mut rng = StdRng::seed_from_u64(0x376C_0554);
+        let pos = BlockPos::new(12, 70, -34);
+        let center = pos.to_centered_f64();
+
+        for _ in 0..10_000 {
+            let ParticleOptions::Trail {
+                target,
+                color,
+                duration,
+            } = transform_particle(&Block::OPEN_EYEBLOSSOM, &pos, &mut rng);
+
+            assert_eq!(color, OPEN_PARTICLE_COLOR);
+            // duration is `(20.0 * lifetime) as i32` over `[0.5, 1.5)`.
+            assert!((10..=29).contains(&duration), "duration {duration}");
+
+            let offset = target.sub(&center);
+            assert!(offset.x.abs() < 0.75, "x {}", offset.x);
+            assert!(offset.z.abs() < 0.75, "z {}", offset.z);
+            assert!(
+                offset.y > 0.0 && offset.y < 3.0,
+                "y {} should rise but stay near the flower",
+                offset.y
+            );
+        }
+    }
+
+    /// The color identifies the state the flower turned into, not the one it left.
+    #[test]
+    fn transform_particle_takes_the_color_of_the_new_state() {
+        let mut rng = StdRng::seed_from_u64(0x0EFE_B105);
+        let pos = BlockPos::new(0, 64, 0);
+
+        let closed = transform_particle(&Block::CLOSED_EYEBLOSSOM, &pos, &mut rng);
+        let ParticleOptions::Trail { color, .. } = closed;
+        assert_eq!(color, CLOSED_PARTICLE_COLOR);
+        assert_ne!(CLOSED_PARTICLE_COLOR, OPEN_PARTICLE_COLOR);
+    }
 }
