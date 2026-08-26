@@ -732,15 +732,24 @@ impl JavaClient {
                 .await;
             }
             id if id == SChatCommandSigned::to_id(version) => {
-                let signed = SChatCommandSigned::read(&mut payload, &version)?;
-                self.handle_chat_command(
-                    player,
-                    server,
-                    &SChatCommand {
-                        command: signed.command,
-                    },
-                )
-                .await;
+                let mut signed_payload = payload;
+                if let Ok(signed) = SChatCommandSigned::read(&mut signed_payload, &version) {
+                    self.handle_chat_command(
+                        player,
+                        server,
+                        &SChatCommand {
+                            command: signed.command,
+                        },
+                    )
+                    .await;
+                } else {
+                    self.handle_chat_command(
+                        player,
+                        server,
+                        &(SChatCommand::read(&mut payload, &version)?),
+                    )
+                    .await;
+                }
             }
             id if id == SChatMessage::to_id(version) => {
                 self.handle_chat_message(
