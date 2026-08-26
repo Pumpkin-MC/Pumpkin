@@ -66,15 +66,15 @@ impl ClientPacket for CMultiBlockUpdate {
             write.write_var_int(&VarInt(self.updates.len() as i32))?;
 
             for update in &self.updates {
-                let (state_id, local_pos) = unpack_update(update);
+                let (state_id, local_pos) = unpack_update(*update);
                 let remapped_state_id = remap_block_state_for_version(state_id, *version);
                 let remapped_packed = (u64::from(remapped_state_id) << 12) | local_pos;
                 write.write_var_long(&VarLong(remapped_packed as i64))?;
             }
         } else {
             // Pre-1.13 the chunk position is sent as two separate i32s.
-            let chunk_x = ((self.chunk_section >> 42) & 0x3F_FFFF) as i64;
-            let chunk_z = ((self.chunk_section >> 20) & 0x3F_FFFF) as i64;
+            let chunk_x = (self.chunk_section >> 42) & 0x3F_FFFF;
+            let chunk_z = (self.chunk_section >> 20) & 0x3F_FFFF;
             write.write_i32_be(((chunk_x << 42) >> 42) as i32)?;
             write.write_i32_be(((chunk_z << 42) >> 42) as i32)?;
 
@@ -83,7 +83,7 @@ impl ClientPacket for CMultiBlockUpdate {
                 // a VarInt block state id.
                 write.write_var_int(&VarInt(self.updates.len() as i32))?;
                 for update in &self.updates {
-                    let (state_id, local_pos) = unpack_update(update);
+                    let (state_id, local_pos) = unpack_update(*update);
                     let remapped_state_id = remap_block_state_for_version(state_id, *version);
                     let (x, z, y) = local_coords(local_pos);
                     let packed_pos = ((x & 0xF) << 12) | ((z & 0xF) << 8) | (y & 0xF);
@@ -94,7 +94,7 @@ impl ClientPacket for CMultiBlockUpdate {
                 // 1.8: each record is horizontal position, y and a block state id.
                 write.write_var_int(&VarInt(self.updates.len() as i32))?;
                 for update in &self.updates {
-                    let (state_id, local_pos) = unpack_update(update);
+                    let (state_id, local_pos) = unpack_update(*update);
                     let remapped_state_id = remap_block_state_for_version(state_id, *version);
                     let (x, z, y) = local_coords(local_pos);
                     write.write_u8(((x & 0xF) << 4 | (z & 0xF)) as u8)?;
@@ -102,19 +102,20 @@ impl ClientPacket for CMultiBlockUpdate {
                     write.write_var_int(&VarInt(remapped_state_id as i32))?;
                 }
             } else {
-                // 1.7.x: the record count is a short and each record carries a
-                // plain block id instead of a block state id.
+                // 1.7.x: a short record count, then an i32 byte length, then
+                // each record is a packed position short followed by a packed
+                // block-state short ((block id << 4) | metadata).
                 let count = i16::try_from(self.updates.len())
                     .map_err(|_| WritingError::Message("Too many block updates".into()))?;
                 write.write_i16_be(count)?;
+                write.write_i32_be(i32::from(count) * 4)?;
                 for update in &self.updates {
-                    let (state_id, local_pos) = unpack_update(update);
+                    let (state_id, local_pos) = unpack_update(*update);
                     let remapped_state_id = remap_block_state_for_version(state_id, *version);
-                    let block_id = remapped_state_id >> 4;
                     let (x, z, y) = local_coords(local_pos);
-                    write.write_u8(((x & 0xF) << 4 | (z & 0xF)) as u8)?;
-                    write.write_u8(y as u8)?;
-                    write.write_var_int(&VarInt(block_id as i32))?;
+                    let packed_pos = ((x & 0xF) << 12) | ((z & 0xF) << 8) | (y & 0xF);
+                    write.write_u16_be(packed_pos as u16)?;
+                    write.write_u16_be(remapped_state_id)?;
                 }
             }
         }
@@ -124,21 +125,25 @@ impl ClientPacket for CMultiBlockUpdate {
 }
 
 /// Splits a stored packed update into its block state id and 12-bit local position.
-fn unpack_update(update: &VarLong) -> (u16, u64) {
+const fn unpack_update(update: VarLong) -> (u16, u64) {
     let packed = update.0 as u64;
     ((packed >> 12) as u16, packed & 0xFFF)
 }
 
 /// Decodes the `(x, z, y)` coordinates from a 12-bit packed local position.
-fn local_coords(local_pos: u64) -> (u64, u64, u64) {
-    ((local_pos >> 8) & 0xF, (local_pos >> 4) & 0xF, local_pos & 0xF)
+const fn local_coords(local_pos: u64) -> (u64, u64, u64) {
+    (
+        (local_pos >> 8) & 0xF,
+        (local_pos >> 4) & 0xF,
+        local_pos & 0xF,
+    )
 }
 
 #[cfg(test)]
 mod tests {
     use super::CMultiBlockUpdate;
-    use crate::codec::var_long::VarLong;
     use crate::ClientPacket;
+    use crate::codec::var_long::VarLong;
     use pumpkin_util::math::vector3::{self, Vector3};
     use pumpkin_util::version::JavaMinecraftVersion;
 
@@ -168,7 +173,7 @@ mod tests {
     }
 
     #[test]
-    fn v1_7_uses_short_count_and_plain_block_id() {
+    fn v1_7_uses_short_count_and_packed_records() {
         let packet = sample();
         let mut out = Vec::new();
         packet
@@ -178,9 +183,10 @@ mod tests {
         assert_eq!(&out[0..4], &1i32.to_be_bytes());
         assert_eq!(&out[4..8], &3i32.to_be_bytes());
         assert_eq!(&out[8..10], &1i16.to_be_bytes(), "count is a short in 1.7");
-        assert_eq!(out[10], 0x12, "horizontal position packs x << 4 | z");
-        assert_eq!(out[11], 3, "y coordinate");
-        assert!(out.len() >= 13);
+        assert_eq!(&out[10..14], &4i32.to_be_bytes(), "data length = count * 4");
+        // one record: packed position short + packed block-state short
+        assert_eq!(&out[14..16], &4611u16.to_be_bytes());
+        assert_eq!(out.len(), 4 + 4 + 2 + 4 + 4);
     }
 
     #[test]
