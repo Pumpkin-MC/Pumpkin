@@ -111,15 +111,15 @@ jobs:
       - uses: nttld/setup-ndk@v1
         with:
           ndk-version: r27c
-      - name: Install cargo-ndk
-        run: cargo install cargo-ndk
+      - run: cargo install cargo-ndk
+      - uses: taiki-e/install-action@nextest
       - uses: Swatinem/rust-cache@v2
       - name: Enable KVM
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
-      - name: Start Android emulator (API 24)
+      - name: Start Android emulator and cargo nextest
         uses: reactivecircus/android-emulator-runner@v2
         env:
           CARGO_NDK_PLATFORM: 24
@@ -130,7 +130,7 @@ jobs:
           profile: pixel_5
           force-avd-creation: false
           emulator-options: -no-snapshot-load -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -camera-front none
-          script: cargo ndk-test -t arm64-v8a -- --verbose
+          script: cargo nextest run --target aarch64-linux-android
   build_release:
     name: Build project in release
     runs-on: ${{ matrix.os }}
