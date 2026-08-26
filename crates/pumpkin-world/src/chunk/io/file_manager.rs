@@ -108,9 +108,7 @@ impl<S: ChunkSerializer<WriteBackend = PathBuf> + 'static> ChunkSerializerLazyLo
                     );
                     return Ok(S::default());
                 }
-                let value = tokio::task::spawn_blocking(move || S::read(bytes.into()))
-                    .await
-                    .map_err(|e| ChunkReadingError::IoError(std::io::Error::other(e)))??;
+                let value = S::read(bytes.into())?;
                 trace!("Successfully read file from disk: {}", self.path.display());
                 Ok(value)
             }

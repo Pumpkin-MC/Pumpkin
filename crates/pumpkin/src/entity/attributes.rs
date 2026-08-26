@@ -89,7 +89,7 @@ impl AttributeInstance {
 }
 
 /// Send updates for multiple attributes in a single packet for the given living entity.
-pub async fn send_attribute_updates_for_living(
+pub fn send_attribute_updates_for_living(
     living: &crate::entity::living::LivingEntity,
     attributes: Vec<Attributes>,
 ) {
@@ -176,8 +176,7 @@ pub async fn send_attribute_updates_for_living(
         .entity
         .world
         .load()
-        .broadcast_editioned(&je_packet, &be_packet)
-        .await;
+        .broadcast_editioned(&je_packet, &be_packet);
 }
 
 impl Clone for AttributeInstance {

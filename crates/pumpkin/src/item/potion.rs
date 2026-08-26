@@ -132,7 +132,7 @@ impl PotionContents {
     }
 
     /// Apply instant or duration effects to a target living entity.
-    pub async fn apply_effects_to(
+    pub fn apply_effects_to(
         target: &LivingEntity,
         effects: Vec<(&'static StatusEffect, i32, u8, bool, bool, bool)>,
         scale: f32,
@@ -155,13 +155,11 @@ impl PotionContents {
                 } else if effect_type.id == pumpkin_data::effect::StatusEffect::INSTANT_DAMAGE.id {
                     let amount = (6 * ((amplifier as i32) + 1)) as f32 * instant_scale;
 
-                    target
-                        .damage(
-                            target.get_entity(),
-                            amount,
-                            pumpkin_data::damage::DamageType::MAGIC,
-                        )
-                        .await;
+                    let _ = target.damage(
+                        target.get_entity(),
+                        amount,
+                        pumpkin_data::damage::DamageType::MAGIC,
+                    );
                 }
 
                 // For instant effects, still add a short visual effect entry as before
@@ -174,7 +172,7 @@ impl PotionContents {
                     show_icon,
                     blend: false,
                 };
-                target.add_effect(eff).await;
+                target.add_effect(eff);
             } else {
                 // Duration scaling
                 let duration_scale = source.duration_scale(scale);
@@ -189,7 +187,7 @@ impl PotionContents {
                     show_icon,
                     blend: false,
                 };
-                target.add_effect(eff).await;
+                target.add_effect(eff);
             }
         }
     }

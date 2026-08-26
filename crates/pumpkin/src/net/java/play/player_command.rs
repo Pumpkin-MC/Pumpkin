@@ -24,7 +24,7 @@ impl JavaClient {
                         server;
                         PlayerToggleSprintEvent::new(player.clone(), true);
                         'after: {
-                            player.get_entity().set_sprinting(event.is_sprinting).await;
+                            player.get_entity().set_sprinting(event.is_sprinting);
                         }
                     }}
                 }
@@ -35,12 +35,12 @@ impl JavaClient {
                         server;
                         PlayerToggleSprintEvent::new(player.clone(), false);
                         'after: {
-                            player.get_entity().set_sprinting(event.is_sprinting).await;
+                            player.get_entity().set_sprinting(event.is_sprinting);
                         }
                     }}
                 }
             }
-            Action::LeaveBed => player.wake_up().await,
+            Action::LeaveBed => player.wake_up(),
 
             Action::StartHorseJump | Action::StopHorseJump | Action::OpenVehicleInventory => {
                 debug!("todo");
@@ -54,7 +54,7 @@ impl JavaClient {
                     );
                     server.plugin_manager.fire(server, &mut event).await;
                     if !event.cancelled {
-                        entity.set_fall_flying(event.is_gliding).await;
+                        entity.set_fall_flying(event.is_gliding);
                     }
                 }
             }

@@ -2,7 +2,7 @@
 use super::*;
 
 impl BedrockClient {
-    pub async fn handle_animate(&self, player: &Arc<Player>, _server: &Server, packet: &SAnimate) {
+    pub fn handle_animate(&self, player: &Arc<Player>, _server: &Server, packet: &SAnimate) {
         if !player.has_client_loaded() {
             return;
         }
@@ -26,7 +26,7 @@ impl BedrockClient {
                 data: 0.0,
                 swing_source: None,
             };
-            world.broadcast_editioned(&je_packet, &be_packet).await;
+            world.broadcast_editioned(&je_packet, &be_packet);
         }
     }
 }

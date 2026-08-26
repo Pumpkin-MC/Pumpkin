@@ -1,4 +1,3 @@
-use crate::block::BlockFuture;
 use crate::block::GetStateForNeighborUpdateArgs;
 use crate::block::OnPlaceArgs;
 use pumpkin_data::BlockDirection;
@@ -25,23 +24,19 @@ type WallProperties = pumpkin_data::block_properties::ResinBrickWallLikeProperti
 pub struct WallBlock;
 
 impl BlockBehaviour for WallBlock {
-    fn on_place<'a>(&'a self, args: OnPlaceArgs<'a>) -> BlockFuture<'a, BlockStateId> {
-        Box::pin(async move {
-            let mut wall_props = WallProperties::default(args.block);
-            wall_props.waterlogged = args.replacing.water_source();
+    fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
+        let mut wall_props = WallProperties::default(args.block);
+        wall_props.waterlogged = args.replacing.water_source();
 
-            compute_wall_state(wall_props, args.world, args.block, args.position)
-        })
+        compute_wall_state(wall_props, args.world, args.block, args.position)
     }
 
-    fn get_state_for_neighbor_update<'a>(
-        &'a self,
-        args: GetStateForNeighborUpdateArgs<'a>,
-    ) -> BlockFuture<'a, BlockStateId> {
-        Box::pin(async move {
-            let wall_props = WallProperties::from_state_id(args.state_id, args.block);
-            compute_wall_state(wall_props, args.world, args.block, args.position)
-        })
+    fn get_state_for_neighbor_update(
+        &self,
+        args: GetStateForNeighborUpdateArgs<'_>,
+    ) -> BlockStateId {
+        let wall_props = WallProperties::from_state_id(args.state_id, args.block);
+        compute_wall_state(wall_props, args.world, args.block, args.position)
     }
 }
 

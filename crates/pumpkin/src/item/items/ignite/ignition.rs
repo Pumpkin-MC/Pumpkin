@@ -12,7 +12,7 @@ pub struct Ignition;
 impl Ignition {
     /// Lights `block` at `location` itself if it can be lit (campfires, candles, candle
     /// cakes), otherwise places a fire block at `fire_pos`.
-    pub async fn ignite_block<F, Fut>(
+    pub fn ignite_block<F>(
         ignite_logic: F,
         world: &Arc<World>,
         location: BlockPos,
@@ -20,8 +20,7 @@ impl Ignition {
         block: &Block,
     ) -> bool
     where
-        F: FnOnce(Arc<World>, BlockPos, BlockStateId) -> Fut,
-        Fut: Future<Output = ()>,
+        F: FnOnce(Arc<World>, BlockPos, BlockStateId),
     {
         if world.get_fluid(&location).name != Fluid::EMPTY.name {
             return false;
@@ -31,13 +30,13 @@ impl Ignition {
         let state_id = world.get_block_state_id(&location);
 
         if let Some(new_state_id) = can_be_lit(block, state_id) {
-            ignite_logic(world.clone(), location, new_state_id).await;
+            ignite_logic(world.clone(), location, new_state_id);
             return true;
         }
 
         let state_id = FireBlock.get_state_for_position(world, &fire_block, &fire_pos);
         if FireBlockBase::can_place_at(world, &fire_pos) {
-            ignite_logic(world.clone(), fire_pos, state_id).await;
+            ignite_logic(world.clone(), fire_pos, state_id);
             return true;
         }
 

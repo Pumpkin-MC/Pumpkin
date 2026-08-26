@@ -1771,8 +1771,7 @@ impl pumpkin::plugin::context::HostContext for PluginHostState {
 
         context_res
             .provider
-            .register_command(command_res.provider, permission)
-            .await;
+            .register_command(command_res.provider, permission);
         Ok(())
     }
 

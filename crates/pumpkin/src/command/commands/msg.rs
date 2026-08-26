@@ -24,42 +24,35 @@ const ARG_MESSAGE: &str = "message";
 struct Executor;
 
 impl CommandExecutor for Executor {
-    fn execute<'a>(
-        &'a self,
-        sender: &'a CommandSender,
-        _server: &'a crate::server::Server,
-        args: &'a ConsumedArgs<'a>,
-    ) -> CommandResult<'a> {
-        Box::pin(async move {
-            let Some(Arg::Msg(msg)) = args.get(ARG_MESSAGE) else {
-                return Err(InvalidConsumption(Some(ARG_MESSAGE.into())));
-            };
-            let targets = PlayersArgumentConsumer.find_arg_default_name(args)?;
-            let player = sender.as_player().ok_or(CommandError::InvalidRequirement)?;
+    fn execute(
+        &self,
+        sender: &CommandSender,
+        _server: &crate::server::Server,
+        args: &ConsumedArgs,
+    ) -> CommandResult {
+        let Some(Arg::Msg(msg)) = args.get(ARG_MESSAGE) else {
+            return Err(InvalidConsumption(Some(ARG_MESSAGE.into())));
+        };
+        let targets = PlayersArgumentConsumer.find_arg_default_name(args)?;
+        let player = sender.as_player().ok_or(CommandError::InvalidRequirement)?;
 
-            for target in targets {
-                player
-                    .send_message(
-                        &TextComponent::text(msg.clone()),
-                        MSG_COMMAND_OUTGOING,
-                        &player.get_display_name().await,
-                        Some(&target.get_display_name().await),
-                    )
-                    .await;
-            }
-            for target in targets {
-                target
-                    .send_message(
-                        &TextComponent::text(msg.clone()),
-                        MSG_COMMAND_INCOMING,
-                        &player.get_display_name().await,
-                        Some(&target.get_display_name().await),
-                    )
-                    .await;
-            }
+        for target in targets {
+            let msg_text = TextComponent::text(msg.clone());
+            player.send_message(
+                &msg_text,
+                MSG_COMMAND_OUTGOING,
+                &player.get_display_name(),
+                Some(&target.get_display_name()),
+            );
+            target.send_message(
+                &msg_text,
+                MSG_COMMAND_INCOMING,
+                &player.get_display_name(),
+                Some(&target.get_display_name()),
+            );
+        }
 
-            Ok(targets.len() as i32)
-        })
+        Ok(targets.len() as i32)
     }
 }
 

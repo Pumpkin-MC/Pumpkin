@@ -27,23 +27,15 @@ impl GetClientSideArgParser for DamageTypeArgumentConsumer {
 }
 
 impl ArgumentConsumer for DamageTypeArgumentConsumer {
-    fn consume<'a, 'b>(
+    fn consume<'a>(
         &'a self,
         _sender: &'a CommandSender,
         _server: &'a Server,
-        args: &'b mut RawArgs<'a>,
+        args: &mut RawArgs<'a>,
     ) -> ConsumeResult<'a> {
-        let name_opt: Option<&'a str> = args.pop().map(|arg| arg.value);
-
-        let result: Option<Arg<'a>> = name_opt.map_or_else(
-            || None,
-            |name| {
-                let name = name.strip_prefix("minecraft:").unwrap_or(name);
-                DamageType::from_name(name).map(Arg::DamageType)
-            },
-        );
-
-        Box::pin(async move { result })
+        let name = args.pop().map(|arg| arg.value)?;
+        let name = name.strip_prefix("minecraft:").unwrap_or(name);
+        DamageType::from_name(name).map(Arg::DamageType)
     }
 }
 

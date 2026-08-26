@@ -13,7 +13,7 @@ use pumpkin_protocol::java::client::play::Metadata;
 use pumpkin_util::math::position::BlockPos;
 
 use crate::entity::{
-    Entity, EntityBase, EntityBaseFuture, NbtFuture,
+    Entity, EntityBase,
     ai::goal::{
         active_target::ActiveTargetGoal, look_around::RandomLookAroundGoal,
         look_at_entity::LookAtEntityGoal, melee_attack::MeleeAttackGoal, open_door::OpenDoorGoal,
@@ -122,7 +122,7 @@ impl PiglinBruteEntity {
         state.id != Block::NETHER_WART_BLOCK.default_state.id
     }
 
-    async fn convert_to_zombified(&self) {
+    fn convert_to_zombified(&self) {
         let entity = &self.mob_entity.living_entity.entity;
         let world = entity.world.load();
         let pos = entity.pos.load();
@@ -156,17 +156,25 @@ impl PiglinBruteEntity {
         }
 
         {
-            let src_equip = self.mob_entity.living_entity.entity_equipment.lock().await;
+            let src_equip = self
+                .mob_entity
+                .living_entity
+                .entity_equipment
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
             if let Some(living) = zombified.get_living_entity() {
-                let mut dst_equip = living.entity_equipment.lock().await;
+                let mut dst_equip = living
+                    .entity_equipment
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
                 for (slot, item) in &src_equip.equipment {
                     dst_equip.put(slot, item.clone());
                 }
             }
         }
 
-        world.spawn_entity(zombified).await;
-        entity.remove().await;
+        world.spawn_entity(zombified);
+        entity.remove();
     }
 }
 
@@ -175,62 +183,54 @@ impl Mob for PiglinBruteEntity {
         &self.mob_entity
     }
 
-    fn mob_init_data_tracker(&self) -> EntityBaseFuture<'_, ()> {
-        Box::pin(async move {
-            let entity = self.get_entity();
-            if self.is_immune_to_zombification() {
-                entity.send_meta_data(
-                    &[Metadata::new(
-                        tracked_data::piglin_brute::DATA_IMMUNE_TO_ZOMBIFICATION,
-                        true,
-                    )],
-                    None,
-                );
-            }
-        })
+    fn mob_init_data_tracker(&self) {
+        let entity = self.get_entity();
+        if self.is_immune_to_zombification() {
+            entity.send_meta_data(
+                &[Metadata::new(
+                    tracked_data::piglin_brute::DATA_IMMUNE_TO_ZOMBIFICATION,
+                    true,
+                )],
+                None,
+            );
+        }
     }
 
-    fn mob_write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
-        Box::pin(async move {
-            if self.is_immune_to_zombification() {
-                nbt.put_bool("IsImmuneToZombification", true);
-            }
-            let time_in_overworld = self.time_in_overworld.load(Ordering::Relaxed);
-            if time_in_overworld > 0 {
-                nbt.put_int("TimeInOverworld", time_in_overworld);
-            }
-            nbt.put_bool("CanPickUpLoot", true);
-        })
+    fn mob_write_nbt(&self, nbt: &mut NbtCompound) {
+        if self.is_immune_to_zombification() {
+            nbt.put_bool("IsImmuneToZombification", true);
+        }
+        let time_in_overworld = self.time_in_overworld.load(Ordering::Relaxed);
+        if time_in_overworld > 0 {
+            nbt.put_int("TimeInOverworld", time_in_overworld);
+        }
+        nbt.put_bool("CanPickUpLoot", true);
     }
 
-    fn mob_read_nbt<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
-        Box::pin(async move {
-            if let Some(immune) = nbt.get_bool("IsImmuneToZombification") {
-                self.set_immune_to_zombification(immune);
-            }
-            if let Some(time) = nbt.get_int("TimeInOverworld") {
-                self.time_in_overworld.store(time, Ordering::Relaxed);
-            }
-        })
+    fn mob_read_nbt(&self, nbt: &NbtCompound) {
+        if let Some(immune) = nbt.get_bool("IsImmuneToZombification") {
+            self.set_immune_to_zombification(immune);
+        }
+        if let Some(time) = nbt.get_int("TimeInOverworld") {
+            self.time_in_overworld.store(time, Ordering::Relaxed);
+        }
     }
 
-    fn mob_tick<'a>(&'a self, _caller: &'a Arc<dyn EntityBase>) -> EntityBaseFuture<'a, ()> {
-        Box::pin(async move {
-            let entity = &self.mob_entity.living_entity.entity;
-            if !entity.is_alive() {
-                return;
-            }
+    fn mob_tick<'a>(&'a self, _caller: &'a Arc<dyn EntityBase>) {
+        let entity = &self.mob_entity.living_entity.entity;
+        if !entity.is_alive() {
+            return;
+        }
 
-            let world = entity.world.load();
-            if self.is_converting(&world) {
-                let time = self.time_in_overworld.fetch_add(1, Ordering::Relaxed) + 1;
-                if time > Self::CONVERSION_TIME {
-                    self.convert_to_zombified().await;
-                }
-            } else {
-                self.time_in_overworld.store(0, Ordering::Relaxed);
+        let world = entity.world.load();
+        if self.is_converting(&world) {
+            let time = self.time_in_overworld.fetch_add(1, Ordering::Relaxed) + 1;
+            if time > Self::CONVERSION_TIME {
+                self.convert_to_zombified();
             }
-        })
+        } else {
+            self.time_in_overworld.store(0, Ordering::Relaxed);
+        }
     }
 
     fn get_base_experience_reward(&self) -> u32 {

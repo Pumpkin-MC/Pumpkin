@@ -2,7 +2,7 @@ use pumpkin_data::tag::{self, Taggable};
 use pumpkin_util::math::position::BlockPos;
 use std::sync::atomic::Ordering;
 
-use super::{Controls, Goal, GoalFuture};
+use super::{Controls, Goal};
 use crate::block::blocks::doors::DoorBlock;
 use crate::entity::mob::Mob;
 
@@ -45,12 +45,12 @@ impl DoorInteractGoal {
         DoorBlock::is_open(&world, &self.door_pos)
     }
 
-    pub async fn set_open(&mut self, mob: &dyn Mob, open: bool) {
+    pub fn set_open(&mut self, mob: &dyn Mob, open: bool) {
         if self.has_door {
             let world = mob.get_entity().world.load_full();
             let (block, _) = world.get_block_and_state_id(&self.door_pos);
             if block.has_tag(&tag::Block::MINECRAFT_DOORS) {
-                DoorBlock::set_open(&world, &self.door_pos, open).await;
+                DoorBlock::set_open(&world, &self.door_pos, open);
             }
         }
     }
@@ -130,24 +130,20 @@ impl DoorInteractGoal {
 }
 
 impl Goal for DoorInteractGoal {
-    fn can_start<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
-        Box::pin(async move { self.can_use(mob) })
+    fn can_start(&mut self, mob: &dyn Mob) -> bool {
+        self.can_use(mob)
     }
 
-    fn should_continue<'a>(&'a self, _mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
-        Box::pin(async move { self.can_continue_to_use() })
+    fn should_continue(&self, _mob: &dyn Mob) -> bool {
+        self.can_continue_to_use()
     }
 
-    fn start<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
-        Box::pin(async move {
-            self.start_interaction(mob);
-        })
+    fn start(&mut self, mob: &dyn Mob) {
+        self.start_interaction(mob);
     }
 
-    fn tick<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
-        Box::pin(async move {
-            self.tick_interaction(mob);
-        })
+    fn tick(&mut self, mob: &dyn Mob) {
+        self.tick_interaction(mob);
     }
 
     fn should_run_every_tick(&self) -> bool {

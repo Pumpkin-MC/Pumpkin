@@ -8,8 +8,8 @@ use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::world::{BlockAccessor, BlockFlags};
 
 use crate::block::{
-    BlockBehaviour, BlockFuture, BonemealArgs, CanPlaceAtArgs, GetStateForNeighborUpdateArgs,
-    OnPlaceArgs, RandomTickArgs,
+    BlockBehaviour, BonemealArgs, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, OnPlaceArgs,
+    RandomTickArgs,
 };
 use crate::entity::EntityBase;
 
@@ -53,57 +53,49 @@ impl BlockBehaviour for CocoaBlock {
         false
     }
 
-    fn on_place<'a>(&'a self, args: OnPlaceArgs<'a>) -> BlockFuture<'a, BlockStateId> {
-        Box::pin(async move {
-            let mut props = CocoaProperties::default(args.block);
-            props.age = 0;
+    fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
+        let mut props = CocoaProperties::default(args.block);
+        props.age = 0;
 
-            let directions = args.player.get_entity().get_entity_facing_order();
-            for dir in directions {
-                if let Some(facing) = dir.to_horizontal_facing()
-                    && Self::can_survive(args.world, args.position, facing)
-                {
-                    props.facing = facing;
-                    return props.to_state_id(args.block);
-                }
-            }
-
-            Block::AIR.default_state.id
-        })
-    }
-
-    fn get_state_for_neighbor_update<'a>(
-        &'a self,
-        args: GetStateForNeighborUpdateArgs<'a>,
-    ) -> BlockFuture<'a, BlockStateId> {
-        Box::pin(async move {
-            let props = CocoaProperties::from_state_id(args.state_id, args.block);
-            if args.direction == props.facing.to_block_direction()
-                && !Self::can_survive(args.world, args.position, props.facing)
+        let directions = args.player.get_entity().get_entity_facing_order();
+        for dir in directions {
+            if let Some(facing) = dir.to_horizontal_facing()
+                && Self::can_survive(args.world, args.position, facing)
             {
-                return Block::AIR.default_state.id;
+                props.facing = facing;
+                return props.to_state_id(args.block);
             }
-            args.state_id
-        })
+        }
+
+        Block::AIR.default_state.id
     }
 
-    fn random_tick<'a>(&'a self, args: RandomTickArgs<'a>) -> BlockFuture<'a, ()> {
-        Box::pin(async move {
-            if rand::random::<u8>().is_multiple_of(5) {
-                let state_id = args.world.get_block_state_id(args.position);
-                let mut props = CocoaProperties::from_state_id(state_id, args.block);
-                if props.age < MAX_AGE {
-                    props.age += 1;
-                    args.world
-                        .set_block_state(
-                            args.position,
-                            props.to_state_id(args.block),
-                            BlockFlags::NOTIFY_ALL,
-                        )
-                        .await;
-                }
+    fn get_state_for_neighbor_update(
+        &self,
+        args: GetStateForNeighborUpdateArgs<'_>,
+    ) -> BlockStateId {
+        let props = CocoaProperties::from_state_id(args.state_id, args.block);
+        if args.direction == props.facing.to_block_direction()
+            && !Self::can_survive(args.world, args.position, props.facing)
+        {
+            return Block::AIR.default_state.id;
+        }
+        args.state_id
+    }
+
+    fn random_tick(&self, args: RandomTickArgs<'_>) {
+        if rand::random::<u8>().is_multiple_of(5) {
+            let state_id = args.world.get_block_state_id(args.position);
+            let mut props = CocoaProperties::from_state_id(state_id, args.block);
+            if props.age < MAX_AGE {
+                props.age += 1;
+                args.world.set_block_state(
+                    args.position,
+                    props.to_state_id(args.block),
+                    BlockFlags::NOTIFY_ALL,
+                );
             }
-        })
+        }
     }
 
     fn is_valid_bonemeal_target(&self, args: BonemealArgs<'_>) -> bool {
@@ -115,20 +107,18 @@ impl BlockBehaviour for CocoaBlock {
         true
     }
 
-    fn perform_bonemeal<'a>(&'a self, args: BonemealArgs<'a>) -> BlockFuture<'a, ()> {
-        Box::pin(async move {
+    fn perform_bonemeal(&self, args: BonemealArgs<'_>) {
+        {
             let mut props = CocoaProperties::from_state_id(args.state_id, args.block);
             if props.age < MAX_AGE {
                 props.age += 1;
-                args.world
-                    .set_block_state(
-                        args.position,
-                        props.to_state_id(args.block),
-                        BlockFlags::NOTIFY_ALL,
-                    )
-                    .await;
+                args.world.set_block_state(
+                    args.position,
+                    props.to_state_id(args.block),
+                    BlockFlags::NOTIFY_ALL,
+                );
             }
-        })
+        }
     }
 
     fn rotate(

@@ -27,22 +27,16 @@ impl GetClientSideArgParser for EffectTypeArgumentConsumer {
 }
 
 impl ArgumentConsumer for EffectTypeArgumentConsumer {
-    fn consume<'a, 'b>(
+    fn consume<'a>(
         &'a self,
         _sender: &'a CommandSender,
         _server: &'a Server,
-        args: &'b mut RawArgs<'a>,
+        args: &mut RawArgs<'a>,
     ) -> ConsumeResult<'a> {
-        let status_effect: Option<&'a str> = args.pop().map(|arg| arg.value);
-
-        match status_effect {
-            Some(name) => Box::pin(async move {
-                let status_effect =
-                    StatusEffect::from_name(name.strip_prefix("minecraft:").unwrap_or(name))?;
-                Some(Arg::Effect(status_effect))
-            }),
-            None => Box::pin(async move { None }),
-        }
+        let name = args.pop().map(|arg| arg.value)?;
+        let status_effect =
+            StatusEffect::from_name(name.strip_prefix("minecraft:").unwrap_or(name))?;
+        Some(Arg::Effect(status_effect))
     }
 }
 

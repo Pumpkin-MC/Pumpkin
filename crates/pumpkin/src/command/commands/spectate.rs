@@ -23,60 +23,122 @@ const ARG_PLAYER: &str = "player";
 struct StopSpectateExecutor;
 
 impl CommandExecutor for StopSpectateExecutor {
-    fn execute<'a>(
-        &'a self,
-        sender: &'a CommandSender,
-        _server: &'a crate::server::Server,
-        _args: &'a ConsumedArgs<'a>,
-    ) -> CommandResult<'a> {
-        Box::pin(async move {
-            let Some(player) = sender.as_player() else {
-                return Err(InvalidRequirement);
-            };
+    fn execute(
+        &self,
+        sender: &CommandSender,
+        _server: &crate::server::Server,
+        _args: &ConsumedArgs,
+    ) -> CommandResult {
+        let Some(player) = sender.as_player() else {
+            return Err(InvalidRequirement);
+        };
 
-            if player.gamemode.load() != GameMode::Spectator {
-                let display_name = player.get_display_name().await;
-                return Err(CommandError::CommandFailed(TextComponent::translate_cross(
-                    translation::java::COMMANDS_SPECTATE_NOT_SPECTATOR,
-                    translation::java::COMMANDS_SPECTATE_NOT_SPECTATOR,
-                    [display_name],
-                )));
-            }
+        if player.gamemode.load() != GameMode::Spectator {
+            let display_name = player.get_display_name();
+            return Err(CommandError::CommandFailed(TextComponent::translate_cross(
+                translation::java::COMMANDS_SPECTATE_NOT_SPECTATOR,
+                translation::java::COMMANDS_SPECTATE_NOT_SPECTATOR,
+                [display_name],
+            )));
+        }
 
-            player.camera_target_id.store(None);
-            player
-                .send_client_packet(&CSetCamera::new(player.entity_id().into()))
-                .await;
+        player.camera_target_id.store(None);
+        player.try_send_client_packet(&CSetCamera::new(player.entity_id().into()));
 
-            sender
-                .send_message(TextComponent::translate_cross(
-                    translation::java::COMMANDS_SPECTATE_SUCCESS_STOPPED,
-                    translation::java::COMMANDS_SPECTATE_SUCCESS_STOPPED,
-                    [],
-                ))
-                .await;
+        sender.send_message(TextComponent::translate_cross(
+            translation::java::COMMANDS_SPECTATE_SUCCESS_STOPPED,
+            translation::java::COMMANDS_SPECTATE_SUCCESS_STOPPED,
+            [],
+        ));
 
-            Ok(1)
-        })
+        Ok(1)
     }
 }
 
 struct SpectateTargetSelfExecutor;
 
 impl CommandExecutor for SpectateTargetSelfExecutor {
-    fn execute<'a>(
-        &'a self,
-        sender: &'a CommandSender,
-        _server: &'a crate::server::Server,
-        args: &'a ConsumedArgs<'a>,
-    ) -> CommandResult<'a> {
-        Box::pin(async move {
-            let Some(player) = sender.as_player() else {
-                return Err(InvalidRequirement);
-            };
+    fn execute(
+        &self,
+        sender: &CommandSender,
+        _server: &crate::server::Server,
+        args: &ConsumedArgs,
+    ) -> CommandResult {
+        let Some(player) = sender.as_player() else {
+            return Err(InvalidRequirement);
+        };
 
+        if player.gamemode.load() != GameMode::Spectator {
+            let display_name = player.get_display_name();
+            return Err(CommandError::CommandFailed(TextComponent::translate_cross(
+                translation::java::COMMANDS_SPECTATE_NOT_SPECTATOR,
+                translation::java::COMMANDS_SPECTATE_NOT_SPECTATOR,
+                [display_name],
+            )));
+        }
+
+        let target = EntityArgumentConsumer::find_arg(args, ARG_TARGET)?;
+
+        let target_entity = target.get_entity();
+        if target_entity.entity_id == player.entity_id() {
+            return Err(CommandError::CommandFailed(TextComponent::translate_cross(
+                translation::java::COMMANDS_SPECTATE_SELF,
+                translation::java::COMMANDS_SPECTATE_SELF,
+                [],
+            )));
+        }
+
+        let target_world = target_entity.world.load_full();
+        let player_world = player.world();
+        if !Arc::ptr_eq(&target_world, &player_world) {
+            let target_name = target.get_display_name();
+            return Err(CommandError::CommandFailed(TextComponent::translate_cross(
+                translation::java::COMMANDS_SPECTATE_CANNOT_SPECTATE,
+                translation::java::COMMANDS_SPECTATE_CANNOT_SPECTATE,
+                [target_name],
+            )));
+        }
+
+        let target_id = target_entity.entity_id;
+        player.camera_target_id.store(Some(target_id));
+        let pos = target_entity.pos.load();
+        let yaw = target_entity.yaw.load();
+        let pitch = target_entity.pitch.load();
+        player.try_send_client_packet(&CSetCamera::new(target_id.into()));
+        futures::executor::block_on(player.teleport(pos, Some(yaw), Some(pitch), player_world));
+
+        let target_name = target.get_display_name();
+        sender.send_message(TextComponent::translate_cross(
+            translation::java::COMMANDS_SPECTATE_SUCCESS_STARTED,
+            translation::java::COMMANDS_SPECTATE_SUCCESS_STARTED,
+            [target_name],
+        ));
+
+        Ok(1)
+    }
+}
+
+struct SpectateTargetOtherExecutor;
+
+impl CommandExecutor for SpectateTargetOtherExecutor {
+    fn execute(
+        &self,
+        sender: &CommandSender,
+        _server: &crate::server::Server,
+        args: &ConsumedArgs,
+    ) -> CommandResult {
+        let Some(Arg::Players(players)) = args.get(ARG_PLAYER) else {
+            return Err(InvalidConsumption(Some(ARG_PLAYER.into())));
+        };
+
+        let target = EntityArgumentConsumer::find_arg(args, ARG_TARGET)?;
+        let target_entity = target.get_entity();
+        let target_world = target_entity.world.load_full();
+
+        // First validate all players
+        for player in players {
             if player.gamemode.load() != GameMode::Spectator {
-                let display_name = player.get_display_name().await;
+                let display_name = player.get_display_name();
                 return Err(CommandError::CommandFailed(TextComponent::translate_cross(
                     translation::java::COMMANDS_SPECTATE_NOT_SPECTATOR,
                     translation::java::COMMANDS_SPECTATE_NOT_SPECTATOR,
@@ -84,9 +146,6 @@ impl CommandExecutor for SpectateTargetSelfExecutor {
                 )));
             }
 
-            let target = EntityArgumentConsumer::find_arg(args, ARG_TARGET)?;
-
-            let target_entity = target.get_entity();
             if target_entity.entity_id == player.entity_id() {
                 return Err(CommandError::CommandFailed(TextComponent::translate_cross(
                     translation::java::COMMANDS_SPECTATE_SELF,
@@ -95,123 +154,43 @@ impl CommandExecutor for SpectateTargetSelfExecutor {
                 )));
             }
 
-            let target_world = target_entity.world.load_full();
             let player_world = player.world();
             if !Arc::ptr_eq(&target_world, &player_world) {
-                let target_name = target.get_display_name().await;
+                let target_name = target.get_display_name();
                 return Err(CommandError::CommandFailed(TextComponent::translate_cross(
                     translation::java::COMMANDS_SPECTATE_CANNOT_SPECTATE,
                     translation::java::COMMANDS_SPECTATE_CANNOT_SPECTATE,
                     [target_name],
                 )));
             }
+        }
 
+        let mut succeeded = 0;
+        for player in players {
             let target_id = target_entity.entity_id;
             player.camera_target_id.store(Some(target_id));
-            player
-                .send_client_packet(&CSetCamera::new(target_id.into()))
-                .await;
-
             let pos = target_entity.pos.load();
             let yaw = target_entity.yaw.load();
             let pitch = target_entity.pitch.load();
-            player
-                .clone()
-                .teleport(pos, Some(yaw), Some(pitch), player_world)
-                .await;
+            let player_world = player.world();
+            player.try_send_client_packet(&CSetCamera::new(target_id.into()));
+            futures::executor::block_on(player.clone().teleport(
+                pos,
+                Some(yaw),
+                Some(pitch),
+                player_world,
+            ));
+            succeeded += 1;
+        }
 
-            let target_name = target.get_display_name().await;
-            sender
-                .send_message(TextComponent::translate_cross(
-                    translation::java::COMMANDS_SPECTATE_SUCCESS_STARTED,
-                    translation::java::COMMANDS_SPECTATE_SUCCESS_STARTED,
-                    [target_name],
-                ))
-                .await;
+        let target_name = target.get_display_name();
+        sender.send_message(TextComponent::translate_cross(
+            translation::java::COMMANDS_SPECTATE_SUCCESS_STARTED,
+            translation::java::COMMANDS_SPECTATE_SUCCESS_STARTED,
+            [target_name],
+        ));
 
-            Ok(1)
-        })
-    }
-}
-
-struct SpectateTargetOtherExecutor;
-
-impl CommandExecutor for SpectateTargetOtherExecutor {
-    fn execute<'a>(
-        &'a self,
-        sender: &'a CommandSender,
-        _server: &'a crate::server::Server,
-        args: &'a ConsumedArgs<'a>,
-    ) -> CommandResult<'a> {
-        Box::pin(async move {
-            let Some(Arg::Players(players)) = args.get(ARG_PLAYER) else {
-                return Err(InvalidConsumption(Some(ARG_PLAYER.into())));
-            };
-
-            let target = EntityArgumentConsumer::find_arg(args, ARG_TARGET)?;
-            let target_entity = target.get_entity();
-            let target_world = target_entity.world.load_full();
-
-            // First validate all players
-            for player in players {
-                if player.gamemode.load() != GameMode::Spectator {
-                    let display_name = player.get_display_name().await;
-                    return Err(CommandError::CommandFailed(TextComponent::translate_cross(
-                        translation::java::COMMANDS_SPECTATE_NOT_SPECTATOR,
-                        translation::java::COMMANDS_SPECTATE_NOT_SPECTATOR,
-                        [display_name],
-                    )));
-                }
-
-                if target_entity.entity_id == player.entity_id() {
-                    return Err(CommandError::CommandFailed(TextComponent::translate_cross(
-                        translation::java::COMMANDS_SPECTATE_SELF,
-                        translation::java::COMMANDS_SPECTATE_SELF,
-                        [],
-                    )));
-                }
-
-                let player_world = player.world();
-                if !Arc::ptr_eq(&target_world, &player_world) {
-                    let target_name = target.get_display_name().await;
-                    return Err(CommandError::CommandFailed(TextComponent::translate_cross(
-                        translation::java::COMMANDS_SPECTATE_CANNOT_SPECTATE,
-                        translation::java::COMMANDS_SPECTATE_CANNOT_SPECTATE,
-                        [target_name],
-                    )));
-                }
-            }
-
-            let mut succeeded = 0;
-            for player in players {
-                let target_id = target_entity.entity_id;
-                player.camera_target_id.store(Some(target_id));
-                player
-                    .send_client_packet(&CSetCamera::new(target_id.into()))
-                    .await;
-
-                let pos = target_entity.pos.load();
-                let yaw = target_entity.yaw.load();
-                let pitch = target_entity.pitch.load();
-                let player_world = player.world();
-                player
-                    .clone()
-                    .teleport(pos, Some(yaw), Some(pitch), player_world)
-                    .await;
-                succeeded += 1;
-            }
-
-            let target_name = target.get_display_name().await;
-            sender
-                .send_message(TextComponent::translate_cross(
-                    translation::java::COMMANDS_SPECTATE_SUCCESS_STARTED,
-                    translation::java::COMMANDS_SPECTATE_SUCCESS_STARTED,
-                    [target_name],
-                ))
-                .await;
-
-            Ok(succeeded)
-        })
+        Ok(succeeded)
     }
 }
 

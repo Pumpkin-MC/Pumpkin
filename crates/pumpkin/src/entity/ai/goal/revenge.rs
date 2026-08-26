@@ -3,7 +3,7 @@ use std::sync::atomic::Ordering::Relaxed;
 
 use super::{Controls, Goal};
 use crate::entity::EntityBase;
-use crate::entity::ai::goal::GoalFuture;
+
 use crate::entity::ai::goal::track_target::TrackTargetGoal;
 use crate::entity::ai::target_predicate::TargetPredicate;
 use crate::entity::mob::Mob;
@@ -31,65 +31,58 @@ impl RevengeGoal {
 }
 
 impl Goal for RevengeGoal {
-    fn can_start<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
-        Box::pin(async move {
-            let mob_entity = mob.get_mob_entity();
-            let living = &mob_entity.living_entity;
+    fn can_start(&mut self, mob: &dyn Mob) -> bool {
+        let mob_entity = mob.get_mob_entity();
+        let living = &mob_entity.living_entity;
 
-            let attacked_time = living.last_attacked_time.load(Relaxed);
-            if attacked_time == self.last_attacked_time {
-                return false;
-            }
+        let attacked_time = living.last_attacked_time.load(Relaxed);
+        if attacked_time == self.last_attacked_time {
+            return false;
+        }
 
-            let attacker_id = living.last_attacker_id.load(Relaxed);
-            if attacker_id == 0 {
-                return false;
-            }
+        let attacker_id = living.last_attacker_id.load(Relaxed);
+        if attacker_id == 0 {
+            return false;
+        }
 
-            let world = living.entity.world.load();
-            let Some(attacker) = world.get_entity_by_id(attacker_id) else {
-                return false;
-            };
+        let world = living.entity.world.load();
+        let Some(attacker) = world.get_entity_by_id(attacker_id) else {
+            return false;
+        };
 
-            let Some(attacker_living) = attacker.get_living_entity() else {
-                return false;
-            };
+        let Some(attacker_living) = attacker.get_living_entity() else {
+            return false;
+        };
 
-            if !self
-                .target_predicate
-                .test(&world, Some(&mob_entity.living_entity), attacker_living)
-                .await
-            {
-                return false;
-            }
+        if !self
+            .target_predicate
+            .test(&world, Some(&mob_entity.living_entity), attacker_living)
+        {
+            return false;
+        }
 
-            self.target = Some(attacker);
-            true
-        })
+        self.target = Some(attacker);
+        true
     }
 
-    fn should_continue<'a>(&'a self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
-        Box::pin(async { self.track_target_goal.should_continue(mob).await })
+    fn should_continue(&self, mob: &dyn Mob) -> bool {
+        self.track_target_goal.should_continue(mob)
     }
 
-    fn start<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
-        Box::pin(async {
-            mob.set_mob_target(self.target.clone()).await;
+    fn start(&mut self, mob: &dyn Mob) {
+        mob.set_mob_target(self.target.clone());
 
-            let mob_entity = mob.get_mob_entity();
-            self.last_attacked_time = mob_entity.living_entity.last_attacked_time.load(Relaxed);
-            self.track_target_goal.max_time_without_visibility = 300;
+        let mob_entity = mob.get_mob_entity();
+        self.last_attacked_time = mob_entity.living_entity.last_attacked_time.load(Relaxed);
+        self.track_target_goal.max_time_without_visibility = 300;
 
-            self.track_target_goal.start(mob).await;
-            // TODO: group revenge — call nearby mobs of same type to help
-        })
+        self.track_target_goal.start(mob);
+        // TODO: group revenge — call nearby mobs of same type to help
     }
 
-    fn stop<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
-        Box::pin(async {
-            self.target = None;
-            self.track_target_goal.stop(mob).await;
-        })
+    fn stop(&mut self, mob: &dyn Mob) {
+        self.target = None;
+        self.track_target_goal.stop(mob);
     }
 
     fn controls(&self) -> Controls {

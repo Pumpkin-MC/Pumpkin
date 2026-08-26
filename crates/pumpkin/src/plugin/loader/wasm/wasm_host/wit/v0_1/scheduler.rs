@@ -21,8 +21,7 @@ impl scheduler::Host for PluginHostState {
         let tick_count = server.tick_count.load(Ordering::Relaxed) as u64;
         let task_id = server
             .task_scheduler
-            .schedule_delayed_task(plugin, handler_id, delay, tick_count)
-            .await;
+            .schedule_delayed_task(plugin, handler_id, delay, tick_count);
         Ok(task_id)
     }
 
@@ -44,8 +43,7 @@ impl scheduler::Host for PluginHostState {
         let tick_count = server.tick_count.load(Ordering::Relaxed) as u64;
         let task_id = server
             .task_scheduler
-            .schedule_repeating_task(plugin, handler_id, delay, period, tick_count)
-            .await;
+            .schedule_repeating_task(plugin, handler_id, delay, period, tick_count);
         Ok(task_id)
     }
 
@@ -54,7 +52,7 @@ impl scheduler::Host for PluginHostState {
             .server
             .as_ref()
             .ok_or_else(|| wasmtime::Error::msg("Server not found"))?;
-        server.task_scheduler.cancel_task(task_id).await;
+        server.task_scheduler.cancel_task(task_id);
         Ok(())
     }
 }

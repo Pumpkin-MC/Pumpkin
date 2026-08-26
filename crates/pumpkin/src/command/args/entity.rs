@@ -35,37 +35,31 @@ impl GetClientSideArgParser for EntityArgumentConsumer {
 }
 
 impl ArgumentConsumer for EntityArgumentConsumer {
-    fn consume<'a, 'b>(
+    fn consume<'a>(
         &'a self,
         sender: &'a CommandSender,
         server: &'a Server,
-        args: &'b mut RawArgs<'a>,
+        args: &mut RawArgs<'a>,
     ) -> ConsumeResult<'a> {
-        let s_opt: Option<&'a str> = args.pop().map(|arg| arg.value);
-
-        let Some(s) = s_opt else {
-            return Box::pin(async move { None });
-        };
+        let s = args.pop().map(|arg| arg.value)?;
 
         let entity_selector = match s.parse::<TargetSelector>() {
             Ok(selector) => selector,
             Err(e) => {
                 debug!("Failed to parse target selector '{s}': {e}");
-                return Box::pin(async move { None });
+                return None;
             }
         };
 
         if entity_selector.get_limit() > 1 {
             debug!("Target selector '{s}' has limit > 1, expected single entity");
-            return Box::pin(async move { None });
+            return None;
         }
 
-        Box::pin(async move {
-            // todo: command context
-            let entities = server.select_entities(&entity_selector, Some(sender));
+        // todo: command context
+        let entities = server.select_entities(&entity_selector, Some(sender));
 
-            entities.into_iter().next().map(Arg::Entity)
-        })
+        entities.into_iter().next().map(Arg::Entity)
     }
 
     fn consume_with_syntax<'a>(
@@ -75,22 +69,17 @@ impl ArgumentConsumer for EntityArgumentConsumer {
         args: &mut RawArgs<'a>,
     ) -> ConsumeResultWithSyntax<'a> {
         let Some(raw_arg) = args.pop() else {
-            return Box::pin(async { Ok(None) });
+            return Ok(None);
         };
 
-        let selector = match parse_target_selector_with_context(raw_arg) {
-            Ok(selector) => selector,
-            Err(error) => return Box::pin(async move { Err(error) }),
-        };
+        let selector = parse_target_selector_with_context(raw_arg)?;
 
         if selector.get_limit() > 1 {
-            return Box::pin(async { Ok(None) });
+            return Ok(None);
         }
 
-        Box::pin(async move {
-            let entities = server.select_entities(&selector, Some(sender));
-            Ok(entities.into_iter().next().map(Arg::Entity))
-        })
+        let entities = server.select_entities(&selector, Some(sender));
+        Ok(entities.into_iter().next().map(Arg::Entity))
     }
 }
 

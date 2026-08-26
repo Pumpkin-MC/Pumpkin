@@ -14,27 +14,22 @@ const PERMISSION: &str = "minecraft:command.reload";
 struct ReloadExecutor;
 
 impl CommandExecutor for ReloadExecutor {
-    fn execute<'a>(&'a self, context: &'a CommandContext) -> CommandExecutorResult<'a> {
-        Box::pin(async move {
-            // Vanilla announces the reload before doing it, so the feedback
-            // arrives even though reloading takes a moment.
-            context
-                .source
-                .send_feedback(
-                    TextComponent::translate_cross(
-                        translation::java::COMMANDS_RELOAD_SUCCESS,
-                        translation::java::COMMANDS_RELOAD_SUCCESS,
-                        [],
-                    ),
-                    true,
-                )
-                .await;
+    fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
+        // Vanilla announces the reload before doing it, so the feedback
+        // arrives even though reloading takes a moment.
+        context.source.send_feedback(
+            TextComponent::translate_cross(
+                translation::java::COMMANDS_RELOAD_SUCCESS,
+                translation::java::COMMANDS_RELOAD_SUCCESS,
+                [],
+            ),
+            true,
+        );
 
-            let server = context.server();
-            server.reload_datapacks(server).await;
+        let server = context.server().clone();
+        server.reload_datapacks(&server);
 
-            Ok(0)
-        })
+        Ok(0)
     }
 }
 

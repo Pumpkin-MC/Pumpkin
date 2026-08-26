@@ -1,5 +1,3 @@
-use std::pin::Pin;
-
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
 
@@ -25,12 +23,7 @@ impl BlockEntity for TestInstanceBlockBlockEntity {
         Self { position }
     }
 
-    fn write_nbt<'a>(
-        &'a self,
-        _nbt: &'a mut NbtCompound,
-    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
-        Box::pin(async {})
-    }
+    fn write_nbt(&self, _nbt: &mut NbtCompound) {}
 
     fn as_any(&self) -> &dyn std::any::Any {
         self

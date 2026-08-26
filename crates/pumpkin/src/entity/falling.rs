@@ -8,7 +8,7 @@ use pumpkin_world::world::BlockFlags;
 use std::sync::{Arc, atomic::Ordering};
 
 use crate::{
-    entity::{Entity, EntityBase, EntityBaseFuture, living::LivingEntity},
+    entity::{Entity, EntityBase, living::LivingEntity},
     server::Server,
     world::World,
 };
@@ -26,16 +26,14 @@ impl FallingEntity {
         }
     }
 
-    /// Replaced the current Block and Spawns a new Falling one
-    pub async fn replace_spawn(world: &Arc<World>, position: BlockPos, block_state: BlockStateId) {
+    /// Replaced the current Block and Spawns a new Falling one (synchronous)
+    pub fn replace_spawn(world: &Arc<World>, position: BlockPos, block_state: BlockStateId) {
         // Replace the original block, TODO: use fluid state
-        world
-            .set_block_state(
-                &position,
-                Block::AIR.default_state.id,
-                BlockFlags::NOTIFY_ALL,
-            )
-            .await;
+        world.set_block_state(
+            &position,
+            Block::AIR.default_state.id,
+            BlockFlags::NOTIFY_ALL,
+        );
 
         let position = position.0.to_f64().add_raw(0.5, 0.0, 0.5);
         let entity = Entity::new(world.clone(), position, &EntityType::FALLING_BLOCK);
@@ -43,61 +41,46 @@ impl FallingEntity {
             .data
             .store(i32::from(block_state.as_u16()), Ordering::Relaxed);
         let entity = Arc::new(Self::new(entity, block_state));
-        world.spawn_entity(entity).await;
+        world.spawn_entity_non_save(entity);
     }
 }
 
 impl EntityBase for FallingEntity {
-    fn tick<'a>(
-        &'a self,
-        caller: &'a Arc<dyn EntityBase>,
-        server: &'a Server,
-    ) -> EntityBaseFuture<'a, ()> {
-        Box::pin(async move {
-            let entity = &self.entity;
-            entity.tick(caller, server).await;
+    fn tick(&self, caller: &Arc<dyn EntityBase>, server: &Server) {
+        let entity = &self.entity;
+        let mut velo = entity.velocity.load();
+        velo.y -= self.get_gravity();
 
-            let original_velo = entity.velocity.load();
-            let mut velo = original_velo;
-            velo.y -= self.get_gravity();
+        entity.velocity.store(velo);
 
-            entity.velocity.store(velo);
+        entity.move_entity(caller, velo);
+        entity.tick_block_collisions(caller, server);
+        if entity.on_ground.load(Ordering::Relaxed) {
+            entity.velocity.store(velo.multiply(0.7, -0.5, 0.7));
+            entity.world.load().set_block_state(
+                &self.entity.block_pos.load(),
+                self.block_state_id,
+                BlockFlags::NOTIFY_ALL,
+            );
+            self.entity.remove();
+        }
 
-            entity.move_entity(caller, velo).await;
-            entity.tick_block_collisions(caller, server).await;
-            if entity.on_ground.load(Ordering::Relaxed) {
-                entity.velocity.store(velo.multiply(0.7, -0.5, 0.7));
-                entity
-                    .world
-                    .load()
-                    .set_block_state(
-                        &self.entity.block_pos.load(),
-                        self.block_state_id,
-                        BlockFlags::NOTIFY_ALL,
-                    )
-                    .await;
-                entity.remove().await;
-            }
+        entity.velocity.store(velo.multiply(0.98, 0.98, 0.98));
 
-            entity.velocity.store(velo.multiply(0.98, 0.98, 0.98));
-
-            if entity.velocity_dirty.swap(false, Ordering::SeqCst) {
-                entity.send_pos_rot();
-                entity.send_velocity();
-            }
-        })
+        if entity.velocity_dirty.swap(false, Ordering::SeqCst) {
+            entity.send_pos_rot();
+            entity.send_velocity();
+        }
     }
 
-    fn init_data_tracker(&self) -> EntityBaseFuture<'_, ()> {
-        Box::pin(async move {
-            self.entity.send_meta_data(
-                &[Metadata::new(
-                    pumpkin_data::tracked_data::falling_block::START_POS,
-                    self.entity.block_pos.load(),
-                )],
-                None,
-            );
-        })
+    fn init_data_tracker(&self) {
+        self.entity.send_meta_data(
+            &[Metadata::new(
+                pumpkin_data::tracked_data::falling_block::START_POS,
+                self.entity.block_pos.load(),
+            )],
+            None,
+        );
     }
 
     fn get_entity(&self) -> &Entity {
@@ -107,13 +90,8 @@ impl EntityBase for FallingEntity {
     fn get_living_entity(&self) -> Option<&LivingEntity> {
         None
     }
-    fn damage<'a>(
-        &'a self,
-        _caller: &'a dyn EntityBase,
-        _amount: f32,
-        _damage_type: DamageType,
-    ) -> EntityBaseFuture<'a, bool> {
-        Box::pin(async move { false })
+    fn damage(&self, _caller: &dyn EntityBase, _amount: f32, _damage_type: DamageType) -> bool {
+        false
     }
 
     fn get_gravity(&self) -> f64 {

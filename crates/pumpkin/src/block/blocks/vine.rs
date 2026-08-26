@@ -1,8 +1,7 @@
 use crate::{
     block::{
-        BlockBehaviour, BlockFuture, CanPlaceAtArgs, CanUpdateAtArgs,
-        GetStateForNeighborUpdateArgs, OnPlaceArgs, RandomTickArgs, UseWithItemArgs,
-        registry::BlockActionResult,
+        BlockBehaviour, CanPlaceAtArgs, CanUpdateAtArgs, GetStateForNeighborUpdateArgs,
+        OnPlaceArgs, RandomTickArgs, UseWithItemArgs, registry::BlockActionResult,
     },
     entity::{EntityBase, player::Player},
     world::World,
@@ -228,36 +227,33 @@ pub fn get_nearest_looking_directions(
 }
 
 impl BlockBehaviour for VineBlock {
-    fn on_place<'a>(&'a self, args: OnPlaceArgs<'a>) -> BlockFuture<'a, BlockStateId> {
-        Box::pin(async move {
-            let (clicked_block, clicked_state_id) =
-                args.world.get_block_and_state_id(args.position);
-            let clicked_is_vine = clicked_block == &Block::VINE;
-            let mut result = if clicked_is_vine {
-                VineLikeProperties::from_state_id(clicked_state_id, args.block)
-            } else {
-                VineLikeProperties::default(args.block)
-            };
+    fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
+        let (clicked_block, clicked_state_id) = args.world.get_block_and_state_id(args.position);
+        let clicked_is_vine = clicked_block == &Block::VINE;
+        let mut result = if clicked_is_vine {
+            VineLikeProperties::from_state_id(clicked_state_id, args.block)
+        } else {
+            VineLikeProperties::default(args.block)
+        };
 
-            let nearest_directions =
-                get_nearest_looking_directions(args.player, clicked_is_vine, args.direction);
+        let nearest_directions =
+            get_nearest_looking_directions(args.player, clicked_is_vine, args.direction);
 
-            for direction in nearest_directions {
-                if direction != BlockDirection::Down {
-                    let face_occupied = clicked_is_vine && has_face_property(&result, direction);
-                    if !face_occupied && can_support_at_face(args.world, args.position, direction) {
-                        set_face_property(&mut result, direction, true);
-                        return result.to_state_id(args.block);
-                    }
+        for direction in nearest_directions {
+            if direction != BlockDirection::Down {
+                let face_occupied = clicked_is_vine && has_face_property(&result, direction);
+                if !face_occupied && can_support_at_face(args.world, args.position, direction) {
+                    set_face_property(&mut result, direction, true);
+                    return result.to_state_id(args.block);
                 }
             }
+        }
 
-            if clicked_is_vine && count_faces(&result) > 0 {
-                result.to_state_id(args.block)
-            } else {
-                Block::AIR.default_state.id
-            }
-        })
+        if clicked_is_vine && count_faces(&result) > 0 {
+            result.to_state_id(args.block)
+        } else {
+            Block::AIR.default_state.id
+        }
     }
 
     fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
@@ -316,27 +312,25 @@ impl BlockBehaviour for VineBlock {
         clicked_is_vine && count_faces(&result) > 0
     }
 
-    fn get_state_for_neighbor_update<'a>(
-        &'a self,
-        args: GetStateForNeighborUpdateArgs<'a>,
-    ) -> BlockFuture<'a, BlockStateId> {
-        Box::pin(async move {
-            if args.direction == BlockDirection::Down {
-                return args.state_id;
-            }
+    fn get_state_for_neighbor_update(
+        &self,
+        args: GetStateForNeighborUpdateArgs<'_>,
+    ) -> BlockStateId {
+        if args.direction == BlockDirection::Down {
+            return args.state_id;
+        }
 
-            let updated_props = get_updated_state(
-                VineLikeProperties::from_state_id(args.state_id, args.block),
-                args.world,
-                args.position,
-                args.block,
-            );
-            if count_faces(&updated_props) == 0 {
-                Block::AIR.default_state.id
-            } else {
-                updated_props.to_state_id(args.block)
-            }
-        })
+        let updated_props = get_updated_state(
+            VineLikeProperties::from_state_id(args.state_id, args.block),
+            args.world,
+            args.position,
+            args.block,
+        );
+        if count_faces(&updated_props) == 0 {
+            Block::AIR.default_state.id
+        } else {
+            updated_props.to_state_id(args.block)
+        }
     }
 
     fn can_update_at(&self, args: CanUpdateAtArgs<'_>) -> bool {
@@ -348,11 +342,8 @@ impl BlockBehaviour for VineBlock {
         count_faces(&props) < 5
     }
 
-    fn use_with_item<'a>(
-        &'a self,
-        args: UseWithItemArgs<'a>,
-    ) -> BlockFuture<'a, BlockActionResult> {
-        Box::pin(async move {
+    fn use_with_item(&self, args: UseWithItemArgs<'_>) -> BlockActionResult {
+        {
             if args.item_stack.item.id != Item::VINE.id {
                 return BlockActionResult::Pass;
             }
@@ -373,250 +364,217 @@ impl BlockBehaviour for VineBlock {
                         && can_support_at_face(&**args.world, args.position, direction)
                     {
                         set_face_property(&mut props, direction, true);
-                        args.world
-                            .set_block_state(
-                                args.position,
-                                props.to_state_id(args.block),
-                                BlockFlags::NOTIFY_ALL,
-                            )
-                            .await;
+                        args.world.set_block_state(
+                            args.position,
+                            props.to_state_id(args.block),
+                            BlockFlags::NOTIFY_ALL,
+                        );
                         return BlockActionResult::Consume;
                     }
                 }
             }
 
             BlockActionResult::Pass
-        })
+        }
     }
 
     #[expect(clippy::too_many_lines)]
-    fn random_tick<'a>(&'a self, args: RandomTickArgs<'a>) -> BlockFuture<'a, ()> {
-        Box::pin(async move {
-            let do_spread = matches!(
-                args.world
-                    .level_info
-                    .load()
-                    .game_rules
-                    .get(&GameRule::SpreadVines),
-                GameRuleValue::Bool(true)
-            );
-            if !do_spread {
-                return;
-            }
+    fn random_tick(&self, args: RandomTickArgs<'_>) {
+        let do_spread = matches!(
+            args.world
+                .level_info
+                .load()
+                .game_rules
+                .get(&GameRule::SpreadVines),
+            GameRuleValue::Bool(true)
+        );
+        if !do_spread {
+            return;
+        }
 
-            if rand::rng().random_range(0..4) != 0 {
-                return;
-            }
+        if rand::rng().random_range(0..4) != 0 {
+            return;
+        }
 
-            let test_direction = BlockDirection::all()[rand::rng().random_range(0..6)];
-            let above_pos = args.position.up();
-            let state_id = args.world.get_block_state_id(args.position);
-            let state_props = VineLikeProperties::from_state_id(state_id, args.block);
+        let test_direction = BlockDirection::all()[rand::rng().random_range(0..6)];
+        let above_pos = args.position.up();
+        let state_id = args.world.get_block_state_id(args.position);
+        let state_props = VineLikeProperties::from_state_id(state_id, args.block);
 
-            if test_direction.is_horizontal() && !has_face_property(&state_props, test_direction) {
-                if can_spread(args.world, args.position) {
-                    let test_pos = args.position.offset(test_direction.to_offset());
-                    let (edge_block, edge_state) = args.world.get_block_and_state(&test_pos);
-                    if edge_block.default_state.is_air() {
-                        let cw_direction = test_direction.rotate_clockwise();
-                        let ccw_direction = test_direction.rotate_counter_clockwise();
-                        let cw_has_connecting_face = has_face_property(&state_props, cw_direction);
-                        let ccw_has_connecting_face =
-                            has_face_property(&state_props, ccw_direction);
-                        let cw_test_pos = test_pos.offset(cw_direction.to_offset());
-                        let ccw_test_pos = test_pos.offset(ccw_direction.to_offset());
+        if test_direction.is_horizontal() && !has_face_property(&state_props, test_direction) {
+            if can_spread(args.world, args.position) {
+                let test_pos = args.position.offset(test_direction.to_offset());
+                let (edge_block, edge_state) = args.world.get_block_and_state(&test_pos);
+                if edge_block.default_state.is_air() {
+                    let cw_direction = test_direction.rotate_clockwise();
+                    let ccw_direction = test_direction.rotate_counter_clockwise();
+                    let cw_has_connecting_face = has_face_property(&state_props, cw_direction);
+                    let ccw_has_connecting_face = has_face_property(&state_props, ccw_direction);
+                    let cw_test_pos = test_pos.offset(cw_direction.to_offset());
+                    let ccw_test_pos = test_pos.offset(ccw_direction.to_offset());
 
-                        let (cw_test_block, cw_test_state) =
-                            args.world.get_block_and_state(&cw_test_pos);
-                        let (ccw_test_block, ccw_test_state) =
-                            args.world.get_block_and_state(&ccw_test_pos);
+                    let (cw_test_block, cw_test_state) =
+                        args.world.get_block_and_state(&cw_test_pos);
+                    let (ccw_test_block, ccw_test_state) =
+                        args.world.get_block_and_state(&ccw_test_pos);
 
-                        if cw_has_connecting_face
-                            && is_acceptable_neighbour(cw_test_block, cw_test_state, cw_direction)
-                        {
-                            let mut new_props = VineLikeProperties::default(args.block);
-                            set_face_property(&mut new_props, cw_direction, true);
-                            args.world
-                                .set_block_state(
-                                    &test_pos,
-                                    new_props.to_state_id(args.block),
-                                    BlockFlags::NOTIFY_ALL,
-                                )
-                                .await;
-                        } else if ccw_has_connecting_face
-                            && is_acceptable_neighbour(
-                                ccw_test_block,
-                                ccw_test_state,
-                                ccw_direction,
-                            )
-                        {
-                            let mut new_props = VineLikeProperties::default(args.block);
-                            set_face_property(&mut new_props, ccw_direction, true);
-                            args.world
-                                .set_block_state(
-                                    &test_pos,
-                                    new_props.to_state_id(args.block),
-                                    BlockFlags::NOTIFY_ALL,
-                                )
-                                .await;
-                        } else {
-                            let opposite = test_direction.opposite();
-                            let (cw_support_block, cw_support_state) =
-                                args.world.get_block_and_state(
-                                    &args.position.offset(cw_direction.to_offset()),
-                                );
-                            let (ccw_support_block, ccw_support_state) =
-                                args.world.get_block_and_state(
-                                    &args.position.offset(ccw_direction.to_offset()),
-                                );
-
-                            if cw_has_connecting_face
-                                && cw_test_block.default_state.is_air()
-                                && is_acceptable_neighbour(
-                                    cw_support_block,
-                                    cw_support_state,
-                                    opposite,
-                                )
-                            {
-                                let mut new_props = VineLikeProperties::default(args.block);
-                                set_face_property(&mut new_props, opposite, true);
-                                args.world
-                                    .set_block_state(
-                                        &cw_test_pos,
-                                        new_props.to_state_id(args.block),
-                                        BlockFlags::NOTIFY_ALL,
-                                    )
-                                    .await;
-                            } else if ccw_has_connecting_face
-                                && ccw_test_block.default_state.is_air()
-                                && is_acceptable_neighbour(
-                                    ccw_support_block,
-                                    ccw_support_state,
-                                    opposite,
-                                )
-                            {
-                                let mut new_props = VineLikeProperties::default(args.block);
-                                set_face_property(&mut new_props, opposite, true);
-                                args.world
-                                    .set_block_state(
-                                        &ccw_test_pos,
-                                        new_props.to_state_id(args.block),
-                                        BlockFlags::NOTIFY_ALL,
-                                    )
-                                    .await;
-                            } else if rand::rng().random_range(0.0..1.0f32) < 0.05
-                                && is_acceptable_neighbour(
-                                    args.world.get_block(&test_pos.up()),
-                                    args.world.get_block_state(&test_pos.up()),
-                                    BlockDirection::Up,
-                                )
-                            {
-                                let mut new_props = VineLikeProperties::default(args.block);
-                                new_props.up = true;
-                                args.world
-                                    .set_block_state(
-                                        &test_pos,
-                                        new_props.to_state_id(args.block),
-                                        BlockFlags::NOTIFY_ALL,
-                                    )
-                                    .await;
-                            }
-                        }
-                    } else if is_acceptable_neighbour(edge_block, edge_state, test_direction) {
-                        let mut new_props = state_props;
-                        set_face_property(&mut new_props, test_direction, true);
-                        args.world
-                            .set_block_state(
-                                args.position,
-                                new_props.to_state_id(args.block),
-                                BlockFlags::NOTIFY_ALL,
-                            )
-                            .await;
-                    }
-                }
-            } else if test_direction == BlockDirection::Up
-                && args.position.0.y < args.world.dimension.min_y + args.world.dimension.height - 1
-            {
-                if can_support_at_face(&**args.world, args.position, test_direction) {
-                    let mut new_props = state_props;
-                    new_props.up = true;
-                    args.world
-                        .set_block_state(
-                            args.position,
+                    if cw_has_connecting_face
+                        && is_acceptable_neighbour(cw_test_block, cw_test_state, cw_direction)
+                    {
+                        let mut new_props = VineLikeProperties::default(args.block);
+                        set_face_property(&mut new_props, cw_direction, true);
+                        args.world.set_block_state(
+                            &test_pos,
                             new_props.to_state_id(args.block),
                             BlockFlags::NOTIFY_ALL,
-                        )
-                        .await;
+                        );
+                    } else if ccw_has_connecting_face
+                        && is_acceptable_neighbour(ccw_test_block, ccw_test_state, ccw_direction)
+                    {
+                        let mut new_props = VineLikeProperties::default(args.block);
+                        set_face_property(&mut new_props, ccw_direction, true);
+                        args.world.set_block_state(
+                            &test_pos,
+                            new_props.to_state_id(args.block),
+                            BlockFlags::NOTIFY_ALL,
+                        );
+                    } else {
+                        let opposite = test_direction.opposite();
+                        let (cw_support_block, cw_support_state) = args
+                            .world
+                            .get_block_and_state(&args.position.offset(cw_direction.to_offset()));
+                        let (ccw_support_block, ccw_support_state) = args
+                            .world
+                            .get_block_and_state(&args.position.offset(ccw_direction.to_offset()));
+
+                        if cw_has_connecting_face
+                            && cw_test_block.default_state.is_air()
+                            && is_acceptable_neighbour(cw_support_block, cw_support_state, opposite)
+                        {
+                            let mut new_props = VineLikeProperties::default(args.block);
+                            set_face_property(&mut new_props, opposite, true);
+                            args.world.set_block_state(
+                                &cw_test_pos,
+                                new_props.to_state_id(args.block),
+                                BlockFlags::NOTIFY_ALL,
+                            );
+                        } else if ccw_has_connecting_face
+                            && ccw_test_block.default_state.is_air()
+                            && is_acceptable_neighbour(
+                                ccw_support_block,
+                                ccw_support_state,
+                                opposite,
+                            )
+                        {
+                            let mut new_props = VineLikeProperties::default(args.block);
+                            set_face_property(&mut new_props, opposite, true);
+                            args.world.set_block_state(
+                                &ccw_test_pos,
+                                new_props.to_state_id(args.block),
+                                BlockFlags::NOTIFY_ALL,
+                            );
+                        } else if rand::rng().random_range(0.0..1.0f32) < 0.05
+                            && is_acceptable_neighbour(
+                                args.world.get_block(&test_pos.up()),
+                                args.world.get_block_state(&test_pos.up()),
+                                BlockDirection::Up,
+                            )
+                        {
+                            let mut new_props = VineLikeProperties::default(args.block);
+                            new_props.up = true;
+                            args.world.set_block_state(
+                                &test_pos,
+                                new_props.to_state_id(args.block),
+                                BlockFlags::NOTIFY_ALL,
+                            );
+                        }
+                    }
+                } else if is_acceptable_neighbour(edge_block, edge_state, test_direction) {
+                    let mut new_props = state_props;
+                    set_face_property(&mut new_props, test_direction, true);
+                    args.world.set_block_state(
+                        args.position,
+                        new_props.to_state_id(args.block),
+                        BlockFlags::NOTIFY_ALL,
+                    );
+                }
+            }
+        } else if test_direction == BlockDirection::Up
+            && args.position.0.y < args.world.dimension.min_y + args.world.dimension.height - 1
+        {
+            if can_support_at_face(&**args.world, args.position, test_direction) {
+                let mut new_props = state_props;
+                new_props.up = true;
+                args.world.set_block_state(
+                    args.position,
+                    new_props.to_state_id(args.block),
+                    BlockFlags::NOTIFY_ALL,
+                );
+                return;
+            }
+
+            if args.world.get_block(&above_pos).default_state.is_air() {
+                if !can_spread(args.world, args.position) {
                     return;
                 }
 
-                if args.world.get_block(&above_pos).default_state.is_air() {
-                    if !can_spread(args.world, args.position) {
-                        return;
-                    }
-
-                    let mut above_props = state_props;
-                    for direction in [
-                        BlockDirection::North,
-                        BlockDirection::South,
-                        BlockDirection::West,
-                        BlockDirection::East,
-                    ] {
-                        let rel_pos = above_pos.offset(direction.to_offset());
-                        let (rel_block, rel_state) = args.world.get_block_and_state(&rel_pos);
-                        if rand::rng().random_range(0..2) == 0
-                            || !is_acceptable_neighbour(rel_block, rel_state, direction)
-                        {
-                            set_face_property(&mut above_props, direction, false);
-                        }
-                    }
-
-                    if has_horizontal_connection(&above_props) {
-                        args.world
-                            .set_block_state(
-                                &above_pos,
-                                above_props.to_state_id(args.block),
-                                BlockFlags::NOTIFY_ALL,
-                            )
-                            .await;
+                let mut above_props = state_props;
+                for direction in [
+                    BlockDirection::North,
+                    BlockDirection::South,
+                    BlockDirection::West,
+                    BlockDirection::East,
+                ] {
+                    let rel_pos = above_pos.offset(direction.to_offset());
+                    let (rel_block, rel_state) = args.world.get_block_and_state(&rel_pos);
+                    if rand::rng().random_range(0..2) == 0
+                        || !is_acceptable_neighbour(rel_block, rel_state, direction)
+                    {
+                        set_face_property(&mut above_props, direction, false);
                     }
                 }
-            } else if args.position.0.y > args.world.dimension.min_y {
-                let below_pos = args.position.down();
-                let (below_block, below_state) = args.world.get_block_and_state(&below_pos);
-                if below_block.default_state.is_air() || below_block == &Block::VINE {
-                    let before_props = if below_block.default_state.is_air() {
-                        VineLikeProperties::default(args.block)
-                    } else {
-                        VineLikeProperties::from_state_id(below_state.id, below_block)
-                    };
 
-                    let mut after_props = before_props;
-                    for direction in [
-                        BlockDirection::North,
-                        BlockDirection::South,
-                        BlockDirection::West,
-                        BlockDirection::East,
-                    ] {
-                        if rand::rng().random_range(0..2) == 0
-                            && has_face_property(&state_props, direction)
-                        {
-                            set_face_property(&mut after_props, direction, true);
-                        }
-                    }
-
-                    if before_props != after_props && has_horizontal_connection(&after_props) {
-                        args.world
-                            .set_block_state(
-                                &below_pos,
-                                after_props.to_state_id(args.block),
-                                BlockFlags::NOTIFY_ALL,
-                            )
-                            .await;
-                    }
+                if has_horizontal_connection(&above_props) {
+                    args.world.set_block_state(
+                        &above_pos,
+                        above_props.to_state_id(args.block),
+                        BlockFlags::NOTIFY_ALL,
+                    );
                 }
             }
-        })
+        } else if args.position.0.y > args.world.dimension.min_y {
+            let below_pos = args.position.down();
+            let (below_block, below_state) = args.world.get_block_and_state(&below_pos);
+            if below_block.default_state.is_air() || below_block == &Block::VINE {
+                let before_props = if below_block.default_state.is_air() {
+                    VineLikeProperties::default(args.block)
+                } else {
+                    VineLikeProperties::from_state_id(below_state.id, below_block)
+                };
+
+                let mut after_props = before_props;
+                for direction in [
+                    BlockDirection::North,
+                    BlockDirection::South,
+                    BlockDirection::West,
+                    BlockDirection::East,
+                ] {
+                    if rand::rng().random_range(0..2) == 0
+                        && has_face_property(&state_props, direction)
+                    {
+                        set_face_property(&mut after_props, direction, true);
+                    }
+                }
+
+                if before_props != after_props && has_horizontal_connection(&after_props) {
+                    args.world.set_block_state(
+                        &below_pos,
+                        after_props.to_state_id(args.block),
+                        BlockFlags::NOTIFY_ALL,
+                    );
+                }
+            }
+        }
     }
 
     fn rotate(

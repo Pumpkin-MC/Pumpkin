@@ -13,11 +13,11 @@ use pumpkin_protocol::{
     codec::item_stack_seralizer::ItemStackSerializer, java::client::play::Metadata,
 };
 use pumpkin_util::math::vector3::Vector3;
+use std::sync::Mutex;
 use std::sync::{
     Arc,
     atomic::{AtomicBool, AtomicU32, Ordering},
 };
-use tokio::sync::Mutex;
 
 use super::{Entity, EntityBase};
 
@@ -54,7 +54,7 @@ impl EyeOfEnder {
 
     /// Aim the eye at `target`, clamping to [`TOO_FAR_DISTANCE`] if necessary,
     /// and randomly decide whether it should drop its item on expiry.
-    pub async fn signal_to(&self, target: Vector3<f64>) {
+    pub fn signal_to(&self, target: Vector3<f64>) {
         let pos = self.entity.pos.load();
         let delta = target.sub(&pos);
         let horizontal_dist = delta.x.hypot(delta.z);
@@ -69,7 +69,10 @@ impl EyeOfEnder {
             target
         };
 
-        *self.target.lock().await = Some(clamped_target);
+        *self
+            .target
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(clamped_target);
         self.life.store(0, Ordering::Relaxed);
 
         // 4-in-5 chance to survive (drop item); 1-in-5 plays the break effect.
@@ -119,83 +122,86 @@ fn lerp(t: f64, start: f64, end: f64) -> f64 {
 }
 
 impl EntityBase for EyeOfEnder {
-    fn tick<'a>(
-        &'a self,
-        caller: &'a Arc<dyn EntityBase>,
-        server: &'a Server,
-    ) -> EntityBaseFuture<'a, ()> {
-        Box::pin(async move {
-            let entity = &self.entity;
-            entity.tick(caller, server).await;
+    fn tick<'a>(&'a self, caller: &'a Arc<dyn EntityBase>, server: &'a Server) {
+        let entity = &self.entity;
+        entity.tick(caller, server);
 
-            // Advance position by current velocity.
-            let velocity = entity.velocity.load();
-            let new_pos = entity.pos.load().add(&velocity);
+        // Advance position by current velocity.
+        let velocity = entity.velocity.load();
+        let new_pos = entity.pos.load().add(&velocity);
 
-            // Server-side: steer toward target if one is set.
-            {
-                let target_guard = self.target.lock().await;
-                if let Some(target) = *target_guard {
-                    let new_velo = Self::compute_new_velocity(velocity, new_pos, target);
-                    entity.velocity.store(new_velo);
-                }
+        // Server-side: steer toward target if one is set.
+        {
+            let target_guard = self
+                .target
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            if let Some(target) = *target_guard {
+                let new_velo = Self::compute_new_velocity(velocity, new_pos, target);
+                entity.velocity.store(new_velo);
             }
+        }
 
-            entity.set_pos(new_pos);
-            entity.send_pos_rot();
+        entity.set_pos(new_pos);
+        entity.send_pos_rot();
 
-            // Tick lifetime and handle expiry.
-            let life = self.life.fetch_add(1, Ordering::Relaxed) + 1;
-            if life > MAX_LIFE {
-                entity.play_sound(Sound::EntityEnderEyeDeath);
-                entity.remove().await;
+        // Tick lifetime and handle expiry.
+        let life = self.life.fetch_add(1, Ordering::Relaxed) + 1;
+        if life > MAX_LIFE {
+            entity.play_sound(Sound::EntityEnderEyeDeath);
+            entity.remove();
 
-                if self.survive_after_death.load(Ordering::Relaxed) {
-                    // Drop the item at the current position.
-                    let item_stack = self.item_stack.lock().await.clone();
-                    let world = entity.world.load();
-                    let entity = Entity::new(world.clone(), new_pos, &EntityType::ITEM);
-                    let item_entity = Arc::new(ItemEntity::new(entity, item_stack));
-                    world.spawn_entity(item_entity).await;
-                } else {
-                    entity.world.load().sync_world_event(
-                        WorldEvent::ParticlesEyeOfEnderDeath,
-                        new_pos.to_block_pos(),
-                        0,
-                    );
-                }
+            if self.survive_after_death.load(Ordering::Relaxed) {
+                // Drop the item at the current position.
+                let item_stack = self
+                    .item_stack
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .clone();
+                let world = entity.world.load();
+                let entity = Entity::new(world.clone(), new_pos, &EntityType::ITEM);
+                let item_entity = Arc::new(ItemEntity::new(entity, item_stack));
+                world.spawn_entity(item_entity);
+            } else {
+                entity.world.load().sync_world_event(
+                    WorldEvent::ParticlesEyeOfEnderDeath,
+                    new_pos.to_block_pos(),
+                    0,
+                );
             }
-        })
+        }
     }
 
-    fn init_data_tracker(&self) -> EntityBaseFuture<'_, ()> {
-        Box::pin(async {
-            self.entity.send_meta_data(
-                &[Metadata::new(
-                    pumpkin_data::tracked_data::eye_of_ender::ITEM_STACK,
-                    &ItemStackSerializer::from(self.item_stack.lock().await.clone()),
-                )],
-                None,
-            );
-        })
+    fn init_data_tracker(&self) {
+        self.entity.send_meta_data(
+            &[Metadata::new(
+                pumpkin_data::tracked_data::eye_of_ender::ITEM_STACK,
+                &ItemStackSerializer::from(
+                    self.item_stack
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner)
+                        .clone(),
+                ),
+            )],
+            None,
+        );
     }
 
-    fn damage_with_context<'a>(
-        &'a self,
-        _caller: &'a dyn EntityBase,
+    fn damage_with_context(
+        &self,
+        _caller: &dyn EntityBase,
         _amount: f32,
         _damage_type: DamageType,
         _position: Option<Vector3<f64>>,
-        _source: Option<&'a dyn EntityBase>,
-        _cause: Option<&'a dyn EntityBase>,
-    ) -> EntityBaseFuture<'a, bool> {
+        _source: Option<&dyn EntityBase>,
+        _cause: Option<&dyn EntityBase>,
+    ) -> bool {
         // Eye of Ender is not attackable.
-        Box::pin(async { false })
+        false
     }
 
-    fn on_player_collision<'a>(&'a self, _player: &'a Arc<Player>) -> EntityBaseFuture<'a, ()> {
+    fn on_player_collision(&self, _player: &Arc<Player>) {
         // Eye of Ender cannot be picked up.
-        Box::pin(async {})
     }
 
     fn get_entity(&self) -> &Entity {
@@ -227,7 +233,12 @@ impl EntityBase for EyeOfEnder {
             if client.version.load() >= pumpkin_data::packet::CURRENT_MC_VERSION {
                 let metadata = Metadata::new(
                     pumpkin_data::tracked_data::eye_of_ender::ITEM_STACK,
-                    ItemStackSerializer::from(self.item_stack.lock().await.clone()),
+                    ItemStackSerializer::from(
+                        self.item_stack
+                            .lock()
+                            .unwrap_or_else(std::sync::PoisonError::into_inner)
+                            .clone(),
+                    ),
                 );
                 let mut data = Vec::new();
                 if metadata.write(&mut data, &client.version.load()).is_ok() {

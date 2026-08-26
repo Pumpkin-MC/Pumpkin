@@ -2,8 +2,8 @@ use std::sync::Arc;
 
 use crate::{
     block::{
-        BlockBehaviour, BlockFuture, BrokenArgs, CanPlaceAtArgs, GetStateForNeighborUpdateArgs,
-        OnPlaceArgs, PlacedArgs,
+        BlockBehaviour, BrokenArgs, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, OnPlaceArgs,
+        PlacedArgs,
     },
     entity::player::Player,
     world::World,
@@ -30,26 +30,24 @@ impl BlockBehaviour for DripstoneBlock {
             args.player,
         )
     }
-    fn on_place<'a>(&'a self, args: OnPlaceArgs<'a>) -> BlockFuture<'a, BlockStateId> {
-        Box::pin(async move {
-            let mut dripstone_props = PointedDripstoneLikeProperties::default(args.block);
-            dripstone_props.waterlogged = args.replacing.water_source();
-            let Some(support_block_ver_dir) = get_support_block_vertical_direction(
-                args.world,
-                args.position,
-                Some(args.direction),
-                Some(args.player),
-            ) else {
-                //this shouldn't happen
-                return Block::AIR.default_state.id;
-            };
+    fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
+        let mut dripstone_props = PointedDripstoneLikeProperties::default(args.block);
+        dripstone_props.waterlogged = args.replacing.water_source();
+        let Some(support_block_ver_dir) = get_support_block_vertical_direction(
+            args.world,
+            args.position,
+            Some(args.direction),
+            Some(args.player),
+        ) else {
+            //this shouldn't happen
+            return Block::AIR.default_state.id;
+        };
 
-            dripstone_props.vertical_direction = flip_dir(support_block_ver_dir);
-            dripstone_props.to_state_id(&Block::POINTED_DRIPSTONE)
-        })
+        dripstone_props.vertical_direction = flip_dir(support_block_ver_dir);
+        dripstone_props.to_state_id(&Block::POINTED_DRIPSTONE)
     }
-    fn placed<'a>(&'a self, args: PlacedArgs<'a>) -> BlockFuture<'a, ()> {
-        Box::pin(async move {
+    fn placed(&self, args: PlacedArgs<'_>) {
+        {
             let (len, vertical_dir) = get_stalagmite_or_stalactice_len_and_dir_from_tip_pos(
                 args.world,
                 args.position,
@@ -57,16 +55,16 @@ impl BlockBehaviour for DripstoneBlock {
             );
             match vertical_dir {
                 VerticalDirection::Up => {
-                    update_stalagmite(args.world, len, args.position).await;
+                    update_stalagmite(args.world, len, args.position);
                 }
                 VerticalDirection::Down => {
-                    update_stalactite(args.world, len, args.position).await;
+                    update_stalactite(args.world, len, args.position);
                 }
             }
-        })
+        }
     }
-    fn broken<'a>(&'a self, args: BrokenArgs<'a>) -> BlockFuture<'a, ()> {
-        Box::pin(async move {
+    fn broken(&self, args: BrokenArgs<'_>) {
+        {
             let broken_dripstone_props =
                 PointedDripstoneLikeProperties::from_state_id(args.state.id, args.block);
             let new_tip_pos = match broken_dripstone_props.vertical_direction {
@@ -81,54 +79,52 @@ impl BlockBehaviour for DripstoneBlock {
             );
             match vertical_dir {
                 VerticalDirection::Up => {
-                    update_stalagmite(args.world, len, &new_tip_pos).await;
+                    update_stalagmite(args.world, len, &new_tip_pos);
                 }
                 VerticalDirection::Down => {
-                    update_stalactite(args.world, len, &new_tip_pos).await;
+                    update_stalactite(args.world, len, &new_tip_pos);
                 }
             }
-        })
+        }
     }
-    fn get_state_for_neighbor_update<'a>(
-        &'a self,
-        args: GetStateForNeighborUpdateArgs<'a>,
-    ) -> BlockFuture<'a, BlockStateId> {
-        Box::pin(async move {
-            if !can_place_at_pos(args.world, args.position, None, None) {
-                return Block::AIR.default_state.id;
-            }
-            let mut dripstone_props =
-                PointedDripstoneLikeProperties::from_state_id(args.state_id, args.block);
-            if dripstone_props.thickness != SpeleothemThickness::TipMerge {
-                return args.state_id;
-            }
-            match dripstone_props.vertical_direction {
-                VerticalDirection::Up => {
-                    let block_above = args.world.get_block(&args.position.up());
-                    if block_above != &Block::POINTED_DRIPSTONE {
-                        dripstone_props.thickness = SpeleothemThickness::Tip;
-                        return dripstone_props.to_state_id(args.block);
-                    }
-                }
-                VerticalDirection::Down => {
-                    let block_below = args.world.get_block(&args.position.down());
-                    if block_below != &Block::POINTED_DRIPSTONE {
-                        dripstone_props.thickness = SpeleothemThickness::Tip;
-                        return dripstone_props.to_state_id(args.block);
-                    }
+    fn get_state_for_neighbor_update(
+        &self,
+        args: GetStateForNeighborUpdateArgs<'_>,
+    ) -> BlockStateId {
+        if !can_place_at_pos(args.world, args.position, None, None) {
+            return Block::AIR.default_state.id;
+        }
+        let mut dripstone_props =
+            PointedDripstoneLikeProperties::from_state_id(args.state_id, args.block);
+        if dripstone_props.thickness != SpeleothemThickness::TipMerge {
+            return args.state_id;
+        }
+        match dripstone_props.vertical_direction {
+            VerticalDirection::Up => {
+                let block_above = args.world.get_block(&args.position.up());
+                if block_above != &Block::POINTED_DRIPSTONE {
+                    dripstone_props.thickness = SpeleothemThickness::Tip;
+                    return dripstone_props.to_state_id(args.block);
                 }
             }
-            args.state_id
-        })
+            VerticalDirection::Down => {
+                let block_below = args.world.get_block(&args.position.down());
+                if block_below != &Block::POINTED_DRIPSTONE {
+                    dripstone_props.thickness = SpeleothemThickness::Tip;
+                    return dripstone_props.to_state_id(args.block);
+                }
+            }
+        }
+        args.state_id
     }
 }
-async fn update_stalagmite(world: &Arc<World>, stalagmite_len: u8, tip_pos: &BlockPos) {
+fn update_stalagmite(world: &Arc<World>, stalagmite_len: u8, tip_pos: &BlockPos) {
     let block_above = world.get_block(&tip_pos.up());
     if block_above == &Block::POINTED_DRIPSTONE {
-        modify_dripstone_thickness_to(world, tip_pos, SpeleothemThickness::TipMerge).await;
-        modify_dripstone_thickness_to(world, &tip_pos.up(), SpeleothemThickness::TipMerge).await;
+        modify_dripstone_thickness_to(world, tip_pos, SpeleothemThickness::TipMerge);
+        modify_dripstone_thickness_to(world, &tip_pos.up(), SpeleothemThickness::TipMerge);
     } else {
-        modify_dripstone_thickness_to(world, tip_pos, SpeleothemThickness::Tip).await;
+        modify_dripstone_thickness_to(world, tip_pos, SpeleothemThickness::Tip);
     }
     match stalagmite_len {
         2 => {
@@ -136,74 +132,65 @@ async fn update_stalagmite(world: &Arc<World>, stalagmite_len: u8, tip_pos: &Blo
                 world,
                 &tip_pos.down_height(1),
                 SpeleothemThickness::Frustum,
-            )
-            .await;
+            );
         }
         3 => {
             modify_dripstone_thickness_to(
                 world,
                 &tip_pos.down_height(1),
                 SpeleothemThickness::Frustum,
-            )
-            .await;
+            );
             modify_dripstone_thickness_to(
                 world,
                 &tip_pos.down_height(2),
                 SpeleothemThickness::Base,
-            )
-            .await;
+            );
         }
         4 => {
             modify_dripstone_thickness_to(
                 world,
                 &tip_pos.down_height(1),
                 SpeleothemThickness::Frustum,
-            )
-            .await;
+            );
             modify_dripstone_thickness_to(
                 world,
                 &tip_pos.down_height(2),
                 SpeleothemThickness::Middle,
-            )
-            .await;
+            );
             modify_dripstone_thickness_to(
                 world,
                 &tip_pos.down_height(3),
                 SpeleothemThickness::Base,
-            )
-            .await;
+            );
         }
         5 => {
             modify_dripstone_thickness_to(
                 world,
                 &tip_pos.down_height(1),
                 SpeleothemThickness::Frustum,
-            )
-            .await;
+            );
             modify_dripstone_thickness_to(
                 world,
                 &tip_pos.down_height(2),
                 SpeleothemThickness::Middle,
-            )
-            .await;
+            );
             modify_dripstone_thickness_to(
                 world,
                 &tip_pos.down_height(3),
                 SpeleothemThickness::Middle,
-            )
-            .await;
+            );
         }
         _ => {}
     }
 }
 
-async fn update_stalactite(world: &Arc<World>, stalagmite_len: u8, tip_pos: &BlockPos) {
+fn update_stalactite(world: &Arc<World>, stalagmite_len: u8, tip_pos: &BlockPos) {
     let block_below = world.get_block(&tip_pos.down());
     if block_below == &Block::POINTED_DRIPSTONE {
-        modify_dripstone_thickness_to(world, tip_pos, SpeleothemThickness::TipMerge).await;
-        modify_dripstone_thickness_to(world, &tip_pos.down(), SpeleothemThickness::TipMerge).await;
+        modify_dripstone_thickness_to(world, tip_pos, SpeleothemThickness::TipMerge);
+        modify_dripstone_thickness_to(world, &tip_pos.down(), SpeleothemThickness::TipMerge);
     } else {
-        modify_dripstone_thickness_to(world, tip_pos, SpeleothemThickness::Tip).await;
+        modify_dripstone_thickness_to(world, tip_pos, SpeleothemThickness::Tip);
     }
     match stalagmite_len {
         2 => {
@@ -211,54 +198,45 @@ async fn update_stalactite(world: &Arc<World>, stalagmite_len: u8, tip_pos: &Blo
                 world,
                 &tip_pos.up_height(1),
                 SpeleothemThickness::Frustum,
-            )
-            .await;
+            );
         }
         3 => {
             modify_dripstone_thickness_to(
                 world,
                 &tip_pos.up_height(1),
                 SpeleothemThickness::Frustum,
-            )
-            .await;
-            modify_dripstone_thickness_to(world, &tip_pos.up_height(2), SpeleothemThickness::Base)
-                .await;
+            );
+            modify_dripstone_thickness_to(world, &tip_pos.up_height(2), SpeleothemThickness::Base);
         }
         4 => {
             modify_dripstone_thickness_to(
                 world,
                 &tip_pos.up_height(1),
                 SpeleothemThickness::Frustum,
-            )
-            .await;
+            );
             modify_dripstone_thickness_to(
                 world,
                 &tip_pos.up_height(2),
                 SpeleothemThickness::Middle,
-            )
-            .await;
-            modify_dripstone_thickness_to(world, &tip_pos.up_height(3), SpeleothemThickness::Base)
-                .await;
+            );
+            modify_dripstone_thickness_to(world, &tip_pos.up_height(3), SpeleothemThickness::Base);
         }
         5 => {
             modify_dripstone_thickness_to(
                 world,
                 &tip_pos.up_height(1),
                 SpeleothemThickness::Frustum,
-            )
-            .await;
+            );
             modify_dripstone_thickness_to(
                 world,
                 &tip_pos.up_height(2),
                 SpeleothemThickness::Middle,
-            )
-            .await;
+            );
             modify_dripstone_thickness_to(
                 world,
                 &tip_pos.up_height(3),
                 SpeleothemThickness::Middle,
-            )
-            .await;
+            );
         }
         _ => {}
     }
@@ -382,7 +360,7 @@ fn can_support_dripstone(support_block: &Block) -> bool {
     }
     false
 }
-async fn modify_dripstone_thickness_to(
+fn modify_dripstone_thickness_to(
     world: &Arc<World>,
     pos: &BlockPos,
     new_thickness: SpeleothemThickness,
@@ -399,13 +377,11 @@ async fn modify_dripstone_thickness_to(
         return;
     }
     support_props.thickness = new_thickness;
-    world
-        .set_block_state(
-            pos,
-            support_props.to_state_id(&Block::POINTED_DRIPSTONE),
-            BlockFlags::empty(),
-        )
-        .await;
+    world.set_block_state(
+        pos,
+        support_props.to_state_id(&Block::POINTED_DRIPSTONE),
+        BlockFlags::empty(),
+    );
 }
 fn offset_pos_by_vertical_dir(pos: &BlockPos, ver_dir: VerticalDirection) -> BlockPos {
     match ver_dir {

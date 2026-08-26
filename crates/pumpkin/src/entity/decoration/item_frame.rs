@@ -1,8 +1,8 @@
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
+use std::sync::{Arc, Mutex};
 
 use crate::entity::player::Player;
-use crate::entity::{Entity, EntityBase, EntityBaseFuture, NbtFuture, living::LivingEntity};
+use crate::entity::{Entity, EntityBase, EntityBaseFuture, living::LivingEntity};
 use crossbeam::atomic::AtomicCell;
 use pumpkin_data::BlockDirection;
 use pumpkin_data::damage::DamageType;
@@ -15,7 +15,6 @@ use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::codec::item_stack_seralizer::ItemStackSerializer;
 use pumpkin_protocol::java::client::play::{CSetEntityMetadata, Metadata};
 use pumpkin_util::math::vector3::Vector3;
-use tokio::sync::Mutex;
 
 /// An item frame or glow item frame.
 ///
@@ -111,18 +110,24 @@ impl ItemFrameEntity {
         self.entity.data.store(i32::from(index), Ordering::Relaxed);
     }
 
-    pub async fn get_item(&self) -> ItemStack {
-        self.item_stack.lock().await.clone()
+    pub fn get_item(&self) -> ItemStack {
+        self.item_stack
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone()
     }
 
-    pub async fn set_item(&self, mut item_stack: ItemStack, update_neighbours: bool) {
+    pub fn set_item(&self, mut item_stack: ItemStack, update_neighbours: bool) {
         if !item_stack.is_empty() {
             item_stack.item_count = 1;
         }
 
         let play_sound = !item_stack.is_empty();
         let item_serializer = ItemStackSerializer::from(item_stack.clone());
-        *self.item_stack.lock().await = item_stack;
+        *self
+            .item_stack
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = item_stack;
 
         self.entity.send_meta_data(
             &[Metadata::new(
@@ -139,7 +144,7 @@ impl ItemFrameEntity {
         if update_neighbours {
             let world = self.entity.world.load();
             let pos = self.entity.block_pos.load();
-            world.update_neighbors(&pos, None).await;
+            world.update_neighbors(&pos, None);
         }
     }
 
@@ -147,7 +152,7 @@ impl ItemFrameEntity {
         self.rotation.load(Ordering::Relaxed) % 8
     }
 
-    pub async fn set_rotation(&self, rotation: u8, update_neighbours: bool) {
+    pub fn set_rotation(&self, rotation: u8, update_neighbours: bool) {
         let rot = rotation % 8;
         self.rotation.store(rot, Ordering::Relaxed);
 
@@ -162,7 +167,7 @@ impl ItemFrameEntity {
         if update_neighbours {
             let world = self.entity.world.load();
             let pos = self.entity.block_pos.load();
-            world.update_neighbors(&pos, None).await;
+            world.update_neighbors(&pos, None);
         }
     }
 
@@ -206,8 +211,8 @@ impl ItemFrameEntity {
         stack
     }
 
-    pub async fn get_pick_result(&self) -> ItemStack {
-        let framed_stack = self.get_item().await;
+    pub fn get_pick_result(&self) -> ItemStack {
+        let framed_stack = self.get_item();
         if framed_stack.is_empty() {
             self.get_frame_item_stack_with_data()
         } else {
@@ -218,21 +223,37 @@ impl ItemFrameEntity {
     /// The comparator signal this frame produces.
     ///
     /// Vanilla: `getItem().isEmpty() ? 0 : getRotation() % 8 + 1`.
-    pub async fn get_analog_output(&self) -> u8 {
-        if self.item_stack.lock().await.is_empty() {
+    pub fn get_analog_output(&self) -> u8 {
+        if self
+            .item_stack
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .is_empty()
+        {
             0
         } else {
             self.rotation.load(Ordering::Relaxed) % 8 + 1
         }
     }
 
-    pub async fn drop_item(&self, caused_by: Option<&dyn EntityBase>, with_frame: bool) {
+    pub fn drop_item(&self, caused_by: Option<&dyn EntityBase>, with_frame: bool) {
         if self.is_fixed() {
             return;
         }
 
-        let item_stack = self.get_item().await;
-        self.set_item(ItemStack::EMPTY.clone(), true).await;
+        let item_stack = self.get_item();
+        *self
+            .item_stack
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = ItemStack::EMPTY.clone();
+        let item_serializer = ItemStackSerializer::from(ItemStack::EMPTY.clone());
+        self.entity.send_meta_data(
+            &[Metadata::new(
+                pumpkin_data::tracked_data::item_frame::ITEM,
+                &item_serializer,
+            )],
+            None,
+        );
 
         let is_creative_player = caused_by.is_some_and(|s| {
             s.cast_any()
@@ -248,61 +269,61 @@ impl ItemFrameEntity {
         let pos = self.entity.block_pos.load();
 
         if with_frame {
-            world
-                .drop_stack(&pos, self.get_frame_item_stack_with_data())
-                .await;
+            world.drop_stack(&pos, self.get_frame_item_stack_with_data());
         }
 
         if !item_stack.is_empty() {
             let drop_chance = self.item_drop_chance.load();
             if rand::random::<f32>() < drop_chance {
-                world.drop_stack(&pos, item_stack).await;
+                world.drop_stack(&pos, item_stack);
             }
         }
     }
 }
 
 impl EntityBase for ItemFrameEntity {
-    fn write_custom_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
-        Box::pin(async move {
-            let item = self.item_stack.lock().await;
-            if !item.is_empty() {
-                let mut item_compound = NbtCompound::new();
-                item.write_item_stack(&mut item_compound);
-                nbt.put_compound("Item", item_compound);
-            }
-            nbt.put_float("ItemDropChance", self.item_drop_chance.load());
-            nbt.put_byte("ItemRotation", self.rotation.load(Ordering::Relaxed) as i8);
-            nbt.put_byte("Facing", self.facing.load(Ordering::Relaxed) as i8);
-            nbt.put_bool("Invisible", self.invisible.load(Ordering::Relaxed));
-            nbt.put_bool("Fixed", self.fixed.load(Ordering::Relaxed));
-        })
+    fn write_custom_nbt(&self, nbt: &mut NbtCompound) {
+        let item = self
+            .item_stack
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if !item.is_empty() {
+            let mut item_compound = NbtCompound::new();
+            item.write_item_stack(&mut item_compound);
+            nbt.put_compound("Item", item_compound);
+        }
+        nbt.put_float("ItemDropChance", self.item_drop_chance.load());
+        nbt.put_byte("ItemRotation", self.rotation.load(Ordering::Relaxed) as i8);
+        nbt.put_byte("Facing", self.facing.load(Ordering::Relaxed) as i8);
+        nbt.put_bool("Invisible", self.invisible.load(Ordering::Relaxed));
+        nbt.put_bool("Fixed", self.fixed.load(Ordering::Relaxed));
     }
 
-    fn read_custom_nbt<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
-        Box::pin(async {
-            if let Some(item_compound) = nbt.get_compound("Item")
-                && let Some(stack) = ItemStack::read_item_stack(item_compound)
-            {
-                *self.item_stack.lock().await = stack;
-            }
-            self.rotation.store(
-                (nbt.get_byte("ItemRotation").unwrap_or(0) as u8) % 8,
-                Ordering::Relaxed,
-            );
-            let facing = nbt.get_byte("Facing").unwrap_or(0) as u8 % 6;
-            self.facing.store(facing, Ordering::Relaxed);
-            // The spawn packet's data field carries the frame's direction.
-            self.entity.data.store(i32::from(facing), Ordering::Relaxed);
-            self.item_drop_chance
-                .store(nbt.get_float("ItemDropChance").unwrap_or(1.0));
-            self.invisible.store(
-                nbt.get_bool("Invisible").unwrap_or(false),
-                Ordering::Relaxed,
-            );
-            self.fixed
-                .store(nbt.get_bool("Fixed").unwrap_or(false), Ordering::Relaxed);
-        })
+    fn read_custom_nbt(&self, nbt: &NbtCompound) {
+        if let Some(item_compound) = nbt.get_compound("Item")
+            && let Some(stack) = ItemStack::read_item_stack(item_compound)
+        {
+            *self
+                .item_stack
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner) = stack;
+        }
+        self.rotation.store(
+            (nbt.get_byte("ItemRotation").unwrap_or(0) as u8) % 8,
+            Ordering::Relaxed,
+        );
+        let facing = nbt.get_byte("Facing").unwrap_or(0) as u8 % 6;
+        self.facing.store(facing, Ordering::Relaxed);
+        // The spawn packet's data field carries the frame's direction.
+        self.entity.data.store(i32::from(facing), Ordering::Relaxed);
+        self.item_drop_chance
+            .store(nbt.get_float("ItemDropChance").unwrap_or(1.0));
+        self.invisible.store(
+            nbt.get_bool("Invisible").unwrap_or(false),
+            Ordering::Relaxed,
+        );
+        self.fixed
+            .store(nbt.get_bool("Fixed").unwrap_or(false), Ordering::Relaxed);
     }
 
     fn get_entity(&self) -> &Entity {
@@ -313,26 +334,29 @@ impl EntityBase for ItemFrameEntity {
         None
     }
 
-    fn init_data_tracker(&self) -> EntityBaseFuture<'_, ()> {
-        Box::pin(async {
-            let item_serializer = ItemStackSerializer::from(self.item_stack.lock().await.clone());
-            let rotation = self.get_rotation() as i32;
+    fn init_data_tracker(&self) {
+        let item_serializer = ItemStackSerializer::from(
+            self.item_stack
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .clone(),
+        );
+        let rotation = self.get_rotation() as i32;
 
-            self.entity.send_meta_data(
-                &[Metadata::new(
-                    pumpkin_data::tracked_data::item_frame::ITEM,
-                    &item_serializer,
-                )],
-                None,
-            );
-            self.entity.send_meta_data(
-                &[Metadata::new(
-                    pumpkin_data::tracked_data::item_frame::ROTATION,
-                    rotation,
-                )],
-                None,
-            );
-        })
+        self.entity.send_meta_data(
+            &[Metadata::new(
+                pumpkin_data::tracked_data::item_frame::ITEM,
+                &item_serializer,
+            )],
+            None,
+        );
+        self.entity.send_meta_data(
+            &[Metadata::new(
+                pumpkin_data::tracked_data::item_frame::ROTATION,
+                rotation,
+            )],
+            None,
+        );
     }
 
     fn send_java_spawn_packet<'a>(
@@ -347,8 +371,12 @@ impl EntityBase for ItemFrameEntity {
 
             let ver = client.version.load();
             if ver >= CURRENT_MC_VERSION {
-                let item_serializer =
-                    ItemStackSerializer::from(self.item_stack.lock().await.clone());
+                let item_serializer = ItemStackSerializer::from(
+                    self.item_stack
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner)
+                        .clone(),
+                );
                 let rotation = self.get_rotation() as i32;
 
                 let mut data = Vec::new();
@@ -373,81 +401,73 @@ impl EntityBase for ItemFrameEntity {
         })
     }
 
-    fn interact<'a>(
-        &'a self,
-        player: &'a Arc<Player>,
-        item_stack: &'a mut ItemStack,
-    ) -> EntityBaseFuture<'a, bool> {
-        Box::pin(async move {
-            if self.is_fixed() {
-                return false;
+    fn interact(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {
+        if self.is_fixed() {
+            return false;
+        }
+
+        let frame_has_item = !self.get_item().is_empty();
+        let has_held_item = !item_stack.is_empty();
+
+        if frame_has_item {
+            let new_rot = self.get_rotation() + 1;
+            self.set_rotation(new_rot, true);
+            self.entity.play_sound(self.get_rotate_item_sound());
+            true
+        } else if has_held_item && !self.entity.removed.load(Ordering::Relaxed) {
+            let mut new_stack = item_stack.clone();
+            new_stack.item_count = 1;
+            self.set_item(new_stack, true);
+
+            if !player.is_creative() {
+                item_stack.decrement(1);
             }
-
-            let frame_has_item = !self.get_item().await.is_empty();
-            let has_held_item = !item_stack.is_empty();
-
-            if frame_has_item {
-                let new_rot = self.get_rotation() + 1;
-                self.set_rotation(new_rot, true).await;
-                self.entity.play_sound(self.get_rotate_item_sound());
-                true
-            } else if has_held_item && !self.entity.removed.load(Ordering::Relaxed) {
-                let mut new_stack = item_stack.clone();
-                new_stack.item_count = 1;
-                self.set_item(new_stack, true).await;
-
-                if !player.is_creative() {
-                    item_stack.decrement(1);
-                }
-                true
-            } else {
-                false
-            }
-        })
+            true
+        } else {
+            false
+        }
     }
 
-    fn damage_with_context<'a>(
-        &'a self,
-        _caller: &'a dyn EntityBase,
+    fn damage_with_context(
+        &self,
+        _caller: &dyn EntityBase,
         _amount: f32,
         damage_type: DamageType,
         _position: Option<Vector3<f64>>,
-        source: Option<&'a dyn EntityBase>,
-        _cause: Option<&'a dyn EntityBase>,
-    ) -> EntityBaseFuture<'a, bool> {
-        Box::pin(async move {
-            let fixed = self.is_fixed();
-            let is_creative_player = source.is_some_and(|s| {
-                s.cast_any()
-                    .downcast_ref::<Player>()
-                    .is_some_and(Player::is_creative)
-            });
-            let bypasses_invuln =
-                damage_type == DamageType::OUT_OF_WORLD || damage_type == DamageType::GENERIC_KILL;
+        source: Option<&dyn EntityBase>,
+        _cause: Option<&dyn EntityBase>,
+    ) -> bool {
+        let fixed = self.is_fixed();
+        let is_creative_player = source.is_some_and(|s| {
+            s.cast_any()
+                .downcast_ref::<Player>()
+                .is_some_and(Player::is_creative)
+        });
+        let bypasses_invuln =
+            damage_type == DamageType::OUT_OF_WORLD || damage_type == DamageType::GENERIC_KILL;
 
-            if fixed {
-                if !bypasses_invuln && !is_creative_player {
-                    return false;
-                }
-                self.drop_item(source, true).await;
-                self.entity.remove().await;
-                return true;
+        if fixed {
+            if !bypasses_invuln && !is_creative_player {
+                return false;
             }
+            self.drop_item(source, true);
+            self.entity.remove();
+            return true;
+        }
 
-            let has_item = !self.get_item().await.is_empty();
-            let is_explosion =
-                damage_type == DamageType::EXPLOSION || damage_type == DamageType::PLAYER_EXPLOSION;
+        let has_item = !self.get_item().is_empty();
+        let is_explosion =
+            damage_type == DamageType::EXPLOSION || damage_type == DamageType::PLAYER_EXPLOSION;
 
-            if !is_explosion && has_item {
-                self.drop_item(source, false).await;
-                self.entity.play_sound(self.get_remove_item_sound());
-            } else {
-                self.drop_item(source, true).await;
-                self.entity.play_sound(self.get_break_sound());
-                self.entity.remove().await;
-            }
-            true
-        })
+        if !is_explosion && has_item {
+            self.drop_item(source, false);
+            self.entity.play_sound(self.get_remove_item_sound());
+        } else {
+            self.drop_item(source, true);
+            self.entity.play_sound(self.get_break_sound());
+            self.entity.remove();
+        }
+        true
     }
 
     fn cast_any(&self) -> &dyn std::any::Any {
