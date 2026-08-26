@@ -36,10 +36,7 @@ impl JavaClient {
         if let Some(target) = target {
             if player.gamemode.load() == GameMode::Spectator {
                 player.camera_target_id.store(Some(entity_id.0));
-                player
-                    .client
-                    .send_packet_now(&CSetCamera::new(entity_id))
-                    .await;
+                player.send_client_packet(&CSetCamera::new(entity_id)).await;
                 return;
             }
             send_cancellable! {{
@@ -47,7 +44,7 @@ impl JavaClient {
                 PlayerInteractEntityEvent::new(
                     player,
                     Arc::clone(&target),
-                    action.clone(),
+                    action,
                     interact.target_position,
                     sneaking,
                 );

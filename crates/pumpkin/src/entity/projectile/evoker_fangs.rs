@@ -5,7 +5,7 @@ use pumpkin_data::damage::DamageType;
 use pumpkin_data::sound::Sound;
 
 use crate::{
-    entity::{Entity, EntityBase, EntityBaseFuture, NBTStorage, NbtFuture},
+    entity::{Entity, EntityBase, EntityBaseFuture, NbtFuture},
     server::Server,
 };
 
@@ -31,8 +31,8 @@ impl EvokerFangsEntity {
     }
 }
 
-impl NBTStorage for EvokerFangsEntity {
-    fn write_nbt<'a>(
+impl EntityBase for EvokerFangsEntity {
+    fn write_custom_nbt<'a>(
         &'a self,
         nbt: &'a mut pumpkin_nbt::compound::NbtCompound,
     ) -> NbtFuture<'a, ()> {
@@ -41,7 +41,7 @@ impl NBTStorage for EvokerFangsEntity {
         })
     }
 
-    fn read_nbt_non_mut<'a>(
+    fn read_custom_nbt<'a>(
         &'a self,
         nbt: &'a pumpkin_nbt::compound::NbtCompound,
     ) -> NbtFuture<'a, ()> {
@@ -51,9 +51,7 @@ impl NBTStorage for EvokerFangsEntity {
             }
         })
     }
-}
 
-impl EntityBase for EvokerFangsEntity {
     fn tick<'a>(
         &'a self,
         _caller: &'a Arc<dyn EntityBase>,
@@ -103,10 +101,6 @@ impl EntityBase for EvokerFangsEntity {
 
     fn get_living_entity(&self) -> Option<&crate::entity::living::LivingEntity> {
         None
-    }
-
-    fn as_nbt_storage(&self) -> &dyn NBTStorage {
-        self
     }
 
     fn cast_any(&self) -> &dyn std::any::Any {

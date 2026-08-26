@@ -29,13 +29,14 @@ pub mod recipe;
 /// Resource pack configuration options.
 pub mod resource_pack;
 
-pub use chat::ChatConfig;
+pub use chat::{AntiSpamConfig, ChatConfig};
 pub use commands::{CommandOverride, CommandsConfig};
 pub use networking::auth::AuthenticationConfig;
 pub use networking::bedrock::BedrockConfig;
 pub use networking::compression::CompressionConfig;
 pub use networking::java::JavaConfig;
 pub use networking::lan_broadcast::LANBroadcastConfig;
+pub use networking::packet_limiter::PacketLimiterConfig;
 pub use networking::rcon::RCONConfig;
 pub use plugins::{PluginOverride, PluginsConfig};
 pub use pvp::PVPConfig;
@@ -93,6 +94,10 @@ impl LoadConfiguration for PumpkinConfig {
         };
 
         // Validate Java
+        assert!(
+            self.advanced.networking.java.keep_alive_time > 0,
+            "Java Keep alive time must be greater than 0"
+        );
         assert!(
             self.advanced.networking.java.view_distance >= min_vd,
             "Java View distance must be at least 2"

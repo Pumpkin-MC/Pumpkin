@@ -6,7 +6,7 @@ use crate::command::{
     args::{Arg, ConsumedArgs},
     tree::{CommandTree, builder::argument},
 };
-use crate::entity::NBTStorage;
+use crate::entity::EntityBase;
 use CommandError::InvalidConsumption;
 use pumpkin_data::translation;
 use pumpkin_nbt::compound::NbtCompound;
@@ -32,12 +32,7 @@ impl CommandExecutor for GetEntityDataExecutor {
             let Some(Arg::Entity(entity)) = args.get(&ARG_ENTITY) else {
                 return Err(InvalidConsumption(Some(ARG_ENTITY.into())));
             };
-            display_data(
-                entity.as_nbt_storage(),
-                entity.get_display_name().await,
-                sender,
-            )
-            .await
+            display_data(entity.as_ref(), entity.get_display_name().await, sender).await
         })
     }
 }
@@ -222,12 +217,12 @@ pub fn snbt_colorful_display(tag: &NbtTag, depth: usize) -> Result<TextComponent
 }
 
 async fn display_data(
-    storage: &dyn NBTStorage,
+    entity: &dyn EntityBase,
     target_name: TextComponent,
     sender: &CommandSender,
 ) -> Result<i32, CommandError> {
     let mut nbt = NbtCompound::new();
-    storage.write_nbt(&mut nbt).await;
+    entity.write_nbt(&mut nbt).await;
     let tag = NbtTag::Compound(nbt);
 
     let result = get_i32_result(&tag)?;

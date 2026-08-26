@@ -2,8 +2,18 @@
 use super::*;
 
 impl PendingConnection {
-    pub async fn handle_login_acknowledged(&mut self, server: &Server) {
+    pub async fn handle_login_acknowledged(
+        &mut self,
+        server: &Server,
+    ) -> Option<PacketHandlerResult> {
         debug!("Handling login acknowledgement");
+        if !self.version.load().supports_configuration_state() {
+            self.kick(TextComponent::text(
+                "Configuration state not supported for this version",
+            ))
+            .await;
+            return Some(PacketHandlerResult::Stop);
+        }
         self.connection_state.store(ConnectionState::Config);
         self.send_packet_now(&server.get_branding()).await;
 
@@ -98,6 +108,7 @@ impl PendingConnection {
             .await;
         }
         debug!("login acknowledged");
+        None
     }
 
     pub async fn send_known_packs(&mut self) {

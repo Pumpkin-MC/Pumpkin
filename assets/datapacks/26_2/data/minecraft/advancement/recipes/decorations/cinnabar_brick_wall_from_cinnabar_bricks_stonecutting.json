@@ -1,0 +1,32 @@
+{
+  "parent": "minecraft:recipes/root",
+  "criteria": {
+    "has_cinnabar_bricks": {
+      "conditions": {
+        "items": [
+          {
+            "items": "minecraft:cinnabar_bricks"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    },
+    "has_the_recipe": {
+      "conditions": {
+        "recipe": "minecraft:cinnabar_brick_wall_from_cinnabar_bricks_stonecutting"
+      },
+      "trigger": "minecraft:recipe_unlocked"
+    }
+  },
+  "requirements": [
+    [
+      "has_the_recipe",
+      "has_cinnabar_bricks"
+    ]
+  ],
+  "rewards": {
+    "recipes": [
+      "minecraft:cinnabar_brick_wall_from_cinnabar_bricks_stonecutting"
+    ]
+  }
+}

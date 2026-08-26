@@ -1,4 +1,4 @@
-use pumpkin_data::packet::clientbound::PLAY_MOVE_MINECART_ALONG_TRACK;
+use pumpkin_data::packet::clientbound::play::MOVE_MINECART_ALONG_TRACK;
 use pumpkin_macros::java_packet;
 
 use crate::{ClientPacket, codec::var_int::VarInt, ser::NetworkWriteExt};
@@ -12,7 +12,7 @@ pub struct MinecartStep {
     pub weight: f32,
 }
 
-#[java_packet(PLAY_MOVE_MINECART_ALONG_TRACK)]
+#[java_packet(MOVE_MINECART_ALONG_TRACK)]
 pub struct CMoveMinecartAlongTrack<'a> {
     pub entity_id: VarInt,
     pub steps: &'a [MinecartStep],

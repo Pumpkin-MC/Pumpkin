@@ -32,8 +32,12 @@ impl CoralTreeFeature {
         }
         let i = random.next_bounded_i32(3) + 2;
 
-        // TODO: Shuffle
-        let directions = BlockDirection::horizontal().into_iter().take(i as usize);
+        // TODO: vanilla takes the first `i` of Plane.HORIZONTAL.shuffledCopy(random) — a
+        // Fisher–Yates that must run over the horizontal_worldgen() [N, E, S, W] base
+        // order and consumes RNG draws.
+        let directions = BlockDirection::horizontal_worldgen()
+            .into_iter()
+            .take(i as usize);
         for dir in directions {
             pos = pos.offset(dir.to_offset());
             let times = random.next_bounded_i32(5) + 2;

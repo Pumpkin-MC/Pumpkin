@@ -3,7 +3,7 @@ use std::sync::{Arc, Weak};
 use pumpkin_data::entity::EntityType;
 
 use crate::entity::{
-    Entity, NBTStorage,
+    Entity, EntityBase,
     ai::goal::{
         look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal, swim::SwimGoal,
         wander_around::WanderAroundGoal,
@@ -53,33 +53,27 @@ impl StriderEntity {
     }
 }
 
-use crate::entity::EntityBase;
-
-impl NBTStorage for StriderEntity {
-    fn write_nbt<'a>(
+impl Mob for StriderEntity {
+    fn mob_write_nbt<'a>(
         &'a self,
         nbt: &'a mut pumpkin_nbt::compound::NbtCompound,
     ) -> crate::entity::NbtFuture<'a, ()> {
         Box::pin(async move {
-            self.mob_entity.living_entity.write_nbt(nbt).await;
             nbt.put_bool("Saddle", self.is_saddled());
         })
     }
 
-    fn read_nbt_non_mut<'a>(
+    fn mob_read_nbt<'a>(
         &'a self,
         nbt: &'a pumpkin_nbt::compound::NbtCompound,
     ) -> crate::entity::NbtFuture<'a, ()> {
         Box::pin(async move {
-            self.mob_entity.living_entity.read_nbt_non_mut(nbt).await;
             if let Some(saddle) = nbt.get_byte("Saddle") {
                 self.set_saddled(saddle == 1);
             }
         })
     }
-}
 
-impl Mob for StriderEntity {
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
     }

@@ -5,19 +5,19 @@ use thiserror::Error;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ServerboundPacket {
     /// Typically, the first packet sent by the client, which is used to authenticate the connection with the server.
-    Auth = 2,
+    Auth = 3,
     /// This packet type represents a command issued by a client to the server. This can be a `ConCommand` such as `/kill <player>` or `/weather clear`.
     /// The response will vary depending on the command issued.
-    ExecCommand = 3,
+    ExecCommand = 2,
 }
 
 impl ServerboundPacket {
     #[must_use]
-    pub const fn from_i32(n: i32) -> Self {
+    pub const fn from_i32(n: i32) -> Option<Self> {
         match n {
-            //  3 => Self::Auth,
-            2 => Self::ExecCommand,
-            _ => Self::Auth,
+            3 => Some(Self::Auth),
+            2 => Some(Self::ExecCommand),
+            _ => None,
         }
     }
 }
@@ -25,8 +25,7 @@ impl ServerboundPacket {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 /// Server -> Client
 pub enum ClientboundPacket {
-    /// This packet is a notification of the connection's current auth status. When the server receives an auth request, it will respond with an empty `SERVERDATA_RESPONSE_VALUE`,
-    /// followed immediately by a `SERVERDATA_AUTH_RESPONSE` indicating whether authentication succeeded or failed. Note that the status code is returned in the packet id field, so when pairing the response with the original auth request, you may need to look at the packet id of the `SERVERDATA_RESPONSE_VALUE`.
+    /// This packet is a notification of the connection's current auth status.
     AuthResponse = 2,
     /// A `SERVERDATA_RESPONSE` packet is the response to a `SERVERDATA_EXECCOMMAND` request.
     Output = 0,
@@ -52,15 +51,17 @@ impl ClientboundPacket {
 pub enum PacketError {
     #[error("Invalid length")]
     InvalidLength,
-    #[error("Failed to send packet")]
+    #[error("Failed to send packet: {0}")]
     FailedSend(std::io::Error),
     #[error("Missing packet null terminator")]
     MissingNullTerminator,
-    #[error("Invalid packet string body")]
+    #[error("Invalid packet string body: {0}")]
     InvalidBody(std::str::Utf8Error),
+    #[error("Unknown packet type: {0}")]
+    UnknownPacketType(i32),
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 /// Serverbound packet
 pub struct Packet {
     id: i32,
@@ -107,6 +108,8 @@ impl Packet {
                 .map_err(|_| PacketError::InvalidLength)?,
         );
 
+        let ptype = ServerboundPacket::from_i32(ty).ok_or(PacketError::UnknownPacketType(ty))?;
+
         // Calculate body boundaries (starts after len, id, and ty -> 4+4+4 = 12)
         // Ends 2 bytes before the total length (excluding the two trailing null bytes)
         let body_start = 12;
@@ -122,11 +125,7 @@ impl Packet {
             .into();
         incoming.drain(0..total_packet_len);
 
-        Ok(Some(Self {
-            id,
-            ptype: ServerboundPacket::from_i32(ty),
-            body,
-        }))
+        Ok(Some(Self { id, ptype, body }))
     }
 
     #[must_use]

@@ -40,7 +40,7 @@ impl ArgumentConsumer for CommandTreeArgumentConsumer {
         };
 
         Box::pin(async move {
-            let dispatcher = server.command_dispatcher.read().await;
+            let dispatcher = server.command_dispatcher.load();
 
             dispatcher
                 .fallback_dispatcher
@@ -61,7 +61,7 @@ impl ArgumentConsumer for CommandTreeArgumentConsumer {
                 return Ok(None);
             };
 
-            let dispatcher = server.command_dispatcher.read().await;
+            let dispatcher = server.command_dispatcher.load();
             let suggestions = dispatcher
                 .fallback_dispatcher
                 .commands

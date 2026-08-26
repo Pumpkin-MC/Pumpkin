@@ -6,6 +6,7 @@ use crate::command::dispatcher::CommandError;
 use crate::command::tree::RawArgs;
 use crate::server::Server;
 use pumpkin_protocol::java::client::play::{ArgumentType, SuggestionProviders};
+use pumpkin_util::identifier::Identifier;
 
 // TODO: Add proper autocomplete
 pub struct ResourceLocationArgumentConsumer;
@@ -21,39 +22,16 @@ impl GetClientSideArgParser for ResourceLocationArgumentConsumer {
 }
 
 impl ArgumentConsumer for ResourceLocationArgumentConsumer {
-    fn consume<'a, 'b>(
+    fn consume<'a>(
         &'a self,
         _sender: &'a CommandSender,
         _server: &'a Server,
-        args: &'b mut RawArgs<'a>,
+        args: &mut RawArgs<'a>,
     ) -> ConsumeResult<'a> {
-        let s_opt: Option<&'a str> = args.pop().map(|arg| arg.value);
+        let identifier = args.pop().and_then(|arg| Identifier::parse(arg.value).ok());
 
-        Box::pin(async move { s_opt.map(Arg::ResourceLocation) })
+        Box::pin(async move { identifier.map(Arg::ResourceLocation) })
     }
-
-    // async fn suggest<'a>(
-    //     &'a self,
-    //     _sender: &CommandSender,
-    //     _server: &'a Server,
-    //     _input: &'a str,
-    // ) -> Result<Option<Vec<CommandSuggestion>>, CommandError> {
-    //     if !self.autocomplete {
-    //         return Ok(None);
-    //     }
-    //     // TODO
-
-    //     // let suggestions = server
-    //     //     .bossbars
-    //     //     .lock()
-    //     //     .await
-    //     //     .custom_bossbars
-    //     //     .keys()
-    //     //     .map(|suggestion| CommandSuggestion::new(suggestion, None))
-    //     //     .collect();
-
-    //     Ok(None)
-    // }
 }
 
 impl DefaultNameArgConsumer for ResourceLocationArgumentConsumer {
@@ -63,7 +41,7 @@ impl DefaultNameArgConsumer for ResourceLocationArgumentConsumer {
 }
 
 impl<'a> FindArg<'a> for ResourceLocationArgumentConsumer {
-    type Data = &'a str;
+    type Data = &'a Identifier;
 
     fn find_arg(args: &'a super::ConsumedArgs, name: &str) -> Result<Self::Data, CommandError> {
         match args.get(name) {

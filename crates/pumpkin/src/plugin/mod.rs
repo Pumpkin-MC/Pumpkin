@@ -1,3 +1,4 @@
+use arc_swap::ArcSwap;
 use futures::future::join_all;
 use loader::{LoaderError, PluginLoader, native::NativePluginLoader};
 use notify::{EventKind, RecursiveMode, Watcher, event::ModifyKind};
@@ -7,6 +8,7 @@ use std::{
     path::{Path, PathBuf},
     pin::Pin,
     sync::{Arc, atomic::AtomicBool},
+    thread::ThreadId,
     time::Duration,
 };
 use thiserror::Error;
@@ -101,15 +103,15 @@ pub trait EventHandler<E: Payload>: Send + Sync {
 /// A struct representing a typed event handler.
 ///
 /// This struct holds a reference to an event handler, its priority, and whether it is blocking.
-struct TypedEventHandler<E, H>
+pub struct TypedEventHandler<E, H>
 where
     E: Payload + Send + Sync + 'static,
     H: EventHandler<E> + Send + Sync,
 {
-    handler: Arc<H>,
-    priority: EventPriority,
-    blocking: bool,
-    _phantom: std::marker::PhantomData<E>,
+    pub handler: Arc<H>,
+    pub priority: EventPriority,
+    pub blocking: bool,
+    pub _phantom: std::marker::PhantomData<E>,
 }
 
 impl<E, H> DynEventHandler for TypedEventHandler<E, H>
@@ -158,7 +160,7 @@ where
 
 /// A type alias for a map of event handlers, where the key is a static string
 /// and the value is a vector of dynamic event handlers.
-type HandlerMap = HashMap<&'static str, Vec<Box<dyn DynEventHandler>>>;
+pub type HandlerMap = HashMap<&'static str, Vec<Arc<dyn DynEventHandler>>>;
 
 /// Plugin loading state
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -172,7 +174,7 @@ pub enum PluginState {
 pub struct PluginManager {
     plugins: RwLock<Vec<LoadedPlugin>>,
     loaders: RwLock<Vec<Arc<dyn PluginLoader>>>,
-    handlers: Arc<RwLock<HandlerMap>>,
+    handlers: Arc<ArcSwap<HandlerMap>>,
     unloaded_files: RwLock<HashSet<PathBuf>>,
     services: Arc<RwLock<HashMap<String, Arc<dyn Payload>>>>,
     // Plugin state tracking
@@ -182,6 +184,9 @@ pub struct PluginManager {
     // Background task for hot reloading
     hot_reload_task: RwLock<Option<JoinHandle<()>>>,
     hot_reload_enabled: AtomicBool,
+    // Thread ID of the thread that created the plugin manager.
+    // Permission prompts use rustyline, which is only safe on this thread.
+    main_thread_id: ThreadId,
 }
 
 /// Represents a successfully loaded plugin
@@ -213,27 +218,28 @@ pub enum ManagerError {
 
 impl Default for PluginManager {
     fn default() -> Self {
-        Self::new()
+        Self::new(true)
     }
 }
 
 impl PluginManager {
     /// Create a new plugin manager with default loaders
     #[must_use]
-    pub fn new() -> Self {
+    pub fn new(verify_plugin_signatures: bool) -> Self {
         Self {
             plugins: RwLock::new(Vec::new()),
             loaders: RwLock::new(vec![
                 Arc::new(NativePluginLoader),
-                Arc::new(WasmPluginLoader),
+                Arc::new(WasmPluginLoader::new(verify_plugin_signatures)),
             ]),
-            handlers: Arc::new(RwLock::new(HashMap::new())),
+            handlers: Arc::new(ArcSwap::from_pointee(HashMap::new())),
             unloaded_files: RwLock::new(HashSet::new()),
             services: Arc::new(RwLock::new(HashMap::new())),
             plugin_states: RwLock::new(HashMap::new()),
             state_notify: Arc::new(Notify::new()),
             hot_reload_task: RwLock::new(None),
             hot_reload_enabled: AtomicBool::new(false),
+            main_thread_id: std::thread::current().id(),
         }
     }
 
@@ -437,13 +443,32 @@ impl PluginManager {
     }
 
     /// Ask the server owner if they allow the permissions requested by a plugin
+    ///
+    /// This must only be called from the main thread, because the underlying
+    /// `rustyline` console handle is neither `Send` nor `Sync`. Calling it from a
+    /// different thread (e.g. the hot-reload watcher task) will panic.
+    ///
+    /// Returns `(allowed, wait_time, cacheable)`. Non-main-thread denials are not
+    /// cacheable so the user gets prompted again on the next cold load.
     #[expect(clippy::print_stdout)]
-    fn ask_permission_confirmation(metadata: &PluginMetadata) -> (bool, std::time::Duration) {
+    fn ask_permission_confirmation(
+        &self,
+        metadata: &PluginMetadata,
+    ) -> (bool, std::time::Duration, bool) {
         use colored::Colorize;
-        use rustyline::DefaultEditor;
 
         if metadata.permissions.is_empty() {
-            return (true, std::time::Duration::ZERO);
+            return (true, std::time::Duration::ZERO, true);
+        }
+
+        if std::thread::current().id() != self.main_thread_id {
+            warn!(
+                "Plugin \"{}\" ({}) requests permissions from a non-main thread. \
+                 Permission prompts are only supported on the main thread. \
+                 Denying permissions. To load this plugin interactively, restart the server.",
+                metadata.name, metadata.version
+            );
+            return (false, Duration::ZERO, false);
         }
 
         let start_time = std::time::Instant::now();
@@ -483,12 +508,11 @@ impl PluginManager {
                 let input = line.trim().to_lowercase();
                 input == "y" || input == "yes"
             })
-        } else if let Ok(mut rl) = DefaultEditor::new() {
-            rl.readline(&prompt).is_ok_and(|line| {
-                let input = line.trim().to_lowercase();
-                input == "y" || input == "yes"
-            })
         } else {
+            warn!(
+                "Console readline is not available; cannot prompt for plugin \"{}\" permissions",
+                metadata.name
+            );
             false
         };
 
@@ -496,7 +520,7 @@ impl PluginManager {
             wrapper.return_readline(rl);
         }
 
-        (result, start_time.elapsed())
+        (result, start_time.elapsed(), true)
     }
 
     /// Spawn initialization for a single plugin
@@ -841,15 +865,17 @@ impl PluginManager {
             return (true, std::time::Duration::ZERO);
         }
 
-        let (allowed, wait_time) = Self::ask_permission_confirmation(metadata);
-        cache.entries.insert(
-            hash,
-            cache::PermissionCacheEntry {
-                permissions_requested: metadata.permissions.clone(),
-                approved: allowed,
-            },
-        );
-        let _ = cache.save(cache_path).await;
+        let (allowed, wait_time, cacheable) = self.ask_permission_confirmation(metadata);
+        if cacheable {
+            cache.entries.insert(
+                hash,
+                cache::PermissionCacheEntry {
+                    permissions_requested: metadata.permissions.clone(),
+                    approved: allowed,
+                },
+            );
+            let _ = cache.save(cache_path).await;
+        }
         (allowed, wait_time)
     }
 
@@ -1090,23 +1116,26 @@ impl PluginManager {
     }
 
     /// Register an event handler
-    pub async fn register<E, H>(&self, handler: Arc<H>, priority: EventPriority, blocking: bool)
+    pub fn register<E, H>(&self, handler: Arc<H>, priority: EventPriority, blocking: bool)
     where
         E: Payload + Send + Sync + 'static,
         H: EventHandler<E> + 'static,
     {
-        let mut handlers = self.handlers.write().await;
-        let typed_handler = TypedEventHandler {
+        let typed_handler = Arc::new(TypedEventHandler {
             handler,
             priority,
             blocking,
             _phantom: std::marker::PhantomData,
-        };
+        });
 
-        handlers
-            .entry(E::get_name_static())
-            .or_default()
-            .push(Box::new(typed_handler));
+        self.handlers.rcu(|handlers| {
+            let mut new_handlers = (**handlers).clone();
+            new_handlers
+                .entry(E::get_name_static())
+                .or_default()
+                .push(typed_handler.clone());
+            Arc::new(new_handlers)
+        });
     }
 
     /// Fire an event to all registered handlers
@@ -1115,12 +1144,12 @@ impl PluginManager {
         server: &Arc<Server>,
         event: &mut E,
     ) {
-        let handlers_lock = self.handlers.read().await;
-        if handlers_lock.is_empty() {
+        let handlers_map = self.handlers.load();
+        if handlers_map.is_empty() {
             return;
         }
 
-        let Some(handlers) = handlers_lock.get(&E::get_name_static()) else {
+        let Some(handlers) = handlers_map.get(E::get_name_static()) else {
             return;
         };
 
@@ -1143,6 +1172,7 @@ impl PluginManager {
         }
     }
 
+    #[expect(clippy::result_unit_err)]
     pub async fn send_message(
         &self,
         sender: &str,

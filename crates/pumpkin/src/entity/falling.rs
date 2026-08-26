@@ -1,15 +1,14 @@
+use pumpkin_data::Block;
 use pumpkin_data::BlockStateId;
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::entity::EntityType;
-use pumpkin_data::meta_data_type::MetaDataType;
-use pumpkin_data::{Block, tracked_data::TrackedData};
 use pumpkin_protocol::java::client::play::Metadata;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::world::BlockFlags;
 use std::sync::{Arc, atomic::Ordering};
 
 use crate::{
-    entity::{Entity, EntityBase, EntityBaseFuture, NBTStorage, living::LivingEntity},
+    entity::{Entity, EntityBase, EntityBaseFuture, living::LivingEntity},
     server::Server,
     world::World,
 };
@@ -47,8 +46,6 @@ impl FallingEntity {
         world.spawn_entity(entity).await;
     }
 }
-
-impl NBTStorage for FallingEntity {}
 
 impl EntityBase for FallingEntity {
     fn tick<'a>(
@@ -95,8 +92,7 @@ impl EntityBase for FallingEntity {
         Box::pin(async move {
             self.entity.send_meta_data(
                 &[Metadata::new(
-                    TrackedData::START_POS,
-                    MetaDataType::BLOCK_POS,
+                    pumpkin_data::tracked_data::falling_block::START_POS,
                     self.entity.block_pos.load(),
                 )],
                 None,
@@ -111,11 +107,6 @@ impl EntityBase for FallingEntity {
     fn get_living_entity(&self) -> Option<&LivingEntity> {
         None
     }
-
-    fn as_nbt_storage(&self) -> &dyn NBTStorage {
-        self
-    }
-
     fn damage<'a>(
         &'a self,
         _caller: &'a dyn EntityBase,

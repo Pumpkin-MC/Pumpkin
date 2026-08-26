@@ -1,4 +1,4 @@
-use pumpkin_data::packet::serverbound::PLAY_RESOURCE_PACK;
+use pumpkin_data::packet::serverbound::play::RESOURCE_PACK;
 use pumpkin_macros::java_packet;
 
 use crate::{
@@ -21,7 +21,7 @@ pub enum PlayResourcePackResult {
     Unknown(i32),
 }
 
-#[java_packet(PLAY_RESOURCE_PACK)]
+#[java_packet(RESOURCE_PACK)]
 pub struct SPlayResourcePack {
     pub uuid: uuid::Uuid,
     pub result: VarInt,
@@ -50,5 +50,18 @@ impl<'a> ServerPacket<'a> for SPlayResourcePack {
             uuid: bytebuf.get_uuid()?,
             result: bytebuf.get_var_int()?,
         })
+    }
+}
+
+impl crate::ClientPacket for SPlayResourcePack {
+    fn write_packet_data(
+        &self,
+        mut write: impl std::io::Write,
+        _version: &JavaMinecraftVersion,
+    ) -> Result<(), crate::ser::WritingError> {
+        use crate::ser::NetworkWriteExt;
+        write.write_uuid(&self.uuid)?;
+        write.write_var_int(&self.result)?;
+        Ok(())
     }
 }

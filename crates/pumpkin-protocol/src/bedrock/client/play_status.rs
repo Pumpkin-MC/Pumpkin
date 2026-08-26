@@ -1,3 +1,5 @@
+// Last verified for v2169
+
 use std::io::{Error, Write};
 
 use pumpkin_macros::packet;
@@ -5,6 +7,7 @@ use pumpkin_macros::packet;
 use crate::serial::PacketWrite;
 
 #[derive(Clone, Copy)]
+#[repr(i32)]
 #[packet(2)]
 pub enum CPlayStatus {
     LoginSuccess = 0,

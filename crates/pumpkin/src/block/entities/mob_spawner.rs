@@ -15,7 +15,7 @@ use pumpkin_util::math::{
     vector3::Vector3,
 };
 
-use crate::{block::entities::BlockEntity, world::World};
+use crate::{block::entities::BlockEntity, entity::EntityBase, world::World};
 
 pub struct MobSpawnerBlockEntity {
     pub position: BlockPos,
@@ -24,6 +24,8 @@ pub struct MobSpawnerBlockEntity {
     pub min_delay: i32,
     pub spawn_count: i32,
     pub spawn_range: i32,
+    pub max_nearby_entities: i32,
+    pub required_player_range: i32,
     pub entity_type: AtomicCell<Option<&'static EntityType>>,
 }
 
@@ -34,6 +36,8 @@ impl MobSpawnerBlockEntity {
     pub const DEFAULT_MIN_SPAWN_DELAY: i32 = 200;
     pub const DEFAULT_SPAWN_COUNT: i32 = 4;
     pub const DEFAULT_SPAWN_RANGE: i32 = 4;
+    pub const DEFAULT_MAX_NEARBY_ENTITIES: i32 = 6;
+    pub const DEFAULT_REQUIRED_PLAYER_RANGE: i32 = 16;
 
     #[must_use]
     pub const fn new(position: BlockPos, entity_type: Option<&'static EntityType>) -> Self {
@@ -44,6 +48,8 @@ impl MobSpawnerBlockEntity {
             min_delay: Self::DEFAULT_MIN_SPAWN_DELAY,
             spawn_count: Self::DEFAULT_SPAWN_COUNT,
             spawn_range: Self::DEFAULT_SPAWN_RANGE,
+            max_nearby_entities: Self::DEFAULT_MAX_NEARBY_ENTITIES,
+            required_player_range: Self::DEFAULT_REQUIRED_PLAYER_RANGE,
             entity_type: AtomicCell::new(entity_type),
         }
     }
@@ -55,6 +61,14 @@ impl MobSpawnerBlockEntity {
         nbt.put_int("x", position.0.x);
         nbt.put_int("y", position.0.y);
         nbt.put_int("z", position.0.z);
+        nbt.put_short("Delay", self.delay.load(Ordering::Relaxed) as i16);
+        nbt.put_short("MinSpawnDelay", self.min_delay as i16);
+        nbt.put_short("MaxSpawnDelay", self.max_delay as i16);
+        nbt.put_short("SpawnCount", self.spawn_count as i16);
+        nbt.put_short("SpawnRange", self.spawn_range as i16);
+        nbt.put_short("MaxNearbyEntities", self.max_nearby_entities as i16);
+        nbt.put_short("RequiredPlayerRange", self.required_player_range as i16);
+
         if let Some(entity_type) = self.entity_type.load() {
             let mut spawn_entry = NbtCompound::new();
 
@@ -101,24 +115,60 @@ impl BlockEntity for MobSpawnerBlockEntity {
     fn tick<'a>(&'a self, world: &'a Arc<World>) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
         Box::pin(async move {
             if let Some(entity_type) = &self.entity_type.load() {
-                if self.delay.load(Ordering::Relaxed) == -1 {
+                let center = self.position.to_centered_f64();
+                let max_player_dist_sq = (self.required_player_range as f64).powi(2);
+                let player_nearby = world.players.load().iter().any(|p| {
+                    p.get_entity().pos.load().squared_distance_to_vec(&center) <= max_player_dist_sq
+                });
+
+                if !player_nearby {
+                    return;
+                }
+
+                if self.delay.load(Ordering::Relaxed) < 0 {
                     self.update_spawns(world).await;
-                } else {
+                    return;
+                }
+                if self.delay.load(Ordering::Relaxed) > 0 {
                     self.delay.fetch_sub(1, Ordering::Relaxed);
                     return;
                 }
+
+                let search_radius_horiz = (self.spawn_range * 2) as f64;
+                let search_radius_vert = 4.0;
+                let nearby_count = world
+                    .entities
+                    .load()
+                    .iter()
+                    .filter(|e| {
+                        let ent = e.get_entity();
+                        if ent.entity_type.id != entity_type.id {
+                            return false;
+                        }
+                        let pos = ent.pos.load();
+                        (pos.x - center.x).abs() <= search_radius_horiz
+                            && (pos.z - center.z).abs() <= search_radius_horiz
+                            && (pos.y - center.y).abs() <= search_radius_vert
+                    })
+                    .count();
+
+                if nearby_count as i32 >= self.max_nearby_entities {
+                    self.update_spawns(world).await;
+                    return;
+                }
+
                 let spawn_range = self.spawn_range;
-                let mut update_spawns = false;
+                let mut spawned_any = false;
                 for _ in 0..self.spawn_count {
                     let pos = self.position.0;
 
                     let spawn_pos = Vector3::new(
                         pos.x as f64
-                            + (rand::random::<f64>() + rand::random::<f64>()) * spawn_range as f64
+                            + (rand::random::<f64>() - rand::random::<f64>()) * spawn_range as f64
                             + 0.5,
                         (pos.y + rand::random_range(0..3) - 1) as f64,
                         pos.z as f64
-                            + (rand::random::<f64>() + rand::random::<f64>()) * spawn_range as f64
+                            + (rand::random::<f64>() - rand::random::<f64>()) * spawn_range as f64
                             + 0.5,
                     );
                     // TODO: we should use getSpawnBox, but this is only modified for slimes and magma slimes
@@ -140,11 +190,13 @@ impl BlockEntity for MobSpawnerBlockEntity {
                         world,
                         uuid::Uuid::new_v4(),
                     );
+                    let yaw = rand::random::<f32>() * 360.0;
+                    entity.get_entity().set_rotation(yaw, 0.0);
                     world.spawn_entity(entity).await;
                     world.sync_world_event(WorldEvent::ParticlesMobblockSpawn, self.position, 0);
-                    update_spawns = true;
+                    spawned_any = true;
                 }
-                if update_spawns {
+                if spawned_any {
                     self.update_spawns(world).await;
                 }
             }
@@ -155,28 +207,51 @@ impl BlockEntity for MobSpawnerBlockEntity {
     where
         Self: Sized,
     {
-        let delay = nbt.get_short("Delay").unwrap_or(Self::DEFAULT_DELAY as i16) as i32;
-        let min_delay = nbt
-            .get_int("MinSpawnDelay")
-            .unwrap_or(Self::DEFAULT_MIN_SPAWN_DELAY);
-        let max_delay = nbt
-            .get_int("MaxSpawnDelay")
-            .unwrap_or(Self::DEFAULT_MAX_SPAWN_DELAY);
-        let spawn_count = nbt
-            .get_int("SpawnCount")
-            .unwrap_or(Self::DEFAULT_SPAWN_COUNT);
-        let spawn_range = nbt
-            .get_int("SpawnRange")
-            .unwrap_or(Self::DEFAULT_SPAWN_RANGE);
+        let get_num = |name: &str| {
+            nbt.get_short(name)
+                .map(i32::from)
+                .or_else(|| nbt.get_int(name))
+                .or_else(|| nbt.get_byte(name).map(i32::from))
+        };
+
+        let delay = get_num("Delay").unwrap_or(Self::DEFAULT_DELAY);
+        let min_delay = get_num("MinSpawnDelay").unwrap_or(Self::DEFAULT_MIN_SPAWN_DELAY);
+        let max_delay = get_num("MaxSpawnDelay").unwrap_or(Self::DEFAULT_MAX_SPAWN_DELAY);
+        let spawn_count = get_num("SpawnCount").unwrap_or(Self::DEFAULT_SPAWN_COUNT);
+        let spawn_range = get_num("SpawnRange").unwrap_or(Self::DEFAULT_SPAWN_RANGE);
+        let max_nearby_entities =
+            get_num("MaxNearbyEntities").unwrap_or(Self::DEFAULT_MAX_NEARBY_ENTITIES);
+        let required_player_range =
+            get_num("RequiredPlayerRange").unwrap_or(Self::DEFAULT_REQUIRED_PLAYER_RANGE);
 
         let entity_type = nbt
             .get_compound("SpawnData")
-            .and_then(|data| data.get_compound("entity"))
-            .and_then(|entity| entity.get_string("id"))
-            .and_then(|id| {
-                let name = id.strip_prefix("minecraft:").unwrap_or(id);
-                EntityType::from_name(name)
-            });
+            .and_then(|data| {
+                data.get_compound("entity")
+                    .and_then(|entity| entity.get_string("id"))
+                    .or_else(|| data.get_string("id"))
+            })
+            .or_else(|| {
+                nbt.get_list("SpawnPotentials")
+                    .and_then(|list| list.first())
+                    .and_then(|tag| tag.extract_compound())
+                    .and_then(|entry| {
+                        entry
+                            .get_compound("data")
+                            .and_then(|data| {
+                                data.get_compound("entity")
+                                    .and_then(|entity| entity.get_string("id"))
+                                    .or_else(|| data.get_string("id"))
+                            })
+                            .or_else(|| {
+                                entry
+                                    .get_compound("entity")
+                                    .and_then(|entity| entity.get_string("id"))
+                            })
+                    })
+            })
+            .or_else(|| nbt.get_string("EntityId"))
+            .and_then(EntityType::from_name);
 
         Self {
             position,
@@ -185,6 +260,8 @@ impl BlockEntity for MobSpawnerBlockEntity {
             min_delay,
             spawn_count,
             spawn_range,
+            max_nearby_entities,
+            required_player_range,
             entity_type: AtomicCell::new(entity_type),
         }
     }
@@ -200,6 +277,14 @@ impl BlockEntity for MobSpawnerBlockEntity {
 
     fn chunk_data_nbt(&self) -> Option<NbtCompound> {
         let mut final_nbt = NbtCompound::new();
+        final_nbt.put_short("Delay", self.delay.load(Ordering::Relaxed) as i16);
+        final_nbt.put_short("MinSpawnDelay", self.min_delay as i16);
+        final_nbt.put_short("MaxSpawnDelay", self.max_delay as i16);
+        final_nbt.put_short("SpawnCount", self.spawn_count as i16);
+        final_nbt.put_short("SpawnRange", self.spawn_range as i16);
+        final_nbt.put_short("MaxNearbyEntities", self.max_nearby_entities as i16);
+        final_nbt.put_short("RequiredPlayerRange", self.required_player_range as i16);
+
         if let Some(entity_type) = self.entity_type.load() {
             let mut spawn_entry = NbtCompound::new();
 

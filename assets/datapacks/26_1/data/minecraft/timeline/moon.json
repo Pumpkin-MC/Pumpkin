@@ -1,0 +1,42 @@
+{
+  "clock": "minecraft:overworld",
+  "period_ticks": 192000,
+  "tracks": {
+    "minecraft:visual/moon_phase": {
+      "keyframes": [
+        {
+          "ticks": 0,
+          "value": "full_moon"
+        },
+        {
+          "ticks": 24000,
+          "value": "waning_gibbous"
+        },
+        {
+          "ticks": 48000,
+          "value": "third_quarter"
+        },
+        {
+          "ticks": 72000,
+          "value": "waning_crescent"
+        },
+        {
+          "ticks": 96000,
+          "value": "new_moon"
+        },
+        {
+          "ticks": 120000,
+          "value": "waxing_crescent"
+        },
+        {
+          "ticks": 144000,
+          "value": "first_quarter"
+        },
+        {
+          "ticks": 168000,
+          "value": "waxing_gibbous"
+        }
+      ]
+    }
+  }
+}

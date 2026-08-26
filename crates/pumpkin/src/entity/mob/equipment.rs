@@ -753,7 +753,7 @@ fn conflicts_with(candidate: &Enchantment, applied: &[&Enchantment]) -> bool {
 /// enchantments by weight, resolves exclusive-set conflicts, and determines
 /// the level from the remaining cost. Cost is halved each iteration so
 /// later enchantments receive lower levels.
-fn apply_vanilla_enchantments(
+pub fn apply_vanilla_enchantments(
     stack: &mut ItemStack,
     slot: &EquipmentSlot,
     special_multiplier: f32,

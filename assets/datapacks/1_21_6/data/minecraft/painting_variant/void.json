@@ -1,0 +1,13 @@
+{
+  "asset_id": "minecraft:void",
+  "title": {
+    "translate": "painting.minecraft.void.title",
+    "color": "yellow"
+  },
+  "author": {
+    "translate": "painting.minecraft.void.author",
+    "color": "gray"
+  },
+  "width": 2,
+  "height": 2
+}

@@ -2,19 +2,18 @@ use std::collections::BTreeMap;
 use std::fs;
 
 pub fn build() -> String {
-    let enchantments: BTreeMap<String, serde_json::Value> =
-        serde_json::from_str(&fs::read_to_string("../../assets/enchantments.json").unwrap())
-            .expect("Failed to parse enchantments.json");
-
-    let mut enchantment_vec = enchantments.keys().collect::<Vec<_>>();
+    let dir = std::path::Path::new("../../assets/datapacks/26_2/data/minecraft/enchantment");
+    let mut enchantment_vec: Vec<String> = fs::read_dir(dir)
+        .expect("Missing enchantment directory")
+        .flatten()
+        .filter(|e| e.path().extension().is_some_and(|ext| ext == "json"))
+        .map(|e| e.path().file_stem().unwrap().to_string_lossy().into_owned())
+        .collect();
     enchantment_vec.sort();
 
     let mut cases = String::new();
     for raw_name in enchantment_vec {
-        let name = raw_name
-            .strip_prefix("minecraft:")
-            .unwrap_or(raw_name)
-            .replace('_', "-");
+        let name = raw_name.replace('_', "-");
         cases.push_str(&format!("    {name},\n"));
     }
 

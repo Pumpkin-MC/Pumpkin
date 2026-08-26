@@ -1,0 +1,26 @@
+{
+  "piglin_safe": 0,
+  "natural": 0,
+  "ambient_light": 0.0,
+  "monster_spawn_block_light_limit": 0,
+  "infiniburn": "#minecraft:infiniburn_end",
+  "respawn_anchor_works": 0,
+  "has_skylight": 0,
+  "bed_works": 0,
+  "effects": "minecraft:the_end",
+  "fixed_time": 6000,
+  "has_raids": 1,
+  "logical_height": 256,
+  "coordinate_scale": 1.0,
+  "monster_spawn_light_level": {
+    "type": "minecraft:uniform",
+    "value": {
+      "min_inclusive": 0,
+      "max_inclusive": 7
+    }
+  },
+  "min_y": 0,
+  "ultrawarm": 0,
+  "has_ceiling": 0,
+  "height": 256
+}

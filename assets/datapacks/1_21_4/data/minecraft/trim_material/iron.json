@@ -1,0 +1,11 @@
+{
+  "asset_name": "iron",
+  "ingredient": "minecraft:iron_ingot",
+  "override_armor_assets": {
+    "minecraft:iron": "iron_darker"
+  },
+  "description": {
+    "translate": "trim_material.minecraft.iron",
+    "color": "#ECECEC"
+  }
+}

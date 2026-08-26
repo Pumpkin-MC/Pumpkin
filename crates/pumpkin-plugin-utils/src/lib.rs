@@ -1,12 +1,10 @@
 //! # Pumpkin Plugin Utilities (`pumpkin-plugin-utils`)
 //!
 //! A fast, secure, and developer-friendly utility crate for Pumpkin server plugins, providing:
-//! - **Offline Ed25519 Signature Verification**: Validates plugin integrity and marketplace metadata on startup in `< 1ms`.
-//! - **Automatic Metadata Caching**: Call `init(context)` once on load; metadata is verified and cached globally for all subsequent operations.
+//! - **Automatic Metadata Caching**: Call `init(context)` once on load; marketplace metadata is retrieved from host WIT and cached globally.
 //! - **Zero-Argument Updates & Online Licensing**: Check licenses and updates against official Pumpkin Marketplace endpoints without manual arguments.
 //! - **Online License Checks**: Verify active licenses with `https://market.pumpkinmc.org/api/v1/rest/check-license`.
 //! - **License Checks & Grace Periods**: Local lease management (`license_lease.json`) to prevent outages during marketplace downtime.
-//! - **Dynamic Public Key Resolution**: Resolves keys via host WIT import, local cache, or HTTPS fallback without hardcoding keys.
 //!
 //! # Quick Start
 //!
@@ -20,7 +18,7 @@
 //!     fn new() -> Self { MyPlugin }
 //!
 //!     fn on_load(&self, context: &Context) -> Result<(), String> {
-//!         // 1. Initialize plugin-utils (verifies signature & caches metadata globally)
+//!         // 1. Initialize plugin-utils (retrieves verified marketplace metadata from host)
 //!         let metadata = pumpkin_plugin_utils::init(context)
 //!             .map_err(|e| format!("Plugin initialization failed: {e}"))?;
 //!
@@ -59,32 +57,21 @@
 )]
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used, clippy::panic))]
 
-/// Cryptographic signature verification.
-pub mod crypto;
 /// HTTP client helpers for marketplace interaction.
 pub mod http;
 /// License checking, validation, and lease management.
 pub mod license;
-/// Data models for metadata, signatures, licenses, and updates.
+/// Data models for metadata, licenses, and updates.
 pub mod models;
-/// Dynamic marketplace public key resolution.
-pub mod resolver;
 /// Non-blocking update checks against marketplace endpoints.
 pub mod updater;
-/// WASM binary inspection and custom section extraction.
-pub mod wasm;
 
-pub use crypto::verify_signature;
 pub use license::{LicenseChecker, LicenseError};
 pub use models::{
     CheckLicenseResponse, CheckUpdateResponse, DEFAULT_MARKETPLACE_URL, LicenseLease,
-    LicenseStatus, MarketplacePublicKeyResponse, PumpkinMetadata, WasmSignatureEnvelope,
+    LicenseStatus, PumpkinMetadata,
 };
-pub use resolver::PublicKeyResolver;
 pub use updater::{UpdateChecker, UpdateError};
-pub use wasm::{
-    ExtractedSections, WasmError, extract_sections, find_self_wasm, strip_pumpkin_sections,
-};
 
 use std::{
     path::{Path, PathBuf},
@@ -98,57 +85,50 @@ static GLOBAL_DATA_FOLDER: OnceLock<PathBuf> = OnceLock::new();
 
 /// Initializes `pumpkin-plugin-utils` using the plugin's runtime `Context`.
 ///
-/// Automatically locates the plugin WASM binary, verifies its cryptographic Ed25519 signature
-/// against the marketplace public key, and caches the verified metadata globally.
+/// Retrieves verified marketplace metadata provided by the host if the plugin is signed,
+/// and caches it globally.
 ///
 /// # Errors
 ///
-/// Returns `LicenseError` if signature verification, section extraction, or public key resolution fails.
+/// Returns `LicenseError::UnsignedPlugin` if the plugin is not signed or marketplace metadata is missing.
 pub fn init(
     context: &pumpkin_plugin_api::Context,
 ) -> Result<&'static PumpkinMetadata, LicenseError> {
     let data_folder = PathBuf::from(context.get_data_folder());
-    init_with_folder(data_folder)
+
+    #[cfg(target_arch = "wasm32")]
+    {
+        if let Some(market_meta) = context.get_marketplace_metadata() {
+            let meta: PumpkinMetadata = market_meta.into();
+            return init_with_metadata(meta, data_folder);
+        }
+        Err(LicenseError::UnsignedPlugin)
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        let _ = data_folder;
+        GLOBAL_METADATA.get().ok_or(LicenseError::NotInitialized)
+    }
 }
 
-/// Initializes `pumpkin-plugin-utils` with a specific data folder path.
+/// Initializes `pumpkin-plugin-utils` with explicit metadata (useful for tests or custom initialization).
 ///
 /// # Errors
 ///
-/// Returns `LicenseError` if signature verification or section extraction fails.
-pub fn init_with_folder(
+/// Returns `LicenseError::NotInitialized` if caching fails.
+pub fn init_with_metadata(
+    metadata: PumpkinMetadata,
     data_folder: impl AsRef<Path>,
 ) -> Result<&'static PumpkinMetadata, LicenseError> {
     let folder = data_folder.as_ref().to_path_buf();
-    let checker = LicenseChecker::new(&folder);
-    let metadata = checker.verify_self_offline()?;
-
     let _ = GLOBAL_DATA_FOLDER.set(folder);
     let _ = GLOBAL_METADATA.set(metadata);
 
     GLOBAL_METADATA.get().ok_or(LicenseError::NotInitialized)
 }
 
-/// Initializes `pumpkin-plugin-utils` with raw WASM bytes directly (useful for tests or embedded bytes).
-///
-/// # Errors
-///
-/// Returns `LicenseError` if signature verification fails.
-pub fn init_with_bytes(
-    wasm_bytes: &[u8],
-    data_folder: impl AsRef<Path>,
-) -> Result<&'static PumpkinMetadata, LicenseError> {
-    let folder = data_folder.as_ref().to_path_buf();
-    let checker = LicenseChecker::new(&folder);
-    let metadata = checker.verify_offline(wasm_bytes)?;
-
-    let _ = GLOBAL_DATA_FOLDER.set(folder);
-    let _ = GLOBAL_METADATA.set(metadata);
-
-    GLOBAL_METADATA.get().ok_or(LicenseError::NotInitialized)
-}
-
-/// Returns a reference to the globally cached, verified metadata if `init` has been called.
+/// Returns a reference to the globally cached metadata if `init` has been called.
 #[must_use]
 pub fn get_metadata() -> Option<&'static PumpkinMetadata> {
     GLOBAL_METADATA.get()
@@ -197,16 +177,16 @@ pub fn check_for_updates() -> Result<CheckUpdateResponse, UpdateError> {
     UpdateChecker::new().check_for_updates(&meta.plugin_name, &meta.version, &meta.marketplace_url)
 }
 
-/// Evaluates the complete offline license status (offline check + lease cache + grace period)
+/// Evaluates the complete offline license status (metadata + lease cache + grace period)
 /// using the globally cached plugin data.
 #[must_use]
 pub fn evaluate_license(grace_period_days: u32) -> LicenseStatus {
     let Some(folder) = get_data_folder() else {
         return LicenseStatus::Invalid("pumpkin_plugin_utils has not been initialized".to_string());
     };
+    let Some(meta) = get_metadata() else {
+        return LicenseStatus::Invalid("pumpkin_plugin_utils has not been initialized".to_string());
+    };
     let checker = LicenseChecker::new(folder);
-    match wasm::find_self_wasm(folder) {
-        Ok(bytes) => checker.evaluate_license(&bytes, grace_period_days),
-        Err(e) => LicenseStatus::Invalid(e.to_string()),
-    }
+    checker.evaluate_license(meta, grace_period_days)
 }

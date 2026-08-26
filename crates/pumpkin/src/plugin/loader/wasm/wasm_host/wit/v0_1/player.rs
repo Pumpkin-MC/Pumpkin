@@ -1,3 +1,4 @@
+use pumpkin_protocol::bedrock::client::PackIdVersion;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use tokio::sync::Mutex;
@@ -5,9 +6,7 @@ use wasmtime::component::Resource;
 
 use crate::plugin::api::gui::PluginScreenHandler;
 use crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::forms::Form;
-use crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::java_dialogs::{
-    Action, AfterAction, Dialog, DialogBody, DialogInput, LinkLabel, LinkType,
-};
+use crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::java_dialogs::Dialog;
 use crate::{
     entity::{EntityBase, player::TitleMode},
     net::DisconnectReason,
@@ -39,16 +38,13 @@ use crate::{
 use pumpkin_inventory::player::player_inventory::PlayerInventory;
 use pumpkin_protocol::Property;
 use pumpkin_protocol::bedrock::client::modal_form_request::CModalFormRequest;
-use pumpkin_protocol::java::client::dialog::{
-    ActionButton as ProtocolActionButton, Dialog as ProtocolDialog, DialogAction,
-    DialogBody as ProtocolDialogBody, DialogInput as ProtocolDialogInput, DialogLink, DialogNBT,
-};
+use pumpkin_protocol::java::client::dialog::DialogNBT;
 use pumpkin_util::permission::PermissionLvl;
 use pumpkin_util::translation::Locale;
 use std::str::FromStr;
 
 use pumpkin_protocol::bedrock::client::set_actor_data::{
-    CSetActorData, EntityMetadata, MetadataValue, PropertySyncData, entity_data_key,
+    CSetActorData, MetadataValue, PropertySyncData, SyncedActorDataList, entity_data_key,
 };
 use pumpkin_protocol::codec::var_ulong::VarULong;
 use pumpkin_util::version::{BedrockMinecraftVersion, JavaMinecraftVersion};
@@ -1113,7 +1109,7 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         // Sync to client
         let stack_serializer = ItemStackSerializer::from(stack);
         let packet = CSetContainerSlot::new(0, 0, slot as i16, &stack_serializer);
-        player.client.enqueue_packet(&packet).await;
+        player.send_client_packet(&packet).await;
 
         Ok(())
     }
@@ -1139,7 +1135,7 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         // Sync to client
         let stack_serializer = ItemStackSerializer::from(stack);
         let packet = CSetContainerSlot::new(0, 0, slot as i16, &stack_serializer);
-        player.client.enqueue_packet(&packet).await;
+        player.send_client_packet(&packet).await;
 
         Ok(())
     }
@@ -1204,7 +1200,7 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
             let sync_id = handler.sync_id();
             let stack_serializer = ItemStackSerializer::from(stack);
             let packet = CSetContainerSlot::new(sync_id as i8, 0, slot as i16, &stack_serializer);
-            player.client.enqueue_packet(&packet).await;
+            player.send_client_packet(&packet).await;
         }
 
         Ok(())
@@ -1229,7 +1225,7 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
             for slot in 0..27 {
                 let packet =
                     CSetContainerSlot::new(sync_id as i8, 0, slot as i16, &empty_serializer);
-                player.client.enqueue_packet(&packet).await;
+                player.send_client_packet(&packet).await;
             }
         }
 
@@ -1349,7 +1345,7 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         let player = player_from_resource(self, &player)?;
         let server = self.server.as_ref().expect("server not available");
         let level = from_wit_permission_level(level);
-        let command_dispatcher = server.command_dispatcher.read().await;
+        let command_dispatcher = server.command_dispatcher.load();
         player
             .set_permission_lvl(server, level, &command_dispatcher)
             .await;
@@ -1365,11 +1361,9 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         let player = player_from_resource(self, &player)?;
         let server = self.server.as_ref().expect("server not available");
 
-        let mut perm_manager = server.permission_manager.write().await;
-        let attachment = perm_manager.get_attachment(player.gameprofile.id);
-        drop(perm_manager);
-
-        attachment.write().await.set_permission(&node, value);
+        server
+            .permission_manager
+            .set_permission(player.gameprofile.id, node, value);
 
         Ok(())
     }
@@ -1382,11 +1376,9 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         let player = player_from_resource(self, &player)?;
         let server = self.server.as_ref().expect("server not available");
 
-        let mut perm_manager = server.permission_manager.write().await;
-        let attachment = perm_manager.get_attachment(player.gameprofile.id);
-        drop(perm_manager);
-
-        attachment.write().await.unset_permission(&node);
+        server
+            .permission_manager
+            .unset_permission(&player.gameprofile.id, &node);
 
         Ok(())
     }
@@ -1399,11 +1391,9 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         let player = player_from_resource(self, &player)?;
         let server = self.server.as_ref().expect("server not available");
 
-        let mut perm_manager = server.permission_manager.write().await;
-        let attachment = perm_manager.get_attachment(player.gameprofile.id);
-        drop(perm_manager);
-
-        Ok(attachment.read().await.has_permission_set(&node))
+        Ok(server
+            .permission_manager
+            .has_permission_set(&player.gameprofile.id, &node))
     }
 
     async fn has_permission(
@@ -1962,6 +1952,69 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         Ok(player.has_item_cooldown(&item_id).await)
     }
 
+    async fn ray_trace_block(
+        &mut self,
+        player: Resource<Player>,
+        max_distance: f64,
+        include_fluids: bool,
+    ) -> wasmtime::Result<Option<pumpkin::plugin::world::RayTraceBlockResult>> {
+        let player = player_from_resource(self, &player)?;
+        let start = player.living_entity.entity.get_eye_pos();
+        let direction = player.living_entity.entity.get_looking_vector();
+        let end = start + direction * max_distance;
+        let world = player.living_entity.entity.world.load_full();
+
+        let hit = world.ray_trace_block(start, end, include_fluids);
+
+        Ok(hit.map(|(pos, face, hit_pos)| pumpkin::plugin::world::RayTraceBlockResult {
+            pos: pumpkin::plugin::world::BlockPos {
+                x: pos.0.x,
+                y: pos.0.y,
+                z: pos.0.z,
+            },
+            face: crate::plugin::loader::wasm::wasm_host::wit::v0_1::world::to_wasm_block_direction(face),
+            hit_pos: to_wasm_position(hit_pos),
+        }))
+    }
+
+    async fn ray_trace_entity(
+        &mut self,
+        player: Resource<Player>,
+        max_distance: f64,
+    ) -> wasmtime::Result<Option<pumpkin::plugin::world::RayTraceEntityResult>> {
+        let player = player_from_resource(self, &player)?;
+        let start = player.living_entity.entity.get_eye_pos();
+        let direction = player.living_entity.entity.get_looking_vector();
+        let end = start + direction * max_distance;
+        let world = player.living_entity.entity.world.load_full();
+        let self_id = player.living_entity.entity.entity_id;
+
+        let hits = world.ray_trace_entities(start, end);
+        for (hit_entity, hit_pos, distance) in hits {
+            if hit_entity.get_entity().entity_id != self_id {
+                let entity_res = self
+                    .add_entity(hit_entity)
+                    .map_err(|_| wasmtime::Error::msg("failed to add entity resource"))?;
+                return Ok(Some(pumpkin::plugin::world::RayTraceEntityResult {
+                    entity: entity_res,
+                    hit_pos: to_wasm_position(hit_pos),
+                    distance,
+                }));
+            }
+        }
+
+        Ok(None)
+    }
+
+    async fn get_target_entity(
+        &mut self,
+        player: Resource<Player>,
+        max_distance: f64,
+    ) -> wasmtime::Result<Option<Resource<pumpkin::plugin::world::Entity>>> {
+        let res = self.ray_trace_entity(player, max_distance).await?;
+        Ok(res.map(|r| r.entity))
+    }
+
     async fn get_target_block(
         &mut self,
         player: Resource<Player>,
@@ -1986,6 +2039,16 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
             );
             to_wasm_position(vec3)
         }))
+    }
+
+    async fn get_target_block_exact(
+        &mut self,
+        player: Resource<Player>,
+        max_distance: f64,
+        include_fluids: bool,
+    ) -> wasmtime::Result<Option<pumpkin::plugin::world::RayTraceBlockResult>> {
+        self.ray_trace_block(player, max_distance, include_fluids)
+            .await
     }
 
     async fn launch_projectile(
@@ -2215,7 +2278,7 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         let player = player_from_resource(self, &player)?;
         if let crate::net::ClientPlatform::Java(client) = player.client.as_ref() {
             client
-                .send_packet_now(&pumpkin_protocol::java::client::play::CTransfer::new(
+                .send_packet(&pumpkin_protocol::java::client::play::CTransfer::new(
                     &host,
                     pumpkin_protocol::codec::var_int::VarInt(i32::from(port)),
                 ))
@@ -2946,8 +3009,7 @@ impl pumpkin::plugin::player::HostJavaPlayer for PluginHostState {
 
         if let crate::net::ClientPlatform::Java(_) = player.client.as_ref() {
             player
-                .client
-                .send_packet_now(&pumpkin_protocol::java::client::play::CCustomPayload::new(
+                .send_client_packet(&pumpkin_protocol::java::client::play::CCustomPayload::new(
                     &channel, &data,
                 ))
                 .await;
@@ -2970,135 +3032,24 @@ impl pumpkin::plugin::player::HostJavaPlayer for PluginHostState {
             .provider
             .clone();
 
-        let title = text_component_from_resource(self, &dialog.title);
+        let protocol_dialog = super::events::dialog::protocol_dialog_from_wasm(self, &dialog);
 
-        let body: Vec<_> = dialog
-            .body
-            .iter()
-            .map(|b| match b {
-                DialogBody::PlainMessage(c) => ProtocolDialogBody::PlainMessage {
-                    contents: text_component_from_resource(self, c),
-                },
-                DialogBody::Item(_i) => {
-                    // TODO: Map ItemStack correctly
-                    ProtocolDialogBody::Item { item: 0 }
-                }
-            })
-            .collect();
-
-        let inputs: Vec<_> = dialog
-            .inputs
-            .iter()
-            .map(|i| match i {
-                DialogInput::Bool(b) => ProtocolDialogInput::Boolean {
-                    label: text_component_from_resource(self, &b.label),
-                    default_value: b.default_value,
-                },
-                DialogInput::Text(t) => ProtocolDialogInput::Text {
-                    label: text_component_from_resource(self, &t.label),
-                    placeholder: text_component_from_resource(self, &t.placeholder),
-                    default_value: t.default_value.clone(),
-                },
-                DialogInput::NumberRange(n) => ProtocolDialogInput::NumberRange {
-                    label: text_component_from_resource(self, &n.label),
-                    min: n.min_value,
-                    max: n.max_value,
-                    initial: n.initial_value,
-                    step: n.step,
-                    label_format: n.label_format.clone(),
-                },
-                DialogInput::SingleOption(s) => ProtocolDialogInput::SingleOption {
-                    label: text_component_from_resource(self, &s.label),
-                    options: s
-                        .options
-                        .iter()
-                        .map(|o| text_component_from_resource(self, o))
-                        .collect(),
-                    initial_index: s.initial_index,
-                },
-            })
-            .collect();
-
-        let buttons: Vec<_> = dialog
-            .buttons
-            .iter()
-            .map(|b| ProtocolActionButton {
-                text: text_component_from_resource(self, &b.text),
-                tooltip: b
-                    .tooltip
-                    .as_ref()
-                    .map(|t| text_component_from_resource(self, t)),
-                width: b.width,
-                action: match &b.action {
-                    Action::OpenUrl(u) => DialogAction::OpenUrl { url: u.clone() },
-                    Action::CustomClick(c) => DialogAction::Custom {
-                        id: c.id.clone(),
-                        payload: c.payload.clone(),
-                    },
-                },
-            })
-            .collect();
-
-        let links: Vec<_> = dialog
-            .links
-            .iter()
-            .map(|l| {
-                let label = match &l.label {
-                    LinkLabel::BuiltIn(t) => {
-                        let link_type = match t {
-                            LinkType::BugReport => pumpkin_protocol::LinkType::BugReport,
-                            LinkType::CommunityGuidelines => {
-                                pumpkin_protocol::LinkType::CommunityGuidelines
-                            }
-                            LinkType::Support => pumpkin_protocol::LinkType::Support,
-                            LinkType::Status => pumpkin_protocol::LinkType::Status,
-                            LinkType::Feedback => pumpkin_protocol::LinkType::Feedback,
-                            LinkType::Community => pumpkin_protocol::LinkType::Community,
-                            LinkType::Website => pumpkin_protocol::LinkType::Website,
-                            LinkType::Forums => pumpkin_protocol::LinkType::Forums,
-                            LinkType::News => pumpkin_protocol::LinkType::News,
-                            LinkType::Announcements => pumpkin_protocol::LinkType::Announcements,
-                        };
-                        pumpkin_protocol::Label::BuiltIn(link_type)
-                    }
-                    LinkLabel::Custom(c) => pumpkin_protocol::Label::TextComponent(Box::new(
-                        text_component_from_resource(self, c),
-                    )),
-                };
-                DialogLink {
-                    label,
-                    url: l.url.clone(),
-                }
-            })
-            .collect();
-
-        let protocol_dialog = ProtocolDialog {
-            r#type: match dialog.type_ {
-                crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::java_dialogs::DialogType::Notice => "minecraft:notice".to_string(),
-                crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::java_dialogs::DialogType::Confirmation => "minecraft:confirmation".to_string(),
-                crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::java_dialogs::DialogType::MultiAction => "minecraft:multi_action".to_string(),
-                crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::java_dialogs::DialogType::DialogList => "minecraft:dialog_list".to_string(),
-                crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::java_dialogs::DialogType::ServerLinks => "minecraft:server_links".to_string(),
-            },
-            title,
-            body,
-            inputs,
-            buttons,
-            links,
-            exit_action: None, // TODO
-            after_action: dialog.after_action.map(|a| match a {
-                AfterAction::Peek => "peek".to_string(),
-                AfterAction::Pop => "pop".to_string(),
-            }),
-            can_close_with_escape: dialog.can_close_with_escape,
-            external_title: dialog.external_title.as_ref().map(|t| text_component_from_resource(self, t)),
-        };
+        if let Some(server) = player.world().server.upgrade() {
+            let mut event = crate::plugin::api::events::dialog::dialog_show::DialogShowEvent::new(
+                player.clone(),
+                protocol_dialog.clone(),
+            );
+            server.plugin_manager.fire(&server, &mut event).await;
+            if event.cancelled {
+                return Ok(());
+            }
+        }
 
         if let crate::net::ClientPlatform::Java(client) = player.client.as_ref() {
             match client.connection_state.load() {
                 pumpkin_protocol::ConnectionState::Config => {
                     client
-                        .send_packet_now(
+                        .send_packet(
                             &pumpkin_protocol::java::client::config::CConfigShowDialog::new(
                                 pumpkin_protocol::IdOr::Value(DialogNBT::from_dialog(
                                     &protocol_dialog,
@@ -3109,13 +3060,9 @@ impl pumpkin::plugin::player::HostJavaPlayer for PluginHostState {
                 }
                 pumpkin_protocol::ConnectionState::Play => {
                     client
-                        .send_packet_now(
-                            &pumpkin_protocol::java::client::play::CPlayShowDialog::new(
-                                pumpkin_protocol::IdOr::Value(DialogNBT::from_dialog(
-                                    &protocol_dialog,
-                                )),
-                            ),
-                        )
+                        .send_packet(&pumpkin_protocol::java::client::play::CPlayShowDialog::new(
+                            pumpkin_protocol::IdOr::Value(DialogNBT::from_dialog(&protocol_dialog)),
+                        ))
                         .await;
                 }
                 _ => {}
@@ -3138,20 +3085,28 @@ impl pumpkin::plugin::player::HostJavaPlayer for PluginHostState {
             .provider
             .clone();
 
+        if let Some(server) = player.world().server.upgrade() {
+            let mut event = crate::plugin::api::events::dialog::dialog_clear::DialogClearEvent::new(
+                player.clone(),
+            );
+            server.plugin_manager.fire(&server, &mut event).await;
+            if event.cancelled {
+                return Ok(());
+            }
+        }
+
         if let crate::net::ClientPlatform::Java(client) = player.client.as_ref() {
             match client.connection_state.load() {
                 pumpkin_protocol::ConnectionState::Config => {
                     client
-                        .send_packet_now(
+                        .send_packet(
                             &pumpkin_protocol::java::client::config::CConfigClearDialog::new(),
                         )
                         .await;
                 }
                 pumpkin_protocol::ConnectionState::Play => {
                     client
-                        .send_packet_now(
-                            &pumpkin_protocol::java::client::play::CPlayClearDialog::new(),
-                        )
+                        .send_packet(&pumpkin_protocol::java::client::play::CPlayClearDialog::new())
                         .await;
                 }
                 _ => {}
@@ -3216,7 +3171,7 @@ impl pumpkin::plugin::player::HostJavaPlayer for PluginHostState {
 
         if let crate::net::ClientPlatform::Java(client) = player.client.as_ref() {
             client
-                .send_packet_now(
+                .send_packet(
                     &pumpkin_protocol::java::client::play::CAddResourcePack::new(
                         &uuid,
                         &pack.url,
@@ -3248,7 +3203,7 @@ impl pumpkin::plugin::player::HostJavaPlayer for PluginHostState {
 
         if let crate::net::ClientPlatform::Java(client) = player.client.as_ref() {
             client
-                .send_packet_now(
+                .send_packet(
                     &pumpkin_protocol::java::client::play::CRemoveResourcePack::new(Some(&uuid)),
                 )
                 .await;
@@ -3271,9 +3226,7 @@ impl pumpkin::plugin::player::HostJavaPlayer for PluginHostState {
 
         if let crate::net::ClientPlatform::Java(client) = player.client.as_ref() {
             client
-                .send_packet_now(
-                    &pumpkin_protocol::java::client::play::CRemoveResourcePack::new(None),
-                )
+                .send_packet(&pumpkin_protocol::java::client::play::CRemoveResourcePack::new(None))
                 .await;
         }
         Ok(())
@@ -3521,10 +3474,10 @@ impl pumpkin::plugin::player::HostBedrockPlayer for PluginHostState {
                 .store(flags, Ordering::Relaxed);
         }
 
-        let mut metadata = EntityMetadata(std::collections::HashMap::new());
+        let mut metadata = SyncedActorDataList(std::collections::HashMap::new());
         metadata.set(
             entity_data_key::FLAGS,
-            MetadataValue::Long(
+            MetadataValue::Int64(
                 player
                     .living_entity
                     .entity
@@ -3534,7 +3487,7 @@ impl pumpkin::plugin::player::HostBedrockPlayer for PluginHostState {
         );
         metadata.set(
             entity_data_key::FLAGS_TWO,
-            MetadataValue::Long(
+            MetadataValue::Int64(
                 player
                     .living_entity
                     .entity
@@ -3544,17 +3497,17 @@ impl pumpkin::plugin::player::HostBedrockPlayer for PluginHostState {
         );
 
         let packet = CSetActorData {
-            actor_runtime_id: VarULong(player.get_entity().entity_id as u64),
-            metadata,
+            target_runtime_id: VarULong(player.get_entity().entity_id as u64),
+            actor_data: metadata,
             synced_properties: PropertySyncData {
-                int_properties: std::collections::HashMap::new(),
-                float_properties: std::collections::HashMap::new(),
+                int_entries_list: std::collections::HashMap::new(),
+                float_entries_list: std::collections::HashMap::new(),
             },
             tick: VarULong(0),
         };
 
         if let crate::net::ClientPlatform::Bedrock(client) = player.client.as_ref() {
-            client.send_game_packet(&packet).await;
+            client.send_packet(&packet).await;
         }
 
         Ok(())
@@ -3658,9 +3611,9 @@ impl pumpkin::plugin::player::HostBedrockPlayer for PluginHostState {
             };
 
             client
-                .send_game_packet(&CModalFormRequest {
+                .send_packet(&CModalFormRequest {
                     form_id: pumpkin_protocol::codec::var_uint::VarUInt(form_id),
-                    form_data: form_json.to_string(),
+                    form_ui_json: form_json.to_string(),
                 })
                 .await;
 
@@ -3719,20 +3672,19 @@ impl pumpkin::plugin::player::HostBedrockPlayer for PluginHostState {
             let entries = info
                 .packs
                 .into_iter()
-                .map(|p| {
-                    pumpkin_protocol::bedrock::client::resource_packs_info::ResourcePackEntry {
-                        uuid: Uuid::from_wit(&p.id),
-                        version: p.version,
-                        size: p.size,
-                        download_url: p.download_url,
+                .map(
+                    |p| pumpkin_protocol::bedrock::client::resource_packs_info::PackInfoData {
+                        pack_id_version: PackIdVersion::new(Uuid::from_wit(&p.id), p.version),
+                        pack_size: p.size,
+                        cdn_url: p.download_url,
                         content_key: p.content_key.unwrap_or_default(),
-                        sub_pack_name: p.sub_pack_name.unwrap_or_default(),
-                        content_id: p.content_id.unwrap_or_default(),
+                        subpack_name: p.sub_pack_name.unwrap_or_default(),
+                        content_identity: p.content_id.unwrap_or_default(),
                         has_scripts: p.has_scripts,
-                        addon_pack: p.addon_pack,
-                        rtx_enabled: p.rtx_enabled,
-                    }
-                })
+                        is_addon_pack: p.addon_pack,
+                        is_ray_tracing_capable: p.rtx_enabled,
+                    },
+                )
                 .collect();
 
             let world_template_id = info
@@ -3744,13 +3696,15 @@ impl pumpkin::plugin::player::HostBedrockPlayer for PluginHostState {
                     resource_pack_required: info.required,
                     has_addon_packs: info.has_addon_packs,
                     has_scripts: info.has_scripts,
-                    is_vibrant_visuals_force_disabled: info.is_vibrant_visuals_force_disabled,
-                    world_template_id,
-                    world_template_version: info.world_template_version.unwrap_or_default(),
+                    force_disable_vibrant_visuals: info.is_vibrant_visuals_force_disabled,
+                    world_template_id_and_version: PackIdVersion::new(
+                        world_template_id,
+                        info.world_template_version.unwrap_or_default(),
+                    ),
                     resource_packs: entries,
                 };
 
-            client.send_game_packet(&packs_info).await;
+            client.send_packet(&packs_info).await;
         }
         Ok(())
     }

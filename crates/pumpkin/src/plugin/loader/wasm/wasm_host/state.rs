@@ -114,6 +114,8 @@ pub struct PluginHostState {
     pub server: Option<Arc<Server>>,
     pub permissions: Vec<String>,
     pub name: Option<String>,
+    pub marketplace_metadata:
+        Option<crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::context::MarketplaceMetadata>,
 }
 
 impl Default for PluginHostState {
@@ -139,6 +141,7 @@ impl PluginHostState {
             server: None,
             permissions: Vec::new(),
             name: None,
+            marketplace_metadata: None,
         }
     }
 

@@ -1,0 +1,20 @@
+{
+  "category": "taiga",
+  "temperature": -0.5,
+  "downfall": 0.4000000059604645,
+  "depth": 0.44999998807907104,
+  "effects": {
+    "water_fog_color": 329011,
+    "water_color": 4020182,
+    "fog_color": 12638463,
+    "mood_sound": {
+      "offset": 2.0,
+      "sound": "minecraft:ambient.cave",
+      "block_search_extent": 8,
+      "tick_delay": 6000
+    },
+    "sky_color": 8625919
+  },
+  "precipitation": "snow",
+  "scale": 0.30000001192092896
+}

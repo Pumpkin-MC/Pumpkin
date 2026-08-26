@@ -9,8 +9,8 @@ use bytes::Bytes;
 use pumpkin_protocol::{
     BClientPacket,
     bedrock::status::{
-        CUnconnectedPong, OFFLINE_MESSAGE_MAGIC, SUnconnectedPing, SUnconnectedPingOpenConnections,
-        ServerInfo,
+        CIncompatibleProtocolVersion, CUnconnectedPong, OFFLINE_MESSAGE_MAGIC, SUnconnectedPing,
+        SUnconnectedPingOpenConnections, ServerInfo,
     },
     packet::Packet,
     serial::PacketRead,
@@ -75,6 +75,8 @@ impl StatusResponder {
                 if is_status_packet(packet) {
                     trace!(%client, length, "Received Bedrock server-list status ping");
                     self.respond(server, &self.ipv4, packet, client).await
+                } else if let Some(client_protocol) = raknet_protocol_version(packet) {
+                    self.reject_legacy_raknet(server, &self.ipv4, client, client_protocol).await
                 } else {
                     trace!(
                         %client,
@@ -91,9 +93,30 @@ impl StatusResponder {
             result = self.ipv6.recv_from(&mut ipv6_buffer) => {
                 let (length, client) = result?;
                 trace!(%client, length, "Received Bedrock IPv6 server-list status packet");
-                self.respond(server, &self.ipv6, &ipv6_buffer[..length], client).await
+                let packet = &ipv6_buffer[..length];
+                if let Some(client_protocol) = raknet_protocol_version(packet) {
+                    self.reject_legacy_raknet(server, &self.ipv6, client, client_protocol).await
+                } else {
+                    self.respond(server, &self.ipv6, packet, client).await
+                }
             }
         }
+    }
+
+    async fn reject_legacy_raknet(
+        &self,
+        server: &Server,
+        socket: &UdpSocket,
+        client: SocketAddr,
+        client_protocol: u8,
+    ) -> Result<(), Error> {
+        let server_protocol = client_protocol.saturating_add(1);
+        let packet = CIncompatibleProtocolVersion::new(server_protocol, server.server_guid);
+        let mut response = vec![CIncompatibleProtocolVersion::PACKET_ID as u8];
+        packet.write_packet(&mut response)?;
+        socket.send_to(&response, client).await?;
+        trace!(%client, client_protocol, server_protocol, "Rejected unsupported Bedrock RakNet connection");
+        Ok(())
     }
 
     async fn respond(
@@ -125,6 +148,12 @@ fn is_status_packet(packet: &[u8]) -> bool {
         && packet.get(9..25) == Some(OFFLINE_MESSAGE_MAGIC.as_slice())
 }
 
+fn raknet_protocol_version(packet: &[u8]) -> Option<u8> {
+    (packet.first() == Some(&0x05) && packet.get(1..17) == Some(OFFLINE_MESSAGE_MAGIC.as_slice()))
+        .then(|| packet.get(17).copied())
+        .flatten()
+}
+
 fn ice_packet_kind(packet: &[u8]) -> &'static str {
     if packet.len() >= 20 && packet.get(4..8) == Some(&[0x21, 0x12, 0xa4, 0x42]) {
         "STUN"
@@ -151,18 +180,6 @@ impl IceSocket {
 
     pub async fn send_to(&self, buffer: &[u8], target: SocketAddr) -> Result<usize, Error> {
         self.socket.send_to(buffer, target).await
-    }
-
-    #[cfg(test)]
-    pub(super) fn for_test(socket: Arc<UdpSocket>) -> (Self, mpsc::Sender<(Bytes, SocketAddr)>) {
-        let (packets, receiver) = mpsc::channel(1024);
-        (
-            Self {
-                socket,
-                packets: Mutex::new(receiver),
-            },
-            packets,
-        )
     }
 }
 
@@ -243,6 +260,12 @@ mod tests {
         stun_success[4..8].copy_from_slice(&[0x21, 0x12, 0xa4, 0x42]);
         assert!(!is_status_packet(&stun_success));
         assert_eq!(ice_packet_kind(&stun_success), "STUN");
+
+        let mut open_connection = [0; 18];
+        open_connection[0] = 0x05;
+        open_connection[1..17].copy_from_slice(&OFFLINE_MESSAGE_MAGIC);
+        open_connection[17] = 11;
+        assert_eq!(raknet_protocol_version(&open_connection), Some(11));
     }
 
     #[tokio::test]

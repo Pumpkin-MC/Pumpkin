@@ -46,14 +46,24 @@ impl Plugin for WasmPlugin {
     }
 }
 
-pub struct WasmPluginLoader;
+pub struct WasmPluginLoader {
+    verify_signatures: bool,
+}
+
+impl WasmPluginLoader {
+    #[must_use]
+    pub const fn new(verify_signatures: bool) -> Self {
+        Self { verify_signatures }
+    }
+}
+
 impl PluginLoader for WasmPluginLoader {
     fn load<'a>(&'a self, path: &'a Path) -> PluginLoadFuture<'a> {
         Box::pin(async {
             let path = path.to_owned();
 
             let runtime = PluginRuntime::new(&path)?;
-            let (plugin, metadata) = runtime.init_plugin(&path).await?;
+            let (plugin, metadata) = runtime.init_plugin(&path, self.verify_signatures).await?;
 
             Ok((
                 plugin as Arc<dyn Plugin>,

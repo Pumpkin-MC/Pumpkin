@@ -1,4 +1,4 @@
-use pumpkin_data::packet::serverbound::CONFIG_RESOURCE_PACK;
+use pumpkin_data::packet::serverbound::config::RESOURCE_PACK;
 use pumpkin_macros::java_packet;
 
 use crate::{
@@ -25,7 +25,7 @@ pub enum ResourcePackResponseResult {
 ///
 /// This allows the server to know if the player is using the required textures
 /// or if the download failed.
-#[java_packet(CONFIG_RESOURCE_PACK)]
+#[java_packet(RESOURCE_PACK)]
 pub struct SConfigResourcePack {
     /// The unique identifier of the resource pack this response refers to.
     pub uuid: uuid::Uuid,
@@ -39,6 +39,19 @@ impl<'a> ServerPacket<'a> for SConfigResourcePack {
             uuid: bytebuf.get_uuid()?,
             result: bytebuf.get_var_int()?,
         })
+    }
+}
+
+impl crate::ClientPacket for SConfigResourcePack {
+    fn write_packet_data(
+        &self,
+        mut write: impl std::io::Write,
+        _version: &JavaMinecraftVersion,
+    ) -> Result<(), crate::ser::WritingError> {
+        use crate::ser::NetworkWriteExt;
+        write.write_uuid(&self.uuid)?;
+        write.write_var_int(&self.result)?;
+        Ok(())
     }
 }
 

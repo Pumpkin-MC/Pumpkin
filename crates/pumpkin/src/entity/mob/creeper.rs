@@ -7,15 +7,13 @@ use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::{
     entity::EntityType,
     item::Item,
-    meta_data_type::MetaDataType,
     sound::{Sound, SoundCategory},
-    tracked_data::TrackedData,
 };
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::{codec::var_int::VarInt, java::client::play::Metadata};
 
 use crate::entity::{
-    Entity, EntityBase, EntityBaseFuture, NBTStorage, NbtFuture,
+    Entity, EntityBase, EntityBaseFuture, NbtFuture,
     ai::goal::{
         active_target::ActiveTargetGoal, creeper_ignite::CreeperIgniteGoal,
         look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal,
@@ -96,8 +94,7 @@ impl CreeperEntity {
         self.fuse_speed.store(speed, Ordering::Relaxed);
         self.mob_entity.living_entity.entity.send_meta_data(
             &[Metadata::new(
-                TrackedData::FUSE_ID,
-                MetaDataType::INTEGER,
+                pumpkin_data::tracked_data::creeper::FUSE_ID,
                 VarInt(speed),
             )],
             None,
@@ -118,16 +115,21 @@ impl CreeperEntity {
             .store(true, Ordering::Relaxed);
         let world = entity.world.load();
         let pos = entity.pos.load();
-        world.explode(pos, radius * multiplier).await;
+        world
+            .explode(
+                pos,
+                radius * multiplier,
+                crate::world::ExplosionInteraction::Mob,
+            )
+            .await;
         // TODO: spawn area effect cloud with potion effects
         entity.remove().await;
     }
 }
 
-impl NBTStorage for CreeperEntity {
-    fn write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
+impl Mob for CreeperEntity {
+    fn mob_write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async {
-            self.mob_entity.living_entity.write_nbt(nbt).await;
             nbt.put_bool("powered", self.charged.load(Ordering::Relaxed));
             nbt.put_short("Fuse", self.fuse_time.load(Ordering::Relaxed) as i16);
             nbt.put_byte(
@@ -138,9 +140,8 @@ impl NBTStorage for CreeperEntity {
         })
     }
 
-    fn read_nbt_non_mut<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
+    fn mob_read_nbt<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async {
-            self.mob_entity.living_entity.read_nbt_non_mut(nbt).await;
             if let Some(powered) = nbt.get_bool("powered") {
                 self.charged.store(powered, Ordering::Relaxed);
             }
@@ -156,9 +157,7 @@ impl NBTStorage for CreeperEntity {
             }
         })
     }
-}
 
-impl Mob for CreeperEntity {
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
     }
@@ -172,8 +171,7 @@ impl Mob for CreeperEntity {
             self.charged.store(true, Ordering::Relaxed);
             self.mob_entity.living_entity.entity.send_meta_data(
                 &[Metadata::new(
-                    TrackedData::CHARGED,
-                    MetaDataType::BOOLEAN,
+                    pumpkin_data::tracked_data::creeper::CHARGED,
                     true,
                 )],
                 None,
@@ -251,8 +249,7 @@ impl Mob for CreeperEntity {
             self.ignited.store(true, Ordering::Relaxed);
             entity.send_meta_data(
                 &[Metadata::new(
-                    TrackedData::IS_IGNITED,
-                    MetaDataType::BOOLEAN,
+                    pumpkin_data::tracked_data::creeper::IS_IGNITED,
                     true,
                 )],
                 None,

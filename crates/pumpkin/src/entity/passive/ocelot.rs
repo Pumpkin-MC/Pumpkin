@@ -6,16 +6,14 @@ use std::sync::{
 use pumpkin_data::entity::{EntityStatus, EntityType};
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
-use pumpkin_data::meta_data_type::MetaDataType;
 use pumpkin_data::tag::{self, Taggable};
-use pumpkin_data::tracked_data::TrackedData;
 use pumpkin_nbt::compound::NbtCompound;
-use pumpkin_protocol::bedrock::server::actor_event::ActorEventType;
+use pumpkin_protocol::bedrock::server::actor_event::ActorEventID;
 use pumpkin_protocol::java::client::play::Metadata;
 use rand::RngExt;
 
 use crate::entity::{
-    Entity, EntityBase, EntityBaseFuture, NBTStorage, NbtFuture,
+    Entity, EntityBase, EntityBaseFuture, NbtFuture,
     ai::goal::{
         active_target::ActiveTargetGoal, avoid_entity::AvoidEntityGoal, breed::BreedGoal,
         escape_danger::EscapeDangerGoal, follow_parent::FollowParentGoal,
@@ -113,32 +111,11 @@ impl OcelotEntity {
         let entity = self.get_entity();
         entity.send_meta_data(
             &[Metadata::new(
-                TrackedData::TRUSTING,
-                MetaDataType::BOOLEAN,
+                pumpkin_data::tracked_data::ocelot::TRUSTING,
                 trusting,
             )],
             None,
         );
-    }
-}
-
-impl NBTStorage for OcelotEntity {
-    fn write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
-        Box::pin(async {
-            self.mob_entity.living_entity.write_nbt(nbt).await;
-            self.write_animal_nbt(nbt);
-            nbt.put_bool("Trusting", self.is_trusting.load(Ordering::Relaxed));
-        })
-    }
-
-    fn read_nbt_non_mut<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
-        Box::pin(async {
-            self.mob_entity.living_entity.read_nbt_non_mut(nbt).await;
-            self.read_animal_nbt(nbt);
-            if let Some(trusting) = nbt.get_bool("Trusting") {
-                self.is_trusting.store(trusting, Ordering::Relaxed);
-            }
-        })
     }
 }
 
@@ -152,6 +129,24 @@ impl Animal for OcelotEntity {
 }
 
 impl Mob for OcelotEntity {
+    fn as_animal(&self) -> Option<&dyn Animal> {
+        Some(self)
+    }
+
+    fn mob_write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
+        Box::pin(async {
+            nbt.put_bool("Trusting", self.is_trusting.load(Ordering::Relaxed));
+        })
+    }
+
+    fn mob_read_nbt<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
+        Box::pin(async {
+            if let Some(trusting) = nbt.get_bool("Trusting") {
+                self.is_trusting.store(trusting, Ordering::Relaxed);
+            }
+        })
+    }
+
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
     }
@@ -163,8 +158,7 @@ impl Mob for OcelotEntity {
             if is_baby {
                 entity.send_meta_data(
                     &[Metadata::new(
-                        TrackedData::BABY_ID,
-                        MetaDataType::BOOLEAN,
+                        pumpkin_data::tracked_data::ocelot::BABY_ID,
                         true,
                     )],
                     None,
@@ -172,8 +166,7 @@ impl Mob for OcelotEntity {
             }
             entity.send_meta_data(
                 &[Metadata::new(
-                    TrackedData::TRUSTING,
-                    MetaDataType::BOOLEAN,
+                    pumpkin_data::tracked_data::ocelot::TRUSTING,
                     self.is_trusting.load(Ordering::Relaxed),
                 )],
                 None,
@@ -203,13 +196,13 @@ impl Mob for OcelotEntity {
                     self.get_entity().world.load().send_entity_status(
                         self.get_entity(),
                         EntityStatus::TrustingSucceeded,
-                        Some(ActorEventType::TrustingSucceeded),
+                        Some(ActorEventID::TamingSucceeded),
                     );
                 } else {
                     self.get_entity().world.load().send_entity_status(
                         self.get_entity(),
                         EntityStatus::TrustingFailed,
-                        Some(ActorEventType::TrustingFailed),
+                        Some(ActorEventID::TamingFailed),
                     );
                 }
 

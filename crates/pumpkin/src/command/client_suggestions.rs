@@ -1,4 +1,5 @@
 use pumpkin_protocol::{
+    bedrock::client::CommandPermissionLevel,
     codec::var_int::VarInt,
     java::client::play::{
         ArgumentType, CCommands, ProtoNode, ProtoNodeType, StringProtoArgBehavior,
@@ -15,8 +16,7 @@ use crate::command::node::{
 use crate::entity::player::Player;
 use crate::server::Server;
 use pumpkin_protocol::bedrock::client::available_commands::{
-    CAvailableCommands, Command, CommandEnum, CommandOverload, CommandParameter, arg_flags,
-    arg_types, command_permissions,
+    CAvailableCommands, CommandData, EnumData, OverloadData, ParamData, arg_flags, arg_types,
 };
 use pumpkin_protocol::java::client::play::SuggestionProviders;
 
@@ -36,6 +36,12 @@ pub async fn send_c_commands_packet(
             continue;
         }
 
+        // For double-slash commands, if the single-slash alias (/set) exists, only
+        // register the single-slash literal for the Java client.
+        if key.starts_with("//") && fallback_dispatcher.commands.contains_key(&key[1..]) {
+            continue;
+        }
+
         let Ok(tree) = fallback_dispatcher.get_tree(key) else {
             continue;
         };
@@ -51,10 +57,16 @@ pub async fn send_c_commands_packet(
         let (is_executable, child_nodes) =
             nodes_to_proto_node_builders(&cmd_src, &tree.nodes, &tree.children);
 
+        let name = if key.starts_with("//") {
+            &key[1..]
+        } else {
+            key.as_str()
+        };
+
         let proto_node = ProtoNodeBuilder {
             child_nodes,
             node_type: ProtoNodeType::Literal {
-                name: key,
+                name,
                 is_executable,
                 redirect_target: None,
                 restricted: false,
@@ -104,26 +116,39 @@ pub async fn send_c_commands_packet(
                     .values()
                     .copied()
                     .filter(|id| {
-                        let disabled = match &dispatcher.tree[*id] {
-                            AttachedNode::Literal(child) => {
-                                dispatcher.is_disabled(&child.meta.literal_lowercase)
-                            }
-                            AttachedNode::Command(child) => {
-                                dispatcher.is_disabled(&child.meta.literal_lowercase)
-                            }
-                            _ => false,
+                        let (disabled, name) = match &dispatcher.tree[*id] {
+                            AttachedNode::Literal(child) => (
+                                dispatcher.is_disabled(&child.meta.literal_lowercase),
+                                child.meta.literal.as_ref(),
+                            ),
+                            AttachedNode::Command(child) => (
+                                dispatcher.is_disabled(&child.meta.literal_lowercase),
+                                child.meta.literal.as_ref(),
+                            ),
+                            _ => (false, ""),
                         };
-                        !disabled
+                        if disabled {
+                            return false;
+                        }
+                        if name.starts_with("//") && dispatcher.tree.get(&name[1..]).is_some() {
+                            return false;
+                        }
+                        true
                     })
                     .map(|id| resolve_node_id(id, node_id_offset, root_node_index))
                     .map(|i| VarInt(i as i32))
                     .collect();
             }
             AttachedNode::Literal(literal_attached_node) => {
+                let name = if literal_attached_node.meta.literal.starts_with("//") {
+                    &literal_attached_node.meta.literal[1..]
+                } else {
+                    &literal_attached_node.meta.literal
+                };
                 let node = ProtoNode {
                     children,
                     node_type: ProtoNodeType::Literal {
-                        name: &literal_attached_node.meta.literal,
+                        name,
                         is_executable: literal_attached_node.owned.command.is_some(),
                         redirect_target,
                         restricted: !satisfies_requirements,
@@ -132,10 +157,15 @@ pub async fn send_c_commands_packet(
                 proto_nodes.push(node);
             }
             AttachedNode::Command(command_attached_node) => {
+                let name = if command_attached_node.meta.literal.starts_with("//") {
+                    &command_attached_node.meta.literal[1..]
+                } else {
+                    &command_attached_node.meta.literal
+                };
                 let node = ProtoNode {
                     children,
                     node_type: ProtoNodeType::Literal {
-                        name: &command_attached_node.meta.literal,
+                        name,
                         is_executable: command_attached_node.owned.command.is_some(),
                         redirect_target,
                         restricted: !satisfies_requirements,
@@ -178,7 +208,7 @@ pub async fn send_c_commands_packet(
     }
 
     let packet = CCommands::new(proto_nodes.into(), VarInt(root_node_index as i32));
-    player.client.enqueue_packet(&packet).await;
+    player.send_client_packet(&packet).await;
 }
 
 fn resolve_node_id(node_id: NodeId, node_id_offset: usize, root_node_index: usize) -> usize {
@@ -227,7 +257,11 @@ fn nodes_to_proto_node_builders<'a>(
     for i in children {
         let node = &nodes[*i];
         match &node.node_type {
-            NodeType::Argument { name, consumer } => {
+            NodeType::Argument {
+                name,
+                consumer,
+                suggestion_provider,
+            } => {
                 let (node_is_executable, node_children) =
                     nodes_to_proto_node_builders(cmd_src, nodes, &node.children);
                 child_nodes.push(ProtoNodeBuilder {
@@ -237,8 +271,11 @@ fn nodes_to_proto_node_builders<'a>(
                         is_executable: node_is_executable,
                         redirect_target: None,
                         parser: consumer.get_client_side_parser(),
-                        override_suggestion_type: consumer
-                            .get_client_side_suggestion_type_override(),
+                        override_suggestion_type: if suggestion_provider.is_some() {
+                            Some(SuggestionProviders::AskServer)
+                        } else {
+                            consumer.get_client_side_suggestion_type_override()
+                        },
                         restricted: false,
                     },
                 });
@@ -278,9 +315,10 @@ fn nodes_to_proto_node_builders<'a>(
 
 struct BuilderContext<'a> {
     enum_values: &'a mut Vec<String>,
-    enums: &'a mut Vec<CommandEnum>,
+    enums: &'a mut Vec<EnumData>,
 }
 
+#[expect(clippy::too_many_lines)]
 pub async fn send_bedrock_commands_packet(
     player: &Arc<Player>,
     server: &Server,
@@ -289,12 +327,16 @@ pub async fn send_bedrock_commands_packet(
     let cmd_src = super::CommandSender::Player(player.clone());
 
     let mut enum_values: Vec<String> = Vec::new();
-    let mut enums: Vec<CommandEnum> = Vec::new();
-    let mut commands: Vec<Command> = Vec::new();
+    let mut enums: Vec<EnumData> = Vec::new();
+    let mut commands: Vec<CommandData> = Vec::new();
 
     let fallback_dispatcher = &dispatcher.fallback_dispatcher;
     for key in fallback_dispatcher.commands.keys() {
         if dispatcher.is_disabled(key) {
+            continue;
+        }
+
+        if key.starts_with("//") && fallback_dispatcher.commands.contains_key(&key[1..]) {
             continue;
         }
 
@@ -317,13 +359,13 @@ pub async fn send_bedrock_commands_packet(
 
         let overloads = build_overloads_from_nodes(&tree.nodes, &tree.children, &mut ctx);
 
-        commands.push(Command {
+        commands.push(CommandData {
             name: key.clone(),
             description: String::new(),
             flags: 0,
-            permission: command_permissions::ANY.to_string(),
-            aliases_enum_index: -1,
-            chained_subcommand_offsets: Vec::new(),
+            permission_level: CommandPermissionLevel::Any.into(),
+            alias_enum: -1,
+            command_data_chained_subcommand_indexes: Vec::new(),
             overloads,
         });
     }
@@ -365,6 +407,10 @@ pub async fn send_bedrock_commands_packet(
             continue;
         }
 
+        if name.starts_with("//") && dispatcher.tree.get(&name[1..]).is_some() {
+            continue;
+        }
+
         let mut ctx = BuilderContext {
             enum_values: &mut enum_values,
             enums: &mut enums,
@@ -373,13 +419,13 @@ pub async fn send_bedrock_commands_packet(
         let overloads =
             build_overloads_from_attached_nodes(&tree_nodes, &child_ids, is_executable, &mut ctx);
 
-        commands.push(Command {
+        commands.push(CommandData {
             name,
             description: String::new(),
             flags: 0,
-            permission: command_permissions::ANY.to_string(),
-            aliases_enum_index: -1,
-            chained_subcommand_offsets: Vec::new(),
+            permission_level: CommandPermissionLevel::Any.into(),
+            alias_enum: -1,
+            command_data_chained_subcommand_indexes: Vec::new(),
             overloads,
         });
     }
@@ -387,16 +433,16 @@ pub async fn send_bedrock_commands_packet(
     let packet = CAvailableCommands {
         enum_values,
         chained_subcommand_values: Vec::new(),
-        suffixes: Vec::new(),
-        chained_subcommands: Vec::new(),
-        enums,
+        post_fixes: Vec::new(),
+        chained_subcommand_data: Vec::new(),
+        enum_data: enums,
         commands,
         soft_enums: Vec::new(),
         constraints: Vec::new(),
     };
 
     if let crate::net::ClientPlatform::Bedrock(bedrock_client) = player.client.as_ref() {
-        bedrock_client.send_game_packet(&packet).await;
+        bedrock_client.send_packet(&packet).await;
     }
 }
 
@@ -404,13 +450,13 @@ fn build_overloads_from_nodes(
     nodes: &[Node],
     children: &[usize],
     ctx: &mut BuilderContext,
-) -> Vec<CommandOverload> {
+) -> Vec<OverloadData> {
     let mut overloads = Vec::new();
     collect_overloads_from_nodes(nodes, children, &mut Vec::new(), &mut overloads, ctx);
     if overloads.is_empty() {
-        overloads.push(CommandOverload {
-            chaining: false,
-            parameters: Vec::new(),
+        overloads.push(OverloadData {
+            is_chaining: false,
+            parameter_data: Vec::new(),
         });
     }
     overloads
@@ -419,8 +465,8 @@ fn build_overloads_from_nodes(
 fn collect_overloads_from_nodes(
     nodes: &[Node],
     children: &[usize],
-    current_params: &mut Vec<CommandParameter>,
-    overloads: &mut Vec<CommandOverload>,
+    current_params: &mut Vec<ParamData>,
+    overloads: &mut Vec<OverloadData>,
     ctx: &mut BuilderContext,
 ) {
     let mut has_executable = false;
@@ -439,22 +485,22 @@ fn collect_overloads_from_nodes(
                     std::slice::from_ref(string),
                 );
                 let mut params = current_params.clone();
-                params.push(CommandParameter {
+                params.push(ParamData {
                     name: string.clone(),
-                    type_info: arg_flags::ARG_FLAG_VALID
+                    parse_symbol: arg_flags::ARG_FLAG_VALID
                         | arg_flags::ARG_FLAG_ENUM
                         | enum_idx as u32,
-                    optional: false,
+                    is_optional: false,
                     options: 0,
                 });
                 collect_overloads_from_nodes(nodes, &node.children, &mut params, overloads, ctx);
             }
-            NodeType::Argument { name, consumer } => {
+            NodeType::Argument { name, consumer, .. } => {
                 let mut params = current_params.clone();
-                params.push(CommandParameter {
+                params.push(ParamData {
                     name: name.clone(),
-                    type_info: bedrock_param_type(&consumer.get_client_side_parser()),
-                    optional: false,
+                    parse_symbol: bedrock_param_type(&consumer.get_client_side_parser()),
+                    is_optional: false,
                     options: 0,
                 });
                 collect_overloads_from_nodes(nodes, &node.children, &mut params, overloads, ctx);
@@ -466,9 +512,9 @@ fn collect_overloads_from_nodes(
     }
 
     if has_executable {
-        overloads.push(CommandOverload {
-            chaining: false,
-            parameters: current_params.clone(),
+        overloads.push(OverloadData {
+            is_chaining: false,
+            parameter_data: current_params.clone(),
         });
     }
 }
@@ -478,19 +524,19 @@ fn build_overloads_from_attached_nodes(
     child_ids: &[NodeId],
     is_root_executable: bool,
     ctx: &mut BuilderContext,
-) -> Vec<CommandOverload> {
+) -> Vec<OverloadData> {
     let mut overloads = Vec::new();
     if is_root_executable {
-        overloads.push(CommandOverload {
-            chaining: false,
-            parameters: Vec::new(),
+        overloads.push(OverloadData {
+            is_chaining: false,
+            parameter_data: Vec::new(),
         });
     }
     collect_overloads_from_attached(tree, child_ids, &Vec::new(), &mut overloads, ctx);
     if overloads.is_empty() {
-        overloads.push(CommandOverload {
-            chaining: false,
-            parameters: Vec::new(),
+        overloads.push(OverloadData {
+            is_chaining: false,
+            parameter_data: Vec::new(),
         });
     }
     overloads
@@ -499,8 +545,8 @@ fn build_overloads_from_attached_nodes(
 fn collect_overloads_from_attached(
     tree: &[&AttachedNode],
     child_ids: &[NodeId],
-    current_params: &[CommandParameter],
-    overloads: &mut Vec<CommandOverload>,
+    current_params: &[ParamData],
+    overloads: &mut Vec<OverloadData>,
     ctx: &mut BuilderContext,
 ) {
     for &child_id in child_ids {
@@ -517,19 +563,19 @@ fn collect_overloads_from_attached(
                     &[name.to_string()],
                 );
                 let mut params = current_params.to_vec();
-                params.push(CommandParameter {
+                params.push(ParamData {
                     name: name.to_string(),
-                    type_info: arg_flags::ARG_FLAG_VALID
+                    parse_symbol: arg_flags::ARG_FLAG_VALID
                         | arg_flags::ARG_FLAG_ENUM
                         | enum_idx as u32,
-                    optional: false,
+                    is_optional: false,
                     options: 0,
                 });
                 let grandchild_ids: Vec<NodeId> = node.children_ref().values().copied().collect();
                 if lit.owned.command.is_some() {
-                    overloads.push(CommandOverload {
-                        chaining: false,
-                        parameters: params.clone(),
+                    overloads.push(OverloadData {
+                        is_chaining: false,
+                        parameter_data: params.clone(),
                     });
                 }
                 collect_overloads_from_attached(tree, &grandchild_ids, &params, overloads, ctx);
@@ -543,19 +589,19 @@ fn collect_overloads_from_attached(
                     &[name.to_string()],
                 );
                 let mut params = current_params.to_vec();
-                params.push(CommandParameter {
+                params.push(ParamData {
                     name: name.to_string(),
-                    type_info: arg_flags::ARG_FLAG_VALID
+                    parse_symbol: arg_flags::ARG_FLAG_VALID
                         | arg_flags::ARG_FLAG_ENUM
                         | enum_idx as u32,
-                    optional: false,
+                    is_optional: false,
                     options: 0,
                 });
                 let grandchild_ids: Vec<NodeId> = node.children_ref().values().copied().collect();
                 if cmd.owned.command.is_some() {
-                    overloads.push(CommandOverload {
-                        chaining: false,
-                        parameters: params.clone(),
+                    overloads.push(OverloadData {
+                        is_chaining: false,
+                        parameter_data: params.clone(),
                     });
                 }
                 collect_overloads_from_attached(tree, &grandchild_ids, &params, overloads, ctx);
@@ -563,17 +609,17 @@ fn collect_overloads_from_attached(
             AttachedNode::Argument(arg) => {
                 let parser = arg.meta.argument_type.client_side_parser();
                 let mut params = current_params.to_vec();
-                params.push(CommandParameter {
+                params.push(ParamData {
                     name: arg.meta.name.to_string(),
-                    type_info: bedrock_param_type(&parser),
-                    optional: false,
+                    parse_symbol: bedrock_param_type(&parser),
+                    is_optional: false,
                     options: 0,
                 });
                 let grandchild_ids: Vec<NodeId> = node.children_ref().values().copied().collect();
                 if arg.owned.command.is_some() {
-                    overloads.push(CommandOverload {
-                        chaining: false,
-                        parameters: params.clone(),
+                    overloads.push(OverloadData {
+                        is_chaining: false,
+                        parameter_data: params.clone(),
                     });
                 }
                 collect_overloads_from_attached(tree, &grandchild_ids, &params, overloads, ctx);
@@ -595,7 +641,7 @@ fn ensure_enum_value(enum_values: &mut Vec<String>, value: &str) -> u32 {
 }
 
 fn ensure_command_enum(
-    enums: &mut Vec<CommandEnum>,
+    enums: &mut Vec<EnumData>,
     enum_values: &mut Vec<String>,
     name: &str,
     values: &[String],
@@ -604,14 +650,12 @@ fn ensure_command_enum(
         return pos;
     }
 
-    let value_indices: Vec<u32> = values
-        .iter()
-        .map(|val| ensure_enum_value(enum_values, val))
-        .collect();
-
-    enums.push(CommandEnum {
+    enums.push(EnumData {
         name: name.to_string(),
-        value_indices,
+        values: values
+            .iter()
+            .map(|val| ensure_enum_value(enum_values, val))
+            .collect(),
     });
 
     enums.len() - 1

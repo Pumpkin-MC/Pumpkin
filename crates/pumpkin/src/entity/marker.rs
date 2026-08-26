@@ -2,7 +2,7 @@ use std::sync::{Arc, atomic::Ordering};
 use tokio::sync::Mutex;
 
 use crate::{
-    entity::{Entity, EntityBase, EntityBaseFuture, NBTStorage, NbtFuture, living::LivingEntity},
+    entity::{Entity, EntityBase, EntityBaseFuture, NbtFuture, living::LivingEntity},
     net::{bedrock::BedrockClient, java::JavaClient},
     server::Server,
 };
@@ -25,10 +25,9 @@ impl MarkerEntity {
     }
 }
 
-impl NBTStorage for MarkerEntity {
-    fn write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
+impl EntityBase for MarkerEntity {
+    fn write_custom_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async move {
-            self.entity.write_nbt(nbt).await;
             let data = self.data.lock().await;
             if !data.is_empty() {
                 nbt.put("data", NbtTag::Compound(data.clone()));
@@ -36,26 +35,14 @@ impl NBTStorage for MarkerEntity {
         })
     }
 
-    fn read_nbt<'a>(&'a mut self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
+    fn read_custom_nbt<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async move {
-            self.entity.read_nbt(nbt).await;
             if let Some(data) = nbt.get_compound("data") {
                 *self.data.lock().await = data.clone();
             }
         })
     }
 
-    fn read_nbt_non_mut<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
-        Box::pin(async move {
-            self.entity.read_nbt_non_mut(nbt).await;
-            if let Some(data) = nbt.get_compound("data") {
-                *self.data.lock().await = data.clone();
-            }
-        })
-    }
-}
-
-impl EntityBase for MarkerEntity {
     fn tick<'a>(
         &'a self,
         _caller: &'a Arc<dyn EntityBase>,
@@ -74,10 +61,6 @@ impl EntityBase for MarkerEntity {
 
     fn get_living_entity(&self) -> Option<&LivingEntity> {
         None
-    }
-
-    fn as_nbt_storage(&self) -> &dyn NBTStorage {
-        self
     }
 
     fn cast_any(&self) -> &dyn std::any::Any {

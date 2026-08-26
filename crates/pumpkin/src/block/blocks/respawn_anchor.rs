@@ -55,14 +55,18 @@ impl BlockBehaviour for RespawnAnchorBlock {
     fn normal_use<'a>(&'a self, args: NormalUseArgs<'a>) -> BlockFuture<'a, BlockActionResult> {
         Box::pin(async move {
             let state_id = args.world.get_block_state_id(args.position);
-            let mut props = RespawnAnchorLikeProperties::from_state_id(state_id, args.block);
+            let props = RespawnAnchorLikeProperties::from_state_id(state_id, args.block);
 
             if args.world.dimension != Dimension::THE_NETHER {
                 args.world
                     .break_block(args.position, None, BlockFlags::SKIP_DROPS)
                     .await;
                 args.world
-                    .explode(args.position.to_centered_f64(), 5.0)
+                    .explode(
+                        args.position.to_centered_f64(),
+                        5.0,
+                        crate::world::ExplosionInteraction::Block,
+                    )
                     .await;
                 return BlockActionResult::SuccessServer;
             }
@@ -88,15 +92,6 @@ impl BlockBehaviour for RespawnAnchorBlock {
                 )
                 .await
             {
-                props.charges -= 1;
-                args.world
-                    .set_block_state(
-                        args.position,
-                        props.to_state_id(args.block),
-                        BlockFlags::NOTIFY_ALL,
-                    )
-                    .await;
-
                 args.world.play_sound(
                     Sound::BlockRespawnAnchorSetSpawn,
                     SoundCategory::Blocks,

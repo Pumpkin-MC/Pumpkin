@@ -141,8 +141,7 @@ impl CommandBlock {
 
             server
                 .command_dispatcher
-                .read()
-                .await
+                .load()
                 .handle_command(&source, command)
                 .await;
         }

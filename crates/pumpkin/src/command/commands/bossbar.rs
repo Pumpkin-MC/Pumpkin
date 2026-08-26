@@ -9,9 +9,11 @@ use crate::command::args::{ConsumedArgs, FindArg, FindArgDefaultName};
 
 use crate::command::args::textcomponent::TextComponentArgConsumer;
 use crate::command::dispatcher::CommandError;
-use crate::command::tree::CommandTree;
+use crate::command::suggestion::suggestions::SuggestionsBuilder;
 use crate::command::tree::builder::{argument, argument_default_name, literal};
+use crate::command::tree::{CommandSuggestionProvider, CommandSuggestionResult, CommandTree};
 use crate::command::{CommandExecutor, CommandResult, CommandSender};
+use crate::server::Server;
 use crate::world::bossbar::Bossbar;
 use crate::world::custom_bossbar::BossbarUpdateError;
 use pumpkin_data::translation;
@@ -20,15 +22,39 @@ use pumpkin_util::text::hover::HoverEvent;
 use uuid::Uuid;
 
 const NAMES: [&str; 1] = ["bossbar"];
-const DESCRIPTION: &str = "Display bossbar";
+const DESCRIPTION: &str = "Creates and modifies boss bars";
 
 const ARG_NAME: &str = "name";
 
 const ARG_VISIBLE: &str = "visible";
 
 const fn autocomplete_consumer() -> ResourceLocationArgumentConsumer {
-    // TODO: Add autocompletion when implemented properly
     ResourceLocationArgumentConsumer
+}
+
+struct BossbarSuggestionProvider;
+
+impl CommandSuggestionProvider for BossbarSuggestionProvider {
+    fn suggest<'a>(
+        &'a self,
+        _src: &'a CommandSender,
+        server: &'a Server,
+        input: &'a str,
+        start: usize,
+        _end: usize,
+    ) -> CommandSuggestionResult<'a> {
+        Box::pin(async move {
+            let mut builder = SuggestionsBuilder::new(input, start);
+            let bossbars = server.bossbars.lock().await;
+            let remaining = builder.remaining_lowercase().to_string();
+            for key in bossbars.custom_bossbars.keys() {
+                if key.to_lowercase().starts_with(&remaining) {
+                    builder = builder.suggest(key.clone());
+                }
+            }
+            builder.build()
+        })
+    }
 }
 
 enum CommandValueGet {
@@ -58,12 +84,9 @@ impl CommandExecutor for AddExecutor {
         args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {
-            let mut namespace = autocomplete_consumer()
+            let namespace = autocomplete_consumer()
                 .find_arg_default_name(args)?
                 .to_string();
-            if !namespace.contains(':') {
-                namespace = format!("minecraft:{namespace}");
-            }
 
             let text_component = TextComponentArgConsumer::find_arg(args, ARG_NAME)?;
 
@@ -98,6 +121,7 @@ impl CommandExecutor for AddExecutor {
 struct GetExecutor(CommandValueGet);
 
 impl CommandExecutor for GetExecutor {
+    #[expect(clippy::too_many_lines)]
     fn execute<'a>(
         &'a self,
         sender: &'a CommandSender,
@@ -132,7 +156,48 @@ impl CommandExecutor for GetExecutor {
                         .await;
                     Ok(bossbar.max)
                 }
-                CommandValueGet::Players => Ok(bossbar.players.len() as i32),
+                CommandValueGet::Players => {
+                    let online_players: Vec<String> = server
+                        .get_all_players()
+                        .iter()
+                        .filter(|player| bossbar.players.contains(&player.gameprofile.id))
+                        .map(|player| player.gameprofile.name.clone())
+                        .collect();
+                    let count = online_players.len() as i32;
+
+                    if count == 0 {
+                        sender
+                            .send_message(TextComponent::translate_cross(
+                                translation::java::COMMANDS_BOSSBAR_GET_PLAYERS_NONE,
+                                translation::bedrock::COMMANDS_BOSSBAR_GET_PLAYERS_NONE,
+                                [bossbar_prefix(
+                                    bossbar.bossbar_data.title.clone(),
+                                    namespace.clone(),
+                                )],
+                            ))
+                            .await;
+                    } else {
+                        sender
+                            .send_message(TextComponent::translate_cross(
+                                translation::java::COMMANDS_BOSSBAR_GET_PLAYERS_SOME,
+                                if count == 1 {
+                                    translation::bedrock::COMMANDS_BOSSBAR_GET_PLAYERS_ONE
+                                } else {
+                                    translation::bedrock::COMMANDS_BOSSBAR_GET_PLAYERS
+                                },
+                                [
+                                    bossbar_prefix(
+                                        bossbar.bossbar_data.title.clone(),
+                                        namespace.clone(),
+                                    ),
+                                    TextComponent::text(count.to_string()),
+                                    TextComponent::text(online_players.join(", ")),
+                                ],
+                            ))
+                            .await;
+                    }
+                    Ok(count)
+                }
                 CommandValueGet::Value => {
                     sender
                         .send_message(TextComponent::translate_cross(
@@ -152,12 +217,12 @@ impl CommandExecutor for GetExecutor {
                 CommandValueGet::Visible => {
                     let (java_key, bedrock_key) = if bossbar.visible {
                         (
-                            translation::java::COMMANDS_BOSSBAR_SET_VISIBLE_SUCCESS_VISIBLE,
+                            translation::java::COMMANDS_BOSSBAR_GET_VISIBLE_VISIBLE,
                             translation::bedrock::COMMANDS_BOSSBAR_GET_VISIBLE_TRUE,
                         )
                     } else {
                         (
-                            translation::java::COMMANDS_BOSSBAR_SET_VISIBLE_SUCCESS_HIDDEN,
+                            translation::java::COMMANDS_BOSSBAR_GET_VISIBLE_HIDDEN,
                             translation::bedrock::COMMANDS_BOSSBAR_GET_VISIBLE_FALSE,
                         )
                     };
@@ -270,7 +335,7 @@ impl CommandExecutor for RemoveExecutor {
                     .bossbars
                     .lock()
                     .await
-                    .remove_bossbar(server, namespace.clone())
+                    .remove_bossbar(server, namespace)
                     .await
                 {
                     Ok(()) => return Ok(server.bossbars.lock().await.get_bossbars_len() as i32),
@@ -294,11 +359,13 @@ impl CommandExecutor for SetExecutor {
         args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {
-            let namespace = autocomplete_consumer().find_arg_default_name(args)?;
+            let namespace = autocomplete_consumer()
+                .find_arg_default_name(args)?
+                .to_string();
 
-            let Some(bossbar) = server.bossbars.lock().await.get_bossbar(namespace) else {
+            let Some(bossbar) = server.bossbars.lock().await.get_bossbar(&namespace) else {
                 return Err(handle_bossbar_error(
-                    BossbarUpdateError::InvalidResourceLocation(namespace.to_string()),
+                    BossbarUpdateError::InvalidResourceLocation(namespace),
                 ));
             };
 
@@ -310,7 +377,7 @@ impl CommandExecutor for SetExecutor {
                         .bossbars
                         .lock()
                         .await
-                        .update_color(server, namespace.to_string(), *color)
+                        .update_color(server, namespace.clone(), *color)
                         .await
                     {
                         Ok(()) => {}
@@ -321,11 +388,11 @@ impl CommandExecutor for SetExecutor {
 
                     sender
                         .send_message(TextComponent::translate_cross(
-                            "commands.bossbar.set.color.success",
-                            "commands.bossbar.set.color.success",
+                            translation::java::COMMANDS_BOSSBAR_SET_COLOR_SUCCESS,
+                            translation::java::COMMANDS_BOSSBAR_SET_COLOR_SUCCESS,
                             [bossbar_prefix(
                                 bossbar.bossbar_data.title.clone(),
-                                namespace.to_string(),
+                                namespace,
                             )],
                         ))
                         .await;
@@ -345,7 +412,7 @@ impl CommandExecutor for SetExecutor {
                         .bossbars
                         .lock()
                         .await
-                        .update_health(server, namespace.to_string(), max_value, bossbar.value)
+                        .update_max(server, namespace.clone(), max_value)
                         .await
                     {
                         Ok(()) => {}
@@ -356,13 +423,10 @@ impl CommandExecutor for SetExecutor {
 
                     sender
                         .send_message(TextComponent::translate_cross(
-                            "commands.bossbar.set.max.success",
-                            "commands.bossbar.set.max.success",
+                            translation::java::COMMANDS_BOSSBAR_SET_MAX_SUCCESS,
+                            translation::java::COMMANDS_BOSSBAR_SET_MAX_SUCCESS,
                             [
-                                bossbar_prefix(
-                                    bossbar.bossbar_data.title.clone(),
-                                    namespace.to_string(),
-                                ),
+                                bossbar_prefix(bossbar.bossbar_data.title.clone(), namespace),
                                 TextComponent::text(max_value.to_string()),
                             ],
                         ))
@@ -376,7 +440,7 @@ impl CommandExecutor for SetExecutor {
                         .bossbars
                         .lock()
                         .await
-                        .update_name(server, namespace, text_component.clone())
+                        .update_name(server, &namespace, text_component.clone())
                         .await
                     {
                         Ok(()) => {}
@@ -387,9 +451,9 @@ impl CommandExecutor for SetExecutor {
 
                     sender
                         .send_message(TextComponent::translate_cross(
-                            "commands.bossbar.set.name.success",
-                            "commands.bossbar.set.name.success",
-                            [bossbar_prefix(text_component, namespace.to_string())],
+                            translation::java::COMMANDS_BOSSBAR_SET_NAME_SUCCESS,
+                            translation::java::COMMANDS_BOSSBAR_SET_NAME_SUCCESS,
+                            [bossbar_prefix(text_component, namespace)],
                         ))
                         .await;
 
@@ -401,7 +465,7 @@ impl CommandExecutor for SetExecutor {
                             .bossbars
                             .lock()
                             .await
-                            .update_players(server, namespace.to_string(), vec![])
+                            .update_players(server, namespace.clone(), vec![])
                             .await
                         {
                             Ok(()) => {}
@@ -411,11 +475,11 @@ impl CommandExecutor for SetExecutor {
                         }
                         sender
                             .send_message(TextComponent::translate_cross(
-                                "commands.bossbar.set.players.success.none",
-                                "commands.bossbar.set.players.success.none",
+                                translation::java::COMMANDS_BOSSBAR_SET_PLAYERS_SUCCESS_NONE,
+                                translation::java::COMMANDS_BOSSBAR_SET_PLAYERS_SUCCESS_NONE,
                                 [bossbar_prefix(
                                     bossbar.bossbar_data.title.clone(),
-                                    namespace.to_string(),
+                                    namespace,
                                 )],
                             ))
                             .await;
@@ -432,7 +496,7 @@ impl CommandExecutor for SetExecutor {
                         .bossbars
                         .lock()
                         .await
-                        .update_players(server, namespace.to_string(), players)
+                        .update_players(server, namespace.clone(), players)
                         .await
                     {
                         Ok(()) => {}
@@ -449,13 +513,10 @@ impl CommandExecutor for SetExecutor {
 
                     sender
                         .send_message(TextComponent::translate_cross(
-                            "commands.bossbar.set.players.success.some",
-                            "commands.bossbar.set.players.success.some",
+                            translation::java::COMMANDS_BOSSBAR_SET_PLAYERS_SUCCESS_SOME,
+                            translation::java::COMMANDS_BOSSBAR_SET_PLAYERS_SUCCESS_SOME,
                             [
-                                bossbar_prefix(
-                                    bossbar.bossbar_data.title.clone(),
-                                    namespace.to_string(),
-                                ),
+                                bossbar_prefix(bossbar.bossbar_data.title.clone(), namespace),
                                 TextComponent::text(count.to_string()),
                                 TextComponent::text(player_names),
                             ],
@@ -470,7 +531,7 @@ impl CommandExecutor for SetExecutor {
                         .bossbars
                         .lock()
                         .await
-                        .update_division(server, namespace.to_string(), *style)
+                        .update_division(server, namespace.clone(), *style)
                         .await
                     {
                         Ok(()) => {}
@@ -480,11 +541,11 @@ impl CommandExecutor for SetExecutor {
                     }
                     sender
                         .send_message(TextComponent::translate_cross(
-                            "commands.bossbar.set.style.success",
-                            "commands.bossbar.set.style.success",
+                            translation::java::COMMANDS_BOSSBAR_SET_STYLE_SUCCESS,
+                            translation::java::COMMANDS_BOSSBAR_SET_STYLE_SUCCESS,
                             [bossbar_prefix(
                                 bossbar.bossbar_data.title.clone(),
-                                namespace.to_string(),
+                                namespace,
                             )],
                         ))
                         .await;
@@ -503,7 +564,7 @@ impl CommandExecutor for SetExecutor {
                         .bossbars
                         .lock()
                         .await
-                        .update_health(server, namespace.to_string(), bossbar.max, value)
+                        .update_value(server, namespace.clone(), value)
                         .await
                     {
                         Ok(()) => {}
@@ -514,13 +575,10 @@ impl CommandExecutor for SetExecutor {
 
                     sender
                         .send_message(TextComponent::translate_cross(
-                            "commands.bossbar.set.value.success",
-                            "commands.bossbar.set.value.success",
+                            translation::java::COMMANDS_BOSSBAR_SET_VALUE_SUCCESS,
+                            translation::java::COMMANDS_BOSSBAR_SET_VALUE_SUCCESS,
                             [
-                                bossbar_prefix(
-                                    bossbar.bossbar_data.title.clone(),
-                                    namespace.to_string(),
-                                ),
+                                bossbar_prefix(bossbar.bossbar_data.title.clone(), namespace),
                                 TextComponent::text(value.to_string()),
                             ],
                         ))
@@ -535,7 +593,7 @@ impl CommandExecutor for SetExecutor {
                         .bossbars
                         .lock()
                         .await
-                        .update_visibility(server, namespace.to_string(), visibility)
+                        .update_visibility(server, namespace.clone(), visibility)
                         .await
                     {
                         Ok(()) => {}
@@ -545,9 +603,9 @@ impl CommandExecutor for SetExecutor {
                     }
 
                     let state = if visibility {
-                        "commands.bossbar.set.visible.success.visible"
+                        translation::java::COMMANDS_BOSSBAR_SET_VISIBLE_SUCCESS_VISIBLE
                     } else {
-                        "commands.bossbar.set.visible.success.hidden"
+                        translation::java::COMMANDS_BOSSBAR_SET_VISIBLE_SUCCESS_HIDDEN
                     };
 
                     sender
@@ -556,12 +614,12 @@ impl CommandExecutor for SetExecutor {
                             state,
                             [bossbar_prefix(
                                 bossbar.bossbar_data.title.clone(),
-                                namespace.to_string(),
+                                namespace,
                             )],
                         ))
                         .await;
 
-                    Ok(visibility as i32)
+                    Ok(0)
                 }
             }
         })
@@ -587,6 +645,7 @@ pub fn init_command_tree() -> CommandTree {
         .then(
             literal("get").then(
                 argument_default_name(autocomplete_consumer())
+                    .suggests(BossbarSuggestionProvider)
                     .then(literal("max").execute(GetExecutor(CommandValueGet::Max)))
                     .then(literal("players").execute(GetExecutor(CommandValueGet::Players)))
                     .then(literal("value").execute(GetExecutor(CommandValueGet::Value)))
@@ -595,12 +654,16 @@ pub fn init_command_tree() -> CommandTree {
         )
         .then(literal("list").execute(ListExecutor))
         .then(
-            literal("remove")
-                .then(argument_default_name(autocomplete_consumer()).execute(RemoveExecutor)),
+            literal("remove").then(
+                argument_default_name(autocomplete_consumer())
+                    .suggests(BossbarSuggestionProvider)
+                    .execute(RemoveExecutor),
+            ),
         )
         .then(
             literal("set").then(
                 argument_default_name(autocomplete_consumer())
+                    .suggests(BossbarSuggestionProvider)
                     .then(
                         literal("color").then(
                             argument_default_name(BossbarColorArgumentConsumer)

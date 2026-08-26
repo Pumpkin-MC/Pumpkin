@@ -20,7 +20,8 @@ use crate::world_info::{
     data_files::{
         minecraft_data_dir, read_game_rules, read_wandering_trader, read_weather,
         read_world_clocks, read_world_gen_settings, write_custom_boss_events_stub,
-        write_game_rules, write_scheduled_events_stub, write_wandering_trader, write_weather,
+        write_game_rules, write_random_sequences_stub, write_scheduled_events_stub,
+        write_scoreboard_stub, write_stopwatches_stub, write_wandering_trader, write_weather,
         write_world_clocks, write_world_gen_settings,
     },
     default_data_packs,
@@ -189,6 +190,24 @@ fn update_world_border_from_nbt(level_data: &mut LevelData, data: &NbtCompound) 
 }
 
 fn update_spawn_from_nbt(level_data: &mut LevelData, data: &NbtCompound) {
+    if let Some(spawn_comp) = data.get_compound("spawn") {
+        if let Some(pos) = spawn_comp.get_int_array("pos")
+            && pos.len() >= 3
+        {
+            level_data.spawn_x = pos[0];
+            level_data.spawn_y = pos[1];
+            level_data.spawn_z = pos[2];
+        }
+        if let Some(spawn_yaw) = spawn_comp
+            .get_float("yaw")
+            .or_else(|| spawn_comp.get_float("SpawnAngle"))
+        {
+            level_data.spawn_yaw = spawn_yaw;
+        }
+        if let Some(spawn_pitch) = spawn_comp.get_float("pitch") {
+            level_data.spawn_pitch = spawn_pitch;
+        }
+    }
     if let Some(spawn_x) = data.get_int("SpawnX") {
         level_data.spawn_x = spawn_x;
     }
@@ -224,11 +243,26 @@ fn level_data_from_nbt(data: &NbtCompound, seed: i64) -> LevelData {
     if let Some(data_version) = data.get_int("DataVersion") {
         level_data.data_version = data_version;
     }
-    if let Some(difficulty) = data.get_byte("Difficulty").and_then(difficulty_from_id) {
-        level_data.difficulty = difficulty;
-    }
-    if let Some(difficulty_locked) = data.get_bool("DifficultyLocked") {
-        level_data.difficulty_locked = difficulty_locked;
+    if let Some(diff_comp) = data.get_compound("difficulty_settings") {
+        if let Some(diff_str) = diff_comp.get_string("difficulty") {
+            match diff_str {
+                "peaceful" => level_data.difficulty = Difficulty::Peaceful,
+                "easy" => level_data.difficulty = Difficulty::Easy,
+                "normal" => level_data.difficulty = Difficulty::Normal,
+                "hard" => level_data.difficulty = Difficulty::Hard,
+                _ => {}
+            }
+        }
+        if let Some(difficulty_locked) = diff_comp.get_bool("locked") {
+            level_data.difficulty_locked = difficulty_locked;
+        }
+    } else {
+        if let Some(difficulty) = data.get_byte("Difficulty").and_then(difficulty_from_id) {
+            level_data.difficulty = difficulty;
+        }
+        if let Some(difficulty_locked) = data.get_bool("DifficultyLocked") {
+            level_data.difficulty_locked = difficulty_locked;
+        }
     }
     if let Some(last_played) = data.get_long("LastPlayed") {
         level_data.last_played = last_played;
@@ -268,10 +302,36 @@ fn level_data_to_nbt(info: &LevelData, data: &mut NbtCompound) {
     data.put_double("BorderWarningTime", info.border_warning_time);
     data.put_compound("DataPacks", data_packs_to_nbt(&info.data_packs));
     data.put_int("DataVersion", info.data_version);
+
+    // 26.2 difficulty_settings
+    let mut diff_comp = NbtCompound::new();
+    let diff_name = match info.difficulty {
+        Difficulty::Peaceful => "peaceful",
+        Difficulty::Easy => "easy",
+        Difficulty::Normal => "normal",
+        Difficulty::Hard => "hard",
+    };
+    diff_comp.put_string("difficulty", diff_name.to_string());
+    diff_comp.put_bool("hardcore", false);
+    diff_comp.put_bool("locked", info.difficulty_locked);
+    data.put_compound("difficulty_settings", diff_comp);
+
     data.put_byte("Difficulty", info.difficulty as i8);
     data.put_bool("DifficultyLocked", info.difficulty_locked);
     data.put_long("LastPlayed", info.last_played);
     data.put_string("LevelName", info.level_name.clone());
+
+    // 26.2 spawn
+    let mut spawn_comp = NbtCompound::new();
+    spawn_comp.put_string("dimension", "minecraft:overworld".to_string());
+    spawn_comp.put(
+        "pos",
+        NbtTag::IntArray(vec![info.spawn_x, info.spawn_y, info.spawn_z]),
+    );
+    spawn_comp.put_float("pitch", info.spawn_pitch);
+    spawn_comp.put_float("yaw", info.spawn_yaw);
+    data.put_compound("spawn", spawn_comp);
+
     data.put_int("SpawnX", info.spawn_x);
     data.put_int("SpawnY", info.spawn_y);
     data.put_int("SpawnZ", info.spawn_z);
@@ -318,6 +378,10 @@ impl WorldInfoReader for AnvilLevelInfo {
 
         let mut level_data = level_data_from_nbt(data, seed);
 
+        if let Some(wgs) = read_world_gen_settings(level_folder) {
+            level_data.world_gen_settings = wgs;
+        }
+
         // game_rules.dat – prefer the new file; fall back to level.dat values
         if minecraft_data_dir(level_folder)
             .join("game_rules.dat")
@@ -363,6 +427,8 @@ impl WorldInfoWriter for AnvilLevelInfo {
 
         // ── Write level.dat ───────────────────────────────────────────────────
         let path = level_folder.join(LEVEL_DAT_FILE_NAME);
+        let path_new = level_folder.join("level.dat_new");
+        let path_old = level_folder.join(LEVEL_DAT_BACKUP_FILE_NAME);
 
         let mut root = existing_level_dat_root(&path)?;
         let mut data_comp = root
@@ -372,8 +438,13 @@ impl WorldInfoWriter for AnvilLevelInfo {
         level_data_to_nbt(&level_data, &mut data_comp);
         root.put_compound(LEVEL_DATA_TAG, data_comp);
 
-        write_gzip_compound_tag(root, File::create(path)?)
+        write_gzip_compound_tag(root, File::create(&path_new)?)
             .map_err(|e| WorldInfoError::SerializationError(e.to_string()))?;
+
+        if path.exists() {
+            let _ = std::fs::copy(&path, &path_old);
+        }
+        let _ = std::fs::rename(&path_new, &path);
 
         let data_version = level_data.data_version;
 
@@ -431,6 +502,21 @@ impl WorldInfoWriter for AnvilLevelInfo {
             error!("Failed to write scheduled_events.dat: {e}");
         }
 
+        // random_sequences.dat
+        if let Err(e) = write_random_sequences_stub(level_folder, data_version) {
+            error!("Failed to write random_sequences.dat: {e}");
+        }
+
+        // scoreboard.dat
+        if let Err(e) = write_scoreboard_stub(level_folder, data_version) {
+            error!("Failed to write scoreboard.dat: {e}");
+        }
+
+        // stopwatches.dat
+        if let Err(e) = write_stopwatches_stub(level_folder, data_version) {
+            error!("Failed to write stopwatches.dat: {e}");
+        }
+
         Ok(())
     }
 }
@@ -465,7 +551,7 @@ mod test {
             DataPacks, LevelData, MAXIMUM_SUPPORTED_LEVEL_VERSION,
             MAXIMUM_SUPPORTED_WORLD_DATA_VERSION, MINIMUM_SUPPORTED_LEVEL_VERSION,
             MINIMUM_SUPPORTED_WORLD_DATA_VERSION, WorldGenSettings, WorldInfoError, WorldVersion,
-            data_files::minecraft_data_dir,
+            data_files::{minecraft_data_dir, read_world_gen_settings, write_world_gen_settings},
         },
     };
 
@@ -812,5 +898,140 @@ mod test {
 
         let bytes = pumpkin_nbt::Nbt::from(root).write();
         assert!(!bytes.is_empty());
+    }
+
+    #[test]
+    fn spawn_and_difficulty_format_26_2() {
+        let temp_dir = TempDir::new().unwrap();
+
+        let mut data_comp = NbtCompound::new();
+        data_comp.put_int("DataVersion", 4903);
+        data_comp.put_int("version", 19133);
+        data_comp.put_string("LevelName", "26.2 Test".to_string());
+        data_comp.put_long("LastPlayed", 123456789);
+        data_comp.put_long("DayTime", 1000);
+
+        // 26.2 difficulty_settings compound
+        let mut diff_comp = NbtCompound::new();
+        diff_comp.put_string("difficulty", "hard".to_string());
+        diff_comp.put_bool("locked", true);
+        diff_comp.put_bool("hardcore", false);
+        data_comp.put_compound("difficulty_settings", diff_comp);
+
+        // 26.2 spawn compound
+        let mut spawn_comp = NbtCompound::new();
+        spawn_comp.put_string("dimension", "minecraft:overworld".to_string());
+        spawn_comp.put("pos", NbtTag::IntArray(vec![42, -60, 99]));
+        spawn_comp.put_float("pitch", 15.0);
+        spawn_comp.put_float("yaw", 180.0);
+        data_comp.put_compound("spawn", spawn_comp);
+
+        let mut root = NbtCompound::new();
+        root.put_compound("Data", data_comp);
+        write_level_dat(temp_dir.path(), root);
+
+        // Write world_gen_settings.dat
+        let mut wgs = WorldGenSettings::new(Seed(777));
+        wgs.dimensions.insert(
+            "minecraft:overworld".to_string(),
+            crate::world_info::Dimension {
+                generator: crate::world_info::Generator {
+                    settings: Some(crate::world_info::GeneratorSettings::Compound(
+                        serde_json::json!({
+                            "biome": "minecraft:the_void",
+                            "layers": [
+                                { "block": "minecraft:air", "height": 1 }
+                            ]
+                        }),
+                    )),
+                    biome_source: None,
+                    generator_type: "minecraft:flat".to_string(),
+                },
+                dimension_type: "minecraft:overworld".to_string(),
+            },
+        );
+        write_world_gen_settings(temp_dir.path(), &wgs, 4903).unwrap();
+
+        let loaded = AnvilLevelInfo.read_world_info(temp_dir.path()).unwrap();
+        assert_eq!(loaded.spawn_x, 42);
+        assert_eq!(loaded.spawn_y, -60);
+        assert_eq!(loaded.spawn_z, 99);
+        assert_eq!(loaded.spawn_pitch, 15.0);
+        assert_eq!(loaded.spawn_yaw, 180.0);
+        assert_eq!(loaded.difficulty, Difficulty::Hard);
+        assert!(loaded.difficulty_locked);
+
+        let read_wgs = read_world_gen_settings(temp_dir.path()).unwrap();
+        assert_eq!(read_wgs.seed, 777);
+        let overworld_dim = read_wgs.dimensions.get("minecraft:overworld").unwrap();
+        assert_eq!(overworld_dim.generator.generator_type, "minecraft:flat");
+        if let Some(crate::world_info::GeneratorSettings::Compound(val)) =
+            &overworld_dim.generator.settings
+        {
+            assert_eq!(val["biome"], "minecraft:the_void");
+        } else {
+            panic!("Expected Compound generator settings");
+        }
+    }
+
+    #[test]
+    fn all_26_2_minecraft_data_files_written_and_read() {
+        let temp_dir = TempDir::new().unwrap();
+        let mut level_data = LEVEL_DAT.data.clone();
+        level_data.data_version = 4903;
+        level_data.day_time = 24000;
+        level_data.clear_weather_time = 100;
+        level_data.world_gen_settings = WorldGenSettings::new(Seed(9999));
+
+        AnvilLevelInfo
+            .write_world_info(&level_data, temp_dir.path())
+            .unwrap();
+
+        let data_dir = temp_dir.path().join("data").join("minecraft");
+        let expected_files = [
+            "game_rules.dat",
+            "random_sequences.dat",
+            "scoreboard.dat",
+            "stopwatches.dat",
+            "wandering_trader.dat",
+            "world_clocks.dat",
+            "world_gen_settings.dat",
+            "scheduled_events.dat",
+            "custom_boss_events.dat",
+            "weather.dat",
+        ];
+
+        for file_name in &expected_files {
+            let file_path = data_dir.join(file_name);
+            assert!(
+                file_path.exists(),
+                "Expected file {file_name} to exist in data/minecraft/"
+            );
+        }
+
+        // Verify world_gen_settings.dat read
+        let loaded_wgs =
+            crate::world_info::data_files::read_world_gen_settings(temp_dir.path()).unwrap();
+        assert_eq!(loaded_wgs.seed, 9999);
+
+        // Verify weather.dat read
+        let loaded_weather = crate::world_info::data_files::read_weather(temp_dir.path());
+        assert_eq!(loaded_weather.clear_weather_time, 100);
+
+        // Verify world_clocks.dat read
+        let loaded_clocks = crate::world_info::data_files::read_world_clocks(temp_dir.path());
+        assert_eq!(
+            loaded_clocks
+                .clocks
+                .get("minecraft:overworld")
+                .unwrap()
+                .total_ticks,
+            24000
+        );
+
+        // Verify wandering_trader.dat read
+        let loaded_wt = crate::world_info::data_files::read_wandering_trader(temp_dir.path());
+        assert_eq!(loaded_wt.spawn_delay, 24000);
+        assert_eq!(loaded_wt.spawn_chance, 25);
     }
 }
