@@ -1506,6 +1506,20 @@ impl Player {
 
         player_attack_sound(&pos, &world, attack_type).await;
 
+        if matches!(attack_type, AttackType::Critical) {
+            let je_packet = CEntityAnimation::new(
+                victim_entity.entity_id.into(),
+                Animation::CriticalEffect,
+            );
+            let be_packet = pumpkin_protocol::bedrock::server::animate::SAnimate {
+                action: pumpkin_protocol::bedrock::server::animate::AnimateAction::CriticalHit,
+                target_actor_runtime_id: VarULong(victim_entity.entity_id as u64),
+                data: 0.0,
+                swing_source: None,
+            };
+            world.broadcast_editioned(&je_packet, &be_packet).await;
+        }
+
         self.living_entity.last_attacking_id.store(
             victim_entity.entity_id,
             std::sync::atomic::Ordering::Relaxed,
