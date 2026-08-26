@@ -7,6 +7,9 @@ on:
     branches: [ "master", "main" ]
   workflow_dispatch:
 
+env:
+  CARGO_NDK_PLATFORM: 24
+
 jobs:
   build-android:
     runs-on: ubuntu-latest
