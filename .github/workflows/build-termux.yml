@@ -1,0 +1,41 @@
+name: Build for Termux (Android AArch64)
+
+on:
+  push:
+    branches: [ "master", "main" ]
+  pull_request:
+  branches: [ "master", "main" ]
+  workflow_dispatch:
+
+jobs:
+  build-android:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          submodules: recursive
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android
+
+      - name: Setup Android NDK
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r27c
+
+      - name: Cache cargo dependencies
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build release binary for Android AArch64
+        run: |
+          cargo build --target aarch64-linux-android --release --locked
+
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: pumpkin-termux-aarch64
+          path: target/aarch64-linux-android/release/pumpkin
+          compression-level: 9
