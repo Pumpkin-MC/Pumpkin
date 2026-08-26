@@ -124,11 +124,12 @@ jobs:
         env:
           CARGO_NDK_PLATFORM: 24
         with:
-          api-level: 24
-          arch: arm64-v8a
-          profile: Nexus 6
+          api-level: 35
           target: google_apis
-          disable-animations: true
+          arch: x86_64
+          profile: pixel_5
+          force-avd-creation: false
+          emulator-options: -no-snapshot-load -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -camera-front none
           script: cargo ndk-test -t arm64-v8a -- --verbose
   build_release:
     name: Build project in release
