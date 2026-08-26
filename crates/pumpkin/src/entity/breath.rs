@@ -178,7 +178,7 @@ impl BreathManager {
                     pumpkin_data::tracked_data::entity::DATA_AIR_SUPPLY_ID,
                     VarInt(air),
                 ),
-                Metadata::new(pumpkin_data::tracked_data::entity::DATA_AIR, VarInt(air)),
+                Metadata::new(pumpkin_data::tracked_data::entity::AIR, VarInt(air)),
             ],
             Some(&bedrock_meta),
         );
