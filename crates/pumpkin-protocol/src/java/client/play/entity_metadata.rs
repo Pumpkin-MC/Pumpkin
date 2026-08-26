@@ -434,6 +434,7 @@ mod tests {
 
     use super::{Metadata, MetadataSerializer};
 
+    #[derive(Clone, Copy)]
     struct ParticleMetadata {
         particle_id: VarInt,
         data: [u8; 4],
@@ -452,20 +453,28 @@ mod tests {
 
     fn encoded_particle(version: JavaMinecraftVersion) -> (VarInt, Vec<u8>) {
         let particle_data = [0x12, 0x34, 0x56, 0x78];
-        let metadata = Metadata::new(
-            pumpkin_data::tracked_data::area_effect_cloud::DATA_PARTICLE,
-            ParticleMetadata {
-                particle_id: VarInt(Particle::ExplosionEmitter as i32),
-                data: particle_data,
-            },
-        );
+        let particle = ParticleMetadata {
+            particle_id: VarInt(Particle::ExplosionEmitter as i32),
+            data: particle_data,
+        };
         let mut bytes = Vec::new();
-        metadata.write(&mut bytes, &version).unwrap();
+        for metadata in [
+            Metadata::new(
+                pumpkin_data::tracked_data::area_effect_cloud::DATA_PARTICLE,
+                particle,
+            ),
+            Metadata::new(
+                pumpkin_data::tracked_data::area_effect_cloud::PARTICLE,
+                particle,
+            ),
+        ] {
+            metadata.write(&mut bytes, &version).unwrap();
+        }
 
-        assert_eq!(
-            bytes[0],
-            pumpkin_data::tracked_data::area_effect_cloud::DATA_PARTICLE.get(&version)
-        );
+        let slot = pumpkin_data::tracked_data::area_effect_cloud::DATA_PARTICLE
+            .get(&version)
+            .min(pumpkin_data::tracked_data::area_effect_cloud::PARTICLE.get(&version));
+        assert_eq!(bytes[0], slot);
         assert_eq!(bytes[1], MetaDataType::PARTICLE.id(version) as u8);
 
         let mut cursor = Cursor::new(&bytes[2..]);
