@@ -274,8 +274,14 @@ mod tests {
         for metadata in [
             Metadata::new(pumpkin_data::tracked_data::boat::ID_HURT, VarInt(10)),
             Metadata::new(pumpkin_data::tracked_data::boat::ID_HURTDIR, VarInt(-1)),
-            Metadata::new(pumpkin_data::tracked_data::boat_entity::DAMAGE_WOBBLE_TICKS, VarInt(10)),
-            Metadata::new(pumpkin_data::tracked_data::boat_entity::DAMAGE_WOBBLE_SIDE, VarInt(-1)),
+            Metadata::new(
+                pumpkin_data::tracked_data::boat_entity::DAMAGE_WOBBLE_TICKS,
+                VarInt(10),
+            ),
+            Metadata::new(
+                pumpkin_data::tracked_data::boat_entity::DAMAGE_WOBBLE_SIDE,
+                VarInt(-1),
+            ),
         ] {
             metadata.write(&mut bytes, &version).unwrap();
         }

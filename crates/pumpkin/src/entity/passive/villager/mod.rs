@@ -440,10 +440,7 @@ impl VillagerEntity {
         mob_arc.get_entity().send_meta_data(
             &[
                 Metadata::new(tracked_data::villager::VILLAGER_DATA, villager_data),
-                Metadata::new(
-                    tracked_data::villager::DATA_VILLAGER_DATA,
-                    villager_data,
-                ),
+                Metadata::new(tracked_data::villager::DATA_VILLAGER_DATA, villager_data),
             ],
             Some(&bedrock_metadata),
         );
