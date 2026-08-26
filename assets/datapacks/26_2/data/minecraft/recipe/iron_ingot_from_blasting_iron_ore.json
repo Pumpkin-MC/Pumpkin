@@ -1,0 +1,9 @@
+{
+  "type": "minecraft:blasting",
+  "experience": 0.7,
+  "group": "iron_ingot",
+  "ingredient": "minecraft:iron_ore",
+  "result": {
+    "id": "minecraft:iron_ingot"
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "type": "minecraft:nether_forest_vegetation",
+  "config": {
+    "spread_height": 1,
+    "spread_width": 3,
+    "state_provider": {
+      "type": "minecraft:simple_state_provider",
+      "state": {
+        "Name": "minecraft:nether_sprouts"
+      }
+    }
+  }
+}

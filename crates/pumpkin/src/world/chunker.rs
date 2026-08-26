@@ -75,7 +75,6 @@ pub async fn update_position(player: &Arc<Player>) {
                 .await;
         }
     }
-
     let (loading_iter, unloading_iter) =
         Cylindrical::changed_chunks(old_cylindrical, new_cylindrical);
     let loading_chunks: Vec<_> = loading_iter.collect();
@@ -84,7 +83,10 @@ pub async fn update_position(player: &Arc<Player>) {
     // Use the chunk_manager's world reference, which is updated on dimension change.
     // This ensures we load chunks from the correct world after portal teleportation.
     let world = {
-        let mut chunk_manager = player.chunk_manager.lock().await;
+        let mut chunk_manager = player
+            .chunk_manager
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let world = chunk_manager.world().clone();
         chunk_manager.update_center_and_view_distance(
             new_chunk_center,

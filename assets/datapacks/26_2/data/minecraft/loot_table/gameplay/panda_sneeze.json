@@ -1,0 +1,19 @@
+{
+  "type": "minecraft:gift",
+  "pools": [
+    {
+      "entries": [
+        {
+          "type": "minecraft:item",
+          "name": "minecraft:slime_ball"
+        },
+        {
+          "type": "minecraft:empty",
+          "weight": 699
+        }
+      ],
+      "rolls": 1.0
+    }
+  ],
+  "random_sequence": "minecraft:gameplay/panda_sneeze"
+}

@@ -1,0 +1,29 @@
+{
+  "type": "minecraft:block",
+  "pools": [
+    {
+      "conditions": [
+        {
+          "condition": "minecraft:survives_explosion"
+        }
+      ],
+      "entries": [
+        {
+          "type": "minecraft:item",
+          "conditions": [
+            {
+              "block": "minecraft:purple_bed",
+              "condition": "minecraft:block_state_property",
+              "properties": {
+                "part": "head"
+              }
+            }
+          ],
+          "name": "minecraft:purple_bed"
+        }
+      ],
+      "rolls": 1.0
+    }
+  ],
+  "random_sequence": "minecraft:blocks/purple_bed"
+}

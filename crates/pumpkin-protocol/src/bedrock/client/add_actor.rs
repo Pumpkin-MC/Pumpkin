@@ -1,73 +1,38 @@
+// Last verified for v2169
+
 use crate::{
     codec::{var_long::VarLong, var_ulong::VarULong},
     serial::PacketWrite,
 };
 use pumpkin_macros::packet;
-use pumpkin_util::math::vector3::Vector3;
+use pumpkin_util::math::{vector2::Vector2, vector3::Vector3};
 
 use super::{
-    common::EntityLink,
-    set_actor_data::{EntityMetadata, PropertySyncData},
+    common::ActorLink,
+    set_actor_data::{PropertySyncData, SyncedActorDataList},
 };
 
 #[derive(PacketWrite)]
 #[packet(13)]
 pub struct CAddActor {
-    pub entity_unique_id: VarLong,
-    pub entity_runtime_id: VarULong,
-    pub entity_type: String,
+    pub target_actor_id: VarLong,
+    pub target_runtime_id: VarULong,
+    pub actor_type: String,
     pub position: Vector3<f32>,
     pub velocity: Vector3<f32>,
-    pub pitch: f32,
-    pub yaw: f32,
-    pub head_yaw: f32,
-    pub body_yaw: f32,
-    pub attributes: Vec<AttributeValue>,
-    pub metadata: EntityMetadata,
+    pub rotation: Vector2<f32>,
+    pub y_head_rotation: f32,
+    pub y_body_rotation: f32,
+    pub attributes_list: Vec<SyncedAttribute>,
+    pub actor_data: SyncedActorDataList,
     pub synced_properties: PropertySyncData,
-    pub links: Vec<EntityLink>,
-}
-
-impl CAddActor {
-    #[allow(clippy::too_many_arguments)]
-    #[must_use]
-    pub const fn new(
-        entity_unique_id: VarLong,
-        entity_runtime_id: VarULong,
-        entity_type: String,
-        position: Vector3<f32>,
-        velocity: Vector3<f32>,
-        pitch: f32,
-        yaw: f32,
-        head_yaw: f32,
-        body_yaw: f32,
-        attributes: Vec<AttributeValue>,
-        metadata: EntityMetadata,
-        synced_properties: PropertySyncData,
-        links: Vec<EntityLink>,
-    ) -> Self {
-        Self {
-            entity_unique_id,
-            entity_runtime_id,
-            entity_type,
-            position,
-            velocity,
-            pitch,
-            yaw,
-            head_yaw,
-            body_yaw,
-            attributes,
-            metadata,
-            synced_properties,
-            links,
-        }
-    }
+    pub actor_links: Vec<ActorLink>,
 }
 
 #[derive(PacketWrite)]
-pub struct AttributeValue {
-    pub name: String,
-    pub min: f32,
-    pub value: f32,
-    pub max: f32,
+pub struct SyncedAttribute {
+    pub attribute_name: String,
+    pub min_value: f32,
+    pub current_value: f32,
+    pub max_value: f32,
 }

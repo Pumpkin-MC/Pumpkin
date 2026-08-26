@@ -25,6 +25,7 @@ use crate::{
 
 pub mod block;
 pub mod cleanup;
+pub mod dialog;
 pub mod enchantment;
 pub mod entity;
 pub mod hanging;
@@ -129,7 +130,7 @@ pub(super) const fn from_wasm_hand(hand: pumpkin::plugin::common::Hand) -> Hand 
 }
 
 pub(super) const fn to_wasm_entity_interaction_action(
-    action: &ActionType,
+    action: ActionType,
 ) -> pumpkin::plugin::event::EntityInteractionAction {
     match action {
         ActionType::Interact => pumpkin::plugin::event::EntityInteractionAction::Interact,

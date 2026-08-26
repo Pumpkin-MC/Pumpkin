@@ -1,0 +1,13 @@
+{
+  "asset_id": "minecraft:bouquet",
+  "title": {
+    "translate": "painting.minecraft.bouquet.title",
+    "color": "yellow"
+  },
+  "author": {
+    "translate": "painting.minecraft.bouquet.author",
+    "color": "gray"
+  },
+  "width": 3,
+  "height": 3
+}

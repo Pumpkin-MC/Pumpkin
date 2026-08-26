@@ -33,11 +33,7 @@ impl ArgumentConsumer for BlockArgumentConsumer {
         _server: &'a Server,
         args: &mut RawArgs<'a>,
     ) -> ConsumeResult<'a> {
-        let block = args.pop().map(|arg| arg.value);
-        match block {
-            Some(s) => Box::pin(async move { Some(Arg::Block(s)) }),
-            None => Box::pin(async move { None }),
-        }
+        args.pop().map(|arg| Arg::Block(arg.value))
     }
 }
 
@@ -99,11 +95,7 @@ impl ArgumentConsumer for BlockPredicateArgumentConsumer {
         _server: &'a Server,
         args: &mut RawArgs<'a>,
     ) -> ConsumeResult<'a> {
-        let block = args.pop().map(|arg| arg.value);
-        match block {
-            Some(s) => Box::pin(async move { Some(Arg::BlockPredicate(s)) }),
-            None => Box::pin(async move { None }),
-        }
+        args.pop().map(|arg| Arg::BlockPredicate(arg.value))
     }
 }
 

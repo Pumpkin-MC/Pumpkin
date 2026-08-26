@@ -67,8 +67,11 @@
 //! ```
 
 use crate::{
-    commands::COMMAND_HANDLERS, events::EVENT_HANDLERS, logging::WitSubscriber,
-    scheduler::TASK_HANDLERS, text::TextComponent,
+    commands::{COMMAND_HANDLERS, COMMAND_SUGGESTION_HANDLERS},
+    events::EVENT_HANDLERS,
+    logging::WitSubscriber,
+    scheduler::TASK_HANDLERS,
+    text::TextComponent,
 };
 
 /// Plugin command registration and handling utilities.
@@ -98,8 +101,8 @@ pub mod worldgen;
 /// Command WIT API re-exports.
 pub mod command {
     pub use crate::wit::pumpkin::plugin::command::{
-        Arg, ArgumentType, Command, CommandError, CommandNode, CommandSender, ConsumedArgs,
-        StringType,
+        Arg, ArgumentType, Command, CommandError, CommandNode, CommandSender, CommandSuggestion,
+        CommandSuggestions, ConsumedArgs, StringType, SuggestionRequest,
     };
 }
 
@@ -142,7 +145,10 @@ pub use wit::pumpkin::plugin::item_stack::ItemStack;
 pub use wit::pumpkin::plugin::player::Player;
 pub use wit::pumpkin::plugin::scoreboard::{CollisionRule, NametagVisibility, TeamSettings};
 pub use wit::pumpkin::plugin::server::Dimension;
-pub use wit::pumpkin::plugin::world::World;
+pub use wit::pumpkin::plugin::world::{
+    Block, BlockDirection, BlockState, BlockStateInfo, Entity, Flammable, RayTraceBlockResult,
+    RayTraceEntityResult, RaycastResult, World, WorldBorder,
+};
 pub use worldgen::{ChunkBuffer, ChunkGenerator, GenerationPhase, GeneratorManager};
 
 /// Advancement WIT API re-exports.
@@ -154,7 +160,11 @@ pub mod advancement {
 
 /// Java dialog WIT API re-exports.
 pub mod java_dialog {
-    pub use crate::wit::pumpkin::plugin::java_dialogs::{ActionButton, DialogBody, DialogType};
+    pub use crate::wit::pumpkin::plugin::java_dialogs::{
+        Action, ActionButton, AfterAction, CustomClickAction, Dialog, DialogBody, DialogInput,
+        DialogInputBool, DialogInputNumberRange, DialogInputSingleOption, DialogInputText,
+        DialogType, Link, LinkLabel, LinkType,
+    };
 }
 
 /// WIT-based logging subscriber.
@@ -166,7 +176,11 @@ mod wit {
         skip: ["init-plugin"],
         path: "../pumpkin-plugin-wit/v0.1",
         world: "plugin",
-        enable_method_chaining: true
+        chainable_methods: [
+            "pumpkin:plugin/command@0.1.0#command",
+            "pumpkin:plugin/command@0.1.0#command-node",
+            "pumpkin:plugin/text@0.1.0#text-component"
+        ]
     });
 
     use super::Component;
@@ -247,6 +261,27 @@ impl wit::Guest for Component {
             },
             |handler| handler.handle(sender, server, args),
         )
+    }
+
+    /// WIT entry point — dispatches an incoming command suggestion request to the registered handler.
+    fn handle_command_suggestion(
+        handler_id: u32,
+        sender: command::CommandSender,
+        server: Server,
+        request: command::SuggestionRequest,
+    ) -> command::CommandSuggestions {
+        let handlers = COMMAND_SUGGESTION_HANDLERS
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        if let Some(handler) = handlers.get(&handler_id) {
+            handler.suggest(sender, server, request)
+        } else {
+            command::CommandSuggestions {
+                start: request.start,
+                length: 0,
+                values: Vec::new(),
+            }
+        }
     }
 
     /// WIT entry point — dispatches a scheduled task invocation to the registered handler for `handler_id`.
@@ -396,9 +431,11 @@ pub fn register_plugin(build_plugin: fn() -> Box<dyn Plugin>) {
 /// If called before [`register_plugin`] has initialized `PLUGIN`.
 fn plugin() -> &'static mut dyn Plugin {
     #[expect(static_mut_refs)]
-    #[allow(clippy::unwrap_used)]
+    #[allow(clippy::expect_used)]
     unsafe {
-        PLUGIN.as_deref_mut().unwrap()
+        PLUGIN
+            .as_deref_mut()
+            .expect("PLUGIN must be initialized with register_plugin before use")
     }
 }
 

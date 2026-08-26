@@ -44,6 +44,16 @@ use super::JavaClient;
 
 const BRAND_CHANNEL_PREFIX: &str = "minecraft:brand";
 
+/// How long a connection may stay silent before login finishes.
+///
+/// Once a player is in game, [`JavaClient::progress_player_packets`] keeps the
+/// connection honest with keep-alives. Nothing plays that role beforehand, and
+/// accepted sockets have no TCP keep-alive either, so a peer that stops talking
+/// without closing would otherwise hold its descriptor for the lifetime of the
+/// server. The timer covers silence rather than the whole handshake: it is reset
+/// on every packet, so a slow but progressing login is never cut off.
+const HANDSHAKE_IDLE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
+
 pub struct PendingConnection {
     pub id: u64,
     pub address: SocketAddr,
@@ -57,6 +67,7 @@ pub struct PendingConnection {
     pub config: Option<PlayerConfig>,
     pub brand: Option<String>,
     pub packet_limiter: PacketRateLimiter,
+    pub verify_token: Option<[u8; 4]>,
 }
 
 impl PendingConnection {
@@ -81,6 +92,7 @@ impl PendingConnection {
             config: None,
             brand: None,
             packet_limiter,
+            verify_token: None,
         }
     }
 
@@ -126,6 +138,14 @@ impl PendingConnection {
         let packet_result = tokio::select! {
             () = close_token.cancelled() => {
                 debug!("Canceling pending connection packet processing");
+                return None;
+            },
+            () = tokio::time::sleep(HANDSHAKE_IDLE_TIMEOUT) => {
+                debug!(
+                    "Client {} sent nothing for {}s before finishing login, dropping it",
+                    self.id,
+                    HANDSHAKE_IDLE_TIMEOUT.as_secs()
+                );
                 return None;
             },
             res = self.network_reader.get_raw_packet() => res,
@@ -302,41 +322,41 @@ impl PendingConnection {
 
         match packet.id {
             id if id == pumpkin_protocol::java::server::login::SLoginStart::to_id(version) => {
-                self.handle_login_start(
-                    server,
-                    pumpkin_protocol::java::server::login::SLoginStart::read(
-                        &mut payload,
-                        &version,
-                    )?,
-                )
-                .await;
-                Ok(())
+                Ok(self
+                    .handle_login_start(
+                        server,
+                        pumpkin_protocol::java::server::login::SLoginStart::read(
+                            &mut payload,
+                            &version,
+                        )?,
+                    )
+                    .await)
             }
             id if id
                 == pumpkin_protocol::java::server::login::SEncryptionResponse::to_id(version) =>
             {
-                self.handle_encryption_response(
-                    server,
-                    pumpkin_protocol::java::server::login::SEncryptionResponse::read(
-                        &mut payload,
-                        &version,
-                    )?,
-                )
-                .await;
-                Ok(())
+                Ok(self
+                    .handle_encryption_response(
+                        server,
+                        pumpkin_protocol::java::server::login::SEncryptionResponse::read(
+                            &mut payload,
+                            &version,
+                        )?,
+                    )
+                    .await)
             }
             id if id
                 == pumpkin_protocol::java::server::login::SLoginPluginResponse::to_id(version) =>
             {
-                self.handle_plugin_response(
-                    server,
-                    pumpkin_protocol::java::server::login::SLoginPluginResponse::read(
-                        &mut payload,
-                        &version,
-                    )?,
-                )
-                .await;
-                Ok(())
+                Ok(self
+                    .handle_plugin_response(
+                        server,
+                        pumpkin_protocol::java::server::login::SLoginPluginResponse::read(
+                            &mut payload,
+                            &version,
+                        )?,
+                    )
+                    .await)
             }
             id if id
                 == pumpkin_protocol::java::server::login::SLoginCookieResponse::to_id(version) =>
@@ -347,33 +367,18 @@ impl PendingConnection {
                         &version,
                     )?,
                 );
-                Ok(())
+                Ok(None)
             }
             id if id
                 == pumpkin_protocol::java::server::login::SLoginAcknowledged::to_id(version) =>
             {
-                self.handle_login_acknowledged(server).await;
-                Ok(())
+                Ok(self.handle_login_acknowledged(server).await)
             }
             _ => Err(ReadingError::Message(format!(
                 "Failed to handle packet id {} in Login State",
                 packet.id
             ))),
-        }?;
-
-        if self.version.load() < JavaMinecraftVersion::V_1_20_2
-            && self.connection_state.load() == ConnectionState::Play
-            && let Some(profile) = self.gameprofile.clone()
-        {
-            let config = self.config.clone().unwrap_or_default();
-            if let Some(reason) = can_not_join(&profile, &self.address, server).await {
-                self.kick(reason).await;
-                return Ok(Some(PacketHandlerResult::Stop));
-            }
-            return Ok(Some(PacketHandlerResult::ReadyToPlay(profile, config)));
         }
-
-        Ok(None)
     }
 
     async fn handle_config_packet(

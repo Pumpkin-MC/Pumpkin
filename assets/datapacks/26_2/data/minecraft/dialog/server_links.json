@@ -1,0 +1,17 @@
+{
+  "type": "minecraft:server_links",
+  "button_width": 310,
+  "columns": 1,
+  "exit_action": {
+    "label": {
+      "translate": "gui.back"
+    },
+    "width": 200
+  },
+  "external_title": {
+    "translate": "menu.server_links"
+  },
+  "title": {
+    "translate": "menu.server_links.title"
+  }
+}

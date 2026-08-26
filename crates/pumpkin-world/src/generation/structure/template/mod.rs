@@ -46,7 +46,10 @@ pub use cache::{
 };
 pub use processor::StructureProcessor;
 pub use pumpkin_data::{BlockState, Mirror as BlockMirror, Rotation as BlockRotation};
-pub use structure_template::{PaletteEntry, StructureTemplate, TemplateBlock, TemplateEntity};
+pub use structure_template::{
+    JigsawBlockInfo, Palette, PaletteEntry, SimplePalette, StructureBlockInfo, StructureEntityInfo,
+    StructurePlaceSettings, StructureTemplate, TemplateBlock, TemplateEntity,
+};
 pub use template_piece::TemplatePiece;
 
 /// Abstraction over block placement, implemented by both [`ProtoChunk`] (worldgen) and
@@ -79,9 +82,39 @@ pub fn place_template(
     processors: &[StructureProcessor],
     chunk_box: Option<&pumpkin_util::math::block_box::BlockBox>,
 ) {
+    place_template_with_options(
+        placer,
+        template,
+        origin,
+        offset,
+        rotation,
+        skip_air,
+        apply_waterlogging,
+        processors,
+        chunk_box,
+        false,
+    );
+}
+
+#[allow(clippy::too_many_arguments, clippy::too_many_lines)]
+pub fn place_template_with_options(
+    placer: &mut impl BlockPlacer,
+    template: &StructureTemplate,
+    origin: Vector3<i32>,
+    offset: (i32, i32),
+    rotation: Rotation,
+    skip_air: bool,
+    apply_waterlogging: bool,
+    processors: &[StructureProcessor],
+    chunk_box: Option<&pumpkin_util::math::block_box::BlockBox>,
+    keep_jigsaws: bool,
+) {
     let (rotated_ox, rotated_oz) = rotation.rotate_offset(offset.0, offset.1);
     let world_x = origin.x + rotated_ox;
     let world_z = origin.z + rotated_oz;
+
+    let mut context_rng = LegacyRand::from_seed(hash_block_pos(world_x, origin.y, world_z) as u64);
+    let mut context = processor::ProcessorContext::new(origin, processors, &mut context_rng);
 
     for block in &template.blocks {
         let palette_entry = &template.palette[block.state as usize];
@@ -96,7 +129,7 @@ pub fn place_template(
 
         // Jigsaw blocks are replaced during template processing, before block entities are
         // collected. Keeping this in the placement pipeline avoids stale jigsaw entities.
-        if palette_entry.name == "minecraft:jigsaw" {
+        if !keep_jigsaws && palette_entry.name == "minecraft:jigsaw" {
             let final_state = block_entity_nbt
                 .as_ref()
                 .and_then(|nbt| nbt.get_string("final_state"))
@@ -155,8 +188,19 @@ pub fn place_template(
 
         // Apply processors
         let mut should_place = true;
+        let mut capped_idx = 0;
+        let mut rng =
+            LegacyRand::from_seed(hash_block_pos(world_pos.x, world_pos.y, world_pos.z) as u64);
         for processor in processors {
-            let Some(processed_state) = processor.process(placer, world_pos, state) else {
+            let Some(processed_state) = processor.process_with_context(
+                placer,
+                world_pos,
+                state,
+                &mut block_entity_nbt,
+                &mut context,
+                &mut capped_idx,
+                &mut rng,
+            ) else {
                 should_place = false;
                 break;
             };
@@ -173,23 +217,20 @@ pub fn place_template(
         placer.set_block_state(&Vector3::new(wx, wy, wz), state);
 
         // Create block entities for interactive blocks (furnaces, chests, etc.)
-        let block_entity_id = get_block_entity_id(&placed_entry.name);
+        let final_block = pumpkin_data::Block::from_id(state.id.to_block_id());
+        let block_entity_id = get_block_entity_id(final_block.name);
         if block_entity_nbt.is_some() || block_entity_id.is_some() {
-            let block_entity_id = block_entity_id.unwrap_or(&placed_entry.name);
+            let fallback_id = block_entity_id.unwrap_or(final_block.name);
             let mut placed_nbt = NbtCompound::new();
 
-            placed_nbt.put_string("id", block_entity_id.to_string());
+            placed_nbt.put_string("id", fallback_id.to_string());
             placed_nbt.put_int("x", wx);
             placed_nbt.put_int("y", wy);
             placed_nbt.put_int("z", wz);
 
             if let Some(template_nbt) = &block_entity_nbt {
                 for (key, value) in &template_nbt.child_tags {
-                    if key.as_ref() != "x"
-                        && key.as_ref() != "y"
-                        && key.as_ref() != "z"
-                        && key.as_ref() != "id"
-                    {
+                    if key.as_ref() != "x" && key.as_ref() != "y" && key.as_ref() != "z" {
                         placed_nbt.child_tags.insert(key.clone(), value.clone());
                     }
                 }
@@ -274,46 +315,63 @@ pub(crate) fn place_template_entities(
 
 /// Returns the block entity ID for blocks that require one, or None if not needed.
 pub(crate) fn get_block_entity_id(block_name: &str) -> Option<&'static str> {
-    match block_name {
-        "minecraft:furnace" => Some("minecraft:furnace"),
-        "minecraft:chest" => Some("minecraft:chest"),
-        "minecraft:trapped_chest" => Some("minecraft:trapped_chest"),
-        "minecraft:barrel" => Some("minecraft:barrel"),
-        "minecraft:hopper" => Some("minecraft:hopper"),
-        "minecraft:dropper" => Some("minecraft:dropper"),
-        "minecraft:dispenser" => Some("minecraft:dispenser"),
-        "minecraft:brewing_stand" => Some("minecraft:brewing_stand"),
-        "minecraft:blast_furnace" => Some("minecraft:blast_furnace"),
-        "minecraft:smoker" => Some("minecraft:smoker"),
-        "minecraft:shulker_box" => Some("minecraft:shulker_box"),
-        "minecraft:bed" => Some("minecraft:bed"),
-        "minecraft:dragon_head"
-        | "minecraft:dragon_wall_head"
-        | "minecraft:skeleton_skull"
-        | "minecraft:skeleton_wall_skull"
-        | "minecraft:wither_skeleton_skull"
-        | "minecraft:wither_skeleton_wall_skull"
-        | "minecraft:zombie_head"
-        | "minecraft:zombie_wall_head"
-        | "minecraft:player_head"
-        | "minecraft:player_wall_head"
-        | "minecraft:creeper_head"
-        | "minecraft:creeper_wall_head"
-        | "minecraft:piglin_head"
-        | "minecraft:piglin_wall_head" => Some("minecraft:skull"),
-        "minecraft:sign"
-        | "minecraft:oak_sign"
-        | "minecraft:spruce_sign"
-        | "minecraft:birch_sign"
-        | "minecraft:jungle_sign"
-        | "minecraft:acacia_sign"
-        | "minecraft:dark_oak_sign"
-        | "minecraft:mangrove_sign"
-        | "minecraft:cherry_sign"
-        | "minecraft:bamboo_sign"
-        | "minecraft:crimson_sign"
-        | "minecraft:warped_sign" => Some("minecraft:sign"),
-        "minecraft:hanging_sign" => Some("minecraft:hanging_sign"),
+    let name = block_name.strip_prefix("minecraft:").unwrap_or(block_name);
+    match name {
+        "furnace" => Some("minecraft:furnace"),
+        "chest" => Some("minecraft:chest"),
+        "trapped_chest" => Some("minecraft:trapped_chest"),
+        "barrel" => Some("minecraft:barrel"),
+        "hopper" => Some("minecraft:hopper"),
+        "dropper" => Some("minecraft:dropper"),
+        "dispenser" => Some("minecraft:dispenser"),
+        "brewing_stand" => Some("minecraft:brewing_stand"),
+        "blast_furnace" => Some("minecraft:blast_furnace"),
+        "smoker" => Some("minecraft:smoker"),
+        "shulker_box" => Some("minecraft:shulker_box"),
+        "bed" => Some("minecraft:bed"),
+        "suspicious_sand" | "suspicious_gravel" => Some("minecraft:brushable_block"),
+        "decorated_pot" => Some("minecraft:decorated_pot"),
+        "spawner" => Some("minecraft:mob_spawner"),
+        "trial_spawner" => Some("minecraft:trial_spawner"),
+        "vault" => Some("minecraft:vault"),
+        "crafter" => Some("minecraft:crafter"),
+        "creaking_heart" => Some("minecraft:creaking_heart"),
+        "chiseled_bookshelf" => Some("minecraft:chiseled_bookshelf"),
+        "beehive" | "bee_nest" => Some("minecraft:beehive"),
+        "campfire" | "soul_campfire" => Some("minecraft:campfire"),
+        "sculk_sensor" | "calibrated_sculk_sensor" => Some("minecraft:sculk_sensor"),
+        "sculk_catalyst" => Some("minecraft:sculk_catalyst"),
+        "sculk_shrieker" => Some("minecraft:sculk_shrieker"),
+        "dragon_head"
+        | "dragon_wall_head"
+        | "skeleton_skull"
+        | "skeleton_wall_skull"
+        | "wither_skeleton_skull"
+        | "wither_skeleton_wall_skull"
+        | "zombie_head"
+        | "zombie_wall_head"
+        | "player_head"
+        | "player_wall_head"
+        | "creeper_head"
+        | "creeper_wall_head"
+        | "piglin_head"
+        | "piglin_wall_head" => Some("minecraft:skull"),
+        "sign" | "oak_sign" | "spruce_sign" | "birch_sign" | "jungle_sign" | "acacia_sign"
+        | "dark_oak_sign" | "mangrove_sign" | "cherry_sign" | "bamboo_sign" | "crimson_sign"
+        | "warped_sign" | "pale_oak_sign" => Some("minecraft:sign"),
+        "hanging_sign"
+        | "oak_hanging_sign"
+        | "spruce_hanging_sign"
+        | "birch_hanging_sign"
+        | "jungle_hanging_sign"
+        | "acacia_hanging_sign"
+        | "dark_oak_hanging_sign"
+        | "mangrove_hanging_sign"
+        | "cherry_hanging_sign"
+        | "bamboo_hanging_sign"
+        | "crimson_hanging_sign"
+        | "warped_hanging_sign"
+        | "pale_oak_hanging_sign" => Some("minecraft:hanging_sign"),
         _ => None,
     }
 }

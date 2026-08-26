@@ -1,0 +1,12 @@
+{
+  "gives": {
+    "id": "minecraft:chainmail_chestplate"
+  },
+  "max_uses": 12.0,
+  "reputation_discount": 0.2,
+  "wants": {
+    "count": 4.0,
+    "id": "minecraft:emerald"
+  },
+  "xp": 10.0
+}

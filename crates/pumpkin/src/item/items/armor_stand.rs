@@ -1,4 +1,3 @@
-use std::pin::Pin;
 use std::sync::Arc;
 
 use crate::entity::Entity;
@@ -38,61 +37,58 @@ impl ItemMetadata for ArmorStandItem {
 }
 
 impl ItemBehaviour for ArmorStandItem {
-    fn use_on_block<'a>(
-        &'a self,
-        item: &'a mut ItemStack,
-        player: &'a Player,
+    fn use_on_block(
+        &self,
+        item: &mut ItemStack,
+        player: &Player,
         location: BlockPos,
         face: BlockDirection,
         _cursor_pos: Vector3<f32>,
-        _block: &'a Block,
-        _server: &'a Server,
-    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
-        Box::pin(async move {
-            let world = player.world();
-            let position = Self::calculate_placement_position(&location, face).to_f64();
+        _block: &Block,
+        _server: &Server,
+    ) {
+        let world = player.world();
+        let position = Self::calculate_placement_position(&location, face).to_f64();
 
-            let bottom_center = Vector3::new(position.x, position.y, position.z);
+        let bottom_center = Vector3::new(position.x, position.y, position.z);
 
-            let armor_stand_dimensions = EntityType::ARMOR_STAND.dimension;
-            let width = f64::from(armor_stand_dimensions[0]);
-            let height = f64::from(armor_stand_dimensions[1]);
+        let armor_stand_dimensions = EntityType::ARMOR_STAND.dimension;
+        let width = f64::from(armor_stand_dimensions[0]);
+        let height = f64::from(armor_stand_dimensions[1]);
 
-            let bounding_box = BoundingBox::new(
-                Vector3::new(
-                    bottom_center.x - width / 2.0,
-                    bottom_center.y,
-                    bottom_center.z - width / 2.0,
-                ),
-                Vector3::new(
-                    bottom_center.x + width / 2.0,
-                    bottom_center.y + height,
-                    bottom_center.z + width / 2.0,
-                ),
+        let bounding_box = BoundingBox::new(
+            Vector3::new(
+                bottom_center.x - width / 2.0,
+                bottom_center.y,
+                bottom_center.z - width / 2.0,
+            ),
+            Vector3::new(
+                bottom_center.x + width / 2.0,
+                bottom_center.y + height,
+                bottom_center.z + width / 2.0,
+            ),
+        );
+
+        if world.is_space_empty(bounding_box) && world.get_entities_at_box(&bounding_box).is_empty()
+        {
+            let (player_yaw, _) = player.rotation();
+            let rotation = ((wrap_degrees(player_yaw - 180.0) + 22.5) / 45.0).floor() * 45.0;
+
+            let entity = Entity::new(world.clone(), position, &EntityType::ARMOR_STAND);
+
+            entity.set_rotation(rotation, 0.0);
+
+            world.play_sound(
+                Sound::EntityArmorStandPlace,
+                SoundCategory::Blocks,
+                &entity.pos.load(),
             );
 
-            if world.is_space_empty(bounding_box)
-                && world.get_entities_at_box(&bounding_box).is_empty()
-            {
-                let (player_yaw, _) = player.rotation();
-                let rotation = ((wrap_degrees(player_yaw - 180.0) + 22.5) / 45.0).floor() * 45.0;
+            let armor_stand = ArmorStandEntity::new(entity);
 
-                let entity = Entity::new(world.clone(), position, &EntityType::ARMOR_STAND);
-
-                entity.set_rotation(rotation, 0.0);
-
-                world.play_sound(
-                    Sound::EntityArmorStandPlace,
-                    SoundCategory::Blocks,
-                    &entity.pos.load(),
-                );
-
-                let armor_stand = ArmorStandEntity::new(entity);
-
-                world.spawn_entity(Arc::new(armor_stand)).await;
-                item.decrement_unless_creative(player.gamemode.load(), 1);
-            }
-        })
+            world.spawn_entity(Arc::new(armor_stand));
+            item.decrement_unless_creative(player.gamemode.load(), 1);
+        }
     }
 
     fn as_any(&self) -> &dyn std::any::Any {

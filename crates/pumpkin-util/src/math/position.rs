@@ -609,6 +609,42 @@ impl BlockPos {
             | ((i64::from(self.0.z) & 0x03FF_FFFF) << 12)
             | (i64::from(self.0.y) & 0xFFF)
     }
+
+    /// Packs this block position into a 64-bit integer based on the Minecraft version.
+    ///
+    /// - For 1.14+: Packed as X (26 bits), Z (26 bits), Y (12 bits)
+    /// - For 1.8 - 1.13.2: Packed as X (26 bits), Y (12 bits), Z (26 bits)
+    #[must_use]
+    pub fn as_long_for_version(&self, version: &crate::version::JavaMinecraftVersion) -> i64 {
+        if *version >= crate::version::JavaMinecraftVersion::V_1_14 {
+            self.as_long()
+        } else {
+            ((i64::from(self.0.x) & 0x03FF_FFFF) << 38)
+                | ((i64::from(self.0.y) & 0xFFF) << 26)
+                | (i64::from(self.0.z) & 0x03FF_FFFF)
+        }
+    }
+
+    /// Unpacks a 64-bit integer into a `BlockPos` based on the Minecraft version.
+    ///
+    /// - For 1.14+: Unpacked from X (26 bits), Z (26 bits), Y (12 bits)
+    /// - For 1.8 - 1.13.2: Unpacked from X (26 bits), Y (12 bits), Z (26 bits)
+    #[must_use]
+    pub fn from_long_for_version(val: i64, version: &crate::version::JavaMinecraftVersion) -> Self {
+        if *version >= crate::version::JavaMinecraftVersion::V_1_14 {
+            Self::new(
+                (val >> 38) as i32,
+                (val << 52 >> 52) as i32,
+                (val << 26 >> 38) as i32,
+            )
+        } else {
+            Self::new(
+                (val >> 38) as i32,
+                (val << 26 >> 52) as i32,
+                (val << 38 >> 38) as i32,
+            )
+        }
+    }
 }
 
 impl Serialize for BlockPos {

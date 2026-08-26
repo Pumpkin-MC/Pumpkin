@@ -3,12 +3,12 @@ use std::sync::atomic::AtomicBool;
 
 use crate::entity::projectile::ProjectileHit;
 use crate::{
-    entity::{Entity, EntityBase, EntityBaseFuture, NBTStorage, projectile::ThrownItemEntity},
+    entity::{Entity, EntityBase, projectile::ThrownItemEntity},
     server::Server,
 };
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::entity::{EntityStatus, EntityType};
-use pumpkin_protocol::bedrock::server::actor_event::ActorEventType;
+use pumpkin_protocol::bedrock::server::actor_event::ActorEventID;
 use pumpkin_util::math::vector3::Vector3;
 
 const GRAVITY: f64 = 0.03;
@@ -41,15 +41,9 @@ impl SnowballEntity {
     }
 }
 
-impl NBTStorage for SnowballEntity {}
-
 impl EntityBase for SnowballEntity {
-    fn tick<'a>(
-        &'a self,
-        caller: &'a Arc<dyn EntityBase>,
-        server: &'a Server,
-    ) -> EntityBaseFuture<'a, ()> {
-        Box::pin(async move { self.thrown.process_tick(caller, server).await })
+    fn tick<'a>(&'a self, caller: &'a Arc<dyn EntityBase>, server: &'a Server) {
+        self.thrown.process_tick(caller, server);
     }
 
     fn get_entity(&self) -> &Entity {
@@ -59,39 +53,26 @@ impl EntityBase for SnowballEntity {
     fn get_living_entity(&self) -> Option<&crate::entity::living::LivingEntity> {
         None
     }
-
-    fn as_nbt_storage(&self) -> &dyn NBTStorage {
-        self
-    }
-
     fn cast_any(&self) -> &dyn std::any::Any {
         self
     }
 
-    fn on_hit(&self, hit: crate::entity::projectile::ProjectileHit) -> EntityBaseFuture<'_, ()> {
-        Box::pin(async move {
-            let world = self.get_entity().world.load();
+    fn on_hit(&self, hit: crate::entity::projectile::ProjectileHit) {
+        let world = self.get_entity().world.load();
 
-            // Always send particle status regardless of what was hit
-            world.send_entity_status(
-                self.get_entity(),
-                EntityStatus::Death,
-                Some(ActorEventType::Death),
-            );
+        // Always send particle status regardless of what was hit
+        world.send_entity_status(
+            self.get_entity(),
+            EntityStatus::Death,
+            Some(ActorEventID::Death),
+        );
 
-            // Handle entity-specific damage
-            if let ProjectileHit::Entity { ref entity, .. } = hit {
-                let entity_clone = entity.clone();
+        // Handle entity-specific damage
+        if let ProjectileHit::Entity { ref entity, .. } = hit {
+            let is_blaze = entity.get_entity().entity_type.id == EntityType::BLAZE.id;
+            let damage = if is_blaze { 3.0 } else { 0.0 }; // Only damage blazes
 
-                tokio::spawn(async move {
-                    let is_blaze = entity_clone.get_entity().entity_type.id == EntityType::BLAZE.id;
-                    let damage = if is_blaze { 3.0 } else { 0.0 }; // Only damage blazes
-
-                    entity_clone
-                        .damage(entity_clone.as_ref(), damage, DamageType::THROWN)
-                        .await;
-                });
-            }
-        })
+            entity.damage(entity.as_ref(), damage, DamageType::THROWN);
+        }
     }
 }

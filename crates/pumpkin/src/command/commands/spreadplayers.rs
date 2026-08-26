@@ -81,15 +81,13 @@ impl Pile {
 
     /// Returns the y coordinate an entity should stand at for this pile, or
     /// `None` if the location is unsafe (on top of a liquid).
-    async fn surface_y(&self, world: &World) -> Option<i32> {
+    fn surface_y(&self, world: &World) -> Option<i32> {
         let block_x = self.x.floor() as i32;
         let block_z = self.z.floor() as i32;
-        let top = world
-            .get_heightmap_height_async(ChunkHeightmapType::WorldSurface, block_x, block_z)
-            .await;
+        let top = world.get_heightmap_height(ChunkHeightmapType::WorldSurface, block_x, block_z);
 
         let ground = pumpkin_util::math::position::BlockPos(Vector3::new(block_x, top, block_z));
-        let state = world.get_block_state_async(&ground).await;
+        let state = world.get_block_state(&ground);
         if state.is_liquid() {
             return None;
         }
@@ -161,7 +159,7 @@ struct SpreadArea {
 /// Randomizes, relaxes, and grounds `pile_count` piles inside `area`.
 /// Returns the piles and their standing y coordinates, or `None` if no safe
 /// arrangement was found.
-async fn find_spread_positions(
+fn find_spread_positions(
     world: &World,
     pile_count: usize,
     spread_distance: f64,
@@ -189,7 +187,7 @@ async fn find_spread_positions(
 
         let mut all_safe = true;
         for (pile, y) in piles.iter_mut().zip(&mut surface_ys) {
-            if let Some(surface) = pile.surface_y(world).await {
+            if let Some(surface) = pile.surface_y(world) {
                 *y = surface;
             } else {
                 pile.randomize(area.min_x, area.min_z, area.max_x, area.max_z);
@@ -226,97 +224,89 @@ fn average_min_distance(piles: &[Pile]) -> f64 {
 struct SpreadPlayersExecutor;
 
 impl CommandExecutor for SpreadPlayersExecutor {
-    fn execute<'a>(&'a self, context: &'a CommandContext) -> CommandExecutorResult<'a> {
-        Box::pin(async move {
-            let center = ColumnPosArgumentType::get_column_pos(context, ARG_CENTER)?;
-            let spread_distance = f64::from(FloatArgumentType::get(context, ARG_SPREAD_DISTANCE)?);
-            let max_range = f64::from(FloatArgumentType::get(context, ARG_MAX_RANGE)?);
-            let respect_teams = BoolArgumentType::get(context, ARG_RESPECT_TEAMS)?;
-            let targets = EntityArgumentType::get_entities(context, ARG_TARGETS).await?;
+    fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
+        let center = ColumnPosArgumentType::get_column_pos(context, ARG_CENTER)?;
+        let spread_distance = f64::from(FloatArgumentType::get(context, ARG_SPREAD_DISTANCE)?);
+        let max_range = f64::from(FloatArgumentType::get(context, ARG_MAX_RANGE)?);
+        let respect_teams = BoolArgumentType::get(context, ARG_RESPECT_TEAMS)?;
+        let targets = EntityArgumentType::get_entities(context, ARG_TARGETS)?;
 
-            // Vanilla center-corrects the vec2 argument to the middle of the block.
-            let center_x = f64::from(center.0.x) + 0.5;
-            let center_z = f64::from(center.0.y) + 0.5;
-            let area = SpreadArea {
-                min_x: center_x - max_range,
-                min_z: center_z - max_range,
-                max_x: center_x + max_range,
-                max_z: center_z + max_range,
+        // Vanilla center-corrects the vec2 argument to the middle of the block.
+        let center_x = f64::from(center.0.x) + 0.5;
+        let center_z = f64::from(center.0.y) + 0.5;
+        let area = SpreadArea {
+            min_x: center_x - max_range,
+            min_z: center_z - max_range,
+            max_x: center_x + max_range,
+            max_z: center_z + max_range,
+        };
+
+        // Teams are not implemented yet, so every target is teamless. With
+        // respectTeams=true that matches Vanilla's behavior of gathering all
+        // teamless entities onto a single position.
+        let pile_count = if respect_teams { 1 } else { targets.len() };
+
+        let world = context.source.world().clone();
+
+        let Some((piles, surface_ys)) =
+            find_spread_positions(&world, pile_count, spread_distance, &area)
+        else {
+            let error_type = if respect_teams {
+                &FAILED_TEAMS_ERROR_TYPE
+            } else {
+                &FAILED_ENTITIES_ERROR_TYPE
             };
+            #[expect(clippy::cast_precision_loss)]
+            let suggested = max_range / (pile_count as f64).sqrt();
+            return Err(error_type.create_without_context(
+                TextComponent::text(pile_count.to_string()),
+                TextComponent::text(format!("{center_x:.2}")),
+                TextComponent::text(format!("{center_z:.2}")),
+                TextComponent::text(format!("{suggested:.2}")),
+            ));
+        };
 
-            // Teams are not implemented yet, so every target is teamless. With
-            // respectTeams=true that matches Vanilla's behavior of gathering all
-            // teamless entities onto a single position.
-            let pile_count = if respect_teams { 1 } else { targets.len() };
+        for (index, target) in targets.iter().enumerate() {
+            let pile = piles[index % pile_count];
+            let y = surface_ys[index % pile_count];
+            futures::executor::block_on(target.clone().teleport(
+                Vector3::new(pile.x.floor() + 0.5, f64::from(y), pile.z.floor() + 0.5),
+                None,
+                None,
+                world.clone(),
+            ));
+        }
 
-            let world = context.source.world().clone();
+        let average_distance = average_min_distance(&piles);
 
-            let Some((piles, surface_ys)) =
-                find_spread_positions(&world, pile_count, spread_distance, &area).await
-            else {
-                let error_type = if respect_teams {
-                    &FAILED_TEAMS_ERROR_TYPE
-                } else {
-                    &FAILED_ENTITIES_ERROR_TYPE
-                };
-                #[expect(clippy::cast_precision_loss)]
-                let suggested = max_range / (pile_count as f64).sqrt();
-                return Err(error_type.create_without_context(
+        let success_key = if respect_teams {
+            (
+                translation::java::COMMANDS_SPREADPLAYERS_SUCCESS_TEAMS,
+                translation::java::COMMANDS_SPREADPLAYERS_SUCCESS_TEAMS,
+            )
+        } else {
+            (
+                translation::java::COMMANDS_SPREADPLAYERS_SUCCESS_ENTITIES,
+                translation::java::COMMANDS_SPREADPLAYERS_SUCCESS_ENTITIES,
+            )
+        };
+
+        context.source.send_feedback(
+            TextComponent::translate_cross(
+                success_key.0,
+                success_key.1,
+                [
                     TextComponent::text(pile_count.to_string()),
                     TextComponent::text(format!("{center_x:.2}")),
                     TextComponent::text(format!("{center_z:.2}")),
-                    TextComponent::text(format!("{suggested:.2}")),
-                ));
-            };
+                    TextComponent::text(format!("{average_distance:.2}")),
+                ],
+            ),
+            true,
+        );
 
-            for (index, target) in targets.iter().enumerate() {
-                let pile = piles[index % pile_count];
-                let y = surface_ys[index % pile_count];
-                target
-                    .clone()
-                    .teleport(
-                        Vector3::new(pile.x.floor() + 0.5, f64::from(y), pile.z.floor() + 0.5),
-                        None,
-                        None,
-                        world.clone(),
-                    )
-                    .await;
-            }
-
-            let average_distance = average_min_distance(&piles);
-
-            let success_key = if respect_teams {
-                (
-                    translation::java::COMMANDS_SPREADPLAYERS_SUCCESS_TEAMS,
-                    translation::java::COMMANDS_SPREADPLAYERS_SUCCESS_TEAMS,
-                )
-            } else {
-                (
-                    translation::java::COMMANDS_SPREADPLAYERS_SUCCESS_ENTITIES,
-                    translation::java::COMMANDS_SPREADPLAYERS_SUCCESS_ENTITIES,
-                )
-            };
-
-            context
-                .source
-                .send_feedback(
-                    TextComponent::translate_cross(
-                        success_key.0,
-                        success_key.1,
-                        [
-                            TextComponent::text(pile_count.to_string()),
-                            TextComponent::text(format!("{center_x:.2}")),
-                            TextComponent::text(format!("{center_z:.2}")),
-                            TextComponent::text(format!("{average_distance:.2}")),
-                        ],
-                    ),
-                    true,
-                )
-                .await;
-
-            #[expect(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
-            Ok(pile_count as i32)
-        })
+        #[expect(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+        Ok(pile_count as i32)
     }
 }
 

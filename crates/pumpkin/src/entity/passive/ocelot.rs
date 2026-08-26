@@ -8,12 +8,12 @@ use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_nbt::compound::NbtCompound;
-use pumpkin_protocol::bedrock::server::actor_event::ActorEventType;
+use pumpkin_protocol::bedrock::server::actor_event::ActorEventID;
 use pumpkin_protocol::java::client::play::Metadata;
 use rand::RngExt;
 
 use crate::entity::{
-    Entity, EntityBase, EntityBaseFuture, NBTStorage, NbtFuture,
+    Entity, EntityBase,
     ai::goal::{
         active_target::ActiveTargetGoal, avoid_entity::AvoidEntityGoal, breed::BreedGoal,
         escape_danger::EscapeDangerGoal, follow_parent::FollowParentGoal,
@@ -119,26 +119,6 @@ impl OcelotEntity {
     }
 }
 
-impl NBTStorage for OcelotEntity {
-    fn write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
-        Box::pin(async {
-            self.mob_entity.living_entity.write_nbt(nbt).await;
-            self.write_animal_nbt(nbt);
-            nbt.put_bool("Trusting", self.is_trusting.load(Ordering::Relaxed));
-        })
-    }
-
-    fn read_nbt_non_mut<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
-        Box::pin(async {
-            self.mob_entity.living_entity.read_nbt_non_mut(nbt).await;
-            self.read_animal_nbt(nbt);
-            if let Some(trusting) = nbt.get_bool("Trusting") {
-                self.is_trusting.store(trusting, Ordering::Relaxed);
-            }
-        })
-    }
-}
-
 impl Animal for OcelotEntity {
     fn is_food(&self, item_stack: &ItemStack) -> bool {
         let item = item_stack.get_item();
@@ -149,74 +129,79 @@ impl Animal for OcelotEntity {
 }
 
 impl Mob for OcelotEntity {
+    fn as_animal(&self) -> Option<&dyn Animal> {
+        Some(self)
+    }
+
+    fn mob_write_nbt(&self, nbt: &mut NbtCompound) {
+        nbt.put_bool("Trusting", self.is_trusting.load(Ordering::Relaxed));
+    }
+
+    fn mob_read_nbt(&self, nbt: &NbtCompound) {
+        if let Some(trusting) = nbt.get_bool("Trusting") {
+            self.is_trusting.store(trusting, Ordering::Relaxed);
+        }
+    }
+
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
     }
 
-    fn mob_init_data_tracker(&self) -> EntityBaseFuture<'_, ()> {
-        Box::pin(async move {
-            let entity = self.get_entity();
-            let is_baby = entity.age.load(Ordering::Relaxed) < 0;
-            if is_baby {
-                entity.send_meta_data(
-                    &[Metadata::new(
-                        pumpkin_data::tracked_data::ocelot::BABY_ID,
-                        true,
-                    )],
-                    None,
-                );
-            }
+    fn mob_init_data_tracker(&self) {
+        let entity = self.get_entity();
+        let is_baby = entity.age.load(Ordering::Relaxed) < 0;
+        if is_baby {
             entity.send_meta_data(
                 &[Metadata::new(
-                    pumpkin_data::tracked_data::ocelot::TRUSTING,
-                    self.is_trusting.load(Ordering::Relaxed),
+                    pumpkin_data::tracked_data::ocelot::BABY_ID,
+                    true,
                 )],
                 None,
             );
-        })
+        }
+        entity.send_meta_data(
+            &[Metadata::new(
+                pumpkin_data::tracked_data::ocelot::TRUSTING,
+                self.is_trusting.load(Ordering::Relaxed),
+            )],
+            None,
+        );
     }
 
-    fn mob_interact<'a>(
-        &'a self,
-        player: &'a Arc<Player>,
-        item_stack: &'a mut ItemStack,
-    ) -> EntityBaseFuture<'a, bool> {
-        Box::pin(async move {
-            let is_food = self.is_food(item_stack);
-            let dist_sqr = self
-                .get_entity()
-                .pos
-                .load()
-                .squared_distance_to_vec(&player.get_entity().pos.load());
+    fn mob_interact(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {
+        let is_food = self.is_food(item_stack);
+        let dist_sqr = self
+            .get_entity()
+            .pos
+            .load()
+            .squared_distance_to_vec(&player.get_entity().pos.load());
 
-            if !self.is_trusting() && is_food && dist_sqr < 9.0 {
-                item_stack.decrement_unless_creative(player.gamemode.load(), 1);
+        if !self.is_trusting() && is_food && dist_sqr < 9.0 {
+            item_stack.decrement_unless_creative(player.gamemode.load(), 1);
 
-                let mut rng = rand::rng();
-                if rng.random_range(0..3) == 0 {
-                    self.set_trusting(true);
-                    self.get_entity().world.load().send_entity_status(
-                        self.get_entity(),
-                        EntityStatus::TrustingSucceeded,
-                        Some(ActorEventType::TamingSucceeded),
-                    );
-                } else {
-                    self.get_entity().world.load().send_entity_status(
-                        self.get_entity(),
-                        EntityStatus::TrustingFailed,
-                        Some(ActorEventType::TamingFailed),
-                    );
-                }
-
-                return true;
+            let mut rng = rand::rng();
+            if rng.random_range(0..3) == 0 {
+                self.set_trusting(true);
+                self.get_entity().world.load().send_entity_status(
+                    self.get_entity(),
+                    EntityStatus::TrustingSucceeded,
+                    Some(ActorEventID::TamingSucceeded),
+                );
+            } else {
+                self.get_entity().world.load().send_entity_status(
+                    self.get_entity(),
+                    EntityStatus::TrustingFailed,
+                    Some(ActorEventID::TamingFailed),
+                );
             }
 
-            self.animal_interact(
-                player,
-                item_stack,
-                pumpkin_data::sound::Sound::EntityOcelotAmbient,
-            )
-            .await
-        })
+            return true;
+        }
+
+        self.animal_interact(
+            player,
+            item_stack,
+            pumpkin_data::sound::Sound::EntityOcelotAmbient,
+        )
     }
 }

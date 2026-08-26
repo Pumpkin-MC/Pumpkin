@@ -1,0 +1,32 @@
+{
+  "parent": "minecraft:recipes/root",
+  "criteria": {
+    "has_end_stone": {
+      "conditions": {
+        "items": [
+          {
+            "items": "minecraft:end_stone"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    },
+    "has_the_recipe": {
+      "conditions": {
+        "recipe": "minecraft:end_stone_brick_slab_from_end_stone_stonecutting"
+      },
+      "trigger": "minecraft:recipe_unlocked"
+    }
+  },
+  "requirements": [
+    [
+      "has_the_recipe",
+      "has_end_stone"
+    ]
+  ],
+  "rewards": {
+    "recipes": [
+      "minecraft:end_stone_brick_slab_from_end_stone_stonecutting"
+    ]
+  }
+}

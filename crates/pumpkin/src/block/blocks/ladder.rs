@@ -1,6 +1,5 @@
 use crate::block::{
-    BlockBehaviour, BlockFuture, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, OnPlaceArgs,
-    OnScheduledTickArgs,
+    BlockBehaviour, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, OnPlaceArgs, OnScheduledTickArgs,
 };
 use crate::entity::EntityBase;
 use crate::world::World;
@@ -16,40 +15,37 @@ use pumpkin_world::tick::TickPriority;
 pub struct LadderBlock;
 
 impl BlockBehaviour for LadderBlock {
-    fn on_place<'a>(&'a self, args: OnPlaceArgs<'a>) -> BlockFuture<'a, BlockStateId> {
-        Box::pin(async move {
-            let clicked_pos = args.use_item_on.position;
-            let (clicked_block, clicked_block_state_id) =
-                args.world.get_block_and_state_id(&clicked_pos);
-            if clicked_block == &Block::LADDER {
-                //you can't click on a ladder and place a ladder
-                let props =
-                    LadderLikeProperties::from_state_id(clicked_block_state_id, clicked_block);
-                let sub = args.position.0.sub(&clicked_pos.0);
-                if let Some(dir) = horizontal_facing_from_offset(sub)
-                    && let Some(horizontal_facing) = dir.to_horizontal_facing()
-                    && props.facing == horizontal_facing
-                {
-                    return Block::AIR.default_state.id;
-                }
+    fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
+        let clicked_pos = args.use_item_on.position;
+        let (clicked_block, clicked_block_state_id) =
+            args.world.get_block_and_state_id(&clicked_pos);
+        if clicked_block == &Block::LADDER {
+            //you can't click on a ladder and place a ladder
+            let props = LadderLikeProperties::from_state_id(clicked_block_state_id, clicked_block);
+            let sub = args.position.0.sub(&clicked_pos.0);
+            if let Some(dir) = horizontal_facing_from_offset(sub)
+                && let Some(horizontal_facing) = dir.to_horizontal_facing()
+                && props.facing == horizontal_facing
+            {
+                return Block::AIR.default_state.id;
             }
-            let mut props = LadderLikeProperties::default(args.block);
+        }
+        let mut props = LadderLikeProperties::default(args.block);
 
-            let directions = args.player.get_entity().get_entity_facing_order();
-            for dir in directions {
-                if dir == Facing::Up || dir == Facing::Down {
-                    continue;
-                }
-                if !can_place_ladder_at(args.world, args.position, dir.to_block_direction()) {
-                    continue;
-                }
-                if let Some(facing) = dir.opposite().to_horizontal_facing() {
-                    props.facing = facing;
-                    return props.to_state_id(args.block);
-                }
+        let directions = args.player.get_entity().get_entity_facing_order();
+        for dir in directions {
+            if dir == Facing::Up || dir == Facing::Down {
+                continue;
             }
-            Block::AIR.default_state.id
-        })
+            if !can_place_ladder_at(args.world, args.position, dir.to_block_direction()) {
+                continue;
+            }
+            if let Some(facing) = dir.opposite().to_horizontal_facing() {
+                props.facing = facing;
+                return props.to_state_id(args.block);
+            }
+        }
+        Block::AIR.default_state.id
     }
     fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
         for dir in BlockDirection::horizontal() {
@@ -63,41 +59,37 @@ impl BlockBehaviour for LadderBlock {
         }
         false
     }
-    fn get_state_for_neighbor_update<'a>(
-        &'a self,
-        args: GetStateForNeighborUpdateArgs<'a>,
-    ) -> BlockFuture<'a, BlockStateId> {
-        Box::pin(async move {
-            let props = LadderLikeProperties::from_state_id(args.state_id, args.block);
-            if props.facing.to_block_direction().opposite() == args.direction
-                && !can_place_ladder_at(
-                    args.world,
-                    args.position,
-                    props.facing.to_block_direction().opposite(),
-                )
-            {
-                return BlockStateId::AIR;
-            }
-            args.state_id
-        })
-    }
-
-    fn on_scheduled_tick<'a>(&'a self, args: OnScheduledTickArgs<'a>) -> BlockFuture<'a, ()> {
-        Box::pin(async move {
-            let state_id = args.world.get_block_state_id(args.position);
-            if Block::from_state_id(state_id) != &Block::LADDER {
-                return;
-            }
-            let props = LadderLikeProperties::from_state_id(state_id, args.block);
-            if !can_place_ladder_at(
+    fn get_state_for_neighbor_update(
+        &self,
+        args: GetStateForNeighborUpdateArgs<'_>,
+    ) -> BlockStateId {
+        let props = LadderLikeProperties::from_state_id(args.state_id, args.block);
+        if props.facing.to_block_direction().opposite() == args.direction
+            && !can_place_ladder_at(
                 args.world,
                 args.position,
                 props.facing.to_block_direction().opposite(),
-            ) {
-                args.world
-                    .schedule_block_tick(args.block, *args.position, 1, TickPriority::Normal);
-            }
-        })
+            )
+        {
+            return BlockStateId::AIR;
+        }
+        args.state_id
+    }
+
+    fn on_scheduled_tick(&self, args: OnScheduledTickArgs<'_>) {
+        let state_id = args.world.get_block_state_id(args.position);
+        if Block::from_state_id(state_id) != &Block::LADDER {
+            return;
+        }
+        let props = LadderLikeProperties::from_state_id(state_id, args.block);
+        if !can_place_ladder_at(
+            args.world,
+            args.position,
+            props.facing.to_block_direction().opposite(),
+        ) {
+            args.world
+                .schedule_block_tick(args.block, *args.position, 1, TickPriority::Normal);
+        }
     }
 }
 #[must_use]

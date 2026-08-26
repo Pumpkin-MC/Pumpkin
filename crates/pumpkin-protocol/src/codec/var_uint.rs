@@ -75,7 +75,15 @@ impl VarUInt {
         let mut val = 0;
         for i in 0..Self::MAX_SIZE.get() {
             let byte = read.read_u8().await.map_err(|err| {
-                if i == 0 && matches!(err.kind(), ErrorKind::UnexpectedEof) {
+                if i == 0
+                    && matches!(
+                        err.kind(),
+                        ErrorKind::UnexpectedEof
+                            | ErrorKind::ConnectionReset
+                            | ErrorKind::ConnectionAborted
+                            | ErrorKind::BrokenPipe
+                    )
+                {
                     ReadingError::CleanEOF("VarUInt".to_string())
                 } else {
                     ReadingError::Incomplete(err.to_string())

@@ -39,29 +39,29 @@ impl CommandExecutor for Executor {
                     config.ops.remove(op_index);
                     succeeded_deops += 1;
 
-                    if let Some(player) = server.get_player_by_uuid(profile.id) {
-                        let command_dispatcher = server.command_dispatcher.load();
+                if let Some(player) = server.get_player_by_uuid(profile.id)
+                    && let Some(server_arc) = player.world().server.upgrade()
+                {
+                    let command_dispatcher = server_arc.command_dispatcher.load();
                         player
-                            .set_permission_lvl(server, PermissionLvl::Zero, &command_dispatcher)
-                            .await;
-                    }
-
-                    let msg = TextComponent::translate_cross(
-                        translation::java::COMMANDS_DEOP_SUCCESS,
-                        translation::bedrock::COMMANDS_DEOP_SUCCESS,
-                        [TextComponent::text(profile.name.clone())],
-                    );
-                    context.source.send_feedback(msg, true).await;
+                            .set_permission_lvl(&server_arc, PermissionLvl::Zero, &command_dispatcher);
                 }
+
+                let msg = TextComponent::translate_cross(
+                    translation::java::COMMANDS_DEOP_SUCCESS,
+                    translation::bedrock::COMMANDS_DEOP_SUCCESS,
+                    [TextComponent::text(profile.name.clone())],
+                );
+                context.source.send_feedback(msg, true);
             }
+        }
 
             if succeeded_deops <= 0 {
-                Err(ALREADY_NOT_OP_ERROR_TYPE.create_without_context())
+            Err(ALREADY_NOT_OP_ERROR_TYPE.create_without_context())
             } else {
                 config.save();
-                Ok(succeeded_deops)
-            }
-        })
+            Ok(succeeded_deops)
+        }
     }
 }
 

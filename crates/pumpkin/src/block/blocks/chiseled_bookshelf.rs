@@ -5,8 +5,8 @@ use pumpkin_macros::pumpkin_block;
 use crate::block::entities::chiseled_bookshelf::ChiseledBookshelfBlockEntity;
 use crate::{
     block::{
-        BlockBehaviour, BlockFuture, BlockHitResult, GetComparatorOutputArgs, NormalUseArgs,
-        OnPlaceArgs, PlacedArgs, UseWithItemArgs, registry::BlockActionResult,
+        BlockBehaviour, BlockHitResult, GetComparatorOutputArgs, NormalUseArgs, OnPlaceArgs,
+        PlacedArgs, UseWithItemArgs, registry::BlockActionResult,
     },
     entity::{EntityBase, player::Player},
     world::World,
@@ -22,121 +22,102 @@ use pumpkin_data::{
 };
 use pumpkin_inventory::screen_handler::InventoryPlayer;
 use pumpkin_util::math::{position::BlockPos, vector2::Vector2};
-use pumpkin_world::inventory::Inventory;
 
 #[pumpkin_block("minecraft:chiseled_bookshelf")]
 pub struct ChiseledBookshelfBlock;
 
 impl BlockBehaviour for ChiseledBookshelfBlock {
-    fn on_place<'a>(&'a self, args: OnPlaceArgs<'a>) -> BlockFuture<'a, BlockStateId> {
-        Box::pin(async move {
-            let mut properties = ChiseledBookshelfLikeProperties::default(args.block);
+    fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
+        let mut properties = ChiseledBookshelfLikeProperties::default(args.block);
 
-            // Face in the opposite direction the player is facing
-            properties.facing = args.player.get_entity().get_horizontal_facing().opposite();
+        // Face in the opposite direction the player is facing
+        properties.facing = args.player.get_entity().get_horizontal_facing().opposite();
 
-            properties.to_state_id(args.block)
-        })
+        properties.to_state_id(args.block)
     }
 
-    fn normal_use<'a>(&'a self, args: NormalUseArgs<'a>) -> BlockFuture<'a, BlockActionResult> {
-        Box::pin(async move {
-            let state = args.world.get_block_state(args.position);
-            let properties = ChiseledBookshelfLikeProperties::from_state_id(state.id, args.block);
+    fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
+        let state = args.world.get_block_state(args.position);
+        let properties = ChiseledBookshelfLikeProperties::from_state_id(state.id, args.block);
 
-            if let Some(slot) = Self::get_slot_for_hit(args.hit, properties.facing) {
-                if Self::is_slot_used(properties, slot) {
-                    if let Some(block_entity) = args.world.get_block_entity(args.position)
-                        && let Some(block_entity) = block_entity
-                            .as_any()
-                            .downcast_ref::<ChiseledBookshelfBlockEntity>()
-                    {
-                        Self::try_remove_book(
-                            args.world,
-                            args.player,
-                            args.position,
-                            block_entity,
-                            properties,
-                            slot,
-                        )
-                        .await;
-                        return BlockActionResult::Success;
-                    }
-                } else {
-                    return BlockActionResult::Consume;
-                }
-            }
-            BlockActionResult::Pass
-        })
-    }
-
-    fn use_with_item<'a>(
-        &'a self,
-        args: UseWithItemArgs<'a>,
-    ) -> BlockFuture<'a, BlockActionResult> {
-        Box::pin(async move {
-            let state = args.world.get_block_state(args.position);
-            let properties = ChiseledBookshelfLikeProperties::from_state_id(state.id, args.block);
-
-            if !args
-                .item_stack
-                .get_item()
-                .has_tag(&tag::Item::MINECRAFT_BOOKSHELF_BOOKS)
-            {
-                return BlockActionResult::PassToDefaultBlockAction;
-            }
-            if let Some(slot) = Self::get_slot_for_hit(args.hit, properties.facing) {
-                if Self::is_slot_used(properties, slot) {
-                    return BlockActionResult::PassToDefaultBlockAction;
-                } else if let Some(block_entity) = args.world.get_block_entity(args.position)
+        if let Some(slot) = Self::get_slot_for_hit(args.hit, properties.facing) {
+            if Self::is_slot_used(properties, slot) {
+                if let Some(block_entity) = args.world.get_block_entity(args.position)
                     && let Some(block_entity) = block_entity
                         .as_any()
                         .downcast_ref::<ChiseledBookshelfBlockEntity>()
                 {
-                    Self::try_add_book(
+                    Self::try_remove_book(
                         args.world,
                         args.player,
                         args.position,
                         block_entity,
                         properties,
                         slot,
-                        args.item_stack,
-                    )
-                    .await;
+                    );
                     return BlockActionResult::Success;
                 }
+            } else {
+                return BlockActionResult::Consume;
             }
-
-            BlockActionResult::Pass
-        })
+        }
+        BlockActionResult::Pass
     }
 
-    fn placed<'a>(&'a self, args: PlacedArgs<'a>) -> BlockFuture<'a, ()> {
-        Box::pin(async move {
-            let block_entity = ChiseledBookshelfBlockEntity::new(*args.position);
-            args.world.add_block_entity(Arc::new(block_entity));
-        })
-    }
+    fn use_with_item(&self, args: UseWithItemArgs<'_>) -> BlockActionResult {
+        let state = args.world.get_block_state(args.position);
+        let properties = ChiseledBookshelfLikeProperties::from_state_id(state.id, args.block);
 
-    fn get_comparator_output<'a>(
-        &'a self,
-        args: GetComparatorOutputArgs<'a>,
-    ) -> BlockFuture<'a, Option<u8>> {
-        Box::pin(async move {
-            if let Some(block_entity) = args.world.get_block_entity(args.position)
+        if !args
+            .item_stack
+            .get_item()
+            .has_tag(&tag::Item::MINECRAFT_BOOKSHELF_BOOKS)
+        {
+            return BlockActionResult::PassToDefaultBlockAction;
+        }
+        if let Some(slot) = Self::get_slot_for_hit(args.hit, properties.facing) {
+            if Self::is_slot_used(properties, slot) {
+                return BlockActionResult::PassToDefaultBlockAction;
+            } else if let Some(block_entity) = args.world.get_block_entity(args.position)
                 && let Some(block_entity) = block_entity
                     .as_any()
                     .downcast_ref::<ChiseledBookshelfBlockEntity>()
             {
-                return Some((block_entity.last_interacted_slot.load(Ordering::Relaxed) + 1) as u8);
+                Self::try_add_book(
+                    args.world,
+                    args.player,
+                    args.position,
+                    block_entity,
+                    properties,
+                    slot,
+                    args.item_stack,
+                );
+                return BlockActionResult::Success;
             }
-            None
-        })
+        }
+
+        BlockActionResult::Pass
+    }
+
+    fn placed(&self, args: PlacedArgs<'_>) {
+        let block_entity = ChiseledBookshelfBlockEntity::new(*args.position);
+        args.world.add_block_entity(Arc::new(block_entity));
+    }
+
+    fn get_comparator_output(&self, args: GetComparatorOutputArgs<'_>) -> Option<u8> {
+        if let Some(block_entity) = args.world.get_block_entity(args.position)
+            && let Some(block_entity) = block_entity
+                .as_any()
+                .downcast_ref::<ChiseledBookshelfBlockEntity>()
+        {
+            return Some((block_entity.last_interacted_slot.load(Ordering::Relaxed) + 1) as u8);
+        }
+        None
     }
 }
 
 impl ChiseledBookshelfBlock {
-    async fn try_add_book(
+    fn try_add_book(
         world: &Arc<World>,
         player: &Player,
         position: &BlockPos,
@@ -153,28 +134,24 @@ impl ChiseledBookshelfBlock {
             Sound::BlockChiseledBookshelfPickup
         };
 
-        entity
-            .set_stack(
-                slot as usize,
-                item.split_unless_creative(player.gamemode.load(), 1),
-            )
-            .await;
-        entity
-            .update_state(properties, world.clone(), slot as usize)
-            .await;
+        entity.set_book(
+            slot as usize,
+            item.split_unless_creative(player.gamemode.load(), 1),
+        );
+        entity.update_state(properties, world, slot as usize);
 
         world.play_sound(sound, SoundCategory::Blocks, &position.to_centered_f64());
     }
 
-    async fn try_remove_book(
+    fn try_remove_book(
         world: &Arc<World>,
-        player: &Player,
+        player: &Arc<Player>,
         position: &BlockPos,
         entity: &ChiseledBookshelfBlockEntity,
         properties: ChiseledBookshelfLikeProperties,
         slot: i8,
     ) {
-        let mut stack = entity.remove_stack_specific(slot as usize, 1).await;
+        let mut stack = entity.remove_book(slot as usize, 1);
 
         let sound = if stack.get_item() == &Item::ENCHANTED_BOOK {
             Sound::BlockChiseledBookshelfPickupEnchanted
@@ -182,17 +159,11 @@ impl ChiseledBookshelfBlock {
             Sound::BlockChiseledBookshelfPickup
         };
 
-        if !player
-            .get_inventory()
-            .insert_stack_anywhere(&mut stack)
-            .await
-        {
+        if !player.get_inventory().insert_stack_anywhere(&mut stack) {
             // Drop the item on the ground if the player cannot hold it because of a full inventory
-            player.drop_item(stack).await;
+            player.drop_item(stack);
         }
-        entity
-            .update_state(properties, world.clone(), slot as usize)
-            .await;
+        entity.update_state(properties, world, slot as usize);
 
         world.play_sound(sound, SoundCategory::Blocks, &position.to_centered_f64());
     }

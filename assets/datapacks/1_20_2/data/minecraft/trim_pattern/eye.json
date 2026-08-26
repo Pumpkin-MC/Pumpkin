@@ -1,0 +1,8 @@
+{
+  "template_item": "minecraft:eye_armor_trim_smithing_template",
+  "description": {
+    "translate": "trim_pattern.minecraft.eye"
+  },
+  "asset_id": "minecraft:eye",
+  "decal": 0
+}

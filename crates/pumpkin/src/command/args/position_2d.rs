@@ -28,24 +28,18 @@ impl GetClientSideArgParser for Position2DArgumentConsumer {
 }
 
 impl ArgumentConsumer for Position2DArgumentConsumer {
-    fn consume<'a, 'b>(
+    fn consume<'a>(
         &'a self,
         sender: &'a CommandSender,
         _server: &'a Server,
-        args: &'b mut RawArgs<'a>,
+        args: &mut RawArgs<'a>,
     ) -> ConsumeResult<'a> {
-        let x_str_opt = args.pop().map(|arg| arg.value);
-        let z_str_opt = args.pop().map(|arg| arg.value);
+        let x_str = args.pop()?.value;
+        let z_str = args.pop()?.value;
 
-        let (Some(x_str), Some(z_str)) = (x_str_opt, z_str_opt) else {
-            return Box::pin(async move { None });
-        };
-
-        let result: Option<Arg<'a>> = MaybeRelativePosition2D::try_new(x_str, z_str)
+        MaybeRelativePosition2D::try_new(x_str, z_str)
             .and_then(|pos| pos.try_to_absolute(sender.position()))
-            .map(Arg::Pos2D);
-
-        Box::pin(async move { result })
+            .map(Arg::Pos2D)
     }
 }
 

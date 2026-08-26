@@ -1,7 +1,6 @@
-use std::{env, fs, path::Path};
+use std::{env, fs, path::Path, sync::RwLock};
 
 use serde::{Deserialize, Serialize};
-use tokio::sync::RwLock;
 use tracing::{debug, error, warn};
 
 const DATA_FOLDER: &str = "data/";
@@ -12,6 +11,7 @@ pub mod advancement_data;
 pub mod banlist_serializer;
 pub mod banned_ip;
 pub mod banned_player;
+pub mod datapack;
 pub mod player_server;
 pub mod usercache;
 pub mod whitelist;

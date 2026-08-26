@@ -1,4 +1,3 @@
-use std::pin::Pin;
 use std::sync::Arc;
 
 use crate::entity::Entity;
@@ -52,44 +51,42 @@ impl ItemMetadata for MinecartItem {
 }
 
 impl ItemBehaviour for MinecartItem {
-    fn use_on_block<'a>(
-        &'a self,
-        item: &'a mut ItemStack,
-        player: &'a Player,
+    fn use_on_block(
+        &self,
+        item: &mut ItemStack,
+        player: &Player,
         location: BlockPos,
         _face: BlockDirection,
         _cursor_pos: Vector3<f32>,
-        block: &'a Block,
-        _server: &'a Server,
-    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
-        Box::pin(async move {
-            let world = player.world();
+        block: &Block,
+        _server: &Server,
+    ) {
+        let world = player.world();
 
-            if !block.has_tag(&tag::Block::MINECRAFT_RAILS) {
-                return;
-            }
-            let state_id = world.get_block_state_id(&location);
-            let is_ascending = if PoweredRailLikeProperties::handles_block_id(block.id) {
-                PoweredRailLikeProperties::from_state_id(state_id, block)
-                    .shape
-                    .is_ascending()
-            } else {
-                RailLikeProperties::from_state_id(state_id, block)
-                    .shape
-                    .is_ascending()
-            };
-            let height = if is_ascending { 0.5 } else { 0.0 };
-            let entity_type = Self::item_to_entity(item.item);
-            let pos = location.to_f64();
-            let entity = Entity::new(
-                world.clone(),
-                Vector3::new(pos.x, pos.y + 0.0625 + height, pos.z),
-                entity_type,
-            );
-            let minecart_entity = Arc::new(MinecartEntity::new(entity));
-            world.spawn_entity(minecart_entity).await;
-            item.decrement_unless_creative(player.gamemode.load(), 1);
-        })
+        if !block.has_tag(&tag::Block::MINECRAFT_RAILS) {
+            return;
+        }
+        let state_id = world.get_block_state_id(&location);
+        let is_ascending = if PoweredRailLikeProperties::handles_block_id(block.id) {
+            PoweredRailLikeProperties::from_state_id(state_id, block)
+                .shape
+                .is_ascending()
+        } else {
+            RailLikeProperties::from_state_id(state_id, block)
+                .shape
+                .is_ascending()
+        };
+        let height = if is_ascending { 0.5 } else { 0.0 };
+        let entity_type = Self::item_to_entity(item.item);
+        let pos = location.to_f64();
+        let entity = Entity::new(
+            world.clone(),
+            Vector3::new(pos.x, pos.y + 0.0625 + height, pos.z),
+            entity_type,
+        );
+        let minecart_entity = Arc::new(MinecartEntity::new(entity));
+        world.spawn_entity(minecart_entity);
+        item.decrement_unless_creative(player.gamemode.load(), 1);
     }
 
     fn as_any(&self) -> &dyn std::any::Any {

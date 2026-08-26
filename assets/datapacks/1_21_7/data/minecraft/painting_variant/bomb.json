@@ -1,0 +1,13 @@
+{
+  "asset_id": "minecraft:bomb",
+  "title": {
+    "translate": "painting.minecraft.bomb.title",
+    "color": "yellow"
+  },
+  "author": {
+    "translate": "painting.minecraft.bomb.author",
+    "color": "gray"
+  },
+  "width": 1,
+  "height": 1
+}

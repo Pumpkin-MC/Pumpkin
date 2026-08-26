@@ -217,11 +217,24 @@ impl BlockState {
 
         base_shapes.chain(water_shape)
     }
+
+    #[must_use]
+    pub const fn rotate(&self, rotation: crate::block_rotation::Rotation) -> &'static Self {
+        Block::from_state_id(self.id).rotate(self.id, rotation)
+    }
+
+    #[must_use]
+    pub const fn mirror(&self, mirror: crate::block_rotation::Mirror) -> &'static Self {
+        Block::from_state_id(self.id).mirror(self.id, mirror)
+    }
 }
 
 impl BlockStateId {
     // depends on generated impl:
     // pub(crate) const STATE_COUNT: u16;
+
+    /// The total count of all registered block states.
+    pub const COUNT: u16 = Self::STATE_COUNT;
 
     // SAFETY: There must never be a BlockStateId where self.0 >= BlockStateId::STATE_COUNT
 
@@ -265,6 +278,18 @@ impl BlockStateId {
     #[must_use]
     pub const fn to_block(self) -> &'static Block {
         Block::from_state_id(self)
+    }
+
+    #[inline]
+    #[must_use]
+    pub const fn rotate(self, rotation: crate::block_rotation::Rotation) -> &'static BlockState {
+        Block::from_state_id(self).rotate(self, rotation)
+    }
+
+    #[inline]
+    #[must_use]
+    pub const fn mirror(self, mirror: crate::block_rotation::Mirror) -> &'static BlockState {
+        Block::from_state_id(self).mirror(self, mirror)
     }
 }
 

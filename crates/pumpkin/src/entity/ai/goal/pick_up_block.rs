@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use super::{Goal, GoalFuture, to_goal_ticks};
+use super::{Goal, to_goal_ticks};
 use crate::entity::mob::Mob;
 use crate::entity::mob::enderman::EndermanEntity;
 use pumpkin_data::BlockStateId;
@@ -20,90 +20,81 @@ impl PickUpBlockGoal {
 }
 
 impl Goal for PickUpBlockGoal {
-    fn can_start<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
-        Box::pin(async move {
-            if self.enderman.get_carried_block().is_some() {
-                return false;
-            }
+    fn can_start(&mut self, mob: &dyn Mob) -> bool {
+        if self.enderman.get_carried_block().is_some() {
+            return false;
+        }
 
-            let entity = &mob.get_mob_entity().living_entity.entity;
-            let world = entity.world.load();
-            if !world.level_info.load().game_rules.mob_griefing {
-                return false;
-            }
+        let entity = &mob.get_mob_entity().living_entity.entity;
+        let world = entity.world.load();
+        if !world.level_info.load().game_rules.mob_griefing {
+            return false;
+        }
 
-            if mob.get_random().random_range(0..to_goal_ticks(20)) != 0 {
-                return false;
-            }
+        if mob.get_random().random_range(0..to_goal_ticks(20)) != 0 {
+            return false;
+        }
 
-            true
-        })
+        true
     }
 
-    fn tick<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
-        Box::pin(async move {
-            let entity = &mob.get_mob_entity().living_entity.entity;
-            let pos = entity.pos.load();
+    fn tick(&mut self, mob: &dyn Mob) {
+        let entity = &mob.get_mob_entity().living_entity.entity;
+        let pos = entity.pos.load();
 
-            let (bx, by, bz) = {
-                let mut rng = mob.get_random();
-                (
-                    pos.x.floor() as i32 + rng.random_range(-2..=2),
-                    pos.y.floor() as i32 + rng.random_range(0..=2),
-                    pos.z.floor() as i32 + rng.random_range(-2..=2),
-                )
-            };
+        let (bx, by, bz) = {
+            let mut rng = mob.get_random();
+            (
+                pos.x.floor() as i32 + rng.random_range(-2..=2),
+                pos.y.floor() as i32 + rng.random_range(0..=2),
+                pos.z.floor() as i32 + rng.random_range(-2..=2),
+            )
+        };
 
-            let world = entity.world.load();
-            let target_pos = BlockPos::new(bx, by, bz);
+        let world = entity.world.load_full();
+        let target_pos = BlockPos::new(bx, by, bz);
 
-            let block = world.get_block(&target_pos);
+        let block = world.get_block(&target_pos);
 
-            if !block.has_tag(&tag::Block::MINECRAFT_ENDERMAN_HOLDABLE) {
-                return;
-            }
+        if !block.has_tag(&tag::Block::MINECRAFT_ENDERMAN_HOLDABLE) {
+            return;
+        }
 
-            let enderman_block = entity.block_pos.load();
-            let enderman_center = Vector3::new(
-                enderman_block.0.x as f64 + 0.5,
-                by as f64 + 0.5,
-                enderman_block.0.z as f64 + 0.5,
-            );
-            let block_center = Vector3::new(bx as f64 + 0.5, by as f64 + 0.5, bz as f64 + 0.5);
-            if let Some((hit_pos, _)) = world
-                .raycast(enderman_center, block_center, async |block_pos, w| {
-                    let state = w.get_block_state(block_pos);
-                    state.is_solid()
-                })
-                .await
-                && hit_pos != target_pos
-            {
-                return;
-            }
+        let enderman_block = entity.block_pos.load();
+        let enderman_center = Vector3::new(
+            enderman_block.0.x as f64 + 0.5,
+            by as f64 + 0.5,
+            enderman_block.0.z as f64 + 0.5,
+        );
+        let block_center = Vector3::new(bx as f64 + 0.5, by as f64 + 0.5, bz as f64 + 0.5);
+        if let Some((hit_pos, _)) = world.raycast(enderman_center, block_center, |block_pos, w| {
+            let state = w.get_block_state(block_pos);
+            state.is_solid()
+        }) && hit_pos != target_pos
+        {
+            return;
+        }
 
-            let default_state_id = block.default_state.id;
-
-            let mut event = crate::plugin::api::events::entity::entity_change_block::EntityChangeBlockEvent::new(
+        let default_state_id = block.default_state.id;
+        let mut event =
+            crate::plugin::api::events::entity::entity_change_block::EntityChangeBlockEvent::new(
                 entity.entity_id,
                 target_pos,
                 "minecraft:air".to_string(),
             );
-            if let Some(server) = world.server.upgrade() {
-                server.plugin_manager.fire(&server, &mut event).await;
-            }
-            if event.cancelled {
-                return;
-            }
+        if let Some(server) = world.server.upgrade() {
+            server.plugin_manager.fire_blocking(&server, &mut event);
+        }
+        if event.cancelled {
+            return;
+        }
 
-            // TODO: Emit game event (BLOCK_DESTROY)
-            world
-                .set_block_state(&target_pos, BlockStateId::AIR, BlockFlags::NOTIFY_ALL)
-                .await;
-            self.enderman.set_carried_block(Some(default_state_id));
-        })
+        // TODO: Emit game event (BLOCK_DESTROY)
+        world.set_block_state(&target_pos, BlockStateId::AIR, BlockFlags::NOTIFY_ALL);
+        self.enderman.set_carried_block(Some(default_state_id));
     }
 
-    fn should_continue<'a>(&'a self, _mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
-        Box::pin(async { false })
+    fn should_continue(&self, _mob: &dyn Mob) -> bool {
+        false
     }
 }

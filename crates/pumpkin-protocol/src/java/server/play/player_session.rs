@@ -1,4 +1,4 @@
-use pumpkin_data::packet::serverbound::PLAY_CHAT_SESSION_UPDATE;
+use pumpkin_data::packet::serverbound::play::CHAT_SESSION_UPDATE;
 use pumpkin_macros::java_packet;
 use pumpkin_util::version::JavaMinecraftVersion;
 
@@ -8,7 +8,7 @@ use crate::{
 };
 
 #[derive(Debug)]
-#[java_packet(PLAY_CHAT_SESSION_UPDATE)]
+#[java_packet(CHAT_SESSION_UPDATE)]
 pub struct SPlayerSession {
     pub session_id: uuid::Uuid,
     pub expires_at: i64,

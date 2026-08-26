@@ -28,25 +28,19 @@ impl GetClientSideArgParser for BlockPosArgumentConsumer {
 }
 
 impl ArgumentConsumer for BlockPosArgumentConsumer {
-    fn consume<'a, 'b>(
+    fn consume<'a>(
         &'a self,
         sender: &'a CommandSender,
         _server: &'a Server,
-        args: &'b mut RawArgs<'a>,
+        args: &mut RawArgs<'a>,
     ) -> ConsumeResult<'a> {
-        let x_str_opt = args.pop().map(|arg| arg.value);
-        let y_str_opt = args.pop().map(|arg| arg.value);
-        let z_str_opt = args.pop().map(|arg| arg.value);
+        let x_str = args.pop()?.value;
+        let y_str = args.pop()?.value;
+        let z_str = args.pop()?.value;
 
-        let (Some(x_str), Some(y_str), Some(z_str)) = (x_str_opt, y_str_opt, z_str_opt) else {
-            return Box::pin(async move { None });
-        };
-
-        let result: Option<Arg<'a>> = MaybeRelativeBlockPos::try_new(x_str, y_str, z_str)
+        MaybeRelativeBlockPos::try_new(x_str, y_str, z_str)
             .and_then(|pos| pos.try_to_absolute(sender))
-            .map(Arg::BlockPos);
-
-        Box::pin(async move { result })
+            .map(Arg::BlockPos)
     }
 }
 

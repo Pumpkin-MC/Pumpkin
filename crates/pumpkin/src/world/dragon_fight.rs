@@ -4,9 +4,7 @@
 //! Matches vanilla `EnderDragonFight` behaviour as closely as `PumpkinMC`'s
 //! current API allows.
 
-use std::sync::Arc;
-
-use tokio::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use tracing::{debug, info};
 use uuid::Uuid;
 
@@ -132,7 +130,7 @@ impl DragonFight {
 
     // ── Main tick ─────────────────────────────────────────────────────────────
 
-    pub async fn tick(fight_mutex: &Mutex<Self>, world: &Arc<World>) {
+    pub fn tick(fight_mutex: &Mutex<Self>, world: &Arc<World>) {
         let (
             ticks_since_last_player_scan,
             needs_state_scanning,
@@ -140,7 +138,9 @@ impl DragonFight {
             dragon_killed,
             dragon_uuid,
         ) = {
-            let mut fight = fight_mutex.lock().await;
+            let mut fight = fight_mutex
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
             fight.ticks_since_last_player_scan += 1;
             (
                 fight.ticks_since_last_player_scan,
@@ -153,12 +153,20 @@ impl DragonFight {
 
         // 1. Update boss-bar recipients every 20 ticks.
         if ticks_since_last_player_scan >= PLAYER_SCAN_INTERVAL {
-            let mut fight = fight_mutex.lock().await;
-            fight.update_players(world).await;
+            let mut fight = fight_mutex
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            fight.update_players(world);
             fight.ticks_since_last_player_scan = 0;
         }
 
-        let is_empty = { fight_mutex.lock().await.bossbar_players.is_empty() };
+        let is_empty = {
+            fight_mutex
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .bossbar_players
+                .is_empty()
+        };
         // Nothing to do without nearby players.
         if is_empty {
             return;
@@ -166,26 +174,32 @@ impl DragonFight {
 
         // 2. One-time state scan on the first populated tick.
         if needs_state_scanning {
-            let mut fight = fight_mutex.lock().await;
-            fight.scan_state(world).await;
+            let mut fight = fight_mutex
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            fight.scan_state(world);
             fight.needs_state_scanning = false;
         }
 
         // 3. Respawn sequence (takes priority over normal dragon-missing logic).
         if respawn_stage.is_some() {
-            let mut fight = fight_mutex.lock().await;
-            fight.tick_respawn(world).await;
+            let mut fight = fight_mutex
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            fight.tick_respawn(world);
             return;
         }
 
         // 4. Normal fight ticking.
         if !dragon_killed {
-            let mut fight = fight_mutex.lock().await;
+            let mut fight = fight_mutex
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
             fight.ticks_since_dragon_seen += 1;
             if dragon_uuid.is_none()
                 || fight.ticks_since_dragon_seen >= MAX_TICKS_BEFORE_DRAGON_RESPAWN
             {
-                fight.find_or_create_dragon(world).await;
+                fight.find_or_create_dragon(world);
                 fight.ticks_since_dragon_seen = 0;
             }
 
@@ -201,7 +215,7 @@ impl DragonFight {
 
     /// Runs once on the first tick with nearby players.  Determines whether
     /// this is a fresh fight or a resumed one and reconciles the entity list.
-    async fn scan_state(&mut self, world: &Arc<World>) {
+    fn scan_state(&mut self, world: &Arc<World>) {
         info!("Scanning End fight state...");
 
         let has_active_portal = Self::has_active_exit_portal(world);
@@ -213,9 +227,9 @@ impl DragonFight {
             info!("No exit portal – fight is fresh or in progress.");
             self.previously_killed = false;
             if self.portal_location.is_none() {
-                self.spawn_exit_portal(world, false).await;
+                self.spawn_exit_portal(world, false);
             }
-            self.spawn_crystals(world).await;
+            self.spawn_crystals(world);
         }
 
         // Reconcile any live dragon entity.
@@ -236,7 +250,7 @@ impl DragonFight {
                     .iter()
                     .find(|e| e.get_entity().entity_uuid == uuid)
                 {
-                    e.get_entity().remove().await;
+                    e.get_entity().remove();
                 }
                 self.dragon_uuid = None;
                 self.dragon_killed = true;
@@ -276,7 +290,7 @@ impl DragonFight {
 
     // ── Dragon lifecycle ──────────────────────────────────────────────────────
 
-    async fn find_or_create_dragon(&mut self, world: &Arc<World>) {
+    fn find_or_create_dragon(&mut self, world: &Arc<World>) {
         let uuid = {
             let entities = world.entities.load();
             entities
@@ -291,31 +305,31 @@ impl DragonFight {
             self.ticks_since_dragon_seen = 0;
         } else {
             debug!("No dragon found – spawning one.");
-            self.create_new_dragon(world).await;
+            self.create_new_dragon(world);
         }
     }
 
-    async fn create_new_dragon(&mut self, world: &Arc<World>) {
+    fn create_new_dragon(&mut self, world: &Arc<World>) {
         let uuid = Uuid::new_v4();
         let position = Vector3::new(0.5, DRAGON_SPAWN_Y, 0.5);
         let dragon =
             crate::entity::r#type::from_type(&EntityType::ENDER_DRAGON, position, world, uuid);
 
-        world.spawn_entity(dragon).await;
+        world.spawn_entity_non_save(dragon);
         self.dragon_uuid = Some(uuid);
         info!("Spawned ender dragon {:?}.", uuid);
     }
 
     /// Called every tick while the dragon is alive.  Updates the boss-bar
     /// health fraction, matching vanilla `EnderDragonFight.updateDragon`.
-    pub async fn update_dragon(&mut self, world: &Arc<World>, health: f32, max_health: f32) {
+    pub fn update_dragon(&mut self, world: &Arc<World>, health: f32, max_health: f32) {
         self.ticks_since_dragon_seen = 0;
         let fraction = if max_health > 0.0 {
             (health / max_health).clamp(0.0, 1.0)
         } else {
             0.0
         };
-        self.update_bossbar_health(world, fraction).await;
+        self.update_bossbar_health(world, fraction);
 
         // Sync fight origin to the dragon so its pathfinding nodes are correctly placed.
         if let Some(loc) = self.portal_location
@@ -329,36 +343,34 @@ impl DragonFight {
                 .cast_any()
                 .downcast_ref::<crate::entity::boss::ender_dragon::EnderDragonEntity>()
         {
-            dragon.set_fight_origin(loc).await;
+            dragon.set_fight_origin(loc);
         }
     }
 
     /// Called by the dragon entity when it dies.  Activates the portal, places
     /// the egg on a first kill, spawns a gateway, and hides the boss bar.
     /// Matches vanilla `EnderDragonFight.setDragonKilled`.
-    pub async fn set_dragon_killed(&mut self, world: &Arc<World>, killed_uuid: Uuid) {
+    pub fn set_dragon_killed(&mut self, world: &Arc<World>, killed_uuid: Uuid) {
         if Some(killed_uuid) != self.dragon_uuid {
             return;
         }
 
-        self.update_bossbar_health(world, 0.0).await;
-        self.remove_all_bossbar(world).await;
+        self.update_bossbar_health(world, 0.0);
+        self.remove_all_bossbar(world);
 
         // Activate the exit portal.
-        self.spawn_exit_portal(world, true).await;
+        self.spawn_exit_portal(world, true);
 
         // Place the dragon egg on the first kill.
         if !self.previously_killed
             && let Some(loc) = self.portal_location
         {
             let egg_pos = BlockPos::new(loc.0.x, loc.0.y + 4, loc.0.z);
-            world
-                .set_block_state(
-                    &egg_pos,
-                    Block::DRAGON_EGG.default_state.id,
-                    BlockFlags::NOTIFY_ALL,
-                )
-                .await;
+            world.set_block_state(
+                &egg_pos,
+                Block::DRAGON_EGG.default_state.id,
+                BlockFlags::NOTIFY_ALL,
+            );
         }
 
         // Spawn a new end gateway.
@@ -384,9 +396,9 @@ impl DragonFight {
     /// Called when an end crystal is destroyed.  If a respawn is in progress
     /// and this was one of the ritual crystals, the respawn is aborted.
     /// Matches vanilla `EnderDragonFight.onCrystalDestroyed`.
-    pub async fn on_crystal_destroyed(&mut self, world: &Arc<World>, crystal_uuid: Uuid) {
+    pub fn on_crystal_destroyed(&mut self, world: &Arc<World>, crystal_uuid: Uuid) {
         if self.respawn_stage.is_some() && self.respawn_crystal_uuids.contains(&crystal_uuid) {
-            self.abort_respawn(world).await;
+            self.abort_respawn(world);
         } else {
             self.update_crystal_count(world);
             // The dragon entity itself handles the visual beam-break logic;
@@ -398,7 +410,7 @@ impl DragonFight {
 
     /// Attempt to begin a respawn.  Requires four end crystals placed on the
     /// cardinal sides of the portal, exactly as in vanilla `tryRespawn`.
-    pub async fn try_respawn(&mut self, world: &Arc<World>) {
+    pub fn try_respawn(&mut self, world: &Arc<World>) {
         if !self.dragon_killed || self.respawn_stage.is_some() {
             return;
         }
@@ -406,7 +418,7 @@ impl DragonFight {
         // Ensure we know where the portal is.
         if self.portal_location.is_none() {
             info!("Tried to respawn but no portal location – placing one.");
-            self.spawn_exit_portal(world, true).await;
+            self.spawn_exit_portal(world, true);
         }
 
         let Some(portal_loc) = self.portal_location else {
@@ -441,25 +453,25 @@ impl DragonFight {
         }
 
         debug!("Found all four ritual crystals – beginning respawn.");
-        self.begin_respawn(world, ritual_uuids).await;
+        self.begin_respawn(world, ritual_uuids);
     }
 
-    async fn begin_respawn(&mut self, world: &Arc<World>, crystal_uuids: Vec<Uuid>) {
+    fn begin_respawn(&mut self, world: &Arc<World>, crystal_uuids: Vec<Uuid>) {
         // Tear down the active portal (replace END_PORTAL/BEDROCK with END_STONE)
         // so the podium resets, matching vanilla.
         if let Some(loc) = self.portal_location {
-            self.clear_portal_blocks(world, loc).await;
+            Self::clear_portal_blocks(world, loc);
         }
 
         self.respawn_stage = Some(DragonRespawnStage::Start);
         self.respawn_time = 0;
         self.respawn_crystal_uuids = crystal_uuids;
-        self.spawn_exit_portal(world, false).await;
+        self.spawn_exit_portal(world, false);
     }
 
     /// Replace the bedrock/portal blocks of the current podium with end-stone,
     /// matching the vanilla portal-reset done during respawn.
-    async fn clear_portal_blocks(&self, world: &Arc<World>, loc: BlockPos) {
+    fn clear_portal_blocks(world: &Arc<World>, loc: BlockPos) {
         // The podium is 7×6×7 centred on loc; just scan a generous volume.
         for dy in -1i32..=5 {
             for dx in -4i32..=4 {
@@ -467,30 +479,28 @@ impl DragonFight {
                     let pos = BlockPos::new(loc.0.x + dx, loc.0.y + dy, loc.0.z + dz);
                     let block = world.get_block(&pos);
                     if block == &Block::BEDROCK || block == &Block::END_PORTAL {
-                        world
-                            .set_block_state(
-                                &pos,
-                                Block::END_STONE.default_state.id,
-                                BlockFlags::NOTIFY_ALL,
-                            )
-                            .await;
+                        world.set_block_state(
+                            &pos,
+                            Block::END_STONE.default_state.id,
+                            BlockFlags::NOTIFY_ALL,
+                        );
                     }
                 }
             }
         }
     }
 
-    async fn abort_respawn(&mut self, world: &Arc<World>) {
+    fn abort_respawn(&mut self, world: &Arc<World>) {
         debug!("Aborting dragon respawn sequence.");
         self.respawn_stage = None;
         self.respawn_time = 0;
         self.respawn_crystal_uuids.clear();
         // Re-activate the portal so the world remains in a valid state.
-        self.spawn_exit_portal(world, true).await;
+        self.spawn_exit_portal(world, true);
     }
 
     /// Drive the respawn animation forward by one tick.
-    async fn tick_respawn(&mut self, world: &Arc<World>) {
+    fn tick_respawn(&mut self, world: &Arc<World>) {
         let Some(stage) = self.respawn_stage else {
             return;
         };
@@ -503,7 +513,7 @@ impl DragonFight {
                 .iter()
                 .all(|uid| entities.iter().any(|e| e.get_entity().entity_uuid == *uid));
             if !all_alive {
-                self.abort_respawn(world).await;
+                self.abort_respawn(world);
                 return;
             }
         }
@@ -526,7 +536,7 @@ impl DragonFight {
                     self.respawn_time = 0;
                     self.respawn_crystal_uuids.clear();
                     self.dragon_killed = false;
-                    self.create_new_dragon(world).await;
+                    self.create_new_dragon(world);
                 }
             }
         }
@@ -554,7 +564,7 @@ impl DragonFight {
 
     /// Spawn end crystals on the obsidian spike tops.  Skips if any crystal
     /// already exists (resumed world).  Matches vanilla `respawnCrystals`.
-    pub async fn spawn_crystals(&mut self, world: &Arc<World>) {
+    pub fn spawn_crystals(&mut self, world: &Arc<World>) {
         if world
             .entities
             .load()
@@ -585,7 +595,7 @@ impl DragonFight {
             );
             let crystal = Arc::new(EndCrystalEntity::new(entity));
             crystal.set_show_bottom(true);
-            world.spawn_entity(crystal).await;
+            world.spawn_entity_non_save(crystal);
         }
         info!("Spawned end crystals on spike tops.");
     }
@@ -594,7 +604,7 @@ impl DragonFight {
 
     /// Place (or activate) the exit podium.  `active = true` fills the portal
     /// disc with `END_PORTAL` blocks after the dragon dies.
-    pub async fn spawn_exit_portal(&mut self, world: &Arc<World>, active: bool) {
+    pub fn spawn_exit_portal(&mut self, world: &Arc<World>, active: bool) {
         // Determine location once and cache it.
         if self.portal_location.is_none() {
             let top_y = world.get_top_block(Vector2::new(0, 0));
@@ -610,7 +620,7 @@ impl DragonFight {
         }
 
         if let Some(loc) = self.portal_location {
-            super::end_podium::place(world, loc, active).await;
+            super::end_podium::place(world, loc, active);
         }
     }
 
@@ -631,20 +641,18 @@ impl DragonFight {
         }
     }
 
-    async fn update_bossbar_health(&self, world: &Arc<World>, health: f32) {
+    fn update_bossbar_health(&self, world: &Arc<World>, health: f32) {
         for player in world.players.load().iter() {
             if self.bossbar_players.contains(&player.gameprofile.id) {
-                player
-                    .update_bossbar_health(&self.bossbar_uuid, health)
-                    .await;
+                player.update_bossbar_health(&self.bossbar_uuid, health);
             }
         }
     }
 
-    async fn remove_all_bossbar(&mut self, world: &Arc<World>) {
+    fn remove_all_bossbar(&mut self, world: &Arc<World>) {
         for player in world.players.load().iter() {
             if self.bossbar_players.contains(&player.gameprofile.id) {
-                player.remove_bossbar(self.bossbar_uuid).await;
+                player.remove_bossbar(self.bossbar_uuid);
             }
         }
         self.bossbar_players.clear();
@@ -652,7 +660,7 @@ impl DragonFight {
 
     /// Sync the boss-bar recipient list with nearby players.
     /// Matches vanilla `updatePlayers`.
-    async fn update_players(&mut self, world: &Arc<World>) {
+    fn update_players(&mut self, world: &Arc<World>) {
         let players = world.players.load();
 
         let current: Vec<Uuid> = players
@@ -673,7 +681,7 @@ impl DragonFight {
                 if !self.dragon_killed
                     && let Some(p) = players.iter().find(|p| p.gameprofile.id == uid)
                 {
-                    p.send_bossbar(&self.make_bossbar()).await;
+                    p.send_bossbar(&self.make_bossbar());
                 }
                 self.bossbar_players.push(uid);
             }
@@ -693,7 +701,7 @@ impl DragonFight {
                 .find(|player| &player.gameprofile.id == uid)
                 .cloned();
             if let Some(player) = player {
-                player.remove_bossbar(self.bossbar_uuid).await;
+                player.remove_bossbar(self.bossbar_uuid);
             }
             self.bossbar_players.retain(|u| u != uid);
         }

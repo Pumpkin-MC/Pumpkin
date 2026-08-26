@@ -1,11 +1,11 @@
 use crate::{ReadingError, ServerPacket, VarInt, ser::NetworkReadExt};
-use pumpkin_data::packet::serverbound::LOGIN_CUSTOM_QUERY_ANSWER;
+use pumpkin_data::packet::serverbound::login::CUSTOM_QUERY_ANSWER;
 use pumpkin_macros::java_packet;
 use pumpkin_util::version::JavaMinecraftVersion;
 
 const MAX_PAYLOAD_SIZE: usize = 1_048_576;
 
-#[java_packet(LOGIN_CUSTOM_QUERY_ANSWER)]
+#[java_packet(CUSTOM_QUERY_ANSWER)]
 pub struct SLoginPluginResponse {
     pub message_id: VarInt,
     pub data: Option<Box<[u8]>>,

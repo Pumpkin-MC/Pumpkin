@@ -2,13 +2,13 @@
 use super::*;
 
 impl BedrockClient {
-    pub async fn handle_actor_event(&self, player: &Player, packet: SActorEvent) {
-        if packet.event_type != ActorEventType::Feed
+    pub fn handle_actor_event(&self, player: &Player, packet: &SActorEvent) {
+        if packet.event_id != ActorEventID::Feed
             || !player
                 .living_entity
                 .item_in_use
                 .lock()
-                .await
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
                 .as_ref()
                 .and_then(|item| item.get_data_component::<ConsumableImpl>())
                 .is_some_and(|consumable| consumable.animation == ConsumeAnimation::Eat)
@@ -20,9 +20,9 @@ impl BedrockClient {
         entity.world.load().broadcast_to_chunk_bedrock(
             entity.chunk_pos.load(),
             &SActorEvent {
-                entity_runtime_id: VarULong(entity.entity_id as u64),
-                event_type: ActorEventType::Feed,
-                event_data: packet.event_data,
+                target_runtime_id: VarULong(entity.entity_id as u64),
+                event_id: ActorEventID::Feed,
+                data: packet.data,
                 fire_at_position: None,
             },
         );

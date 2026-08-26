@@ -15,7 +15,6 @@ use crate::net::{GameProfile, offline_uuid};
 use crate::server::Server;
 use arc_swap::ArcSwap;
 use pumpkin_data::translation;
-use std::pin::Pin;
 use std::sync::Arc;
 use uuid::Uuid;
 
@@ -49,24 +48,26 @@ impl GameProfileResult {
     /// - `server.data.whitelist_config`
     ///
     /// Instead, call this method *before* using `write()`/`read()` on a lock.
-    pub async fn resolve(
-        &self,
-        source: &CommandSource,
-    ) -> Result<Vec<GameProfile>, CommandSyntaxError> {
+    pub fn resolve(&self, source: &CommandSource) -> Result<Vec<GameProfile>, CommandSyntaxError> {
         let players = match self {
-            Self::Selector(selector) => selector.find_players(source).await,
+            Self::Selector(selector) => selector.find_players(source),
             Self::Name(name) => {
                 let server = source.server();
                 if let Some(player) = server.get_player_by_name(name) {
                     return Ok(vec![player.gameprofile.clone()]);
                 }
 
-                let cached_entry = server.data.user_cache.write().await.get_by_name(name);
+                let cached_entry = server
+                    .data
+                    .user_cache
+                    .write()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .get_by_name(name);
                 if let Some(entry) = cached_entry {
                     return Ok(vec![Self::profile_from_uuid_name(entry.uuid, entry.name)]);
                 }
 
-                if let Some(profile) = Self::resolve_known_profile_by_name(server, name).await {
+                if let Some(profile) = Self::resolve_known_profile_by_name(server, name) {
                     return Ok(vec![profile]);
                 }
 
@@ -80,7 +81,7 @@ impl GameProfileResult {
                                 .data
                                 .user_cache
                                 .write()
-                                .await
+                                .unwrap_or_else(std::sync::PoisonError::into_inner)
                                 .upsert(uuid, resolved_name.clone());
                             Ok(vec![Self::profile_from_uuid_name(uuid, resolved_name)])
                         }
@@ -92,7 +93,7 @@ impl GameProfileResult {
                         .data
                         .user_cache
                         .write()
-                        .await
+                        .unwrap_or_else(std::sync::PoisonError::into_inner)
                         .upsert(profile.id, profile.name.clone());
                     return Ok(vec![profile]);
                 }
@@ -106,12 +107,17 @@ impl GameProfileResult {
                     return Ok(vec![player.gameprofile.clone()]);
                 }
 
-                let cached_entry = server.data.user_cache.write().await.get_by_uuid(*uuid);
+                let cached_entry = server
+                    .data
+                    .user_cache
+                    .write()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .get_by_uuid(*uuid);
                 if let Some(entry) = cached_entry {
                     return Ok(vec![Self::profile_from_uuid_name(entry.uuid, entry.name)]);
                 }
 
-                if let Some(profile) = Self::resolve_known_profile_by_uuid(server, *uuid).await {
+                if let Some(profile) = Self::resolve_known_profile_by_uuid(server, *uuid) {
                     return Ok(vec![profile]);
                 }
 
@@ -122,13 +128,21 @@ impl GameProfileResult {
         Ok(players.iter().map(|p| &p.gameprofile).cloned().collect())
     }
 
-    async fn resolve_known_profile_by_name(server: &Server, name: &str) -> Option<GameProfile> {
-        let ops = server.data.operator_config.read().await;
+    fn resolve_known_profile_by_name(server: &Server, name: &str) -> Option<GameProfile> {
+        let ops = server
+            .data
+            .operator_config
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         if let Some(op) = ops.ops.iter().find(|op| op.name.eq_ignore_ascii_case(name)) {
             return Some(Self::profile_from_uuid_name(op.uuid, op.name.clone()));
         }
 
-        let banned_players = server.data.banned_player_list.read().await;
+        let banned_players = server
+            .data
+            .banned_player_list
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         if let Some(entry) = banned_players
             .banned_players
             .iter()
@@ -137,7 +151,11 @@ impl GameProfileResult {
             return Some(Self::profile_from_uuid_name(entry.uuid, entry.name.clone()));
         }
 
-        let whitelist = server.data.whitelist_config.read().await;
+        let whitelist = server
+            .data
+            .whitelist_config
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         if let Some(entry) = whitelist
             .whitelist
             .iter()
@@ -149,13 +167,21 @@ impl GameProfileResult {
         None
     }
 
-    async fn resolve_known_profile_by_uuid(server: &Server, uuid: Uuid) -> Option<GameProfile> {
-        let ops = server.data.operator_config.read().await;
+    fn resolve_known_profile_by_uuid(server: &Server, uuid: Uuid) -> Option<GameProfile> {
+        let ops = server
+            .data
+            .operator_config
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         if let Some(op) = ops.ops.iter().find(|op| op.uuid == uuid) {
             return Some(Self::profile_from_uuid_name(op.uuid, op.name.clone()));
         }
 
-        let banned_players = server.data.banned_player_list.read().await;
+        let banned_players = server
+            .data
+            .banned_player_list
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         if let Some(entry) = banned_players
             .banned_players
             .iter()
@@ -164,7 +190,11 @@ impl GameProfileResult {
             return Some(Self::profile_from_uuid_name(entry.uuid, entry.name.clone()));
         }
 
-        let whitelist = server.data.whitelist_config.read().await;
+        let whitelist = server
+            .data
+            .whitelist_config
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         if let Some(entry) = whitelist.whitelist.iter().find(|entry| entry.uuid == uuid) {
             return Some(Self::profile_from_uuid_name(entry.uuid, entry.name.clone()));
         }
@@ -202,12 +232,12 @@ impl ArgumentType for GameProfileArgumentType {
         JavaClientArgumentType::GameProfile
     }
 
-    fn list_suggestions<'a>(
-        &'a self,
-        context: &'a CommandContext,
+    fn list_suggestions(
+        &self,
+        context: &CommandContext,
         builder: SuggestionsBuilder,
-    ) -> Pin<Box<dyn Future<Output = Suggestions> + Send + 'a>> {
-        EntitySelectorParserSuggestions::list_suggestions(context, builder)
+    ) -> Suggestions {
+        EntitySelectorParserSuggestions::list_suggestions(context, &builder)
     }
 
     fn examples(&self) -> Vec<String> {
@@ -255,13 +285,12 @@ impl GameProfileArgumentType {
     /// - `server.data.whitelist_config`
     ///
     /// Instead, call this function *before* using `write()`/`read()` on a lock.
-    pub async fn get(
+    pub fn get(
         context: &CommandContext<'_>,
         name: &str,
     ) -> Result<Vec<GameProfile>, CommandSyntaxError> {
         context
             .get_argument::<GameProfileResult>(name)?
             .resolve(context.source.as_ref())
-            .await
     }
 }

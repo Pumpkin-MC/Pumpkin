@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:iceberg",
+  "config": {
+    "state": {
+      "Name": "minecraft:packed_ice"
+    }
+  }
+}

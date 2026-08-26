@@ -9,8 +9,8 @@ use std::{
 
 use crate::{
     entity::{
-        Entity, EntityBase, EntityBaseFuture, NBTStorage, living::LivingEntity,
-        projectile::ThrownItemEntity, projectile_deflection::ProjectileDeflectionType,
+        Entity, EntityBase, living::LivingEntity, projectile::ThrownItemEntity,
+        projectile_deflection::ProjectileDeflectionType,
     },
     server::Server,
 };
@@ -32,6 +32,31 @@ pub struct WindChargeEntity {
     kind: WindChargeKind,
     thrown_item_entity: ThrownItemEntity,
 }
+
+use crate::world::SimpleExplosionDamageCalculator;
+use pumpkin_data::tag;
+use std::sync::LazyLock;
+
+pub static WIND_CHARGE_EXPLOSION_DAMAGE_CALCULATOR: LazyLock<Arc<SimpleExplosionDamageCalculator>> =
+    LazyLock::new(|| {
+        Arc::new(SimpleExplosionDamageCalculator::new(
+            true,
+            false,
+            Some(1.22),
+            Some(&tag::Block::MINECRAFT_BLOCKS_WIND_CHARGE_EXPLOSIONS),
+        ))
+    });
+
+pub static BREEZE_WIND_CHARGE_EXPLOSION_DAMAGE_CALCULATOR: LazyLock<
+    Arc<SimpleExplosionDamageCalculator>,
+> = LazyLock::new(|| {
+    Arc::new(SimpleExplosionDamageCalculator::new(
+        true,
+        false,
+        None,
+        Some(&tag::Block::MINECRAFT_BLOCKS_WIND_CHARGE_EXPLOSIONS),
+    ))
+});
 
 impl WindChargeEntity {
     #[must_use]
@@ -63,12 +88,17 @@ impl WindChargeEntity {
         }
     }
 
-    pub async fn create_explosion(&self, position: Vector3<f64>) {
-        self.get_entity()
-            .world
-            .load()
-            .explode(position, EXPLOSION_POWER)
-            .await;
+    pub fn create_explosion(&self, position: Vector3<f64>) {
+        let calculator = match self.kind {
+            WindChargeKind::Normal { .. } => WIND_CHARGE_EXPLOSION_DAMAGE_CALCULATOR.clone(),
+            WindChargeKind::Breeze => BREEZE_WIND_CHARGE_EXPLOSION_DAMAGE_CALCULATOR.clone(),
+        };
+        self.get_entity().world.load().explode_with_calculator(
+            position,
+            EXPLOSION_POWER,
+            crate::world::ExplosionInteraction::Trigger,
+            Some(calculator),
+        );
     }
 
     pub fn deflect(
@@ -95,24 +125,16 @@ impl WindChargeEntity {
     }
 }
 
-impl NBTStorage for WindChargeEntity {}
-
 impl EntityBase for WindChargeEntity {
-    fn tick<'a>(
-        &'a self,
-        caller: &'a Arc<dyn EntityBase>,
-        server: &'a Server,
-    ) -> EntityBaseFuture<'a, ()> {
-        Box::pin(async move {
-            self.thrown_item_entity.process_tick(caller, server).await;
+    fn tick<'a>(&'a self, caller: &'a Arc<dyn EntityBase>, server: &'a Server) {
+        self.thrown_item_entity.process_tick(caller, server);
 
-            if let Some(cooldown) = self.deflect_cooldown() {
-                let cooldown_ticks = cooldown.load(Ordering::Relaxed);
-                if cooldown_ticks > 0 {
-                    cooldown.store(cooldown_ticks - 1, Ordering::Relaxed);
-                }
+        if let Some(cooldown) = self.deflect_cooldown() {
+            let cooldown_ticks = cooldown.load(Ordering::Relaxed);
+            if cooldown_ticks > 0 {
+                cooldown.store(cooldown_ticks - 1, Ordering::Relaxed);
             }
-        })
+        }
     }
 
     fn get_entity(&self) -> &Entity {
@@ -122,11 +144,6 @@ impl EntityBase for WindChargeEntity {
     fn get_living_entity(&self) -> Option<&LivingEntity> {
         None
     }
-
-    fn as_nbt_storage(&self) -> &dyn NBTStorage {
-        self
-    }
-
     fn cast_any(&self) -> &dyn std::any::Any {
         self
     }

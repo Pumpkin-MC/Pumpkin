@@ -3,7 +3,7 @@ use std::sync::{Arc, Weak};
 use pumpkin_data::entity::EntityType;
 
 use crate::entity::{
-    Entity, NBTStorage,
+    Entity,
     ai::goal::{
         active_target::ActiveTargetGoal, look_around::RandomLookAroundGoal,
         look_at_entity::LookAtEntityGoal, swim::SwimGoal, wander_around::WanderAroundGoal,
@@ -83,8 +83,6 @@ impl BlazeEntity {
         //     .await;
     }
 }
-
-impl NBTStorage for BlazeEntity {}
 
 impl Mob for BlazeEntity {
     fn get_mob_entity(&self) -> &MobEntity {

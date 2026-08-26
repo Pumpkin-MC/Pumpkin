@@ -1,41 +1,60 @@
-use pumpkin_data::BlockStateId;
-use pumpkin_data::block_properties::BlockProperties;
+use std::sync::Arc;
+
+use pumpkin_data::{
+    Block, BlockStateId,
+    block_properties::{BlockProperties, OakSaplingLikeProperties},
+};
 use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::world::BlockFlags;
-use std::sync::Arc;
 
 use crate::block::blocks::plant::PlantBlockBase;
 use crate::block::{
-    BlockBehaviour, BlockFuture, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, RandomTickArgs,
+    BlockBehaviour, BonemealArgs, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, RandomTickArgs,
 };
+use crate::plugin::api::events::world::structure_grow::{StructureGrowEvent, TreeType};
 use crate::world::World;
-
-type SaplingProperties = pumpkin_data::block_properties::OakSaplingLikeProperties;
 
 #[pumpkin_block_from_tag("minecraft:saplings")]
 pub struct SaplingBlock;
 
 impl SaplingBlock {
-    async fn generate(&self, world: &Arc<World>, pos: &BlockPos) {
-        use crate::plugin::api::events::world::structure_grow::{StructureGrowEvent, TreeType};
-        let mut event = StructureGrowEvent::new(*pos, TreeType::Oak, false);
-        if let Some(server) = world.server.upgrade() {
-            server.plugin_manager.fire(&server, &mut event).await;
+    #[must_use]
+    pub fn get_tree_type(block: &Block) -> TreeType {
+        match block.name {
+            "oak_sapling" => TreeType::Oak,
+            "spruce_sapling" => TreeType::Spruce,
+            "birch_sapling" => TreeType::Birch,
+            "jungle_sapling" => TreeType::Jungle,
+            "acacia_sapling" => TreeType::Acacia,
+            "dark_oak_sapling" | "pale_oak_sapling" => TreeType::DarkOak,
+            "cherry_sapling" => TreeType::Cherry,
+            "azalea" | "flowering_azalea" => TreeType::Azalea,
+            "mangrove_propagule" => TreeType::Mangrove,
+            _ => TreeType::Custom,
         }
-        if event.cancelled {
-            return;
+    }
+
+    pub fn advance_tree(
+        world: &Arc<World>,
+        pos: &BlockPos,
+        block: &Block,
+        state_id: BlockStateId,
+        bone_meal: bool,
+    ) {
+        if OakSaplingLikeProperties::handles_block_id(block.id) {
+            let mut props = OakSaplingLikeProperties::from_state_id(state_id, block);
+            if props.stage == 0 {
+                props.stage = 1;
+                world.set_block_state(pos, props.to_state_id(block), BlockFlags::NOTIFY_ALL);
+                return;
+            }
         }
 
-        let (block, state) = world.get_block_and_state_id(pos);
-        let mut props = SaplingProperties::from_state_id(state, block);
-        if props.stage == 0 {
-            props.stage = 1;
-            world
-                .set_block_state(pos, props.to_state_id(block), BlockFlags::NOTIFY_ALL)
-                .await;
-        } else {
-            //TODO generate tree
+        let tree_type = Self::get_tree_type(block);
+        let mut event = StructureGrowEvent::new(*pos, tree_type, bone_meal);
+        if let Some(server) = world.server.upgrade() {
+            server.plugin_manager.fire_blocking(&server, &mut event);
         }
     }
 }
@@ -45,25 +64,37 @@ impl BlockBehaviour for SaplingBlock {
         <Self as PlantBlockBase>::can_place_at(self, args.block_accessor, args.position)
     }
 
-    fn get_state_for_neighbor_update<'a>(
-        &'a self,
-        args: GetStateForNeighborUpdateArgs<'a>,
-    ) -> BlockFuture<'a, BlockStateId> {
-        Box::pin(async move {
-            <Self as PlantBlockBase>::get_state_for_neighbor_update(
-                self,
-                args.world,
-                args.position,
-                args.state_id,
-            )
-            .await
-        })
+    fn get_state_for_neighbor_update(
+        &self,
+        args: GetStateForNeighborUpdateArgs<'_>,
+    ) -> BlockStateId {
+        <Self as PlantBlockBase>::get_state_for_neighbor_update(
+            self,
+            args.world,
+            args.position,
+            args.state_id,
+        )
     }
 
-    fn random_tick<'a>(&'a self, args: RandomTickArgs<'a>) -> BlockFuture<'a, ()> {
-        Box::pin(async move {
-            self.generate(args.world, args.position).await;
-        })
+    fn random_tick(&self, args: RandomTickArgs<'_>) {
+        if rand::random::<u8>().is_multiple_of(7) {
+            let state_id = args.world.get_block_state_id(args.position);
+            Self::advance_tree(args.world, args.position, args.block, state_id, false);
+        }
+    }
+
+    fn is_valid_bonemeal_target(&self, _args: BonemealArgs<'_>) -> bool {
+        true
+    }
+
+    fn is_bonemeal_success(&self, _args: BonemealArgs<'_>) -> bool {
+        rand::random::<f32>() < 0.45
+    }
+
+    fn perform_bonemeal(&self, args: BonemealArgs<'_>) {
+        {
+            Self::advance_tree(args.world, args.position, args.block, args.state_id, true);
+        }
     }
 }
 

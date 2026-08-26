@@ -2,7 +2,7 @@
 use super::*;
 
 impl BedrockClient {
-    pub async fn handle_animate(&self, player: &Arc<Player>, _server: &Server, packet: &SAnimate) {
+    pub fn handle_animate(&self, player: &Arc<Player>, _server: &Server, packet: &SAnimate) {
         if !player.has_client_loaded() {
             return;
         }
@@ -22,11 +22,11 @@ impl BedrockClient {
             let je_packet = CEntityAnimation::new(VarInt(entity.entity_id), animation);
             let be_packet = SAnimate {
                 action: packet.action,
-                runtime_entity_id: VarULong(entity.entity_id as u64),
+                target_actor_runtime_id: VarULong(entity.entity_id as u64),
                 data: 0.0,
                 swing_source: None,
             };
-            world.broadcast_editioned(&je_packet, &be_packet).await;
+            world.broadcast_editioned(&je_packet, &be_packet);
         }
     }
 }

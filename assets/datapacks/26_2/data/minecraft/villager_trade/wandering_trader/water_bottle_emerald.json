@@ -1,0 +1,15 @@
+{
+  "gives": {
+    "id": "minecraft:emerald"
+  },
+  "max_uses": 2.0,
+  "reputation_discount": 0.05,
+  "wants": {
+    "components": {
+      "minecraft:potion_contents": {
+        "potion": "minecraft:water"
+      }
+    },
+    "id": "minecraft:potion"
+  }
+}

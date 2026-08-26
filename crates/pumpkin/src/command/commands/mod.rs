@@ -17,6 +17,8 @@ mod clear;
 mod clone;
 mod damage;
 mod data;
+mod datapack;
+mod debug;
 pub mod defaultgamemode;
 mod deop;
 mod dialog;
@@ -29,6 +31,7 @@ mod fetchprofile;
 mod fill;
 mod fillbiome;
 mod forceload;
+mod function;
 mod gamemode;
 mod gamerule;
 mod give;
@@ -37,6 +40,7 @@ mod item;
 mod kick;
 mod kill;
 mod list;
+mod locate;
 mod loot;
 mod me;
 mod msg;
@@ -49,8 +53,10 @@ mod playsound;
 mod plugin;
 mod plugins;
 mod pumpkin;
+mod raid;
 mod random;
 mod recipe;
+mod reload;
 mod ride;
 mod rotate;
 mod saveall;
@@ -131,7 +137,6 @@ pub fn default_dispatcher(
     dispatcher.register(rotate::init_command_tree(), "minecraft:command.rotate");
     dispatcher.register(damage::init_command_tree(), "minecraft:command.damage");
     dispatcher.register(bossbar::init_command_tree(), "minecraft:command.bossbar");
-    dispatcher.register(say::init_command_tree(), "minecraft:command.say");
     dispatcher.register(gamemode::init_command_tree(), "minecraft:command.gamemode");
     dispatcher.register(gamerule::init_command_tree(), "minecraft:command.gamerule");
     dispatcher.register(
@@ -153,6 +158,7 @@ pub fn default_dispatcher(
     dispatcher.register(spectate::init_command_tree(), "minecraft:command.spectate");
     dispatcher.register(data::init_command_tree(), "minecraft:command.data");
     dispatcher.register(waypoint::init_command_tree(), "minecraft:command.waypoint");
+    dispatcher.register(raid::init_command_tree(), "minecraft:command.raid");
     // Three
     dispatcher.register(kick::init_command_tree(), "minecraft:command.kick");
     dispatcher.register(plugin::init_command_tree(), "pumpkin:command.plugin");
@@ -174,20 +180,24 @@ pub fn default_dispatcher(
     };
 
     deop::register(&mut dispatcher, registry);
+    say::register(&mut dispatcher, registry);
     banlist::register(&mut dispatcher, registry);
     difficulty::register(&mut dispatcher, registry);
+    debug::register(&mut dispatcher, registry);
     dialog::register(&mut dispatcher, registry);
     execute::register(&mut dispatcher, registry);
     fillbiome::register(&mut dispatcher, registry);
     forceload::register(&mut dispatcher, registry);
     ride::register(&mut dispatcher, registry);
     recipe::register(&mut dispatcher, registry);
+    reload::register(&mut dispatcher, registry);
     help::register(&mut dispatcher, registry);
     kill::register(&mut dispatcher, registry);
     op::register(&mut dispatcher, registry);
     place::register(&mut dispatcher, registry);
     random::register(&mut dispatcher, registry);
     list::register(&mut dispatcher, registry);
+    locate::register(&mut dispatcher, registry);
     loot::register(&mut dispatcher, registry);
     seed::register(&mut dispatcher, registry);
     saveall::register(&mut dispatcher, registry);
@@ -205,6 +215,8 @@ pub fn default_dispatcher(
     teammsg::register(&mut dispatcher, registry);
     clone::register(&mut dispatcher, registry);
     attribute::register(&mut dispatcher, registry);
+    datapack::register(&mut dispatcher, registry);
+    function::register(&mut dispatcher, registry);
     fetchprofile::register(&mut dispatcher, registry);
 
     apply_command_overrides(&mut dispatcher, registry, commands_config);
@@ -503,13 +515,6 @@ fn register_level_2_permissions(registry: &PermissionRegistry) {
         .register_permission(Permission::new(
             "minecraft:command.bossbar",
             "Creates and manages boss bars",
-            PermissionDefault::Op(PermissionLvl::Two),
-        ))
-        .unwrap_or_else(|e| tracing::warn!("{e}"));
-    registry
-        .register_permission(Permission::new(
-            "minecraft:command.say",
-            "Broadcasts a message to multiple players",
             PermissionDefault::Op(PermissionLvl::Two),
         ))
         .unwrap_or_else(|e| tracing::warn!("{e}"));

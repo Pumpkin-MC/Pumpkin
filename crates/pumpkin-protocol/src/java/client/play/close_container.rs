@@ -1,7 +1,7 @@
-use crate::ClientPacket;
 use crate::VarInt;
-use crate::ser::NetworkWriteExt;
-use pumpkin_data::packet::clientbound::PLAY_CONTAINER_CLOSE;
+use crate::ser::{NetworkReadExt, NetworkWriteExt, ReadingError, WritingError};
+use crate::{ClientPacket, ServerPacket};
+use pumpkin_data::packet::clientbound::play::CONTAINER_CLOSE;
 use pumpkin_macros::java_packet;
 use pumpkin_util::version::JavaMinecraftVersion;
 
@@ -10,7 +10,7 @@ use pumpkin_util::version::JavaMinecraftVersion;
 /// This is used by the server to force the player's UI to shut, for example,
 /// if the player moves too far away from a chest or if an NPC's trade window
 /// is invalidated.
-#[java_packet(PLAY_CONTAINER_CLOSE)]
+#[java_packet(CONTAINER_CLOSE)]
 pub struct CCloseContainer {
     /// The ID of the container window to close.
     ///
@@ -29,9 +29,16 @@ impl ClientPacket for CCloseContainer {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        _version: &JavaMinecraftVersion,
-    ) -> Result<(), crate::ser::WritingError> {
-        write.write_var_int(&self.sync_id)?;
+        version: &JavaMinecraftVersion,
+    ) -> Result<(), WritingError> {
+        write.write_container_id(&self.sync_id, version)?;
         Ok(())
+    }
+}
+
+impl<'a> ServerPacket<'a> for CCloseContainer {
+    fn read(bytebuf: &mut &'a [u8], version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+        let sync_id = bytebuf.get_container_id(version)?;
+        Ok(Self { sync_id })
     }
 }
