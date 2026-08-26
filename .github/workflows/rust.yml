@@ -97,6 +97,36 @@ jobs:
         run: cargo nextest run --verbose
       - name: Cargo doctest
         run: cargo test --doc --verbose
+  test_android:
+    name: Test on Android AArch64
+    runs-on: ubuntu-latest
+    needs: [format, machete, clippy_debug, clippy_release]
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android
+      - uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r27c
+      - name: Install cargo-ndk
+        run: cargo install cargo-ndk
+      - uses: Swatinem/rust-cache@v2
+      - name: Start Android emulator (API 24)
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 24
+          arch: arm64-v8a
+          profile: Nexus 6
+          target: google_apis
+          disable-animations: true
+          script: echo "Emulator ready"
+      - name: Run tests with cargo ndk
+        env:
+          CARGO_NDK_PLATFORM: 24
+        run: cargo ndk-test -t arm64-v8a -- --verbose
   build_release:
     name: Build project in release
     runs-on: ${{ matrix.os }}
@@ -162,6 +192,38 @@ jobs:
           name: pumpkin-${{ runner.arch }}-${{ runner.os }}
           compression-level: 9
           path: dist/pumpkin-*
+  build_android_release:
+    name: Build project in release for Android (AArch64)
+    runs-on: ubuntu-latest
+    needs: [test_android]
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android
+      - uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r27c
+      - name: Install cargo-ndk
+        run: cargo install cargo-ndk
+      - uses: Swatinem/rust-cache@v2
+      - name: Build Release with cargo ndk
+        env:
+          CARGO_NDK_PLATFORM: 24
+        run: cargo ndk -t arm64-v8a build --release --locked
+      - name: Prepare artifacts
+        shell: bash
+        run: |
+          mkdir -p dist
+          cp "target/aarch64-linux-android/release/pumpkin" "dist/pumpkin-aarch64-android"
+      - name: Export executable
+        uses: actions/upload-artifact@v7
+        with:
+          name: pumpkin-aarch64-android
+          compression-level: 9
+          path: dist/pumpkin-aarch64-android
   draft_release:
     permissions:
       contents: write
