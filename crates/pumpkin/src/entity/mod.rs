@@ -2091,9 +2091,9 @@ impl Entity {
         }
     }
 
-    async fn update_swimming(&self) {
+    fn update_swimming(&self) {
         let swimming = self.is_swimming();
-        let is_not_passenger = !self.is_passenger().await;
+        let is_not_passenger = !self.is_passenger();
         let new_swimming_state = if swimming {
             self.is_sprinting() && self.is_in_water() && is_not_passenger
         } else {
@@ -2107,7 +2107,7 @@ impl Entity {
                     .0
                     == &Block::WATER
         };
-        self.set_swimming(new_swimming_state).await;
+        self.set_swimming(new_swimming_state);
     }
 
     fn get_pos_with_y_offset(
@@ -4110,8 +4110,8 @@ impl EntityBase for Entity {
         self.update_last_pos();
         self.tick_portal(caller);
         self.update_fluid_state(caller);
-        self.update_swimming().await;
-            self.check_out_of_world(&**caller);
+        self.update_swimming();
+        self.check_out_of_world(&**caller);
         let fire_ticks = self.fire_ticks.load(Ordering::Relaxed);
 
         // Check for fire immunity (or if the specific entity is)
