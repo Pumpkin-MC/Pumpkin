@@ -1,5 +1,5 @@
 use crate::block::registry::BlockActionResult;
-use crate::block::{BlockBehaviour, BlockFuture, RandomTickArgs, UseWithItemArgs};
+use crate::block::{BlockBehaviour, RandomTickArgs, UseWithItemArgs};
 use pumpkin_data::dimension::Dimension;
 use pumpkin_data::flower_pot_transformations::get_potted_item;
 use pumpkin_data::{Block, BlockId};
@@ -10,23 +10,18 @@ use pumpkin_world::world::BlockFlags;
 pub struct FlowerPotBlock;
 
 impl BlockBehaviour for FlowerPotBlock {
-    fn use_with_item<'a>(
-        &'a self,
-        args: UseWithItemArgs<'a>,
-    ) -> BlockFuture<'a, BlockActionResult> {
-        Box::pin(async move {
+    fn use_with_item(&self, args: UseWithItemArgs<'_>) -> BlockActionResult {
+        {
             let item = args.item_stack.item;
             //Place the flower inside the pot
             let potted_block_id = get_potted_item(item.id);
             if args.block.eq(&Block::FLOWER_POT) {
                 if potted_block_id != BlockId::AIR {
-                    args.world
-                        .set_block_state(
-                            args.position,
-                            Block::from_id(potted_block_id).default_state.id,
-                            BlockFlags::NOTIFY_ALL,
-                        )
-                        .await;
+                    args.world.set_block_state(
+                        args.position,
+                        Block::from_id(potted_block_id).default_state.id,
+                        BlockFlags::NOTIFY_ALL,
+                    );
                 }
                 return BlockActionResult::Success;
             } else if potted_block_id != BlockId::AIR {
@@ -35,43 +30,35 @@ impl BlockBehaviour for FlowerPotBlock {
             }
 
             //get the flower + empty the pot
-            args.world
-                .set_block_state(
-                    args.position,
-                    Block::FLOWER_POT.default_state.id,
-                    BlockFlags::NOTIFY_ALL,
-                )
-                .await;
+            args.world.set_block_state(
+                args.position,
+                Block::FLOWER_POT.default_state.id,
+                BlockFlags::NOTIFY_ALL,
+            );
             BlockActionResult::Success
-        })
+        }
     }
 
-    fn random_tick<'a>(&'a self, args: RandomTickArgs<'a>) -> BlockFuture<'a, ()> {
-        Box::pin(async move {
-            if (args.world.dimension.eq(&Dimension::OVERWORLD)
-                || args.world.dimension.eq(&Dimension::OVERWORLD_CAVES))
-                && args.block.eq(&Block::POTTED_CLOSED_EYEBLOSSOM)
-                && args.world.level_time.lock().await.time_of_day % 24000 > 14500
-            {
-                args.world
-                    .set_block_state(
-                        args.position,
-                        Block::POTTED_OPEN_EYEBLOSSOM.default_state.id,
-                        BlockFlags::NOTIFY_ALL,
-                    )
-                    .await;
-            }
-            if args.block.eq(&Block::POTTED_OPEN_EYEBLOSSOM)
-                && args.world.level_time.lock().await.time_of_day % 24000 <= 14500
-            {
-                args.world
-                    .set_block_state(
-                        args.position,
-                        Block::POTTED_CLOSED_EYEBLOSSOM.default_state.id,
-                        BlockFlags::NOTIFY_ALL,
-                    )
-                    .await;
-            }
-        })
+    fn random_tick(&self, args: RandomTickArgs<'_>) {
+        if (args.world.dimension.eq(&Dimension::OVERWORLD)
+            || args.world.dimension.eq(&Dimension::OVERWORLD_CAVES))
+            && args.block.eq(&Block::POTTED_CLOSED_EYEBLOSSOM)
+            && args.world.get_time_of_day() % 24000 > 14500
+        {
+            args.world.set_block_state(
+                args.position,
+                Block::POTTED_OPEN_EYEBLOSSOM.default_state.id,
+                BlockFlags::NOTIFY_ALL,
+            );
+        }
+        if args.block.eq(&Block::POTTED_OPEN_EYEBLOSSOM)
+            && args.world.get_time_of_day() % 24000 <= 14500
+        {
+            args.world.set_block_state(
+                args.position,
+                Block::POTTED_CLOSED_EYEBLOSSOM.default_state.id,
+                BlockFlags::NOTIFY_ALL,
+            );
+        }
     }
 }

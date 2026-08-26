@@ -316,6 +316,13 @@ impl ClientPlatform {
         self.send_packet_now(data).await;
     }
 
+    pub fn try_kick(&self, reason: DisconnectReason, message: &TextComponent) {
+        match self {
+            Self::Java(java) => java.try_kick(message),
+            Self::Bedrock(bedrock) => bedrock.try_kick(reason, message.clone().get_text()),
+        }
+    }
+
     pub async fn kick(&self, reason: DisconnectReason, message: TextComponent) {
         match self {
             Self::Java(java) => java.kick(message).await,
@@ -333,7 +340,11 @@ pub async fn can_not_join(
         "[year]-[month]-[day] at [hour]:[minute]:[second] [offset_hour sign:mandatory]:[offset_minute]"
     );
 
-    let mut banned_players = server.data.banned_player_list.write().await;
+    let mut banned_players = server
+        .data
+        .banned_player_list
+        .write()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     if let Some(entry) = banned_players.get_entry(profile) {
         let text = TextComponent::translate_cross(
             translation::java::MULTIPLAYER_DISCONNECT_BANNED_REASON,
@@ -354,8 +365,16 @@ pub async fn can_not_join(
     drop(banned_players);
 
     if server.white_list.load(Ordering::Relaxed) {
-        let ops = server.data.operator_config.read().await;
-        let whitelist = server.data.whitelist_config.read().await;
+        let ops = server
+            .data
+            .operator_config
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let whitelist = server
+            .data
+            .whitelist_config
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
 
         if ops.get_entry(&profile.id).is_none() && !whitelist.is_whitelisted(profile) {
             return Some(TextComponent::translate_cross(
@@ -370,7 +389,7 @@ pub async fn can_not_join(
         .data
         .banned_ip_list
         .write()
-        .await
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
         .get_entry(&address.ip())
     {
         let text = TextComponent::translate_cross(

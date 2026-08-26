@@ -19,60 +19,56 @@ const ARG_SOUND: &str = "sound";
 pub struct Executor;
 
 impl CommandExecutor for Executor {
-    fn execute<'a>(
-        &'a self,
-        sender: &'a CommandSender,
-        _server: &'a crate::server::Server,
-        args: &'a ConsumedArgs<'a>,
-    ) -> CommandResult<'a> {
-        Box::pin(async move {
-            let targets = PlayersArgumentConsumer::find_arg(args, ARG_TARGETS)?;
+    fn execute(
+        &self,
+        sender: &CommandSender,
+        _server: &crate::server::Server,
+        args: &ConsumedArgs,
+    ) -> CommandResult {
+        let targets = PlayersArgumentConsumer::find_arg(args, ARG_TARGETS)?;
 
-            let category = SoundCategoryArgumentConsumer::find_arg(args, ARG_SOURCE);
-            let sound = SoundArgumentConsumer::find_arg(args, ARG_SOUND);
+        let category = SoundCategoryArgumentConsumer::find_arg(args, ARG_SOURCE);
+        let sound = SoundArgumentConsumer::find_arg(args, ARG_SOUND);
 
-            for target in targets {
-                target
-                    .stop_sound(
-                        sound
-                            .as_ref()
-                            .cloned()
-                            .map(|s| format!("minecraft:{}", s.to_name()))
-                            .ok(),
-                        category.as_ref().map(|s| **s).ok(),
-                    )
-                    .await;
-            }
+        let sound_name = sound
+            .as_ref()
+            .cloned()
+            .map(|s| format!("minecraft:{}", s.to_name()))
+            .ok();
+        let cat = category.as_ref().map(|s| **s).ok();
 
-            let text = match (category, sound) {
-                (Ok(c), Ok(s)) => TextComponent::translate_cross(
-                    translation::java::COMMANDS_STOPSOUND_SUCCESS_SOURCE_SOUND,
-                    translation::java::COMMANDS_STOPSOUND_SUCCESS_SOURCE_SOUND,
-                    [
-                        TextComponent::text(s.to_name()),
-                        TextComponent::text(c.to_name()),
-                    ],
-                ),
-                (Ok(c), Err(_)) => TextComponent::translate_cross(
-                    translation::java::COMMANDS_STOPSOUND_SUCCESS_SOURCE_ANY,
-                    translation::java::COMMANDS_STOPSOUND_SUCCESS_SOURCE_ANY,
-                    [TextComponent::text(c.to_name())],
-                ),
-                (Err(_), Ok(s)) => TextComponent::translate_cross(
-                    translation::java::COMMANDS_STOPSOUND_SUCCESS_SOURCELESS_SOUND,
-                    translation::java::COMMANDS_STOPSOUND_SUCCESS_SOURCELESS_SOUND,
-                    [TextComponent::text(s.to_name())],
-                ),
-                (Err(_), Err(_)) => TextComponent::translate_cross(
-                    translation::java::COMMANDS_STOPSOUND_SUCCESS_SOURCELESS_ANY,
-                    translation::java::COMMANDS_STOPSOUND_SUCCESS_SOURCELESS_ANY,
-                    [],
-                ),
-            };
-            sender.send_message(text).await;
+        for target in targets {
+            target.stop_sound(sound_name.clone(), cat);
+        }
 
-            Ok(targets.len() as i32)
-        })
+        let text = match (category, sound) {
+            (Ok(c), Ok(s)) => TextComponent::translate_cross(
+                translation::java::COMMANDS_STOPSOUND_SUCCESS_SOURCE_SOUND,
+                translation::java::COMMANDS_STOPSOUND_SUCCESS_SOURCE_SOUND,
+                [
+                    TextComponent::text(s.to_name()),
+                    TextComponent::text(c.to_name()),
+                ],
+            ),
+            (Ok(c), Err(_)) => TextComponent::translate_cross(
+                translation::java::COMMANDS_STOPSOUND_SUCCESS_SOURCE_ANY,
+                translation::java::COMMANDS_STOPSOUND_SUCCESS_SOURCE_ANY,
+                [TextComponent::text(c.to_name())],
+            ),
+            (Err(_), Ok(s)) => TextComponent::translate_cross(
+                translation::java::COMMANDS_STOPSOUND_SUCCESS_SOURCELESS_SOUND,
+                translation::java::COMMANDS_STOPSOUND_SUCCESS_SOURCELESS_SOUND,
+                [TextComponent::text(s.to_name())],
+            ),
+            (Err(_), Err(_)) => TextComponent::translate_cross(
+                translation::java::COMMANDS_STOPSOUND_SUCCESS_SOURCELESS_ANY,
+                translation::java::COMMANDS_STOPSOUND_SUCCESS_SOURCELESS_ANY,
+                [],
+            ),
+        };
+        sender.send_message(text);
+
+        Ok(targets.len() as i32)
     }
 }
 

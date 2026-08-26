@@ -769,7 +769,7 @@ pub fn generate_chest_loot(
 }
 
 /// Items are scattered randomly across the 27 chest slots.
-pub async fn fill_chest_inventory(
+pub fn fill_chest_inventory(
     inventory: &std::sync::Arc<dyn pumpkin_world::inventory::Inventory>,
     table: &pumpkin_util::chest_loot_table::ChestLootTable,
     seed: i64,
@@ -799,7 +799,7 @@ pub async fn fill_chest_inventory(
         let Some(slot) = available_slots.pop() else {
             break;
         };
-        inventory.set_stack(slot, item).await;
+        inventory.set_stack(slot, item);
     }
 }
 

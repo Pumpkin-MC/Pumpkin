@@ -4,7 +4,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use crossbeam::atomic::AtomicCell;
 
 use crate::entity::player::Player;
-use crate::entity::{Entity, EntityBase, EntityBaseFuture, living::LivingEntity};
+use crate::entity::{Entity, EntityBase, living::LivingEntity};
 use crate::server::Server;
 
 use pumpkin_data::damage::DamageType;
@@ -60,27 +60,19 @@ impl EntityBase for BoatEntity {
         None
     }
 
-    fn tick<'a>(
-        &'a self,
-        _caller: &'a Arc<dyn EntityBase>,
-        _server: &'a Server,
-    ) -> EntityBaseFuture<'a, ()> {
-        Box::pin(async move {
-            self.vehicle.tick();
+    fn tick<'a>(&'a self, _caller: &'a Arc<dyn EntityBase>, _server: &'a Server) {
+        self.vehicle.tick();
 
-            let underwater = self.ticks_underwater.load();
-            if self.vehicle.entity.touching_water.load(Ordering::Relaxed) {
-                self.ticks_underwater.store((underwater + 1.0).min(60.0));
-            } else if underwater > 0.0 {
-                self.ticks_underwater.store((underwater - 1.0).max(0.0));
-            }
-        })
+        let underwater = self.ticks_underwater.load();
+        if self.vehicle.entity.touching_water.load(Ordering::Relaxed) {
+            self.ticks_underwater.store((underwater + 1.0).min(60.0));
+        } else if underwater > 0.0 {
+            self.ticks_underwater.store((underwater - 1.0).max(0.0));
+        }
     }
 
-    fn init_data_tracker(&self) -> EntityBaseFuture<'_, ()> {
-        Box::pin(async move {
-            self.send_wobble_metadata();
-        })
+    fn init_data_tracker(&self) {
+        self.send_wobble_metadata();
     }
 
     fn can_hit(&self) -> bool {
@@ -91,62 +83,61 @@ impl EntityBase for BoatEntity {
         true
     }
 
-    fn damage_with_context<'a>(
-        &'a self,
-        _caller: &'a dyn EntityBase,
+    fn damage_with_context(
+        &self,
+        _caller: &dyn EntityBase,
         amount: f32,
         _damage_type: DamageType,
         _position: Option<Vector3<f64>>,
-        source: Option<&'a dyn EntityBase>,
-        _cause: Option<&'a dyn EntityBase>,
-    ) -> EntityBaseFuture<'a, bool> {
-        Box::pin(async move { self.vehicle.damage_with_context(amount, source).await })
+        source: Option<&dyn EntityBase>,
+        _cause: Option<&dyn EntityBase>,
+    ) -> bool {
+        self.vehicle.damage_with_context(amount, source)
     }
 
-    fn interact<'a>(
-        &'a self,
-        player: &'a Arc<Player>,
-        _item_stack: &'a mut ItemStack,
-    ) -> EntityBaseFuture<'a, bool> {
-        Box::pin(async move {
-            if player.get_entity().is_sneaking() {
-                return false;
-            }
+    fn interact(&self, player: &Arc<Player>, _item_stack: &mut ItemStack) -> bool {
+        if player.get_entity().is_sneaking() {
+            return false;
+        }
 
-            if self.ticks_underwater.load() >= 60.0 {
-                return false;
-            }
+        if self.ticks_underwater.load() >= 60.0 {
+            return false;
+        }
 
-            if self.vehicle.entity.passengers.lock().await.len() >= 2 {
-                return false;
-            }
+        if self
+            .vehicle
+            .entity
+            .passengers
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .len()
+            >= 2
+        {
+            return false;
+        }
 
-            if player.get_entity().has_vehicle().await {
-                return false;
-            }
+        if player.get_entity().has_vehicle() {
+            return false;
+        }
 
-            let world = self.vehicle.entity.world.load();
-            let Some(vehicle) = world.get_entity_by_id(self.vehicle.entity.entity_id) else {
-                return false;
-            };
+        let world = self.vehicle.entity.world.load();
+        let Some(vehicle) = world.get_entity_by_id(self.vehicle.entity.entity_id) else {
+            return false;
+        };
 
-            let Some(passenger) = world.get_player_by_id(player.entity_id()) else {
-                return false;
-            };
+        let Some(passenger) = world.get_player_by_id(player.entity_id()) else {
+            return false;
+        };
 
-            self.vehicle
-                .entity
-                .add_passenger(vehicle, passenger as Arc<dyn EntityBase>)
-                .await;
+        self.vehicle
+            .entity
+            .add_passenger(vehicle, passenger as Arc<dyn EntityBase>);
 
-            true
-        })
+        true
     }
 
-    fn set_paddle_state(&self, left: bool, right: bool) -> EntityBaseFuture<'_, ()> {
-        Box::pin(async move {
-            self.set_paddles(left, right);
-        })
+    fn set_paddle_state(&self, left: bool, right: bool) {
+        self.set_paddles(left, right);
     }
     fn cast_any(&self) -> &dyn std::any::Any {
         self

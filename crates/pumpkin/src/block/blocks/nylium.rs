@@ -7,7 +7,7 @@ use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::world::BlockFlags;
 use rand::RngExt;
 
-use crate::block::{BlockBehaviour, BlockFuture, BonemealArgs, RandomTickArgs};
+use crate::block::{BlockBehaviour, BonemealArgs, RandomTickArgs};
 use crate::world::World;
 
 #[pumpkin_block_from_tag("minecraft:nylium")]
@@ -25,18 +25,14 @@ impl NyliumBlock {
 }
 
 impl BlockBehaviour for NyliumBlock {
-    fn random_tick<'a>(&'a self, args: RandomTickArgs<'a>) -> BlockFuture<'a, ()> {
-        Box::pin(async move {
-            if !Self::can_be_nylium(args.world, args.position) {
-                args.world
-                    .set_block_state(
-                        args.position,
-                        Block::NETHERRACK.default_state.id,
-                        BlockFlags::NOTIFY_ALL,
-                    )
-                    .await;
-            }
-        })
+    fn random_tick(&self, args: RandomTickArgs<'_>) {
+        if !Self::can_be_nylium(args.world, args.position) {
+            args.world.set_block_state(
+                args.position,
+                Block::NETHERRACK.default_state.id,
+                BlockFlags::NOTIFY_ALL,
+            );
+        }
     }
 
     fn is_valid_bonemeal_target(&self, args: BonemealArgs<'_>) -> bool {
@@ -50,26 +46,24 @@ impl BlockBehaviour for NyliumBlock {
         true
     }
 
-    fn perform_bonemeal<'a>(&'a self, args: BonemealArgs<'a>) -> BlockFuture<'a, ()> {
-        Box::pin(async move {
-            let world = args.world;
-            let block = args.block;
-            let above_pos = args.position.up();
+    fn perform_bonemeal(&self, args: BonemealArgs<'_>) {
+        let world = args.world;
+        let block = args.block;
+        let above_pos = args.position.up();
 
-            if block == &Block::CRIMSON_NYLIUM {
-                place_crimson_vegetation(world, &above_pos).await;
-            } else if block == &Block::WARPED_NYLIUM {
-                place_warped_vegetation(world, &above_pos).await;
-                place_nether_sprouts(world, &above_pos).await;
-                if rand::rng().random_range(0..8) == 0 {
-                    place_twisting_vines(world, &above_pos).await;
-                }
+        if block == &Block::CRIMSON_NYLIUM {
+            place_crimson_vegetation(world, &above_pos);
+        } else if block == &Block::WARPED_NYLIUM {
+            place_warped_vegetation(world, &above_pos);
+            place_nether_sprouts(world, &above_pos);
+            if rand::rng().random_range(0..8) == 0 {
+                place_twisting_vines(world, &above_pos);
             }
-        })
+        }
     }
 }
 
-async fn place_crimson_vegetation(world: &Arc<World>, origin: &BlockPos) {
+fn place_crimson_vegetation(world: &Arc<World>, origin: &BlockPos) {
     for _ in 0..9 {
         let dx = rand::rng().random_range(0..3) - rand::rng().random_range(0..3);
         let dy = rand::rng().random_range(0..1) - rand::rng().random_range(0..1);
@@ -116,13 +110,11 @@ async fn place_crimson_vegetation(world: &Arc<World>, origin: &BlockPos) {
             continue;
         }
 
-        world
-            .set_block_state(&target_pos, state.id, BlockFlags::NOTIFY_ALL)
-            .await;
+        world.set_block_state(&target_pos, state.id, BlockFlags::NOTIFY_ALL);
     }
 }
 
-async fn place_warped_vegetation(world: &Arc<World>, origin: &BlockPos) {
+fn place_warped_vegetation(world: &Arc<World>, origin: &BlockPos) {
     for _ in 0..9 {
         let dx = rand::rng().random_range(0..3) - rand::rng().random_range(0..3);
         let dy = rand::rng().random_range(0..1) - rand::rng().random_range(0..1);
@@ -171,13 +163,11 @@ async fn place_warped_vegetation(world: &Arc<World>, origin: &BlockPos) {
             continue;
         }
 
-        world
-            .set_block_state(&target_pos, state.id, BlockFlags::NOTIFY_ALL)
-            .await;
+        world.set_block_state(&target_pos, state.id, BlockFlags::NOTIFY_ALL);
     }
 }
 
-async fn place_nether_sprouts(world: &Arc<World>, origin: &BlockPos) {
+fn place_nether_sprouts(world: &Arc<World>, origin: &BlockPos) {
     for _ in 0..9 {
         let dx = rand::rng().random_range(0..3) - rand::rng().random_range(0..3);
         let dy = rand::rng().random_range(0..1) - rand::rng().random_range(0..1);
@@ -216,13 +206,11 @@ async fn place_nether_sprouts(world: &Arc<World>, origin: &BlockPos) {
             continue;
         }
 
-        world
-            .set_block_state(&target_pos, state.id, BlockFlags::NOTIFY_ALL)
-            .await;
+        world.set_block_state(&target_pos, state.id, BlockFlags::NOTIFY_ALL);
     }
 }
 
-async fn place_twisting_vines(world: &Arc<World>, origin: &BlockPos) {
+fn place_twisting_vines(world: &Arc<World>, origin: &BlockPos) {
     for _ in 0..9 {
         let dx = rand::rng().random_range(0..3) - rand::rng().random_range(0..3);
         let dy = rand::rng().random_range(0..1) - rand::rng().random_range(0..1);
@@ -256,22 +244,18 @@ async fn place_twisting_vines(world: &Arc<World>, origin: &BlockPos) {
                 || !world.get_block_state(&current_pos.up()).is_air();
 
             if is_top {
-                world
-                    .set_block_state(
-                        &current_pos,
-                        Block::TWISTING_VINES.default_state.id,
-                        BlockFlags::NOTIFY_ALL,
-                    )
-                    .await;
+                world.set_block_state(
+                    &current_pos,
+                    Block::TWISTING_VINES.default_state.id,
+                    BlockFlags::NOTIFY_ALL,
+                );
                 break;
             }
-            world
-                .set_block_state(
-                    &current_pos,
-                    Block::TWISTING_VINES_PLANT.default_state.id,
-                    BlockFlags::NOTIFY_ALL,
-                )
-                .await;
+            world.set_block_state(
+                &current_pos,
+                Block::TWISTING_VINES_PLANT.default_state.id,
+                BlockFlags::NOTIFY_ALL,
+            );
             current_pos = current_pos.up();
         }
     }

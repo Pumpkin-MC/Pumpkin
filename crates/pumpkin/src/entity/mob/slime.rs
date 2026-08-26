@@ -12,9 +12,9 @@ use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 
 use crate::entity::{
-    Entity, EntityBase, NbtFuture,
+    Entity, EntityBase,
     ai::control::{Control, MoveControlTrait},
-    ai::goal::{Goal, GoalFuture, active_target::ActiveTargetGoal},
+    ai::goal::{Goal, active_target::ActiveTargetGoal},
     mob::{Mob, MobEntity},
 };
 use crate::world::World;
@@ -265,132 +265,115 @@ impl SlimeEntity {
 }
 
 impl Mob for SlimeEntity {
-    fn mob_write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
-        Box::pin(async move {
-            nbt.put_int("Size", self.get_size() - 1);
-            nbt.put_bool("wasOnGround", self.was_on_ground.load(Ordering::Relaxed));
-        })
+    fn mob_write_nbt(&self, nbt: &mut NbtCompound) {
+        nbt.put_int("Size", self.get_size() - 1);
+        nbt.put_bool("wasOnGround", self.was_on_ground.load(Ordering::Relaxed));
     }
 
-    fn mob_read_nbt<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
-        Box::pin(async move {
-            self.set_size(nbt.get_int("Size").unwrap_or(0) + 1, false);
-            self.was_on_ground.store(
-                nbt.get_bool("wasOnGround").unwrap_or(false),
-                Ordering::Relaxed,
-            );
-        })
+    fn mob_read_nbt(&self, nbt: &NbtCompound) {
+        self.set_size(nbt.get_int("Size").unwrap_or(0) + 1, false);
+        self.was_on_ground.store(
+            nbt.get_bool("wasOnGround").unwrap_or(false),
+            Ordering::Relaxed,
+        );
     }
 
     fn get_mob_entity(&self) -> &MobEntity {
         &self.entity
     }
 
-    fn mob_tick<'a>(
-        &'a self,
-        _caller: &'a Arc<dyn EntityBase>,
-    ) -> crate::entity::EntityBaseFuture<'a, ()> {
-        Box::pin(async move {
-            self.o_squish.store(self.squish.load());
-            self.squish
-                .store(self.squish.load() + (self.target_squish.load() - self.squish.load()) * 0.5);
+    fn mob_tick<'a>(&'a self, _caller: &'a Arc<dyn EntityBase>) {
+        self.o_squish.store(self.squish.load());
+        self.squish
+            .store(self.squish.load() + (self.target_squish.load() - self.squish.load()) * 0.5);
 
-            let on_ground = self
+        let on_ground = self
+            .entity
+            .living_entity
+            .entity
+            .on_ground
+            .load(Ordering::Relaxed);
+        let was_on_ground = self.was_on_ground.load(Ordering::Relaxed);
+
+        if on_ground && !was_on_ground {
+            // TODO: particles
+
+            let world = self.entity.living_entity.entity.world.load();
+            world.play_sound_fine(
+                self.get_squish_sound(),
+                SoundCategory::Hostile,
+                &self.entity.living_entity.entity.pos.load(),
+                self.get_sound_volume(),
+                ((rand::random_range(0.0..1.0) - rand::random_range(0.0..1.0)) * 0.2 + 1.0) / 0.8,
+            );
+
+            self.target_squish.store(-0.5);
+        } else if !on_ground && was_on_ground {
+            self.target_squish.store(1.0);
+        }
+
+        self.was_on_ground.store(on_ground, Ordering::Relaxed);
+        self.target_squish.store(self.target_squish.load() * 0.6);
+
+        self.is_aggressive.store(false, Ordering::Relaxed);
+        self.speed_modifier.store(0.0);
+    }
+
+    fn mob_player_collision(&self, player: &Arc<crate::entity::player::Player>) {
+        if !self.is_tiny() {
+            // dealDamage
+            self.entity.try_attack(self, &**player);
+        }
+    }
+
+    fn post_tick(&self) {
+        if self.entity.living_entity.dead.load(Ordering::Relaxed)
+            && self.get_size() > 1
+            && self
+                .has_split
+                .compare_exchange(false, true, Ordering::Relaxed, Ordering::Relaxed)
+                .is_ok()
+        {
+            let size = self.get_size();
+            let world = self.entity.living_entity.entity.world.load();
+            let pos = self.entity.living_entity.entity.pos.load();
+            let half_size = size / 2;
+            let count = 2 + rand::random_range(0..3);
+
+            let width = self
                 .entity
                 .living_entity
                 .entity
-                .on_ground
-                .load(Ordering::Relaxed);
-            let was_on_ground = self.was_on_ground.load(Ordering::Relaxed);
+                .entity_dimension
+                .load()
+                .width;
+            let xz_offset = width / 4.0;
 
-            if on_ground && !was_on_ground {
-                // TODO: particles
+            for i in 0..count {
+                let xd = ((i % 2) as f32 - 0.5) * xz_offset;
+                let zd = ((i / 2) as f32 - 0.5) * xz_offset;
 
-                let world = self.entity.living_entity.entity.world.load();
-                world.play_sound_fine(
-                    self.get_squish_sound(),
-                    SoundCategory::Hostile,
-                    &self.entity.living_entity.entity.pos.load(),
-                    self.get_sound_volume(),
-                    ((rand::random_range(0.0..1.0) - rand::random_range(0.0..1.0)) * 0.2 + 1.0)
-                        / 0.8,
+                let new_pos = pumpkin_util::math::vector3::Vector3::new(
+                    pos.x + xd as f64,
+                    pos.y + 0.5,
+                    pos.z + zd as f64,
                 );
-
-                self.target_squish.store(-0.5);
-            } else if !on_ground && was_on_ground {
-                self.target_squish.store(1.0);
-            }
-
-            self.was_on_ground.store(on_ground, Ordering::Relaxed);
-            self.target_squish.store(self.target_squish.load() * 0.6);
-
-            self.is_aggressive.store(false, Ordering::Relaxed);
-            self.speed_modifier.store(0.0);
-        })
-    }
-
-    fn mob_player_collision<'a>(
-        &'a self,
-        player: &'a Arc<crate::entity::player::Player>,
-    ) -> crate::entity::EntityBaseFuture<'a, ()> {
-        Box::pin(async move {
-            if !self.is_tiny() {
-                // dealDamage
-                self.entity.try_attack(self, &**player).await;
-            }
-        })
-    }
-
-    fn post_tick(&self) -> crate::entity::EntityBaseFuture<'_, ()> {
-        Box::pin(async move {
-            if self.entity.living_entity.dead.load(Ordering::Relaxed)
-                && self.get_size() > 1
-                && self
-                    .has_split
-                    .compare_exchange(false, true, Ordering::Relaxed, Ordering::Relaxed)
-                    .is_ok()
-            {
-                let size = self.get_size();
-                let world = self.entity.living_entity.entity.world.load();
-                let pos = self.entity.living_entity.entity.pos.load();
-                let half_size = size / 2;
-                let count = 2 + rand::random_range(0..3);
-
-                let width = self
+                let new_entity = Entity::new(
+                    world.clone(),
+                    new_pos,
+                    self.entity.living_entity.entity.entity_type,
+                );
+                let slime_like = Self::new(new_entity);
+                slime_like.set_size(half_size, true);
+                slime_like
                     .entity
                     .living_entity
                     .entity
-                    .entity_dimension
-                    .load()
-                    .width;
-                let xz_offset = width / 4.0;
-
-                for i in 0..count {
-                    let xd = ((i % 2) as f32 - 0.5) * xz_offset;
-                    let zd = ((i / 2) as f32 - 0.5) * xz_offset;
-
-                    let new_pos = pumpkin_util::math::vector3::Vector3::new(
-                        pos.x + xd as f64,
-                        pos.y + 0.5,
-                        pos.z + zd as f64,
-                    );
-                    let new_entity = Entity::new(
-                        world.clone(),
-                        new_pos,
-                        self.entity.living_entity.entity.entity_type,
-                    );
-                    let slime_like = Self::new(new_entity);
-                    slime_like.set_size(half_size, true);
-                    slime_like
-                        .entity
-                        .living_entity
-                        .entity
-                        .yaw
-                        .store(rand::random_range(0.0..360.0));
-                    world.spawn_entity(slime_like).await;
-                }
+                    .yaw
+                    .store(rand::random_range(0.0..360.0));
+                world.spawn_entity_non_save(slime_like as Arc<dyn EntityBase>);
             }
-        })
+        }
     }
 }
 
@@ -478,25 +461,21 @@ impl SlimeFloatGoal {
 }
 
 impl Goal for SlimeFloatGoal {
-    fn can_start<'a>(&'a mut self, _mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
-        Box::pin(async move {
-            let entity = &self.slime.entity.living_entity.entity;
-            entity.touching_water.load(Ordering::Relaxed)
-                || entity.touching_lava.load(Ordering::Relaxed)
-        })
+    fn can_start(&mut self, _mob: &dyn Mob) -> bool {
+        let entity = &self.slime.entity.living_entity.entity;
+        entity.touching_water.load(Ordering::Relaxed)
+            || entity.touching_lava.load(Ordering::Relaxed)
     }
 
-    fn tick<'a>(&'a mut self, _mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
-        Box::pin(async move {
-            if rand::random_range(0.0..1.0) < 0.8 {
-                self.slime
-                    .entity
-                    .living_entity
-                    .jumping
-                    .store(true, Ordering::SeqCst);
-            }
-            self.slime.speed_modifier.store(1.2);
-        })
+    fn tick(&mut self, _mob: &dyn Mob) {
+        if rand::random_range(0.0..1.0) < 0.8 {
+            self.slime
+                .entity
+                .living_entity
+                .jumping
+                .store(true, Ordering::SeqCst);
+        }
+        self.slime.speed_modifier.store(1.2);
     }
 
     fn should_run_every_tick(&self) -> bool {
@@ -523,40 +502,29 @@ impl SlimeAttackGoal {
 }
 
 impl Goal for SlimeAttackGoal {
-    fn can_start<'a>(&'a mut self, _mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
-        Box::pin(async move {
-            let target = self.slime.entity.target.lock().await;
-            target.is_some()
-        })
+    fn can_start(&mut self, _mob: &dyn Mob) -> bool {
+        self.slime.entity.get_target().is_some()
     }
 
-    fn start<'a>(&'a mut self, _mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
-        Box::pin(async move {
-            self.grow_tired_timer = 300;
-        })
+    fn start(&mut self, _mob: &dyn Mob) {
+        self.grow_tired_timer = 300;
     }
 
-    fn should_continue<'a>(&'a self, _mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
-        Box::pin(async move {
-            let target = self.slime.entity.target.lock().await;
-            target.is_some() && self.grow_tired_timer > 0
-        })
+    fn should_continue(&self, _mob: &dyn Mob) -> bool {
+        self.slime.entity.get_target().is_some() && self.grow_tired_timer > 0
     }
 
-    fn tick<'a>(&'a mut self, _mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
-        Box::pin(async move {
-            self.grow_tired_timer -= 1;
-            let target_guard = self.slime.entity.target.lock().await;
-            if let Some(target) = target_guard.as_ref() {
-                let pos = target.get_entity().pos.load();
-                let my_pos = self.slime.entity.living_entity.entity.pos.load();
-                let dx = pos.x - my_pos.x;
-                let dz = pos.z - my_pos.z;
-                let yaw = dx.atan2(dz).to_degrees() as f32;
-                self.slime.target_yaw.store(yaw);
-            }
-            self.slime.is_aggressive.store(true, Ordering::Relaxed);
-        })
+    fn tick(&mut self, _mob: &dyn Mob) {
+        self.grow_tired_timer -= 1;
+        if let Some(target) = self.slime.entity.get_target() {
+            let pos = target.get_entity().pos.load();
+            let my_pos = self.slime.entity.living_entity.entity.pos.load();
+            let dx = pos.x - my_pos.x;
+            let dz = pos.z - my_pos.z;
+            let yaw = dx.atan2(dz).to_degrees() as f32;
+            self.slime.target_yaw.store(yaw);
+        }
+        self.slime.is_aggressive.store(true, Ordering::Relaxed);
     }
 
     fn should_run_every_tick(&self) -> bool {
@@ -585,44 +553,39 @@ impl SlimeRandomDirectionGoal {
 }
 
 impl Goal for SlimeRandomDirectionGoal {
-    fn can_start<'a>(&'a mut self, _mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
-        Box::pin(async move {
-            let target = self.slime.entity.target.lock().await;
-            target.is_none()
-                && (self
+    fn can_start(&mut self, _mob: &dyn Mob) -> bool {
+        self.slime.entity.get_target().is_none()
+            && (self
+                .slime
+                .entity
+                .living_entity
+                .entity
+                .on_ground
+                .load(Ordering::Relaxed)
+                || self
                     .slime
                     .entity
                     .living_entity
                     .entity
-                    .on_ground
+                    .touching_water
                     .load(Ordering::Relaxed)
-                    || self
-                        .slime
-                        .entity
-                        .living_entity
-                        .entity
-                        .touching_water
-                        .load(Ordering::Relaxed)
-                    || self
-                        .slime
-                        .entity
-                        .living_entity
-                        .entity
-                        .touching_lava
-                        .load(Ordering::Relaxed))
-        })
+                || self
+                    .slime
+                    .entity
+                    .living_entity
+                    .entity
+                    .touching_lava
+                    .load(Ordering::Relaxed))
     }
 
-    fn tick<'a>(&'a mut self, _mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
-        Box::pin(async move {
-            self.next_randomize_time -= 1;
-            if self.next_randomize_time <= 0 {
-                self.next_randomize_time = rand::random_range(40..100);
-                self.chosen_degrees = rand::random_range(0.0..360.0);
-            }
-            self.slime.target_yaw.store(self.chosen_degrees);
-            self.slime.is_aggressive.store(false, Ordering::Relaxed);
-        })
+    fn tick(&mut self, _mob: &dyn Mob) {
+        self.next_randomize_time -= 1;
+        if self.next_randomize_time <= 0 {
+            self.next_randomize_time = rand::random_range(40..100);
+            self.chosen_degrees = rand::random_range(0.0..360.0);
+        }
+        self.slime.target_yaw.store(self.chosen_degrees);
+        self.slime.is_aggressive.store(false, Ordering::Relaxed);
     }
 
     fn controls(&self) -> crate::entity::ai::goal::Controls {
@@ -635,23 +598,19 @@ pub struct SlimeKeepOnJumpingGoal {
 }
 
 impl SlimeKeepOnJumpingGoal {
+    #[must_use]
     pub const fn new(slime: Arc<SlimeEntity>) -> Self {
         Self { slime }
     }
 }
 
 impl Goal for SlimeKeepOnJumpingGoal {
-    fn can_start<'a>(&'a mut self, _mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
-        Box::pin(async move {
-            let vehicle = self.slime.entity.living_entity.entity.vehicle.lock().await;
-            vehicle.is_none()
-        })
+    fn can_start(&mut self, _mob: &dyn Mob) -> bool {
+        !self.slime.entity.living_entity.entity.has_vehicle()
     }
 
-    fn tick<'a>(&'a mut self, _mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
-        Box::pin(async move {
-            self.slime.speed_modifier.store(1.0);
-        })
+    fn tick(&mut self, _mob: &dyn Mob) {
+        self.slime.speed_modifier.store(1.0);
     }
 
     fn controls(&self) -> crate::entity::ai::goal::Controls {

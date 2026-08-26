@@ -65,21 +65,19 @@ impl GetClientSideArgParser for TimeArgumentConsumer {
 }
 
 impl ArgumentConsumer for TimeArgumentConsumer {
-    fn consume<'a, 'b>(
+    fn consume<'a>(
         &'a self,
         _sender: &'a CommandSender,
         _server: &'a Server,
-        args: &'b mut RawArgs<'a>,
+        args: &mut RawArgs<'a>,
     ) -> ConsumeResult<'a> {
         let s_opt: Option<&'a str> = args.pop().map(|arg| arg.value);
 
-        let result: Option<Arg<'a>> = s_opt.and_then(|s| {
+        s_opt.and_then(|s| {
             let mut reader = StringReader::new(s);
             let parser = TimeArgumentType::new(self.min);
             parser.parse(&mut reader).ok().map(Arg::Time)
-        });
-
-        Box::pin(async move { result })
+        })
     }
 
     fn consume_with_syntax<'a>(
@@ -89,17 +87,15 @@ impl ArgumentConsumer for TimeArgumentConsumer {
         args: &mut RawArgs<'a>,
     ) -> ConsumeResultWithSyntax<'a> {
         let Some(raw_arg) = args.pop() else {
-            return Box::pin(async { Ok(None) });
+            return Ok(None);
         };
 
         let mut reader = StringReader::new(raw_arg.value);
         let parser = TimeArgumentType::new(self.min);
-        let result = parser
+        parser
             .parse(&mut reader)
             .map(|ticks| Some(Arg::Time(ticks)))
-            .map_err(|error| map_local_syntax_error(error, raw_arg));
-
-        Box::pin(async move { result })
+            .map_err(|error| map_local_syntax_error(error, raw_arg))
     }
 }
 

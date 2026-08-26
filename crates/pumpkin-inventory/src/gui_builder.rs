@@ -1,9 +1,6 @@
 use crate::{
     player::player_inventory::PlayerInventory,
-    screen_handler::{
-        InventoryPlayer, ItemStackFuture, ScreenHandler, ScreenHandlerBehaviour,
-        ScreenHandlerFuture,
-    },
+    screen_handler::{InventoryPlayer, ScreenHandler, ScreenHandlerBehaviour},
     slot::NormalSlot,
 };
 use pumpkin_data::{item_stack::ItemStack, screen::WindowType};
@@ -59,11 +56,7 @@ impl GUIBuilder {
     }
 
     /// Builds the `GUIScreenHandler`.
-    pub async fn build(
-        self,
-        sync_id: u8,
-        player_inventory: &Arc<PlayerInventory>,
-    ) -> GUIScreenHandler {
+    pub fn build(self, sync_id: u8, player_inventory: &Arc<PlayerInventory>) -> GUIScreenHandler {
         let mut behaviour = ScreenHandlerBehaviour::new(sync_id, Some(self.screen_type));
         behaviour.allow_grab_items = self.allow_grab_items;
         behaviour.allow_put_items = self.allow_put_items;
@@ -76,7 +69,7 @@ impl GUIBuilder {
             behaviour,
         };
 
-        self.inventory.on_open().await;
+        self.inventory.on_open();
 
         handler.add_inventory_slots();
         let player_inventory_trait: Arc<dyn Inventory> = player_inventory.clone();
@@ -123,65 +116,51 @@ impl ScreenHandler for GUIScreenHandler {
         &mut self.behaviour
     }
 
-    fn on_closed<'a>(&'a mut self, player: &'a dyn InventoryPlayer) -> ScreenHandlerFuture<'a, ()> {
-        Box::pin(async move {
-            self.default_on_closed(player).await;
-            self.inventory.on_close().await;
-        })
+    fn on_closed(&mut self, player: &dyn InventoryPlayer) {
+        self.default_on_closed(player);
+        self.inventory.on_close();
     }
 
-    fn quick_move<'a>(
-        &'a mut self,
-        _player: &'a dyn InventoryPlayer,
-        slot_index: i32,
-    ) -> ItemStackFuture<'a> {
-        Box::pin(async move {
-            let mut stack_left = ItemStack::EMPTY.clone();
-            let slot = self.get_behaviour().slots[slot_index as usize].clone();
+    fn quick_move(&mut self, _player: &dyn InventoryPlayer, slot_index: i32) -> ItemStack {
+        let mut stack_left = ItemStack::EMPTY.clone();
+        let slot = self.get_behaviour().slots[slot_index as usize].clone();
 
-            if slot.has_stack().await {
-                let mut slot_stack = slot.get_stack().await;
-                stack_left = slot_stack.clone();
-                let container_slots = i32::from(self.rows * self.columns);
+        if slot.has_stack() {
+            let mut slot_stack = slot.get_stack();
+            stack_left = slot_stack.clone();
+            let container_slots = i32::from(self.rows * self.columns);
 
-                if slot_index < container_slots {
-                    // From container to player
-                    if !self.get_behaviour().allow_grab_items {
-                        return ItemStack::EMPTY.clone();
-                    }
-                    if !self
-                        .insert_item(
-                            &mut slot_stack,
-                            container_slots,
-                            self.get_behaviour().slots.len() as i32,
-                            true,
-                        )
-                        .await
-                    {
-                        return ItemStack::EMPTY.clone();
-                    }
-                } else {
-                    // From player to container
-                    if !self.get_behaviour().allow_put_items {
-                        return ItemStack::EMPTY.clone();
-                    }
-                    if !self
-                        .insert_item(&mut slot_stack, 0, container_slots, false)
-                        .await
-                    {
-                        // Move from player area to inventory (start)
-                        return ItemStack::EMPTY.clone();
-                    }
+            if slot_index < container_slots {
+                // From container to player
+                if !self.get_behaviour().allow_grab_items {
+                    return ItemStack::EMPTY.clone();
                 }
-
-                if slot_stack.is_empty() {
-                    slot.set_stack(ItemStack::EMPTY.clone()).await;
-                } else {
-                    slot.set_stack(slot_stack).await;
+                if !self.insert_item(
+                    &mut slot_stack,
+                    container_slots,
+                    self.get_behaviour().slots.len() as i32,
+                    true,
+                ) {
+                    return ItemStack::EMPTY.clone();
+                }
+            } else {
+                // From player to container
+                if !self.get_behaviour().allow_put_items {
+                    return ItemStack::EMPTY.clone();
+                }
+                if !self.insert_item(&mut slot_stack, 0, container_slots, false) {
+                    // Move from player area to inventory (start)
+                    return ItemStack::EMPTY.clone();
                 }
             }
 
-            stack_left
-        })
+            if slot_stack.is_empty() {
+                slot.set_stack(ItemStack::EMPTY.clone());
+            } else {
+                slot.set_stack(slot_stack);
+            }
+        }
+
+        stack_left
     }
 }

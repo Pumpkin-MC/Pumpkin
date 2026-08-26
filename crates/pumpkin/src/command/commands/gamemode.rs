@@ -25,72 +25,65 @@ struct TargetExecutor {
 }
 
 impl CommandExecutor for TargetExecutor {
-    fn execute<'a>(
-        &'a self,
-        sender: &'a CommandSender,
-        server: &'a crate::server::Server,
-        args: &'a ConsumedArgs<'a>,
-    ) -> CommandResult<'a> {
-        Box::pin(async move {
-            let Some(Arg::GameMode(gamemode)) = args.get_cloned(&ARG_GAMEMODE) else {
-                return Err(InvalidConsumption(Some(ARG_GAMEMODE.into())));
-            };
+    fn execute(
+        &self,
+        sender: &CommandSender,
+        server: &crate::server::Server,
+        args: &ConsumedArgs,
+    ) -> CommandResult {
+        let Some(Arg::GameMode(gamemode)) = args.get_cloned(&ARG_GAMEMODE) else {
+            return Err(InvalidConsumption(Some(ARG_GAMEMODE.into())));
+        };
 
-            let targets = if self.is_self {
-                let Some(player) = sender.as_player() else {
-                    return Err(InvalidRequirement);
-                };
-                &[player]
-            } else {
-                let Some(Arg::Players(targets)) = args.get(ARG_TARGET) else {
-                    return Err(InvalidConsumption(Some(ARG_TARGET.into())));
-                };
-                targets.as_slice()
+        let targets = if self.is_self {
+            let Some(player) = sender.as_player() else {
+                return Err(InvalidRequirement);
             };
+            &[player]
+        } else {
+            let Some(Arg::Players(targets)) = args.get(ARG_TARGET) else {
+                return Err(InvalidConsumption(Some(ARG_TARGET.into())));
+            };
+            targets.as_slice()
+        };
 
-            let mut succeeded: i32 = 0;
-            for target in targets {
-                if target.set_gamemode(gamemode).await {
-                    succeeded += 1;
-                    let gamemode_string = format!("{gamemode:?}").to_lowercase();
-                    let gamemode_string = format!("gameMode.{gamemode_string}");
-                    // Checking if the target was the sender of this command.
-                    let gamemode_comp = TextComponent::translate_cross(
-                        gamemode_string.clone(),
-                        gamemode_string.clone(),
-                        [],
-                    );
-                    if sender.as_player().as_ref() == Some(target) {
-                        target
-                            .send_system_message(&TextComponent::translate_cross(
-                                translation::java::COMMANDS_GAMEMODE_SUCCESS_SELF,
-                                translation::bedrock::COMMANDS_GAMEMODE_SUCCESS_SELF,
-                                [gamemode_comp],
-                            ))
-                            .await;
-                    } else {
-                        if server.level_info.load().game_rules.send_command_feedback {
-                            target
-                                .send_system_message(&TextComponent::translate_cross(
-                                    translation::java::GAMEMODE_CHANGED,
-                                    translation::bedrock::GAMEMODE_CHANGED,
-                                    [gamemode_comp.clone()],
-                                ))
-                                .await;
-                        }
-                        sender
-                            .send_message(TextComponent::translate_cross(
-                                translation::java::COMMANDS_GAMEMODE_SUCCESS_OTHER,
-                                translation::bedrock::COMMANDS_GAMEMODE_SUCCESS_OTHER,
-                                [target.get_display_name().await, gamemode_comp],
-                            ))
-                            .await;
+        let mut succeeded: i32 = 0;
+        for target in targets {
+            if target.gamemode.load() != gamemode {
+                target.set_gamemode(gamemode);
+                succeeded += 1;
+                let gamemode_string = format!("{gamemode:?}").to_lowercase();
+                let gamemode_string = format!("gameMode.{gamemode_string}");
+                // Checking if the target was the sender of this command.
+                let gamemode_comp = TextComponent::translate_cross(
+                    gamemode_string.clone(),
+                    gamemode_string.clone(),
+                    [],
+                );
+                if sender.as_player().as_ref() == Some(target) {
+                    target.send_system_message(&TextComponent::translate_cross(
+                        translation::java::COMMANDS_GAMEMODE_SUCCESS_SELF,
+                        translation::bedrock::COMMANDS_GAMEMODE_SUCCESS_SELF,
+                        [gamemode_comp],
+                    ));
+                } else {
+                    if server.level_info.load().game_rules.send_command_feedback {
+                        target.send_system_message(&TextComponent::translate_cross(
+                            translation::java::GAMEMODE_CHANGED,
+                            translation::bedrock::GAMEMODE_CHANGED,
+                            [gamemode_comp.clone()],
+                        ));
                     }
+                    sender.send_message(TextComponent::translate_cross(
+                        translation::java::COMMANDS_GAMEMODE_SUCCESS_OTHER,
+                        translation::bedrock::COMMANDS_GAMEMODE_SUCCESS_OTHER,
+                        [target.get_display_name(), gamemode_comp],
+                    ));
                 }
             }
+        }
 
-            Ok(succeeded)
-        })
+        Ok(succeeded)
     }
 }
 

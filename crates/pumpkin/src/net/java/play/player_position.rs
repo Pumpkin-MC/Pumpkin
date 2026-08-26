@@ -52,11 +52,16 @@ impl JavaClient {
         if !player.has_client_loaded() {
             return;
         }
-        if player.get_entity().has_vehicle().await {
+        if player.get_entity().has_vehicle() {
             return;
         }
         // Ignore movement packets while awaiting a teleport confirmation (vanilla behavior)
-        if player.awaiting_teleport.lock().await.is_some() {
+        if player
+            .awaiting_teleport
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .is_some()
+        {
             return;
         }
         // y = feet Y
@@ -94,10 +99,8 @@ impl JavaClient {
                 let distance = last_pos.squared_distance_to_vec(&pos).sqrt();
                 let cm = (distance * 100.0) as i32;
                 if cm > 0 {
-                    let stat = player.get_movement_statistic().await;
-                    player
-                        .increment_stat(StatisticCategory::Custom, stat as i32, cm)
-                        .await;
+                    let stat = player.get_movement_statistic();
+                    player.increment_stat(StatisticCategory::Custom, stat as i32, cm);
                 }
 
                 let height_difference = pos.y - last_pos.y;
@@ -108,14 +111,14 @@ impl JavaClient {
                 let new_on_ground = packet.collision & FLAG_ON_GROUND != 0;
                 entity.on_ground.store(new_on_ground, Ordering::Relaxed);
                 if new_on_ground && entity.is_fall_flying() {
-                    entity.set_fall_flying(false).await;
+                    entity.set_fall_flying(false);
                 }
                 let world = &player.world();
 
                 // TODO: Warn when player moves to quickly
                 if !Self::sync_position(player, world, pos, last_pos, entity.yaw.load(), entity.pitch.load(), packet.collision & FLAG_ON_GROUND != 0) {
                     // Send the new position to all other players.
-                    world.broadcast_packet_except_editioned_sync(
+                    world.broadcast_packet_except_editioned(
                         &[player.gameprofile.id],
                         &CUpdateEntityPos::new(
                             player.entity_id().into(),
@@ -143,18 +146,16 @@ impl JavaClient {
                 }
 
                 // Only process fall damage if player is alive
-                if !player.abilities.lock().await.flying
+                if !player.abilities.lock().unwrap_or_else(std::sync::PoisonError::into_inner).flying
                     && player.living_entity.health.load() > 0.0
                     && !player.living_entity.dead.load(Ordering::Relaxed)
                 {
-                    player.living_entity
-                        .fall(
-                            player.clone(),
-                            height_difference,
-                            packet.collision & FLAG_ON_GROUND != 0,
-                            player.gamemode.load() == GameMode::Creative,
-                        )
-                        .await;
+                    player.living_entity.fall(
+                        player.as_ref(),
+                        height_difference,
+                        packet.collision & FLAG_ON_GROUND != 0,
+                        player.gamemode.load() == GameMode::Creative,
+                    );
                 }
                 chunker::update_position(player).await;
                 let delta = Vector3::new(
@@ -185,11 +186,16 @@ impl JavaClient {
         if !player.has_client_loaded() {
             return;
         }
-        if player.get_entity().has_vehicle().await {
+        if player.get_entity().has_vehicle() {
             return;
         }
         // Ignore movement packets while awaiting a teleport confirmation (vanilla behavior)
-        if player.awaiting_teleport.lock().await.is_some() {
+        if player
+            .awaiting_teleport
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .is_some()
+        {
             return;
         }
         // y = feet Y
@@ -232,10 +238,8 @@ impl JavaClient {
                 let distance = last_pos.squared_distance_to_vec(&pos).sqrt();
                 let cm = (distance * 100.0) as i32;
                 if cm > 0 {
-                    let stat = player.get_movement_statistic().await;
-                    player
-                        .increment_stat(StatisticCategory::Custom, stat as i32, cm)
-                        .await;
+                    let stat = player.get_movement_statistic();
+                    player.increment_stat(StatisticCategory::Custom, stat as i32, cm);
                 }
 
                 let height_difference = pos.y - last_pos.y;
@@ -263,7 +267,7 @@ impl JavaClient {
                     sync_position(player, &world, pos, last_pos, yaw, pitch, (packet.collision & FLAG_ON_GROUND) != 0)
                 {
                     // Send the new position to all other players.
-                    world.broadcast_packet_except_editioned_sync(
+                    world.broadcast_packet_except_editioned(
                         &[player.gameprofile.id],
                         &CUpdateEntityPosRot::new(
                             entity_id.into(),
@@ -299,18 +303,16 @@ impl JavaClient {
                     )
                    ;
                 // Only process fall damage if player is alive
-                if !player.abilities.lock().await.flying
+                if !player.abilities.lock().unwrap_or_else(std::sync::PoisonError::into_inner).flying
                     && player.living_entity.health.load() > 0.0
                     && !player.living_entity.dead.load(Ordering::Relaxed)
                 {
-                    player.living_entity
-                        .fall(
-                            player.clone(),
-                            height_difference,
-                            (packet.collision & FLAG_ON_GROUND) != 0,
-                            player.gamemode.load() == GameMode::Creative,
-                        )
-                        .await;
+                    player.living_entity.fall(
+                        player.as_ref(),
+                        height_difference,
+                        (packet.collision & FLAG_ON_GROUND) != 0,
+                        player.gamemode.load() == GameMode::Creative,
+                    );
                 }
                 chunker::update_position(player).await;
                 let delta = Vector3::new(
@@ -333,7 +335,11 @@ impl JavaClient {
 
     pub async fn force_tp(&self, player: &Arc<Player>, position: Vector3<f64>) {
         let teleport_id = player.teleport_id_count.fetch_add(1, Ordering::Relaxed) + 1;
-        *player.awaiting_teleport.lock().await = Some((teleport_id.into(), position));
+        *player
+            .awaiting_teleport
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) =
+            Some((teleport_id.into(), position));
         self.enqueue_client_packet(&CPlayerPosition::new(
             teleport_id.into(),
             player.get_entity().pos.load(),

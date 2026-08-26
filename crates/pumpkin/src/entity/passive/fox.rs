@@ -13,7 +13,7 @@ use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::java::client::play::Metadata;
 
 use crate::entity::{
-    Entity, EntityBase, EntityBaseFuture, NbtFuture,
+    Entity, EntityBase,
     ageable::{AgeableData, AgeableMob},
     ai::goal::{
         breed::BreedGoal, escape_danger::EscapeDangerGoal, follow_parent::FollowParentGoal,
@@ -248,30 +248,26 @@ impl Mob for FoxEntity {
         Some(self)
     }
 
-    fn mob_write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
-        Box::pin(async move {
-            nbt.put_string("Type", self.get_variant().as_str().to_string());
-            nbt.put_bool("Sleeping", self.is_sleeping());
-            nbt.put_bool("Sitting", self.is_sitting());
-            nbt.put_bool("Crouching", self.is_crouching());
-        })
+    fn mob_write_nbt(&self, nbt: &mut NbtCompound) {
+        nbt.put_string("Type", self.get_variant().as_str().to_string());
+        nbt.put_bool("Sleeping", self.is_sleeping());
+        nbt.put_bool("Sitting", self.is_sitting());
+        nbt.put_bool("Crouching", self.is_crouching());
     }
 
-    fn mob_read_nbt<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
-        Box::pin(async move {
-            if let Some(variant_str) = nbt.get_string("Type") {
-                self.set_variant(FoxVariant::from_name(variant_str));
-            }
-            if let Some(sleeping) = nbt.get_bool("Sleeping") {
-                self.set_sleeping(sleeping);
-            }
-            if let Some(sitting) = nbt.get_bool("Sitting") {
-                self.set_sitting(sitting);
-            }
-            if let Some(crouching) = nbt.get_bool("Crouching") {
-                self.set_crouching(crouching);
-            }
-        })
+    fn mob_read_nbt(&self, nbt: &NbtCompound) {
+        if let Some(variant_str) = nbt.get_string("Type") {
+            self.set_variant(FoxVariant::from_name(variant_str));
+        }
+        if let Some(sleeping) = nbt.get_bool("Sleeping") {
+            self.set_sleeping(sleeping);
+        }
+        if let Some(sitting) = nbt.get_bool("Sitting") {
+            self.set_sitting(sitting);
+        }
+        if let Some(crouching) = nbt.get_bool("Crouching") {
+            self.set_crouching(crouching);
+        }
     }
 
     fn get_mob_entity(&self) -> &MobEntity {
@@ -282,50 +278,39 @@ impl Mob for FoxEntity {
         self.set_variant(FoxVariant::from_name(name));
     }
 
-    fn mob_tick<'a>(&'a self, _caller: &'a Arc<dyn EntityBase>) -> EntityBaseFuture<'a, ()> {
-        Box::pin(async move {
-            self.ageable_ai_step();
-        })
+    fn mob_tick<'a>(&'a self, _caller: &'a Arc<dyn EntityBase>) {
+        self.ageable_ai_step();
     }
 
-    fn mob_init_data_tracker(&self) -> EntityBaseFuture<'_, ()> {
-        Box::pin(async move {
-            let entity = self.get_entity();
-            let is_baby = entity.age.load(Ordering::Relaxed) < 0;
-            if is_baby {
-                entity.send_meta_data(
-                    &[Metadata::new(
-                        pumpkin_data::tracked_data::fox::BABY_ID,
-                        true,
-                    )],
-                    None,
-                );
-            }
+    fn mob_init_data_tracker(&self) {
+        let entity = self.get_entity();
+        let is_baby = entity.age.load(Ordering::Relaxed) < 0;
+        if is_baby {
             entity.send_meta_data(
                 &[Metadata::new(
-                    pumpkin_data::tracked_data::fox::TYPE_ID,
-                    VarInt(self.get_variant().id()),
+                    pumpkin_data::tracked_data::fox::BABY_ID,
+                    true,
                 )],
                 None,
             );
-            entity.send_meta_data(
-                &[Metadata::new(
-                    pumpkin_data::tracked_data::fox::FLAGS_ID,
-                    self.flags.load(Ordering::Relaxed),
-                )],
-                None,
-            );
-        })
+        }
+        entity.send_meta_data(
+            &[Metadata::new(
+                pumpkin_data::tracked_data::fox::TYPE_ID,
+                VarInt(self.get_variant().id()),
+            )],
+            None,
+        );
+        entity.send_meta_data(
+            &[Metadata::new(
+                pumpkin_data::tracked_data::fox::FLAGS_ID,
+                self.flags.load(Ordering::Relaxed),
+            )],
+            None,
+        );
     }
 
-    fn mob_interact<'a>(
-        &'a self,
-        player: &'a Arc<Player>,
-        item_stack: &'a mut ItemStack,
-    ) -> EntityBaseFuture<'a, bool> {
-        Box::pin(async move {
-            self.animal_interact(player, item_stack, Sound::EntityFoxAmbient)
-                .await
-        })
+    fn mob_interact(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {
+        self.animal_interact(player, item_stack, Sound::EntityFoxAmbient)
     }
 }

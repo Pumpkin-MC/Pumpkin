@@ -1,8 +1,7 @@
 use std::sync::{
-    Arc,
+    Arc, Mutex,
     atomic::{AtomicI8, AtomicI32, AtomicU8, Ordering},
 };
-use tokio::sync::Mutex;
 
 use pumpkin_data::{damage::DamageType, item_stack::ItemStack};
 use pumpkin_nbt::{compound::NbtCompound, tag::NbtTag};
@@ -14,7 +13,7 @@ use pumpkin_protocol::{
 use pumpkin_util::{math::vector3::Vector3, text::TextComponent};
 
 use crate::{
-    entity::{Entity, EntityBase, EntityBaseFuture, NbtFuture, living::LivingEntity},
+    entity::{Entity, EntityBase, living::LivingEntity},
     server::Server,
 };
 
@@ -70,7 +69,7 @@ pub struct DisplayEntity {
 
 impl DisplayEntity {
     pub fn new(entity: Entity) -> Self {
-        entity.no_clip.store(true, Ordering::Relaxed);
+        entity.no_physics.store(true, Ordering::Relaxed);
         Self {
             entity,
             interpolation_start_delta_ticks: AtomicI32::new(0),
@@ -138,12 +137,18 @@ impl DisplayEntity {
         );
     }
 
-    pub async fn get_translation(&self) -> Vector3<f32> {
-        *self.translation.lock().await
+    pub fn get_translation(&self) -> Vector3<f32> {
+        *self
+            .translation
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
     }
 
-    pub async fn set_translation(&self, translation: Vector3<f32>) {
-        *self.translation.lock().await = translation;
+    pub fn set_translation(&self, translation: Vector3<f32>) {
+        *self
+            .translation
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = translation;
         self.entity.send_meta_data(
             &[Metadata::new(
                 pumpkin_data::tracked_data::display::TRANSLATION,
@@ -153,12 +158,18 @@ impl DisplayEntity {
         );
     }
 
-    pub async fn get_scale(&self) -> Vector3<f32> {
-        *self.scale.lock().await
+    pub fn get_scale(&self) -> Vector3<f32> {
+        *self
+            .scale
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
     }
 
-    pub async fn set_scale(&self, scale: Vector3<f32>) {
-        *self.scale.lock().await = scale;
+    pub fn set_scale(&self, scale: Vector3<f32>) {
+        *self
+            .scale
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = scale;
         self.entity.send_meta_data(
             &[Metadata::new(
                 pumpkin_data::tracked_data::display::SCALE,
@@ -168,12 +179,18 @@ impl DisplayEntity {
         );
     }
 
-    pub async fn get_left_rotation(&self) -> [f32; 4] {
-        *self.left_rotation.lock().await
+    pub fn get_left_rotation(&self) -> [f32; 4] {
+        *self
+            .left_rotation
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
     }
 
-    pub async fn set_left_rotation(&self, left_rotation: [f32; 4]) {
-        *self.left_rotation.lock().await = left_rotation;
+    pub fn set_left_rotation(&self, left_rotation: [f32; 4]) {
+        *self
+            .left_rotation
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = left_rotation;
         self.entity.send_meta_data(
             &[Metadata::new(
                 pumpkin_data::tracked_data::display::LEFT_ROTATION,
@@ -188,12 +205,18 @@ impl DisplayEntity {
         );
     }
 
-    pub async fn get_right_rotation(&self) -> [f32; 4] {
-        *self.right_rotation.lock().await
+    pub fn get_right_rotation(&self) -> [f32; 4] {
+        *self
+            .right_rotation
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
     }
 
-    pub async fn set_right_rotation(&self, right_rotation: [f32; 4]) {
-        *self.right_rotation.lock().await = right_rotation;
+    pub fn set_right_rotation(&self, right_rotation: [f32; 4]) {
+        *self
+            .right_rotation
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = right_rotation;
         self.entity.send_meta_data(
             &[Metadata::new(
                 pumpkin_data::tracked_data::display::RIGHT_ROTATION,
@@ -238,12 +261,18 @@ impl DisplayEntity {
         );
     }
 
-    pub async fn get_view_range(&self) -> f32 {
-        *self.view_range.lock().await
+    pub fn get_view_range(&self) -> f32 {
+        *self
+            .view_range
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
     }
 
-    pub async fn set_view_range(&self, view_range: f32) {
-        *self.view_range.lock().await = view_range;
+    pub fn set_view_range(&self, view_range: f32) {
+        *self
+            .view_range
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = view_range;
         self.entity.send_meta_data(
             &[Metadata::new(
                 pumpkin_data::tracked_data::display::VIEW_RANGE,
@@ -253,12 +282,18 @@ impl DisplayEntity {
         );
     }
 
-    pub async fn get_shadow_radius(&self) -> f32 {
-        *self.shadow_radius.lock().await
+    pub fn get_shadow_radius(&self) -> f32 {
+        *self
+            .shadow_radius
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
     }
 
-    pub async fn set_shadow_radius(&self, shadow_radius: f32) {
-        *self.shadow_radius.lock().await = shadow_radius;
+    pub fn set_shadow_radius(&self, shadow_radius: f32) {
+        *self
+            .shadow_radius
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = shadow_radius;
         self.entity.send_meta_data(
             &[Metadata::new(
                 pumpkin_data::tracked_data::display::SHADOW_RADIUS,
@@ -268,12 +303,18 @@ impl DisplayEntity {
         );
     }
 
-    pub async fn get_shadow_strength(&self) -> f32 {
-        *self.shadow_strength.lock().await
+    pub fn get_shadow_strength(&self) -> f32 {
+        *self
+            .shadow_strength
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
     }
 
-    pub async fn set_shadow_strength(&self, shadow_strength: f32) {
-        *self.shadow_strength.lock().await = shadow_strength;
+    pub fn set_shadow_strength(&self, shadow_strength: f32) {
+        *self
+            .shadow_strength
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = shadow_strength;
         self.entity.send_meta_data(
             &[Metadata::new(
                 pumpkin_data::tracked_data::display::SHADOW_STRENGTH,
@@ -283,12 +324,18 @@ impl DisplayEntity {
         );
     }
 
-    pub async fn get_display_width(&self) -> f32 {
-        *self.width.lock().await
+    pub fn get_display_width(&self) -> f32 {
+        *self
+            .width
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
     }
 
-    pub async fn set_display_width(&self, width: f32) {
-        *self.width.lock().await = width;
+    pub fn set_display_width(&self, width: f32) {
+        *self
+            .width
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = width;
         self.entity.send_meta_data(
             &[Metadata::new(
                 pumpkin_data::tracked_data::display::WIDTH,
@@ -298,12 +345,18 @@ impl DisplayEntity {
         );
     }
 
-    pub async fn get_display_height(&self) -> f32 {
-        *self.height.lock().await
+    pub fn get_display_height(&self) -> f32 {
+        *self
+            .height
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
     }
 
-    pub async fn set_display_height(&self, height: f32) {
-        *self.height.lock().await = height;
+    pub fn set_display_height(&self, height: f32) {
+        *self
+            .height
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = height;
         self.entity.send_meta_data(
             &[Metadata::new(
                 pumpkin_data::tracked_data::display::HEIGHT,
@@ -329,16 +382,43 @@ impl DisplayEntity {
     }
 
     #[allow(clippy::too_many_lines)]
-    pub async fn init_display_data_tracker(&self) {
-        let view_range = *self.view_range.lock().await;
-        let shadow_radius = *self.shadow_radius.lock().await;
-        let shadow_strength = *self.shadow_strength.lock().await;
-        let width = *self.width.lock().await;
-        let height = *self.height.lock().await;
-        let translation = *self.translation.lock().await;
-        let scale = *self.scale.lock().await;
-        let left_rotation = *self.left_rotation.lock().await;
-        let right_rotation = *self.right_rotation.lock().await;
+    pub fn init_display_data_tracker(&self) {
+        let view_range = *self
+            .view_range
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let shadow_radius = *self
+            .shadow_radius
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let shadow_strength = *self
+            .shadow_strength
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let width = *self
+            .width
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let height = *self
+            .height
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let translation = *self
+            .translation
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let scale = *self
+            .scale
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let left_rotation = *self
+            .left_rotation
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let right_rotation = *self
+            .right_rotation
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
 
         self.entity.send_meta_data(
             &[Metadata::new(
@@ -457,7 +537,8 @@ impl DisplayEntity {
         );
     }
 
-    pub async fn write_display_nbt(&self, nbt: &mut NbtCompound) {
+    #[expect(clippy::too_many_lines)]
+    pub fn write_display_nbt(&self, nbt: &mut NbtCompound) {
         nbt.put_int(
             "interpolation_duration",
             self.interpolation_duration.load(Ordering::Relaxed),
@@ -466,14 +547,44 @@ impl DisplayEntity {
             "start_interpolation",
             self.interpolation_start_delta_ticks.load(Ordering::Relaxed),
         );
-        nbt.put_float("view_range", *self.view_range.lock().await);
-        nbt.put_float("shadow_radius", *self.shadow_radius.lock().await);
-        nbt.put_float("shadow_strength", *self.shadow_strength.lock().await);
-        nbt.put_float("width", *self.width.lock().await);
-        nbt.put_float("height", *self.height.lock().await);
+        nbt.put_float(
+            "view_range",
+            *self
+                .view_range
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner),
+        );
+        nbt.put_float(
+            "shadow_radius",
+            *self
+                .shadow_radius
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner),
+        );
+        nbt.put_float(
+            "shadow_strength",
+            *self
+                .shadow_strength
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner),
+        );
+        nbt.put_float(
+            "width",
+            *self
+                .width
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner),
+        );
+        nbt.put_float(
+            "height",
+            *self
+                .height
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner),
+        );
         nbt.put_int(
-            "glow_color_override",
-            self.glow_color_override.load(Ordering::Relaxed),
+            "teleport_duration",
+            self.teleport_duration.load(Ordering::Relaxed),
         );
 
         let billboard_str = match self.billboard.load(Ordering::Relaxed) {
@@ -482,24 +593,44 @@ impl DisplayEntity {
             3 => "center",
             _ => "fixed",
         };
-        nbt.put_string("billboard", billboard_str.to_string());
+        nbt.put_string("billboard", billboard_str.into());
+
+        let brightness = self.brightness.load(Ordering::Relaxed);
+        if brightness != -1 {
+            let block = brightness & 0xF;
+            let sky = (brightness >> 4) & 0xF;
+            let mut b_compound = NbtCompound::new();
+            b_compound.put_int("block", block);
+            b_compound.put_int("sky", sky);
+            nbt.put("brightness", NbtTag::Compound(b_compound));
+        }
+
+        let glow_color_override = self.glow_color_override.load(Ordering::Relaxed);
+        if glow_color_override != -1 {
+            nbt.put_int("glow_color_override", glow_color_override);
+        }
 
         let mut transform = NbtCompound::new();
-        let translation = *self.translation.lock().await;
+        let trans = *self
+            .translation
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         transform.put(
             "translation",
-            NbtTag::List(vec![
-                translation.x.into(),
-                translation.y.into(),
-                translation.z.into(),
-            ]),
+            NbtTag::List(vec![trans.x.into(), trans.y.into(), trans.z.into()]),
         );
-        let scale = *self.scale.lock().await;
+        let scale = *self
+            .scale
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         transform.put(
             "scale",
             NbtTag::List(vec![scale.x.into(), scale.y.into(), scale.z.into()]),
         );
-        let left_rot = *self.left_rotation.lock().await;
+        let left_rot = *self
+            .left_rotation
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         transform.put(
             "left_rotation",
             NbtTag::List(vec![
@@ -509,7 +640,10 @@ impl DisplayEntity {
                 left_rot[3].into(),
             ]),
         );
-        let right_rot = *self.right_rotation.lock().await;
+        let right_rot = *self
+            .right_rotation
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         transform.put(
             "right_rotation",
             NbtTag::List(vec![
@@ -522,7 +656,8 @@ impl DisplayEntity {
         nbt.put("transformation", NbtTag::Compound(transform));
     }
 
-    pub async fn read_display_nbt(&self, nbt: &NbtCompound) {
+    #[expect(clippy::too_many_lines)]
+    pub fn read_display_nbt(&self, nbt: &NbtCompound) {
         if let Some(dur) = nbt.get_int("interpolation_duration") {
             self.interpolation_duration.store(dur, Ordering::Relaxed);
         }
@@ -531,19 +666,34 @@ impl DisplayEntity {
                 .store(start, Ordering::Relaxed);
         }
         if let Some(vr) = nbt.get_float("view_range") {
-            *self.view_range.lock().await = vr;
+            *self
+                .view_range
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner) = vr;
         }
         if let Some(sr) = nbt.get_float("shadow_radius") {
-            *self.shadow_radius.lock().await = sr;
+            *self
+                .shadow_radius
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner) = sr;
         }
         if let Some(ss) = nbt.get_float("shadow_strength") {
-            *self.shadow_strength.lock().await = ss;
+            *self
+                .shadow_strength
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner) = ss;
         }
         if let Some(w) = nbt.get_float("width") {
-            *self.width.lock().await = w;
+            *self
+                .width
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner) = w;
         }
         if let Some(h) = nbt.get_float("height") {
-            *self.height.lock().await = h;
+            *self
+                .height
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner) = h;
         }
         if let Some(glow) = nbt.get_int("glow_color_override") {
             self.glow_color_override.store(glow, Ordering::Relaxed);
@@ -558,6 +708,13 @@ impl DisplayEntity {
             self.billboard.store(mode, Ordering::Relaxed);
         }
 
+        if let Some(b) = nbt.get_compound("brightness") {
+            let block = b.get_int("block").unwrap_or(0);
+            let sky = b.get_int("sky").unwrap_or(0);
+            self.brightness
+                .store((sky << 4) | (block & 0xF), Ordering::Relaxed);
+        }
+
         if let Some(transform) = nbt.get_compound("transformation") {
             if let Some(t_list) = transform.get_list("translation")
                 && t_list.len() >= 3
@@ -565,7 +722,10 @@ impl DisplayEntity {
                 let x = t_list[0].extract_float().unwrap_or(0.0);
                 let y = t_list[1].extract_float().unwrap_or(0.0);
                 let z = t_list[2].extract_float().unwrap_or(0.0);
-                *self.translation.lock().await = Vector3::new(x, y, z);
+                *self
+                    .translation
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner) = Vector3::new(x, y, z);
             }
             if let Some(s_list) = transform.get_list("scale")
                 && s_list.len() >= 3
@@ -573,7 +733,10 @@ impl DisplayEntity {
                 let x = s_list[0].extract_float().unwrap_or(1.0);
                 let y = s_list[1].extract_float().unwrap_or(1.0);
                 let z = s_list[2].extract_float().unwrap_or(1.0);
-                *self.scale.lock().await = Vector3::new(x, y, z);
+                *self
+                    .scale
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner) = Vector3::new(x, y, z);
             }
             if let Some(lr_list) = transform.get_list("left_rotation")
                 && lr_list.len() >= 4
@@ -582,7 +745,10 @@ impl DisplayEntity {
                 let y = lr_list[1].extract_float().unwrap_or(0.0);
                 let z = lr_list[2].extract_float().unwrap_or(0.0);
                 let w = lr_list[3].extract_float().unwrap_or(1.0);
-                *self.left_rotation.lock().await = [x, y, z, w];
+                *self
+                    .left_rotation
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner) = [x, y, z, w];
             }
             if let Some(rr_list) = transform.get_list("right_rotation")
                 && rr_list.len() >= 4
@@ -591,7 +757,10 @@ impl DisplayEntity {
                 let y = rr_list[1].extract_float().unwrap_or(0.0);
                 let z = rr_list[2].extract_float().unwrap_or(0.0);
                 let w = rr_list[3].extract_float().unwrap_or(1.0);
-                *self.right_rotation.lock().await = [x, y, z, w];
+                *self
+                    .right_rotation
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner) = [x, y, z, w];
             }
         }
     }
@@ -627,41 +796,29 @@ impl BlockDisplayEntity {
 }
 
 impl EntityBase for BlockDisplayEntity {
-    fn write_custom_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
-        Box::pin(async move {
-            self.display.write_display_nbt(nbt).await;
-            nbt.put_int("block_state", self.block_state.load(Ordering::Relaxed));
-        })
+    fn write_custom_nbt(&self, nbt: &mut NbtCompound) {
+        self.display.write_display_nbt(nbt);
+        nbt.put_int("block_state", self.block_state.load(Ordering::Relaxed));
     }
 
-    fn read_custom_nbt<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
-        Box::pin(async move {
-            self.display.read_display_nbt(nbt).await;
-            if let Some(state) = nbt.get_int("block_state") {
-                self.block_state.store(state, Ordering::Relaxed);
-            }
-        })
+    fn read_custom_nbt(&self, nbt: &NbtCompound) {
+        self.display.read_display_nbt(nbt);
+        if let Some(state) = nbt.get_int("block_state") {
+            self.block_state.store(state, Ordering::Relaxed);
+        }
     }
 
-    fn tick<'a>(
-        &'a self,
-        _caller: &'a Arc<dyn EntityBase>,
-        _server: &'a Server,
-    ) -> EntityBaseFuture<'a, ()> {
-        Box::pin(async move {})
-    }
+    fn tick<'a>(&'a self, _caller: &'a Arc<dyn EntityBase>, _server: &'a Server) {}
 
-    fn init_data_tracker(&self) -> EntityBaseFuture<'_, ()> {
-        Box::pin(async move {
-            self.display.init_display_data_tracker().await;
-            self.display.entity.send_meta_data(
-                &[Metadata::new(
-                    pumpkin_data::tracked_data::block_display::BLOCK_STATE,
-                    VarInt(self.block_state.load(Ordering::Relaxed)),
-                )],
-                None,
-            );
-        })
+    fn init_data_tracker(&self) {
+        self.display.init_display_data_tracker();
+        self.display.entity.send_meta_data(
+            &[Metadata::new(
+                pumpkin_data::tracked_data::block_display::BLOCK_STATE,
+                VarInt(self.block_state.load(Ordering::Relaxed)),
+            )],
+            None,
+        );
     }
 
     fn get_entity(&self) -> &Entity {
@@ -692,16 +849,16 @@ impl EntityBase for BlockDisplayEntity {
         true
     }
 
-    fn damage_with_context<'a>(
-        &'a self,
-        _caller: &'a dyn EntityBase,
+    fn damage_with_context(
+        &self,
+        _caller: &dyn EntityBase,
         _amount: f32,
         _damage_type: DamageType,
         _position: Option<Vector3<f64>>,
-        _source: Option<&'a dyn EntityBase>,
-        _cause: Option<&'a dyn EntityBase>,
-    ) -> EntityBaseFuture<'a, bool> {
-        Box::pin(async move { false })
+        _source: Option<&dyn EntityBase>,
+        _cause: Option<&dyn EntityBase>,
+    ) -> bool {
+        false
     }
 }
 
@@ -720,12 +877,18 @@ impl ItemDisplayEntity {
         })
     }
 
-    pub async fn get_item(&self) -> ItemStack {
-        self.item_stack.lock().await.clone()
+    pub fn get_item(&self) -> ItemStack {
+        self.item_stack
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone()
     }
 
-    pub async fn set_item(&self, item: ItemStack) {
-        *self.item_stack.lock().await = item.clone();
+    pub fn set_item(&self, item: ItemStack) {
+        *self
+            .item_stack
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = item.clone();
         self.display.entity.send_meta_data(
             &[Metadata::new(
                 pumpkin_data::tracked_data::item_display::ITEM,
@@ -752,70 +915,63 @@ impl ItemDisplayEntity {
 }
 
 impl EntityBase for ItemDisplayEntity {
-    fn write_custom_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
-        Box::pin(async move {
-            self.display.write_display_nbt(nbt).await;
-            let display_mode_str = match self.item_display.load(Ordering::Relaxed) {
-                1 => "thirdperson_lefthand",
-                2 => "thirdperson_righthand",
-                3 => "firstperson_lefthand",
-                4 => "firstperson_righthand",
-                5 => "head",
-                6 => "gui",
-                7 => "ground",
-                8 => "fixed",
-                _ => "none",
+    fn write_custom_nbt(&self, nbt: &mut NbtCompound) {
+        self.display.write_display_nbt(nbt);
+        let display_mode_str = match self.item_display.load(Ordering::Relaxed) {
+            1 => "thirdperson_lefthand",
+            2 => "thirdperson_righthand",
+            3 => "firstperson_lefthand",
+            4 => "firstperson_righthand",
+            5 => "head",
+            6 => "gui",
+            7 => "ground",
+            8 => "fixed",
+            _ => "none",
+        };
+        nbt.put_string("item_display", display_mode_str.to_string());
+    }
+
+    fn read_custom_nbt(&self, nbt: &NbtCompound) {
+        self.display.read_display_nbt(nbt);
+        if let Some(mode_str) = nbt.get_string("item_display") {
+            let mode = match mode_str {
+                "thirdperson_lefthand" => 1,
+                "thirdperson_righthand" => 2,
+                "firstperson_lefthand" => 3,
+                "firstperson_righthand" => 4,
+                "head" => 5,
+                "gui" => 6,
+                "ground" => 7,
+                "fixed" => 8,
+                _ => 0,
             };
-            nbt.put_string("item_display", display_mode_str.to_string());
-        })
+            self.item_display.store(mode, Ordering::Relaxed);
+        }
     }
 
-    fn read_custom_nbt<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
-        Box::pin(async move {
-            self.display.read_display_nbt(nbt).await;
-            if let Some(mode_str) = nbt.get_string("item_display") {
-                let mode = match mode_str {
-                    "thirdperson_lefthand" => 1,
-                    "thirdperson_righthand" => 2,
-                    "firstperson_lefthand" => 3,
-                    "firstperson_righthand" => 4,
-                    "head" => 5,
-                    "gui" => 6,
-                    "ground" => 7,
-                    "fixed" => 8,
-                    _ => 0,
-                };
-                self.item_display.store(mode, Ordering::Relaxed);
-            }
-        })
-    }
+    fn tick<'a>(&'a self, _caller: &'a Arc<dyn EntityBase>, _server: &'a Server) {}
 
-    fn tick<'a>(
-        &'a self,
-        _caller: &'a Arc<dyn EntityBase>,
-        _server: &'a Server,
-    ) -> EntityBaseFuture<'a, ()> {
-        Box::pin(async move {})
-    }
-
-    fn init_data_tracker(&self) -> EntityBaseFuture<'_, ()> {
-        Box::pin(async move {
-            self.display.init_display_data_tracker().await;
-            self.display.entity.send_meta_data(
-                &[Metadata::new(
-                    pumpkin_data::tracked_data::item_display::ITEM,
-                    ItemStackSerializer::from(self.item_stack.lock().await.clone()),
-                )],
-                None,
-            );
-            self.display.entity.send_meta_data(
-                &[Metadata::new(
-                    pumpkin_data::tracked_data::item_display::ITEM_DISPLAY,
-                    self.item_display.load(Ordering::Relaxed),
-                )],
-                None,
-            );
-        })
+    fn init_data_tracker(&self) {
+        self.display.init_display_data_tracker();
+        self.display.entity.send_meta_data(
+            &[Metadata::new(
+                pumpkin_data::tracked_data::item_display::ITEM,
+                ItemStackSerializer::from(
+                    self.item_stack
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner)
+                        .clone(),
+                ),
+            )],
+            None,
+        );
+        self.display.entity.send_meta_data(
+            &[Metadata::new(
+                pumpkin_data::tracked_data::item_display::ITEM_DISPLAY,
+                self.item_display.load(Ordering::Relaxed),
+            )],
+            None,
+        );
     }
 
     fn get_entity(&self) -> &Entity {
@@ -846,16 +1002,16 @@ impl EntityBase for ItemDisplayEntity {
         true
     }
 
-    fn damage_with_context<'a>(
-        &'a self,
-        _caller: &'a dyn EntityBase,
+    fn damage_with_context(
+        &self,
+        _caller: &dyn EntityBase,
         _amount: f32,
         _damage_type: DamageType,
         _position: Option<Vector3<f64>>,
-        _source: Option<&'a dyn EntityBase>,
-        _cause: Option<&'a dyn EntityBase>,
-    ) -> EntityBaseFuture<'a, bool> {
-        Box::pin(async move { false })
+        _source: Option<&dyn EntityBase>,
+        _cause: Option<&dyn EntityBase>,
+    ) -> bool {
+        false
     }
 }
 
@@ -880,12 +1036,18 @@ impl TextDisplayEntity {
         })
     }
 
-    pub async fn get_text(&self) -> TextComponent {
-        self.text.lock().await.clone()
+    pub fn get_text(&self) -> TextComponent {
+        self.text
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone()
     }
 
-    pub async fn set_text(&self, text: TextComponent) {
-        *self.text.lock().await = text.clone();
+    pub fn set_text(&self, text: TextComponent) {
+        *self
+            .text
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = text.clone();
         self.display.entity.send_meta_data(
             &[Metadata::new(
                 pumpkin_data::tracked_data::text_display::TEXT,
@@ -1033,119 +1195,119 @@ impl TextDisplayEntity {
 }
 
 impl EntityBase for TextDisplayEntity {
-    fn write_custom_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
-        Box::pin(async move {
-            self.display.write_display_nbt(nbt).await;
-            let text_json_res = pumpkin_util::serde_json::to_string(&*self.text.lock().await);
-            if let Ok(text_json) = text_json_res {
-                nbt.put_string("text", text_json);
-            }
-            nbt.put_int("line_width", self.line_width.load(Ordering::Relaxed));
-            nbt.put_int("background", self.background.load(Ordering::Relaxed));
-            nbt.put_byte("text_opacity", self.text_opacity.load(Ordering::Relaxed));
+    fn write_custom_nbt(&self, nbt: &mut NbtCompound) {
+        self.display.write_display_nbt(nbt);
+        let text_json_res = pumpkin_util::serde_json::to_string(
+            &*self
+                .text
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner),
+        );
+        if let Ok(text_json) = text_json_res {
+            nbt.put_string("text", text_json);
+        }
+        nbt.put_int("line_width", self.line_width.load(Ordering::Relaxed));
+        nbt.put_int("background", self.background.load(Ordering::Relaxed));
+        nbt.put_byte("text_opacity", self.text_opacity.load(Ordering::Relaxed));
 
-            let flags = self.flags.load(Ordering::Relaxed);
-            nbt.put_bool("shadow", flags & 1 != 0);
-            nbt.put_bool("see_through", flags & 2 != 0);
-            nbt.put_bool("default_background", flags & 4 != 0);
-            let align_str = if flags & 8 != 0 {
-                "left"
-            } else if flags & 16 != 0 {
-                "right"
-            } else {
-                "center"
-            };
-            nbt.put_string("alignment", align_str.to_string());
-        })
+        let flags = self.flags.load(Ordering::Relaxed);
+        nbt.put_bool("shadow", flags & 1 != 0);
+        nbt.put_bool("see_through", flags & 2 != 0);
+        nbt.put_bool("default_background", flags & 4 != 0);
+        let align_str = if flags & 8 != 0 {
+            "left"
+        } else if flags & 16 != 0 {
+            "right"
+        } else {
+            "center"
+        };
+        nbt.put_string("alignment", align_str.to_string());
     }
 
-    fn read_custom_nbt<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
-        Box::pin(async move {
-            self.display.read_display_nbt(nbt).await;
-            if let Some(text_json) = nbt.get_string("text")
-                && let Ok(component) = pumpkin_util::serde_json::from_str(text_json)
-            {
-                *self.text.lock().await = component;
-            }
-            if let Some(lw) = nbt.get_int("line_width") {
-                self.line_width.store(lw, Ordering::Relaxed);
-            }
-            if let Some(bg) = nbt.get_int("background") {
-                self.background.store(bg, Ordering::Relaxed);
-            }
-            if let Some(opacity) = nbt.get_byte("text_opacity") {
-                self.text_opacity.store(opacity, Ordering::Relaxed);
-            }
+    fn read_custom_nbt(&self, nbt: &NbtCompound) {
+        self.display.read_display_nbt(nbt);
+        if let Some(text_json) = nbt.get_string("text")
+            && let Ok(component) = pumpkin_util::serde_json::from_str(text_json)
+        {
+            *self
+                .text
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner) = component;
+        }
+        if let Some(lw) = nbt.get_int("line_width") {
+            self.line_width.store(lw, Ordering::Relaxed);
+        }
+        if let Some(bg) = nbt.get_int("background") {
+            self.background.store(bg, Ordering::Relaxed);
+        }
+        if let Some(opacity) = nbt.get_byte("text_opacity") {
+            self.text_opacity.store(opacity, Ordering::Relaxed);
+        }
 
-            let mut flags = 0u8;
-            if nbt.get_bool("shadow").unwrap_or(false) {
-                flags |= 1;
+        let mut flags = 0u8;
+        if nbt.get_bool("shadow").unwrap_or(false) {
+            flags |= 1;
+        }
+        if nbt.get_bool("see_through").unwrap_or(false) {
+            flags |= 2;
+        }
+        if nbt.get_bool("default_background").unwrap_or(false) {
+            flags |= 4;
+        }
+        if let Some(align) = nbt.get_string("alignment") {
+            match align {
+                "left" => flags |= 8,
+                "right" => flags |= 16,
+                _ => {}
             }
-            if nbt.get_bool("see_through").unwrap_or(false) {
-                flags |= 2;
-            }
-            if nbt.get_bool("default_background").unwrap_or(false) {
-                flags |= 4;
-            }
-            if let Some(align) = nbt.get_string("alignment") {
-                match align {
-                    "left" => flags |= 8,
-                    "right" => flags |= 16,
-                    _ => {}
-                }
-            }
-            self.flags.store(flags, Ordering::Relaxed);
-        })
+        }
+        self.flags.store(flags, Ordering::Relaxed);
     }
 
-    fn tick<'a>(
-        &'a self,
-        _caller: &'a Arc<dyn EntityBase>,
-        _server: &'a Server,
-    ) -> EntityBaseFuture<'a, ()> {
-        Box::pin(async move {})
-    }
+    fn tick<'a>(&'a self, _caller: &'a Arc<dyn EntityBase>, _server: &'a Server) {}
 
-    fn init_data_tracker(&self) -> EntityBaseFuture<'_, ()> {
-        Box::pin(async move {
-            self.display.init_display_data_tracker().await;
-            let text = self.text.lock().await.clone();
-            self.display.entity.send_meta_data(
-                &[Metadata::new(
-                    pumpkin_data::tracked_data::text_display::TEXT,
-                    text,
-                )],
-                None,
-            );
-            self.display.entity.send_meta_data(
-                &[Metadata::new(
-                    pumpkin_data::tracked_data::text_display::LINE_WIDTH,
-                    VarInt(self.line_width.load(Ordering::Relaxed)),
-                )],
-                None,
-            );
-            self.display.entity.send_meta_data(
-                &[Metadata::new(
-                    pumpkin_data::tracked_data::text_display::BACKGROUND,
-                    VarInt(self.background.load(Ordering::Relaxed)),
-                )],
-                None,
-            );
-            self.display.entity.send_meta_data(
-                &[Metadata::new(
-                    pumpkin_data::tracked_data::text_display::TEXT_OPACITY,
-                    self.text_opacity.load(Ordering::Relaxed) as u8,
-                )],
-                None,
-            );
-            self.display.entity.send_meta_data(
-                &[Metadata::new(
-                    pumpkin_data::tracked_data::text_display::TEXT_DISPLAY_FLAGS,
-                    self.flags.load(Ordering::Relaxed),
-                )],
-                None,
-            );
-        })
+    fn init_data_tracker(&self) {
+        self.display.init_display_data_tracker();
+        let text = self
+            .text
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone();
+        self.display.entity.send_meta_data(
+            &[Metadata::new(
+                pumpkin_data::tracked_data::text_display::TEXT,
+                text,
+            )],
+            None,
+        );
+        self.display.entity.send_meta_data(
+            &[Metadata::new(
+                pumpkin_data::tracked_data::text_display::LINE_WIDTH,
+                VarInt(self.line_width.load(Ordering::Relaxed)),
+            )],
+            None,
+        );
+        self.display.entity.send_meta_data(
+            &[Metadata::new(
+                pumpkin_data::tracked_data::text_display::BACKGROUND,
+                VarInt(self.background.load(Ordering::Relaxed)),
+            )],
+            None,
+        );
+        self.display.entity.send_meta_data(
+            &[Metadata::new(
+                pumpkin_data::tracked_data::text_display::TEXT_OPACITY,
+                self.text_opacity.load(Ordering::Relaxed) as u8,
+            )],
+            None,
+        );
+        self.display.entity.send_meta_data(
+            &[Metadata::new(
+                pumpkin_data::tracked_data::text_display::TEXT_DISPLAY_FLAGS,
+                self.flags.load(Ordering::Relaxed),
+            )],
+            None,
+        );
     }
 
     fn get_entity(&self) -> &Entity {
@@ -1176,15 +1338,15 @@ impl EntityBase for TextDisplayEntity {
         true
     }
 
-    fn damage_with_context<'a>(
-        &'a self,
-        _caller: &'a dyn EntityBase,
+    fn damage_with_context(
+        &self,
+        _caller: &dyn EntityBase,
         _amount: f32,
         _damage_type: DamageType,
         _position: Option<Vector3<f64>>,
-        _source: Option<&'a dyn EntityBase>,
-        _cause: Option<&'a dyn EntityBase>,
-    ) -> EntityBaseFuture<'a, bool> {
-        Box::pin(async move { false })
+        _source: Option<&dyn EntityBase>,
+        _cause: Option<&dyn EntityBase>,
+    ) -> bool {
+        false
     }
 }

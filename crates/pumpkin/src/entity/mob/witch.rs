@@ -13,7 +13,7 @@ use pumpkin_data::tracked_data;
 use pumpkin_protocol::java::client::play::Metadata;
 
 use crate::entity::{
-    Entity, EntityBase, EntityBaseFuture,
+    Entity, EntityBase,
     ai::goal::{
         active_target::ActiveTargetGoal, look_around::RandomLookAroundGoal,
         look_at_entity::LookAtEntityGoal, ranged_attack::RangedAttackGoal, revenge::RevengeGoal,
@@ -132,13 +132,13 @@ impl WitchEntity {
         self.drinking_potion.load(Ordering::Relaxed)
     }
 
-    pub async fn throw_potion(&self, target: &Arc<dyn EntityBase>) {
+    pub fn throw_potion(&self, target: &Arc<dyn EntityBase>) {
         if self.is_drinking_potion() {
             return;
         }
 
         let entity = &self.mob_entity.living_entity.entity;
-        let world = entity.world.load();
+        let world = entity.world.load_full();
 
         let target_entity = target.get_entity();
         let target_pos = target_entity.pos.load();
@@ -154,15 +154,13 @@ impl WitchEntity {
 
         if let Some(target_living) = target.get_living_entity() {
             let r: f32 = rand::random();
-            if dist >= 8.0 && !target_living.has_effect(&StatusEffect::SLOWNESS).await {
+            if dist >= 8.0 && !target_living.has_effect(&StatusEffect::SLOWNESS) {
                 potion = &Potion::SLOWNESS;
             } else if target_living.health.load() >= 8.0
-                && !target_living.has_effect(&StatusEffect::POISON).await
+                && !target_living.has_effect(&StatusEffect::POISON)
             {
                 potion = &Potion::POISON;
-            } else if dist <= 3.0
-                && !target_living.has_effect(&StatusEffect::WEAKNESS).await
-                && r < 0.25
+            } else if dist <= 3.0 && !target_living.has_effect(&StatusEffect::WEAKNESS) && r < 0.25
             {
                 potion = &Potion::WEAKNESS;
             }
@@ -172,7 +170,7 @@ impl WitchEntity {
 
         let splash_entity = Entity::new(world.clone(), witch_pos, &EntityType::SPLASH_POTION);
         let splash = SplashPotionEntity::new_shot(splash_entity, entity);
-        splash.set_item_stack(potion_stack).await;
+        splash.set_item_stack(potion_stack);
 
         let speed = if dist <= 2.0 { 0.45 } else { 0.75 };
         let yo = dist * 0.2;
@@ -184,7 +182,7 @@ impl WitchEntity {
         }
 
         let splash_arc: Arc<dyn EntityBase> = Arc::new(splash);
-        world.spawn_entity(splash_arc).await;
+        world.spawn_entity(splash_arc);
     }
 }
 
@@ -201,37 +199,21 @@ impl Mob for WitchEntity {
         Some(self)
     }
 
-    fn mob_write_nbt<'a>(
-        &'a self,
-        nbt: &'a mut pumpkin_nbt::compound::NbtCompound,
-    ) -> crate::entity::NbtFuture<'a, ()> {
-        Box::pin(async move {
-            self.write_raider_nbt(nbt);
-        })
+    fn mob_write_nbt(&self, nbt: &mut pumpkin_nbt::compound::NbtCompound) {
+        self.write_raider_nbt(nbt);
     }
 
-    fn mob_read_nbt<'a>(
-        &'a self,
-        nbt: &'a pumpkin_nbt::compound::NbtCompound,
-    ) -> crate::entity::NbtFuture<'a, ()> {
-        Box::pin(async move {
-            self.read_raider_nbt(nbt);
-        })
+    fn mob_read_nbt(&self, nbt: &pumpkin_nbt::compound::NbtCompound) {
+        self.read_raider_nbt(nbt);
     }
 
-    fn pre_damage<'a>(
-        &'a self,
-        _damage_type: DamageType,
-        source: Option<&'a dyn EntityBase>,
-    ) -> EntityBaseFuture<'a, bool> {
-        Box::pin(async move {
-            if let Some(src) = source
-                && src.get_entity().entity_id == self.mob_entity.living_entity.entity.entity_id
-            {
-                return false;
-            }
-            true
-        })
+    fn pre_damage(&self, _damage_type: DamageType, source: Option<&dyn EntityBase>) -> bool {
+        if let Some(src) = source
+            && src.get_entity().entity_id == self.mob_entity.living_entity.entity.entity_id
+        {
+            return false;
+        }
+        true
     }
 
     fn modify_incoming_damage(&self, mut amount: f32, damage_type: DamageType) -> f32 {
@@ -245,17 +227,21 @@ impl Mob for WitchEntity {
         amount
     }
 
-    fn mob_tick<'a>(&'a self, _caller: &'a Arc<dyn EntityBase>) -> EntityBaseFuture<'a, ()> {
-        Box::pin(async move {
-            let entity = &self.mob_entity.living_entity.entity;
-            let living = &self.mob_entity.living_entity;
-            let world = entity.world.load();
+    fn mob_tick<'a>(&'a self, caller: &'a Arc<dyn EntityBase>) {
+        let entity = &self.mob_entity.living_entity.entity;
+        let living = &self.mob_entity.living_entity;
+        let world = entity.world.load();
 
-            if self.is_drinking_potion() {
-                let remaining = self.using_time.fetch_sub(1, Ordering::Relaxed) - 1;
-                if remaining <= 0 {
-                    self.set_drinking_potion(false);
-                    let mut equipment = living.entity_equipment.lock().await;
+        if self.is_drinking_potion() {
+            let remaining = self.using_time.fetch_sub(1, Ordering::Relaxed) - 1;
+            if remaining <= 0 {
+                self.set_drinking_potion(false);
+                if let Some(witch) = caller.cast_any().downcast_ref::<Self>() {
+                    let living = &witch.mob_entity.living_entity;
+                    let mut equipment = living
+                        .entity_equipment
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner);
                     let stack = equipment.get(&EquipmentSlot::MAIN_HAND);
                     equipment.put(&EquipmentSlot::MAIN_HAND, ItemStack::EMPTY.clone());
                     drop(equipment);
@@ -270,65 +256,64 @@ impl Mob for WitchEntity {
                         effects,
                         1.0,
                         crate::item::potion::PotionApplicationSource::Normal,
-                    )
-                    .await;
+                    );
                 }
-            } else {
-                let mut potion: Option<&'static Potion> = None;
-                let r: f32 = rand::random();
+            }
+        } else {
+            let mut potion: Option<&'static Potion> = None;
+            let r: f32 = rand::random();
 
-                if r < 0.15
-                    && entity.touching_water.load(Ordering::Relaxed)
-                    && !living.has_effect(&StatusEffect::WATER_BREATHING).await
-                {
-                    potion = Some(&Potion::WATER_BREATHING);
-                } else if r < 0.15
-                    && entity.fire_ticks.load(Ordering::Relaxed) > 0
-                    && !living.has_effect(&StatusEffect::FIRE_RESISTANCE).await
-                {
-                    potion = Some(&Potion::FIRE_RESISTANCE);
-                } else if r < 0.05 && living.health.load() < living.get_max_health() {
-                    potion = Some(&Potion::HEALING);
-                } else if r < 0.5
-                    && let Some(target) = self.mob_entity.target.lock().await.as_ref()
-                    && !living.has_effect(&StatusEffect::SPEED).await
-                {
-                    let target_pos = target.get_entity().pos.load();
-                    let self_pos = entity.pos.load();
-                    if self_pos.squared_distance_to_vec(&target_pos) > 121.0 {
-                        potion = Some(&Potion::SWIFTNESS);
-                    }
+            if r < 0.15
+                && entity.touching_water.load(Ordering::Relaxed)
+                && !living.has_effect(&StatusEffect::WATER_BREATHING)
+            {
+                potion = Some(&Potion::WATER_BREATHING);
+            } else if r < 0.15
+                && entity.fire_ticks.load(Ordering::Relaxed) > 0
+                && !living.has_effect(&StatusEffect::FIRE_RESISTANCE)
+            {
+                potion = Some(&Potion::FIRE_RESISTANCE);
+            } else if r < 0.05 && living.health.load() < living.get_max_health() {
+                potion = Some(&Potion::HEALING);
+            } else if r < 0.5
+                && let Some(target) = self.mob_entity.get_target()
+                && !living.has_effect(&StatusEffect::SPEED)
+            {
+                let target_pos = target.get_entity().pos.load();
+                let self_pos = entity.pos.load();
+                if self_pos.squared_distance_to_vec(&target_pos) > 121.0 {
+                    potion = Some(&Potion::SWIFTNESS);
                 }
+            }
 
-                if let Some(potion) = potion {
-                    let stack = create_potion_stack(&Item::POTION, potion);
-                    let mut equipment = living.entity_equipment.lock().await;
+            if let Some(potion) = potion {
+                let stack = create_potion_stack(&Item::POTION, potion);
+                if let Some(witch) = caller.cast_any().downcast_ref::<Self>() {
+                    let living = &witch.mob_entity.living_entity;
+                    let mut equipment = living
+                        .entity_equipment
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner);
                     equipment.put(&EquipmentSlot::MAIN_HAND, stack.clone());
                     drop(equipment);
                     living.send_equipment_changes(&[(EquipmentSlot::MAIN_HAND, stack)]);
+                }
 
-                    self.using_time.store(32, Ordering::Relaxed);
-                    self.set_drinking_potion(true);
+                self.using_time.store(32, Ordering::Relaxed);
+                self.set_drinking_potion(true);
 
-                    if !entity.silent.load(Ordering::Relaxed) {
-                        let pos = entity.pos.load();
-                        world.play_sound(Sound::EntityWitchDrink, SoundCategory::Hostile, &pos);
-                    }
+                if !entity.silent.load(Ordering::Relaxed) {
+                    let pos = entity.pos.load();
+                    world.play_sound(Sound::EntityWitchDrink, SoundCategory::Hostile, &pos);
                 }
             }
-        })
+        }
     }
 }
 
 impl RangedAttackMob for WitchEntity {
-    fn perform_ranged_attack<'a>(
-        &'a self,
-        target: &'a Arc<dyn EntityBase>,
-        _power: f32,
-    ) -> EntityBaseFuture<'a, ()> {
-        Box::pin(async move {
-            self.throw_potion(target).await;
-        })
+    fn perform_ranged_attack(&self, target: &Arc<dyn EntityBase>, _power: f32) {
+        self.throw_potion(target);
     }
 }
 

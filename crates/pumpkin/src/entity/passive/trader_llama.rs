@@ -5,7 +5,7 @@ use pumpkin_data::entity::EntityType;
 use pumpkin_data::sound::{Sound, SoundCategory};
 
 use crate::entity::{
-    Entity, EntityBase, EntityBaseFuture,
+    Entity, EntityBase,
     ai::goal::{
         active_target::ActiveTargetGoal, look_around::RandomLookAroundGoal,
         look_at_entity::LookAtEntityGoal, ranged_attack::RangedAttackGoal, revenge::RevengeGoal,
@@ -67,9 +67,9 @@ impl TraderLlamaEntity {
         mob_arc
     }
 
-    pub async fn spit(&self, target: &Arc<dyn EntityBase>) {
+    pub fn spit(&self, target: &Arc<dyn EntityBase>) {
         let entity = self.get_entity();
-        let world = entity.world.load();
+        let world = entity.world.load_full();
 
         let spit_entity = Entity::new(world.clone(), entity.pos.load(), &EntityType::LLAMA_SPIT);
         let spit = LlamaSpitEntity::new_shot(spit_entity, entity);
@@ -92,7 +92,7 @@ impl TraderLlamaEntity {
         }
 
         let spit_arc: Arc<dyn EntityBase> = Arc::new(spit);
-        world.spawn_entity(spit_arc).await;
+        world.spawn_entity(spit_arc);
     }
 }
 
@@ -103,13 +103,7 @@ impl Mob for TraderLlamaEntity {
 }
 
 impl RangedAttackMob for TraderLlamaEntity {
-    fn perform_ranged_attack<'a>(
-        &'a self,
-        target: &'a Arc<dyn EntityBase>,
-        _power: f32,
-    ) -> EntityBaseFuture<'a, ()> {
-        Box::pin(async move {
-            self.spit(target).await;
-        })
+    fn perform_ranged_attack(&self, target: &Arc<dyn EntityBase>, _power: f32) {
+        self.spit(target);
     }
 }

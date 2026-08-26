@@ -20,22 +20,18 @@ impl GetClientSideArgParser for TextComponentArgConsumer {
 }
 
 impl ArgumentConsumer for TextComponentArgConsumer {
-    fn consume<'a, 'b>(
+    fn consume<'a>(
         &'a self,
         _sender: &'a CommandSender,
         _server: &'a Server,
-        args: &'b mut RawArgs<'a>,
+        args: &mut RawArgs<'a>,
     ) -> ConsumeResult<'a> {
-        let s_opt: Option<&'a str> = args.pop().map(|arg| arg.value);
-
-        let Some(s) = s_opt else {
-            return Box::pin(async move { None });
-        };
+        let s = args.pop().map(|arg| arg.value)?;
 
         let text_component_opt = parse_text_component(s);
 
         // TODO: Allow identifiers (starting with alphabetic or _, then alphanumeric+-_.) as display names
-        let final_arg: Option<Arg<'a>> = text_component_opt.map_or_else(
+        text_component_opt.map_or_else(
             || {
                 (s.starts_with('"') && s.ends_with('"')).then(|| {
                     let s_owned = s.replace('"', "");
@@ -43,9 +39,7 @@ impl ArgumentConsumer for TextComponentArgConsumer {
                 })
             },
             |text_component| Some(Arg::TextComponent(text_component)),
-        );
-
-        Box::pin(async move { final_arg })
+        )
     }
 }
 

@@ -10,7 +10,7 @@ use pumpkin_protocol::codec::var_int::VarInt;
 use rand::RngExt;
 
 use crate::entity::{
-    Entity, EntityBase, EntityBaseFuture, NbtFuture,
+    Entity, EntityBase,
     ageable::AgeableMob,
     ai::goal::{
         breed::BreedGoal, escape_danger::EscapeDangerGoal, follow_parent::FollowParentGoal,
@@ -107,34 +107,30 @@ impl Mob for ChickenEntity {
         Some(self)
     }
 
-    fn mob_write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
-        Box::pin(async {
-            nbt.put_int("EggLayTime", self.egg_lay_time.load(Ordering::Relaxed));
-            let variant_str = match self.variant.load(Ordering::Relaxed) {
-                0 => "minecraft:cold",
-                2 => "minecraft:warm",
-                _ => "minecraft:temperate",
-            };
-            nbt.put_string("variant", variant_str.to_string());
-        })
+    fn mob_write_nbt(&self, nbt: &mut NbtCompound) {
+        nbt.put_int("EggLayTime", self.egg_lay_time.load(Ordering::Relaxed));
+        let variant_str = match self.variant.load(Ordering::Relaxed) {
+            0 => "minecraft:cold",
+            2 => "minecraft:warm",
+            _ => "minecraft:temperate",
+        };
+        nbt.put_string("variant", variant_str.to_string());
     }
 
-    fn mob_read_nbt<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
-        Box::pin(async {
-            self.egg_lay_time
-                .store(nbt.get_int("EggLayTime").unwrap_or(6000), Ordering::Relaxed);
-            if let Some(variant_str) = nbt.get_string("variant") {
-                let variant = match variant_str
-                    .strip_prefix("minecraft:")
-                    .unwrap_or(variant_str)
-                {
-                    "cold" => 0,
-                    "warm" => 2,
-                    _ => 1,
-                };
-                self.variant.store(variant, Ordering::Relaxed);
-            }
-        })
+    fn mob_read_nbt(&self, nbt: &NbtCompound) {
+        self.egg_lay_time
+            .store(nbt.get_int("EggLayTime").unwrap_or(6000), Ordering::Relaxed);
+        if let Some(variant_str) = nbt.get_string("variant") {
+            let variant = match variant_str
+                .strip_prefix("minecraft:")
+                .unwrap_or(variant_str)
+            {
+                "cold" => 0,
+                "warm" => 2,
+                _ => 1,
+            };
+            self.variant.store(variant, Ordering::Relaxed);
+        }
     }
 
     fn get_mob_entity(&self) -> &MobEntity {
@@ -150,68 +146,63 @@ impl Mob for ChickenEntity {
         self.variant.store(variant, Ordering::Relaxed);
     }
 
-    fn mob_init_data_tracker(&self) -> EntityBaseFuture<'_, ()> {
-        Box::pin(async move {
-            let entity = self.get_entity();
-            let is_baby = entity.age.load(Ordering::Relaxed) < 0;
-            if is_baby {
-                entity.send_meta_data(
-                    &[pumpkin_protocol::java::client::play::Metadata::new(
-                        pumpkin_data::tracked_data::chicken::BABY_ID,
-                        true,
-                    )],
-                    None,
-                );
-            }
+    fn mob_init_data_tracker(&self) {
+        let entity = self.get_entity();
+        let is_baby = entity.age.load(Ordering::Relaxed) < 0;
+        if is_baby {
             entity.send_meta_data(
                 &[pumpkin_protocol::java::client::play::Metadata::new(
-                    pumpkin_data::tracked_data::chicken::VARIANT,
-                    VarInt(self.variant.load(Ordering::Relaxed) as i32),
+                    pumpkin_data::tracked_data::chicken::BABY_ID,
+                    true,
                 )],
                 None,
             );
-        })
+        }
+        entity.send_meta_data(
+            &[pumpkin_protocol::java::client::play::Metadata::new(
+                pumpkin_data::tracked_data::chicken::VARIANT,
+                VarInt(self.variant.load(Ordering::Relaxed) as i32),
+            )],
+            None,
+        );
     }
 
-    fn mob_tick<'a>(&'a self, _caller: &'a Arc<dyn EntityBase>) -> EntityBaseFuture<'a, ()> {
-        Box::pin(async {
-            if self.mob_entity.living_entity.dead.load(Relaxed) {
-                return;
-            }
-            let entity = &self.mob_entity.living_entity.entity;
-            let current_velocity = entity.velocity.load();
-            let on_ground = entity.on_ground.load(Ordering::Relaxed);
+    fn mob_tick<'a>(&'a self, _caller: &'a Arc<dyn EntityBase>) {
+        if self.mob_entity.living_entity.dead.load(Relaxed) {
+            return;
+        }
+        let entity = &self.mob_entity.living_entity.entity;
+        let current_velocity = entity.velocity.load();
+        let on_ground = entity.on_ground.load(Ordering::Relaxed);
 
-            // TODO: move velocity logic to physics tick when implemented
-            if (!on_ground) && current_velocity.y < 0.0 {
-                entity.set_velocity(current_velocity.multiply(1.0, 0.6, 1.0));
+        // TODO: move velocity logic to physics tick when implemented
+        if (!on_ground) && current_velocity.y < 0.0 {
+            entity.set_velocity(current_velocity.multiply(1.0, 0.6, 1.0));
+        }
+        if self.egg_lay_time.fetch_sub(1, Ordering::Relaxed) <= 1 {
+            let next_time = rand::rng().random_range(6000..12000);
+            let world = entity.world.load_full();
+            let pos = entity.block_pos.load();
+            let entity_id = entity.entity_id;
+            let mut drop_event =
+                crate::plugin::api::events::entity::entity_drop_item::EntityDropItemEvent::new(
+                    entity_id,
+                    "minecraft:egg".to_string(),
+                    1,
+                );
+            if let Some(server) = world.server.upgrade() {
+                server
+                    .plugin_manager
+                    .fire_blocking(&server, &mut drop_event);
             }
-            if self.egg_lay_time.fetch_sub(1, Ordering::Relaxed) <= 1 {
-                let next_time = rand::rng().random_range(6000..12000);
-                let world = entity.world.load_full();
-                let pos = entity.block_pos.load();
-                let mut drop_event =
-                    crate::plugin::api::events::entity::entity_drop_item::EntityDropItemEvent::new(
-                        entity.entity_id,
-                        "minecraft:egg".to_string(),
-                        1,
-                    );
-                if let Some(server) = world.server.upgrade() {
-                    server.plugin_manager.fire(&server, &mut drop_event).await;
-                }
-                if !drop_event.cancelled {
-                    world.drop_stack(&pos, ItemStack::new(1, &Item::EGG)).await;
-                }
-                self.egg_lay_time.store(next_time, Ordering::Relaxed);
+            if !drop_event.cancelled {
+                world.drop_stack(&pos, ItemStack::new(1, &Item::EGG));
             }
-        })
+            self.egg_lay_time.store(next_time, Ordering::Relaxed);
+        }
     }
 
-    fn mob_interact<'a>(
-        &'a self,
-        player: &'a Arc<Player>,
-        item_stack: &'a mut ItemStack,
-    ) -> EntityBaseFuture<'a, bool> {
+    fn mob_interact(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {
         use super::animal::Animal;
         self.animal_interact(player, item_stack, Sound::EntityChickenAmbient)
     }

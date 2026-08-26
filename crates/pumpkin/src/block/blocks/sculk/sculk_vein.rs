@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
 use crate::block::{
-    BlockBehaviour, BlockFuture, BlockIsReplacing, BlockMetadata, CanPlaceAtArgs, CanUpdateAtArgs,
+    BlockBehaviour, BlockIsReplacing, BlockMetadata, CanPlaceAtArgs, CanUpdateAtArgs,
     GetStateForNeighborUpdateArgs, OnPlaceArgs, UseWithItemArgs, registry::BlockActionResult,
 };
 use crate::entity::{EntityBase, player::Player};
@@ -22,37 +22,35 @@ impl BlockMetadata for SculkVeinBlock {
 }
 
 impl BlockBehaviour for SculkVeinBlock {
-    fn on_place<'a>(&'a self, args: OnPlaceArgs<'a>) -> BlockFuture<'a, BlockStateId> {
-        Box::pin(async move {
-            if let BlockIsReplacing::Itself(state_id) = args.replacing {
-                let (Some(direction), _) = get_attach_direction(
-                    args.world,
-                    args.position,
-                    Some(args.player),
-                    args.direction,
-                    true,
-                ) else {
-                    return Block::AIR.default_state.id;
-                };
-                let mut props = GlowLichenLikeProperties::from_state_id(state_id, args.block);
-                set_face(&mut props, direction);
-                props.waterlogged = args.replacing.water_source();
-                return props.to_state_id(args.block);
-            }
+    fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
+        if let BlockIsReplacing::Itself(state_id) = args.replacing {
             let (Some(direction), _) = get_attach_direction(
                 args.world,
                 args.position,
                 Some(args.player),
                 args.direction,
-                false,
+                true,
             ) else {
                 return Block::AIR.default_state.id;
             };
-            let mut props = GlowLichenLikeProperties::default(args.block);
+            let mut props = GlowLichenLikeProperties::from_state_id(state_id, args.block);
             set_face(&mut props, direction);
             props.waterlogged = args.replacing.water_source();
-            props.to_state_id(args.block)
-        })
+            return props.to_state_id(args.block);
+        }
+        let (Some(direction), _) = get_attach_direction(
+            args.world,
+            args.position,
+            Some(args.player),
+            args.direction,
+            false,
+        ) else {
+            return Block::AIR.default_state.id;
+        };
+        let mut props = GlowLichenLikeProperties::default(args.block);
+        set_face(&mut props, direction);
+        props.waterlogged = args.replacing.water_source();
+        props.to_state_id(args.block)
     }
 
     fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
@@ -79,37 +77,32 @@ impl BlockBehaviour for SculkVeinBlock {
         .is_some()
     }
 
-    fn get_state_for_neighbor_update<'a>(
-        &'a self,
-        args: GetStateForNeighborUpdateArgs<'a>,
-    ) -> BlockFuture<'a, BlockStateId> {
-        Box::pin(async move {
-            let old_props = GlowLichenLikeProperties::from_state_id(args.state_id, args.block);
-            let mut new_directions = active_directions(old_props);
+    fn get_state_for_neighbor_update(
+        &self,
+        args: GetStateForNeighborUpdateArgs<'_>,
+    ) -> BlockStateId {
+        let old_props = GlowLichenLikeProperties::from_state_id(args.state_id, args.block);
+        let mut new_directions = active_directions(old_props);
 
-            let support = args
-                .world
-                .get_block(&args.position.offset(args.direction.to_offset()));
-            if !is_solid_face(support) {
-                new_directions.remove(&args.direction);
-            }
+        let support = args
+            .world
+            .get_block(&args.position.offset(args.direction.to_offset()));
+        if !is_solid_face(support) {
+            new_directions.remove(&args.direction);
+        }
 
-            if new_directions.is_empty() {
-                return Block::AIR.default_state.id;
-            }
-            let mut new_props = GlowLichenLikeProperties::default(args.block);
-            for dir in new_directions {
-                set_face(&mut new_props, dir);
-            }
-            new_props.to_state_id(args.block)
-        })
+        if new_directions.is_empty() {
+            return Block::AIR.default_state.id;
+        }
+        let mut new_props = GlowLichenLikeProperties::default(args.block);
+        for dir in new_directions {
+            set_face(&mut new_props, dir);
+        }
+        new_props.to_state_id(args.block)
     }
 
-    fn use_with_item<'a>(
-        &'a self,
-        args: UseWithItemArgs<'a>,
-    ) -> BlockFuture<'a, BlockActionResult> {
-        Box::pin(async move {
+    fn use_with_item(&self, args: UseWithItemArgs<'_>) -> BlockActionResult {
+        {
             if args.item_stack.item.id != Item::SCULK_VEIN.id {
                 return BlockActionResult::Pass;
             }
@@ -127,15 +120,13 @@ impl BlockBehaviour for SculkVeinBlock {
             };
             set_face(&mut props, accurate_dir);
 
-            args.world
-                .set_block_state(
-                    args.position,
-                    props.to_state_id(args.block),
-                    BlockFlags::NOTIFY_ALL,
-                )
-                .await;
+            args.world.set_block_state(
+                args.position,
+                props.to_state_id(args.block),
+                BlockFlags::NOTIFY_ALL,
+            );
             BlockActionResult::Consume
-        })
+        }
     }
 }
 

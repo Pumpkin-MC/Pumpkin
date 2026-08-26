@@ -323,13 +323,9 @@ impl AnvilChunkData {
 
         let compression = compression.unwrap_or_else(|| chunk_config.compression.algorithm.into());
         let level = chunk_config.compression.level;
-
-        // Offload CPU-heavy compression to blocking thread pool
-        let compressed_data =
-            tokio::task::spawn_blocking(move || compression.compress_data(&raw_bytes, level))
-                .await
-                .map_err(|err| ChunkWritingError::IoError(std::io::Error::other(err)))?
-                .map_err(ChunkWritingError::Compression)?;
+        let compressed_data = compression
+            .compress_data(&raw_bytes, level)
+            .map_err(ChunkWritingError::Compression)?;
 
         Ok(Self {
             compression: Some(compression),
@@ -793,17 +789,10 @@ impl<S: SingleChunkDataSerializer + 'static> ChunkSerializer for AnvilChunkFile<
             let is_ok = match &self.chunks_data[index] {
                 None => stream.send(LoadedData::Missing(chunk)).await.is_ok(),
                 Some(chunk_metadata) => {
-                    let chunk_data = chunk_metadata.serialized_data.clone();
-                    let result =
-                        match tokio::task::spawn_blocking(move || chunk_data.to_chunk(chunk)).await
-                        {
-                            Ok(Ok(chunk_res)) => LoadedData::Loaded(chunk_res),
-                            Ok(Err(err)) => LoadedData::Error((chunk, err)),
-                            Err(err) => LoadedData::Error((
-                                chunk,
-                                ChunkReadingError::IoError(std::io::Error::other(err)),
-                            )),
-                        };
+                    let result = match chunk_metadata.serialized_data.to_chunk(chunk) {
+                        Ok(chunk_res) => LoadedData::Loaded(chunk_res),
+                        Err(err) => LoadedData::Error((chunk, err)),
+                    };
 
                     stream.send(result).await.is_ok()
                 }

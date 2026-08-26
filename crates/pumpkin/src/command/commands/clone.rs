@@ -76,191 +76,178 @@ struct ClonedBlock {
 
 impl CommandExecutor for CloneExecutor {
     #[expect(clippy::too_many_lines)]
-    fn execute<'a>(&'a self, context: &'a CommandContext) -> CommandExecutorResult<'a> {
-        Box::pin(async move {
-            let begin = BlockPosArgumentType::get_block_pos(context, ARG_BEGIN)?;
-            let end = BlockPosArgumentType::get_block_pos(context, ARG_END)?;
-            let dest = BlockPosArgumentType::get_block_pos(context, ARG_DEST)?;
+    fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
+        let begin = BlockPosArgumentType::get_block_pos(context, ARG_BEGIN)?;
+        let end = BlockPosArgumentType::get_block_pos(context, ARG_END)?;
+        let dest = BlockPosArgumentType::get_block_pos(context, ARG_DEST)?;
 
-            let filter_block = if self.has_filter {
-                Some(BlockArgumentType::get(context, ARG_FILTER)?)
-            } else {
-                None
-            };
+        let filter_block = if self.has_filter {
+            Some(BlockArgumentType::get(context, ARG_FILTER)?)
+        } else {
+            None
+        };
 
-            let min_x = begin.0.x.min(end.0.x);
-            let max_x = begin.0.x.max(end.0.x);
-            let min_y = begin.0.y.min(end.0.y);
-            let max_y = begin.0.y.max(end.0.y);
-            let min_z = begin.0.z.min(end.0.z);
-            let max_z = begin.0.z.max(end.0.z);
+        let min_x = begin.0.x.min(end.0.x);
+        let max_x = begin.0.x.max(end.0.x);
+        let min_y = begin.0.y.min(end.0.y);
+        let max_y = begin.0.y.max(end.0.y);
+        let min_z = begin.0.z.min(end.0.z);
+        let max_z = begin.0.z.max(end.0.z);
 
-            let size_x = max_x - min_x + 1;
-            let size_y = max_y - min_y + 1;
-            let size_z = max_z - min_z + 1;
+        let size_x = max_x - min_x + 1;
+        let size_y = max_y - min_y + 1;
+        let size_z = max_z - min_z + 1;
 
-            let volume = size_x * size_y * size_z;
+        let volume = size_x * size_y * size_z;
 
-            if volume > 32768 {
-                return Err(TOOBIG_ERROR.create_without_context_args_slice(&[
-                    TextComponent::text("32768"),
-                    TextComponent::text(volume.to_string()),
-                ]));
-            }
+        if volume > 32768 {
+            return Err(TOOBIG_ERROR.create_without_context_args_slice(&[
+                TextComponent::text("32768"),
+                TextComponent::text(volume.to_string()),
+            ]));
+        }
 
-            let dest_min_x = dest.0.x;
-            let dest_min_y = dest.0.y;
-            let dest_min_z = dest.0.z;
-            let dest_max_x = dest_min_x + size_x - 1;
-            let dest_max_y = dest_min_y + size_y - 1;
-            let dest_max_z = dest_min_z + size_z - 1;
+        let dest_min_x = dest.0.x;
+        let dest_min_y = dest.0.y;
+        let dest_min_z = dest.0.z;
+        let dest_max_x = dest_min_x + size_x - 1;
+        let dest_max_y = dest_min_y + size_y - 1;
+        let dest_max_z = dest_min_z + size_z - 1;
 
-            let overlap = !(dest_max_x < min_x
-                || dest_min_x > max_x
-                || dest_max_y < min_y
-                || dest_min_y > max_y
-                || dest_max_z < min_z
-                || dest_min_z > max_z);
+        let overlap = !(dest_max_x < min_x
+            || dest_min_x > max_x
+            || dest_max_y < min_y
+            || dest_min_y > max_y
+            || dest_max_z < min_z
+            || dest_min_z > max_z);
 
-            if overlap && self.clone_mode != CloneMode::Force {
-                return Err(OVERLAP_ERROR.create_without_context());
-            }
+        if overlap && self.clone_mode != CloneMode::Force {
+            return Err(OVERLAP_ERROR.create_without_context());
+        }
 
-            let world = context.source.world();
+        let world = context.source.world();
 
-            let limit_check_pos_1 = BlockPos::new(min_x, min_y, min_z);
-            let limit_check_pos_2 = BlockPos::new(max_x, max_y, max_z);
-            let limit_check_pos_3 = BlockPos::new(dest_min_x, dest_min_y, dest_min_z);
-            let limit_check_pos_4 = BlockPos::new(dest_max_x, dest_max_y, dest_max_z);
+        let limit_check_pos_1 = BlockPos::new(min_x, min_y, min_z);
+        let limit_check_pos_2 = BlockPos::new(max_x, max_y, max_z);
+        let limit_check_pos_3 = BlockPos::new(dest_min_x, dest_min_y, dest_min_z);
+        let limit_check_pos_4 = BlockPos::new(dest_max_x, dest_max_y, dest_max_z);
 
-            if !world.is_in_build_limit(limit_check_pos_1)
-                || !world.is_in_build_limit(limit_check_pos_2)
-                || !world.is_in_build_limit(limit_check_pos_3)
-                || !world.is_in_build_limit(limit_check_pos_4)
-            {
-                return Err(OUT_OF_WORLD_ERROR.create_without_context());
-            }
+        if !world.is_in_build_limit(limit_check_pos_1)
+            || !world.is_in_build_limit(limit_check_pos_2)
+            || !world.is_in_build_limit(limit_check_pos_3)
+            || !world.is_in_build_limit(limit_check_pos_4)
+        {
+            return Err(OUT_OF_WORLD_ERROR.create_without_context());
+        }
 
-            for cx in (min_x >> 4)..=(max_x >> 4) {
-                for cz in (min_z >> 4)..=(max_z >> 4) {
-                    let chunk_pos = Vector2::new(cx, cz);
-                    if world.level.read_chunk_sync(&chunk_pos, |_| ()).is_none() {
-                        return Err(NOT_LOADED_ERROR.create_without_context());
-                    }
+        for cx in (min_x >> 4)..=(max_x >> 4) {
+            for cz in (min_z >> 4)..=(max_z >> 4) {
+                let chunk_pos = Vector2::new(cx, cz);
+                if world.level.read_chunk_sync(&chunk_pos, |_| ()).is_none() {
+                    return Err(NOT_LOADED_ERROR.create_without_context());
                 }
             }
+        }
 
-            for cx in (dest_min_x >> 4)..=(dest_max_x >> 4) {
-                for cz in (dest_min_z >> 4)..=(dest_max_z >> 4) {
-                    let chunk_pos = Vector2::new(cx, cz);
-                    if world.level.read_chunk_sync(&chunk_pos, |_| ()).is_none() {
-                        return Err(NOT_LOADED_ERROR.create_without_context());
-                    }
+        for cx in (dest_min_x >> 4)..=(dest_max_x >> 4) {
+            for cz in (dest_min_z >> 4)..=(dest_max_z >> 4) {
+                let chunk_pos = Vector2::new(cx, cz);
+                if world.level.read_chunk_sync(&chunk_pos, |_| ()).is_none() {
+                    return Err(NOT_LOADED_ERROR.create_without_context());
                 }
             }
+        }
 
-            let mut blocks_to_clone = Vec::new();
+        let mut blocks_to_clone = Vec::new();
 
-            for x in 0..size_x {
-                for y in 0..size_y {
-                    for z in 0..size_z {
-                        let src_pos = BlockPos::new(min_x + x, min_y + y, min_z + z);
-                        let dest_pos =
-                            BlockPos::new(dest_min_x + x, dest_min_y + y, dest_min_z + z);
+        for x in 0..size_x {
+            for y in 0..size_y {
+                for z in 0..size_z {
+                    let src_pos = BlockPos::new(min_x + x, min_y + y, min_z + z);
+                    let dest_pos = BlockPos::new(dest_min_x + x, dest_min_y + y, dest_min_z + z);
 
-                        let state_id = world.get_block_state_id(&src_pos);
+                    let state_id = world.get_block_state_id(&src_pos);
 
-                        let should_clone = match self.mask_mode {
-                            MaskMode::Replace => true,
-                            MaskMode::Masked => !pumpkin_data::block_properties::is_air(state_id),
-                            MaskMode::Filtered => {
-                                let block = Block::from_state_id(state_id);
-                                filter_block.is_some_and(|f| block.id == f.id)
-                            }
-                        };
-
-                        if should_clone {
-                            let block_entity_nbt =
-                                if let Some(be) = world.get_block_entity(&src_pos) {
-                                    let mut nbt = NbtCompound::new();
-                                    be.write_internal(&mut nbt).await;
-                                    Some(nbt)
-                                } else {
-                                    None
-                                };
-
-                            blocks_to_clone.push(ClonedBlock {
-                                src_pos,
-                                dest_pos,
-                                state_id,
-                                block_entity_nbt,
-                            });
+                    let should_clone = match self.mask_mode {
+                        MaskMode::Replace => true,
+                        MaskMode::Masked => !pumpkin_data::block_properties::is_air(state_id),
+                        MaskMode::Filtered => {
+                            let block = Block::from_state_id(state_id);
+                            filter_block.is_some_and(|f| block.id == f.id)
                         }
+                    };
+
+                    if should_clone {
+                        let block_entity_nbt = world.get_block_entity(&src_pos).map(|be| {
+                            let mut nbt = NbtCompound::new();
+                            be.write_internal(&mut nbt);
+                            nbt
+                        });
+
+                        blocks_to_clone.push(ClonedBlock {
+                            src_pos,
+                            dest_pos,
+                            state_id,
+                            block_entity_nbt,
+                        });
                     }
                 }
             }
+        }
 
-            let mut count = 0;
+        let mut count = 0;
+        for block in &blocks_to_clone {
+            world.set_block_state(&block.dest_pos, block.state_id, BlockFlags::NOTIFY_ALL);
+
+            if let Some(nbt) = &block.block_entity_nbt {
+                let mut new_nbt = nbt.clone();
+                new_nbt.put_int("x", block.dest_pos.0.x);
+                new_nbt.put_int("y", block.dest_pos.0.y);
+                new_nbt.put_int("z", block.dest_pos.0.z);
+
+                if let Some(be) = crate::block::entities::block_entity_from_nbt(&new_nbt) {
+                    world.add_block_entity(be);
+                }
+            }
+
+            count += 1;
+        }
+
+        if count == 0 {
+            return Err(FAILED_ERROR.create_without_context());
+        }
+
+        let is_dest_pos = |pos: &BlockPos| {
+            pos.0.x >= dest_min_x
+                && pos.0.x <= dest_max_x
+                && pos.0.y >= dest_min_y
+                && pos.0.y <= dest_max_y
+                && pos.0.z >= dest_min_z
+                && pos.0.z <= dest_max_z
+        };
+
+        if self.clone_mode == CloneMode::Move {
             for block in &blocks_to_clone {
-                world
-                    .set_block_state(&block.dest_pos, block.state_id, BlockFlags::NOTIFY_ALL)
-                    .await;
-
-                if let Some(nbt) = &block.block_entity_nbt {
-                    let mut new_nbt = nbt.clone();
-                    new_nbt.put_int("x", block.dest_pos.0.x);
-                    new_nbt.put_int("y", block.dest_pos.0.y);
-                    new_nbt.put_int("z", block.dest_pos.0.z);
-
-                    if let Some(be) = crate::block::entities::block_entity_from_nbt(&new_nbt) {
-                        world.add_block_entity(be);
-                    }
-                }
-
-                count += 1;
-            }
-
-            if count == 0 {
-                return Err(FAILED_ERROR.create_without_context());
-            }
-
-            let is_dest_pos = |pos: &BlockPos| {
-                pos.0.x >= dest_min_x
-                    && pos.0.x <= dest_max_x
-                    && pos.0.y >= dest_min_y
-                    && pos.0.y <= dest_max_y
-                    && pos.0.z >= dest_min_z
-                    && pos.0.z <= dest_max_z
-            };
-
-            if self.clone_mode == CloneMode::Move {
-                for block in &blocks_to_clone {
-                    if !is_dest_pos(&block.src_pos) {
-                        world
-                            .set_block_state(
-                                &block.src_pos,
-                                BlockStateId::AIR,
-                                BlockFlags::NOTIFY_ALL,
-                            )
-                            .await;
-                    }
+                if !is_dest_pos(&block.src_pos) {
+                    world.set_block_state(
+                        &block.src_pos,
+                        BlockStateId::AIR,
+                        BlockFlags::NOTIFY_ALL,
+                    );
                 }
             }
+        }
 
-            context
-                .source
-                .send_feedback(
-                    TextComponent::translate_cross(
-                        translation::java::COMMANDS_CLONE_SUCCESS,
-                        translation::bedrock::COMMANDS_CLONE_SUCCESS,
-                        [TextComponent::text(count.to_string())],
-                    ),
-                    true,
-                )
-                .await;
+        context.source.send_feedback(
+            TextComponent::translate_cross(
+                translation::java::COMMANDS_CLONE_SUCCESS,
+                translation::bedrock::COMMANDS_CLONE_SUCCESS,
+                [TextComponent::text(count.to_string())],
+            ),
+            true,
+        );
 
-            Ok(count)
-        })
+        Ok(count)
     }
 }
 

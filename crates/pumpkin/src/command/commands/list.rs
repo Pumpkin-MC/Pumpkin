@@ -12,7 +12,7 @@ use crate::{
         context::command_context::CommandContext,
         node::{CommandExecutor, CommandExecutorResult, dispatcher::CommandDispatcher},
     },
-    entity::{EntityBase, EntityBaseFuture, player::Player},
+    entity::{EntityBase, player::Player},
 };
 
 const DESCRIPTION: &str = "Print the list of online players.";
@@ -27,58 +27,51 @@ enum ListMode {
 struct ListCommandExecutor(ListMode);
 
 impl CommandExecutor for ListCommandExecutor {
-    fn execute<'a>(&'a self, context: &'a CommandContext) -> CommandExecutorResult<'a> {
-        Box::pin(async move {
-            let players: Vec<Arc<Player>> = context.server().get_all_players();
-            let players_len = players.len();
+    fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
+        let players: Vec<Arc<Player>> = context.server().get_all_players();
+        let players_len = players.len();
 
-            let list = match self.0 {
-                ListMode::Names => get_player_names(&players).await,
-                ListMode::Uuids => get_player_names_and_ids(&players),
-            };
+        let list = match self.0 {
+            ListMode::Names => get_player_names(&players),
+            ListMode::Uuids => get_player_names_and_ids(&players),
+        };
 
-            let max_players = context.source.output.as_player().map_or_else(
-                || context.server().advanced_config.networking.java.max_players,
-                |player| match player.client.as_ref() {
-                    crate::net::ClientPlatform::Java(_) => {
-                        context.server().advanced_config.networking.java.max_players
-                    }
-                    crate::net::ClientPlatform::Bedrock(_) => {
-                        context
-                            .server()
-                            .advanced_config
-                            .networking
-                            .bedrock
-                            .max_players
-                    }
-                },
-            );
+        let max_players = context.source.output.as_player().map_or_else(
+            || context.server().advanced_config.networking.java.max_players,
+            |player| match player.client.as_ref() {
+                crate::net::ClientPlatform::Java(_) => {
+                    context.server().advanced_config.networking.java.max_players
+                }
+                crate::net::ClientPlatform::Bedrock(_) => {
+                    context
+                        .server()
+                        .advanced_config
+                        .networking
+                        .bedrock
+                        .max_players
+                }
+            },
+        );
 
-            context
-                .source
-                .send_feedback(
-                    TextComponent::translate_cross(
-                        COMMANDS_LIST_PLAYERS,
-                        COMMANDS_LIST_PLAYERS,
-                        [
-                            TextComponent::text(players_len.to_string()),
-                            TextComponent::text(max_players.to_string()),
-                            list,
-                        ],
-                    ),
-                    false,
-                )
-                .await;
+        context.source.send_feedback(
+            TextComponent::translate_cross(
+                COMMANDS_LIST_PLAYERS,
+                COMMANDS_LIST_PLAYERS,
+                [
+                    TextComponent::text(players_len.to_string()),
+                    TextComponent::text(max_players.to_string()),
+                    list,
+                ],
+            ),
+            false,
+        );
 
-            Ok(players_len as i32)
-        })
+        Ok(players_len as i32)
     }
 }
 
-async fn get_player_names(players: &[Arc<Player>]) -> TextComponent {
-    let display_name_futures: Vec<EntityBaseFuture<'_, TextComponent>> =
-        players.iter().map(|p| p.get_display_name()).collect();
-    let display_names = futures::future::join_all(display_name_futures).await;
+fn get_player_names(players: &[Arc<Player>]) -> TextComponent {
+    let display_names = players.iter().map(|p| p.get_display_name()).collect();
     TextComponent::join_with_comma(display_names)
 }
 

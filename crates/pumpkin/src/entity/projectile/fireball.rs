@@ -1,6 +1,5 @@
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use tokio::sync::RwLock;
+use std::sync::{Arc, RwLock};
 
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
@@ -12,7 +11,7 @@ use pumpkin_util::math::vector3::Vector3;
 
 use crate::{
     entity::{
-        Entity, EntityBase, EntityBaseFuture, NbtFuture,
+        Entity, EntityBase,
         projectile::{ProjectileHit, ThrownItemEntity},
         projectile_deflection::ProjectileDeflectionType,
     },
@@ -100,11 +99,14 @@ impl FireballEntity {
         ItemStack::new(1, &Item::FIRE_CHARGE)
     }
 
-    pub async fn get_item(&self) -> ItemStack {
-        self.item_stack.read().await.clone()
+    pub fn get_item(&self) -> ItemStack {
+        self.item_stack
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone()
     }
 
-    pub async fn set_item(&self, source: ItemStack) {
+    pub fn set_item(&self, source: ItemStack) {
         let new_item = if source.item_count == 0 {
             Self::get_default_item()
         } else {
@@ -112,7 +114,10 @@ impl FireballEntity {
             item.item_count = 1;
             item
         };
-        *self.item_stack.write().await = new_item.clone();
+        *self
+            .item_stack
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = new_item.clone();
 
         self.get_entity().send_meta_data(
             &[Metadata::new(
@@ -168,70 +173,61 @@ impl FireballEntity {
 }
 
 impl EntityBase for FireballEntity {
-    fn write_custom_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
-        Box::pin(async move {
-            nbt.put_double("acceleration_power", self.get_acceleration_power());
-            nbt.put_float("ExplosionPower", self.get_explosion_power());
-        })
+    fn write_custom_nbt(&self, nbt: &mut NbtCompound) {
+        nbt.put_double("acceleration_power", self.get_acceleration_power());
+        nbt.put_float("ExplosionPower", self.get_explosion_power());
     }
 
-    fn read_custom_nbt<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
-        Box::pin(async move {
-            if let Some(accel) = nbt
-                .get_double("acceleration_power")
-                .or_else(|| nbt.get_double("power"))
-            {
-                self.set_acceleration_power(accel);
-            }
-            if let Some(exp) = nbt.get_float("ExplosionPower") {
-                self.set_explosion_power(exp);
-            }
-        })
+    fn read_custom_nbt(&self, nbt: &NbtCompound) {
+        if let Some(accel) = nbt
+            .get_double("acceleration_power")
+            .or_else(|| nbt.get_double("power"))
+        {
+            self.set_acceleration_power(accel);
+        }
+        if let Some(exp) = nbt.get_float("ExplosionPower") {
+            self.set_explosion_power(exp);
+        }
     }
 
-    fn init_data_tracker(&self) -> EntityBaseFuture<'_, ()> {
-        Box::pin(async move {
-            let entity = self.get_entity();
-            let stack = self.item_stack.read().await;
+    fn init_data_tracker(&self) {
+        let entity = self.get_entity();
+        let stack = self
+            .item_stack
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
 
-            entity.send_meta_data(
-                &[Metadata::new(
-                    pumpkin_data::tracked_data::fireball::ITEM_STACK,
-                    &ItemStackSerializer::from(stack.clone()),
-                )],
-                None,
-            );
-        })
+        entity.send_meta_data(
+            &[Metadata::new(
+                pumpkin_data::tracked_data::fireball::ITEM_STACK,
+                &ItemStackSerializer::from(stack.clone()),
+            )],
+            None,
+        );
     }
 
-    fn tick<'a>(
-        &'a self,
-        caller: &'a Arc<dyn EntityBase>,
-        server: &'a Server,
-    ) -> EntityBaseFuture<'a, ()> {
-        Box::pin(async move {
-            let entity = self.get_entity();
-            let mut velocity = entity.velocity.load();
+    fn tick<'a>(&'a self, caller: &'a Arc<dyn EntityBase>, server: &'a Server) {
+        let entity = self.get_entity();
+        let mut velocity = entity.velocity.load();
 
-            let inertia = if entity.touching_water.load(Ordering::Relaxed) {
-                WATER_INERTIA
-            } else {
-                AIR_INERTIA
-            };
+        let inertia = if entity.touching_water.load(Ordering::Relaxed) {
+            WATER_INERTIA
+        } else {
+            AIR_INERTIA
+        };
 
-            let accel = self.get_acceleration_power();
-            let speed = velocity.length();
-            if speed > 1e-6 {
-                let norm = velocity.normalize();
-                velocity = norm
-                    .multiply(accel, accel, accel)
-                    .add(&velocity)
-                    .multiply(inertia, inertia, inertia);
-                entity.velocity.store(velocity);
-            }
+        let accel = self.get_acceleration_power();
+        let speed = velocity.length();
+        if speed > 1e-6 {
+            let norm = velocity.normalize();
+            velocity = norm
+                .multiply(accel, accel, accel)
+                .add(&velocity)
+                .multiply(inertia, inertia, inertia);
+            entity.velocity.store(velocity);
+        }
 
-            self.thrown.process_tick(caller, server).await;
-        })
+        self.thrown.process_tick(caller, server);
     }
 
     fn get_entity(&self) -> &Entity {
@@ -246,33 +242,20 @@ impl EntityBase for FireballEntity {
         self
     }
 
-    fn on_hit(&self, hit: ProjectileHit) -> EntityBaseFuture<'_, ()> {
-        Box::pin(async move {
-            let world = self.get_entity().world.load();
+    fn on_hit(&self, hit: ProjectileHit) {
+        let world = self.get_entity().world.load();
 
-            if let ProjectileHit::Entity { ref entity, .. } = hit {
-                let entity_clone = entity.clone();
+        if let ProjectileHit::Entity { ref entity, .. } = hit {
+            entity.get_entity().set_on_fire_for(5.0);
+            let _ = entity.damage(
+                entity.as_ref(),
+                6.0,
+                pumpkin_data::damage::DamageType::FIREBALL,
+            );
+        }
 
-                tokio::spawn(async move {
-                    entity_clone.get_entity().set_on_fire_for(5.0);
-                    let _ = entity_clone
-                        .damage(
-                            entity_clone.as_ref(),
-                            6.0,
-                            pumpkin_data::damage::DamageType::FIREBALL,
-                        )
-                        .await;
-                });
-            }
-
-            let hit_pos = hit.hit_pos();
-            world
-                .explode(
-                    hit_pos,
-                    self.get_explosion_power(),
-                    crate::world::ExplosionInteraction::Mob,
-                )
-                .await;
-        })
+        let hit_pos = hit.hit_pos();
+        let power = self.get_explosion_power();
+        world.explode(hit_pos, power, crate::world::ExplosionInteraction::Mob);
     }
 }

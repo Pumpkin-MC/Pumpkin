@@ -10,24 +10,16 @@ use crate::entity::ai::pathfinder::{
 pub trait NodeEvaluator {
     fn prepare(&mut self, context: PathfindingContext, mob_data: MobData);
     fn done(&mut self);
-    fn get_start(&mut self) -> impl std::future::Future<Output = Option<Node>> + Send;
+    fn get_start(&mut self) -> Option<Node>;
     fn get_target(&mut self, pos: BlockPos) -> Target;
-    fn get_neighbors(
-        &mut self,
-        current: &Node,
-        out: &mut Vec<Node>,
-    ) -> impl std::future::Future<Output = ()> + Send;
+    fn get_neighbors(&mut self, current: &Node, out: &mut Vec<Node>);
     fn get_path_type_of_mob(
         &mut self,
         context: &mut PathfindingContext,
         pos: Vector3<i32>,
         mob_data: &MobData,
-    ) -> impl std::future::Future<Output = PathType> + Send;
-    fn get_path_type(
-        &mut self,
-        context: &mut PathfindingContext,
-        pos: Vector3<i32>,
-    ) -> impl std::future::Future<Output = PathType> + Send;
+    ) -> PathType;
+    fn get_path_type(&mut self, context: &mut PathfindingContext, pos: Vector3<i32>) -> PathType;
     fn set_can_pass_doors(&mut self, can_pass: bool);
     fn set_can_open_doors(&mut self, can_open: bool);
     fn set_can_float(&mut self, can_float: bool);

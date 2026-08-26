@@ -1,5 +1,5 @@
 use std::sync::{
-    Arc, Weak,
+    Arc, Mutex, Weak,
     atomic::{AtomicBool, AtomicI32, Ordering},
 };
 
@@ -16,12 +16,11 @@ use pumpkin_nbt::tag::NbtTag;
 use pumpkin_protocol::java::client::play::Metadata;
 use pumpkin_util::math::boundingbox::EntityDimensions;
 use pumpkin_util::math::position::BlockPos;
-use tokio::sync::Mutex;
 
 use crate::entity::living::LivingEntity;
 use crate::entity::player::Player;
 use crate::entity::{
-    Entity, EntityBase, EntityBaseFuture, NbtFuture,
+    Entity, EntityBase,
     ai::goal::{
         active_target::ActiveTargetGoal, look_around::RandomLookAroundGoal,
         look_at_entity::LookAtEntityGoal, melee_attack::MeleeAttackGoal, open_door::OpenDoorGoal,
@@ -128,8 +127,8 @@ impl PiglinEntity {
                     10,
                     true,
                     false,
-                    Some(|target: Arc<LivingEntity>, _world: Arc<World>| {
-                        Box::pin(async move { !PiglinAi::is_wearing_safe_armor(&target).await })
+                    Some(|target: &LivingEntity, _world: &World| {
+                        !PiglinAi::is_wearing_safe_armor(target)
                     }),
                 )),
             );
@@ -158,9 +157,8 @@ impl PiglinEntity {
                     10,
                     true,
                     false,
-                    Some(move |_target: Arc<LivingEntity>, _world: Arc<World>| {
-                        let piglin = piglin_clone.clone();
-                        Box::pin(async move { piglin.is_adult() && piglin.can_hunt() })
+                    Some(move |_target: &LivingEntity, _world: &World| {
+                        piglin_clone.is_adult() && piglin_clone.can_hunt()
                     }),
                 )),
             );
@@ -275,12 +273,20 @@ impl PiglinEntity {
         self.eat_cooldown_timer.load(Ordering::Relaxed) > 0
     }
 
-    pub async fn start_admiring(&self, item: ItemStack) {
+    pub fn start_admiring(&self, item: ItemStack) {
         self.admire_timer
             .store(PiglinAi::ADMIRE_DURATION, Ordering::Relaxed);
-        *self.admiring_item.lock().await = Some(item.clone());
+        *self
+            .admiring_item
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(item.clone());
 
-        let mut equip = self.mob_entity.living_entity.entity_equipment.lock().await;
+        let mut equip = self
+            .mob_entity
+            .living_entity
+            .entity_equipment
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         equip.put(&EquipmentSlot::OFF_HAND, item);
 
         let entity = &self.mob_entity.living_entity.entity;
@@ -292,14 +298,22 @@ impl PiglinEntity {
         );
     }
 
-    pub async fn stop_holding_off_hand_item(&self, bartering_enabled: bool) {
+    pub fn stop_holding_off_hand_item(&self, bartering_enabled: bool) {
         let admired_item = {
-            let mut guard = self.admiring_item.lock().await;
+            let mut guard = self
+                .admiring_item
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
             guard.take()
         };
 
         let _ = {
-            let mut equip = self.mob_entity.living_entity.entity_equipment.lock().await;
+            let mut equip = self
+                .mob_entity
+                .living_entity
+                .entity_equipment
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
             equip.put(&EquipmentSlot::OFF_HAND, ItemStack::EMPTY.clone())
         };
 
@@ -320,45 +334,53 @@ impl PiglinEntity {
                         outcomes,
                     );
                 if let Some(server) = entity.world.load().server.upgrade() {
-                    server.plugin_manager.fire(&server, &mut event).await;
+                    server.plugin_manager.fire_blocking(&server, &mut event);
                 }
 
                 if !event.cancelled {
-                    PiglinAi::throw_items(self, event.outcome, None).await;
+                    PiglinAi::throw_items(self, event.outcome, None);
                 }
             } else if !is_barter {
-                let remainder = self.add_to_inventory(item).await;
+                let remainder = self.add_to_inventory(item);
                 if let Some(rem) = remainder {
-                    PiglinAi::throw_items(self, vec![rem], None).await;
+                    PiglinAi::throw_items(self, vec![rem], None);
                 }
             }
         } else {
-            let remainder = self.add_to_inventory(item).await;
+            let remainder = self.add_to_inventory(item);
             if let Some(rem) = remainder {
-                PiglinAi::throw_items(self, vec![rem], None).await;
+                PiglinAi::throw_items(self, vec![rem], None);
             }
         }
     }
 
-    pub async fn cancel_admiring(&self) {
+    pub fn cancel_admiring(&self) {
         if self.is_admiring() {
             self.admire_timer.store(0, Ordering::Relaxed);
             let item = {
-                let mut guard = self.admiring_item.lock().await;
+                let mut guard = self
+                    .admiring_item
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
                 guard.take()
             };
             if let Some(item) = item {
                 let _ = {
-                    let mut equip = self.mob_entity.living_entity.entity_equipment.lock().await;
+                    let mut equip = self
+                        .mob_entity
+                        .living_entity
+                        .entity_equipment
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner);
                     equip.put(&EquipmentSlot::OFF_HAND, ItemStack::EMPTY.clone())
                 };
-                PiglinAi::throw_items(self, vec![item], None).await;
+                PiglinAi::throw_items(self, vec![item], None);
             }
         }
     }
 
-    pub async fn was_hurt_by(&self, attacker: Option<&dyn EntityBase>) {
-        self.cancel_admiring().await;
+    pub fn was_hurt_by(&self, attacker: Option<&dyn EntityBase>) {
+        self.cancel_admiring();
         self.set_dancing(false);
         self.celebration_timer.store(0, Ordering::Relaxed);
 
@@ -370,8 +392,11 @@ impl PiglinEntity {
         }
     }
 
-    pub async fn add_to_inventory(&self, item: ItemStack) -> Option<ItemStack> {
-        let mut inv = self.inventory.lock().await;
+    pub fn add_to_inventory(&self, item: ItemStack) -> Option<ItemStack> {
+        let mut inv = self
+            .inventory
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         if inv.len() < Self::INVENTORY_SIZE {
             inv.push(item);
             None
@@ -380,11 +405,11 @@ impl PiglinEntity {
         }
     }
 
-    pub async fn drop_inventory(&self) {
-        let items = {
-            let mut inv = self.inventory.lock().await;
-            std::mem::take(&mut *inv)
-        };
+    pub fn drop_inventory(&self) {
+        let items = self
+            .inventory
+            .try_lock()
+            .map_or_else(|_| Vec::new(), |mut inv| std::mem::take(&mut *inv));
         let entity = &self.mob_entity.living_entity.entity;
         let world = entity.world.load();
         let pos = entity.pos.load();
@@ -394,7 +419,7 @@ impl PiglinEntity {
                     Entity::new(world.clone(), pos, &EntityType::ITEM),
                     item,
                 );
-                world.spawn_entity(Arc::new(item_entity)).await;
+                world.spawn_entity(Arc::new(item_entity));
             }
         }
     }
@@ -406,7 +431,7 @@ impl PiglinEntity {
         state.id != Block::NETHER_WART_BLOCK.default_state.id
     }
 
-    async fn convert_to_zombified(&self) {
+    fn convert_to_zombified(&self) {
         let entity = &self.mob_entity.living_entity.entity;
         let world = entity.world.load();
         let pos = entity.pos.load();
@@ -419,7 +444,7 @@ impl PiglinEntity {
             );
         }
 
-        self.drop_inventory().await;
+        self.drop_inventory();
 
         let zombified = crate::entity::r#type::from_type(
             &EntityType::ZOMBIFIED_PIGLIN,
@@ -442,17 +467,25 @@ impl PiglinEntity {
         }
 
         {
-            let src_equip = self.mob_entity.living_entity.entity_equipment.lock().await;
+            let src_equip = self
+                .mob_entity
+                .living_entity
+                .entity_equipment
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
             if let Some(living) = zombified.get_living_entity() {
-                let mut dst_equip = living.entity_equipment.lock().await;
+                let mut dst_equip = living
+                    .entity_equipment
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
                 for (slot, item) in &src_equip.equipment {
                     dst_equip.put(slot, item.clone());
                 }
             }
         }
 
-        world.spawn_entity(zombified).await;
-        entity.remove().await;
+        world.spawn_entity(zombified);
+        entity.remove();
     }
 }
 
@@ -461,227 +494,226 @@ impl Mob for PiglinEntity {
         &self.mob_entity
     }
 
-    fn populate_default_equipment_slots<'a>(
-        &'a self,
-        _world: &'a Arc<World>,
-        _difficulty: &'a RegionalDifficulty,
-    ) -> EntityBaseFuture<'a, ()> {
-        Box::pin(async move {
-            if !self.is_baby.load(Ordering::Relaxed) {
-                let living = &self.mob_entity.living_entity;
-                let mut equipment = living.entity_equipment.lock().await;
+    fn populate_default_equipment_slots(
+        &self,
+        _world: &Arc<World>,
+        _difficulty: &RegionalDifficulty,
+    ) {
+        if !self.is_baby.load(Ordering::Relaxed) {
+            let living = &self.mob_entity.living_entity;
+            let mut equipment = living
+                .entity_equipment
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
 
-                // Spawn weapon: 50% crossbow, 5% golden spear (10% of remaining 50%), 45% golden sword
-                let weapon = if rand::random::<f32>() < 0.5 {
-                    &Item::CROSSBOW
-                } else if rand::random_range(0..10) == 0 {
-                    &Item::GOLDEN_SPEAR
-                } else {
-                    &Item::GOLDEN_SWORD
-                };
-                equipment.put(&EquipmentSlot::MAIN_HAND, ItemStack::new(1, weapon));
-
-                // Armor: 10% chance per piece for golden armor
-                if rand::random::<f32>() < 0.1 {
-                    equipment.put(
-                        &EquipmentSlot::HEAD,
-                        ItemStack::new(1, &Item::GOLDEN_HELMET),
-                    );
-                }
-                if rand::random::<f32>() < 0.1 {
-                    equipment.put(
-                        &EquipmentSlot::CHEST,
-                        ItemStack::new(1, &Item::GOLDEN_CHESTPLATE),
-                    );
-                }
-                if rand::random::<f32>() < 0.1 {
-                    equipment.put(
-                        &EquipmentSlot::LEGS,
-                        ItemStack::new(1, &Item::GOLDEN_LEGGINGS),
-                    );
-                }
-                if rand::random::<f32>() < 0.1 {
-                    equipment.put(&EquipmentSlot::FEET, ItemStack::new(1, &Item::GOLDEN_BOOTS));
-                }
-            }
-        })
-    }
-
-    fn mob_init_data_tracker(&self) -> EntityBaseFuture<'_, ()> {
-        Box::pin(async move {
-            let entity = self.get_entity();
-            let mut meta = Vec::new();
-            if self.is_immune_to_zombification() {
-                meta.push(Metadata::new(
-                    tracked_data::piglin::DATA_IMMUNE_TO_ZOMBIFICATION,
-                    true,
-                ));
-            }
-            if self.is_baby() {
-                meta.push(Metadata::new(tracked_data::piglin::DATA_BABY_ID, true));
-            }
-            if self.is_charging_crossbow() {
-                meta.push(Metadata::new(
-                    tracked_data::piglin::DATA_IS_CHARGING_CROSSBOW,
-                    true,
-                ));
-            }
-            if self.is_dancing() {
-                meta.push(Metadata::new(tracked_data::piglin::DATA_IS_DANCING, true));
-            }
-            if !meta.is_empty() {
-                entity.send_meta_data(&meta, None);
-            }
-        })
-    }
-
-    fn mob_write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
-        Box::pin(async move {
-            if self.is_immune_to_zombification() {
-                nbt.put_bool("IsImmuneToZombification", true);
-            }
-            let time_in_overworld = self.time_in_overworld.load(Ordering::Relaxed);
-            if time_in_overworld > 0 {
-                nbt.put_int("TimeInOverworld", time_in_overworld);
-            }
-            nbt.put_bool("CanPickUpLoot", true);
-            if self.is_baby() {
-                nbt.put_bool("IsBaby", true);
-            }
-            if !self.can_hunt() {
-                nbt.put_bool("CannotHunt", true);
-            }
-            if self.is_charging_crossbow() {
-                nbt.put_bool("IsChargingCrossbow", true);
-            }
-            if self.is_dancing() {
-                nbt.put_bool("IsDancing", true);
-            }
-
-            let inv = self.inventory.lock().await;
-            if !inv.is_empty() {
-                let mut items_tag = Vec::new();
-                for item in inv.iter() {
-                    if !item.is_empty() {
-                        let mut item_nbt = NbtCompound::new();
-                        item.write_item_stack(&mut item_nbt);
-                        items_tag.push(NbtTag::Compound(item_nbt));
-                    }
-                }
-                if !items_tag.is_empty() {
-                    nbt.put_list("Inventory", items_tag);
-                }
-            }
-        })
-    }
-
-    fn mob_read_nbt<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
-        Box::pin(async move {
-            if let Some(immune) = nbt.get_bool("IsImmuneToZombification") {
-                self.set_immune_to_zombification(immune);
-            }
-            if let Some(time) = nbt.get_int("TimeInOverworld") {
-                self.time_in_overworld.store(time, Ordering::Relaxed);
-            }
-            if let Some(baby) = nbt.get_bool("IsBaby") {
-                self.set_baby(baby);
-            }
-            if let Some(cannot_hunt) = nbt.get_bool("CannotHunt") {
-                self.set_cannot_hunt(cannot_hunt);
-            }
-            if let Some(charging) = nbt.get_bool("IsChargingCrossbow") {
-                self.set_charging_crossbow(charging);
-            }
-            if let Some(dancing) = nbt.get_bool("IsDancing") {
-                self.set_dancing(dancing);
-            }
-            if let Some(inv_list) = nbt.get_list("Inventory") {
-                let mut inv = self.inventory.lock().await;
-                inv.clear();
-                for tag in inv_list {
-                    if let Some(compound) = tag.extract_compound()
-                        && let Some(stack) = ItemStack::read_item_stack(compound)
-                    {
-                        inv.push(stack);
-                    }
-                }
-            }
-        })
-    }
-
-    fn mob_interact<'a>(
-        &'a self,
-        player: &'a Arc<Player>,
-        item_stack: &'a mut ItemStack,
-    ) -> EntityBaseFuture<'a, bool> {
-        Box::pin(async move {
-            if PiglinAi::can_admire(self, item_stack) {
-                let mut given = item_stack.clone();
-                given.item_count = 1;
-                if player.gamemode.load() != pumpkin_util::GameMode::Creative {
-                    item_stack.item_count -= 1;
-                }
-                self.start_admiring(given).await;
-                return true;
-            }
-            self.mob_entity.mob_interact(player, item_stack).await
-        })
-    }
-
-    fn mob_tick<'a>(&'a self, _caller: &'a Arc<dyn EntityBase>) -> EntityBaseFuture<'a, ()> {
-        Box::pin(async move {
-            let entity = &self.mob_entity.living_entity.entity;
-            if !entity.is_alive() {
-                return;
-            }
-
-            let world = entity.world.load();
-            if self.is_converting(&world) {
-                let time = self.time_in_overworld.fetch_add(1, Ordering::Relaxed) + 1;
-                if time > Self::CONVERSION_TIME {
-                    self.convert_to_zombified().await;
-                }
+            // Spawn weapon: 50% crossbow, 5% golden spear (10% of remaining 50%), 45% golden sword
+            let weapon = if rand::random::<f32>() < 0.5 {
+                &Item::CROSSBOW
+            } else if rand::random_range(0..10) == 0 {
+                &Item::GOLDEN_SPEAR
             } else {
-                self.time_in_overworld.store(0, Ordering::Relaxed);
-            }
+                &Item::GOLDEN_SWORD
+            };
+            equipment.put(&EquipmentSlot::MAIN_HAND, ItemStack::new(1, weapon));
 
-            if self.admiring_disabled_timer.load(Ordering::Relaxed) > 0 {
-                self.admiring_disabled_timer.fetch_sub(1, Ordering::Relaxed);
+            // Armor: 10% chance per piece for golden armor
+            if rand::random::<f32>() < 0.1 {
+                equipment.put(
+                    &EquipmentSlot::HEAD,
+                    ItemStack::new(1, &Item::GOLDEN_HELMET),
+                );
             }
-            if self.eat_cooldown_timer.load(Ordering::Relaxed) > 0 {
-                self.eat_cooldown_timer.fetch_sub(1, Ordering::Relaxed);
+            if rand::random::<f32>() < 0.1 {
+                equipment.put(
+                    &EquipmentSlot::CHEST,
+                    ItemStack::new(1, &Item::GOLDEN_CHESTPLATE),
+                );
             }
-            if self.hunt_cooldown_timer.load(Ordering::Relaxed) > 0 {
-                self.hunt_cooldown_timer.fetch_sub(1, Ordering::Relaxed);
+            if rand::random::<f32>() < 0.1 {
+                equipment.put(
+                    &EquipmentSlot::LEGS,
+                    ItemStack::new(1, &Item::GOLDEN_LEGGINGS),
+                );
             }
-            if self.celebration_timer.load(Ordering::Relaxed) > 0 {
-                let remaining = self.celebration_timer.fetch_sub(1, Ordering::Relaxed) - 1;
-                if remaining <= 0 {
-                    self.set_dancing(false);
-                }
+            if rand::random::<f32>() < 0.1 {
+                equipment.put(&EquipmentSlot::FEET, ItemStack::new(1, &Item::GOLDEN_BOOTS));
             }
-
-            if self.admire_timer.load(Ordering::Relaxed) > 0 {
-                let remaining = self.admire_timer.fetch_sub(1, Ordering::Relaxed) - 1;
-                if remaining <= 0 {
-                    self.stop_holding_off_hand_item(true).await;
-                }
-            }
-        })
+        }
     }
 
-    fn on_damage<'a>(
-        &'a self,
+    fn mob_init_data_tracker(&self) {
+        let entity = self.get_entity();
+        let mut meta = Vec::new();
+        if self.is_immune_to_zombification() {
+            meta.push(Metadata::new(
+                tracked_data::piglin::DATA_IMMUNE_TO_ZOMBIFICATION,
+                true,
+            ));
+        }
+        if self.is_baby() {
+            meta.push(Metadata::new(tracked_data::piglin::DATA_BABY_ID, true));
+        }
+        if self.is_charging_crossbow() {
+            meta.push(Metadata::new(
+                tracked_data::piglin::DATA_IS_CHARGING_CROSSBOW,
+                true,
+            ));
+        }
+        if self.is_dancing() {
+            meta.push(Metadata::new(tracked_data::piglin::DATA_IS_DANCING, true));
+        }
+        if !meta.is_empty() {
+            entity.send_meta_data(&meta, None);
+        }
+    }
+
+    fn mob_write_nbt(&self, nbt: &mut NbtCompound) {
+        if self.is_immune_to_zombification() {
+            nbt.put_bool("IsImmuneToZombification", true);
+        }
+        let time_in_overworld = self.time_in_overworld.load(Ordering::Relaxed);
+        if time_in_overworld > 0 {
+            nbt.put_int("TimeInOverworld", time_in_overworld);
+        }
+        nbt.put_bool("CanPickUpLoot", true);
+        if self.is_baby() {
+            nbt.put_bool("IsBaby", true);
+        }
+        if !self.can_hunt() {
+            nbt.put_bool("CannotHunt", true);
+        }
+        if self.is_charging_crossbow() {
+            nbt.put_bool("IsChargingCrossbow", true);
+        }
+        if self.is_dancing() {
+            nbt.put_bool("IsDancing", true);
+        }
+
+        let inv = self
+            .inventory
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if !inv.is_empty() {
+            let mut items_tag = Vec::new();
+            for item in inv.iter() {
+                if !item.is_empty() {
+                    let mut item_nbt = NbtCompound::new();
+                    item.write_item_stack(&mut item_nbt);
+                    items_tag.push(NbtTag::Compound(item_nbt));
+                }
+            }
+            if !items_tag.is_empty() {
+                nbt.put_list("Inventory", items_tag);
+            }
+        }
+    }
+
+    fn mob_read_nbt(&self, nbt: &NbtCompound) {
+        if let Some(immune) = nbt.get_bool("IsImmuneToZombification") {
+            self.set_immune_to_zombification(immune);
+        }
+        if let Some(time) = nbt.get_int("TimeInOverworld") {
+            self.time_in_overworld.store(time, Ordering::Relaxed);
+        }
+        if let Some(baby) = nbt.get_bool("IsBaby") {
+            self.set_baby(baby);
+        }
+        if let Some(cannot_hunt) = nbt.get_bool("CannotHunt") {
+            self.set_cannot_hunt(cannot_hunt);
+        }
+        if let Some(charging) = nbt.get_bool("IsChargingCrossbow") {
+            self.set_charging_crossbow(charging);
+        }
+        if let Some(dancing) = nbt.get_bool("IsDancing") {
+            self.set_dancing(dancing);
+        }
+        if let Some(inv_list) = nbt.get_list("Inventory") {
+            let mut inv = self
+                .inventory
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            inv.clear();
+            for tag in inv_list {
+                if let Some(compound) = tag.extract_compound()
+                    && let Some(stack) = ItemStack::read_item_stack(compound)
+                {
+                    inv.push(stack);
+                }
+            }
+        }
+    }
+
+    fn mob_interact(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {
+        if PiglinAi::can_admire(self, item_stack) {
+            let mut given = item_stack.clone();
+            given.item_count = 1;
+            if player.gamemode.load() != pumpkin_util::GameMode::Creative {
+                item_stack.item_count -= 1;
+            }
+            self.start_admiring(given);
+            return true;
+        }
+        self.mob_entity.mob_interact(player, item_stack)
+    }
+
+    fn mob_tick<'a>(&'a self, _caller: &'a Arc<dyn EntityBase>) {
+        let entity = &self.mob_entity.living_entity.entity;
+        if !entity.is_alive() {
+            return;
+        }
+
+        let world = entity.world.load();
+        if self.is_converting(&world) {
+            let time = self.time_in_overworld.fetch_add(1, Ordering::Relaxed) + 1;
+            if time > Self::CONVERSION_TIME {
+                self.convert_to_zombified();
+            }
+        } else {
+            self.time_in_overworld.store(0, Ordering::Relaxed);
+        }
+
+        if self.admiring_disabled_timer.load(Ordering::Relaxed) > 0 {
+            self.admiring_disabled_timer.fetch_sub(1, Ordering::Relaxed);
+        }
+        if self.eat_cooldown_timer.load(Ordering::Relaxed) > 0 {
+            self.eat_cooldown_timer.fetch_sub(1, Ordering::Relaxed);
+        }
+        if self.hunt_cooldown_timer.load(Ordering::Relaxed) > 0 {
+            self.hunt_cooldown_timer.fetch_sub(1, Ordering::Relaxed);
+        }
+        if self.celebration_timer.load(Ordering::Relaxed) > 0 {
+            let remaining = self.celebration_timer.fetch_sub(1, Ordering::Relaxed) - 1;
+            if remaining <= 0 {
+                self.set_dancing(false);
+            }
+        }
+
+        if self.admire_timer.load(Ordering::Relaxed) > 0 {
+            let remaining = self.admire_timer.fetch_sub(1, Ordering::Relaxed) - 1;
+            if remaining <= 0 {
+                self.stop_holding_off_hand_item(true);
+            }
+        }
+    }
+
+    fn on_damage(
+        &self,
         _damage_type: pumpkin_data::damage::DamageType,
-        source: Option<&'a dyn EntityBase>,
-    ) -> EntityBaseFuture<'a, ()> {
-        Box::pin(async move {
-            if self.mob_entity.living_entity.dead.load(Ordering::Relaxed) {
-                self.drop_inventory().await;
-            } else {
-                self.was_hurt_by(source).await;
+        source: Option<&dyn EntityBase>,
+    ) {
+        if self.mob_entity.living_entity.dead.load(Ordering::Relaxed) {
+            self.drop_inventory();
+        } else {
+            self.set_dancing(false);
+            self.celebration_timer.store(0, Ordering::Relaxed);
+
+            if let Some(attacker_entity) = source
+                && attacker_entity.get_entity().entity_type.id == EntityType::PLAYER.id
+            {
+                self.admiring_disabled_timer
+                    .store(PiglinAi::ADMIRING_DISABLED_DURATION, Ordering::Relaxed);
             }
-        })
+        }
     }
 
     fn as_crossbow_attack_mob(&self) -> Option<&dyn CrossbowAttackMob> {

@@ -1,13 +1,9 @@
 use rand::Rng;
-use std::{
-    pin::Pin,
-    sync::{
-        Arc,
-        atomic::{AtomicBool, AtomicI32, Ordering},
-    },
+use std::sync::{
+    Arc, Mutex,
+    atomic::{AtomicBool, AtomicI32, Ordering},
 };
 
-use futures::Future;
 use pumpkin_data::block_properties::{BlockProperties, JigsawLikeProperties, Orientation};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::{
@@ -21,8 +17,6 @@ use pumpkin_world::generation::structure::structures::{
         DimensionPadding, JigsawPlacement, LiquidSettings, MaxDistance, PoolAliasLookup,
     },
 };
-
-use tokio::sync::Mutex;
 
 use crate::block::blocks::jigsaw::JigsawBlock;
 use crate::world::World;
@@ -80,9 +74,17 @@ impl JigsawBlockEntity {
         }
     }
 
-    pub async fn generate(&self, world: &Arc<World>, levels: i32, keep_jigsaws: bool) {
-        let pool = self.pool.lock().await.clone();
-        let target = self.target.lock().await.clone();
+    pub fn generate(&self, world: &Arc<World>, levels: i32, keep_jigsaws: bool) {
+        let pool = self
+            .pool
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone();
+        let target = self
+            .target
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone();
 
         let block_state = world.get_block_state(&self.position);
         let props =
@@ -119,16 +121,11 @@ impl JigsawBlockEntity {
         };
 
         if let Some(structure) = structure {
-            self.place_structure(world, structure, keep_jigsaws).await;
+            Self::place_structure(world, &structure, keep_jigsaws);
         }
     }
 
-    async fn place_structure(
-        &self,
-        world: &Arc<World>,
-        structure: StructurePosition,
-        keep_jigsaws: bool,
-    ) {
+    fn place_structure(world: &Arc<World>, structure: &StructurePosition, keep_jigsaws: bool) {
         let mut pieces = std::mem::take(
             &mut structure
                 .collector
@@ -148,8 +145,8 @@ impl JigsawBlockEntity {
             }
         }
         placer.finalize();
-        world.queue_block_updates(&placer.changed_positions).await;
-        world.flush_block_updates().await;
+        world.queue_block_updates(&placer.changed_positions);
+        world.flush_block_updates();
     }
 }
 
@@ -211,26 +208,30 @@ impl BlockEntity for JigsawBlockEntity {
         }
     }
 
-    fn write_nbt<'a>(
-        &'a self,
-        nbt: &'a mut NbtCompound,
-    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
-        Box::pin(async move {
-            nbt.put_string(Self::NAME, self.name.lock().await.clone());
-            nbt.put_string(Self::TARGET, self.target.lock().await.clone());
-            nbt.put_string(Self::POOL, self.pool.lock().await.clone());
-            nbt.put_string(Self::FINAL_STATE, self.final_state.lock().await.clone());
-            let joint = *self.joint.lock().await;
+    fn write_nbt(&self, nbt: &mut NbtCompound) {
+        if let Ok(name) = self.name.lock() {
+            nbt.put_string(Self::NAME, name.clone());
+        }
+        if let Ok(target) = self.target.lock() {
+            nbt.put_string(Self::TARGET, target.clone());
+        }
+        if let Ok(pool) = self.pool.lock() {
+            nbt.put_string(Self::POOL, pool.clone());
+        }
+        if let Ok(final_state) = self.final_state.lock() {
+            nbt.put_string(Self::FINAL_STATE, final_state.clone());
+        }
+        if let Ok(joint) = self.joint.lock() {
             nbt.put_string(Self::JOINT, joint.as_str().to_string());
-            nbt.put_int(
-                Self::PLACEMENT_PRIORITY,
-                self.placement_priority.load(Ordering::SeqCst),
-            );
-            nbt.put_int(
-                Self::SELECTION_PRIORITY,
-                self.selection_priority.load(Ordering::SeqCst),
-            );
-        })
+        }
+        nbt.put_int(
+            Self::PLACEMENT_PRIORITY,
+            self.placement_priority.load(Ordering::SeqCst),
+        );
+        nbt.put_int(
+            Self::SELECTION_PRIORITY,
+            self.selection_priority.load(Ordering::SeqCst),
+        );
     }
 
     fn chunk_data_nbt(&self) -> Option<NbtCompound> {

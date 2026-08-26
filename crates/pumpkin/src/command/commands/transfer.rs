@@ -32,124 +32,112 @@ const fn port_consumer() -> BoundedNumArgumentConsumer<i32> {
 struct TargetSelfExecutor;
 
 impl CommandExecutor for TargetSelfExecutor {
-    fn execute<'a>(
-        &'a self,
-        sender: &'a CommandSender,
-        _server: &'a crate::server::Server,
-        args: &'a ConsumedArgs<'a>,
-    ) -> CommandResult<'a> {
-        Box::pin(async move {
-            let Some(Arg::Simple(hostname)) = args.get(ARG_HOSTNAME) else {
-                return Err(InvalidConsumption(Some(ARG_HOSTNAME.into())));
-            };
+    fn execute(
+        &self,
+        sender: &CommandSender,
+        _server: &crate::server::Server,
+        args: &ConsumedArgs,
+    ) -> CommandResult {
+        let Some(Arg::Simple(hostname)) = args.get(ARG_HOSTNAME) else {
+            return Err(InvalidConsumption(Some(ARG_HOSTNAME.into())));
+        };
+        let hostname = (*hostname).to_string();
 
-            let port = match port_consumer().find_arg_default_name(args) {
-                Err(_) => 25565,
-                Ok(Ok(count)) => count,
-                Ok(Err(_)) => {
-                    return Err(InvalidConsumption(Some(
-                        "Port must be between 1 and 65535.".into(),
-                    )));
-                }
-            };
-
-            if let CommandSender::Player(player) = sender {
-                let name = &player.gameprofile.name;
-                info!("[{name}: Transferring {name} to {hostname}:{port}]");
-
-                player
-                    .enqueue_packet_editioned(
-                        &JavaCTransfer::new(hostname, VarInt(port)),
-                        &BedrockCTransfer::new(hostname.to_string(), port as u16, false),
-                    )
-                    .await;
-
-                Ok(1)
-            } else {
-                Err(InvalidRequirement)
+        let port = match port_consumer().find_arg_default_name(args) {
+            Err(_) => 25565,
+            Ok(Ok(count)) => count,
+            Ok(Err(_)) => {
+                return Err(InvalidConsumption(Some(
+                    "Port must be between 1 and 65535.".into(),
+                )));
             }
-        })
+        };
+
+        if let CommandSender::Player(player) = sender {
+            let name = &player.gameprofile.name;
+            info!("[{name}: Transferring {name} to {hostname}:{port}]");
+
+            let bedrock_packet = BedrockCTransfer::new(hostname.clone(), port as u16, false);
+            let java_packet = JavaCTransfer::new(&hostname, VarInt(port));
+            player.try_enqueue_packet_editioned(&java_packet, &bedrock_packet);
+
+            Ok(1)
+        } else {
+            Err(InvalidRequirement)
+        }
     }
 }
 
 struct TargetPlayerExecutor;
 
 impl CommandExecutor for TargetPlayerExecutor {
-    fn execute<'a>(
-        &'a self,
-        sender: &'a CommandSender,
-        _server: &'a crate::server::Server,
-        args: &'a ConsumedArgs<'a>,
-    ) -> CommandResult<'a> {
-        Box::pin(async move {
-            let Some(Arg::Simple(hostname)) = args.get(ARG_HOSTNAME) else {
-                return Err(InvalidConsumption(Some(ARG_HOSTNAME.into())));
-            };
-            let hostname = *hostname;
+    fn execute(
+        &self,
+        sender: &CommandSender,
+        _server: &crate::server::Server,
+        args: &ConsumedArgs,
+    ) -> CommandResult {
+        let Some(Arg::Simple(hostname)) = args.get(ARG_HOSTNAME) else {
+            return Err(InvalidConsumption(Some(ARG_HOSTNAME.into())));
+        };
+        let hostname = (*hostname).to_string();
 
-            let port = match port_consumer().find_arg_default_name(args) {
-                Err(_) => 25565,
-                Ok(Ok(count)) => count,
-                Ok(Err(_)) => {
-                    return Err(InvalidConsumption(Some(
-                        "Port must be between 1 and 65535.".into(),
-                    )));
-                }
-            };
-
-            let Some(Arg::Players(players)) = args.get(ARG_PLAYERS) else {
-                return Err(InvalidConsumption(Some(ARG_PLAYERS.into())));
-            };
-
-            if players.is_empty() {
-                return Err(CommandError::CommandFailed(TextComponent::translate_cross(
-                    "commands.transfer.error.no_players",
-                    "commands.transfer.error.no_players",
-                    [],
+        let port = match port_consumer().find_arg_default_name(args) {
+            Err(_) => 25565,
+            Ok(Ok(count)) => count,
+            Ok(Err(_)) => {
+                return Err(InvalidConsumption(Some(
+                    "Port must be between 1 and 65535.".into(),
                 )));
             }
+        };
 
-            for p in players {
-                p.enqueue_packet_editioned(
-                    &JavaCTransfer::new(hostname, VarInt(port)),
-                    &BedrockCTransfer::new(hostname.to_string(), port as u16, false),
-                )
-                .await;
+        let Some(Arg::Players(players)) = args.get(ARG_PLAYERS) else {
+            return Err(InvalidConsumption(Some(ARG_PLAYERS.into())));
+        };
 
-                info!(
-                    "[{sender}: Transferring {} to {hostname}:{port}]",
-                    p.gameprofile.name
-                );
-            }
+        if players.is_empty() {
+            return Err(CommandError::CommandFailed(TextComponent::translate_cross(
+                "commands.transfer.error.no_players",
+                "commands.transfer.error.no_players",
+                [],
+            )));
+        }
 
-            if players.len() == 1 {
-                sender
-                    .send_message(TextComponent::translate_cross(
-                        "commands.transfer.success.single",
-                        "commands.transfer.success.single",
-                        [
-                            players[0].get_display_name().await,
-                            TextComponent::text(hostname.to_owned()),
-                            TextComponent::text(port.to_string()),
-                        ],
-                    ))
-                    .await;
-            } else {
-                sender
-                    .send_message(TextComponent::translate_cross(
-                        "commands.transfer.success.multiple",
-                        "commands.transfer.success.multiple",
-                        [
-                            TextComponent::text(players.len().to_string()),
-                            TextComponent::text(hostname.to_owned()),
-                            TextComponent::text(port.to_string()),
-                        ],
-                    ))
-                    .await;
-            }
+        for p in players {
+            let bedrock_packet = BedrockCTransfer::new(hostname.clone(), port as u16, false);
+            let java_packet = JavaCTransfer::new(&hostname, VarInt(port));
+            p.try_enqueue_packet_editioned(&java_packet, &bedrock_packet);
 
-            Ok(players.len() as i32)
-        })
+            info!(
+                "[{sender}: Transferring {} to {hostname}:{port}]",
+                p.gameprofile.name
+            );
+        }
+
+        if players.len() == 1 {
+            sender.send_message(TextComponent::translate_cross(
+                "commands.transfer.success.single",
+                "commands.transfer.success.single",
+                [
+                    players[0].get_display_name(),
+                    TextComponent::text(hostname),
+                    TextComponent::text(port.to_string()),
+                ],
+            ));
+        } else {
+            sender.send_message(TextComponent::translate_cross(
+                "commands.transfer.success.multiple",
+                "commands.transfer.success.multiple",
+                [
+                    TextComponent::text(players.len().to_string()),
+                    TextComponent::text(hostname),
+                    TextComponent::text(port.to_string()),
+                ],
+            ));
+        }
+
+        Ok(players.len() as i32)
     }
 }
 
