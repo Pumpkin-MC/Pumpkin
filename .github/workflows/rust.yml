@@ -119,7 +119,7 @@ jobs:
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
-      - name: Start Android emulator and cargo nextest
+      - name: Start Android emulator and Test
         uses: reactivecircus/android-emulator-runner@v2
         env:
           CARGO_NDK_PLATFORM: 24
@@ -130,7 +130,7 @@ jobs:
           profile: pixel_5
           force-avd-creation: false
           emulator-options: -no-snapshot-load -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -camera-front none
-          script: cargo nextest run --target aarch64-linux-android
+          script: cargo ndk-test -t arm64-v8a
   build_release:
     name: Build project in release
     runs-on: ${{ matrix.os }}
