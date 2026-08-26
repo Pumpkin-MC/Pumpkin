@@ -226,6 +226,7 @@ impl BedrockPlayer<'_> {
         self.client_data().map(|d| d.graphics_mode)
     }
 }
+use pumpkin_data::AttributeModifierSlot;
 use pumpkin_data::attributes::Attributes;
 use pumpkin_data::block_properties::{BlockProperties, HorizontalFacing};
 use pumpkin_data::damage::DamageType;
@@ -264,9 +265,9 @@ use pumpkin_protocol::java::client::play::{
     CPlayerPosition, CPlayerSpawnPosition, CRespawn, CSetCamera, CSetContainerContent,
     CSetContainerProperty, CSetContainerSlot, CSetCursorItem, CSetExperience, CSetHealth,
     CSetPlayerInventory, CSetSelectedSlot, CSoundEffect, CStopSound, CSubtitle, CSystemChatMessage,
-    CTabList, CTitleAnimation, CTitleText, CUnloadChunk, CUpdateMobEffect, CUpdateTime, GameEvent,
-    MapIcon, MapPatch, Metadata, PlayerAction, PlayerInfoFlags, PlayerSpawnData, PreviousMessage,
-    Statistic,
+    CTabList, CTitleAnimation, CTitleText, CUnloadChunk, CUpdateAttributes, CUpdateMobEffect,
+    CUpdateTime, GameEvent, MapIcon, MapPatch, Metadata, PlayerAction, PlayerInfoFlags,
+    PlayerSpawnData, PreviousMessage, Statistic,
 };
 use pumpkin_protocol::java::server::play::{
     SClickSlot, SContainerButtonClick, SRenameItem, SlotActionType,
@@ -291,6 +292,7 @@ use crate::command::node::dispatcher::CommandDispatcher;
 use crate::command::{CommandSender, client_suggestions};
 use crate::data::SaveJSONConfiguration;
 use crate::entity::TeleportFuture;
+use crate::entity::attributes::{AttributeInstance, Modifier, ModifierOperation};
 use crate::net::{ClientPlatform, GameProfile};
 use crate::net::{DisconnectReason, PlayerConfig};
 use crate::plugin::player::exp_change::PlayerExpChangeEvent;
@@ -705,6 +707,16 @@ pub enum PlayerWeather {
     Downfall,
 }
 
+/// An attribute modifier applied from the player's held item. Tracked so that
+/// equipment changes can be detected and the affected attributes re-synced.
+#[derive(Clone, PartialEq, Debug)]
+pub struct HeldItemAttributeModifier {
+    attribute: &'static Attributes,
+    modifier_id: String,
+    amount: f64,
+    operation: ModifierOperation,
+}
+
 pub struct Player {
     /// The underlying living entity object that represents the player.
     pub living_entity: LivingEntity,
@@ -740,6 +752,9 @@ pub struct Player {
     pub raid_omen_position: AtomicCell<Option<BlockPos>>,
     /// The item currently being held by the player.
     pub carried_item: Mutex<Option<ItemStack>>,
+    /// Attribute modifiers currently applied from the held item. Compared each
+    /// tick against the held item's modifiers to detect equipment changes.
+    pub held_item_attribute_modifiers: Mutex<Vec<HeldItemAttributeModifier>>,
     /// The player's abilities and special powers.
     ///
     /// This field represents the various abilities that the player possesses, such as flight, invulnerability, and other special effects.
@@ -1033,6 +1048,7 @@ impl Player {
             start_mining_time: AtomicI32::new(0),
             last_input: AtomicI8::new(0),
             carried_item: Mutex::new(None),
+            held_item_attribute_modifiers: Mutex::new(Vec::new()),
             experience_pick_up_delay: Mutex::new(0),
             teleport_id_count: AtomicI32::new(0),
             mining: AtomicBool::new(false),
@@ -2434,6 +2450,8 @@ impl Player {
 
     #[expect(clippy::too_many_lines)]
     pub fn tick<'a>(&'a self, server: &'a Server) {
+        self.sync_held_item_attributes();
+
         if self.is_spectator() {
             self.living_entity
                 .entity
@@ -3962,6 +3980,99 @@ impl Player {
         }
     }
 
+    /// Applies the held item's attribute modifiers to the player's attribute map
+    /// and sends the affected attributes to the client. Mirrors vanilla's
+    /// LivingEntity.detectEquipmentUpdates, which applies equipment modifiers
+    /// on the server and syncs dirty attributes; without it the client keeps the
+    /// default attack speed and never shows the crosshair attack indicator.
+    pub fn sync_held_item_attributes(&self) {
+        let stack = self.inventory.held_item();
+        let mut current: Vec<HeldItemAttributeModifier> = Vec::new();
+        if let Some(modifiers) = stack.get_data_component::<AttributeModifiersImpl>() {
+            for modifier in modifiers.attribute_modifiers.iter() {
+                if matches!(
+                    modifier.slot,
+                    AttributeModifierSlot::MainHand
+                        | AttributeModifierSlot::Hand
+                        | AttributeModifierSlot::Any
+                ) {
+                    current.push(HeldItemAttributeModifier {
+                        attribute: modifier.r#type,
+                        modifier_id: modifier.id.to_string(),
+                        amount: modifier.amount,
+                        operation: match modifier.operation {
+                            Operation::AddValue => ModifierOperation::Add,
+                            Operation::AddMultipliedBase => ModifierOperation::MultiplyBase,
+                            Operation::AddMultipliedTotal => ModifierOperation::MultiplyTotal,
+                        },
+                    });
+                }
+            }
+        }
+
+        let properties = {
+            let mut applied = self.held_item_attribute_modifiers.lock().unwrap();
+            if *applied == current {
+                return;
+            }
+
+            let mut attributes = self
+                .living_entity
+                .attributes
+                .write()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let mut changed: Vec<&'static Attributes> = Vec::new();
+
+            for modifier in &*applied {
+                if let Some(instance) = attributes.get_mut(&modifier.attribute.id) {
+                    instance.remove_modifier(&modifier.modifier_id);
+                }
+                if !changed.contains(&modifier.attribute) {
+                    changed.push(modifier.attribute);
+                }
+            }
+            for modifier in &current {
+                let instance = attributes
+                    .entry(modifier.attribute.id)
+                    .or_insert_with(|| AttributeInstance::new(modifier.attribute.default_value));
+                instance.add_or_replace_modifier(Modifier {
+                    id: modifier.modifier_id.clone(),
+                    amount: modifier.amount,
+                    operation: modifier.operation,
+                });
+                if !changed.contains(&modifier.attribute) {
+                    changed.push(modifier.attribute);
+                }
+            }
+            *applied = current;
+
+            changed
+                .into_iter()
+                .filter_map(|attribute| {
+                    attributes.get(&attribute.id).map(|instance| {
+                        pumpkin_protocol::java::client::play::Property::new(
+                            VarInt(i32::from(attribute.id)),
+                            instance.base_value,
+                            instance
+                                .modifiers
+                                .iter()
+                                .map(|m| {
+                                    pumpkin_protocol::java::client::play::AttributeModifier::new(
+                                        m.id.clone(),
+                                        m.amount,
+                                        m.operation as i8,
+                                    )
+                                })
+                                .collect(),
+                        )
+                    })
+                })
+                .collect()
+        };
+
+        self.try_send_client_packet(&CUpdateAttributes::new(self.entity_id().into(), properties));
+    }
+
     pub fn tick_health(&self) {
         if !self.has_client_loaded() {
             return;
@@ -4134,6 +4245,9 @@ impl Player {
     }
 
     pub async fn respawn(self: &Arc<Self>) {
+        // The client rebuilds its attribute state on respawn, so forget what was
+        // applied and let the next tick re-sync the held item's modifiers.
+        self.held_item_attribute_modifiers.lock().unwrap().clear();
         self.world().respawn_player(self, false).await;
     }
 
