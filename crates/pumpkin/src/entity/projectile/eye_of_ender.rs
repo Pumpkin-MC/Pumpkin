@@ -224,7 +224,7 @@ impl EntityBase for EyeOfEnder {
                 client.enqueue_packet(data).await;
             }
 
-            if client.version.load() >= pumpkin_data::packet::CURRENT_MC_VERSION {
+            if client.version.load() >= pumpkin_util::version::JavaMinecraftVersion::V_1_21 {
                 let metadata = Metadata::new(
                     pumpkin_data::tracked_data::eye_of_ender::ITEM_STACK,
                     ItemStackSerializer::from(self.item_stack.lock().await.clone()),

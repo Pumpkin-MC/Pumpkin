@@ -173,10 +173,13 @@ impl BreathManager {
         );
 
         player.get_entity().send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::entity::DATA_AIR_SUPPLY_ID,
-                VarInt(air),
-            )],
+            &[
+                Metadata::new(
+                    pumpkin_data::tracked_data::entity::DATA_AIR_SUPPLY_ID,
+                    VarInt(air),
+                ),
+                Metadata::new(pumpkin_data::tracked_data::entity::DATA_AIR, VarInt(air)),
+            ],
             Some(&bedrock_meta),
         );
     }

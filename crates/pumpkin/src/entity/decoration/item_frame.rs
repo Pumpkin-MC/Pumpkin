@@ -9,7 +9,6 @@ use pumpkin_data::damage::DamageType;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
-use pumpkin_data::packet::CURRENT_MC_VERSION;
 use pumpkin_data::sound::Sound;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::codec::item_stack_seralizer::ItemStackSerializer;
@@ -346,7 +345,7 @@ impl EntityBase for ItemFrameEntity {
             }
 
             let ver = client.version.load();
-            if ver >= CURRENT_MC_VERSION {
+            if ver >= pumpkin_util::version::JavaMinecraftVersion::V_1_21 {
                 let item_serializer =
                     ItemStackSerializer::from(self.item_stack.lock().await.clone());
                 let rotation = self.get_rotation() as i32;

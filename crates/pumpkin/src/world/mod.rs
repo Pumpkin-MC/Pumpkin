@@ -70,7 +70,6 @@ use pumpkin_data::{
     entity::{EntityStatus, EntityType},
     fluid::Fluid,
     item_stack::ItemStack,
-    packet::CURRENT_MC_VERSION,
     particle::Particle,
     sound::{Sound, SoundCategory},
     sound_id_remap::remap_sound_id_for_version,
@@ -979,7 +978,7 @@ impl World {
             Self::collect_java_recipients_by_version(java_recipients.into_iter());
 
         for (version, recipients) in recipients_by_version {
-            if version < CURRENT_MC_VERSION {
+            if version < JavaMinecraftVersion::V_1_21 {
                 continue;
             }
             let mut buf = Vec::new();
@@ -3558,7 +3557,7 @@ impl World {
                 )
                 .await;
 
-            if client.version.load() >= CURRENT_MC_VERSION {
+            if client.version.load() >= JavaMinecraftVersion::V_1_21 {
                 let config = existing_player.config.load();
                 let mut buf = Vec::new();
                 {
