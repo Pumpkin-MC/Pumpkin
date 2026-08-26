@@ -39,13 +39,23 @@ static ERROR_GENERIC: CommandErrorType<2> = CommandErrorType::new(
 );
 
 #[allow(clippy::assigning_clones)]
-async fn is_riding_recursive(entity: &dyn EntityBase, possible_vehicle: &dyn EntityBase) -> bool {
-    let mut current = possible_vehicle.get_entity().vehicle.lock().await.clone();
+fn is_riding_recursive(entity: &dyn EntityBase, possible_vehicle: &dyn EntityBase) -> bool {
+    let mut current = possible_vehicle
+        .get_entity()
+        .vehicle
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .clone();
     while let Some(vehicle) = current {
         if vehicle.get_entity().entity_id == entity.get_entity().entity_id {
             return true;
         }
-        current = vehicle.get_entity().vehicle.lock().await.clone();
+        current = vehicle
+            .get_entity()
+            .vehicle
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone();
     }
     false
 }
@@ -53,128 +63,126 @@ async fn is_riding_recursive(entity: &dyn EntityBase, possible_vehicle: &dyn Ent
 struct RideMountExecutor;
 
 impl CommandExecutor for RideMountExecutor {
-    fn execute<'a>(&'a self, context: &'a CommandContext) -> CommandExecutorResult<'a> {
-        Box::pin(async move {
-            let targets = EntityArgumentType::get_entities(context, "target").await?;
-            let vehicle = EntityArgumentType::get_entity(context, "vehicle").await?;
+    fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
+        let targets = EntityArgumentType::get_entities(context, "target")?;
+        let vehicle = EntityArgumentType::get_entity(context, "vehicle")?;
 
-            if vehicle.get_player().is_some() {
-                return Err(ERROR_CANT_RIDE_PLAYERS.create_without_context());
+        if vehicle.get_player().is_some() {
+            return Err(ERROR_CANT_RIDE_PLAYERS.create_without_context());
+        }
+
+        let vehicle_world = vehicle.get_entity().world.load();
+
+        let mut success_count = 0;
+        let mut last_error = None;
+
+        for target in &targets {
+            let target_world = target.get_entity().world.load();
+            if target_world.dimension.minecraft_name != vehicle_world.dimension.minecraft_name {
+                last_error = Some(ERROR_WRONG_DIMENSION.create_without_context());
+                continue;
             }
 
-            let vehicle_world = vehicle.get_entity().world.load();
+            if target.get_entity().entity_id == vehicle.get_entity().entity_id {
+                last_error = Some(ERROR_LOOP.create_without_context());
+                continue;
+            }
 
-            let mut success_count = 0;
-            let mut last_error = None;
+            if is_riding_recursive(target.as_ref(), vehicle.as_ref()) {
+                last_error = Some(ERROR_LOOP.create_without_context());
+                continue;
+            }
 
-            for target in &targets {
-                let target_world = target.get_entity().world.load();
-                if target_world.dimension.minecraft_name != vehicle_world.dimension.minecraft_name {
-                    last_error = Some(ERROR_WRONG_DIMENSION.create_without_context());
+            let current_vehicle = target
+                .get_entity()
+                .vehicle
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .clone();
+            if let Some(ref curr_veh) = current_vehicle {
+                if curr_veh.get_entity().entity_id == vehicle.get_entity().entity_id {
+                    last_error = Some(ERROR_ALREADY_RIDING.create_without_context(
+                        target.get_display_name(),
+                        vehicle.get_display_name(),
+                    ));
                     continue;
                 }
-
-                if target.get_entity().entity_id == vehicle.get_entity().entity_id {
-                    last_error = Some(ERROR_LOOP.create_without_context());
-                    continue;
-                }
-
-                if is_riding_recursive(target.as_ref(), vehicle.as_ref()).await {
-                    last_error = Some(ERROR_LOOP.create_without_context());
-                    continue;
-                }
-
-                let current_vehicle = target.get_entity().vehicle.lock().await.clone();
-                if let Some(ref curr_veh) = current_vehicle {
-                    if curr_veh.get_entity().entity_id == vehicle.get_entity().entity_id {
-                        last_error = Some(ERROR_ALREADY_RIDING.create_without_context(
-                            target.get_display_name().await,
-                            vehicle.get_display_name().await,
-                        ));
-                        continue;
-                    }
-                    // Dismount first
+                // Dismount first
+                futures::executor::block_on(
                     curr_veh
                         .get_entity()
-                        .remove_passenger(target.get_entity().entity_id)
-                        .await;
-                }
-
-                vehicle
-                    .get_entity()
-                    .add_passenger(vehicle.clone(), target.clone())
-                    .await;
-                success_count += 1;
-
-                let msg = TextComponent::translate_cross(
-                    translation::java::COMMANDS_RIDE_MOUNT_SUCCESS,
-                    translation::java::COMMANDS_RIDE_MOUNT_SUCCESS,
-                    [
-                        target.get_display_name().await,
-                        vehicle.get_display_name().await,
-                    ],
+                        .remove_passenger(target.get_entity().entity_id),
                 );
-                context.source.send_feedback(msg, true).await;
             }
 
-            if success_count == 0 {
-                if let Some(err) = last_error {
-                    return Err(err);
-                }
-                return Err(ERROR_GENERIC.create_without_context(
-                    targets[0].get_display_name().await,
-                    vehicle.get_display_name().await,
-                ));
-            }
+            vehicle
+                .get_entity()
+                .add_passenger(vehicle.clone(), target.clone());
+            success_count += 1;
 
-            Ok(success_count)
-        })
+            let msg = TextComponent::translate_cross(
+                translation::java::COMMANDS_RIDE_MOUNT_SUCCESS,
+                translation::java::COMMANDS_RIDE_MOUNT_SUCCESS,
+                [target.get_display_name(), vehicle.get_display_name()],
+            );
+            context.source.send_feedback(msg, true);
+        }
+
+        if success_count == 0 {
+            if let Some(err) = last_error {
+                return Err(err);
+            }
+            return Err(ERROR_GENERIC.create_without_context(
+                targets[0].get_display_name(),
+                vehicle.get_display_name(),
+            ));
+        }
+
+        Ok(success_count)
     }
 }
 
 struct RideDismountExecutor;
 
 impl CommandExecutor for RideDismountExecutor {
-    fn execute<'a>(&'a self, context: &'a CommandContext) -> CommandExecutorResult<'a> {
-        Box::pin(async move {
-            let targets = EntityArgumentType::get_entities(context, "target").await?;
+    fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
+        let targets = EntityArgumentType::get_entities(context, "target")?;
 
-            let mut success_count = 0;
-            let mut last_error = None;
+        let mut success_count = 0;
+        let mut last_error = None;
 
-            for target in &targets {
-                let current_vehicle = target.get_entity().vehicle.lock().await.clone();
-                if let Some(vehicle) = current_vehicle {
-                    vehicle
-                        .get_entity()
-                        .remove_passenger(target.get_entity().entity_id)
-                        .await;
-                    success_count += 1;
+        for target in &targets {
+            let current_vehicle = target
+                .get_entity()
+                .vehicle
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .clone();
+            if let Some(vehicle) = current_vehicle {
+                let target_id = target.get_entity().entity_id;
+                futures::executor::block_on(vehicle.get_entity().remove_passenger(target_id));
+                success_count += 1;
 
-                    let msg = TextComponent::translate_cross(
-                        translation::java::COMMANDS_RIDE_DISMOUNT_SUCCESS,
-                        translation::java::COMMANDS_RIDE_DISMOUNT_SUCCESS,
-                        [target.get_display_name().await],
-                    );
-                    context.source.send_feedback(msg, true).await;
-                } else {
-                    last_error = Some(
-                        ERROR_NOT_RIDING.create_without_context(target.get_display_name().await),
-                    );
-                }
-            }
-
-            if success_count == 0 {
-                if let Some(err) = last_error {
-                    return Err(err);
-                }
-                return Err(
-                    ERROR_NOT_RIDING.create_without_context(targets[0].get_display_name().await)
+                let msg = TextComponent::translate_cross(
+                    translation::java::COMMANDS_RIDE_DISMOUNT_SUCCESS,
+                    translation::java::COMMANDS_RIDE_DISMOUNT_SUCCESS,
+                    [target.get_display_name()],
                 );
+                context.source.send_feedback(msg, true);
+            } else {
+                last_error =
+                    Some(ERROR_NOT_RIDING.create_without_context(target.get_display_name()));
             }
+        }
 
-            Ok(success_count)
-        })
+        if success_count == 0 {
+            if let Some(err) = last_error {
+                return Err(err);
+            }
+            return Err(ERROR_NOT_RIDING.create_without_context(targets[0].get_display_name()));
+        }
+
+        Ok(success_count)
     }
 }
 

@@ -111,6 +111,14 @@ impl WorldGenerator {
             Self::Custom(custom_gen) => custom_gen.global_structure_cache(),
         }
     }
+
+    #[must_use]
+    pub fn find_spawn_position(&self) -> pumpkin_util::math::position::BlockPos {
+        match self {
+            Self::Noise(noise_gen) => noise_gen.find_spawn_position(),
+            _ => pumpkin_util::math::position::BlockPos::ZERO,
+        }
+    }
 }
 
 pub struct VanillaGenerator {
@@ -127,6 +135,25 @@ pub struct VanillaGenerator {
     pub global_structure_cache: crate::generation::structure::placement::GlobalStructureCache,
     pub structure_calculator: StructurePlacementCalculator,
     pub structure_allowed_biomes: FxHashMap<usize, Vec<u16>>,
+}
+
+impl VanillaGenerator {
+    #[must_use]
+    pub fn find_spawn_position(&self) -> pumpkin_util::math::position::BlockPos {
+        if self.settings.spawn_target.is_empty() {
+            return pumpkin_util::math::position::BlockPos::ZERO;
+        }
+        let options = crate::generation::noise::router::multi_noise_sampler::MultiNoiseSamplerBuilderOptions::new(1, 1, 1);
+        let mut sampler =
+            crate::generation::noise::router::multi_noise_sampler::MultiNoiseSampler::generate(
+                &self.base_router.multi_noise,
+                &options,
+            );
+        crate::biome::position_finder::SpawnFinder::find_spawn_position(
+            self.settings.spawn_target,
+            &mut sampler,
+        )
+    }
 }
 
 impl GeneratorInit for VanillaGenerator {

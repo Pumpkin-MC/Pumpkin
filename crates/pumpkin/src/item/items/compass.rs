@@ -1,6 +1,4 @@
 use std::any::Any;
-use std::future::Future;
-use std::pin::Pin;
 
 use crate::entity::player::Player;
 use crate::item::{ItemBehaviour, ItemMetadata};
@@ -23,46 +21,46 @@ impl ItemMetadata for CompassItem {
 }
 
 impl ItemBehaviour for CompassItem {
-    fn use_on_block<'a>(
-        &'a self,
-        item: &'a mut ItemStack,
-        player: &'a Player,
+    fn use_on_block(
+        &self,
+        item: &mut ItemStack,
+        player: &Player,
         location: BlockPos,
         _face: BlockDirection,
         _cursor_pos: Vector3<f32>,
-        block: &'a Block,
-        _server: &'a Server,
-    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
-        Box::pin(async move {
-            if block.id == Block::LODESTONE.id && item.item.id == Item::COMPASS.id {
-                let world = player.world();
-                world.play_sound(
-                    Sound::ItemLodestoneCompassLock,
-                    SoundCategory::Players,
-                    &location.to_f64(),
-                );
+        block: &Block,
+        _server: &Server,
+    ) {
+        if block.id == Block::LODESTONE.id && item.item.id == Item::COMPASS.id {
+            let world = player.world();
+            world.play_sound(
+                Sound::ItemLodestoneCompassLock,
+                SoundCategory::Players,
+                &location.to_f64(),
+            );
 
-                let mut lodestone_compass = ItemStack::new(1, &Item::COMPASS);
-                let tracker = LodestoneTrackerImpl {
-                    target: Some(LodestoneTarget {
-                        dimension: world.dimension.minecraft_name.to_string(),
-                        x: location.0.x,
-                        y: location.0.y,
-                        z: location.0.z,
-                    }),
-                    tracked: true,
-                };
-                lodestone_compass
-                    .patch
-                    .push((DataComponent::LodestoneTracker, Some(tracker.to_dyn())));
+            let mut lodestone_compass = ItemStack::new(1, &Item::COMPASS);
+            let tracker = LodestoneTrackerImpl {
+                target: Some(LodestoneTarget {
+                    dimension: world.dimension.minecraft_name.to_string(),
+                    x: location.0.x,
+                    y: location.0.y,
+                    z: location.0.z,
+                }),
+                tracked: true,
+            };
+            lodestone_compass
+                .patch
+                .push((DataComponent::LodestoneTracker, Some(tracker.to_dyn())));
 
-                item.decrement_unless_creative(player.gamemode.load(), 1);
-                player
-                    .inventory
-                    .offer_or_drop_stack(lodestone_compass, player)
-                    .await;
+            item.decrement_unless_creative(player.gamemode.load(), 1);
+            let was_added = player
+                .inventory
+                .insert_stack_anywhere(&mut lodestone_compass);
+            if !was_added && !lodestone_compass.is_empty() {
+                world.drop_stack(&player.position().to_block_pos(), lodestone_compass);
             }
-        })
+        }
     }
 
     fn as_any(&self) -> &dyn Any {

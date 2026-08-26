@@ -22,6 +22,27 @@ pub struct SSetCommandBlock<'a> {
     pub flags: i8,
 }
 
+impl SSetCommandBlock<'_> {
+    pub const FLAG_TRACK_OUTPUT: i8 = 0x01;
+    pub const FLAG_CONDITIONAL: i8 = 0x02;
+    pub const FLAG_AUTOMATIC: i8 = 0x04;
+
+    #[must_use]
+    pub const fn track_output(&self) -> bool {
+        (self.flags & Self::FLAG_TRACK_OUTPUT) != 0
+    }
+
+    #[must_use]
+    pub const fn is_conditional(&self) -> bool {
+        (self.flags & Self::FLAG_CONDITIONAL) != 0
+    }
+
+    #[must_use]
+    pub const fn is_automatic(&self) -> bool {
+        (self.flags & Self::FLAG_AUTOMATIC) != 0
+    }
+}
+
 impl<'a> ServerPacket<'a> for SSetCommandBlock<'a> {
     fn read(bytebuf: &mut &'a [u8], version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
         Ok(Self {

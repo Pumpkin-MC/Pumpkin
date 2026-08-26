@@ -1,4 +1,4 @@
-use super::{Entity, EntityBase, NBTStorage, living::LivingEntity};
+use super::{Entity, EntityBase, living::LivingEntity};
 use crate::server::Server;
 use pumpkin_data::BlockDirection;
 use pumpkin_data::entity::EntityType;
@@ -18,12 +18,14 @@ pub mod fireball;
 pub mod firework_rocket;
 pub mod fishing_bobber;
 pub mod lingering_potion;
+pub mod llama_spit;
 pub mod shulker_bullet;
 pub mod small_fireball;
 pub mod snowball;
 pub mod splash_potion;
 pub mod trident;
 pub mod wind_charge;
+pub mod wither_skull;
 
 #[must_use]
 pub fn is_projectile(entity_type: &EntityType) -> bool {
@@ -40,6 +42,8 @@ pub fn is_projectile(entity_type: &EntityType) -> bool {
         || *entity_type == EntityType::FIREBALL
         || *entity_type == EntityType::SMALL_FIREBALL
         || *entity_type == EntityType::FISHING_BOBBER
+        || *entity_type == EntityType::WITHER_SKULL
+        || *entity_type == EntityType::LLAMA_SPIT
 }
 
 pub struct ThrownItemEntity {
@@ -112,11 +116,9 @@ impl ThrownItemEntity {
     }
 }
 
-impl NBTStorage for ThrownItemEntity {}
-
 impl ThrownItemEntity {
     /// Process a tick for projectile movement and collisions
-    pub async fn process_tick<'a>(&'a self, caller: &'a Arc<dyn EntityBase>, _server: &'a Server) {
+    pub fn process_tick<'a>(&'a self, caller: &'a Arc<dyn EntityBase>, _server: &'a Server) {
         let entity = self.get_entity();
         let world = entity.world.load();
 
@@ -167,9 +169,7 @@ impl ThrownItemEntity {
         let mut hit = None;
 
         // Block collisions
-        let (block_cols, block_positions) = world
-            .get_block_collisions(search_box, caller.as_ref())
-            .await;
+        let (block_cols, block_positions) = world.get_block_collisions(search_box, caller.as_ref());
         for (idx, bb) in block_cols.iter().enumerate() {
             if let Some(t) = calculate_ray_intersection(&start_pos, &delta, bb)
                 && t < closest_t
@@ -222,8 +222,8 @@ impl ThrownItemEntity {
             }
 
             // Just trigger hit effects and remove
-            caller.on_hit(h).await;
-            entity.remove().await;
+            caller.on_hit(h);
+            entity.remove();
         }
     }
 
@@ -259,11 +259,6 @@ impl ThrownItemEntity {
     #[allow(dead_code, clippy::unused_self)]
     const fn get_living_entity(&self) -> Option<&LivingEntity> {
         None
-    }
-
-    #[allow(dead_code, clippy::unused_self)]
-    const fn as_nbt_storage(&self) -> &dyn NBTStorage {
-        self
     }
     const fn get_gravity(&self) -> f64 {
         self.gravity

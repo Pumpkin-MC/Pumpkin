@@ -38,7 +38,11 @@ impl ClientPacket for CEntityVelocity {
     ) -> Result<(), WritingError> {
         let mut write = write;
 
-        write.write_var_int(&self.entity_id)?;
+        if *version <= JavaMinecraftVersion::V_1_7_6 {
+            write.write_i32_be(self.entity_id.0)?;
+        } else {
+            write.write_var_int(&self.entity_id)?;
+        }
 
         // Protocol 773+ uses packed velocity; 772 and below use three i16 components.
         if version >= &JavaMinecraftVersion::V_1_21_9 {

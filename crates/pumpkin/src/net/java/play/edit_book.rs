@@ -2,8 +2,8 @@
 use super::*;
 
 impl JavaClient {
-    pub async fn handle_edit_book(&self, player: &Player, packet: SEditBook<'_>) {
-        let held_stack = player.inventory().held_item().await;
+    pub fn handle_edit_book(&self, player: &Player, packet: &SEditBook<'_>) {
+        let held_stack = player.inventory().held_item();
         if held_stack.item.id != Item::WRITABLE_BOOK.id {
             return;
         }
@@ -20,7 +20,7 @@ impl JavaClient {
             written_book
                 .patch
                 .push((DataComponent::WrittenBookContent, Some(content.to_dyn())));
-            player.inventory().set_held_item(written_book).await;
+            player.inventory().set_held_item(written_book);
         } else {
             let mut writable_book = held_stack;
             let content = WritableBookContentImpl { pages };
@@ -30,7 +30,7 @@ impl JavaClient {
             writable_book
                 .patch
                 .push((DataComponent::WritableBookContent, Some(content.to_dyn())));
-            player.inventory().set_held_item(writable_book).await;
+            player.inventory().set_held_item(writable_book);
         }
     }
 }

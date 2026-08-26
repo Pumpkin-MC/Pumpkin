@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
 use crate::block::BlockBehaviour;
-use crate::block::BlockFuture;
 use crate::block::CanPlaceAtArgs;
 use crate::block::GetStateForNeighborUpdateArgs;
 use crate::block::OnPlaceArgs;
@@ -28,123 +27,72 @@ type FarmlandProperties = FarmlandLikeProperties;
 pub struct FarmlandBlock;
 
 impl BlockBehaviour for FarmlandBlock {
-    fn on_scheduled_tick<'a>(&'a self, args: OnScheduledTickArgs<'a>) -> BlockFuture<'a, ()> {
-        Box::pin(async move {
-            // TODO: push up entities
+    fn on_scheduled_tick(&self, args: OnScheduledTickArgs<'_>) {
+        // TODO: push up entities
+        args.world.set_block_state(
+            args.position,
+            Block::DIRT.default_state.id,
+            BlockFlags::NOTIFY_ALL,
+        );
+    }
+
+    fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
+        if !can_place_at(args.world, args.position) {
+            return Block::DIRT.default_state.id;
+        }
+        args.block.default_state.id
+    }
+
+    fn get_state_for_neighbor_update(
+        &self,
+        args: GetStateForNeighborUpdateArgs<'_>,
+    ) -> BlockStateId {
+        if args.direction == BlockDirection::Up && !can_place_at(args.world, args.position) {
             args.world
-                .set_block_state(
-                    args.position,
-                    Block::DIRT.default_state.id,
-                    BlockFlags::NOTIFY_ALL,
-                )
-                .await;
-        })
-    }
-
-    fn on_place<'a>(&'a self, args: OnPlaceArgs<'a>) -> BlockFuture<'a, BlockStateId> {
-        Box::pin(async move {
-            if !can_place_at(args.world, args.position) {
-                return Block::DIRT.default_state.id;
-            }
-            args.block.default_state.id
-        })
-    }
-
-    fn get_state_for_neighbor_update<'a>(
-        &'a self,
-        args: GetStateForNeighborUpdateArgs<'a>,
-    ) -> BlockFuture<'a, BlockStateId> {
-        Box::pin(async move {
-            if args.direction == BlockDirection::Up && !can_place_at(args.world, args.position) {
-                args.world
-                    .schedule_block_tick(args.block, *args.position, 1, TickPriority::Normal);
-            }
-            args.state_id
-        })
+                .schedule_block_tick(args.block, *args.position, 1, TickPriority::Normal);
+        }
+        args.state_id
     }
 
     fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
         can_place_at(args.block_accessor, args.position)
     }
 
-    fn random_tick<'a>(&'a self, args: RandomTickArgs<'a>) -> BlockFuture<'a, ()> {
-        Box::pin(async move {
-            // TODO: add rain check. Remember to check which one is most optimized.
-            if is_water_nearby(args.world, args.position) {
-                let mut props = FarmlandProperties::default(args.block);
-                props.moisture = 7;
-                let mut event = crate::plugin::block::moisture_change::MoistureChangeEvent {
-                    block_pos: *args.position,
-                    world: args.world.clone(),
-                    new_moisture: 7,
-                    cancelled: false,
-                };
-                if let Some(server) = args.world.server.upgrade() {
-                    server.plugin_manager.fire(&server, &mut event).await;
-                }
-                if !event.cancelled {
-                    props.moisture = (event.new_moisture.clamp(0, 7)) as u8;
-                    args.world
-                        .set_block_state(
-                            args.position,
-                            props.to_state_id(args.block),
-                            BlockFlags::NOTIFY_NEIGHBORS,
-                        )
-                        .await;
+    fn random_tick(&self, args: RandomTickArgs<'_>) {
+        // TODO: add rain check. Remember to check which one is most optimized.
+        if is_water_nearby(args.world, args.position) {
+            let mut props = FarmlandProperties::default(args.block);
+            props.moisture = 7;
+            args.world.set_block_state(
+                args.position,
+                props.to_state_id(args.block),
+                BlockFlags::NOTIFY_NEIGHBORS,
+            );
+        } else {
+            let state_id = args.world.get_block_state_id(args.position);
+            let mut props = FarmlandProperties::from_state_id(state_id, args.block);
+            if props.moisture == 0 {
+                if !args
+                    .world
+                    .get_block(&args.position.up())
+                    .has_tag(&tag::Block::MINECRAFT_MAINTAINS_FARMLAND)
+                {
+                    //TODO push entities up
+                    args.world.set_block_state(
+                        args.position,
+                        Block::DIRT.default_state.id,
+                        BlockFlags::NOTIFY_NEIGHBORS,
+                    );
                 }
             } else {
-                let state_id = args.world.get_block_state_id(args.position);
-                let mut props = FarmlandProperties::from_state_id(state_id, args.block);
-                if props.moisture == 0 {
-                    if !args
-                        .world
-                        .get_block(&args.position.up())
-                        .has_tag(&tag::Block::MINECRAFT_MAINTAINS_FARMLAND)
-                    {
-                        let mut event =
-                            crate::plugin::api::events::block::block_fade::BlockFadeEvent::new(
-                                *args.position,
-                                &Block::DIRT,
-                            );
-                        if let Some(server) = args.world.server.upgrade() {
-                            server.plugin_manager.fire(&server, &mut event).await;
-                        }
-                        if event.cancelled {
-                            return;
-                        }
-
-                        //TODO push entities up
-                        args.world
-                            .set_block_state(
-                                args.position,
-                                Block::DIRT.default_state.id,
-                                BlockFlags::NOTIFY_NEIGHBORS,
-                            )
-                            .await;
-                    }
-                } else {
-                    let mut event = crate::plugin::block::moisture_change::MoistureChangeEvent {
-                        block_pos: *args.position,
-                        world: args.world.clone(),
-                        new_moisture: (props.moisture as i32) - 1,
-                        cancelled: false,
-                    };
-                    if let Some(server) = args.world.server.upgrade() {
-                        server.plugin_manager.fire(&server, &mut event).await;
-                    }
-                    if !event.cancelled {
-                        props.moisture = (event.new_moisture.clamp(0, 7)) as u8;
-                        args.world
-                            .set_block_state(
-                                args.position,
-                                props.to_state_id(args.block),
-                                BlockFlags::NOTIFY_NEIGHBORS,
-                            )
-                            .await;
-                    }
-                }
+                props.moisture = (props.moisture as i32 - 1).clamp(0, 7) as u8;
+                args.world.set_block_state(
+                    args.position,
+                    props.to_state_id(args.block),
+                    BlockFlags::NOTIFY_NEIGHBORS,
+                );
             }
-        })
+        }
     }
 }
 

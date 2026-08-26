@@ -2,9 +2,8 @@ use crate::plugin::loader::wasm::wasm_host::WasmPlugin;
 use crate::server::Server;
 use std::cmp::Ordering;
 use std::collections::{BinaryHeap, HashSet};
-use std::sync::Arc;
 use std::sync::atomic::Ordering as AtomicOrdering;
-use tokio::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 pub type TaskId = u32;
 
@@ -59,7 +58,7 @@ impl TaskScheduler {
         }
     }
 
-    pub async fn schedule_delayed_task(
+    pub fn schedule_delayed_task(
         &self,
         plugin: Arc<WasmPlugin>,
         handler_id: u32,
@@ -74,11 +73,14 @@ impl TaskScheduler {
             next_tick: current_tick + delay,
             period: None,
         };
-        self.tasks.lock().await.push(task);
+        self.tasks
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .push(task);
         id
     }
 
-    pub async fn schedule_repeating_task(
+    pub fn schedule_repeating_task(
         &self,
         plugin: Arc<WasmPlugin>,
         handler_id: u32,
@@ -94,17 +96,29 @@ impl TaskScheduler {
             next_tick: current_tick + delay,
             period: Some(period),
         };
-        self.tasks.lock().await.push(task);
+        self.tasks
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .push(task);
         id
     }
 
-    pub async fn cancel_task(&self, id: TaskId) {
-        self.cancelled_tasks.lock().await.insert(id);
+    pub fn cancel_task(&self, id: TaskId) {
+        self.cancelled_tasks
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .insert(id);
     }
 
-    pub async fn cancel_all_tasks(&self, plugin: &Arc<WasmPlugin>) {
-        let tasks = self.tasks.lock().await;
-        let mut cancelled = self.cancelled_tasks.lock().await;
+    pub fn cancel_all_tasks(&self, plugin: &Arc<WasmPlugin>) {
+        let tasks = self
+            .tasks
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut cancelled = self
+            .cancelled_tasks
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         for task in tasks.iter() {
             if Arc::ptr_eq(&task.plugin, plugin) {
                 cancelled.insert(task.id);
@@ -112,13 +126,19 @@ impl TaskScheduler {
         }
     }
 
-    pub async fn tick(&self, server: &Arc<Server>) {
+    pub fn tick(&self, server: &Arc<Server>) {
         let current_tick = server.tick_count.load(AtomicOrdering::Relaxed) as u64;
         let mut tasks_to_run = Vec::new();
 
         {
-            let mut tasks = self.tasks.lock().await;
-            let mut cancelled = self.cancelled_tasks.lock().await;
+            let mut tasks = self
+                .tasks
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let mut cancelled = self
+                .cancelled_tasks
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
 
             while let Some(task) = tasks.peek() {
                 if task.next_tick > current_tick {
@@ -165,7 +185,10 @@ impl TaskScheduler {
             // If repeating, schedule next run
             if let Some(period) = task.period {
                 task.next_tick = current_tick + period;
-                self.tasks.lock().await.push(task);
+                self.tasks
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .push(task);
             }
         }
     }

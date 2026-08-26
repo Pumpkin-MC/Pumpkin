@@ -19,50 +19,56 @@ const ARG_TARGET: &str = "ip";
 struct Executor;
 
 impl CommandExecutor for Executor {
-    fn execute<'a>(
-        &'a self,
-        sender: &'a CommandSender,
-        server: &'a crate::server::Server,
-        args: &'a ConsumedArgs<'a>,
-    ) -> CommandResult<'a> {
-        Box::pin(async move {
-            let Some(Arg::Simple(target)) = args.get(&ARG_TARGET) else {
-                return Err(InvalidConsumption(Some(ARG_TARGET.into())));
-            };
+    fn execute(
+        &self,
+        sender: &CommandSender,
+        server: &crate::server::Server,
+        args: &ConsumedArgs,
+    ) -> CommandResult {
+        let Some(Arg::Simple(target)) = args.get(&ARG_TARGET) else {
+            return Err(InvalidConsumption(Some(ARG_TARGET.into())));
+        };
 
-            let Ok(ip) = IpAddr::from_str(target) else {
-                return Err(CommandError::CommandFailed(TextComponent::translate_cross(
-                    pumpkin_data::translation::java::COMMANDS_PARDONIP_INVALID,
-                    pumpkin_data::translation::bedrock::COMMANDS_UNBANIP_INVALID,
-                    [],
-                )));
-            };
+        let Ok(ip) = IpAddr::from_str(target) else {
+            return Err(CommandError::CommandFailed(TextComponent::translate_cross(
+                pumpkin_data::translation::java::COMMANDS_PARDONIP_INVALID,
+                pumpkin_data::translation::bedrock::COMMANDS_UNBANIP_INVALID,
+                [],
+            )));
+        };
 
-            let mut lock = server.data.banned_ip_list.write().await;
+        let mut lock = server
+            .data
+            .banned_ip_list
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
 
-            let result = if let Some(idx) = lock.banned_ips.iter().position(|entry| entry.ip == ip)
-            {
-                lock.banned_ips.remove(idx);
-                sender
-                    .send_message(TextComponent::translate_cross(
+        let result = lock
+            .banned_ips
+            .iter()
+            .position(|entry| entry.ip == ip)
+            .map_or_else(
+                || {
+                    Err(CommandError::CommandFailed(TextComponent::translate_cross(
+                        pumpkin_data::translation::java::COMMANDS_PARDONIP_FAILED,
+                        pumpkin_data::translation::java::COMMANDS_PARDONIP_FAILED,
+                        [],
+                    )))
+                },
+                |idx| {
+                    lock.banned_ips.remove(idx);
+                    sender.send_message(TextComponent::translate_cross(
                         pumpkin_data::translation::java::COMMANDS_PARDONIP_SUCCESS,
                         pumpkin_data::translation::bedrock::COMMANDS_UNBANIP_SUCCESS,
                         [TextComponent::text(ip.to_string())],
-                    ))
-                    .await;
-                Ok(1)
-            } else {
-                Err(CommandError::CommandFailed(TextComponent::translate_cross(
-                    pumpkin_data::translation::java::COMMANDS_PARDONIP_FAILED,
-                    pumpkin_data::translation::java::COMMANDS_PARDONIP_FAILED,
-                    [],
-                )))
-            };
+                    ));
+                    Ok(1)
+                },
+            );
 
-            lock.save();
+        lock.save();
 
-            result
-        })
+        result
     }
 }
 

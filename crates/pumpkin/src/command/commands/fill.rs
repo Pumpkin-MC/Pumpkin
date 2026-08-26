@@ -88,14 +88,14 @@ impl Context {
 }
 
 trait Filler {
-    async fn execute_for_pos(context: &Context, block_position: BlockPos) -> FillerResult;
+    fn execute_for_pos(context: &Context, block_position: BlockPos) -> FillerResult;
 
-    async fn execute_for_region(context: &mut Context) {
+    fn execute_for_region(context: &mut Context) {
         for x in context.start_x..=context.end_x {
             for y in context.start_y..=context.end_y {
                 for z in context.start_z..=context.end_z {
                     let block_position = BlockPos(Vector3::new(x, y, z));
-                    let filler_result = Self::execute_for_pos(context, block_position).await;
+                    let filler_result = Self::execute_for_pos(context, block_position);
                     match filler_result {
                         FillerResult::PlacedBlock => {
                             context.placed_blocks += 1;
@@ -114,54 +114,46 @@ trait Filler {
 
 struct DestroyFiller;
 impl Filler for DestroyFiller {
-    async fn execute_for_pos(context: &Context, block_position: BlockPos) -> FillerResult {
+    fn execute_for_pos(context: &Context, block_position: BlockPos) -> FillerResult {
         if let Some(filter) = &context.option_filter
             && not_in_filter(filter, context.world.get_block(&block_position))
         {
             return FillerResult::DidNotPlaceBlock;
         }
-        context
-            .world
-            .break_block(
-                &block_position,
-                None,
-                BlockFlags::SKIP_DROPS | BlockFlags::FORCE_STATE,
-            )
-            .await;
-        context
-            .world
-            .set_block_state(
-                &block_position,
-                context.block_state_id,
-                BlockFlags::FORCE_STATE,
-            )
-            .await;
+        context.world.break_block(
+            &block_position,
+            None,
+            BlockFlags::SKIP_DROPS | BlockFlags::FORCE_STATE,
+        );
+        context.world.set_block_state(
+            &block_position,
+            context.block_state_id,
+            BlockFlags::FORCE_STATE,
+        );
         FillerResult::PlacedBlock
     }
 }
 
 struct HollowFiller;
 impl Filler for HollowFiller {
-    async fn execute_for_pos(context: &Context, block_position: BlockPos) -> FillerResult {
+    fn execute_for_pos(context: &Context, block_position: BlockPos) -> FillerResult {
         if let Some(filter) = &context.option_filter
             && not_in_filter(filter, context.world.get_block(&block_position))
         {
             return FillerResult::DidNotPlaceBlock;
         }
         if context.is_edge(block_position) {
-            context
-                .world
-                .set_block_state(
-                    &block_position,
-                    context.block_state_id,
-                    BlockFlags::FORCE_STATE,
-                )
-                .await;
+            context.world.set_block_state(
+                &block_position,
+                context.block_state_id,
+                BlockFlags::FORCE_STATE,
+            );
         } else {
-            context
-                .world
-                .set_block_state(&block_position, BlockStateId::AIR, BlockFlags::FORCE_STATE)
-                .await;
+            context.world.set_block_state(
+                &block_position,
+                BlockStateId::AIR,
+                BlockFlags::FORCE_STATE,
+            );
         }
         FillerResult::PlacedBlock
     }
@@ -169,7 +161,7 @@ impl Filler for HollowFiller {
 
 struct KeepFiller;
 impl Filler for KeepFiller {
-    async fn execute_for_pos(context: &Context, block_position: BlockPos) -> FillerResult {
+    fn execute_for_pos(context: &Context, block_position: BlockPos) -> FillerResult {
         let (old_block, old_state) = context.world.get_block_and_state(&block_position);
         if old_state.is_air() {
             if let Some(filter) = &context.option_filter
@@ -177,14 +169,11 @@ impl Filler for KeepFiller {
             {
                 return FillerResult::DidNotPlaceBlock;
             }
-            context
-                .world
-                .set_block_state(
-                    &block_position,
-                    context.block_state_id,
-                    BlockFlags::FORCE_STATE,
-                )
-                .await;
+            context.world.set_block_state(
+                &block_position,
+                context.block_state_id,
+                BlockFlags::FORCE_STATE,
+            );
             FillerResult::PlacedBlock
         } else {
             FillerResult::DidNotPlaceBlock
@@ -194,7 +183,7 @@ impl Filler for KeepFiller {
 
 struct OutlineFiller;
 impl Filler for OutlineFiller {
-    async fn execute_for_pos(context: &Context, block_position: BlockPos) -> FillerResult {
+    fn execute_for_pos(context: &Context, block_position: BlockPos) -> FillerResult {
         if !context.is_edge(block_position) {
             return FillerResult::DidNotPlaceBlock;
         }
@@ -203,149 +192,136 @@ impl Filler for OutlineFiller {
         {
             return FillerResult::DidNotPlaceBlock;
         }
-        context
-            .world
-            .set_block_state(
-                &block_position,
-                context.block_state_id,
-                BlockFlags::FORCE_STATE,
-            )
-            .await;
+        context.world.set_block_state(
+            &block_position,
+            context.block_state_id,
+            BlockFlags::FORCE_STATE,
+        );
         FillerResult::PlacedBlock
     }
 }
 
 struct ReplaceFiller;
 impl Filler for ReplaceFiller {
-    async fn execute_for_pos(context: &Context, block_position: BlockPos) -> FillerResult {
+    fn execute_for_pos(context: &Context, block_position: BlockPos) -> FillerResult {
         if let Some(filter) = &context.option_filter
             && not_in_filter(filter, context.world.get_block(&block_position))
         {
             return FillerResult::DidNotPlaceBlock;
         }
-        context
-            .world
-            .set_block_state(
-                &block_position,
-                context.block_state_id,
-                BlockFlags::FORCE_STATE,
-            )
-            .await;
+        context.world.set_block_state(
+            &block_position,
+            context.block_state_id,
+            BlockFlags::FORCE_STATE,
+        );
         FillerResult::PlacedBlock
     }
 }
 
 struct StrictFiller;
 impl Filler for StrictFiller {
-    async fn execute_for_pos(context: &Context, block_position: BlockPos) -> FillerResult {
+    fn execute_for_pos(context: &Context, block_position: BlockPos) -> FillerResult {
         if let Some(filter) = &context.option_filter
             && not_in_filter(filter, context.world.get_block(&block_position))
         {
             return FillerResult::DidNotPlaceBlock;
         }
-        context
-            .world
-            .set_block_state(
-                &block_position,
-                context.block_state_id,
-                BlockFlags::SKIP_BLOCK_ADDED_CALLBACK,
-            )
-            .await;
+        context.world.set_block_state(
+            &block_position,
+            context.block_state_id,
+            BlockFlags::SKIP_BLOCK_ADDED_CALLBACK,
+        );
         FillerResult::PlacedBlockWithoutUpdate
     }
 }
 
 impl CommandExecutor for Executor {
-    fn execute<'a>(
-        &'a self,
-        sender: &'a CommandSender,
-        server: &'a crate::server::Server,
-        args: &'a ConsumedArgs<'a>,
-    ) -> CommandResult<'a> {
-        Box::pin(async move {
-            let block = BlockArgumentConsumer::find_arg(args, ARG_BLOCK)?;
-            let block_state_id = block.default_state.id;
-            let from = BlockPosArgumentConsumer::find_arg(args, ARG_FROM)?;
-            let to = BlockPosArgumentConsumer::find_arg(args, ARG_TO)?;
-            let mode = self.0;
+    fn execute(
+        &self,
+        sender: &CommandSender,
+        server: &crate::server::Server,
+        args: &ConsumedArgs,
+    ) -> CommandResult {
+        let block = BlockArgumentConsumer::find_arg(args, ARG_BLOCK)?;
+        let block_state_id = block.default_state.id;
+        let from = BlockPosArgumentConsumer::find_arg(args, ARG_FROM)?;
+        let to = BlockPosArgumentConsumer::find_arg(args, ARG_TO)?;
+        let mode = self.0;
 
-            let mut context = Context {
-                block_state_id,
-                option_filter: BlockPredicateArgumentConsumer::find_arg(args, ARG_FILTER)?,
-                world: sender
-                    .world_or_first(server)
-                    .ok_or(CommandError::InvalidRequirement)?,
-                placed_blocks: 0,
-                to_update: Vec::new(),
+        let mut context = Context {
+            block_state_id,
+            option_filter: BlockPredicateArgumentConsumer::find_arg(args, ARG_FILTER)?,
+            world: sender
+                .world_or_first(server)
+                .ok_or(CommandError::InvalidRequirement)?,
+            placed_blocks: 0,
+            to_update: Vec::new(),
 
-                start_x: from.0.x.min(to.0.x),
-                start_y: from.0.y.min(to.0.y),
-                start_z: from.0.z.min(to.0.z),
+            start_x: from.0.x.min(to.0.x),
+            start_y: from.0.y.min(to.0.y),
+            start_z: from.0.z.min(to.0.z),
 
-                end_x: from.0.x.max(to.0.x),
-                end_y: from.0.y.max(to.0.y),
-                end_z: from.0.z.max(to.0.z),
-            };
+            end_x: from.0.x.max(to.0.x),
+            end_y: from.0.y.max(to.0.y),
+            end_z: from.0.z.max(to.0.z),
+        };
 
-            if !context.world.is_in_build_limit(from) || !context.world.is_in_build_limit(to) {
-                return Err(CommandError::CommandFailed(TextComponent::translate_cross(
-                    translation::java::ARGUMENT_POS_OUTOFBOUNDS,
-                    translation::java::ARGUMENT_POS_OUTOFBOUNDS,
-                    [],
-                )));
-            }
+        if !context.world.is_in_build_limit(from) || !context.world.is_in_build_limit(to) {
+            return Err(CommandError::CommandFailed(TextComponent::translate_cross(
+                translation::java::ARGUMENT_POS_OUTOFBOUNDS,
+                translation::java::ARGUMENT_POS_OUTOFBOUNDS,
+                [],
+            )));
+        }
 
-            let max_block_modifications = {
-                let level_info = server.level_info.load();
-                level_info.game_rules.max_block_modifications
-            };
+        let max_block_modifications = {
+            let level_info = server.level_info.load();
+            level_info.game_rules.max_block_modifications
+        };
 
-            let total_blocks = (context.end_x - context.start_x + 1) as i64
-                * (context.end_y - context.start_y + 1) as i64
-                * (context.end_z - context.start_z + 1) as i64;
+        let total_blocks = (context.end_x - context.start_x + 1) as i64
+            * (context.end_y - context.start_y + 1) as i64
+            * (context.end_z - context.start_z + 1) as i64;
 
-            if total_blocks > max_block_modifications {
-                return Err(CommandError::CommandFailed(TextComponent::translate_cross(
-                    translation::java::COMMANDS_FILL_TOOBIG,
-                    translation::java::COMMANDS_FILL_TOOBIG,
-                    [
-                        TextComponent::text(max_block_modifications.to_string()),
-                        TextComponent::text(total_blocks.to_string()),
-                    ],
-                )));
-            }
+        if total_blocks > max_block_modifications {
+            return Err(CommandError::CommandFailed(TextComponent::translate_cross(
+                translation::java::COMMANDS_FILL_TOOBIG,
+                translation::java::COMMANDS_FILL_TOOBIG,
+                [
+                    TextComponent::text(max_block_modifications.to_string()),
+                    TextComponent::text(total_blocks.to_string()),
+                ],
+            )));
+        }
 
-            match mode {
-                Mode::Destroy => DestroyFiller::execute_for_region(&mut context).await,
-                Mode::Replace => ReplaceFiller::execute_for_region(&mut context).await,
-                Mode::Keep => KeepFiller::execute_for_region(&mut context).await,
-                Mode::Hollow => HollowFiller::execute_for_region(&mut context).await,
-                Mode::Outline => OutlineFiller::execute_for_region(&mut context).await,
-                Mode::Strict => StrictFiller::execute_for_region(&mut context).await,
-            }
+        match mode {
+            Mode::Destroy => DestroyFiller::execute_for_region(&mut context),
+            Mode::Replace => ReplaceFiller::execute_for_region(&mut context),
+            Mode::Keep => KeepFiller::execute_for_region(&mut context),
+            Mode::Hollow => HollowFiller::execute_for_region(&mut context),
+            Mode::Outline => OutlineFiller::execute_for_region(&mut context),
+            Mode::Strict => StrictFiller::execute_for_region(&mut context),
+        }
 
-            for i in context.to_update {
-                context.world.update_neighbors(&i, None).await;
-            }
+        for i in context.to_update {
+            context.world.update_neighbors(&i, None);
+        }
 
-            if context.placed_blocks == 0 {
-                return Err(CommandError::CommandFailed(TextComponent::translate_cross(
-                    translation::java::COMMANDS_FILL_FAILED,
-                    translation::bedrock::COMMANDS_FILL_FAILED,
-                    [],
-                )));
-            }
+        if context.placed_blocks == 0 {
+            return Err(CommandError::CommandFailed(TextComponent::translate_cross(
+                translation::java::COMMANDS_FILL_FAILED,
+                translation::bedrock::COMMANDS_FILL_FAILED,
+                [],
+            )));
+        }
 
-            sender
-                .send_message(TextComponent::translate_cross(
-                    translation::java::COMMANDS_FILL_SUCCESS,
-                    translation::bedrock::COMMANDS_FILL_SUCCESS,
-                    [TextComponent::text(context.placed_blocks.to_string())],
-                ))
-                .await;
+        sender.send_message(TextComponent::translate_cross(
+            translation::java::COMMANDS_FILL_SUCCESS,
+            translation::bedrock::COMMANDS_FILL_SUCCESS,
+            [TextComponent::text(context.placed_blocks.to_string())],
+        ));
 
-            Ok(context.placed_blocks)
-        })
+        Ok(context.placed_blocks)
     }
 }
 

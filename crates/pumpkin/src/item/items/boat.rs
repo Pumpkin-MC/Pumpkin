@@ -1,4 +1,3 @@
-use std::pin::Pin;
 use std::sync::Arc;
 
 use crate::entity::Entity;
@@ -89,106 +88,99 @@ impl ItemMetadata for BoatItem {
 
 impl ItemBehaviour for BoatItem {
     /// Vanilla: `BoatItem.use()` - raycasts to find placement position
-    fn normal_use<'a>(
-        &'a self,
-        item: &'a Item,
-        player: &'a Player,
-    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
-        Box::pin(async move {
-            let world = player.world();
-            let (start_pos, end_pos) = self.get_start_and_end_pos(player);
+    fn normal_use(&self, item: &Item, player: &Player) {
+        let world = player.world();
+        let (start_pos, end_pos) = self.get_start_and_end_pos(player);
 
-            // Vanilla: raycast with FluidHandling.ANY - stops on water/lava surface or solid blocks
-            let checker = async |pos: &BlockPos, world_inner: &Arc<World>| {
-                let state_id = world_inner.get_block_state_id(pos);
+        // Vanilla: raycast with FluidHandling.ANY - stops on water/lava surface or solid blocks
+        let checker = |pos: &BlockPos, world_inner: &Arc<World>| {
+            let state_id = world_inner.get_block_state_id(pos);
 
-                // Air doesn't stop the raycast
-                if state_id == Block::AIR.default_state.id {
-                    return false;
-                }
-
-                // Check if it's a fluid - stop on any fluid (FluidHandling.ANY in vanilla)
-                if Fluid::from_state_id(state_id).is_some() {
-                    return true;
-                }
-
-                // Stop on solid blocks
-                true
-            };
-
-            let Some((hit_pos, _direction)) = world.raycast(start_pos, end_pos, checker).await
-            else {
-                return;
-            };
-
-            // Calculate hit position - center of the block top or water surface
-            // TODO: Vanilla uses exact raycast intersection point (hitResult.getPos()),
-            // Pumpkin's raycast only returns block positions.
-            let hit_vec = Vector3::new(
-                f64::from(hit_pos.0.x) + 0.5,
-                f64::from(hit_pos.0.y) + 1.0,
-                f64::from(hit_pos.0.z) + 0.5,
-            );
-
-            // Vanilla: Check for entities in the path that would block placement
-            // Get player's rotation vector stretched by 5.0 and expanded by 1.0
-            let (yaw, pitch) = player.rotation();
-            let rotation_vec =
-                Vector3::rotation_vector(f64::from(pitch), f64::from(yaw)).multiply(5.0, 5.0, 5.0);
-            let player_entity = player.get_entity().bounding_box.load();
-            let search_box = player_entity.stretch(rotation_vec).expand_all(1.0);
-
-            let entities = world.get_entities_at_box(&search_box);
-            let player_eye_pos = player.eye_position();
-
-            for entity in &entities {
-                // Vanilla: EntityPredicates.CAN_HIT = !isSpectator() && canHit()
-                if entity.is_spectator() || !entity.can_hit() {
-                    continue;
-                }
-
-                // Vanilla: expand by getTargetingMargin() (0.0 for most entities)
-                let entity_box = entity.get_entity().bounding_box.load();
-                // Check if entity's bounding box contains the player's eye position
-                if entity_box.intersects(&BoundingBox::new(player_eye_pos, player_eye_pos)) {
-                    // Entity is blocking the line of sight at eye position
-                    return;
-                }
+            // Air doesn't stop the raycast
+            if state_id == Block::AIR.default_state.id {
+                return false;
             }
 
-            // Create the boat entity
-            let entity_type = Self::item_to_entity(item);
-            let dimensions = Self::get_entity_dimensions(entity_type);
-            let boat_box = BoundingBox::new_from_pos(hit_vec.x, hit_vec.y, hit_vec.z, &dimensions);
-
-            // Vanilla: if (!world.isSpaceEmpty(lv7, lv7.getBoundingBox())) return FAIL
-            if !world.is_space_empty(boat_box) {
-                return;
+            // Check if it's a fluid - stop on any fluid (FluidHandling.ANY in vanilla)
+            if Fluid::from_state_id(state_id).is_some() {
+                return true;
             }
 
-            // Check no entities occupy the space
-            if !world.get_entities_at_box(&boat_box).is_empty() {
-                return;
+            // Stop on solid blocks
+            true
+        };
+
+        let Some((hit_pos, _direction)) = world.raycast(start_pos, end_pos, checker) else {
+            return;
+        };
+
+        // Calculate hit position - center of the block top or water surface
+        // TODO: Vanilla uses exact raycast intersection point (hitResult.getPos()),
+        // Pumpkin's raycast only returns block positions.
+        let hit_vec = Vector3::new(
+            f64::from(hit_pos.0.x) + 0.5,
+            f64::from(hit_pos.0.y) + 1.0,
+            f64::from(hit_pos.0.z) + 0.5,
+        );
+
+        // Vanilla: Check for entities in the path that would block placement
+        // Get player's rotation vector stretched by 5.0 and expanded by 1.0
+        let (yaw, pitch) = player.rotation();
+        let rotation_vec =
+            Vector3::rotation_vector(f64::from(pitch), f64::from(yaw)).multiply(5.0, 5.0, 5.0);
+        let player_entity = player.get_entity().bounding_box.load();
+        let search_box = player_entity.stretch(rotation_vec).expand_all(1.0);
+
+        let entities = world.get_entities_at_box(&search_box);
+        let player_eye_pos = player.eye_position();
+
+        for entity in &entities {
+            // Vanilla: EntityPredicates.CAN_HIT = !isSpectator() && canHit()
+            if entity.is_spectator() || !entity.can_hit() {
+                continue;
             }
 
-            // Create and spawn the boat
-            let entity = Entity::new(world.clone(), hit_vec, entity_type);
+            // Vanilla: expand by getTargetingMargin() (0.0 for most entities)
+            let entity_box = entity.get_entity().bounding_box.load();
+            // Check if entity's bounding box contains the player's eye position
+            if entity_box.intersects(&BoundingBox::new(player_eye_pos, player_eye_pos)) {
+                // Entity is blocking the line of sight at eye position
+                return;
+            }
+        }
 
-            // Set yaw to player's yaw
-            let (player_yaw, _) = player.rotation();
-            entity.set_rotation(player_yaw, 0.0);
+        // Create the boat entity
+        let entity_type = Self::item_to_entity(item);
+        let dimensions = Self::get_entity_dimensions(entity_type);
+        let boat_box = BoundingBox::new_from_pos(hit_vec.x, hit_vec.y, hit_vec.z, &dimensions);
 
-            let boat_entity = Arc::new(BoatEntity::new(entity));
-            world.spawn_entity(boat_entity).await;
+        // Vanilla: if (!world.isSpaceEmpty(lv7, lv7.getBoundingBox())) return FAIL
+        if !world.is_space_empty(boat_box) {
+            return;
+        }
 
-            // Decrement item unless in creative mode
-            let mut stack = player.inventory.held_item().await;
-            stack.decrement_unless_creative(player.gamemode.load(), 1);
-            player.inventory.set_held_item(stack).await;
+        // Check no entities occupy the space
+        if !world.get_entities_at_box(&boat_box).is_empty() {
+            return;
+        }
 
-            // TODO: world.emitGameEvent(user, GameEvent.ENTITY_PLACE, hitResult.getPos())
-            // TODO: user.incrementStat(Stats.USED.getOrCreateStat(this))
-        })
+        // Create and spawn the boat
+        let entity = Entity::new(world.clone(), hit_vec, entity_type);
+
+        // Set yaw to player's yaw
+        let (player_yaw, _) = player.rotation();
+        entity.set_rotation(player_yaw, 0.0);
+
+        let boat_entity = Arc::new(BoatEntity::new(entity));
+        world.spawn_entity(boat_entity);
+
+        // Decrement item unless in creative mode
+        let mut stack = player.inventory.held_item();
+        stack.decrement_unless_creative(player.gamemode.load(), 1);
+        player.inventory.set_held_item(stack);
+
+        // TODO: world.emitGameEvent(user, GameEvent.ENTITY_PLACE, hitResult.getPos())
+        // TODO: user.incrementStat(Stats.USED.getOrCreateStat(this))
     }
 
     fn as_any(&self) -> &dyn std::any::Any {

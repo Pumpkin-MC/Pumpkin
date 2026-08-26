@@ -1,5 +1,3 @@
-use std::pin::Pin;
-
 use pumpkin_data::{
     BlockState, BlockStateId,
     item::JavaToBedrockItemMapping,
@@ -30,12 +28,7 @@ impl BlockEntity for BedBlockEntity {
         Self { position }
     }
 
-    fn write_nbt<'a>(
-        &'a self,
-        _nbt: &'a mut NbtCompound,
-    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
-        Box::pin(async {})
-    }
+    fn write_nbt(&self, _nbt: &mut NbtCompound) {}
 
     fn bedrock_block_actor_data(&self, state_id: BlockStateId) -> Option<NbtCompound> {
         let (block, _) = BlockState::from_id_with_block(state_id);

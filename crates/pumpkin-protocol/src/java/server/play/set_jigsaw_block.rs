@@ -23,15 +23,36 @@ pub struct SSetJigsawBlock<'a> {
 
 impl<'a> ServerPacket<'a> for SSetJigsawBlock<'a> {
     fn read(bytebuf: &mut &'a [u8], version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+        let pos = bytebuf.get_block_pos(version)?;
+        let name = bytebuf.get_str_bounded_borrowed(32767)?;
+        let target = if *version >= JavaMinecraftVersion::V_1_16 {
+            bytebuf.get_str_bounded_borrowed(32767)?
+        } else {
+            ""
+        };
+        let pool = bytebuf.get_str_bounded_borrowed(32767)?;
+        let final_state = bytebuf.get_str_bounded_borrowed(32767)?;
+        let joint = if *version >= JavaMinecraftVersion::V_1_16 {
+            bytebuf.get_str_bounded_borrowed(32767)?
+        } else {
+            "aligned"
+        };
+        let (selection_priority, placement_priority) = if *version >= JavaMinecraftVersion::V_1_20_3
+        {
+            (bytebuf.get_var_int()?, bytebuf.get_var_int()?)
+        } else {
+            (VarInt(0), VarInt(0))
+        };
+
         Ok(Self {
-            pos: bytebuf.get_block_pos(version)?,
-            name: bytebuf.get_str_bounded_borrowed(32767)?,
-            target: bytebuf.get_str_bounded_borrowed(32767)?,
-            pool: bytebuf.get_str_bounded_borrowed(32767)?,
-            final_state: bytebuf.get_str_bounded_borrowed(32767)?,
-            joint: bytebuf.get_str_bounded_borrowed(32767)?,
-            selection_priority: bytebuf.get_var_int()?,
-            placement_priority: bytebuf.get_var_int()?,
+            pos,
+            name,
+            target,
+            pool,
+            final_state,
+            joint,
+            selection_priority,
+            placement_priority,
         })
     }
 }
@@ -45,12 +66,18 @@ impl crate::ClientPacket for SSetJigsawBlock<'_> {
         use crate::ser::NetworkWriteExt;
         write.write_block_pos(&self.pos, version)?;
         write.write_string_bounded(self.name, 32767)?;
-        write.write_string_bounded(self.target, 32767)?;
+        if *version >= JavaMinecraftVersion::V_1_16 {
+            write.write_string_bounded(self.target, 32767)?;
+        }
         write.write_string_bounded(self.pool, 32767)?;
         write.write_string_bounded(self.final_state, 32767)?;
-        write.write_string_bounded(self.joint, 32767)?;
-        write.write_var_int(&self.selection_priority)?;
-        write.write_var_int(&self.placement_priority)?;
+        if *version >= JavaMinecraftVersion::V_1_16 {
+            write.write_string_bounded(self.joint, 32767)?;
+        }
+        if *version >= JavaMinecraftVersion::V_1_20_3 {
+            write.write_var_int(&self.selection_priority)?;
+            write.write_var_int(&self.placement_priority)?;
+        }
         Ok(())
     }
 }

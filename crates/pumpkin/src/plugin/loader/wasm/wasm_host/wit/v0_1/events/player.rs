@@ -1,7 +1,6 @@
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
-use crate::plugin::api::events::player::custom_click_action::CustomClickActionEvent;
 use crate::plugin::{
     loader::wasm::wasm_host::{
         state::PluginHostState,
@@ -17,12 +16,11 @@ use crate::plugin::{
             gui::{from_wit_screen, to_wit_screen},
             pumpkin::plugin::event::{
                 AsyncPlayerChatEventData, AsyncPlayerPreLoginEventData,
-                BedrockFormResponseEventData, CustomClickActionEventData, Event,
-                InteractAction as WasmInteractAction, InventoryClickEventData,
-                InventoryCloseEventData, PlayerAdvancementDoneEventData, PlayerAnimationEventData,
-                PlayerArmorStandManipulateEventData, PlayerBedEnterEventData,
-                PlayerBedLeaveEventData, PlayerBucketEmptyEventData, PlayerBucketEntityEventData,
-                PlayerBucketFillEventData, PlayerChangeWorldEventData,
+                BedrockFormResponseEventData, Event, InteractAction as WasmInteractAction,
+                InventoryClickEventData, InventoryCloseEventData, PlayerAdvancementDoneEventData,
+                PlayerAnimationEventData, PlayerArmorStandManipulateEventData,
+                PlayerBedEnterEventData, PlayerBedLeaveEventData, PlayerBucketEmptyEventData,
+                PlayerBucketEntityEventData, PlayerBucketFillEventData, PlayerChangeWorldEventData,
                 PlayerChangedMainHandEventData, PlayerChangedWorldEventData,
                 PlayerChannelEventData, PlayerChatEventData, PlayerCommandPreprocessEventData,
                 PlayerCommandSendEventData, PlayerCustomPayloadEventData, PlayerDropItemEventData,
@@ -727,7 +725,7 @@ impl ToFromWasmEvent for PlayerInteractUnknownEntityEvent {
         Event::PlayerInteractUnknownEntityEvent(PlayerInteractUnknownEntityEventData {
             player,
             entity_id: self.entity_id,
-            action: to_wasm_entity_interaction_action(&self.action),
+            action: to_wasm_entity_interaction_action(self.action),
             cancelled: self.cancelled,
         })
     }
@@ -892,29 +890,6 @@ impl ToFromWasmEvent for BedrockFormResponseEvent {
     }
 }
 
-impl ToFromWasmEvent for CustomClickActionEvent {
-    fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
-        Event::CustomClickActionEvent(CustomClickActionEventData {
-            player: state
-                .add_player(self.player.clone())
-                .expect("failed to add player resource"),
-            id: self.id.clone(),
-            payload: self.payload.as_ref().map(|p| p.to_vec()),
-        })
-    }
-
-    fn from_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
-        match event {
-            Event::CustomClickActionEvent(data) => Self {
-                player: consume_player(state, &data.player),
-                id: data.id,
-                payload: data.payload.map(Bytes::from),
-            },
-            _ => panic!("unexpected event type"),
-        }
-    }
-}
-
 impl ToFromWasmEvent for PlayerInteractEntityEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = state
@@ -924,7 +899,7 @@ impl ToFromWasmEvent for PlayerInteractEntityEvent {
         Event::PlayerInteractEntityEvent(PlayerInteractEntityEventData {
             player,
             entity_id: self.target.get_entity().entity_id,
-            action: to_wasm_entity_interaction_action(&self.action),
+            action: to_wasm_entity_interaction_action(self.action),
             sneaking: self.sneaking,
             cancelled: self.cancelled,
         })

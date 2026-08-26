@@ -20,46 +20,43 @@ pub struct DefaultGamemode {
 struct DefaultGamemodeExecutor;
 
 impl CommandExecutor for DefaultGamemodeExecutor {
-    fn execute<'a>(
-        &'a self,
-        sender: &'a CommandSender,
-        server: &'a crate::server::Server,
-        args: &'a ConsumedArgs<'a>,
-    ) -> CommandResult<'a> {
-        Box::pin(async move {
-            let Some(Arg::GameMode(gamemode)) = args.get_cloned(&ARG_GAMEMODE) else {
-                return Err(InvalidConsumption(Some(ARG_GAMEMODE.into())));
-            };
+    fn execute(
+        &self,
+        sender: &CommandSender,
+        server: &crate::server::Server,
+        args: &ConsumedArgs,
+    ) -> CommandResult {
+        let Some(Arg::GameMode(gamemode)) = args.get_cloned(&ARG_GAMEMODE) else {
+            return Err(InvalidConsumption(Some(ARG_GAMEMODE.into())));
+        };
 
-            let mut successful_changes: i32 = 0;
-            if server.basic_config.force_gamemode {
-                for player in server.get_all_players() {
-                    if player.set_gamemode(gamemode).await {
-                        successful_changes += 1;
-                    }
+        let mut successful_changes: i32 = 0;
+        if server.basic_config.force_gamemode {
+            for player in server.get_all_players() {
+                if player.gamemode.load() != gamemode {
+                    player.set_gamemode(gamemode);
+                    successful_changes += 1;
                 }
             }
+        }
 
-            let gamemode_string = format!("{gamemode:?}").to_lowercase();
-            let gamemode_string = format!("gameMode.{gamemode_string}");
+        let gamemode_string = format!("{gamemode:?}").to_lowercase();
+        let gamemode_string = format!("gameMode.{gamemode_string}");
 
-            sender
-                .send_message(TextComponent::translate_cross(
-                    pumpkin_data::translation::java::COMMANDS_DEFAULTGAMEMODE_SUCCESS,
-                    pumpkin_data::translation::bedrock::COMMANDS_DEFAULTGAMEMODE_SUCCESS,
-                    [TextComponent::translate_cross(
-                        gamemode_string.clone(),
-                        gamemode_string,
-                        [],
-                    )],
-                ))
-                .await;
+        sender.send_message(TextComponent::translate_cross(
+            pumpkin_data::translation::java::COMMANDS_DEFAULTGAMEMODE_SUCCESS,
+            pumpkin_data::translation::bedrock::COMMANDS_DEFAULTGAMEMODE_SUCCESS,
+            [TextComponent::translate_cross(
+                gamemode_string.clone(),
+                gamemode_string,
+                [],
+            )],
+        ));
 
-            //Change the default gamemode (not in configuration.toml)
-            server.defaultgamemode.lock().await.gamemode = gamemode;
+        //Change the default gamemode (not in configuration.toml)
+        server.defaultgamemode.lock().unwrap().gamemode = gamemode;
 
-            Ok(successful_changes)
-        })
+        Ok(successful_changes)
     }
 }
 

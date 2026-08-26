@@ -1,17 +1,15 @@
 use crate::entity::EntityBase;
-use pumpkin_data::BlockStateId;
 use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::block_properties::Half;
 use pumpkin_data::block_properties::HorizontalFacing;
 use pumpkin_data::block_properties::StairsShape;
 use pumpkin_data::tag::Taggable;
-use pumpkin_data::{BlockDirection, tag};
+use pumpkin_data::{Block, BlockDirection, BlockState, BlockStateId, Mirror, Rotation, tag};
 use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::world::BlockFlags;
 
 use crate::block::BlockBehaviour;
-use crate::block::BlockFuture;
 use crate::block::OnNeighborUpdateArgs;
 use crate::block::OnPlaceArgs;
 use crate::world::World;
@@ -22,37 +20,35 @@ type StairsProperties = pumpkin_data::block_properties::OakStairsLikeProperties;
 pub struct StairBlock;
 
 impl BlockBehaviour for StairBlock {
-    fn on_place<'a>(&'a self, args: OnPlaceArgs<'a>) -> BlockFuture<'a, BlockStateId> {
-        Box::pin(async move {
-            let mut stair_props = StairsProperties::default(args.block);
-            stair_props.waterlogged = args.replacing.water_source();
+    fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
+        let mut stair_props = StairsProperties::default(args.block);
+        stair_props.waterlogged = args.replacing.water_source();
 
-            stair_props.facing = args.player.get_entity().get_horizontal_facing();
-            stair_props.half = match args.direction {
-                BlockDirection::Up => Half::Top,
-                BlockDirection::Down => Half::Bottom,
-                _ => match args.use_item_on.cursor_pos.y {
-                    0.0..0.5 => Half::Bottom,
-                    0.5..1.0 => Half::Top,
+        stair_props.facing = args.player.get_entity().get_horizontal_facing();
+        stair_props.half = match args.direction {
+            BlockDirection::Up => Half::Top,
+            BlockDirection::Down => Half::Bottom,
+            _ => match args.use_item_on.cursor_pos.y {
+                0.0..0.5 => Half::Bottom,
+                0.5..1.0 => Half::Top,
 
-                    // This cannot happen normally
-                    _ => Half::Bottom,
-                },
-            };
+                // This cannot happen normally
+                _ => Half::Bottom,
+            },
+        };
 
-            stair_props.shape = compute_stair_shape(
-                args.world,
-                args.position,
-                stair_props.facing,
-                stair_props.half,
-            );
+        stair_props.shape = compute_stair_shape(
+            args.world,
+            args.position,
+            stair_props.facing,
+            stair_props.half,
+        );
 
-            stair_props.to_state_id(args.block)
-        })
+        stair_props.to_state_id(args.block)
     }
 
-    fn on_neighbor_update<'a>(&'a self, args: OnNeighborUpdateArgs<'a>) -> BlockFuture<'a, ()> {
-        Box::pin(async move {
+    fn on_neighbor_update(&self, args: OnNeighborUpdateArgs<'_>) {
+        {
             let state_id = args.world.get_block_state_id(args.position);
             let mut stair_props = StairsProperties::from_state_id(state_id, args.block);
 
@@ -65,15 +61,62 @@ impl BlockBehaviour for StairBlock {
 
             if stair_props.shape != new_shape {
                 stair_props.shape = new_shape;
-                args.world
-                    .set_block_state(
-                        args.position,
-                        stair_props.to_state_id(args.block),
-                        BlockFlags::NOTIFY_ALL,
-                    )
-                    .await;
+                args.world.set_block_state(
+                    args.position,
+                    stair_props.to_state_id(args.block),
+                    BlockFlags::NOTIFY_ALL,
+                );
             }
-        })
+        }
+    }
+
+    fn rotate(
+        &self,
+        block: &Block,
+        state_id: BlockStateId,
+        rotation: Rotation,
+    ) -> &'static BlockState {
+        let mut stair_props = StairsProperties::from_state_id(state_id, block);
+        stair_props.facing = rotation.rotate_horizontal(stair_props.facing);
+        BlockState::from_id(stair_props.to_state_id(block))
+    }
+
+    fn mirror(&self, block: &Block, state_id: BlockStateId, mirror: Mirror) -> &'static BlockState {
+        let mut stair_props = StairsProperties::from_state_id(state_id, block);
+        let direction = stair_props.facing;
+        let shape = stair_props.shape;
+
+        match mirror {
+            Mirror::LeftRight => {
+                if matches!(direction, HorizontalFacing::North | HorizontalFacing::South) {
+                    stair_props.facing = stair_props.facing.opposite();
+                    stair_props.shape = match shape {
+                        StairsShape::Straight => StairsShape::Straight,
+                        StairsShape::OuterLeft => StairsShape::OuterRight,
+                        StairsShape::InnerRight => StairsShape::InnerLeft,
+                        StairsShape::InnerLeft => StairsShape::InnerRight,
+                        StairsShape::OuterRight => StairsShape::OuterLeft,
+                    };
+                    return BlockState::from_id(stair_props.to_state_id(block));
+                }
+            }
+            Mirror::FrontBack => {
+                if matches!(direction, HorizontalFacing::East | HorizontalFacing::West) {
+                    stair_props.facing = stair_props.facing.opposite();
+                    stair_props.shape = match shape {
+                        StairsShape::Straight => StairsShape::Straight,
+                        StairsShape::OuterLeft => StairsShape::OuterRight,
+                        StairsShape::InnerRight => StairsShape::InnerRight,
+                        StairsShape::InnerLeft => StairsShape::InnerLeft,
+                        StairsShape::OuterRight => StairsShape::OuterLeft,
+                    };
+                    return BlockState::from_id(stair_props.to_state_id(block));
+                }
+            }
+            Mirror::None => {}
+        }
+
+        BlockState::from_id(state_id)
     }
 }
 

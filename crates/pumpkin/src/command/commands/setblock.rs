@@ -33,94 +33,75 @@ enum Mode {
 struct Executor(Mode);
 
 impl CommandExecutor for Executor {
-    fn execute<'a>(
-        &'a self,
-        sender: &'a CommandSender,
-        server: &'a crate::server::Server,
-        args: &'a ConsumedArgs<'a>,
-    ) -> CommandResult<'a> {
-        Box::pin(async move {
-            let block = BlockArgumentConsumer::find_arg(args, ARG_BLOCK)?;
-            let block_state_id = block.default_state.id;
-            let mode = self.0;
-            let world = sender
-                .world_or_first(server)
-                .ok_or(CommandError::InvalidRequirement)?;
-            let pos = BlockPosArgumentConsumer::find_loaded_arg(args, ARG_BLOCK_POS, &world)?;
+    fn execute(
+        &self,
+        sender: &CommandSender,
+        server: &crate::server::Server,
+        args: &ConsumedArgs,
+    ) -> CommandResult {
+        let block = BlockArgumentConsumer::find_arg(args, ARG_BLOCK)?;
+        let block_state_id = block.default_state.id;
+        let mode = self.0;
+        let world = sender
+            .world_or_first(server)
+            .ok_or(CommandError::InvalidRequirement)?;
+        let pos = BlockPosArgumentConsumer::find_loaded_arg(args, ARG_BLOCK_POS, &world)?;
 
-            let success = match mode {
-                Mode::Destroy => {
-                    world
-                        .clone()
-                        .break_block(&pos, None, BlockFlags::SKIP_DROPS | BlockFlags::FORCE_STATE)
-                        .await;
-                    world
-                        .set_block_state(
-                            &pos,
-                            block_state_id,
-                            BlockFlags::FORCE_STATE | BlockFlags::NOTIFY_NEIGHBORS,
-                        )
-                        .await;
-                    true
-                }
-                Mode::Replace => {
-                    world
-                        .set_block_state(
-                            &pos,
-                            block_state_id,
-                            BlockFlags::FORCE_STATE | BlockFlags::NOTIFY_NEIGHBORS,
-                        )
-                        .await;
-                    true
-                }
-                Mode::Keep => {
-                    let old_state = world.get_block_state(&pos);
-                    if old_state.is_air() {
-                        world
-                            .set_block_state(
-                                &pos,
-                                block_state_id,
-                                BlockFlags::FORCE_STATE | BlockFlags::NOTIFY_NEIGHBORS,
-                            )
-                            .await;
-                        true
-                    } else {
-                        false
-                    }
-                }
-                Mode::Strict => {
-                    world
-                        .set_block_state(
-                            &pos,
-                            block_state_id,
-                            BlockFlags::SKIP_BLOCK_ADDED_CALLBACK,
-                        )
-                        .await;
-                    true
-                }
-            };
-
-            if success {
-                sender
-                    .send_message(TextComponent::translate_cross(
-                        pumpkin_data::translation::java::COMMANDS_SETBLOCK_SUCCESS,
-                        pumpkin_data::translation::bedrock::COMMANDS_SETBLOCK_SUCCESS,
-                        [
-                            TextComponent::text(pos.0.x.to_string()),
-                            TextComponent::text(pos.0.y.to_string()),
-                            TextComponent::text(pos.0.z.to_string()),
-                        ],
-                    ))
-                    .await;
-                Ok(1)
-            } else {
-                Err(CommandError::CommandFailed(TextComponent::translate_cross(
-                    pumpkin_data::translation::java::COMMANDS_SETBLOCK_FAILED,
-                    pumpkin_data::translation::bedrock::COMMANDS_SETBLOCK_FAILED,
-                    [],
-                )))
+        let success = match mode {
+            Mode::Destroy => {
+                world.break_block(&pos, None, BlockFlags::SKIP_DROPS | BlockFlags::FORCE_STATE);
+                world.set_block_state(
+                    &pos,
+                    block_state_id,
+                    BlockFlags::FORCE_STATE | BlockFlags::NOTIFY_NEIGHBORS,
+                );
+                true
             }
-        })
+            Mode::Replace => {
+                world.set_block_state(
+                    &pos,
+                    block_state_id,
+                    BlockFlags::FORCE_STATE | BlockFlags::NOTIFY_NEIGHBORS,
+                );
+                true
+            }
+            Mode::Keep => {
+                let old_state = world.get_block_state(&pos);
+                if old_state.is_air() {
+                    world.set_block_state(
+                        &pos,
+                        block_state_id,
+                        BlockFlags::FORCE_STATE | BlockFlags::NOTIFY_NEIGHBORS,
+                    );
+                    true
+                } else {
+                    false
+                }
+            }
+            Mode::Strict => {
+                world.set_block_state(&pos, block_state_id, BlockFlags::SKIP_BLOCK_ADDED_CALLBACK);
+                true
+            }
+        };
+
+        if success {
+            sender.send_message(TextComponent::translate_cross(
+                pumpkin_data::translation::java::COMMANDS_SETBLOCK_SUCCESS,
+                pumpkin_data::translation::bedrock::COMMANDS_SETBLOCK_SUCCESS,
+                [
+                    TextComponent::text(pos.0.x.to_string()),
+                    TextComponent::text(pos.0.y.to_string()),
+                    TextComponent::text(pos.0.z.to_string()),
+                ],
+            ));
+            Ok(1)
+        } else {
+            Err(CommandError::CommandFailed(TextComponent::translate_cross(
+                pumpkin_data::translation::java::COMMANDS_SETBLOCK_FAILED,
+                pumpkin_data::translation::bedrock::COMMANDS_SETBLOCK_FAILED,
+                [],
+            )))
+        }
     }
 }
 

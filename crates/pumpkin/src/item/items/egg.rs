@@ -1,4 +1,3 @@
-use std::pin::Pin;
 use std::sync::Arc;
 
 use crate::entity::Entity;
@@ -22,55 +21,48 @@ impl ItemMetadata for EggItem {
 const POWER: f32 = 1.5;
 
 impl ItemBehaviour for EggItem {
-    fn normal_use<'a>(
-        &'a self,
-        _block: &'a Item,
-        player: &'a Player,
-    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
-        Box::pin(async move {
-            let position = player.position();
-            let world = player.world();
-            world.play_sound(
-                Sound::EntityEggThrow,
-                pumpkin_data::sound::SoundCategory::Players,
-                &position,
-            );
+    fn normal_use(&self, _block: &Item, player: &Player) {
+        let position = player.position();
+        let world = player.world();
+        world.play_sound(
+            Sound::EntityEggThrow,
+            pumpkin_data::sound::SoundCategory::Players,
+            &position,
+        );
 
-            // Capture the held item stack and pass it to the thrown egg entity
-            let item_stack: ItemStack = player.inventory.held_item().await;
+        // Capture the held item stack and pass it to the thrown egg entity
+        let item_stack: ItemStack = player.inventory.held_item();
 
-            let entity = Entity::new(world.clone(), position, &EntityType::EGG);
-            let egg = EggEntity::new_shot(entity, player.get_entity());
+        let entity = Entity::new(world.clone(), position, &EntityType::EGG);
+        let egg = EggEntity::new_shot(entity, player.get_entity());
 
-            // Propagate the item stack so clients show correct variant
-            egg.set_item_stack(item_stack.clone()).await;
+        // Propagate the item stack so clients show correct variant
+        egg.set_item_stack(item_stack);
 
-            let (yaw, pitch) = player.rotation();
-            egg.thrown
-                .set_velocity_from(player.get_entity(), pitch, yaw, 0.0, POWER, 1.0);
-            world.spawn_entity(Arc::new(egg)).await;
+        let (yaw, pitch) = player.rotation();
+        egg.thrown
+            .set_velocity_from(player.get_entity(), pitch, yaw, 0.0, POWER, 1.0);
+        world.spawn_entity(Arc::new(egg));
 
-            // Consume item
-            let mut main_hand = player.inventory.held_item().await;
-            let consumed = if !main_hand.is_empty() && Self::ids().contains(&main_hand.item.id) {
-                main_hand.decrement_unless_creative(player.gamemode.load(), 1);
-                player.inventory.set_held_item(main_hand).await;
-                true
-            } else {
-                false
-            };
+        // Consume item
+        let mut main_hand = player.inventory.held_item();
+        let consumed = if !main_hand.is_empty() && Self::ids().contains(&main_hand.item.id) {
+            main_hand.decrement_unless_creative(player.gamemode.load(), 1);
+            player.inventory.set_held_item(main_hand);
+            true
+        } else {
+            false
+        };
 
-            if !consumed {
-                let mut off_hand = player.inventory.off_hand_item().await;
-                if !off_hand.is_empty() && Self::ids().contains(&off_hand.item.id) {
-                    off_hand.decrement_unless_creative(player.gamemode.load(), 1);
-                    player
-                        .inventory
-                        .set_stack_in_hand(pumpkin_util::Hand::Left, off_hand)
-                        .await;
-                }
+        if !consumed {
+            let mut off_hand = player.inventory.off_hand_item();
+            if !off_hand.is_empty() && Self::ids().contains(&off_hand.item.id) {
+                off_hand.decrement_unless_creative(player.gamemode.load(), 1);
+                player
+                    .inventory
+                    .set_stack_in_hand(pumpkin_util::Hand::Left, off_hand);
             }
-        })
+        }
     }
 
     fn as_any(&self) -> &dyn std::any::Any {

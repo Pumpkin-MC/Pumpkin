@@ -753,7 +753,7 @@ fn conflicts_with(candidate: &Enchantment, applied: &[&Enchantment]) -> bool {
 /// enchantments by weight, resolves exclusive-set conflicts, and determines
 /// the level from the remaining cost. Cost is halved each iteration so
 /// later enchantments receive lower levels.
-fn apply_vanilla_enchantments(
+pub fn apply_vanilla_enchantments(
     stack: &mut ItemStack,
     slot: &EquipmentSlot,
     special_multiplier: f32,
@@ -1008,7 +1008,7 @@ fn equip_mob_from_def(
 /// and broadcasts the changes to nearby players.
 ///
 /// Mobs not listed in the registry silently receive no equipment.
-pub async fn equip_mob_on_spawn(mob: &dyn EntityBase, world: &Arc<crate::world::World>) {
+pub fn equip_mob_on_spawn(mob: &dyn EntityBase, world: &Arc<crate::world::World>) {
     let entity_type = mob.get_entity().entity_type;
     let pos = mob.get_entity().pos.load();
     let difficulty = RegionalDifficulty::at(world, pos);
@@ -1023,8 +1023,14 @@ pub async fn equip_mob_on_spawn(mob: &dyn EntityBase, world: &Arc<crate::world::
         return;
     };
 
-    let mut equipment = living.entity_equipment.lock().await;
-    let mut drop_chances = living.equipment_drop_chances.lock().await;
+    let mut equipment = living
+        .entity_equipment
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let mut drop_chances = living
+        .equipment_drop_chances
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     let changes_with_drops = equip_mob_from_def(def, &difficulty);
 
     let mut equipment_changes: Vec<(EquipmentSlot, ItemStack)> = Vec::new();

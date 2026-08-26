@@ -15,7 +15,7 @@ use pumpkin_world::world::BlockFlags;
 use super::World;
 
 /// Place the podium structure centred on `origin` into `world`.
-pub async fn place(world: &Arc<World>, origin: BlockPos, active: bool) {
+pub fn place(world: &Arc<World>, origin: BlockPos, active: bool) {
     let ox = origin.0.x;
     let oy = origin.0.y;
     let oz = origin.0.z;
@@ -56,21 +56,17 @@ pub async fn place(world: &Arc<World>, origin: BlockPos, active: bool) {
                     }
                 };
 
-                world
-                    .set_block_state(&pos, state_id, BlockFlags::NOTIFY_ALL)
-                    .await;
+                world.set_block_state(&pos, state_id, BlockFlags::NOTIFY_ALL);
             }
         }
     }
 
     for y in oy..=(oy + 3) {
-        world
-            .set_block_state(
-                &BlockPos::new(ox, y, oz),
-                Block::BEDROCK.default_state.id,
-                BlockFlags::NOTIFY_ALL,
-            )
-            .await;
+        world.set_block_state(
+            &BlockPos::new(ox, y, oz),
+            Block::BEDROCK.default_state.id,
+            BlockFlags::NOTIFY_ALL,
+        );
     }
 
     // Wall torches on N/S/E/W faces at pillar height 2
@@ -84,12 +80,10 @@ pub async fn place(world: &Arc<World>, origin: BlockPos, active: bool) {
     ] {
         let props = WallTorchLikeProperties { facing };
         let state_id = props.to_state_id(&Block::WALL_TORCH);
-        world
-            .set_block_state(
-                &BlockPos::new(ox + dx, torch_y, oz + dz),
-                state_id,
-                BlockFlags::NOTIFY_ALL,
-            )
-            .await;
+        world.set_block_state(
+            &BlockPos::new(ox + dx, torch_y, oz + dz),
+            state_id,
+            BlockFlags::NOTIFY_ALL,
+        );
     }
 }

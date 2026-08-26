@@ -1,6 +1,4 @@
 use std::any::Any;
-use std::future::Future;
-use std::pin::Pin;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 
@@ -14,7 +12,6 @@ use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_protocol::IdOr;
 use pumpkin_protocol::java::client::play::CSoundEffect;
 use pumpkin_util::GameMode;
-use pumpkin_world::inventory::Inventory;
 
 pub struct BowItem;
 
@@ -25,40 +22,27 @@ impl ItemMetadata for BowItem {
 }
 
 impl ItemBehaviour for BowItem {
-    fn normal_use<'a>(
-        &'a self,
-        _item: &'a Item,
-        player: &'a Player,
-    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
-        Box::pin(async move {
-            // Check if player has arrows (or is in creative mode)
-            let has_arrows = self.has_arrows(player).await;
-            let gamemode = player.gamemode.load();
+    fn normal_use(&self, _item: &Item, player: &Player) {
+        // Check if player has arrows (or is in creative mode)
+        let has_arrows = Self::has_arrows(player);
+        let gamemode = player.gamemode.load();
 
-            if !has_arrows && gamemode != GameMode::Creative {
-                return;
-            }
+        if !has_arrows && gamemode != GameMode::Creative {
+            return;
+        }
 
-            // Get the held item stack
-            let inventory = player.inventory();
-            let stack = inventory.held_item().await;
+        // Get the held item stack
+        let inventory = player.inventory();
+        let stack = inventory.held_item();
 
-            // Start the bow drawing animation
-            player
-                .living_entity
-                .set_active_hand(pumpkin_util::Hand::Right, stack, Self::USE_DURATION)
-                .await;
-        })
+        // Start the bow drawing animation
+        player
+            .living_entity
+            .set_active_hand(pumpkin_util::Hand::Right, stack, Self::USE_DURATION);
     }
 
-    fn on_stopped_using<'a>(
-        &'a self,
-        _stack: &'a ItemStack,
-        player: &'a Player,
-    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
-        Box::pin(async move {
-            Self::release_bow(player).await;
-        })
+    fn on_stopped_using(&self, _stack: &ItemStack, player: &Player) {
+        Self::release_bow(player);
     }
 
     fn get_use_duration(&self) -> i32 {
@@ -77,7 +61,7 @@ impl BowItem {
     const ARROW_SPEED_MULTIPLIER: f32 = 3.0;
 
     /// Called when the player releases the bow
-    pub async fn release_bow(player: &Player) {
+    pub fn release_bow(player: &Player) {
         // Get the used ticks
         let use_ticks = player.living_entity.item_use_time.load(Ordering::Relaxed);
         let use_ticks = Self::USE_DURATION - use_ticks;
@@ -88,19 +72,20 @@ impl BowItem {
         }
 
         // Check arrows again
-        let arrow_slot = player.find_arrow().await;
+        let arrow_slot = player.find_arrow();
         let gamemode = player.gamemode.load();
 
         if arrow_slot.is_none() && gamemode != GameMode::Creative {
             return;
         }
 
-        let projectile = if let Some(slot) = arrow_slot {
-            let stack = player.inventory().get_stack(slot).await;
-            stack.copy_with_count(1)
-        } else {
-            ItemStack::new(1, &Item::ARROW)
-        };
+        let projectile = arrow_slot.map_or_else(
+            || ItemStack::new(1, &Item::ARROW),
+            |slot| {
+                let stack = player.inventory.get_slot(slot);
+                stack.copy_with_count(1)
+            },
+        );
         let infinite_projectile = projectile.item.id == Item::ARROW.id;
 
         // Calculate power and fire
@@ -108,7 +93,7 @@ impl BowItem {
 
         // Check for Infinity enchantment
         let mut has_infinity = false;
-        let held = player.inventory().held_item().await;
+        let held = player.inventory().held_item();
         if let Some(enchantments) =
             held.get_data_component::<pumpkin_data::data_component_impl::EnchantmentsImpl>()
         {
@@ -118,23 +103,23 @@ impl BowItem {
                 .any(|(e, _)| **e == pumpkin_data::Enchantment::INFINITY);
         }
 
-        Self::fire_arrow(player, power, projectile).await;
+        Self::fire_arrow(player, power, &projectile);
 
         // Consume arrow (if not creative and no Infinity)
         if let Some(slot) = arrow_slot
             && gamemode != GameMode::Creative
             && !(has_infinity && infinite_projectile)
         {
-            player.consume_arrow(slot).await;
+            player.consume_arrow(slot);
         }
 
         // Damage bow
-        player.damage_held_item(1).await;
+        player.damage_held_item(1);
     }
 
     /// Check if player has arrows in their inventory
-    async fn has_arrows(&self, player: &Player) -> bool {
-        player.find_arrow().await.is_some()
+    fn has_arrows(player: &Player) -> bool {
+        player.find_arrow().is_some()
     }
 
     /// Calculate the power/charge of the bow based on time held
@@ -149,7 +134,7 @@ impl BowItem {
     }
 
     /// Fire an arrow from the bow
-    pub async fn fire_arrow(player: &Player, power: f32, projectile: ItemStack) {
+    pub fn fire_arrow(player: &Player, power: f32, projectile: &ItemStack) {
         if power < 0.1 {
             return; // Not enough charge
         }
@@ -173,10 +158,10 @@ impl BowItem {
         };
 
         let mut arrow =
-            ArrowEntity::new_shot(arrow_entity, player.get_entity(), &projectile, pickup);
+            ArrowEntity::new_shot(arrow_entity, player.get_entity(), projectile, pickup);
 
         // Read enchantments of the held item (bow)
-        let stack = player.inventory().held_item().await;
+        let stack = player.inventory().held_item();
         if let Some(enchantments) =
             stack.get_data_component::<pumpkin_data::data_component_impl::EnchantmentsImpl>()
         {
@@ -204,7 +189,7 @@ impl BowItem {
 
         // Spawn the arrow entity in the world
         let arrow_arc: Arc<dyn EntityBase> = Arc::new(arrow);
-        world.spawn_entity(arrow_arc).await;
+        world.spawn_entity(arrow_arc);
 
         // Play bow shoot sound
         let sound_pitch = 1.0 / (rand::random::<f32>() * 0.4 + 1.2) + power * 0.5;

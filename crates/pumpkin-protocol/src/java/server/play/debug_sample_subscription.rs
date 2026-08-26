@@ -11,6 +11,10 @@ pub struct SDebugSampleSubscription {
     pub sample_type: VarInt,
 }
 
+impl SDebugSampleSubscription {
+    pub const TICK_TIME: i32 = 0;
+}
+
 impl<'a> ServerPacket<'a> for SDebugSampleSubscription {
     fn read(bytebuf: &mut &'a [u8], _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
         Ok(Self {

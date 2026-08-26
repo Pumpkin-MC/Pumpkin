@@ -9,7 +9,7 @@ impl BedrockClient {
         packet: SMobEquipment,
     ) {
         player.update_last_action_time();
-        let slot = packet.hotbar_slot;
+        let slot = packet.selected_slot;
         if slot >= 9 {
             return;
         }
@@ -26,7 +26,7 @@ impl BedrockClient {
                 self.enqueue_client_packet(&CPlayerHotbar {
                     selected_slot: VarUInt(previous_slot as u32),
                     container_id: 0,
-                    should_select_block: true,
+                    should_select_slot: true,
                 })
                 .await;
                 return;
@@ -35,7 +35,7 @@ impl BedrockClient {
 
         let inv = player.inventory();
         inv.set_selected_slot(slot);
-        let stack = inv.held_item().await;
+        let stack = inv.held_item();
         let equipment = &[(EquipmentSlot::MAIN_HAND, stack)];
         player.living_entity.send_equipment_changes(equipment);
     }

@@ -22,6 +22,15 @@ pub struct SClickSlot {
     pub carried_item: OptionalItemStackHash,
 }
 
+impl SClickSlot {
+    pub const BUTTON_LEFT: i8 = 0;
+    pub const BUTTON_RIGHT: i8 = 1;
+    pub const BUTTON_MIDDLE: i8 = 2;
+    pub const BUTTON_DROP_SINGLE: i8 = 0;
+    pub const BUTTON_DROP_STACK: i8 = 1;
+    pub const BUTTON_OFFHAND_SWAP: i8 = 40;
+}
+
 impl<'a> ServerPacket<'a> for SClickSlot {
     fn read(
         mut bytebuf: &mut &'a [u8],

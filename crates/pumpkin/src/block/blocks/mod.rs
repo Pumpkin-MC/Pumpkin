@@ -43,6 +43,7 @@ pub mod iron_bars;
 pub mod slabs;
 pub mod stairs;
 pub mod walls;
+pub mod weathering_copper;
 
 // Decorative & furnishings
 pub mod banners;
@@ -73,6 +74,7 @@ pub mod carved_pumpkin;
 pub mod dripstone;
 pub mod farmland;
 pub mod hay;
+pub mod leaves;
 pub mod logs;
 pub mod mangrove_roots;
 pub mod plant;
@@ -87,7 +89,9 @@ pub mod dirt_path;
 pub mod dragon_egg;
 pub mod falling;
 pub mod grass_block;
+pub mod ice;
 pub mod infested;
+pub mod nylium;
 pub mod powder_snow;
 pub mod rooted_dirt;
 pub mod snow;

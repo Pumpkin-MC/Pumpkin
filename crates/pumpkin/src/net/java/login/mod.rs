@@ -21,7 +21,7 @@ use uuid::Uuid;
 
 use crate::{
     net::{
-        GameProfile, PacketHandlerResult,
+        EncryptionError, GameProfile, PacketHandlerResult,
         authentication::{self, AuthError},
         can_not_join, is_valid_player_name,
         java::pending::PendingConnection,

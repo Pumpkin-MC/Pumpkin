@@ -327,9 +327,7 @@ pub fn write_packet<P: ClientPacket + ?Sized>(
 ) -> Result<(), WritingError> {
     let version_number = P::to_id(*version);
     if version_number == -1 {
-        return Err(WritingError::Message(format!(
-            "Packet is not supported in Minecraft version {version:?}"
-        )));
+        return Err(WritingError::UnsupportedVersion(*version));
     }
     write.write_var_int(&VarInt(version_number))?;
     packet.write_packet_data(write, version)

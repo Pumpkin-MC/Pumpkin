@@ -7,8 +7,8 @@ use pumpkin_macros::java_packet;
 use pumpkin_util::{math::vector3::Vector3, version::JavaMinecraftVersion};
 
 use crate::{
-    ClientPacket, VarInt,
-    ser::{NetworkWriteExt, WritingError},
+    ClientPacket, ServerPacket, VarInt,
+    ser::{NetworkReadExt, NetworkReadSliceExt, NetworkWriteExt, ReadingError, WritingError},
 };
 
 /// Spawns a cluster of particles at a specific location.
@@ -18,6 +18,7 @@ use crate::{
 /// carry extra data for complex particles like redstone dust (color) or
 /// block/item breaking (textures).
 #[java_packet(LEVEL_PARTICLES)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct CParticle<'a> {
     /// If true, the particle renders even if the client's "Particles"
     /// setting is set to "Minimal".
@@ -66,6 +67,98 @@ impl<'a> CParticle<'a> {
     }
 }
 
+#[must_use]
+pub const fn particle_name_for_v1_7(particle: pumpkin_data::particle::Particle) -> &'static str {
+    use pumpkin_data::particle::Particle::{
+        AngryVillager, Block, BlockCrumble, BlockMarker, Bubble, BubbleColumnUp, BubblePop,
+        CampfireSignalSmoke, Cloud, Composter, Crit, DamageIndicator, DragonBreath,
+        DrippingDripstoneLava, DrippingDripstoneWater, DrippingLava, DrippingWater, Dust,
+        DustColorTransition, DustPillar, DustPlume, Effect, Enchant, EnchantedHit, EntityEffect,
+        Explosion, ExplosionEmitter, FallingDust, Firework, Fishing, Flame, HappyVillager, Heart,
+        InstantEffect, Item, ItemSlime, ItemSnowball, LargeSmoke, Lava, Mycelium, Note, Poof,
+        Portal, Rain, ReversePortal, SmallFlame, Snowflake, SoulFireFlame, Splash, SweepAttack,
+        TotemOfUndying, Underwater, Witch,
+    };
+    match particle {
+        ExplosionEmitter => "hugeexplosion",
+        Explosion => "largeexplode",
+        Poof => "explode",
+        Firework => "fireworksSpark",
+        Bubble | BubblePop | BubbleColumnUp => "bubble",
+        Splash => "splash",
+        Fishing => "wake",
+        Underwater => "suspended",
+        Crit | DamageIndicator | SweepAttack => "crit",
+        EnchantedHit => "magicCrit",
+        LargeSmoke | CampfireSignalSmoke => "largesmoke",
+        InstantEffect => "spell",
+        EntityEffect => "mobSpell",
+        Effect => "mobSpellAmbient",
+        Witch | TotemOfUndying | DragonBreath => "witchMagic",
+        DrippingWater | DrippingDripstoneWater => "dripWater",
+        DrippingLava | DrippingDripstoneLava => "dripLava",
+        AngryVillager => "angryVillager",
+        HappyVillager | Composter => "happyVillager",
+        Mycelium => "townaura",
+        Note => "note",
+        Portal | ReversePortal => "portal",
+        Enchant => "enchantmenttable",
+        Flame | SmallFlame | SoulFireFlame => "flame",
+        Lava => "lava",
+        Cloud => "cloud",
+        Dust | DustColorTransition | DustPillar | DustPlume => "reddust",
+        ItemSnowball | Snowflake => "snowballpoof",
+        ItemSlime => "slime",
+        Heart => "heart",
+        BlockMarker => "barrier",
+        Rain => "droplet",
+        Item => "iconcrack_",
+        Block | BlockCrumble => "blockcrack_",
+        FallingDust => "blockdust_",
+        _ => "smoke",
+    }
+}
+
+#[must_use]
+pub fn particle_id_from_1_7_name(name: &str) -> i32 {
+    match name {
+        "explode" => pumpkin_data::particle::Particle::Poof as i32,
+        "largeexplode" => pumpkin_data::particle::Particle::Explosion as i32,
+        "hugeexplosion" => pumpkin_data::particle::Particle::ExplosionEmitter as i32,
+        "fireworksSpark" => pumpkin_data::particle::Particle::Firework as i32,
+        "bubble" => pumpkin_data::particle::Particle::Bubble as i32,
+        "splash" => pumpkin_data::particle::Particle::Splash as i32,
+        "wake" => pumpkin_data::particle::Particle::Fishing as i32,
+        "suspended" | "depthsuspend" => pumpkin_data::particle::Particle::Underwater as i32,
+        "crit" => pumpkin_data::particle::Particle::Crit as i32,
+        "magicCrit" => pumpkin_data::particle::Particle::EnchantedHit as i32,
+        "smoke" => pumpkin_data::particle::Particle::Smoke as i32,
+        "largesmoke" => pumpkin_data::particle::Particle::LargeSmoke as i32,
+        "spell" | "instantSpell" => pumpkin_data::particle::Particle::InstantEffect as i32,
+        "mobSpell" => pumpkin_data::particle::Particle::EntityEffect as i32,
+        "mobSpellAmbient" => pumpkin_data::particle::Particle::Effect as i32,
+        "witchMagic" => pumpkin_data::particle::Particle::Witch as i32,
+        "dripWater" => pumpkin_data::particle::Particle::DrippingWater as i32,
+        "dripLava" => pumpkin_data::particle::Particle::DrippingLava as i32,
+        "angryVillager" => pumpkin_data::particle::Particle::AngryVillager as i32,
+        "happyVillager" => pumpkin_data::particle::Particle::HappyVillager as i32,
+        "townaura" => pumpkin_data::particle::Particle::Mycelium as i32,
+        "note" => pumpkin_data::particle::Particle::Note as i32,
+        "portal" => pumpkin_data::particle::Particle::Portal as i32,
+        "enchantmenttable" => pumpkin_data::particle::Particle::Enchant as i32,
+        "flame" => pumpkin_data::particle::Particle::Flame as i32,
+        "lava" => pumpkin_data::particle::Particle::Lava as i32,
+        "cloud" => pumpkin_data::particle::Particle::Cloud as i32,
+        "reddust" => pumpkin_data::particle::Particle::Dust as i32,
+        "snowballpoof" | "snowshovel" => pumpkin_data::particle::Particle::ItemSnowball as i32,
+        "slime" => pumpkin_data::particle::Particle::ItemSlime as i32,
+        "heart" => pumpkin_data::particle::Particle::Heart as i32,
+        "barrier" => pumpkin_data::particle::Particle::BlockMarker as i32,
+        "droplet" => pumpkin_data::particle::Particle::Rain as i32,
+        _ => pumpkin_data::particle::Particle::from_name(name).map_or(0, |p| p as i32),
+    }
+}
+
 pub(super) fn particle_id_for_version(
     particle_id: VarInt,
     version: JavaMinecraftVersion,
@@ -88,7 +181,7 @@ impl ClientPacket for CParticle<'_> {
 
         if *version <= JavaMinecraftVersion::V_1_7_6 {
             let name = pumpkin_data::particle::Particle::from_id(self.particle_id.0 as u16)
-                .map_or("smoke", |p| p.to_name());
+                .map_or("smoke", particle_name_for_v1_7);
             write.write_string_bounded(name, 64)?;
         } else if *version < JavaMinecraftVersion::V_1_20_5 {
             let remapped_id =
@@ -100,7 +193,9 @@ impl ClientPacket for CParticle<'_> {
             }
         }
 
-        write.write_bool(self.important)?;
+        if *version >= JavaMinecraftVersion::V_1_8 {
+            write.write_bool(self.important)?;
+        }
         if *version >= JavaMinecraftVersion::V_1_21_4 {
             write.write_bool(self.force_spawn)?;
         }
@@ -130,6 +225,74 @@ impl ClientPacket for CParticle<'_> {
         write.write_slice(self.data)?;
 
         Ok(())
+    }
+}
+
+impl<'a> ServerPacket<'a> for CParticle<'a> {
+    fn read(bytebuf: &mut &'a [u8], version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+        let (particle_id, important, force_spawn) = if *version <= JavaMinecraftVersion::V_1_7_6 {
+            let name = bytebuf.get_str_bounded_borrowed(64)?;
+            let id = particle_id_from_1_7_name(name);
+            (VarInt(id), false, false)
+        } else if *version < JavaMinecraftVersion::V_1_20_5 {
+            let id = if *version >= JavaMinecraftVersion::V_1_19 {
+                bytebuf.get_var_int()?
+            } else {
+                VarInt(bytebuf.get_i32_be()?)
+            };
+            let important = bytebuf.get_bool()?;
+            (id, important, false)
+        } else {
+            let important = bytebuf.get_bool()?;
+            let force_spawn = if *version >= JavaMinecraftVersion::V_1_21_4 {
+                bytebuf.get_bool()?
+            } else {
+                false
+            };
+            (VarInt(0), important, force_spawn)
+        };
+
+        let position = if *version >= JavaMinecraftVersion::V_1_15 {
+            Vector3::new(
+                bytebuf.get_f64_be()?,
+                bytebuf.get_f64_be()?,
+                bytebuf.get_f64_be()?,
+            )
+        } else {
+            Vector3::new(
+                f64::from(bytebuf.get_f32_be()?),
+                f64::from(bytebuf.get_f32_be()?),
+                f64::from(bytebuf.get_f32_be()?),
+            )
+        };
+
+        let offset = Vector3::new(
+            bytebuf.get_f32_be()?,
+            bytebuf.get_f32_be()?,
+            bytebuf.get_f32_be()?,
+        );
+        let max_speed = bytebuf.get_f32_be()?;
+        let particle_count = bytebuf.get_i32_be()?;
+
+        let (particle_id, data) = if *version >= JavaMinecraftVersion::V_1_20_5 {
+            let id = bytebuf.get_var_int()?;
+            let remaining = bytebuf.read_remaining_slice_borrowed(usize::MAX)?;
+            (id, remaining)
+        } else {
+            let remaining = bytebuf.read_remaining_slice_borrowed(usize::MAX)?;
+            (particle_id, remaining)
+        };
+
+        Ok(Self {
+            force_spawn,
+            important,
+            position,
+            offset,
+            max_speed,
+            particle_count,
+            particle_id,
+            data,
+        })
     }
 }
 
@@ -200,7 +363,7 @@ mod tests {
 
         let mut slice = bytes.as_slice();
         let name = slice.get_str_borrowed().unwrap();
-        assert_eq!(name, "explosion_emitter");
+        assert_eq!(name, "hugeexplosion");
     }
 
     #[test]

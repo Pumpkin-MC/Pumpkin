@@ -35,19 +35,16 @@ impl ArgumentConsumer for MsgArgConsumer {
         _server: &'a Server,
         args: &mut RawArgs<'a>,
     ) -> ConsumeResult<'a> {
-        let first_word_opt = args.pop();
+        let first_word = args.pop()?;
 
-        let mut msg = match first_word_opt {
-            Some(word) => word.value.to_string(),
-            None => return Box::pin(async { None }),
-        };
+        let mut msg = first_word.value.to_string();
 
         while let Some(word) = args.pop() {
             msg.push(' ');
             msg.push_str(word.value);
         }
 
-        Box::pin(async move { Some(Arg::Msg(msg)) })
+        Some(Arg::Msg(msg))
     }
 }
 

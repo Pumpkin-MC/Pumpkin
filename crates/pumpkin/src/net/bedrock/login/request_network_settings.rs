@@ -6,17 +6,23 @@ impl BedrockClient {
         &self,
         packet: SRequestNetworkSettings,
         server: &Server,
-    ) {
-        if packet.protocol_version < CURRENT_BEDROCK_MC_PROTOCOL as i32 {
-            self.send_packet(&CPlayStatus::OutdatedClient).await;
-            return;
-        } else if packet.protocol_version > CURRENT_BEDROCK_MC_PROTOCOL as i32 {
-            self.send_packet(&CPlayStatus::OutdatedServer).await;
-            return;
+    ) -> bool {
+        let status = match packet
+            .client_network_version
+            .cmp(&(CURRENT_BEDROCK_MC_PROTOCOL as i32))
+        {
+            std::cmp::Ordering::Less => Some(CPlayStatus::OutdatedClient),
+            std::cmp::Ordering::Greater => Some(CPlayStatus::OutdatedServer),
+            std::cmp::Ordering::Equal => None,
+        };
+        if let Some(status) = status {
+            self.send_packet(&status).await;
+            self.close().await;
+            return false;
         }
 
         self.version.store(BedrockMinecraftVersion::from_protocol(
-            packet.protocol_version as u32,
+            packet.client_network_version as u32,
         ));
 
         let compression = server
@@ -26,14 +32,16 @@ impl BedrockClient {
             .compression
             .info
             .clone();
-        self.send_packet(&CNetworkSettings::new(
-            compression.threshold as u16,
-            0,
-            false,
-            0,
-            0.0,
-        ))
+
+        self.send_packet(&CNetworkSettings {
+            compression_threshold: compression.threshold as u16,
+            compression_algorithm: 0,
+            client_throttle_enabled: false,
+            client_throttle_threshold: 0,
+            client_throttle_scalar: 0.0,
+        })
         .await;
         self.set_compression(compression).await;
+        true
     }
 }

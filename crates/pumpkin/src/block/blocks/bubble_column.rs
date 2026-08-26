@@ -10,7 +10,7 @@ use pumpkin_world::tick::TickPriority;
 use pumpkin_world::world::BlockFlags;
 
 use crate::block::{
-    BlockBehaviour, BlockFuture, BlockMetadata, OnEntityCollisionArgs, OnNeighborUpdateArgs,
+    BlockBehaviour, BlockMetadata, OnEntityCollisionArgs, OnNeighborUpdateArgs,
     OnScheduledTickArgs, PlacedArgs,
 };
 use crate::world::World;
@@ -161,8 +161,8 @@ fn bubble_column_velocity(
 }
 
 impl BlockBehaviour for BubbleColumnBlock {
-    fn on_entity_collision<'a>(&'a self, args: OnEntityCollisionArgs<'a>) -> BlockFuture<'a, ()> {
-        Box::pin(async move {
+    fn on_entity_collision(&self, args: OnEntityCollisionArgs<'_>) {
+        {
             if args.block != &Block::BUBBLE_COLUMN {
                 return;
             }
@@ -179,19 +179,19 @@ impl BlockBehaviour for BubbleColumnBlock {
             if let Some(player) = args.entity.get_player() {
                 player.breath_manager.reset(player);
             }
-        })
+        }
     }
 
-    fn placed<'a>(&'a self, args: PlacedArgs<'a>) -> BlockFuture<'a, ()> {
-        Box::pin(async move {
+    fn placed(&self, args: PlacedArgs<'_>) {
+        {
             if args.block == &Block::WATER && is_source_water(args.world, *args.position) {
                 schedule_reconcile(args.world, *args.position, CREATE_DELAY_TICKS);
             }
-        })
+        }
     }
 
-    fn on_neighbor_update<'a>(&'a self, args: OnNeighborUpdateArgs<'a>) -> BlockFuture<'a, ()> {
-        Box::pin(async move {
+    fn on_neighbor_update(&self, args: OnNeighborUpdateArgs<'_>) {
+        {
             let state = args.world.get_block_state_id(args.position);
             if args.block == &Block::BUBBLE_COLUMN {
                 schedule_reconcile(args.world, *args.position, REMOVE_DELAY_TICKS);
@@ -202,42 +202,37 @@ impl BlockBehaviour for BubbleColumnBlock {
             {
                 schedule_reconcile(args.world, *args.position, CREATE_DELAY_TICKS);
             }
-        })
+        }
     }
 
-    fn on_scheduled_tick<'a>(&'a self, args: OnScheduledTickArgs<'a>) -> BlockFuture<'a, ()> {
-        Box::pin(async move {
-            let state = args.world.get_block_state_id(args.position);
-            let block = Block::from_state_id(state);
-            if block != &Block::BUBBLE_COLUMN && block != &Block::WATER {
-                return;
-            }
+    fn on_scheduled_tick(&self, args: OnScheduledTickArgs<'_>) {
+        let state = args.world.get_block_state_id(args.position);
+        let block = Block::from_state_id(state);
+        if block != &Block::BUBBLE_COLUMN && block != &Block::WATER {
+            return;
+        }
 
-            let below_pos = args.position.down();
-            let below_state = args.world.get_block_state_id(&below_pos);
-            let below_block = Block::from_state_id(below_state);
+        let below_pos = args.position.down();
+        let below_state = args.world.get_block_state_id(&below_pos);
+        let below_block = Block::from_state_id(below_state);
 
-            match reconcile_action(block, state, below_block, below_state) {
-                ReconcileAction::SetBubble(kind) => {
-                    let new_state = bubble_column_state(kind);
-                    args.world
-                        .set_block_state(args.position, new_state, BlockFlags::NOTIFY_ALL)
-                        .await;
-                    schedule_reconcile(args.world, args.position.up(), CREATE_DELAY_TICKS);
-                }
-                ReconcileAction::RestoreWater => {
-                    args.world
-                        .set_block_state(
-                            args.position,
-                            source_water_state(),
-                            BlockFlags::NOTIFY_ALL,
-                        )
-                        .await;
-                    schedule_reconcile(args.world, args.position.up(), REMOVE_DELAY_TICKS);
-                }
-                ReconcileAction::Stop => {}
+        match reconcile_action(block, state, below_block, below_state) {
+            ReconcileAction::SetBubble(kind) => {
+                let new_state = bubble_column_state(kind);
+                args.world
+                    .set_block_state(args.position, new_state, BlockFlags::NOTIFY_ALL);
+                schedule_reconcile(args.world, args.position.up(), CREATE_DELAY_TICKS);
             }
-        })
+            ReconcileAction::RestoreWater => {
+                args.world.set_block_state(
+                    args.position,
+                    source_water_state(),
+                    BlockFlags::NOTIFY_ALL,
+                );
+                schedule_reconcile(args.world, args.position.up(), REMOVE_DELAY_TICKS);
+            }
+            ReconcileAction::Stop => {}
+        }
     }
 }
 
