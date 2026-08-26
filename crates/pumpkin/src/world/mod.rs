@@ -309,6 +309,62 @@ impl PartialEq for World {
 
 impl Eq for World {}
 
+/// Mirrors vanilla's `Block#isPossibleToRespawnInThis`: a block state is a
+/// possible respawn location when it is neither solid nor liquid, so it can
+/// neither obstruct the player nor suffocate, drown, or burn them.
+const fn is_possible_to_respawn_in_state(state: &BlockState) -> bool {
+    !state.is_solid() && !state.is_liquid()
+}
+
+/// Checks whether the block at the player's feet and the block at the
+/// player's head are both safe to spawn in, mirroring vanilla's
+/// `ServerPlayer#findRespawnAndUseSpawnBlock`:
+///
+/// - the feet block must not be solid or liquid (no collision, no drowning,
+///   no burning),
+/// - the head block must not be solid or liquid (no obstruction, no
+///   suffocation).
+const fn is_safe_player_spawn_position_states(feet: &BlockState, head: &BlockState) -> bool {
+    is_possible_to_respawn_in_state(feet) && is_possible_to_respawn_in_state(head)
+}
+
+/// Yields the column offsets of the square ring at Chebyshev distance
+/// `radius` from a suggested spawn position, starting with the top and bottom
+/// edges and finishing with the left and right edges. Used by the spawn search
+/// to expand outward in a square spiral.
+fn spawn_search_ring_offsets(radius: i32) -> Vec<(i32, i32)> {
+    let mut offsets = Vec::with_capacity((radius * 8) as usize);
+    for x in -radius..=radius {
+        offsets.push((x, -radius));
+        offsets.push((x, radius));
+    }
+    for z in (-radius + 1)..radius {
+        offsets.push((-radius, z));
+        offsets.push((radius, z));
+    }
+    offsets
+}
+
+/// Moves the spawn position up while it is unsafe and then down until the
+/// position is just above the ground again, mirroring vanilla's
+/// `PlayerSpawnFinder#fixupSpawnHeight`. `is_safe` decides whether the block
+/// at the player's feet and the block at the player's head are safe to
+/// spawn in.
+fn fixup_spawn_height_with(
+    mut position: BlockPos,
+    min_y: i32,
+    max_feet_y: i32,
+    is_safe: impl Fn(&BlockPos) -> bool,
+) -> BlockPos {
+    while !is_safe(&position) && position.0.y < max_feet_y {
+        position = position.up();
+    }
+    while is_safe(&position) && position.0.y > min_y {
+        position = position.down();
+    }
+    position.up()
+}
+
 impl World {
     pub async fn get_block_state_id_async(&self, position: &BlockPos) -> BlockStateId {
         if !self.is_in_build_limit(*position) {
@@ -2284,12 +2340,12 @@ impl World {
             .unwrap_or(self.min_y)
     }
 
-    /// Mirrors vanilla's `Block#isPossibleToRespawnInThis`: a block is a possible
-    /// respawn location when it is neither solid nor liquid, so it can neither
+    /// Mirrors vanilla's `Block#isPossibleToRespawnInThis` (see
+    /// [`is_possible_to_respawn_in_state`]): a block is a possible respawn
+    /// location when it is neither solid nor liquid, so it can neither
     /// obstruct the player nor suffocate, drown, or burn them.
     pub fn is_possible_to_respawn_in(&self, position: &BlockPos) -> bool {
-        let state = self.get_block_state(position);
-        !state.is_solid() && !state.is_liquid()
+        is_possible_to_respawn_in_state(self.get_block_state(position))
     }
 
     /// Checks whether a position is safe for a player to spawn at, mirroring
@@ -2300,24 +2356,25 @@ impl World {
     /// - the block at the player's head must not be solid or liquid (no
     ///   obstruction, no suffocation).
     pub fn is_safe_player_spawn_position(&self, position: &BlockPos) -> bool {
-        self.is_possible_to_respawn_in(position) && self.is_possible_to_respawn_in(&position.up())
+        is_safe_player_spawn_position_states(
+            self.get_block_state(position),
+            self.get_block_state(&position.up()),
+        )
     }
 
     /// Moves the spawn position up while it is unsafe and then down until the
     /// position is just above the ground again, mirroring vanilla's
     /// `PlayerSpawnFinder#fixupSpawnHeight`. Used as a last resort when no safe
     /// position could be found around the suggested one.
-    fn fixup_spawn_height(&self, mut position: BlockPos) -> BlockPos {
+    fn fixup_spawn_height(&self, position: BlockPos) -> BlockPos {
         // The head block also has to fit in the world, so the feet can only go
         // as high as one block below the top.
-        let max_feet_y = self.get_top_y() - 1;
-        while !self.is_safe_player_spawn_position(&position) && position.0.y < max_feet_y {
-            position = position.up();
-        }
-        while self.is_safe_player_spawn_position(&position) && position.0.y > self.dimension.min_y {
-            position = position.down();
-        }
-        position.up()
+        fixup_spawn_height_with(
+            position,
+            self.dimension.min_y,
+            self.get_top_y() - 1,
+            |pos| self.is_safe_player_spawn_position(pos),
+        )
     }
 
     /// Computes the position a player joining the server for the first time
@@ -2374,26 +2431,12 @@ impl World {
         loaded_chunks: &mut FxHashSet<Vector2<i32>>,
     ) -> Option<BlockPos> {
         for radius in 1..=PLAYER_SPAWN_SEARCH_RADIUS {
-            let min_x = suggestion.0.x - radius;
-            let max_x = suggestion.0.x + radius;
-            let min_z = suggestion.0.z - radius;
-            let max_z = suggestion.0.z + radius;
-
-            // Top and bottom edges of the ring.
-            for x in min_x..=max_x {
-                for z in [min_z, max_z] {
-                    if let Some(found) = self.check_spawn_column(x, z, loaded_chunks).await {
-                        return Some(found);
-                    }
-                }
-            }
-
-            // Left and right edges of the ring, corners were already checked.
-            for z in (min_z + 1)..max_z {
-                for x in [min_x, max_x] {
-                    if let Some(found) = self.check_spawn_column(x, z, loaded_chunks).await {
-                        return Some(found);
-                    }
+            for (dx, dz) in spawn_search_ring_offsets(radius) {
+                if let Some(found) = self
+                    .check_spawn_column(suggestion.0.x + dx, suggestion.0.z + dz, loaded_chunks)
+                    .await
+                {
+                    return Some(found);
                 }
             }
         }
@@ -7138,7 +7181,11 @@ mod tests {
     };
     use pumpkin_util::math::position::BlockPos;
 
-    use super::{bedrock_block_breaking_rate, bedrock_chest_block_actor};
+    use super::{
+        bedrock_block_breaking_rate, bedrock_chest_block_actor, fixup_spawn_height_with,
+        is_possible_to_respawn_in_state, is_safe_player_spawn_position_states,
+        spawn_search_ring_offsets,
+    };
 
     #[test]
     fn bedrock_block_breaking_rate_uses_progress_per_tick() {
@@ -7197,5 +7244,171 @@ mod tests {
             GameRuleValue::Int(v) => assert_eq!(*v, 20),
             GameRuleValue::Bool(_) => panic!("expected int"),
         }
+    }
+
+    #[test]
+    fn respawn_block_check_matches_vanilla_flags() {
+        // Vanilla `Block#isPossibleToRespawnInThis` = `!isSolid() && !liquid()`.
+        // Air-like and pass-through blocks are safe to spawn in...
+        for state in [
+            Block::AIR.default_state,
+            Block::VOID_AIR.default_state,
+            Block::COBWEB.default_state,
+            Block::BAMBOO_SAPLING.default_state,
+        ] {
+            assert!(
+                is_possible_to_respawn_in_state(state),
+                "{state:?} should be safe to spawn in",
+            );
+        }
+
+        // ...solid blocks obstruct the player...
+        for state in [
+            Block::STONE.default_state,
+            Block::GRASS_BLOCK.default_state,
+            Block::BEDROCK.default_state,
+            // Pumpkin's block data marks leaves as solid, so they are rejected
+            // as well even though vanilla's collision-shape based check would
+            // allow respawning inside them.
+            Block::OAK_LEAVES.default_state,
+        ] {
+            assert!(
+                !is_possible_to_respawn_in_state(state),
+                "{state:?} should not be safe to spawn in",
+            );
+        }
+
+        // ...and fluids drown or burn the player.
+        for state in [Block::WATER.default_state, Block::LAVA.default_state] {
+            assert!(
+                !is_possible_to_respawn_in_state(state),
+                "{state:?} should not be safe to spawn in",
+            );
+        }
+    }
+
+    #[test]
+    fn feet_and_head_blocks_must_both_be_safe() {
+        let air = Block::AIR.default_state;
+        let stone = Block::STONE.default_state;
+        let water = Block::WATER.default_state;
+
+        assert!(is_safe_player_spawn_position_states(air, air));
+
+        // A solid block at the feet or at the head makes the position unsafe.
+        assert!(!is_safe_player_spawn_position_states(stone, air));
+        assert!(!is_safe_player_spawn_position_states(air, stone));
+
+        // A fluid at the feet drowns/burns the player and a fluid at the head
+        // suffocates them, so both are unsafe.
+        assert!(!is_safe_player_spawn_position_states(water, air));
+        assert!(!is_safe_player_spawn_position_states(air, water));
+    }
+
+    #[test]
+    fn spawn_search_rings_expand_outward() {
+        // Every ring contains exactly 8 * radius columns, all at Chebyshev
+        // distance `radius`, with no duplicates within or across rings and
+        // never the suggested column itself.
+        let mut seen = std::collections::HashSet::new();
+        let mut total = 0;
+        for radius in 1..=3 {
+            let offsets = spawn_search_ring_offsets(radius);
+            assert_eq!(offsets.len(), (radius * 8) as usize);
+            for (dx, dz) in &offsets {
+                assert_eq!(
+                    dx.abs().max(dz.abs()),
+                    radius,
+                    "offset ({dx}, {dz}) is not on ring {radius}",
+                );
+                assert!(seen.insert((*dx, *dz)), "duplicate offset ({dx}, {dz})");
+            }
+            total += offsets.len();
+        }
+        assert_eq!(total, 48); // 8 + 16 + 24
+        assert!(
+            !seen.contains(&(0, 0)),
+            "the suggested column itself must not be searched",
+        );
+    }
+
+    #[test]
+    fn spawn_search_ring_offsets_follow_expected_order() {
+        // The search walks the top/bottom edges of each ring first and then
+        // the left/right edges, so positions closest in z are checked first.
+        assert_eq!(
+            spawn_search_ring_offsets(1),
+            vec![
+                (-1, -1),
+                (-1, 1),
+                (0, -1),
+                (0, 1),
+                (1, -1),
+                (1, 1),
+                (-1, 0),
+                (1, 0),
+            ],
+        );
+    }
+
+    /// Fixes up the height of a column whose solid ground ends at `ground_y`
+    /// and whose solid canopy spans `canopy`; every other position is air.
+    fn fixup_on_column(
+        start: BlockPos,
+        ground_y: i32,
+        canopy: std::ops::RangeInclusive<i32>,
+    ) -> BlockPos {
+        fixup_spawn_height_with(start, -64, 319, |pos| {
+            let feet_unsafe = pos.0.y <= ground_y || canopy.contains(&pos.0.y);
+            let head_unsafe = pos.0.y < ground_y || canopy.contains(&(pos.0.y + 1));
+            !feet_unsafe && !head_unsafe
+        })
+    }
+
+    #[test]
+    fn fixup_keeps_an_already_safe_position() {
+        // Ground ends at y=64 and the feet are already one block above it.
+        assert_eq!(
+            fixup_on_column(BlockPos::new(0, 65, 0), 64, 70..=70),
+            BlockPos::new(0, 65, 0),
+        );
+    }
+
+    #[test]
+    fn fixup_lifts_a_position_inside_the_ground() {
+        // Feet buried in the ground: walk up to the first safe position and
+        // back down until the player stands on the surface.
+        assert_eq!(
+            fixup_on_column(BlockPos::new(0, 60, 0), 64, 70..=70),
+            BlockPos::new(0, 65, 0),
+        );
+    }
+
+    #[test]
+    fn fixup_places_the_player_on_top_of_a_canopy() {
+        // A solid canopy spans y=70..=72: starting inside it walks up over the
+        // top and settles one block above the canopy.
+        assert_eq!(
+            fixup_on_column(BlockPos::new(0, 71, 0), 64, 70..=72),
+            BlockPos::new(0, 73, 0),
+        );
+    }
+
+    #[test]
+    fn fixup_does_not_suffocate_the_player_in_a_canopy() {
+        // Feet at y=69 put the head (y=70) inside the solid canopy, so the
+        // position is unsafe and must be moved on top of the canopy.
+        assert_eq!(
+            fixup_on_column(BlockPos::new(0, 69, 0), 64, 70..=72),
+            BlockPos::new(0, 73, 0),
+        );
+    }
+
+    #[test]
+    fn fixup_lands_above_the_world_floor_in_a_void_column() {
+        // No ground at all: the position sinks to the world floor and steps
+        // back up one block, mirroring vanilla's `fixupSpawnHeight`.
+        let result = fixup_spawn_height_with(BlockPos::new(0, 0, 0), -64, 319, |_| true);
+        assert_eq!(result, BlockPos::new(0, -63, 0));
     }
 }
