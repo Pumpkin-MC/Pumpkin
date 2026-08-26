@@ -220,7 +220,10 @@ use pumpkin_data::particle::Particle;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::statistic::StatisticCategory;
 use pumpkin_data::tag::Taggable;
-use pumpkin_data::{Block, BlockState, Enchantment, screen::WindowType, tag, translation};
+use pumpkin_data::{
+    Block, BlockState, BlockStateId, Enchantment, block_state_remap::remap_block_state_for_version,
+    screen::WindowType, tag, translation,
+};
 use pumpkin_inventory::player::{
     player_inventory::PlayerInventory, player_screen_handler::PlayerScreenHandler,
 };
@@ -2306,6 +2309,52 @@ impl Player {
             && let Ok(data) = client.serialize_packet(&packet)
         {
             client.try_enqueue_packet(data);
+        }
+    }
+
+    /// Spawns a `block` particle cluster textured with `block_state_id`, mirroring
+    /// vanilla's `BlockParticleOption` (the particles a block emits when broken).
+    ///
+    /// The state id is encoded here rather than passed to [`CParticle`] as a typed
+    /// field because it has to be remapped to this client's protocol version, and
+    /// the packet only carries already-encoded extra particle data.
+    ///
+    /// Java only, like [`Self::spawn_particle`]: `CParticle` is a Java packet, so
+    /// Bedrock clients are skipped.
+    pub fn spawn_block_particle(
+        &self,
+        position: Vector3<f64>,
+        offset: Vector3<f32>,
+        max_speed: f32,
+        particle_count: i32,
+        block_state_id: BlockStateId,
+    ) {
+        use pumpkin_protocol::ser::NetworkWriteExt;
+
+        let ClientPlatform::Java(client) = self.client.as_ref() else {
+            return;
+        };
+
+        // A single VarInt, so at most 5 bytes.
+        let mut data = Vec::with_capacity(5);
+        // Writing to a `Vec` never fails.
+        let _ = data.write_var_int(&VarInt(i32::from(remap_block_state_for_version(
+            block_state_id.as_u16(),
+            client.version.load(),
+        ))));
+
+        let packet = CParticle::new(
+            false,
+            false,
+            position,
+            offset,
+            max_speed,
+            particle_count,
+            VarInt(Particle::Block as i32),
+            &data,
+        );
+        if let Ok(bytes) = client.serialize_packet(&packet) {
+            client.try_enqueue_packet(bytes);
         }
     }
 
