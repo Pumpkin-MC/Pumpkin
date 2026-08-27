@@ -256,7 +256,8 @@ impl PistonBlock {
 
         let extended_pos = pos.offset(dir.to_offset());
 
-        if let Some(block_entity) = world.get_block_entity(&extended_pos)
+        // Live instance only: `get_block_entity` can rebuild from NBT at progress 0.
+        if let Some(block_entity) = world.get_live_block_entity(&extended_pos)
             && let Some(piston) = block_entity.as_any().downcast_ref::<PistonBlockEntity>()
         {
             piston.finish(world);

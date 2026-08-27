@@ -171,6 +171,26 @@ pub trait BlockBehaviour: Send + Sync {
         BoundingBox::full_block()
     }
 
+    /// Vanilla `Block.dynamicShape()`: collision is not a cached voxel.
+    fn has_dynamic_collision_shape(&self) -> bool {
+        false
+    }
+
+    /// Vanilla `BlockCollisions` edge cells (`cursorFaceType == 2`): `MovingPistonBlock` only.
+    fn collision_reaches_edge_cells(&self) -> bool {
+        false
+    }
+
+    /// Vanilla `Block.getCollisionShape` with world context. `None` uses the static state.
+    fn get_collision_shapes(&self, _args: GetCollisionShapesArgs<'_>) -> Option<Vec<BoundingBox>> {
+        None
+    }
+
+    /// Vanilla `newBlockEntity` on place. False skips the factory (`MovingPistonBlock` is null).
+    fn creates_block_entity_on_place(&self) -> bool {
+        true
+    }
+
     fn mirror(&self, block: &Block, state_id: BlockStateId, mirror: Mirror) -> &'static BlockState {
         block.mirror(state_id, mirror)
     }
@@ -392,6 +412,14 @@ pub struct GetInsideCollisionShapeArgs<'a> {
     pub block: &'a Block,
     pub state: &'a BlockState,
     pub position: &'a BlockPos,
+}
+
+pub struct GetCollisionShapesArgs<'a> {
+    pub world: &'a World,
+    pub block: &'a Block,
+    pub state: &'a BlockState,
+    pub position: &'a BlockPos,
+    pub entity: &'a dyn EntityBase,
 }
 
 /// A queued block event.

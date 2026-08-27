@@ -156,9 +156,8 @@ impl BlockBehaviour for CoralFanBlock {
                 return BlockStateId::AIR;
             }
         } else if args.direction == BlockDirection::Down {
-            // Vanilla `canSurvive`: `getBlockState` is the raw cell. `MOVING_PISTON`
-            // has an empty `getShape`, so `isFaceSturdy` is false and the fan pops
-            // (TNT duper). `BlockAccessor` would answer as the animated slime.
+            // Vanilla `canSurvive`: raw `getBlockState`. `MOVING_PISTON` has an empty
+            // `getShape`, so `isFaceSturdy` is false and the fan pops (TNT duper).
             let support_block = args.world.get_block_state(&args.position.down());
             if !support_block.is_center_solid(BlockDirection::Up) {
                 return BlockStateId::AIR;
@@ -222,8 +221,7 @@ fn can_place_at(world: &dyn BlockAccessor, block_pos: &BlockPos, facing: Horizon
         .is_side_solid(facing.opposite().to_block_direction())
 }
 
-/// Vanilla `BaseCoralWallFanBlock.canSurvive`: raw `getBlockState`, not the
-/// animated block behind a `MOVING_PISTON` placeholder.
+/// Vanilla `BaseCoralWallFanBlock.canSurvive`: raw `getBlockState`.
 fn wall_fan_can_survive(world: &World, block_pos: &BlockPos, facing: HorizontalFacing) -> bool {
     let support = facing.opposite();
     world

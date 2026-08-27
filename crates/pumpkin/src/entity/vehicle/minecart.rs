@@ -318,8 +318,8 @@ impl EntityBase for MinecartEntity {
             pos.z.floor() as i32,
         ));
 
-        // Raw block, not through `MOVING_PISTON`: while the rail is a placeholder the cart
-        // is off rails. Same descent as `rail_collision_ignore_positions` (`ignoreBelow`).
+        // While the rail is a `MOVING_PISTON` placeholder the cart is off rails.
+        // Same descent as `rail_collision_ignore_positions` (`ignoreBelow`).
         let below_block_pos = BlockPos(Vector3::new(
             block_pos.0.x,
             block_pos.0.y - 1,

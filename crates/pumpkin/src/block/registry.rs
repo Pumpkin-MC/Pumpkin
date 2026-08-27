@@ -1024,8 +1024,12 @@ impl BlockRegistry {
         notify: bool,
     ) {
         let state = world.get_block_state(position);
+        let skip_auto_entity = self
+            .get_pumpkin_block(block.id)
+            .is_some_and(|pumpkin_block| !pumpkin_block.creates_block_entity_on_place());
         if state.block_entity_type != u16::MAX
             && world.get_block_entity(position).is_none()
+            && !skip_auto_entity
             && let Some(entity) =
                 crate::block::entities::create_block_entity(state.block_entity_type, *position)
         {

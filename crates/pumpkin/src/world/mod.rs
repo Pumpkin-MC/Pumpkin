@@ -32,6 +32,7 @@ use crate::world::chunker::is_within_view_distance;
 use crate::{block::BlockEvent, entity::item::ItemEntity};
 use crate::{
     block::{
+        GetCollisionShapesArgs,
         registry::BlockRegistry,
         {OnNeighborUpdateArgs, OnScheduledTickArgs},
     },
@@ -2358,32 +2359,34 @@ impl World {
             }
 
             let block = Block::from_state_id(state.id);
+            let pumpkin_block = self.block_registry.get_pumpkin_block(block.id);
 
             // Vanilla `hasLargeCollisionShape()`: `cache == null || cache.largeCollisionShape`.
             // Cache is absent for `dynamicShape()` (`MOVING_PISTON`, powder snow).
-            let dynamic_shape = block == &Block::MOVING_PISTON || block == &Block::POWDER_SNOW;
+            let dynamic_shape = pumpkin_block.is_some_and(|b| b.has_dynamic_collision_shape())
+                || block == &Block::POWDER_SNOW;
+            let edge_cell = pumpkin_block.is_some_and(|b| b.collision_reaches_edge_cells());
             match on_boundary {
-                2 if block != &Block::MOVING_PISTON => continue,
+                2 if !edge_cell => continue,
                 1 if !dynamic_shape && !state.has_large_collision_shape() => continue,
                 _ => {}
             }
 
             let mut collided = false;
 
-            if block == &Block::MOVING_PISTON {
-                // Placeholder is mid-animation: collision from the BE
-                // (`PistonBlockEntity::collision_shapes`).
-                if let Some(block_entity) = self.get_block_entity(&pos)
-                    && let Some(piston) = block_entity
-                        .as_any()
-                        .downcast_ref::<crate::block::entities::piston::PistonBlockEntity>(
-                    )
-                {
-                    for shape in piston.collision_shapes(entity.get_entity().piston_noclip.load()) {
-                        if shape.intersects(&bounding_box) {
-                            collided = true;
-                            collisions.push(shape);
-                        }
+            if let Some(shapes) = pumpkin_block.and_then(|pumpkin_block| {
+                pumpkin_block.get_collision_shapes(GetCollisionShapesArgs {
+                    world: self,
+                    block,
+                    state,
+                    position: &pos,
+                    entity,
+                })
+            }) {
+                for shape in shapes {
+                    if shape.intersects(&bounding_box) {
+                        collided = true;
+                        collisions.push(shape);
                     }
                 }
             } else if block == &Block::POWDER_SNOW {
@@ -5606,28 +5609,13 @@ impl World {
             return block_state_id;
         }
 
-        // Vanilla `Level.setBlock` marks for `broadcastChanges` only with `UPDATE_CLIENTS`.
-        // Dest `moving_piston` (flags 324 / 276) stays off the wire: a `CBlockUpdate` of it
-        // would wipe the client animation BE (`MovingPistonBlock.newBlockEntity` is null).
-        // Drop a stale mark too. `/setblock` and buckets omit `NOTIFY_LISTENERS` but still
-        // need a packet.
-        let hide_moving_piston = Block::from_state_id(block_state_id) == &Block::MOVING_PISTON
-            && !flags.contains(BlockFlags::NOTIFY_LISTENERS);
-        if hide_moving_piston {
-            self.unsent_block_changes
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .remove(position);
-            self.deferred_block_changes
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .remove(position);
-        } else {
-            self.unsent_block_changes
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .insert(*position, block_state_id);
-        }
+        // Vanilla `Level.setBlock` marks for `broadcastChanges` with `UPDATE_CLIENTS`.
+        // Pumpkin still queues every write (setblock/buckets omit `NOTIFY_LISTENERS`).
+        // Live `moving_piston` is dropped in `flush_block_updates` (`RenderShape.INVISIBLE`).
+        self.unsent_block_changes
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .insert(*position, block_state_id);
 
         let old_block = Block::from_state_id(replaced_block_state_id);
         let new_block = Block::from_state_id(block_state_id);
@@ -6181,13 +6169,6 @@ impl World {
         BlockState::from_id(id)
     }
 
-    /// [`Self::get_block_state`] via the `MOVING_PISTON`-translating `BlockAccessor`.
-    /// A neighbour that is still a placeholder must answer as the block it is delivering
-    /// (`MOVING_PISTON` itself is never solid). See [`Self::moving_piston_state`].
-    pub fn get_block_state_for_support(&self, position: &BlockPos) -> &'static BlockState {
-        BlockAccessor::get_block_state(self, position)
-    }
-
     /// Gets the Block + Block state from the Block Registry, Returns Air if the Block state has not been found
     pub fn get_block_and_state(
         &self,
@@ -6201,17 +6182,6 @@ impl World {
     pub fn get_block_and_state_id(&self, position: &BlockPos) -> (&'static Block, BlockStateId) {
         let id = self.get_block_state_id(position);
         (Block::from_state_id(id), id)
-    }
-
-    /// The block a `MOVING_PISTON` placeholder stands in for (`PistonBlockEntity`).
-    /// Vanilla `MovingPistonBlock` has no static shape; collision/support come from the
-    /// animated block for the ~2 ticks of the push.
-    fn moving_piston_state(&self, position: &BlockPos) -> Option<&'static BlockState> {
-        let block_entity = self.get_block_entity(position)?;
-        let piston = block_entity
-            .as_any()
-            .downcast_ref::<crate::block::entities::piston::PistonBlockEntity>()?;
-        Some(piston.pushed_block_state)
     }
 
     /// Neighbor update using the block currently at `block_pos`.
@@ -7545,32 +7515,26 @@ const fn overlapping_entity_chunks(aabb: &BoundingBox) -> (i32, i32, i32, i32) {
     )
 }
 
-/// `BlockAccessor` getters resolve `MOVING_PISTON` to the animated block
-/// (`World::moving_piston_state`). Inherent `World` getters stay raw.
+/// Vanilla `getBlockState`: the cell as stored. `MOVING_PISTON` is not the pushed block;
+/// collision comes from `PistonExtensionBlock` / the BE.
+///
+/// `World::` (not `Self::`): `Self::get_block` in this impl is the trait method.
+#[allow(clippy::use_self)]
 impl BlockAccessor for World {
     fn get_block(&self, position: &BlockPos) -> &'static Block {
-        BlockAccessor::get_block_and_state(self, position).0
+        World::get_block(self, position)
     }
 
     fn get_block_state(&self, position: &BlockPos) -> &'static BlockState {
-        BlockAccessor::get_block_and_state(self, position).1
+        World::get_block_state(self, position)
     }
 
     fn get_block_state_id(&self, position: &BlockPos) -> BlockStateId {
-        BlockAccessor::get_block_and_state(self, position).1.id
+        World::get_block_state_id(self, position)
     }
 
     fn get_block_and_state(&self, position: &BlockPos) -> (&'static Block, &'static BlockState) {
-        let id = self
-            .get_block_state_id_if_loaded(position)
-            .unwrap_or(Block::AIR.default_state.id);
-        let (block, state) = BlockState::from_id_with_block(id);
-        if block == &Block::MOVING_PISTON
-            && let Some(animated) = self.moving_piston_state(position)
-        {
-            return BlockState::from_id_with_block(animated.id);
-        }
-        (block, state)
+        World::get_block_and_state(self, position)
     }
 }
 

@@ -360,11 +360,6 @@ pub fn create_block_entity(
         return None;
     }
     let name = BLOCK_ENTITY_TYPES.get(block_entity_type_id as usize)?;
-    // Vanilla `MovingPistonBlock.newBlockEntity()` is null. The real BE is
-    // attached with `World::add_block_entity` after `setBlock` (`movedState` is the pushed block).
-    if *name == "piston" {
-        return None;
-    }
     match *name {
         "furnace" => Some(Arc::new(furnace::FurnaceBlockEntity::new(position))),
         "chest" => Some(Arc::new(chest::ChestBlockEntity::new(position))),
