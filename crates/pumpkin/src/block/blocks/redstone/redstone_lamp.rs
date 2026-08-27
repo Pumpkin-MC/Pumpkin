@@ -1,4 +1,4 @@
-use crate::block::{BlockFuture, OnNeighborUpdateArgs, OnPlaceArgs, OnScheduledTickArgs};
+use crate::block::{OnNeighborUpdateArgs, OnPlaceArgs, OnScheduledTickArgs};
 use pumpkin_data::BlockStateId;
 use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_macros::pumpkin_block;
@@ -14,20 +14,18 @@ type RedstoneLampProperties = pumpkin_data::block_properties::RedstoneOreLikePro
 pub struct RedstoneLamp;
 
 impl BlockBehaviour for RedstoneLamp {
-    fn on_place<'a>(&'a self, args: OnPlaceArgs<'a>) -> BlockFuture<'a, BlockStateId> {
-        Box::pin(async move {
-            let mut props = RedstoneLampProperties::default(args.block);
-            props.lit = block_receives_redstone_power(args.world, args.position).await;
-            props.to_state_id(args.block)
-        })
+    fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
+        let mut props = RedstoneLampProperties::default(args.block);
+        props.lit = block_receives_redstone_power(args.world, args.position);
+        props.to_state_id(args.block)
     }
 
-    fn on_neighbor_update<'a>(&'a self, args: OnNeighborUpdateArgs<'a>) -> BlockFuture<'a, ()> {
-        Box::pin(async move {
+    fn on_neighbor_update(&self, args: OnNeighborUpdateArgs<'_>) {
+        {
             let state = args.world.get_block_state(args.position);
             let mut props = RedstoneLampProperties::from_state_id(state.id, args.block);
             let is_lit = props.lit;
-            let is_receiving_power = block_receives_redstone_power(args.world, args.position).await;
+            let is_receiving_power = block_receives_redstone_power(args.world, args.position);
 
             if is_lit != is_receiving_power {
                 if is_lit {
@@ -39,35 +37,31 @@ impl BlockBehaviour for RedstoneLamp {
                     );
                 } else {
                     props.lit = !props.lit;
-                    args.world
-                        .set_block_state(
-                            args.position,
-                            props.to_state_id(args.block),
-                            BlockFlags::NOTIFY_LISTENERS,
-                        )
-                        .await;
-                }
-            }
-        })
-    }
-
-    fn on_scheduled_tick<'a>(&'a self, args: OnScheduledTickArgs<'a>) -> BlockFuture<'a, ()> {
-        Box::pin(async move {
-            let state = args.world.get_block_state(args.position);
-            let mut props = RedstoneLampProperties::from_state_id(state.id, args.block);
-            let is_lit = props.lit;
-            let is_receiving_power = block_receives_redstone_power(args.world, args.position).await;
-
-            if is_lit && !is_receiving_power {
-                props.lit = !props.lit;
-                args.world
-                    .set_block_state(
+                    args.world.set_block_state(
                         args.position,
                         props.to_state_id(args.block),
                         BlockFlags::NOTIFY_LISTENERS,
-                    )
-                    .await;
+                    );
+                }
             }
-        })
+        }
+    }
+
+    fn on_scheduled_tick(&self, args: OnScheduledTickArgs<'_>) {
+        let state = args.world.get_block_state(args.position);
+        let props = RedstoneLampProperties::from_state_id(state.id, args.block);
+        let is_lit = props.lit;
+        let is_receiving_power = block_receives_redstone_power(args.world, args.position);
+
+        if is_lit && !is_receiving_power {
+            let block = args.world.get_block(args.position);
+            let mut props = RedstoneLampProperties::from_state_id(state.id, block);
+            props.lit = !props.lit;
+            args.world.set_block_state(
+                args.position,
+                props.to_state_id(block),
+                BlockFlags::NOTIFY_LISTENERS,
+            );
+        }
     }
 }

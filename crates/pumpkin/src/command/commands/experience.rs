@@ -45,7 +45,7 @@ struct Executor {
 }
 
 impl Executor {
-    async fn handle_query(&self, sender: &CommandSender, target: &Player) -> i32 {
+    fn handle_query(&self, sender: &CommandSender, target: &Player) -> i32 {
         let (val, translation_key) = match self.exp_type {
             ExpType::Levels => (
                 target.experience_level.load(Ordering::Relaxed),
@@ -57,16 +57,14 @@ impl Executor {
             ),
         };
 
-        sender
-            .send_message(TextComponent::translate_cross(
-                translation_key,
-                translation_key,
-                [
-                    target.get_display_name().await,
-                    TextComponent::text(val.to_string()),
-                ],
-            ))
-            .await;
+        sender.send_message(TextComponent::translate_cross(
+            translation_key,
+            translation_key,
+            [
+                target.get_display_name(),
+                TextComponent::text(val.to_string()),
+            ],
+        ));
 
         val
     }
@@ -122,24 +120,24 @@ impl Executor {
     }
 
     /// Returns `true` if successful. Otherwise, there was a problem setting the points of a player.
-    async fn handle_modify(&self, target: &Arc<Player>, amount: i32) -> bool {
+    fn handle_modify(&self, target: &Arc<Player>, amount: i32) -> bool {
         match self.exp_type {
             ExpType::Levels => {
                 if self.mode == Mode::Add {
-                    target.add_experience_levels(amount).await;
+                    target.add_experience_levels(amount);
                 } else {
-                    target.set_experience_level(amount, true).await;
+                    target.set_experience_level(amount, true);
                 }
             }
             ExpType::Points => {
                 if self.mode == Mode::Add {
-                    target.add_experience_points(amount).await;
+                    target.add_experience_points(amount);
                 } else {
                     let current_lvl = target.experience_level.load(Ordering::Relaxed);
                     if amount > experience::points_in_level(current_lvl) {
                         return false;
                     }
-                    target.set_experience_points(amount).await;
+                    target.set_experience_points(amount);
                 }
             }
         }
@@ -148,59 +146,57 @@ impl Executor {
 }
 
 impl CommandExecutor for Executor {
-    fn execute<'a>(
-        &'a self,
-        sender: &'a CommandSender,
-        _server: &'a crate::server::Server,
-        args: &'a ConsumedArgs<'a>,
-    ) -> CommandResult<'a> {
-        Box::pin(async move {
-            let targets = PlayersArgumentConsumer::find_arg(args, ARG_TARGETS)?;
+    fn execute(
+        &self,
+        sender: &CommandSender,
+        _server: &crate::server::Server,
+        args: &ConsumedArgs,
+    ) -> CommandResult {
+        let targets = PlayersArgumentConsumer::find_arg(args, ARG_TARGETS)?;
 
-            if self.mode == Mode::Query {
-                let target = targets.first().ok_or_else(|| {
-                    CommandError::CommandFailed(TextComponent::translate_cross(
-                        "argument.player.unknown",
-                        "argument.player.unknown",
-                        [],
-                    ))
-                })?;
+        if self.mode == Mode::Query {
+            let target = targets.first().ok_or_else(|| {
+                CommandError::CommandFailed(TextComponent::translate_cross(
+                    "argument.player.unknown",
+                    "argument.player.unknown",
+                    [],
+                ))
+            })?;
 
-                if targets.len() > 1 {
-                    return Err(CommandError::CommandFailed(TextComponent::translate_cross(
-                        "argument.player.toomany",
-                        "argument.player.toomany",
-                        [],
-                    )));
-                }
-                return Ok(self.handle_query(sender, target).await);
-            }
-
-            // Handle Add/Set
-            let amount = BoundedNumArgumentConsumer::<i32>::find_arg(args, ARG_AMOUNT)??;
-
-            let mut successes = 0;
-            for target in targets {
-                if self.handle_modify(target, amount).await {
-                    successes += 1;
-                }
-            }
-
-            if successes == 0 {
+            if targets.len() > 1 {
                 return Err(CommandError::CommandFailed(TextComponent::translate_cross(
-                    "commands.experience.set.points.invalid",
-                    "commands.experience.set.points.invalid",
+                    "argument.player.toomany",
+                    "argument.player.toomany",
                     [],
                 )));
             }
+            return Ok(self.handle_query(sender, target));
+        }
 
-            // Safe to access first() because successes > 0
-            let first_name = targets[0].get_display_name().await;
-            let msg = self.get_success_message(amount, targets, first_name);
-            sender.send_message(msg).await;
+        // Handle Add/Set
+        let amount = BoundedNumArgumentConsumer::<i32>::find_arg(args, ARG_AMOUNT)??;
 
-            Ok(successes)
-        })
+        let mut successes = 0;
+        for target in targets {
+            if self.handle_modify(target, amount) {
+                successes += 1;
+            }
+        }
+
+        if successes == 0 {
+            return Err(CommandError::CommandFailed(TextComponent::translate_cross(
+                "commands.experience.set.points.invalid",
+                "commands.experience.set.points.invalid",
+                [],
+            )));
+        }
+
+        // Safe to access first() because successes > 0
+        let first_name = targets[0].get_display_name();
+        let msg = self.get_success_message(amount, targets, first_name);
+        sender.send_message(msg);
+
+        Ok(successes)
     }
 }
 

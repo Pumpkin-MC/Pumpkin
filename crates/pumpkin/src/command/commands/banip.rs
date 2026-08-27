@@ -30,46 +30,42 @@ fn parse_ip(target: &str, server: &Server) -> Option<IpAddr> {
 struct NoReasonExecutor;
 
 impl CommandExecutor for NoReasonExecutor {
-    fn execute<'a>(
-        &'a self,
-        sender: &'a CommandSender,
-        server: &'a crate::server::Server,
-        args: &'a ConsumedArgs<'a>,
-    ) -> CommandResult<'a> {
-        Box::pin(async move {
-            let Some(Arg::Simple(target)) = args.get(&ARG_TARGET) else {
-                return Err(InvalidConsumption(Some(ARG_TARGET.into())));
-            };
+    fn execute(
+        &self,
+        sender: &CommandSender,
+        server: &crate::server::Server,
+        args: &ConsumedArgs,
+    ) -> CommandResult {
+        let Some(Arg::Simple(target)) = args.get(&ARG_TARGET) else {
+            return Err(InvalidConsumption(Some(ARG_TARGET.into())));
+        };
 
-            ban_ip(sender, server, target, None).await
-        })
+        ban_ip(sender, server, target, None)
     }
 }
 
 struct ReasonExecutor;
 
 impl CommandExecutor for ReasonExecutor {
-    fn execute<'a>(
-        &'a self,
-        sender: &'a CommandSender,
-        server: &'a crate::server::Server,
-        args: &'a ConsumedArgs<'a>,
-    ) -> CommandResult<'a> {
-        Box::pin(async move {
-            let Some(Arg::Simple(target)) = args.get(&ARG_TARGET) else {
-                return Err(InvalidConsumption(Some(ARG_TARGET.into())));
-            };
+    fn execute(
+        &self,
+        sender: &CommandSender,
+        server: &crate::server::Server,
+        args: &ConsumedArgs,
+    ) -> CommandResult {
+        let Some(Arg::Simple(target)) = args.get(&ARG_TARGET) else {
+            return Err(InvalidConsumption(Some(ARG_TARGET.into())));
+        };
 
-            let Some(Arg::Msg(reason)) = args.get(ARG_REASON) else {
-                return Err(InvalidConsumption(Some(ARG_REASON.into())));
-            };
+        let Some(Arg::Msg(reason)) = args.get(ARG_REASON) else {
+            return Err(InvalidConsumption(Some(ARG_REASON.into())));
+        };
 
-            ban_ip(sender, server, target, Some(reason.clone())).await
-        })
+        ban_ip(sender, server, target, Some(reason.clone()))
     }
 }
 
-async fn ban_ip(
+fn ban_ip(
     sender: &CommandSender,
     server: &Server,
     target: &str,
@@ -85,7 +81,7 @@ async fn ban_ip(
         )));
     };
 
-    let mut banned_ips = server.data.banned_ip_list.write().await;
+    let mut banned_ips = server.data.banned_ip_list.write().unwrap();
 
     if banned_ips.get_entry(&target_ip).is_some() {
         return Err(CommandError::CommandFailed(TextComponent::translate_cross(
@@ -113,40 +109,32 @@ async fn ban_ip(
         .collect::<Vec<_>>()
         .join(" ");
 
-    sender
-        .send_message(TextComponent::translate_cross(
-            translation::java::COMMANDS_BANIP_SUCCESS,
-            translation::bedrock::COMMANDS_BANIP_SUCCESS,
-            [
-                TextComponent::text(target_ip.to_string()),
-                TextComponent::text(reason),
-            ],
-        ))
-        .await;
+    sender.send_message(TextComponent::translate_cross(
+        translation::java::COMMANDS_BANIP_SUCCESS,
+        translation::bedrock::COMMANDS_BANIP_SUCCESS,
+        [
+            TextComponent::text(target_ip.to_string()),
+            TextComponent::text(reason),
+        ],
+    ));
 
-    sender
-        .send_message(TextComponent::translate_cross(
-            translation::java::COMMANDS_BANIP_INFO,
-            translation::java::COMMANDS_BANIP_INFO,
-            [
-                TextComponent::text(affected.len().to_string()),
-                TextComponent::text(names),
-            ],
-        ))
-        .await;
+    sender.send_message(TextComponent::translate_cross(
+        translation::java::COMMANDS_BANIP_INFO,
+        translation::java::COMMANDS_BANIP_INFO,
+        [
+            TextComponent::text(affected.len().to_string()),
+            TextComponent::text(names),
+        ],
+    ));
 
     let count = affected.len();
     for target in affected {
-        target
-            .kick(
-                DisconnectReason::Kicked,
-                TextComponent::translate_cross(
-                    translation::java::MULTIPLAYER_DISCONNECT_IP_BANNED,
-                    translation::java::MULTIPLAYER_DISCONNECT_IP_BANNED,
-                    [],
-                ),
-            )
-            .await;
+        let kick_msg = TextComponent::translate_cross(
+            translation::java::MULTIPLAYER_DISCONNECT_IP_BANNED,
+            translation::java::MULTIPLAYER_DISCONNECT_IP_BANNED,
+            [],
+        );
+        target.kick(DisconnectReason::Kicked, &kick_msg);
     }
 
     Ok(count as i32)

@@ -7,7 +7,6 @@ use crate::command::suggestion::suggestions::{Suggestions, SuggestionsBuilder};
 use pumpkin_data::translation::java::ARGUMENT_COLOR_INVALID;
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::color::NamedColor;
-use std::pin::Pin;
 
 pub const INVALID_VALUE_ERROR_TYPE: CommandErrorType<1> =
     CommandErrorType::new(ARGUMENT_COLOR_INVALID, ARGUMENT_COLOR_INVALID);
@@ -30,33 +29,31 @@ impl ArgumentType for TeamColorArgumentType {
         JavaClientArgumentType::Color
     }
 
-    fn list_suggestions<'a>(
-        &'a self,
-        _context: &'a CommandContext,
+    fn list_suggestions(
+        &self,
+        _context: &CommandContext,
         builder: SuggestionsBuilder,
-    ) -> Pin<Box<dyn Future<Output = Suggestions> + Send + 'a>> {
-        Box::pin(async move {
-            builder
-                .filter_and_suggest(&[
-                    "black",
-                    "dark_blue",
-                    "dark_green",
-                    "dark_aqua",
-                    "dark_red",
-                    "dark_purple",
-                    "gold",
-                    "gray",
-                    "dark_gray",
-                    "blue",
-                    "green",
-                    "aqua",
-                    "red",
-                    "light_purple",
-                    "yellow",
-                    "white",
-                ])
-                .build()
-        })
+    ) -> Suggestions {
+        builder
+            .filter_and_suggest(&[
+                "black",
+                "dark_blue",
+                "dark_green",
+                "dark_aqua",
+                "dark_red",
+                "dark_purple",
+                "gold",
+                "gray",
+                "dark_gray",
+                "blue",
+                "green",
+                "aqua",
+                "red",
+                "light_purple",
+                "yellow",
+                "white",
+            ])
+            .build()
     }
 
     fn examples(&self) -> Vec<String> {

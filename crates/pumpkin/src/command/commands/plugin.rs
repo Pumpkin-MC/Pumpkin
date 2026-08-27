@@ -1,248 +1,245 @@
 use std::path::Path;
 
-use pumpkin_util::{
-    PermissionLvl,
-    text::{TextComponent, color::NamedColor, hover::HoverEvent},
-};
+use pumpkin_util::text::hover::HoverEvent;
+use pumpkin_util::text::{TextComponent, color::NamedColor};
 
-use crate::command::{
-    CommandExecutor, CommandResult, CommandSender,
-    args::{Arg, ConsumedArgs, simple::SimpleArgConsumer},
-    dispatcher::CommandError,
-    tree::{
-        CommandTree,
-        builder::{argument, literal, require},
-    },
-};
-
-use crate::command::CommandError::InvalidConsumption;
+use crate::command::args::simple::SimpleArgConsumer;
+use crate::command::args::{Arg, ConsumedArgs};
+use crate::command::dispatcher::CommandError::{self, InvalidConsumption};
+use crate::command::tree::CommandTree;
+use crate::command::tree::builder::{argument, literal};
+use crate::command::{CommandExecutor, CommandResult, CommandSender};
 
 const NAMES: [&str; 1] = ["plugin"];
 
-const DESCRIPTION: &str = "Manage plugins.";
+const DESCRIPTION: &str = "Manage server plugins.";
 
-const PLUGIN_NAME: &str = "plugin_name";
+const PLUGIN_NAME: &str = "plugin";
 
 struct ListExecutor;
 
 impl CommandExecutor for ListExecutor {
-    fn execute<'a>(
-        &'a self,
-        sender: &'a CommandSender,
-        server: &'a crate::server::Server,
-        _args: &'a ConsumedArgs<'a>,
-    ) -> CommandResult<'a> {
-        Box::pin(async move {
-            let plugins = server.plugin_manager.active_plugins().await;
+    fn execute(
+        &self,
+        sender: &CommandSender,
+        server: &crate::server::Server,
+        _args: &ConsumedArgs,
+    ) -> CommandResult {
+        let Some(server_arc) = sender
+            .world_or_first(server)
+            .and_then(|w| w.server.upgrade())
+        else {
+            return Err(CommandError::CommandFailed(TextComponent::text(
+                "Failed to get server instance",
+            )));
+        };
 
-            let message_text = if plugins.is_empty() {
-                "There are no loaded plugins.".to_string()
-            } else if plugins.len() == 1 {
-                "There is 1 plugin loaded:\n".to_string()
+        let plugins = futures::executor::block_on(server_arc.plugin_manager.active_plugins());
+        let loaded_plugins =
+            futures::executor::block_on(server_arc.plugin_manager.loaded_plugins());
+
+        let mut message = TextComponent::text(format!("Plugins ({}):", loaded_plugins.len()))
+            .color_named(NamedColor::Gold)
+            .add_child(TextComponent::text("\n"));
+
+        for (i, plugin) in plugins.iter().enumerate() {
+            let metadata = plugin;
+            let version = metadata
+                .version
+                .strip_prefix('v')
+                .unwrap_or(&metadata.version);
+            let line = if i == plugins.len() - 1 {
+                format!("- {} (v{version})", metadata.name)
             } else {
-                format!("There are {} plugins loaded:\n", plugins.len())
+                format!("- {} (v{version})\n", metadata.name)
             };
-            let mut message = TextComponent::text(message_text);
+            let hover_text = format!(
+                "Version: {}\nAuthors: {}\nDescription: {}",
+                metadata.version,
+                metadata.authors.join(", "),
+                metadata.description
+            );
+            let component = TextComponent::text(line)
+                .color_named(NamedColor::Green)
+                .hover_event(HoverEvent::show_text(TextComponent::text(hover_text)));
 
-            for (i, metadata) in plugins.iter().enumerate() {
-                let version = metadata
-                    .version
-                    .strip_prefix('v')
-                    .unwrap_or(&metadata.version);
-                let line = if i == plugins.len() - 1 {
-                    format!("- {} (v{version})", metadata.name)
-                } else {
-                    format!("- {} (v{version})\n", metadata.name)
-                };
-                let hover_text = format!(
-                    "Version: {}\nAuthors: {}\nDescription: {}",
-                    metadata.version,
-                    metadata.authors.join(", "),
-                    metadata.description
-                );
-                let component = TextComponent::text(line)
-                    .color_named(NamedColor::Green)
-                    .hover_event(HoverEvent::show_text(TextComponent::text(hover_text)));
+            message = message.add_child(component);
+        }
 
-                message = message.add_child(component);
-            }
+        sender.send_message(message);
 
-            sender.send_message(message).await;
-
-            Ok(plugins.len() as i32)
-        })
+        Ok(1)
     }
 }
 
 struct LoadExecutor;
 
 impl CommandExecutor for LoadExecutor {
-    fn execute<'a>(
-        &'a self,
-        sender: &'a CommandSender,
-        server: &'a crate::server::Server,
-        args: &'a ConsumedArgs<'a>,
-    ) -> CommandResult<'a> {
-        Box::pin(async move {
-            let Some(Arg::Simple(plugin_name)) = args.get(PLUGIN_NAME) else {
-                return Err(InvalidConsumption(Some(PLUGIN_NAME.into())));
-            };
+    fn execute(
+        &self,
+        sender: &CommandSender,
+        server: &crate::server::Server,
+        args: &ConsumedArgs,
+    ) -> CommandResult {
+        let Some(Arg::Simple(plugin_name)) = args.get(PLUGIN_NAME) else {
+            return Err(InvalidConsumption(Some(PLUGIN_NAME.into())));
+        };
 
-            if server.plugin_manager.is_plugin_active(plugin_name).await {
-                return Err(CommandError::CommandFailed(TextComponent::text(format!(
-                    "Plugin {plugin_name} is already loaded"
-                ))));
-            }
+        let Some(server_arc) = sender
+            .world_or_first(server)
+            .and_then(|w| w.server.upgrade())
+        else {
+            return Err(CommandError::CommandFailed(TextComponent::text(
+                "Failed to get server instance",
+            )));
+        };
 
-            let Some(server_arc) = sender
-                .world_or_first(server)
-                .and_then(|w| w.server.upgrade())
-            else {
-                return Err(CommandError::CommandFailed(TextComponent::text(
-                    "Failed to get server instance",
-                )));
-            };
+        let plugin_name = plugin_name.to_string();
+        if futures::executor::block_on(server_arc.plugin_manager.is_plugin_active(&plugin_name)) {
+            sender.send_message(TextComponent::text(format!(
+                "Plugin {plugin_name} is already loaded"
+            )));
+            return Ok(1);
+        }
 
-            let result = server
+        let result = futures::executor::block_on(
+            server_arc
                 .plugin_manager
-                .try_load_plugin(&server_arc, Path::new(plugin_name))
-                .await;
+                .try_load_plugin(&server_arc, Path::new(&plugin_name)),
+        );
 
-            match result {
-                Ok(()) => {
-                    sender
-                        .send_message(
-                            TextComponent::text(format!(
-                                "Plugin {plugin_name} loaded successfully"
-                            ))
-                            .color_named(NamedColor::Green),
-                        )
-                        .await;
-                    Ok(1)
-                }
-                Err(e) => Err(CommandError::CommandFailed(TextComponent::text(format!(
-                    "Failed to load plugin {plugin_name}: {e}"
-                )))),
+        match result {
+            Ok(()) => {
+                sender.send_message(
+                    TextComponent::text(format!("Plugin {plugin_name} loaded successfully"))
+                        .color_named(NamedColor::Green),
+                );
             }
-        })
+            Err(e) => {
+                sender.send_message(TextComponent::text(format!(
+                    "Failed to load plugin {plugin_name}: {e}"
+                )));
+            }
+        }
+
+        Ok(1)
     }
 }
 
 struct UnloadExecutor;
 
 impl CommandExecutor for UnloadExecutor {
-    fn execute<'a>(
-        &'a self,
-        sender: &'a CommandSender,
-        server: &'a crate::server::Server,
-        args: &'a ConsumedArgs<'a>,
-    ) -> CommandResult<'a> {
-        Box::pin(async move {
-            let Some(Arg::Simple(plugin_name)) = args.get(PLUGIN_NAME) else {
-                return Err(InvalidConsumption(Some(PLUGIN_NAME.into())));
-            };
+    fn execute(
+        &self,
+        sender: &CommandSender,
+        server: &crate::server::Server,
+        args: &ConsumedArgs,
+    ) -> CommandResult {
+        let Some(Arg::Simple(plugin_name)) = args.get(PLUGIN_NAME) else {
+            return Err(InvalidConsumption(Some(PLUGIN_NAME.into())));
+        };
 
-            if !server.plugin_manager.is_plugin_active(plugin_name).await {
-                return Err(CommandError::CommandFailed(TextComponent::text(format!(
-                    "Plugin {plugin_name} is not loaded"
-                ))));
+        let Some(server_arc) = sender
+            .world_or_first(server)
+            .and_then(|w| w.server.upgrade())
+        else {
+            return Err(CommandError::CommandFailed(TextComponent::text(
+                "Failed to get server instance",
+            )));
+        };
+
+        let plugin_name = plugin_name.to_string();
+        if !futures::executor::block_on(server_arc.plugin_manager.is_plugin_active(&plugin_name)) {
+            sender.send_message(TextComponent::text(format!(
+                "Plugin {plugin_name} is not loaded"
+            )));
+            return Ok(1);
+        }
+
+        let result =
+            futures::executor::block_on(server_arc.plugin_manager.unload_plugin(&plugin_name));
+
+        match result {
+            Ok(()) => {
+                sender.send_message(
+                    TextComponent::text(format!("Plugin {plugin_name} unloaded successfully"))
+                        .color_named(NamedColor::Green),
+                );
             }
-
-            let result = server.plugin_manager.unload_plugin(plugin_name).await;
-
-            match result {
-                Ok(()) => {
-                    sender
-                        .send_message(
-                            TextComponent::text(format!(
-                                "Plugin {plugin_name} unloaded successfully",
-                            ))
-                            .color_named(NamedColor::Green),
-                        )
-                        .await;
-
-                    Ok(1)
-                }
-                Err(e) => Err(CommandError::CommandFailed(TextComponent::text(format!(
+            Err(e) => {
+                sender.send_message(TextComponent::text(format!(
                     "Failed to unload plugin {plugin_name}: {e}"
-                )))),
+                )));
             }
-        })
+        }
+
+        Ok(1)
     }
 }
 
 struct HotReloadExecutor(bool);
 
 impl CommandExecutor for HotReloadExecutor {
-    fn execute<'a>(
-        &'a self,
-        sender: &'a CommandSender,
-        server: &'a crate::server::Server,
-        _args: &'a ConsumedArgs<'a>,
-    ) -> CommandResult<'a> {
-        Box::pin(async move {
-            let enabled = self.0;
+    fn execute(
+        &self,
+        sender: &CommandSender,
+        server: &crate::server::Server,
+        _args: &ConsumedArgs,
+    ) -> CommandResult {
+        let enabled = self.0;
 
-            if enabled {
-                let Some(server_arc) = sender
-                    .world_or_first(server)
-                    .and_then(|w| w.server.upgrade())
-                else {
-                    return Err(CommandError::CommandFailed(TextComponent::text(
-                        "Failed to get server instance",
-                    )));
-                };
+        let Some(server_arc) = sender
+            .world_or_first(server)
+            .and_then(|w| w.server.upgrade())
+        else {
+            return Err(CommandError::CommandFailed(TextComponent::text(
+                "Failed to get server instance",
+            )));
+        };
 
-                if let Err(e) = server.plugin_manager.start_watcher(&server_arc).await {
-                    return Err(CommandError::CommandFailed(TextComponent::text(format!(
-                        "Failed to start plugin watcher: {e}"
-                    ))));
-                }
-
-                sender
-                    .send_message(
-                        TextComponent::text("Hot reloading has been enabled.")
-                            .color_named(NamedColor::Green),
-                    )
-                    .await;
-                sender
-                    .send_message(
-                        TextComponent::text("WARNING: Hot reloading can impact performance and should only be enabled during plugin development.")
-                            .color_named(NamedColor::Red),
-                    )
-                    .await;
-            } else {
-                server.plugin_manager.stop_watcher().await;
-
-                sender
-                    .send_message(
-                        TextComponent::text("Hot reloading has been disabled.")
-                            .color_named(NamedColor::Green),
-                    )
-                    .await;
+        if enabled {
+            if let Err(e) =
+                futures::executor::block_on(server_arc.plugin_manager.start_watcher(&server_arc))
+            {
+                sender.send_message(TextComponent::text(format!(
+                    "Failed to start plugin watcher: {e}"
+                )));
+                return Ok(1);
             }
 
-            Ok(1)
-        })
+            sender.send_message(
+                TextComponent::text("Hot reloading has been enabled.")
+                    .color_named(NamedColor::Green),
+            );
+            sender.send_message(
+                TextComponent::text(
+                    "WARNING: Hot reloading can impact performance and should only be enabled during plugin development.",
+                )
+                .color_named(NamedColor::Red),
+            );
+        } else {
+            futures::executor::block_on(server_arc.plugin_manager.stop_watcher());
+            sender.send_message(
+                TextComponent::text("Hot reloading has been disabled.")
+                    .color_named(NamedColor::Yellow),
+            );
+        }
+
+        Ok(1)
     }
 }
 
 pub fn init_command_tree() -> CommandTree {
-    CommandTree::new(NAMES, DESCRIPTION).then(
-        require(|sender| sender.has_permission_lvl(PermissionLvl::Three))
-            .then(
-                literal("load")
-                    .then(argument(PLUGIN_NAME, SimpleArgConsumer).execute(LoadExecutor)),
-            )
-            .then(
-                literal("unload")
-                    .then(argument(PLUGIN_NAME, SimpleArgConsumer).execute(UnloadExecutor)),
-            )
-            .then(
-                literal("hotreload")
-                    .then(literal("enable").execute(HotReloadExecutor(true)))
-                    .then(literal("disable").execute(HotReloadExecutor(false))),
-            )
-            .then(literal("list").execute(ListExecutor)),
-    )
+    CommandTree::new(NAMES, DESCRIPTION)
+        .then(literal("list").execute(ListExecutor))
+        .then(literal("load").then(argument(PLUGIN_NAME, SimpleArgConsumer).execute(LoadExecutor)))
+        .then(
+            literal("unload")
+                .then(argument(PLUGIN_NAME, SimpleArgConsumer).execute(UnloadExecutor)),
+        )
+        .then(
+            literal("hotreload")
+                .then(literal("enable").execute(HotReloadExecutor(true)))
+                .then(literal("disable").execute(HotReloadExecutor(false))),
+        )
 }

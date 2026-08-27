@@ -1,8 +1,7 @@
 use super::BlockEntity;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
-use std::pin::Pin;
-use tokio::sync::Mutex;
+use std::sync::Mutex;
 
 pub struct TrialSpawnerBlockEntity {
     pub position: BlockPos,
@@ -32,21 +31,22 @@ impl BlockEntity for TrialSpawnerBlockEntity {
         }
     }
 
-    fn write_nbt<'a>(
-        &'a self,
-        nbt: &'a mut NbtCompound,
-    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
-        Box::pin(async move {
-            if let Some(cfg) = self.normal_config.lock().await.as_ref() {
-                nbt.put_compound("normal_config", cfg.clone());
-            }
-            if let Some(cfg) = self.ominous_config.lock().await.as_ref() {
-                nbt.put_compound("ominous_config", cfg.clone());
-            }
-            if let Some(data) = self.spawner_data.lock().await.as_ref() {
-                nbt.put_compound("spawner_data", data.clone());
-            }
-        })
+    fn write_nbt(&self, nbt: &mut NbtCompound) {
+        if let Ok(cfg) = self.normal_config.lock()
+            && let Some(cfg) = cfg.as_ref()
+        {
+            nbt.put_compound("normal_config", cfg.clone());
+        }
+        if let Ok(cfg) = self.ominous_config.lock()
+            && let Some(cfg) = cfg.as_ref()
+        {
+            nbt.put_compound("ominous_config", cfg.clone());
+        }
+        if let Ok(data) = self.spawner_data.lock()
+            && let Some(data) = data.as_ref()
+        {
+            nbt.put_compound("spawner_data", data.clone());
+        }
     }
 
     fn chunk_data_nbt(&self) -> Option<NbtCompound> {
@@ -80,9 +80,9 @@ impl TrialSpawnerBlockEntity {
     pub const fn new(position: BlockPos) -> Self {
         Self {
             position,
-            normal_config: Mutex::const_new(None),
-            ominous_config: Mutex::const_new(None),
-            spawner_data: Mutex::const_new(None),
+            normal_config: Mutex::new(None),
+            ominous_config: Mutex::new(None),
+            spawner_data: Mutex::new(None),
         }
     }
 }

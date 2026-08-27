@@ -1,5 +1,5 @@
 use super::door_interact::DoorInteractGoal;
-use super::{Controls, Goal, GoalFuture};
+use super::{Controls, Goal};
 use crate::entity::mob::Mob;
 
 pub struct OpenDoorGoal {
@@ -26,37 +26,29 @@ impl Default for OpenDoorGoal {
 }
 
 impl Goal for OpenDoorGoal {
-    fn can_start<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
-        Box::pin(async move { self.door_interact_goal.can_use(mob) })
+    fn can_start(&mut self, mob: &dyn Mob) -> bool {
+        self.door_interact_goal.can_use(mob)
     }
 
-    fn should_continue<'a>(&'a self, _mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
-        Box::pin(async move {
-            self.close_door && self.forget_time > 0 && self.door_interact_goal.can_continue_to_use()
-        })
+    fn should_continue(&self, _mob: &dyn Mob) -> bool {
+        self.close_door && self.forget_time > 0 && self.door_interact_goal.can_continue_to_use()
     }
 
-    fn start<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
-        Box::pin(async move {
-            self.door_interact_goal.start_interaction(mob);
-            self.forget_time = 20;
-            self.door_interact_goal.set_open(mob, true).await;
-        })
+    fn start(&mut self, mob: &dyn Mob) {
+        self.door_interact_goal.start_interaction(mob);
+        self.forget_time = 20;
+        self.door_interact_goal.set_open(mob, true);
     }
 
-    fn stop<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
-        Box::pin(async move {
-            if self.close_door {
-                self.door_interact_goal.set_open(mob, false).await;
-            }
-        })
+    fn stop(&mut self, mob: &dyn Mob) {
+        if self.close_door {
+            self.door_interact_goal.set_open(mob, false);
+        }
     }
 
-    fn tick<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
-        Box::pin(async move {
-            self.forget_time -= 1;
-            self.door_interact_goal.tick_interaction(mob);
-        })
+    fn tick(&mut self, mob: &dyn Mob) {
+        self.forget_time -= 1;
+        self.door_interact_goal.tick_interaction(mob);
     }
 
     fn should_run_every_tick(&self) -> bool {

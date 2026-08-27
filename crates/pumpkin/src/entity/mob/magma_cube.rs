@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use crate::entity::{
-    Entity,
+    Entity, EntityBase,
     mob::{Mob, MobEntity, slime::SlimeEntity},
 };
 
@@ -21,21 +21,15 @@ impl Mob for MagmaCubeEntity {
         self.slime.get_mob_entity()
     }
 
-    fn mob_tick<'a>(
-        &'a self,
-        caller: &'a Arc<dyn crate::entity::EntityBase>,
-    ) -> crate::entity::EntityBaseFuture<'a, ()> {
-        self.slime.mob_tick(caller)
+    fn mob_tick<'a>(&'a self, caller: &'a Arc<dyn EntityBase>) {
+        self.slime.mob_tick(caller);
     }
 
-    fn post_tick(&self) -> crate::entity::EntityBaseFuture<'_, ()> {
-        self.slime.post_tick()
+    fn post_tick(&self) {
+        self.slime.post_tick();
     }
 
-    fn mob_player_collision<'a>(
-        &'a self,
-        player: &'a Arc<crate::entity::player::Player>,
-    ) -> crate::entity::EntityBaseFuture<'a, ()> {
-        self.slime.mob_player_collision(player)
+    fn mob_player_collision(&self, player: &Arc<crate::entity::player::Player>) {
+        self.slime.mob_player_collision(player);
     }
 }

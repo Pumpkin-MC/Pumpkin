@@ -5,7 +5,7 @@ use pumpkin_data::sound::Sound;
 use pumpkin_nbt::compound::NbtCompound;
 
 use crate::entity::{
-    Entity, NbtFuture,
+    Entity,
     ai::goal::{
         active_target::ActiveTargetGoal, look_around::RandomLookAroundGoal,
         look_at_entity::LookAtEntityGoal, melee_attack::MeleeAttackGoal, open_door::OpenDoorGoal,
@@ -99,16 +99,12 @@ impl Mob for VindicatorEntity {
         Some(self)
     }
 
-    fn mob_write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
-        Box::pin(async move {
-            self.write_raider_nbt(nbt);
-        })
+    fn mob_write_nbt(&self, nbt: &mut NbtCompound) {
+        self.write_raider_nbt(nbt);
     }
 
-    fn mob_read_nbt<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
-        Box::pin(async move {
-            self.read_raider_nbt(nbt);
-        })
+    fn mob_read_nbt(&self, nbt: &NbtCompound) {
+        self.read_raider_nbt(nbt);
     }
 }
 

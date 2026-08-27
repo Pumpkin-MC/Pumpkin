@@ -1,14 +1,17 @@
+use crossbeam::atomic::AtomicCell;
 use pumpkin_data::Block;
 use pumpkin_data::BlockStateId;
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::entity::EntityType;
+use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::java::client::play::Metadata;
 use pumpkin_util::math::position::BlockPos;
+use pumpkin_world::block::{block_state_from_nbt, block_state_to_nbt};
 use pumpkin_world::world::BlockFlags;
 use std::sync::{Arc, atomic::Ordering};
 
 use crate::{
-    entity::{Entity, EntityBase, EntityBaseFuture, living::LivingEntity},
+    entity::{Entity, EntityBase, living::LivingEntity},
     server::Server,
     world::World,
 };
@@ -19,27 +22,28 @@ const UPDATE_INTERVAL: i32 = 20;
 
 pub struct FallingEntity {
     entity: Entity,
-    block_state_id: BlockStateId,
+    /// Which block lands when the entity settles. Written to NBT so a chunk unload does not
+    /// turn gravel or an anvil into `from_type`'s placeholder sand; see
+    /// [`Self::read_custom_nbt`].
+    block_state_id: AtomicCell<BlockStateId>,
 }
 
 impl FallingEntity {
     pub const fn new(entity: Entity, block_state_id: BlockStateId) -> Self {
         Self {
             entity,
-            block_state_id,
+            block_state_id: AtomicCell::new(block_state_id),
         }
     }
 
-    /// Replaced the current Block and Spawns a new Falling one
-    pub async fn replace_spawn(world: &Arc<World>, position: BlockPos, block_state: BlockStateId) {
+    /// Replaced the current Block and Spawns a new Falling one (synchronous)
+    pub fn replace_spawn(world: &Arc<World>, position: BlockPos, block_state: BlockStateId) {
         // Replace the original block, TODO: use fluid state
-        world
-            .set_block_state(
-                &position,
-                Block::AIR.default_state.id,
-                BlockFlags::NOTIFY_ALL,
-            )
-            .await;
+        world.set_block_state(
+            &position,
+            Block::AIR.default_state.id,
+            BlockFlags::NOTIFY_ALL,
+        );
 
         let position = position.0.to_f64().add_raw(0.5, 0.0, 0.5);
         let entity = Entity::new(world.clone(), position, &EntityType::FALLING_BLOCK);
@@ -47,63 +51,72 @@ impl FallingEntity {
             .data
             .store(i32::from(block_state.as_u16()), Ordering::Relaxed);
         let entity = Arc::new(Self::new(entity, block_state));
-        world.spawn_entity(entity).await;
+        world.spawn_entity_non_save(entity);
     }
 }
 
 impl EntityBase for FallingEntity {
-    fn tick<'a>(
-        &'a self,
-        caller: &'a Arc<dyn EntityBase>,
-        server: &'a Server,
-    ) -> EntityBaseFuture<'a, ()> {
-        Box::pin(async move {
-            let entity = &self.entity;
-            entity.tick(caller, server).await;
-
-            let original_velo = entity.velocity.load();
-            let mut velo = original_velo;
-            velo.y -= self.get_gravity();
-
-            entity.velocity.store(velo);
-
-            entity.move_entity(caller, velo).await;
-            entity.tick_block_collisions(caller, server).await;
-            if entity.on_ground.load(Ordering::Relaxed) {
-                entity.velocity.store(velo.multiply(0.7, -0.5, 0.7));
-                entity
-                    .world
-                    .load()
-                    .set_block_state(
-                        &self.entity.block_pos.load(),
-                        self.block_state_id,
-                        BlockFlags::NOTIFY_ALL,
-                    )
-                    .await;
-                entity.remove().await;
-            }
-
-            entity.velocity.store(velo.multiply(0.98, 0.98, 0.98));
-
-            if entity.velocity_dirty.swap(false, Ordering::SeqCst) {
-                entity.send_pos_rot();
-                entity.send_velocity();
-            } else {
-                entity.send_tracked_position(UPDATE_INTERVAL);
-            }
-        })
+    /// Vanilla `FallingBlockEntity.addAdditionalSaveData`'s `BlockState`. `spawn_entity_non_save`
+    /// only skips the write at spawn time; the entity is still serialized when its chunk
+    /// unloads, and [`from_type`](crate::entity::type::from_type) rebuilds it as plain sand
+    /// without this.
+    ///
+    /// Vanilla's `Time`, `DropItem` and `FallHurtAmount` are not persisted because this entity
+    /// does not model them.
+    fn write_custom_nbt(&self, nbt: &mut NbtCompound) {
+        nbt.put_compound("BlockState", block_state_to_nbt(self.block_state_id.load()));
     }
 
-    fn init_data_tracker(&self) -> EntityBaseFuture<'_, ()> {
-        Box::pin(async move {
-            self.entity.send_meta_data(
-                &[Metadata::new(
-                    pumpkin_data::tracked_data::falling_block::START_POS,
-                    self.entity.block_pos.load(),
-                )],
-                None,
+    fn read_custom_nbt(&self, nbt: &NbtCompound) {
+        if let Some(state_id) = nbt
+            .get_compound("BlockState")
+            .and_then(block_state_from_nbt)
+        {
+            self.block_state_id.store(state_id);
+            // The client renders the falling block from the spawn packet's `data` field.
+            self.entity
+                .data
+                .store(i32::from(state_id.as_u16()), Ordering::Relaxed);
+        }
+    }
+
+    fn tick(&self, caller: &Arc<dyn EntityBase>, server: &Server) {
+        let entity = &self.entity;
+        let mut velo = entity.velocity.load();
+        velo.y -= self.get_gravity();
+
+        entity.velocity.store(velo);
+
+        entity.move_entity(caller, velo);
+        entity.tick_block_collisions(caller, server);
+        if entity.on_ground.load(Ordering::Relaxed) {
+            entity.velocity.store(velo.multiply(0.7, -0.5, 0.7));
+            entity.world.load().set_block_state(
+                &self.entity.block_pos.load(),
+                self.block_state_id.load(),
+                BlockFlags::NOTIFY_ALL,
             );
-        })
+            self.entity.remove();
+        }
+
+        entity.velocity.store(velo.multiply(0.98, 0.98, 0.98));
+
+        if entity.velocity_dirty.swap(false, Ordering::SeqCst) {
+            entity.send_pos_rot();
+            entity.send_velocity();
+        } else {
+            entity.send_tracked_position(UPDATE_INTERVAL);
+        }
+    }
+
+    fn init_data_tracker(&self) {
+        self.entity.send_meta_data(
+            &[Metadata::new(
+                pumpkin_data::tracked_data::falling_block::START_POS,
+                self.entity.block_pos.load(),
+            )],
+            None,
+        );
     }
 
     fn get_entity(&self) -> &Entity {
@@ -113,13 +126,8 @@ impl EntityBase for FallingEntity {
     fn get_living_entity(&self) -> Option<&LivingEntity> {
         None
     }
-    fn damage<'a>(
-        &'a self,
-        _caller: &'a dyn EntityBase,
-        _amount: f32,
-        _damage_type: DamageType,
-    ) -> EntityBaseFuture<'a, bool> {
-        Box::pin(async move { false })
+    fn damage(&self, _caller: &dyn EntityBase, _amount: f32, _damage_type: DamageType) -> bool {
+        false
     }
 
     fn get_gravity(&self) -> f64 {

@@ -51,11 +51,7 @@ impl JavaClient {
             VarULong(0),
         );
 
-        world.broadcast_packet_except_editioned_sync(
-            &[player.gameprofile.id],
-            &je_packet,
-            &be_packet,
-        );
+        world.broadcast_packet_except_editioned(&[player.gameprofile.id], &je_packet, &be_packet);
 
         let je_packet = CHeadRot::new(entity_id.into(), yaw as u8);
         world.broadcast_packet_except(&[player.gameprofile.id], &je_packet);

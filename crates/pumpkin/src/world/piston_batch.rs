@@ -82,7 +82,7 @@ impl PistonBatch {
     ///
     /// After the concurrent BE `JoinSet`. Sequential `await`: two placeholders cannot place
     /// into the same neighbour on the same tick.
-    pub async fn tick_block_entities(&self, world: &Arc<World>) {
+    pub fn tick_block_entities(&self, world: &Arc<World>) {
         for entry in &self.entries {
             if world
                 .get_block_state_id_if_loaded(&entry.position)
@@ -90,7 +90,7 @@ impl PistonBatch {
             {
                 continue;
             }
-            entry.block_entity.tick(world).await;
+            entry.block_entity.tick(world);
         }
     }
 }

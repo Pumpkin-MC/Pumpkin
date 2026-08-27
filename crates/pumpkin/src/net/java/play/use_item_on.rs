@@ -39,16 +39,14 @@ impl JavaClient {
         }
 
         let inventory = player.inventory();
-        let held_item = inventory.held_item().await;
-        let off_hand_item = inventory.off_hand_item().await;
+        let held_item = inventory.held_item();
+        let off_hand_item = inventory.off_hand_item();
         let held_item_empty = held_item.is_empty();
         let off_hand_item_empty = off_hand_item.is_empty();
 
-        let mut item = inventory.get_stack_in_hand(hand).await;
+        let mut item = inventory.get_stack_in_hand(hand);
         let item_id = item.item.id;
-        player
-            .increment_stat(StatisticCategory::Used, item_id as i32, 1)
-            .await;
+        player.increment_stat(StatisticCategory::Used, item_id as i32, 1);
 
         let entity = &player.get_entity();
         let world = entity.world.load_full();
@@ -85,24 +83,22 @@ impl JavaClient {
 
         // Code based on the java class ServerPlayerInteractionManager
         if !(sneaking && (!held_item_empty || !off_hand_item_empty)) {
-            let result = self
-                .call_use_item_on(
-                    player,
-                    &position,
-                    &cursor_pos,
-                    &face,
-                    &mut item,
-                    &equipment_slot,
-                    &world,
-                    block,
-                    server,
-                )
-                .await;
+            let result = Self::call_use_item_on(
+                player,
+                &position,
+                &cursor_pos,
+                face,
+                &mut item,
+                &equipment_slot,
+                &world,
+                block,
+                server,
+            );
             if result.consumes_action() {
                 // TODO: Trigger ANY_BLOCK_USE Criteria
 
                 if matches!(result, BlockActionResult::SuccessServer) {
-                    player.swing_hand(hand, true).await;
+                    player.swing_hand(hand, true);
                 }
                 return Ok(());
             }
@@ -124,8 +120,7 @@ impl JavaClient {
 
         server
             .item_registry
-            .use_on_block(&mut item, player, position, face, cursor_pos, block, server)
-            .await;
+            .use_on_block(&mut item, player, position, face, cursor_pos, block, server);
 
         // Check if the item is a block, because not every item can be placed :D
         let item_id = item.item.id;
@@ -161,39 +156,38 @@ impl JavaClient {
         }
 
         if !after.are_equal(&before) {
-            player.sync_hand_slot(slot_index, after.clone()).await;
-            inventory.set_stack_in_hand(hand, after).await;
+            player.sync_hand_slot(slot_index, after.clone());
+            inventory.set_stack_in_hand(hand, after);
         }
 
         Ok(())
     }
 
     #[expect(clippy::too_many_arguments)]
-    async fn call_use_item_on(
-        &self,
+    fn call_use_item_on(
         player: &Arc<Player>,
         position: &BlockPos,
         cursor_pos: &Vector3<f32>,
-        face: &BlockDirection,
+        face: BlockDirection,
         held_item: &mut ItemStack,
         equipment_slot: &EquipmentSlot,
         world: &Arc<World>,
         block: &Block,
         server: &Arc<Server>,
     ) -> BlockActionResult {
-        let result = server
-            .block_registry
-            .use_with_item(
-                block,
-                player,
-                position,
-                &BlockHitResult { face, cursor_pos },
-                held_item,
-                equipment_slot,
-                server,
-                world,
-            )
-            .await;
+        let result = server.block_registry.use_with_item(
+            block,
+            player,
+            position,
+            &BlockHitResult {
+                face: &face,
+                cursor_pos,
+            },
+            held_item,
+            equipment_slot,
+            server,
+            world,
+        );
 
         if result.consumes_action() {
             // TODO: Trigger ITEM_USED_ON_BLOCK Criteria
@@ -201,17 +195,17 @@ impl JavaClient {
         }
 
         if matches!(result, BlockActionResult::PassToDefaultBlockAction) {
-            let result = server
-                .block_registry
-                .on_use(
-                    block,
-                    player,
-                    position,
-                    &BlockHitResult { face, cursor_pos },
-                    server,
-                    world,
-                )
-                .await;
+            let result = server.block_registry.on_use(
+                block,
+                player,
+                position,
+                &BlockHitResult {
+                    face: &face,
+                    cursor_pos,
+                },
+                server,
+                world,
+            );
 
             if result.consumes_action() {
                 // TODO: Trigger DEFAULT_BLOCK_USE Criteria
@@ -252,11 +246,5 @@ impl JavaClient {
                 Err(BlockPlacingError::BlockOutOfWorld)
             }
         }
-    }
-
-    /// Checks if the block placed was a sign, then opens a dialog.
-    pub async fn send_sign_packet(&self, block_position: BlockPos, is_front_text: bool) {
-        self.enqueue_client_packet(&COpenSignEditor::new(block_position, is_front_text))
-            .await;
     }
 }

@@ -9,7 +9,7 @@ use std::{
 
 use crate::{
     entity::{
-        Entity, EntityBase, EntityBaseFuture, living::LivingEntity, projectile::ThrownItemEntity,
+        Entity, EntityBase, living::LivingEntity, projectile::ThrownItemEntity,
         projectile_deflection::ProjectileDeflectionType,
     },
     server::Server,
@@ -88,21 +88,17 @@ impl WindChargeEntity {
         }
     }
 
-    pub async fn create_explosion(&self, position: Vector3<f64>) {
+    pub fn create_explosion(&self, position: Vector3<f64>) {
         let calculator = match self.kind {
             WindChargeKind::Normal { .. } => WIND_CHARGE_EXPLOSION_DAMAGE_CALCULATOR.clone(),
             WindChargeKind::Breeze => BREEZE_WIND_CHARGE_EXPLOSION_DAMAGE_CALCULATOR.clone(),
         };
-        self.get_entity()
-            .world
-            .load()
-            .explode_with_calculator(
-                position,
-                EXPLOSION_POWER,
-                crate::world::ExplosionInteraction::Trigger,
-                Some(calculator),
-            )
-            .await;
+        self.get_entity().world.load().explode_with_calculator(
+            position,
+            EXPLOSION_POWER,
+            crate::world::ExplosionInteraction::Trigger,
+            Some(calculator),
+        );
     }
 
     pub fn deflect(
@@ -130,21 +126,15 @@ impl WindChargeEntity {
 }
 
 impl EntityBase for WindChargeEntity {
-    fn tick<'a>(
-        &'a self,
-        caller: &'a Arc<dyn EntityBase>,
-        server: &'a Server,
-    ) -> EntityBaseFuture<'a, ()> {
-        Box::pin(async move {
-            self.thrown_item_entity.process_tick(caller, server).await;
+    fn tick<'a>(&'a self, caller: &'a Arc<dyn EntityBase>, server: &'a Server) {
+        self.thrown_item_entity.process_tick(caller, server);
 
-            if let Some(cooldown) = self.deflect_cooldown() {
-                let cooldown_ticks = cooldown.load(Ordering::Relaxed);
-                if cooldown_ticks > 0 {
-                    cooldown.store(cooldown_ticks - 1, Ordering::Relaxed);
-                }
+        if let Some(cooldown) = self.deflect_cooldown() {
+            let cooldown_ticks = cooldown.load(Ordering::Relaxed);
+            if cooldown_ticks > 0 {
+                cooldown.store(cooldown_ticks - 1, Ordering::Relaxed);
             }
-        })
+        }
     }
 
     fn get_entity(&self) -> &Entity {

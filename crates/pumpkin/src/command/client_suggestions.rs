@@ -21,7 +21,7 @@ use pumpkin_protocol::bedrock::client::available_commands::{
 use pumpkin_protocol::java::client::play::SuggestionProviders;
 
 #[expect(clippy::too_many_lines)]
-pub async fn send_c_commands_packet(
+pub fn send_c_commands_packet(
     player: &Arc<Player>,
     server: &Server,
     dispatcher: &CommandDispatcher,
@@ -50,7 +50,7 @@ pub async fn send_c_commands_packet(
             continue;
         };
 
-        if !cmd_src.has_permission(server, permission.as_str()).await {
+        if !cmd_src.has_permission(server, permission.as_str()) {
             continue;
         }
 
@@ -208,7 +208,7 @@ pub async fn send_c_commands_packet(
     }
 
     let packet = CCommands::new(proto_nodes.into(), VarInt(root_node_index as i32));
-    player.send_client_packet(&packet).await;
+    player.try_send_client_packet(&packet);
 }
 
 fn resolve_node_id(node_id: NodeId, node_id_offset: usize, root_node_index: usize) -> usize {
@@ -319,7 +319,7 @@ struct BuilderContext<'a> {
 }
 
 #[expect(clippy::too_many_lines)]
-pub async fn send_bedrock_commands_packet(
+pub fn send_bedrock_commands_packet(
     player: &Arc<Player>,
     server: &Server,
     dispatcher: &CommandDispatcher,
@@ -348,7 +348,7 @@ pub async fn send_bedrock_commands_packet(
             continue;
         };
 
-        if !cmd_src.has_permission(server, permission.as_str()).await {
+        if !cmd_src.has_permission(server, permission.as_str()) {
             continue;
         }
 
@@ -441,8 +441,10 @@ pub async fn send_bedrock_commands_packet(
         constraints: Vec::new(),
     };
 
-    if let crate::net::ClientPlatform::Bedrock(bedrock_client) = player.client.as_ref() {
-        bedrock_client.send_packet(&packet).await;
+    if let crate::net::ClientPlatform::Bedrock(bedrock_client) = player.client.as_ref()
+        && let Ok(data) = bedrock_client.serialize_packet(&packet)
+    {
+        bedrock_client.try_enqueue_packet(data);
     }
 }
 

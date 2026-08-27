@@ -1,15 +1,12 @@
-use std::{
-    pin::Pin,
-    sync::{
-        Arc,
-        atomic::{AtomicBool, AtomicI8, Ordering},
-    },
+use std::sync::{
+    Arc,
+    atomic::{AtomicBool, AtomicI8, Ordering},
 };
 
 use super::BlockEntity;
 use pumpkin_nbt::{compound::NbtCompound, tag::NbtTag};
 use pumpkin_util::math::position::BlockPos;
-use tokio::sync::Mutex;
+use std::sync::Mutex;
 
 pub use pumpkin_data::dye_color::DyeColor;
 
@@ -155,15 +152,10 @@ impl BlockEntity for SignBlockEntity {
         }
     }
 
-    fn write_nbt<'a>(
-        &'a self,
-        nbt: &'a mut NbtCompound,
-    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
-        Box::pin(async move {
-            nbt.put("front_text", self.front_text.clone());
-            nbt.put("back_text", self.back_text.clone());
-            nbt.put_bool("is_waxed", self.is_waxed.load(Ordering::Relaxed));
-        })
+    fn write_nbt(&self, nbt: &mut NbtCompound) {
+        nbt.put("front_text", self.front_text.clone());
+        nbt.put("back_text", self.back_text.clone());
+        nbt.put_bool("is_waxed", self.is_waxed.load(Ordering::Relaxed));
     }
 
     fn chunk_data_nbt(&self) -> Option<NbtCompound> {

@@ -165,27 +165,21 @@ impl RCONClient {
             }
             ServerboundPacket::ExecCommand => {
                 if self.logged_in {
-                    let output = Arc::new(tokio::sync::Mutex::new(Vec::<String>::new()));
-
-                    let server_clone = server.clone();
-                    let output_clone = output.clone();
+                    let output = Arc::new(std::sync::Mutex::new(Vec::<String>::new()));
                     let packet_body = packet.get_body().to_owned();
 
-                    let command_source =
-                        CommandSender::Rcon(output_clone).into_source(server).await;
+                    let command_source = CommandSender::Rcon(output.clone()).into_source(server);
 
-                    // Wait task complete before send output
-                    let _ = tokio::spawn(async move {
-                        server_clone
-                            .command_dispatcher
-                            .load()
-                            .handle_command(&command_source, &packet_body)
-                            .await;
-                    })
-                    .await;
+                    server
+                        .command_dispatcher
+                        .load()
+                        .handle_command(&command_source, &packet_body);
 
-                    let output = output.lock().await;
-                    if output.is_empty() {
+                    let output_lines: Vec<String> = output
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner)
+                        .clone();
+                    if output_lines.is_empty() {
                         if config.logging.commands {
                             info!(
                                 "RCON ({}): Executed command: {}",
@@ -196,7 +190,7 @@ impl RCONClient {
                         self.send(ClientboundPacket::Output, packet.get_id(), "")
                             .await?;
                     } else {
-                        for line in output.iter() {
+                        for line in &output_lines {
                             if config.logging.commands {
                                 info!("RCON ({}): {}", self.address, line);
                             }

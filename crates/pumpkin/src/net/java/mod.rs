@@ -46,7 +46,7 @@ use tokio::{
     sync::oneshot,
 };
 use tokio::{
-    sync::mpsc::{Receiver, Sender, error::TryRecvError},
+    sync::mpsc::{Receiver, Sender},
     task::JoinHandle,
 };
 use tokio_util::sync::CancellationToken;
@@ -56,10 +56,13 @@ use tracing::{debug, error, warn};
 pub mod config;
 pub mod handshake;
 pub mod login;
+mod outgoing;
 pub mod pending;
 pub mod play;
 pub mod recipe_helper;
 pub mod status;
+
+use outgoing::{OutgoingPacket, run_outgoing_packet_writer};
 
 use arc_swap::ArcSwap;
 use pending::PendingConnection;
@@ -119,32 +122,14 @@ pub struct JavaClient {
     pub packet_sequence: AtomicI32,
     /// Packet rate limiter for incoming client packets.
     pub packet_limiter: PacketRateLimiter,
+    /// Vanilla `suspendFlushingOnServerThread`: the writer holds the socket flush
+    /// until tick end so packets from this game tick are not mixed with the next.
+    suspend_flushing: Arc<AtomicBool>,
 }
 
 pub enum OutgoingPacketType {
     Normal,
     HighPriority,
-}
-
-struct OutgoingPacket {
-    data: Bytes,
-    completion: Option<oneshot::Sender<()>>,
-}
-
-impl OutgoingPacket {
-    const fn normal(data: Bytes) -> Self {
-        Self {
-            data,
-            completion: None,
-        }
-    }
-
-    const fn high_priority(data: Bytes, completion: oneshot::Sender<()>) -> Self {
-        Self {
-            data,
-            completion: Some(completion),
-        }
-    }
 }
 
 impl JavaClient {
@@ -182,7 +167,22 @@ impl JavaClient {
             pending_keep_alives: std::sync::Mutex::new(Vec::new()),
             packet_sequence: AtomicI32::new(-1),
             packet_limiter: pending.packet_limiter,
+            suspend_flushing: Arc::new(AtomicBool::new(false)),
         }
+    }
+
+    /// Vanilla `ServerCommonPacketListenerImpl.suspendFlushing`.
+    pub fn suspend_flushing(&self) {
+        self.suspend_flushing.store(true, Ordering::Release);
+    }
+
+    /// Vanilla `ServerCommonPacketListenerImpl.resumeFlushing`: lift the hold and
+    /// enqueue a tick-end flush barrier.
+    pub fn resume_flushing(&self) {
+        self.suspend_flushing.store(false, Ordering::Release);
+        let _ = self
+            .outgoing_packet_queue_send
+            .try_send(OutgoingPacket::Flush);
     }
 
     pub fn set_player(&self, player: Arc<Player>) {
@@ -475,6 +475,35 @@ impl JavaClient {
         }
     }
 
+    pub fn try_kick(&self, reason: &TextComponent) {
+        match self.connection_state.load() {
+            ConnectionState::Login => {
+                let packet = CLoginDisconnect::new(
+                    serde_json::to_string(&reason.0).unwrap_or_else(|_| String::new()),
+                );
+                if let Ok(data) = self.serialize_packet(&packet) {
+                    self.try_enqueue_packet(data);
+                }
+            }
+            ConnectionState::Config => {
+                let reason_text = reason.clone().get_text();
+                let packet = CConfigDisconnect::new(&reason_text);
+                if let Ok(data) = self.serialize_packet(&packet) {
+                    self.try_enqueue_packet(data);
+                }
+            }
+            ConnectionState::Play => {
+                let packet = CPlayDisconnect::new(reason);
+                if let Ok(data) = self.serialize_packet(&packet) {
+                    self.try_enqueue_packet(data);
+                }
+            }
+            _ => {}
+        }
+        debug!("Closing connection for {}", self.id);
+        self.close();
+    }
+
     pub async fn kick(&self, reason: TextComponent) {
         self.kick_explicit(&reason, true).await;
     }
@@ -581,16 +610,14 @@ impl JavaClient {
     /// - **Login/Transfer:** Handles login and transfer packets.
     /// - **Config:** Handles configuration packets.
     pub fn start_outgoing_packet_task(&mut self) {
-        const MAX_BATCH_SIZE: usize = 64;
-
-        let Some(mut packet_receiver) = self.outgoing_packet_queue_recv.take() else {
+        let Some(packet_receiver) = self.outgoing_packet_queue_recv.take() else {
             return;
         };
-        let Some(mut priority_packet_receiver) = self.outgoing_packet_priority_recv.take() else {
+        let Some(priority_packet_receiver) = self.outgoing_packet_priority_recv.take() else {
             return;
         };
         let close_token = self.close_token.clone();
-        let Some(mut writer) = self
+        let Some(writer) = self
             .network_writer
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
@@ -599,71 +626,17 @@ impl JavaClient {
             return;
         };
         let id = self.id;
+        let suspend_flushing = self.suspend_flushing.clone();
         self.spawn_task(async move {
-            while !close_token.is_cancelled() {
-                let recv_result = tokio::select! {
-                    biased;
-                    () = close_token.cancelled() => None,
-                    res = priority_packet_receiver.recv() => res,
-                    res = packet_receiver.recv() => res,
-                };
-
-                let Some(packet_data) = recv_result else {
-                    break;
-                };
-
-                let mut packet_batch = Vec::with_capacity(MAX_BATCH_SIZE);
-                packet_batch.push(packet_data);
-
-                while packet_batch.len() < MAX_BATCH_SIZE {
-                    match priority_packet_receiver.try_recv() {
-                        Ok(packet_data) => {
-                            packet_batch.push(packet_data);
-                            continue;
-                        }
-                        Err(TryRecvError::Disconnected | TryRecvError::Empty) => {}
-                    }
-
-                    match packet_receiver.try_recv() {
-                        Ok(packet_data) => packet_batch.push(packet_data),
-                        Err(TryRecvError::Disconnected | TryRecvError::Empty) => break,
-                    }
-                }
-
-                let send_failed = {
-                    let mut failed = false;
-                    for packet in &packet_batch {
-                        if let Err(err) = writer.write_packet(packet.data.clone()).await {
-                            failed = true;
-                            // It is expected that the packet will fail if we are closed
-                            if !close_token.is_cancelled() {
-                                warn!("Failed to send packet to client {id}: {err}");
-                            }
-                            break;
-                        }
-                    }
-
-                    if !failed && let Err(err) = writer.flush().await {
-                        failed = true;
-                        if !close_token.is_cancelled() {
-                            warn!("Failed to flush packet batch for client {id}: {err}");
-                        }
-                    }
-                    failed
-                };
-
-                if send_failed {
-                    // We now need to close the connection to the client since the stream is in an unknown state.
-                    close_token.cancel();
-                    break;
-                }
-
-                for packet in packet_batch {
-                    if let Some(completion) = packet.completion {
-                        let _ = completion.send(());
-                    }
-                }
-            }
+            run_outgoing_packet_writer(
+                packet_receiver,
+                priority_packet_receiver,
+                writer,
+                close_token,
+                suspend_flushing,
+                id,
+            )
+            .await;
         });
     }
 
@@ -715,9 +688,8 @@ impl JavaClient {
             id if id == SChangeGameMode::to_id(version) => {
                 self.handle_change_game_mode(
                     player,
-                    SChangeGameMode::read(&mut payload, &version)?,
-                )
-                .await;
+                    &SChangeGameMode::read(&mut payload, &version)?,
+                );
             }
             id if id == SChatAck::to_id(version) => {
                 let packet = SChatAck::read(&mut payload, &version)?;
@@ -775,8 +747,7 @@ impl JavaClient {
                     .await;
             }
             id if id == SPaddleBoat::to_id(version) => {
-                self.handle_paddle_boat(player, SPaddleBoat::read(&mut payload, &version)?)
-                    .await;
+                self.handle_paddle_boat(player, &SPaddleBoat::read(&mut payload, &version)?);
             }
             id if id == SInteract::to_id(version) => {
                 self.handle_interact(player, SInteract::read(&mut payload, &version)?, server)
@@ -902,13 +873,14 @@ impl JavaClient {
             id if id == SSetJigsawBlock::to_id(version) => {
                 self.handle_set_jigsaw_block(
                     player,
-                    SSetJigsawBlock::read(&mut payload, &version)?,
-                )
-                .await;
+                    &SSetJigsawBlock::read(&mut payload, &version)?,
+                );
             }
             id if id == SJigsawGenerate::to_id(version) => {
-                self.handle_jigsaw_generate(player, SJigsawGenerate::read(&mut payload, &version)?)
-                    .await;
+                self.handle_jigsaw_generate(
+                    player,
+                    &SJigsawGenerate::read(&mut payload, &version)?,
+                );
             }
             id if id == SPlayerCommand::to_id(version) => {
                 self.handle_player_command(
@@ -931,9 +903,10 @@ impl JavaClient {
                     .await;
             }
             id if id == SContainerButtonClick::to_id(version) => {
-                player
-                    .on_container_button_click(SContainerButtonClick::read(&mut payload, &version)?)
-                    .await;
+                player.on_container_button_click(&SContainerButtonClick::read(
+                    &mut payload,
+                    &version,
+                )?);
             }
             id if id == SSetHeldItem::to_id(version) => {
                 self.handle_set_held_item(
@@ -959,8 +932,7 @@ impl JavaClient {
                     .await;
             }
             id if id == SEditBook::to_id(version) => {
-                self.handle_edit_book(player, SEditBook::read(&mut payload, &version)?)
-                    .await;
+                self.handle_edit_book(player, &SEditBook::read(&mut payload, &version)?);
             }
             id if id == SUseItemOn::to_id(version) => {
                 self.handle_use_item_on(player, SUseItemOn::read(&mut payload, &version)?, server)
@@ -986,12 +958,10 @@ impl JavaClient {
                     player,
                     server,
                     SCloseContainer::read(&mut payload, &version)?,
-                )
-                .await;
+                );
             }
             id if id == SChunkBatch::to_id(version) => {
-                self.handle_chunk_batch(player, SChunkBatch::read(&mut payload, &version)?)
-                    .await;
+                self.handle_chunk_batch(player, &SChunkBatch::read(&mut payload, &version)?);
             }
             id if id == SPlayerSession::to_id(version) => {
                 self.handle_chat_session_update(
@@ -1057,8 +1027,7 @@ impl JavaClient {
                 self.handle_seen_advancement(
                     player,
                     SSeenAdvancement::read(&mut payload, &version)?,
-                )
-                .await;
+                );
             }
             id if id == SPlayResourcePack::to_id(version) => {
                 self.handle_play_resource_pack_response(
@@ -1076,16 +1045,14 @@ impl JavaClient {
                     server,
                     player,
                     &SLockDifficulty::read(&mut payload, &version)?,
-                )
-                .await;
+                );
             }
             id if id == SChangeDifficulty::to_id(version) => {
                 self.handle_change_difficulty(
                     server,
                     player,
                     &SChangeDifficulty::read(&mut payload, &version)?,
-                )
-                .await;
+                );
             }
             id if id == SSetBeacon::to_id(version) => {
                 self.handle_set_beacon(player, &SSetBeacon::read(&mut payload, &version)?)

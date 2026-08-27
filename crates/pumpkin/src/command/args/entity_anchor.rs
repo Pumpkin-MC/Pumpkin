@@ -47,17 +47,15 @@ impl ArgumentConsumer for EntityAnchorArgumentConsumer {
         _server: &'a Server,
         args: &mut RawArgs<'a>,
     ) -> ConsumeResult<'a> {
-        let Some(anchor_str) = args.pop().map(|arg| arg.value) else {
-            return Box::pin(async move { None });
-        };
+        let anchor_str = args.pop().map(|arg| arg.value)?;
 
         let anchor = match anchor_str.to_lowercase().as_str() {
             "feet" => EntityAnchor::Feet,
             "eyes" => EntityAnchor::Eyes,
-            _ => return Box::pin(async move { None }),
+            _ => return None,
         };
 
-        Box::pin(async move { Some(Arg::EntityAnchor(anchor)) })
+        Some(Arg::EntityAnchor(anchor))
     }
 }
 

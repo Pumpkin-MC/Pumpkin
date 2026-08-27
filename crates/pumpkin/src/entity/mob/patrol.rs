@@ -6,7 +6,7 @@ use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 
-use crate::entity::ai::goal::{Controls, Goal, GoalFuture};
+use crate::entity::ai::goal::{Controls, Goal};
 use crate::entity::ai::pathfinder::NavigatorGoal;
 use crate::entity::mob::Mob;
 use crate::entity::mob::raider::create_ominous_banner;
@@ -95,14 +95,11 @@ pub trait PatrollingMonster: Mob {
         if self.is_patrol_leader() {
             let banner = create_ominous_banner();
             let living = &self.get_mob_entity().living_entity;
-            tokio::task::block_in_place(|| {
-                tokio::runtime::Handle::current().block_on(async {
-                    let mut equipment = living.entity_equipment.lock().await;
-                    equipment.put(&EquipmentSlot::HEAD, banner.clone());
-                    drop(equipment);
-                    living.send_equipment_changes(&[(EquipmentSlot::HEAD, banner)]);
-                });
-            });
+            if let Ok(mut equipment) = living.entity_equipment.try_lock() {
+                equipment.put(&EquipmentSlot::HEAD, banner.clone());
+                drop(equipment);
+                living.send_equipment_changes(&[(EquipmentSlot::HEAD, banner)]);
+            }
         }
 
         if is_patrol_spawn {
@@ -158,70 +155,65 @@ impl LongDistancePatrolGoal {
 }
 
 impl Goal for LongDistancePatrolGoal {
-    fn can_start<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
-        Box::pin(async move {
-            let Some(patrol) = mob.as_patrolling_monster() else {
-                return false;
-            };
-            let world = mob.get_entity().world.load();
-            let game_time = world.level_time.lock().await.query_daytime();
-            let is_on_cooldown = game_time < self.cooldown_until;
+    fn can_start(&mut self, mob: &dyn Mob) -> bool {
+        let Some(patrol) = mob.as_patrolling_monster() else {
+            return false;
+        };
+        let world = mob.get_entity().world.load();
+        let game_time = world
+            .level_time
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .query_daytime();
+        let is_on_cooldown = game_time < self.cooldown_until;
 
-            let target = mob.get_mob_entity().target.lock().await.clone();
-            patrol.is_patrolling()
-                && target.is_none()
-                && patrol.has_patrol_target()
-                && !is_on_cooldown
-        })
+        let target = mob.get_mob_entity().get_target().clone();
+        patrol.is_patrolling() && target.is_none() && patrol.has_patrol_target() && !is_on_cooldown
     }
 
-    fn should_continue<'a>(&'a self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
-        Box::pin(async move {
-            let Some(patrol) = mob.as_patrolling_monster() else {
-                return false;
-            };
-            let target = mob.get_mob_entity().target.lock().await.clone();
-            patrol.is_patrolling() && target.is_none() && patrol.has_patrol_target()
-        })
+    fn should_continue(&self, mob: &dyn Mob) -> bool {
+        let Some(patrol) = mob.as_patrolling_monster() else {
+            return false;
+        };
+        let target = mob.get_mob_entity().get_target().clone();
+        patrol.is_patrolling() && target.is_none() && patrol.has_patrol_target()
     }
 
     fn controls(&self) -> Controls {
         Controls::MOVE
     }
 
-    fn tick<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
-        Box::pin(async move {
-            let Some(patrol) = mob.as_patrolling_monster() else {
-                return;
-            };
-            let is_leader = patrol.is_patrol_leader();
-            let entity = mob.get_entity();
-            let pos = entity.pos.load();
+    fn tick(&mut self, mob: &dyn Mob) {
+        let Some(patrol) = mob.as_patrolling_monster() else {
+            return;
+        };
+        let is_leader = patrol.is_patrol_leader();
+        let entity = mob.get_entity();
+        let pos = entity.pos.load();
 
-            let Some(patrol_target) = patrol.get_patrol_target() else {
-                return;
-            };
+        let Some(patrol_target) = patrol.get_patrol_target() else {
+            return;
+        };
 
-            let dist_sq = pos.squared_distance_to_vec(&patrol_target.to_f64());
-            if is_leader && dist_sq < 100.0 {
-                patrol.find_patrol_target();
+        let dist_sq = pos.squared_distance_to_vec(&patrol_target.to_f64());
+        if is_leader && dist_sq < 100.0 {
+            patrol.find_patrol_target();
+        } else {
+            let speed = if is_leader {
+                self.leader_speed_modifier
             } else {
-                let speed = if is_leader {
-                    self.leader_speed_modifier
-                } else {
-                    self.speed_modifier
-                };
-                let mut nav = mob
-                    .get_mob_entity()
-                    .navigator
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner);
-                nav.set_progress(NavigatorGoal {
-                    current_progress: pos,
-                    destination: patrol_target.to_f64(),
-                    speed,
-                });
-            }
-        })
+                self.speed_modifier
+            };
+            let mut nav = mob
+                .get_mob_entity()
+                .navigator
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            nav.set_progress(NavigatorGoal {
+                current_progress: pos,
+                destination: patrol_target.to_f64(),
+                speed,
+            });
+        }
     }
 }

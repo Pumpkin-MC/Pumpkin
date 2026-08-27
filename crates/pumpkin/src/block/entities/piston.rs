@@ -1,5 +1,5 @@
+use std::sync::Arc;
 use std::sync::atomic::Ordering;
-use std::{pin::Pin, sync::Arc};
 
 use crossbeam::atomic::AtomicCell;
 use pumpkin_data::block_properties::{
@@ -110,7 +110,7 @@ impl PistonBlockEntity {
 
     /// Ports vanilla `PistonMovingBlockEntity.moveCollidedEntities`: pushes entities whose
     /// bounding box the moving block's leading face sweeps into during this tick.
-    async fn push_entities(&self, world: &Arc<World>, new_progress: f32) {
+    fn push_entities(&self, world: &Arc<World>, new_progress: f32) {
         let last = self.last_progress.load();
         let delta = f64::from(new_progress - last);
         if delta <= 0.0 {
@@ -129,11 +129,11 @@ impl PistonBlockEntity {
         let query = block_aabb.union(&Self::movement_area(block_aabb, motion_dir, delta));
 
         let launches = Self::launches_entities(self.pushed_block_state);
-        let game_time = world.get_world_age().await;
+        let game_time = world.get_world_age();
 
         for entity in world.get_entities_at_box(&query) {
             let e = entity.get_entity();
-            if e.no_clip.load(Ordering::Relaxed) {
+            if e.no_physics.load(Ordering::Relaxed) {
                 continue;
             }
             // Vanilla: markers, displays, interaction, area effect clouds. No launch, no shove.
@@ -183,7 +183,7 @@ impl PistonBlockEntity {
                 continue;
             }
             let push_amount = overlap.min(delta) + 0.01;
-            Self::move_entity(&entity, motion_dir, push_amount, motion_dir, game_time).await;
+            Self::move_entity(&entity, motion_dir, push_amount, motion_dir, game_time);
 
             // Vanilla `push`: retracting head also shoves out of the piston body cube.
             if !self.extending && self.source {
@@ -193,8 +193,7 @@ impl PistonBlockEntity {
                     motion_dir,
                     delta,
                     game_time,
-                )
-                .await;
+                );
             }
         }
     }
@@ -306,7 +305,7 @@ impl PistonBlockEntity {
 
     /// Collision-clipped move, not a teleport. `move_entity_external`: do not write into
     /// `velocity` (a minecart would re-integrate it).
-    async fn move_entity(
+    fn move_entity(
         entity: &Arc<dyn crate::entity::EntityBase>,
         dir: BlockDirection,
         distance: f64,
@@ -319,15 +318,14 @@ impl PistonBlockEntity {
             Self::dir_vec(dir, distance),
             piston_direction,
             game_time,
-        )
-        .await;
+        );
         e.send_pos();
     }
 
     /// Vanilla `push`: when a piston head retracts, shove entities that ended up
     /// inside the piston-body cube back out the opposite direction (slightly past
     /// the move they just got, so the net motion is essentially zero).
-    async fn push_out_of_piston_body(
+    fn push_out_of_piston_body(
         entity: &Arc<dyn crate::entity::EntityBase>,
         piston_pos: &BlockPos,
         motion_dir: BlockDirection,
@@ -350,7 +348,7 @@ impl PistonBlockEntity {
             let distance = e.min(amount) + 0.01;
             // Vanilla `moveEntityByPiston(direction, entity, delta, opposite)`: noclip stays
             // `motion_dir` so the entity can leave the retracting head's cell.
-            Self::move_entity(entity, back, distance, motion_dir, game_time).await;
+            Self::move_entity(entity, back, distance, motion_dir, game_time);
         }
     }
 
@@ -369,7 +367,7 @@ impl PistonBlockEntity {
         )
     }
 
-    pub async fn finish(&self, world: Arc<World>) {
+    pub fn finish(&self, world: &Arc<World>) {
         if self.last_progress.load() < 1.0 {
             // Vanilla parks the animation at its end before doing anything else, so a second
             // `finish` on the same instance is a no-op.
@@ -377,26 +375,18 @@ impl PistonBlockEntity {
             self.last_progress.store(1.0);
 
             let pos = self.position;
-            // State first, BE second (same as `tick`). Re-check `is_current` after every `.await`.
-            if world.get_block(&pos) == &Block::MOVING_PISTON && self.is_current(&world) {
+            // State first, BE second (same as `tick`).
+            if world.get_block(&pos) == &Block::MOVING_PISTON && self.is_current(world) {
                 let state = if self.source {
                     Block::AIR.default_state.id
                 } else {
                     // Vanilla `finalTick` does not strip `waterlogged`; `tick` does.
-                    world
-                        .clone()
-                        .update_from_neighbor_shapes(self.pushed_block_state.id, &pos)
-                        .await
+                    world.update_from_neighbor_shapes(self.pushed_block_state.id, &pos)
                 };
-                world
-                    .clone()
-                    .set_block_state(&pos, state, BlockFlags::NOTIFY_ALL)
-                    .await;
-                world
-                    .update_neighbor(&pos, Block::from_state_id(state))
-                    .await;
+                world.set_block_state(&pos, state, BlockFlags::NOTIFY_ALL);
+                world.update_neighbor(&pos, Block::from_state_id(state));
             }
-            if self.is_current(&world) {
+            if self.is_current(world) {
                 world.remove_block_entity(&pos);
             }
         }
@@ -434,71 +424,56 @@ impl BlockEntity for PistonBlockEntity {
         true
     }
 
-    fn tick<'a>(&'a self, world: &'a Arc<World>) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
-        Box::pin(async move {
-            // Superseded by a re-trigger: further `finish` would clobber the new animation.
-            if !self.is_current(world) {
-                return;
-            }
+    fn tick(&self, world: &Arc<World>) {
+        // Superseded by a re-trigger: further `finish` would clobber the new animation.
+        if !self.is_current(world) {
+            return;
+        }
 
-            self.last_ticked.store(world.get_world_age().await);
+        self.last_ticked.store(world.get_world_age());
 
-            let current_progress = self.current_progress.load();
-            self.last_progress.store(current_progress);
-            if current_progress >= 1.0 {
-                let pos = self.position;
-                // State first, BE second. `World::moving_piston_state` answers through this BE;
-                // a `MOVING_PISTON` with no BE has no solid faces.
-                if world.get_block(&pos) == &Block::MOVING_PISTON && self.is_current(world) {
-                    // Vanilla uses the post-processed state. Unsurvivable (rail, torch) becomes
-                    // air: place then break so it drops.
-                    let updated_state = world
-                        .clone()
-                        .update_from_neighbor_shapes(self.pushed_block_state.id, &pos)
-                        .await;
+        let current_progress = self.current_progress.load();
+        self.last_progress.store(current_progress);
+        if current_progress >= 1.0 {
+            let pos = self.position;
+            // State first, BE second. `World::moving_piston_state` answers through this BE;
+            // a `MOVING_PISTON` with no BE has no solid faces.
+            if world.get_block(&pos) == &Block::MOVING_PISTON && self.is_current(world) {
+                // Vanilla uses the post-processed state. Unsurvivable (rail, torch) becomes
+                // air: place then break so it drops.
+                let updated_state =
+                    world.update_from_neighbor_shapes(self.pushed_block_state.id, &pos);
 
-                    if BlockState::from_id(updated_state).is_air() {
-                        world
-                            .clone()
-                            .set_block_state(
-                                &pos,
-                                self.pushed_block_state.id,
-                                BlockFlags::FORCE_STATE | BlockFlags::MOVED,
-                            )
-                            .await;
-                        // No-op when the pushed block was air to begin with.
-                        world
-                            .clone()
-                            .break_block(&pos, None, BlockFlags::NOTIFY_ALL)
-                            .await;
-                    } else {
-                        let updated_state = Block::from_state_id(updated_state)
-                            .without_waterlogged(updated_state)
-                            .map_or(updated_state, |state| state.id);
-                        world
-                            .clone()
-                            .set_block_state(
-                                &pos,
-                                updated_state,
-                                BlockFlags::NOTIFY_ALL | BlockFlags::MOVED,
-                            )
-                            .await;
-                        // Vanilla `updateNeighbor(pos, block, pos)`: the delivered block
-                        // re-examines its support. Neighbours already got `NOTIFY_NEIGHBORS`.
-                        world
-                            .update_neighbor(&pos, Block::from_state_id(updated_state))
-                            .await;
-                    }
+                if BlockState::from_id(updated_state).is_air() {
+                    world.set_block_state(
+                        &pos,
+                        self.pushed_block_state.id,
+                        BlockFlags::FORCE_STATE | BlockFlags::MOVED,
+                    );
+                    // No-op when the pushed block was air to begin with.
+                    world.break_block(&pos, None, BlockFlags::NOTIFY_ALL);
+                } else {
+                    let updated_state = Block::from_state_id(updated_state)
+                        .without_waterlogged(updated_state)
+                        .map_or(updated_state, |state| state.id);
+                    world.set_block_state(
+                        &pos,
+                        updated_state,
+                        BlockFlags::NOTIFY_ALL | BlockFlags::MOVED,
+                    );
+                    // Vanilla `updateNeighbor(pos, block, pos)`: the delivered block
+                    // re-examines its support. Neighbours already got `NOTIFY_NEIGHBORS`.
+                    world.update_neighbor(&pos, Block::from_state_id(updated_state));
                 }
-                if self.is_current(world) {
-                    world.remove_block_entity(&pos);
-                }
-                return;
             }
-            let new_progress = (current_progress + 0.5).min(1.0);
-            self.push_entities(world, new_progress).await;
-            self.current_progress.store(new_progress);
-        })
+            if self.is_current(world) {
+                world.remove_block_entity(&pos);
+            }
+            return;
+        }
+        let new_progress = (current_progress + 0.5).min(1.0);
+        self.push_entities(world, new_progress);
+        self.current_progress.store(new_progress);
     }
 
     fn from_nbt(nbt: &pumpkin_nbt::compound::NbtCompound, position: BlockPos) -> Self
@@ -527,19 +502,18 @@ impl BlockEntity for PistonBlockEntity {
         }
     }
 
-    fn write_nbt<'a>(
-        &'a self,
-        nbt: &'a mut NbtCompound,
-    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
-        Box::pin(async move {
-            self.write_fields(nbt);
-        })
+    fn write_nbt(&self, nbt: &mut NbtCompound) {
+        self.write_fields(nbt);
     }
 
     fn chunk_data_nbt(&self) -> Option<NbtCompound> {
         let mut nbt = NbtCompound::new();
         self.write_fields(&mut nbt);
         Some(nbt)
+    }
+
+    fn sends_update_packet(&self) -> bool {
+        false
     }
 
     fn as_any(&self) -> &dyn std::any::Any {

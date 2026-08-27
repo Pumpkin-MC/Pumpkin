@@ -137,58 +137,54 @@ fn format_pack(name: &str) -> TextComponent {
 struct AvailablePackSuggestionProvider;
 
 impl SuggestionProvider for AvailablePackSuggestionProvider {
-    fn suggest<'a>(
-        &'a self,
-        context: &'a CommandContext,
+    fn suggest(
+        &self,
+        context: &CommandContext,
         mut builder: SuggestionsBuilder,
-    ) -> SuggestionProviderResult<'a> {
-        Box::pin(async move {
-            let server = context.server();
-            for pack in get_available_packs(server) {
-                if pack.contains(' ') || pack.contains('/') {
-                    builder = builder.suggest(format!("\"{pack}\""));
+    ) -> SuggestionProviderResult {
+        let server = context.server();
+        for pack in get_available_packs(server) {
+            if pack.contains(' ') || pack.contains('/') {
+                builder = builder.suggest(format!("\"{pack}\""));
+            } else {
+                builder = builder.suggest(pack.clone());
+            }
+            if let Some(short) = pack.strip_prefix("file/") {
+                if short.contains(' ') {
+                    builder = builder.suggest(format!("\"{short}\""));
                 } else {
-                    builder = builder.suggest(pack.clone());
-                }
-                if let Some(short) = pack.strip_prefix("file/") {
-                    if short.contains(' ') {
-                        builder = builder.suggest(format!("\"{short}\""));
-                    } else {
-                        builder = builder.suggest(short.to_string());
-                    }
+                    builder = builder.suggest(short.to_string());
                 }
             }
-            builder.build()
-        })
+        }
+        builder.build()
     }
 }
 
 struct EnabledPackSuggestionProvider;
 
 impl SuggestionProvider for EnabledPackSuggestionProvider {
-    fn suggest<'a>(
-        &'a self,
-        context: &'a CommandContext,
+    fn suggest(
+        &self,
+        context: &CommandContext,
         mut builder: SuggestionsBuilder,
-    ) -> SuggestionProviderResult<'a> {
-        Box::pin(async move {
-            let server = context.server();
-            for pack in get_enabled_packs(server) {
-                if pack.contains(' ') || pack.contains('/') {
-                    builder = builder.suggest(format!("\"{pack}\""));
+    ) -> SuggestionProviderResult {
+        let server = context.server();
+        for pack in get_enabled_packs(server) {
+            if pack.contains(' ') || pack.contains('/') {
+                builder = builder.suggest(format!("\"{pack}\""));
+            } else {
+                builder = builder.suggest(pack.clone());
+            }
+            if let Some(short) = pack.strip_prefix("file/") {
+                if short.contains(' ') {
+                    builder = builder.suggest(format!("\"{short}\""));
                 } else {
-                    builder = builder.suggest(pack.clone());
-                }
-                if let Some(short) = pack.strip_prefix("file/") {
-                    if short.contains(' ') {
-                        builder = builder.suggest(format!("\"{short}\""));
-                    } else {
-                        builder = builder.suggest(short.to_string());
-                    }
+                    builder = builder.suggest(short.to_string());
                 }
             }
-            builder.build()
-        })
+        }
+        builder.build()
     }
 }
 
@@ -202,94 +198,80 @@ enum ListFilter {
 struct DatapackListExecutor(ListFilter);
 
 impl CommandExecutor for DatapackListExecutor {
-    fn execute<'a>(&'a self, context: &'a CommandContext) -> CommandExecutorResult<'a> {
-        Box::pin(async move {
-            let server = context.server();
-            let enabled = get_enabled_packs(server);
-            let available = get_available_packs(server);
+    fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
+        let server = context.server();
+        let enabled = get_enabled_packs(server);
+        let available = get_available_packs(server);
 
-            match self.0 {
-                ListFilter::All => {
-                    send_enabled_list(context, &enabled).await;
-                    send_available_list(context, &available).await;
-                    Ok(enabled.len() as i32)
-                }
-                ListFilter::Enabled => {
-                    send_enabled_list(context, &enabled).await;
-                    Ok(enabled.len() as i32)
-                }
-                ListFilter::Available => {
-                    send_available_list(context, &available).await;
-                    Ok(available.len() as i32)
-                }
+        match self.0 {
+            ListFilter::All => {
+                send_enabled_list(context, &enabled);
+                send_available_list(context, &available);
+                Ok(enabled.len() as i32)
             }
-        })
+            ListFilter::Enabled => {
+                send_enabled_list(context, &enabled);
+                Ok(enabled.len() as i32)
+            }
+            ListFilter::Available => {
+                send_available_list(context, &available);
+                Ok(available.len() as i32)
+            }
+        }
     }
 }
 
-async fn send_enabled_list(context: &CommandContext<'_>, enabled: &[String]) {
+fn send_enabled_list(context: &CommandContext<'_>, enabled: &[String]) {
     if enabled.is_empty() {
-        context
-            .source
-            .send_feedback(
-                TextComponent::translate_cross(
-                    translation::java::COMMANDS_DATAPACK_LIST_ENABLED_NONE,
-                    translation::java::COMMANDS_DATAPACK_LIST_ENABLED_NONE,
-                    [],
-                ),
-                false,
-            )
-            .await;
+        context.source.send_feedback(
+            TextComponent::translate_cross(
+                translation::java::COMMANDS_DATAPACK_LIST_ENABLED_NONE,
+                translation::java::COMMANDS_DATAPACK_LIST_ENABLED_NONE,
+                [],
+            ),
+            false,
+        );
     } else {
         let packs_component =
             TextComponent::join_with_comma(enabled.iter().map(|p| format_pack(p)).collect());
-        context
-            .source
-            .send_feedback(
-                TextComponent::translate_cross(
-                    translation::java::COMMANDS_DATAPACK_LIST_ENABLED_SUCCESS,
-                    translation::java::COMMANDS_DATAPACK_LIST_ENABLED_SUCCESS,
-                    [
-                        TextComponent::text(enabled.len().to_string()),
-                        packs_component,
-                    ],
-                ),
-                false,
-            )
-            .await;
+        context.source.send_feedback(
+            TextComponent::translate_cross(
+                translation::java::COMMANDS_DATAPACK_LIST_ENABLED_SUCCESS,
+                translation::java::COMMANDS_DATAPACK_LIST_ENABLED_SUCCESS,
+                [
+                    TextComponent::text(enabled.len().to_string()),
+                    packs_component,
+                ],
+            ),
+            false,
+        );
     }
 }
 
-async fn send_available_list(context: &CommandContext<'_>, available: &[String]) {
+fn send_available_list(context: &CommandContext<'_>, available: &[String]) {
     if available.is_empty() {
-        context
-            .source
-            .send_feedback(
-                TextComponent::translate_cross(
-                    translation::java::COMMANDS_DATAPACK_LIST_AVAILABLE_NONE,
-                    translation::java::COMMANDS_DATAPACK_LIST_AVAILABLE_NONE,
-                    [],
-                ),
-                false,
-            )
-            .await;
+        context.source.send_feedback(
+            TextComponent::translate_cross(
+                translation::java::COMMANDS_DATAPACK_LIST_AVAILABLE_NONE,
+                translation::java::COMMANDS_DATAPACK_LIST_AVAILABLE_NONE,
+                [],
+            ),
+            false,
+        );
     } else {
         let packs_component =
             TextComponent::join_with_comma(available.iter().map(|p| format_pack(p)).collect());
-        context
-            .source
-            .send_feedback(
-                TextComponent::translate_cross(
-                    translation::java::COMMANDS_DATAPACK_LIST_AVAILABLE_SUCCESS,
-                    translation::java::COMMANDS_DATAPACK_LIST_AVAILABLE_SUCCESS,
-                    [
-                        TextComponent::text(available.len().to_string()),
-                        packs_component,
-                    ],
-                ),
-                false,
-            )
-            .await;
+        context.source.send_feedback(
+            TextComponent::translate_cross(
+                translation::java::COMMANDS_DATAPACK_LIST_AVAILABLE_SUCCESS,
+                translation::java::COMMANDS_DATAPACK_LIST_AVAILABLE_SUCCESS,
+                [
+                    TextComponent::text(available.len().to_string()),
+                    packs_component,
+                ],
+            ),
+            false,
+        );
     }
 }
 
@@ -302,60 +284,55 @@ enum EnablePosition {
 struct DatapackEnableExecutor(EnablePosition);
 
 impl CommandExecutor for DatapackEnableExecutor {
-    fn execute<'a>(&'a self, context: &'a CommandContext) -> CommandExecutorResult<'a> {
-        Box::pin(async move {
-            let name_str = StringArgumentType::get(context, "name")?;
-            let server = context.server();
+    fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
+        let name_str = StringArgumentType::get(context, "name")?;
+        let server = context.server();
 
-            let Some(resolved_name) = find_pack_name(server, name_str) else {
-                return Err(ERROR_UNKNOWN_DATAPACK
-                    .create_without_context(TextComponent::text(name_str.to_string())));
-            };
+        let Some(resolved_name) = find_pack_name(server, name_str) else {
+            return Err(ERROR_UNKNOWN_DATAPACK
+                .create_without_context(TextComponent::text(name_str.to_string())));
+        };
 
-            let enabled = get_enabled_packs(server);
-            if enabled.contains(&resolved_name) {
-                return Err(
-                    ERROR_ENABLE_FAILED.create_without_context(TextComponent::text(resolved_name))
-                );
-            }
+        let enabled = get_enabled_packs(server);
+        if enabled.contains(&resolved_name) {
+            return Err(
+                ERROR_ENABLE_FAILED.create_without_context(TextComponent::text(resolved_name))
+            );
+        }
 
-            let target = resolved_name.clone();
-            let pos = self.0;
-            server.level_info.rcu(|level_info| {
-                let mut new_info = (**level_info).clone();
-                new_info.data_packs.disabled.retain(|p| p != &target);
-                new_info.data_packs.enabled.retain(|p| p != &target);
-                match pos {
-                    EnablePosition::First => {
-                        new_info.data_packs.enabled.insert(0, target.clone());
-                    }
-                    EnablePosition::Last => {
-                        new_info.data_packs.enabled.push(target.clone());
-                    }
+        let target = resolved_name.clone();
+        let pos = self.0;
+        server.level_info.rcu(|level_info| {
+            let mut new_info = (**level_info).clone();
+            new_info.data_packs.disabled.retain(|p| p != &target);
+            new_info.data_packs.enabled.retain(|p| p != &target);
+            match pos {
+                EnablePosition::First => {
+                    new_info.data_packs.enabled.insert(0, target.clone());
                 }
-                new_info
-            });
-
-            if let Err(err) = server.save_world_info() {
-                error!("Failed to save world info: {err}");
+                EnablePosition::Last => {
+                    new_info.data_packs.enabled.push(target.clone());
+                }
             }
+            new_info
+        });
 
-            server.reload_datapacks(server).await;
+        if let Err(err) = server.save_world_info() {
+            error!("Failed to save world info: {err}");
+        }
 
-            context
-                .source
-                .send_feedback(
-                    TextComponent::translate_cross(
-                        translation::java::COMMANDS_DATAPACK_MODIFY_ENABLE,
-                        translation::java::COMMANDS_DATAPACK_MODIFY_ENABLE,
-                        [format_pack(&resolved_name)],
-                    ),
-                    true,
-                )
-                .await;
+        server.reload_datapacks(server);
 
-            Ok(server.level_info.load().data_packs.enabled.len() as i32)
-        })
+        context.source.send_feedback(
+            TextComponent::translate_cross(
+                translation::java::COMMANDS_DATAPACK_MODIFY_ENABLE,
+                translation::java::COMMANDS_DATAPACK_MODIFY_ENABLE,
+                [format_pack(&resolved_name)],
+            ),
+            true,
+        );
+
+        Ok(server.level_info.load().data_packs.enabled.len() as i32)
     }
 }
 
@@ -368,140 +345,130 @@ enum BeforeOrAfter {
 struct DatapackEnableExistingExecutor(BeforeOrAfter);
 
 impl CommandExecutor for DatapackEnableExistingExecutor {
-    fn execute<'a>(&'a self, context: &'a CommandContext) -> CommandExecutorResult<'a> {
-        Box::pin(async move {
-            let name_str = StringArgumentType::get(context, "name")?;
-            let existing_str = StringArgumentType::get(context, "existing")?;
-            let server = context.server();
+    fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
+        let name_str = StringArgumentType::get(context, "name")?;
+        let existing_str = StringArgumentType::get(context, "existing")?;
+        let server = context.server();
 
-            let Some(target_pack) = find_pack_name(server, name_str) else {
-                return Err(ERROR_UNKNOWN_DATAPACK
-                    .create_without_context(TextComponent::text(name_str.to_string())));
-            };
+        let Some(target_pack) = find_pack_name(server, name_str) else {
+            return Err(ERROR_UNKNOWN_DATAPACK
+                .create_without_context(TextComponent::text(name_str.to_string())));
+        };
 
-            let Some(existing_pack) = find_pack_name(server, existing_str) else {
-                return Err(ERROR_UNKNOWN_DATAPACK
-                    .create_without_context(TextComponent::text(existing_str.to_string())));
-            };
+        let Some(existing_pack) = find_pack_name(server, existing_str) else {
+            return Err(ERROR_UNKNOWN_DATAPACK
+                .create_without_context(TextComponent::text(existing_str.to_string())));
+        };
 
-            let enabled = get_enabled_packs(server);
-            if enabled.contains(&target_pack) {
-                return Err(
-                    ERROR_ENABLE_FAILED.create_without_context(TextComponent::text(target_pack))
-                );
-            }
+        let enabled = get_enabled_packs(server);
+        if enabled.contains(&target_pack) {
+            return Err(
+                ERROR_ENABLE_FAILED.create_without_context(TextComponent::text(target_pack))
+            );
+        }
 
-            if !enabled.contains(&existing_pack) {
-                return Err(
-                    ERROR_DISABLE_FAILED.create_without_context(TextComponent::text(existing_pack))
-                );
-            }
+        if !enabled.contains(&existing_pack) {
+            return Err(
+                ERROR_DISABLE_FAILED.create_without_context(TextComponent::text(existing_pack))
+            );
+        }
 
-            let target = target_pack.clone();
-            let existing = existing_pack.clone();
-            let before_or_after = self.0;
-            server.level_info.rcu(|level_info| {
-                let mut new_info = (**level_info).clone();
-                new_info.data_packs.disabled.retain(|p| p != &target);
-                new_info.data_packs.enabled.retain(|p| p != &target);
+        let target = target_pack.clone();
+        let existing = existing_pack;
+        let before_or_after = self.0;
+        server.level_info.rcu(|level_info| {
+            let mut new_info = (**level_info).clone();
+            new_info.data_packs.disabled.retain(|p| p != &target);
+            new_info.data_packs.enabled.retain(|p| p != &target);
 
-                if let Some(idx) = new_info
+            if let Some(idx) = new_info
+                .data_packs
+                .enabled
+                .iter()
+                .position(|p| p == &existing)
+            {
+                let insert_pos = match before_or_after {
+                    BeforeOrAfter::Before => idx,
+                    BeforeOrAfter::After => idx + 1,
+                };
+                new_info
                     .data_packs
                     .enabled
-                    .iter()
-                    .position(|p| p == &existing)
-                {
-                    let insert_pos = match before_or_after {
-                        BeforeOrAfter::Before => idx,
-                        BeforeOrAfter::After => idx + 1,
-                    };
-                    new_info
-                        .data_packs
-                        .enabled
-                        .insert(insert_pos, target.clone());
-                } else {
-                    new_info.data_packs.enabled.push(target.clone());
-                }
-                new_info
-            });
-
-            if let Err(err) = server.save_world_info() {
-                error!("Failed to save world info: {err}");
+                    .insert(insert_pos, target.clone());
+            } else {
+                new_info.data_packs.enabled.push(target.clone());
             }
+            new_info
+        });
 
-            server.reload_datapacks(server).await;
+        if let Err(err) = server.save_world_info() {
+            error!("Failed to save world info: {err}");
+        }
 
-            context
-                .source
-                .send_feedback(
-                    TextComponent::translate_cross(
-                        translation::java::COMMANDS_DATAPACK_MODIFY_ENABLE,
-                        translation::java::COMMANDS_DATAPACK_MODIFY_ENABLE,
-                        [format_pack(&target_pack)],
-                    ),
-                    true,
-                )
-                .await;
+        server.reload_datapacks(server);
 
-            Ok(server.level_info.load().data_packs.enabled.len() as i32)
-        })
+        context.source.send_feedback(
+            TextComponent::translate_cross(
+                translation::java::COMMANDS_DATAPACK_MODIFY_ENABLE,
+                translation::java::COMMANDS_DATAPACK_MODIFY_ENABLE,
+                [format_pack(&target_pack)],
+            ),
+            true,
+        );
+
+        Ok(server.level_info.load().data_packs.enabled.len() as i32)
     }
 }
 
 struct DatapackDisableExecutor;
 
 impl CommandExecutor for DatapackDisableExecutor {
-    fn execute<'a>(&'a self, context: &'a CommandContext) -> CommandExecutorResult<'a> {
-        Box::pin(async move {
-            let name_str = StringArgumentType::get(context, "name")?;
-            let server = context.server();
+    fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
+        let name_str = StringArgumentType::get(context, "name")?;
+        let server = context.server();
 
-            let Some(target_pack) = find_pack_name(server, name_str) else {
-                return Err(ERROR_DISABLE_FAILED
-                    .create_without_context(TextComponent::text(name_str.to_string())));
-            };
+        let Some(target_pack) = find_pack_name(server, name_str) else {
+            return Err(ERROR_DISABLE_FAILED
+                .create_without_context(TextComponent::text(name_str.to_string())));
+        };
 
-            let enabled = get_enabled_packs(server);
-            if !enabled.contains(&target_pack) {
-                return Err(ERROR_DISABLE_FAILED
-                    .create_without_context(TextComponent::text(name_str.to_string())));
+        let enabled = get_enabled_packs(server);
+        if !enabled.contains(&target_pack) {
+            return Err(ERROR_DISABLE_FAILED
+                .create_without_context(TextComponent::text(name_str.to_string())));
+        }
+
+        if target_pack == "vanilla" {
+            return Err(ERROR_DISABLE_FAILED
+                .create_without_context(TextComponent::text("vanilla".to_string())));
+        }
+
+        let target = target_pack.clone();
+        server.level_info.rcu(|level_info| {
+            let mut new_info = (**level_info).clone();
+            new_info.data_packs.enabled.retain(|p| p != &target);
+            if !new_info.data_packs.disabled.contains(&target) {
+                new_info.data_packs.disabled.push(target.clone());
             }
+            new_info
+        });
 
-            if target_pack == "vanilla" {
-                return Err(ERROR_DISABLE_FAILED
-                    .create_without_context(TextComponent::text("vanilla".to_string())));
-            }
+        if let Err(err) = server.save_world_info() {
+            error!("Failed to save world info: {err}");
+        }
 
-            let target = target_pack.clone();
-            server.level_info.rcu(|level_info| {
-                let mut new_info = (**level_info).clone();
-                new_info.data_packs.enabled.retain(|p| p != &target);
-                if !new_info.data_packs.disabled.contains(&target) {
-                    new_info.data_packs.disabled.push(target.clone());
-                }
-                new_info
-            });
+        server.reload_datapacks(server);
 
-            if let Err(err) = server.save_world_info() {
-                error!("Failed to save world info: {err}");
-            }
+        context.source.send_feedback(
+            TextComponent::translate_cross(
+                translation::java::COMMANDS_DATAPACK_MODIFY_DISABLE,
+                translation::java::COMMANDS_DATAPACK_MODIFY_DISABLE,
+                [format_pack(&target_pack)],
+            ),
+            true,
+        );
 
-            server.reload_datapacks(server).await;
-
-            context
-                .source
-                .send_feedback(
-                    TextComponent::translate_cross(
-                        translation::java::COMMANDS_DATAPACK_MODIFY_DISABLE,
-                        translation::java::COMMANDS_DATAPACK_MODIFY_DISABLE,
-                        [format_pack(&target_pack)],
-                    ),
-                    true,
-                )
-                .await;
-
-            Ok(server.level_info.load().data_packs.enabled.len() as i32)
-        })
+        Ok(server.level_info.load().data_packs.enabled.len() as i32)
     }
 }
 
@@ -518,69 +485,64 @@ fn is_valid_pack_name(name: &str) -> bool {
 struct DatapackCreateExecutor;
 
 impl CommandExecutor for DatapackCreateExecutor {
-    fn execute<'a>(&'a self, context: &'a CommandContext) -> CommandExecutorResult<'a> {
-        Box::pin(async move {
-            let name_str = StringArgumentType::get(context, "name")?;
-            let description = StringArgumentType::get(context, "description").unwrap_or(name_str);
+    fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
+        let name_str = StringArgumentType::get(context, "name")?;
+        let description = StringArgumentType::get(context, "description").unwrap_or(name_str);
 
-            if !is_valid_pack_name(name_str) {
-                return Err(ERROR_CREATE_INVALID_NAME
-                    .create_without_context(TextComponent::text(name_str.to_string())));
+        if !is_valid_pack_name(name_str) {
+            return Err(ERROR_CREATE_INVALID_NAME
+                .create_without_context(TextComponent::text(name_str.to_string())));
+        }
+
+        let server = context.server();
+        let datapacks_dir = server.basic_config.get_world_path().join("datapacks");
+        let pack_dir = datapacks_dir.join(name_str);
+
+        if pack_dir.exists() {
+            return Err(ERROR_CREATE_ALREADY_EXISTS
+                .create_without_context(TextComponent::text(name_str.to_string())));
+        }
+
+        let data_dir = pack_dir.join("data");
+        if let Err(err) = fs::create_dir_all(&data_dir) {
+            error!("Failed to create datapack directory: {err}");
+            return Err(ERROR_CREATE_IO_FAILURE
+                .create_without_context(TextComponent::text(name_str.to_string())));
+        }
+
+        let mcmeta_content = serde_json::json!({
+            "pack": {
+                "pack_format": 61,
+                "description": description
             }
+        });
 
-            let server = context.server();
-            let datapacks_dir = server.basic_config.get_world_path().join("datapacks");
-            let pack_dir = datapacks_dir.join(name_str);
-
-            if pack_dir.exists() {
-                return Err(ERROR_CREATE_ALREADY_EXISTS
-                    .create_without_context(TextComponent::text(name_str.to_string())));
-            }
-
-            let data_dir = pack_dir.join("data");
-            if let Err(err) = fs::create_dir_all(&data_dir) {
-                error!("Failed to create datapack directory: {err}");
+        let mcmeta_path = pack_dir.join("pack.mcmeta");
+        let mcmeta_str = match serde_json::to_string_pretty(&mcmeta_content) {
+            Ok(s) => s,
+            Err(err) => {
+                error!("Failed to serialize pack.mcmeta: {err}");
                 return Err(ERROR_CREATE_IO_FAILURE
                     .create_without_context(TextComponent::text(name_str.to_string())));
             }
+        };
 
-            let mcmeta_content = serde_json::json!({
-                "pack": {
-                    "pack_format": 61,
-                    "description": description
-                }
-            });
+        if let Err(err) = fs::write(&mcmeta_path, mcmeta_str) {
+            error!("Failed to write pack.mcmeta: {err}");
+            return Err(ERROR_CREATE_IO_FAILURE
+                .create_without_context(TextComponent::text(name_str.to_string())));
+        }
 
-            let mcmeta_path = pack_dir.join("pack.mcmeta");
-            let mcmeta_str = match serde_json::to_string_pretty(&mcmeta_content) {
-                Ok(s) => s,
-                Err(err) => {
-                    error!("Failed to serialize pack.mcmeta: {err}");
-                    return Err(ERROR_CREATE_IO_FAILURE
-                        .create_without_context(TextComponent::text(name_str.to_string())));
-                }
-            };
+        context.source.send_feedback(
+            TextComponent::translate_cross(
+                translation::java::COMMANDS_DATAPACK_CREATE_SUCCESS,
+                translation::java::COMMANDS_DATAPACK_CREATE_SUCCESS,
+                [TextComponent::text(name_str.to_string())],
+            ),
+            true,
+        );
 
-            if let Err(err) = fs::write(&mcmeta_path, mcmeta_str) {
-                error!("Failed to write pack.mcmeta: {err}");
-                return Err(ERROR_CREATE_IO_FAILURE
-                    .create_without_context(TextComponent::text(name_str.to_string())));
-            }
-
-            context
-                .source
-                .send_feedback(
-                    TextComponent::translate_cross(
-                        translation::java::COMMANDS_DATAPACK_CREATE_SUCCESS,
-                        translation::java::COMMANDS_DATAPACK_CREATE_SUCCESS,
-                        [TextComponent::text(name_str.to_string())],
-                    ),
-                    true,
-                )
-                .await;
-
-            Ok(1)
-        })
+        Ok(1)
     }
 }
 

@@ -12,7 +12,6 @@ use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::math::wrap_degrees;
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::color::{Color, NamedColor};
-use std::pin::Pin;
 use std::sync::Arc;
 
 pub const REQUIRES_PLAYER: CommandErrorType<0> = CommandErrorType::new(
@@ -25,7 +24,7 @@ pub const REQUIRES_ENTITY: CommandErrorType<0> = CommandErrorType::new(
 );
 
 pub trait ReturnValueCallable: Send + Sync {
-    fn call(&self, value: ReturnValue) -> Pin<Box<dyn Future<Output = ()> + Send + '_>>;
+    fn call(&self, value: ReturnValue);
 }
 
 pub type ReturnValueCallback = Arc<dyn ReturnValueCallable>;
@@ -55,13 +54,10 @@ impl ResultValueTaker {
     }
 
     /// Calls all the contained callbacks of this taker with the returned result.
-    #[must_use]
-    pub fn call(&self, return_value: ReturnValue) -> Pin<Box<dyn Future<Output = ()> + Send + '_>> {
-        Box::pin(async move {
-            for callback in &self.0 {
-                callback.call(return_value).await;
-            }
-        })
+    pub fn call(&self, return_value: ReturnValue) {
+        for callback in &self.0 {
+            callback.call(return_value);
+        }
     }
 }
 
@@ -201,9 +197,9 @@ impl CommandSource {
     /// Returns a new [`CommandSource`] with the specified entity and
     /// everything else from the `source` provided.
     #[must_use]
-    pub async fn with_entity(self, entity: Arc<dyn EntityBase>) -> Self {
+    pub fn with_entity(self, entity: Arc<dyn EntityBase>) -> Self {
         let name = entity.get_name().get_text();
-        let display_name = entity.get_display_name().await;
+        let display_name = entity.get_display_name();
         Self {
             output: self.output,
             world: self.world,
@@ -403,14 +399,14 @@ impl CommandSource {
     }
 
     /// Sends a message to this source.
-    pub async fn send_message(&self, message: TextComponent) {
+    pub fn send_message(&self, message: TextComponent) {
         if !self.silent {
-            self.output.send_message(message).await;
+            self.output.send_message(message);
         }
     }
 
     /// Sends a message to all online operators.
-    async fn send_to_ops(&self, message: TextComponent) {
+    fn send_to_ops(&self, message: TextComponent) {
         let text = TextComponent::translate_cross(
             "chat.type.admin",
             "chat.type.admin",
@@ -430,24 +426,24 @@ impl CommandSource {
                 if output_player != Some(&player)
                     && player.permission_lvl.load() >= server.basic_config.op_permission_level
                 {
-                    player.send_system_message(&text).await;
+                    player.send_system_message(&text);
                 }
             }
         }
     }
 
     /// Sends feedback to this source.
-    pub async fn send_feedback(&self, message: TextComponent, broadcast_to_ops: bool) {
+    pub fn send_feedback(&self, message: TextComponent, broadcast_to_ops: bool) {
         if !self.silent {
             let should_send_to_output = self.output.should_receive_feedback();
             let should_send_to_ops =
                 broadcast_to_ops && self.output.should_broadcast_console_to_ops();
 
             if should_send_to_output {
-                self.output.send_message(message.clone()).await;
+                self.output.send_message(message.clone());
             }
             if should_send_to_ops {
-                self.send_to_ops(message).await;
+                self.send_to_ops(message);
             }
         }
     }
@@ -460,15 +456,13 @@ impl CommandSource {
     ///
     /// However, there are still use cases of this function to send an error
     /// without reporting command failure directly.
-    pub async fn send_error(&self, error: TextComponent) {
+    pub fn send_error(&self, error: TextComponent) {
         if !self.silent && self.output.should_track_output() {
-            self.output
-                .send_message(
-                    TextComponent::empty()
-                        .add_child(error)
-                        .color(Color::Named(NamedColor::Red)),
-                )
-                .await;
+            self.output.send_message(
+                TextComponent::empty()
+                    .add_child(error)
+                    .color(Color::Named(NamedColor::Red)),
+            );
         }
     }
 
@@ -479,8 +473,8 @@ impl CommandSource {
     /// Panics if this source does not have a reference to the
     /// server (i.e. this is a dummy [`CommandSource`].)
     #[must_use]
-    pub async fn has_permission(&self, permission: &str) -> bool {
-        self.output.has_permission(self.server(), permission).await
+    pub fn has_permission(&self, permission: &str) -> bool {
+        self.output.has_permission(self.server(), permission)
     }
 
     /// Returns whether this source has the permission provided.
@@ -492,11 +486,8 @@ impl CommandSource {
     /// - permission is not [`None`].
     /// - this source does not have a reference to the server (i.e. this is a dummy [`CommandSource`].)
     #[must_use]
-    pub async fn has_permission_from_option(&self, permission: Option<&str>) -> bool {
-        match permission {
-            None => true,
-            Some(permission) => self.has_permission(permission).await,
-        }
+    pub fn has_permission_from_option(&self, permission: Option<&str>) -> bool {
+        permission.is_none_or(|permission| self.has_permission(permission))
     }
 }
 

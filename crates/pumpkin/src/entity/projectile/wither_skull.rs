@@ -8,7 +8,7 @@ use pumpkin_util::{Difficulty, math::vector3::Vector3};
 
 use crate::{
     entity::{
-        Entity, EntityBase, EntityBaseFuture, NbtFuture,
+        Entity, EntityBase,
         projectile::{ProjectileHit, ThrownItemEntity},
     },
     server::Server,
@@ -81,41 +81,29 @@ impl WitherSkullEntity {
 }
 
 impl EntityBase for WitherSkullEntity {
-    fn write_custom_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
-        Box::pin(async move {
-            nbt.put_bool("dangerous", self.is_dangerous());
-        })
+    fn write_custom_nbt(&self, nbt: &mut NbtCompound) {
+        nbt.put_bool("dangerous", self.is_dangerous());
     }
 
-    fn read_custom_nbt<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
-        Box::pin(async move {
-            if let Some(dangerous) = nbt.get_bool("dangerous") {
-                self.dangerous.store(dangerous, Ordering::Relaxed);
-            }
-        })
+    fn read_custom_nbt(&self, nbt: &NbtCompound) {
+        if let Some(dangerous) = nbt.get_bool("dangerous") {
+            self.dangerous.store(dangerous, Ordering::Relaxed);
+        }
     }
 
-    fn init_data_tracker(&self) -> EntityBaseFuture<'_, ()> {
-        Box::pin(async move {
-            let entity = self.get_entity();
-            entity.send_meta_data(
-                &[Metadata::new(
-                    tracked_data::wither_skull::DATA_DANGEROUS,
-                    self.is_dangerous(),
-                )],
-                None,
-            );
-        })
+    fn init_data_tracker(&self) {
+        let entity = self.get_entity();
+        entity.send_meta_data(
+            &[Metadata::new(
+                tracked_data::wither_skull::DATA_DANGEROUS,
+                self.is_dangerous(),
+            )],
+            None,
+        );
     }
 
-    fn tick<'a>(
-        &'a self,
-        caller: &'a Arc<dyn EntityBase>,
-        server: &'a Server,
-    ) -> EntityBaseFuture<'a, ()> {
-        Box::pin(async move {
-            self.thrown.process_tick(caller, server).await;
-        })
+    fn tick<'a>(&'a self, caller: &'a Arc<dyn EntityBase>, server: &'a Server) {
+        self.thrown.process_tick(caller, server);
     }
 
     fn get_entity(&self) -> &Entity {
@@ -130,47 +118,41 @@ impl EntityBase for WitherSkullEntity {
         self
     }
 
-    fn on_hit(&self, hit: ProjectileHit) -> EntityBaseFuture<'_, ()> {
-        Box::pin(async move {
-            let world = self.get_entity().world.load();
+    fn on_hit(&self, hit: ProjectileHit) {
+        let world = self.get_entity().world.load();
 
-            if let ProjectileHit::Entity { ref entity, .. } = hit {
-                let entity_clone = entity.clone();
-                let difficulty = world.level_info.load().difficulty;
+        if let ProjectileHit::Entity { ref entity, .. } = hit {
+            let difficulty = world.level_info.load().difficulty;
 
-                tokio::spawn(async move {
-                    let _ = entity_clone
-                        .damage(entity_clone.as_ref(), 8.0, DamageType::WITHER_SKULL)
-                        .await;
+            let _ = entity.damage(entity.as_ref(), 8.0, DamageType::WITHER_SKULL);
 
-                    if let Some(living) = entity_clone.get_living_entity() {
-                        let duration = match difficulty {
-                            Difficulty::Hard => 800,   // 40 seconds
-                            Difficulty::Normal => 200, // 10 seconds
-                            Difficulty::Easy | Difficulty::Peaceful => 0,
-                        };
+            if let Some(living) = entity.get_living_entity() {
+                let duration = match difficulty {
+                    Difficulty::Hard => 800,   // 40 seconds
+                    Difficulty::Normal => 200, // 10 seconds
+                    Difficulty::Easy | Difficulty::Peaceful => 0,
+                };
 
-                        if duration > 0 {
-                            let effect = Effect {
-                                effect_type: &StatusEffect::WITHER,
-                                duration,
-                                amplifier: 1,
-                                ambient: false,
-                                show_particles: true,
-                                show_icon: true,
-                                blend: true,
-                            };
-                            if let Some(player) = entity_clone.get_player() {
-                                player.send_effect(effect.clone()).await;
-                            }
-                            living.add_effect(effect).await;
-                        }
+                if duration > 0 {
+                    let effect = Effect {
+                        effect_type: &StatusEffect::WITHER,
+                        duration,
+                        amplifier: 1,
+                        ambient: false,
+                        show_particles: true,
+                        show_icon: true,
+                        blend: true,
+                    };
+                    if let Some(player) = entity.get_player() {
+                        player.add_effect(effect);
+                    } else {
+                        living.add_effect(effect);
                     }
-                });
+                }
             }
+        }
 
-            let hit_pos = hit.hit_pos();
-            world.explode(hit_pos, 1.0, ExplosionInteraction::Mob).await;
-        })
+        let hit_pos = hit.hit_pos();
+        world.explode(hit_pos, 1.0, ExplosionInteraction::Mob);
     }
 }

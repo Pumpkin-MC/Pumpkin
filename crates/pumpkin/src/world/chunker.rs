@@ -82,13 +82,23 @@ pub async fn update_position(player: &Arc<Player>) {
 
     // Use the chunk_manager's world reference, which is updated on dimension change.
     // This ensures we load chunks from the correct world after portal teleportation.
-    let world = { player.chunk_manager.lock().await.world().clone() };
+    let world = {
+        player
+            .chunk_manager
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .world()
+            .clone()
+    };
     // Before releasing this player's tickets on the unloading chunks below: that can let
     // `GenerationSchedule` evict their raw block data before the tick loop persists any live
     // BE in them. See `World::flush_block_entities`.
-    world.flush_block_entities(&unloading_chunks).await;
+    world.flush_block_entities(&unloading_chunks);
     {
-        let mut chunk_manager = player.chunk_manager.lock().await;
+        let mut chunk_manager = player
+            .chunk_manager
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         chunk_manager.update_center_and_view_distance(
             new_chunk_center,
             view_distance.into(),

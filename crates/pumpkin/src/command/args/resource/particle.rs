@@ -27,23 +27,14 @@ impl GetClientSideArgParser for ParticleArgumentConsumer {
 }
 
 impl ArgumentConsumer for ParticleArgumentConsumer {
-    fn consume<'a, 'b>(
+    fn consume<'a>(
         &'a self,
         _sender: &'a CommandSender,
         _server: &'a Server,
-        args: &'b mut RawArgs<'a>,
+        args: &mut RawArgs<'a>,
     ) -> ConsumeResult<'a> {
-        let name_opt: Option<&'a str> = args.pop().map(|arg| arg.value);
-
-        let result: Option<Arg<'a>> = name_opt.map_or_else(
-            || None,
-            |name| {
-                Particle::from_name(name.strip_prefix("minecraft:").unwrap_or(name))
-                    .map(Arg::Particle)
-            },
-        );
-
-        Box::pin(async move { result })
+        let name = args.pop().map(|arg| arg.value)?;
+        Particle::from_name(name.strip_prefix("minecraft:").unwrap_or(name)).map(Arg::Particle)
     }
 }
 

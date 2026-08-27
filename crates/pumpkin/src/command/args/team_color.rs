@@ -50,17 +50,15 @@ impl GetClientSideArgParser for TeamColorArgumentConsumer {
 }
 
 impl ArgumentConsumer for TeamColorArgumentConsumer {
-    fn consume<'a, 'b>(
+    fn consume<'a>(
         &'a self,
         _sender: &'a CommandSender,
         _server: &'a Server,
-        args: &'b mut RawArgs<'a>,
+        args: &mut RawArgs<'a>,
     ) -> ConsumeResult<'a> {
         let s_opt: Option<&'a str> = args.pop().map(|arg| arg.value);
 
-        let result = s_opt.and_then(|s| NamedColor::try_from(s).ok().map(Arg::TeamColor));
-
-        Box::pin(async move { result })
+        s_opt.and_then(|s| NamedColor::try_from(s).ok().map(Arg::TeamColor))
     }
 
     fn consume_with_syntax<'a>(
@@ -70,32 +68,25 @@ impl ArgumentConsumer for TeamColorArgumentConsumer {
         args: &mut RawArgs<'a>,
     ) -> ConsumeResultWithSyntax<'a> {
         let Some(raw_arg) = args.pop() else {
-            return Box::pin(async { Ok(None) });
+            return Ok(None);
         };
 
-        let result = NamedColor::try_from(raw_arg.value)
+        NamedColor::try_from(raw_arg.value)
             .map(|color| Some(Arg::TeamColor(color)))
             .map_err(|()| {
                 INVALID_COLOR_ERROR_TYPE.create_without_context_args_slice(&[TextComponent::text(
                     raw_arg.value.to_string(),
                 )])
-            });
-
-        Box::pin(async move { result })
+            })
     }
 
-    fn suggest<'a>(
-        &'a self,
-        _sender: &CommandSender,
-        _server: &'a Server,
-        input: &'a str,
-    ) -> SuggestResult<'a> {
+    fn suggest(&self, _sender: &CommandSender, _server: &Server, input: &str) -> SuggestResult {
         let suggestions: Vec<CommandSuggestion> = TEAM_COLORS
             .iter()
             .filter(|color| color.starts_with(input))
             .map(|color| CommandSuggestion::new((*color).to_string(), None))
             .collect();
-        Box::pin(async move { Ok(Some(suggestions)) })
+        Ok(Some(suggestions))
     }
 }
 

@@ -64,13 +64,13 @@ fn resolve_sender_world(
         .ok_or(CommandError::InvalidRequirement)
 }
 
-async fn success_key_and_arg(
+fn success_key_and_arg(
     targets: &[Arc<dyn EntityBase>],
     single_key: &'static str,
     multiple_key: &'static str,
 ) -> (&'static str, TextComponent) {
     if targets.len() == 1 {
-        (single_key, targets[0].get_display_name().await)
+        (single_key, targets[0].get_display_name())
     } else {
         (multiple_key, TextComponent::text(targets.len().to_string()))
     }
@@ -79,377 +79,359 @@ async fn success_key_and_arg(
 struct EntitiesToEntityExecutor;
 
 impl CommandExecutor for EntitiesToEntityExecutor {
-    fn execute<'a>(
-        &'a self,
-        sender: &'a CommandSender,
-        _server: &'a crate::server::Server,
-        args: &'a ConsumedArgs<'a>,
-    ) -> CommandResult<'a> {
-        Box::pin(async move {
-            let targets = EntitiesArgumentConsumer::find_arg(args, ARG_TARGETS)?;
+    fn execute(
+        &self,
+        sender: &CommandSender,
+        _server: &crate::server::Server,
+        args: &ConsumedArgs,
+    ) -> CommandResult {
+        let targets = EntitiesArgumentConsumer::find_arg(args, ARG_TARGETS)?;
 
-            let destination = EntityArgumentConsumer::find_arg(args, ARG_DESTINATION)?;
-            let destination = destination.get_entity();
-            let pos = destination.pos.load();
-            let yaw = destination.yaw.load();
-            let pitch = destination.pitch.load();
-            let world = destination.world.load_full();
-            if !World::is_valid(BlockPos(pos.floor_to_i32())) {
-                return Err(CommandError::CommandFailed(TextComponent::translate_cross(
-                    translation::java::COMMANDS_TELEPORT_INVALIDPOSITION,
-                    translation::java::COMMANDS_TELEPORT_INVALIDPOSITION,
-                    [],
-                )));
-            }
-            for target in targets {
-                target
-                    .clone()
-                    .teleport(pos, Some(yaw), Some(pitch), world.clone())
-                    .await;
-            }
+        let destination = EntityArgumentConsumer::find_arg(args, ARG_DESTINATION)?;
+        let destination_entity = destination.get_entity();
+        let pos = destination_entity.pos.load();
+        let yaw = destination_entity.yaw.load();
+        let pitch = destination_entity.pitch.load();
+        let world = destination_entity.world.load_full();
+        if !World::is_valid(BlockPos(pos.floor_to_i32())) {
+            return Err(CommandError::CommandFailed(TextComponent::translate_cross(
+                translation::java::COMMANDS_TELEPORT_INVALIDPOSITION,
+                translation::java::COMMANDS_TELEPORT_INVALIDPOSITION,
+                [],
+            )));
+        }
+        for target in targets {
+            futures::executor::block_on(target.clone().teleport(
+                pos,
+                Some(yaw),
+                Some(pitch),
+                world.clone(),
+            ));
+        }
 
-            let (key, target_arg) = success_key_and_arg(
-                targets,
-                translation::java::COMMANDS_TELEPORT_SUCCESS_ENTITY_SINGLE,
-                translation::java::COMMANDS_TELEPORT_SUCCESS_ENTITY_MULTIPLE,
-            )
-            .await;
-            sender
-                .send_message(TextComponent::translate_cross(
-                    key,
-                    translation::bedrock::COMMANDS_TP_SUCCESSVICTIM,
-                    [target_arg, destination.get_display_name().await],
-                ))
-                .await;
+        let (key, target_arg) = success_key_and_arg(
+            targets,
+            translation::java::COMMANDS_TELEPORT_SUCCESS_ENTITY_SINGLE,
+            translation::java::COMMANDS_TELEPORT_SUCCESS_ENTITY_MULTIPLE,
+        );
+        sender.send_message(TextComponent::translate_cross(
+            key,
+            translation::bedrock::COMMANDS_TP_SUCCESSVICTIM,
+            [target_arg, destination_entity.get_display_name()],
+        ));
 
-            Ok(targets.len() as i32)
-        })
+        Ok(targets.len() as i32)
     }
 }
 
 struct EntitiesToPosFacingPosExecutor;
 
 impl CommandExecutor for EntitiesToPosFacingPosExecutor {
-    fn execute<'a>(
-        &'a self,
-        sender: &'a CommandSender,
-        server: &'a crate::server::Server,
-        args: &'a ConsumedArgs<'a>,
-    ) -> CommandResult<'a> {
-        Box::pin(async move {
-            let targets = EntitiesArgumentConsumer::find_arg(args, ARG_TARGETS)?;
+    fn execute(
+        &self,
+        sender: &CommandSender,
+        server: &crate::server::Server,
+        args: &ConsumedArgs,
+    ) -> CommandResult {
+        let targets = EntitiesArgumentConsumer::find_arg(args, ARG_TARGETS)?;
 
-            let pos = Position3DArgumentConsumer::find_arg(args, ARG_LOCATION)?;
-            if !World::is_valid(BlockPos(pos.floor_to_i32())) {
-                return Err(CommandError::CommandFailed(TextComponent::translate_cross(
-                    translation::java::COMMANDS_TELEPORT_INVALIDPOSITION,
-                    translation::java::COMMANDS_TELEPORT_INVALIDPOSITION,
-                    [],
-                )));
-            }
-            let facing_pos = Position3DArgumentConsumer::find_arg(args, ARG_FACING_LOCATION)?;
-            let (yaw, pitch) = yaw_pitch_facing_position(&pos, &facing_pos);
-            let world = resolve_sender_world(sender, server)?;
+        let pos = Position3DArgumentConsumer::find_arg(args, ARG_LOCATION)?;
+        if !World::is_valid(BlockPos(pos.floor_to_i32())) {
+            return Err(CommandError::CommandFailed(TextComponent::translate_cross(
+                translation::java::COMMANDS_TELEPORT_INVALIDPOSITION,
+                translation::java::COMMANDS_TELEPORT_INVALIDPOSITION,
+                [],
+            )));
+        }
+        let facing_pos = Position3DArgumentConsumer::find_arg(args, ARG_FACING_LOCATION)?;
+        let (yaw, pitch) = yaw_pitch_facing_position(&pos, &facing_pos);
+        let world = resolve_sender_world(sender, server)?;
 
-            for target in targets {
-                target
-                    .clone()
-                    .teleport(pos, Some(yaw), Some(pitch), world.clone())
-                    .await;
-            }
+        for target in targets {
+            futures::executor::block_on(target.clone().teleport(
+                pos,
+                Some(yaw),
+                Some(pitch),
+                world.clone(),
+            ));
+        }
 
-            let (key, target_arg) = success_key_and_arg(
-                targets,
-                translation::java::COMMANDS_TELEPORT_SUCCESS_LOCATION_SINGLE,
-                translation::java::COMMANDS_TELEPORT_SUCCESS_LOCATION_MULTIPLE,
-            )
-            .await;
-            sender
-                .send_message(TextComponent::translate_cross(
-                    key,
-                    translation::bedrock::COMMANDS_TP_SUCCESS_COORDINATES,
-                    [
-                        target_arg,
-                        TextComponent::text(pos.x.to_string()),
-                        TextComponent::text(pos.y.to_string()),
-                        TextComponent::text(pos.z.to_string()),
-                    ],
-                ))
-                .await;
+        let (key, target_arg) = success_key_and_arg(
+            targets,
+            translation::java::COMMANDS_TELEPORT_SUCCESS_LOCATION_SINGLE,
+            translation::java::COMMANDS_TELEPORT_SUCCESS_LOCATION_MULTIPLE,
+        );
+        sender.send_message(TextComponent::translate_cross(
+            key,
+            translation::bedrock::COMMANDS_TP_SUCCESS_COORDINATES,
+            [
+                target_arg,
+                TextComponent::text(pos.x.to_string()),
+                TextComponent::text(pos.y.to_string()),
+                TextComponent::text(pos.z.to_string()),
+            ],
+        ));
 
-            Ok(targets.len() as i32)
-        })
+        Ok(targets.len() as i32)
     }
 }
 
 struct EntitiesToPosFacingEntityExecutor;
 
 impl CommandExecutor for EntitiesToPosFacingEntityExecutor {
-    fn execute<'a>(
-        &'a self,
-        sender: &'a CommandSender,
-        server: &'a crate::server::Server,
-        args: &'a ConsumedArgs<'a>,
-    ) -> CommandResult<'a> {
-        Box::pin(async move {
-            let targets = EntitiesArgumentConsumer::find_arg(args, ARG_TARGETS)?;
+    fn execute(
+        &self,
+        sender: &CommandSender,
+        server: &crate::server::Server,
+        args: &ConsumedArgs,
+    ) -> CommandResult {
+        let targets = EntitiesArgumentConsumer::find_arg(args, ARG_TARGETS)?;
 
-            let pos = Position3DArgumentConsumer::find_arg(args, ARG_LOCATION)?;
-            if !World::is_valid(BlockPos(pos.floor_to_i32())) {
-                return Err(CommandError::CommandFailed(TextComponent::translate_cross(
-                    translation::java::COMMANDS_TELEPORT_INVALIDPOSITION,
-                    translation::java::COMMANDS_TELEPORT_INVALIDPOSITION,
-                    [],
-                )));
-            }
-            let facing_entity = EntityArgumentConsumer::find_arg(args, ARG_FACING_ENTITY)?;
-            let (yaw, pitch) =
-                yaw_pitch_facing_position(&pos, &facing_entity.get_entity().pos.load());
-            let world = resolve_sender_world(sender, server)?;
+        let pos = Position3DArgumentConsumer::find_arg(args, ARG_LOCATION)?;
+        if !World::is_valid(BlockPos(pos.floor_to_i32())) {
+            return Err(CommandError::CommandFailed(TextComponent::translate_cross(
+                translation::java::COMMANDS_TELEPORT_INVALIDPOSITION,
+                translation::java::COMMANDS_TELEPORT_INVALIDPOSITION,
+                [],
+            )));
+        }
+        let facing_entity = EntityArgumentConsumer::find_arg(args, ARG_FACING_ENTITY)?;
+        let (yaw, pitch) = yaw_pitch_facing_position(&pos, &facing_entity.get_entity().pos.load());
+        let world = resolve_sender_world(sender, server)?;
 
-            for target in targets {
-                target
-                    .clone()
-                    .teleport(pos, Some(yaw), Some(pitch), world.clone())
-                    .await;
-            }
+        for target in targets {
+            futures::executor::block_on(target.clone().teleport(
+                pos,
+                Some(yaw),
+                Some(pitch),
+                world.clone(),
+            ));
+        }
 
-            let (key, target_arg) = success_key_and_arg(
-                targets,
-                translation::java::COMMANDS_TELEPORT_SUCCESS_LOCATION_SINGLE,
-                translation::java::COMMANDS_TELEPORT_SUCCESS_LOCATION_MULTIPLE,
-            )
-            .await;
-            sender
-                .send_message(TextComponent::translate_cross(
-                    key,
-                    translation::bedrock::COMMANDS_TP_SUCCESS_COORDINATES,
-                    [
-                        target_arg,
-                        TextComponent::text(pos.x.to_string()),
-                        TextComponent::text(pos.y.to_string()),
-                        TextComponent::text(pos.z.to_string()),
-                    ],
-                ))
-                .await;
+        let (key, target_arg) = success_key_and_arg(
+            targets,
+            translation::java::COMMANDS_TELEPORT_SUCCESS_LOCATION_SINGLE,
+            translation::java::COMMANDS_TELEPORT_SUCCESS_LOCATION_MULTIPLE,
+        );
+        sender.send_message(TextComponent::translate_cross(
+            key,
+            translation::bedrock::COMMANDS_TP_SUCCESS_COORDINATES,
+            [
+                target_arg,
+                TextComponent::text(pos.x.to_string()),
+                TextComponent::text(pos.y.to_string()),
+                TextComponent::text(pos.z.to_string()),
+            ],
+        ));
 
-            Ok(targets.len() as i32)
-        })
+        Ok(targets.len() as i32)
     }
 }
 
 struct EntitiesToPosWithRotationExecutor;
 
 impl CommandExecutor for EntitiesToPosWithRotationExecutor {
-    fn execute<'a>(
-        &'a self,
-        sender: &'a CommandSender,
-        server: &'a crate::server::Server,
-        args: &'a ConsumedArgs<'a>,
-    ) -> CommandResult<'a> {
-        Box::pin(async move {
-            let targets = EntitiesArgumentConsumer::find_arg(args, ARG_TARGETS)?;
+    fn execute(
+        &self,
+        sender: &CommandSender,
+        server: &crate::server::Server,
+        args: &ConsumedArgs,
+    ) -> CommandResult {
+        let targets = EntitiesArgumentConsumer::find_arg(args, ARG_TARGETS)?;
 
-            let pos = Position3DArgumentConsumer::find_arg(args, ARG_LOCATION)?;
-            if !World::is_valid(BlockPos(pos.floor_to_i32())) {
-                return Err(CommandError::CommandFailed(TextComponent::translate_cross(
-                    translation::java::COMMANDS_TELEPORT_INVALIDPOSITION,
-                    translation::java::COMMANDS_TELEPORT_INVALIDPOSITION,
-                    [],
-                )));
-            }
-            // Note: Rotation returns (yaw, is_yaw_relative, pitch, is_pitch_relative)
-            // For teleport, we use absolute values only (ignore relative flags)
-            let (yaw, _, pitch, _) = RotationArgumentConsumer::find_arg(args, ARG_ROTATION)?;
-            let world = resolve_sender_world(sender, server)?;
+        let pos = Position3DArgumentConsumer::find_arg(args, ARG_LOCATION)?;
+        if !World::is_valid(BlockPos(pos.floor_to_i32())) {
+            return Err(CommandError::CommandFailed(TextComponent::translate_cross(
+                translation::java::COMMANDS_TELEPORT_INVALIDPOSITION,
+                translation::java::COMMANDS_TELEPORT_INVALIDPOSITION,
+                [],
+            )));
+        }
+        // Note: Rotation returns (yaw, is_yaw_relative, pitch, is_pitch_relative)
+        // For teleport, we use absolute values only (ignore relative flags)
+        let (yaw, _, pitch, _) = RotationArgumentConsumer::find_arg(args, ARG_ROTATION)?;
+        let world = resolve_sender_world(sender, server)?;
 
-            for target in targets {
-                target
-                    .clone()
-                    .teleport(pos, Some(yaw), Some(pitch), world.clone())
-                    .await;
-            }
+        for target in targets {
+            futures::executor::block_on(target.clone().teleport(
+                pos,
+                Some(yaw),
+                Some(pitch),
+                world.clone(),
+            ));
+        }
 
-            let (key, target_arg) = success_key_and_arg(
-                targets,
-                translation::java::COMMANDS_TELEPORT_SUCCESS_LOCATION_SINGLE,
-                translation::java::COMMANDS_TELEPORT_SUCCESS_LOCATION_MULTIPLE,
-            )
-            .await;
-            sender
-                .send_message(TextComponent::translate_cross(
-                    key,
-                    translation::bedrock::COMMANDS_TP_SUCCESS_COORDINATES,
-                    [
-                        target_arg,
-                        TextComponent::text(pos.x.to_string()),
-                        TextComponent::text(pos.y.to_string()),
-                        TextComponent::text(pos.z.to_string()),
-                    ],
-                ))
-                .await;
+        let (key, target_arg) = success_key_and_arg(
+            targets,
+            translation::java::COMMANDS_TELEPORT_SUCCESS_LOCATION_SINGLE,
+            translation::java::COMMANDS_TELEPORT_SUCCESS_LOCATION_MULTIPLE,
+        );
+        sender.send_message(TextComponent::translate_cross(
+            key,
+            translation::bedrock::COMMANDS_TP_SUCCESS_COORDINATES,
+            [
+                target_arg,
+                TextComponent::text(pos.x.to_string()),
+                TextComponent::text(pos.y.to_string()),
+                TextComponent::text(pos.z.to_string()),
+            ],
+        ));
 
-            Ok(targets.len() as i32)
-        })
+        Ok(targets.len() as i32)
     }
 }
 
 struct EntitiesToPosExecutor;
 
 impl CommandExecutor for EntitiesToPosExecutor {
-    fn execute<'a>(
-        &'a self,
-        sender: &'a CommandSender,
-        server: &'a crate::server::Server,
-        args: &'a ConsumedArgs<'a>,
-    ) -> CommandResult<'a> {
-        Box::pin(async move {
-            let targets = EntitiesArgumentConsumer::find_arg(args, ARG_TARGETS)?;
+    fn execute(
+        &self,
+        sender: &CommandSender,
+        server: &crate::server::Server,
+        args: &ConsumedArgs,
+    ) -> CommandResult {
+        let targets = EntitiesArgumentConsumer::find_arg(args, ARG_TARGETS)?;
 
-            let pos = Position3DArgumentConsumer::find_arg(args, ARG_LOCATION)?;
-            if !World::is_valid(BlockPos(pos.floor_to_i32())) {
-                return Err(CommandError::CommandFailed(TextComponent::translate_cross(
-                    translation::java::COMMANDS_TELEPORT_INVALIDPOSITION,
-                    translation::java::COMMANDS_TELEPORT_INVALIDPOSITION,
-                    [],
-                )));
-            }
-            let world = resolve_sender_world(sender, server)?;
-            for target in targets {
-                let yaw = target.get_entity().yaw.load();
-                let pitch = target.get_entity().pitch.load();
-                target
-                    .clone()
-                    .teleport(pos, Some(yaw), Some(pitch), world.clone())
-                    .await;
-            }
+        let pos = Position3DArgumentConsumer::find_arg(args, ARG_LOCATION)?;
+        if !World::is_valid(BlockPos(pos.floor_to_i32())) {
+            return Err(CommandError::CommandFailed(TextComponent::translate_cross(
+                translation::java::COMMANDS_TELEPORT_INVALIDPOSITION,
+                translation::java::COMMANDS_TELEPORT_INVALIDPOSITION,
+                [],
+            )));
+        }
+        let world = resolve_sender_world(sender, server)?;
+        for target in targets {
+            let yaw = target.get_entity().yaw.load();
+            let pitch = target.get_entity().pitch.load();
+            futures::executor::block_on(target.clone().teleport(
+                pos,
+                Some(yaw),
+                Some(pitch),
+                world.clone(),
+            ));
+        }
 
-            let (key, target_arg) = success_key_and_arg(
-                targets,
-                translation::java::COMMANDS_TELEPORT_SUCCESS_LOCATION_SINGLE,
-                translation::java::COMMANDS_TELEPORT_SUCCESS_LOCATION_MULTIPLE,
-            )
-            .await;
-            sender
-                .send_message(TextComponent::translate_cross(
-                    key,
-                    translation::bedrock::COMMANDS_TP_SUCCESS_COORDINATES,
-                    [
-                        target_arg,
-                        TextComponent::text(pos.x.to_string()),
-                        TextComponent::text(pos.y.to_string()),
-                        TextComponent::text(pos.z.to_string()),
-                    ],
-                ))
-                .await;
+        let (key, target_arg) = success_key_and_arg(
+            targets,
+            translation::java::COMMANDS_TELEPORT_SUCCESS_LOCATION_SINGLE,
+            translation::java::COMMANDS_TELEPORT_SUCCESS_LOCATION_MULTIPLE,
+        );
+        sender.send_message(TextComponent::translate_cross(
+            key,
+            translation::bedrock::COMMANDS_TP_SUCCESS_COORDINATES,
+            [
+                target_arg,
+                TextComponent::text(pos.x.to_string()),
+                TextComponent::text(pos.y.to_string()),
+                TextComponent::text(pos.z.to_string()),
+            ],
+        ));
 
-            Ok(targets.len() as i32)
-        })
+        Ok(targets.len() as i32)
     }
 }
 
 struct SelfToEntityExecutor;
 
 impl CommandExecutor for SelfToEntityExecutor {
-    fn execute<'a>(
-        &'a self,
-        sender: &'a CommandSender,
-        _server: &'a crate::server::Server,
-        args: &'a ConsumedArgs<'a>,
-    ) -> CommandResult<'a> {
-        Box::pin(async move {
-            let destination = EntityArgumentConsumer::find_arg(args, ARG_DESTINATION)?;
-            let destination = destination.get_entity();
-            let pos = destination.pos.load();
-            let yaw = destination.yaw.load();
-            let pitch = destination.pitch.load();
-            let world = destination.world.load_full();
+    fn execute(
+        &self,
+        sender: &CommandSender,
+        _server: &crate::server::Server,
+        args: &ConsumedArgs,
+    ) -> CommandResult {
+        let destination = EntityArgumentConsumer::find_arg(args, ARG_DESTINATION)?;
+        let destination_entity = destination.get_entity();
+        let pos = destination_entity.pos.load();
+        let yaw = destination_entity.yaw.load();
+        let pitch = destination_entity.pitch.load();
+        let world = destination_entity.world.load_full();
 
-            match sender {
-                CommandSender::Player(player) => {
-                    if !World::is_valid(BlockPos(pos.floor_to_i32())) {
-                        return Err(CommandError::CommandFailed(TextComponent::translate_cross(
-                            translation::java::COMMANDS_TELEPORT_INVALIDPOSITION,
-                            translation::java::COMMANDS_TELEPORT_INVALIDPOSITION,
-                            [],
-                        )));
-                    }
-                    player
-                        .clone()
-                        .teleport(pos, Some(yaw), Some(pitch), world)
-                        .await;
-
-                    sender
-                        .send_message(TextComponent::translate_cross(
-                            translation::java::COMMANDS_TELEPORT_SUCCESS_ENTITY_SINGLE,
-                            translation::bedrock::COMMANDS_TP_SUCCESSVICTIM,
-                            [
-                                player.get_display_name().await,
-                                destination.get_display_name().await,
-                            ],
-                        ))
-                        .await;
-
-                    Ok(1)
+        match sender {
+            CommandSender::Player(player) => {
+                if !World::is_valid(BlockPos(pos.floor_to_i32())) {
+                    return Err(CommandError::CommandFailed(TextComponent::translate_cross(
+                        translation::java::COMMANDS_TELEPORT_INVALIDPOSITION,
+                        translation::java::COMMANDS_TELEPORT_INVALIDPOSITION,
+                        [],
+                    )));
                 }
-                _ => Err(CommandError::CommandFailed(TextComponent::translate_cross(
-                    translation::java::PERMISSIONS_REQUIRES_PLAYER,
-                    translation::java::PERMISSIONS_REQUIRES_PLAYER,
-                    [],
-                ))),
+                futures::executor::block_on(player.clone().teleport(
+                    pos,
+                    Some(yaw),
+                    Some(pitch),
+                    world,
+                ));
+
+                sender.send_message(TextComponent::translate_cross(
+                    translation::java::COMMANDS_TELEPORT_SUCCESS_ENTITY_SINGLE,
+                    translation::bedrock::COMMANDS_TP_SUCCESSVICTIM,
+                    [
+                        player.get_display_name(),
+                        destination_entity.get_display_name(),
+                    ],
+                ));
+
+                Ok(1)
             }
-        })
+            _ => Err(CommandError::CommandFailed(TextComponent::translate_cross(
+                translation::java::PERMISSIONS_REQUIRES_PLAYER,
+                translation::java::PERMISSIONS_REQUIRES_PLAYER,
+                [],
+            ))),
+        }
     }
 }
+
 struct SelfToPosExecutor;
 
 impl CommandExecutor for SelfToPosExecutor {
-    fn execute<'a>(
-        &'a self,
-        sender: &'a CommandSender,
-        _server: &'a crate::server::Server,
-        args: &'a ConsumedArgs<'a>,
-    ) -> CommandResult<'a> {
-        Box::pin(async move {
-            match sender {
-                CommandSender::Player(player) => {
-                    let pos = Position3DArgumentConsumer::find_arg(args, ARG_LOCATION)?;
-                    let yaw = player.get_entity().yaw.load();
-                    let pitch = player.get_entity().pitch.load();
-                    if !World::is_valid(BlockPos(pos.floor_to_i32())) {
-                        return Err(CommandError::CommandFailed(TextComponent::translate_cross(
-                            translation::java::COMMANDS_TELEPORT_INVALIDPOSITION,
-                            translation::java::COMMANDS_TELEPORT_INVALIDPOSITION,
-                            [],
-                        )));
-                    }
-                    player
-                        .clone()
-                        .teleport(pos, Some(yaw), Some(pitch), player.world().clone())
-                        .await;
-
-                    sender
-                        .send_message(TextComponent::translate_cross(
-                            translation::java::COMMANDS_TELEPORT_SUCCESS_LOCATION_SINGLE,
-                            translation::bedrock::COMMANDS_TP_SUCCESS_COORDINATES,
-                            [
-                                player.get_display_name().await,
-                                TextComponent::text(pos.x.to_string()),
-                                TextComponent::text(pos.y.to_string()),
-                                TextComponent::text(pos.z.to_string()),
-                            ],
-                        ))
-                        .await;
-
-                    Ok(1)
+    fn execute(
+        &self,
+        sender: &CommandSender,
+        _server: &crate::server::Server,
+        args: &ConsumedArgs,
+    ) -> CommandResult {
+        match sender {
+            CommandSender::Player(player) => {
+                let pos = Position3DArgumentConsumer::find_arg(args, ARG_LOCATION)?;
+                let yaw = player.get_entity().yaw.load();
+                let pitch = player.get_entity().pitch.load();
+                if !World::is_valid(BlockPos(pos.floor_to_i32())) {
+                    return Err(CommandError::CommandFailed(TextComponent::translate_cross(
+                        translation::java::COMMANDS_TELEPORT_INVALIDPOSITION,
+                        translation::java::COMMANDS_TELEPORT_INVALIDPOSITION,
+                        [],
+                    )));
                 }
-                _ => Err(CommandError::CommandFailed(TextComponent::translate_cross(
-                    translation::java::PERMISSIONS_REQUIRES_PLAYER,
-                    translation::java::PERMISSIONS_REQUIRES_PLAYER,
-                    [],
-                ))),
+                let player_world = player.world();
+                futures::executor::block_on(player.clone().teleport(
+                    pos,
+                    Some(yaw),
+                    Some(pitch),
+                    player_world,
+                ));
+
+                sender.send_message(TextComponent::translate_cross(
+                    translation::java::COMMANDS_TELEPORT_SUCCESS_LOCATION_SINGLE,
+                    translation::bedrock::COMMANDS_TP_SUCCESS_COORDINATES,
+                    [
+                        player.get_display_name(),
+                        TextComponent::text(pos.x.to_string()),
+                        TextComponent::text(pos.y.to_string()),
+                        TextComponent::text(pos.z.to_string()),
+                    ],
+                ));
+
+                Ok(1)
             }
-        })
+            _ => Err(CommandError::CommandFailed(TextComponent::translate_cross(
+                translation::java::PERMISSIONS_REQUIRES_PLAYER,
+                translation::java::PERMISSIONS_REQUIRES_PLAYER,
+                [],
+            ))),
+        }
     }
 }
 

@@ -124,11 +124,17 @@ impl gui::HostGui for PluginHostState {
         slot: u32,
         item: Resource<WitHostItemStack>,
     ) -> wasmtime::Result<()> {
-        let gui = self.get_gui_res(&res)?.provider.lock().await;
-        let mut slots = gui.inventory.slots.write().await;
-        if (slot as usize) < slots.len() {
+        let item_stack = {
             let item_stack = self.get_item_stack(&item)?;
-            let item_stack = item_stack.lock().await.clone();
+            item_stack.lock().await.clone()
+        };
+        let gui = self.get_gui_res(&res)?.provider.lock().await;
+        let mut slots = gui
+            .inventory
+            .slots
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if (slot as usize) < slots.len() {
             slots[slot as usize] = item_stack;
         }
         Ok(())
@@ -141,7 +147,11 @@ impl gui::HostGui for PluginHostState {
     ) -> wasmtime::Result<Option<Resource<WitHostItemStack>>> {
         let stack = {
             let gui = self.get_gui_res(&res)?.provider.lock().await;
-            let slots = gui.inventory.slots.read().await;
+            let slots = gui
+                .inventory
+                .slots
+                .read()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
             if (slot as usize) < slots.len() {
                 let stack = &slots[slot as usize];
                 if stack.is_empty() {
@@ -191,7 +201,7 @@ impl gui::HostGui for PluginHostState {
     async fn clear_items(&mut self, res: Resource<Gui>) -> wasmtime::Result<()> {
         use pumpkin_world::inventory::Clearable;
         let gui = self.get_gui_res(&res)?.provider.lock().await;
-        gui.inventory.clear().await;
+        gui.inventory.clear();
         Ok(())
     }
 

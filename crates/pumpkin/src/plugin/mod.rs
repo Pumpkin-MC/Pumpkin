@@ -1172,6 +1172,35 @@ impl PluginManager {
         }
     }
 
+    /// Fire an event to all registered handlers synchronously (blocking if handlers exist).
+    /// If no handlers are registered for this event, returns immediately without runtime overhead.
+    pub fn fire_blocking<E: Payload + Send + Sync + 'static>(
+        &self,
+        server: &Arc<Server>,
+        event: &mut E,
+    ) {
+        let handlers_map = self.handlers.load();
+        if handlers_map.is_empty() {
+            return;
+        }
+
+        let Some(handlers) = handlers_map.get(E::get_name_static()) else {
+            return;
+        };
+
+        if handlers.is_empty() {
+            return;
+        }
+
+        if tokio::runtime::Handle::try_current().is_ok() {
+            tokio::task::block_in_place(|| {
+                server.runtime.block_on(self.fire(server, event));
+            });
+        } else {
+            server.runtime.block_on(self.fire(server, event));
+        }
+    }
+
     #[expect(clippy::result_unit_err)]
     pub async fn send_message(
         &self,

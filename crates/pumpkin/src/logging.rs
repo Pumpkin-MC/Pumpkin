@@ -462,9 +462,6 @@ impl Completer for PumpkinCommandCompleter {
             cmd_to_cursor
         };
 
-        let Some(handle) = self.rt.get() else {
-            return Ok((0, Vec::new()));
-        };
         let Ok(server_guard) = self.server.try_read() else {
             return Ok((0, Vec::new()));
         };
@@ -475,151 +472,147 @@ impl Completer for PumpkinCommandCompleter {
         let parts: Vec<&str> = cmd.split_whitespace().collect();
         let ends_with_space = cmd.ends_with(' ');
 
-        handle.block_on(async {
-            let dispatcher = server.command_dispatcher.load();
-            let source = CommandSender::Console.into_source(server).await;
+        let dispatcher = server.command_dispatcher.load();
+        let source = CommandSender::Console.into_source(server);
 
-            // Temporary setups to unify both dispatchers for now:
+        // Temporary setups to unify both dispatchers for now:
 
-            {
-                if cmd.trim().is_empty() {
-                    // Give all commands as suggestions.
+        {
+            if cmd.trim().is_empty() {
+                // Give all commands as suggestions.
 
-                    let suggestions: Vec<String> = dispatcher
-                        .get_all_commands()
-                        .keys()
-                        .map(ToString::to_string)
-                        .collect();
-                    return Ok((pos, suggestions));
-                }
-            }
-
-            // Not sure if this is necessary, but I guess we better be safe than sorry.
-            if let Some(cursor) = pos.checked_sub(usize::from(has_slash)) {
-                let mut reader = StringReader::new(cmd);
-                if reader.peek() == Some('/') {
-                    reader.skip();
-                }
-                let parsed = dispatcher.parse(&mut reader, &source).await;
-                let suggestions = dispatcher.get_completion_suggestions(parsed, cursor).await;
-
-                if !suggestions.is_empty() {
-                    let start = suggestions.range.start;
-                    let suggestions = suggestions
-                        .suggestions
-                        .into_iter()
-                        .map(|s| s.text.cached_text().clone())
-                        .collect();
-                    return Ok((start + usize::from(has_slash), suggestions));
-                }
-            }
-
-            let dispatcher = &dispatcher.fallback_dispatcher;
-            let src = CommandSender::Console;
-
-            if parts.is_empty() || (parts.len() == 1 && !ends_with_space) {
-                let typing = parts.first().unwrap_or(&"");
-                let candidates = dispatcher
-                    .commands
+                let suggestions: Vec<String> = dispatcher
+                    .get_all_commands()
                     .keys()
-                    .filter(|k| k.starts_with(typing))
-                    .cloned()
+                    .map(ToString::to_string)
                     .collect();
-                return Ok((usize::from(has_slash), candidates));
+                return Ok((pos, suggestions));
             }
+        }
 
-            let Some(tree) = dispatcher.get_tree(parts[0]).ok() else {
-                return Ok((0, Vec::new()));
-            };
-
-            let mut current_indices = tree.children.clone();
-            let mut word_index = 1;
-            let walk_limit = if ends_with_space {
-                parts.len()
-            } else {
-                parts.len() - 1
-            };
-
-            while word_index < walk_limit {
-                let token = parts[word_index];
-                let mut next_indices = Vec::new();
-
-                let mut worklist: VecDeque<usize> = current_indices.iter().copied().collect();
-
-                while let Some(idx) = worklist.pop_front() {
-                    let node = &tree.nodes[idx];
-
-                    match &node.node_type {
-                        NodeType::Require { predicate } => {
-                            if predicate(&src) {
-                                worklist.extend(node.children.iter().copied());
-                            }
-                        }
-                        NodeType::Literal { string } => {
-                            if string.eq_ignore_ascii_case(token) {
-                                next_indices.extend(node.children.iter().copied());
-                            }
-                        }
-                        NodeType::Argument { .. } => {
-                            next_indices.extend(node.children.iter().copied());
-                        }
-                        NodeType::ExecuteLeaf { .. } => {}
-                    }
-                }
-
-                if next_indices.is_empty() {
-                    return Ok((0, Vec::new()));
-                }
-
-                current_indices = next_indices;
-                word_index += 1;
+        // Not sure if this is necessary, but I guess we better be safe than sorry.
+        if let Some(cursor) = pos.checked_sub(usize::from(has_slash)) {
+            let mut reader = StringReader::new(cmd);
+            if reader.peek() == Some('/') {
+                reader.skip();
             }
+            let parsed = dispatcher.parse(&mut reader, &source);
+            let suggestions = dispatcher.get_completion_suggestions(parsed, cursor);
 
-            let typing = if ends_with_space {
-                ""
-            } else {
-                parts.last().unwrap_or(&"")
-            };
-            let mut candidates = Vec::new();
+            if !suggestions.is_empty() {
+                let start = suggestions.range.start;
+                let suggestions = suggestions
+                    .suggestions
+                    .into_iter()
+                    .map(|s| s.text.cached_text().clone())
+                    .collect();
+                return Ok((start + usize::from(has_slash), suggestions));
+            }
+        }
 
-            let mut suggestion_worklist: VecDeque<usize> = current_indices.into_iter().collect();
+        let dispatcher = &dispatcher.fallback_dispatcher;
+        let src = CommandSender::Console;
 
-            while let Some(idx) = suggestion_worklist.pop_front() {
+        if parts.is_empty() || (parts.len() == 1 && !ends_with_space) {
+            let typing = parts.first().unwrap_or(&"");
+            let candidates = dispatcher
+                .commands
+                .keys()
+                .filter(|k| k.starts_with(typing))
+                .cloned()
+                .collect();
+            return Ok((usize::from(has_slash), candidates));
+        }
+
+        let Some(tree) = dispatcher.get_tree(parts[0]).ok() else {
+            return Ok((0, Vec::new()));
+        };
+
+        let mut current_indices = tree.children.clone();
+        let mut word_index = 1;
+        let walk_limit = if ends_with_space {
+            parts.len()
+        } else {
+            parts.len() - 1
+        };
+
+        while word_index < walk_limit {
+            let token = parts[word_index];
+            let mut next_indices = Vec::new();
+
+            let mut worklist: VecDeque<usize> = current_indices.iter().copied().collect();
+
+            while let Some(idx) = worklist.pop_front() {
                 let node = &tree.nodes[idx];
+
                 match &node.node_type {
                     NodeType::Require { predicate } => {
                         if predicate(&src) {
-                            suggestion_worklist.extend(node.children.iter().copied());
+                            worklist.extend(node.children.iter().copied());
                         }
                     }
                     NodeType::Literal { string } => {
-                        if string.starts_with(typing) {
-                            candidates.push(string.clone());
+                        if string.eq_ignore_ascii_case(token) {
+                            next_indices.extend(node.children.iter().copied());
                         }
                     }
-                    NodeType::Argument { name, consumer, .. } => {
-                        let suggest_future = consumer.suggest(&src, server, typing);
-
-                        if let Ok(Some(suggestions)) = suggest_future.await {
-                            for s in suggestions {
-                                let s = s.suggestion;
-                                if s.starts_with(typing) {
-                                    candidates.push(s);
-                                }
-                            }
-                        } else {
-                            let placeholder = format!("<{name}>");
-                            if placeholder.starts_with(typing) || typing.is_empty() {
-                                candidates.push(placeholder);
-                            }
-                        }
+                    NodeType::Argument { .. } => {
+                        next_indices.extend(node.children.iter().copied());
                     }
-                    NodeType::ExecuteLeaf { executor: _ } => {}
+                    NodeType::ExecuteLeaf { .. } => {}
                 }
             }
 
-            let last_space = cmd.rfind(' ').map_or(0, |i| i + 1);
-            Ok((last_space + usize::from(has_slash), candidates))
-        })
+            if next_indices.is_empty() {
+                return Ok((0, Vec::new()));
+            }
+
+            current_indices = next_indices;
+            word_index += 1;
+        }
+
+        let typing = if ends_with_space {
+            ""
+        } else {
+            parts.last().unwrap_or(&"")
+        };
+        let mut candidates = Vec::new();
+
+        let mut suggestion_worklist: VecDeque<usize> = current_indices.into_iter().collect();
+
+        while let Some(idx) = suggestion_worklist.pop_front() {
+            let node = &tree.nodes[idx];
+            match &node.node_type {
+                NodeType::Require { predicate } => {
+                    if predicate(&src) {
+                        suggestion_worklist.extend(node.children.iter().copied());
+                    }
+                }
+                NodeType::Literal { string } => {
+                    if string.starts_with(typing) {
+                        candidates.push(string.clone());
+                    }
+                }
+                NodeType::Argument { name, consumer, .. } => {
+                    if let Ok(Some(suggestions)) = consumer.suggest(&src, server, typing) {
+                        for s in suggestions {
+                            let s = s.suggestion;
+                            if s.starts_with(typing) {
+                                candidates.push(s);
+                            }
+                        }
+                    } else {
+                        let placeholder = format!("<{name}>");
+                        if placeholder.starts_with(typing) || typing.is_empty() {
+                            candidates.push(placeholder);
+                        }
+                    }
+                }
+                NodeType::ExecuteLeaf { executor: _ } => {}
+            }
+        }
+
+        let last_space = cmd.rfind(' ').map_or(0, |i| i + 1);
+        Ok((last_space + usize::from(has_slash), candidates))
     }
 }
