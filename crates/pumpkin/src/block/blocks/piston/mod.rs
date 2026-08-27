@@ -16,7 +16,8 @@ const MAX_MOVABLE_BLOCKS: usize = 12;
 pub struct PistonHandler<'a> {
     world: &'a World,
     pos_from: BlockPos,
-    retracted: bool,
+    /// Vanilla `PistonStructureResolver.extending`. True on push, false on pull.
+    extending: bool,
     pos_to: BlockPos,
     motion_direction: BlockDirection,
     pub moved_blocks: Vec<BlockPos>,
@@ -25,9 +26,9 @@ pub struct PistonHandler<'a> {
 }
 
 impl<'a> PistonHandler<'a> {
-    pub fn new(world: &'a World, pos: BlockPos, dir: BlockDirection, retracted: bool) -> Self {
+    pub fn new(world: &'a World, pos: BlockPos, dir: BlockDirection, extending: bool) -> Self {
         let motion_direction;
-        let pos_to = if retracted {
+        let pos_to = if extending {
             motion_direction = dir;
             pos.offset(dir.to_offset())
         } else {
@@ -38,7 +39,7 @@ impl<'a> PistonHandler<'a> {
             world,
             pos_from: pos,
             piston_direction: dir,
-            retracted,
+            extending,
             motion_direction,
             pos_to,
             moved_blocks: Vec::new(),
@@ -71,18 +72,18 @@ impl<'a> PistonHandler<'a> {
             }
             return false;
         }
-        if !self.try_move(self.pos_to, self.motion_direction) {
+        if !self.add_block_line(self.pos_to, self.motion_direction) {
             return false;
         }
         // `while i < len()`, not `for i in 0..len()`: vanilla's `resolve()` uses
         // `for (i = 0; i < toPush.size(); i++)`, which re-evaluates `size()` every iteration,
-        // so a block appended here (by `try_move_adjacent_block`'s stickiness discovery) is
+        // so a block appended here (by `add_branching_blocks` stickiness discovery) is
         // still swept for its own branches. A Rust `0..len()` range is frozen up front.
         let mut i = 0;
         while i < self.moved_blocks.len() {
             let block_pos = self.moved_blocks[i];
             let block = self.world.get_block(&block_pos);
-            if Self::is_block_sticky(block) && !self.try_move_adjacent_block(block, &block_pos) {
+            if Self::is_block_sticky(block) && !self.add_branching_blocks(block, &block_pos) {
                 return false;
             }
             i += 1;
@@ -106,13 +107,13 @@ impl<'a> PistonHandler<'a> {
 
     fn is_piston_head_or_base(&self, pos: BlockPos) -> bool {
         pos == self.pos_from
-            || (!self.retracted && pos == self.pos_from.offset(self.piston_direction.to_offset()))
+            || (!self.extending && pos == self.pos_from.offset(self.piston_direction.to_offset()))
     }
 
     // A line-for-line port of vanilla's `PistonStructureResolver.addBlockLine`; splitting it
     // would only make the correspondence harder to check against the original.
     #[expect(clippy::too_many_lines)]
-    fn try_move(&mut self, pos: BlockPos, dir: BlockDirection) -> bool {
+    fn add_block_line(&mut self, pos: BlockPos, dir: BlockDirection) -> bool {
         let (mut block, block_state) = self.world.get_block_and_state(&pos);
         if block_state.is_air() {
             return true;
@@ -178,7 +179,7 @@ impl<'a> PistonHandler<'a> {
                     let block_pos3 = self.moved_blocks[m];
                     let block = self.world.get_block(&block_pos3);
                     if Self::is_block_sticky(block)
-                        && !self.try_move_adjacent_block(block, &block_pos3)
+                        && !self.add_branching_blocks(block, &block_pos3)
                     {
                         return false;
                     }
@@ -187,7 +188,7 @@ impl<'a> PistonHandler<'a> {
             }
             let (block, block_state) = self.world.get_block_and_state(&block_pos2);
             if block_state.is_air()
-                || (!self.retracted
+                || (!self.extending
                     && block_pos2 == self.pos_from.offset(self.piston_direction.to_offset()))
             {
                 return true;
@@ -230,7 +231,7 @@ impl<'a> PistonHandler<'a> {
         self.moved_blocks.extend(list3);
     }
 
-    fn try_move_adjacent_block(&mut self, block: &Block, pos: &BlockPos) -> bool {
+    fn add_branching_blocks(&mut self, block: &Block, pos: &BlockPos) -> bool {
         for direction in BlockDirection::all() {
             if direction.to_axis() == self.motion_direction.to_axis() {
                 continue;
@@ -238,7 +239,7 @@ impl<'a> PistonHandler<'a> {
             let block_pos = pos.offset(direction.to_offset());
             let block_state2 = self.world.get_block(&block_pos);
             if Self::is_adjacent_block_stuck(block_state2, block)
-                && !self.try_move(block_pos, direction)
+                && !self.add_block_line(block_pos, direction)
             {
                 return false;
             }

@@ -165,11 +165,11 @@ impl BlockBehaviour for PistonBlock {
         if args.old_state_id == args.state_id {
             return;
         }
-        try_move(args.world, args.block, args.position);
+        check_if_extend(args.world, args.block, args.position);
     }
 
     fn on_neighbor_update(&self, args: OnNeighborUpdateArgs<'_>) {
-        try_move(args.world, args.block, args.position);
+        check_if_extend(args.world, args.block, args.position);
     }
 
     fn on_synced_block_event(&self, args: OnSyncedBlockEventArgs<'_>) -> bool {
@@ -220,7 +220,7 @@ impl PistonBlock {
                 return false;
             }
 
-            if !move_piston(world, dir, pos, true, sticky) {
+            if !move_blocks(world, dir, pos, true, sticky) {
                 return false;
             }
             props.extended = true;
@@ -315,7 +315,7 @@ impl PistonBlock {
                         BlockFlags::NOTIFY_ALL,
                     );
                 } else {
-                    move_piston(world, dir, pos, false, sticky);
+                    move_blocks(world, dir, pos, false, sticky);
                 }
             }
         } else {
@@ -368,17 +368,17 @@ fn should_extend(world: &World, block_pos: &BlockPos, piston_dir: BlockDirection
     false
 }
 
-pub fn try_move(world: &Arc<World>, block: &Block, block_pos: &BlockPos) {
+fn check_if_extend(world: &Arc<World>, block: &Block, block_pos: &BlockPos) {
     let state = world.get_block_state(block_pos);
     let props = PistonProps::from_state_id(state.id, block);
     let dir = props.facing.to_block_direction();
-    let should_extent = should_extend(world, block_pos, dir);
+    let should_extend = should_extend(world, block_pos, dir);
 
-    if should_extent && !props.extended {
+    if should_extend && !props.extended {
         if PistonHandler::new(world, *block_pos, dir, true).calculate_push() {
             world.add_synced_block_event(*block_pos, PistonBlock::TRIGGER_EXTEND, dir.to_index());
         }
-    } else if !should_extent && props.extended {
+    } else if !should_extend && props.extended {
         let new_pos = block_pos.offset_dir(dir.to_offset(), 2);
         let (new_block, new_state) = world.get_block_and_state_id(&new_pos);
         let mut r#type = PistonBlock::TRIGGER_CONTRACT;
@@ -408,22 +408,22 @@ fn moving_piston_placeholder(dir: BlockDirection, piston_type: Option<PistonType
 }
 
 #[expect(clippy::too_many_lines)]
-fn move_piston(
+fn move_blocks(
     world: &Arc<World>,
     dir: BlockDirection,
     block_pos: &BlockPos,
-    extend: bool,
+    extending: bool,
     sticky: bool,
 ) -> bool {
     let extended_pos = block_pos.offset(dir.to_offset());
-    if !extend && world.get_block(&extended_pos) == &Block::PISTON_HEAD {
+    if !extending && world.get_block(&extended_pos) == &Block::PISTON_HEAD {
         world.set_block_state(
             &extended_pos,
             Block::AIR.default_state.id,
             BlockFlags::FORCE_STATE,
         );
     }
-    let mut handler = PistonHandler::new(world, *block_pos, dir, extend);
+    let mut handler = PistonHandler::new(world, *block_pos, dir, extending);
     if !handler.calculate_push() {
         return false;
     }
@@ -442,7 +442,7 @@ fn move_piston(
     let broken_blocks: Vec<BlockPos> = handler.broken_blocks;
     let mut affected_block_states: Vec<&BlockState> =
         Vec::with_capacity(moved_blocks.len() + broken_blocks.len());
-    let move_direction = if extend { dir } else { dir.opposite() };
+    let move_direction = if extending { dir } else { dir.opposite() };
 
     for &broken_block_pos in broken_blocks.iter().rev() {
         let block_state = world.get_block_state(&broken_block_pos);
@@ -470,14 +470,14 @@ fn move_piston(
                 target_pos,
                 dir.to_facing().to_block_direction(),
                 moved_state,
-                extend,
+                extending,
                 false,
             )));
         }
         affected_block_states.push(block_state);
     }
 
-    if extend {
+    if extending {
         let piston_type = PistonBlock::type_from_sticky(sticky);
         moved_blocks_map.remove(&extended_pos);
         world.set_block_state(
@@ -567,7 +567,7 @@ fn move_piston(
         }
     }
 
-    if extend {
+    if extending {
         // Vanilla `level.updateNeighborsAt(armPos, Blocks.PISTON_HEAD)`: the arm is still
         // MOVING_PISTON, so the source is explicit.
         world.update_neighbors_from(&extended_pos, &Block::PISTON_HEAD, None);
