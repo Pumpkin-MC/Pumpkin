@@ -315,16 +315,6 @@ impl Server {
         };
         let server = Arc::new(server);
 
-        let gen_pool = Arc::new(
-            rayon::ThreadPoolBuilder::new()
-                .thread_name(|i| format!("Gen-Pool-{i}"))
-                .build()
-                .unwrap_or_else(|err| {
-                    error!("Failed to build generation thread pool: {err}");
-                    std::process::exit(1);
-                }),
-        );
-
         // Fetch / generate keys in background tasks to avoid blocking startup
         let server_clone = server.clone();
         tokio::spawn(async move {
@@ -400,7 +390,6 @@ impl Server {
             let l_info = server.level_info.clone(); // Access from struct
             let weak = Arc::downgrade(&server);
             let config = Arc::new(server.advanced_config.world.clone());
-            let pool = gen_pool.clone();
 
             tokio::task::spawn_blocking(move || {
                 info!(
@@ -409,7 +398,7 @@ impl Server {
                         .color_named(NamedColor::DarkGreen)
                         .to_pretty_console()
                 );
-                let level = into_level(dim.clone(), &config, path, seed, Some(pool));
+                let level = into_level(dim.clone(), &config, path, seed);
                 let world = Arc::new(World::load(level.clone(), l_info, dim, registry, weak));
                 let portal: Arc<dyn WorldPortalExt> = Arc::new(WorldPortal(world.clone()));
                 level.world_portal.store(Arc::new(Some(portal)));
@@ -508,14 +497,8 @@ impl Server {
             let config = Arc::new(server.advanced_config.world.clone());
             let seed = server.level_info.load().world_gen_settings.seed;
 
-            // TODO: gen_pool should be reused
-            let level = pumpkin_world::dimension::into_level(
-                dimension.clone(),
-                &config,
-                world_path,
-                seed,
-                None,
-            );
+            let level =
+                pumpkin_world::dimension::into_level(dimension.clone(), &config, world_path, seed);
             let world: World = World::load(level.clone(), l_info, dimension, registry, weak);
             let world = Arc::new(world);
             let portal: Arc<dyn WorldPortalExt> = Arc::new(WorldPortal(world.clone()));

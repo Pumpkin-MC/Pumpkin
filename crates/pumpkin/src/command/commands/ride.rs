@@ -108,11 +108,9 @@ impl CommandExecutor for RideMountExecutor {
                     continue;
                 }
                 // Dismount first
-                futures::executor::block_on(
-                    curr_veh
-                        .get_entity()
-                        .remove_passenger(target.get_entity().entity_id),
-                );
+                curr_veh
+                    .get_entity()
+                    .remove_passenger_sync(target.get_entity().entity_id);
             }
 
             vehicle
@@ -160,7 +158,7 @@ impl CommandExecutor for RideDismountExecutor {
                 .clone();
             if let Some(vehicle) = current_vehicle {
                 let target_id = target.get_entity().entity_id;
-                futures::executor::block_on(vehicle.get_entity().remove_passenger(target_id));
+                vehicle.get_entity().remove_passenger_sync(target_id);
                 success_count += 1;
 
                 let msg = TextComponent::translate_cross(

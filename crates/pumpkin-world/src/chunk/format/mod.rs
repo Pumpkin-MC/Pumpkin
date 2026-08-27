@@ -1,6 +1,5 @@
 use std::{
     path::PathBuf,
-    pin::Pin,
     str::FromStr,
     sync::{
         RwLock,
@@ -13,7 +12,6 @@ use pumpkin_data::{Block, BlockStateId, chunk::ChunkStatus, fluid::Fluid};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::resource_location::{FromResourceLocation, ResourceLocation, ToResourceLocation};
 use rustc_hash::FxHashMap;
-use tokio::sync::Mutex;
 
 use crate::{
     chunk::{
@@ -43,10 +41,8 @@ impl SingleChunkDataSerializer for ChunkData {
     }
 
     #[inline]
-    fn to_bytes(
-        &self,
-    ) -> Pin<Box<dyn Future<Output = Result<Bytes, ChunkSerializingError>> + Send + '_>> {
-        Box::pin(async move { Ok(self.internal_to_bytes()) })
+    fn to_bytes(&self) -> Result<Bytes, ChunkSerializingError> {
+        Ok(self.internal_to_bytes())
     }
 
     #[inline]
@@ -707,10 +703,8 @@ impl SingleChunkDataSerializer for ChunkEntityData {
     }
 
     #[inline]
-    fn to_bytes(
-        &self,
-    ) -> Pin<Box<dyn Future<Output = Result<Bytes, ChunkSerializingError>> + Send + '_>> {
-        Box::pin(async move { self.internal_to_bytes().await })
+    fn to_bytes(&self) -> Result<Bytes, ChunkSerializingError> {
+        Ok(self.internal_to_bytes())
     }
 
     #[inline]
@@ -775,12 +769,12 @@ impl ChunkEntityData {
         Ok(Self {
             x: position.x,
             z: position.y,
-            data: Mutex::new(entities),
+            data: std::sync::Mutex::new(entities),
             dirty: AtomicBool::new(false),
         })
     }
 
-    async fn internal_to_bytes(&self) -> Result<Bytes, ChunkSerializingError> {
+    fn internal_to_bytes(&self) -> Bytes {
         let mut root = NbtCompound::new();
         root.put_int("DataVersion", WORLD_DATA_VERSION);
         root.put(
@@ -790,14 +784,14 @@ impl ChunkEntityData {
         let entities_tag: Vec<pumpkin_nbt::tag::NbtTag> = self
             .data
             .lock()
-            .await
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
             .iter()
             .map(|c| pumpkin_nbt::tag::NbtTag::Compound(c.clone()))
             .collect();
         root.put_list("Entities", entities_tag);
 
         let nbt = pumpkin_nbt::Nbt::from(root);
-        Ok(nbt.write())
+        nbt.write()
     }
 }
 

@@ -119,9 +119,6 @@ impl IronGolemEntity {
 }
 
 impl Mob for IronGolemEntity {
-    fn as_iron_golem(&self) -> Option<&IronGolemEntity> {
-        Some(self)
-    }
     fn mob_write_nbt(&self, nbt: &mut NbtCompound) {
         nbt.put_bool("PlayerCreated", self.is_player_created());
     }

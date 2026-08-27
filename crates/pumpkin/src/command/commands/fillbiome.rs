@@ -30,7 +30,6 @@ struct FillBiomeExecutor {
 }
 
 impl CommandExecutor for FillBiomeExecutor {
-    #[expect(clippy::too_many_lines)]
     fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
         let from_pos = BlockPosArgumentType::get_block_pos(context, "from")?;
         let to_pos = BlockPosArgumentType::get_block_pos(context, "to")?;
@@ -96,51 +95,30 @@ impl CommandExecutor for FillBiomeExecutor {
 
         let mut changed_count = 0;
         for (chunk_pos, mods) in chunk_modifications {
-            let (has_replaced, count) =
-                futures::executor::block_on(world.level.get_or_fetch_chunk(chunk_pos, |chunk| {
-                    let mut local_count = 0;
-                    let mut modified = false;
-                    for &(rel_x, rel_y, rel_z) in &mods {
-                        let section_index = rel_y / 4;
-                        let scale_y = rel_y % 4;
-                        if let Some(current_id) =
-                            chunk
-                                .section
-                                .get_noise_biome(section_index, rel_x, scale_y, rel_z)
-                        {
-                            if let Some(replace_id) = replace_biome_id {
-                                if current_id == replace_id {
-                                    chunk.section.set_relative_biome(
-                                        rel_x,
-                                        rel_y,
-                                        rel_z,
-                                        target_biome_id,
-                                    );
-                                    local_count += 1;
-                                    modified = true;
-                                }
-                            } else {
-                                chunk.section.set_relative_biome(
-                                    rel_x,
-                                    rel_y,
-                                    rel_z,
-                                    target_biome_id,
-                                );
-                                local_count += 1;
-                                modified = true;
-                            }
-                        }
+            let result = world.level.read_chunk_sync(&chunk_pos, |chunk| {
+                let mut local_count = 0;
+                let mut modified = false;
+                for &(rel_x, rel_y, rel_z) in &mods {
+                    let section_index = rel_y / 4;
+                    let scale_y = rel_y % 4;
+                    if let Some(current_id) =
+                        chunk
+                            .section
+                            .get_noise_biome(section_index, rel_x, scale_y, rel_z)
+                        && replace_biome_id.is_none_or(|rep| current_id == rep)
+                    {
+                        chunk
+                            .section
+                            .set_relative_biome(rel_x, rel_y, rel_z, target_biome_id);
+                        local_count += 1;
+                        modified = true;
                     }
-                    (modified, local_count)
-                }));
+                }
+                (local_count, modified.then(|| chunk.clone()))
+            });
 
-            if has_replaced {
+            if let Some((count, Some(chunk))) = result {
                 changed_count += count;
-                let chunk = futures::executor::block_on(
-                    world
-                        .level
-                        .get_or_fetch_chunk(chunk_pos, std::clone::Clone::clone),
-                );
                 world.broadcast_to_chunk_except(chunk_pos, &[], &CChunkData(&chunk));
             }
         }

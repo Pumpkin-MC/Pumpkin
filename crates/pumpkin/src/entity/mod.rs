@@ -2351,29 +2351,18 @@ impl Entity {
                 tokio::spawn(async move {
                     let world_for_dest = world_clone.clone();
                     let caller_for_dest = caller_clone.clone();
-                    let gen_pool = world_for_dest.level.gen_pool.clone();
-                    let transition = if let Some(pool) = gen_pool {
-                        let (tx, rx) = tokio::sync::oneshot::channel();
-                        pool.spawn(move || {
-                            let dest = portal_type.get_portal_destination(
-                                &world_for_dest,
-                                dest_world_opt,
-                                &caller_for_dest,
-                                entry_pos,
-                                src_portal.as_ref(),
-                            );
-                            let _ = tx.send(dest);
-                        });
-                        rx.await.ok().flatten()
-                    } else {
-                        portal_type.get_portal_destination(
+                    let (tx, rx) = tokio::sync::oneshot::channel();
+                    rayon::spawn(move || {
+                        let dest = portal_type.get_portal_destination(
                             &world_for_dest,
                             dest_world_opt,
                             &caller_for_dest,
                             entry_pos,
                             src_portal.as_ref(),
-                        )
-                    };
+                        );
+                        let _ = tx.send(dest);
+                    });
+                    let transition = rx.await.ok().flatten();
 
                     if let Some(transition) = transition {
                         let dest_world = transition.new_world.clone();
@@ -3164,7 +3153,7 @@ impl Entity {
         }
     }
 
-    fn teleport(
+    pub fn teleport(
         &self,
         position: Vector3<f64>,
         yaw: Option<f32>,
@@ -3483,6 +3472,10 @@ impl Entity {
             self.chunk_pos.load(),
             &CSetPassengers::new(VarInt(self.entity_id), &passenger_ids),
         );
+    }
+
+    pub fn remove_passenger_sync(&self, passenger_id: i32) {
+        self.remove_passenger_on_disconnect(passenger_id);
     }
 
     pub async fn remove_passenger(&self, passenger_id: i32) {

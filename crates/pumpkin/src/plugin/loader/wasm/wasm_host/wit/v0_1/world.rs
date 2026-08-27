@@ -2231,7 +2231,7 @@ impl WasmChunkGenerator {
             proto_chunk,
         };
 
-        futures::executor::block_on(async {
+        let run = async {
             let mut store = self.plugin.store.lock().await;
             let Ok(buffer_res) = store.data_mut().add_chunk_buffer(chunk_buffer) else {
                 return;
@@ -2257,7 +2257,13 @@ impl WasmChunkGenerator {
                         );
                 }
             }
-        });
+        };
+
+        if let Ok(handle) = tokio::runtime::Handle::try_current() {
+            tokio::task::block_in_place(|| {
+                handle.block_on(run);
+            });
+        }
     }
 }
 
