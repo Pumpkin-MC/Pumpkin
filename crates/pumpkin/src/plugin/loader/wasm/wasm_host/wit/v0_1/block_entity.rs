@@ -206,16 +206,19 @@ impl HostBlockEntity for PluginHostState {
         Ok(())
     }
 
-    async fn is_comparator_dirty(&mut self, res: Resource<BlockEntity>) -> wasmtime::Result<bool> {
-        let entity = block_entity_from_resource(self, &res)?;
-        Ok(entity.is_comparator_dirty())
-    }
-
-    async fn clear_comparator_dirty(&mut self, res: Resource<BlockEntity>) -> wasmtime::Result<()> {
-        let entity = block_entity_from_resource(self, &res)?;
-        entity.clear_comparator_dirty();
-        Ok(())
-    }
+    // TODO: is-comparator-dirty/clear-comparator-dirty need to be re-added to
+    // block-entity.wit in pumpkin-plugin-wit; the submodule was pointed at master's
+    // commit during the master merge, which doesn't have these entries yet.
+    // async fn is_comparator_dirty(&mut self, res: Resource<BlockEntity>) -> wasmtime::Result<bool> {
+    //     let entity = block_entity_from_resource(self, &res)?;
+    //     Ok(entity.is_comparator_dirty())
+    // }
+    //
+    // async fn clear_comparator_dirty(&mut self, res: Resource<BlockEntity>) -> wasmtime::Result<()> {
+    //     let entity = block_entity_from_resource(self, &res)?;
+    //     entity.clear_comparator_dirty();
+    //     Ok(())
+    // }
 
     async fn set_custom_data(
         &mut self,
@@ -328,6 +331,24 @@ impl HostContainerBlockEntity for PluginHostState {
             .map_err(|_| wasmtime::Error::msg("invalid container block entity resource handle"))?;
         let provider = container.provider.provider.clone();
         self.add_block_entity(provider)
+    }
+
+    async fn get_inventory(
+        &mut self,
+        res: Resource<ContainerBlockEntity>,
+    ) -> wasmtime::Result<
+        Resource<
+            crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::inventory::Inventory,
+        >,
+    >{
+        let container = self
+            .resource_table
+            .get::<ContainerBlockEntityResource>(&Resource::new_own(res.rep()))
+            .map_err(|_| wasmtime::Error::msg("invalid container block entity resource handle"))?;
+        let inventory = container.provider.inventory.clone();
+        self.add_inventory(
+            crate::plugin::loader::wasm::wasm_host::state::InventoryProvider::Generic(inventory),
+        )
     }
 
     async fn get_size(&mut self, res: Resource<ContainerBlockEntity>) -> wasmtime::Result<u32> {

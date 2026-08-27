@@ -1,7 +1,7 @@
 use std::sync::{Arc, Mutex, atomic::Ordering};
 
 use crate::{
-    entity::{Entity, EntityBase, EntityBaseFuture, living::LivingEntity},
+    entity::{Entity, EntityBase, living::LivingEntity},
     net::{bedrock::BedrockClient, java::JavaClient},
     server::Server,
 };
@@ -44,7 +44,7 @@ impl EntityBase for MarkerEntity {
         }
     }
 
-    fn tick<'a>(&'a self, _caller: &'a Arc<dyn EntityBase>, _server: &'a Server) {}
+    fn tick(&self, _caller: &dyn EntityBase, _server: &Server) {}
 
     fn init_data_tracker(&self) {}
 
@@ -88,14 +88,7 @@ impl EntityBase for MarkerEntity {
         false
     }
 
-    fn send_java_spawn_packet<'a>(&'a self, _client: &'a JavaClient) -> EntityBaseFuture<'a, ()> {
-        Box::pin(async move {})
-    }
+    fn send_java_spawn_packet(&self, _client: &JavaClient) {}
 
-    fn send_bedrock_spawn_packet<'a>(
-        &'a self,
-        _client: &'a BedrockClient,
-    ) -> EntityBaseFuture<'a, ()> {
-        Box::pin(async move {})
-    }
+    fn send_bedrock_spawn_packet(&self, _client: &BedrockClient) {}
 }

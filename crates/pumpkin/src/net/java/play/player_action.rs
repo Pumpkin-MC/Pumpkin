@@ -78,7 +78,7 @@ impl JavaClient {
                         // Block break & play sound
                         let new_state = world.break_block(
                             &position,
-                            Some(player.clone()),
+                            Some(player),
                             BlockFlags::NOTIFY_NEIGHBORS | BlockFlags::SKIP_DROPS,
                         );
                         if new_state.is_some() {
@@ -100,11 +100,12 @@ impl JavaClient {
                         if speed >= 1.0 {
                             let broken_state = world.get_block_state(&position);
                             let can_harvest = player.can_harvest(broken_state, block);
-                            let new_state = world.break_block(
-                                &position,
-                                Some(player.clone()),
-                                BlockFlags::NOTIFY_NEIGHBORS,
-                            );
+                            let flags = if can_harvest {
+                                BlockFlags::NOTIFY_NEIGHBORS
+                            } else {
+                                BlockFlags::SKIP_DROPS | BlockFlags::NOTIFY_NEIGHBORS
+                            };
+                            let new_state = world.break_block(&position, Some(player), flags);
                             if new_state.is_some() {
                                 server.block_registry.broken(
                                     &world,
@@ -116,7 +117,7 @@ impl JavaClient {
                                 );
                                 player.apply_tool_damage_for_block_break(broken_state);
                                 if can_harvest {
-                                    player.add_exhaustion(MINE_BLOCK_EXHAUSTION).await;
+                                    player.add_exhaustion(MINE_BLOCK_EXHAUSTION);
                                 }
                                 let item_id = player.inventory().held_item().item.id;
                                 player.increment_stat(StatisticCategory::Used, item_id as i32, 1);
@@ -195,7 +196,7 @@ impl JavaClient {
 
                     let new_state = world.break_block(
                         &location,
-                        Some(player.clone()),
+                        Some(player),
                         if block_drop {
                             BlockFlags::NOTIFY_NEIGHBORS
                         } else {
@@ -209,7 +210,7 @@ impl JavaClient {
 
                         player.apply_tool_damage_for_block_break(state);
                         if block_drop {
-                            player.add_exhaustion(MINE_BLOCK_EXHAUSTION).await;
+                            player.add_exhaustion(MINE_BLOCK_EXHAUSTION);
                         }
                         let item_id = player.inventory().held_item().item.id;
                         player.increment_stat(StatisticCategory::Used, item_id as i32, 1);

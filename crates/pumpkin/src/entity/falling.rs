@@ -80,7 +80,7 @@ impl EntityBase for FallingEntity {
         }
     }
 
-    fn tick(&self, caller: &Arc<dyn EntityBase>, server: &Server) {
+    fn tick(&self, caller: &dyn EntityBase, server: &Server) {
         let entity = &self.entity;
         let mut velo = entity.velocity.load();
         velo.y -= self.get_gravity();

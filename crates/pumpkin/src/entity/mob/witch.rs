@@ -227,7 +227,7 @@ impl Mob for WitchEntity {
         amount
     }
 
-    fn mob_tick<'a>(&'a self, caller: &'a Arc<dyn EntityBase>) {
+    fn mob_tick(&self, caller: &dyn EntityBase) {
         let entity = &self.mob_entity.living_entity.entity;
         let living = &self.mob_entity.living_entity;
         let world = entity.world.load();

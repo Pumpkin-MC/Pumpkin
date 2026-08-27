@@ -105,7 +105,7 @@ impl JavaClient {
 
                 let height_difference = pos.y - last_pos.y;
                 if entity.on_ground.load(Ordering::Relaxed) && packet.collision & FLAG_ON_GROUND == 0 && height_difference > 0.0 {
-                    player.jump().await;
+                    player.jump();
                 }
 
                 let new_on_ground = packet.collision & FLAG_ON_GROUND != 0;
@@ -167,7 +167,7 @@ impl JavaClient {
                 if delta.length_squared() > 1.0E-5 {
                     player.update_last_action_time();
                 }
-                player.progress_motion(delta).await;
+                player.progress_motion(delta);
             }
 
             'cancelled: {
@@ -247,7 +247,7 @@ impl JavaClient {
                     && (packet.collision & FLAG_ON_GROUND) != 0
                     && height_difference > 0.0
                 {
-                    player.jump().await;
+                    player.jump();
                 }
                 entity
                     .on_ground
@@ -324,7 +324,7 @@ impl JavaClient {
                 if delta.length_squared() > 1.0E-5 {
                     player.update_last_action_time();
                 }
-                player.progress_motion(delta).await;
+                player.progress_motion(delta);
             }
 
             'cancelled: {

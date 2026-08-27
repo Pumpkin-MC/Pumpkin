@@ -254,7 +254,7 @@ impl MinecartEntity {
     /// the `CSetPassengers`/teleport pair to the dismounting player in order), so the ejection
     /// is handed to the runtime instead of blocking the tick. `caller` keeps the cart alive
     /// until the task runs.
-    fn dismount_all_passengers(&self, caller: &Arc<dyn EntityBase>) {
+    fn dismount_all_passengers(&self, caller: &dyn EntityBase) {
         let passenger_ids: Vec<i32> = self
             .vehicle
             .entity
@@ -269,7 +269,11 @@ impl MinecartEntity {
             return;
         }
 
-        let vehicle = caller.clone();
+        let world = caller.get_entity().world.load();
+        let vehicle_id = caller.get_entity().entity_id;
+        let Some(vehicle) = world.get_entity_by_id(vehicle_id) else {
+            return;
+        };
         tokio::spawn(async move {
             for passenger_id in passenger_ids {
                 vehicle.get_entity().remove_passenger(passenger_id).await;
@@ -300,7 +304,7 @@ impl EntityBase for MinecartEntity {
     }
 
     #[allow(clippy::too_many_lines)]
-    fn tick(&self, caller: &Arc<dyn EntityBase>, server: &Server) {
+    fn tick(&self, caller: &dyn EntityBase, server: &Server) {
         self.vehicle.tick();
         if let MinecartKind::Furnace(minecart) = &self.kind {
             minecart.tick(&self.vehicle.entity);
@@ -782,7 +786,7 @@ impl EntityBase for MinecartEntity {
     }
 
     #[allow(clippy::too_many_lines)]
-    fn push(&self, entity: &Arc<dyn EntityBase>) {
+    fn push(&self, entity: &dyn EntityBase) {
         let self_entity = self.get_entity();
         let other_entity = entity.get_entity();
 

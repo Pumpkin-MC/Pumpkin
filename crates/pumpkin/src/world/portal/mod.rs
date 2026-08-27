@@ -72,7 +72,7 @@ impl PortalType {
         &self,
         current_level: &World,
         dest_world: Arc<World>,
-        caller: &Arc<dyn crate::entity::EntityBase>,
+        caller: &dyn crate::entity::EntityBase,
         _portal_entry_pos: BlockPos,
         source_portal: Option<&SourcePortalInfo>,
     ) -> Option<TeleportTransition> {

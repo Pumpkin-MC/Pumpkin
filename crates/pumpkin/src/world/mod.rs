@@ -66,7 +66,6 @@ use pumpkin_data::{
     entity::{EntityStatus, EntityType},
     fluid::Fluid,
     item_stack::ItemStack,
-    packet::CURRENT_MC_VERSION,
     particle::Particle,
     sound::{Sound, SoundCategory},
     sound_id_remap::remap_sound_id_for_version,
@@ -84,8 +83,8 @@ use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::bedrock::client::set_actor_data::{CSetActorData, PropertySyncData};
 use pumpkin_protocol::bedrock::client::start_game::{CStartGame, ServerTelemetryData};
 use pumpkin_protocol::java::client::play::{
-    CBlockUpdate, CChunkBatchEnd, CChunkBatchStart, CChunkData, CDisguisedChatMessage, CExplosion,
-    CLightUpdate, CRespawn, CSetBlockDestroyStage, CWorldEvent, PlayerSpawnData,
+    CBlockUpdate, CDisguisedChatMessage, CExplosion, CRespawn, CSetBlockDestroyStage, CWorldEvent,
+    PlayerSpawnData,
 };
 use pumpkin_protocol::java::client::play::{
     CPlayerSpawnPosition, CRecipeBookAdd, CRecipeBookSettings, CSystemChatMessage,
@@ -455,7 +454,7 @@ impl World {
         }
     }
 
-    pub fn update_active_chunks(self: &Arc<Self>) {
+    pub fn update_active_chunks(&self) {
         let mut active_chunks = FxHashSet::default();
         let sim_dist = self.server.upgrade().map_or(10, |s| {
             s.advanced_config.networking.java.simulation_distance.get()
@@ -578,7 +577,10 @@ impl World {
 
         for (pos, nbts) in by_chunk {
             let chunk = self.level.get_entity_chunk(pos).await;
-            let mut data = chunk.data.lock().await;
+            let mut data = chunk
+                .data
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
             if rebuilt.contains(&pos) {
                 if data.is_empty() && nbts.is_empty() {
                     continue;
@@ -1140,7 +1142,7 @@ impl World {
             Self::collect_java_recipients_by_version(java_recipients.into_iter());
 
         for (version, recipients) in recipients_by_version {
-            if version < CURRENT_MC_VERSION {
+            if version < JavaMinecraftVersion::V_1_21 {
                 continue;
             }
             let mut buf = Vec::new();
@@ -1359,7 +1361,7 @@ impl World {
         entity_chunk: Vector2<i32>,
     ) {
         entity.get_entity().age.fetch_add(1, Relaxed);
-        entity.tick(entity, server);
+        entity.tick(entity.as_ref(), server);
 
         let entity_inner = entity.get_entity();
         let entity_pos = entity_inner.pos.load();
@@ -1498,7 +1500,6 @@ impl World {
 
         let entities_to_tick = self.entities.load();
         let entity_count = entities_to_tick.len();
-        let server_for_entities = (*server).clone();
         let active_chunks = self.active_chunks.load();
         let level_for_entities = self.level.clone();
         let entity_handle = handle.clone();
@@ -1518,7 +1519,7 @@ impl World {
                 if !level_for_entities.is_chunk_loaded(&entity_chunk) {
                     return None;
                 }
-                Some((entity.clone(), entity_chunk))
+                Some((entity, entity_chunk))
             })
             .collect();
 
@@ -1534,11 +1535,9 @@ impl World {
             .par_chunks(ENTITY_TICK_BATCH_SIZE)
             .for_each(|batch| {
                 let _guard = entity_handle.enter();
-                let s_clone = server_for_entities.clone();
-                let p_cache = players_cache.clone();
 
                 for (entity, entity_chunk) in batch {
-                    Self::tick_one_entity(entity, &s_clone, &p_cache, *entity_chunk);
+                    Self::tick_one_entity(entity, server, &players_cache, *entity_chunk);
                 }
             });
 
@@ -1583,28 +1582,26 @@ impl World {
         let block_entity_count = block_entities.len() + piston_batch.len();
 
         let t_be = std::time::Instant::now();
-        let world_for_be = self.clone();
         let be_handle = handle;
         block_entities.par_chunks(16).for_each(|batch| {
             let _guard = be_handle.enter();
-            let w_clone = world_for_be.clone();
             for be in batch {
                 // Snapshot is stale: a disconnect can unload the chunk; `get_block_state`
                 // then returns air and property codecs panic.
-                if w_clone
+                if self
                     .get_block_state_id_if_loaded(&be.get_position())
                     .is_none()
                 {
                     continue;
                 }
-                be.tick(&w_clone);
+                be.tick(self);
                 // Vanilla `BlockEntity.setChanged` -> `Level.updateNeighbourForOutputSignal`.
                 // Separate from `is_dirty` (WASM may consume that on its own schedule).
                 if be.is_comparator_dirty() {
                     be.clear_comparator_dirty();
                     let pos = be.get_position();
-                    let block = w_clone.get_block(&pos);
-                    w_clone.update_neighbour_for_output_signal(&pos, block);
+                    let block = self.get_block(&pos);
+                    self.update_neighbour_for_output_signal(&pos, block);
                 }
             }
         });
@@ -1880,10 +1877,12 @@ impl World {
                 let cleaned_chunks = self.level.clean_memory();
                 if !cleaned_chunks.is_empty() {
                     let world_clone = self.clone();
-                    tokio::spawn(async move {
-                        world_clone.remove_entities_in_chunks(&cleaned_chunks).await;
-                        world_clone.level.clean_entity_chunks(&cleaned_chunks);
-                    });
+                    if let Some(server) = self.server.upgrade() {
+                        server.spawn_task(async move {
+                            world_clone.remove_entities_in_chunks(&cleaned_chunks).await;
+                            world_clone.level.clean_entity_chunks(&cleaned_chunks);
+                        });
+                    }
                 }
                 // If autosave is configured and this tick will trigger an autosave, don't double notify
                 if self.level.autosave_ticks == 0 {
@@ -2109,7 +2108,7 @@ impl World {
         });
     }
 
-    pub fn check_fluid_collision(self: &Arc<Self>, bounding_box: BoundingBox) -> bool {
+    pub fn check_fluid_collision(&self, bounding_box: BoundingBox) -> bool {
         let min = bounding_box.min_block_pos();
 
         let max = bounding_box.max_block_pos();
@@ -3530,8 +3529,8 @@ impl World {
         if client.version.load() < JavaMinecraftVersion::V_1_20_2
             && client.version.load() >= JavaMinecraftVersion::V_1_13
         {
-            let mut tags = Vec::new();
             let version = client.version.load();
+            let mut tags = Vec::new();
             for &key in pumpkin_data::tag::RegistryKey::NETWORK_KEYS {
                 if pumpkin_data::tag::get_registry_key_tags(version, key)
                     .is_some_and(|map| !map.is_empty())
@@ -3539,11 +3538,10 @@ impl World {
                     tags.push(key);
                 }
             }
-            client
-                .send_packet(&pumpkin_protocol::java::client::play::CUpdateTagsPlay::new(
-                    &tags,
-                ))
-                .await;
+            let packet = pumpkin_protocol::java::client::play::CUpdateTagsPlay::new(&tags);
+            if let Ok(packet_data) = JavaClient::serialize_packet_for_version(&packet, version) {
+                client.send_packet_now(packet_data).await;
+            }
         }
 
         let (position, yaw, pitch) = if player.has_played_before.load(Ordering::Relaxed) {
@@ -3591,24 +3589,12 @@ impl World {
                 return;
             }
         }
-        if client.version.load() >= JavaMinecraftVersion::V_1_20_2 {
-            client.send_packet(&CChunkBatchStart).await;
-        }
-        client.send_packet(&CChunkData(&chunk)).await;
-        if client.version.load() >= JavaMinecraftVersion::V_1_14
-            && client.version.load() < JavaMinecraftVersion::V_1_18
-            && let Ok(light_packet) = CLightUpdate::from_chunk(&chunk, client.version.load())
-        {
-            client.send_packet(&light_packet).await;
-        }
-        if client.version.load() >= JavaMinecraftVersion::V_1_20_2 {
-            client.send_packet(&CChunkBatchEnd::new(1u16)).await;
-        }
+        client.send_chunks(&[chunk]).await;
 
         let velocity = player.living_entity.entity.velocity.load();
 
         debug!("Sending player teleport to {}", player.gameprofile.name);
-        player.request_teleport(position, yaw, pitch).await;
+        player.request_teleport(position, yaw, pitch);
 
         let gameprofile = &player.gameprofile;
         let bedrock_player_list = CPlayerList {
@@ -3965,7 +3951,7 @@ impl World {
                 )
                 .await;
 
-            if client.version.load() >= CURRENT_MC_VERSION {
+            if client.version.load() >= JavaMinecraftVersion::V_1_21 {
                 let config = existing_player.config.load();
                 let mut buf = Vec::new();
                 {
@@ -4631,24 +4617,11 @@ impl World {
                 .level
                 .get_or_fetch_chunk(center_chunk, std::clone::Clone::clone)
                 .await;
-            if java_client.version.load() >= JavaMinecraftVersion::V_1_20_2 {
-                java_client.send_packet(&CChunkBatchStart).await;
-            }
-            java_client.send_packet(&CChunkData(&chunk)).await;
-            if java_client.version.load() >= JavaMinecraftVersion::V_1_14
-                && java_client.version.load() < JavaMinecraftVersion::V_1_18
-                && let Ok(light_packet) =
-                    CLightUpdate::from_chunk(&chunk, java_client.version.load())
-            {
-                java_client.send_packet(&light_packet).await;
-            }
-            if java_client.version.load() >= JavaMinecraftVersion::V_1_20_2 {
-                java_client.send_packet(&CChunkBatchEnd::new(1u16)).await;
-            }
+            java_client.send_chunks(&[chunk]).await;
         }
 
         // Send teleport packet after at least the center chunk was delivered
-        player.request_teleport(position, yaw, pitch).await;
+        player.request_teleport(position, yaw, pitch);
     }
 
     /// Returns true if enough players are sleeping and we should skip the night.
@@ -4741,7 +4714,12 @@ impl World {
                 if first_load {
                     // First watcher: take NBT, make entities live (clears the buffer so unload
                     // does not double them).
-                    let entity_nbts = std::mem::take(&mut *chunk.data.lock().await);
+                    let entity_nbts = std::mem::take(
+                        &mut *chunk
+                            .data
+                            .lock()
+                            .unwrap_or_else(std::sync::PoisonError::into_inner),
+                    );
                     let mut entities_to_add: Vec<Arc<dyn EntityBase>> =
                         Vec::with_capacity(entity_nbts.len());
                     for entity_nbt in &entity_nbts {
@@ -4769,7 +4747,7 @@ impl World {
                         // server and client agree. Vanilla `ClientboundAddEntityPacket` carries
                         // `getDeltaMovement()` the same way; zeroing it here would rob a thrown
                         // or launched entity of its momentum across a reload.
-                        player.client.enqueue_spawn_packet(&entity).await;
+                        player.client.enqueue_spawn_packet(&entity);
                         player.try_restore_vehicle(&entity);
                         entities_to_add.push(entity);
                     }
@@ -4791,7 +4769,7 @@ impl World {
                     for entity in world.entities.load().iter() {
                         let base_entity = entity.get_entity();
                         if base_entity.chunk_pos.load() == position {
-                            player.client.enqueue_spawn_packet(entity).await;
+                            player.client.enqueue_spawn_packet(entity);
                             player.try_restore_vehicle(entity);
                         }
                     }
@@ -5779,15 +5757,31 @@ impl World {
     pub fn break_block(
         self: &Arc<Self>,
         position: &BlockPos,
-        _cause: Option<Arc<Player>>,
+        cause: Option<&Player>,
         flags: BlockFlags,
     ) -> Option<BlockStateId> {
-        let (broken_block, broken_block_state) = self.get_block_and_state_id(position);
-        if is_air(broken_block_state) {
+        let (broken_block, broken_block_state) = self.get_block_and_state(position);
+        if broken_block_state.is_air() {
             return None;
         }
+
+        if !flags.contains(BlockFlags::SKIP_DROPS) {
+            let tool = cause.and_then(|p| {
+                let item = p.inventory().held_item();
+                if item.is_empty() { None } else { Some(item) }
+            });
+            let params = crate::world::loot::LootContextParameters {
+                tool,
+                block_state: Some(broken_block_state),
+                position: Some(position.to_f64()),
+                killed_by_player: Some(cause.is_some()),
+                ..Default::default()
+            };
+            crate::block::drop_loot(self, broken_block, position, true, params);
+        }
+
         let new_state_id = if broken_block
-            .properties(broken_block_state)
+            .properties(broken_block_state.id)
             .and_then(|properties| {
                 properties
                     .to_props()

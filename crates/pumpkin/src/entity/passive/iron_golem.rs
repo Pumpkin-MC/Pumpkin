@@ -119,9 +119,6 @@ impl IronGolemEntity {
 }
 
 impl Mob for IronGolemEntity {
-    fn as_iron_golem(&self) -> Option<&IronGolemEntity> {
-        Some(self)
-    }
     fn mob_write_nbt(&self, nbt: &mut NbtCompound) {
         nbt.put_bool("PlayerCreated", self.is_player_created());
     }
@@ -136,7 +133,7 @@ impl Mob for IronGolemEntity {
         &self.mob_entity
     }
 
-    fn mob_tick<'a>(&'a self, _caller: &'a Arc<dyn EntityBase>) {
+    fn mob_tick(&self, _caller: &dyn EntityBase) {
         let attack_tick = self.attack_animation_tick.load(Ordering::Relaxed);
         if attack_tick > 0 {
             self.attack_animation_tick.fetch_sub(1, Ordering::Relaxed);

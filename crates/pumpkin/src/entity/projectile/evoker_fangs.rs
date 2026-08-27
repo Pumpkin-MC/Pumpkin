@@ -1,4 +1,3 @@
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 
 use pumpkin_data::damage::DamageType;
@@ -42,7 +41,7 @@ impl EntityBase for EvokerFangsEntity {
         }
     }
 
-    fn tick<'a>(&'a self, _caller: &'a Arc<dyn EntityBase>, _server: &'a Server) {
+    fn tick(&self, _caller: &dyn EntityBase, _server: &Server) {
         let entity = &self.entity;
         let world = entity.world.load();
 

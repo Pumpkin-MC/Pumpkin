@@ -45,7 +45,7 @@ impl BedrockClient {
                 if player.gamemode.load() == GameMode::Creative {
                     let new_state = world.break_block(
                         &location,
-                        Some(player.clone()),
+                        Some(player),
                         BlockFlags::NOTIFY_NEIGHBORS | BlockFlags::SKIP_DROPS,
                     );
                     if new_state.is_some() {
@@ -59,11 +59,12 @@ impl BedrockClient {
                         player.stop_mining();
                         let broken_state = world.get_block_state(&location);
                         let can_harvest = player.can_harvest(broken_state, block);
-                        let new_state = world.break_block(
-                            &location,
-                            Some(player.clone()),
-                            BlockFlags::NOTIFY_NEIGHBORS,
-                        );
+                        let flags = if can_harvest {
+                            BlockFlags::NOTIFY_NEIGHBORS
+                        } else {
+                            BlockFlags::SKIP_DROPS | BlockFlags::NOTIFY_NEIGHBORS
+                        };
+                        let new_state = world.break_block(&location, Some(player), flags);
                         if new_state.is_some() {
                             server.block_registry.broken(
                                 &world,
@@ -75,7 +76,7 @@ impl BedrockClient {
                             );
                             player.apply_tool_damage_for_block_break(broken_state);
                             if can_harvest {
-                                player.add_exhaustion(MINE_BLOCK_EXHAUSTION).await;
+                                player.add_exhaustion(MINE_BLOCK_EXHAUSTION);
                             }
                         }
                     } else {
@@ -157,16 +158,13 @@ impl BedrockClient {
                         } else {
                             BlockFlags::SKIP_DROPS | BlockFlags::NOTIFY_NEIGHBORS
                         };
-                        if world
-                            .break_block(&location, Some(player.clone()), flags)
-                            .is_some()
-                        {
+                        if world.break_block(&location, Some(player), flags).is_some() {
                             server
                                 .block_registry
                                 .broken(&world, block, player, &location, server, state);
                             player.apply_tool_damage_for_block_break(state);
                             if can_harvest {
-                                player.add_exhaustion(MINE_BLOCK_EXHAUSTION).await;
+                                player.add_exhaustion(MINE_BLOCK_EXHAUSTION);
                             }
                         }
                     } else {
