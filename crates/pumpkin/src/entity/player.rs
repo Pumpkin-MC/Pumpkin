@@ -228,7 +228,7 @@ impl BedrockPlayer<'_> {
 }
 use pumpkin_data::attributes::Attributes;
 use pumpkin_data::block_properties::{BlockProperties, HorizontalFacing};
-use pumpkin_data::damage::DamageType;
+use pumpkin_data::damage::{DamageScaling, DamageType};
 use pumpkin_data::data_component_impl::{AttributeModifiersImpl, EnchantmentsImpl, Operation};
 use pumpkin_data::data_component_impl::{EquipmentSlot, EquippableImpl, ToolImpl, WeaponImpl};
 use pumpkin_data::effect::StatusEffect;
@@ -279,7 +279,7 @@ use pumpkin_util::resource_location::ResourceLocation;
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::click::ClickEvent;
 use pumpkin_util::text::hover::HoverEvent;
-use pumpkin_util::{GameMode, Hand};
+use pumpkin_util::{Difficulty, GameMode, Hand};
 use pumpkin_world::biome;
 use pumpkin_world::cylindrical_chunk_iterator::Cylindrical;
 use pumpkin_world::level::{Level, SyncChunk, SyncEntityChunk};
@@ -3865,6 +3865,29 @@ impl Player {
         self.send_health();
     }
 
+    /// Vanilla `Player.hurtServer` difficulty scaling.
+    fn scale_player_damage(
+        amount: f32,
+        scaling: DamageScaling,
+        difficulty: Difficulty,
+        caused_by_living_non_player: bool,
+    ) -> f32 {
+        let scales = match scaling {
+            DamageScaling::Always => true,
+            DamageScaling::WhenCausedByLivingNonPlayer => caused_by_living_non_player,
+            DamageScaling::Never => false,
+        };
+        if !scales {
+            return amount;
+        }
+        match difficulty {
+            Difficulty::Peaceful => 0.0,
+            Difficulty::Easy => (amount / 2.0 + 1.0).min(amount),
+            Difficulty::Normal => amount,
+            Difficulty::Hard => amount * 3.0 / 2.0,
+        }
+    }
+
     pub fn damage(
         &self,
         caller: &dyn crate::entity::EntityBase,
@@ -3878,7 +3901,7 @@ impl Player {
         &self,
         caller: &dyn crate::entity::EntityBase,
         amount: f32,
-        damage_type: pumpkin_data::damage::DamageType,
+        damage_type: DamageType,
         position: Option<Vector3<f64>>,
         source: Option<&dyn crate::entity::EntityBase>,
         cause: Option<&dyn crate::entity::EntityBase>,
@@ -3891,6 +3914,19 @@ impl Player {
             && damage_type != pumpkin_data::damage::DamageType::GENERIC_KILL
             && damage_type != pumpkin_data::damage::DamageType::OUT_OF_WORLD
         {
+            return false;
+        }
+        // Vanilla `Player.hurtServer`: `DamageSource.scalesWithDifficulty`.
+        let caused_by_living_non_player = cause.is_some_and(|c| {
+            c.get_living_entity().is_some() && c.get_player().is_none()
+        });
+        let amount = Self::scale_player_damage(
+            amount,
+            damage_type.scaling,
+            self.world().level_info.load().difficulty,
+            caused_by_living_non_player,
+        );
+        if amount == 0.0 {
             return false;
         }
         self.living_entity

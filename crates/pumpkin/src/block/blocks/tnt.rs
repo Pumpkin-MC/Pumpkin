@@ -111,6 +111,10 @@ impl BlockBehaviour for TNTBlock {
 
     fn explode(&self, args: ExplodeArgs<'_>) {
         {
+            // Vanilla `TntBlock.wasExploded`: gated on `GameRules.TNT_EXPLODES`.
+            if !args.world.level_info.load().game_rules.tnt_explodes {
+                return;
+            }
             let entity = Entity::new(args.world.clone(), args.position.to_f64(), &EntityType::TNT);
             let angle = rand::random::<f64>() * std::f64::consts::TAU;
             entity.set_velocity(Vector3::new(-angle.sin() * 0.02, 0.2, -angle.cos() * 0.02));
