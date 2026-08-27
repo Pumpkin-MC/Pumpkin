@@ -3464,7 +3464,6 @@ dependencies = [
  "pumpkin-world",
  "rand",
  "thiserror 2.0.20",
- "tokio",
  "tracing",
 ]
 
