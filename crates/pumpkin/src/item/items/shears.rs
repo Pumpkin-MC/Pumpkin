@@ -76,7 +76,9 @@ impl ItemBehaviour for ShearsItem {
     }
 
     fn use_on_entity(&self, _item: &mut ItemStack, player: &Player, entity: Arc<dyn EntityBase>) {
-        if let Some(sheep) = entity.get_mob().and_then(|m| m.get_sheep())
+        if let Some(sheep) = entity
+            .cast_any()
+            .downcast_ref::<crate::entity::passive::sheep::SheepEntity>()
             && !sheep.is_sheared()
         {
             sheep.set_sheared(true);

@@ -70,7 +70,21 @@ pub type EnchantmentManagerResource =
 pub type OpManagerResource = WasmResource<Arc<Server>>;
 pub type BanManagerResource = WasmResource<Arc<Server>>;
 pub type WhitelistManagerResource = WasmResource<Arc<Server>>;
+pub type DatapackManagerResource = WasmResource<Arc<Server>>;
 pub type BlockEntityResource = WasmResource<Arc<dyn crate::block::entities::BlockEntity>>;
+
+#[derive(Clone)]
+pub enum InventoryProvider {
+    Generic(Arc<dyn pumpkin_world::inventory::Inventory>),
+    PlayerMain(Arc<Player>),
+    PlayerEnderChest(Arc<Player>),
+}
+
+pub type InventoryResource = WasmResource<InventoryProvider>;
+pub type PlayerInventoryResource = WasmResource<Arc<Player>>;
+
+pub type LivingEntityResource = WasmResource<Arc<dyn EntityBase>>;
+pub type MobResource = WasmResource<Arc<dyn EntityBase>>;
 
 #[derive(Clone)]
 pub struct ContainerBlockEntity {
@@ -192,6 +206,24 @@ impl PluginHostState {
         provider: Arc<dyn EntityBase>,
     ) -> wasmtime::Result<wasmtime::component::Resource<T>> {
         let resource = self.resource_table.push(EntityResource { provider })?;
+        Ok(wasmtime::component::Resource::new_own(resource.rep()))
+    }
+
+    pub fn add_living_entity<T>(
+        &mut self,
+        provider: Arc<dyn EntityBase>,
+    ) -> wasmtime::Result<wasmtime::component::Resource<T>> {
+        let resource = self
+            .resource_table
+            .push(LivingEntityResource { provider })?;
+        Ok(wasmtime::component::Resource::new_own(resource.rep()))
+    }
+
+    pub fn add_mob<T>(
+        &mut self,
+        provider: Arc<dyn EntityBase>,
+    ) -> wasmtime::Result<wasmtime::component::Resource<T>> {
+        let resource = self.resource_table.push(MobResource { provider })?;
         Ok(wasmtime::component::Resource::new_own(resource.rep()))
     }
 
@@ -359,6 +391,34 @@ impl PluginHostState {
         let resource = self
             .resource_table
             .push(WhitelistManagerResource { provider })?;
+        Ok(wasmtime::component::Resource::new_own(resource.rep()))
+    }
+
+    pub fn add_datapack_manager<T>(
+        &mut self,
+        provider: Arc<Server>,
+    ) -> wasmtime::Result<wasmtime::component::Resource<T>> {
+        let resource = self
+            .resource_table
+            .push(DatapackManagerResource { provider })?;
+        Ok(wasmtime::component::Resource::new_own(resource.rep()))
+    }
+
+    pub fn add_inventory<T>(
+        &mut self,
+        provider: InventoryProvider,
+    ) -> wasmtime::Result<wasmtime::component::Resource<T>> {
+        let resource = self.resource_table.push(InventoryResource { provider })?;
+        Ok(wasmtime::component::Resource::new_own(resource.rep()))
+    }
+
+    pub fn add_player_inventory<T>(
+        &mut self,
+        provider: Arc<Player>,
+    ) -> wasmtime::Result<wasmtime::component::Resource<T>> {
+        let resource = self
+            .resource_table
+            .push(PlayerInventoryResource { provider })?;
         Ok(wasmtime::component::Resource::new_own(resource.rep()))
     }
 
