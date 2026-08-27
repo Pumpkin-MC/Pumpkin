@@ -41,6 +41,82 @@ pub struct CParticle<'a> {
     pub data: &'a [u8],
 }
 
+/// The payload that follows the particle ID for particle types whose vanilla
+/// `ParticleOptions` is not a plain `SimpleParticleType`.
+///
+/// The particle ID is taken from [`Self::particle`] rather than passed
+/// alongside, so a payload can never be paired with the wrong particle.
+/// Particles that take no options are spawned through [`CParticle`] directly
+/// with an empty `data`.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum ParticleOptions {
+    /// `minecraft:trail`, vanilla's `TrailParticleOption`.
+    Trail {
+        /// The position the trail travels towards.
+        target: Vector3<f64>,
+        /// The trail color, encoded as `0xRRGGBB`. The top bits are ignored.
+        color: i32,
+        /// Life time in ticks.
+        duration: i32,
+    },
+}
+
+impl ParticleOptions {
+    /// The particle this payload belongs to.
+    #[must_use]
+    pub const fn particle(&self) -> pumpkin_data::particle::Particle {
+        match self {
+            Self::Trail { .. } => pumpkin_data::particle::Particle::Trail,
+        }
+    }
+
+    /// Whether `version` still has this particle under an ID of its own.
+    ///
+    /// On older versions [`remap_particle_id_for_version`] folds the particle
+    /// onto an unrelated one that reads a different payload — `trail` becomes
+    /// `entity_effect`, for instance — so no byte string we could write would be
+    /// read correctly and the packet has to be dropped instead.
+    #[must_use]
+    pub fn is_supported_by(&self, version: JavaMinecraftVersion) -> bool {
+        match self {
+            Self::Trail { .. } => version >= JavaMinecraftVersion::V_1_21_2,
+        }
+    }
+
+    /// Writes the payload that follows the particle ID.
+    pub fn write(&self, write: impl Write) -> Result<(), WritingError> {
+        let mut write = write;
+        match *self {
+            Self::Trail {
+                target,
+                color,
+                duration,
+            } => {
+                write.write_f64_be(target.x)?;
+                write.write_f64_be(target.y)?;
+                write.write_f64_be(target.z)?;
+                write.write_i32_be(color)?;
+                write.write_var_int(&VarInt(duration))
+            }
+        }
+    }
+
+    /// The payload to send to a client on `version`, or `None` when that client
+    /// cannot read this particle and the packet must be dropped instead.
+    ///
+    /// See [`Self::is_supported_by`] for when that happens. `None` also covers a
+    /// write failure, which a `Vec` sink cannot actually produce.
+    #[must_use]
+    pub fn encode_for(&self, version: JavaMinecraftVersion) -> Option<Vec<u8>> {
+        if !self.is_supported_by(version) {
+            return None;
+        }
+        let mut payload = Vec::new();
+        self.write(&mut payload).ok()?;
+        Some(payload)
+    }
+}
+
 impl<'a> CParticle<'a> {
     #[expect(clippy::too_many_arguments)]
     #[must_use]
@@ -305,7 +381,7 @@ mod tests {
 
     use crate::{ClientPacket, VarInt};
 
-    use super::CParticle;
+    use super::{CParticle, ParticleOptions};
 
     fn encoded_particle_id(version: JavaMinecraftVersion) -> VarInt {
         let packet = CParticle::new(
@@ -388,6 +464,199 @@ mod tests {
         let mut slice = bytes.as_slice();
         let id = slice.get_i32_be().unwrap();
         assert_eq!(id, 18);
+    }
+
+    /// Byte offset at which `write_packet_data` puts the particle ID for
+    /// 1.20.5+, pinned by `particle_id_stays_latest_for_26_2` above.
+    const PARTICLE_ID_OFFSET: usize = 46;
+
+    fn trail_options() -> ParticleOptions {
+        ParticleOptions::Trail {
+            target: Vector3::new(1.5, 2.25, -3.75),
+            color: 16_545_810,
+            duration: 23,
+        }
+    }
+
+    fn trail_packet(options: &ParticleOptions) -> Vec<u8> {
+        let mut payload = Vec::new();
+        options.write(&mut payload).unwrap();
+        let packet = CParticle::new(
+            false,
+            false,
+            Vector3::new(0.0, 0.0, 0.0),
+            Vector3::new(0.0, 0.0, 0.0),
+            0.0,
+            1,
+            VarInt(options.particle() as i32),
+            &payload,
+        );
+        let mut bytes = Vec::new();
+        packet
+            .write_packet_data(&mut bytes, &JavaMinecraftVersion::V_26_2)
+            .unwrap();
+        bytes
+    }
+
+    #[test]
+    fn trail_options_match_vanilla_stream_codec() {
+        let mut payload = Vec::new();
+        trail_options().write(&mut payload).unwrap();
+
+        // Vanilla `TrailParticleOption.STREAM_CODEC`: Vec3, then INT, then VAR_INT.
+        let mut expected = Vec::new();
+        expected.extend_from_slice(&1.5f64.to_be_bytes());
+        expected.extend_from_slice(&2.25f64.to_be_bytes());
+        expected.extend_from_slice(&(-3.75f64).to_be_bytes());
+        expected.extend_from_slice(&16_545_810i32.to_be_bytes());
+        expected.push(23);
+
+        assert_eq!(payload, expected);
+        assert_eq!(payload.len(), 29);
+    }
+
+    /// Decodes the packet the way `ClientboundLevelParticlesPacket` does and
+    /// checks that the trail payload is complete and nothing is left over.
+    ///
+    /// Without the payload the client reads past the end of the buffer, which
+    /// is the disconnect reported in #3065.
+    #[test]
+    fn trail_packet_carries_a_complete_particle_option() {
+        use crate::ser::NetworkReadExt;
+
+        let options = trail_options();
+        let bytes = trail_packet(&options);
+
+        let mut tail = &bytes[PARTICLE_ID_OFFSET..];
+        assert_eq!(VarInt::decode(&mut tail).unwrap(), VarInt(56));
+
+        let target = Vector3::new(
+            tail.get_f64_be().unwrap(),
+            tail.get_f64_be().unwrap(),
+            tail.get_f64_be().unwrap(),
+        );
+        let color = tail.get_i32_be().unwrap();
+        let duration = tail.get_var_int().unwrap();
+
+        assert_eq!(
+            options,
+            ParticleOptions::Trail {
+                target,
+                color,
+                duration: duration.0,
+            }
+        );
+        assert!(
+            tail.is_empty(),
+            "{} trailing bytes after the particle option",
+            tail.len()
+        );
+    }
+
+    /// The reporter's client failed at `readerIndex(48) + length(8)`: the whole
+    /// packet was 48 bytes and the first double of `target` needed eight more, so
+    /// it ended exactly where the particle option should have started.
+    ///
+    /// Measured through `serialize_packet`, the same call `Player` makes, so the
+    /// length includes the packet ID.
+    #[test]
+    fn trail_packet_no_longer_ends_at_the_particle_id() {
+        use crate::java::packet_encoder::serialize_packet;
+
+        let options = trail_options();
+        let mut payload = Vec::new();
+        options.write(&mut payload).unwrap();
+
+        let packet = |data: &[u8]| {
+            let packet = CParticle::new(
+                false,
+                false,
+                Vector3::new(0.0, 0.0, 0.0),
+                Vector3::new(0.0, 0.0, 0.0),
+                0.0,
+                1,
+                VarInt(options.particle() as i32),
+                data,
+            );
+            serialize_packet(&packet, &JavaMinecraftVersion::V_26_2)
+                .unwrap()
+                .len()
+        };
+
+        assert_eq!(packet(&[]), 48);
+        assert_eq!(packet(&payload), 48 + 29);
+    }
+
+    /// `encode_for` is the whole decision `Player::spawn_particle_with_options`
+    /// makes: which clients get a payload, and which get no packet at all.
+    #[test]
+    fn encode_for_yields_a_payload_only_where_the_particle_exists() {
+        let options = trail_options();
+        let mut written = Vec::new();
+        options.write(&mut written).unwrap();
+
+        for version in [
+            JavaMinecraftVersion::V_26_2,
+            JavaMinecraftVersion::V_1_21_4,
+            JavaMinecraftVersion::V_1_21_2,
+        ] {
+            assert_eq!(
+                options.encode_for(version).as_deref(),
+                Some(written.as_slice()),
+                "{version:?} should receive the full payload"
+            );
+        }
+
+        for version in [
+            JavaMinecraftVersion::V_1_21,
+            JavaMinecraftVersion::V_1_20_5,
+            JavaMinecraftVersion::V_1_8,
+        ] {
+            assert_eq!(
+                options.encode_for(version),
+                None,
+                "{version:?} should be sent no packet at all"
+            );
+        }
+    }
+
+    /// Below 1.21.2 the ID remap folds `trail` onto `entity_effect`, which reads
+    /// a different payload, so those clients must be skipped entirely.
+    #[test]
+    fn trail_options_are_gated_on_versions_that_have_the_particle() {
+        use pumpkin_data::particle_id_remap::remap_particle_id_for_version;
+
+        let options = trail_options();
+        let trail = Particle::Trail as u16;
+        let entity_effect = Particle::EntityEffect as u16;
+
+        for version in [
+            JavaMinecraftVersion::V_26_2,
+            JavaMinecraftVersion::V_1_21_11,
+            JavaMinecraftVersion::V_1_21_4,
+            JavaMinecraftVersion::V_1_21_2,
+        ] {
+            assert!(options.is_supported_by(version), "{version:?}");
+            assert_ne!(
+                remap_particle_id_for_version(trail, version),
+                remap_particle_id_for_version(entity_effect, version),
+                "{version:?} was expected to keep a dedicated trail ID"
+            );
+        }
+
+        for version in [
+            JavaMinecraftVersion::V_1_21,
+            JavaMinecraftVersion::V_1_20_5,
+            JavaMinecraftVersion::V_1_16,
+            JavaMinecraftVersion::V_1_8,
+        ] {
+            assert!(!options.is_supported_by(version), "{version:?}");
+            assert_eq!(
+                remap_particle_id_for_version(trail, version),
+                remap_particle_id_for_version(entity_effect, version),
+                "{version:?} was expected to fold trail onto entity_effect"
+            );
+        }
     }
 
     #[test]
