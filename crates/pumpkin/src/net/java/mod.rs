@@ -38,6 +38,7 @@ use pumpkin_protocol::{
     },
     ser::{NetworkWriteExt, WritingError},
 };
+use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::version::JavaMinecraftVersion;
 use tokio::{
@@ -368,6 +369,15 @@ impl JavaClient {
         if valid_chunks.is_empty() {
             return;
         }
+
+        // `CChunkData` reads `pending_block_entities`. Live piston progress only lands
+        // there on flush; otherwise a joining client gets the create-time snapshot and a
+        // honey-dragged minecart sits off the interpolated block.
+        player.world().flush_block_entities(
+            valid_chunks
+                .iter()
+                .map(|chunk| Vector2::new(chunk.x, chunk.z)),
+        );
 
         let version = self.version.load();
         let (tx, rx) = oneshot::channel();

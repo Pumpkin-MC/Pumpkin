@@ -497,12 +497,15 @@ impl PistonBlockEntity {
     }
 
     /// Vanilla `PistonMovingBlockEntity.saveAdditional`. Client codec names and types:
-    /// `blockState` as `{Name, Properties}`, `facing` as byte (`to_index`), `progress` is
-    /// `progressO` (last tick) so the client interpolates from there.
+    /// `blockState` as `{Name, Properties}`, `facing` as byte (`to_index`).
+    ///
+    /// Vanilla writes `progressO`. Load sets both `progress` and `progressO` to that value,
+    /// so a joining client (or a chunk reload) shows last tick while entities already sit
+    /// at `progress`. Write `progress` so a honey-dragged minecart stays on the block.
     fn write_fields(&self, nbt: &mut NbtCompound) {
         nbt.put_compound(BLOCK_STATE, block_state_to_nbt(self.pushed_block_state.id));
         nbt.put_byte(FACING, self.facing.to_index() as i8);
-        nbt.put_float(LAST_PROGRESS, self.last_progress.load());
+        nbt.put_float(PROGRESS, self.current_progress.load());
         nbt.put_bool(EXTENDING, self.extending);
         nbt.put_bool(SOURCE, self.source);
     }
@@ -510,7 +513,7 @@ impl PistonBlockEntity {
 
 const BLOCK_STATE: &str = "blockState";
 const FACING: &str = "facing";
-const LAST_PROGRESS: &str = "progress";
+const PROGRESS: &str = "progress";
 const EXTENDING: &str = "extending";
 const SOURCE: &str = "source";
 
@@ -594,7 +597,7 @@ impl BlockEntity for PistonBlockEntity {
             .and_then(block_state_from_nbt)
             .map_or(Block::AIR.default_state, BlockStateId::to_state);
         let facing = nbt.get_byte(FACING).unwrap_or(0);
-        let last_progress = nbt.get_float(LAST_PROGRESS).unwrap_or(0.0);
+        let last_progress = nbt.get_float(PROGRESS).unwrap_or(0.0);
         let extending = nbt.get_bool(EXTENDING).unwrap_or(false);
         let source = nbt.get_bool(SOURCE).unwrap_or(false);
         Self {
