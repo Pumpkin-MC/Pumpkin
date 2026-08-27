@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use super::{NBTStorage, NBTStorageInit, player::Player};
 use crossbeam::atomic::AtomicCell;
 use pumpkin_data::damage::DamageType;
@@ -29,7 +27,7 @@ impl Default for HungerManager {
 }
 
 impl HungerManager {
-    pub fn tick(&self, player: &Arc<Player>) {
+    pub fn tick(&self, player: &Player) {
         let mut level = self.level.load();
         let mut saturation = self.saturation.load();
         let mut exhaustion = self.exhaustion.load();
@@ -109,7 +107,7 @@ impl HungerManager {
         if damage_amount > 0.0 {
             player
                 .living_entity
-                .damage(player.as_ref(), damage_amount, DamageType::STARVE);
+                .damage(player, damage_amount, DamageType::STARVE);
         }
     }
 

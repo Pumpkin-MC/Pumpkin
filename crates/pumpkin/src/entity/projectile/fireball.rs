@@ -1,5 +1,5 @@
+use std::sync::RwLock;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::{Arc, RwLock};
 
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
@@ -206,7 +206,7 @@ impl EntityBase for FireballEntity {
         );
     }
 
-    fn tick<'a>(&'a self, caller: &'a Arc<dyn EntityBase>, server: &'a Server) {
+    fn tick(&self, caller: &dyn EntityBase, server: &Server) {
         let entity = self.get_entity();
         let mut velocity = entity.velocity.load();
 

@@ -192,7 +192,7 @@ impl LightningBoltEntity {
 }
 
 impl EntityBase for LightningBoltEntity {
-    fn tick(&self, _caller: &Arc<dyn EntityBase>, _server: &Server) {
+    fn tick(&self, _caller: &dyn EntityBase, _server: &Server) {
         let entity = &self.entity;
         let life = self.life.load(Ordering::Relaxed);
 

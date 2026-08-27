@@ -366,7 +366,7 @@ impl Mob for ShulkerEntity {
         0.0
     }
 
-    fn mob_tick<'a>(&'a self, _caller: &'a Arc<dyn EntityBase>) {
+    fn mob_tick(&self, _caller: &dyn EntityBase) {
         let entity = &self.mob_entity.living_entity.entity;
 
         if !entity.is_alive() {

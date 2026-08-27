@@ -808,7 +808,7 @@ impl EntityBase for BlockDisplayEntity {
         }
     }
 
-    fn tick<'a>(&'a self, _caller: &'a Arc<dyn EntityBase>, _server: &'a Server) {}
+    fn tick(&self, _caller: &dyn EntityBase, _server: &Server) {}
 
     fn init_data_tracker(&self) {
         self.display.init_display_data_tracker();
@@ -949,7 +949,7 @@ impl EntityBase for ItemDisplayEntity {
         }
     }
 
-    fn tick<'a>(&'a self, _caller: &'a Arc<dyn EntityBase>, _server: &'a Server) {}
+    fn tick(&self, _caller: &dyn EntityBase, _server: &Server) {}
 
     fn init_data_tracker(&self) {
         self.display.init_display_data_tracker();
@@ -1264,7 +1264,7 @@ impl EntityBase for TextDisplayEntity {
         self.flags.store(flags, Ordering::Relaxed);
     }
 
-    fn tick<'a>(&'a self, _caller: &'a Arc<dyn EntityBase>, _server: &'a Server) {}
+    fn tick(&self, _caller: &dyn EntityBase, _server: &Server) {}
 
     fn init_data_tracker(&self) {
         self.display.init_display_data_tracker();

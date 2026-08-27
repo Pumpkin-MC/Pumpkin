@@ -77,17 +77,9 @@ fn rotate_entity(
     };
 
     // Use teleport with same position to update rotation
-    // This properly handles both players (sends CPlayerPosition) and other entities
     let pos = entity.pos.load();
     let world = entity.world.load_full();
-    if let Some(player) = target.get_player() {
-        let fut = target
-            .clone()
-            .teleport(pos, Some(final_yaw), Some(final_pitch), world);
-        player.spawn_task(fut);
-    } else {
-        entity.teleport(pos, Some(final_yaw), Some(final_pitch), world);
-    }
+    target.teleport(pos, Some(final_yaw), Some(final_pitch), world);
 }
 
 /// Sends success message for the rotate command.

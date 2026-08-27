@@ -60,7 +60,7 @@ impl EntityBase for BoatEntity {
         None
     }
 
-    fn tick<'a>(&'a self, _caller: &'a Arc<dyn EntityBase>, _server: &'a Server) {
+    fn tick(&self, _caller: &dyn EntityBase, _server: &Server) {
         self.vehicle.tick();
 
         let underwater = self.ticks_underwater.load();

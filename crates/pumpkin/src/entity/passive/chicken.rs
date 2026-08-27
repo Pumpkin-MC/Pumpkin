@@ -167,7 +167,7 @@ impl Mob for ChickenEntity {
         );
     }
 
-    fn mob_tick<'a>(&'a self, _caller: &'a Arc<dyn EntityBase>) {
+    fn mob_tick(&self, _caller: &dyn EntityBase) {
         if self.mob_entity.living_entity.dead.load(Relaxed) {
             return;
         }

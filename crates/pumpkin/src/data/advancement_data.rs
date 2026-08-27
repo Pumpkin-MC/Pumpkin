@@ -65,19 +65,16 @@ impl AdvancementManager {
             to_write.push((guard.path.clone(), json));
         }
 
-        let advancement_path = self.advancement_path.clone();
-        tokio::task::spawn_blocking(move || {
-            if let Err(e) = create_dir_all(advancement_path) {
-                error!("Failed to create player advancement directory : {e}");
-                return Err(AdvancementDataError::Io(e));
-            }
-            for (path, json) in to_write {
-                std::fs::write(&path, json).map_err(AdvancementDataError::Io)?;
-            }
-            Ok(())
-        })
-        .await
-        .unwrap_or(Ok(()))
+        if let Err(e) = tokio::fs::create_dir_all(&self.advancement_path).await {
+            error!("Failed to create player advancement directory : {e}");
+            return Err(AdvancementDataError::Io(e));
+        }
+        for (path, json) in to_write {
+            tokio::fs::write(&path, json)
+                .await
+                .map_err(AdvancementDataError::Io)?;
+        }
+        Ok(())
     }
 
     /// Saves the advancements of a specific player.

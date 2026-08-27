@@ -606,7 +606,7 @@ impl Mob for WitherEntity {
         );
     }
 
-    fn mob_tick<'a>(&'a self, _caller: &'a Arc<dyn EntityBase>) {
+    fn mob_tick(&self, _caller: &dyn EntityBase) {
         self.tick_wither();
     }
 

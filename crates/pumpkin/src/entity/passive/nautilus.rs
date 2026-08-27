@@ -267,7 +267,7 @@ impl Mob for NautilusEntity {
         );
     }
 
-    fn mob_tick<'a>(&'a self, _caller: &'a Arc<dyn EntityBase>) {
+    fn mob_tick(&self, _caller: &dyn EntityBase) {
         let entity = &self.mob_entity.living_entity.entity;
 
         let Ok(passengers) = entity.passengers.try_lock() else {
