@@ -411,8 +411,8 @@ pub struct ChunkManager {
 }
 
 impl ChunkManager {
-    pub const NOTCHIAN_BATCHES_WITHOUT_ACK_UNTIL_PAUSE: u8 = 10;
-    const ACK_STALL_FALLBACK_DELAY: Duration = Duration::from_millis(250);
+    pub const NOTCHIAN_BATCHES_WITHOUT_ACK_UNTIL_PAUSE: u8 = 16;
+    const ACK_STALL_FALLBACK_DELAY: Duration = Duration::from_millis(100);
 
     #[must_use]
     pub fn new(

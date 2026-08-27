@@ -114,7 +114,6 @@ pub struct Level {
     pub level_channel: Arc<LevelChannel>,
     pub thread_tracker: Mutex<Vec<thread::JoinHandle<()>>>,
     pub chunk_listener: Arc<ChunkListener>,
-    pub gen_pool: Option<Arc<rayon::ThreadPool>>,
 }
 
 pub struct TickData {
@@ -146,7 +145,6 @@ impl Level {
         root_folder: PathBuf,
         seed: i64,
         dimension: Dimension,
-        gen_pool: Option<Arc<rayon::ThreadPool>>,
     ) -> Arc<Self> {
         let (namespace, name) = match dimension.minecraft_name.split_once(':') {
             Some((ns, n)) => (ns, n),
@@ -281,19 +279,10 @@ impl Level {
             level_channel: level_channel.clone(),
             thread_tracker,
             chunk_listener: listener.clone(),
-            gen_pool: gen_pool.clone(),
         });
-
-        // TODO
-        let total_cores = thread::available_parallelism()
-            .map_or(1, std::num::NonZero::get)
-            .saturating_sub(2)
-            .max(1);
-        let threads_per_dimension = (total_cores / 2).max(1);
 
         GenerationSchedule::create(
             4,
-            threads_per_dimension,
             level_ref.clone(),
             level_channel,
             listener,
@@ -302,7 +291,6 @@ impl Level {
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner)
                 .as_mut(),
-            gen_pool,
         );
 
         level_ref
@@ -319,48 +307,22 @@ impl Level {
 
     pub fn spawn_entity_generation(self: &Arc<Self>, pos: Vector2<i32>) {
         let level = self.clone();
-        if let Some(pool) = &self.gen_pool {
-            pool.spawn(move || {
-                let arc_chunk = Arc::new(ChunkEntityData {
-                    x: pos.x,
-                    z: pos.y,
-                    data: tokio::sync::Mutex::new(Vec::new()),
-                    dirty: AtomicBool::new(false),
-                });
-
-                level.loaded_entity_chunks.insert(pos, arc_chunk.clone());
-
-                if let Some((_, waiters)) = level.pending_entity_generations.remove(&pos) {
-                    for tx in waiters {
-                        let _ = tx.send(arc_chunk.clone());
-                    }
-                }
+        rayon::spawn(move || {
+            let arc_chunk = Arc::new(ChunkEntityData {
+                x: pos.x,
+                z: pos.y,
+                data: std::sync::Mutex::new(Vec::new()),
+                dirty: AtomicBool::new(false),
             });
-        } else {
-            // Fallback to spawning a new thread if no pool is available (should not happen in production)
-            let level_clone = level;
-            let _ = thread::Builder::new()
-                .name(format!("Entity Gen {pos:?}"))
-                .spawn(move || {
-                    let arc_chunk = Arc::new(ChunkEntityData {
-                        x: pos.x,
-                        z: pos.y,
-                        data: tokio::sync::Mutex::new(Vec::new()),
-                        dirty: AtomicBool::new(false),
-                    });
 
-                    level_clone
-                        .loaded_entity_chunks
-                        .insert(pos, arc_chunk.clone());
+            level.loaded_entity_chunks.insert(pos, arc_chunk.clone());
 
-                    if let Some((_, waiters)) = level_clone.pending_entity_generations.remove(&pos)
-                    {
-                        for tx in waiters {
-                            let _ = tx.send(arc_chunk.clone());
-                        }
-                    }
-                });
-        }
+            if let Some((_, waiters)) = level.pending_entity_generations.remove(&pos) {
+                for tx in waiters {
+                    let _ = tx.send(arc_chunk.clone());
+                }
+            }
+        });
     }
 
     /// Spawns a task associated with this world. All tasks spawned with this method are awaited
@@ -750,20 +712,18 @@ impl Level {
                                 let _ = sender.send((Arc::downgrade(&chunk), true)).await;
                             }
                             LoadedData::Missing(pos) | LoadedData::Error((pos, _)) => {
-                                let sender_clone = sender.clone();
-                                let level_clone = level.clone();
-
-                                tokio::spawn(async move {
-                                    let (tx, rx) = oneshot::channel();
-                                    match level_clone.pending_entity_generations.entry(pos) {
-                                        dashmap::mapref::entry::Entry::Occupied(mut entry) => {
-                                            entry.get_mut().push(tx);
-                                        }
-                                        dashmap::mapref::entry::Entry::Vacant(entry) => {
-                                            entry.insert(vec![tx]);
-                                            level_clone.spawn_entity_generation(pos);
-                                        }
+                                let (tx, rx) = oneshot::channel();
+                                match level.pending_entity_generations.entry(pos) {
+                                    dashmap::mapref::entry::Entry::Occupied(mut entry) => {
+                                        entry.get_mut().push(tx);
                                     }
+                                    dashmap::mapref::entry::Entry::Vacant(entry) => {
+                                        entry.insert(vec![tx]);
+                                        level.spawn_entity_generation(pos);
+                                    }
+                                }
+                                let sender_clone = sender.clone();
+                                tokio::spawn(async move {
                                     if let Ok(chunk) = rx.await {
                                         let _ =
                                             sender_clone.send((Arc::downgrade(&chunk), true)).await;
@@ -807,7 +767,7 @@ impl Level {
                 Arc::new(ChunkEntityData {
                     x: pos.x,
                     z: pos.y,
-                    data: tokio::sync::Mutex::new(Vec::new()),
+                    data: std::sync::Mutex::new(Vec::new()),
                     dirty: AtomicBool::new(false),
                 })
             })
@@ -1025,7 +985,7 @@ mod tests {
         let config = LevelConfig::default();
 
         let overworld_level =
-            Level::from_root_folder(&config, root.clone(), 0, Dimension::OVERWORLD, None);
+            Level::from_root_folder(&config, root.clone(), 0, Dimension::OVERWORLD);
         assert_eq!(
             overworld_level.level_folder.dim_folder,
             root.join("dimensions").join("minecraft").join("overworld")
@@ -1038,14 +998,13 @@ mod tests {
                 .join("region")
         );
 
-        let nether_level =
-            Level::from_root_folder(&config, root.clone(), 0, Dimension::THE_NETHER, None);
+        let nether_level = Level::from_root_folder(&config, root.clone(), 0, Dimension::THE_NETHER);
         assert_eq!(
             nether_level.level_folder.dim_folder,
             root.join("dimensions").join("minecraft").join("the_nether")
         );
 
-        let end_level = Level::from_root_folder(&config, root.clone(), 0, Dimension::THE_END, None);
+        let end_level = Level::from_root_folder(&config, root.clone(), 0, Dimension::THE_END);
         assert_eq!(
             end_level.level_folder.dim_folder,
             root.join("dimensions").join("minecraft").join("the_end")
@@ -1064,14 +1023,13 @@ mod tests {
         std::fs::create_dir_all(root.join("DIM1").join("region")).unwrap();
 
         let overworld_level =
-            Level::from_root_folder(&config, root.clone(), 0, Dimension::OVERWORLD, None);
+            Level::from_root_folder(&config, root.clone(), 0, Dimension::OVERWORLD);
         assert_eq!(overworld_level.level_folder.dim_folder, root);
 
-        let nether_level =
-            Level::from_root_folder(&config, root.clone(), 0, Dimension::THE_NETHER, None);
+        let nether_level = Level::from_root_folder(&config, root.clone(), 0, Dimension::THE_NETHER);
         assert_eq!(nether_level.level_folder.dim_folder, root.join("DIM-1"));
 
-        let end_level = Level::from_root_folder(&config, root.clone(), 0, Dimension::THE_END, None);
+        let end_level = Level::from_root_folder(&config, root.clone(), 0, Dimension::THE_END);
         assert_eq!(end_level.level_folder.dim_folder, root.join("DIM1"));
     }
 }

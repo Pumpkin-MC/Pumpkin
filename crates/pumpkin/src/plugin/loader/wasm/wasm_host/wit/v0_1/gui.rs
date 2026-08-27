@@ -118,6 +118,23 @@ impl gui::HostGui for PluginHostState {
         self.add_gui(gui)
     }
 
+    async fn get_inventory(
+        &mut self,
+        res: Resource<Gui>,
+    ) -> wasmtime::Result<
+        Resource<
+            crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::inventory::Inventory,
+        >,
+    >{
+        let inv = {
+            let gui = self.get_gui_res(&res)?.provider.lock().await;
+            gui.inventory.clone()
+        };
+        self.add_inventory(
+            crate::plugin::loader::wasm::wasm_host::state::InventoryProvider::Generic(inv),
+        )
+    }
+
     async fn set_item(
         &mut self,
         res: Resource<Gui>,

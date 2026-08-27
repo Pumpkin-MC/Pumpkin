@@ -535,8 +535,9 @@ impl Goal for EvokerWololoSpellGoal {
 
         for cand in candidates {
             if *cand.get_entity().entity_type == EntityType::SHEEP
-                && let Some(mob) = cand.get_mob()
-                && let Some(sheep) = mob.get_sheep()
+                && let Some(sheep) = cand
+                    .cast_any()
+                    .downcast_ref::<crate::entity::passive::sheep::SheepEntity>()
             {
                 // Blue color is 11 in Minecraft
                 if sheep.get_color() == 11 {
@@ -609,8 +610,9 @@ impl Goal for EvokerWololoSpellGoal {
 
             for cand in candidates {
                 if cand.get_entity().entity_id == target_id
-                    && let Some(mob) = cand.get_mob()
-                    && let Some(sheep) = mob.get_sheep()
+                    && let Some(sheep) = cand
+                        .cast_any()
+                        .downcast_ref::<crate::entity::passive::sheep::SheepEntity>()
                 {
                     // Convert color to Red (14)
                     sheep.set_color(14);

@@ -113,13 +113,31 @@ impl ShulkerEntity {
             .unwrap_or(DEFAULT_ATTACH_FACE)
     }
 
-    fn set_attach_face(&self, face: BlockDirection) {
+    pub fn set_attach_face(&self, face: BlockDirection) {
         self.attach_face.store(face as u8, Ordering::Relaxed);
         let entity = &self.mob_entity.living_entity.entity;
         entity.send_meta_data(
             &[Metadata::new(
                 pumpkin_data::tracked_data::shulker::ATTACH_FACE_ID,
                 VarInt(face as i32),
+            )],
+            None,
+        );
+    }
+
+    pub fn get_color(&self) -> Option<u8> {
+        let c = self.color.load(Ordering::Relaxed);
+        if c == NO_COLOR { None } else { Some(c) }
+    }
+
+    pub fn set_color(&self, color: Option<u8>) {
+        let val = color.unwrap_or(NO_COLOR);
+        self.color.store(val, Ordering::Relaxed);
+        let entity = &self.mob_entity.living_entity.entity;
+        entity.send_meta_data(
+            &[Metadata::new(
+                pumpkin_data::tracked_data::shulker::COLOR,
+                val as i8,
             )],
             None,
         );

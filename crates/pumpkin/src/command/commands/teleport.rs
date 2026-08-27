@@ -82,7 +82,7 @@ impl CommandExecutor for EntitiesToEntityExecutor {
     fn execute(
         &self,
         sender: &CommandSender,
-        _server: &crate::server::Server,
+        server: &crate::server::Server,
         args: &ConsumedArgs,
     ) -> CommandResult {
         let targets = EntitiesArgumentConsumer::find_arg(args, ARG_TARGETS)?;
@@ -101,7 +101,7 @@ impl CommandExecutor for EntitiesToEntityExecutor {
             )));
         }
         for target in targets {
-            futures::executor::block_on(target.clone().teleport(
+            server.runtime.spawn(target.clone().teleport(
                 pos,
                 Some(yaw),
                 Some(pitch),
@@ -148,7 +148,7 @@ impl CommandExecutor for EntitiesToPosFacingPosExecutor {
         let world = resolve_sender_world(sender, server)?;
 
         for target in targets {
-            futures::executor::block_on(target.clone().teleport(
+            server.runtime.spawn(target.clone().teleport(
                 pos,
                 Some(yaw),
                 Some(pitch),
@@ -200,7 +200,7 @@ impl CommandExecutor for EntitiesToPosFacingEntityExecutor {
         let world = resolve_sender_world(sender, server)?;
 
         for target in targets {
-            futures::executor::block_on(target.clone().teleport(
+            server.runtime.spawn(target.clone().teleport(
                 pos,
                 Some(yaw),
                 Some(pitch),
@@ -253,7 +253,7 @@ impl CommandExecutor for EntitiesToPosWithRotationExecutor {
         let world = resolve_sender_world(sender, server)?;
 
         for target in targets {
-            futures::executor::block_on(target.clone().teleport(
+            server.runtime.spawn(target.clone().teleport(
                 pos,
                 Some(yaw),
                 Some(pitch),
@@ -304,7 +304,7 @@ impl CommandExecutor for EntitiesToPosExecutor {
         for target in targets {
             let yaw = target.get_entity().yaw.load();
             let pitch = target.get_entity().pitch.load();
-            futures::executor::block_on(target.clone().teleport(
+            server.runtime.spawn(target.clone().teleport(
                 pos,
                 Some(yaw),
                 Some(pitch),
@@ -338,7 +338,7 @@ impl CommandExecutor for SelfToEntityExecutor {
     fn execute(
         &self,
         sender: &CommandSender,
-        _server: &crate::server::Server,
+        server: &crate::server::Server,
         args: &ConsumedArgs,
     ) -> CommandResult {
         let destination = EntityArgumentConsumer::find_arg(args, ARG_DESTINATION)?;
@@ -357,12 +357,9 @@ impl CommandExecutor for SelfToEntityExecutor {
                         [],
                     )));
                 }
-                futures::executor::block_on(player.clone().teleport(
-                    pos,
-                    Some(yaw),
-                    Some(pitch),
-                    world,
-                ));
+                server
+                    .runtime
+                    .spawn(player.clone().teleport(pos, Some(yaw), Some(pitch), world));
 
                 sender.send_message(TextComponent::translate_cross(
                     translation::java::COMMANDS_TELEPORT_SUCCESS_ENTITY_SINGLE,
@@ -390,7 +387,7 @@ impl CommandExecutor for SelfToPosExecutor {
     fn execute(
         &self,
         sender: &CommandSender,
-        _server: &crate::server::Server,
+        server: &crate::server::Server,
         args: &ConsumedArgs,
     ) -> CommandResult {
         match sender {
@@ -406,7 +403,7 @@ impl CommandExecutor for SelfToPosExecutor {
                     )));
                 }
                 let player_world = player.world();
-                futures::executor::block_on(player.clone().teleport(
+                server.runtime.spawn(player.clone().teleport(
                     pos,
                     Some(yaw),
                     Some(pitch),

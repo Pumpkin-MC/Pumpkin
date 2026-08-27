@@ -53,7 +53,7 @@ fn get_anchor_position(entity: &crate::entity::Entity, anchor: EntityAnchor) -> 
 /// If relative flags are true, the values are added to current rotation.
 /// If relative flags are false, the values are absolute.
 fn rotate_entity(
-    target: std::sync::Arc<dyn crate::entity::EntityBase>,
+    target: &std::sync::Arc<dyn crate::entity::EntityBase>,
     yaw: f32,
     is_yaw_relative: bool,
     pitch: f32,
@@ -80,7 +80,14 @@ fn rotate_entity(
     // This properly handles both players (sends CPlayerPosition) and other entities
     let pos = entity.pos.load();
     let world = entity.world.load_full();
-    futures::executor::block_on(target.teleport(pos, Some(final_yaw), Some(final_pitch), world));
+    if let Some(player) = target.get_player() {
+        let fut = target
+            .clone()
+            .teleport(pos, Some(final_yaw), Some(final_pitch), world);
+        player.spawn_task(fut);
+    } else {
+        entity.teleport(pos, Some(final_yaw), Some(final_pitch), world);
+    }
 }
 
 /// Sends success message for the rotate command.
@@ -107,7 +114,7 @@ impl CommandExecutor for RotateToRotationExecutor {
         let (yaw, yaw_rel, pitch, pitch_rel) =
             RotationArgumentConsumer::find_arg(args, ARG_ROTATION)?;
 
-        rotate_entity(target.clone(), yaw, yaw_rel, pitch, pitch_rel);
+        rotate_entity(&target, yaw, yaw_rel, pitch, pitch_rel);
         send_success_message(sender, target.as_ref());
 
         Ok(1)
@@ -135,7 +142,7 @@ impl CommandExecutor for RotateFacingLocationExecutor {
         let (yaw, pitch) = yaw_pitch_facing_position(&looking_from, &facing_pos);
 
         // Facing uses absolute rotation
-        rotate_entity(target.clone(), yaw, false, pitch, false);
+        rotate_entity(&target, yaw, false, pitch, false);
         send_success_message(sender, target.as_ref());
 
         Ok(1)
@@ -165,7 +172,7 @@ impl CommandExecutor for RotateFacingEntityExecutor {
         let (yaw, pitch) = yaw_pitch_facing_position(&looking_from, &looking_towards);
 
         // Facing uses absolute rotation
-        rotate_entity(target.clone(), yaw, false, pitch, false);
+        rotate_entity(&target, yaw, false, pitch, false);
         send_success_message(sender, target.as_ref());
 
         Ok(1)
@@ -196,7 +203,7 @@ impl CommandExecutor for RotateFacingEntityNoAnchorExecutor {
         let (yaw, pitch) = yaw_pitch_facing_position(&looking_from, &looking_towards);
 
         // Facing uses absolute rotation
-        rotate_entity(target.clone(), yaw, false, pitch, false);
+        rotate_entity(&target, yaw, false, pitch, false);
         send_success_message(sender, target.as_ref());
 
         Ok(1)

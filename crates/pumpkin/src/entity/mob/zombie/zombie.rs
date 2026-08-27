@@ -52,3 +52,46 @@ impl Mob for ZombieEntity {
         self.entity.mob_read_nbt(nbt);
     }
 }
+
+impl ZombieEntity {
+    #[must_use]
+    pub fn can_break_doors(&self) -> bool {
+        self.entity
+            .can_break_doors
+            .load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    pub fn set_can_break_doors(&self, can_break: bool) {
+        self.entity
+            .can_break_doors
+            .store(can_break, std::sync::atomic::Ordering::Relaxed);
+    }
+
+    #[must_use]
+    pub fn is_baby(&self) -> bool {
+        self.entity
+            .mob_entity
+            .living_entity
+            .entity
+            .age
+            .load(std::sync::atomic::Ordering::Relaxed)
+            < 0
+    }
+
+    pub fn set_baby(&self, baby: bool) {
+        let age = if baby { -24000 } else { 0 };
+        self.entity
+            .mob_entity
+            .living_entity
+            .entity
+            .age
+            .store(age, std::sync::atomic::Ordering::Relaxed);
+        self.entity.mob_entity.living_entity.entity.send_meta_data(
+            &[pumpkin_protocol::java::client::play::Metadata::new(
+                pumpkin_data::tracked_data::zombie::BABY,
+                baby,
+            )],
+            None,
+        );
+    }
+}

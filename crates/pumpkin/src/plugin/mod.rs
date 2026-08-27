@@ -1009,8 +1009,8 @@ impl PluginManager {
 
     /// Checks if plugin active
     #[must_use]
-    pub async fn is_plugin_active(&self, name: &str) -> bool {
-        let plugins = self.plugins.read().await;
+    pub fn is_plugin_active(&self, name: &str) -> bool {
+        let plugins = self.plugins.blocking_read();
         plugins
             .iter()
             .any(|p| p.metadata.name == name && p.is_active && p.instance.is_some())
@@ -1018,8 +1018,8 @@ impl PluginManager {
 
     /// Get list of active plugins
     #[must_use]
-    pub async fn active_plugins(&self) -> Vec<PluginMetadata> {
-        let plugins = self.plugins.read().await;
+    pub fn active_plugins(&self) -> Vec<PluginMetadata> {
+        let plugins = self.plugins.blocking_read();
         plugins
             .iter()
             .filter(|p| p.is_active && p.instance.is_some())
@@ -1029,15 +1029,15 @@ impl PluginManager {
 
     /// Checks if plugin loaded
     #[must_use]
-    pub async fn is_plugin_loaded(&self, name: &str) -> bool {
-        let plugins = self.plugins.read().await;
+    pub fn is_plugin_loaded(&self, name: &str) -> bool {
+        let plugins = self.plugins.blocking_read();
         plugins.iter().any(|p| p.metadata.name == name)
     }
 
     /// Get list of loaded plugins
     #[must_use]
-    pub async fn loaded_plugins(&self) -> Vec<PluginMetadata> {
-        let plugins = self.plugins.read().await;
+    pub fn loaded_plugins(&self) -> Vec<PluginMetadata> {
+        let plugins = self.plugins.blocking_read();
         plugins.iter().map(|p| p.metadata.clone()).collect()
     }
 
