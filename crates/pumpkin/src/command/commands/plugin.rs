@@ -111,7 +111,7 @@ impl CommandExecutor for LoadExecutor {
         let sender_clone = sender.clone();
         let plugin_name_clone = plugin_name;
         let server_clone = server_arc.clone();
-        server_arc.runtime.spawn(async move {
+        server_arc.spawn_task(async move {
             let result = server_clone
                 .plugin_manager
                 .try_load_plugin(&server_clone, Path::new(&plugin_name_clone))
@@ -171,7 +171,7 @@ impl CommandExecutor for UnloadExecutor {
         let sender_clone = sender.clone();
         let plugin_name_clone = plugin_name;
         let server_clone = server_arc.clone();
-        server_arc.runtime.spawn(async move {
+        server_arc.spawn_task(async move {
             let result = server_clone
                 .plugin_manager
                 .unload_plugin(&plugin_name_clone)
@@ -221,7 +221,7 @@ impl CommandExecutor for HotReloadExecutor {
         let sender_clone = sender.clone();
         let server_clone = server_arc.clone();
         if enabled {
-            server_arc.runtime.spawn(async move {
+            server_arc.spawn_task(async move {
                 if let Err(e) = server_clone.plugin_manager.start_watcher(&server_clone).await {
                     sender_clone.send_message(TextComponent::text(format!(
                         "Failed to start plugin watcher: {e}"
@@ -241,7 +241,7 @@ impl CommandExecutor for HotReloadExecutor {
                 );
             });
         } else {
-            server_arc.runtime.spawn(async move {
+            server_arc.spawn_task(async move {
                 server_clone.plugin_manager.stop_watcher().await;
                 sender_clone.send_message(
                     TextComponent::text("Hot reloading has been disabled.")

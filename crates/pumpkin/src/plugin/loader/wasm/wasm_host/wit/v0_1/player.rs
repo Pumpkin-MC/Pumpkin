@@ -2190,9 +2190,7 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
     ) -> wasmtime::Result<()> {
         let player = player_from_resource(self, &player)?;
         let world = world_from_resource(self, &world);
-        player
-            .teleport(from_wasm_position(position), yaw, pitch, world)
-            .await;
+        player.teleport(from_wasm_position(position), yaw, pitch, world);
         Ok(())
     }
 

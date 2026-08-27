@@ -8,7 +8,6 @@ use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::java::client::play::Metadata;
 use pumpkin_util::GameMode;
 use pumpkin_util::math::position::BlockPos;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicI32, Ordering};
 
 pub const MAX_AIR: i32 = 300;
@@ -32,7 +31,7 @@ impl Default for BreathManager {
 }
 
 impl BreathManager {
-    pub fn tick(&self, player: &Arc<Player>) {
+    pub fn tick(&self, player: &Player) {
         let mode = player.gamemode.load();
 
         if matches!(mode, GameMode::Creative | GameMode::Spectator) {
@@ -84,11 +83,9 @@ impl BreathManager {
 
                 if t >= DROWNING_INTERVAL {
                     self.drowning_tick.store(0, Ordering::Relaxed);
-                    player.living_entity.damage(
-                        player.as_ref(),
-                        DROWNING_DAMAGE,
-                        DamageType::DROWN,
-                    );
+                    player
+                        .living_entity
+                        .damage(player, DROWNING_DAMAGE, DamageType::DROWN);
                 }
             }
         } else {

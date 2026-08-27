@@ -21,7 +21,7 @@ impl Mob for MagmaCubeEntity {
         self.slime.get_mob_entity()
     }
 
-    fn mob_tick<'a>(&'a self, caller: &'a Arc<dyn EntityBase>) {
+    fn mob_tick(&self, caller: &dyn EntityBase) {
         self.slime.mob_tick(caller);
     }
 

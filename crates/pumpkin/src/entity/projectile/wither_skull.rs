@@ -1,4 +1,3 @@
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use pumpkin_data::{damage::DamageType, effect::StatusEffect, potion::Effect, tracked_data};
@@ -102,7 +101,7 @@ impl EntityBase for WitherSkullEntity {
         );
     }
 
-    fn tick<'a>(&'a self, caller: &'a Arc<dyn EntityBase>, server: &'a Server) {
+    fn tick(&self, caller: &dyn EntityBase, server: &Server) {
         self.thrown.process_tick(caller, server);
     }
 

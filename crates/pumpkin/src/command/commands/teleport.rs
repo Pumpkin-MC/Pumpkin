@@ -82,7 +82,7 @@ impl CommandExecutor for EntitiesToEntityExecutor {
     fn execute(
         &self,
         sender: &CommandSender,
-        server: &crate::server::Server,
+        _server: &crate::server::Server,
         args: &ConsumedArgs,
     ) -> CommandResult {
         let targets = EntitiesArgumentConsumer::find_arg(args, ARG_TARGETS)?;
@@ -101,12 +101,7 @@ impl CommandExecutor for EntitiesToEntityExecutor {
             )));
         }
         for target in targets {
-            server.runtime.spawn(target.clone().teleport(
-                pos,
-                Some(yaw),
-                Some(pitch),
-                world.clone(),
-            ));
+            target.teleport(pos, Some(yaw), Some(pitch), world.clone());
         }
 
         let (key, target_arg) = success_key_and_arg(
@@ -148,12 +143,7 @@ impl CommandExecutor for EntitiesToPosFacingPosExecutor {
         let world = resolve_sender_world(sender, server)?;
 
         for target in targets {
-            server.runtime.spawn(target.clone().teleport(
-                pos,
-                Some(yaw),
-                Some(pitch),
-                world.clone(),
-            ));
+            target.teleport(pos, Some(yaw), Some(pitch), world.clone());
         }
 
         let (key, target_arg) = success_key_and_arg(
@@ -200,12 +190,7 @@ impl CommandExecutor for EntitiesToPosFacingEntityExecutor {
         let world = resolve_sender_world(sender, server)?;
 
         for target in targets {
-            server.runtime.spawn(target.clone().teleport(
-                pos,
-                Some(yaw),
-                Some(pitch),
-                world.clone(),
-            ));
+            target.teleport(pos, Some(yaw), Some(pitch), world.clone());
         }
 
         let (key, target_arg) = success_key_and_arg(
@@ -253,12 +238,7 @@ impl CommandExecutor for EntitiesToPosWithRotationExecutor {
         let world = resolve_sender_world(sender, server)?;
 
         for target in targets {
-            server.runtime.spawn(target.clone().teleport(
-                pos,
-                Some(yaw),
-                Some(pitch),
-                world.clone(),
-            ));
+            target.teleport(pos, Some(yaw), Some(pitch), world.clone());
         }
 
         let (key, target_arg) = success_key_and_arg(
@@ -304,12 +284,7 @@ impl CommandExecutor for EntitiesToPosExecutor {
         for target in targets {
             let yaw = target.get_entity().yaw.load();
             let pitch = target.get_entity().pitch.load();
-            server.runtime.spawn(target.clone().teleport(
-                pos,
-                Some(yaw),
-                Some(pitch),
-                world.clone(),
-            ));
+            target.teleport(pos, Some(yaw), Some(pitch), world.clone());
         }
 
         let (key, target_arg) = success_key_and_arg(
@@ -338,7 +313,7 @@ impl CommandExecutor for SelfToEntityExecutor {
     fn execute(
         &self,
         sender: &CommandSender,
-        server: &crate::server::Server,
+        _server: &crate::server::Server,
         args: &ConsumedArgs,
     ) -> CommandResult {
         let destination = EntityArgumentConsumer::find_arg(args, ARG_DESTINATION)?;
@@ -357,9 +332,7 @@ impl CommandExecutor for SelfToEntityExecutor {
                         [],
                     )));
                 }
-                server
-                    .runtime
-                    .spawn(player.clone().teleport(pos, Some(yaw), Some(pitch), world));
+                player.teleport(pos, Some(yaw), Some(pitch), world);
 
                 sender.send_message(TextComponent::translate_cross(
                     translation::java::COMMANDS_TELEPORT_SUCCESS_ENTITY_SINGLE,
@@ -387,7 +360,7 @@ impl CommandExecutor for SelfToPosExecutor {
     fn execute(
         &self,
         sender: &CommandSender,
-        server: &crate::server::Server,
+        _server: &crate::server::Server,
         args: &ConsumedArgs,
     ) -> CommandResult {
         match sender {
@@ -403,12 +376,7 @@ impl CommandExecutor for SelfToPosExecutor {
                     )));
                 }
                 let player_world = player.world();
-                server.runtime.spawn(player.clone().teleport(
-                    pos,
-                    Some(yaw),
-                    Some(pitch),
-                    player_world,
-                ));
+                player.teleport(pos, Some(yaw), Some(pitch), player_world);
 
                 sender.send_message(TextComponent::translate_cross(
                     translation::java::COMMANDS_TELEPORT_SUCCESS_LOCATION_SINGLE,

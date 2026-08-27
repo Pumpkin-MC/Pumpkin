@@ -317,30 +317,24 @@ impl Server {
 
         // Fetch / generate keys in background tasks to avoid blocking startup
         let server_clone = server.clone();
-        tokio::spawn(async move {
-            let key_store = tokio::task::spawn_blocking(|| Arc::new(KeyStore::new()))
-                .await
-                .unwrap_or_else(|_| Arc::new(KeyStore::new()));
+        server.spawn_task(async move {
+            let key_store = Arc::new(KeyStore::new());
             let _ = server_clone.key_store.set(key_store);
         });
 
         if server.basic_config.allow_chat_reports {
             let server_clone = server.clone();
-            tokio::spawn(async move {
+            server.spawn_task(async move {
                 let auth_config = server_clone
                     .advanced_config
                     .networking
                     .java
                     .authentication
                     .clone();
-                let keys = tokio::task::spawn_blocking(move || {
-                    fetch_mojang_public_keys(&auth_config).unwrap_or_else(|e| {
-                        error!("Failed to fetch Mojang keys: {e}");
-                        Vec::new()
-                    })
-                })
-                .await
-                .unwrap_or_default();
+                let keys = fetch_mojang_public_keys(&auth_config).unwrap_or_else(|e| {
+                    error!("Failed to fetch Mojang keys: {e}");
+                    Vec::new()
+                });
                 server_clone.mojang_public_keys.store(Arc::new(keys));
             });
         }
@@ -354,29 +348,21 @@ impl Server {
                 .enabled
         {
             let server_clone = server.clone();
-            tokio::spawn(async move {
+            server.spawn_task(async move {
                 let auth = server_clone
                     .advanced_config
                     .networking
                     .bedrock
                     .authentication
                     .clone();
-                let keys = match tokio::task::spawn_blocking(move || {
-                    pumpkin_util::jwt::fetch_oidc_jwks(
-                        auth.url.as_deref(),
-                        auth.connect_timeout,
-                        auth.read_timeout,
-                    )
-                })
-                .await
-                {
-                    Ok(Ok(keys)) => keys,
-                    Ok(Err(error)) => {
+                let keys = match pumpkin_util::jwt::fetch_oidc_jwks(
+                    auth.url.as_deref(),
+                    auth.connect_timeout,
+                    auth.read_timeout,
+                ) {
+                    Ok(keys) => keys,
+                    Err(error) => {
                         error!("Failed to fetch Bedrock OIDC keys: {error}");
-                        (String::new(), pumpkin_util::jwt::Jwks { keys: Vec::new() })
-                    }
-                    Err(join_err) => {
-                        error!("Bedrock OIDC key task failed: {join_err}");
                         (String::new(), pumpkin_util::jwt::Jwks { keys: Vec::new() })
                     }
                 };
@@ -384,38 +370,25 @@ impl Server {
             });
         }
 
-        let world_loader = |dim: Dimension| {
-            let path = world_path.clone();
-            let registry = block_registry.clone();
-            let l_info = server.level_info.clone(); // Access from struct
-            let weak = Arc::downgrade(&server);
-            let config = Arc::new(server.advanced_config.world.clone());
-
-            tokio::task::spawn_blocking(move || {
-                info!(
-                    "Loading {}",
-                    TextComponent::text(dim.minecraft_name.to_string())
-                        .color_named(NamedColor::DarkGreen)
-                        .to_pretty_console()
-                );
-                let level = into_level(dim.clone(), &config, path, seed);
-                let world = Arc::new(World::load(level.clone(), l_info, dim, registry, weak));
-                let portal: Arc<dyn WorldPortalExt> = Arc::new(WorldPortal(world.clone()));
-                level.world_portal.store(Arc::new(Some(portal)));
-                world
-            })
-        };
-
-        info!("Starting parallel world load...");
-        let mut world_futures = Vec::new();
-        for dim in &server.dimensions {
-            world_futures.push(world_loader(dim.clone()));
-        }
-
-        let worlds_results = futures::future::join_all(world_futures).await;
-
         let mut worlds_vec = Vec::new();
-        for world in worlds_results.into_iter().flatten() {
+        for dim in &server.dimensions {
+            info!(
+                "Loading {}",
+                TextComponent::text(dim.minecraft_name.to_string())
+                    .color_named(NamedColor::DarkGreen)
+                    .to_pretty_console()
+            );
+            let config = Arc::new(server.advanced_config.world.clone());
+            let level = into_level(dim.clone(), &config, world_path.clone(), seed);
+            let world = Arc::new(World::load(
+                level.clone(),
+                server.level_info.clone(),
+                dim.clone(),
+                block_registry.clone(),
+                Arc::downgrade(&server),
+            ));
+            let portal: Arc<dyn WorldPortalExt> = Arc::new(WorldPortal(world.clone()));
+            level.world_portal.store(Arc::new(Some(portal)));
             worlds_vec.push(world);
         }
 
@@ -475,7 +448,7 @@ impl Server {
             })
     }
 
-    pub async fn create_world(self: &Arc<Self>, name: String, dimension: Dimension) -> Arc<World> {
+    pub fn create_world(self: &Arc<Self>, name: String, dimension: Dimension) -> Arc<World> {
         {
             let worlds = self.worlds.load();
             let world = worlds
@@ -487,37 +460,28 @@ impl Server {
             }
         }
 
-        let server = self.clone();
-        let name_clone = name.clone();
-        tokio::task::spawn_blocking(move || {
-            let world_path = server.basic_config.get_world_path().join(name_clone);
-            let registry = server.block_registry.clone();
-            let l_info = server.level_info.clone();
-            let weak = Arc::downgrade(&server);
-            let config = Arc::new(server.advanced_config.world.clone());
-            let seed = server.level_info.load().world_gen_settings.seed;
+        let world_path = self.basic_config.get_world_path().join(name);
+        let registry = self.block_registry.clone();
+        let l_info = self.level_info.clone();
+        let weak = Arc::downgrade(self);
+        let config = Arc::new(self.advanced_config.world.clone());
+        let seed = self.level_info.load().world_gen_settings.seed;
 
-            let level =
-                pumpkin_world::dimension::into_level(dimension.clone(), &config, world_path, seed);
-            let world: World = World::load(level.clone(), l_info, dimension, registry, weak);
-            let world = Arc::new(world);
-            let portal: Arc<dyn WorldPortalExt> = Arc::new(WorldPortal(world.clone()));
-            level.world_portal.store(Arc::new(Some(portal)));
-            server.worlds.rcu(|worlds| {
-                let mut new_worlds = (**worlds).clone();
-                new_worlds.push(world.clone());
-                new_worlds
-            });
-            let mut event =
-                crate::plugin::api::events::world::world_init::WorldInitEvent::new(world.clone());
-            server.plugin_manager.fire_blocking(&server, &mut event);
-            world
-        })
-        .await
-        .unwrap_or_else(|_| {
-            error!("World creation failed");
-            std::process::exit(1);
-        })
+        let level =
+            pumpkin_world::dimension::into_level(dimension.clone(), &config, world_path, seed);
+        let world: World = World::load(level.clone(), l_info, dimension, registry, weak);
+        let world = Arc::new(world);
+        let portal: Arc<dyn WorldPortalExt> = Arc::new(WorldPortal(world.clone()));
+        level.world_portal.store(Arc::new(Some(portal)));
+        self.worlds.rcu(|worlds| {
+            let mut new_worlds = (**worlds).clone();
+            new_worlds.push(world.clone());
+            new_worlds
+        });
+        let mut event =
+            crate::plugin::api::events::world::world_init::WorldInitEvent::new(world.clone());
+        self.plugin_manager.fire_blocking(self, &mut event);
+        world
     }
 
     pub async fn unload_world(&self, name: &str) -> Result<(), String> {
@@ -590,7 +554,7 @@ impl Server {
             return Err(format!("Failed to save world info: {err}"));
         }
 
-        if let Err(err) = self.player_data_storage.save_all_players(self).await {
+        if let Err(err) = self.player_data_storage.save_all_players(self) {
             error!("Failed to save player data: {err}");
             return Err(format!("Failed to save player data: {err}"));
         }
@@ -650,33 +614,31 @@ impl Server {
 
         let first_world = self.worlds.load().first().cloned()?;
 
-        let (world, nbt) =
-            if let Ok(Some(data)) = self.player_data_storage.load_data(&profile.id).await {
-                if let Some(dimension_key) = data.get_string("Dimension") {
-                    if let Some(dimension) = Dimension::from_name(dimension_key) {
-                        let world = self.get_world_from_dimension(dimension);
-                        (world, Some(data))
-                    } else {
-                        warn!("Invalid dimension key in player data: {dimension_key}");
-                        (first_world, Some(data))
-                    }
+        let (world, nbt) = if let Ok(Some(data)) = self.player_data_storage.load_data(&profile.id) {
+            if let Some(dimension_key) = data.get_string("Dimension") {
+                if let Some(dimension) = Dimension::from_name(dimension_key) {
+                    let world = self.get_world_from_dimension(dimension);
+                    (world, Some(data))
                 } else {
-                    // Player data exists but doesn't have a "Dimension" key.
+                    warn!("Invalid dimension key in player data: {dimension_key}");
                     (first_world, Some(data))
                 }
             } else {
-                // No player data found or an error occurred, default to the Overworld.
-                (first_world, None)
-            };
+                // Player data exists but doesn't have a "Dimension" key.
+                (first_world, Some(data))
+            }
+        } else {
+            // No player data found or an error occurred, default to the Overworld.
+            (first_world, None)
+        };
 
         let mut player = Player::new(
             client,
             profile,
             config.clone().unwrap_or_default(),
-            world.clone(),
+            &world,
             gamemode,
-        )
-        .await;
+        );
 
         if let Some(mut nbt_data) = nbt {
             player.read_nbt(&mut nbt_data);
@@ -1059,23 +1021,19 @@ impl Server {
     /// This includes player ticking (network, keep-alives) and flushing world updates to clients.
     pub fn tick_players_and_network(self: &Arc<Self>) {
         let worlds = self.worlds.load();
+        let handle = self.runtime.clone();
 
         for world in worlds.iter() {
             world.flush_block_updates();
             world.flush_synced_block_events();
-        }
 
-        let mut all_players = Vec::new();
-        for world in worlds.iter() {
             let players = world.players.load();
-            all_players.extend(players.iter().cloned());
+            let player_handle = handle.clone();
+            players.par_iter().for_each(|player| {
+                let _guard = player_handle.enter();
+                player.tick(self);
+            });
         }
-
-        let handle = self.runtime.clone();
-        all_players.par_iter().for_each(|player| {
-            let _guard = handle.enter();
-            player.tick(self);
-        });
     }
 
     /// Ticks the game logic for all worlds. This is the part that is affected by `/tick freeze`.

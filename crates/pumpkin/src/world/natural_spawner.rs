@@ -337,7 +337,7 @@ impl SpawnState {
     pub fn new(
         chunk_count: i32,
         entities: &ArcSwap<Vec<Arc<dyn EntityBase>>>,
-        world: &Arc<World>,
+        world: &World,
     ) -> Self {
         let potential = PotentialCalculator::default();
         let local_mob_cap = LocalMobCapCalculator::default();

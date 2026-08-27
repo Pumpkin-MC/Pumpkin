@@ -355,17 +355,20 @@ impl Level {
 
         let handle_count = handles.len();
         info!("Joining {} threads for {}...", handle_count, world_id);
-        let join_task = tokio::task::spawn_blocking(move || {
-            let mut failed_count = 0;
-            for handle in handles {
-                if handle.join().is_err() {
-                    failed_count += 1;
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        let _ = std::thread::Builder::new()
+            .name("Thread-Joiner".into())
+            .spawn(move || {
+                let mut failed_count = 0;
+                for handle in handles {
+                    if handle.join().is_err() {
+                        failed_count += 1;
+                    }
                 }
-            }
-            failed_count
-        });
+                let _ = tx.send(failed_count);
+            });
 
-        match timeout(Duration::from_secs(3), join_task).await {
+        match timeout(Duration::from_secs(3), rx).await {
             Ok(Ok(failed_count)) => {
                 if failed_count > 0 {
                     warn!(

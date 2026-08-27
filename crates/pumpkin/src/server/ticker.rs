@@ -15,6 +15,7 @@ pub struct Ticker;
 impl Ticker {
     /// Runs the main server tick loop on a dedicated thread.
     pub fn run(server: &Arc<Server>) {
+        let _guard = server.runtime.enter();
         let mut next_tick = Instant::now();
 
         'ticker: loop {

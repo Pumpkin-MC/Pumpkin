@@ -237,7 +237,7 @@ impl pumpkin::plugin::server::HostServer for PluginHostState {
             Dimension::End => pumpkin_data::dimension::Dimension::THE_END,
         };
 
-        let world = server.create_world(name, internal_dim).await;
+        let world = server.create_world(name, internal_dim);
         self.add_world(world)
             .map_err(|_| wasmtime::Error::msg("failed to add world resource"))
     }
