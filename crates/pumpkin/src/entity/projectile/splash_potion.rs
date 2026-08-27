@@ -1,8 +1,8 @@
-use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
+use std::sync::{Arc, RwLock};
 
 use crate::{
-    entity::{Entity, EntityBase, EntityBaseFuture, projectile::ThrownItemEntity},
+    entity::{Entity, EntityBase, projectile::ThrownItemEntity},
     server::Server,
 };
 use pumpkin_data::item_stack::ItemStack;
@@ -12,7 +12,6 @@ use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::math::{boundingbox::BoundingBox, vector2::Vector2};
 use pumpkin_util::math::{position::BlockPos, vector2::to_chunk_pos};
 use pumpkin_world::world::BlockFlags;
-use tokio::sync::RwLock;
 
 const GRAVITY: f64 = 0.05;
 
@@ -47,8 +46,11 @@ impl SplashPotionEntity {
         }
     }
 
-    pub async fn set_item_stack(&self, item_stack: ItemStack) {
-        let mut write = self.item_stack.write().await;
+    pub fn set_item_stack(&self, item_stack: ItemStack) {
+        let mut write = self
+            .item_stack
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         *write = item_stack;
     }
 }
@@ -61,7 +63,7 @@ fn is_water_potion(stack: &ItemStack) -> bool {
 }
 
 /// Extinguishes fire (including soul fire) at the hit position and its four horizontal neighbors.
-async fn extinguish_fire(world: &Arc<crate::world::World>, hit_pos: Vector3<f64>) {
+fn extinguish_fire(world: &Arc<crate::world::World>, hit_pos: Vector3<f64>) {
     let air_state_id = Block::AIR.default_state.id;
 
     let neighbors = [
@@ -81,48 +83,43 @@ async fn extinguish_fire(world: &Arc<crate::world::World>, hit_pos: Vector3<f64>
         let state_id = world.get_block_state_id(&pos);
         let raw_block_id = state_id.to_block_id();
         if raw_block_id == BlockId::FIRE || raw_block_id == BlockId::SOUL_FIRE {
-            world
-                .set_block_state(&pos, air_state_id, BlockFlags::NOTIFY_ALL)
-                .await;
+            world.set_block_state(&pos, air_state_id, BlockFlags::NOTIFY_ALL);
         }
     }
 }
 
-pub(crate) async fn extinguish_fire_if_water_potion(
+pub(crate) fn extinguish_fire_if_water_potion(
     world: &Arc<crate::world::World>,
     hit_pos: Vector3<f64>,
     stack: &ItemStack,
 ) {
     if is_water_potion(stack) {
-        extinguish_fire(world, hit_pos).await;
+        extinguish_fire(world, hit_pos);
     }
 }
 
 impl EntityBase for SplashPotionEntity {
-    fn init_data_tracker(&self) -> EntityBaseFuture<'_, ()> {
-        Box::pin(async move {
-            let entity = self.get_entity();
-            let stack = self.item_stack.read().await;
+    fn init_data_tracker(&self) {
+        let entity = self.get_entity();
+        let stack = self
+            .item_stack
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
 
-            // Sync the item stack
-            entity.send_meta_data(
-                &[pumpkin_protocol::java::client::play::Metadata::new(
-                    pumpkin_data::tracked_data::splash_potion::ITEM_STACK,
-                    &pumpkin_protocol::codec::item_stack_seralizer::ItemStackSerializer::from(
-                        stack.clone(),
-                    ),
-                )],
-                None,
-            );
-        })
+        // Sync the item stack
+        entity.send_meta_data(
+            &[pumpkin_protocol::java::client::play::Metadata::new(
+                pumpkin_data::tracked_data::splash_potion::ITEM_STACK,
+                &pumpkin_protocol::codec::item_stack_seralizer::ItemStackSerializer::from(
+                    stack.clone(),
+                ),
+            )],
+            None,
+        );
     }
 
-    fn tick<'a>(
-        &'a self,
-        caller: &'a Arc<dyn EntityBase>,
-        server: &'a Server,
-    ) -> EntityBaseFuture<'a, ()> {
-        Box::pin(async move { self.thrown.process_tick(caller, server).await })
+    fn tick<'a>(&'a self, caller: &'a Arc<dyn EntityBase>, server: &'a Server) {
+        self.thrown.process_tick(caller, server);
     }
 
     fn get_entity(&self) -> &Entity {
@@ -136,122 +133,123 @@ impl EntityBase for SplashPotionEntity {
         self
     }
 
-    fn on_hit(&self, hit: crate::entity::projectile::ProjectileHit) -> EntityBaseFuture<'_, ()> {
-        Box::pin(async move {
-            let world = self.get_entity().world.load();
-            let hit_pos = hit.hit_pos();
+    fn on_hit(&self, hit: crate::entity::projectile::ProjectileHit) {
+        let world = self.get_entity().world.load();
+        let hit_pos = hit.hit_pos();
 
-            // Only extinguish fire for plain water potions
-            let stack = self.item_stack.read().await.clone();
-            extinguish_fire_if_water_potion(&world, hit_pos, &stack).await;
+        // Extinguish fire if it's a water potion
+        let stack = self
+            .item_stack
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone();
+        extinguish_fire_if_water_potion(&world, hit_pos, &stack);
 
-            let effects = crate::item::potion::PotionContents::read_potion_effects(&stack);
+        // Send impact entity status (plays break particles)
+        world.send_entity_status(
+            self.get_entity(),
+            pumpkin_data::entity::EntityStatus::Death,
+            Some(pumpkin_protocol::bedrock::server::actor_event::ActorEventID::Death),
+        );
 
-            let mut color = 0x385dc6; // Default to water color if no effects/color found
-            if let Some(pc) =
-                stack.get_data_component::<pumpkin_data::data_component_impl::PotionContentsImpl>()
-            {
-                if let Some(c) = pc.custom_color {
-                    color = c;
-                } else if !effects.is_empty() {
-                    let mut r_sum = 0.0;
-                    let mut g_sum = 0.0;
-                    let mut b_sum = 0.0;
-                    let count = effects.len() as f32;
-                    for (eff, _, _, _, _, _) in &effects {
-                        let c = eff.color;
-                        r_sum += ((c >> 16) & 0xFF) as f32;
-                        g_sum += ((c >> 8) & 0xFF) as f32;
-                        b_sum += (c & 0xFF) as f32;
-                    }
-                    let r = (r_sum / count) as i32;
-                    let g = (g_sum / count) as i32;
-                    let b = (b_sum / count) as i32;
-                    color = (r << 16) | (g << 8) | b;
+        let effects = crate::item::potion::PotionContents::read_potion_effects(&stack);
+
+        // Calculate color: custom_color if present, else blend of effects, else default water color
+        let mut color = 0x385dc6; // default water-like color
+        if let Some(pc) =
+            stack.get_data_component::<pumpkin_data::data_component_impl::PotionContentsImpl>()
+        {
+            if let Some(c) = pc.custom_color {
+                color = c;
+            } else if !effects.is_empty() {
+                let mut r_sum = 0.0;
+                let mut g_sum = 0.0;
+                let mut b_sum = 0.0;
+                let count = effects.len() as f32;
+                for (eff, _, _, _, _, _) in &effects {
+                    let c = eff.color;
+                    r_sum += ((c >> 16) & 0xFF) as f32;
+                    g_sum += ((c >> 8) & 0xFF) as f32;
+                    b_sum += (c & 0xFF) as f32;
                 }
-            } else {
-                // Try to guess from effects directly if potion contents missing but effects present
-                if !effects.is_empty() {
-                    let mut r_sum = 0.0;
-                    let mut g_sum = 0.0;
-                    let mut b_sum = 0.0;
-                    let count = effects.len() as f32;
-                    for (eff, _, _, _, _, _) in &effects {
-                        let c = eff.color;
-                        r_sum += ((c >> 16) & 0xFF) as f32;
-                        g_sum += ((c >> 8) & 0xFF) as f32;
-                        b_sum += (c & 0xFF) as f32;
-                    }
-                    let r = (r_sum / count) as i32;
-                    let g = (g_sum / count) as i32;
-                    let b = (b_sum / count) as i32;
-                    color = (r << 16) | (g << 8) | b;
+                let r = (r_sum / count) as i32;
+                let g = (g_sum / count) as i32;
+                let b = (b_sum / count) as i32;
+                color = (r << 16) | (g << 8) | b;
+            }
+        } else if !effects.is_empty() {
+            let mut r_sum = 0.0;
+            let mut g_sum = 0.0;
+            let mut b_sum = 0.0;
+            let count = effects.len() as f32;
+            for (eff, _, _, _, _, _) in &effects {
+                let c = eff.color;
+                r_sum += ((c >> 16) & 0xFF) as f32;
+                g_sum += ((c >> 8) & 0xFF) as f32;
+                b_sum += (c & 0xFF) as f32;
+            }
+            let r = (r_sum / count) as i32;
+            let g = (g_sum / count) as i32;
+            let b = (b_sum / count) as i32;
+            color = (r << 16) | (g << 8) | b;
+        }
+
+        // Play splash particles
+        let has_instant = effects.iter().any(|(e, _, _, _, _, _)| {
+            e.id == pumpkin_data::effect::StatusEffect::INSTANT_DAMAGE.id
+                || e.id == pumpkin_data::effect::StatusEffect::INSTANT_HEALTH.id
+        });
+        let event_id = if has_instant { 2007 } else { 2002 };
+
+        // Convert hit_pos to BlockPos
+        let block_pos = BlockPos(Vector3::new(
+            hit_pos.x.floor() as i32,
+            hit_pos.y.floor() as i32,
+            hit_pos.z.floor() as i32,
+        ));
+        world.broadcast_to_chunk(
+            to_chunk_pos(&Vector2::new(block_pos.0.x, block_pos.0.z)),
+            &CWorldEvent::new(event_id, block_pos, color, false),
+        );
+
+        // If no effects, just splash (like water bottles)
+        if effects.is_empty() {
+            return;
+        }
+
+        let radius = 4.0f64;
+        let min = Vector3::new(hit_pos.x - radius, hit_pos.y - radius, hit_pos.z - radius);
+        let max = Vector3::new(hit_pos.x + radius, hit_pos.y + radius, hit_pos.z + radius);
+        let aabb = BoundingBox::new(min, max);
+
+        // Gather entity and player candidates
+        let mut candidates = world.get_entities_at_box(&aabb);
+        let players = world.get_players_at_box(&aabb);
+        for p in players {
+            candidates.push(p.clone() as Arc<dyn EntityBase>);
+        }
+
+        for cand in candidates {
+            if let Some(living) = cand.get_living_entity() {
+                let pos = cand.get_entity().pos.load();
+                let dx = pos.x - hit_pos.x;
+                let dy = pos.y - hit_pos.y;
+                let dz = pos.z - hit_pos.z;
+                let dist = (dx * dx + dy * dy + dz * dz).sqrt();
+                if dist > radius {
+                    continue;
                 }
+
+                // Distance scaling
+                let scale = (1.0f32 - (dist as f32 / radius as f32)).max(0.0);
+
+                crate::item::potion::PotionContents::apply_effects_to(
+                    living,
+                    effects.clone(),
+                    scale,
+                    crate::item::potion::PotionApplicationSource::Normal,
+                );
             }
-
-            // Play splash particles
-            let has_instant = effects.iter().any(|(e, _, _, _, _, _)| {
-                e.id == pumpkin_data::effect::StatusEffect::INSTANT_DAMAGE.id
-                    || e.id == pumpkin_data::effect::StatusEffect::INSTANT_HEALTH.id
-            });
-            let event_id = if has_instant { 2007 } else { 2002 };
-
-            // Convert hit_pos to BlockPos
-            let block_pos = BlockPos(Vector3::new(
-                hit_pos.x.floor() as i32,
-                hit_pos.y.floor() as i32,
-                hit_pos.z.floor() as i32,
-            ));
-            world.broadcast_to_chunk(
-                to_chunk_pos(&Vector2::new(block_pos.0.x, block_pos.0.z)),
-                &CWorldEvent::new(event_id, block_pos, color, false),
-            );
-
-            // If no effects, just splash (like water bottles)
-            if effects.is_empty() {
-                return;
-            }
-
-            let radius = 4.0f64;
-            let min = Vector3::new(hit_pos.x - radius, hit_pos.y - radius, hit_pos.z - radius);
-            let max = Vector3::new(hit_pos.x + radius, hit_pos.y + radius, hit_pos.z + radius);
-            let aabb = BoundingBox::new(min, max);
-
-            // Gather entity and player candidates
-            let mut candidates = world.get_entities_at_box(&aabb);
-            let players = world.get_players_at_box(&aabb);
-            for p in players {
-                candidates.push(p.clone() as Arc<dyn EntityBase>);
-            }
-
-            for cand in candidates {
-                let cand_clone = cand.clone();
-                let effs_clone: Vec<_> = effects.clone();
-                let hit_pos_clone = hit_pos;
-                tokio::spawn(async move {
-                    if let Some(living) = cand_clone.get_living_entity() {
-                        let pos = cand_clone.get_entity().pos.load();
-                        let dx = pos.x - hit_pos_clone.x;
-                        let dy = pos.y - hit_pos_clone.y;
-                        let dz = pos.z - hit_pos_clone.z;
-                        let dist = (dx * dx + dy * dy + dz * dz).sqrt();
-                        if dist > radius {
-                            return;
-                        }
-
-                        // Distance scaling
-                        let scale = (1.0f32 - (dist as f32 / radius as f32)).max(0.0);
-
-                        crate::item::potion::PotionContents::apply_effects_to(
-                            living,
-                            effs_clone,
-                            scale,
-                            crate::item::potion::PotionApplicationSource::Normal,
-                        )
-                        .await;
-                    }
-                });
-            }
-        })
+        }
     }
 }

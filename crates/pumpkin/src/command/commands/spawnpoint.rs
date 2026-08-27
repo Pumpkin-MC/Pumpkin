@@ -27,22 +27,20 @@ const ARG_ANGLE: &str = "angle";
 struct SelfExecutor;
 
 impl CommandExecutor for SelfExecutor {
-    fn execute<'a>(
-        &'a self,
-        sender: &'a CommandSender,
-        _server: &'a crate::server::Server,
-        _args: &'a ConsumedArgs<'a>,
-    ) -> CommandResult<'a> {
-        Box::pin(async move {
-            let Some(player) = sender.as_player() else {
-                return Err(CommandError::InvalidRequirement);
-            };
-            let pos = player.position().to_block_pos();
-            let yaw = player.get_entity().yaw.load();
-            set_spawnpoint(sender, &player, pos, yaw).await;
+    fn execute(
+        &self,
+        sender: &CommandSender,
+        _server: &crate::server::Server,
+        _args: &ConsumedArgs,
+    ) -> CommandResult {
+        let Some(player) = sender.as_player() else {
+            return Err(CommandError::InvalidRequirement);
+        };
+        let pos = player.position().to_block_pos();
+        let yaw = player.get_entity().yaw.load();
+        set_spawnpoint(sender, &player, pos, yaw);
 
-            Ok(1)
-        })
+        Ok(1)
     }
 }
 
@@ -50,23 +48,21 @@ impl CommandExecutor for SelfExecutor {
 struct TargetsExecutor;
 
 impl CommandExecutor for TargetsExecutor {
-    fn execute<'a>(
-        &'a self,
-        sender: &'a CommandSender,
-        _server: &'a crate::server::Server,
-        args: &'a ConsumedArgs<'a>,
-    ) -> CommandResult<'a> {
-        Box::pin(async move {
-            let targets = PlayersArgumentConsumer.find_arg_default_name(args)?;
+    fn execute(
+        &self,
+        sender: &CommandSender,
+        _server: &crate::server::Server,
+        args: &ConsumedArgs,
+    ) -> CommandResult {
+        let targets = PlayersArgumentConsumer.find_arg_default_name(args)?;
 
-            for target in targets {
-                let pos = target.position().to_block_pos();
-                let yaw = target.living_entity.entity.yaw.load();
-                set_spawnpoint(sender, target, pos, yaw).await;
-            }
+        for target in targets {
+            let pos = target.position().to_block_pos();
+            let yaw = target.living_entity.entity.yaw.load();
+            set_spawnpoint(sender, target, pos, yaw);
+        }
 
-            Ok(targets.len() as i32)
-        })
+        Ok(targets.len() as i32)
     }
 }
 
@@ -74,25 +70,23 @@ impl CommandExecutor for TargetsExecutor {
 struct TargetsPosExecutor;
 
 impl CommandExecutor for TargetsPosExecutor {
-    fn execute<'a>(
-        &'a self,
-        sender: &'a CommandSender,
-        _server: &'a crate::server::Server,
-        args: &'a ConsumedArgs<'a>,
-    ) -> CommandResult<'a> {
-        Box::pin(async move {
-            let targets = PlayersArgumentConsumer.find_arg_default_name(args)?;
-            let Some(Arg::BlockPos(pos)) = args.get(ARG_POS) else {
-                return Err(CommandError::InvalidConsumption(Some(ARG_POS.into())));
-            };
+    fn execute(
+        &self,
+        sender: &CommandSender,
+        _server: &crate::server::Server,
+        args: &ConsumedArgs,
+    ) -> CommandResult {
+        let targets = PlayersArgumentConsumer.find_arg_default_name(args)?;
+        let Some(Arg::BlockPos(pos)) = args.get(ARG_POS) else {
+            return Err(CommandError::InvalidConsumption(Some(ARG_POS.into())));
+        };
 
-            for target in targets {
-                let yaw = target.living_entity.entity.yaw.load();
-                set_spawnpoint(sender, target, *pos, yaw).await;
-            }
+        for target in targets {
+            let yaw = target.living_entity.entity.yaw.load();
+            set_spawnpoint(sender, target, *pos, yaw);
+        }
 
-            Ok(targets.len() as i32)
-        })
+        Ok(targets.len() as i32)
     }
 }
 
@@ -100,49 +94,42 @@ impl CommandExecutor for TargetsPosExecutor {
 struct TargetsPosAngleExecutor;
 
 impl CommandExecutor for TargetsPosAngleExecutor {
-    fn execute<'a>(
-        &'a self,
-        sender: &'a CommandSender,
-        _server: &'a crate::server::Server,
-        args: &'a ConsumedArgs<'a>,
-    ) -> CommandResult<'a> {
-        Box::pin(async move {
-            let targets = PlayersArgumentConsumer.find_arg_default_name(args)?;
-            let Some(Arg::BlockPos(pos)) = args.get(ARG_POS) else {
-                return Err(CommandError::InvalidConsumption(Some(ARG_POS.into())));
-            };
-            let Some(Arg::Rotation(yaw, _, _, _)) = args.get(ARG_ANGLE) else {
-                return Err(CommandError::InvalidConsumption(Some(ARG_ANGLE.into())));
-            };
+    fn execute(
+        &self,
+        sender: &CommandSender,
+        _server: &crate::server::Server,
+        args: &ConsumedArgs,
+    ) -> CommandResult {
+        let targets = PlayersArgumentConsumer.find_arg_default_name(args)?;
+        let Some(Arg::BlockPos(pos)) = args.get(ARG_POS) else {
+            return Err(CommandError::InvalidConsumption(Some(ARG_POS.into())));
+        };
+        let Some(Arg::Rotation(yaw, _, _, _)) = args.get(ARG_ANGLE) else {
+            return Err(CommandError::InvalidConsumption(Some(ARG_ANGLE.into())));
+        };
 
-            for target in targets {
-                set_spawnpoint(sender, target, *pos, *yaw).await;
-            }
+        for target in targets {
+            set_spawnpoint(sender, target, *pos, *yaw);
+        }
 
-            Ok(targets.len() as i32)
-        })
+        Ok(targets.len() as i32)
     }
 }
 
-async fn set_spawnpoint(sender: &CommandSender, target: &Arc<Player>, pos: BlockPos, yaw: f32) {
-    let dimension = &target.world().dimension;
+fn set_spawnpoint(sender: &CommandSender, target: &Arc<Player>, pos: BlockPos, yaw: f32) {
+    let dimension = target.world().dimension.clone();
+    target.set_respawn_point(dimension, pos, yaw, 0.0, true);
 
-    target
-        .set_respawn_point(dimension.clone(), pos, yaw, 0.0, true)
-        .await;
-
-    sender
-        .send_message(TextComponent::translate_cross(
-            translation::java::COMMANDS_SPAWNPOINT_SUCCESS_SINGLE,
-            translation::bedrock::COMMANDS_SPAWNPOINT_SUCCESS_SINGLE,
-            [
-                TextComponent::text(target.gameprofile.name.clone()),
-                TextComponent::text(pos.0.x.to_string()),
-                TextComponent::text(pos.0.y.to_string()),
-                TextComponent::text(pos.0.z.to_string()),
-            ],
-        ))
-        .await;
+    sender.send_message(TextComponent::translate_cross(
+        translation::java::COMMANDS_SPAWNPOINT_SUCCESS_SINGLE,
+        translation::bedrock::COMMANDS_SPAWNPOINT_SUCCESS_SINGLE,
+        [
+            TextComponent::text(target.gameprofile.name.clone()),
+            TextComponent::text(pos.0.x.to_string()),
+            TextComponent::text(pos.0.y.to_string()),
+            TextComponent::text(pos.0.z.to_string()),
+        ],
+    ));
 }
 
 #[must_use]

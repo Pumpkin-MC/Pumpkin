@@ -66,115 +66,106 @@ const fn min_volume_consumer() -> BoundedNumArgumentConsumer<f32> {
 struct Executor;
 
 impl CommandExecutor for Executor {
-    fn execute<'a>(
-        &'a self,
-        sender: &'a CommandSender,
-        _server: &'a crate::server::Server,
-        args: &'a ConsumedArgs<'a>,
-    ) -> CommandResult<'a> {
-        Box::pin(async move {
-            // Get required sound argument
-            let sound = SoundArgumentConsumer::find_arg(args, ARG_SOUND)?;
+    fn execute(
+        &self,
+        sender: &CommandSender,
+        _server: &crate::server::Server,
+        args: &ConsumedArgs,
+    ) -> CommandResult {
+        // Get required sound argument
+        let sound = SoundArgumentConsumer::find_arg(args, ARG_SOUND)?;
 
-            // Get optional sound category, defaults to Master
-            let source = args
-                .get(ARG_SOURCE)
-                .map_or(SoundCategory::Master, |arg| match arg {
-                    Arg::SoundCategory(category) => *category,
-                    _ => SoundCategory::Master,
-                });
+        // Get optional sound category, defaults to Master
+        let source = args
+            .get(ARG_SOURCE)
+            .map_or(SoundCategory::Master, |arg| match arg {
+                Arg::SoundCategory(category) => *category,
+                _ => SoundCategory::Master,
+            });
 
-            // Get target players, defaults to sender if not specified
-            let targets: &[Arc<Player>] = match (
-                PlayersArgumentConsumer::find_arg(args, ARG_TARGETS),
-                sender.as_player(),
-            ) {
-                (Ok(players), _) => players,
-                (_, Some(player)) => &[player],
-                (_, _) => &[],
-            };
+        // Get target players, defaults to sender if not specified
+        let targets: &[Arc<Player>] = match (
+            PlayersArgumentConsumer::find_arg(args, ARG_TARGETS),
+            sender.as_player(),
+        ) {
+            (Ok(players), _) => players,
+            (_, Some(player)) => &[player],
+            (_, _) => &[],
+        };
 
-            // Get optional position, defaults to target's position
-            let position = Position3DArgumentConsumer::find_arg(args, ARG_POS).ok();
+        // Get optional position, defaults to target's position
+        let position = Position3DArgumentConsumer::find_arg(args, ARG_POS).ok();
 
-            // Get optional volume parameter
-            let volume = match BoundedNumArgumentConsumer::<f32>::find_arg(args, ARG_VOLUME) {
-                Ok(Ok(v)) => v,
-                _ => 1.0, // Default volume
-            };
+        // Get optional volume parameter
+        let volume = match BoundedNumArgumentConsumer::<f32>::find_arg(args, ARG_VOLUME) {
+            Ok(Ok(v)) => v,
+            _ => 1.0, // Default volume
+        };
 
-            // Get optional pitch parameter
-            let pitch = match BoundedNumArgumentConsumer::<f32>::find_arg(args, ARG_PITCH) {
-                Ok(Ok(p)) => p.max(0.5), // Values below 0.5 are clamped
-                _ => 1.0,                // Default pitch
-            };
+        // Get optional pitch parameter
+        let pitch = match BoundedNumArgumentConsumer::<f32>::find_arg(args, ARG_PITCH) {
+            Ok(Ok(p)) => p.max(0.5), // Values below 0.5 are clamped
+            _ => 1.0,                // Default pitch
+        };
 
-            // Get optional minimum volume (currently unused in implementation)
-            let min_volume = match BoundedNumArgumentConsumer::<f32>::find_arg(args, ARG_MIN_VOLUME)
-            {
-                Ok(Ok(v)) => v,
-                _ => 0.0, // Default minimum volume
-            };
+        // Get optional minimum volume (currently unused in implementation)
+        let min_volume = match BoundedNumArgumentConsumer::<f32>::find_arg(args, ARG_MIN_VOLUME) {
+            Ok(Ok(v)) => v,
+            _ => 0.0, // Default minimum volume
+        };
 
-            // Use same random seed for all targets to ensure sound synchronization
-            let seed = rng().random::<f64>();
+        // Use same random seed for all targets to ensure sound synchronization
+        let seed = rng().random::<f64>();
 
-            // Track how many players actually received the sound
-            let mut players_who_heard = 0;
+        // Track how many players actually received the sound
+        let mut players_who_heard = 0;
 
-            // Play sound for each target player
-            for target in targets {
-                let pos = position.unwrap_or(target.living_entity.entity.pos.load());
+        // Play sound for each target player
+        for target in targets {
+            let pos = position.unwrap_or(target.living_entity.entity.pos.load());
 
-                // Check if player can hear the sound based on volume and distance
-                let player_pos = target.living_entity.entity.pos.load();
-                let distance = player_pos.squared_distance_to_vec(&pos);
-                let max_distance: f64 = (16.0 * volume).into(); // 16 blocks is base distance at volume 1.0
+            // Check if player can hear the sound based on volume and distance
+            let player_pos = target.living_entity.entity.pos.load();
+            let distance = player_pos.squared_distance_to_vec(&pos);
+            let max_distance: f64 = (16.0 * volume).into(); // 16 blocks is base distance at volume 1.0
 
-                if distance <= max_distance || min_volume > 0.0 {
-                    target
-                        .play_sound(sound as u16, source, &pos, volume, pitch, seed)
-                        .await;
-                    players_who_heard += 1;
-                }
+            if distance <= max_distance || min_volume > 0.0 {
+                target.play_sound(sound as u16, source, &pos, volume, pitch, seed);
+                players_who_heard += 1;
             }
+        }
 
-            // Send appropriate message based on results
-            if players_who_heard == 0 {
-                Err(CommandError::CommandFailed(TextComponent::translate_cross(
-                    translation::java::COMMANDS_PLAYSOUND_FAILED,
-                    translation::java::COMMANDS_PLAYSOUND_FAILED,
-                    [],
-                )))
+        // Send appropriate message based on results
+        if players_who_heard == 0 {
+            Err(CommandError::CommandFailed(TextComponent::translate_cross(
+                translation::java::COMMANDS_PLAYSOUND_FAILED,
+                translation::java::COMMANDS_PLAYSOUND_FAILED,
+                [],
+            )))
+        } else {
+            let sound_name = sound.to_name();
+            if players_who_heard == 1 {
+                sender.send_message(TextComponent::translate_cross(
+                    translation::java::COMMANDS_PLAYSOUND_SUCCESS_SINGLE,
+                    translation::bedrock::COMMANDS_PLAYSOUND_SUCCESS,
+                    [
+                        TextComponent::text(sound_name),
+                        targets[0].get_display_name(),
+                    ],
+                ));
             } else {
-                let sound_name = sound.to_name();
-                if players_who_heard == 1 {
-                    sender
-                        .send_message(TextComponent::translate_cross(
-                            translation::java::COMMANDS_PLAYSOUND_SUCCESS_SINGLE,
-                            translation::bedrock::COMMANDS_PLAYSOUND_SUCCESS,
-                            [
-                                TextComponent::text(sound_name),
-                                targets[0].get_display_name().await,
-                            ],
-                        ))
-                        .await;
-                } else {
-                    sender
-                        .send_message(TextComponent::translate_cross(
-                            translation::java::COMMANDS_PLAYSOUND_SUCCESS_MULTIPLE,
-                            translation::bedrock::COMMANDS_PLAYSOUND_SUCCESS,
-                            [
-                                TextComponent::text(sound_name),
-                                TextComponent::text(players_who_heard.to_string()),
-                            ],
-                        ))
-                        .await;
-                }
-
-                Ok(players_who_heard)
+                sender.send_message(TextComponent::translate_cross(
+                    translation::java::COMMANDS_PLAYSOUND_SUCCESS_MULTIPLE,
+                    translation::bedrock::COMMANDS_PLAYSOUND_SUCCESS,
+                    [
+                        TextComponent::text(sound_name),
+                        TextComponent::text(players_who_heard.to_string()),
+                    ],
+                ));
             }
-        })
+
+            Ok(players_who_heard)
+        }
     }
 }
 

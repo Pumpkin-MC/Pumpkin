@@ -118,7 +118,7 @@ impl ThrownItemEntity {
 
 impl ThrownItemEntity {
     /// Process a tick for projectile movement and collisions
-    pub async fn process_tick<'a>(&'a self, caller: &'a Arc<dyn EntityBase>, _server: &'a Server) {
+    pub fn process_tick<'a>(&'a self, caller: &'a Arc<dyn EntityBase>, _server: &'a Server) {
         let entity = self.get_entity();
         let world = entity.world.load();
 
@@ -169,9 +169,7 @@ impl ThrownItemEntity {
         let mut hit = None;
 
         // Block collisions
-        let (block_cols, block_positions) = world
-            .get_block_collisions(search_box, caller.as_ref())
-            .await;
+        let (block_cols, block_positions) = world.get_block_collisions(search_box, caller.as_ref());
         for (idx, bb) in block_cols.iter().enumerate() {
             if let Some(t) = calculate_ray_intersection(&start_pos, &delta, bb)
                 && t < closest_t
@@ -224,8 +222,8 @@ impl ThrownItemEntity {
             }
 
             // Just trigger hit effects and remove
-            caller.on_hit(h).await;
-            entity.remove().await;
+            caller.on_hit(h);
+            entity.remove();
         }
     }
 

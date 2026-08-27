@@ -27,10 +27,10 @@ use pumpkin_util::math::{boundingbox::BoundingBox, position::BlockPos, vector3::
 use rand::RngExt;
 
 use crate::entity::{
-    Entity, EntityBase, NbtFuture,
+    Entity, EntityBase,
     ai::{
         goal::{
-            GoalFuture, active_target::ActiveTargetGoal, chase_player::ChasePlayerGoal,
+            active_target::ActiveTargetGoal, chase_player::ChasePlayerGoal,
             look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal,
             melee_attack::MeleeAttackGoal, pick_up_block::PickUpBlockGoal,
             place_block::PlaceBlockGoal, revenge::RevengeGoal, swim::SwimGoal,
@@ -233,10 +233,7 @@ impl EndermanEntity {
                     origin,
                     new_pos,
                 );
-            tokio::task::block_in_place(|| {
-                tokio::runtime::Handle::current()
-                    .block_on(server.plugin_manager.fire(&server, &mut event));
-            });
+            server.plugin_manager.fire_blocking(&server, &mut event);
             if event.cancelled {
                 return false;
             }
@@ -265,12 +262,17 @@ impl EndermanEntity {
         true
     }
 
-    pub async fn set_target(&self, target: Option<Arc<dyn EntityBase>>) {
-        let mut mob_target = self.mob_entity.target.lock().await;
-        (*mob_target).clone_from(&target);
+    pub fn set_target(&self, target: Option<Arc<dyn EntityBase>>) {
+        let is_some = target.is_some();
+        let mut mob_target = self
+            .mob_entity
+            .target
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        *mob_target = target;
         drop(mob_target);
 
-        if target.is_some() {
+        if is_some {
             self.set_angry(true);
             // Use attribute modifier instead of direct speed arithmetic
             if !self.speed_boosted.swap(true, Ordering::Relaxed) {
@@ -288,8 +290,7 @@ impl EndermanEntity {
                 crate::entity::attributes::send_attribute_updates_for_living(
                     living,
                     vec![Attributes::MOVEMENT_SPEED],
-                )
-                .await;
+                );
             }
         } else {
             self.set_angry(false);
@@ -304,8 +305,7 @@ impl EndermanEntity {
                 crate::entity::attributes::send_attribute_updates_for_living(
                     living,
                     vec![Attributes::MOVEMENT_SPEED],
-                )
-                .await;
+                );
             }
         }
     }
@@ -352,7 +352,7 @@ impl EndermanEntity {
         self.carried_block.load()
     }
 
-    pub async fn is_player_staring(&self, player: &Player) -> bool {
+    pub fn is_player_staring(&self, player: &Player) -> bool {
         let equipment = player.living_entity.entity_equipment.try_lock();
         if let Ok(equipment) = equipment
             && let Some(head_stack) = equipment.equipment.get(&EquipmentSlot::HEAD)
@@ -403,100 +403,69 @@ impl EndermanEntity {
         let player_eye_pos = Vector3::new(player_pos.x, player_eye_y, player_pos.z);
         let world = entity.world.load();
         world
-            .raycast(enderman_eye_pos, player_eye_pos, async |block_pos, w| {
+            .raycast(enderman_eye_pos, player_eye_pos, |block_pos, w| {
                 let state = w.get_block_state(block_pos);
                 state.is_solid()
             })
-            .await
             .is_none()
     }
 }
 
 impl Mob for EndermanEntity {
-    fn mob_write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
-        Box::pin(async {
-            if let Some(block_state) = self.carried_block.load() {
-                nbt.put_int("carriedBlockState", block_state.as_u16() as i32);
-            }
-        })
+    fn mob_write_nbt(&self, nbt: &mut NbtCompound) {
+        if let Some(block_state) = self.carried_block.load() {
+            nbt.put_int("carriedBlockState", block_state.as_u16() as i32);
+        }
     }
 
-    fn mob_read_nbt<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
-        Box::pin(async {
-            if let Some(block_state) = nbt.get_int("carriedBlockState") {
-                self.set_carried_block(BlockStateId::new(block_state as u16));
-            }
-        })
+    fn mob_read_nbt(&self, nbt: &NbtCompound) {
+        if let Some(block_state) = nbt.get_int("carriedBlockState") {
+            self.set_carried_block(BlockStateId::new(block_state as u16));
+        }
     }
 
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
     }
 
-    fn set_mob_target(&self, target: Option<Arc<dyn EntityBase>>) -> GoalFuture<'_, ()> {
-        Box::pin(async move {
-            self.set_target(target).await;
-        })
+    fn set_mob_target(&self, target: Option<Arc<dyn EntityBase>>) {
+        self.set_target(target);
     }
 
     // TODO: sunlight avoidance, carried block drop on death, angerable system, ambient sound override
-    fn mob_tick<'a>(&'a self, _caller: &'a Arc<dyn EntityBase>) -> GoalFuture<'a, ()> {
-        Box::pin(async move {
-            let entity = &self.mob_entity.living_entity.entity;
-            if !entity.is_alive() {
-                return;
-            }
+    fn mob_tick<'a>(&'a self, caller: &'a Arc<dyn EntityBase>) {
+        let entity = &self.mob_entity.living_entity.entity;
+        if !entity.is_alive() {
+            return;
+        }
 
-            let world = entity.world.load();
-            let raining_at_feet = world.is_raining_at(&entity.block_pos.load()).await;
-            let raining_at_head = world
-                .is_raining_at(&entity.bounding_box.load().max_block_pos())
-                .await;
-            if entity.touching_water.load(Ordering::SeqCst) || raining_at_feet || raining_at_head {
-                self.mob_entity
-                    .living_entity
-                    .damage_with_context(self, 1.0, DamageType::DROWN, None, None, None)
-                    .await;
-            }
-
-            // NOTE: Enderman ambient portal particles are intentionally NOT sent server-side.
-            // The vanilla Minecraft client generates these particles locally in the entity
-            // renderer. Sending them from the server would cause duplicate particles and
-            // massive network overhead (2 packets/tick/enderman = 40 packets/sec/enderman).
-        })
+        let world = entity.world.load();
+        let raining_at_feet = world.is_raining_at(&entity.block_pos.load());
+        let raining_at_head = world.is_raining_at(&entity.bounding_box.load().max_block_pos());
+        if entity.touching_water.load(Ordering::SeqCst) || raining_at_feet || raining_at_head {
+            caller.damage(caller.as_ref(), 1.0, DamageType::DROWN);
+        }
     }
 
-    fn pre_damage<'a>(
-        &'a self,
-        damage_type: DamageType,
-        _source: Option<&'a dyn EntityBase>,
-    ) -> GoalFuture<'a, bool> {
+    fn pre_damage(&self, damage_type: DamageType, _source: Option<&dyn EntityBase>) -> bool {
         let is_projectile = is_projectile_damage(damage_type);
-        Box::pin(async move {
-            if is_projectile {
-                for _ in 0..64 {
-                    if self.teleport_randomly() {
-                        return false;
-                    }
+        if is_projectile {
+            for _ in 0..64 {
+                if self.teleport_randomly() {
+                    return false;
                 }
             }
-            true
-        })
+        }
+        true
     }
 
-    fn on_damage<'a>(
-        &'a self,
-        _damage_type: DamageType,
-        source: Option<&'a dyn EntityBase>,
-    ) -> GoalFuture<'a, ()> {
-        Box::pin(async move {
-            if source.is_some_and(|s| s.get_living_entity().is_some()) {
-                return;
-            }
-            let should_teleport = self.get_random().random_range(0..10) != 0;
-            if should_teleport {
-                self.teleport_randomly();
-            }
-        })
+    fn on_damage(&self, _damage_type: DamageType, source: Option<&dyn EntityBase>) {
+        if source.is_some_and(|s| s.get_living_entity().is_some()) {
+            return;
+        }
+        let should_teleport = self.get_random().random_range(0..10) != 0;
+        if should_teleport {
+            self.teleport_randomly();
+        }
     }
 }

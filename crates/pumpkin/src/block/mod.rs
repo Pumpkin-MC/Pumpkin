@@ -8,7 +8,6 @@ use crate::entity::experience_orb::ExperienceOrbEntity;
 use crate::entity::player::Player;
 use crate::world::World;
 use crate::world::loot::{LootContextParameters, LootTableExt};
-use std::pin::Pin;
 use std::sync::Arc;
 
 pub mod blocks;
@@ -36,8 +35,6 @@ pub trait BlockMetadata {
 pub trait FluidMetadata {
     fn ids() -> Box<[u16]>;
 }
-
-pub type BlockFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 
 pub(crate) fn stop_vertical_movement_after_fall(entity: &dyn EntityBase) {
     let entity = entity.get_entity();
@@ -73,56 +70,40 @@ pub trait BlockBehaviour: Send + Sync {
         true
     }
 
-    fn perform_bonemeal<'a>(&'a self, _args: BonemealArgs<'a>) -> BlockFuture<'a, ()> {
-        Box::pin(async {})
+    fn perform_bonemeal(&self, _args: BonemealArgs<'_>) {}
+
+    fn normal_use(&self, _args: NormalUseArgs<'_>) -> BlockActionResult {
+        BlockActionResult::Pass
     }
 
-    fn normal_use<'a>(&'a self, _args: NormalUseArgs<'a>) -> BlockFuture<'a, BlockActionResult> {
-        Box::pin(async move { BlockActionResult::Pass })
+    fn use_with_item(&self, _args: UseWithItemArgs<'_>) -> BlockActionResult {
+        BlockActionResult::PassToDefaultBlockAction
     }
 
-    fn use_with_item<'a>(
-        &'a self,
-        _args: UseWithItemArgs<'a>,
-    ) -> BlockFuture<'a, BlockActionResult> {
-        Box::pin(async move { BlockActionResult::PassToDefaultBlockAction })
-    }
-
-    fn on_entity_collision<'a>(&'a self, _args: OnEntityCollisionArgs<'a>) -> BlockFuture<'a, ()> {
-        Box::pin(async {})
-    }
+    fn on_entity_collision(&self, _args: OnEntityCollisionArgs<'_>) {}
 
     /// Called when an entity is standing on / walking over the top face of this block.
-    fn on_entity_step<'a>(&'a self, _args: OnEntityStepArgs<'a>) -> BlockFuture<'a, ()> {
-        Box::pin(async {})
-    }
+    fn on_entity_step(&self, _args: OnEntityStepArgs<'_>) {}
 
     fn should_drop_items_on_explosion(&self) -> bool {
         true
     }
 
-    fn explode<'a>(&'a self, _args: ExplodeArgs<'a>) -> BlockFuture<'a, ()> {
-        Box::pin(async {})
-    }
+    fn explode(&self, _args: ExplodeArgs<'_>) {}
 
     /// Handles the block event, which is an event specific to a block with an integer ID and data.
     ///
     /// returns whether the event was handled successfully
-    fn on_synced_block_event<'a>(
-        &'a self,
-        _args: OnSyncedBlockEventArgs<'a>,
-    ) -> BlockFuture<'a, bool> {
-        Box::pin(async move { false })
+    fn on_synced_block_event(&self, _args: OnSyncedBlockEventArgs<'_>) -> bool {
+        false
     }
 
     /// getPlacementState in source code
-    fn on_place<'a>(&'a self, args: OnPlaceArgs<'a>) -> BlockFuture<'a, BlockStateId> {
-        Box::pin(async move { args.block.default_state.id })
+    fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
+        args.block.default_state.id
     }
 
-    fn random_tick<'a>(&'a self, _args: RandomTickArgs<'a>) -> BlockFuture<'a, ()> {
-        Box::pin(async {})
-    }
+    fn random_tick(&self, _args: RandomTickArgs<'_>) {}
 
     fn can_place_at(&self, _args: CanPlaceAtArgs<'_>) -> bool {
         true
@@ -133,99 +114,61 @@ pub trait BlockBehaviour: Send + Sync {
     }
 
     /// onBlockAdded in source code
-    fn placed<'a>(&'a self, _args: PlacedArgs<'a>) -> BlockFuture<'a, ()> {
-        Box::pin(async {})
+    fn placed(&self, _args: PlacedArgs<'_>) {}
+
+    fn player_placed(&self, _args: PlayerPlacedArgs<'_>) {}
+
+    fn on_landed_upon(&self, args: OnLandedUponArgs<'_>) {
+        if let Some(living) = args.entity.get_living_entity() {
+            living.handle_fall_damage(args.entity, args.fall_distance, 1.0);
+        }
     }
 
-    fn player_placed<'a>(&'a self, _args: PlayerPlacedArgs<'a>) -> BlockFuture<'a, ()> {
-        Box::pin(async {})
+    fn update_entity_movement_after_fall_on(&self, args: UpdateEntityMovementAfterFallOnArgs<'_>) {
+        stop_vertical_movement_after_fall(args.entity);
     }
 
-    fn on_landed_upon<'a>(&'a self, args: OnLandedUponArgs<'a>) -> BlockFuture<'a, ()> {
-        Box::pin(async move {
-            if let Some(living) = args.entity.get_living_entity() {
-                living
-                    .handle_fall_damage(args.entity, args.fall_distance, 1.0)
-                    .await;
-            }
-        })
-    }
+    fn broken(&self, _args: BrokenArgs<'_>) {}
 
-    fn update_entity_movement_after_fall_on<'a>(
-        &'a self,
-        args: UpdateEntityMovementAfterFallOnArgs<'a>,
-    ) -> BlockFuture<'a, ()> {
-        Box::pin(async move {
-            stop_vertical_movement_after_fall(args.entity);
-        })
-    }
-
-    fn broken<'a>(&'a self, _args: BrokenArgs<'a>) -> BlockFuture<'a, ()> {
-        Box::pin(async {})
-    }
-
-    fn on_neighbor_update<'a>(&'a self, _args: OnNeighborUpdateArgs<'a>) -> BlockFuture<'a, ()> {
-        Box::pin(async {})
-    }
+    fn on_neighbor_update(&self, _args: OnNeighborUpdateArgs<'_>) {}
 
     /// Called if a block state is replaced or it replaces another state
-    fn prepare<'a>(&'a self, _args: PrepareArgs<'a>) -> BlockFuture<'a, ()> {
-        Box::pin(async {})
+    fn prepare(&self, _args: PrepareArgs<'_>) {}
+
+    fn get_state_for_neighbor_update(
+        &self,
+        args: GetStateForNeighborUpdateArgs<'_>,
+    ) -> BlockStateId {
+        args.state_id
     }
 
-    fn get_state_for_neighbor_update<'a>(
-        &'a self,
-        args: GetStateForNeighborUpdateArgs<'a>,
-    ) -> BlockFuture<'a, BlockStateId> {
-        Box::pin(async move { args.state_id })
-    }
+    fn on_scheduled_tick(&self, _args: OnScheduledTickArgs<'_>) {}
 
-    fn on_scheduled_tick<'a>(&'a self, _args: OnScheduledTickArgs<'a>) -> BlockFuture<'a, ()> {
-        Box::pin(async {})
-    }
-
-    fn on_state_replaced<'a>(&'a self, _args: OnStateReplacedArgs<'a>) -> BlockFuture<'a, ()> {
-        Box::pin(async {})
-    }
+    fn on_state_replaced(&self, _args: OnStateReplacedArgs<'_>) {}
 
     // --- Redstone/Comparator Methods ---
 
     /// Sides where redstone connects to
-    fn emits_redstone_power<'a>(
-        &'a self,
-        _args: EmitsRedstonePowerArgs<'a>,
-    ) -> BlockFuture<'a, bool> {
-        Box::pin(async move { false })
+    fn emits_redstone_power(&self, _args: EmitsRedstonePowerArgs<'_>) -> bool {
+        false
     }
 
     /// Weak redstone power, aka. block that should be powered needs to be directly next to the source block
-    fn get_weak_redstone_power<'a>(
-        &'a self,
-        _args: GetRedstonePowerArgs<'a>,
-    ) -> BlockFuture<'a, u8> {
-        Box::pin(async move { 0 })
+    fn get_weak_redstone_power(&self, _args: GetRedstonePowerArgs<'_>) -> u8 {
+        0
     }
 
     /// Strong redstone power. this can power a block that then gives power
-    fn get_strong_redstone_power<'a>(
-        &'a self,
-        _args: GetRedstonePowerArgs<'a>,
-    ) -> BlockFuture<'a, u8> {
-        Box::pin(async move { 0 })
+    fn get_strong_redstone_power(&self, _args: GetRedstonePowerArgs<'_>) -> u8 {
+        0
     }
 
-    fn get_comparator_output<'a>(
-        &'a self,
-        _args: GetComparatorOutputArgs<'a>,
-    ) -> BlockFuture<'a, Option<u8>> {
-        Box::pin(async move { None })
+    fn get_comparator_output(&self, _args: GetComparatorOutputArgs<'_>) -> Option<u8> {
+        None
     }
 
-    fn get_inside_collision_shape<'a>(
-        &'a self,
-        _args: GetInsideCollisionShapeArgs<'a>,
-    ) -> BlockFuture<'a, BoundingBox> {
-        Box::pin(async move { BoundingBox::full_block() })
+    fn get_inside_collision_shape(&self, _args: GetInsideCollisionShapeArgs<'_>) -> BoundingBox {
+        BoundingBox::full_block()
     }
 
     fn mirror(&self, block: &Block, state_id: BlockStateId, mirror: Mirror) -> &'static BlockState {
@@ -458,7 +401,7 @@ pub struct BlockEvent {
     pub data: u8,
 }
 
-pub async fn drop_loot(
+pub fn drop_loot(
     world: &Arc<World>,
     block: &Block,
     pos: &BlockPos,
@@ -476,11 +419,11 @@ pub async fn drop_loot(
                 cancelled: false,
             };
             if let Some(server) = world.server.upgrade() {
-                server.plugin_manager.fire(&server, &mut event).await;
+                server.plugin_manager.fire_blocking(&server, &mut event);
             }
             if !event.cancelled {
                 for stack in event.items {
-                    world.drop_stack(pos, stack).await;
+                    world.drop_stack(pos, stack);
                 }
             }
         }
@@ -497,33 +440,29 @@ pub async fn drop_loot(
                 exp: amount,
             };
             if let Some(server) = world.server.upgrade() {
-                server.plugin_manager.fire(&server, &mut event).await;
+                server.plugin_manager.fire_blocking(&server, &mut event);
             }
             if event.exp > 0 {
-                ExperienceOrbEntity::spawn(world, pos.to_f64(), event.exp as u32).await;
+                ExperienceOrbEntity::spawn(world, pos.to_f64(), event.exp as u32);
             }
         }
     }
 }
 
-pub async fn calc_block_breaking(
-    player: &Player,
-    state: &BlockState,
-    block: &'static Block,
-) -> f32 {
+pub fn calc_block_breaking(player: &Player, state: &BlockState, block: &'static Block) -> f32 {
     let hardness = state.hardness;
     #[expect(clippy::float_cmp)]
     if hardness == -1.0 {
         // unbreakable
         return 0.0;
     }
-    let i = if player.can_harvest(state, block).await {
+    let i = if player.can_harvest(state, block) {
         30.0
     } else {
         100.0
     };
 
-    player.get_mining_speed(block).await / hardness / i
+    player.get_mining_speed(block) / hardness / i
 }
 
 #[derive(PartialEq, Eq, Debug)]
@@ -546,9 +485,7 @@ impl BlockIsReplacing {
     }
 }
 
-pub async fn calculate_comparator_output(
-    inventory: &dyn pumpkin_world::inventory::Inventory,
-) -> u8 {
+pub fn calculate_comparator_output(inventory: &dyn pumpkin_world::inventory::Inventory) -> u8 {
     let size = inventory.size();
     if size == 0 {
         return 0;
@@ -556,7 +493,7 @@ pub async fn calculate_comparator_output(
     let mut fill_sum = 0.0;
     let mut non_empty_count = 0;
     for i in 0..size {
-        let stack = inventory.get_stack(i).await;
+        let stack = inventory.get_stack(i);
         if !stack.is_empty() {
             let max_stack = stack.get_max_stack_size() as f32;
             let count = stack.item_count as f32;

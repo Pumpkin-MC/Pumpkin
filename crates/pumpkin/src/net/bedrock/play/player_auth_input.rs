@@ -21,7 +21,7 @@ impl BedrockClient {
         let entity = player.get_entity();
         let on_ground = packet.input_data.get(InputData::VerticalCollision as usize)
             && packet.delta.y < 0.0
-            && !entity.has_vehicle().await;
+            && !entity.has_vehicle();
         entity.on_ground.store(on_ground, Ordering::Relaxed);
 
         let new_pos = packet
@@ -90,7 +90,7 @@ impl BedrockClient {
                     ),
                 );
             } else if pos_changed && rot_changed {
-                world.broadcast_packet_except_editioned_sync(
+                world.broadcast_packet_except_editioned(
                     &[player.gameprofile.id],
                     &pumpkin_protocol::java::client::play::CUpdateEntityPosRot::new(
                         player.entity_id().into(),
@@ -106,7 +106,7 @@ impl BedrockClient {
                     &bedrock_move_packet,
                 );
             } else if pos_changed {
-                world.broadcast_packet_except_editioned_sync(
+                world.broadcast_packet_except_editioned(
                     &[player.gameprofile.id],
                     &pumpkin_protocol::java::client::play::CUpdateEntityPos::new(
                         player.entity_id().into(),
@@ -120,7 +120,7 @@ impl BedrockClient {
                     &bedrock_move_packet,
                 );
             } else if rot_changed {
-                world.broadcast_packet_except_editioned_sync(
+                world.broadcast_packet_except_editioned(
                     &[player.gameprofile.id],
                     &pumpkin_protocol::java::client::play::CUpdateEntityRot::new(
                         player.entity_id().into(),
@@ -152,54 +152,67 @@ impl BedrockClient {
         let input_data = packet.input_data;
 
         if input_data.get(InputData::StartSprinting as usize) {
-            entity.set_sprinting(true).await;
+            entity.set_sprinting(true);
         } else if input_data.get(InputData::StopSprinting as usize) {
-            entity.set_sprinting(false).await;
+            entity.set_sprinting(false);
         }
 
         if input_data.get(InputData::StartSneaking as usize) {
-            entity.set_sneaking(true).await;
+            entity.set_sneaking(true);
         } else if input_data.get(InputData::StopSneaking as usize) {
-            entity.set_sneaking(false).await;
+            entity.set_sneaking(false);
         }
 
         if input_data.get(InputData::StartCrawling as usize) {
             entity.set_pose(EntityPose::Swimming);
         } else if input_data.get(InputData::StopCrawling as usize) {
-            player.update_player_pose().await;
+            player.update_player_pose();
         }
 
         if input_data.get(InputData::StartFlying as usize) {
-            let flying = { player.abilities.lock().await.flying };
+            let flying = {
+                player
+                    .abilities
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .flying
+            };
             if !flying {
                 send_cancellable! {{
                     server;
                     PlayerToggleFlightEvent::new(player.clone(), true);
                     'after: {
+                        player.living_entity.fall_distance.store(0.0);
                         {
-                            player.abilities.lock().await.flying = true;
+                            player.abilities.lock().unwrap_or_else(std::sync::PoisonError::into_inner).flying = true;
                         };
-                        player.send_abilities_update().await;
+                        player.send_abilities_update();
                     }
                     'cancelled: {
-                        player.send_abilities_update().await;
+                        player.send_abilities_update();
                     }
                 }}
             }
         } else if input_data.get(InputData::StopFlying as usize) {
-            let flying = { player.abilities.lock().await.flying };
+            let flying = {
+                player
+                    .abilities
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .flying
+            };
             if flying {
                 send_cancellable! {{
                     server;
                     PlayerToggleFlightEvent::new(player.clone(), false);
                     'after: {
                         {
-                            player.abilities.lock().await.flying = false;
+                            player.abilities.lock().unwrap_or_else(std::sync::PoisonError::into_inner).flying = false;
                         };
-                        player.send_abilities_update().await;
+                        player.send_abilities_update();
                     }
                     'cancelled: {
-                        player.send_abilities_update().await;
+                        player.send_abilities_update();
                     }
                 }}
             }

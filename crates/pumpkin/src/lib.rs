@@ -306,9 +306,15 @@ impl PumpkinServer {
         // Ticker
         {
             let ticker_server = server.clone();
-            server.spawn_task(async move {
-                Ticker::run(&ticker_server).await;
-            });
+            if let Err(err) = std::thread::Builder::new()
+                .name("Server-Ticker".into())
+                .spawn(move || {
+                    Ticker::run(&ticker_server);
+                })
+            {
+                error!("Failed to spawn Server-Ticker thread: {err}");
+                std::process::exit(1);
+            }
         };
 
         let (bedrock_status, ice_socket) = Self::bind_bedrock_status(&server).await;
@@ -489,9 +495,7 @@ impl PumpkinServer {
 
         let kick_message = TextComponent::text("Server stopped");
         for player in self.server.get_all_players() {
-            player
-                .kick(DisconnectReason::Shutdown, kick_message.clone())
-                .await;
+            player.kick(DisconnectReason::Shutdown, &kick_message);
         }
 
         info!("Ending player tasks");
@@ -723,14 +727,10 @@ fn setup_stdin_console(server: Arc<Server>) {
             let mut event = ServerCommandEvent::new(command.clone());
             server.plugin_manager.fire(&server, &mut event).await;
             if !event.cancelled {
-                server
-                    .command_dispatcher
-                    .load()
-                    .handle_command(
-                        &command::CommandSender::Console.into_source(&server).await,
-                        command.as_str(),
-                    )
-                    .await;
+                server.command_dispatcher.load().handle_command(
+                    &command::CommandSender::Console.into_source(&server),
+                    command.as_str(),
+                );
             }
         }
     });
@@ -795,14 +795,10 @@ fn setup_console(mut rl: Editor<PumpkinCommandCompleter, FileHistory>, server: A
                 let mut event = ServerCommandEvent::new(line.clone());
                 server.plugin_manager.fire(&server, &mut event).await;
                 if !event.cancelled {
-                    server
-                        .command_dispatcher
-                        .load()
-                        .handle_command(
-                            &command::CommandSender::Console.into_source(&server).await,
-                            &line,
-                        )
-                        .await;
+                    server.command_dispatcher.load().handle_command(
+                        &command::CommandSender::Console.into_source(&server),
+                        &line,
+                    );
                 }
                 let _ = tx_reply.send(1).await;
             } else {

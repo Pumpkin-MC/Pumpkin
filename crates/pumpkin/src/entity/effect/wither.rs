@@ -1,6 +1,6 @@
 use pumpkin_data::damage::DamageType;
 
-use crate::entity::effect::{EffectFuture, MobEffect};
+use crate::entity::effect::MobEffect;
 use crate::entity::living::LivingEntity;
 
 pub struct WitherMobEffect;
@@ -18,20 +18,14 @@ impl MobEffect for WitherMobEffect {
         }
     }
 
-    fn apply_effect_tick<'a>(
-        &'a self,
-        living: &'a LivingEntity,
-        _amplifier: u8,
-    ) -> EffectFuture<'a, ()> {
-        Box::pin(async move {
-            let dyn_self = living
-                .entity
-                .world
-                .load()
-                .get_entity_by_id(living.entity.entity_id);
-            if let Some(dyn_self) = dyn_self {
-                dyn_self.damage(&*dyn_self, 1.0, DamageType::WITHER).await;
-            }
-        })
+    fn apply_effect_tick(&self, living: &LivingEntity, _amplifier: u8) {
+        let dyn_self = living
+            .entity
+            .world
+            .load()
+            .get_entity_by_id(living.entity.entity_id);
+        if let Some(dyn_self) = dyn_self {
+            dyn_self.damage(&*dyn_self, 1.0, DamageType::WITHER);
+        }
     }
 }

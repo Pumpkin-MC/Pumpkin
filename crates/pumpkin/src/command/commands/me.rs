@@ -17,37 +17,33 @@ const ARG_MESSAGE: &str = "action";
 struct Executor;
 
 impl CommandExecutor for Executor {
-    fn execute<'a>(
-        &'a self,
-        sender: &'a CommandSender,
-        server: &'a crate::server::Server,
-        args: &'a ConsumedArgs<'a>,
-    ) -> CommandResult<'a> {
-        Box::pin(async move {
-            let Some(Arg::Msg(msg)) = args.get(ARG_MESSAGE) else {
-                return Err(InvalidConsumption(Some(ARG_MESSAGE.into())));
-            };
+    fn execute(
+        &self,
+        sender: &CommandSender,
+        server: &crate::server::Server,
+        args: &ConsumedArgs,
+    ) -> CommandResult {
+        let Some(Arg::Msg(msg)) = args.get(ARG_MESSAGE) else {
+            return Err(InvalidConsumption(Some(ARG_MESSAGE.into())));
+        };
 
-            let Some(server_arc) = sender
-                .world_or_first(server)
-                .and_then(|w| w.server.upgrade())
-            else {
-                return Err(CommandError::CommandFailed(TextComponent::text(
-                    "Failed to get server instance",
-                )));
-            };
+        let Some(server_arc) = sender
+            .world_or_first(server)
+            .and_then(|w| w.server.upgrade())
+        else {
+            return Err(CommandError::CommandFailed(TextComponent::text(
+                "Failed to get server instance",
+            )));
+        };
 
-            server_arc
-                .broadcast_message(
-                    &TextComponent::text(msg.clone()),
-                    &TextComponent::text(format!("{sender}")),
-                    EMOTE_COMMAND,
-                    None,
-                )
-                .await;
+        server_arc.broadcast_message(
+            &TextComponent::text(msg.clone()),
+            &TextComponent::text(format!("{sender}")),
+            EMOTE_COMMAND,
+            None,
+        );
 
-            Ok(1)
-        })
+        Ok(1)
     }
 }
 

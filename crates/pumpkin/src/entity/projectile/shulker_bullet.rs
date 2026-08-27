@@ -15,7 +15,7 @@ use rand::RngExt;
 use uuid::Uuid;
 
 use crate::entity::mob::shulker::Axis;
-use crate::entity::{Entity, EntityBase, EntityBaseFuture};
+use crate::entity::{Entity, EntityBase};
 use crate::server::Server;
 
 // Direction ordinal constants
@@ -284,250 +284,59 @@ impl EntityBase for ShulkerBulletEntity {
     }
 
     /// Any hit destroys the bullet (melee, arrow, etc.).
-    fn damage_with_context<'a>(
-        &'a self,
-        _caller: &'a dyn EntityBase,
+    fn damage_with_context(
+        &self,
+        _caller: &dyn EntityBase,
         _amount: f32,
         _damage_type: DamageType,
         _position: Option<Vector3<f64>>,
-        _source: Option<&'a dyn EntityBase>,
-        _cause: Option<&'a dyn EntityBase>,
-    ) -> EntityBaseFuture<'a, bool> {
-        Box::pin(async move {
-            // Guard against double-hit
-            if self.has_hit.swap(true, Ordering::SeqCst) {
-                return false;
-            }
-            let entity = &self.entity;
-            let world = entity.world.load();
-            let pos = entity.pos.load();
-            world.play_sound_fine(
-                Sound::EntityShulkerBulletHit,
-                SoundCategory::Hostile,
-                &pos,
-                1.0,
-                1.0,
-            );
-            world.spawn_particle(
-                pos,
-                Vector3::new(0.2, 0.2, 0.2),
-                0.0,
-                2,
-                Particle::Explosion,
-            );
-            entity.remove().await;
-            true
-        })
+        _source: Option<&dyn EntityBase>,
+        _cause: Option<&dyn EntityBase>,
+    ) -> bool {
+        // Guard against double-hit
+        if self.has_hit.swap(true, Ordering::SeqCst) {
+            return false;
+        }
+        let entity = &self.entity;
+        let world = entity.world.load();
+        let pos = entity.pos.load();
+        world.play_sound_fine(
+            Sound::EntityShulkerBulletHit,
+            SoundCategory::Hostile,
+            &pos,
+            1.0,
+            1.0,
+        );
+        world.spawn_particle(
+            pos,
+            Vector3::new(0.2, 0.2, 0.2),
+            0.0,
+            2,
+            Particle::Explosion,
+        );
+        entity.remove();
+        true
     }
     #[allow(clippy::too_many_lines)]
-    fn tick<'a>(
-        &'a self,
-        caller: &'a Arc<dyn EntityBase>,
-        _server: &'a Server,
-    ) -> EntityBaseFuture<'a, ()> {
-        Box::pin(async move {
-            if self.has_hit.load(Ordering::Relaxed) {
-                return;
-            }
+    fn tick<'a>(&'a self, _caller: &'a Arc<dyn EntityBase>, _server: &'a Server) {
+        if self.has_hit.load(Ordering::Relaxed) {
+            return;
+        }
 
-            // Discard bullet after 150 ticks if it never hits anything
-            let age = self.age.fetch_add(1, Ordering::Relaxed) + 1;
-            if age > 150 {
-                if !self.has_hit.swap(true, Ordering::SeqCst) {
-                    let entity = &self.entity;
-                    let world = entity.world.load();
-                    let pos = entity.pos.load();
-                    world.play_sound_fine(
-                        Sound::EntityShulkerBulletHit,
-                        SoundCategory::Hostile,
-                        &pos,
-                        1.0,
-                        1.0,
-                    );
-                    world.spawn_particle(
-                        pos,
-                        Vector3::new(0.2, 0.2, 0.2),
-                        0.0,
-                        2,
-                        Particle::Explosion,
-                    );
-                    entity.remove().await;
-                }
-                return;
-            }
-
-            let entity = &self.entity;
-            let world = entity.world.load();
-
-            let target_id = self.target_id.load(Ordering::Relaxed);
-            let target_opt = if target_id >= 0 {
-                world.get_entity_by_id(target_id)
-            } else {
-                None
-            };
-
-            // Apply gravity only if target is null, dead, or a spectator.
-            let target_alive = target_opt
-                .as_ref()
-                .is_some_and(|t| t.get_entity().is_alive());
-
-            if !target_alive && target_id >= 0 {
-                // Target ID is set but entity was not found (dead/left the world).
-                // Only permanently clear the target when we're sure it's gone.
-                if let Some(t) = &target_opt {
-                    if !t.get_entity().is_alive() {
-                        self.target_id.store(-1, Ordering::Relaxed);
-                    }
-                } else {
-                    // Not found -> clear target
-                    self.target_id.store(-1, Ordering::Relaxed);
-                }
-            }
-
-            if target_alive {
-                // Accelerate target deltas x 1.025, clamped
-                let mut tdx = (self.target_delta_x.load() * 1.025).clamp(-1.0, 1.0);
-                let mut tdy = (self.target_delta_y.load() * 1.025).clamp(-1.0, 1.0);
-                let mut tdz = (self.target_delta_z.load() * 1.025).clamp(-1.0, 1.0);
-                self.target_delta_x.store(tdx);
-                self.target_delta_y.store(tdy);
-                self.target_delta_z.store(tdz);
-
-                // Clamp initialised sentinel values
-                if tdx.abs() < 1e-10 && tdy.abs() < 1e-10 && tdz.abs() < 1e-10 {
-                    tdx = 0.0;
-                    tdy = 0.0;
-                    tdz = 0.0;
-                }
-
-                // Lerp actual velocity toward steering delta
-                let mut vel = entity.velocity.load();
-                vel.x += (tdx - vel.x) * 0.2;
-                vel.y += (tdy - vel.y) * 0.2;
-                vel.z += (tdz - vel.z) * 0.2;
-                entity.velocity.store(vel);
-            } else {
-                // No live target – apply gravity and drift
-                let mut vel = entity.velocity.load();
-                vel.y -= 0.04;
-                entity.velocity.store(vel);
-            }
-
-            let vel = entity.velocity.load();
-            let old_pos = entity.pos.load();
-            let new_pos = old_pos.add(&vel);
-            entity.set_pos(new_pos);
-
-            // Broadcast position and velocity
-            let chunk_pos = entity.chunk_pos.load();
-            world.broadcast_to_chunk(
-                chunk_pos,
-                &CEntityPositionSync::new(
-                    entity.entity_id.into(),
-                    new_pos,
-                    vel,
-                    entity.yaw.load(),
-                    entity.pitch.load(),
-                    false,
-                ),
-            );
-            world.broadcast_to_chunk(
-                chunk_pos,
-                &CEntityVelocity::new(entity.entity_id.into(), vel),
-            );
-
-            // Check for block collisions
-            let new_bp = entity.block_pos.load();
-            let state = world.get_block_state(&new_bp);
-            if !state.is_air() && state.is_solid() {
-                if !self.has_hit.swap(true, Ordering::SeqCst) {
-                    let pos = entity.pos.load();
-                    world.play_sound_fine(
-                        Sound::EntityShulkerBulletHit,
-                        SoundCategory::Hostile,
-                        &pos,
-                        1.0,
-                        1.0,
-                    );
-                    world.spawn_particle(
-                        pos,
-                        Vector3::new(0.2, 0.2, 0.2),
-                        0.0,
-                        2,
-                        Particle::Explosion,
-                    );
-                    entity.remove().await;
-                }
-                return;
-            }
-
-            // Check for entity collisions
-            let bullet_bb = entity.bounding_box.load().expand(0.1, 0.1, 0.1);
-            let nearby_entities = world.get_entities_at_box(&bullet_bb);
-            let nearby_players = world.get_players_at_box(&bullet_bb);
-            let nearby: Vec<Arc<dyn crate::entity::EntityBase>> = nearby_entities
-                .into_iter()
-                .chain(
-                    nearby_players
-                        .into_iter()
-                        .map(|p| p as Arc<dyn crate::entity::EntityBase>),
-                )
-                .collect();
-            for hit_entity in nearby {
-                let he = hit_entity.get_entity();
-                // Skip self
-                if he.entity_id == entity.entity_id {
-                    continue;
-                }
-                // Never hit the owner shulker
-                if he.entity_id == self.owner_id {
-                    continue;
-                }
-                // Must be alive
-                if !he.is_alive() {
-                    continue;
-                }
-                // Must be a living entity
-                let Some(living) = hit_entity.get_living_entity() else {
-                    continue;
-                };
-                if !living.entity.is_alive() {
-                    continue;
-                }
-
-                if self.has_hit.swap(true, Ordering::SeqCst) {
-                    break;
-                }
-
-                // Deal 4 (MOB_PROJECTILE) damage
-                let owner_arc = world.get_entity_by_id(self.owner_id);
-                let damaged = hit_entity
-                    .damage_with_context(
-                        hit_entity.as_ref(),
-                        4.0,
-                        DamageType::MOB_PROJECTILE,
-                        None,
-                        owner_arc.as_deref(),
-                        Some(caller.as_ref()),
-                    )
-                    .await;
-
-                if damaged {
-                    // Apply levitation for 200 ticks
-                    living
-                        .add_effect(Effect {
-                            effect_type: &StatusEffect::LEVITATION,
-                            duration: 200,
-                            amplifier: 0,
-                            ambient: false,
-                            show_particles: true,
-                            show_icon: true,
-                            blend: false,
-                        })
-                        .await;
-                }
-
+        // Discard bullet after 150 ticks if it never hits anything
+        let age = self.age.fetch_add(1, Ordering::Relaxed) + 1;
+        if age > 150 {
+            if !self.has_hit.swap(true, Ordering::SeqCst) {
+                let entity = &self.entity;
+                let world = entity.world.load();
                 let pos = entity.pos.load();
+                world.play_sound_fine(
+                    Sound::EntityShulkerBulletHit,
+                    SoundCategory::Hostile,
+                    &pos,
+                    1.0,
+                    1.0,
+                );
                 world.spawn_particle(
                     pos,
                     Vector3::new(0.2, 0.2, 0.2),
@@ -535,52 +344,231 @@ impl EntityBase for ShulkerBulletEntity {
                     2,
                     Particle::Explosion,
                 );
-                entity.remove().await;
+                entity.remove();
+            }
+            return;
+        }
+
+        let entity = &self.entity;
+        let world = entity.world.load();
+
+        let target_id = self.target_id.load(Ordering::Relaxed);
+        let target_opt = if target_id >= 0 {
+            world.get_entity_by_id(target_id)
+        } else {
+            None
+        };
+
+        // Apply gravity only if target is null, dead, or a spectator.
+        let target_alive = target_opt
+            .as_ref()
+            .is_some_and(|t| t.get_entity().is_alive());
+
+        if !target_alive && target_id >= 0 {
+            // Target ID is set but entity was not found (dead/left the world).
+            // Only permanently clear the target when we're sure it's gone.
+            if let Some(t) = &target_opt {
+                if !t.get_entity().is_alive() {
+                    self.target_id.store(-1, Ordering::Relaxed);
+                }
+            } else {
+                // Not found -> clear target
+                self.target_id.store(-1, Ordering::Relaxed);
+            }
+        }
+
+        if target_alive {
+            // Accelerate target deltas x 1.025, clamped
+            let mut tdx = (self.target_delta_x.load() * 1.025).clamp(-1.0, 1.0);
+            let mut tdy = (self.target_delta_y.load() * 1.025).clamp(-1.0, 1.0);
+            let mut tdz = (self.target_delta_z.load() * 1.025).clamp(-1.0, 1.0);
+            self.target_delta_x.store(tdx);
+            self.target_delta_y.store(tdy);
+            self.target_delta_z.store(tdz);
+
+            // Clamp initialised sentinel values
+            if tdx.abs() < 1e-10 && tdy.abs() < 1e-10 && tdz.abs() < 1e-10 {
+                tdx = 0.0;
+                tdy = 0.0;
+                tdz = 0.0;
+            }
+
+            // Lerp actual velocity toward steering delta
+            let mut vel = entity.velocity.load();
+            vel.x += (tdx - vel.x) * 0.2;
+            vel.y += (tdy - vel.y) * 0.2;
+            vel.z += (tdz - vel.z) * 0.2;
+            entity.velocity.store(vel);
+        } else {
+            // No live target – apply gravity and drift
+            let mut vel = entity.velocity.load();
+            vel.y -= 0.04;
+            entity.velocity.store(vel);
+        }
+
+        let vel = entity.velocity.load();
+        let old_pos = entity.pos.load();
+        let new_pos = old_pos.add(&vel);
+        entity.set_pos(new_pos);
+
+        // Broadcast position and velocity
+        let chunk_pos = entity.chunk_pos.load();
+        world.broadcast_to_chunk(
+            chunk_pos,
+            &CEntityPositionSync::new(
+                entity.entity_id.into(),
+                new_pos,
+                vel,
+                entity.yaw.load(),
+                entity.pitch.load(),
+                false,
+            ),
+        );
+        world.broadcast_to_chunk(
+            chunk_pos,
+            &CEntityVelocity::new(entity.entity_id.into(), vel),
+        );
+
+        // Check for block collisions
+        let new_bp = entity.block_pos.load();
+        let state = world.get_block_state(&new_bp);
+        if !state.is_air() && state.is_solid() {
+            if !self.has_hit.swap(true, Ordering::SeqCst) {
+                let pos = entity.pos.load();
+                world.play_sound_fine(
+                    Sound::EntityShulkerBulletHit,
+                    SoundCategory::Hostile,
+                    &pos,
+                    1.0,
+                    1.0,
+                );
+                world.spawn_particle(
+                    pos,
+                    Vector3::new(0.2, 0.2, 0.2),
+                    0.0,
+                    2,
+                    Particle::Explosion,
+                );
+                entity.remove();
+            }
+            return;
+        }
+
+        // Check for entity collisions
+        let bullet_bb = entity.bounding_box.load().expand(0.1, 0.1, 0.1);
+        let nearby_entities = world.get_entities_at_box(&bullet_bb);
+        let nearby_players = world.get_players_at_box(&bullet_bb);
+        let nearby: Vec<Arc<dyn crate::entity::EntityBase>> = nearby_entities
+            .into_iter()
+            .chain(
+                nearby_players
+                    .into_iter()
+                    .map(|p| p as Arc<dyn crate::entity::EntityBase>),
+            )
+            .collect();
+        for hit_entity in nearby {
+            let he = hit_entity.get_entity();
+            // Skip self
+            if he.entity_id == entity.entity_id {
+                continue;
+            }
+            // Never hit the owner shulker
+            if he.entity_id == self.owner_id {
+                continue;
+            }
+            // Must be alive
+            if !he.is_alive() {
+                continue;
+            }
+            // Must be a living entity
+            let Some(living) = hit_entity.get_living_entity() else {
+                continue;
+            };
+            if !living.entity.is_alive() {
+                continue;
+            }
+
+            if self.has_hit.swap(true, Ordering::SeqCst) {
                 break;
             }
 
-            if !target_alive || self.has_hit.load(Ordering::Relaxed) {
-                return;
+            // Deal 4 (MOB_PROJECTILE) damage
+            let owner_arc = world.get_entity_by_id(self.owner_id);
+            let damaged = hit_entity.damage_with_context(
+                hit_entity.as_ref(),
+                4.0,
+                DamageType::MOB_PROJECTILE,
+                None,
+                owner_arc.as_deref(),
+                None,
+            );
+
+            if damaged && let Some(living) = hit_entity.get_living_entity() {
+                // Apply levitation for 200 ticks
+                living.add_effect(Effect {
+                    effect_type: &StatusEffect::LEVITATION,
+                    duration: 200,
+                    amplifier: 0,
+                    ambient: false,
+                    show_particles: true,
+                    show_icon: true,
+                    blend: false,
+                });
             }
 
-            let target_pos = target_opt.as_ref().map(|t| t.get_entity().pos.load());
+            let pos = entity.pos.load();
+            world.spawn_particle(
+                pos,
+                Vector3::new(0.2, 0.2, 0.2),
+                0.0,
+                2,
+                Particle::Explosion,
+            );
+            entity.remove();
+            break;
+        }
 
-            let raw_dir = self.current_dir.load(Ordering::Relaxed);
-            let avoid_axis = dir_axis(raw_dir);
+        if !target_alive || self.has_hit.load(Ordering::Relaxed) {
+            return;
+        }
 
-            // Decrement flight-step counter; re-select direction when it hits 0
-            let steps = self.flight_steps.fetch_sub(1, Ordering::Relaxed) - 1;
-            if steps <= 0 {
-                self.select_next_dir(avoid_axis, target_pos);
-            }
+        let target_pos = target_opt.as_ref().map(|t| t.get_entity().pos.load());
 
-            // Check the block immediately ahead.
-            // If it is solid we must re-select; if we've aligned axes with the target we also re-select.
-            let dir = self.current_dir.load(Ordering::Relaxed);
-            if dir != DIR_NONE {
-                let cur_bp = entity.block_pos.load();
-                if !is_empty_block(&world, &cur_bp, dir) {
-                    // Solid obstacle -> navigate around it
-                    self.select_next_dir(dir_axis(dir), target_pos);
-                } else if let Some(tp) = target_pos {
-                    let axis = dir_axis(dir);
-                    let tbp = BlockPos::new(
-                        tp.x.floor() as i32,
-                        tp.y.floor() as i32,
-                        tp.z.floor() as i32,
-                    );
-                    let cur_bp2 = entity.block_pos.load();
-                    let reached = match axis {
-                        0 => cur_bp2.0.x == tbp.0.x,
-                        1 => cur_bp2.0.y == tbp.0.y,
-                        _ => cur_bp2.0.z == tbp.0.z,
-                    };
-                    if reached {
-                        // Aligned on this axis -> switch to next best axis
-                        self.select_next_dir(axis, Some(tp));
-                    }
+        let raw_dir = self.current_dir.load(Ordering::Relaxed);
+        let avoid_axis = dir_axis(raw_dir);
+
+        // Decrement flight-step counter; re-select direction when it hits 0
+        let steps = self.flight_steps.fetch_sub(1, Ordering::Relaxed) - 1;
+        if steps <= 0 {
+            self.select_next_dir(avoid_axis, target_pos);
+        }
+
+        // Check the block immediately ahead.
+        // If it is solid we must re-select; if we've aligned axes with the target we also re-select.
+        let dir = self.current_dir.load(Ordering::Relaxed);
+        if dir != DIR_NONE {
+            let cur_bp = entity.block_pos.load();
+            if !is_empty_block(&world, &cur_bp, dir) {
+                // Solid obstacle -> navigate around it
+                self.select_next_dir(dir_axis(dir), target_pos);
+            } else if let Some(tp) = target_pos {
+                let axis = dir_axis(dir);
+                let tbp = BlockPos::new(
+                    tp.x.floor() as i32,
+                    tp.y.floor() as i32,
+                    tp.z.floor() as i32,
+                );
+                let cur_bp2 = entity.block_pos.load();
+                let reached = match axis {
+                    0 => cur_bp2.0.x == tbp.0.x,
+                    1 => cur_bp2.0.y == tbp.0.y,
+                    _ => cur_bp2.0.z == tbp.0.z,
+                };
+                if reached {
+                    // Aligned on this axis -> switch to next best axis
+                    self.select_next_dir(axis, Some(tp));
                 }
             }
-        })
+        }
     }
 }

@@ -18,24 +18,19 @@ impl GetClientSideArgParser for BoolArgConsumer {
 }
 
 impl ArgumentConsumer for BoolArgConsumer {
-    fn consume<'a, 'b>(
+    fn consume<'a>(
         &'a self,
         _sender: &'a CommandSender,
         _server: &'a Server,
-        args: &'b mut RawArgs<'a>,
+        args: &mut RawArgs<'a>,
     ) -> ConsumeResult<'a> {
         let s_opt: Option<&'a str> = args.pop().map(|arg| arg.value);
 
-        let result: Option<Arg<'a>> = s_opt.map_or_else(
-            || None,
-            |s| match s {
-                "false" => Some(Arg::Bool(false)),
-                "true" => Some(Arg::Bool(true)),
-                _ => None,
-            },
-        );
-
-        Box::pin(async move { result })
+        s_opt.and_then(|s| match s {
+            "false" => Some(Arg::Bool(false)),
+            "true" => Some(Arg::Bool(true)),
+            _ => None,
+        })
     }
 }
 

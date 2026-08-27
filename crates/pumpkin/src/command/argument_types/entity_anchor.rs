@@ -9,7 +9,6 @@ use crate::entity::Entity;
 use pumpkin_data::translation;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::text::TextComponent;
-use std::pin::Pin;
 
 pub const INVALID_ERROR_TYPE: CommandErrorType<1> = CommandErrorType::new(
     translation::java::ARGUMENT_ANCHOR_INVALID,
@@ -37,12 +36,12 @@ impl ArgumentType for EntityAnchorArgumentType {
         JavaClientArgumentType::EntityAnchor
     }
 
-    fn list_suggestions<'a>(
-        &'a self,
-        _context: &'a CommandContext,
+    fn list_suggestions(
+        &self,
+        _context: &CommandContext,
         builder: SuggestionsBuilder,
-    ) -> Pin<Box<dyn Future<Output = Suggestions> + Send + 'a>> {
-        Box::pin(async move { builder.filter_and_suggest(&["eyes", "feet"]).build() })
+    ) -> Suggestions {
+        builder.filter_and_suggest(&["eyes", "feet"]).build()
     }
 
     fn examples(&self) -> Vec<String> {

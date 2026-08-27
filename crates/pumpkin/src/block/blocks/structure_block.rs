@@ -1,5 +1,5 @@
 use crate::block::registry::BlockActionResult;
-use crate::block::{BlockBehaviour, BlockFuture, NormalUseArgs, OnPlaceArgs};
+use crate::block::{BlockBehaviour, NormalUseArgs, OnPlaceArgs};
 
 use pumpkin_data::BlockStateId;
 use pumpkin_data::block_properties::{BlockProperties, StructureBlockLikeProperties};
@@ -10,15 +10,13 @@ use pumpkin_util::PermissionLvl;
 pub struct StructureBlock;
 
 impl BlockBehaviour for StructureBlock {
-    fn on_place<'a>(&'a self, args: OnPlaceArgs<'a>) -> BlockFuture<'a, BlockStateId> {
-        Box::pin(async move {
-            let props = StructureBlockLikeProperties::default(args.block);
-            props.to_state_id(args.block)
-        })
+    fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
+        let props = StructureBlockLikeProperties::default(args.block);
+        props.to_state_id(args.block)
     }
 
-    fn normal_use<'a>(&'a self, args: NormalUseArgs<'a>) -> BlockFuture<'a, BlockActionResult> {
-        Box::pin(async move {
+    fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
+        {
             if args.player.permission_lvl.load() < PermissionLvl::Two {
                 return BlockActionResult::Pass;
             }
@@ -28,6 +26,6 @@ impl BlockBehaviour for StructureBlock {
             args.world.update_block_entity(&block_entity);
 
             BlockActionResult::Success
-        })
+        }
     }
 }

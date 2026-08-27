@@ -57,7 +57,10 @@ impl AdvancementManager {
         }
         let mut to_write = Vec::with_capacity(players.len());
         for player in players {
-            let guard = player.advancements.lock().await;
+            let guard = player
+                .advancements
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
             let json = serde_json::to_string_pretty(&*guard).map_err(AdvancementDataError::Json)?;
             to_write.push((guard.path.clone(), json));
         }
