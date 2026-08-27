@@ -98,7 +98,8 @@ impl BlockBehaviour for RepeaterBlock {
         let props = RepeaterProperties::from_state_id(state.id, args.block);
         Self::on_use(props, args.world, *args.position, args.block);
 
-        BlockActionResult::SuccessServer
+        // Vanilla `RepeaterBlock.useWithoutItem`: `InteractionResult.SUCCESS`.
+        BlockActionResult::Success
     }
 
     fn get_weak_redstone_power(&self, args: GetRedstonePowerArgs<'_>) -> u8 {
@@ -219,7 +220,8 @@ impl RepeaterBlock {
         let mut props = props;
         props.delay = if props.delay == 4 { 1 } else { props.delay + 1 };
         let state = props.to_state_id(block);
-        world.set_block_state(&block_pos, state, BlockFlags::empty());
+        // Vanilla `RepeaterBlock.useWithoutItem`: `setBlock(..., 3)` (`NOTIFY_ALL`).
+        world.set_block_state(&block_pos, state, BlockFlags::NOTIFY_ALL);
     }
 
     fn is_locked(

@@ -176,6 +176,24 @@ impl JavaClient {
         self.suspend_flushing.store(true, Ordering::Release);
     }
 
+    /// Vanilla `ServerGamePacketListenerImpl.tick` `ClientboundBlockChangedAckPacket`.
+    ///
+    /// Must run after `ChunkHolder.broadcastChanges` (`flush_block_updates`) and
+    /// on the normal outgoing queue. The client
+    /// `BlockStatePredictionHandler` keeps the predicted block (repeater delay)
+    /// until this ack. Acking first reapplies the pre-click `serverVerifiedState`;
+    /// the later `CBlockUpdate` then snaps to the new delay. `send_packet` is
+    /// high-priority and flushes immediately, so it can also overtake a queued
+    /// `CBlockUpdate`.
+    pub fn acknowledge_pending_block_changes(&self) {
+        let seq = self.packet_sequence.swap(-1, Ordering::Relaxed);
+        if seq != -1
+            && let Ok(data) = self.serialize_packet(&CAcknowledgeBlockChange::new(seq.into()))
+        {
+            self.try_enqueue_packet(data);
+        }
+    }
+
     /// Vanilla `ServerCommonPacketListenerImpl.resumeFlushing`: lift the hold and
     /// enqueue a tick-end flush barrier.
     pub fn resume_flushing(&self) {
@@ -189,7 +207,6 @@ impl JavaClient {
         self.player.store(Arc::new(Some(player)));
     }
 
-    #[expect(clippy::too_many_lines)]
     pub async fn progress_player_packets(&self, player: &Arc<Player>, server: &Arc<Server>) {
         let Some(mut network_reader) = self
             .network_reader
@@ -300,14 +317,9 @@ impl JavaClient {
                         }
                     }
 
-                    // ServerGamePacketListenerImpl acknowledges the sequence at the end of the
-                    // packet that carried it. Until we do, the client keeps predicting the block
-                    // it interacted with and drops our updates for that position
-                    let seq = self.packet_sequence.swap(-1, Ordering::Relaxed);
-                    if seq != -1 {
-                        self.send_packet(&CAcknowledgeBlockChange::new(seq.into()))
-                            .await;
-                    }
+                    // Sequence is recorded in `update_sequence`. Ack after
+                    // `broadcastChanges` (`Server::acknowledge_player_block_changes`),
+                    // not here: see `acknowledge_pending_block_changes`.
                 }
             }
         }

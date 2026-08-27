@@ -1091,7 +1091,29 @@ impl Server {
         } else {
             self.tick_players_and_network();
         }
+        // Vanilla `tickChildren`: `level.tick` (`broadcastChanges`) then
+        // `tickConnection` / `ServerGamePacketListenerImpl.tick` (block-changed
+        // ack). A second flush picks up `setBlock` from packets that arrived
+        // after this tick's in-world flush; do not `promote_deferred` here
+        // (piston dest `CBlockUpdate` stays on the next tick).
+        self.flush_pending_block_updates();
+        self.acknowledge_player_block_changes();
         self.resume_player_flushes();
+    }
+
+    fn flush_pending_block_updates(&self) {
+        for world in self.worlds.load().iter() {
+            world.flush_block_updates();
+        }
+    }
+
+    /// Vanilla `ServerGamePacketListenerImpl.tick` `ClientboundBlockChangedAckPacket`.
+    fn acknowledge_player_block_changes(&self) {
+        self.for_each_player(|player| {
+            if let Some(java) = player.client.java() {
+                java.acknowledge_pending_block_changes();
+            }
+        });
     }
 
     /// Ticks essential server functions that must run even when the game is frozen.
