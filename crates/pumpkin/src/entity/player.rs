@@ -4011,7 +4011,10 @@ impl Player {
         }
 
         let properties = {
-            let mut applied = self.held_item_attribute_modifiers.lock().unwrap();
+            let mut applied = self
+                .held_item_attribute_modifiers
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
             if *applied == current {
                 return;
             }
@@ -4247,7 +4250,10 @@ impl Player {
     pub async fn respawn(self: &Arc<Self>) {
         // The client rebuilds its attribute state on respawn, so forget what was
         // applied and let the next tick re-sync the held item's modifiers.
-        self.held_item_attribute_modifiers.lock().unwrap().clear();
+        self.held_item_attribute_modifiers
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clear();
         self.world().respawn_player(self, false).await;
     }
 
