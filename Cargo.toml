@@ -6,6 +6,7 @@ members = [
     "crates/pumpkin-codecs",
     "crates/pumpkin-config",
     "crates/pumpkin-data",
+    "crates/pumpkin-gametest",
     "crates/pumpkin-inventory",
     "crates/pumpkin-macros",
     "crates/pumpkin-nbt",

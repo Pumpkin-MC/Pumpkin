@@ -30,6 +30,7 @@ pumpkin-data = { workspace = true, features = ["default"] }
 pumpkin-protocol = { workspace = true, features = ["default"] }
 pumpkin-macros.workspace = true
 pumpkin-codecs.workspace = true
+pumpkin-gametest = { path = "../pumpkin-gametest" }
 
 dashmap.workspace = true
 crossbeam.workspace = true
