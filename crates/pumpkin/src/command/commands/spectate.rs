@@ -105,7 +105,11 @@ impl CommandExecutor for SpectateTargetSelfExecutor {
         let yaw = target_entity.yaw.load();
         let pitch = target_entity.pitch.load();
         player.try_send_client_packet(&CSetCamera::new(target_id.into()));
-        futures::executor::block_on(player.teleport(pos, Some(yaw), Some(pitch), player_world));
+        player.spawn_task(
+            player
+                .clone()
+                .teleport(pos, Some(yaw), Some(pitch), player_world),
+        );
 
         let target_name = target.get_display_name();
         sender.send_message(TextComponent::translate_cross(
@@ -174,12 +178,11 @@ impl CommandExecutor for SpectateTargetOtherExecutor {
             let pitch = target_entity.pitch.load();
             let player_world = player.world();
             player.try_send_client_packet(&CSetCamera::new(target_id.into()));
-            futures::executor::block_on(player.clone().teleport(
-                pos,
-                Some(yaw),
-                Some(pitch),
-                player_world,
-            ));
+            player.spawn_task(
+                player
+                    .clone()
+                    .teleport(pos, Some(yaw), Some(pitch), player_world),
+            );
             succeeded += 1;
         }
 

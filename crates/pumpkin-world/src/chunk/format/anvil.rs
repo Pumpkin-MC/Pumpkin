@@ -8,7 +8,6 @@ use std::{
     io::{Read, SeekFrom, Write},
     marker::PhantomData,
     path::{Path, PathBuf},
-    pin::Pin,
     time::{SystemTime, UNIX_EPOCH},
 };
 use tokio::{
@@ -308,7 +307,7 @@ impl AnvilChunkData {
         }
     }
 
-    async fn from_chunk<S>(
+    fn from_chunk<S>(
         chunk: &S,
         compression: Option<Compression>,
         chunk_config: &AnvilChunkConfig,
@@ -318,7 +317,6 @@ impl AnvilChunkData {
     {
         let raw_bytes = chunk
             .to_bytes()
-            .await
             .map_err(|err| ChunkWritingError::ChunkSerializingError(err.to_string()))?;
 
         let compression = compression.unwrap_or_else(|| chunk_config.compression.algorithm.into());
@@ -498,9 +496,7 @@ impl<S: SingleChunkDataSerializer> Default for AnvilChunkFile<S> {
 }
 
 pub trait SingleChunkDataSerializer: Send + Sync + Sized + Dirtiable + 'static {
-    fn to_bytes(
-        &self,
-    ) -> Pin<Box<dyn Future<Output = Result<Bytes, ChunkSerializingError>> + Send + '_>>;
+    fn to_bytes(&self) -> Result<Bytes, ChunkSerializingError>;
     fn from_bytes(bytes: &Bytes, pos: Vector2<i32>) -> Result<Self, ChunkReadingError>;
     fn position(&self) -> (i32, i32);
 }
@@ -620,8 +616,7 @@ impl<S: SingleChunkDataSerializer + 'static> ChunkSerializer for AnvilChunkFile<
         let compression_type = self.chunks_data[index]
             .as_ref()
             .and_then(|chunk_data| chunk_data.serialized_data.compression);
-        let new_chunk_data =
-            AnvilChunkData::from_chunk(chunk, compression_type, chunk_config).await?;
+        let new_chunk_data = AnvilChunkData::from_chunk(chunk, compression_type, chunk_config)?;
 
         let mut write_action = self.write_action.lock().await;
         if !chunk_config.write_in_place {

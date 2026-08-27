@@ -247,3 +247,53 @@ impl Mob for CreeperEntity {
         true
     }
 }
+
+impl CreeperEntity {
+    pub fn is_charged(&self) -> bool {
+        self.charged.load(Ordering::Relaxed)
+    }
+
+    pub fn set_charged(&self, charged: bool) {
+        self.charged.store(charged, Ordering::Relaxed);
+        let entity = &self.mob_entity.living_entity.entity;
+        entity.send_meta_data(
+            &[Metadata::new(
+                pumpkin_data::tracked_data::creeper::CHARGED,
+                charged,
+            )],
+            None,
+        );
+    }
+
+    pub fn is_ignited(&self) -> bool {
+        self.ignited.load(Ordering::Relaxed)
+    }
+
+    pub fn set_ignited(&self, ignited: bool) {
+        self.ignited.store(ignited, Ordering::Relaxed);
+        let entity = &self.mob_entity.living_entity.entity;
+        entity.send_meta_data(
+            &[Metadata::new(
+                pumpkin_data::tracked_data::creeper::IS_IGNITED,
+                ignited,
+            )],
+            None,
+        );
+    }
+
+    pub fn get_fuse(&self) -> i32 {
+        self.fuse_time.load(Ordering::Relaxed)
+    }
+
+    pub fn set_fuse(&self, fuse: i32) {
+        self.fuse_time.store(fuse, Ordering::Relaxed);
+    }
+
+    pub fn get_explosion_radius(&self) -> i32 {
+        self.explosion_radius.load(Ordering::Relaxed)
+    }
+
+    pub fn set_explosion_radius(&self, radius: i32) {
+        self.explosion_radius.store(radius, Ordering::Relaxed);
+    }
+}

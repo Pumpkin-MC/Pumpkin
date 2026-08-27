@@ -22,6 +22,8 @@ pub mod common;
 #[allow(clippy::unused_async_trait_impl)]
 pub mod context;
 #[allow(clippy::unused_async_trait_impl)]
+pub mod datapack;
+#[allow(clippy::unused_async_trait_impl)]
 pub mod display;
 #[allow(clippy::unused_async_trait_impl)]
 pub mod enchantment;
@@ -34,12 +36,18 @@ pub mod generated_packets;
 pub mod gui;
 #[allow(clippy::unused_async_trait_impl)]
 pub mod i18n;
+#[allow(clippy::unused_async_trait_impl)]
+pub mod inventory;
 pub mod ipc;
 #[allow(clippy::unused_async_trait_impl)]
 pub mod item_stack;
 pub mod java_dialogs;
 #[allow(clippy::unused_async_trait_impl)]
+pub mod living_entity;
+#[allow(clippy::unused_async_trait_impl)]
 pub mod logging;
+#[allow(clippy::unused_async_trait_impl)]
+pub mod mob;
 pub mod permission;
 #[allow(clippy::unused_async_trait_impl)]
 pub mod player;

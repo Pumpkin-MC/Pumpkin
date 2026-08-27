@@ -94,7 +94,7 @@ impl ServerPlayerData {
             }
 
             let storage = self.storage.clone();
-            server.runtime.spawn(async move {
+            tokio::task::spawn_blocking(move || {
                 for (uuid, nbt) in snapshots {
                     if let Err(e) = storage.save_player_data(&uuid, nbt) {
                         error!("Failed to save player data for {uuid}: {e}");

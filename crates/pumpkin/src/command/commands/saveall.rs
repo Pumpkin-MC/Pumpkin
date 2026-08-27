@@ -26,24 +26,28 @@ impl CommandExecutor for SaveAllExecutor {
             false,
         );
 
-        let server = context.server();
-        if let Err(err) = futures::executor::block_on(server.save_all()) {
-            error!("Failed to save server data: {err}");
-            context.source.send_error(TextComponent::translate_cross(
-                translation::java::COMMANDS_SAVE_FAILED,
-                translation::bedrock::COMMANDS_SAVE_FAILED,
-                [],
-            ));
-        } else {
-            context.source.send_feedback(
-                TextComponent::translate_cross(
-                    translation::java::COMMANDS_SAVE_SUCCESS,
-                    translation::bedrock::COMMANDS_SAVE_SUCCESS,
+        let server_arc = context.server().clone();
+        let source = context.source.clone();
+        let runtime = server_arc.runtime.clone();
+        runtime.spawn(async move {
+            if let Err(err) = server_arc.save_all().await {
+                error!("Failed to save server data: {err}");
+                source.send_error(TextComponent::translate_cross(
+                    translation::java::COMMANDS_SAVE_FAILED,
+                    translation::bedrock::COMMANDS_SAVE_FAILED,
                     [],
-                ),
-                true,
-            );
-        }
+                ));
+            } else {
+                source.send_feedback(
+                    TextComponent::translate_cross(
+                        translation::java::COMMANDS_SAVE_SUCCESS,
+                        translation::bedrock::COMMANDS_SAVE_SUCCESS,
+                        [],
+                    ),
+                    true,
+                );
+            }
+        });
 
         Ok(1)
     }

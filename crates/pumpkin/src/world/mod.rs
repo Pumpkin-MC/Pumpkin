@@ -84,8 +84,8 @@ use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::bedrock::client::set_actor_data::{CSetActorData, PropertySyncData};
 use pumpkin_protocol::bedrock::client::start_game::{CStartGame, ServerTelemetryData};
 use pumpkin_protocol::java::client::play::{
-    CBlockUpdate, CChunkBatchEnd, CChunkBatchStart, CChunkData, CDisguisedChatMessage, CExplosion,
-    CLightUpdate, CRespawn, CSetBlockDestroyStage, CWorldEvent, PlayerSpawnData,
+    CBlockUpdate, CDisguisedChatMessage, CExplosion, CRespawn, CSetBlockDestroyStage, CWorldEvent,
+    PlayerSpawnData,
 };
 use pumpkin_protocol::java::client::play::{
     CPlayerSpawnPosition, CRecipeBookAdd, CRecipeBookSettings, CSystemChatMessage,
@@ -511,7 +511,11 @@ impl World {
         let mut nbt = NbtCompound::new();
         entity.write_nbt(&mut nbt);
         let chunk = self.level.get_entity_chunk(current_chunk).await;
-        chunk.data.lock().await.push(nbt);
+        chunk
+            .data
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .push(nbt);
         chunk.mark_dirty(true);
     }
 
@@ -3144,20 +3148,23 @@ impl World {
         if client.version.load() < JavaMinecraftVersion::V_1_20_2
             && client.version.load() >= JavaMinecraftVersion::V_1_13
         {
-            let mut tags = Vec::new();
             let version = client.version.load();
-            for &key in pumpkin_data::tag::RegistryKey::NETWORK_KEYS {
-                if pumpkin_data::tag::get_registry_key_tags(version, key)
-                    .is_some_and(|map| !map.is_empty())
-                {
-                    tags.push(key);
+            if let Ok(Ok(packet_data)) = tokio::task::spawn_blocking(move || {
+                let mut tags = Vec::new();
+                for &key in pumpkin_data::tag::RegistryKey::NETWORK_KEYS {
+                    if pumpkin_data::tag::get_registry_key_tags(version, key)
+                        .is_some_and(|map| !map.is_empty())
+                    {
+                        tags.push(key);
+                    }
                 }
+                let packet = pumpkin_protocol::java::client::play::CUpdateTagsPlay::new(&tags);
+                JavaClient::serialize_packet_for_version(&packet, version)
+            })
+            .await
+            {
+                client.send_packet_now(packet_data).await;
             }
-            client
-                .send_packet(&pumpkin_protocol::java::client::play::CUpdateTagsPlay::new(
-                    &tags,
-                ))
-                .await;
         }
 
         let (position, yaw, pitch) = if player.has_played_before.load(Ordering::Relaxed) {
@@ -3205,19 +3212,7 @@ impl World {
                 return;
             }
         }
-        if client.version.load() >= JavaMinecraftVersion::V_1_20_2 {
-            client.send_packet(&CChunkBatchStart).await;
-        }
-        client.send_packet(&CChunkData(&chunk)).await;
-        if client.version.load() >= JavaMinecraftVersion::V_1_14
-            && client.version.load() < JavaMinecraftVersion::V_1_18
-            && let Ok(light_packet) = CLightUpdate::from_chunk(&chunk, client.version.load())
-        {
-            client.send_packet(&light_packet).await;
-        }
-        if client.version.load() >= JavaMinecraftVersion::V_1_20_2 {
-            client.send_packet(&CChunkBatchEnd::new(1u16)).await;
-        }
+        client.send_chunks(&[chunk]).await;
 
         let velocity = player.living_entity.entity.velocity.load();
 
@@ -4245,20 +4240,7 @@ impl World {
                 .level
                 .get_or_fetch_chunk(center_chunk, std::clone::Clone::clone)
                 .await;
-            if java_client.version.load() >= JavaMinecraftVersion::V_1_20_2 {
-                java_client.send_packet(&CChunkBatchStart).await;
-            }
-            java_client.send_packet(&CChunkData(&chunk)).await;
-            if java_client.version.load() >= JavaMinecraftVersion::V_1_14
-                && java_client.version.load() < JavaMinecraftVersion::V_1_18
-                && let Ok(light_packet) =
-                    CLightUpdate::from_chunk(&chunk, java_client.version.load())
-            {
-                java_client.send_packet(&light_packet).await;
-            }
-            if java_client.version.load() >= JavaMinecraftVersion::V_1_20_2 {
-                java_client.send_packet(&CChunkBatchEnd::new(1u16)).await;
-            }
+            java_client.send_chunks(&[chunk]).await;
         }
 
         // Send teleport packet after at least the center chunk was delivered
@@ -4360,7 +4342,12 @@ impl World {
                     // truth, so the chunk's NBT is taken (cleared) to avoid keeping
                     // a duplicate copy that would be re-appended on the next unload
                     // and doubled on every reload.
-                    let entity_nbts = std::mem::take(&mut *chunk.data.lock().await);
+                    let entity_nbts = std::mem::take(
+                        &mut *chunk
+                            .data
+                            .lock()
+                            .unwrap_or_else(std::sync::PoisonError::into_inner),
+                    );
                     let mut entities_to_add: Vec<Arc<dyn EntityBase>> =
                         Vec::with_capacity(entity_nbts.len());
                     for entity_nbt in &entity_nbts {

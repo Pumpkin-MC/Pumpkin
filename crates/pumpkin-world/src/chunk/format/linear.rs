@@ -572,7 +572,6 @@ impl<S: SingleChunkDataSerializer + 'static> ChunkSerializer for LinearV2File<S>
         let index = Self::get_chunk_index(chunk.position().0, chunk.position().1);
         let chunk_raw: Bytes = chunk
             .to_bytes()
-            .await
             .map_err(|err| ChunkWritingError::ChunkSerializingError(err.to_string()))?;
 
         self.timestamps[index] = SystemTime::now()

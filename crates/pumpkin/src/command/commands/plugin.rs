@@ -34,9 +34,8 @@ impl CommandExecutor for ListExecutor {
             )));
         };
 
-        let plugins = futures::executor::block_on(server_arc.plugin_manager.active_plugins());
-        let loaded_plugins =
-            futures::executor::block_on(server_arc.plugin_manager.loaded_plugins());
+        let plugins = server_arc.plugin_manager.active_plugins();
+        let loaded_plugins = server_arc.plugin_manager.loaded_plugins();
 
         let mut message = TextComponent::text(format!("Plugins ({}):", loaded_plugins.len()))
             .color_named(NamedColor::Gold)
@@ -59,11 +58,18 @@ impl CommandExecutor for ListExecutor {
                 metadata.authors.join(", "),
                 metadata.description
             );
-            let component = TextComponent::text(line)
+            let mut plugin_component = TextComponent::text(line)
                 .color_named(NamedColor::Green)
                 .hover_event(HoverEvent::show_text(TextComponent::text(hover_text)));
 
-            message = message.add_child(component);
+            if !metadata.permissions.is_empty() {
+                plugin_component = plugin_component.add_child(
+                    TextComponent::text(format!(" (Permissions: {:?})", metadata.permissions))
+                        .color_named(NamedColor::Gray),
+                );
+            }
+
+            message = message.add_child(plugin_component);
         }
 
         sender.send_message(message);
@@ -95,32 +101,38 @@ impl CommandExecutor for LoadExecutor {
         };
 
         let plugin_name = plugin_name.to_string();
-        if futures::executor::block_on(server_arc.plugin_manager.is_plugin_active(&plugin_name)) {
+        if server_arc.plugin_manager.is_plugin_active(&plugin_name) {
             sender.send_message(TextComponent::text(format!(
                 "Plugin {plugin_name} is already loaded"
             )));
             return Ok(1);
         }
 
-        let result = futures::executor::block_on(
-            server_arc
+        let sender_clone = sender.clone();
+        let plugin_name_clone = plugin_name;
+        let server_clone = server_arc.clone();
+        server_arc.runtime.spawn(async move {
+            let result = server_clone
                 .plugin_manager
-                .try_load_plugin(&server_arc, Path::new(&plugin_name)),
-        );
+                .try_load_plugin(&server_clone, Path::new(&plugin_name_clone))
+                .await;
 
-        match result {
-            Ok(()) => {
-                sender.send_message(
-                    TextComponent::text(format!("Plugin {plugin_name} loaded successfully"))
+            match result {
+                Ok(()) => {
+                    sender_clone.send_message(
+                        TextComponent::text(format!(
+                            "Plugin {plugin_name_clone} loaded successfully"
+                        ))
                         .color_named(NamedColor::Green),
-                );
+                    );
+                }
+                Err(e) => {
+                    sender_clone.send_message(TextComponent::text(format!(
+                        "Failed to load plugin {plugin_name_clone}: {e}"
+                    )));
+                }
             }
-            Err(e) => {
-                sender.send_message(TextComponent::text(format!(
-                    "Failed to load plugin {plugin_name}: {e}"
-                )));
-            }
-        }
+        });
 
         Ok(1)
     }
@@ -149,29 +161,38 @@ impl CommandExecutor for UnloadExecutor {
         };
 
         let plugin_name = plugin_name.to_string();
-        if !futures::executor::block_on(server_arc.plugin_manager.is_plugin_active(&plugin_name)) {
+        if !server_arc.plugin_manager.is_plugin_active(&plugin_name) {
             sender.send_message(TextComponent::text(format!(
                 "Plugin {plugin_name} is not loaded"
             )));
             return Ok(1);
         }
 
-        let result =
-            futures::executor::block_on(server_arc.plugin_manager.unload_plugin(&plugin_name));
+        let sender_clone = sender.clone();
+        let plugin_name_clone = plugin_name;
+        let server_clone = server_arc.clone();
+        server_arc.runtime.spawn(async move {
+            let result = server_clone
+                .plugin_manager
+                .unload_plugin(&plugin_name_clone)
+                .await;
 
-        match result {
-            Ok(()) => {
-                sender.send_message(
-                    TextComponent::text(format!("Plugin {plugin_name} unloaded successfully"))
+            match result {
+                Ok(()) => {
+                    sender_clone.send_message(
+                        TextComponent::text(format!(
+                            "Plugin {plugin_name_clone} unloaded successfully"
+                        ))
                         .color_named(NamedColor::Green),
-                );
+                    );
+                }
+                Err(e) => {
+                    sender_clone.send_message(TextComponent::text(format!(
+                        "Failed to unload plugin {plugin_name_clone}: {e}"
+                    )));
+                }
             }
-            Err(e) => {
-                sender.send_message(TextComponent::text(format!(
-                    "Failed to unload plugin {plugin_name}: {e}"
-                )));
-            }
-        }
+        });
 
         Ok(1)
     }
@@ -197,32 +218,36 @@ impl CommandExecutor for HotReloadExecutor {
             )));
         };
 
+        let sender_clone = sender.clone();
+        let server_clone = server_arc.clone();
         if enabled {
-            if let Err(e) =
-                futures::executor::block_on(server_arc.plugin_manager.start_watcher(&server_arc))
-            {
-                sender.send_message(TextComponent::text(format!(
-                    "Failed to start plugin watcher: {e}"
-                )));
-                return Ok(1);
-            }
+            server_arc.runtime.spawn(async move {
+                if let Err(e) = server_clone.plugin_manager.start_watcher(&server_clone).await {
+                    sender_clone.send_message(TextComponent::text(format!(
+                        "Failed to start plugin watcher: {e}"
+                    )));
+                    return;
+                }
 
-            sender.send_message(
-                TextComponent::text("Hot reloading has been enabled.")
-                    .color_named(NamedColor::Green),
-            );
-            sender.send_message(
-                TextComponent::text(
-                    "WARNING: Hot reloading can impact performance and should only be enabled during plugin development.",
-                )
-                .color_named(NamedColor::Red),
-            );
+                sender_clone.send_message(
+                    TextComponent::text("Hot reloading has been enabled.")
+                        .color_named(NamedColor::Green),
+                );
+                sender_clone.send_message(
+                    TextComponent::text(
+                        "WARNING: Hot reloading can impact performance and should only be enabled during plugin development.",
+                    )
+                    .color_named(NamedColor::Red),
+                );
+            });
         } else {
-            futures::executor::block_on(server_arc.plugin_manager.stop_watcher());
-            sender.send_message(
-                TextComponent::text("Hot reloading has been disabled.")
-                    .color_named(NamedColor::Yellow),
-            );
+            server_arc.runtime.spawn(async move {
+                server_clone.plugin_manager.stop_watcher().await;
+                sender_clone.send_message(
+                    TextComponent::text("Hot reloading has been disabled.")
+                        .color_named(NamedColor::Yellow),
+                );
+            });
         }
 
         Ok(1)

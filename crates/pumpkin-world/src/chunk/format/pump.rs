@@ -108,7 +108,6 @@ where
 
         let bytes = chunk_data
             .to_bytes()
-            .await
             .map_err(|e| ChunkWritingError::ChunkSerializingError(e.to_string()))?;
 
         let compressed = compress_to_vec(&bytes[..], CompressionLevel::Fastest);
@@ -165,9 +164,6 @@ mod tests {
     use crate::chunk::io::{ChunkSerializer, LoadedData};
     use bytes::Bytes;
     use pumpkin_util::math::vector2::Vector2;
-    use serde::{Deserialize, Serialize};
-    use std::future::Future;
-    use std::pin::Pin;
     use tempfile::TempDir;
 
     #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -185,17 +181,14 @@ mod tests {
     }
 
     impl SingleChunkDataSerializer for MockChunk {
-        fn to_bytes(
-            &self,
-        ) -> Pin<Box<dyn Future<Output = Result<Bytes, ChunkSerializingError>> + Send + '_>>
-        {
+        fn to_bytes(&self) -> Result<Bytes, ChunkSerializingError> {
             let mut root = pumpkin_nbt::compound::NbtCompound::new();
             root.put_int("x", self.x);
             root.put_int("z", self.z);
             let i8_vec: Vec<i8> = self.data.iter().map(|&b| b as i8).collect();
             root.put("data", pumpkin_nbt::tag::NbtTag::ByteArray(i8_vec.into()));
             let bytes = pumpkin_nbt::Nbt::from(root).write_unnamed();
-            Box::pin(async move { Ok(bytes) })
+            Ok(bytes)
         }
         fn from_bytes(bytes: &Bytes, pos: Vector2<i32>) -> Result<Self, ChunkReadingError> {
             let mut cursor = std::io::Cursor::new(bytes);

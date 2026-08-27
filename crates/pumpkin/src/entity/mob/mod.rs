@@ -957,10 +957,6 @@ pub trait Mob: EntityBase + Send + Sync {
 
     fn mob_set_variant_name(&self, _name: &str) {}
 
-    fn get_sheep(&self) -> Option<&crate::entity::passive::sheep::SheepEntity> {
-        None
-    }
-
     fn mob_on_lightning_strike(
         &self,
         caller: &dyn EntityBase,

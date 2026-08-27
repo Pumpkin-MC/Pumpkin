@@ -267,28 +267,32 @@ struct ResolveNameExecutor;
 impl CommandExecutor for ResolveNameExecutor {
     fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
         let name = StringArgumentType::get(context, ARG_NAME)?;
-        let server = context.server();
+        let server = context.server().clone();
+        let source = context.source.clone();
         let name_owned = name.to_string();
 
         let name_component = TextComponent::text(name_owned.clone());
-        let result = futures::executor::block_on(fetch_profile_by_name_helper(server, &name_owned));
-        match result {
-            Some(profile) => {
-                report_resolved_profile(
-                    &context.source,
-                    &profile,
-                    translation::java::COMMANDS_FETCHPROFILE_NAME_SUCCESS,
-                    name_component,
-                );
+        let runtime = server.runtime.clone();
+        runtime.spawn(async move {
+            let result = fetch_profile_by_name_helper(&server, &name_owned).await;
+            match result {
+                Some(profile) => {
+                    report_resolved_profile(
+                        &source,
+                        &profile,
+                        translation::java::COMMANDS_FETCHPROFILE_NAME_SUCCESS,
+                        name_component,
+                    );
+                }
+                None => {
+                    source.send_error(TextComponent::translate_cross(
+                        translation::java::COMMANDS_FETCHPROFILE_NAME_FAILURE,
+                        translation::java::COMMANDS_FETCHPROFILE_NAME_FAILURE,
+                        [name_component],
+                    ));
+                }
             }
-            None => {
-                context.source.send_error(TextComponent::translate_cross(
-                    translation::java::COMMANDS_FETCHPROFILE_NAME_FAILURE,
-                    translation::java::COMMANDS_FETCHPROFILE_NAME_FAILURE,
-                    [name_component],
-                ));
-            }
-        }
+        });
 
         Ok(1)
     }
@@ -299,27 +303,31 @@ struct ResolveIdExecutor;
 impl CommandExecutor for ResolveIdExecutor {
     fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
         let id = UuidArgumentType::get(context, ARG_ID)?;
-        let server = context.server();
+        let server = context.server().clone();
+        let source = context.source.clone();
 
         let id_component = TextComponent::text(id.to_string());
-        let result = futures::executor::block_on(fetch_profile_by_id_helper(server, id));
-        match result {
-            Some(profile) => {
-                report_resolved_profile(
-                    &context.source,
-                    &profile,
-                    translation::java::COMMANDS_FETCHPROFILE_ID_SUCCESS,
-                    id_component,
-                );
+        let runtime = server.runtime.clone();
+        runtime.spawn(async move {
+            let result = fetch_profile_by_id_helper(&server, id).await;
+            match result {
+                Some(profile) => {
+                    report_resolved_profile(
+                        &source,
+                        &profile,
+                        translation::java::COMMANDS_FETCHPROFILE_ID_SUCCESS,
+                        id_component,
+                    );
+                }
+                None => {
+                    source.send_error(TextComponent::translate_cross(
+                        translation::java::COMMANDS_FETCHPROFILE_ID_FAILURE,
+                        translation::java::COMMANDS_FETCHPROFILE_ID_FAILURE,
+                        [id_component],
+                    ));
+                }
             }
-            None => {
-                context.source.send_error(TextComponent::translate_cross(
-                    translation::java::COMMANDS_FETCHPROFILE_ID_FAILURE,
-                    translation::java::COMMANDS_FETCHPROFILE_ID_FAILURE,
-                    [id_component],
-                ));
-            }
-        }
+        });
 
         Ok(1)
     }

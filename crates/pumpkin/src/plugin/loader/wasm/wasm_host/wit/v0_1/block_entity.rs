@@ -319,6 +319,24 @@ impl HostContainerBlockEntity for PluginHostState {
         self.add_block_entity(provider)
     }
 
+    async fn get_inventory(
+        &mut self,
+        res: Resource<ContainerBlockEntity>,
+    ) -> wasmtime::Result<
+        Resource<
+            crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::inventory::Inventory,
+        >,
+    >{
+        let container = self
+            .resource_table
+            .get::<ContainerBlockEntityResource>(&Resource::new_own(res.rep()))
+            .map_err(|_| wasmtime::Error::msg("invalid container block entity resource handle"))?;
+        let inventory = container.provider.inventory.clone();
+        self.add_inventory(
+            crate::plugin::loader::wasm::wasm_host::state::InventoryProvider::Generic(inventory),
+        )
+    }
+
     async fn get_size(&mut self, res: Resource<ContainerBlockEntity>) -> wasmtime::Result<u32> {
         let container = self
             .resource_table
