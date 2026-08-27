@@ -3917,9 +3917,8 @@ impl Player {
             return false;
         }
         // Vanilla `Player.hurtServer`: `DamageSource.scalesWithDifficulty`.
-        let caused_by_living_non_player = cause.is_some_and(|c| {
-            c.get_living_entity().is_some() && c.get_player().is_none()
-        });
+        let caused_by_living_non_player =
+            cause.is_some_and(|c| c.get_living_entity().is_some() && c.get_player().is_none());
         let amount = Self::scale_player_damage(
             amount,
             damage_type.scaling,
