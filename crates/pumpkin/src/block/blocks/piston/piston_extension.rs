@@ -6,7 +6,7 @@ use pumpkin_world::world::BlockFlags;
 use crate::block::BlockBehaviour;
 use crate::block::BrokenArgs;
 
-use super::piston::PistonProps;
+use super::piston::{PistonBlock, PistonProps};
 
 pub(crate) type MovingPistonProps = pumpkin_data::block_properties::MovingPistonLikeProperties;
 
@@ -21,7 +21,7 @@ impl BlockBehaviour for PistonExtensionBlock {
                 .position
                 .offset(props.facing.opposite().to_block_direction().to_offset());
             let (new_block, new_state) = args.world.get_block_and_state_id(&pos);
-            if &Block::PISTON == new_block || &Block::STICKY_PISTON == new_block {
+            if PistonBlock::is_base(new_block) {
                 let props = PistonProps::from_state_id(new_state, new_block);
                 if props.extended {
                     // TODO: use player

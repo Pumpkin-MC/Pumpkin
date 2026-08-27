@@ -38,6 +38,47 @@ impl BlockMetadata for PistonBlock {
 }
 
 impl PistonBlock {
+    /// Vanilla piston `blockEvent` type: extend (`0`), retract/pull (`1`), drop (`2`).
+    pub const TRIGGER_EXTEND: u8 = 0;
+    pub const TRIGGER_CONTRACT: u8 = 1;
+    pub const TRIGGER_DROP: u8 = 2;
+
+    /// Dest/arm `moving_piston`: vanilla 324
+    /// (`UPDATE_INVISIBLE | MOVE_BY_PISTON | SKIP_BLOCK_ENTITY_SIDEEFFECTS`).
+    /// No `NOTIFY_LISTENERS` (clients), no `FORCE_STATE` (shape updates still run).
+    const DEST_PLACEHOLDER_FLAGS: BlockFlags =
+        BlockFlags::MOVED.union(BlockFlags::SKIP_BLOCK_ENTITY_REPLACED_CALLBACK);
+
+    /// Retracting body: vanilla 276
+    /// (`UPDATE_INVISIBLE | UPDATE_KNOWN_SHAPE | SKIP_BLOCK_ENTITY_SIDEEFFECTS`).
+    const RETRACT_BODY_FLAGS: BlockFlags =
+        BlockFlags::FORCE_STATE.union(BlockFlags::SKIP_BLOCK_ENTITY_REPLACED_CALLBACK);
+
+    /// Vanilla `state.getBlock() instanceof PistonBaseBlock`.
+    #[must_use]
+    pub fn is_base(block: &Block) -> bool {
+        block == &Block::PISTON || block == &Block::STICKY_PISTON
+    }
+
+    #[must_use]
+    pub fn is_sticky(block: &Block) -> bool {
+        block == &Block::STICKY_PISTON
+    }
+
+    #[must_use]
+    const fn type_from_sticky(sticky: bool) -> PistonType {
+        if sticky {
+            PistonType::Sticky
+        } else {
+            PistonType::Normal
+        }
+    }
+
+    #[must_use]
+    pub fn piston_type(block: &Block) -> PistonType {
+        Self::type_from_sticky(Self::is_sticky(block))
+    }
+
     #[must_use]
     pub fn is_movable(
         world: &World,
@@ -68,7 +109,7 @@ impl PistonBlock {
         {
             return false;
         }
-        if block == &Block::PISTON || block == &Block::STICKY_PISTON {
+        if Self::is_base(block) {
             let props = PistonProps::from_state_id(state.id, block);
             // Extended pistons are immovable. Non-extended pistons are movable
             return !props.extended;
@@ -151,23 +192,22 @@ impl PistonBlock {
         let mut props = PistonProps::from_state_id(state.id, block);
         let dir = props.facing.to_block_direction();
 
-        // I don't think this is optimal ?
-        let sticky = block == &Block::STICKY_PISTON;
+        let sticky = Self::is_sticky(block);
 
         let should_extend = should_extend(world, pos, dir);
-        if should_extend && (r#type == 1 || r#type == 2) {
+        if should_extend && (r#type == Self::TRIGGER_CONTRACT || r#type == Self::TRIGGER_DROP) {
             props.extended = true;
             world.set_block_state(pos, props.to_state_id(block), BlockFlags::NOTIFY_LISTENERS);
             return false;
         }
 
         // This may prevents when something happens in the one tick before this function got called
-        if !should_extend && r#type == 0 {
+        if !should_extend && r#type == Self::TRIGGER_EXTEND {
             return false;
         }
 
         // Extend Piston
-        if r#type == 0 {
+        if r#type == Self::TRIGGER_EXTEND {
             let mut event =
                 crate::plugin::api::events::block::block_piston::BlockPistonExtendEvent::new(
                     *pos,
@@ -222,19 +262,10 @@ impl PistonBlock {
             piston.finish(world);
         }
 
-        let mut props = MovingPistonLikeProperties::default(&Block::MOVING_PISTON);
-        props.facing = dir.to_facing();
-        props.r#type = if sticky {
-            PistonType::Sticky
-        } else {
-            PistonType::Normal
-        };
-
-        // Vanilla `setBlock(..., 276)`: retracting body stays off the client (`UPDATE_INVISIBLE`).
         world.set_block_state(
             pos,
-            props.to_state_id(&Block::MOVING_PISTON),
-            BlockFlags::FORCE_STATE | BlockFlags::SKIP_BLOCK_ENTITY_REPLACED_CALLBACK,
+            moving_piston_placeholder(dir, Some(Self::piston_type(block))),
+            Self::RETRACT_BODY_FLAGS,
         );
 
         let mut props = PistonProps::default(block);
@@ -242,16 +273,13 @@ impl PistonBlock {
             .unwrap_or(BlockDirection::North)
             .to_facing();
 
-        world.add_block_entity(Arc::new(PistonBlockEntity {
-            position: *pos,
-            facing: dir,
-            pushed_block_state: BlockState::from_id(props.to_state_id(block)),
-            current_progress: 0.0.into(),
-            last_progress: 0.0.into(),
-            extending: false,
-            source: true,
-            last_ticked: (-1i64).into(),
-        }));
+        world.add_block_entity(Arc::new(PistonBlockEntity::new(
+            *pos,
+            dir,
+            BlockState::from_id(props.to_state_id(block)),
+            false,
+            true,
+        )));
 
         // Vanilla `updateNeighborsAt` after the retracting body. The arm is already
         // air from the head `finalTick`; `removeBlock` / `moveBlocks` below pull or drop.
@@ -275,12 +303,10 @@ impl PistonBlock {
             if !piston_piece {
                 // Vanilla `b0 != 1` (`TRIGGER_DROP`). Event type is `r#type`;
                 // `data` is facing (`b1`).
-                if r#type != 1
+                if r#type != Self::TRIGGER_CONTRACT
                     || state.is_air()
                     || !Self::is_movable(world, &pull_pos, block, state, dir.opposite(), false, dir)
-                    || (state.piston_behavior != PistonBehavior::Normal
-                        && block != &Block::PISTON
-                        && block != &Block::STICKY_PISTON)
+                    || (state.piston_behavior != PistonBehavior::Normal && !Self::is_base(block))
                 {
                     world.set_block_state(
                         &extended_pos,
@@ -349,33 +375,35 @@ pub fn try_move(world: &Arc<World>, block: &Block, block_pos: &BlockPos) {
 
     if should_extent && !props.extended {
         if PistonHandler::new(world, *block_pos, dir, true).calculate_push() {
-            world.add_synced_block_event(*block_pos, 0, dir.to_index());
+            world.add_synced_block_event(*block_pos, PistonBlock::TRIGGER_EXTEND, dir.to_index());
         }
     } else if !should_extent && props.extended {
         let new_pos = block_pos.offset_dir(dir.to_offset(), 2);
         let (new_block, new_state) = world.get_block_and_state_id(&new_pos);
-        let mut r#type = 1;
+        let mut r#type = PistonBlock::TRIGGER_CONTRACT;
 
         if new_block == &Block::MOVING_PISTON {
             let new_props = MovingPistonLikeProperties::from_state_id(new_state, new_block);
             if new_props.facing == props.facing
                 && let Some(entity) = world.get_live_block_entity(&new_pos)
                 && let Some(piston) = entity.as_any().downcast_ref::<PistonBlockEntity>()
+                && piston.should_drop_instead_of_pull(world)
             {
-                // Vanilla `checkIfExtend`: progress, `lastTicked == level.getGameTime()`,
-                // or `isHandlingTick` (0-tick: the placeholder has not ticked this game tick).
-                if piston.extending
-                    && (piston.current_progress.load() < 0.5
-                        || piston.last_ticked.load() == world.get_world_age()
-                        || world.is_handling_tick())
-                {
-                    // Too fast: sticky must drop, not pull (`TRIGGER_DROP`).
-                    r#type = 2;
-                }
+                r#type = PistonBlock::TRIGGER_DROP;
             }
         }
         world.add_synced_block_event(*block_pos, r#type, dir.to_index());
     }
+}
+
+/// `MOVING_PISTON` placeholder. Dest cells leave `TYPE` at default; arm/body set sticky/normal.
+fn moving_piston_placeholder(dir: BlockDirection, piston_type: Option<PistonType>) -> BlockStateId {
+    let mut props = MovingPistonLikeProperties::default(&Block::MOVING_PISTON);
+    props.facing = dir.to_facing();
+    if let Some(piston_type) = piston_type {
+        props.r#type = piston_type;
+    }
+    props.to_state_id(&Block::MOVING_PISTON)
 }
 
 #[expect(clippy::too_many_lines)]
@@ -430,66 +458,42 @@ fn move_piston(
         let target_pos = moved_block_pos.offset(move_direction.to_offset());
         moved_blocks_map.remove(&target_pos);
 
-        let mut props = MovingPistonLikeProperties::default(&Block::MOVING_PISTON);
-        props.facing = dir.to_facing();
-        let state = props.to_state_id(&Block::MOVING_PISTON);
-
-        // Vanilla `setBlock(..., 324)`: `UPDATE_INVISIBLE | MOVE_BY_PISTON |
-        // SKIP_BLOCK_ENTITY_SIDEEFFECTS`. No `UPDATE_CLIENTS` (dest stays off the
-        // wire; animation BE is `CBlockEvent`). No `UPDATE_NEIGHBORS` (BUD).
-        // No `UPDATE_KNOWN_SHAPE`: `updateNeighbourShapes` still runs so a coral
-        // fan pops when its support becomes `moving_piston`. `FORCE_STATE` is
-        // Pumpkin's shape skip (vanilla 82), not `UPDATE_INVISIBLE`.
         world.set_block_state(
             &target_pos,
-            state,
-            BlockFlags::MOVED | BlockFlags::SKIP_BLOCK_ENTITY_REPLACED_CALLBACK,
+            moving_piston_placeholder(dir, None),
+            PistonBlock::DEST_PLACEHOLDER_FLAGS,
         );
 
         if let Some(moved_state) = moved_block_states.get(moved_blocks.len() - 1 - index) {
-            world.add_block_entity(Arc::new(PistonBlockEntity {
-                position: target_pos,
-                facing: dir.to_facing().to_block_direction(),
-                pushed_block_state: moved_state,
-                current_progress: 0.0.into(),
-                last_progress: 0.0.into(),
-                extending: extend,
-                source: false,
-                last_ticked: (-1i64).into(),
-            }));
+            world.add_block_entity(Arc::new(PistonBlockEntity::new(
+                target_pos,
+                dir.to_facing().to_block_direction(),
+                moved_state,
+                extend,
+                false,
+            )));
         }
         affected_block_states.push(block_state);
     }
 
     if extend {
-        let pistion_type = if sticky {
-            PistonType::Sticky
-        } else {
-            PistonType::Normal
-        };
-        let mut props = MovingPistonLikeProperties::default(&Block::MOVING_PISTON);
-        props.facing = dir.to_facing();
-        props.r#type = pistion_type;
+        let piston_type = PistonBlock::type_from_sticky(sticky);
         moved_blocks_map.remove(&extended_pos);
-        // Same 324 as dest cells above (arm placeholder).
         world.set_block_state(
             &extended_pos,
-            props.to_state_id(&Block::MOVING_PISTON),
-            BlockFlags::MOVED | BlockFlags::SKIP_BLOCK_ENTITY_REPLACED_CALLBACK,
+            moving_piston_placeholder(dir, Some(piston_type)),
+            PistonBlock::DEST_PLACEHOLDER_FLAGS,
         );
         let mut props = PistonHeadLikeProperties::default(&Block::PISTON_HEAD);
         props.facing = dir.to_facing();
-        props.r#type = pistion_type;
-        world.add_block_entity(Arc::new(PistonBlockEntity {
-            position: extended_pos,
-            facing: dir.to_facing().to_block_direction(),
-            pushed_block_state: BlockState::from_id(props.to_state_id(&Block::PISTON_HEAD)),
-            current_progress: 0.0.into(),
-            last_progress: 0.0.into(),
-            extending: true,
-            source: true,
-            last_ticked: (-1i64).into(),
-        }));
+        props.r#type = piston_type;
+        world.add_block_entity(Arc::new(PistonBlockEntity::new(
+            extended_pos,
+            dir.to_facing().to_block_direction(),
+            BlockState::from_id(props.to_state_id(&Block::PISTON_HEAD)),
+            true,
+            true,
+        )));
     }
 
     let air_state = Block::AIR.default_state.id;

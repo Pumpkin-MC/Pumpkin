@@ -4,7 +4,7 @@ use pumpkin_macros::pumpkin_block;
 use pumpkin_world::world::BlockFlags;
 
 use crate::block::BlockBehaviour;
-use crate::block::blocks::piston::piston::try_move;
+use crate::block::blocks::piston::piston::{PistonBlock, try_move};
 use crate::block::{BrokenArgs, OnNeighborUpdateArgs};
 
 use super::piston::PistonProps;
@@ -21,7 +21,7 @@ impl BlockBehaviour for PistonHeadBlock {
             .position
             .offset(props.facing.opposite().to_block_direction().to_offset());
         let (new_block, new_state) = args.world.get_block_and_state_id(&pos);
-        if &Block::PISTON == new_block || &Block::STICKY_PISTON == new_block {
+        if PistonBlock::is_base(new_block) {
             let props = PistonProps::from_state_id(new_state, new_block);
             if props.extended {
                 // TODO: use player
@@ -43,7 +43,7 @@ impl BlockBehaviour for PistonHeadBlock {
                 .to_offset(),
         );
         let piston_block = args.world.get_block(&piston_pos);
-        if &Block::PISTON == piston_block || &Block::STICKY_PISTON == piston_block {
+        if PistonBlock::is_base(piston_block) {
             let up_pos = args
                 .position
                 .offset(head_props.facing.to_block_direction().to_offset());

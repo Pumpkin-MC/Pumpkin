@@ -3,7 +3,7 @@ use std::sync::atomic::Ordering;
 
 use crossbeam::atomic::AtomicCell;
 use pumpkin_data::block_properties::{
-    Axis as BlockAxis, BlockProperties, PistonHeadLikeProperties, PistonType,
+    Axis as BlockAxis, BlockProperties, PistonHeadLikeProperties,
     StickyPistonLikeProperties as PistonProps,
 };
 use pumpkin_data::{Block, BlockDirection, BlockState, BlockStateId};
@@ -11,6 +11,7 @@ use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::{boundingbox::BoundingBox, position::BlockPos, vector3::Vector3};
 use pumpkin_world::block::{block_state_from_nbt, block_state_to_nbt};
 
+use crate::block::blocks::piston::piston::PistonBlock;
 use crate::world::{BlockFlags, World};
 
 use super::BlockEntity;
@@ -30,6 +31,36 @@ pub struct PistonBlockEntity {
 
 impl PistonBlockEntity {
     pub const ID: &'static str = "minecraft:piston";
+
+    /// Animation start: progress 0, `lastTicked` unset (`-1`). Vanilla `PistonMovingBlockEntity` ctor.
+    #[must_use]
+    pub fn new(
+        position: BlockPos,
+        facing: BlockDirection,
+        pushed_block_state: &'static BlockState,
+        extending: bool,
+        source: bool,
+    ) -> Self {
+        Self {
+            position,
+            facing,
+            pushed_block_state,
+            current_progress: 0.0.into(),
+            last_progress: 0.0.into(),
+            extending,
+            source,
+            last_ticked: (-1i64).into(),
+        }
+    }
+
+    /// Vanilla `checkIfExtend` `TRIGGER_DROP`: dest still extending and (progress < 0.5,
+    /// `lastTicked == gameTime`, or `isHandlingTick`).
+    pub fn should_drop_instead_of_pull(&self, world: &World) -> bool {
+        self.extending
+            && (self.current_progress.load() < 0.5
+                || self.last_ticked.load() == world.get_world_age()
+                || world.is_handling_tick())
+    }
 
     /// True while this instance is still the live BE at its position. Re-check after every
     /// `.await`: a re-trigger can replace it. Live-map only; `get_block_entity` would rebuild
@@ -290,8 +321,7 @@ impl PistonBlockEntity {
 
     /// Vanilla `movedState.getBlock() instanceof PistonBaseBlock`.
     fn is_piston_base(state: &BlockState) -> bool {
-        let block = Block::from_state_id(state.id);
-        block == &Block::PISTON || block == &Block::STICKY_PISTON
+        PistonBlock::is_base(Block::from_state_id(state.id))
     }
 
     /// The piston head state this placeholder animates, with `short` as given. Used wherever
@@ -300,12 +330,7 @@ impl PistonBlockEntity {
         let mut props = PistonHeadLikeProperties::default(&Block::PISTON_HEAD);
         props.facing = self.facing.to_facing();
         props.short = short;
-        props.r#type = if Block::from_state_id(self.pushed_block_state.id) == &Block::STICKY_PISTON
-        {
-            PistonType::Sticky
-        } else {
-            PistonType::Normal
-        };
+        props.r#type = PistonBlock::piston_type(Block::from_state_id(self.pushed_block_state.id));
         BlockState::from_id(props.to_state_id(&Block::PISTON_HEAD))
     }
 
