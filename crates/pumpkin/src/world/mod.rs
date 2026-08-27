@@ -284,6 +284,10 @@ pub struct World {
     synced_block_event_queue: std::sync::Mutex<Vec<BlockEvent>>,
     /// A map of unsent block changes, keyed by block position.
     unsent_block_changes: std::sync::Mutex<HashMap<BlockPos, BlockStateId>>,
+    /// Piston-delivered blocks for the next tick's `broadcastChanges`.
+    /// Vanilla `ChunkHolder.broadcastChanges` is in `chunkSource.tick`, before
+    /// `runBlockEvents`. Same-tick send would skip the client's `deathTicks` (retract snap).
+    deferred_block_changes: std::sync::Mutex<HashMap<BlockPos, BlockStateId>>,
     /// Persisted vanilla POI storage for portal and villager lookups.
     pub portal_poi: std::sync::Mutex<portal::PortalPoiStorage>,
     /// Villager job sites and their current owners.
@@ -431,6 +435,7 @@ impl World {
             min_y: i32::from(generation_settings.shape.min_y),
             synced_block_event_queue: std::sync::Mutex::new(Vec::new()),
             unsent_block_changes: std::sync::Mutex::new(HashMap::new()),
+            deferred_block_changes: std::sync::Mutex::new(HashMap::new()),
             portal_poi: std::sync::Mutex::new(portal_poi),
             villager_poi: std::sync::Mutex::new(villager_poi::VillagerPoiStorage::default()),
             raids: std::sync::Mutex::new(raid::Raids::default()),
@@ -1454,6 +1459,12 @@ impl World {
         });
         let player_elapsed = t_players.elapsed();
 
+        // Vanilla `chunkSource.tick` / `ChunkHolder.broadcastChanges`: after scheduled
+        // ticks, before `runBlockEvents`. `CBlockEvent` needs the source cells still
+        // occupied; `CBlockUpdate(source=air)` waits until the next tick.
+        self.promote_deferred_block_changes();
+        self.flush_block_updates();
+
         // Vanilla `ServerLevel.tick`: tickPending, then `runBlockEvents` (pistons).
         self.flush_synced_block_events();
         self.handling_tick.store(false, Relaxed);
@@ -1618,11 +1629,6 @@ impl World {
             dragon_fight::DragonFight::tick(fight_mutex, self);
         }
 
-        // Vanilla writes block updates during the tick and flushes the socket at
-        // tick end (`resumeFlushing`). Emit this tick's coalesced changes now so
-        // they share that flush with entity/BE packets instead of the next tick.
-        self.flush_block_updates();
-
         let total_elapsed = start.elapsed();
         if total_elapsed.as_millis() > 50 {
             debug!(
@@ -1644,6 +1650,35 @@ impl World {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .insert(position, block_state_id);
+    }
+
+    /// Mark `position` for the next tick's `broadcastChanges`, not this tick's flush.
+    pub fn defer_block_change(&self, position: BlockPos, block_state_id: BlockStateId) {
+        self.unsent_block_changes
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .remove(&position);
+        self.deferred_block_changes
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .insert(position, block_state_id);
+    }
+
+    pub(crate) fn promote_deferred_block_changes(&self) {
+        let deferred = {
+            let mut guard = self
+                .deferred_block_changes
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            std::mem::take(&mut *guard)
+        };
+        if deferred.is_empty() {
+            return;
+        }
+        self.unsent_block_changes
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .extend(deferred);
     }
 
     /// Queues block state changes for broadcast to nearby players.
@@ -1672,19 +1707,22 @@ impl World {
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
             std::mem::take(&mut *guard)
         };
-        for (position, block_state_id) in changes {
-            // Vanilla places `moving_piston` with `UPDATE_INVISIBLE` (no `UPDATE_CLIENTS`).
-            // The client creates the placeholder from `CBlockEvent`; a block update for
-            // `moving_piston` yields no BE (`MovingPistonBlock.newBlockEntity` is null)
-            // and the pushed block stays invisible until the chunk is reloaded.
-            if Block::from_state_id(block_state_id) == &Block::MOVING_PISTON {
+        for (position, queued_state_id) in changes {
+            // Vanilla `ChunkHolder.broadcastChanges` reads the live cell, not the
+            // state at mark time.
+            let send_id = self
+                .get_block_state_id_if_loaded(&position)
+                .unwrap_or(queued_state_id);
+            // `moving_piston` is `RenderShape.INVISIBLE` and `newBlockEntity` is null.
+            // The client animation BE is created from `CBlockEvent` (`moveBlocks`).
+            if Block::from_state_id(send_id) == &Block::MOVING_PISTON {
                 continue;
             }
             let chunk_section = chunk_section_from_pos(&position);
             block_state_updates_by_chunk_section
                 .entry(chunk_section)
                 .or_default()
-                .push((position, block_state_id));
+                .push((position, send_id));
         }
 
         // TODO: only send packet to players who have the chunks loaded
@@ -5590,10 +5628,28 @@ impl World {
             return block_state_id;
         }
 
-        self.unsent_block_changes
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .insert(*position, block_state_id);
+        // Vanilla `Level.setBlock` marks for `broadcastChanges` only with `UPDATE_CLIENTS`.
+        // Dest `moving_piston` (flags 324 / 276) stays off the wire: a `CBlockUpdate` of it
+        // would wipe the client animation BE (`MovingPistonBlock.newBlockEntity` is null).
+        // Drop a stale mark too. `/setblock` and buckets omit `NOTIFY_LISTENERS` but still
+        // need a packet.
+        let hide_moving_piston = Block::from_state_id(block_state_id) == &Block::MOVING_PISTON
+            && !flags.contains(BlockFlags::NOTIFY_LISTENERS);
+        if hide_moving_piston {
+            self.unsent_block_changes
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .remove(position);
+            self.deferred_block_changes
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .remove(position);
+        } else {
+            self.unsent_block_changes
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .insert(*position, block_state_id);
+        }
 
         let old_block = Block::from_state_id(replaced_block_state_id);
         let new_block = Block::from_state_id(block_state_id);

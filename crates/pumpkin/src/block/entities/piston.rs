@@ -375,8 +375,13 @@ impl PistonBlockEntity {
             self.last_progress.store(1.0);
 
             let pos = self.position;
-            // State first, BE second (same as `tick`).
-            if world.get_block(&pos) == &Block::MOVING_PISTON && self.is_current(world) {
+            if !self.is_current(world) {
+                return;
+            }
+            // Vanilla `finalTick`: drop the BE first, then `setBlock` if the cell is
+            // still `MOVING_PISTON`. Neighbour callbacks must not see the placeholder.
+            world.remove_block_entity(&pos);
+            if world.get_block(&pos) == &Block::MOVING_PISTON {
                 let state = if self.source {
                     Block::AIR.default_state.id
                 } else {
@@ -385,10 +390,17 @@ impl PistonBlockEntity {
                 };
                 world.set_block_state(&pos, state, BlockFlags::NOTIFY_ALL);
                 world.update_neighbor(&pos, Block::from_state_id(state));
+                Self::queue_delivered_block(world, pos);
             }
-            if self.is_current(world) {
-                world.remove_block_entity(&pos);
-            }
+        }
+    }
+
+    /// Vanilla `ChunkHolder.broadcastChanges` sends the live cell. Re-queue after
+    /// neighbour callbacks: the delivered block, even if `set_block_state` was a no-op.
+    fn queue_delivered_block(world: &World, pos: BlockPos) {
+        let live = world.get_block_state_id(&pos);
+        if Block::from_state_id(live) != &Block::MOVING_PISTON {
+            world.defer_block_change(pos, live);
         }
     }
 
@@ -436,9 +448,13 @@ impl BlockEntity for PistonBlockEntity {
         self.last_progress.store(current_progress);
         if current_progress >= 1.0 {
             let pos = self.position;
-            // State first, BE second. `World::moving_piston_state` answers through this BE;
-            // a `MOVING_PISTON` with no BE has no solid faces.
-            if world.get_block(&pos) == &Block::MOVING_PISTON && self.is_current(world) {
+            // Vanilla `PistonMovingBlockEntity.tick`: `removeBlockEntity` first, then
+            // `setBlock` if the cell is still `MOVING_PISTON`.
+            if !self.is_current(world) {
+                return;
+            }
+            world.remove_block_entity(&pos);
+            if world.get_block(&pos) == &Block::MOVING_PISTON {
                 // Vanilla uses the post-processed state. Unsurvivable (rail, torch) becomes
                 // air: place then break so it drops.
                 let updated_state =
@@ -465,9 +481,7 @@ impl BlockEntity for PistonBlockEntity {
                     // re-examines its support. Neighbours already got `NOTIFY_NEIGHBORS`.
                     world.update_neighbor(&pos, Block::from_state_id(updated_state));
                 }
-            }
-            if self.is_current(world) {
-                world.remove_block_entity(&pos);
+                Self::queue_delivered_block(world, pos);
             }
             return;
         }

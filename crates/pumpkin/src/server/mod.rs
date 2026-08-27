@@ -1102,6 +1102,7 @@ impl Server {
         let worlds = self.worlds.load();
 
         for world in worlds.iter() {
+            world.promote_deferred_block_changes();
             world.flush_block_updates();
         }
 
