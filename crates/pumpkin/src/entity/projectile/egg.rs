@@ -1,5 +1,5 @@
+use std::sync::RwLock;
 use std::sync::atomic::AtomicBool;
-use std::sync::{Arc, RwLock};
 
 use crate::plugin::player::egg_throw::PlayerEggThrowEvent;
 use crate::{
@@ -80,7 +80,7 @@ impl EntityBase for EggEntity {
         );
     }
 
-    fn tick<'a>(&'a self, caller: &'a Arc<dyn EntityBase>, server: &'a Server) {
+    fn tick(&self, caller: &dyn EntityBase, server: &Server) {
         self.thrown.process_tick(caller, server);
     }
 

@@ -21,7 +21,6 @@ use pumpkin_data::dimension::Dimension;
 use pumpkin_data::entity::EntityStatus;
 use pumpkin_data::fluid::Fluid;
 use pumpkin_data::item_stack::ItemStack;
-use pumpkin_data::packet::CURRENT_MC_VERSION;
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_data::tracked_data;
 use pumpkin_data::{Block, BlockDirection};
@@ -71,7 +70,6 @@ use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::hover::HoverEvent;
 use pumpkin_util::version::JavaMinecraftVersion;
 use std::collections::{BTreeMap, HashSet};
-use std::pin::Pin;
 use std::sync::{
     Arc,
     atomic::{
@@ -131,10 +129,6 @@ pub const fn equipment_break_status(slot: &EquipmentSlot) -> EntityStatus {
     }
 }
 
-pub type EntityBaseFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
-
-pub type TeleportFuture = Pin<Box<dyn Future<Output = ()> + Send>>;
-
 pub trait EntityBase: Send + Sync + std::any::Any {
     fn write_nbt(&self, nbt: &mut NbtCompound) {
         self.get_entity().write_nbt(nbt);
@@ -162,7 +156,7 @@ pub trait EntityBase: Send + Sync + std::any::Any {
     /// but in some scenarios (e.g., interactions or events), it might be a different entity.
     ///
     /// The `server` parameter provides access to the game server instance.
-    fn tick(&self, caller: &Arc<dyn EntityBase>, server: &Server) {
+    fn tick(&self, caller: &dyn EntityBase, server: &Server) {
         if let Some(living) = self.get_living_entity() {
             living.tick(caller, server);
         } else {
@@ -215,20 +209,14 @@ pub trait EntityBase: Send + Sync + std::any::Any {
     }
     fn set_variant_name(&self, _name: &str) {}
 
-    // This method takes ownership of Arc<Self>, so the lifetime bounds are different.
     fn teleport(
-        self: Arc<Self>,
+        &self,
         position: Vector3<f64>,
         yaw: Option<f32>,
         pitch: Option<f32>,
         world: Arc<World>,
-    ) -> TeleportFuture
-    where
-        Self: 'static,
-    {
-        Box::pin(async move {
-            self.get_entity().teleport(position, yaw, pitch, world);
-        })
+    ) {
+        self.get_entity().teleport(position, yaw, pitch, world);
     }
 
     fn is_pushed_by_fluids(&self) -> bool {
@@ -298,82 +286,75 @@ pub trait EntityBase: Send + Sync + std::any::Any {
         None
     }
 
-    fn send_bedrock_spawn_packet<'a>(
-        &'a self,
-        client: &'a BedrockClient,
-    ) -> EntityBaseFuture<'a, ()> {
-        Box::pin(async move {
-            let entity = self.get_entity();
-            let runtime_id = entity.entity_id as u64;
-            let identifier = self
-                .get_mob()
-                .and_then(mob::Mob::mob_bedrock_identifier)
-                .unwrap_or(entity.entity_type.resource_name);
-            let mut metadata = entity.bedrock_metadata();
-            if let Some(mob) = self.get_mob()
-                && let Some(mob_metadata) = mob.mob_bedrock_spawn_metadata()
-            {
-                metadata.0.extend(mob_metadata.0);
-            }
-            let packet = CAddActor {
-                target_actor_id: VarLong(runtime_id as i64),
-                target_runtime_id: VarULong(runtime_id),
-                actor_type: identifier.to_string(),
-                position: entity.pos.load().to_f32_lossy(),
-                velocity: entity.velocity.load().to_f32_lossy(),
-                rotation: Vector2::new(entity.pitch.load(), entity.yaw.load()),
-                y_head_rotation: entity.head_yaw.load(),
-                y_body_rotation: entity.body_yaw.load(),
-                attributes_list: Vec::new(),
-                actor_data: metadata,
-                synced_properties: PropertySyncData {
-                    int_entries_list: std::collections::HashMap::new(),
-                    float_entries_list: std::collections::HashMap::new(),
-                },
-                actor_links: Vec::new(),
-            };
-            if let Ok(data) = client.serialize_packet(&packet) {
-                client.send_game_packet(data).await;
-            }
-        })
+    fn send_bedrock_spawn_packet(&self, client: &BedrockClient) {
+        let entity = self.get_entity();
+        let runtime_id = entity.entity_id as u64;
+        let identifier = self
+            .get_mob()
+            .and_then(mob::Mob::mob_bedrock_identifier)
+            .unwrap_or(entity.entity_type.resource_name);
+        let mut metadata = entity.bedrock_metadata();
+        if let Some(mob) = self.get_mob()
+            && let Some(mob_metadata) = mob.mob_bedrock_spawn_metadata()
+        {
+            metadata.0.extend(mob_metadata.0);
+        }
+        let packet = CAddActor {
+            target_actor_id: VarLong(runtime_id as i64),
+            target_runtime_id: VarULong(runtime_id),
+            actor_type: identifier.to_string(),
+            position: entity.pos.load().to_f32_lossy(),
+            velocity: entity.velocity.load().to_f32_lossy(),
+            rotation: Vector2::new(entity.pitch.load(), entity.yaw.load()),
+            y_head_rotation: entity.head_yaw.load(),
+            y_body_rotation: entity.body_yaw.load(),
+            attributes_list: Vec::new(),
+            actor_data: metadata,
+            synced_properties: PropertySyncData {
+                int_entries_list: std::collections::HashMap::new(),
+                float_entries_list: std::collections::HashMap::new(),
+            },
+            actor_links: Vec::new(),
+        };
+        if let Ok(data) = client.serialize_packet(&packet) {
+            client.try_enqueue_packet(data);
+        }
     }
 
-    fn send_java_spawn_packet<'a>(&'a self, client: &'a JavaClient) -> EntityBaseFuture<'a, ()> {
-        Box::pin(async move {
-            let entity = self.get_entity();
-            let version = client.version.load();
-            let is_mob = entity.entity_type.mob || self.get_mob().is_some();
-            if version < JavaMinecraftVersion::V_1_19 && is_mob {
-                let metadata = self
-                    .get_mob()
-                    .and_then(|mob| mob.mob_java_spawn_metadata(version));
-                let spawn_packet = entity.create_spawn_living_packet(metadata.clone());
-                if let Ok(data) = client.serialize_packet(&spawn_packet) {
-                    client.enqueue_packet(data).await;
-                }
-                if version >= JavaMinecraftVersion::V_1_15
-                    && let Some(meta) = metadata
-                {
-                    let meta_packet = CSetEntityMetadata::new(entity.entity_id.into(), meta);
-                    if let Ok(meta_data) = client.serialize_packet(&meta_packet) {
-                        client.enqueue_packet(meta_data).await;
-                    }
-                }
-            } else {
-                let spawn_packet = entity.create_spawn_packet();
-                if let Ok(data) = client.serialize_packet(&spawn_packet) {
-                    client.enqueue_packet(data).await;
-                }
-                if let Some(mob) = self.get_mob()
-                    && let Some(metadata) = mob.mob_java_spawn_metadata(version)
-                {
-                    let meta_packet = CSetEntityMetadata::new(entity.entity_id.into(), metadata);
-                    if let Ok(meta_data) = client.serialize_packet(&meta_packet) {
-                        client.enqueue_packet(meta_data).await;
-                    }
+    fn send_java_spawn_packet(&self, client: &JavaClient) {
+        let entity = self.get_entity();
+        let version = client.version.load();
+        let is_mob = entity.entity_type.mob || self.get_mob().is_some();
+        if version < JavaMinecraftVersion::V_1_19 && is_mob {
+            let metadata = self
+                .get_mob()
+                .and_then(|mob| mob.mob_java_spawn_metadata(version));
+            let spawn_packet = entity.create_spawn_living_packet(metadata.clone());
+            if let Ok(data) = client.serialize_packet(&spawn_packet) {
+                client.try_enqueue_packet(data);
+            }
+            if version >= JavaMinecraftVersion::V_1_15
+                && let Some(meta) = metadata
+            {
+                let meta_packet = CSetEntityMetadata::new(entity.entity_id.into(), meta);
+                if let Ok(meta_data) = client.serialize_packet(&meta_packet) {
+                    client.try_enqueue_packet(meta_data);
                 }
             }
-        })
+        } else {
+            let spawn_packet = entity.create_spawn_packet();
+            if let Ok(data) = client.serialize_packet(&spawn_packet) {
+                client.try_enqueue_packet(data);
+            }
+            if let Some(mob) = self.get_mob()
+                && let Some(metadata) = mob.mob_java_spawn_metadata(version)
+            {
+                let meta_packet = CSetEntityMetadata::new(entity.entity_id.into(), metadata);
+                if let Ok(meta_data) = client.serialize_packet(&meta_packet) {
+                    client.try_enqueue_packet(meta_data);
+                }
+            }
+        }
     }
 
     fn damage_with_context(
@@ -442,12 +423,12 @@ pub trait EntityBase: Send + Sync + std::any::Any {
         self.get_entity().has_passengers()
     }
 
-    fn has_passenger(&self, other: &Arc<dyn EntityBase>) -> bool {
+    fn has_passenger(&self, other: &dyn EntityBase) -> bool {
         self.get_entity()
             .has_passenger(other.get_entity().entity_id)
     }
 
-    fn move_entity(&self, caller: &Arc<dyn EntityBase>, motion: Vector3<f64>) {
+    fn move_entity(&self, caller: &dyn EntityBase, motion: Vector3<f64>) {
         self.get_entity().move_entity(caller, motion);
     }
 
@@ -455,7 +436,7 @@ pub trait EntityBase: Send + Sync + std::any::Any {
         false
     }
 
-    fn push(&self, entity: &Arc<dyn EntityBase>) {
+    fn push(&self, entity: &dyn EntityBase) {
         let self_entity = self.get_entity();
         let other_entity = entity.get_entity();
 
@@ -506,7 +487,7 @@ pub trait EntityBase: Send + Sync + std::any::Any {
     }
 
     #[allow(clippy::too_many_lines)]
-    fn push_entities(&self, dyn_self: &Arc<dyn EntityBase>) -> bool {
+    fn push_entities(&self, dyn_self: &dyn EntityBase) -> bool {
         let mut picked_up = false;
         let mut pushed = false;
         let self_entity = self.get_entity();
@@ -555,10 +536,9 @@ pub trait EntityBase: Send + Sync + std::any::Any {
                             && !other.is_passenger()
                             && other.is_pushable()
                             && other.get_entity().riding_cooldown.load(Relaxed) == 0
+                            && let Some(self_arc) = world.get_entity_by_id(self_entity.entity_id)
                         {
-                            dyn_self
-                                .get_entity()
-                                .add_passenger(dyn_self.clone(), other.clone());
+                            self_entity.add_passenger(self_arc, other.clone());
                             picked_up = true;
                             break;
                         }
@@ -582,14 +562,14 @@ pub trait EntityBase: Send + Sync + std::any::Any {
                             || !other.get_entity().has_vehicle())
                             && other.is_pushable()
                         {
-                            dyn_self.push(&other);
+                            dyn_self.push(other.as_ref());
                             pushed = true;
                         }
-                    } else if !self.has_passenger(&other)
+                    } else if !self.has_passenger(other.as_ref())
                         && other.is_pushable()
                         && is_other_minecart
                     {
-                        dyn_self.push(&other);
+                        dyn_self.push(other.as_ref());
                         pushed = true;
                     }
                 }
@@ -598,8 +578,7 @@ pub trait EntityBase: Send + Sync + std::any::Any {
             let players = world.get_players_at_box(&push_bb);
             for player in players {
                 if player.get_entity().entity_id != self_entity.entity_id && is_rideable_minecart {
-                    let player_base: Arc<dyn EntityBase> = player.clone();
-                    dyn_self.push(&player_base);
+                    dyn_self.push(player.as_ref());
                     pushed = true;
                     // Non-rideable minecarts (hoppers, chests) do not push players in vanilla.
                 }
@@ -608,7 +587,7 @@ pub trait EntityBase: Send + Sync + std::any::Any {
             let other_entities = world.get_entities_at_box(&entity_bb);
             for other in other_entities {
                 if other.get_entity().entity_id != self_entity.entity_id {
-                    dyn_self.push(&other);
+                    dyn_self.push(other.as_ref());
                     pushed = true;
                 }
             }
@@ -616,8 +595,7 @@ pub trait EntityBase: Send + Sync + std::any::Any {
             let players = world.get_players_at_box(&entity_bb);
             for player in players {
                 if player.get_entity().entity_id != self_entity.entity_id {
-                    let player_base: Arc<dyn EntityBase> = player.clone();
-                    dyn_self.push(&player_base);
+                    dyn_self.push(player.as_ref());
                     pushed = true;
                 }
             }
@@ -652,7 +630,7 @@ pub trait EntityBase: Send + Sync + std::any::Any {
 
     fn cast_any(&self) -> &dyn std::any::Any;
 
-    fn get_item_entity(self: Arc<Self>) -> Option<Arc<ItemEntity>> {
+    fn get_item_entity(&self) -> Option<&ItemEntity> {
         None
     }
 
@@ -1524,14 +1502,14 @@ impl Entity {
     }
 
     #[expect(dead_code)]
-    fn tick_block_underneath(_caller: &Arc<dyn EntityBase>) {
+    fn tick_block_underneath(_caller: &dyn EntityBase) {
         // let world = self.world.read();
 
         // let (pos, block, state) = self.get_block_with_y_offset(0.2);
 
         // world
         //     .block_registry
-        //     .on_stepped_on(&world, caller.as_ref(), pos, block, state)
+        //     .on_stepped_on(&world, caller, pos, block, state)
         //     ;
 
         // TODO: Add this to on_stepped_on
@@ -1587,7 +1565,7 @@ impl Entity {
         */
     }
 
-    pub fn tick_block_collisions(&self, caller: &Arc<dyn EntityBase>, _server: &Server) -> bool {
+    pub fn tick_block_collisions(&self, caller: &dyn EntityBase, _server: &Server) -> bool {
         if !self.is_affected_by_blocks() {
             return false;
         }
@@ -1630,10 +1608,7 @@ impl Entity {
             );
 
             let collision_shape = if block == &Block::POWDER_SNOW {
-                crate::block::blocks::powder_snow::inside_collision_shape_for_entity(
-                    caller.as_ref(),
-                    &pos,
-                )
+                crate::block::blocks::powder_snow::inside_collision_shape_for_entity(caller, &pos)
             } else {
                 world
                     .block_registry
@@ -1648,7 +1623,7 @@ impl Entity {
                     world.block_registry.on_entity_collision(
                         block,
                         &world,
-                        caller.as_ref(),
+                        caller,
                         &pos,
                         state,
                         &server_arc,
@@ -1940,7 +1915,7 @@ impl Entity {
 
     // updateWaterState() in yarn
 
-    fn update_fluid_state(&self, caller: &Arc<dyn EntityBase>) {
+    fn update_fluid_state(&self, caller: &dyn EntityBase) {
         let is_pushed = caller.is_pushed_by_fluids();
         let mut fluids = BTreeMap::new();
 
@@ -2018,7 +1993,7 @@ impl Entity {
         for (_, fluid) in fluids {
             world
                 .block_registry
-                .on_entity_collision_fluid(fluid, caller.as_ref());
+                .on_entity_collision_fluid(fluid, caller);
         }
 
         let lava_speed = if world.dimension == Dimension::THE_NETHER {
@@ -2220,7 +2195,7 @@ impl Entity {
     // Move by a delta, adjust for collisions, and send
 
     // Does not send movement. That must be done separately
-    pub fn move_entity(&self, caller: &Arc<dyn EntityBase>, mut motion: Vector3<f64>) {
+    pub fn move_entity(&self, caller: &dyn EntityBase, mut motion: Vector3<f64>) {
         if caller.get_player().is_some() {
             return;
         }
@@ -2245,7 +2220,7 @@ impl Entity {
             self.velocity.store(Vector3::default());
         }
 
-        let final_move = self.adjust_movement_for_collisions(motion, caller.as_ref());
+        let final_move = self.adjust_movement_for_collisions(motion, caller);
 
         self.move_pos(final_move);
 
@@ -2255,7 +2230,7 @@ impl Entity {
 
         if let Some(living) = caller.get_living_entity() {
             let on_ground = self.on_ground.load(Ordering::SeqCst);
-            living.fall(caller.as_ref(), final_move.y, on_ground, false);
+            living.fall(caller, final_move.y, on_ground, false);
         }
 
         if motion.y != final_move.y {
@@ -2263,7 +2238,7 @@ impl Entity {
             let block = self.get_block_with_y_offset(0.2).1;
             world
                 .block_registry
-                .update_entity_movement_after_fall_on(block, caller.as_ref());
+                .update_entity_movement_after_fall_on(block, caller);
         }
     }
 
@@ -2322,7 +2297,7 @@ impl Entity {
         self.velocity.store(velo);
     }
 
-    fn tick_portal(&self, caller: &Arc<dyn EntityBase>) {
+    fn tick_portal(&self, caller: &dyn EntityBase) {
         if self.portal_cooldown.load(Ordering::Relaxed) > 0 {
             self.portal_cooldown.fetch_sub(1, Ordering::Relaxed);
         }
@@ -2331,15 +2306,10 @@ impl Entity {
         };
         let mut should_remove = false;
         if let Some(portal_processor) = manager_guard.as_mut() {
-            if portal_processor.process_portal_teleportation(
-                &self.world.load(),
-                caller.as_ref(),
-                true,
-            ) {
+            if portal_processor.process_portal_teleportation(&self.world.load(), caller, true) {
                 self.portal_cooldown
                     .store(self.default_portal_cooldown(), Ordering::Relaxed);
 
-                let caller_clone = caller.clone();
                 let world_clone = self.world.load_full();
                 let portal_type = portal_processor.portal_type;
                 let dest_world_opt = portal_processor.destination_world.clone();
@@ -2348,21 +2318,17 @@ impl Entity {
                 let entity_id = self.entity_id;
                 let yaw = self.yaw.load();
 
-                tokio::spawn(async move {
-                    let world_for_dest = world_clone.clone();
-                    let caller_for_dest = caller_clone.clone();
-                    let (tx, rx) = tokio::sync::oneshot::channel();
-                    rayon::spawn(move || {
-                        let dest = portal_type.get_portal_destination(
-                            &world_for_dest,
-                            dest_world_opt,
-                            &caller_for_dest,
-                            entry_pos,
-                            src_portal.as_ref(),
-                        );
-                        let _ = tx.send(dest);
-                    });
-                    let transition = rx.await.ok().flatten();
+                rayon::spawn(move || {
+                    let Some(entity_arc) = world_clone.get_entity_by_id(entity_id) else {
+                        return;
+                    };
+                    let transition = portal_type.get_portal_destination(
+                        &world_clone,
+                        dest_world_opt,
+                        entity_arc.as_ref(),
+                        entry_pos,
+                        src_portal.as_ref(),
+                    );
 
                     if let Some(transition) = transition {
                         let dest_world = transition.new_world.clone();
@@ -2371,21 +2337,16 @@ impl Entity {
                         let teleport_pos = transition.position;
 
                         // Teleport the main entity
-                        caller_clone
-                            .teleport(teleport_pos, yaw_val, pitch, dest_world.clone())
-                            .await;
+                        entity_arc.teleport(teleport_pos, yaw_val, pitch, dest_world.clone());
 
                         // Teleport all passengers recursively along with the vehicle
-                        if let Some(entity) = world_clone.get_entity_by_id(entity_id) {
-                            let yaw_delta = yaw_val.map(|y| y - yaw);
-                            Self::teleport_passengers_recursive(
-                                entity.get_entity(),
-                                teleport_pos,
-                                yaw_delta,
-                                &dest_world,
-                            )
-                            .await;
-                        }
+                        let yaw_delta = yaw_val.map(|y| y - yaw);
+                        Self::teleport_passengers_recursive(
+                            entity_arc.get_entity(),
+                            teleport_pos,
+                            yaw_delta,
+                            &dest_world,
+                        );
                     }
                 });
             } else if portal_processor.portal_time == 0 {
@@ -2398,50 +2359,40 @@ impl Entity {
     }
 
     /// Recursively teleports all passengers (and their passengers) to the destination
-    fn teleport_passengers_recursive<'a>(
-        entity: &'a Self,
+    fn teleport_passengers_recursive(
+        entity: &Self,
         position: Vector3<f64>,
         yaw_delta: Option<f32>,
-        dest_world: &'a Arc<World>,
-    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send + 'a>> {
-        Box::pin(async move {
-            let passengers = entity
+        dest_world: &Arc<World>,
+    ) {
+        let passengers = entity
+            .passengers
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone();
+        for passenger in passengers {
+            let passenger_entity = passenger.get_entity();
+            let passenger_yaw = yaw_delta.map(|delta| passenger_entity.yaw.load() + delta);
+            passenger_entity.portal_cooldown.store(
+                passenger_entity.default_portal_cooldown(),
+                Ordering::Relaxed,
+            );
+
+            // Get nested passengers before teleporting
+            let nested_passengers = passenger_entity
                 .passengers
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner)
                 .clone();
-            for passenger in passengers {
-                let passenger_entity = passenger.get_entity();
-                let passenger_yaw = yaw_delta.map(|delta| passenger_entity.yaw.load() + delta);
-                passenger_entity.portal_cooldown.store(
-                    passenger_entity.default_portal_cooldown(),
-                    Ordering::Relaxed,
-                );
 
-                // Get nested passengers before teleporting
-                let nested_passengers = passenger_entity
-                    .passengers
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .clone();
+            passenger.teleport(position, passenger_yaw, None, dest_world.clone());
 
-                passenger
-                    .teleport(position, passenger_yaw, None, dest_world.clone())
-                    .await;
-
-                // Recursively teleport nested passengers
-                for nested in nested_passengers {
-                    let nested_entity = nested.get_entity();
-                    Self::teleport_passengers_recursive(
-                        nested_entity,
-                        position,
-                        yaw_delta,
-                        dest_world,
-                    )
-                    .await;
-                }
+            // Recursively teleport nested passengers
+            for nested in nested_passengers {
+                let nested_entity = nested.get_entity();
+                Self::teleport_passengers_recursive(nested_entity, position, yaw_delta, dest_world);
             }
-        })
+        }
     }
 
     pub fn try_use_portal(&self, _portal_delay: u32, portal_world: Arc<World>, pos: BlockPos) {
@@ -2986,7 +2937,7 @@ impl Entity {
             World::collect_java_recipients_by_version(java_recipients.into_iter());
 
         for (version, recipients) in recipients_by_version {
-            if version < CURRENT_MC_VERSION {
+            if version < JavaMinecraftVersion::V_1_21 {
                 continue;
             }
             let mut buf = Vec::new();
@@ -4060,7 +4011,7 @@ impl Entity {
 }
 
 impl EntityBase for Entity {
-    fn tick(&self, caller: &Arc<dyn EntityBase>, _server: &Server) {
+    fn tick(&self, caller: &dyn EntityBase, _server: &Server) {
         // Recomputed during movement/block-collision handling in the same tick.
         let was_in_powder_snow = self.is_in_powder_snow.load(Ordering::Relaxed);
         self.was_in_powder_snow
@@ -4070,7 +4021,7 @@ impl EntityBase for Entity {
         self.update_last_pos();
         self.tick_portal(caller);
         self.update_fluid_state(caller);
-        self.check_out_of_world(&**caller);
+        self.check_out_of_world(caller);
         let fire_ticks = self.fire_ticks.load(Ordering::Relaxed);
 
         // Check for fire immunity (or if the specific entity is)
@@ -4083,7 +4034,7 @@ impl EntityBase for Entity {
                 }
             } else {
                 if fire_ticks % 20 == 0 {
-                    caller.damage(&**caller, 1.0, DamageType::ON_FIRE);
+                    caller.damage(caller, 1.0, DamageType::ON_FIRE);
                 }
 
                 self.fire_ticks.store(fire_ticks - 1, Ordering::Relaxed);
@@ -4099,19 +4050,6 @@ impl EntityBase for Entity {
             self.riding_cooldown
                 .store(riding_cooldown - 1, Ordering::Relaxed);
         }
-    }
-
-    fn teleport(
-        self: Arc<Self>,
-        position: Vector3<f64>,
-        yaw: Option<f32>,
-        pitch: Option<f32>,
-        world: Arc<World>,
-    ) -> TeleportFuture {
-        // TODO: handle world change
-        Box::pin(async move {
-            self.get_entity().teleport(position, yaw, pitch, world);
-        })
     }
 
     fn get_entity(&self) -> &Entity {

@@ -290,7 +290,6 @@ use crate::command::context::command_source::CommandSource;
 use crate::command::node::dispatcher::CommandDispatcher;
 use crate::command::{CommandSender, client_suggestions};
 use crate::data::SaveJSONConfiguration;
-use crate::entity::TeleportFuture;
 use crate::net::{ClientPlatform, GameProfile};
 use crate::net::{DisconnectReason, PlayerConfig};
 use crate::plugin::player::exp_change::PlayerExpChangeEvent;
@@ -918,11 +917,11 @@ impl Player {
     }
 
     #[expect(clippy::too_many_lines, clippy::items_after_statements)]
-    pub async fn new(
+    pub fn new(
         client: Arc<ClientPlatform>,
         gameprofile: GameProfile,
         config: PlayerConfig,
-        world: Arc<World>,
+        world: &Arc<World>,
         gamemode: GameMode,
     ) -> Self {
         let inventory_changed = Arc::new(AtomicBool::new(true));
@@ -986,13 +985,9 @@ impl Player {
         let mut abilities = Abilities::default();
         abilities.set_for_gamemode(gamemode);
 
-        let properties = gameprofile.properties.load().clone();
-        let mut bedrock_skin = tokio::task::spawn_blocking(move || {
-            Self::fetch_skin(&properties)
-                .unwrap_or_else(pumpkin_protocol::bedrock::client::Skin::steve)
-        })
-        .await
-        .unwrap_or_else(|_| pumpkin_protocol::bedrock::client::Skin::steve());
+        let properties = gameprofile.properties.load();
+        let mut bedrock_skin = Self::fetch_skin(&properties)
+            .unwrap_or_else(pumpkin_protocol::bedrock::client::Skin::steve);
 
         // Standard_Custom is a shared placeholder. Give fallback skins a stable,
         // per-player identity so Bedrock never sees duplicate skin IDs.
@@ -1646,7 +1641,7 @@ impl Player {
         // Vanilla `Player#attack` ends the successful-hit branch with
         // `causeFoodExhaustion(0.1F)`. Only landed hits exhaust; the miss/no-damage
         // case returned early above.
-        self.add_exhaustion(0.1).await;
+        self.add_exhaustion(0.1);
 
         if config.swing {}
     }
@@ -2456,7 +2451,7 @@ impl Player {
                     if player_pos != target_pos {
                         self.living_entity.entity.set_pos(target_pos);
                         if let Some(p) = self.world().get_player_by_uuid(self.gameprofile.id) {
-                            server.runtime.spawn(async move {
+                            server.spawn_task(async move {
                                 crate::world::chunker::update_position(&p).await;
                             });
                         }
@@ -2530,7 +2525,7 @@ impl Player {
             && !chunk_of_chunks.is_empty()
         {
             let client = self.client.clone();
-            server.runtime.spawn(async move {
+            server.spawn_task(async move {
                 client.send_chunks(&chunk_of_chunks).await;
             });
             if let ClientPlatform::Bedrock(bedrock_client) = self.client.as_ref()
@@ -2559,71 +2554,64 @@ impl Player {
             self.sleeping_since.store(Some(sleeping_since + 1));
         }
 
-        let player_arc = self.world().get_player_by_uuid(self.gameprofile.id);
         if self.mining.load(Ordering::Relaxed)
-            && let Some(p) = player_arc.clone()
+            && let Some(p) = self.world().get_player_by_uuid(self.gameprofile.id)
         {
             let world_clone = p.world();
             let server_clone = world_clone.server.upgrade();
-            server.runtime.spawn(async move {
-                let pos = *p
-                    .mining_pos
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner);
-                let world = p.world();
-                let state = world.get_block_state(&pos);
-                // Is the block broken?
-                if state.is_air() {
+            let pos = *p
+                .mining_pos
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let world = p.world();
+            let state = world.get_block_state(&pos);
+            // Is the block broken?
+            if state.is_air() {
+                p.stop_mining();
+            } else {
+                let finished = p.continue_mining(
+                    pos,
+                    &world,
+                    state,
+                    p.start_mining_time.load(Ordering::Relaxed),
+                );
+                if finished && matches!(p.client.as_ref(), ClientPlatform::Bedrock(_)) {
                     p.stop_mining();
-                } else {
-                    let finished = p.continue_mining(
-                        pos,
-                        &world,
-                        state,
-                        p.start_mining_time.load(Ordering::Relaxed),
-                    );
-                    if finished && matches!(p.client.as_ref(), ClientPlatform::Bedrock(_)) {
-                        p.stop_mining();
 
-                        let block = Block::from_state_id(state.id);
-                        let can_harvest = p.can_harvest(state, block);
-                        let flags = if can_harvest {
-                            pumpkin_world::world::BlockFlags::NOTIFY_NEIGHBORS
-                        } else {
-                            pumpkin_world::world::BlockFlags::SKIP_DROPS
-                                | pumpkin_world::world::BlockFlags::NOTIFY_NEIGHBORS
-                        };
-                        if world.break_block(&pos, Some(p.clone()), flags).is_some() {
-                            if let Some(server) = server_clone {
-                                server
-                                    .block_registry
-                                    .broken(&world, block, &p, &pos, &server, state);
-                            }
-                            p.apply_tool_damage_for_block_break(state);
-                            if can_harvest {
-                                p.add_exhaustion(MINE_BLOCK_EXHAUSTION).await;
-                            }
+                    let block = Block::from_state_id(state.id);
+                    let can_harvest = p.can_harvest(state, block);
+                    let flags = if can_harvest {
+                        pumpkin_world::world::BlockFlags::NOTIFY_NEIGHBORS
+                    } else {
+                        pumpkin_world::world::BlockFlags::SKIP_DROPS
+                            | pumpkin_world::world::BlockFlags::NOTIFY_NEIGHBORS
+                    };
+                    if world.break_block(&pos, Some(&p), flags).is_some() {
+                        if let Some(server) = server_clone {
+                            server
+                                .block_registry
+                                .broken(&world, block, &p, &pos, &server, state);
+                        }
+                        p.apply_tool_damage_for_block_break(state);
+                        if can_harvest {
+                            p.add_exhaustion(MINE_BLOCK_EXHAUSTION);
                         }
                     }
                 }
-            });
+            }
         }
         self.last_attacked_ticks.fetch_add(1, Ordering::Relaxed);
 
-        if let Some(ref p_arc) = player_arc {
-            let caller: Arc<dyn EntityBase> = p_arc.clone();
-            self.living_entity.tick(&caller, server);
-            self.breath_manager.tick(p_arc);
-            self.hunger_manager.tick(p_arc);
-        }
+        self.living_entity.tick(self, server);
+
+        self.breath_manager.tick(self);
+        self.hunger_manager.tick(self);
 
         // Vanilla updates pose in PlayerEntity#tick after super.tick().
         self.update_player_pose();
         self.check_inventory_advancements();
-        if let Some(ref p_arc) = player_arc
-            && let Ok(mut adv) = self.advancements.try_lock()
-        {
-            adv.flush_dirty(p_arc, true);
+        if let Ok(mut adv) = self.advancements.try_lock() {
+            adv.flush_dirty(self, true);
         }
 
         // experience handling
@@ -2649,10 +2637,8 @@ impl Player {
         let idle_timeout_minutes = server.player_idle_timeout.load(Ordering::Relaxed);
         if idle_timeout_minutes > 0 {
             let idle_duration = now.duration_since(self.last_action_time.load());
-            if idle_duration >= Duration::from_secs(idle_timeout_minutes as u64 * 60)
-                && let Some(ref p_arc) = player_arc
-            {
-                p_arc.kick(
+            if idle_duration >= Duration::from_secs(idle_timeout_minutes as u64 * 60) {
+                self.kick(
                     DisconnectReason::KickedForIdle,
                     &TextComponent::translate_cross(
                         translation::java::MULTIPLAYER_DISCONNECT_IDLING,
@@ -2714,27 +2700,27 @@ impl Player {
         }
     }
 
-    pub async fn jump(&self) {
+    pub fn jump(&self) {
         self.stats
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .increment_custom(statistics::CustomStatistic::Jump, 1);
         if self.living_entity.entity.is_sprinting() {
-            self.add_exhaustion(0.2).await;
+            self.add_exhaustion(0.2);
         } else {
-            self.add_exhaustion(0.05).await;
+            self.add_exhaustion(0.05);
         }
     }
 
-    pub async fn progress_motion(&self, delta_pos: Vector3<f64>) {
+    pub fn progress_motion(&self, delta_pos: Vector3<f64>) {
         // TODO: Swimming, gliding...
         if self.living_entity.entity.on_ground.load(Ordering::Relaxed) {
             let delta = (delta_pos.horizontal_length() * 100.0).round() as f32;
             if delta > 0.0 {
                 if self.living_entity.entity.is_sprinting() {
-                    self.add_exhaustion(0.1 * delta * 0.01).await;
+                    self.add_exhaustion(0.1 * delta * 0.01);
                 } else {
-                    self.add_exhaustion(0.0 * delta * 0.01).await;
+                    self.add_exhaustion(0.0 * delta * 0.01);
                 }
             }
         }
@@ -3637,7 +3623,7 @@ impl Player {
 
                 self.send_permission_lvl_update();
 
-                player.clone().request_teleport(position, yaw, pitch).await;
+                player.request_teleport(position, yaw, pitch);
                 player.get_entity().last_pos.store(position);
 
                 self.send_abilities_update();
@@ -3658,78 +3644,74 @@ impl Player {
     /// `yaw` and `pitch` are in degrees.
     /// Rarly used, for example when waking up the player from a bed or their first time spawn. Otherwise, the `teleport` method should be used.
     /// The player should respond with the `SConfirmTeleport` packet.
-    pub async fn request_teleport(self: &Arc<Self>, position: Vector3<f64>, yaw: f32, pitch: f32) {
+    pub fn request_teleport(&self, position: Vector3<f64>, yaw: f32, pitch: f32) {
         // This is the ultra special magic code used to create the teleport id
         // This returns the old value
         // This operation wraps around on overflow.
         let Some(server) = self.world().server.upgrade() else {
             return;
         };
-        send_cancellable! {{
-            server;
-            PlayerTeleportEvent {
-                player: self.clone(),
+        if let Some(player_arc) = self.world().get_player_by_uuid(self.gameprofile.id) {
+            let mut event = PlayerTeleportEvent {
+                player: player_arc,
                 from: self.living_entity.entity.pos.load(),
                 to: position,
                 cancelled: false,
             };
+            server.plugin_manager.fire_blocking(&server, &mut event);
+            if event.cancelled {
+                return;
+            }
+        }
 
-            'after: {
-                let position = event.to;
-                let i = self
-                    .teleport_id_count
-                    .fetch_add(1, Ordering::Relaxed);
-                let teleport_id = i + 1;
-                self.living_entity.entity.set_pos(position);
-                let entity = &self.living_entity.entity;
-                entity.set_rotation(yaw, pitch);
-                match self.client.as_ref() {
-                    ClientPlatform::Java(client) => {
-                        *self
-                            .awaiting_teleport
-                            .lock()
-                            .unwrap_or_else(std::sync::PoisonError::into_inner) =
-                            Some((teleport_id.into(), position));
-                        let packet = CPlayerPosition::new(
-                            teleport_id.into(),
-                            position,
-                            Vector3::new(0.0, 0.0, 0.0),
-                            yaw,
-                            pitch,
-                            // TODO
-                            Vec::new(),
-                        );
-                        if let Ok(data) = client.serialize_packet(&packet) {
-                            client.send_packet_now(data).await;
-                        }
-                    }
-                    ClientPlatform::Bedrock(client) => {
-                        let packet = CBedrockMovePlayer::new(
-                            VarULong(self.entity_id() as u64),
-                            Vector3::new(
-                                position.x as f32,
-                                position.y as f32 + entity.entity_type.eye_height,
-                                position.z as f32,
-                            ),
-                            pitch,
-                            yaw,
-                            yaw,
-                            CBedrockMovePlayer::MODE_TELEPORT,
-                            false,
-                            VarULong(0),
-                            0,
-                            0,
-                            VarULong(
-                                self.tick_counter.load(Ordering::Relaxed).max(0) as u64,
-                            ),
-                        );
-                        if let Ok(data) = client.serialize_packet(&packet) {
-                            client.send_game_packet(data).await;
-                        }
-                    }
+        let i = self.teleport_id_count.fetch_add(1, Ordering::Relaxed);
+        let teleport_id = i + 1;
+        self.living_entity.entity.set_pos(position);
+        let entity = &self.living_entity.entity;
+        entity.set_rotation(yaw, pitch);
+        match self.client.as_ref() {
+            ClientPlatform::Java(client) => {
+                *self
+                    .awaiting_teleport
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner) =
+                    Some((teleport_id.into(), position));
+                let packet = CPlayerPosition::new(
+                    teleport_id.into(),
+                    position,
+                    Vector3::new(0.0, 0.0, 0.0),
+                    yaw,
+                    pitch,
+                    // TODO
+                    Vec::new(),
+                );
+                if let Ok(data) = client.serialize_packet(&packet) {
+                    client.try_enqueue_packet(data);
                 }
             }
-        }}
+            ClientPlatform::Bedrock(client) => {
+                let packet = CBedrockMovePlayer::new(
+                    VarULong(self.entity_id() as u64),
+                    Vector3::new(
+                        position.x as f32,
+                        position.y as f32 + entity.entity_type.eye_height,
+                        position.z as f32,
+                    ),
+                    pitch,
+                    yaw,
+                    yaw,
+                    CBedrockMovePlayer::MODE_TELEPORT,
+                    false,
+                    VarULong(0),
+                    0,
+                    0,
+                    VarULong(self.tick_counter.load(Ordering::Relaxed).max(0) as u64),
+                );
+                if let Ok(data) = client.serialize_packet(&packet) {
+                    client.try_enqueue_packet(data);
+                }
+            }
+        }
     }
 
     pub fn block_interaction_range(&self) -> f64 {
@@ -3818,7 +3800,7 @@ impl Player {
         health > 0.0 && health < max_health
     }
 
-    pub async fn add_exhaustion(&self, exhaustion: f32) {
+    pub fn add_exhaustion(&self, exhaustion: f32) {
         if self
             .abilities
             .lock()
@@ -3835,8 +3817,7 @@ impl Player {
         if let Some(server) = self.world().server.upgrade() {
             server
                 .plugin_manager
-                .fire(&server, &mut exhaustion_event)
-                .await;
+                .fire_blocking(&server, &mut exhaustion_event);
         }
         if exhaustion_event.cancelled {
             return;
@@ -6188,55 +6169,36 @@ impl EntityBase for Player {
     }
 
     fn teleport(
-        self: Arc<Self>,
+        &self,
         position: Vector3<f64>,
         yaw: Option<f32>,
         pitch: Option<f32>,
         world: Arc<World>,
-    ) -> TeleportFuture {
-        Box::pin(async move {
-            if Arc::ptr_eq(&world, &self.world()) {
-                // Same world
-                let yaw = yaw.unwrap_or(self.living_entity.entity.yaw.load());
-                let pitch = pitch.unwrap_or(self.living_entity.entity.pitch.load());
-                let Some(server) = self.world().server.upgrade() else {
-                    return;
-                };
-                send_cancellable! {{
-                    server;
-                    PlayerTeleportEvent {
-                        player: self.clone(),
-                        from: self.living_entity.entity.pos.load(),
-                        to: position,
-                        cancelled: false,
-                    };
-                    'after: {
-                        let position = event.to;
-                        let entity = self.get_entity();
-                        self.request_teleport(position, yaw, pitch).await;
-                        let chunk_pos = entity.chunk_pos.load();
-                        entity
-                            .world
-                            .load()
-                            .broadcast_to_chunk_except(
-                                chunk_pos,
-                                &[self.living_entity.entity.entity_uuid],
-                                &CEntityPositionSync::new(
-                                    self.living_entity.entity.entity_id.into(),
-                                    position,
-                                    Vector3::new(0.0, 0.0, 0.0),
-                                    yaw,
-                                    pitch,
-                                    entity.on_ground.load(Ordering::SeqCst),
-                                )
-                            )
-                            ;
-                    }
-                }}
-            } else {
-                self.teleport_world(world, position, yaw, pitch).await;
-            }
-        })
+    ) {
+        if Arc::ptr_eq(&world, &self.world()) {
+            // Same world
+            let yaw = yaw.unwrap_or_else(|| self.living_entity.entity.yaw.load());
+            let pitch = pitch.unwrap_or_else(|| self.living_entity.entity.pitch.load());
+            self.request_teleport(position, yaw, pitch);
+            let entity = self.get_entity();
+            let chunk_pos = entity.chunk_pos.load();
+            entity.world.load().broadcast_to_chunk_except(
+                chunk_pos,
+                &[self.living_entity.entity.entity_uuid],
+                &CEntityPositionSync::new(
+                    self.living_entity.entity.entity_id.into(),
+                    position,
+                    Vector3::new(0.0, 0.0, 0.0),
+                    yaw,
+                    pitch,
+                    entity.on_ground.load(Ordering::SeqCst),
+                ),
+            );
+        } else if let Some(player_arc) = self.world().get_player_by_uuid(self.gameprofile.id) {
+            self.spawn_task(async move {
+                player_arc.teleport_world(world, position, yaw, pitch).await;
+            });
+        }
     }
 
     fn get_entity(&self) -> &Entity {

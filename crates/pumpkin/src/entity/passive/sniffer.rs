@@ -357,7 +357,7 @@ impl Mob for SnifferEntity {
         &self.mob_entity
     }
 
-    fn mob_tick<'a>(&'a self, _caller: &'a Arc<dyn EntityBase>) {
+    fn mob_tick(&self, _caller: &dyn EntityBase) {
         self.ageable_ai_step();
         let state = self.get_state();
         match state {

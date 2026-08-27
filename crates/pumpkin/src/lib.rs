@@ -435,7 +435,7 @@ impl PumpkinServer {
                         "The input is not a TTY; falling back to simple logger and ignoring `use_tty` setting"
                     );
                 }
-                setup_stdin_console(self.server.clone());
+                setup_stdin_console(&self.server);
             }
         }
 
@@ -479,7 +479,6 @@ impl PumpkinServer {
             .server
             .player_data_storage
             .save_all_players(&self.server)
-            .await
         {
             error!("Error saving all players during shutdown: {e}");
         }
@@ -586,11 +585,12 @@ impl PumpkinServer {
                                     }
                                     player.remove().await;
                                     server_clone.remove_player(&player).await;
-                                    if let Err(e) = server_clone.player_data_storage
+                                    if let Err(e) = server_clone
+                                        .player_data_storage
                                         .handle_player_leave(&player)
-                                        .await {
-                                            error!("Failed to save player data on disconnect: {e}");
-                                        }
+                                    {
+                                        error!("Failed to save player data on disconnect: {e}");
+                                    }
                                     if let Err(e) = server_clone.advancement_manager
                                         .save_player(&player)
                                         .await {
@@ -686,10 +686,7 @@ impl PumpkinServer {
                         client.await_tasks().await;
                         player.remove().await;
                         server.remove_player(&player).await;
-                        if let Err(error) = server
-                            .player_data_storage
-                            .handle_player_leave(&player)
-                            .await
+                        if let Err(error) = server.player_data_storage.handle_player_leave(&player)
                         {
                             error!("Failed to save player data on disconnect: {error}");
                         }
@@ -700,7 +697,7 @@ impl PumpkinServer {
     }
 }
 
-fn setup_stdin_console(server: Arc<Server>) {
+fn setup_stdin_console(server: &Arc<Server>) {
     let (tx, mut rx) = tokio::sync::mpsc::channel(1);
     let rt = tokio::runtime::Handle::current();
     std::thread::spawn(move || {
@@ -720,15 +717,19 @@ fn setup_stdin_console(server: Arc<Server>) {
             let _ = rt.block_on(tx.send(line.trim().to_string()));
         }
     });
-    tokio::spawn(async move {
+    let server_clone = server.clone();
+    server.spawn_task(async move {
         while !SHOULD_STOP.load(Ordering::Relaxed)
             && let Some(command) = rx.recv().await
         {
             let mut event = ServerCommandEvent::new(command.clone());
-            server.plugin_manager.fire(&server, &mut event).await;
+            server_clone
+                .plugin_manager
+                .fire(&server_clone, &mut event)
+                .await;
             if !event.cancelled {
-                server.command_dispatcher.load().handle_command(
-                    &command::CommandSender::Console.into_source(&server),
+                server_clone.command_dispatcher.load().handle_command(
+                    &command::CommandSender::Console.into_source(&server_clone),
                     command.as_str(),
                 );
             }

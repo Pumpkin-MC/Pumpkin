@@ -282,7 +282,7 @@ impl Mob for SlimeEntity {
         &self.entity
     }
 
-    fn mob_tick<'a>(&'a self, _caller: &'a Arc<dyn EntityBase>) {
+    fn mob_tick(&self, _caller: &dyn EntityBase) {
         self.o_squish.store(self.squish.load());
         self.squish
             .store(self.squish.load() + (self.target_squish.load() - self.squish.load()) * 0.5);

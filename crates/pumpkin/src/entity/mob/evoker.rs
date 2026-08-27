@@ -177,7 +177,7 @@ impl Mob for EvokerEntity {
         &self.mob_entity
     }
 
-    fn mob_tick<'a>(&'a self, _caller: &'a Arc<dyn EntityBase>) {
+    fn mob_tick(&self, _caller: &dyn EntityBase) {
         let ticks = self.spell_casting_tick_count.load(Ordering::Relaxed);
         if ticks > 0 {
             self.spell_casting_tick_count

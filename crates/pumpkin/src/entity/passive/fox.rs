@@ -278,7 +278,7 @@ impl Mob for FoxEntity {
         self.set_variant(FoxVariant::from_name(name));
     }
 
-    fn mob_tick<'a>(&'a self, _caller: &'a Arc<dyn EntityBase>) {
+    fn mob_tick(&self, _caller: &dyn EntityBase) {
         self.ageable_ai_step();
     }
 

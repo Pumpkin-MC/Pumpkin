@@ -233,7 +233,7 @@ impl HopperBlockEntity {
             );
             let entities = world.get_entities_at_box(&search_box);
             for entity_base in entities {
-                if let Some(item_entity) = entity_base.clone().get_item_entity() {
+                if let Some(item_entity) = entity_base.get_item_entity() {
                     let (is_empty, registry_key) = {
                         let stack = item_entity
                             .get_item_stack()
