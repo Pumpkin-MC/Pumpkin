@@ -81,6 +81,37 @@ impl<'a, T: std::hash::Hash + Eq> ChunkTickScheduler<&'a T> {
             .is_some_and(|inner| inner.queued_ticks.contains(&(pos, value)))
     }
 
+    pub fn clear_area(&self, min: &BlockPos, max: &BlockPos) {
+        let mut inner_guard = self
+            .inner
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let Some(inner) = inner_guard.as_mut() else {
+            return;
+        };
+
+        let contains = |position: &BlockPos| {
+            position.0.x >= min.0.x
+                && position.0.x < max.0.x
+                && position.0.y >= min.0.y
+                && position.0.y < max.0.y
+                && position.0.z >= min.0.z
+                && position.0.z < max.0.z
+        };
+
+        for queue in &mut inner.tick_queue {
+            queue.retain(|tick| !contains(&tick.position));
+        }
+        inner
+            .queued_ticks
+            .retain(|(position, _)| !contains(position));
+        let became_empty = inner.queued_ticks.is_empty();
+
+        if became_empty {
+            *inner_guard = None;
+        }
+    }
+
     pub fn has_ticks(&self) -> bool {
         self.inner
             .lock()

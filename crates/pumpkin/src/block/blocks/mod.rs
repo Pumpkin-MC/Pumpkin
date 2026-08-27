@@ -27,6 +27,7 @@ pub mod jigsaw;
 pub mod note;
 pub mod piston;
 pub mod redstone;
+pub mod test_block;
 
 // Doors, gates & openings
 pub mod doors;
