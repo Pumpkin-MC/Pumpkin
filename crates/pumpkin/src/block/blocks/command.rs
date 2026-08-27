@@ -13,8 +13,9 @@ use crate::{
     world::World,
 };
 use pumpkin_data::{
-    Block, BlockId, BlockStateId, FacingExt,
+    Block, BlockId, BlockState, BlockStateId, FacingExt,
     block_properties::{BlockProperties, CommandBlockLikeProperties, Facing},
+    block_rotation::Rotation,
 };
 use pumpkin_util::{GameMode, PermissionLvl, math::position::BlockPos};
 use pumpkin_world::tick::TickPriority;
@@ -356,5 +357,18 @@ impl BlockBehaviour for CommandBlock {
                 },
             )
         }
+    }
+
+    fn rotate(
+        &self,
+        block: &Block,
+        state_id: BlockStateId,
+        rotation: Rotation,
+    ) -> &'static BlockState {
+        let mut props = CommandBlockLikeProperties::from_state_id(state_id, block);
+        props.facing = rotation
+            .rotate(props.facing.to_block_direction())
+            .to_facing();
+        BlockState::from_id(props.to_state_id(block))
     }
 }

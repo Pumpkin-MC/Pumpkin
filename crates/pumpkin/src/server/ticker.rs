@@ -1,3 +1,8 @@
+pub use super::server_test_manager::{
+    GameTestBatchReport, GameTestRequest, GameTestRetryOptions, enqueue_game_test, stop_game_tests,
+};
+use super::server_test_manager::{ServerGameTestRunner, drain_game_test_queue};
+
 use crate::{
     STOP_INTERRUPT,
     plugin::server::{
@@ -16,6 +21,7 @@ impl Ticker {
     /// Runs the main server tick loop on a dedicated thread.
     pub fn run(server: &Arc<Server>) {
         let mut next_tick = Instant::now();
+        let mut game_test_runner = ServerGameTestRunner::new();
 
         'ticker: loop {
             let tick_start_time = Instant::now();
@@ -30,6 +36,8 @@ impl Ticker {
                     .fire(server, &mut ServerTickStartEvent::new(tick_number)),
             );
 
+            let should_tick_game_tests = manager.runs_normally() || manager.is_sprinting();
+
             if manager.is_sprinting() {
                 manager.start_sprint_tick_work();
                 server.tick();
@@ -39,6 +47,13 @@ impl Ticker {
                 }
             } else {
                 server.tick();
+            }
+
+            if should_tick_game_tests {
+                server.runtime.block_on(async {
+                    drain_game_test_queue(server, &mut game_test_runner).await;
+                    game_test_runner.tick().await;
+                });
             }
 
             let tick_duration_nanos = tick_start_time.elapsed().as_nanos() as i64;

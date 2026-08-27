@@ -79,6 +79,7 @@ mod team;
 mod teammsg;
 mod teleport;
 mod tellraw;
+mod test;
 mod tick;
 mod time;
 mod title;
@@ -211,6 +212,7 @@ pub fn default_dispatcher(
     advancement::register(&mut dispatcher, registry);
     trigger::register(&mut dispatcher, registry);
     scoreboard::register(&mut dispatcher, registry);
+    test::register(&mut dispatcher, registry);
     team::register(&mut dispatcher, registry);
     teammsg::register(&mut dispatcher, registry);
     clone::register(&mut dispatcher, registry);
