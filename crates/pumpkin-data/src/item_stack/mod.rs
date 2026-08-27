@@ -1107,6 +1107,18 @@ mod tests {
     }
 
     #[test]
+    fn damage_item_changes_component_equality() {
+        let mut stack = iron_sword();
+        let original = stack.clone();
+        assert_eq!(stack.damage_item(1), DamageResult::Damaged);
+        assert!(
+            !stack.are_equal(&original),
+            "durability patch must differ so inventory sync sends SET_SLOT"
+        );
+        assert_eq!(stack.get_damage(), 1);
+    }
+
+    #[test]
     fn damage_breaks_single_item_to_empty() {
         let mut stack = iron_sword();
         let _ = stack.damage_item(300);

@@ -5,7 +5,6 @@ use pumpkin_data::tag::{self, Taggable};
 use pumpkin_data::tracked_data;
 use pumpkin_inventory::build_equipment_slots;
 use pumpkin_inventory::player::player_inventory::PlayerInventory;
-use pumpkin_inventory::screen_handler::InventoryPlayer;
 use pumpkin_protocol::bedrock::client::take_item_actor::CTakeItemActor;
 use pumpkin_protocol::bedrock::server::actor_event::{ActorEventID, SActorEvent};
 use pumpkin_protocol::codec::var_ulong::VarULong;
@@ -1952,12 +1951,21 @@ impl LivingEntity {
                             None,
                         );
                     }
+                    {
+                        let mut equipment = self
+                            .entity_equipment
+                            .lock()
+                            .unwrap_or_else(std::sync::PoisonError::into_inner);
+                        equipment.put(&slot, stack.clone());
+                    }
                     equipment_updates.push((slot.clone(), stack.clone()));
                     if let Some(player) = caller.get_player() {
-                        player.enqueue_slot_set_packet(&CSetPlayerInventory::new(
+                        player.inventory.set_slot(slot_index, stack.clone());
+                        player.try_send_slot_set_packet(&CSetPlayerInventory::new(
                             (slot_index as i32).into(),
                             &ItemStackSerializer::from(stack),
                         ));
+                        player.sync_inventory_to_client();
                     }
                 }
             }
@@ -2406,31 +2414,38 @@ impl LivingEntity {
                     );
                 }
 
-                let active_hand = self
+                let active_hand = *self
                     .active_hand
                     .lock()
                     .unwrap_or_else(std::sync::PoisonError::into_inner);
-                if let Some(hand) = *active_hand {
+                if let Some(hand) = active_hand {
                     let slot = if hand == Hand::Left {
                         EquipmentSlot::MAIN_HAND
                     } else {
                         EquipmentSlot::OFF_HAND
                     };
+                    let durability_damage = (amount / 1.0).floor().max(1.0) as i32;
 
-                    let mut equipment_guard = self
-                        .entity_equipment
-                        .lock()
-                        .unwrap_or_else(std::sync::PoisonError::into_inner);
-                    if let Some(stack) = equipment_guard.equipment.get_mut(&slot) {
-                        let durability_damage = (amount / 1.0).floor().max(1.0) as i32;
-                        if stack.damage_item(durability_damage) == DamageResult::Broken {
-                            if let Some(player) = caller.get_player() {
-                                player.increment_stat(
-                                    StatisticCategory::Broken,
-                                    stack.item.id as i32,
-                                    1,
-                                );
-                            }
+                    if let Some(player) = caller.get_player() {
+                        let broke = player.damage_item_in_slot(&slot, durability_damage);
+                        let empty = player
+                            .inventory
+                            .get_stack_in_hand(match &slot {
+                                EquipmentSlot::OffHand(_) => Hand::Left,
+                                _ => Hand::Right,
+                            })
+                            .is_empty();
+                        if broke && empty {
+                            self.clear_active_hand();
+                        }
+                    } else {
+                        let mut equipment_guard = self
+                            .entity_equipment
+                            .lock()
+                            .unwrap_or_else(std::sync::PoisonError::into_inner);
+                        if let Some(stack) = equipment_guard.equipment.get_mut(&slot)
+                            && stack.damage_item(durability_damage) == DamageResult::Broken
+                        {
                             world.send_entity_status(
                                 &self.entity,
                                 crate::entity::equipment_break_status(&slot),

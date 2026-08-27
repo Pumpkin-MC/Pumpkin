@@ -124,6 +124,15 @@ impl ItemEntity {
         &self.entity
     }
 
+    fn item_stack_metadata(&self) -> ItemStackSerializer<'static> {
+        ItemStackSerializer::from(
+            self.item_stack
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .clone(),
+        )
+    }
+
     pub fn can_merge(&self) -> bool {
         let Ok(item_stack) = self.item_stack.try_lock() else {
             return false;
@@ -469,16 +478,12 @@ impl EntityBase for ItemEntity {
     }
 
     fn init_data_tracker(&self) {
+        let stack = self.item_stack_metadata();
         self.entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::item::ITEM,
-                &ItemStackSerializer::from(
-                    self.item_stack
-                        .lock()
-                        .unwrap_or_else(std::sync::PoisonError::into_inner)
-                        .clone(),
-                ),
-            )],
+            &[
+                Metadata::new(pumpkin_data::tracked_data::item::ITEM, stack.clone()),
+                Metadata::new(pumpkin_data::tracked_data::item::STACK, stack),
+            ],
             None,
         );
     }
@@ -685,17 +690,15 @@ impl EntityBase for ItemEntity {
             }
 
             if client.version.load() >= pumpkin_util::version::JavaMinecraftVersion::V_1_21 {
-                let metadata = Metadata::new(
-                    pumpkin_data::tracked_data::item::ITEM,
-                    ItemStackSerializer::from(
-                        self.item_stack
-                            .lock()
-                            .unwrap_or_else(std::sync::PoisonError::into_inner)
-                            .clone(),
-                    ),
-                );
+                let stack = self.item_stack_metadata();
+                let item_meta =
+                    Metadata::new(pumpkin_data::tracked_data::item::ITEM, stack.clone());
+                let stack_meta = Metadata::new(pumpkin_data::tracked_data::item::STACK, stack);
+                let version = client.version.load();
                 let mut data = Vec::new();
-                if metadata.write(&mut data, &client.version.load()).is_ok() {
+                if item_meta.write(&mut data, &version).is_ok()
+                    && stack_meta.write(&mut data, &version).is_ok()
+                {
                     data.push(255);
                     let meta_packet =
                         CSetEntityMetadata::new(self.entity.entity_id.into(), data.into());
