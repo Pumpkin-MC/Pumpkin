@@ -62,9 +62,8 @@ impl BlockBehaviour for CoralPlantBlock {
         args: GetStateForNeighborUpdateArgs<'_>,
     ) -> BlockStateId {
         if args.direction == BlockDirection::Down {
-            let support_block = args
-                .world
-                .get_block_state_for_support(&args.position.down());
+            // Vanilla `canSurvive`: raw cell. `MOVING_PISTON` is not face-sturdy.
+            let support_block = args.world.get_block_state(&args.position.down());
             if !support_block.is_center_solid(BlockDirection::Up) {
                 return BlockStateId::AIR;
             }

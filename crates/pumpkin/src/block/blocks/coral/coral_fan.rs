@@ -5,6 +5,7 @@ use crate::{
         blocks::coral::{is_dead_coral, scan_for_water, try_schedule_die_tick},
     },
     entity::EntityBase,
+    world::World,
 };
 use pumpkin_data::{
     Block, BlockDirection, BlockId, BlockStateId, FacingExt, HorizontalFacingExt,
@@ -150,14 +151,15 @@ impl BlockBehaviour for CoralFanBlock {
         if is_wall_fan(args.block) {
             let props = CoralWallFanLikeProperties::from_state_id(args.state_id, args.block);
             if props.facing.to_block_direction().opposite() == args.direction
-                && !can_place_at(args.world, args.position, props.facing.opposite())
+                && !wall_fan_can_survive(args.world, args.position, props.facing)
             {
                 return BlockStateId::AIR;
             }
         } else if args.direction == BlockDirection::Down {
-            let support_block = args
-                .world
-                .get_block_state_for_support(&args.position.down());
+            // Vanilla `canSurvive`: `getBlockState` is the raw cell. `MOVING_PISTON`
+            // has an empty `getShape`, so `isFaceSturdy` is false and the fan pops
+            // (TNT duper). `BlockAccessor` would answer as the animated slime.
+            let support_block = args.world.get_block_state(&args.position.down());
             if !support_block.is_center_solid(BlockDirection::Up) {
                 return BlockStateId::AIR;
             }
@@ -218,4 +220,13 @@ fn can_place_at(world: &dyn BlockAccessor, block_pos: &BlockPos, facing: Horizon
     world
         .get_block_state(&block_pos.offset(facing.to_offset()))
         .is_side_solid(facing.opposite().to_block_direction())
+}
+
+/// Vanilla `BaseCoralWallFanBlock.canSurvive`: raw `getBlockState`, not the
+/// animated block behind a `MOVING_PISTON` placeholder.
+fn wall_fan_can_survive(world: &World, block_pos: &BlockPos, facing: HorizontalFacing) -> bool {
+    let support = facing.opposite();
+    world
+        .get_block_state(&block_pos.offset(support.to_offset()))
+        .is_side_solid(facing.to_block_direction())
 }

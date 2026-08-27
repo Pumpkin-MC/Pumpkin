@@ -434,14 +434,16 @@ fn move_piston(
         props.facing = dir.to_facing();
         let state = props.to_state_id(&Block::MOVING_PISTON);
 
-        // Vanilla `setBlock(..., 324)`: dest `moving_piston` is `UPDATE_INVISIBLE`.
-        // The client animation BE comes from `CBlockEvent` (`moveBlocks`).
+        // Vanilla `setBlock(..., 324)`: `UPDATE_INVISIBLE | MOVE_BY_PISTON |
+        // SKIP_BLOCK_ENTITY_SIDEEFFECTS`. No `UPDATE_CLIENTS` (dest stays off the
+        // wire; animation BE is `CBlockEvent`). No `UPDATE_NEIGHBORS` (BUD).
+        // No `UPDATE_KNOWN_SHAPE`: `updateNeighbourShapes` still runs so a coral
+        // fan pops when its support becomes `moving_piston`. `FORCE_STATE` is
+        // Pumpkin's shape skip (vanilla 82), not `UPDATE_INVISIBLE`.
         world.set_block_state(
             &target_pos,
             state,
-            BlockFlags::FORCE_STATE
-                | BlockFlags::MOVED
-                | BlockFlags::SKIP_BLOCK_ENTITY_REPLACED_CALLBACK,
+            BlockFlags::MOVED | BlockFlags::SKIP_BLOCK_ENTITY_REPLACED_CALLBACK,
         );
 
         if let Some(moved_state) = moved_block_states.get(moved_blocks.len() - 1 - index) {
@@ -469,12 +471,11 @@ fn move_piston(
         props.facing = dir.to_facing();
         props.r#type = pistion_type;
         moved_blocks_map.remove(&extended_pos);
+        // Same 324 as dest cells above (arm placeholder).
         world.set_block_state(
             &extended_pos,
             props.to_state_id(&Block::MOVING_PISTON),
-            BlockFlags::FORCE_STATE
-                | BlockFlags::MOVED
-                | BlockFlags::SKIP_BLOCK_ENTITY_REPLACED_CALLBACK,
+            BlockFlags::MOVED | BlockFlags::SKIP_BLOCK_ENTITY_REPLACED_CALLBACK,
         );
         let mut props = PistonHeadLikeProperties::default(&Block::PISTON_HEAD);
         props.facing = dir.to_facing();
