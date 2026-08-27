@@ -157,7 +157,7 @@ impl BlockBehaviour for BedBlock {
         };
 
         args.world
-            .break_block(&other_half_pos, Some(args.player.clone()), flags);
+            .break_block(&other_half_pos, Some(args.player), flags);
     }
 
     fn on_state_replaced(&self, args: OnStateReplacedArgs<'_>) {

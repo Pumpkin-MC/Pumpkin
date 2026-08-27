@@ -162,7 +162,7 @@ impl TaskScheduler {
             let handler_id = task.handler_id;
             let server_clone = server.clone();
 
-            tokio::spawn(async move {
+            server.spawn_task(async move {
                 let mut store = plugin.store.lock().await;
                 match plugin.plugin_instance {
                     crate::plugin::loader::wasm::wasm_host::PluginInstance::V0_1(ref instance) => {

@@ -133,7 +133,7 @@ impl Mob for IronGolemEntity {
         &self.mob_entity
     }
 
-    fn mob_tick<'a>(&'a self, _caller: &'a Arc<dyn EntityBase>) {
+    fn mob_tick(&self, _caller: &dyn EntityBase) {
         let attack_tick = self.attack_animation_tick.load(Ordering::Relaxed);
         if attack_tick > 0 {
             self.attack_animation_tick.fetch_sub(1, Ordering::Relaxed);

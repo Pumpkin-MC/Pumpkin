@@ -286,7 +286,7 @@ impl EntityBase for ArrowEntity {
         }
     }
     #[allow(clippy::too_many_lines)]
-    fn tick<'a>(&'a self, caller: &'a Arc<dyn EntityBase>, _server: &'a Server) {
+    fn tick(&self, caller: &dyn EntityBase, _server: &Server) {
         let entity = self.get_entity();
         let world = entity.world.load();
 

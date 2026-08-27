@@ -178,14 +178,12 @@ impl HostEntity for PluginHostState {
             )
             .map_err(|_| wasmtime::Error::msg("invalid world resource handle"))?;
         let world = world.provider.clone();
-        entity_base
-            .teleport(
-                pumpkin_util::math::vector3::Vector3::new(pos.0, pos.1, pos.2),
-                None,
-                None,
-                world,
-            )
-            .await;
+        entity_base.teleport(
+            pumpkin_util::math::vector3::Vector3::new(pos.0, pos.1, pos.2),
+            None,
+            None,
+            world,
+        );
         Ok(())
     }
 

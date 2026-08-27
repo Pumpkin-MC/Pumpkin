@@ -28,9 +28,7 @@ impl JavaClient {
                 .send_client_packet(&CSetCamera::new(target_id.into()))
                 .await;
 
-            player
-                .request_teleport(target_pos, target_yaw, target_pitch)
-                .await;
+            player.request_teleport(target_pos, target_yaw, target_pitch);
         }
     }
 }

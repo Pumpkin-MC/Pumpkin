@@ -118,7 +118,7 @@ impl EntityBase for SplashPotionEntity {
         );
     }
 
-    fn tick<'a>(&'a self, caller: &'a Arc<dyn EntityBase>, server: &'a Server) {
+    fn tick(&self, caller: &dyn EntityBase, server: &Server) {
         self.thrown.process_tick(caller, server);
     }
 
