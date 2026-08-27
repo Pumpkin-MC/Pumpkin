@@ -3,7 +3,7 @@ use std::sync::atomic::Ordering;
 
 use crossbeam::atomic::AtomicCell;
 use pumpkin_data::block_properties::{
-    BlockProperties, PistonHeadLikeProperties, PistonType,
+    Axis as BlockAxis, BlockProperties, PistonHeadLikeProperties, PistonType,
     StickyPistonLikeProperties as PistonProps,
 };
 use pumpkin_data::{Block, BlockDirection, BlockState, BlockStateId};
@@ -195,6 +195,73 @@ impl PistonBlockEntity {
                     game_time,
                 );
             }
+        }
+    }
+
+    /// Vanilla `PistonMovingBlockEntity.moveStuckEntities`. Honey only
+    /// (`isStickyForEntities`). Horizontal movement only.
+    fn move_stuck_entities(&self, world: &Arc<World>, new_progress: f32) {
+        if Block::from_state_id(self.pushed_block_state.id) != &Block::HONEY_BLOCK {
+            return;
+        }
+
+        let motion_dir = self.movement_direction();
+        if motion_dir.to_axis() == BlockAxis::Y {
+            return;
+        }
+
+        let last = self.last_progress.load();
+        let delta_progress = f64::from(new_progress - last);
+        if delta_progress <= 0.0 {
+            return;
+        }
+
+        // Vanilla: `movedState.getCollisionShape().max(Y)`, then local
+        // `AABB(0, stickyTop, 0, 1, 1.500001, 1)` shifted by `getExtendedProgress`.
+        let sticky_top = self
+            .pushed_block_state
+            .get_block_collision_shapes()
+            .map(|shape| shape.max.y)
+            .fold(f64::NEG_INFINITY, f64::max);
+        if !sticky_top.is_finite() {
+            return;
+        }
+        let query = BoundingBox::new(
+            Vector3::new(0.0, sticky_top, 0.0),
+            Vector3::new(1.0, 1.500_001_000_000_000_1, 1.0),
+        )
+        .at_pos(self.position)
+        .shift(Self::dir_vec(
+            self.facing,
+            f64::from(self.amount_extended(last)),
+        ));
+
+        let game_time = world.get_world_age();
+        for entity in world.get_entities_at_box(&query) {
+            let e = entity.get_entity();
+            // Vanilla `matchesStickyCritera`: `PushReaction.NORMAL` (IGNORE is not).
+            if e.ignores_piston_push() {
+                continue;
+            }
+            // Player position is client-authoritative. Vanilla still `Entity.move(PISTON)`.
+            if entity.get_player().is_some() {
+                continue;
+            }
+            if !e.on_ground.load(Ordering::Relaxed) {
+                continue;
+            }
+            // `isSupportedBy(pos)` or entity x/z inside the band, not the AABB.
+            let pos = e.pos.load();
+            let supported_here = e.supporting_block_pos.load() == Some(self.position);
+            let within_footprint = pos.x >= query.min.x
+                && pos.x <= query.max.x
+                && pos.z >= query.min.z
+                && pos.z <= query.max.z;
+            if !supported_here && !within_footprint {
+                continue;
+            }
+
+            Self::move_entity(&entity, motion_dir, delta_progress, motion_dir, game_time);
         }
     }
 
@@ -487,6 +554,7 @@ impl BlockEntity for PistonBlockEntity {
         }
         let new_progress = (current_progress + 0.5).min(1.0);
         self.push_entities(world, new_progress);
+        self.move_stuck_entities(world, new_progress);
         self.current_progress.store(new_progress);
     }
 

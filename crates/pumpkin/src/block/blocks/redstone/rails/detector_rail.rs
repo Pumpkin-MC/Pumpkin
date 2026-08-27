@@ -43,8 +43,11 @@ fn find_minecart_at(world: &World, pos: &BlockPos) -> Option<Arc<dyn EntityBase>
 
 /// Vanilla `DetectorRailBlock.updatePowerToConnected`: block update on each cell this
 /// shape connects to (slope: one up and one over, outside the six-neighbour sweep).
-fn update_power_to_connected(world: &Arc<World>, block: &Block, pos: &BlockPos) {
-    let props = RailProperties::new(world.get_block_state_id(pos), block);
+///
+/// Uses the just-written `newState`, not a world re-read. `setBlock(..., 3)` can
+/// prime TNT under the rail; that pops the support and `neighborChanged` replaces
+/// this cell with air before this call returns.
+fn update_power_to_connected(world: &Arc<World>, pos: &BlockPos, props: &RailProperties) {
     let ascending_towards = match props.shape() {
         RailShape::AscendingEast => Some(HorizontalFacing::East),
         RailShape::AscendingWest => Some(HorizontalFacing::West),
@@ -71,6 +74,9 @@ fn check_pressed(world: &Arc<World>, block: &Block, pos: &BlockPos) {
     }
 
     let state_id = world.get_block_state_id(pos);
+    if Block::from_state_id(state_id) != block {
+        return;
+    }
     let mut rail_props = RailProperties::new(state_id, block);
     let was_powered = rail_props.is_powered();
     let is_powered = find_minecart_at(world, pos).is_some();
@@ -78,7 +84,7 @@ fn check_pressed(world: &Arc<World>, block: &Block, pos: &BlockPos) {
     if is_powered != was_powered {
         rail_props.set_powered(is_powered);
         world.set_block_state(pos, rail_props.to_state_id(block), BlockFlags::NOTIFY_ALL);
-        update_power_to_connected(world, block, pos);
+        update_power_to_connected(world, pos, &rail_props);
         // Vanilla `updateNeighborsAt` on the rail and the block below (the support carries
         // the signal to a piston beside or beneath it).
         world.update_neighbors(pos, None);
@@ -126,6 +132,10 @@ impl BlockBehaviour for DetectorRailBlock {
     }
 
     fn on_neighbor_update(&self, args: OnNeighborUpdateArgs<'_>) {
+        // Vanilla `BaseRailBlock.neighborChanged`: `getBlockState(pos).is(this)`.
+        if args.world.get_block(args.position) != args.block {
+            return;
+        }
         if !rail_placement_is_valid(args.world, args.block, args.position) {
             args.world
                 .break_block(args.position, None, BlockFlags::NOTIFY_ALL);
@@ -147,8 +157,8 @@ impl BlockBehaviour for DetectorRailBlock {
         if !is_minecart(args.entity.get_entity().entity_type) {
             return;
         }
-        let state_id = args.world.get_block_state_id(args.position);
-        if !RailProperties::new(state_id, args.block).is_powered() {
+        // Vanilla `entityInside`: the collision `state`, not a world re-read.
+        if !RailProperties::new(args.state.id, args.block).is_powered() {
             check_pressed(args.world, args.block, args.position);
         }
     }
@@ -156,6 +166,9 @@ impl BlockBehaviour for DetectorRailBlock {
     fn on_scheduled_tick(&self, args: OnScheduledTickArgs<'_>) {
         // Vanilla `tick`: re-check only while powered (cart left). Arrival is `on_entity_collision`.
         let state_id = args.world.get_block_state_id(args.position);
+        if Block::from_state_id(state_id) != args.block {
+            return;
+        }
         if RailProperties::new(state_id, args.block).is_powered() {
             check_pressed(args.world, args.block, args.position);
         }
