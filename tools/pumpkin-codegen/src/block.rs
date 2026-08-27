@@ -1072,21 +1072,17 @@ pub fn build() -> TokenStream {
             Span::call_site(),
         );
 
-        for (block_name, id) in &property_group.blocks {
-            let const_block_name = Ident::new(
-                &const_block_name_from_block_name(block_name),
-                Span::call_site(),
-            );
-            let id_lit = LitInt::new(&id.to_string(), Span::call_site());
+        let idents: Box<_> = property_group.blocks.iter().map(|(name, _)| Ident::new(
+            &const_block_name_from_block_name(name),
+            Span::call_site(),
+        )).collect();
 
-            block_properties_from_state_and_block_id_arms.push(quote! {
-                #id_lit => Box::new(#property_name::from_state_id(state_id, &Block::#const_block_name)),
-            });
-
-            block_properties_from_props_and_name_arms.push(quote! {
-                #id_lit => Box::new(#property_name::from_props(props, &Block::#const_block_name)),
-            });
-        }
+        block_properties_from_state_and_block_id_arms.push(quote! {
+            #(BlockId::#idents)|* => Box::new(#property_name::from_state_id(state_id, self)),
+        });
+        block_properties_from_props_and_name_arms.push(quote! {
+            #(BlockId::#idents)|* => Box::new(#property_name::from_props(props, self)),
+        });
 
         block_properties.push(BlockPropertyStruct {
             data: property_group,
@@ -1351,7 +1347,7 @@ pub fn build() -> TokenStream {
             #[track_caller]
             #[doc = r" Get the properties of the block."]
             pub fn properties(&self, state_id: BlockStateId) -> Option<Box<dyn BlockProperties>> {
-                Some(match self.id.as_u16() {
+                Some(match self.id {
                     #(#block_properties_from_state_and_block_id_arms)*
                     _ => return None,
                 })
@@ -1360,7 +1356,7 @@ pub fn build() -> TokenStream {
             #[track_caller]
             #[doc = r" Get the properties of the block."]
             pub fn from_properties(&self, props: &[(&str, &str)]) -> Box<dyn BlockProperties> {
-                match self.id.as_u16() {
+                match self.id {
                     #(#block_properties_from_props_and_name_arms)*
                     _ => panic!("Invalid props")
                 }
