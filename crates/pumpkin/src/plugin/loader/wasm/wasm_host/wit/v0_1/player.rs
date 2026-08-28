@@ -15,10 +15,10 @@ use crate::{
             GuiResource, PlayerResource, PluginHostState, TextComponentResource, WorldResource,
         },
         wit::v0_1::{
-            entity::from_wit_damage_type,
             events::{
                 from_wasm_game_mode, from_wasm_position, to_wasm_game_mode, to_wasm_position,
             },
+            living_entity::from_wit_damage_type,
             pumpkin::{
                 self,
                 plugin::damage_types::DamageType as WitDamageType,
@@ -1136,6 +1136,34 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         Ok(())
     }
 
+    async fn get_inventory(
+        &mut self,
+        player: Resource<Player>,
+    ) -> wasmtime::Result<
+        Resource<
+            crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::inventory::PlayerInventory,
+        >,
+    >{
+        let player = player_from_resource(self, &player)?;
+        self.add_player_inventory(player)
+    }
+
+    async fn get_ender_chest(
+        &mut self,
+        player: Resource<Player>,
+    ) -> wasmtime::Result<
+        Resource<
+            crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::inventory::Inventory,
+        >,
+    >{
+        let player = player_from_resource(self, &player)?;
+        self.add_inventory(
+            crate::plugin::loader::wasm::wasm_host::state::InventoryProvider::PlayerEnderChest(
+                player,
+            ),
+        )
+    }
+
     async fn get_inventory_item(
         &mut self,
         player: Resource<Player>,
@@ -2162,9 +2190,7 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
     ) -> wasmtime::Result<()> {
         let player = player_from_resource(self, &player)?;
         let world = world_from_resource(self, &world);
-        player
-            .teleport(from_wasm_position(position), yaw, pitch, world)
-            .await;
+        player.teleport(from_wasm_position(position), yaw, pitch, world);
         Ok(())
     }
 

@@ -66,7 +66,7 @@ impl ExperienceOrbEntity {
 }
 
 impl EntityBase for ExperienceOrbEntity {
-    fn tick(&self, caller: &Arc<dyn EntityBase>, server: &Server) {
+    fn tick(&self, caller: &dyn EntityBase, server: &Server) {
         let entity = &self.entity;
         entity.tick(caller, server);
         let bounding_box = entity.bounding_box.load();

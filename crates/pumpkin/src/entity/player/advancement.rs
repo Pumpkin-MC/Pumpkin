@@ -19,11 +19,10 @@ use serde::ser::SerializeMap;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::to_string_pretty;
 use std::collections::{HashMap, HashSet};
-use std::fs::{create_dir_all, read, write};
+use std::fs::read;
 use std::path::PathBuf;
 use std::sync::{Arc, Weak};
 use std::time::{SystemTime, UNIX_EPOCH};
-use tokio::task::spawn_blocking;
 use tracing::{error, warn};
 use uuid::Uuid;
 
@@ -271,19 +270,17 @@ impl PlayerAdvancement {
             return Ok(());
         }
         let json = to_string_pretty(self).map_err(AdvancementDataError::Json)?;
-        let path = self.path.clone();
-        spawn_blocking(move || {
-            let Some(parent) = path.parent() else {
-                return Ok(());
-            };
-            if let Err(e) = create_dir_all(parent) {
-                error!("Failed to create player advancement directory : {e}");
-                return Err(AdvancementDataError::Io(e));
-            }
-            write(path, json).map_err(AdvancementDataError::Io)
-        })
-        .await
-        .unwrap_or(Ok(()))
+        let Some(parent) = self.path.parent() else {
+            return Ok(());
+        };
+        if let Err(e) = tokio::fs::create_dir_all(parent).await {
+            error!("Failed to create player advancement directory : {e}");
+            return Err(AdvancementDataError::Io(e));
+        }
+        tokio::fs::write(&self.path, json)
+            .await
+            .map_err(AdvancementDataError::Io)?;
+        Ok(())
     }
 
     /// Loads the player's advancement progress from disk.
@@ -352,7 +349,7 @@ impl PlayerAdvancement {
     }
 
     /// Flushes any pending advancement state down to the client.
-    pub fn flush_dirty(&mut self, player: &Arc<Player>, show_advancement: bool) {
+    pub fn flush_dirty(&mut self, player: &Player, show_advancement: bool) {
         if self.is_first_packet || !self.roots_to_update.is_empty() {
             let mut progress: HashMap<Identifier, &AdvancementProgress> = HashMap::new();
             let mut added: Vec<&Advancement> = Vec::new();
@@ -368,7 +365,6 @@ impl PlayerAdvancement {
             }
             self.progress_changed.clear();
             if !progress.is_empty() || !added.is_empty() || !removed.is_empty() {
-                let player = player.clone();
                 let parsed_progress: Vec<AdvancementProgressData> = progress
                     .into_iter()
                     .map(|(key, val)| AdvancementProgressData {

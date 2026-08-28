@@ -141,15 +141,13 @@ impl CommandContext<'_> {
     ///
     /// struct Executor;
     /// impl CommandExecutor for Executor {
-    ///     fn execute<'a>(&'a self, context: &'a CommandContext) -> CommandExecutorResult<'a> {
-    ///         Box::pin(async move {
-    ///             // The `get_argument` method returns a `Result<&i32, CommandSyntaxError>`.
-    ///             // We apply the `?` operator first, propagating the `CommandSyntaxError` if contained.
-    ///             // Finally, we dereference the `&i32`, as `i32` implements Copy.
-    ///             let operand1: i32 = *context.get_argument("operand1")?;
-    ///             let operand2: i32 = *context.get_argument("operand2")?;
-    ///             Ok(operand1 + operand2)
-    ///         })
+    ///     fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
+    ///         // The `get_argument` method returns a `Result<&i32, CommandSyntaxError>`.
+    ///         // We apply the `?` operator first, propagating the `CommandSyntaxError` if contained.
+    ///         // Finally, we dereference the `&i32`, as `i32` implements Copy.
+    ///         let operand1: i32 = *context.get_argument("operand1")?;
+    ///         let operand2: i32 = *context.get_argument("operand2")?;
+    ///         Ok(operand1 + operand2)
     ///     }
     /// }
     /// ```

@@ -216,7 +216,7 @@ impl EntityBase for AreaEffectCloudEntity {
 
     #[allow(clippy::too_many_lines)]
     #[allow(clippy::semicolon_outside_block)]
-    fn tick<'a>(&'a self, _caller: &'a Arc<dyn EntityBase>, _server: &'a Server) {
+    fn tick(&self, _caller: &dyn EntityBase, _server: &Server) {
         // Age & duration handling
         {
             let mut age = self

@@ -6,7 +6,6 @@ use crate::chunk::format::LightContainer;
 use crate::chunk::io::LoadedData::Loaded;
 use crate::chunk::io::{FileIO, LoadedData};
 use crate::level::Level;
-use crossfire::compat::AsyncRx;
 use pumpkin_config::lighting::LightingEngineConfig;
 use pumpkin_data::chunk::ChunkStatus;
 use pumpkin_data::chunk_gen_settings::GenerationSettings;
@@ -57,19 +56,15 @@ fn needs_relighting(chunk: &crate::chunk::ChunkData, config: LightingEngineConfi
 }
 
 async fn load_proto_chunk(chunk: &Arc<crate::chunk::ChunkData>, level: &Level) -> ProtoChunk {
-    if let Some(pool) = &level.gen_pool {
-        let (tx, rx) = tokio::sync::oneshot::channel();
-        let world_gen = level.world_gen.load();
-        let chunk_clone = chunk.clone();
-        pool.spawn(move || {
-            let p = ProtoChunk::from_chunk_data(&chunk_clone, &world_gen);
-            let _ = tx.send(p);
-        });
-        rx.await
-            .unwrap_or_else(|_| ProtoChunk::from_chunk_data(chunk, &level.world_gen.load()))
-    } else {
-        ProtoChunk::from_chunk_data(chunk, &level.world_gen.load())
-    }
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    let world_gen = level.world_gen.load();
+    let chunk_clone = chunk.clone();
+    rayon::spawn(move || {
+        let p = ProtoChunk::from_chunk_data(&chunk_clone, &world_gen);
+        let _ = tx.send(p);
+    });
+    rx.await
+        .unwrap_or_else(|_| ProtoChunk::from_chunk_data(chunk, &level.world_gen.load()))
 }
 
 async fn process_loaded_chunk(chunk: Arc<crate::chunk::ChunkData>, level: &Level) -> Chunk {
@@ -91,10 +86,7 @@ async fn process_loaded_chunk(chunk: Arc<crate::chunk::ChunkData>, level: &Level
             proto.light.block_light = (0..section_count)
                 .map(|_| LightContainer::new_empty(0))
                 .collect();
-
-            // Set stage to Features
             proto.stage = StagedChunkEnum::Features;
-
             Chunk::Proto(Box::new(proto))
         } else {
             Chunk::Level(chunk)
@@ -106,15 +98,22 @@ async fn process_loaded_chunk(chunk: Arc<crate::chunk::ChunkData>, level: &Level
 }
 
 pub async fn io_read_work(
-    recv: crossfire::compat::MAsyncRx<Vec<ChunkPos>>,
-    send: crossfire::compat::MTx<(ChunkPos, RecvChunk)>,
+    recv: Arc<tokio::sync::Mutex<tokio::sync::mpsc::Receiver<Vec<ChunkPos>>>>,
+    send: crossbeam::channel::Sender<(ChunkPos, RecvChunk)>,
     level: Arc<Level>,
     lock: IOLock,
 ) {
     debug!("io read thread start");
 
     // Cleaner loop and async recv
-    while let Ok(batch) = recv.recv().await {
+    loop {
+        let batch = {
+            let mut lock_rx = recv.lock().await;
+            lock_rx.recv().await
+        };
+        let Some(batch) = batch else {
+            break;
+        };
         for pos in &batch {
             // Lock handling
             loop {
@@ -178,10 +177,14 @@ pub async fn io_read_work(
     debug!("io read thread stop");
 }
 
-pub async fn io_write_work(recv: AsyncRx<Vec<(ChunkPos, Chunk)>>, level: Arc<Level>, lock: IOLock) {
+pub async fn io_write_work(
+    mut recv: tokio::sync::mpsc::Receiver<Vec<(ChunkPos, Chunk)>>,
+    level: Arc<Level>,
+    lock: IOLock,
+) {
     loop {
         // Don't check cancel_token here (keep saving chunks)
-        let Ok(data) = recv.recv().await else { break };
+        let Some(data) = recv.recv().await else { break };
         // debug!("io write thread receive chunks size {}", data.len());
         let mut vec = Vec::with_capacity(data.len());
         let mut positions = Vec::with_capacity(data.len());
@@ -284,26 +287,6 @@ pub fn run_generation(
                 stage,
                 error: msg.to_string(),
             }
-        }
-    }
-}
-
-pub fn generation_work(
-    recv: &crossfire::compat::MRx<(ChunkPos, Cache, StagedChunkEnum)>,
-    send: &crossfire::compat::MTx<(ChunkPos, RecvChunk)>,
-    level: &Arc<Level>,
-) {
-    let settings = GenerationSettings::from_dimension(level.world_gen.load().dimension());
-
-    loop {
-        let Ok((pos, cache, stage)) = recv.recv() else {
-            debug!("generation channel closed, exiting");
-            break;
-        };
-
-        let result = run_generation(pos, cache, stage, level, settings);
-        if send.send((pos, result)).is_err() {
-            break;
         }
     }
 }

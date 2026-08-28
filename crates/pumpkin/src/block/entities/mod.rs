@@ -1,4 +1,3 @@
-use std::pin::Pin;
 use std::{any::Any, sync::Arc};
 
 use pumpkin_data::{Block, block_properties::BLOCK_ENTITY_TYPES};
@@ -126,19 +125,10 @@ pub trait BlockEntity: Any + Send + Sync {
         None
     }
     fn set_block_state(&mut self, _block_state: BlockStateId) {}
-    fn on_block_replaced<'a>(
-        self: Arc<Self>,
-        world: Arc<World>,
-        position: BlockPos,
-    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>>
-    where
-        Self: 'a,
-    {
-        Box::pin(async move {
-            if let Some(inventory) = self.get_inventory() {
-                world.scatter_inventory(&position, &inventory);
-            }
-        })
+    fn on_block_replaced(self: Arc<Self>, world: &Arc<World>, position: &BlockPos) {
+        if let Some(inventory) = self.get_inventory() {
+            world.scatter_inventory(position, &inventory);
+        }
     }
     fn is_dirty(&self) -> bool {
         false

@@ -328,3 +328,21 @@ impl Mob for WolfEntity {
         );
     }
 }
+
+impl WolfEntity {
+    pub fn get_collar_color(&self) -> u8 {
+        self.collar_color.load(Ordering::Relaxed)
+    }
+
+    pub fn set_collar_color(&self, color: u8) {
+        self.collar_color.store(color, Ordering::Relaxed);
+        let entity = self.get_entity();
+        entity.send_meta_data(
+            &[Metadata::new(
+                pumpkin_data::tracked_data::wolf::COLLAR_COLOR,
+                VarInt(color as i32),
+            )],
+            None,
+        );
+    }
+}
