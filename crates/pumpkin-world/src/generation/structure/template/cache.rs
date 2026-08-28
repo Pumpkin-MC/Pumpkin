@@ -158,12 +158,6 @@ pub fn processor_list_json(id: &str) -> Option<&'static str> {
     get_processor_list_json(&canonicalize(id))
 }
 
-/// Returns the raw JSON for a test instance, or `None` if not found.
-#[must_use]
-pub fn test_instance_json(id: &str) -> Option<&'static str> {
-    get_test_instance_json(&canonicalize(id))
-}
-
 /// Returns the element template ids for a pool, or `None` if not found.
 ///
 /// Element ids are fully qualified and can be passed directly to [`get_template`].
@@ -194,13 +188,6 @@ pub const fn all_structure_names() -> &'static [&'static str] {
 #[allow(clippy::used_underscore_items)]
 pub const fn all_pool_names() -> &'static [&'static str] {
     _generated_all_pool_names()
-}
-
-/// Returns a list of all available test instance names for tab-completion.
-#[must_use]
-#[allow(clippy::used_underscore_items)]
-pub const fn all_test_instance_names() -> &'static [&'static str] {
-    _generated_all_test_instance_names()
 }
 
 /// Returns raw NBT bytes for an embedded structure template.

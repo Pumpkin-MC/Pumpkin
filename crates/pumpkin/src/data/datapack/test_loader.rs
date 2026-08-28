@@ -16,12 +16,10 @@ pub type TestInstanceRegistry = HashMap<String, TestInstance>;
 /// Ids are fully qualified, so entries here can be overridden by later
 /// [`load_test_instances_from_dir`] calls for the same id.
 pub fn load_embedded_test_instances(registry: &mut TestInstanceRegistry) -> usize {
-    use pumpkin_world::generation::structure::template;
-
     let before = registry.len();
 
-    for &id in template::all_test_instance_names() {
-        let Some(content) = template::test_instance_json(id) else {
+    for &id in pumpkin_world::test_instance::all_names() {
+        let Some(content) = pumpkin_world::test_instance::json(id) else {
             warn!("Embedded test instance '{id}' has no JSON payload");
             continue;
         };

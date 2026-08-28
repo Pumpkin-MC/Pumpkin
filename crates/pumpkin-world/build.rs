@@ -122,76 +122,85 @@ fn main() {
         }
     }
 
-    let mut out = String::new();
+    let mut template_out = String::new();
 
     // ---------------------------------------------------------------------
-    // Resource lookup functions
+    // Structure/template resource lookup functions
     // ---------------------------------------------------------------------
 
-    out.push_str(&wrap_fn(
+    template_out.push_str(&wrap_fn(
         "get_template_bytes",
         "path",
         "Option<&'static [u8]>",
         &arms.templates,
     ));
 
-    out.push_str(&wrap_fn(
+    template_out.push_str(&wrap_fn(
         "get_pool_elements",
         "pool_id",
         "Option<&'static [&'static str]>",
         &arms.pools,
     ));
 
-    out.push_str(&wrap_fn(
+    template_out.push_str(&wrap_fn(
         "get_template_pool_json",
         "path",
         "Option<&'static str>",
         &arms.template_pool_json,
     ));
 
-    out.push_str(&wrap_fn(
+    template_out.push_str(&wrap_fn(
         "get_processor_list_json",
         "path",
         "Option<&'static str>",
         &arms.processor_list_json,
     ));
 
-    out.push_str(&wrap_fn(
-        "get_test_instance_json",
-        "path",
-        "Option<&'static str>",
-        &arms.test_instance_json,
-    ));
-
     // ---------------------------------------------------------------------
-    // Resource-name lists
+    // Structure/template resource-name lists
     // ---------------------------------------------------------------------
 
-    out.push_str(&name_list_fn(
+    template_out.push_str(&name_list_fn(
         "_generated_all_template_names",
         &arms.templates,
     ));
 
-    out.push_str(&name_list_fn("_generated_all_pool_names", &arms.pools));
-
-    out.push_str(&name_list_fn(
-        "_generated_all_test_instance_names",
-        &arms.test_instance_json,
-    ));
+    template_out.push_str(&name_list_fn("_generated_all_pool_names", &arms.pools));
 
     // ---------------------------------------------------------------------
     // Datapack identity
     // ---------------------------------------------------------------------
 
-    out.push_str(&string_list_fn(
+    template_out.push_str(&string_list_fn(
         "_generated_all_embedded_datapack_names",
         &embedded_pack_names,
     ));
 
     let out_dir = env::var_os("OUT_DIR").unwrap();
-    let dest_path = Path::new(&out_dir).join("template_embeddings.rs");
+    let out_dir = Path::new(&out_dir);
 
-    fs::write(&dest_path, out).unwrap();
+    fs::write(out_dir.join("template_embeddings.rs"), template_out).unwrap();
+
+    // Test instances are a datapack registry of their own. Keep their generated
+    // resource table separate from the structure-template cache so consumers do
+    // not need to reach through `generation::structure::template`.
+    let mut test_instance_out = String::new();
+    test_instance_out.push_str(&wrap_fn(
+        "get_test_instance_json",
+        "path",
+        "Option<&'static str>",
+        &arms.test_instance_json,
+    ));
+    test_instance_out.push_str(&name_list_fn(
+        "_generated_all_test_instance_names",
+        &arms.test_instance_json,
+    ));
+
+    fs::write(
+        out_dir.join("test_instance_embeddings.rs"),
+        test_instance_out,
+    )
+    .unwrap();
 }
 
 /// Scans every namespace under `<pack>/data/`.
