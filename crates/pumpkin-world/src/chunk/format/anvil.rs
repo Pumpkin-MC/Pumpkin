@@ -33,14 +33,38 @@ pub const SUBREGION_AND: i32 = i32::pow(2, SUBREGION_BITS as u32) - 1;
 /// The number of chunks in a region
 pub const CHUNK_COUNT: usize = REGION_SIZE * REGION_SIZE;
 
-/// The number of bytes in a sector (4 KiB)
-const SECTOR_BYTES: usize = 4096;
+/// The number of bytes in a sector (4 KiB). Vanilla `RegionFile.SECTOR_BYTES`.
+pub(crate) const SECTOR_BYTES: usize = 4096;
 
-/// Hard cap on a chunk's sector count in the Anvil location table
-/// (`(offset << 8) | sector_count`): one byte, so 255. Vanilla spills a larger chunk into a
-/// companion `c.<x>.<z>.mcc` file. Pumpkin has no such fallback; writing the count anyway
-/// overflows into the neighbouring offset field and the region is unparsable from that point on.
-const MAX_SECTORS_PER_CHUNK: u32 = 0xFF;
+/// One-byte sector count in the Anvil location table (`(offset << 8) | sector_count`).
+/// Vanilla spills a larger chunk to `c.<x>.<z>.mcc`. Pumpkin has no `.mcc` fallback;
+/// writing a count above 255 overflows into the neighbouring offset.
+pub(crate) const MAX_SECTORS_PER_CHUNK: u32 = 0xFF;
+
+/// Location table entry: `(sector_offset << 8) | sector_count`. Vanilla `RegionFile`.
+/// `None` if `sector_count` does not fit in one byte.
+#[must_use]
+pub(crate) const fn pack_location(sector_offset: u32, sector_count: u32) -> Option<u32> {
+    if sector_count > MAX_SECTORS_PER_CHUNK {
+        None
+    } else {
+        Some((sector_offset << 8) | sector_count)
+    }
+}
+
+/// Inverse of [`pack_location`]: `(sector_offset, sector_count)`.
+#[must_use]
+pub(crate) const fn unpack_location(location: u32) -> (u32, u32) {
+    (location >> 8, location & MAX_SECTORS_PER_CHUNK)
+}
+
+/// Chunk index in a region file (0..1023). Vanilla `RegionFile.getOffsetIndex`.
+#[must_use]
+pub const fn chunk_index(x: i32, z: i32) -> usize {
+    let local_x = x & SUBREGION_AND;
+    let local_z = z & SUBREGION_AND;
+    ((local_z << SUBREGION_BITS) + local_x) as usize
+}
 
 // 26.2
 pub const WORLD_DATA_VERSION: i32 = 4903;
@@ -331,10 +355,20 @@ impl AnvilChunkData {
             .compress_data(&raw_bytes, level)
             .map_err(ChunkWritingError::Compression)?;
 
-        Ok(Self {
+        let data = Self {
             compression: Some(compression),
             compressed_data: compressed_data.into(),
-        })
+        };
+        // Refuse before the location table is written: a count above 255 cannot be encoded
+        // and would overflow into the next offset. The in-memory chunk stays dirty.
+        if data.sector_count() > MAX_SECTORS_PER_CHUNK {
+            return Err(ChunkWritingError::ChunkSerializingError(format!(
+                "chunk {:?} serializes to {} sectors; Anvil location table max is {MAX_SECTORS_PER_CHUNK} (no `.mcc` fallback)",
+                chunk.position(),
+                data.sector_count(),
+            )));
+        }
+        Ok(data)
     }
 }
 
@@ -347,10 +381,7 @@ impl<S: SingleChunkDataSerializer> AnvilChunkFile<S> {
 
     #[must_use]
     pub const fn get_chunk_index(x: i32, z: i32) -> usize {
-        let local_x = x & SUBREGION_AND;
-        let local_z = z & SUBREGION_AND;
-        let index = (local_z << SUBREGION_BITS) + local_x;
-        index as usize
+        chunk_index(x, z)
     }
 
     async fn write_indices<I>(&self, path: &Path, indices: I) -> Result<(), std::io::Error>
@@ -375,7 +406,13 @@ impl<S: SingleChunkDataSerializer> AnvilChunkFile<S> {
         for metadata in &self.chunks_data {
             if let Some(chunk) = metadata {
                 let sector_count = chunk.serialized_data.sector_count();
-                header.put_u32((chunk.file_sector_offset << 8) | sector_count);
+                let location =
+                    pack_location(chunk.file_sector_offset, sector_count).ok_or_else(|| {
+                        std::io::Error::other(
+                            "Anvil location table sector count exceeds 255 (no `.mcc` fallback)",
+                        )
+                    })?;
+                header.put_u32(location);
             } else {
                 header.put_u32(0);
             }
@@ -458,7 +495,12 @@ impl<S: SingleChunkDataSerializer> AnvilChunkFile<S> {
         for metadata in &self.chunks_data {
             if let Some(chunk) = metadata {
                 let sector_count = chunk.serialized_data.sector_count();
-                header.put_u32((current_sector << 8) | sector_count);
+                let location = pack_location(current_sector, sector_count).ok_or_else(|| {
+                    std::io::Error::other(
+                        "Anvil location table sector count exceeds 255 (no `.mcc` fallback)",
+                    )
+                })?;
+                header.put_u32(location);
                 current_sector += sector_count;
             } else {
                 header.put_u32(0);
@@ -562,8 +604,9 @@ impl<S: SingleChunkDataSerializer + 'static> ChunkSerializer for AnvilChunkFile<
             let timestamp = timestamp_bytes.get_u32();
             let location = location_bytes.get_u32();
 
-            let sector_count = (location & 0xFF) as usize;
-            let sector_offset = (location >> 8) as usize;
+            let (sector_offset, sector_count) = unpack_location(location);
+            let sector_offset = sector_offset as usize;
+            let sector_count = sector_count as usize;
             let end_offset = sector_offset + sector_count;
 
             // If the sector offset or count is 0, the chunk is not present (we should not parse empty chunks)
@@ -623,19 +666,6 @@ impl<S: SingleChunkDataSerializer + 'static> ChunkSerializer for AnvilChunkFile<
             .as_ref()
             .and_then(|chunk_data| chunk_data.serialized_data.compression);
         let new_chunk_data = AnvilChunkData::from_chunk(chunk, compression_type, chunk_config)?;
-
-        // Cap check before `chunks_data`: a sector count above `MAX_SECTORS_PER_CHUNK` cannot
-        // be encoded, so the write is refused and the chunk stays dirty for a retry. The region
-        // file already on disk stays readable.
-        if new_chunk_data.sector_count() > MAX_SECTORS_PER_CHUNK {
-            return Err(ChunkWritingError::IoError(std::io::Error::other(format!(
-                "Chunk {:?} serializes to {} sectors, more than the {MAX_SECTORS_PER_CHUNK} a \
-                 region file can address for one chunk; it cannot be saved (oversized `.mcc` \
-                 chunks are not supported yet)",
-                chunk.position(),
-                new_chunk_data.sector_count(),
-            ))));
-        }
 
         let mut write_action = self.write_action.lock().await;
         if !chunk_config.write_in_place {
@@ -1333,7 +1363,10 @@ mod tests {
  */
 #[cfg(test)]
 mod tests {
-    use super::{Compression, CompressionError};
+    use super::{
+        Compression, CompressionError, MAX_SECTORS_PER_CHUNK, chunk_index, pack_location,
+        unpack_location,
+    };
 
     #[test]
     fn custom_compression_returns_unknown_compression_error() {
@@ -1349,5 +1382,30 @@ mod tests {
             Compression::Custom.decompress_data(b"chunk data"),
             Err(CompressionError::UnknownCompression)
         ));
+    }
+
+    #[test]
+    fn pack_location_fits_one_byte_sector_count() {
+        assert_eq!(pack_location(2, 1), Some((2 << 8) | 1));
+        assert_eq!(
+            pack_location(2, MAX_SECTORS_PER_CHUNK),
+            Some((2 << 8) | MAX_SECTORS_PER_CHUNK)
+        );
+        assert_eq!(pack_location(2, MAX_SECTORS_PER_CHUNK + 1), None);
+    }
+
+    #[test]
+    fn unpack_location_is_inverse_of_pack() {
+        let packed = pack_location(0x123456, 0xAB).expect("fits");
+        assert_eq!(unpack_location(packed), (0x123456, 0xAB));
+        assert_eq!(unpack_location(0), (0, 0));
+    }
+
+    #[test]
+    fn chunk_index_uses_32x32_region_local_coords() {
+        assert_eq!(chunk_index(0, 0), 0);
+        assert_eq!(chunk_index(31, 0), 31);
+        assert_eq!(chunk_index(0, 1), 32);
+        assert_eq!(chunk_index(-1, -1), chunk_index(31, 31));
     }
 }
