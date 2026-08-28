@@ -19,6 +19,7 @@ pumpkin-world.workspace = true
 pumpkin-util.workspace = true
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
+cesu8.workspace = true
 
 uuid.workspace = true
 thiserror.workspace = true

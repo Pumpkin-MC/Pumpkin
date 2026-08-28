@@ -280,6 +280,21 @@ pub trait EntityBase: Send + Sync + std::any::Any {
         false
     }
 
+    fn set_sprinting(&self, is_sprinting: bool) {
+        if let Some(living) = self.get_living_entity() {
+            living.set_sprinting(is_sprinting);
+        } else {
+            self.get_entity().set_sprinting(is_sprinting);
+        }
+    }
+
+    fn get_block_speed_factor(&self) -> f32 {
+        self.get_living_entity().map_or_else(
+            || self.get_entity().get_block_speed_factor(),
+            LivingEntity::get_block_speed_factor,
+        )
+    }
+
     /// Custom Y-axis velocity drag multiplier applied during `travel_in_air`.
     /// Bats return `Some(0.6)` to match vanilla's `travel()` override.
     fn get_y_velocity_drag(&self) -> Option<f64> {
@@ -2157,18 +2172,27 @@ impl Entity {
         )
     }
 
+    #[must_use]
+    pub fn get_block_pos_below_that_affects_my_movement(&self) -> BlockPos {
+        self.get_pos_with_y_offset(0.500_001).0
+    }
+
+    #[must_use]
     #[expect(clippy::float_cmp)]
-    fn get_velocity_multiplier(&self) -> f32 {
-        let block = self.world.load().get_block(&self.block_pos.load());
-
-        let multiplier = block.velocity_multiplier;
-
-        if multiplier != 1.0 || block == &Block::WATER || block == &Block::BUBBLE_COLUMN {
-            multiplier
+    pub fn get_block_speed_factor(&self) -> f32 {
+        let world = self.world.load();
+        let (block, _state) = world.get_block_and_state(&self.block_pos.load());
+        let speed_factor_here = block.get_speed_factor();
+        if block != &Block::WATER && block != &Block::BUBBLE_COLUMN {
+            if speed_factor_here == 1.0 {
+                let below_pos = self.get_block_pos_below_that_affects_my_movement();
+                let (below_block, _below_state) = world.get_block_and_state(&below_pos);
+                below_block.get_speed_factor()
+            } else {
+                speed_factor_here
+            }
         } else {
-            let (_pos, block, _state) = self.get_block_with_y_offset(0.500_001);
-
-            block.velocity_multiplier
+            speed_factor_here
         }
     }
 
@@ -2224,7 +2248,7 @@ impl Entity {
 
         self.move_pos(final_move);
 
-        let velocity_multiplier = f64::from(self.get_velocity_multiplier());
+        let velocity_multiplier = f64::from(caller.get_block_speed_factor());
 
         self.velocity.store(final_move * velocity_multiplier);
 
@@ -2317,7 +2341,9 @@ impl Entity {
                 let entity_id = self.entity_id;
                 let yaw = self.yaw.load();
 
+                let rt_handle = world_clone.server.upgrade().map(|s| s.runtime.clone());
                 rayon::spawn(move || {
+                    let _guard = rt_handle.as_ref().map(tokio::runtime::Handle::enter);
                     let Some(entity_arc) = world_clone.get_entity_by_id(entity_id) else {
                         return;
                     };
@@ -2445,23 +2471,15 @@ impl Entity {
 
             let mut new_manager = PortalProcessor::new(portal_type, pos, portal_world);
 
-            if let Some(portal) = NetherPortal::get_on_axis(
-                &world,
-                &pos,
-                pumpkin_data::block_properties::HorizontalAxis::X,
-            ) && portal.was_already_valid()
-            {
-                new_manager.set_source_portal(SourcePortalInfo {
-                    lower_corner: portal.lower_corner(),
-                    axis: portal.axis(),
-                    width: portal.width(),
-                    height: portal.height(),
-                });
-            } else if let Some(portal) = NetherPortal::get_on_axis(
-                &world,
-                &pos,
-                pumpkin_data::block_properties::HorizontalAxis::Z,
-            ) && portal.was_already_valid()
+            let (block, state) = world.get_block_and_state(&pos);
+            let source_axis = (block == &pumpkin_data::Block::NETHER_PORTAL).then(|| {
+                let props = <pumpkin_data::block_properties::NetherPortalLikeProperties as pumpkin_data::block_properties::BlockProperties>::from_state_id(state.id, block);
+                props.axis
+            });
+
+            if let Some(axis) = source_axis
+                && let Some(portal) = NetherPortal::get_on_axis(&world, &pos, axis)
+                && portal.was_already_valid()
             {
                 new_manager.set_source_portal(SourcePortalInfo {
                     lower_corner: portal.lower_corner(),
@@ -2475,6 +2493,22 @@ impl Entity {
         } else if let Some(manager) = manager.as_mut() {
             manager.entry_position = pos;
             manager.inside_portal_this_tick = true;
+            if manager.source_portal.is_none() {
+                let (block, state) = world.get_block_and_state(&pos);
+                if block == &pumpkin_data::Block::NETHER_PORTAL {
+                    let props = <pumpkin_data::block_properties::NetherPortalLikeProperties as pumpkin_data::block_properties::BlockProperties>::from_state_id(state.id, block);
+                    if let Some(portal) = NetherPortal::get_on_axis(&world, &pos, props.axis)
+                        && portal.was_already_valid()
+                    {
+                        manager.set_source_portal(SourcePortalInfo {
+                            lower_corner: portal.lower_corner(),
+                            axis: portal.axis(),
+                            width: portal.width(),
+                            height: portal.height(),
+                        });
+                    }
+                }
+            }
         }
     }
 
@@ -2665,6 +2699,41 @@ impl Entity {
     }
     pub fn is_sneaking(&self) -> bool {
         self.sneaking.load(Ordering::Relaxed)
+    }
+
+    #[must_use]
+    pub fn is_swimming(&self) -> bool {
+        self.swimming.load(Ordering::Relaxed)
+    }
+
+    #[must_use]
+    pub fn is_visually_swimming(&self) -> bool {
+        self.pose.load() == EntityPose::Swimming
+    }
+
+    #[must_use]
+    pub fn is_in_water(&self) -> bool {
+        self.touching_water.load(Ordering::Relaxed)
+    }
+
+    #[must_use]
+    pub fn is_submerged_in_water(&self) -> bool {
+        let pos = self.pos.load();
+        let eye_height = self.get_eye_height();
+        let eye_pos = BlockPos::floored(pos.x, pos.y + eye_height - 0.111_111_11, pos.z);
+        let world = self.world.load();
+        let (fluid, _) = world.get_fluid_and_fluid_state(&eye_pos);
+        fluid.id == Fluid::WATER.id || fluid.id == Fluid::FLOWING_WATER.id
+    }
+
+    #[must_use]
+    pub fn is_under_water(&self) -> bool {
+        self.is_in_water() && self.is_submerged_in_water()
+    }
+
+    #[must_use]
+    pub fn is_visually_crawling(&self) -> bool {
+        self.is_visually_swimming() && !self.is_in_water()
     }
 
     pub fn set_swimming(&self, swimming: bool) {
@@ -2970,6 +3039,10 @@ impl Entity {
     }
 
     pub fn set_pose(&self, pose: EntityPose) {
+        if self.pose.load() == pose {
+            return;
+        }
+
         let mut pose_event =
             crate::plugin::api::events::entity::entity_pose_change::EntityPoseChangeEvent::new(
                 self.entity_id,
@@ -2987,27 +3060,24 @@ impl Entity {
         let dimension = Self::get_entity_dimensions(pose);
         let position = self.pos.load();
         let aabb = BoundingBox::new_from_pos(position.x, position.y, position.z, &dimension);
-        if self.world.load().is_space_empty(aabb.contract_all(1.0E-7)) {
-            self.pose.store(pose);
-            let dimension = Self::get_entity_dimensions(pose);
-            self.bounding_box.store(aabb);
-            self.entity_dimension.store(dimension);
-            let pose = pose as i32;
-            let mut bedrock_meta = SyncedActorDataList::new();
-            bedrock_meta.set(entity_data_key::POSE_INDEX, MetadataValue::Int(pose));
-            bedrock_meta.set(
-                entity_data_key::WIDTH,
-                MetadataValue::Float(dimension.width),
-            );
-            bedrock_meta.set(
-                entity_data_key::HEIGHT,
-                MetadataValue::Float(dimension.height),
-            );
-            self.send_meta_data(
-                &[Metadata::new(tracked_data::entity::DATA_POSE, VarInt(pose))],
-                Some(&bedrock_meta),
-            );
-        }
+        self.pose.store(pose);
+        self.bounding_box.store(aabb);
+        self.entity_dimension.store(dimension);
+        let pose = pose as i32;
+        let mut bedrock_meta = SyncedActorDataList::new();
+        bedrock_meta.set(entity_data_key::POSE_INDEX, MetadataValue::Int(pose));
+        bedrock_meta.set(
+            entity_data_key::WIDTH,
+            MetadataValue::Float(dimension.width),
+        );
+        bedrock_meta.set(
+            entity_data_key::HEIGHT,
+            MetadataValue::Float(dimension.height),
+        );
+        self.send_meta_data(
+            &[Metadata::new(tracked_data::entity::DATA_POSE, VarInt(pose))],
+            Some(&bedrock_meta),
+        );
     }
 
     /// Checks if the entity is invulnerable to the given damage type, considering both general invulnerability and specific immunities.
