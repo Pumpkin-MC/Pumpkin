@@ -358,66 +358,66 @@ impl JavaClient {
         }
 
         let version = self.version.load();
-        // Offload CPU-heavy packet serialization (palette packing, lighting, NBT heightmaps)
-        // off Tokio worker threads onto blocking/Rayon worker threads
-        let serialize_tasks: Vec<_> = valid_chunks
-            .into_iter()
-            .map(|chunk| {
-                tokio::task::spawn_blocking(move || {
-                    let mut buf = Vec::with_capacity(32 * 1024);
-                    if let Err(err) = buf.write_var_int(&VarInt(CChunkData::to_id(version))) {
-                        error!("Failed to write chunk data id: {err:?}");
-                        return None;
-                    }
-                    if let Err(err) = CChunkData(&chunk).write_packet_data(&mut buf, &version) {
-                        error!("Failed to write chunk data: {err:?}");
-                        return None;
-                    }
+        let (tx, rx) = oneshot::channel();
+        rayon::spawn(move || {
+            let mut serialized = Vec::with_capacity(valid_chunks.len());
+            for chunk in valid_chunks {
+                let mut buf = Vec::with_capacity(32 * 1024);
+                if let Err(err) = buf.write_var_int(&VarInt(CChunkData::to_id(version))) {
+                    error!("Failed to write chunk data id: {err:?}");
+                    continue;
+                }
+                if let Err(err) = CChunkData(&chunk).write_packet_data(&mut buf, &version) {
+                    error!("Failed to write chunk data: {err:?}");
+                    continue;
+                }
 
-                    let light_buf = if version >= JavaMinecraftVersion::V_1_14
-                        && version < JavaMinecraftVersion::V_1_18
-                    {
-                        match CLightUpdate::from_chunk(&chunk, version) {
-                            Ok(light_packet) => {
-                                let mut light_buf = Vec::new();
-                                if let Err(err) =
-                                    light_buf.write_var_int(&VarInt(CLightUpdate::to_id(version)))
-                                {
-                                    error!("Failed to write light update id: {err:?}");
-                                    None
-                                } else if let Err(err) =
-                                    light_packet.write_packet_data(&mut light_buf, &version)
-                                {
-                                    error!("Failed to write light update data: {err:?}");
-                                    None
-                                } else {
-                                    Some(Bytes::from(light_buf))
-                                }
-                            }
-                            Err(err) => {
-                                error!("Failed to create light update packet: {err:?}");
+                let light_buf = if version >= JavaMinecraftVersion::V_1_14
+                    && version < JavaMinecraftVersion::V_1_18
+                {
+                    match CLightUpdate::from_chunk(&chunk, version) {
+                        Ok(light_packet) => {
+                            let mut light_buf = Vec::new();
+                            if let Err(err) =
+                                light_buf.write_var_int(&VarInt(CLightUpdate::to_id(version)))
+                            {
+                                error!("Failed to write light update id: {err:?}");
                                 None
+                            } else if let Err(err) =
+                                light_packet.write_packet_data(&mut light_buf, &version)
+                            {
+                                error!("Failed to write light update data: {err:?}");
+                                None
+                            } else {
+                                Some(Bytes::from(light_buf))
                             }
                         }
-                    } else {
-                        None
-                    };
+                        Err(err) => {
+                            error!("Failed to create light update packet: {err:?}");
+                            None
+                        }
+                    }
+                } else {
+                    None
+                };
 
-                    Some((Bytes::from(buf), light_buf))
-                })
-            })
-            .collect();
+                serialized.push((Bytes::from(buf), light_buf));
+            }
+            let _ = tx.send(serialized);
+        });
+
+        let Ok(serialized) = rx.await else {
+            return;
+        };
 
         if version >= JavaMinecraftVersion::V_1_20_2 {
             self.send_packet(&CChunkBatchStart).await;
         }
 
-        for task in serialize_tasks {
-            if let Ok(Some((chunk_data, light_data))) = task.await {
-                self.send_packet_now_data(chunk_data).await;
-                if let Some(light_data) = light_data {
-                    self.send_packet_now_data(light_data).await;
-                }
+        for (chunk_data, light_data) in serialized {
+            self.enqueue_packet(chunk_data).await;
+            if let Some(light_data) = light_data {
+                self.enqueue_packet(light_data).await;
             }
         }
 

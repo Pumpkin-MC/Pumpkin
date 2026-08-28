@@ -251,31 +251,13 @@ impl ClientPlatform {
     }
 
     pub fn try_enqueue_spawn_packet(&self, entity: &Arc<dyn crate::entity::EntityBase>) {
-        match self {
-            Self::Java(java) => {
-                let ent = entity.get_entity();
-                let version = java.version.load();
-                let is_mob = ent.entity_type.mob || entity.get_mob().is_some();
-                if version < JavaMinecraftVersion::V_1_19 && is_mob {
-                    let packet = ent.create_spawn_living_packet(None);
-                    if let Ok(data) = java.serialize_packet(&packet) {
-                        java.try_enqueue_packet(data);
-                    }
-                } else {
-                    let packet = ent.create_spawn_packet();
-                    if let Ok(data) = java.serialize_packet(&packet) {
-                        java.try_enqueue_packet(data);
-                    }
-                }
-            }
-            Self::Bedrock(bedrock) => bedrock.enqueue_spawn_packet(entity.clone()),
-        }
+        self.enqueue_spawn_packet(entity);
     }
 
-    pub async fn enqueue_spawn_packet(&self, entity: &Arc<dyn crate::entity::EntityBase>) {
+    pub fn enqueue_spawn_packet(&self, entity: &Arc<dyn crate::entity::EntityBase>) {
         match self {
-            Self::Java(java) => entity.send_java_spawn_packet(java).await,
-            Self::Bedrock(bedrock) => entity.send_bedrock_spawn_packet(bedrock).await,
+            Self::Java(java) => entity.send_java_spawn_packet(java),
+            Self::Bedrock(bedrock) => entity.send_bedrock_spawn_packet(bedrock),
         }
     }
 

@@ -343,26 +343,32 @@ impl BedrockClient {
         let cache_enabled = server.advanced_config.networking.bedrock.chunk_caching
             && self.client_cache_supported.load(Ordering::Relaxed);
 
-        let mut serialize_tasks = Vec::with_capacity(valid_chunks.len());
-        for chunk in valid_chunks {
-            let block_actors = player.world().bedrock_chunk_block_actors(&chunk);
-            serialize_tasks.push(tokio::task::spawn_blocking(move || {
-                CLevelChunk::encode_chunk(&chunk, bedrock_dimension, cache_enabled, &block_actors)
-            }));
-        }
-
-        let mut encoded_payloads = Vec::with_capacity(serialize_tasks.len());
-        let mut new_blobs = Vec::new();
-        for task in serialize_tasks {
-            match task.await {
-                Ok(Ok((payload, blobs))) => {
-                    encoded_payloads.push(payload);
-                    new_blobs.extend(blobs);
+        let world = player.world();
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        rayon::spawn(move || {
+            let mut encoded_payloads = Vec::with_capacity(valid_chunks.len());
+            let mut new_blobs = Vec::new();
+            for chunk in valid_chunks {
+                let block_actors = world.bedrock_chunk_block_actors(&chunk);
+                match CLevelChunk::encode_chunk(
+                    &chunk,
+                    bedrock_dimension,
+                    cache_enabled,
+                    &block_actors,
+                ) {
+                    Ok((payload, blobs)) => {
+                        encoded_payloads.push(payload);
+                        new_blobs.extend(blobs);
+                    }
+                    Err(e) => error!("Failed to serialize Bedrock chunk: {:?}", e),
                 }
-                Ok(Err(e)) => error!("Failed to serialize Bedrock chunk: {:?}", e),
-                Err(e) => error!("Join error in Bedrock chunk serialization: {:?}", e),
             }
-        }
+            let _ = tx.send((encoded_payloads, new_blobs));
+        });
+
+        let Ok((encoded_payloads, new_blobs)) = rx.await else {
+            return;
+        };
 
         if !new_blobs.is_empty() {
             let mut cache = self.blob_cache.lock().await;
@@ -528,11 +534,8 @@ impl BedrockClient {
         self.close_token.is_cancelled() || self.session.is_closed()
     }
 
-    pub fn enqueue_spawn_packet(self: &Arc<Self>, entity: Arc<dyn crate::entity::EntityBase>) {
-        let client = self.clone();
-        self.spawn_task(async move {
-            entity.send_bedrock_spawn_packet(&client).await;
-        });
+    pub fn enqueue_spawn_packet(&self, entity: &dyn crate::entity::EntityBase) {
+        entity.send_bedrock_spawn_packet(self);
     }
 
     async fn process_batch(

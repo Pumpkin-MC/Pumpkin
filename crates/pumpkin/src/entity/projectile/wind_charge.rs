@@ -126,7 +126,7 @@ impl WindChargeEntity {
 }
 
 impl EntityBase for WindChargeEntity {
-    fn tick<'a>(&'a self, caller: &'a Arc<dyn EntityBase>, server: &'a Server) {
+    fn tick(&self, caller: &dyn EntityBase, server: &Server) {
         self.thrown_item_entity.process_tick(caller, server);
 
         if let Some(cooldown) = self.deflect_cooldown() {

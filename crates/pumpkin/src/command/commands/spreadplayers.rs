@@ -269,12 +269,12 @@ impl CommandExecutor for SpreadPlayersExecutor {
         for (index, target) in targets.iter().enumerate() {
             let pile = piles[index % pile_count];
             let y = surface_ys[index % pile_count];
-            context.server().runtime.spawn(target.clone().teleport(
+            target.teleport(
                 Vector3::new(pile.x.floor() + 0.5, f64::from(y), pile.z.floor() + 0.5),
                 None,
                 None,
                 world.clone(),
-            ));
+            );
         }
 
         let average_distance = average_min_distance(&piles);

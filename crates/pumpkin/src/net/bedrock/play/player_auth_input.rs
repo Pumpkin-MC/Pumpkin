@@ -145,7 +145,7 @@ impl BedrockClient {
 
             if pos_changed {
                 chunker::update_position(player).await;
-                player.progress_motion(delta).await;
+                player.progress_motion(delta);
             }
         }
 

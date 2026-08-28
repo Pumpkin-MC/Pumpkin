@@ -634,7 +634,7 @@ pub trait Mob: EntityBase + Send + Sync {
     fn set_saddled(&self, _saddled: bool) {}
 
     /// Per-mob tick hook called each tick before AI runs. Override for mob-specific logic.
-    fn mob_tick<'a>(&'a self, _caller: &'a Arc<dyn EntityBase>) {}
+    fn mob_tick(&self, _caller: &dyn EntityBase) {}
 
     fn post_tick(&self) {}
 
@@ -1008,7 +1008,7 @@ impl<T: Mob + Send + 'static> EntityBase for T {
     }
 
     #[allow(clippy::too_many_lines)]
-    fn tick(&self, caller: &Arc<dyn EntityBase>, server: &Server) {
+    fn tick(&self, caller: &dyn EntityBase, server: &Server) {
         let mob_entity = self.get_mob_entity();
         mob_entity.living_entity.entity.tick_leash();
         mob_entity.tick_sun_burn();

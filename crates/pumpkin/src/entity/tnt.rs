@@ -6,12 +6,9 @@ use pumpkin_protocol::{codec::var_int::VarInt, java::client::play::Metadata};
 use pumpkin_util::math::vector3::Vector3;
 use std::{
     f64::consts::TAU,
-    sync::{
-        Arc,
-        atomic::{
-            AtomicU32,
-            Ordering::{self, Relaxed},
-        },
+    sync::atomic::{
+        AtomicU32,
+        Ordering::{self, Relaxed},
     },
 };
 
@@ -32,7 +29,7 @@ impl TNTEntity {
 }
 
 impl EntityBase for TNTEntity {
-    fn tick(&self, caller: &Arc<dyn EntityBase>, server: &Server) {
+    fn tick(&self, caller: &dyn EntityBase, server: &Server) {
         let entity = &self.entity;
 
         let mut velo = entity.velocity.load();
