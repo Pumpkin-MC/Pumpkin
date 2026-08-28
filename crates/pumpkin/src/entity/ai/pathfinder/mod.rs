@@ -136,23 +136,18 @@ impl Navigator {
         self.mob_height = height;
     }
 
-    pub async fn can_reach_within(
+    pub fn can_reach_within(
         &mut self,
         entity: &LivingEntity,
         destination: Vector3<f64>,
         distance: f32,
     ) -> bool {
         self.compute_path(entity, destination)
-            .await
             .is_some_and(|path| path.can_reach() || path.get_dist_to_target() <= distance)
     }
 
     #[allow(clippy::too_many_lines)]
-    async fn compute_path(
-        &mut self,
-        entity: &LivingEntity,
-        destination: Vector3<f64>,
-    ) -> Option<Path> {
+    fn compute_path(&mut self, entity: &LivingEntity, destination: Vector3<f64>) -> Option<Path> {
         let start_pos_f = entity.entity.pos.load();
         let start_block_vec = start_pos_f.to_i32();
         let mob_position = Vector3::new(start_block_vec.x, start_block_vec.y, start_block_vec.z);
@@ -173,7 +168,7 @@ impl Navigator {
 
         self.evaluator.prepare(context, mob_data);
 
-        let mut start_node = self.evaluator.get_start().await?;
+        let mut start_node = self.evaluator.get_start()?;
 
         let mut target = self.evaluator.get_target(destination.to_block_pos());
 
@@ -230,8 +225,7 @@ impl Navigator {
 
             self.neighbors_buf.clear();
             self.evaluator
-                .get_neighbors(&current, &mut self.neighbors_buf)
-                .await;
+                .get_neighbors(&current, &mut self.neighbors_buf);
 
             for mut neighbor in self.neighbors_buf.drain(..) {
                 let step_cost = current.distance(&neighbor);
@@ -321,7 +315,7 @@ impl Navigator {
     }
 
     #[allow(clippy::too_many_lines)]
-    pub async fn tick(&mut self, entity: &LivingEntity) {
+    pub fn tick(&mut self, entity: &LivingEntity) {
         let Some(goal) = self.current_goal.take() else {
             // Idle: stop the mob
             self.is_idle.store(true, Ordering::Relaxed);
@@ -342,7 +336,7 @@ impl Navigator {
         }
 
         if self.needs_new_path(&goal) {
-            self.current_path = self.compute_path(entity, goal.destination).await;
+            self.current_path = self.compute_path(entity, goal.destination);
             self.ticks_on_current_node = 0;
             self.last_node_index = 0;
             self.path_start_pos = Some(entity.entity.pos.load());

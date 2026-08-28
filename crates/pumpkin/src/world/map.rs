@@ -2,8 +2,7 @@ use crate::entity::player::Player;
 use dashmap::DashMap;
 use pumpkin_data::dimension::Dimension;
 use pumpkin_util::math::{position::BlockPos, vector2::Vector2};
-use std::sync::Arc;
-use tokio::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 pub struct MapManager {
     pub maps: DashMap<i32, Arc<Mutex<MapData>>>,

@@ -9,26 +9,21 @@ use pumpkin_world::world::BlockFlags;
 use rand::RngExt;
 
 use crate::block::{
-    BlockBehaviour, BlockFuture, BlockMetadata, BrokenArgs, OnNeighborUpdateArgs,
-    OnScheduledTickArgs, PlacedArgs, RandomTickArgs,
+    BlockBehaviour, BlockMetadata, BrokenArgs, OnNeighborUpdateArgs, OnScheduledTickArgs,
+    PlacedArgs, RandomTickArgs,
 };
 use crate::world::World;
 
 /// Melts ice at the given position into water (or removes it in ultrawarm dimensions like the Nether).
-pub async fn melt(world: &Arc<World>, position: &BlockPos) {
+pub fn melt(world: &Arc<World>, position: &BlockPos) {
     if world.dimension == Dimension::THE_NETHER {
-        world
-            .set_block_state(position, BlockStateId::AIR, BlockFlags::NOTIFY_ALL)
-            .await;
+        world.set_block_state(position, BlockStateId::AIR, BlockFlags::NOTIFY_ALL);
     } else {
-        world
-            .set_block_state(
-                position,
-                Block::WATER.default_state.id,
-                BlockFlags::NOTIFY_ALL,
-            )
-            .await;
-        world.update_neighbors(position, None).await;
+        world.set_block_state(
+            position,
+            Block::WATER.default_state.id,
+            BlockFlags::NOTIFY_ALL,
+        );
     }
 }
 
@@ -47,20 +42,14 @@ pub fn fewer_neighbors_than(world: &World, pos: &BlockPos, limit: usize) -> bool
     true
 }
 
-/// Slightly melts the frosted ice at `pos`.
-///
-/// Increments its age if `age < 3`, or completely melts it if `age >= 3`.
-/// Returns `true` if it completely melted, or `false` if it just aged.
-async fn slightly_melt(world: &Arc<World>, pos: &BlockPos, block: &Block, age: u8) -> bool {
+fn slightly_melt(world: &Arc<World>, pos: &BlockPos, block: &Block, age: u8) -> bool {
     if age < 3 {
         let mut new_props = NetherWartLikeProperties::default(block);
         new_props.r#age = age + 1;
-        world
-            .set_block_state(pos, new_props.to_state_id(block), BlockFlags::NOTIFY_ALL)
-            .await;
+        world.set_block_state(pos, new_props.to_state_id(block), BlockFlags::NOTIFY_ALL);
         false
     } else {
-        melt(world, pos).await;
+        melt(world, pos);
         true
     }
 }
@@ -74,15 +63,17 @@ impl BlockMetadata for IceBlock {
 }
 
 impl BlockBehaviour for IceBlock {
-    fn broken<'a>(&'a self, args: BrokenArgs<'a>) -> BlockFuture<'a, ()> {
-        Box::pin(async move {
-            let held_item = args.player.inventory().held_item().await;
+    fn broken(&self, args: BrokenArgs<'_>) {
+        {
+            let held_item = args.player.inventory().held_item();
             let has_silk_touch = held_item.get_enchantment_level(&Enchantment::SILK_TOUCH) > 0;
             if !has_silk_touch {
                 if args.world.dimension == Dimension::THE_NETHER {
-                    args.world
-                        .set_block_state(args.position, BlockStateId::AIR, BlockFlags::NOTIFY_ALL)
-                        .await;
+                    args.world.set_block_state(
+                        args.position,
+                        BlockStateId::AIR,
+                        BlockFlags::NOTIFY_ALL,
+                    );
                     return;
                 }
 
@@ -93,26 +84,22 @@ impl BlockBehaviour for IceBlock {
                     || below_state.is_liquid()
                     || below_state.is_solid()
                 {
-                    args.world
-                        .set_block_state(
-                            args.position,
-                            Block::WATER.default_state.id,
-                            BlockFlags::NOTIFY_ALL,
-                        )
-                        .await;
+                    args.world.set_block_state(
+                        args.position,
+                        Block::WATER.default_state.id,
+                        BlockFlags::NOTIFY_ALL,
+                    );
                 }
             }
-        })
+        }
     }
 
-    fn random_tick<'a>(&'a self, args: RandomTickArgs<'a>) -> BlockFuture<'a, ()> {
-        Box::pin(async move {
-            let state = args.world.get_block_state(args.position);
-            let block_light = args.world.get_block_light_level(args.position).unwrap_or(0);
-            if block_light > (11u8.saturating_sub(state.opacity)) {
-                melt(args.world, args.position).await;
-            }
-        })
+    fn random_tick(&self, args: RandomTickArgs<'_>) {
+        let state = args.world.get_block_state(args.position);
+        let block_light = args.world.get_block_light_level(args.position).unwrap_or(0);
+        if block_light > (11u8.saturating_sub(state.opacity)) {
+            melt(args.world, args.position);
+        }
     }
 }
 
@@ -125,85 +112,75 @@ impl BlockMetadata for FrostedIceBlock {
 }
 
 impl BlockBehaviour for FrostedIceBlock {
-    fn placed<'a>(&'a self, args: PlacedArgs<'a>) -> BlockFuture<'a, ()> {
-        Box::pin(async move {
+    fn placed(&self, args: PlacedArgs<'_>) {
+        {
             let delay = rand::rng().random_range(60..=120);
             args.world
                 .schedule_block_tick(args.block, *args.position, delay, TickPriority::Normal);
-        })
+        }
     }
 
-    fn on_scheduled_tick<'a>(&'a self, args: OnScheduledTickArgs<'a>) -> BlockFuture<'a, ()> {
-        Box::pin(async move {
-            let should_check_melt = rand::rng().random_range(0..3) == 0
-                || fewer_neighbors_than(args.world, args.position, 4);
+    fn on_scheduled_tick(&self, args: OnScheduledTickArgs<'_>) {
+        let should_check_melt = rand::rng().random_range(0..3) == 0
+            || fewer_neighbors_than(args.world, args.position, 4);
 
-            if should_check_melt {
-                let state_id = args.world.get_block_state_id(args.position);
-                let state = args.world.get_block_state(args.position);
-                let props = NetherWartLikeProperties::from_state_id(state_id, args.block);
-                let age = props.r#age;
+        if should_check_melt {
+            let state_id = args.world.get_block_state_id(args.position);
+            let state = args.world.get_block_state(args.position);
+            let props = NetherWartLikeProperties::from_state_id(state_id, args.block);
+            let age = props.r#age;
 
-                let brightness = if args.world.dimension == Dimension::THE_END {
-                    args.world.get_block_light_level(args.position).unwrap_or(0)
-                } else {
-                    args.world.get_max_local_raw_brightness(args.position)
-                };
+            let brightness = if args.world.dimension == Dimension::THE_END {
+                args.world.get_block_light_level(args.position).unwrap_or(0)
+            } else {
+                args.world.get_max_local_raw_brightness(args.position)
+            };
 
-                let threshold = 11u8.saturating_sub(age).saturating_sub(state.opacity);
-                if brightness > threshold
-                    && slightly_melt(args.world, args.position, args.block, age).await
-                {
-                    for dir in BlockDirection::all() {
-                        let neighbor_pos = args.position.offset(dir.to_offset());
-                        let (neighbor_block, neighbor_state_id) =
-                            args.world.get_block_and_state_id(&neighbor_pos);
-                        if neighbor_block == &Block::FROSTED_ICE {
-                            let neighbor_props = NetherWartLikeProperties::from_state_id(
-                                neighbor_state_id,
+            let threshold = 11u8.saturating_sub(age).saturating_sub(state.opacity);
+            if brightness > threshold && slightly_melt(args.world, args.position, args.block, age) {
+                for dir in BlockDirection::all() {
+                    let neighbor_pos = args.position.offset(dir.to_offset());
+                    let (neighbor_block, neighbor_state_id) =
+                        args.world.get_block_and_state_id(&neighbor_pos);
+                    if neighbor_block == &Block::FROSTED_ICE {
+                        let neighbor_props = NetherWartLikeProperties::from_state_id(
+                            neighbor_state_id,
+                            neighbor_block,
+                        );
+                        if !slightly_melt(
+                            args.world,
+                            &neighbor_pos,
+                            neighbor_block,
+                            neighbor_props.r#age,
+                        ) {
+                            let delay = rand::rng().random_range(20..=40);
+                            args.world.schedule_block_tick(
                                 neighbor_block,
+                                neighbor_pos,
+                                delay,
+                                TickPriority::Normal,
                             );
-                            if !slightly_melt(
-                                args.world,
-                                &neighbor_pos,
-                                neighbor_block,
-                                neighbor_props.r#age,
-                            )
-                            .await
-                            {
-                                let delay = rand::rng().random_range(20..=40);
-                                args.world.schedule_block_tick(
-                                    neighbor_block,
-                                    neighbor_pos,
-                                    delay,
-                                    TickPriority::Normal,
-                                );
-                            }
                         }
                     }
-                    return;
                 }
+                return;
             }
+        }
 
-            let delay = rand::rng().random_range(20..=40);
-            args.world
-                .schedule_block_tick(args.block, *args.position, delay, TickPriority::Normal);
-        })
+        let delay = rand::rng().random_range(20..=40);
+        args.world
+            .schedule_block_tick(args.block, *args.position, delay, TickPriority::Normal);
     }
 
-    fn on_neighbor_update<'a>(&'a self, args: OnNeighborUpdateArgs<'a>) -> BlockFuture<'a, ()> {
-        Box::pin(async move {
-            if args.source_block == &Block::FROSTED_ICE
-                && fewer_neighbors_than(args.world, args.position, 2)
-            {
-                melt(args.world, args.position).await;
-            }
-        })
+    fn on_neighbor_update(&self, args: OnNeighborUpdateArgs<'_>) {
+        if args.source_block == &Block::FROSTED_ICE
+            && fewer_neighbors_than(args.world, args.position, 2)
+        {
+            melt(args.world, args.position);
+        }
     }
 
-    fn broken<'a>(&'a self, args: BrokenArgs<'a>) -> BlockFuture<'a, ()> {
-        Box::pin(async move {
-            IceBlock.broken(args).await;
-        })
+    fn broken(&self, args: BrokenArgs<'_>) {
+        IceBlock.broken(args);
     }
 }

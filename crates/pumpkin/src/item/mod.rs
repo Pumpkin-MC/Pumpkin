@@ -3,7 +3,6 @@ pub mod potion;
 pub mod registry;
 
 use std::any::Any;
-use std::pin::Pin;
 use std::sync::Arc;
 
 use crate::entity::EntityBase;
@@ -21,44 +20,25 @@ pub trait ItemMetadata {
 }
 
 pub trait ItemBehaviour: Send + Sync {
-    fn normal_use<'a>(
-        &'a self,
-        _item: &'a Item,
-        _player: &'a Player,
-    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
-        Box::pin(async {})
-    }
+    fn normal_use(&self, _item: &Item, _player: &Player) {}
 
     #[expect(clippy::too_many_arguments)]
-    fn use_on_block<'a>(
-        &'a self,
-        _item: &'a mut ItemStack,
-        _player: &'a Player,
+    fn use_on_block(
+        &self,
+        _item: &mut ItemStack,
+        _player: &Player,
         _location: BlockPos,
         _face: BlockDirection,
         _cursor_pos: Vector3<f32>,
-        _block: &'a Block,
-        _server: &'a Server,
-    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
-        Box::pin(async {})
+        _block: &Block,
+        _server: &Server,
+    ) {
     }
 
-    fn use_on_entity<'a>(
-        &'a self,
-        _item: &'a mut ItemStack,
-        _player: &'a Player,
-        _entity: Arc<dyn EntityBase>,
-    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
-        Box::pin(async {})
+    fn use_on_entity(&self, _item: &mut ItemStack, _player: &Player, _entity: Arc<dyn EntityBase>) {
     }
 
-    fn on_stopped_using<'a>(
-        &'a self,
-        _stack: &'a ItemStack,
-        _player: &'a Player,
-    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
-        Box::pin(async {})
-    }
+    fn on_stopped_using(&self, _stack: &ItemStack, _player: &Player) {}
 
     /// Returns the maximum number of ticks this item can be used for.
     /// Return 0 if the item does not have a behaviour-driven use duration.

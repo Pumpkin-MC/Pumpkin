@@ -27,18 +27,13 @@ impl ArgumentConsumer for SlotArgumentConsumer {
         _server: &'a Server,
         args: &mut RawArgs<'a>,
     ) -> ConsumeResult<'a> {
-        let slot = args.pop().map(|arg| arg.value);
-        match slot {
-            Some(s) => Box::pin(async move {
-                if let Some(range) = get_slot_range(s)
-                    && range.len() == 1
-                {
-                    return Some(Arg::Slot(range[0], s.to_string()));
-                }
-                None
-            }),
-            None => Box::pin(async move { None }),
+        let s = args.pop()?.value;
+        if let Some(range) = get_slot_range(s)
+            && range.len() == 1
+        {
+            return Some(Arg::Slot(range[0], s.to_string()));
         }
+        None
     }
 }
 
@@ -78,16 +73,11 @@ impl ArgumentConsumer for SlotsArgumentConsumer {
         _server: &'a Server,
         args: &mut RawArgs<'a>,
     ) -> ConsumeResult<'a> {
-        let slots = args.pop().map(|arg| arg.value);
-        match slots {
-            Some(s) => Box::pin(async move {
-                if let Some(range) = get_slot_range(s) {
-                    return Some(Arg::Slots(range, s.to_string()));
-                }
-                None
-            }),
-            None => Box::pin(async move { None }),
+        let s = args.pop()?.value;
+        if let Some(range) = get_slot_range(s) {
+            return Some(Arg::Slots(range, s.to_string()));
         }
+        None
     }
 }
 

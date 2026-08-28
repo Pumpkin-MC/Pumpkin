@@ -1,4 +1,3 @@
-use std::pin::Pin;
 use std::sync::Arc;
 
 use crate::entity::Entity;
@@ -23,43 +22,41 @@ impl ItemMetadata for EndCrystalItem {
 }
 
 impl ItemBehaviour for EndCrystalItem {
-    fn use_on_block<'a>(
-        &'a self,
-        item: &'a mut ItemStack,
-        player: &'a Player,
+    fn use_on_block(
+        &self,
+        item: &mut ItemStack,
+        player: &Player,
         location: BlockPos,
         _face: BlockDirection,
         _cursor_pos: Vector3<f32>,
-        _block: &'a Block,
-        _server: &'a Server,
-    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
-        Box::pin(async move {
-            let world = player.world();
-            let block = world.get_block(&location);
-            if block != &Block::OBSIDIAN && block != &Block::BEDROCK {
-                return;
-            }
+        _block: &Block,
+        _server: &Server,
+    ) {
+        let world = player.world();
+        let block = world.get_block(&location);
+        if block != &Block::OBSIDIAN && block != &Block::BEDROCK {
+            return;
+        }
 
-            let location = location.up();
-            let location_vec = location.0.to_f64();
+        let location = location.up();
+        let location_vec = location.0.to_f64();
 
-            if !world.get_block_state(&location).is_air()
-                || !world
-                    .get_entities_at_box(&BoundingBox::new(
-                        Vector3::new(location_vec.x, location_vec.y, location_vec.z),
-                        Vector3::new(location_vec.x + 1.0, location_vec.y + 2.0, location_vec.z),
-                    ))
-                    .is_empty()
-            {
-                return;
-            }
+        if !world.get_block_state(&location).is_air()
+            || !world
+                .get_entities_at_box(&BoundingBox::new(
+                    Vector3::new(location_vec.x, location_vec.y, location_vec.z),
+                    Vector3::new(location_vec.x + 1.0, location_vec.y + 2.0, location_vec.z),
+                ))
+                .is_empty()
+        {
+            return;
+        }
 
-            let entity = Entity::new(world.clone(), location.to_f64(), &EntityType::END_CRYSTAL);
-            let end_crystal = Arc::new(EndCrystalEntity::new(entity));
-            world.spawn_entity(end_crystal.clone()).await;
-            end_crystal.set_show_bottom(false);
-            item.decrement_unless_creative(player.gamemode.load(), 1);
-        })
+        let entity = Entity::new(world.clone(), location.to_f64(), &EntityType::END_CRYSTAL);
+        let end_crystal = Arc::new(EndCrystalEntity::new(entity));
+        world.spawn_entity(end_crystal.clone());
+        end_crystal.set_show_bottom(false);
+        item.decrement_unless_creative(player.gamemode.load(), 1);
     }
 
     fn as_any(&self) -> &dyn std::any::Any {

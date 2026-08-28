@@ -12,7 +12,7 @@ use rand::RngExt;
 
 use crate::{
     block::{
-        BlockBehaviour, BlockFuture, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, RandomTickArgs,
+        BlockBehaviour, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, RandomTickArgs,
         blocks::plant::{PlantBlockBase, crop::CropBlockBase},
     },
     world::World,
@@ -26,25 +26,20 @@ impl BlockBehaviour for NetherWartBlock {
         <Self as PlantBlockBase>::can_place_at(self, args.block_accessor, args.position)
     }
 
-    fn get_state_for_neighbor_update<'a>(
-        &'a self,
-        args: GetStateForNeighborUpdateArgs<'a>,
-    ) -> BlockFuture<'a, BlockStateId> {
-        Box::pin(async move {
-            <Self as PlantBlockBase>::get_state_for_neighbor_update(
-                self,
-                args.world,
-                args.position,
-                args.state_id,
-            )
-            .await
-        })
+    fn get_state_for_neighbor_update(
+        &self,
+        args: GetStateForNeighborUpdateArgs<'_>,
+    ) -> BlockStateId {
+        <Self as PlantBlockBase>::get_state_for_neighbor_update(
+            self,
+            args.world,
+            args.position,
+            args.state_id,
+        )
     }
 
-    fn random_tick<'a>(&'a self, args: RandomTickArgs<'a>) -> BlockFuture<'a, ()> {
-        Box::pin(async move {
-            <Self as CropBlockBase>::random_tick(self, args.world, args.position).await;
-        })
+    fn random_tick(&self, args: RandomTickArgs<'_>) {
+        <Self as CropBlockBase>::random_tick(self, args.world, args.position);
     }
 }
 
@@ -79,17 +74,15 @@ impl CropBlockBase for NetherWartBlock {
         props.to_state_id(block)
     }
 
-    async fn random_tick(&self, world: &Arc<World>, pos: &BlockPos) {
+    fn random_tick(&self, world: &Arc<World>, pos: &BlockPos) {
         let (block, state) = world.get_block_and_state_id(pos);
         let age = self.get_age(state, block);
         if age < self.max_age() && rand::rng().random_range(0..10) == 0 {
-            world
-                .set_block_state(
-                    pos,
-                    self.state_with_age(block, state, age + 1),
-                    BlockFlags::NOTIFY_NEIGHBORS,
-                )
-                .await;
+            world.set_block_state(
+                pos,
+                self.state_with_age(block, state, age + 1),
+                BlockFlags::NOTIFY_NEIGHBORS,
+            );
         }
     }
 }

@@ -14,7 +14,6 @@ use std::sync::RwLock;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::AtomicU64;
 use thiserror::Error;
-use tokio::sync::Mutex;
 
 pub mod format;
 pub mod io;
@@ -90,7 +89,7 @@ pub struct ChunkEntityData {
     pub x: i32,
     /// Chunk Z
     pub z: i32,
-    pub data: Mutex<Vec<NbtCompound>>,
+    pub data: std::sync::Mutex<Vec<NbtCompound>>,
 
     pub dirty: AtomicBool,
 }

@@ -154,19 +154,18 @@ impl Context {
         <dyn Payload>::downcast_arc::<T>(service)
     }
 
-    /// Asynchronously registers a command with the server.
+    /// Registers a new command to the server with a specified permission level.
     ///
     /// # Arguments
     /// - `tree`: The command tree to register.
     /// - `permission`: The permission level required to execute the command.
-    pub async fn register_command<P: Into<String>>(
+    pub fn register_command<P: Into<String>>(
         &self,
-        tree: crate::command::tree::CommandTree,
+        mut tree: crate::command::tree::CommandTree,
         permission: P,
     ) {
         let permission = permission.into();
 
-        let mut tree = tree.clone();
         tree.source = Some(self.metadata.name.clone());
 
         let full_permission_node = if permission.contains(':') {
@@ -183,48 +182,46 @@ impl Context {
             Arc::new(new_dispatcher)
         });
 
-        self.reload_commands_for_everyone().await;
+        self.reload_commands_for_everyone();
     }
 
-    /// Asynchronously unregisters a command from the server.
+    /// Unregisters a command from the server.
     ///
     /// # Arguments
     /// - `name`: The name of the command to unregister.
-    pub async fn unregister_command(&self, name: &str) {
+    pub fn unregister_command(&self, name: &str) {
         self.server.command_dispatcher.rcu(|dispatcher| {
             let mut new_dispatcher = (**dispatcher).clone();
             new_dispatcher.fallback_dispatcher.unregister(name);
             Arc::new(new_dispatcher)
         });
 
-        self.reload_commands_for_everyone().await;
+        self.reload_commands_for_everyone();
     }
 
-    /// Asynchronously reloads (resends) all commands for all currently online players.
-    pub async fn reload_commands_for_everyone(&self) {
+    /// Reloads (resends) all commands for all currently online players.
+    pub fn reload_commands_for_everyone(&self) {
         for world in self.server.worlds.load().iter() {
             for player in world.players.load().iter() {
-                self.reload_commands_for(player).await;
+                self.reload_commands_for(player);
             }
         }
     }
 
-    /// Asynchronously reloads (resends) all commands for a particular player on the server.
+    /// Reloads (resends) all commands for a particular player on the server.
     ///
     /// # Arguments
     /// - `player`: The player for which the commands will be reloaded.
-    pub async fn reload_commands_for(&self, player: &Arc<Player>) {
+    pub fn reload_commands_for(&self, player: &Arc<Player>) {
         let command_dispatcher = self.server.command_dispatcher.load();
         if let ClientPlatform::Bedrock(_) = player.client.as_ref() {
             client_suggestions::send_bedrock_commands_packet(
                 player,
                 &self.server,
                 &command_dispatcher,
-            )
-            .await;
+            );
         } else {
-            client_suggestions::send_c_commands_packet(player, &self.server, &command_dispatcher)
-                .await;
+            client_suggestions::send_c_commands_packet(player, &self.server, &command_dispatcher);
         }
     }
 
@@ -319,9 +316,9 @@ impl Context {
         &self,
         loader: Arc<dyn crate::plugin::loader::PluginLoader>,
     ) -> bool {
-        let before_count = self.plugin_manager.loaded_plugins().await.len();
+        let before_count = self.plugin_manager.loaded_plugins().len();
         self.plugin_manager.add_loader(&self.server, loader).await;
-        let after_count = self.plugin_manager.loaded_plugins().await.len();
+        let after_count = self.plugin_manager.loaded_plugins().len();
 
         // Return true if any new plugins were loaded
         after_count > before_count

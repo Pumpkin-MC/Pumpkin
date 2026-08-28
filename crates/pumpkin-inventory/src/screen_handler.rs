@@ -53,10 +53,10 @@ use pumpkin_world::{
     block::entities::PropertyDelegate,
     inventory::{ComparableInventory, Inventory},
 };
+use std::cmp::max;
+use std::sync::Mutex;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::{any::Any, collections::HashMap, sync::Arc};
-use std::{cmp::max, pin::Pin};
-use tokio::sync::Mutex;
 use tracing::warn;
 
 /// Slot index indicating a click outside the inventory.
@@ -108,10 +108,6 @@ impl ScreenProperty {
     }
 }
 
-/// Type alias for async player operations.
-/// Type alias for async player operations.
-pub type PlayerFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
-
 /// Interface for player interactions with containers.
 ///
 /// This trait abstracts the player's ability to:
@@ -128,7 +124,7 @@ pub trait InventoryPlayer: Send + Sync {
     /// # Arguments
     /// - `item` - The item to drop
     /// - `retain_ownership` - If true, the player keeps ownership (for pickup delay)
-    fn drop_item(&self, item: ItemStack, retain_ownership: bool) -> PlayerFuture<'_, ()>;
+    fn drop_item(&self, item: ItemStack, retain_ownership: bool);
 
     /// Gets the player's inventory.
     fn get_inventory(&self) -> Arc<PlayerInventory>;
@@ -143,112 +139,85 @@ pub trait InventoryPlayer: Send + Sync {
     fn experience_level(&self) -> i32;
 
     /// Adds or removes experience levels.
-    fn add_experience_levels(&self, levels: i32) -> PlayerFuture<'_, ()>;
+    fn add_experience_levels(&self, levels: i32);
 
     /// Gets the player's enchantment seed.
     fn enchantment_seed(&self) -> i32;
 
     /// Sets the player's enchantment seed.
-    fn set_enchantment_seed(&self, seed: i32) -> PlayerFuture<'_, ()>;
+    fn set_enchantment_seed(&self, seed: i32);
 
     /// Sends a full container content packet.
-    fn enqueue_inventory_packet<'a>(
-        &'a self,
-        packet: &'a CSetContainerContent,
+    fn enqueue_inventory_packet(
+        &self,
+        packet: &CSetContainerContent,
         window_type: Option<WindowType>,
-    ) -> PlayerFuture<'a, ()>;
+    );
 
     /// Sends a single slot update packet.
-    fn enqueue_slot_packet<'a>(
-        &'a self,
-        packet: &'a CSetContainerSlot,
+    fn enqueue_slot_packet(
+        &self,
+        packet: &CSetContainerSlot,
         window_type: Option<WindowType>,
         total_slots: usize,
-    ) -> PlayerFuture<'a, ()>;
+    );
 
     /// Sends a cursor item update packet.
-    fn enqueue_cursor_packet<'a>(&'a self, packet: &'a CSetCursorItem) -> PlayerFuture<'a, ()>;
+    fn enqueue_cursor_packet(&self, packet: &CSetCursorItem);
 
     /// Sends a property update packet.
-    fn enqueue_property_packet<'a>(
-        &'a self,
-        packet: &'a CSetContainerProperty,
-    ) -> PlayerFuture<'a, ()>;
+    fn enqueue_property_packet(&self, packet: &CSetContainerProperty);
 
     /// Sends a player inventory slot update.
-    fn enqueue_slot_set_packet<'a>(
-        &'a self,
-        packet: &'a CSetPlayerInventory,
-    ) -> PlayerFuture<'a, ()>;
+    fn enqueue_slot_set_packet(&self, packet: &CSetPlayerInventory);
 
     /// Sends a selected slot update.
-    fn enqueue_set_held_item_packet<'a>(
-        &'a self,
-        packet: &'a CSetSelectedSlot,
-    ) -> PlayerFuture<'a, ()>;
+    fn enqueue_set_held_item_packet(&self, packet: &CSetSelectedSlot);
 
     /// Sends an equipment change packet.
-    fn enqueue_equipment_change<'a>(
-        &'a self,
-        slot: &'a EquipmentSlot,
-        stack: &'a ItemStack,
-    ) -> PlayerFuture<'a, ()>;
+    fn enqueue_equipment_change(&self, slot: &EquipmentSlot, stack: &ItemStack);
 
     /// Awards experience points to the player (used for furnace smelting, etc.)
-    fn award_experience(&self, amount: i32) -> PlayerFuture<'_, ()>;
+    fn award_experience(&self, amount: i32);
 
     /// Increments a statistic for the player.
-    fn increment_stat(
-        &self,
-        category: StatisticCategory,
-        stat_id: i32,
-        amount: i32,
-    ) -> PlayerFuture<'_, ()>;
+    fn increment_stat(&self, category: StatisticCategory, stat_id: i32, amount: i32);
 
     /// Fires a prepare item enchant event. Returns true if cancelled.
-    fn fire_prepare_item_enchant_event<'a>(
-        &'a self,
-        _item: &'a ItemStack,
-        _level_requirements: &'a mut [i32; 3],
-        _enchantment_id: &'a mut [i32; 3],
-        _enchantment_level: &'a mut [i32; 3],
+    fn fire_prepare_item_enchant_event(
+        &self,
+        _item: &ItemStack,
+        _level_requirements: &mut [i32; 3],
+        _enchantment_id: &mut [i32; 3],
+        _enchantment_level: &mut [i32; 3],
         _bookshelf_count: i32,
-    ) -> PlayerFuture<'a, bool> {
-        Box::pin(async move { false })
+    ) -> bool {
+        false
     }
 
     /// Fires an enchant item event. Returns true if cancelled.
-    fn fire_enchant_item_event<'a>(
-        &'a self,
-        _item: &'a ItemStack,
+    fn fire_enchant_item_event(
+        &self,
+        _item: &ItemStack,
         _option: i32,
         _exp_level_cost: i32,
-        _enchantments_to_add: &'a mut Vec<(&'static Enchantment, i32)>,
-    ) -> PlayerFuture<'a, bool> {
-        Box::pin(async move { false })
+        _enchantments_to_add: &mut Vec<(&'static Enchantment, i32)>,
+    ) -> bool {
+        false
     }
+
+    /// Closes the player's current handled screen.
+    fn close_screen_handler(&self) {}
 }
 
 /// Gives a stack to the player or drops it if inventory is full.
 ///
 /// Tries to insert the stack into the player's inventory first,
 /// and drops it in the world if there's no room.
-pub async fn offer_or_drop_stack(player: &dyn InventoryPlayer, stack: ItemStack) {
+pub fn offer_or_drop_stack(player: &dyn InventoryPlayer, stack: ItemStack) {
     // TODO: Super weird disconnect logic in vanilla, investigate this later
-    player
-        .get_inventory()
-        .offer_or_drop_stack(stack, player)
-        .await;
+    player.get_inventory().offer_or_drop_stack(stack, player);
 }
-
-/// Type alias for async screen handler operations.
-pub type ScreenHandlerFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
-
-/// Future type that returns an `ItemStack` (used by `quick_move`).
-pub type ItemStackFuture<'a> = ScreenHandlerFuture<'a, ItemStack>;
-
-/// Future type that returns an optional slot index.
-pub type OptionUsizeFuture<'a> = ScreenHandlerFuture<'a, Option<usize>>;
 
 /// The main trait for container screen handlers.
 ///
@@ -375,312 +344,261 @@ pub trait ScreenHandler: Send + Sync {
         }
     }
 
-    // --- Asynchronous Methods ---
-
     /// Called when the container is closed by the player.
     ///
     /// Default implementation drops the cursor item.
-    fn on_closed<'a>(&'a mut self, player: &'a dyn InventoryPlayer) -> ScreenHandlerFuture<'a, ()> {
-        Box::pin(async move {
-            self.default_on_closed(player).await;
-        })
+    fn on_closed(&mut self, player: &dyn InventoryPlayer) {
+        self.default_on_closed(player);
     }
 
     /// Default close behavior - drops the cursor item.
-    fn default_on_closed<'a>(
-        &'a mut self,
-        player: &'a dyn InventoryPlayer,
-    ) -> ScreenHandlerFuture<'a, ()> {
-        Box::pin(async move {
-            let behaviour = self.get_behaviour_mut();
+    fn default_on_closed(&mut self, player: &dyn InventoryPlayer) {
+        let behaviour = self.get_behaviour_mut();
 
-            // Lock and clone are performed inside the async block
-            let mut cursor_stack_lock = behaviour.cursor_stack.lock().await;
+        let mut cursor_stack_lock = behaviour
+            .cursor_stack
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
 
-            if !cursor_stack_lock.is_empty() {
-                offer_or_drop_stack(player, cursor_stack_lock.clone()).await;
-                *cursor_stack_lock = ItemStack::EMPTY.clone();
-            }
-        })
+        if !cursor_stack_lock.is_empty() {
+            offer_or_drop_stack(player, cursor_stack_lock.clone());
+            *cursor_stack_lock = ItemStack::EMPTY.clone();
+        }
     }
 
     /// Drops all items from an inventory into the world.
-    fn drop_inventory<'a>(
-        &'a self,
-        player: &'a dyn InventoryPlayer,
-        inventory: Arc<dyn Inventory>,
-    ) -> ScreenHandlerFuture<'a, ()> {
-        Box::pin(async move {
-            for i in 0..inventory.size() {
-                offer_or_drop_stack(player, inventory.remove_stack(i).await).await;
-            }
-        })
+    fn drop_inventory(&self, player: &dyn InventoryPlayer, inventory: Arc<dyn Inventory>) {
+        for i in 0..inventory.size() {
+            offer_or_drop_stack(player, inventory.remove_stack(i));
+        }
     }
 
     /// Copies tracked slot state from another screen handler.
     ///
     /// Used when reopening a container to restore previous state.
-    fn copy_shared_slots(
-        &mut self,
-        other: Arc<Mutex<dyn ScreenHandler>>,
-    ) -> ScreenHandlerFuture<'_, ()> {
-        Box::pin(async move {
-            let mut table: HashMap<ComparableInventory, HashMap<usize, usize>> = HashMap::new();
-            let other_binding = other.lock().await;
-            let other_behaviour = other_binding.get_behaviour();
+    fn copy_shared_slots(&mut self, other: Arc<Mutex<dyn ScreenHandler>>) {
+        let mut table: HashMap<ComparableInventory, HashMap<usize, usize>> = HashMap::new();
+        let other_binding = other
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let other_behaviour = other_binding.get_behaviour();
 
-            for i in 0..other_behaviour.slots.len() {
-                let other_slot = other_behaviour.slots[i].clone();
-                let mut hash_map = HashMap::new();
-                hash_map.insert(other_slot.get_index(), i);
-                table.insert(
-                    ComparableInventory(other_slot.get_inventory().clone()),
-                    hash_map,
-                );
+        for i in 0..other_behaviour.slots.len() {
+            let other_slot = other_behaviour.slots[i].clone();
+            let mut hash_map = HashMap::new();
+            hash_map.insert(other_slot.get_index(), i);
+            table.insert(
+                ComparableInventory(other_slot.get_inventory().clone()),
+                hash_map,
+            );
+        }
+
+        for i in 0..self.get_behaviour().slots.len() {
+            let slot = self.get_behaviour().slots[i].clone();
+            let inventory = slot.get_inventory();
+            let index = slot.get_index();
+
+            if let Some(hash_map) = table.get(&ComparableInventory(inventory.clone()))
+                && let Some(other_index) = hash_map.get(&index)
+            {
+                self.get_behaviour_mut().tracked_stacks[i] =
+                    other_behaviour.tracked_stacks[*other_index].clone();
+                self.get_behaviour_mut().previous_tracked_stacks[i] =
+                    other_behaviour.previous_tracked_stacks[*other_index].clone();
             }
-
-            for i in 0..self.get_behaviour().slots.len() {
-                let slot = self.get_behaviour().slots[i].clone();
-                let inventory = slot.get_inventory();
-                let index = slot.get_index();
-
-                if let Some(hash_map) = table.get(&ComparableInventory(inventory.clone()))
-                    && let Some(other_index) = hash_map.get(&index)
-                {
-                    self.get_behaviour_mut().tracked_stacks[i] =
-                        other_behaviour.tracked_stacks[*other_index].clone();
-                    self.get_behaviour_mut().previous_tracked_stacks[i] =
-                        other_behaviour.previous_tracked_stacks[*other_index].clone();
-                }
-            }
-        })
+        }
     }
 
     /// Synchronizes the full state to the client.
     ///
     /// Captures current slot states and sends a full update packet.
-    fn sync_state(&mut self) -> ScreenHandlerFuture<'_, ()> {
-        Box::pin(async move {
-            let behaviour = self.get_behaviour_mut();
-            let mut previous_tracked_stacks = Vec::new();
+    fn sync_state(&mut self) {
+        let behaviour = self.get_behaviour_mut();
+        let mut previous_tracked_stacks = Vec::new();
 
-            for i in 0..behaviour.slots.len() {
-                let stack = behaviour.slots[i].get_cloned_stack().await;
-                previous_tracked_stacks.push(stack.clone());
-                behaviour.previous_tracked_stacks[i].set_received_stack(stack);
-            }
+        for i in 0..behaviour.slots.len() {
+            let stack = behaviour.slots[i].get_cloned_stack();
+            previous_tracked_stacks.push(stack.clone());
+            behaviour.previous_tracked_stacks[i].set_received_stack(stack);
+        }
 
-            let cursor_stack = behaviour.cursor_stack.lock().await.clone();
-            behaviour
-                .previous_cursor_stack
-                .set_received_stack(cursor_stack.clone());
+        let cursor_stack = behaviour
+            .cursor_stack
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone();
+        behaviour
+            .previous_cursor_stack
+            .set_received_stack(cursor_stack.clone());
 
-            for i in 0..behaviour.properties.len() {
-                let property_val = behaviour.properties[i].get();
-                behaviour.tracked_property_values[i] = property_val;
-            }
+        for i in 0..behaviour.properties.len() {
+            let property_val = behaviour.properties[i].get();
+            behaviour.tracked_property_values[i] = property_val;
+        }
 
-            let next_revision = behaviour.next_revision();
+        let next_revision = behaviour.next_revision();
 
-            if let Some(sync_handler) = behaviour.sync_handler.as_ref() {
-                sync_handler
-                    .update_state(
-                        behaviour,
-                        &previous_tracked_stacks,
-                        &cursor_stack,
-                        behaviour.tracked_property_values.clone(),
-                        next_revision,
-                    )
-                    .await;
-            }
-        })
+        if let Some(sync_handler) = behaviour.sync_handler.as_ref() {
+            sync_handler.update_state(
+                behaviour,
+                &previous_tracked_stacks,
+                &cursor_stack,
+                &behaviour.tracked_property_values,
+                next_revision,
+            );
+        }
     }
 
     /// Adds a listener for slot and property changes.
-    fn add_listener(
-        &mut self,
-        listener: Arc<dyn ScreenHandlerListener>,
-    ) -> ScreenHandlerFuture<'_, ()> {
-        Box::pin(async move {
-            self.get_behaviour_mut().listeners.push(listener);
-            self.send_content_updates().await;
-        })
+    fn add_listener(&mut self, listener: Arc<dyn ScreenHandlerListener>) {
+        self.get_behaviour_mut().listeners.push(listener);
+        self.send_content_updates();
     }
 
     /// Attaches a sync handler and performs initial sync.
-    fn update_sync_handler(
-        &mut self,
-        sync_handler: Arc<SyncHandler>,
-    ) -> ScreenHandlerFuture<'_, ()> {
-        Box::pin(async move {
-            let behaviour = self.get_behaviour_mut();
-            behaviour.sync_handler = Some(sync_handler.clone());
-            self.sync_state().await;
-        })
+    fn update_sync_handler(&mut self, sync_handler: Arc<SyncHandler>) {
+        let behaviour = self.get_behaviour_mut();
+        behaviour.sync_handler = Some(sync_handler);
+        self.sync_state();
     }
 
     /// Sends all updates to the client.
     ///
     /// Updates tracked slots and properties.
-    fn update_to_client(&mut self) -> ScreenHandlerFuture<'_, ()> {
-        Box::pin(async move {
-            for i in 0..self.get_behaviour().slots.len() {
-                let behaviour = self.get_behaviour_mut();
-                let slot = behaviour.slots[i].clone();
-                let stack = slot.get_cloned_stack().await;
-                self.update_tracked_slot(i, stack).await;
-            }
-
+    fn update_to_client(&mut self) {
+        for i in 0..self.get_behaviour().slots.len() {
             let behaviour = self.get_behaviour_mut();
-            let mut prop_vec = vec![];
-            for (idx, prop) in behaviour.properties.iter_mut().enumerate() {
-                let value = prop.get();
-                if prop.has_changed() {
-                    prop_vec.push((idx, value));
-                }
-            }
+            let slot = behaviour.slots[i].clone();
+            let stack = slot.get_cloned_stack();
+            self.update_tracked_slot(i, stack);
+        }
 
-            for (idx, value) in prop_vec {
-                self.update_tracked_properties(idx as i32, value).await;
-                self.check_property_updates(idx as i32, value).await;
+        let behaviour = self.get_behaviour_mut();
+        let mut prop_vec = vec![];
+        for (idx, prop) in behaviour.properties.iter_mut().enumerate() {
+            let value = prop.get();
+            if prop.has_changed() {
+                prop_vec.push((idx, value));
             }
+        }
 
-            self.sync_state().await;
-        })
+        for (idx, value) in prop_vec {
+            self.update_tracked_properties(idx as i32, value);
+            self.check_property_updates(idx as i32, value);
+        }
+
+        self.sync_state();
     }
 
     /// Updates a tracked property value.
-    fn update_tracked_properties(&mut self, idx: i32, value: i32) -> ScreenHandlerFuture<'_, ()> {
-        Box::pin(async move {
-            let behaviour = self.get_behaviour_mut();
-            if idx <= behaviour.tracked_property_values.len() as i32 {
-                behaviour.tracked_property_values[idx as usize] = value;
-                for listener in &behaviour.listeners {
-                    listener
-                        .on_property_update(behaviour, idx as u8, value)
-                        .await;
-                }
+    fn update_tracked_properties(&mut self, idx: i32, value: i32) {
+        let behaviour = self.get_behaviour_mut();
+        if idx <= behaviour.tracked_property_values.len() as i32 {
+            behaviour.tracked_property_values[idx as usize] = value;
+            for listener in &behaviour.listeners {
+                listener.on_property_update(behaviour, idx as u8, value);
             }
-        })
+        }
     }
 
     /// Checks if a property needs to be synced to the client.
-    fn check_property_updates(&mut self, idx: i32, value: i32) -> ScreenHandlerFuture<'_, ()> {
-        Box::pin(async move {
-            let behaviour = self.get_behaviour_mut();
-            if !behaviour.disable_sync
-                && let Some(old_value) = behaviour.tracked_property_values.get(idx as usize)
-            {
-                let old_value = *old_value;
-                if old_value != value {
-                    behaviour
-                        .tracked_property_values
-                        .insert(idx as usize, value);
-                    if let Some(ref sync_handler) = behaviour.sync_handler {
-                        sync_handler.update_property(behaviour, idx, value).await;
-                    }
+    fn check_property_updates(&mut self, idx: i32, value: i32) {
+        let behaviour = self.get_behaviour_mut();
+        if !behaviour.disable_sync
+            && let Some(old_value) = behaviour.tracked_property_values.get(idx as usize)
+        {
+            let old_value = *old_value;
+            if old_value != value {
+                behaviour
+                    .tracked_property_values
+                    .insert(idx as usize, value);
+                if let Some(ref sync_handler) = behaviour.sync_handler {
+                    sync_handler.update_property(behaviour, idx, value);
                 }
             }
-        })
+        }
     }
 
     /// Updates the tracked state of a slot.
-    fn update_tracked_slot(
-        &mut self,
-        slot: usize,
-        stack: ItemStack,
-    ) -> ScreenHandlerFuture<'_, ()> {
-        Box::pin(async move {
-            let behaviour = self.get_behaviour_mut();
-            let other_stack = &behaviour.tracked_stacks[slot];
-            if !other_stack.are_equal(&stack) {
-                behaviour.tracked_stacks[slot] = stack.clone();
+    fn update_tracked_slot(&mut self, slot: usize, stack: ItemStack) {
+        let behaviour = self.get_behaviour_mut();
+        let other_stack = &behaviour.tracked_stacks[slot];
+        if !other_stack.are_equal(&stack) {
+            behaviour.tracked_stacks[slot] = stack.clone();
 
-                for listener in &behaviour.listeners {
-                    listener
-                        .on_slot_update(behaviour, slot as u8, stack.clone())
-                        .await;
-                }
+            for listener in &behaviour.listeners {
+                listener.on_slot_update(behaviour, slot as u8, stack.clone());
             }
-        })
+        }
     }
 
     /// Checks if a slot needs to be synced to the client.
-    fn check_slot_updates(&mut self, slot: usize, stack: ItemStack) -> ScreenHandlerFuture<'_, ()> {
-        Box::pin(async move {
-            let behaviour = self.get_behaviour_mut();
-            if !behaviour.disable_sync {
-                let prev_stack = &mut behaviour.previous_tracked_stacks[slot];
+    fn check_slot_updates(&mut self, slot: usize, stack: ItemStack) {
+        let behaviour = self.get_behaviour_mut();
+        if !behaviour.disable_sync {
+            let prev_stack = &mut behaviour.previous_tracked_stacks[slot];
 
-                if !prev_stack.is_in_sync(&stack) {
-                    prev_stack.set_received_stack(stack.clone());
-                    let next_revision = behaviour.next_revision();
-                    if let Some(sync_handler) = behaviour.sync_handler.as_ref() {
-                        sync_handler
-                            .update_slot(behaviour, slot, &stack, next_revision)
-                            .await;
-                    }
+            if !prev_stack.is_in_sync(&stack) {
+                prev_stack.set_received_stack(stack.clone());
+                let next_revision = behaviour.next_revision();
+                if let Some(sync_handler) = behaviour.sync_handler.as_ref() {
+                    sync_handler.update_slot(behaviour, slot, &stack, next_revision);
                 }
             }
-        })
+        }
     }
 
     /// Checks if the cursor stack needs to be synced.
-    fn check_cursor_stack_updates(&mut self) -> ScreenHandlerFuture<'_, ()> {
-        Box::pin(async move {
-            let behaviour = self.get_behaviour_mut();
-            if !behaviour.disable_sync {
-                let cursor_stack = behaviour.cursor_stack.lock().await;
-                if !behaviour.previous_cursor_stack.is_in_sync(&cursor_stack) {
-                    behaviour
-                        .previous_cursor_stack
-                        .set_received_stack(cursor_stack.clone());
-                    if let Some(sync_handler) = behaviour.sync_handler.as_ref() {
-                        sync_handler
-                            .update_cursor_stack(behaviour, &cursor_stack)
-                            .await;
-                    }
+    fn check_cursor_stack_updates(&mut self) {
+        let behaviour = self.get_behaviour_mut();
+        if !behaviour.disable_sync {
+            let cursor_stack = behaviour
+                .cursor_stack
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            if !behaviour.previous_cursor_stack.is_in_sync(&cursor_stack) {
+                behaviour
+                    .previous_cursor_stack
+                    .set_received_stack(cursor_stack.clone());
+                if let Some(sync_handler) = behaviour.sync_handler.as_ref() {
+                    sync_handler.update_cursor_stack(behaviour, &cursor_stack);
                 }
             }
-        })
+        }
     }
 
     /// Sends all content updates to listeners and sync handler.
-    fn send_content_updates(&mut self) -> ScreenHandlerFuture<'_, ()> {
-        Box::pin(async move {
-            let slots_len = self.get_behaviour().slots.len();
+    fn send_content_updates(&mut self) {
+        let slots_len = self.get_behaviour().slots.len();
 
-            for i in 0..slots_len {
-                let slot = self.get_behaviour().slots[i].clone();
-                let stack = slot.get_cloned_stack().await;
+        for i in 0..slots_len {
+            let slot = self.get_behaviour().slots[i].clone();
+            let stack = slot.get_cloned_stack();
 
-                self.update_tracked_slot(i, stack.clone()).await;
-                self.check_slot_updates(i, stack).await;
+            self.update_tracked_slot(i, stack.clone());
+            self.check_slot_updates(i, stack);
+        }
+
+        self.check_cursor_stack_updates();
+
+        let behaviour = self.get_behaviour_mut();
+        let mut prop_vec = vec![];
+        for (idx, prop) in behaviour.properties.iter_mut().enumerate() {
+            let value = prop.get();
+            if prop.has_changed() {
+                prop_vec.push((idx, value));
             }
+        }
 
-            self.check_cursor_stack_updates().await;
-
-            let behaviour = self.get_behaviour_mut();
-            let mut prop_vec = vec![];
-            for (idx, prop) in behaviour.properties.iter_mut().enumerate() {
-                let value = prop.get();
-                if prop.has_changed() {
-                    prop_vec.push((idx, value));
-                }
-            }
-
-            for (idx, value) in prop_vec {
-                self.update_tracked_properties(idx as i32, value).await;
-                self.check_property_updates(idx as i32, value).await;
-            }
-        })
+        for (idx, value) in prop_vec {
+            self.update_tracked_properties(idx as i32, value);
+            self.check_property_updates(idx as i32, value);
+        }
     }
 
     /// Checks if a slot index is valid.
-    fn is_slot_valid(&self, slot: i32) -> ScreenHandlerFuture<'_, bool> {
-        Box::pin(async move {
-            slot == -1 || slot == -999 || slot < self.get_behaviour().slots.len() as i32
-        })
+    fn is_slot_valid(&self, slot: i32) -> bool {
+        slot == -1 || slot == -999 || slot < self.get_behaviour().slots.len() as i32
     }
 
     /// Disables synchronization (for batch operations).
@@ -696,16 +614,10 @@ pub trait ScreenHandler: Send + Sync {
     }
 
     /// Gets the screen handler slot index for an inventory slot.
-    fn get_slot_index<'a>(
-        &'a self,
-        inventory: &'a Arc<dyn Inventory>,
-        slot: usize,
-    ) -> OptionUsizeFuture<'a> {
-        Box::pin(async move {
-            (0..self.get_behaviour().slots.len()).find(|&i| {
-                Arc::ptr_eq(&self.get_behaviour().slots[i].get_inventory(), inventory)
-                    && self.get_behaviour().slots[i].get_index() == slot
-            })
+    fn get_slot_index(&self, inventory: &Arc<dyn Inventory>, slot: usize) -> Option<usize> {
+        (0..self.get_behaviour().slots.len()).find(|&i| {
+            Arc::ptr_eq(&self.get_behaviour().slots[i].get_inventory(), inventory)
+                && self.get_behaviour().slots[i].get_index() == slot
         })
     }
 
@@ -713,610 +625,577 @@ pub trait ScreenHandler: Send + Sync {
     ///
     /// Must be implemented by concrete screen handlers to define
     /// where items go when shift-clicked from specific slots.
-    fn quick_move<'a>(
-        &'a mut self,
-        player: &'a dyn InventoryPlayer,
-        slot_index: i32,
-    ) -> ItemStackFuture<'a>;
+    fn quick_move(&mut self, player: &dyn InventoryPlayer, slot_index: i32) -> ItemStack;
 
     /// Handles a button click event (e.g., enchantment selection, beacon effects).
-    fn on_button_click<'a>(
-        &'a mut self,
-        _player: &'a dyn InventoryPlayer,
-        _button_id: i32,
-    ) -> ScreenHandlerFuture<'a, bool> {
-        Box::pin(async { false })
+    fn on_button_click(&mut self, _player: &dyn InventoryPlayer, _button_id: i32) -> bool {
+        false
     }
 
     /// Inserts an item into a range of slots.
     ///
     /// First tries to stack with existing items, then fills empty slots.
-    fn insert_item<'a>(
-        &'a mut self,
-        stack: &'a mut ItemStack,
+    fn insert_item(
+        &mut self,
+        stack: &mut ItemStack,
         start_index: i32,
         end_index: i32,
         from_last: bool,
-    ) -> ScreenHandlerFuture<'a, bool> {
-        Box::pin(async move {
-            let mut success = false;
-            let mut current_index = if from_last {
-                end_index - 1
-            } else {
-                start_index
-            };
+    ) -> bool {
+        let mut success = false;
+        let mut current_index = if from_last {
+            end_index - 1
+        } else {
+            start_index
+        };
 
-            if stack.is_stackable() {
-                while !stack.is_empty()
-                    && (if from_last {
-                        current_index >= start_index
-                    } else {
-                        current_index < end_index
-                    })
-                {
-                    let slot = self.get_behaviour().slots[current_index as usize].clone();
-                    let mut slot_stack = slot.get_stack().await;
-
-                    if !slot_stack.is_empty() && slot_stack.are_items_and_components_equal(stack) {
-                        let combined_count = slot_stack.item_count + stack.item_count;
-                        let max_slot_count = slot.get_max_item_count_for_stack(&slot_stack).await;
-                        if combined_count <= max_slot_count {
-                            stack.set_count(0);
-                            slot_stack.set_count(combined_count);
-                            slot.set_stack(slot_stack).await;
-                            success = true;
-                        } else if slot_stack.item_count < max_slot_count {
-                            stack.decrement(max_slot_count - slot_stack.item_count);
-                            slot_stack.set_count(max_slot_count);
-                            slot.set_stack(slot_stack).await;
-                            success = true;
-                        }
-                    }
-
-                    if from_last {
-                        current_index -= 1;
-                    } else {
-                        current_index += 1;
-                    }
-                }
-            }
-
-            if !stack.is_empty() {
-                if from_last {
-                    current_index = end_index - 1;
-                } else {
-                    current_index = start_index;
-                }
-
-                while if from_last {
+        if stack.is_stackable() {
+            while !stack.is_empty()
+                && (if from_last {
                     current_index >= start_index
                 } else {
                     current_index < end_index
-                } {
-                    let slot = self.get_behaviour().slots[current_index as usize].clone();
-                    let slot_stack = slot.get_stack().await;
+                })
+            {
+                let slot = self.get_behaviour().slots[current_index as usize].clone();
+                let mut slot_stack = slot.get_stack();
 
-                    if slot_stack.is_empty() && slot.can_insert(stack).await {
-                        let max_count = slot.get_max_item_count_for_stack(stack).await;
-                        slot.set_stack(stack.split(max_count.min(stack.item_count)))
-                            .await;
-                        slot.mark_dirty().await;
+                if !slot_stack.is_empty() && slot_stack.are_items_and_components_equal(stack) {
+                    let combined_count = slot_stack.item_count + stack.item_count;
+                    let max_slot_count = slot.get_max_item_count_for_stack(&slot_stack);
+                    if combined_count <= max_slot_count {
+                        stack.set_count(0);
+                        slot_stack.set_count(combined_count);
+                        slot.set_stack(slot_stack);
                         success = true;
-                        break;
-                    }
-
-                    if from_last {
-                        current_index -= 1;
-                    } else {
-                        current_index += 1;
+                    } else if slot_stack.item_count < max_slot_count {
+                        stack.decrement(max_slot_count - slot_stack.item_count);
+                        slot_stack.set_count(max_slot_count);
+                        slot.set_stack(slot_stack);
+                        success = true;
                     }
                 }
+
+                if from_last {
+                    current_index -= 1;
+                } else {
+                    current_index += 1;
+                }
+            }
+        }
+
+        if !stack.is_empty() {
+            if from_last {
+                current_index = end_index - 1;
+            } else {
+                current_index = start_index;
             }
 
-            success
-        })
+            while if from_last {
+                current_index >= start_index
+            } else {
+                current_index < end_index
+            } {
+                let slot = self.get_behaviour().slots[current_index as usize].clone();
+                let slot_stack = slot.get_stack();
+
+                if slot_stack.is_empty() && slot.can_insert(stack) {
+                    let max_count = slot.get_max_item_count_for_stack(stack);
+                    slot.set_stack(stack.split(max_count.min(stack.item_count)));
+                    slot.mark_dirty();
+                    success = true;
+                    break;
+                }
+
+                if from_last {
+                    current_index -= 1;
+                } else {
+                    current_index += 1;
+                }
+            }
+        }
+
+        success
     }
 
     /// Handles a slot click event.
     ///
     /// Override for custom click handling. Return true to prevent default handling.
-    fn handle_slot_click<'a>(
-        &'a self,
-        _player: &'a dyn InventoryPlayer,
+    fn handle_slot_click(
+        &self,
+        _player: &dyn InventoryPlayer,
         _click_type: MouseClick,
         _slot: Arc<dyn Slot>,
         _slot_stack: ItemStack,
         _cursor_stack: ItemStack,
-    ) -> ScreenHandlerFuture<'a, bool> {
-        Box::pin(async {
-            // TODO: required for bundle in the future
-            false
-        })
+    ) -> bool {
+        // TODO: required for bundle in the future
+        false
     }
 
     /// Cancels any client-side changes and resynchronizes the state.
-    fn cancel(&mut self) -> ScreenHandlerFuture<'_, ()> {
-        Box::pin(async move {
-            self.sync_state().await;
-        })
+    fn cancel(&mut self) {
+        self.sync_state();
     }
 
     /// Public entry point for slot click handling.
-    fn on_slot_click<'a>(
-        &'a mut self,
+    fn on_slot_click(
+        &mut self,
         slot_index: i32,
         button: i32,
         action_type: SlotActionType,
-        player: &'a dyn InventoryPlayer,
-    ) -> ScreenHandlerFuture<'a, ()> {
-        Box::pin(async move {
-            self.internal_on_slot_click(slot_index, button, action_type, player)
-                .await;
-        })
+        player: &dyn InventoryPlayer,
+    ) {
+        self.internal_on_slot_click(slot_index, button, action_type, player);
     }
 
     /// Internal slot click handling implementation.
     ///
     /// Handles all click types: pickup, quick move, swap, throw, drag, clone.
     #[expect(clippy::too_many_lines)]
-    fn internal_on_slot_click<'a>(
-        &'a mut self,
+    fn internal_on_slot_click(
+        &mut self,
         slot_index: i32,
         button: i32,
         action_type: SlotActionType,
-        player: &'a dyn InventoryPlayer,
-    ) -> ScreenHandlerFuture<'a, ()> {
-        Box::pin(async move {
-            if action_type == SlotActionType::PickupAll && button == 0 {
-                let behavior = self.get_behaviour_mut();
-                let mut cursor_stack = behavior.cursor_stack.lock().await;
-                let mut to_pick_up = cursor_stack.get_max_stack_size() - cursor_stack.item_count;
+        player: &dyn InventoryPlayer,
+    ) {
+        if action_type == SlotActionType::PickupAll && button == 0 {
+            let behavior = self.get_behaviour_mut();
+            let mut cursor_stack = behavior
+                .cursor_stack
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let mut to_pick_up = cursor_stack.get_max_stack_size() - cursor_stack.item_count;
 
-                for slot in &behavior.slots {
-                    if to_pick_up == 0 {
-                        break;
-                    }
-
-                    let item_stack = slot.get_cloned_stack().await;
-                    if !item_stack.are_items_and_components_equal(&cursor_stack) {
-                        continue;
-                    }
-
-                    if !slot.allow_modification(player).await {
-                        continue;
-                    }
-
-                    let taken_stack = slot
-                        .safe_take(
-                            item_stack.item_count.min(to_pick_up),
-                            cursor_stack.get_max_stack_size() - cursor_stack.item_count,
-                            player,
-                        )
-                        .await;
-                    to_pick_up -= taken_stack.item_count;
-                    cursor_stack.increment(taken_stack.item_count);
+            for slot in &behavior.slots {
+                if to_pick_up == 0 {
+                    break;
                 }
-            } else if action_type == SlotActionType::QuickCraft {
-                let drag_type = button & 3;
-                let drag_button = (button >> 2) & 3;
-                let behaviour = self.get_behaviour_mut();
-                if drag_type == 0 {
-                    behaviour.drag_slots.clear();
-                } else if drag_type == 1 {
-                    if slot_index < 0 {
-                        warn!("Invalid slot index for drag action: {slot_index}. Must be >= 0");
-                        return;
-                    }
-                    let cursor_stack = behaviour.cursor_stack.lock().await;
 
-                    let slot = &behaviour.slots[slot_index as usize];
-                    let stack = slot.get_stack().await;
-                    if !cursor_stack.is_empty()
-                        && slot.can_insert(&cursor_stack).await
-                        && (stack.are_items_and_components_equal(&cursor_stack) || stack.is_empty())
-                        && slot.get_max_item_count_for_stack(&stack).await > stack.item_count
-                    {
-                        behaviour.drag_slots.push(slot_index as u32);
-                    }
-                } else if drag_type == 2 && !behaviour.drag_slots.is_empty() {
-                    // process drag end
-                    if behaviour.drag_slots.len() == 1 {
-                        let slot = behaviour.drag_slots[0] as i32;
-                        behaviour.drag_slots.clear();
-                        let _ = behaviour;
-                        self.internal_on_slot_click(
-                            slot,
-                            drag_button,
-                            SlotActionType::Pickup,
-                            player,
-                        )
-                        .await;
-
-                        return;
-                    }
-                    if drag_button == 2 && !player.has_infinite_materials() {
-                        return; // Only creative
-                    }
-
-                    let mut cursor_stack = behaviour.cursor_stack.lock().await;
-                    let initial_count = cursor_stack.item_count;
-                    let slots_count = behaviour.drag_slots.len();
-                    for slot_index in &behaviour.drag_slots {
-                        let Some(slot) = behaviour.slots.get(*slot_index as usize).cloned() else {
-                            continue;
-                        };
-                        let stack = slot.get_stack().await;
-
-                        if (stack.are_items_and_components_equal(&cursor_stack) || stack.is_empty())
-                            && slot.can_insert(&cursor_stack).await
-                        {
-                            let mut inserting_count = match drag_button {
-                                0 => (initial_count as usize)
-                                    .checked_div(slots_count)
-                                    .map_or(0, |c| c as u8),
-                                1 => 1,
-                                2 => {
-                                    cursor_stack.item_count = cursor_stack.get_max_stack_size();
-                                    cursor_stack.item_count
-                                }
-                                _ => 0,
-                            };
-                            inserting_count = inserting_count
-                                .min(max(
-                                    0,
-                                    slot.get_max_item_count_for_stack(&stack).await
-                                        - stack.item_count,
-                                ))
-                                .min(cursor_stack.item_count);
-                            if inserting_count > 0 {
-                                let mut new_stack = stack.clone();
-                                if new_stack.is_empty() {
-                                    new_stack = cursor_stack.copy_with_count(0);
-                                }
-                                new_stack.increment(inserting_count);
-                                slot.set_stack(new_stack).await;
-                                if drag_button != 2 {
-                                    cursor_stack.decrement(inserting_count);
-                                }
-                                if cursor_stack.is_empty() {
-                                    *cursor_stack = ItemStack::EMPTY.clone();
-                                    break;
-                                }
-                            }
-                        }
-                    }
-
-                    if drag_button == 2 {
-                        *cursor_stack = ItemStack::EMPTY.clone();
-                    }
-                    behaviour.drag_slots.clear();
+                let item_stack = slot.get_cloned_stack();
+                if !item_stack.are_items_and_components_equal(&cursor_stack) {
+                    continue;
                 }
-            } else if action_type == SlotActionType::Throw {
-                if slot_index >= 0 && self.get_behaviour().cursor_stack.lock().await.is_empty() {
-                    let slot = self.get_behaviour().slots[slot_index as usize].clone();
-                    let prev_stack = slot.get_cloned_stack().await;
-                    if !prev_stack.is_empty() {
-                        if button == 1 {
-                            // Throw all
-                            while slot
-                                .get_cloned_stack()
-                                .await
-                                .are_items_and_components_equal(&prev_stack)
-                            {
-                                let drop_stack =
-                                    slot.safe_take(prev_stack.item_count, u8::MAX, player).await;
-                                player.drop_item(drop_stack, true).await;
-                                // player.handleCreativeModeItemDrop(itemStack);
-                            }
-                        } else {
-                            let drop_stack = slot.safe_take(1, u8::MAX, player).await;
-                            if !drop_stack.is_empty() {
-                                slot.on_take_item(player, &drop_stack).await;
-                                player.drop_item(drop_stack, true).await;
-                            }
-                        }
-                    }
+
+                if !slot.allow_modification(player) {
+                    continue;
                 }
-            } else if action_type == SlotActionType::Clone {
-                if player.has_infinite_materials() && slot_index >= 0 {
-                    let behaviour = self.get_behaviour_mut();
-                    let mut cursor_stack = behaviour.cursor_stack.lock().await;
-                    if !cursor_stack.is_empty() {
-                        return;
-                    }
-                    let slot = behaviour.slots[slot_index as usize].clone();
-                    let stack = slot.get_stack().await;
-                    *cursor_stack = stack.copy_with_count(stack.get_max_stack_size());
-                }
-            } else if (action_type == SlotActionType::Pickup
-                || action_type == SlotActionType::QuickMove)
-                && (button == 0 || button == 1)
-            {
-                let click_type = if button == 0 {
-                    MouseClick::Left
-                } else {
-                    MouseClick::Right
-                };
 
-                // Drop item if outside inventory
-                if slot_index == SLOT_INDEX_OUTSIDE {
-                    let mut cursor_stack = self.get_behaviour().cursor_stack.lock().await;
-                    if !cursor_stack.is_empty() {
-                        if click_type == MouseClick::Left {
-                            player.drop_item(cursor_stack.clone(), true).await;
-                            *cursor_stack = ItemStack::EMPTY.clone();
-                        } else {
-                            player.drop_item(cursor_stack.split(1), true).await;
-                        }
-                    }
-                } else if action_type == SlotActionType::QuickMove {
-                    if slot_index < 0 {
-                        return;
-                    }
-
-                    let slot = self.get_behaviour().slots[slot_index as usize].clone();
-
-                    if !slot.can_take_items(player).await {
-                        return;
-                    }
-
-                    let mut moved_stack = self.quick_move(player, slot_index).await;
-
-                    while !moved_stack.is_empty()
-                        && ItemStack::are_items_and_components_equal(
-                            &slot.get_cloned_stack().await,
-                            &moved_stack,
-                        )
-                    {
-                        moved_stack = self.quick_move(player, slot_index).await;
-                    }
-                } else {
-                    // Pickup
-                    if slot_index < 0 {
-                        return;
-                    }
-
-                    let slot = self.get_behaviour().slots[slot_index as usize].clone();
-
-                    if click_type == MouseClick::Left {
-                        slot.on_click(player).await;
-                    }
-
-                    let slot_stack = slot.get_cloned_stack().await;
-                    let mut cursor_stack = self.get_behaviour().cursor_stack.lock().await;
-
-                    if click_type == MouseClick::Right {
-                        let mut intercepted = false;
-
-                        if !cursor_stack.is_empty() {
-                            let mut inner_slot_stack = slot.get_stack().await;
-                            if let Some(bundle) = inner_slot_stack.get_data_component_mut::<pumpkin_data::data_component_impl::BundleContentsImpl>()
-                                && bundle.try_insert(&mut cursor_stack) {
-                                    slot.set_stack(inner_slot_stack).await;
-                                    intercepted = true;
-                                }
-                        }
-
-                        if !intercepted && !slot_stack.is_empty()
-                            && let Some(bundle) = cursor_stack.get_data_component_mut::<pumpkin_data::data_component_impl::BundleContentsImpl>() {
-                                let mut inner_slot_stack = slot.get_stack().await;
-                                if bundle.try_insert(&mut inner_slot_stack) {
-                                    if inner_slot_stack.item_count == 0 {
-                                        inner_slot_stack = ItemStack::EMPTY.clone();
-                                    }
-                                    slot.set_stack(inner_slot_stack).await;
-                                    intercepted = true;
-                                }
-                            }
-
-                        if !intercepted && cursor_stack.is_empty() {
-                            let mut inner_slot_stack = slot.get_stack().await;
-                            if let Some(bundle) = inner_slot_stack.get_data_component_mut::<pumpkin_data::data_component_impl::BundleContentsImpl>()
-                                && let Some(extracted) = bundle.try_extract() {
-                                    *cursor_stack = extracted;
-                                    slot.set_stack(inner_slot_stack).await;
-                                    intercepted = true;
-                                }
-                        }
-
-                        if !intercepted && slot_stack.is_empty()
-                            && let Some(bundle) = cursor_stack.get_data_component_mut::<pumpkin_data::data_component_impl::BundleContentsImpl>()
-                                && let Some(extracted) = bundle.try_extract() {
-                                    slot.set_stack(extracted).await;
-                                    intercepted = true;
-                                }
-
-                        if intercepted {
-                            if cursor_stack.item_count == 0 {
-                                *cursor_stack = ItemStack::EMPTY.clone();
-                            }
-                            slot.mark_dirty().await;
-                            return;
-                        }
-                    }
-
-                    let equipment_slot = cursor_stack
-                        .get_data_component::<EquippableImpl>()
-                        .map_or(&EquipmentSlot::MAIN_HAND, |equippable| equippable.slot);
-
-                    if self
-                        .handle_slot_click(
-                            player,
-                            click_type.clone(),
-                            slot.clone(),
-                            slot_stack.clone(),
-                            cursor_stack.clone(),
-                        )
-                        .await
-                    {
-                        return;
-                    }
-
-                    if slot_stack.is_empty() {
-                        if !cursor_stack.is_empty() {
-                            if equipment_slot.slot_type() == EquipmentType::HumanoidArmor
-                                && (5..9).contains(&slot_index)
-                            {
-                                player
-                                    .enqueue_equipment_change(equipment_slot, &cursor_stack)
-                                    .await;
-                            }
-
-                            let transfer_count = if click_type == MouseClick::Left {
-                                cursor_stack.item_count
-                            } else {
-                                1
-                            };
-                            *cursor_stack = slot
-                                .insert_stack_count(cursor_stack.clone(), transfer_count)
-                                .await;
-                        }
-                    } else if slot.can_take_items(player).await {
-                        if cursor_stack.is_empty() {
-                            let take_count = if click_type == MouseClick::Left {
-                                slot_stack.item_count
-                            } else {
-                                slot_stack.item_count.div_ceil(2)
-                            };
-                            let taken =
-                                slot.try_take_stack_range(take_count, u8::MAX, player).await;
-                            if let Some(taken) = taken {
-                                // Reverse order of operations, shouldn't affect anything
-                                *cursor_stack = taken.clone();
-                                slot.on_take_item(player, &taken).await;
-
-                                if (5..9).contains(&slot_index) {
-                                    let equipment_slot = cursor_stack
-                                        .get_data_component::<EquippableImpl>()
-                                        .map_or(&EquipmentSlot::MAIN_HAND, |equippable| {
-                                            equippable.slot
-                                        });
-                                    player
-                                        .enqueue_equipment_change(equipment_slot, ItemStack::EMPTY)
-                                        .await;
-                                }
-                            }
-                        } else if slot.can_insert(&cursor_stack).await {
-                            if equipment_slot.slot_type() == EquipmentType::HumanoidArmor
-                                && (5..9).contains(&slot_index)
-                            {
-                                player
-                                    .enqueue_equipment_change(equipment_slot, &cursor_stack)
-                                    .await;
-                            }
-
-                            if ItemStack::are_items_and_components_equal(&slot_stack, &cursor_stack)
-                            {
-                                let insert_count = if click_type == MouseClick::Left {
-                                    cursor_stack.item_count
-                                } else {
-                                    1
-                                };
-                                *cursor_stack = slot
-                                    .insert_stack_count(cursor_stack.clone(), insert_count)
-                                    .await;
-                            } else if cursor_stack.item_count
-                                <= slot.get_max_item_count_for_stack(&cursor_stack).await
-                            {
-                                let old_cursor_stack = cursor_stack.clone();
-                                *cursor_stack = slot_stack.clone();
-                                slot.set_stack(old_cursor_stack).await;
-                            }
-                        } else if ItemStack::are_items_and_components_equal(
-                            &slot_stack,
-                            &cursor_stack,
-                        ) {
-                            let taken = slot
-                                .try_take_stack_range(
-                                    slot_stack.item_count,
-                                    cursor_stack
-                                        .get_max_stack_size()
-                                        .saturating_sub(cursor_stack.item_count),
-                                    player,
-                                )
-                                .await;
-
-                            if let Some(taken) = taken {
-                                cursor_stack.increment(taken.item_count);
-                                slot.on_take_item(player, &taken).await;
-                            }
-                        }
-                    }
-
-                    slot.mark_dirty().await;
-                }
-            } else if action_type == SlotActionType::Swap && (0..9).contains(&button)
-                || button == 40
-            {
+                let taken_stack = slot.safe_take(
+                    item_stack.item_count.min(to_pick_up),
+                    cursor_stack.get_max_stack_size() - cursor_stack.item_count,
+                    player,
+                );
+                to_pick_up -= taken_stack.item_count;
+                cursor_stack.increment(taken_stack.item_count);
+            }
+        } else if action_type == SlotActionType::QuickCraft {
+            let drag_type = button & 3;
+            let drag_button = (button >> 2) & 3;
+            let behaviour = self.get_behaviour_mut();
+            if drag_type == 0 {
+                behaviour.drag_slots.clear();
+            } else if drag_type == 1 {
                 if slot_index < 0 {
+                    warn!("Invalid slot index for drag action: {slot_index}. Must be >= 0");
                     return;
                 }
-                let mut button_stack = player.get_inventory().get_stack(button as usize).await;
-                let source_slot = self.get_behaviour().slots[slot_index as usize].clone();
-                let source_stack = source_slot.get_cloned_stack().await;
+                let cursor_stack = behaviour
+                    .cursor_stack
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
 
-                if !button_stack.is_empty() || !source_stack.is_empty() {
-                    if button_stack.is_empty() {
-                        if source_slot.can_take_items(player).await {
-                            player
-                                .get_inventory()
-                                .set_stack(button as usize, source_stack.clone())
-                                .await;
-                            source_slot.set_stack(ItemStack::EMPTY.clone()).await;
-                            source_slot.on_take_item(player, &source_stack).await;
-                        }
-                    } else if source_stack.is_empty() && source_slot.can_insert(&button_stack).await
+                let slot = &behaviour.slots[slot_index as usize];
+                let stack = slot.get_stack();
+                if !cursor_stack.is_empty()
+                    && slot.can_insert(&cursor_stack)
+                    && (stack.are_items_and_components_equal(&cursor_stack) || stack.is_empty())
+                    && slot.get_max_item_count_for_stack(&stack) > stack.item_count
+                {
+                    behaviour.drag_slots.push(slot_index as u32);
+                }
+            } else if drag_type == 2 && !behaviour.drag_slots.is_empty() {
+                // process drag end
+                if behaviour.drag_slots.len() == 1 {
+                    let slot = behaviour.drag_slots[0] as i32;
+                    behaviour.drag_slots.clear();
+                    self.internal_on_slot_click(slot, drag_button, SlotActionType::Pickup, player);
+
+                    return;
+                }
+                if drag_button == 2 && !player.has_infinite_materials() {
+                    return; // Only creative
+                }
+
+                let mut cursor_stack = behaviour
+                    .cursor_stack
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                let initial_count = cursor_stack.item_count;
+                let slots_count = behaviour.drag_slots.len();
+                for slot_index in &behaviour.drag_slots {
+                    let Some(slot) = behaviour.slots.get(*slot_index as usize).cloned() else {
+                        continue;
+                    };
+                    let stack = slot.get_stack();
+
+                    if (stack.are_items_and_components_equal(&cursor_stack) || stack.is_empty())
+                        && slot.can_insert(&cursor_stack)
                     {
-                        let max_count = source_slot
-                            .get_max_item_count_for_stack(&button_stack)
-                            .await;
-                        if button_stack.item_count > max_count {
-                            // button_stack might need to be a ref instead of a clone
-                            source_slot.set_stack(button_stack.split(max_count)).await;
-                        } else {
-                            player
-                                .get_inventory()
-                                .set_stack(button as usize, ItemStack::EMPTY.clone())
-                                .await;
-                            source_slot.set_stack(button_stack).await;
+                        let mut inserting_count = match drag_button {
+                            0 => (initial_count as usize)
+                                .checked_div(slots_count)
+                                .map_or(0, |c| c as u8),
+                            1 => 1,
+                            2 => {
+                                cursor_stack.item_count = cursor_stack.get_max_stack_size();
+                                cursor_stack.item_count
+                            }
+                            _ => 0,
+                        };
+                        inserting_count = inserting_count
+                            .min(max(
+                                0,
+                                slot.get_max_item_count_for_stack(&stack) - stack.item_count,
+                            ))
+                            .min(cursor_stack.item_count);
+                        if inserting_count > 0 {
+                            let mut new_stack = stack.clone();
+                            if new_stack.is_empty() {
+                                new_stack = cursor_stack.copy_with_count(0);
+                            }
+                            new_stack.increment(inserting_count);
+                            slot.set_stack(new_stack);
+                            if drag_button != 2 {
+                                cursor_stack.decrement(inserting_count);
+                            }
+                            if cursor_stack.is_empty() {
+                                *cursor_stack = ItemStack::EMPTY.clone();
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                if drag_button == 2 {
+                    *cursor_stack = ItemStack::EMPTY.clone();
+                }
+                behaviour.drag_slots.clear();
+            }
+        } else if action_type == SlotActionType::Throw {
+            if slot_index >= 0
+                && self
+                    .get_behaviour()
+                    .cursor_stack
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .is_empty()
+            {
+                let slot = self.get_behaviour().slots[slot_index as usize].clone();
+                let prev_stack = slot.get_cloned_stack();
+                if !prev_stack.is_empty() {
+                    if button == 1 {
+                        // Throw all
+                        while slot
+                            .get_cloned_stack()
+                            .are_items_and_components_equal(&prev_stack)
+                        {
+                            let drop_stack = slot.safe_take(prev_stack.item_count, u8::MAX, player);
+                            player.drop_item(drop_stack, true);
+                            // player.handleCreativeModeItemDrop(itemStack);
+                        }
+                    } else {
+                        let drop_stack = slot.safe_take(1, u8::MAX, player);
+                        if !drop_stack.is_empty() {
+                            slot.on_take_item(player, &drop_stack);
+                            player.drop_item(drop_stack, true);
                         }
                     }
                 }
             }
-        })
+        } else if action_type == SlotActionType::Clone {
+            if player.has_infinite_materials() && slot_index >= 0 {
+                let behaviour = self.get_behaviour_mut();
+                let mut cursor_stack = behaviour
+                    .cursor_stack
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                if !cursor_stack.is_empty() {
+                    return;
+                }
+                let slot = behaviour.slots[slot_index as usize].clone();
+                let stack = slot.get_stack();
+                *cursor_stack = stack.copy_with_count(stack.get_max_stack_size());
+            }
+        } else if (action_type == SlotActionType::Pickup
+            || action_type == SlotActionType::QuickMove)
+            && (button == 0 || button == 1)
+        {
+            let click_type = if button == 0 {
+                MouseClick::Left
+            } else {
+                MouseClick::Right
+            };
+
+            // Drop item if outside inventory
+            if slot_index == SLOT_INDEX_OUTSIDE {
+                let mut cursor_stack = self
+                    .get_behaviour()
+                    .cursor_stack
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                if !cursor_stack.is_empty() {
+                    if click_type == MouseClick::Left {
+                        player.drop_item(cursor_stack.clone(), true);
+                        *cursor_stack = ItemStack::EMPTY.clone();
+                    } else {
+                        player.drop_item(cursor_stack.split(1), true);
+                    }
+                }
+            } else if action_type == SlotActionType::QuickMove {
+                if slot_index < 0 {
+                    return;
+                }
+
+                let slot = self.get_behaviour().slots[slot_index as usize].clone();
+
+                if !slot.can_take_items(player) {
+                    return;
+                }
+
+                let mut moved_stack = self.quick_move(player, slot_index);
+
+                while !moved_stack.is_empty()
+                    && ItemStack::are_items_and_components_equal(
+                        &slot.get_cloned_stack(),
+                        &moved_stack,
+                    )
+                {
+                    moved_stack = self.quick_move(player, slot_index);
+                }
+            } else {
+                // Pickup
+                if slot_index < 0 {
+                    return;
+                }
+
+                let slot = self.get_behaviour().slots[slot_index as usize].clone();
+
+                if click_type == MouseClick::Left {
+                    slot.on_click(player);
+                }
+
+                let slot_stack = slot.get_cloned_stack();
+                let mut cursor_stack = self
+                    .get_behaviour()
+                    .cursor_stack
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+
+                if click_type == MouseClick::Right {
+                    let mut intercepted = false;
+
+                    if !cursor_stack.is_empty() {
+                        let mut inner_slot_stack = slot.get_stack();
+                        if let Some(bundle) = inner_slot_stack.get_data_component_mut::<pumpkin_data::data_component_impl::BundleContentsImpl>()
+                            && bundle.try_insert(&mut cursor_stack) {
+                                slot.set_stack(inner_slot_stack);
+                                intercepted = true;
+                            }
+                    }
+
+                    if !intercepted && !slot_stack.is_empty()
+                        && let Some(bundle) = cursor_stack.get_data_component_mut::<pumpkin_data::data_component_impl::BundleContentsImpl>() {
+                            let mut inner_slot_stack = slot.get_stack();
+                            if bundle.try_insert(&mut inner_slot_stack) {
+                                if inner_slot_stack.item_count == 0 {
+                                    inner_slot_stack = ItemStack::EMPTY.clone();
+                                }
+                                slot.set_stack(inner_slot_stack);
+                                intercepted = true;
+                            }
+                        }
+
+                    if !intercepted && cursor_stack.is_empty() {
+                        let mut inner_slot_stack = slot.get_stack();
+                        if let Some(bundle) = inner_slot_stack.get_data_component_mut::<pumpkin_data::data_component_impl::BundleContentsImpl>()
+                            && let Some(extracted) = bundle.try_extract() {
+                                *cursor_stack = extracted;
+                                slot.set_stack(inner_slot_stack);
+                                intercepted = true;
+                            }
+                    }
+
+                    if !intercepted && slot_stack.is_empty()
+                        && let Some(bundle) = cursor_stack.get_data_component_mut::<pumpkin_data::data_component_impl::BundleContentsImpl>()
+                        && let Some(extracted) = bundle.try_extract() {
+                            slot.set_stack(extracted);
+                            intercepted = true;
+                        }
+
+                    if intercepted {
+                        if cursor_stack.item_count == 0 {
+                            *cursor_stack = ItemStack::EMPTY.clone();
+                        }
+                        slot.mark_dirty();
+                        return;
+                    }
+                }
+
+                let equipment_slot = cursor_stack
+                    .get_data_component::<EquippableImpl>()
+                    .map_or(&EquipmentSlot::MAIN_HAND, |equippable| equippable.slot);
+
+                if self.handle_slot_click(
+                    player,
+                    click_type.clone(),
+                    slot.clone(),
+                    slot_stack.clone(),
+                    cursor_stack.clone(),
+                ) {
+                    return;
+                }
+
+                if slot_stack.is_empty() {
+                    if !cursor_stack.is_empty() {
+                        if equipment_slot.slot_type() == EquipmentType::HumanoidArmor
+                            && (5..9).contains(&slot_index)
+                        {
+                            player.enqueue_equipment_change(equipment_slot, &cursor_stack);
+                        }
+
+                        let transfer_count = if click_type == MouseClick::Left {
+                            cursor_stack.item_count
+                        } else {
+                            1
+                        };
+                        *cursor_stack =
+                            slot.insert_stack_count(cursor_stack.clone(), transfer_count);
+                    }
+                } else if slot.can_take_items(player) {
+                    if cursor_stack.is_empty() {
+                        let take_count = if click_type == MouseClick::Left {
+                            slot_stack.item_count
+                        } else {
+                            slot_stack.item_count.div_ceil(2)
+                        };
+                        let taken = slot.try_take_stack_range(take_count, u8::MAX, player);
+                        if let Some(taken) = taken {
+                            // Reverse order of operations, shouldn't affect anything
+                            *cursor_stack = taken.clone();
+                            slot.on_take_item(player, &taken);
+
+                            if (5..9).contains(&slot_index) {
+                                let equipment_slot = cursor_stack
+                                    .get_data_component::<EquippableImpl>()
+                                    .map_or(&EquipmentSlot::MAIN_HAND, |equippable| {
+                                        equippable.slot
+                                    });
+                                player.enqueue_equipment_change(equipment_slot, ItemStack::EMPTY);
+                            }
+                        }
+                    } else if slot.can_insert(&cursor_stack) {
+                        if equipment_slot.slot_type() == EquipmentType::HumanoidArmor
+                            && (5..9).contains(&slot_index)
+                        {
+                            player.enqueue_equipment_change(equipment_slot, &cursor_stack);
+                        }
+
+                        if ItemStack::are_items_and_components_equal(&slot_stack, &cursor_stack) {
+                            let insert_count = if click_type == MouseClick::Left {
+                                cursor_stack.item_count
+                            } else {
+                                1
+                            };
+                            *cursor_stack =
+                                slot.insert_stack_count(cursor_stack.clone(), insert_count);
+                        } else if cursor_stack.item_count
+                            <= slot.get_max_item_count_for_stack(&cursor_stack)
+                        {
+                            let old_cursor_stack = cursor_stack.clone();
+                            *cursor_stack = slot_stack;
+                            slot.set_stack(old_cursor_stack);
+                        }
+                    } else if ItemStack::are_items_and_components_equal(&slot_stack, &cursor_stack)
+                    {
+                        let taken = slot.try_take_stack_range(
+                            slot_stack.item_count,
+                            cursor_stack
+                                .get_max_stack_size()
+                                .saturating_sub(cursor_stack.item_count),
+                            player,
+                        );
+
+                        if let Some(taken) = taken {
+                            cursor_stack.increment(taken.item_count);
+                            slot.on_take_item(player, &taken);
+                        }
+                    }
+                }
+
+                slot.mark_dirty();
+            }
+        } else if action_type == SlotActionType::Swap && (0..9).contains(&button) || button == 40 {
+            if slot_index < 0 {
+                return;
+            }
+            let mut button_stack = player.get_inventory().get_stack(button as usize);
+            let source_slot = self.get_behaviour().slots[slot_index as usize].clone();
+            let source_stack = source_slot.get_cloned_stack();
+
+            if !button_stack.is_empty() || !source_stack.is_empty() {
+                if button_stack.is_empty() {
+                    if source_slot.can_take_items(player) {
+                        player
+                            .get_inventory()
+                            .set_stack(button as usize, source_stack.clone());
+                        source_slot.set_stack(ItemStack::EMPTY.clone());
+                        source_slot.on_take_item(player, &source_stack);
+                    }
+                } else if source_stack.is_empty() && source_slot.can_insert(&button_stack) {
+                    let max_count = source_slot.get_max_item_count_for_stack(&button_stack);
+                    if button_stack.item_count > max_count {
+                        // button_stack might need to be a ref instead of a clone
+                        source_slot.set_stack(button_stack.split(max_count));
+                    } else {
+                        player
+                            .get_inventory()
+                            .set_stack(button as usize, ItemStack::EMPTY.clone());
+                        source_slot.set_stack(button_stack);
+                    }
+                }
+            }
+        }
     }
 }
 
 pub trait ScreenHandlerListener: Send + Sync {
-    fn on_slot_update<'a>(
-        &'a self,
-        _screen_handler: &'a ScreenHandlerBehaviour,
+    fn on_slot_update(
+        &self,
+        _screen_handler: &ScreenHandlerBehaviour,
         _slot: u8,
         _stack: ItemStack,
-    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
-        Box::pin(async {})
+    ) {
     }
-    fn on_property_update<'a>(
-        &'a self,
-        _screen_handler: &'a ScreenHandlerBehaviour,
+    fn on_property_update(
+        &self,
+        _screen_handler: &ScreenHandlerBehaviour,
         _property: u8,
         _value: i32,
-    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
-        Box::pin(async {})
+    ) {
     }
 }
-
-pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 
 pub type SharedScreenHandler = Arc<Mutex<dyn ScreenHandler>>;
 
 pub trait ScreenHandlerFactory: Send + Sync {
-    fn create_screen_handler<'a>(
-        &'a self,
+    fn create_screen_handler(
+        &self,
         sync_id: u8,
-        player_inventory: &'a Arc<PlayerInventory>,
-        player: &'a dyn InventoryPlayer,
-    ) -> BoxFuture<'a, Option<SharedScreenHandler>>;
+        player_inventory: &Arc<PlayerInventory>,
+        player: &dyn InventoryPlayer,
+    ) -> Option<SharedScreenHandler>;
     fn get_display_name(&self) -> TextComponent;
 }
 

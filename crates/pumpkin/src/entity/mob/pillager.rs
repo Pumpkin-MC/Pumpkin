@@ -1,5 +1,5 @@
 use std::sync::{
-    Arc, Weak,
+    Arc, Mutex, Weak,
     atomic::{AtomicBool, Ordering},
 };
 
@@ -10,10 +10,9 @@ use pumpkin_data::tracked_data;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
 use pumpkin_protocol::java::client::play::Metadata;
-use tokio::sync::Mutex;
 
 use crate::entity::{
-    Entity, EntityBase, EntityBaseFuture, NbtFuture,
+    Entity, EntityBase,
     ai::goal::{
         active_target::ActiveTargetGoal, look_around::RandomLookAroundGoal,
         look_at_entity::LookAtEntityGoal, ranged_crossbow_attack::RangedCrossbowAttackGoal,
@@ -115,8 +114,11 @@ impl PillagerEntity {
         );
     }
 
-    pub async fn add_to_inventory(&self, item: ItemStack) -> Option<ItemStack> {
-        let mut inv = self.inventory.lock().await;
+    pub fn add_to_inventory(&self, item: ItemStack) -> Option<ItemStack> {
+        let mut inv = self
+            .inventory
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         if inv.len() < Self::INVENTORY_SIZE {
             inv.push(item);
             None
@@ -125,11 +127,11 @@ impl PillagerEntity {
         }
     }
 
-    pub async fn drop_inventory(&self) {
-        let items = {
-            let mut inv = self.inventory.lock().await;
-            std::mem::take(&mut *inv)
-        };
+    pub fn drop_inventory(&self) {
+        let items = self
+            .inventory
+            .try_lock()
+            .map_or_else(|_| Vec::new(), |mut inv| std::mem::take(&mut *inv));
         let entity = &self.mob_entity.living_entity.entity;
         let world = entity.world.load();
         let pos = entity.pos.load();
@@ -139,7 +141,7 @@ impl PillagerEntity {
                     Entity::new(world.clone(), pos, &EntityType::ITEM),
                     item,
                 );
-                world.spawn_entity(Arc::new(item_entity)).await;
+                world.spawn_entity(Arc::new(item_entity));
             }
         }
     }
@@ -162,71 +164,60 @@ impl Mob for PillagerEntity {
         Some(self)
     }
 
-    fn mob_init_data_tracker(&self) -> EntityBaseFuture<'_, ()> {
-        Box::pin(async move {
-            let entity = self.get_entity();
-            if self.is_charging_crossbow() {
-                entity.send_meta_data(
-                    &[Metadata::new(
-                        tracked_data::pillager::IS_CHARGING_CROSSBOW,
-                        true,
-                    )],
-                    None,
-                );
-            }
-        })
+    fn mob_init_data_tracker(&self) {
+        self.set_charging_crossbow(self.is_charging_crossbow.load(Ordering::Relaxed));
     }
 
-    fn mob_write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
-        Box::pin(async move {
-            self.write_raider_nbt(nbt);
-            nbt.put_bool("CanPickUpLoot", true);
+    fn mob_write_nbt(&self, nbt: &mut NbtCompound) {
+        self.write_raider_nbt(nbt);
+        nbt.put_bool("CanPickUpLoot", true);
 
-            let inv = self.inventory.lock().await;
-            if !inv.is_empty() {
-                let mut items_tag = Vec::new();
-                for item in inv.iter() {
-                    if !item.is_empty() {
-                        let mut item_nbt = NbtCompound::new();
-                        item.write_item_stack(&mut item_nbt);
-                        items_tag.push(NbtTag::Compound(item_nbt));
-                    }
-                }
-                if !items_tag.is_empty() {
-                    nbt.put_list("Inventory", items_tag);
+        let inv = self
+            .inventory
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if !inv.is_empty() {
+            let mut items_tag = Vec::new();
+            for item in inv.iter() {
+                if !item.is_empty() {
+                    let mut item_nbt = NbtCompound::new();
+                    item.write_item_stack(&mut item_nbt);
+                    items_tag.push(NbtTag::Compound(item_nbt));
                 }
             }
-        })
+            if !items_tag.is_empty() {
+                nbt.put_list("Inventory", items_tag);
+            }
+        }
     }
 
-    fn mob_read_nbt<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
-        Box::pin(async move {
-            self.read_raider_nbt(nbt);
+    fn mob_read_nbt(&self, nbt: &NbtCompound) {
+        self.read_raider_nbt(nbt);
 
-            if let Some(inv_list) = nbt.get_list("Inventory") {
-                let mut inv = self.inventory.lock().await;
-                inv.clear();
-                for tag in inv_list {
-                    if let Some(compound) = tag.extract_compound()
-                        && let Some(stack) = ItemStack::read_item_stack(compound)
-                    {
-                        inv.push(stack);
-                    }
+        if let Some(inv_list) = nbt.get_list("Inventory") {
+            let mut inv = self
+                .inventory
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            inv.clear();
+            for tag in inv_list {
+                if let Some(compound) = tag.extract_compound()
+                    && let Some(stack) = ItemStack::read_item_stack(compound)
+                {
+                    inv.push(stack);
                 }
             }
-        })
+        }
     }
 
-    fn on_damage<'a>(
-        &'a self,
+    fn on_damage(
+        &self,
         _damage_type: pumpkin_data::damage::DamageType,
-        _source: Option<&'a dyn EntityBase>,
-    ) -> EntityBaseFuture<'a, ()> {
-        Box::pin(async move {
-            if self.mob_entity.living_entity.dead.load(Ordering::Relaxed) {
-                self.drop_inventory().await;
-            }
-        })
+        _source: Option<&dyn EntityBase>,
+    ) {
+        if self.mob_entity.living_entity.dead.load(Ordering::Relaxed) {
+            self.drop_inventory();
+        }
     }
 }
 

@@ -23,51 +23,47 @@ const ARG_REASON: &str = "reason";
 struct Executor;
 
 impl CommandExecutor for Executor {
-    fn execute<'a>(
-        &'a self,
-        sender: &'a CommandSender,
-        _server: &'a crate::server::Server,
-        args: &'a ConsumedArgs<'a>,
-    ) -> CommandResult<'a> {
-        Box::pin(async move {
-            let Some(Arg::Players(targets)) = args.get(&ARG_TARGETS) else {
-                return Err(InvalidConsumption(Some(ARG_TARGETS.into())));
+    fn execute(
+        &self,
+        sender: &CommandSender,
+        _server: &crate::server::Server,
+        args: &ConsumedArgs,
+    ) -> CommandResult {
+        let Some(Arg::Players(targets)) = args.get(&ARG_TARGETS) else {
+            return Err(InvalidConsumption(Some(ARG_TARGETS.into())));
+        };
+
+        let custom_reason = args.get(&ARG_REASON);
+        let reason = match custom_reason {
+            Some(Arg::Msg(r)) => TextComponent::text(r.clone()),
+            _ => TextComponent::translate_cross(
+                translation::java::MULTIPLAYER_DISCONNECT_KICKED,
+                translation::bedrock::DISCONNECT_KICKED,
+                [],
+            ),
+        };
+
+        for target in targets {
+            target.kick(DisconnectReason::Kicked, &reason);
+
+            let feedback = if custom_reason.is_some() {
+                TextComponent::translate_cross(
+                    translation::java::COMMANDS_KICK_SUCCESS,
+                    translation::bedrock::COMMANDS_KICK_SUCCESS_REASON,
+                    [target.get_display_name(), reason.clone()],
+                )
+            } else {
+                TextComponent::translate_cross(
+                    translation::java::COMMANDS_KICK_SUCCESS,
+                    translation::bedrock::COMMANDS_KICK_SUCCESS,
+                    [target.get_display_name(), reason.clone()],
+                )
             };
 
-            let custom_reason = args.get(&ARG_REASON);
-            let reason = match custom_reason {
-                Some(Arg::Msg(r)) => TextComponent::text(r.clone()),
-                _ => TextComponent::translate_cross(
-                    translation::java::MULTIPLAYER_DISCONNECT_KICKED,
-                    translation::bedrock::DISCONNECT_KICKED,
-                    [],
-                ),
-            };
+            sender.send_message(feedback.color_named(NamedColor::Blue));
+        }
 
-            for target in targets {
-                target.kick(DisconnectReason::Kicked, reason.clone()).await;
-
-                let feedback = if custom_reason.is_some() {
-                    TextComponent::translate_cross(
-                        translation::java::COMMANDS_KICK_SUCCESS,
-                        translation::bedrock::COMMANDS_KICK_SUCCESS_REASON,
-                        [target.get_display_name().await, reason.clone()],
-                    )
-                } else {
-                    TextComponent::translate_cross(
-                        translation::java::COMMANDS_KICK_SUCCESS,
-                        translation::bedrock::COMMANDS_KICK_SUCCESS,
-                        [target.get_display_name().await, reason.clone()],
-                    )
-                };
-
-                sender
-                    .send_message(feedback.color_named(NamedColor::Blue))
-                    .await;
-            }
-
-            Ok(targets.len() as i32)
-        })
+        Ok(targets.len() as i32)
     }
 }
 

@@ -1,5 +1,4 @@
-use super::{Controls, Goal, GoalFuture, to_goal_ticks};
-use crate::entity::EntityBase;
+use super::{Controls, Goal, to_goal_ticks};
 use crate::entity::ai::pathfinder::NavigatorGoal;
 use crate::entity::ai::pathfinder::node::PathType;
 use crate::entity::mob::Mob;
@@ -33,12 +32,12 @@ impl FollowOwnerGoal {
         })
     }
 
-    async fn unable_to_move_to_owner(mob: &dyn Mob, owner: Option<&Player>) -> bool {
+    fn unable_to_move_to_owner(mob: &dyn Mob, owner: Option<&Player>) -> bool {
         if mob.is_sitting() {
             return true;
         }
         let mob_entity = &mob.get_mob_entity().living_entity.entity;
-        if mob_entity.has_vehicle().await || mob_entity.is_leashed().await {
+        if mob_entity.has_vehicle() || mob_entity.is_leashed() {
             return true;
         }
         let Some(owner) = owner else {
@@ -133,124 +132,110 @@ impl FollowOwnerGoal {
 }
 
 impl Goal for FollowOwnerGoal {
-    fn can_start<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
-        Box::pin(async move {
-            let Some(owner) = Self::find_owner(mob) else {
-                return false;
-            };
+    fn can_start(&mut self, mob: &dyn Mob) -> bool {
+        let Some(owner) = Self::find_owner(mob) else {
+            return false;
+        };
 
-            if Self::unable_to_move_to_owner(mob, Some(&owner)).await {
-                return false;
-            }
+        if Self::unable_to_move_to_owner(mob, Some(&owner)) {
+            return false;
+        }
 
-            let dist_sq = Self::distance_to_owner_sq(mob, &owner);
-            if dist_sq < self.start_distance_sq {
-                return false;
-            }
+        let dist_sq = Self::distance_to_owner_sq(mob, &owner);
+        if dist_sq < self.start_distance_sq {
+            return false;
+        }
 
-            self.owner = Some(owner);
-            true
-        })
+        self.owner = Some(owner);
+        true
     }
 
-    fn should_continue<'a>(&'a self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
-        Box::pin(async move {
-            let is_idle = {
-                let navigator = mob
+    fn should_continue(&self, mob: &dyn Mob) -> bool {
+        let is_idle = {
+            let navigator = mob
+                .get_mob_entity()
+                .navigator
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            navigator.is_idle()
+        };
+        if is_idle {
+            return false;
+        }
+
+        if Self::unable_to_move_to_owner(mob, self.owner.as_deref()) {
+            return false;
+        }
+
+        let Some(owner) = &self.owner else {
+            return false;
+        };
+
+        let dist_sq = Self::distance_to_owner_sq(mob, owner);
+        dist_sq > self.stop_distance_sq
+    }
+
+    fn start(&mut self, mob: &dyn Mob) {
+        self.time_to_recalc_path = 0;
+        let mut navigator = mob
+            .get_mob_entity()
+            .navigator
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        self.old_water_cost = navigator.get_pathfinding_malus(PathType::Water);
+        navigator.set_pathfinding_malus(PathType::Water, 0.0);
+    }
+
+    fn stop(&mut self, mob: &dyn Mob) {
+        self.owner = None;
+        let mut navigator = mob
+            .get_mob_entity()
+            .navigator
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        navigator.stop();
+        navigator.set_pathfinding_malus(PathType::Water, self.old_water_cost);
+    }
+
+    fn tick(&mut self, mob: &dyn Mob) {
+        let Some(owner) = &self.owner else {
+            return;
+        };
+
+        let is_owner_far_away = Self::should_try_teleport_to_owner(mob, owner);
+
+        if !is_owner_far_away {
+            let mob_entity = mob.get_mob_entity();
+            let owner_eye_pos = owner.living_entity.entity.get_eye_pos();
+            let mut look_control = mob_entity
+                .look_control
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            look_control.look_at_with_range(
+                owner_eye_pos.x,
+                owner_eye_pos.y,
+                owner_eye_pos.z,
+                10.0,
+                mob.get_max_look_pitch_change(),
+            );
+        }
+
+        self.time_to_recalc_path -= 1;
+        if self.time_to_recalc_path <= 0 {
+            self.time_to_recalc_path = to_goal_ticks(10);
+            if is_owner_far_away {
+                Self::try_teleport_to_owner(mob, owner);
+            } else {
+                let mob_pos = mob.get_mob_entity().living_entity.entity.pos.load();
+                let owner_pos = owner.living_entity.entity.pos.load();
+                let mut navigator = mob
                     .get_mob_entity()
                     .navigator
                     .lock()
                     .unwrap_or_else(std::sync::PoisonError::into_inner);
-                navigator.is_idle()
-            };
-            if is_idle {
-                return false;
+                navigator.set_progress(NavigatorGoal::new(mob_pos, owner_pos, self.speed_modifier));
             }
-
-            if Self::unable_to_move_to_owner(mob, self.owner.as_deref()).await {
-                return false;
-            }
-
-            let Some(owner) = &self.owner else {
-                return false;
-            };
-
-            let dist_sq = Self::distance_to_owner_sq(mob, owner);
-            dist_sq > self.stop_distance_sq
-        })
-    }
-
-    fn start<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
-        Box::pin(async move {
-            self.time_to_recalc_path = 0;
-            let mut navigator = mob
-                .get_mob_entity()
-                .navigator
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            self.old_water_cost = navigator.get_pathfinding_malus(PathType::Water);
-            navigator.set_pathfinding_malus(PathType::Water, 0.0);
-        })
-    }
-
-    fn stop<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
-        Box::pin(async move {
-            self.owner = None;
-            let mut navigator = mob
-                .get_mob_entity()
-                .navigator
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            navigator.stop();
-            navigator.set_pathfinding_malus(PathType::Water, self.old_water_cost);
-        })
-    }
-
-    fn tick<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
-        Box::pin(async move {
-            let Some(owner) = &self.owner else {
-                return;
-            };
-
-            let is_owner_far_away = Self::should_try_teleport_to_owner(mob, owner);
-
-            if !is_owner_far_away {
-                let mob_entity = mob.get_mob_entity();
-                let owner_eye_pos = owner.living_entity.entity.get_eye_pos();
-                let mut look_control = mob_entity
-                    .look_control
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner);
-                look_control.look_at_with_range(
-                    owner_eye_pos.x,
-                    owner_eye_pos.y,
-                    owner_eye_pos.z,
-                    10.0,
-                    mob.get_max_look_pitch_change(),
-                );
-            }
-
-            self.time_to_recalc_path -= 1;
-            if self.time_to_recalc_path <= 0 {
-                self.time_to_recalc_path = to_goal_ticks(10);
-                if is_owner_far_away {
-                    Self::try_teleport_to_owner(mob, owner);
-                } else {
-                    let mob_pos = mob.get_mob_entity().living_entity.entity.pos.load();
-                    let owner_pos = owner.living_entity.entity.pos.load();
-                    let mut navigator = mob
-                        .get_mob_entity()
-                        .navigator
-                        .lock()
-                        .unwrap_or_else(std::sync::PoisonError::into_inner);
-                    navigator.set_progress(NavigatorGoal::new(
-                        mob_pos,
-                        owner_pos,
-                        self.speed_modifier,
-                    ));
-                }
-            }
-        })
+        }
     }
 
     fn should_run_every_tick(&self) -> bool {

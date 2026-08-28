@@ -20,64 +20,64 @@ const NO_TEAM_ERROR: CommandErrorType<0> = CommandErrorType::new(
 struct TeamMsgCommandExecutor;
 
 impl CommandExecutor for TeamMsgCommandExecutor {
-    fn execute<'a>(&'a self, context: &'a CommandContext) -> CommandExecutorResult<'a> {
-        Box::pin(async move {
-            let player = context.source.player_or_err()?;
-            let sender_name = &player.gameprofile.name;
-            let world = context.world();
-            let scoreboard = world.scoreboard.lock().await;
+    fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
+        let player = context.source.player_or_err()?;
+        let sender_name = player.gameprofile.name.clone();
+        let world = context.world().clone();
+        let message_text = StringArgumentType::get(context, ARG_MESSAGE)?.to_string();
+        let sender_display_name = context.source.display_name.clone();
 
-            let mut sender_team = None;
-            for team in scoreboard.get_teams().values() {
-                if team.players.contains(sender_name) {
-                    sender_team = Some(team.clone());
-                    break;
-                }
+        let scoreboard = world
+            .scoreboard
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+
+        let mut sender_team = None;
+        for team in scoreboard.get_teams().values() {
+            if team.players.contains(&sender_name) {
+                sender_team = Some(team.clone());
+                break;
             }
+        }
 
-            let Some(team) = sender_team else {
-                return Err(NO_TEAM_ERROR.create_without_context());
-            };
+        let Some(team) = sender_team else {
+            return Err(NO_TEAM_ERROR.create_without_context());
+        };
 
-            let team_display_name = team.display_name.clone().color_named(team.color);
-            let sender_display_name = context.source.display_name.clone();
-            let message_text = StringArgumentType::get(context, ARG_MESSAGE)?;
-            let message_component = TextComponent::text(message_text.to_string());
+        let team_display_name = team.display_name.clone().color_named(team.color);
+        let message_component = TextComponent::text(message_text);
 
-            let online_players = world.players.load();
-            let mut sent_count = 0;
+        let online_players = world.players.load();
 
-            for player in online_players.iter() {
-                if team.players.contains(&player.gameprofile.name) {
-                    let msg = if player.gameprofile.name == *sender_name {
-                        TextComponent::translate_cross(
-                            translation::java::CHAT_TYPE_TEAM_SENT,
-                            translation::java::CHAT_TYPE_TEAM_SENT,
-                            [
-                                team_display_name.clone(),
-                                sender_display_name.clone(),
-                                message_component.clone(),
-                            ],
-                        )
-                    } else {
-                        TextComponent::translate_cross(
-                            translation::java::CHAT_TYPE_TEAM_TEXT,
-                            translation::java::CHAT_TYPE_TEAM_TEXT,
-                            [
-                                team_display_name.clone(),
-                                sender_display_name.clone(),
-                                message_component.clone(),
-                            ],
-                        )
-                    };
+        for player in online_players.iter() {
+            if team.players.contains(&player.gameprofile.name) {
+                let msg = if player.gameprofile.name == sender_name {
+                    TextComponent::translate_cross(
+                        translation::java::CHAT_TYPE_TEAM_SENT,
+                        translation::java::CHAT_TYPE_TEAM_SENT,
+                        [
+                            team_display_name.clone(),
+                            sender_display_name.clone(),
+                            message_component.clone(),
+                        ],
+                    )
+                } else {
+                    TextComponent::translate_cross(
+                        translation::java::CHAT_TYPE_TEAM_TEXT,
+                        translation::java::CHAT_TYPE_TEAM_TEXT,
+                        [
+                            team_display_name.clone(),
+                            sender_display_name.clone(),
+                            message_component.clone(),
+                        ],
+                    )
+                };
 
-                    player.send_system_message(&msg).await;
-                    sent_count += 1;
-                }
+                player.send_system_message(&msg);
             }
+        }
 
-            Ok(sent_count)
-        })
+        Ok(1)
     }
 }
 

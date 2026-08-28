@@ -1,5 +1,3 @@
-use std::pin::Pin;
-
 use crate::block::entities::mob_spawner::MobSpawnerBlockEntity;
 use crate::entity::EntityBase;
 use crate::entity::player::Player;
@@ -62,51 +60,49 @@ pub(crate) fn apply_entity_variant(item: &ItemStack, mob: &dyn EntityBase) {
 }
 
 impl ItemBehaviour for SpawnEggItem {
-    fn use_on_block<'a>(
-        &'a self,
-        item: &'a mut ItemStack,
-        player: &'a Player,
+    fn use_on_block(
+        &self,
+        item: &mut ItemStack,
+        player: &Player,
         location: BlockPos,
         face: BlockDirection,
         _cursor_pos: Vector3<f32>,
-        _block: &'a Block,
-        _server: &'a Server,
-    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
-        Box::pin(async move {
-            if let Some(entity_type) = entity_from_egg(item.item.id) {
-                let world = player.world();
+        _block: &Block,
+        _server: &Server,
+    ) {
+        if let Some(entity_type) = entity_from_egg(item.item.id) {
+            let world = player.world();
 
-                if let Some(block_entity) = player.world().get_block_entity(&location)
-                    && let Some(spawner) = block_entity
-                        .as_any()
-                        .downcast_ref::<MobSpawnerBlockEntity>()
-                {
-                    spawner.set_entity_type(entity_type);
-                    world.update_block_entity(&block_entity);
-                    item.decrement_unless_creative(player.gamemode.load(), 1);
-                    return;
-                }
-                let pos = BlockPos(location.0 + face.to_offset());
-                let pos = Vector3::new(
-                    f64::from(pos.0.x) + 0.5,
-                    f64::from(pos.0.y),
-                    f64::from(pos.0.z) + 0.5,
-                );
-                // Create rotation like Vanilla
-                let yaw = wrap_degrees(rand::random::<f32>() * 360.0) % 360.0;
-
-                let mob = from_type(entity_type, pos, &world, Uuid::new_v4());
-
-                // Set the rotation
-                mob.get_entity().set_rotation(yaw, 0.0);
-
-                apply_entity_variant(item, mob.as_ref());
-
-                // Broadcast the new mob to all players
-                world.spawn_entity(mob).await;
+            if let Some(block_entity) = player.world().get_block_entity(&location)
+                && let Some(spawner) = block_entity
+                    .as_any()
+                    .downcast_ref::<MobSpawnerBlockEntity>()
+            {
+                spawner.set_entity_type(entity_type);
+                world.update_block_entity(&block_entity);
                 item.decrement_unless_creative(player.gamemode.load(), 1);
+                return;
             }
-        })
+            let pos = BlockPos(location.0 + face.to_offset());
+            let pos = Vector3::new(
+                f64::from(pos.0.x) + 0.5,
+                f64::from(pos.0.y),
+                f64::from(pos.0.z) + 0.5,
+            );
+            // Create rotation like Vanilla
+            let yaw = wrap_degrees(rand::random::<f32>() * 360.0) % 360.0;
+
+            let mob = from_type(entity_type, pos, &world, Uuid::new_v4());
+
+            // Set the rotation
+            mob.get_entity().set_rotation(yaw, 0.0);
+
+            apply_entity_variant(item, mob.as_ref());
+
+            // Broadcast the new mob to all players
+            world.spawn_entity(mob);
+            item.decrement_unless_creative(player.gamemode.load(), 1);
+        }
     }
 
     fn as_any(&self) -> &dyn std::any::Any {

@@ -32,7 +32,7 @@ const fn amount_consumer() -> BoundedNumArgumentConsumer<f32> {
 struct LocationExecutor;
 struct EntityExecutor(bool);
 
-async fn send_damage_result(
+fn send_damage_result(
     sender: &CommandSender,
     success: bool,
     amount: f32,
@@ -46,86 +46,77 @@ async fn send_damage_result(
         )));
     }
 
-    sender
-        .send_message(TextComponent::translate_cross(
-            translation::java::COMMANDS_DAMAGE_SUCCESS,
-            translation::bedrock::COMMANDS_DAMAGE_SUCCESS,
-            [TextComponent::text(amount.to_string()), target_name],
-        ))
-        .await;
+    sender.send_message(TextComponent::translate_cross(
+        translation::java::COMMANDS_DAMAGE_SUCCESS,
+        translation::bedrock::COMMANDS_DAMAGE_SUCCESS,
+        [TextComponent::text(amount.to_string()), target_name],
+    ));
 
     Ok(1) // not arbitrary, this is what vanilla does
 }
 
 impl CommandExecutor for LocationExecutor {
-    fn execute<'a>(
-        &'a self,
-        sender: &'a CommandSender,
-        _server: &'a crate::server::Server,
-        args: &'a ConsumedArgs<'a>,
-    ) -> CommandResult<'a> {
-        Box::pin(async move {
-            let target = EntityArgumentConsumer::find_arg(args, ARG_TARGET)?;
+    fn execute(
+        &self,
+        sender: &CommandSender,
+        _server: &crate::server::Server,
+        args: &ConsumedArgs,
+    ) -> CommandResult {
+        let target = EntityArgumentConsumer::find_arg(args, ARG_TARGET)?;
 
-            let amount = BoundedNumArgumentConsumer::<f32>::find_arg(args, ARG_AMOUNT)??;
+        let amount = BoundedNumArgumentConsumer::<f32>::find_arg(args, ARG_AMOUNT)??;
 
-            let damage_type =
-                args.get(ARG_DAMAGE_TYPE)
-                    .map_or(DamageType::GENERIC, |arg| match arg {
-                        Arg::DamageType(dt) => *dt,
-                        _ => DamageType::GENERIC,
-                    });
+        let damage_type = args
+            .get(ARG_DAMAGE_TYPE)
+            .map_or(DamageType::GENERIC, |arg| match arg {
+                Arg::DamageType(dt) => *dt,
+                _ => DamageType::GENERIC,
+            });
 
-            let location = Position3DArgumentConsumer::find_arg(args, ARG_LOCATION)?;
+        let location = Position3DArgumentConsumer::find_arg(args, ARG_LOCATION)?;
 
-            let success = target
-                .damage_with_context(&*target, amount, damage_type, Some(location), None, None)
-                .await;
+        let success =
+            target.damage_with_context(&*target, amount, damage_type, Some(location), None, None);
 
-            send_damage_result(sender, success, amount, target.get_display_name().await).await
-        })
+        send_damage_result(sender, success, amount, target.get_display_name())
     }
 }
 
 impl CommandExecutor for EntityExecutor {
-    fn execute<'a>(
-        &'a self,
-        sender: &'a CommandSender,
-        _server: &'a crate::server::Server,
-        args: &'a ConsumedArgs<'a>,
-    ) -> CommandResult<'a> {
-        Box::pin(async move {
-            let target = EntityArgumentConsumer::find_arg(args, ARG_TARGET)?;
+    fn execute(
+        &self,
+        sender: &CommandSender,
+        _server: &crate::server::Server,
+        args: &ConsumedArgs,
+    ) -> CommandResult {
+        let target = EntityArgumentConsumer::find_arg(args, ARG_TARGET)?;
 
-            let amount = BoundedNumArgumentConsumer::<f32>::find_arg(args, ARG_AMOUNT)??;
+        let amount = BoundedNumArgumentConsumer::<f32>::find_arg(args, ARG_AMOUNT)??;
 
-            let damage_type =
-                args.get(ARG_DAMAGE_TYPE)
-                    .map_or(DamageType::GENERIC, |arg| match arg {
-                        Arg::DamageType(dt) => *dt,
-                        _ => DamageType::GENERIC,
-                    });
+        let damage_type = args
+            .get(ARG_DAMAGE_TYPE)
+            .map_or(DamageType::GENERIC, |arg| match arg {
+                Arg::DamageType(dt) => *dt,
+                _ => DamageType::GENERIC,
+            });
 
-            let source = EntityArgumentConsumer::find_arg(args, ARG_ENTITY).ok();
-            let cause = if self.0 {
-                EntityArgumentConsumer::find_arg(args, ARG_CAUSE).ok()
-            } else {
-                None
-            };
+        let source = EntityArgumentConsumer::find_arg(args, ARG_ENTITY).ok();
+        let cause = if self.0 {
+            EntityArgumentConsumer::find_arg(args, ARG_CAUSE).ok()
+        } else {
+            None
+        };
 
-            let success = target
-                .damage_with_context(
-                    &*target,
-                    amount,
-                    damage_type,
-                    None,
-                    source.as_ref().map(|e| e.as_ref() as &dyn EntityBase),
-                    cause.as_ref().map(|e| e.as_ref() as &dyn EntityBase),
-                )
-                .await;
+        let success = target.damage_with_context(
+            &*target,
+            amount,
+            damage_type,
+            None,
+            source.as_ref().map(|e| e.as_ref() as &dyn EntityBase),
+            cause.as_ref().map(|e| e.as_ref() as &dyn EntityBase),
+        );
 
-            send_damage_result(sender, success, amount, target.get_display_name().await).await
-        })
+        send_damage_result(sender, success, amount, target.get_display_name())
     }
 }
 

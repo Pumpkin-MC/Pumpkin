@@ -1,5 +1,5 @@
 use super::{Controls, Goal, to_goal_ticks};
-use crate::entity::ai::goal::GoalFuture;
+
 use crate::entity::ai::target_predicate::TargetPredicate;
 use crate::entity::living::LivingEntity;
 use crate::entity::mob::Mob;
@@ -66,7 +66,7 @@ impl TrackTargetGoal {
     }
 
     /// Equivalent to Vanilla's `canAttack` check inside `TargetGoal`
-    pub async fn can_track(
+    pub fn can_track(
         &self,
         mob: &dyn Mob,
         target: Option<&LivingEntity>,
@@ -79,10 +79,7 @@ impl TrackTargetGoal {
         let mob_entity = mob.get_mob_entity();
         let world = mob_entity.living_entity.entity.world.load();
 
-        if !target_predicate
-            .test(&world, Some(&mob_entity.living_entity), target)
-            .await
-        {
+        if !target_predicate.test(&world, Some(&mob_entity.living_entity), target) {
             return false;
         }
 
@@ -115,81 +112,71 @@ impl TrackTargetGoal {
 }
 
 impl Goal for TrackTargetGoal {
-    fn should_continue<'a>(&'a self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
-        Box::pin(async {
-            let mob_entity = mob.get_mob_entity();
-            let target_arc = mob_entity.target.lock().await.clone();
+    fn should_continue(&self, mob: &dyn Mob) -> bool {
+        let mob_entity = mob.get_mob_entity();
+        let target_arc = mob_entity.get_target();
 
-            let Some(target_base) = target_arc else {
-                return false;
-            };
+        let Some(target_base) = target_arc else {
+            return false;
+        };
 
-            let Some(target) = target_base.get_living_entity() else {
-                return false;
-            };
+        let Some(target) = target_base.get_living_entity() else {
+            return false;
+        };
 
-            if !target.entity.is_alive() {
+        if !target.entity.is_alive() {
+            return false;
+        }
+
+        if !self.can_track(mob, Some(target), &self.target_predicate) {
+            return false;
+        }
+
+        // TODO: Team checks (return false if on the same team)
+
+        let dist_sq = mob_entity
+            .living_entity
+            .entity
+            .pos
+            .load()
+            .squared_distance_to_vec(&target.entity.pos.load());
+
+        // Get follow range attribute value and check if target is within range
+        let follow_range = mob_entity
+            .living_entity
+            .get_attribute_value(&Attributes::FOLLOW_RANGE);
+
+        if dist_sq > follow_range * follow_range {
+            return false;
+        }
+
+        if self.check_visibility {
+            let world = mob_entity.living_entity.entity.world.load();
+            let has_line_of_sight = world
+                .raycast(
+                    mob_entity.living_entity.entity.get_eye_pos(),
+                    target.entity.get_eye_pos(),
+                    |block_pos, world| world.get_block_state(block_pos).is_solid(),
+                )
+                .is_none();
+
+            if !self.remembers_visible_target(has_line_of_sight) {
                 return false;
             }
+        }
 
-            if !self
-                .can_track(mob, Some(target), &self.target_predicate)
-                .await
-            {
-                return false;
-            }
-
-            // TODO: Team checks (return false if on the same team)
-
-            let dist_sq = mob_entity
-                .living_entity
-                .entity
-                .pos
-                .load()
-                .squared_distance_to_vec(&target.entity.pos.load());
-
-            // Get follow range attribute value and check if target is within range
-            let follow_range = mob_entity
-                .living_entity
-                .get_attribute_value(&Attributes::FOLLOW_RANGE);
-
-            if dist_sq > follow_range * follow_range {
-                return false;
-            }
-
-            if self.check_visibility {
-                let world = mob_entity.living_entity.entity.world.load();
-                let has_line_of_sight = world
-                    .raycast(
-                        mob_entity.living_entity.entity.get_eye_pos(),
-                        target.entity.get_eye_pos(),
-                        async |block_pos, world| world.get_block_state(block_pos).is_solid(),
-                    )
-                    .await
-                    .is_none();
-
-                if !self.remembers_visible_target(has_line_of_sight) {
-                    return false;
-                }
-            }
-
-            mob.set_mob_target(Some(target_base.clone())).await;
-            true
-        })
+        mob.set_mob_target(Some(target_base.clone()));
+        true
     }
 
-    fn start<'a>(&'a mut self, _mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
-        Box::pin(async {
-            self.can_navigate_flag.store(UNSET, Ordering::Relaxed);
-            self.check_can_navigate_cooldown.store(0, Ordering::Relaxed);
-            self.time_without_visibility.store(0, Ordering::Relaxed);
-        })
+    fn start(&mut self, _mob: &dyn Mob) {
+        self.can_navigate_flag.store(UNSET, Ordering::Relaxed);
+        self.check_can_navigate_cooldown.store(0, Ordering::Relaxed);
+        self.time_without_visibility.store(0, Ordering::Relaxed);
     }
 
-    fn stop<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
-        Box::pin(async {
-            mob.set_mob_target(None).await;
-        })
+    fn stop(&mut self, mob: &dyn Mob) {
+        mob.set_mob_target(None);
     }
 
     fn controls(&self) -> Controls {

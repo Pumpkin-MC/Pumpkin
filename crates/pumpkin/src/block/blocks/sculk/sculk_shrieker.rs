@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use crate::block::entities::sculk_shrieker::SculkShriekerBlockEntity;
-use crate::block::{BlockBehaviour, BlockFuture, BlockMetadata, OnPlaceArgs, OnScheduledTickArgs};
+use crate::block::{BlockBehaviour, BlockMetadata, OnPlaceArgs, OnScheduledTickArgs};
 use crate::world::World;
 use pumpkin_data::potion::Effect;
 use pumpkin_data::{
@@ -27,7 +27,7 @@ impl BlockMetadata for SculkShriekerBlock {
 }
 
 impl SculkShriekerBlock {
-    pub async fn try_activate(world: &Arc<World>, pos: &BlockPos) -> bool {
+    pub fn try_activate(world: &Arc<World>, pos: &BlockPos) -> bool {
         let block = world.get_block(pos);
         if block.id != BlockId::SCULK_SHRIEKER {
             return false;
@@ -40,9 +40,7 @@ impl SculkShriekerBlock {
         }
 
         props.shrieking = true;
-        world
-            .set_block_state(pos, props.to_state_id(block), BlockFlags::NOTIFY_ALL)
-            .await;
+        world.set_block_state(pos, props.to_state_id(block), BlockFlags::NOTIFY_ALL);
 
         world.play_sound(
             Sound::BlockSculkShriekerShriek,
@@ -63,14 +61,17 @@ impl SculkShriekerBlock {
                 show_icon: true,
                 blend: true,
             };
-            player.send_effect(darkness.clone()).await;
-            player.living_entity.add_effect(darkness).await;
+            player.send_effect(&darkness);
+            player.living_entity.add_effect(darkness);
         }
 
         if let Some(entity) = world.get_block_entity(pos)
             && let Some(shrieker) = entity.as_any().downcast_ref::<SculkShriekerBlockEntity>()
         {
-            let mut level = shrieker.warning_level.lock().await;
+            let mut level = shrieker
+                .warning_level
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
             *level = (*level + 1).min(4);
             if props.can_summon && *level >= 4 {
                 // TODO: spawn Warden near pos
@@ -82,29 +83,23 @@ impl SculkShriekerBlock {
 }
 
 impl BlockBehaviour for SculkShriekerBlock {
-    fn on_place<'a>(&'a self, args: OnPlaceArgs<'a>) -> BlockFuture<'a, BlockStateId> {
-        Box::pin(async move {
-            let mut props = SculkShriekerLikeProperties::default(args.block);
-            props.shrieking = false;
-            props.waterlogged = args.replacing.water_source();
-            props.to_state_id(args.block)
-        })
+    fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
+        let mut props = SculkShriekerLikeProperties::default(args.block);
+        props.shrieking = false;
+        props.waterlogged = args.replacing.water_source();
+        props.to_state_id(args.block)
     }
 
-    fn on_scheduled_tick<'a>(&'a self, args: OnScheduledTickArgs<'a>) -> BlockFuture<'a, ()> {
-        Box::pin(async move {
-            let state = args.world.get_block_state(args.position);
-            let mut props = SculkShriekerLikeProperties::from_state_id(state.id, args.block);
-            if props.shrieking {
-                props.shrieking = false;
-                args.world
-                    .set_block_state(
-                        args.position,
-                        props.to_state_id(args.block),
-                        BlockFlags::NOTIFY_ALL,
-                    )
-                    .await;
-            }
-        })
+    fn on_scheduled_tick(&self, args: OnScheduledTickArgs<'_>) {
+        let state = args.world.get_block_state(args.position);
+        let mut props = SculkShriekerLikeProperties::from_state_id(state.id, args.block);
+        if props.shrieking {
+            props.shrieking = false;
+            args.world.set_block_state(
+                args.position,
+                props.to_state_id(args.block),
+                BlockFlags::NOTIFY_ALL,
+            );
+        }
     }
 }

@@ -17,8 +17,8 @@ use rand::RngExt;
 use super::chorus_plant;
 use crate::{
     block::{
-        BlockBehaviour, BlockFuture, CanPlaceAtArgs, GetStateForNeighborUpdateArgs,
-        OnScheduledTickArgs, RandomTickArgs,
+        BlockBehaviour, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, OnScheduledTickArgs,
+        RandomTickArgs,
     },
     world::World,
 };
@@ -40,156 +40,144 @@ impl BlockBehaviour for ChorusFlowerBlock {
         can_survive(args.block_accessor, args.position)
     }
 
-    fn get_state_for_neighbor_update<'a>(
-        &'a self,
-        args: GetStateForNeighborUpdateArgs<'a>,
-    ) -> BlockFuture<'a, BlockStateId> {
-        Box::pin(async move {
-            if args.direction != BlockDirection::Up && !can_survive(args.world, args.position) {
-                args.world
-                    .schedule_block_tick(args.block, *args.position, 1, TickPriority::Normal);
-            }
-            args.state_id
-        })
+    fn get_state_for_neighbor_update(
+        &self,
+        args: GetStateForNeighborUpdateArgs<'_>,
+    ) -> BlockStateId {
+        if args.direction != BlockDirection::Up && !can_survive(args.world, args.position) {
+            args.world
+                .schedule_block_tick(args.block, *args.position, 1, TickPriority::Normal);
+        }
+        args.state_id
     }
 
-    fn on_scheduled_tick<'a>(&'a self, args: OnScheduledTickArgs<'a>) -> BlockFuture<'a, ()> {
-        Box::pin(async move {
-            if !can_survive(args.world.as_ref(), args.position) {
-                args.world
-                    .break_block(args.position, None, BlockFlags::empty())
-                    .await;
-            }
-        })
+    fn on_scheduled_tick(&self, args: OnScheduledTickArgs<'_>) {
+        if !can_survive(args.world.as_ref(), args.position) {
+            args.world
+                .break_block(args.position, None, BlockFlags::empty());
+        }
     }
 
-    fn random_tick<'a>(&'a self, args: RandomTickArgs<'a>) -> BlockFuture<'a, ()> {
-        Box::pin(async move {
-            let above = args.position.up();
-            let max_y = args.world.dimension.min_y + args.world.dimension.height - 1;
-            if args.world.get_block(&above).default_state.is_air() && above.0.y <= max_y {
-                let state_id = args.world.get_block_state_id(args.position);
-                let state_props = ChorusFlowerLikeProperties::from_state_id(state_id, args.block);
-                let current_age = state_props.age;
-                if current_age < DEAD_AGE {
-                    let mut grow_upwards = false;
-                    let mut pillar_on_support_block = false;
-                    let below_pos = args.position.down();
-                    let (below_block, _) = args.world.get_block_and_state(&below_pos);
+    fn random_tick(&self, args: RandomTickArgs<'_>) {
+        let above = args.position.up();
+        let max_y = args.world.dimension.min_y + args.world.dimension.height - 1;
+        if args.world.get_block(&above).default_state.is_air() && above.0.y <= max_y {
+            let state_id = args.world.get_block_state_id(args.position);
+            let state_props = ChorusFlowerLikeProperties::from_state_id(state_id, args.block);
+            let current_age = state_props.age;
+            if current_age < DEAD_AGE {
+                let mut grow_upwards = false;
+                let mut pillar_on_support_block = false;
+                let below_pos = args.position.down();
+                let (below_block, _) = args.world.get_block_and_state(&below_pos);
 
-                    if below_block.has_tag(&tag::Block::MINECRAFT_SUPPORTS_CHORUS_FLOWER) {
-                        grow_upwards = true;
-                    } else if below_block == &Block::CHORUS_PLANT {
-                        let mut height = 1;
-                        for _ in 0..4 {
-                            let test_pos = args.position.offset(Vector3::new(0, -(height + 1), 0));
-                            let (test_block, _) = args.world.get_block_and_state(&test_pos);
-                            if test_block != &Block::CHORUS_PLANT {
-                                if test_block.has_tag(&tag::Block::MINECRAFT_SUPPORTS_CHORUS_FLOWER)
-                                {
-                                    pillar_on_support_block = true;
-                                }
-                                break;
+                if below_block.has_tag(&tag::Block::MINECRAFT_SUPPORTS_CHORUS_FLOWER) {
+                    grow_upwards = true;
+                } else if below_block == &Block::CHORUS_PLANT {
+                    let mut height = 1;
+                    for _ in 0..4 {
+                        let test_pos = args.position.offset(Vector3::new(0, -(height + 1), 0));
+                        let (test_block, _) = args.world.get_block_and_state(&test_pos);
+                        if test_block != &Block::CHORUS_PLANT {
+                            if test_block.has_tag(&tag::Block::MINECRAFT_SUPPORTS_CHORUS_FLOWER) {
+                                pillar_on_support_block = true;
                             }
-                            height += 1;
+                            break;
                         }
-
-                        let max_chance = if pillar_on_support_block { 5 } else { 4 };
-                        if height < 2 || height <= rand::rng().random_range(0..max_chance) {
-                            grow_upwards = true;
-                        }
-                    } else if below_block.default_state.is_air() {
-                        grow_upwards = true;
+                        height += 1;
                     }
 
-                    let above_2 = args.position.offset(Vector3::new(0, 2, 0));
-                    if grow_upwards
-                        && all_neighbors_empty(args.world.as_ref(), &above, None)
-                        && args.world.get_block(&above_2).default_state.is_air()
-                    {
+                    let max_chance = if pillar_on_support_block { 5 } else { 4 };
+                    if height < 2 || height <= rand::rng().random_range(0..max_chance) {
+                        grow_upwards = true;
+                    }
+                } else if below_block.default_state.is_air() {
+                    grow_upwards = true;
+                }
+
+                let above_2 = args.position.offset(Vector3::new(0, 2, 0));
+                if grow_upwards
+                    && all_neighbors_empty(args.world.as_ref(), &above, None)
+                    && args.world.get_block(&above_2).default_state.is_air()
+                {
+                    let plant_state_id = chorus_plant::get_state_with_connections(
+                        args.world.as_ref(),
+                        &Block::CHORUS_PLANT,
+                        args.position,
+                    );
+                    args.world.set_block_state(
+                        args.position,
+                        plant_state_id,
+                        BlockFlags::NOTIFY_ALL,
+                    );
+                    place_grown_flower(args.world, &above, current_age);
+                } else if current_age < 4 {
+                    let mut num_branch_attempts = rand::rng().random_range(0..4);
+                    if pillar_on_support_block {
+                        num_branch_attempts += 1;
+                    }
+
+                    let mut created_branch = false;
+
+                    for _ in 0..num_branch_attempts {
+                        let direction = HORIZONTAL_DIRECTIONS[rand::rng().random_range(0..4)];
+                        let target = args.position.offset(direction.to_offset());
+                        let target_below = target.down();
+
+                        if args.world.get_block(&target).default_state.is_air()
+                            && args.world.get_block(&target_below).default_state.is_air()
+                            && all_neighbors_empty(
+                                args.world.as_ref(),
+                                &target,
+                                Some(direction.opposite()),
+                            )
+                        {
+                            place_grown_flower(args.world, &target, current_age + 1);
+                            created_branch = true;
+                        }
+                    }
+
+                    if created_branch {
                         let plant_state_id = chorus_plant::get_state_with_connections(
                             args.world.as_ref(),
                             &Block::CHORUS_PLANT,
                             args.position,
                         );
-                        args.world
-                            .set_block_state(args.position, plant_state_id, BlockFlags::NOTIFY_ALL)
-                            .await;
-                        place_grown_flower(args.world, &above, current_age).await;
-                    } else if current_age < 4 {
-                        let mut num_branch_attempts = rand::rng().random_range(0..4);
-                        if pillar_on_support_block {
-                            num_branch_attempts += 1;
-                        }
-
-                        let mut created_branch = false;
-
-                        for _ in 0..num_branch_attempts {
-                            let direction = HORIZONTAL_DIRECTIONS[rand::rng().random_range(0..4)];
-                            let target = args.position.offset(direction.to_offset());
-                            let target_below = target.down();
-
-                            if args.world.get_block(&target).default_state.is_air()
-                                && args.world.get_block(&target_below).default_state.is_air()
-                                && all_neighbors_empty(
-                                    args.world.as_ref(),
-                                    &target,
-                                    Some(direction.opposite()),
-                                )
-                            {
-                                place_grown_flower(args.world, &target, current_age + 1).await;
-                                created_branch = true;
-                            }
-                        }
-
-                        if created_branch {
-                            let plant_state_id = chorus_plant::get_state_with_connections(
-                                args.world.as_ref(),
-                                &Block::CHORUS_PLANT,
-                                args.position,
-                            );
-                            args.world
-                                .set_block_state(
-                                    args.position,
-                                    plant_state_id,
-                                    BlockFlags::NOTIFY_ALL,
-                                )
-                                .await;
-                        } else {
-                            place_dead_flower(args.world, args.position).await;
-                        }
+                        args.world.set_block_state(
+                            args.position,
+                            plant_state_id,
+                            BlockFlags::NOTIFY_ALL,
+                        );
                     } else {
-                        place_dead_flower(args.world, args.position).await;
+                        place_dead_flower(args.world, args.position);
                     }
+                } else {
+                    place_dead_flower(args.world, args.position);
                 }
             }
-        })
+        }
     }
 }
 
-pub async fn place_grown_flower(world: &Arc<World>, pos: &BlockPos, age: u8) {
+pub fn place_grown_flower(world: &Arc<World>, pos: &BlockPos, age: u8) {
     let mut props = ChorusFlowerLikeProperties::default(&Block::CHORUS_FLOWER);
     props.age = age;
-    world
-        .set_block_state(
-            pos,
-            props.to_state_id(&Block::CHORUS_FLOWER),
-            BlockFlags::NOTIFY_ALL,
-        )
-        .await;
+    world.set_block_state(
+        pos,
+        props.to_state_id(&Block::CHORUS_FLOWER),
+        BlockFlags::NOTIFY_ALL,
+    );
     world.sync_world_event(WorldEvent::SoundChorusGrow, *pos, 0);
 }
 
-pub async fn place_dead_flower(world: &Arc<World>, pos: &BlockPos) {
+pub fn place_dead_flower(world: &Arc<World>, pos: &BlockPos) {
     let mut props = ChorusFlowerLikeProperties::default(&Block::CHORUS_FLOWER);
     props.age = DEAD_AGE;
-    world
-        .set_block_state(
-            pos,
-            props.to_state_id(&Block::CHORUS_FLOWER),
-            BlockFlags::NOTIFY_ALL,
-        )
-        .await;
+    world.set_block_state(
+        pos,
+        props.to_state_id(&Block::CHORUS_FLOWER),
+        BlockFlags::NOTIFY_ALL,
+    );
     world.sync_world_event(WorldEvent::SoundChorusDeath, *pos, 0);
 }
 
