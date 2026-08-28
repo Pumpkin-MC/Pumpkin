@@ -561,7 +561,7 @@ pub trait ScreenHandler: Send + Sync {
                     .previous_cursor_stack
                     .set_received_stack(cursor_stack.clone());
                 if let Some(sync_handler) = behaviour.sync_handler.as_ref() {
-                    sync_handler.update_cursor_stack(behaviour, &cursor_stack);
+                    sync_handler.update_cursor_stack(&cursor_stack);
                 }
             }
         }

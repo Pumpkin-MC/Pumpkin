@@ -56,7 +56,7 @@ impl AcaciaFoliagePlacer {
         foliage_positions
     }
 
-    pub const fn get_random_height(_random: &mut RandomGenerator) -> i32 {
+    pub const fn get_random_height() -> i32 {
         0
     }
 }

@@ -3,19 +3,18 @@ use super::*;
 use pumpkin_protocol::java::server::play::SChatAck;
 
 impl JavaClient {
-    pub async fn handle_chat_ack(&self, player: &Arc<Player>, packet: &SChatAck) {
+    pub fn handle_chat_ack(&self, player: &Arc<Player>, packet: &SChatAck) {
         let offset = packet.offset.0;
         if offset < 0 {
             warn!(
                 "Failed to validate message acknowledgement offset from {}: negative offset {}",
                 player.gameprofile.name, offset
             );
-            self.kick(TextComponent::translate_cross(
+            self.try_kick(&TextComponent::translate_cross(
                 translation::java::MULTIPLAYER_DISCONNECT_CHAT_VALIDATION_FAILED,
                 translation::java::MULTIPLAYER_DISCONNECT_CHAT_VALIDATION_FAILED,
                 [],
-            ))
-            .await;
+            ));
             return;
         }
 
@@ -35,12 +34,11 @@ impl JavaClient {
                 "Failed to validate message acknowledgement offset from {}: {}",
                 player.gameprofile.name, err
             );
-            self.kick(TextComponent::translate_cross(
+            self.try_kick(&TextComponent::translate_cross(
                 translation::java::MULTIPLAYER_DISCONNECT_CHAT_VALIDATION_FAILED,
                 translation::java::MULTIPLAYER_DISCONNECT_CHAT_VALIDATION_FAILED,
                 [],
-            ))
-            .await;
+            ));
             return;
         }
 

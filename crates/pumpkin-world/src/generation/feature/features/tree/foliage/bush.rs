@@ -42,7 +42,7 @@ impl BushFoliagePlacer {
         foliage_positions
     }
 
-    pub const fn get_random_height(&self, _random: &mut RandomGenerator) -> i32 {
+    pub const fn get_random_height(&self) -> i32 {
         self.height
     }
 }

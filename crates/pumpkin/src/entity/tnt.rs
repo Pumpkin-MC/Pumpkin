@@ -29,14 +29,14 @@ impl TNTEntity {
 }
 
 impl EntityBase for TNTEntity {
-    fn tick(&self, caller: &dyn EntityBase, server: &Server) {
+    fn tick(&self, caller: &dyn EntityBase, _server: &Server) {
         let entity = &self.entity;
 
         let mut velo = entity.velocity.load();
         velo.y -= self.get_gravity();
 
         entity.move_entity(caller, velo);
-        entity.tick_block_collisions(caller, server);
+        entity.tick_block_collisions(caller);
 
         // Read back what actually happened instead of reusing the pre-move
         // value: `move_entity` clamps on collision, and an explosion may have

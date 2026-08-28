@@ -88,7 +88,7 @@ impl FlowingLava {
         world.set_block_state(pos, fire_state_id, BlockFlags::NOTIFY_ALL);
     }
 
-    fn receive_neighbor_fluids(world: &Arc<World>, _fluid: &Fluid, block_pos: &BlockPos) -> bool {
+    fn receive_neighbor_fluids(world: &Arc<World>, block_pos: &BlockPos) -> bool {
         // Logic to determine if we should replace the fluid with any of (cobble, obsidian, stone, etc.)
         let below_is_soul_soil = world
             .get_block(&block_pos.offset(BlockDirection::Down.to_offset()))
@@ -152,7 +152,7 @@ impl FluidBehaviour for FlowingLava {
         old_state_id: BlockStateId,
         _notify: bool,
     ) {
-        if old_state_id != state_id && Self::receive_neighbor_fluids(world, fluid, block_pos) {
+        if old_state_id != state_id && Self::receive_neighbor_fluids(world, block_pos) {
             let flow_speed = self.get_flow_speed(world);
             world.schedule_fluid_tick(fluid, *block_pos, flow_speed, TickPriority::Normal);
         }
@@ -169,7 +169,7 @@ impl FluidBehaviour for FlowingLava {
         block_pos: &BlockPos,
         _notify: bool,
     ) {
-        if Self::receive_neighbor_fluids(world, fluid, block_pos) {
+        if Self::receive_neighbor_fluids(world, block_pos) {
             let flow_speed = self.get_flow_speed(world);
             world.schedule_fluid_tick(fluid, *block_pos, flow_speed, TickPriority::Normal);
         }

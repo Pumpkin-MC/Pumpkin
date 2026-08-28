@@ -216,7 +216,7 @@ pub trait EntityBase: Send + Sync + std::any::Any {
         pitch: Option<f32>,
         world: Arc<World>,
     ) {
-        self.get_entity().teleport(position, yaw, pitch, world);
+        self.get_entity().teleport(position, yaw, pitch, &world);
     }
 
     fn is_pushed_by_fluids(&self) -> bool {
@@ -1502,7 +1502,7 @@ impl Entity {
     }
 
     #[expect(dead_code)]
-    fn tick_block_underneath(_caller: &dyn EntityBase) {
+    const fn tick_block_underneath() {
         // let world = self.world.read();
 
         // let (pos, block, state) = self.get_block_with_y_offset(0.2);
@@ -1565,7 +1565,7 @@ impl Entity {
         */
     }
 
-    pub fn tick_block_collisions(&self, caller: &dyn EntityBase, _server: &Server) -> bool {
+    pub fn tick_block_collisions(&self, caller: &dyn EntityBase) -> bool {
         if !self.is_affected_by_blocks() {
             return false;
         }
@@ -2313,7 +2313,6 @@ impl Entity {
                 let world_clone = self.world.load_full();
                 let portal_type = portal_processor.portal_type;
                 let dest_world_opt = portal_processor.destination_world.clone();
-                let entry_pos = portal_processor.entry_position;
                 let src_portal = portal_processor.source_portal.clone();
                 let entity_id = self.entity_id;
                 let yaw = self.yaw.load();
@@ -2326,7 +2325,6 @@ impl Entity {
                         &world_clone,
                         dest_world_opt,
                         entity_arc.as_ref(),
-                        entry_pos,
                         src_portal.as_ref(),
                     );
 
@@ -2395,7 +2393,7 @@ impl Entity {
         }
     }
 
-    pub fn try_use_portal(&self, _portal_delay: u32, portal_world: Arc<World>, pos: BlockPos) {
+    pub fn try_use_portal(&self, portal_world: Arc<World>, pos: BlockPos) {
         let mut portal_event =
             crate::plugin::api::events::entity::entity_portal::EntityPortalEvent::new(
                 self.entity_id,
@@ -3109,7 +3107,7 @@ impl Entity {
         position: Vector3<f64>,
         yaw: Option<f32>,
         pitch: Option<f32>,
-        _world: Arc<World>,
+        world: &World,
     ) {
         // Update server-side position and bounding box
         self.set_pos(position);
@@ -3132,7 +3130,7 @@ impl Entity {
                 .store((pitch * 256.0 / 360.0).rem_euclid(256.0) as u8, Relaxed);
         }
         let chunk_pos = self.chunk_pos.load();
-        self.world.load().broadcast_to_chunk(
+        world.broadcast_to_chunk(
             chunk_pos,
             &CEntityPositionSync::new(
                 self.entity_id.into(),
@@ -3429,16 +3427,16 @@ impl Entity {
         self.remove_passenger_on_disconnect(passenger_id);
     }
 
-    pub async fn remove_passenger(&self, passenger_id: i32) {
-        self.remove_passenger_internal(passenger_id, true).await;
+    pub fn remove_passenger(&self, passenger_id: i32) {
+        self.remove_passenger_internal(passenger_id, true);
     }
 
-    pub async fn remove_passenger_before_teleport(&self, passenger_id: i32) {
-        self.remove_passenger_internal(passenger_id, false).await;
+    pub fn remove_passenger_before_teleport(&self, passenger_id: i32) {
+        self.remove_passenger_internal(passenger_id, false);
     }
 
     #[allow(clippy::too_many_lines)]
-    async fn remove_passenger_internal(&self, passenger_id: i32, reposition: bool) {
+    fn remove_passenger_internal(&self, passenger_id: i32, reposition: bool) {
         let mut dismount_event =
             crate::plugin::api::events::entity::entity_dismount::EntityDismountEvent::new(
                 passenger_id,
@@ -3452,9 +3450,10 @@ impl Entity {
         if let Some(server) = self.world.load().server.upgrade() {
             server
                 .plugin_manager
-                .fire(&server, &mut dismount_event)
-                .await;
-            server.plugin_manager.fire(&server, &mut vehicle_exit).await;
+                .fire_blocking(&server, &mut dismount_event);
+            server
+                .plugin_manager
+                .fire_blocking(&server, &mut vehicle_exit);
         }
         if dismount_event.cancelled || vehicle_exit.cancelled {
             return;
@@ -3521,13 +3520,7 @@ impl Entity {
             let world = self.world.load();
             let passengers_packet = CSetPassengers::new(VarInt(self.entity_id), &passenger_ids);
             if let Some(player) = passenger.get_player() {
-                if reposition {
-                    player.send_client_packet(&passengers_packet).await;
-                } else if let ClientPlatform::Java(client) = player.client.as_ref()
-                    && let Ok(data) = client.serialize_packet(&passengers_packet)
-                {
-                    client.send_packet_now(data).await;
-                }
+                player.try_send_client_packet(&passengers_packet);
                 world.broadcast_to_chunk_except(
                     chunk_pos,
                     &[player.get_entity().entity_uuid],
@@ -3729,22 +3722,20 @@ impl Entity {
                     // the same packet queue as CSetPassengers, preserving send order.
                     // Vanilla uses DELTA | ROT flags: position absolute, delta/rotation relative.
                     // With rotation relative and yaw/pitch=0, the client preserves its current look.
-                    player
-                        .send_client_packet(&CPlayerPosition::new(
-                            id.into(),
-                            dismount_pos,
-                            Vector3::new(0.0, 0.0, 0.0),
-                            0.0,
-                            0.0,
-                            vec![
-                                PositionFlag::DeltaX,
-                                PositionFlag::DeltaY,
-                                PositionFlag::DeltaZ,
-                                PositionFlag::YRot,
-                                PositionFlag::XRot,
-                            ],
-                        ))
-                        .await;
+                    player.try_send_client_packet(&CPlayerPosition::new(
+                        id.into(),
+                        dismount_pos,
+                        Vector3::new(0.0, 0.0, 0.0),
+                        0.0,
+                        0.0,
+                        vec![
+                            PositionFlag::DeltaX,
+                            PositionFlag::DeltaY,
+                            PositionFlag::DeltaZ,
+                            PositionFlag::YRot,
+                            PositionFlag::XRot,
+                        ],
+                    ));
                 }
 
                 // Vanilla: setSneaking(false) after dismount via sneak input

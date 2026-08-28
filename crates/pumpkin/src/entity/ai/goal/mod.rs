@@ -22,6 +22,7 @@ pub mod look_around;
 pub mod look_at_entity;
 pub mod melee_attack;
 pub mod move_to_target_pos;
+pub mod move_towards_target;
 pub mod offer_flower;
 pub mod open_door;
 pub mod owner_hurt_by_target;
@@ -89,7 +90,7 @@ pub trait Goal: Send + Sync {
     }
 }
 
-#[derive(Clone, Copy, Default)]
+#[derive(Clone, Copy, Default, PartialEq, Eq, Debug)]
 // We actually only use the first 4 bits ;)
 pub struct Controls(u8);
 

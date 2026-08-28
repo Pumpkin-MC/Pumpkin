@@ -104,7 +104,7 @@ impl FireBlock {
 
         for dir in BlockDirection::all() {
             let neighbor_block = world.get_block(&pos.offset(dir.to_offset()));
-            if world.get_fluid(&pos.offset(dir.to_offset())).name != Fluid::EMPTY.name {
+            if *world.get_fluid(&pos.offset(dir.to_offset())) != Fluid::EMPTY {
                 continue; // Skip if there is a fluid
             }
             if let Some(flammable) = &neighbor_block.flammable {
@@ -115,10 +115,12 @@ impl FireBlock {
         total_burn_chance
     }
 
-    const fn is_near_rain(_world: &World, _pos: &BlockPos) -> bool {
-        // TODO: Implement proper rain checking when weather is implemented
-        // For now, return false to allow fire to work
-        false
+    fn is_near_rain(world: &World, pos: &BlockPos) -> bool {
+        world.is_raining_at(pos)
+            || world.is_raining_at(&pos.west())
+            || world.is_raining_at(&pos.east())
+            || world.is_raining_at(&pos.north())
+            || world.is_raining_at(&pos.south())
     }
 
     // Get burn odds for a block, used in try_spreading_fire

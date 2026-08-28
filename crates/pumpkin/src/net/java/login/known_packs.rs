@@ -2,7 +2,7 @@
 use super::*;
 
 impl PendingConnection {
-    pub async fn handle_known_packs(&mut self, _packet: SKnownPacks<'_>, _server: &Server) {
+    pub async fn handle_known_packs(&mut self) {
         let version = self.version.load();
         if version.supports_configuration_state() {
             self.send_packet_now(&CFeatureFlags::new(&["minecraft:vanilla".to_string()]))

@@ -2,12 +2,7 @@
 use super::*;
 
 impl JavaClient {
-    pub async fn handle_use_item(
-        &self,
-        player: &Arc<Player>,
-        use_item: &SUseItem,
-        server: &Arc<Server>,
-    ) {
+    pub fn handle_use_item(&self, player: &Arc<Player>, use_item: &SUseItem, server: &Arc<Server>) {
         if !player.has_client_loaded() {
             return;
         }
@@ -15,10 +10,10 @@ impl JavaClient {
 
         let inventory = player.inventory();
         let Ok(hand) = Hand::from_packet_id(use_item.hand.0) else {
-            self.kick(TextComponent::text("InvalidHand")).await;
+            self.try_kick(&TextComponent::text("InvalidHand"));
             return;
         };
-        self.update_sequence(player, use_item.sequence.0);
+        self.update_sequence(use_item.sequence.0);
 
         let mut item_in_hand = inventory.get_stack_in_hand(hand);
 
@@ -27,7 +22,9 @@ impl JavaClient {
                 player.clone(),
                 item_in_hand.item.registry_key.to_string(),
             );
-        server.plugin_manager.fire(server, &mut consume_event).await;
+        server
+            .plugin_manager
+            .fire_blocking(server, &mut consume_event);
         if consume_event.cancelled {
             return;
         }
@@ -60,14 +57,11 @@ impl JavaClient {
         let (item_for_use, stack_for_use) = (item_in_hand.item, item_in_hand.clone());
         Self::prepare_hand_item_for_use(player, hand, &mut item_in_hand);
 
-        if !self
-            .should_continue_use_after_fish_event(server, player, hand, item_for_use)
-            .await
-        {
+        if !Self::should_continue_use_after_fish_event(server, player, hand, item_for_use) {
             return;
         }
 
-        send_cancellable! {{
+        send_cancellable_blocking! {{
             server;
             event;
             'after: {
@@ -147,8 +141,7 @@ impl JavaClient {
         }
     }
 
-    async fn should_continue_use_after_fish_event(
-        &self,
+    fn should_continue_use_after_fish_event(
         server: &Arc<Server>,
         player: &Arc<Player>,
         hand: Hand,
@@ -168,7 +161,7 @@ impl JavaClient {
             hand,
             0,
         );
-        server.plugin_manager.fire(server, &mut fish_event).await;
+        server.plugin_manager.fire_blocking(server, &mut fish_event);
         !fish_event.cancelled
     }
 }
