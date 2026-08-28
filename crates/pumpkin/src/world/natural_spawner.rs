@@ -337,7 +337,7 @@ impl SpawnState {
     pub fn new(
         chunk_count: i32,
         entities: &ArcSwap<Vec<Arc<dyn EntityBase>>>,
-        world: &Arc<World>,
+        world: &World,
     ) -> Self {
         let potential = PotentialCalculator::default();
         let local_mob_cap = LocalMobCapCalculator::default();
@@ -580,7 +580,7 @@ pub fn spawn_mobs_for_chunk_generation(
                     entity
                         .get_entity()
                         .set_rotation(rand::random::<f32>() * 360., 0.);
-                    world.spawn_entity_non_save(&entity);
+                    world.spawn_entity_non_save(entity);
                     success = true;
                 }
 

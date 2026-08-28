@@ -19,13 +19,22 @@ impl JavaClient {
             return;
         }
 
-        let mut cache = player.signature_cache.lock().await;
-        if let Err(err) = cache.last_seen_validator.apply_offset(offset as usize) {
+        let validation_err = {
+            let mut cache = player
+                .signature_cache
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            cache
+                .last_seen_validator
+                .apply_offset(offset as usize)
+                .err()
+        };
+
+        if let Some(err) = validation_err {
             warn!(
                 "Failed to validate message acknowledgement offset from {}: {}",
                 player.gameprofile.name, err
             );
-            drop(cache);
             self.kick(TextComponent::translate_cross(
                 translation::java::MULTIPLAYER_DISCONNECT_CHAT_VALIDATION_FAILED,
                 translation::java::MULTIPLAYER_DISCONNECT_CHAT_VALIDATION_FAILED,

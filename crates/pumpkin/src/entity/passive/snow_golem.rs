@@ -5,7 +5,7 @@ use pumpkin_data::entity::EntityType;
 use pumpkin_data::sound::{Sound, SoundCategory};
 
 use crate::entity::{
-    Entity, EntityBase, EntityBaseFuture,
+    Entity, EntityBase,
     ai::goal::{
         active_target::ActiveTargetGoal, look_around::RandomLookAroundGoal,
         look_at_entity::LookAtEntityGoal, ranged_attack::RangedAttackGoal,
@@ -65,9 +65,9 @@ impl SnowGolemEntity {
         mob_arc
     }
 
-    pub async fn throw_snowball(&self, target: &Arc<dyn EntityBase>) {
+    pub fn throw_snowball(&self, target: &Arc<dyn EntityBase>) {
         let entity = self.get_entity();
-        let world = entity.world.load();
+        let world = entity.world.load_full();
 
         let snowball_entity = Entity::new(world.clone(), entity.pos.load(), &EntityType::SNOWBALL);
         let snowball = SnowballEntity::new_shot(snowball_entity, entity);
@@ -90,7 +90,7 @@ impl SnowGolemEntity {
         }
 
         let snowball_arc: Arc<dyn EntityBase> = Arc::new(snowball);
-        world.spawn_entity(snowball_arc).await;
+        world.spawn_entity(snowball_arc);
     }
 }
 
@@ -101,13 +101,7 @@ impl Mob for SnowGolemEntity {
 }
 
 impl RangedAttackMob for SnowGolemEntity {
-    fn perform_ranged_attack<'a>(
-        &'a self,
-        target: &'a Arc<dyn EntityBase>,
-        _power: f32,
-    ) -> EntityBaseFuture<'a, ()> {
-        Box::pin(async move {
-            self.throw_snowball(target).await;
-        })
+    fn perform_ranged_attack(&self, target: &Arc<dyn EntityBase>, _power: f32) {
+        self.throw_snowball(target);
     }
 }

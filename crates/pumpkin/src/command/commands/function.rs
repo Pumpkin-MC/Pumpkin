@@ -23,73 +23,63 @@ static ERROR_UNKNOWN_FUNCTION: CommandErrorType<1> = CommandErrorType::new(
 struct FunctionSuggestionProvider;
 
 impl SuggestionProvider for FunctionSuggestionProvider {
-    fn suggest<'a>(
-        &'a self,
-        context: &'a CommandContext,
+    fn suggest(
+        &self,
+        context: &CommandContext,
         mut builder: SuggestionsBuilder,
-    ) -> SuggestionProviderResult<'a> {
-        Box::pin(async move {
-            let server = context.server();
-            let function_names = server.datapack_manager.get_function_names().await;
-            for name in function_names {
-                builder = builder.suggest(name);
-            }
-            builder.build()
-        })
+    ) -> SuggestionProviderResult {
+        let server = context.server();
+        let function_names = server.datapack_manager.get_function_names();
+        for name in function_names {
+            builder = builder.suggest(name);
+        }
+        builder.build()
     }
 }
 
 struct FunctionExecutor;
 
 impl CommandExecutor for FunctionExecutor {
-    fn execute<'a>(&'a self, context: &'a CommandContext) -> CommandExecutorResult<'a> {
-        Box::pin(async move {
-            let name_str = StringArgumentType::get(context, "name")?;
-            let server = context.server();
+    fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
+        let name_str = StringArgumentType::get(context, "name")?;
+        let server = context.server();
 
-            let Ok(executed_count) = server
+        let Ok(executed_count) =
+            server
                 .datapack_manager
                 .execute_function(server, &context.source, name_str)
-                .await
-            else {
-                return Err(ERROR_UNKNOWN_FUNCTION
-                    .create_without_context(TextComponent::text(name_str.to_string())));
-            };
+        else {
+            return Err(ERROR_UNKNOWN_FUNCTION
+                .create_without_context(TextComponent::text(name_str.to_string())));
+        };
 
-            if name_str.starts_with('#') {
-                context
-                    .source
-                    .send_feedback(
-                        TextComponent::translate_cross(
-                            translation::java::COMMANDS_FUNCTION_SUCCESS_MULTIPLE,
-                            translation::java::COMMANDS_FUNCTION_SUCCESS_MULTIPLE,
-                            [
-                                TextComponent::text(executed_count.to_string()),
-                                TextComponent::text(name_str.to_string()),
-                            ],
-                        ),
-                        true,
-                    )
-                    .await;
-            } else {
-                context
-                    .source
-                    .send_feedback(
-                        TextComponent::translate_cross(
-                            translation::java::COMMANDS_FUNCTION_SUCCESS_SINGLE,
-                            translation::java::COMMANDS_FUNCTION_SUCCESS_SINGLE,
-                            [
-                                TextComponent::text(executed_count.to_string()),
-                                TextComponent::text(name_str.to_string()),
-                            ],
-                        ),
-                        true,
-                    )
-                    .await;
-            }
+        if name_str.starts_with('#') {
+            context.source.send_feedback(
+                TextComponent::translate_cross(
+                    translation::java::COMMANDS_FUNCTION_SUCCESS_MULTIPLE,
+                    translation::java::COMMANDS_FUNCTION_SUCCESS_MULTIPLE,
+                    [
+                        TextComponent::text(executed_count.to_string()),
+                        TextComponent::text(name_str.to_string()),
+                    ],
+                ),
+                true,
+            );
+        } else {
+            context.source.send_feedback(
+                TextComponent::translate_cross(
+                    translation::java::COMMANDS_FUNCTION_SUCCESS_SINGLE,
+                    translation::java::COMMANDS_FUNCTION_SUCCESS_SINGLE,
+                    [
+                        TextComponent::text(executed_count.to_string()),
+                        TextComponent::text(name_str.to_string()),
+                    ],
+                ),
+                true,
+            );
+        }
 
-            Ok(executed_count as i32)
-        })
+        Ok(executed_count as i32)
     }
 }
 

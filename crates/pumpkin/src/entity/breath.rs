@@ -8,7 +8,6 @@ use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::java::client::play::Metadata;
 use pumpkin_util::GameMode;
 use pumpkin_util::math::position::BlockPos;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicI32, Ordering};
 
 pub const MAX_AIR: i32 = 300;
@@ -32,7 +31,7 @@ impl Default for BreathManager {
 }
 
 impl BreathManager {
-    pub async fn tick(&self, player: &Arc<Player>) {
+    pub fn tick(&self, player: &Player) {
         let mode = player.gamemode.load();
 
         if matches!(mode, GameMode::Creative | GameMode::Spectator) {
@@ -51,7 +50,6 @@ impl BreathManager {
         if player
             .living_entity
             .has_effect(&StatusEffect::WATER_BREATHING)
-            .await
         {
             if self.air_supply.swap(MAX_AIR, Ordering::Relaxed) != MAX_AIR {
                 self.send_air_supply(player);
@@ -75,14 +73,7 @@ impl BreathManager {
                         player.entity_id(),
                         new_air,
                     );
-                    tokio::task::block_in_place(|| {
-                        tokio::runtime::Handle::current()
-                            .block_on(server.plugin_manager.fire(&server, &mut event));
-                    });
-                    if event.cancelled {
-                        self.air_supply.store(prev, Ordering::Relaxed);
-                        return;
-                    }
+                    server.plugin_manager.fire_blocking(&server, &mut event);
                 }
                 self.send_air_supply(player);
             }
@@ -94,8 +85,7 @@ impl BreathManager {
                     self.drowning_tick.store(0, Ordering::Relaxed);
                     player
                         .living_entity
-                        .damage(player.as_ref(), DROWNING_DAMAGE, DamageType::DROWN)
-                        .await;
+                        .damage(player, DROWNING_DAMAGE, DamageType::DROWN);
                 }
             }
         } else {

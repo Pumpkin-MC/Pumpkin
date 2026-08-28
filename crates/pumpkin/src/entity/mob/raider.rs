@@ -12,7 +12,7 @@ use pumpkin_protocol::java::client::play::Metadata;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::text::TextComponent;
 
-use crate::entity::ai::goal::{Controls, Goal, GoalFuture};
+use crate::entity::ai::goal::{Controls, Goal};
 use crate::entity::ai::pathfinder::NavigatorGoal;
 use crate::entity::mob::Mob;
 use crate::entity::mob::patrol::{PatrolData, PatrollingMonster};
@@ -154,74 +154,66 @@ impl HoldGroundAttackGoal {
 }
 
 impl Goal for HoldGroundAttackGoal {
-    fn can_start<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
-        Box::pin(async move {
-            let Some(raider) = mob.as_raider() else {
-                return false;
-            };
-            if raider.has_active_raid() || !raider.is_patrolling() {
-                return false;
-            }
-            let target = mob.get_mob_entity().target.lock().await.clone();
-            target.is_some()
-        })
+    fn can_start(&mut self, mob: &dyn Mob) -> bool {
+        let Some(raider) = mob.as_raider() else {
+            return false;
+        };
+        if raider.has_active_raid() || !raider.is_patrolling() {
+            return false;
+        }
+        let target = mob.get_mob_entity().get_target().clone();
+        target.is_some()
     }
 
-    fn should_continue<'a>(&'a self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
-        Box::pin(async move {
-            let target = mob.get_mob_entity().target.lock().await.clone();
-            target.is_some()
-        })
+    fn should_continue(&self, mob: &dyn Mob) -> bool {
+        let target = mob.get_mob_entity().get_target().clone();
+        target.is_some()
     }
 
-    fn start<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
-        Box::pin(async move {
-            mob.get_mob_entity()
-                .navigator
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .stop();
+    fn start(&mut self, mob: &dyn Mob) {
+        mob.get_mob_entity()
+            .navigator
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .stop();
 
-            let target = mob.get_mob_entity().target.lock().await.clone();
-            if let Some(target) = target {
-                let entity = mob.get_entity();
-                let world = entity.world.load();
-                let bb = entity.bounding_box.load().expand(8.0, 8.0, 8.0);
-                let nearby = world.get_entities_at_box(&bb);
+        let target = mob.get_mob_entity().get_target().clone();
+        if let Some(target) = target {
+            let entity = mob.get_entity();
+            let world = entity.world.load();
+            let bb = entity.bounding_box.load().expand(8.0, 8.0, 8.0);
+            let nearby = world.get_entities_at_box(&bb);
 
-                for cand in nearby {
-                    if cand.get_entity().entity_id != entity.entity_id
-                        && let Some(cand_mob) = cand.get_mob()
-                        && cand_mob.as_raider().is_some()
-                    {
-                        *cand_mob.get_mob_entity().target.lock().await = Some(target.clone());
-                    }
+            for cand in nearby {
+                if cand.get_entity().entity_id != entity.entity_id
+                    && let Some(cand_mob) = cand.get_mob()
+                    && cand_mob.as_raider().is_some()
+                {
+                    cand_mob.get_mob_entity().set_target(Some(target.clone()));
                 }
             }
-        })
+        }
     }
 
     fn controls(&self) -> Controls {
         Controls::MOVE | Controls::LOOK
     }
 
-    fn tick<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
-        Box::pin(async move {
-            let target = mob.get_mob_entity().target.lock().await.clone();
-            if let Some(target) = target {
-                let mob_pos = mob.get_entity().pos.load();
-                let target_pos = target.get_entity().pos.load();
-                let dist_sq = mob_pos.squared_distance_to_vec(&target_pos);
+    fn tick(&mut self, mob: &dyn Mob) {
+        let target = mob.get_mob_entity().get_target().clone();
+        if let Some(target) = target {
+            let mob_pos = mob.get_entity().pos.load();
+            let target_pos = target.get_entity().pos.load();
+            let dist_sq = mob_pos.squared_distance_to_vec(&target_pos);
 
-                if dist_sq > self.hostile_radius_sqr {
-                    mob.get_mob_entity()
-                        .look_control
-                        .lock()
-                        .unwrap_or_else(std::sync::PoisonError::into_inner)
-                        .look_at_entity_with_range(&target, 30.0, 30.0);
-                }
+            if dist_sq > self.hostile_radius_sqr {
+                mob.get_mob_entity()
+                    .look_control
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .look_at_entity_with_range(&target, 30.0, 30.0);
             }
-        })
+        }
     }
 }
 
@@ -229,74 +221,71 @@ impl Goal for HoldGroundAttackGoal {
 pub struct ObtainRaidLeaderBannerGoal;
 
 impl Goal for ObtainRaidLeaderBannerGoal {
-    fn can_start<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
-        Box::pin(async move {
-            let Some(raider) = mob.as_raider() else {
-                return false;
-            };
-            if !raider.can_be_leader() || raider.is_patrol_leader() {
-                return false;
-            }
-            // Check if dropped banner nearby
-            let entity = mob.get_entity();
-            let world = entity.world.load();
-            let bb = entity.bounding_box.load().expand(16.0, 4.0, 16.0);
-            let nearby = world.get_entities_at_box(&bb);
+    fn can_start(&mut self, mob: &dyn Mob) -> bool {
+        let Some(raider) = mob.as_raider() else {
+            return false;
+        };
+        if !raider.can_be_leader() || raider.is_patrol_leader() {
+            return false;
+        }
+        // Check if dropped banner nearby
+        let entity = mob.get_entity();
+        let world = entity.world.load();
+        let bb = entity.bounding_box.load().expand(16.0, 4.0, 16.0);
+        let nearby = world.get_entities_at_box(&bb);
 
-            nearby
-                .iter()
-                .any(|e| *e.get_entity().entity_type == EntityType::ITEM)
-        })
+        nearby
+            .iter()
+            .any(|e| *e.get_entity().entity_type == EntityType::ITEM)
     }
 
     fn controls(&self) -> Controls {
         Controls::MOVE
     }
 
-    fn tick<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
-        Box::pin(async move {
-            let Some(raider) = mob.as_raider() else {
-                return;
-            };
-            if !raider.can_be_leader() || raider.is_patrol_leader() {
-                return;
-            }
+    fn tick(&mut self, mob: &dyn Mob) {
+        let Some(raider) = mob.as_raider() else {
+            return;
+        };
+        if !raider.can_be_leader() || raider.is_patrol_leader() {
+            return;
+        }
 
-            let entity = mob.get_entity();
-            let pos = entity.pos.load();
-            let world = entity.world.load();
-            let bb = entity.bounding_box.load().expand(16.0, 4.0, 16.0);
-            let nearby = world.get_entities_at_box(&bb);
+        let entity = mob.get_entity();
+        let pos = entity.pos.load();
+        let world = entity.world.load();
+        let bb = entity.bounding_box.load().expand(16.0, 4.0, 16.0);
+        let nearby = world.get_entities_at_box(&bb);
 
-            for cand in nearby {
-                if *cand.get_entity().entity_type == EntityType::ITEM {
-                    let cand_pos = cand.get_entity().pos.load();
-                    let dist = pos.squared_distance_to_vec(&cand_pos);
-                    if dist < 2.0 {
-                        raider.set_patrol_leader(true);
-                        let banner = create_ominous_banner();
-                        let living = &mob.get_mob_entity().living_entity;
-                        let mut equipment = living.entity_equipment.lock().await;
+        for cand in nearby {
+            if *cand.get_entity().entity_type == EntityType::ITEM {
+                let cand_pos = cand.get_entity().pos.load();
+                let dist = pos.squared_distance_to_vec(&cand_pos);
+                if dist < 2.0 {
+                    raider.set_patrol_leader(true);
+                    let banner = create_ominous_banner();
+                    let living = &mob.get_mob_entity().living_entity;
+                    if let Ok(mut equipment) = living.entity_equipment.try_lock() {
                         equipment.put(&EquipmentSlot::HEAD, banner.clone());
                         drop(equipment);
                         living.send_equipment_changes(&[(EquipmentSlot::HEAD, banner)]);
-                        cand.get_entity().remove().await;
-                        break;
                     }
-                    let mut nav = mob
-                        .get_mob_entity()
-                        .navigator
-                        .lock()
-                        .unwrap_or_else(std::sync::PoisonError::into_inner);
-                    nav.set_progress(NavigatorGoal {
-                        current_progress: pos,
-                        destination: cand_pos,
-                        speed: 1.15,
-                    });
+                    cand.get_entity().remove();
                     break;
                 }
+                let mut nav = mob
+                    .get_mob_entity()
+                    .navigator
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                nav.set_progress(NavigatorGoal {
+                    current_progress: pos,
+                    destination: cand_pos,
+                    speed: 1.15,
+                });
+                break;
             }
-        })
+        }
     }
 }
 
@@ -304,60 +293,50 @@ impl Goal for ObtainRaidLeaderBannerGoal {
 pub struct RaiderCelebrationGoal;
 
 impl Goal for RaiderCelebrationGoal {
-    fn can_start<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
-        Box::pin(async move {
-            let Some(raider) = mob.as_raider() else {
-                return false;
-            };
-            let target = mob.get_mob_entity().target.lock().await.clone();
-            target.is_none() && raider.is_celebrating()
-        })
+    fn can_start(&mut self, mob: &dyn Mob) -> bool {
+        let Some(raider) = mob.as_raider() else {
+            return false;
+        };
+        let target = mob.get_mob_entity().get_target().clone();
+        target.is_none() && raider.is_celebrating()
     }
 
-    fn should_continue<'a>(&'a self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
-        Box::pin(async move {
-            let Some(raider) = mob.as_raider() else {
-                return false;
-            };
-            let target = mob.get_mob_entity().target.lock().await.clone();
-            target.is_none() && raider.is_celebrating()
-        })
+    fn should_continue(&self, mob: &dyn Mob) -> bool {
+        let Some(raider) = mob.as_raider() else {
+            return false;
+        };
+        let target = mob.get_mob_entity().get_target().clone();
+        target.is_none() && raider.is_celebrating()
     }
 
-    fn start<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
-        Box::pin(async move {
-            if let Some(raider) = mob.as_raider() {
-                raider.set_celebrating(true);
-            }
-        })
+    fn start(&mut self, mob: &dyn Mob) {
+        if let Some(raider) = mob.as_raider() {
+            raider.set_celebrating(true);
+        }
     }
 
-    fn stop<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
-        Box::pin(async move {
-            if let Some(raider) = mob.as_raider() {
-                raider.set_celebrating(false);
-            }
-        })
+    fn stop(&mut self, mob: &dyn Mob) {
+        if let Some(raider) = mob.as_raider() {
+            raider.set_celebrating(false);
+        }
     }
 
-    fn tick<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
-        Box::pin(async move {
-            let Some(raider) = mob.as_raider() else {
-                return;
-            };
-            let entity = mob.get_entity();
-            let pos = entity.pos.load();
-            let world = entity.world.load();
+    fn tick(&mut self, mob: &dyn Mob) {
+        let Some(raider) = mob.as_raider() else {
+            return;
+        };
+        let entity = mob.get_entity();
+        let pos = entity.pos.load();
+        let world = entity.world.load();
 
-            let r: f32 = rand::random();
-            if r < 0.02 && !entity.silent.load(Ordering::Relaxed) {
-                world.play_sound(
-                    raider.get_celebrate_sound(),
-                    pumpkin_data::sound::SoundCategory::Hostile,
-                    &pos,
-                );
-            }
-        })
+        let r: f32 = rand::random();
+        if r < 0.02 && !entity.silent.load(Ordering::Relaxed) {
+            world.play_sound(
+                raider.get_celebrate_sound(),
+                pumpkin_data::sound::SoundCategory::Hostile,
+                &pos,
+            );
+        }
     }
 }
 
@@ -374,44 +353,40 @@ impl RaiderMoveThroughVillageGoal {
 }
 
 impl Goal for RaiderMoveThroughVillageGoal {
-    fn can_start<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
-        Box::pin(async move {
-            let Some(raider) = mob.as_raider() else {
-                return false;
-            };
-            if !raider.has_active_raid() {
-                return false;
-            }
-            let target = mob.get_mob_entity().target.lock().await.clone();
-            target.is_none()
-        })
+    fn can_start(&mut self, mob: &dyn Mob) -> bool {
+        let Some(raider) = mob.as_raider() else {
+            return false;
+        };
+        if !raider.has_active_raid() {
+            return false;
+        }
+        let target = mob.get_mob_entity().get_target().clone();
+        target.is_none()
     }
 
     fn controls(&self) -> Controls {
         Controls::MOVE
     }
 
-    fn tick<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
-        Box::pin(async move {
-            let entity = mob.get_entity();
-            let pos = entity.pos.load();
-            let mut nav = mob
-                .get_mob_entity()
-                .navigator
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
+    fn tick(&mut self, mob: &dyn Mob) {
+        let entity = mob.get_entity();
+        let pos = entity.pos.load();
+        let mut nav = mob
+            .get_mob_entity()
+            .navigator
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
 
-            if nav.is_idle() {
-                let dx: f64 = (rand::random::<f64>() - 0.5) * 32.0;
-                let dz: f64 = (rand::random::<f64>() - 0.5) * 32.0;
-                let dest = Vector3::new(pos.x + dx, pos.y, pos.z + dz);
-                nav.set_progress(NavigatorGoal {
-                    current_progress: pos,
-                    destination: dest,
-                    speed: self.speed_modifier,
-                });
-            }
-        })
+        if nav.is_idle() {
+            let dx: f64 = (rand::random::<f64>() - 0.5) * 32.0;
+            let dz: f64 = (rand::random::<f64>() - 0.5) * 32.0;
+            let dest = Vector3::new(pos.x + dx, pos.y, pos.z + dz);
+            nav.set_progress(NavigatorGoal {
+                current_progress: pos,
+                destination: dest,
+                speed: self.speed_modifier,
+            });
+        }
     }
 }
 

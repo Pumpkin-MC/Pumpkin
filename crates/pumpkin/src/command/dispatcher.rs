@@ -239,24 +239,17 @@ pub struct CommandDispatcher {
 
 /// Stores registered [`CommandTree`]s and dispatches commands to them.
 impl CommandDispatcher {
-    pub async fn handle_command<'a>(
-        &'a self,
-        sender: &CommandSender,
-        server: &'a Server,
-        cmd: &'a str,
-    ) {
-        let result = self.dispatch(sender, server, cmd).await;
+    pub fn handle_command(&self, sender: &CommandSender, server: &Server, cmd: &str) {
+        let result = self.dispatch(sender, server, cmd);
         sender.set_success_count(u32::from(result.is_ok()));
 
         if let Err(e) = result {
             for text in e.into_messages(cmd) {
-                sender
-                    .send_message(
-                        TextComponent::text("")
-                            .add_child(text)
-                            .color_named(pumpkin_util::text::color::NamedColor::Red),
-                    )
-                    .await;
+                sender.send_message(
+                    TextComponent::text("")
+                        .add_child(text)
+                        .color_named(pumpkin_util::text::color::NamedColor::Red),
+                );
             }
         }
     }
@@ -266,7 +259,7 @@ impl CommandDispatcher {
     /// # todo
     /// - make this less ugly
     /// - do not query suggestions for the same consumer multiple times just because they are on different paths through the tree
-    pub(crate) async fn find_suggestions<'a>(
+    pub(crate) fn find_suggestions<'a>(
         &'a self,
         src: &'a CommandSender,
         server: &'a Server,
@@ -299,7 +292,7 @@ impl CommandDispatcher {
             return Suggestions::empty();
         };
 
-        if !src.has_permission(server, permission.as_str()).await {
+        if !src.has_permission(server, permission.as_str()) {
             return Suggestions::empty();
         }
 
@@ -308,9 +301,7 @@ impl CommandDispatcher {
         // try paths and collect the nodes that fail
         // todo: make this more fine-grained
         for path in tree.iter_paths() {
-            match Self::try_find_suggestions_on_path(src, server, &path, tree, &mut raw_args, cmd)
-                .await
-            {
+            match Self::try_find_suggestions_on_path(src, server, &path, tree, &mut raw_args, cmd) {
                 Err(InvalidConsumption(s)) => {
                     debug!(
                         "Error while parsing command \"{cmd}\": {s:?} was consumed, but couldn't be parsed"
@@ -442,7 +433,7 @@ impl CommandDispatcher {
     }
 
     /// Execute a command using its corresponding [`CommandTree`].
-    pub(crate) async fn dispatch<'a>(
+    pub(crate) fn dispatch<'a>(
         &'a self,
         src: &CommandSender,
         server: &'a Server,
@@ -460,7 +451,7 @@ impl CommandDispatcher {
             )));
         };
 
-        if !src.has_permission(server, permission.as_str()).await {
+        if !src.has_permission(server, permission.as_str()) {
             return Err(PermissionDenied);
         }
 
@@ -468,9 +459,7 @@ impl CommandDispatcher {
 
         // try paths until fitting path is found
         for path in tree.iter_paths() {
-            match Self::try_is_fitting_path(src, server, &path, tree, &mut raw_args.clone(), cmd)
-                .await
-            {
+            match Self::try_is_fitting_path(src, server, &path, tree, &mut raw_args.clone(), cmd) {
                 Ok(PathResult::Matched) => return Ok(()),
                 Ok(PathResult::Failed(failure)) => path_failures.push(failure),
                 Err(error) => return Err(error),
@@ -503,7 +492,7 @@ impl CommandDispatcher {
     }
 
     #[allow(clippy::too_many_lines)]
-    async fn try_is_fitting_path<'a>(
+    fn try_is_fitting_path<'a>(
         src: &'a CommandSender,
         server: &'a Server,
         path: &[usize],
@@ -520,7 +509,7 @@ impl CommandDispatcher {
             match &node.node_type {
                 NodeType::ExecuteLeaf { executor } => {
                     return if raw_args.is_empty() {
-                        executor.execute(src, server, &parsed_args).await?;
+                        executor.execute(src, server, &parsed_args)?;
                         Ok(PathResult::Matched)
                     } else {
                         debug!(
@@ -559,7 +548,7 @@ impl CommandDispatcher {
                     matched_any_node = true;
                 }
                 NodeType::Argument { consumer, name, .. } => {
-                    match consumer.consume_with_syntax(src, server, raw_args).await {
+                    match consumer.consume_with_syntax(src, server, raw_args) {
                         Ok(Some(consumed)) => {
                             parsed_args.insert(name, consumed);
                             matched_any_node = true;
@@ -615,7 +604,7 @@ impl CommandDispatcher {
         )))
     }
 
-    async fn try_find_suggestions_on_path<'a>(
+    fn try_find_suggestions_on_path<'a>(
         src: &'a CommandSender,
         server: &'a Server,
         path: &[usize],
@@ -640,7 +629,7 @@ impl CommandDispatcher {
                     suggestion_provider,
                     name: _,
                 } => {
-                    match consumer.consume_with_syntax(src, server, raw_args).await {
+                    match consumer.consume_with_syntax(src, server, raw_args) {
                         Ok(Some(_consumed)) => {
                             //parsed_args.insert(name, consumed);
                         }
@@ -651,13 +640,15 @@ impl CommandDispatcher {
                                     .rfind(|(_, c)| c.is_whitespace())
                                     .map_or(0, |(index, c)| index + c.len_utf8());
                                 if let Some(provider) = suggestion_provider {
-                                    Ok(Some(
-                                        provider
-                                            .suggest(src, server, input, start, input.len())
-                                            .await,
-                                    ))
+                                    Ok(Some(provider.suggest(
+                                        src,
+                                        server,
+                                        input,
+                                        start,
+                                        input.len(),
+                                    )))
                                 } else {
-                                    let suggestions = consumer.suggest(src, server, input).await?;
+                                    let suggestions = consumer.suggest(src, server, input)?;
                                     let range = StringRange::between(start, input.len());
                                     Ok(suggestions.map(|suggestions| {
                                         Suggestions::new(

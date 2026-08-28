@@ -5,8 +5,8 @@ use pumpkin_data::{Block, BlockId, tag};
 use crate::block::blocks::plant::PlantBlockBase;
 
 use crate::block::{
-    BlockBehaviour, BlockFuture, BlockMetadata, CanPlaceAtArgs, CanUpdateAtArgs,
-    GetStateForNeighborUpdateArgs, OnPlaceArgs,
+    BlockBehaviour, BlockMetadata, CanPlaceAtArgs, CanUpdateAtArgs, GetStateForNeighborUpdateArgs,
+    OnPlaceArgs,
 };
 
 use super::segmented::Segmented;
@@ -31,23 +31,20 @@ impl BlockBehaviour for FlowerbedBlock {
         Segmented::can_update_at(self, args)
     }
 
-    fn on_place<'a>(&'a self, args: OnPlaceArgs<'a>) -> BlockFuture<'a, BlockStateId> {
+    fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
         Segmented::on_place(self, args)
     }
 
-    fn get_state_for_neighbor_update<'a>(
-        &'a self,
-        args: GetStateForNeighborUpdateArgs<'a>,
-    ) -> BlockFuture<'a, BlockStateId> {
-        Box::pin(async move {
-            <Self as PlantBlockBase>::get_state_for_neighbor_update(
-                self,
-                args.world,
-                args.position,
-                args.state_id,
-            )
-            .await
-        })
+    fn get_state_for_neighbor_update(
+        &self,
+        args: GetStateForNeighborUpdateArgs<'_>,
+    ) -> BlockStateId {
+        <Self as PlantBlockBase>::get_state_for_neighbor_update(
+            self,
+            args.world,
+            args.position,
+            args.state_id,
+        )
     }
 }
 

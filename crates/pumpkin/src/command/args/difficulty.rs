@@ -38,26 +38,16 @@ impl ArgumentConsumer for DifficultyArgumentConsumer {
     ) -> ConsumeResult<'a> {
         let s_opt: Option<&'a str> = args.pop().map(|arg| arg.value);
 
-        let result: Option<Arg<'a>> =
-            s_opt.and_then(|s| Difficulty::from_str(s).map(Arg::Difficulty).ok());
-
-        Box::pin(async move { result })
+        s_opt.and_then(|s| Difficulty::from_str(s).map(Arg::Difficulty).ok())
     }
 
-    fn suggest<'a>(
-        &'a self,
-        _sender: &CommandSender,
-        _server: &'a Server,
-        _input: &'a str,
-    ) -> SuggestResult<'a> {
-        Box::pin(async move {
-            let difficulties = ["easy", "normal", "hard", "peaceful"];
-            let suggestions: Vec<CommandSuggestion> = difficulties
-                .iter()
-                .map(|difficulty| CommandSuggestion::new((*difficulty).to_string(), None))
-                .collect();
-            Ok(Some(suggestions))
-        })
+    fn suggest(&self, _sender: &CommandSender, _server: &Server, _input: &str) -> SuggestResult {
+        let difficulties = ["easy", "normal", "hard", "peaceful"];
+        let suggestions: Vec<CommandSuggestion> = difficulties
+            .iter()
+            .map(|difficulty| CommandSuggestion::new((*difficulty).to_string(), None))
+            .collect();
+        Ok(Some(suggestions))
     }
 }
 

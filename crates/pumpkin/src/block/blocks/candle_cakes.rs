@@ -10,8 +10,8 @@ use pumpkin_world::{
 
 use crate::{
     block::{
-        BlockBehaviour, BlockFuture, GetStateForNeighborUpdateArgs, NormalUseArgs,
-        OnScheduledTickArgs, UseWithItemArgs, blocks::cake::CakeBlock, registry::BlockActionResult,
+        BlockBehaviour, GetStateForNeighborUpdateArgs, NormalUseArgs, OnScheduledTickArgs,
+        UseWithItemArgs, blocks::cake::CakeBlock, registry::BlockActionResult,
     },
     entity::player::Player,
     world::World,
@@ -55,7 +55,7 @@ pub fn candle_from_cake(block: &Block) -> &'static Item {
 pub struct CandleCakeBlock;
 
 impl CandleCakeBlock {
-    async fn consume_and_drop_candle(
+    fn consume_and_drop_candle(
         block: &Block,
         player: &Player,
         location: &BlockPos,
@@ -75,65 +75,51 @@ impl CandleCakeBlock {
 
         let item_stack = ItemStack::new(1, candle_item);
 
-        world.drop_stack(location, item_stack).await;
+        world.drop_stack(location, item_stack);
 
-        world
-            .set_block_state(
-                location,
-                Block::CAKE.default_state.id,
-                BlockFlags::NOTIFY_ALL,
-            )
-            .await;
+        world.set_block_state(
+            location,
+            Block::CAKE.default_state.id,
+            BlockFlags::NOTIFY_ALL,
+        );
 
         let (block, state) = world.get_block_and_state_id(location);
 
-        CakeBlock::consume_if_hungry(world, player, block, location, state).await
+        CakeBlock::consume_if_hungry(world, player, block, location, state)
     }
 }
 
 impl BlockBehaviour for CandleCakeBlock {
-    fn use_with_item<'a>(
-        &'a self,
-        args: UseWithItemArgs<'a>,
-    ) -> BlockFuture<'a, BlockActionResult> {
-        Box::pin(async move {
-            let item_id = args.item_stack.item.id;
-            match item_id {
-                id if id == Item::FIRE_CHARGE.id || id == Item::FLINT_AND_STEEL.id => {
-                    BlockActionResult::Pass
-                } // Item::FIRE_CHARGE | Item::FLINT_AND_STEEL
-                _ => BlockActionResult::PassToDefaultBlockAction,
-            }
-        })
+    fn use_with_item(&self, args: UseWithItemArgs<'_>) -> BlockActionResult {
+        let item_id = args.item_stack.item.id;
+        match item_id {
+            id if id == Item::FIRE_CHARGE.id || id == Item::FLINT_AND_STEEL.id => {
+                BlockActionResult::Pass
+            } // Item::FIRE_CHARGE | Item::FLINT_AND_STEEL
+            _ => BlockActionResult::PassToDefaultBlockAction,
+        }
     }
 
-    fn normal_use<'a>(&'a self, args: NormalUseArgs<'a>) -> BlockFuture<'a, BlockActionResult> {
-        Box::pin(async move {
-            Self::consume_and_drop_candle(args.block, args.player, args.position, args.world).await
-        })
+    fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
+        Self::consume_and_drop_candle(args.block, args.player, args.position, args.world)
     }
 
-    fn on_scheduled_tick<'a>(&'a self, args: OnScheduledTickArgs<'a>) -> BlockFuture<'a, ()> {
-        Box::pin(async move {
-            if !can_place_at(args.world.as_ref(), args.position) {
-                args.world
-                    .break_block(args.position, None, BlockFlags::empty())
-                    .await;
-            }
-        })
+    fn on_scheduled_tick(&self, args: OnScheduledTickArgs<'_>) {
+        if !can_place_at(args.world.as_ref(), args.position) {
+            args.world
+                .break_block(args.position, None, BlockFlags::empty());
+        }
     }
 
-    fn get_state_for_neighbor_update<'a>(
-        &'a self,
-        args: GetStateForNeighborUpdateArgs<'a>,
-    ) -> BlockFuture<'a, BlockStateId> {
-        Box::pin(async move {
-            if !can_place_at(args.world, args.position) {
-                args.world
-                    .schedule_block_tick(args.block, *args.position, 1, TickPriority::Normal);
-            }
-            args.state_id
-        })
+    fn get_state_for_neighbor_update(
+        &self,
+        args: GetStateForNeighborUpdateArgs<'_>,
+    ) -> BlockStateId {
+        if !can_place_at(args.world, args.position) {
+            args.world
+                .schedule_block_tick(args.block, *args.position, 1, TickPriority::Normal);
+        }
+        args.state_id
     }
 }
 

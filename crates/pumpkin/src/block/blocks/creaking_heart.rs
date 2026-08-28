@@ -11,9 +11,7 @@ use pumpkin_macros::pumpkin_block;
 use pumpkin_world::world::BlockFlags;
 
 use crate::block::entities::creaking_heart::CreakingHeartBlockEntity;
-use crate::block::{
-    BlockBehaviour, BlockFuture, BrokenArgs, OnNeighborUpdateArgs, OnPlaceArgs, PlacedArgs,
-};
+use crate::block::{BlockBehaviour, BrokenArgs, OnNeighborUpdateArgs, OnPlaceArgs, PlacedArgs};
 
 #[pumpkin_block("minecraft:creaking_heart")]
 pub struct CreakingHeartBlock;
@@ -45,24 +43,20 @@ impl CreakingHeartBlock {
 }
 
 impl BlockBehaviour for CreakingHeartBlock {
-    fn on_place<'a>(&'a self, args: OnPlaceArgs<'a>) -> BlockFuture<'a, BlockStateId> {
-        Box::pin(async move {
-            let mut props =
-                CreakingHeartLikeProperties::from_state_id(args.block.default_state.id, args.block);
-            props.axis = match args.direction {
-                pumpkin_data::BlockDirection::North | pumpkin_data::BlockDirection::South => {
-                    Axis::Z
-                }
-                pumpkin_data::BlockDirection::East | pumpkin_data::BlockDirection::West => Axis::X,
-                pumpkin_data::BlockDirection::Up | pumpkin_data::BlockDirection::Down => Axis::Y,
-            };
-            props.creaking_heart_state = CreakingHeartState::Uprooted;
-            props.to_state_id(args.block)
-        })
+    fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
+        let mut props =
+            CreakingHeartLikeProperties::from_state_id(args.block.default_state.id, args.block);
+        props.axis = match args.direction {
+            pumpkin_data::BlockDirection::North | pumpkin_data::BlockDirection::South => Axis::Z,
+            pumpkin_data::BlockDirection::East | pumpkin_data::BlockDirection::West => Axis::X,
+            pumpkin_data::BlockDirection::Up | pumpkin_data::BlockDirection::Down => Axis::Y,
+        };
+        props.creaking_heart_state = CreakingHeartState::Uprooted;
+        props.to_state_id(args.block)
     }
 
-    fn placed<'a>(&'a self, args: PlacedArgs<'a>) -> BlockFuture<'a, ()> {
-        Box::pin(async move {
+    fn placed(&self, args: PlacedArgs<'_>) {
+        {
             let entity = CreakingHeartBlockEntity::new(*args.position);
             args.world.add_block_entity(Arc::new(entity));
 
@@ -71,13 +65,11 @@ impl BlockBehaviour for CreakingHeartBlock {
 
             if Self::check_active_logs(args.world.as_ref(), args.position, props.axis) {
                 props.creaking_heart_state = CreakingHeartState::Dormant;
-                args.world
-                    .set_block_state(
-                        args.position,
-                        props.to_state_id(args.block),
-                        BlockFlags::NOTIFY_ALL,
-                    )
-                    .await;
+                args.world.set_block_state(
+                    args.position,
+                    props.to_state_id(args.block),
+                    BlockFlags::NOTIFY_ALL,
+                );
 
                 args.world.play_sound(
                     Sound::BlockCreakingHeartSpawn,
@@ -85,11 +77,11 @@ impl BlockBehaviour for CreakingHeartBlock {
                     &args.position.to_f64(),
                 );
             }
-        })
+        }
     }
 
-    fn on_neighbor_update<'a>(&'a self, args: OnNeighborUpdateArgs<'a>) -> BlockFuture<'a, ()> {
-        Box::pin(async move {
+    fn on_neighbor_update(&self, args: OnNeighborUpdateArgs<'_>) {
+        {
             let state_id = args.world.get_block_state_id(args.position);
             let mut props = CreakingHeartLikeProperties::from_state_id(state_id, args.block);
 
@@ -110,27 +102,24 @@ impl BlockBehaviour for CreakingHeartBlock {
 
             if props.creaking_heart_state != new_state {
                 props.creaking_heart_state = new_state;
-                args.world
-                    .set_block_state(
-                        args.position,
-                        props.to_state_id(args.block),
-                        BlockFlags::NOTIFY_ALL,
-                    )
-                    .await;
+                args.world.set_block_state(
+                    args.position,
+                    props.to_state_id(args.block),
+                    BlockFlags::NOTIFY_ALL,
+                );
             }
-        })
+        }
     }
 
-    fn broken<'a>(&'a self, args: BrokenArgs<'a>) -> BlockFuture<'a, ()> {
-        Box::pin(async move {
+    fn broken(&self, args: BrokenArgs<'_>) {
+        {
             args.world.play_sound(
                 Sound::BlockCreakingHeartBreak,
                 SoundCategory::Blocks,
                 &args.position.to_f64(),
             );
             args.world
-                .drop_stack(args.position, ItemStack::new(1, &Item::CREAKING_HEART))
-                .await;
-        })
+                .drop_stack(args.position, ItemStack::new(1, &Item::CREAKING_HEART));
+        }
     }
 }

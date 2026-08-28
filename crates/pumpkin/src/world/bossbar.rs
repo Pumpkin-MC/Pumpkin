@@ -106,133 +106,93 @@ pub const fn bossbar_bedrock_id(uuid: &Uuid) -> VarLong {
 
 /// Extra methods for [`Player`] to send and manage the bossbar.
 impl Player {
-    pub async fn send_bossbar(&self, bossbar: &Bossbar) {
-        match self.client.as_ref() {
-            ClientPlatform::Java(java) => {
-                let boss_action = BosseventAction::Add {
-                    title: bossbar.title.clone(),
-                    health: bossbar.health,
-                    color: (bossbar.color as u8).into(),
-                    division: (bossbar.division as u8).into(),
-                    flags: bossbar.flags.bits(),
-                };
+    pub fn send_bossbar(&self, bossbar: &Bossbar) {
+        let boss_action = BosseventAction::Add {
+            title: bossbar.title.clone(),
+            health: bossbar.health,
+            color: (bossbar.color as u8).into(),
+            division: (bossbar.division as u8).into(),
+            flags: bossbar.flags.bits(),
+        };
 
-                let packet = CBossEvent::new(&bossbar.uuid, boss_action);
-                java.enqueue_client_packet(&packet).await;
-            }
-            ClientPlatform::Bedrock(bedrock) => {
-                let boss_id = bossbar_bedrock_id(&bossbar.uuid);
-                let player_id = VarLong(self.entity_id() as i64);
-                let packet = BBossEvent::show(
-                    boss_id,
-                    player_id,
-                    bossbar.title.clone().get_text(),
-                    bossbar.health,
-                    bossbar.color.to_bedrock(),
-                    bossbar.division.to_bedrock(),
-                );
-                bedrock.send_packet(&packet).await;
+        let je_packet = CBossEvent::new(&bossbar.uuid, boss_action);
+        let boss_id = bossbar_bedrock_id(&bossbar.uuid);
+        let player_id = VarLong(self.entity_id() as i64);
+        let be_packet = BBossEvent::show(
+            boss_id,
+            player_id,
+            bossbar.title.clone().get_text(),
+            bossbar.health,
+            bossbar.color.to_bedrock(),
+            bossbar.division.to_bedrock(),
+        );
 
-                let register_packet = BBossEvent::register_player(boss_id, player_id);
-                bedrock.send_packet(&register_packet).await;
+        self.try_enqueue_packet_editioned(&je_packet, &be_packet);
+        if let ClientPlatform::Bedrock(bedrock) = self.client.as_ref() {
+            let register_packet = BBossEvent::register_player(boss_id, player_id);
+            if let Ok(data) = bedrock.serialize_packet(&register_packet) {
+                bedrock.try_enqueue_packet(data);
             }
         }
     }
 
-    pub async fn remove_bossbar(&self, uuid: Uuid) {
-        match self.client.as_ref() {
-            ClientPlatform::Java(java) => {
-                let boss_action = BosseventAction::Remove;
+    pub fn remove_bossbar(&self, uuid: Uuid) {
+        let boss_action = BosseventAction::Remove;
+        let je_packet = CBossEvent::new(&uuid, boss_action);
+        let boss_id = bossbar_bedrock_id(&uuid);
+        let player_id = VarLong(self.entity_id() as i64);
+        let unregister_packet = BBossEvent::unregister_player(boss_id, player_id);
+        let be_packet = BBossEvent::hide(boss_id);
 
-                let packet = CBossEvent::new(&uuid, boss_action);
-                java.enqueue_client_packet(&packet).await;
-            }
-            ClientPlatform::Bedrock(bedrock) => {
-                let boss_id = bossbar_bedrock_id(&uuid);
-                let player_id = VarLong(self.entity_id() as i64);
-                let unregister_packet = BBossEvent::unregister_player(boss_id, player_id);
-                bedrock.send_packet(&unregister_packet).await;
-
-                let packet = BBossEvent::hide(boss_id);
-                bedrock.send_packet(&packet).await;
-            }
+        self.try_enqueue_packet_editioned(&je_packet, &be_packet);
+        if let ClientPlatform::Bedrock(bedrock) = self.client.as_ref()
+            && let Ok(data) = bedrock.serialize_packet(&unregister_packet)
+        {
+            bedrock.try_enqueue_packet(data);
         }
     }
 
-    pub async fn update_bossbar_health(&self, uuid: &Uuid, health: f32) {
-        match self.client.as_ref() {
-            ClientPlatform::Java(java) => {
-                let boss_action = BosseventAction::UpdateHealth(health);
-
-                let packet = CBossEvent::new(uuid, boss_action);
-                java.enqueue_client_packet(&packet).await;
-            }
-            ClientPlatform::Bedrock(bedrock) => {
-                let boss_id = bossbar_bedrock_id(uuid);
-                let packet = BBossEvent::update_health(boss_id, health);
-                bedrock.send_packet(&packet).await;
-            }
-        }
+    pub fn update_bossbar_health(&self, uuid: &Uuid, health: f32) {
+        let boss_action = BosseventAction::UpdateHealth(health);
+        let je_packet = CBossEvent::new(uuid, boss_action);
+        let boss_id = bossbar_bedrock_id(uuid);
+        let be_packet = BBossEvent::update_health(boss_id, health);
+        self.try_enqueue_packet_editioned(&je_packet, &be_packet);
     }
 
-    pub async fn update_bossbar_title(&self, uuid: &Uuid, title: TextComponent) {
-        match self.client.as_ref() {
-            ClientPlatform::Java(java) => {
-                let boss_action = BosseventAction::UpdateTile(title);
-
-                let packet = CBossEvent::new(uuid, boss_action);
-                java.enqueue_client_packet(&packet).await;
-            }
-            ClientPlatform::Bedrock(bedrock) => {
-                let boss_id = bossbar_bedrock_id(uuid);
-                let packet = BBossEvent::update_title(boss_id, title.get_text());
-                bedrock.send_packet(&packet).await;
-            }
-        }
+    pub fn update_bossbar_title(&self, uuid: &Uuid, title: TextComponent) {
+        let text = title.clone().get_text();
+        let boss_action = BosseventAction::UpdateTile(title);
+        let je_packet = CBossEvent::new(uuid, boss_action);
+        let boss_id = bossbar_bedrock_id(uuid);
+        let be_packet = BBossEvent::update_title(boss_id, text);
+        self.try_enqueue_packet_editioned(&je_packet, &be_packet);
     }
 
-    pub async fn update_bossbar_style(
+    pub fn update_bossbar_style(
         &self,
         uuid: &Uuid,
         color: BossbarColor,
         dividers: BossbarDivisions,
         _flags: BossbarFlags,
     ) {
-        match self.client.as_ref() {
-            ClientPlatform::Java(java) => {
-                let boss_action = BosseventAction::UpdateStyle {
-                    color: (color as u8).into(),
-                    dividers: (dividers as u8).into(),
-                };
+        let boss_action = BosseventAction::UpdateStyle {
+            color: (color as u8).into(),
+            dividers: (dividers as u8).into(),
+        };
 
-                let packet = CBossEvent::new(uuid, boss_action);
-                java.enqueue_client_packet(&packet).await;
-            }
-            ClientPlatform::Bedrock(bedrock) => {
-                let boss_id = bossbar_bedrock_id(uuid);
-                let packet = BBossEvent::update_properties(
-                    boss_id,
-                    color.to_bedrock(),
-                    dividers.to_bedrock(),
-                );
-                bedrock.send_packet(&packet).await;
-            }
-        }
+        let je_packet = CBossEvent::new(uuid, boss_action);
+        let boss_id = bossbar_bedrock_id(uuid);
+        let be_packet =
+            BBossEvent::update_properties(boss_id, color.to_bedrock(), dividers.to_bedrock());
+        self.try_enqueue_packet_editioned(&je_packet, &be_packet);
     }
 
-    pub async fn update_bossbar_flags(&self, uuid: &Uuid, flags: BossbarFlags) {
-        match self.client.as_ref() {
-            ClientPlatform::Java(java) => {
-                let boss_action = BosseventAction::UpdateFlags(flags.bits());
-
-                let packet = CBossEvent::new(uuid, boss_action);
-                java.enqueue_client_packet(&packet).await;
-            }
-            ClientPlatform::Bedrock(bedrock) => {
-                let boss_id = bossbar_bedrock_id(uuid);
-                let packet = BBossEvent::update_properties(boss_id, 0, 0);
-                bedrock.send_packet(&packet).await;
-            }
-        }
+    pub fn update_bossbar_flags(&self, uuid: &Uuid, flags: BossbarFlags) {
+        let boss_action = BosseventAction::UpdateFlags(flags.bits());
+        let je_packet = CBossEvent::new(uuid, boss_action);
+        let boss_id = bossbar_bedrock_id(uuid);
+        let be_packet = BBossEvent::update_properties(boss_id, 0, 0);
+        self.try_enqueue_packet_editioned(&je_packet, &be_packet);
     }
 }

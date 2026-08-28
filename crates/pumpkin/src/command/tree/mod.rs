@@ -2,7 +2,6 @@ use super::{CommandExecutor, args::ArgumentConsumer};
 use crate::command::CommandSender;
 use crate::command::suggestion::suggestions::Suggestions;
 use crate::server::Server;
-use std::pin::Pin;
 use std::{borrow::Cow, collections::VecDeque, fmt::Debug, sync::Arc};
 
 pub mod builder;
@@ -29,17 +28,17 @@ impl Debug for RawArg<'_> {
 /// see [`crate::command::tree::builder::argument`]
 pub type RawArgs<'a> = Vec<RawArg<'a>>;
 
-pub type CommandSuggestionResult<'a> = Pin<Box<dyn Future<Output = Suggestions> + Send + 'a>>;
+pub type CommandSuggestionResult = Suggestions;
 
 pub trait CommandSuggestionProvider: Send + Sync {
-    fn suggest<'a>(
-        &'a self,
-        src: &'a CommandSender,
-        server: &'a Server,
-        input: &'a str,
+    fn suggest(
+        &self,
+        src: &CommandSender,
+        server: &Server,
+        input: &str,
         start: usize,
         end: usize,
-    ) -> CommandSuggestionResult<'a>;
+    ) -> CommandSuggestionResult;
 }
 
 #[derive(Debug, Clone)]

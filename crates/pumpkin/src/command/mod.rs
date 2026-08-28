@@ -1,7 +1,6 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use std::fmt;
-use std::pin::Pin;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
@@ -64,9 +63,9 @@ pub fn set_broadcast_console_to_ops(value: bool) {
 pub enum CommandSender {
     /// A remote console connection via the RCON protocol.
     ///
-    /// Stores an asynchronous buffer to capture command output
+    /// Stores an buffer to capture command output
     /// so it can be sent back over the network to the RCON client.
-    Rcon(Arc<tokio::sync::Mutex<Vec<String>>>),
+    Rcon(Arc<std::sync::Mutex<Vec<String>>>),
     /// The local server terminal/console.
     ///
     /// This sender typically has absolute permissions (bypass) and
@@ -104,14 +103,20 @@ impl fmt::Display for CommandSender {
 }
 
 impl CommandSender {
-    pub async fn send_message(&self, text: TextComponent) {
+    pub fn send_message(&self, text: TextComponent) {
         match self {
             #[allow(clippy::print_stdout)]
             Self::Console => println!("{}", text.to_pretty_console()),
-            Self::Player(c) => c.send_system_message(&text).await,
-            Self::Rcon(s) => s.lock().await.push(text.to_pretty_console()),
+            Self::Player(c) => c.send_system_message(&text),
+            Self::Rcon(s) => s
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .push(text.to_pretty_console()),
             Self::CommandBlock(block_entity, _) => {
-                let mut last_output = block_entity.last_output.lock().await;
+                let mut last_output = block_entity
+                    .last_output
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
 
                 let now = time::OffsetDateTime::now_utc();
                 let format = time::macros::format_description!("[hour]:[minute]:[second]");
@@ -169,10 +174,10 @@ impl CommandSender {
     }
 
     /// Check if the sender has a specific permission
-    pub async fn has_permission(&self, server: &Server, node: &str) -> bool {
+    pub fn has_permission(&self, server: &Server, node: &str) -> bool {
         match self {
             Self::Console | Self::Rcon(_) => true, // Console and RCON always have all permissions
-            Self::Player(p) => p.has_permission(server, node).await,
+            Self::Player(p) => p.has_permission(server, node),
             Self::CommandBlock(..) | Self::Dummy => {
                 let Some(p) = server.permission_manager.get_permission(node) else {
                     return false;
@@ -294,7 +299,7 @@ impl CommandSender {
     }
 
     #[must_use]
-    pub async fn into_source(self, server: &Arc<Server>) -> CommandSource {
+    pub fn into_source(self, server: &Arc<Server>) -> CommandSource {
         match self {
             Self::Rcon(rcon) => {
                 let (world, spawn_point) = Self::get_world_and_spawn_point(server);
@@ -328,8 +333,8 @@ impl CommandSender {
                 Some(player.clone()),
                 player.position(),
                 player.rotation().into(),
-                player.get_display_name().await.get_text(),
-                player.get_display_name().await,
+                player.get_display_name().get_text(),
+                player.get_display_name(),
                 server.clone(),
             ),
             Self::CommandBlock(command_entity, world) => {
@@ -412,13 +417,13 @@ const fn command_block_y_rot(facing: Facing) -> f32 {
 ///
 /// If the command **fails**, an [`Err`] is returned, containing the [`CommandError`]
 /// that led to this result.
-pub type CommandResult<'a> = Pin<Box<dyn Future<Output = Result<i32, CommandError>> + Send + 'a>>;
+pub type CommandResult = Result<i32, CommandError>;
 
 pub trait CommandExecutor: Sync + Send {
-    fn execute<'a>(
-        &'a self,
-        sender: &'a CommandSender,
-        server: &'a Server,
-        args: &'a ConsumedArgs<'a>,
-    ) -> CommandResult<'a>;
+    fn execute(
+        &self,
+        sender: &CommandSender,
+        server: &Server,
+        args: &ConsumedArgs,
+    ) -> CommandResult;
 }

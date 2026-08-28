@@ -11,7 +11,7 @@ use pumpkin_world::world::BlockFlags;
 
 use crate::{
     block::{
-        BlockBehaviour, BlockFuture, CanPlaceAtArgs, EmitsRedstonePowerArgs, GetRedstonePowerArgs,
+        BlockBehaviour, CanPlaceAtArgs, EmitsRedstonePowerArgs, GetRedstonePowerArgs,
         GetStateForNeighborUpdateArgs, NormalUseArgs, OnNeighborUpdateArgs, OnPlaceArgs,
         OnScheduledTickArgs, OnStateReplacedArgs, PlacedArgs, PlayerPlacedArgs,
         registry::BlockActionResult,
@@ -27,180 +27,136 @@ type RepeaterProperties = pumpkin_data::block_properties::RepeaterLikeProperties
 pub struct RepeaterBlock;
 
 impl BlockBehaviour for RepeaterBlock {
-    fn on_place<'a>(&'a self, args: OnPlaceArgs<'a>) -> BlockFuture<'a, BlockStateId> {
-        Box::pin(async move {
-            let state_id = RedstoneGateBlock::on_place(self, args.player, args.block).await;
+    fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
+        let state_id = RedstoneGateBlock::on_place(self, args.player, args.block);
 
-            let mut props = RepeaterProperties::from_state_id(state_id, args.block);
-            props.locked = self
-                .is_locked(args.world, *args.position, state_id, args.block)
-                .await;
+        let mut props = RepeaterProperties::from_state_id(state_id, args.block);
+        props.locked = self.is_locked(args.world, *args.position, state_id, args.block);
 
-            props.to_state_id(args.block)
-        })
+        props.to_state_id(args.block)
     }
 
-    fn on_neighbor_update<'a>(&'a self, args: OnNeighborUpdateArgs<'a>) -> BlockFuture<'a, ()> {
-        Box::pin(async move {
-            RedstoneGateBlock::on_neighbor_update(self, args).await;
-        })
+    fn on_neighbor_update(&self, args: OnNeighborUpdateArgs<'_>) {
+        RedstoneGateBlock::on_neighbor_update(self, args);
     }
 
-    fn on_scheduled_tick<'a>(&'a self, args: OnScheduledTickArgs<'a>) -> BlockFuture<'a, ()> {
-        Box::pin(async move {
-            let state = args.world.get_block_state(args.position);
-            if self
-                .is_locked(args.world, *args.position, state.id, args.block)
-                .await
-            {
-                return;
-            }
-            let mut props = RepeaterProperties::from_state_id(state.id, args.block);
+    fn on_scheduled_tick(&self, args: OnScheduledTickArgs<'_>) {
+        let (block, state) = args.world.get_block_and_state(args.position);
+        if self.is_locked(args.world, *args.position, state.id, block) {
+            return;
+        }
+        let mut props = RepeaterProperties::from_state_id(state.id, block);
 
-            let now_powered = props.powered;
-            let should_be_powered = self
-                .has_power(args.world, *args.position, state, args.block)
-                .await;
+        let now_powered = props.powered;
+        let should_be_powered = self.has_power(args.world, *args.position, state, block);
 
-            if now_powered && !should_be_powered {
-                props.powered = false;
-                args.world
-                    .set_block_state(
-                        args.position,
-                        props.to_state_id(args.block),
-                        BlockFlags::NOTIFY_LISTENERS,
-                    )
-                    .await;
-                RedstoneGateBlock::update_target(
-                    self,
-                    args.world,
+        if now_powered && !should_be_powered {
+            props.powered = false;
+            args.world.set_block_state(
+                args.position,
+                props.to_state_id(block),
+                BlockFlags::NOTIFY_LISTENERS,
+            );
+            RedstoneGateBlock::update_target(
+                self,
+                args.world,
+                *args.position,
+                props.to_state_id(block),
+                block,
+            );
+        } else if !now_powered {
+            props.powered = true;
+            args.world.set_block_state(
+                args.position,
+                props.to_state_id(block),
+                BlockFlags::NOTIFY_LISTENERS,
+            );
+            if !should_be_powered {
+                args.world.schedule_block_tick(
+                    block,
                     *args.position,
-                    props.to_state_id(args.block),
-                    args.block,
-                )
-                .await;
-            } else if !now_powered {
-                props.powered = true;
-                args.world
-                    .set_block_state(
-                        args.position,
-                        props.to_state_id(args.block),
-                        BlockFlags::NOTIFY_LISTENERS,
-                    )
-                    .await;
-                if !should_be_powered {
-                    args.world.schedule_block_tick(
-                        args.block,
-                        *args.position,
-                        RedstoneGateBlock::get_update_delay_internal(
-                            self,
-                            props.to_state_id(args.block),
-                            args.block,
-                        ),
-                        TickPriority::VeryHigh,
-                    );
-                }
-                RedstoneGateBlock::update_target(
-                    self,
-                    args.world,
-                    *args.position,
-                    props.to_state_id(args.block),
-                    args.block,
-                )
-                .await;
+                    RedstoneGateBlock::get_update_delay_internal(
+                        self,
+                        props.to_state_id(block),
+                        block,
+                    ),
+                    TickPriority::VeryHigh,
+                );
             }
-        })
+            RedstoneGateBlock::update_target(
+                self,
+                args.world,
+                *args.position,
+                props.to_state_id(block),
+                block,
+            );
+        }
     }
 
-    fn normal_use<'a>(&'a self, args: NormalUseArgs<'a>) -> BlockFuture<'a, BlockActionResult> {
-        Box::pin(async move {
-            let state = args.world.get_block_state(args.position);
-            let props = RepeaterProperties::from_state_id(state.id, args.block);
-            self.on_use(props, args.world, *args.position, args.block)
-                .await;
+    fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
+        let state = args.world.get_block_state(args.position);
+        let props = RepeaterProperties::from_state_id(state.id, args.block);
+        Self::on_use(props, args.world, *args.position, args.block);
 
-            BlockActionResult::Success
-        })
+        BlockActionResult::SuccessServer
     }
 
-    fn get_weak_redstone_power<'a>(
-        &'a self,
-        args: GetRedstonePowerArgs<'a>,
-    ) -> BlockFuture<'a, u8> {
-        Box::pin(async move { RedstoneGateBlock::get_weak_redstone_power(self, args).await })
+    fn get_weak_redstone_power(&self, args: GetRedstonePowerArgs<'_>) -> u8 {
+        RedstoneGateBlock::get_weak_redstone_power(self, args)
     }
 
-    fn get_strong_redstone_power<'a>(
-        &'a self,
-        args: GetRedstonePowerArgs<'a>,
-    ) -> BlockFuture<'a, u8> {
-        Box::pin(async move { RedstoneGateBlock::get_strong_redstone_power(self, args).await })
+    fn get_strong_redstone_power(&self, args: GetRedstonePowerArgs<'_>) -> u8 {
+        RedstoneGateBlock::get_strong_redstone_power(self, args)
     }
 
-    fn emits_redstone_power<'a>(
-        &'a self,
-        args: EmitsRedstonePowerArgs<'a>,
-    ) -> BlockFuture<'a, bool> {
-        Box::pin(async move {
-            let repeater_props = RepeaterProperties::from_state_id(args.state.id, args.block);
-            repeater_props.facing.to_block_direction() == args.direction
-                || repeater_props.facing.to_block_direction() == args.direction.opposite()
-        })
+    fn emits_redstone_power(&self, args: EmitsRedstonePowerArgs<'_>) -> bool {
+        let repeater_props = RepeaterProperties::from_state_id(args.state.id, args.block);
+        repeater_props.facing.to_block_direction() == args.direction
+            || repeater_props.facing.to_block_direction() == args.direction.opposite()
     }
 
     fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
         RedstoneGateBlock::can_place_at(self, args.block_accessor, *args.position)
     }
 
-    fn placed<'a>(&'a self, args: PlacedArgs<'a>) -> BlockFuture<'a, ()> {
-        Box::pin(async move {
-            RedstoneGateBlock::update_target(
+    fn placed(&self, args: PlacedArgs<'_>) {
+        RedstoneGateBlock::update_target(
+            self,
+            args.world,
+            *args.position,
+            args.state_id,
+            args.block,
+        );
+    }
+
+    fn get_state_for_neighbor_update(
+        &self,
+        args: GetStateForNeighborUpdateArgs<'_>,
+    ) -> BlockStateId {
+        if args.direction == BlockDirection::Down
+            && !RedstoneGateBlock::can_place_above(
                 self,
                 args.world,
-                *args.position,
-                args.state_id,
-                args.block,
+                *args.neighbor_position,
+                BlockState::from_id(args.neighbor_state_id),
             )
-            .await;
-        })
+        {
+            return Block::AIR.default_state.id;
+        }
+        let mut props = RepeaterProperties::from_state_id(args.state_id, args.block);
+        if args.direction.to_axis() != props.facing.to_block_direction().to_axis() {
+            props.locked = self.is_locked(args.world, *args.position, args.state_id, args.block);
+            return props.to_state_id(args.block);
+        }
+        args.state_id
     }
 
-    fn get_state_for_neighbor_update<'a>(
-        &'a self,
-        args: GetStateForNeighborUpdateArgs<'a>,
-    ) -> BlockFuture<'a, BlockStateId> {
-        Box::pin(async move {
-            if args.direction == BlockDirection::Down
-                && !RedstoneGateBlock::can_place_above(
-                    self,
-                    args.world,
-                    *args.neighbor_position,
-                    BlockState::from_id(args.neighbor_state_id),
-                )
-            {
-                return Block::AIR.default_state.id;
-            }
-            let mut props = RepeaterProperties::from_state_id(args.state_id, args.block);
-            if args.direction.to_axis() != props.facing.to_block_direction().to_axis() {
-                props.locked = self
-                    .is_locked(args.world, *args.position, args.state_id, args.block)
-                    .await;
-                return props.to_state_id(args.block);
-            }
-            args.state_id
-        })
+    fn player_placed(&self, args: PlayerPlacedArgs<'_>) {
+        RedstoneGateBlock::player_placed(self, args);
     }
 
-    fn player_placed<'a>(&'a self, args: PlayerPlacedArgs<'a>) -> BlockFuture<'a, ()> {
-        Box::pin(async move {
-            RedstoneGateBlock::player_placed(self, args).await;
-        })
-    }
-
-    fn on_state_replaced<'a>(&'a self, args: OnStateReplacedArgs<'a>) -> BlockFuture<'a, ()> {
-        Box::pin(async move {
-            RedstoneGateBlock::on_state_replaced(self, args).await;
-        })
+    fn on_state_replaced(&self, args: OnStateReplacedArgs<'_>) {
+        RedstoneGateBlock::on_state_replaced(self, args);
     }
 }
 
@@ -219,46 +175,37 @@ impl RedstoneGateBlockProperties for RepeaterProperties {
 }
 
 impl RedstoneGateBlock<RepeaterProperties> for RepeaterBlock {
-    fn get_output_level<'a>(&'a self, _world: &'a World, _pos: BlockPos) -> BlockFuture<'a, u8> {
-        Box::pin(async { 15 })
+    fn get_output_level(&self, _world: &World, _pos: BlockPos) -> u8 {
+        15
     }
 
-    fn update_powered<'a>(
-        &'a self,
-        world: &'a World,
-        pos: BlockPos,
-        state: &'a BlockState,
-        block: &'a Block,
-    ) -> BlockFuture<'a, ()> {
-        Box::pin(async move {
-            // Note: is_locked is assumed to remain an async fn or return a future
-            if self.is_locked(world, pos, state.id, block).await {
-                return;
-            }
-            let props = RepeaterProperties::from_state_id(state.id, block);
-            let powered = props.powered;
+    fn update_powered(&self, world: &World, pos: BlockPos, state: &BlockState, block: &Block) {
+        if self.is_locked(world, pos, state.id, block) {
+            return;
+        }
+        let props = RepeaterProperties::from_state_id(state.id, block);
+        let powered = props.powered;
 
-            // Note: The signature for has_power must be called without self, as it's a trait method.
-            let has_power = RedstoneGateBlock::has_power(self, world, pos, state, block).await;
+        // Note: The signature for has_power must be called without self, as it's a trait method.
+        let has_power = RedstoneGateBlock::has_power(self, world, pos, state, block);
 
-            if powered != has_power && !world.is_block_tick_scheduled(&pos, block) {
-                let priority =
-                    if RedstoneGateBlock::is_target_not_aligned(self, world, pos, state, block) {
-                        TickPriority::ExtremelyHigh
-                    } else if powered {
-                        TickPriority::VeryHigh
-                    } else {
-                        TickPriority::High
-                    };
+        if powered != has_power && !world.is_block_tick_scheduled(&pos, block) {
+            let priority =
+                if RedstoneGateBlock::is_target_not_aligned(self, world, pos, state, block) {
+                    TickPriority::ExtremelyHigh
+                } else if powered {
+                    TickPriority::VeryHigh
+                } else {
+                    TickPriority::High
+                };
 
-                world.schedule_block_tick(
-                    block,
-                    pos,
-                    RedstoneGateBlock::get_update_delay_internal(self, state.id, block),
-                    priority,
-                );
-            }
-        })
+            world.schedule_block_tick(
+                block,
+                pos,
+                RedstoneGateBlock::get_update_delay_internal(self, state.id, block),
+                priority,
+            );
+        }
     }
 
     fn get_update_delay_internal(&self, state_id: BlockStateId, block: &Block) -> u8 {
@@ -268,28 +215,20 @@ impl RedstoneGateBlock<RepeaterProperties> for RepeaterBlock {
 }
 
 impl RepeaterBlock {
-    async fn on_use(
-        &self,
-        props: RepeaterProperties,
-        world: &Arc<World>,
-        block_pos: BlockPos,
-        block: &Block,
-    ) {
+    fn on_use(props: RepeaterProperties, world: &Arc<World>, block_pos: BlockPos, block: &Block) {
         let mut props = props;
         props.delay = if props.delay == 4 { 1 } else { props.delay + 1 };
         let state = props.to_state_id(block);
-        world
-            .set_block_state(&block_pos, state, BlockFlags::empty())
-            .await;
+        world.set_block_state(&block_pos, state, BlockFlags::empty());
     }
 
-    async fn is_locked(
+    fn is_locked(
         &self,
         world: &World,
         pos: BlockPos,
         state_id: BlockStateId,
         block: &Block,
     ) -> bool {
-        Self::get_max_input_level_sides(self, world, pos, state_id, block, true).await > 0
+        Self::get_max_input_level_sides(self, world, pos, state_id, block, true) > 0
     }
 }

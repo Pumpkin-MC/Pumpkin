@@ -23,15 +23,15 @@ impl GetClientSideArgParser for GamemodeArgumentConsumer {
 }
 
 impl ArgumentConsumer for GamemodeArgumentConsumer {
-    fn consume<'a, 'b>(
+    fn consume<'a>(
         &'a self,
         _sender: &'a CommandSender,
         _server: &'a Server,
-        args: &'b mut RawArgs<'a>,
+        args: &mut RawArgs<'a>,
     ) -> ConsumeResult<'a> {
         let s_opt: Option<&'a str> = args.pop().map(|arg| arg.value);
 
-        let result: Option<Arg<'a>> = s_opt.and_then(|s| {
+        s_opt.and_then(|s| {
             if let Ok(id) = s.parse::<i8>()
                 && let Ok(gamemode) = GameMode::try_from(id)
             {
@@ -39,9 +39,7 @@ impl ArgumentConsumer for GamemodeArgumentConsumer {
             }
 
             GameMode::from_str(s).map(Arg::GameMode).ok() // Convert Result to Option<T>
-        });
-
-        Box::pin(async move { result })
+        })
     }
 }
 

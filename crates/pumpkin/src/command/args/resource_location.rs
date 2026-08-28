@@ -30,7 +30,7 @@ impl ArgumentConsumer for ResourceLocationArgumentConsumer {
     ) -> ConsumeResult<'a> {
         let identifier = args.pop().and_then(|arg| Identifier::parse(arg.value).ok());
 
-        Box::pin(async move { identifier.map(Arg::ResourceLocation) })
+        identifier.map(Arg::ResourceLocation)
     }
 }
 

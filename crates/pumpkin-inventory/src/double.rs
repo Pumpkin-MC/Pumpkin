@@ -8,10 +8,10 @@
 //! slots. Operations are delegated to the appropriate underlying inventory
 //! based on the slot index.
 
-use std::{any::Any, pin::Pin, sync::Arc};
+use std::{any::Any, sync::Arc};
 
 use pumpkin_data::item_stack::ItemStack;
-use pumpkin_world::inventory::{Clearable, Inventory, InventoryFuture};
+use pumpkin_world::inventory::{Clearable, Inventory};
 
 /// A composite inventory combining two inventories.
 ///
@@ -44,64 +44,51 @@ impl Inventory for DoubleInventory {
         self.first.size() + self.second.size()
     }
 
-    fn is_empty(&self) -> InventoryFuture<'_, bool> {
-        Box::pin(async move { self.first.is_empty().await && self.second.is_empty().await })
+    fn is_empty(&self) -> bool {
+        self.first.is_empty() && self.second.is_empty()
     }
 
-    fn get_stack(&self, slot: usize) -> InventoryFuture<'_, ItemStack> {
-        Box::pin(async move {
-            if slot >= self.first.size() {
-                self.second.get_stack(slot - self.first.size()).await
-            } else {
-                self.first.get_stack(slot).await
-            }
-        })
+    fn get_stack(&self, slot: usize) -> ItemStack {
+        if slot >= self.first.size() {
+            self.second.get_stack(slot - self.first.size())
+        } else {
+            self.first.get_stack(slot)
+        }
     }
 
-    fn remove_stack(&self, slot: usize) -> InventoryFuture<'_, ItemStack> {
-        Box::pin(async move {
-            if slot >= self.first.size() {
-                self.second.remove_stack(slot - self.first.size()).await
-            } else {
-                self.first.remove_stack(slot).await
-            }
-        })
+    fn remove_stack(&self, slot: usize) -> ItemStack {
+        if slot >= self.first.size() {
+            self.second.remove_stack(slot - self.first.size())
+        } else {
+            self.first.remove_stack(slot)
+        }
     }
 
-    fn remove_stack_specific(&self, slot: usize, amount: u8) -> InventoryFuture<'_, ItemStack> {
-        Box::pin(async move {
-            if slot >= self.first.size() {
-                self.second
-                    .remove_stack_specific(slot - self.first.size(), amount)
-                    .await
-            } else {
-                self.first.remove_stack_specific(slot, amount).await
-            }
-        })
+    fn remove_stack_specific(&self, slot: usize, amount: u8) -> ItemStack {
+        if slot >= self.first.size() {
+            self.second
+                .remove_stack_specific(slot - self.first.size(), amount)
+        } else {
+            self.first.remove_stack_specific(slot, amount)
+        }
     }
 
-    fn set_stack(&self, slot: usize, stack: ItemStack) -> InventoryFuture<'_, ()> {
-        Box::pin(async move {
-            if slot >= self.first.size() {
-                self.second.set_stack(slot - self.first.size(), stack).await;
-            } else {
-                self.first.set_stack(slot, stack).await;
-            }
-        })
+    fn set_stack(&self, slot: usize, stack: ItemStack) {
+        if slot >= self.first.size() {
+            self.second.set_stack(slot - self.first.size(), stack);
+        } else {
+            self.first.set_stack(slot, stack);
+        }
     }
 
-    fn on_open(&self) -> InventoryFuture<'_, ()> {
-        Box::pin(async move {
-            self.first.on_open().await;
-            self.second.on_open().await;
-        })
+    fn on_open(&self) {
+        self.first.on_open();
+        self.second.on_open();
     }
 
-    fn on_close(&self) -> InventoryFuture<'_, ()> {
-        Box::pin(async move {
-            self.first.on_close().await;
-            self.second.on_close().await;
-        })
+    fn on_close(&self) {
+        self.first.on_close();
+        self.second.on_close();
     }
 
     fn get_max_count_per_stack(&self) -> u8 {
@@ -128,10 +115,8 @@ impl Inventory for DoubleInventory {
 }
 
 impl Clearable for DoubleInventory {
-    fn clear(&self) -> Pin<Box<dyn Future<Output = ()> + Send + '_>> {
-        Box::pin(async move {
-            self.first.clear().await;
-            self.second.clear().await;
-        })
+    fn clear(&self) {
+        self.first.clear();
+        self.second.clear();
     }
 }

@@ -50,7 +50,10 @@ impl JavaClient {
             sign_data.line_3.into(),
             sign_data.line_4.into(),
         ];
-        *sign_entity.currently_editing_player.lock().await = None;
+        *sign_entity
+            .currently_editing_player
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
         world.update_block_entity(&block_entity);
     }
 }
