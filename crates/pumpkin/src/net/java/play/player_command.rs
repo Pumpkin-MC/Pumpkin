@@ -48,7 +48,12 @@ impl JavaClient {
                 debug!("todo");
             }
             Action::StartFlyingElytra => {
-                let fall_flying = entity.check_fall_flying();
+                // `check_fall_flying` only confirms the client is airborne; actually starting a
+                // glide additionally requires a usable elytra (and none of the states vanilla
+                // blocks it in), same as `LivingEntity.tryToStartFallFlying`. Evaluating the full
+                // gate here - not just on landing - means a client that sends this action without
+                // an elytra equipped gets corrected back to `false` instead of flying anyway.
+                let fall_flying = entity.check_fall_flying() && player.living_entity.can_glide();
                 if entity.is_fall_flying() != fall_flying {
                     let mut event = crate::plugin::api::events::entity::entity_toggle_glide::EntityToggleGlideEvent::new(
                         entity.entity_id,
