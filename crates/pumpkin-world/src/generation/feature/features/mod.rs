@@ -14,6 +14,7 @@ pub mod drip_stone;
 pub mod end_gateway;
 pub mod end_island;
 pub mod end_platform;
+pub mod end_podium;
 pub mod end_spike;
 pub mod fallen_tree;
 pub mod fill_layer;

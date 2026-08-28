@@ -150,10 +150,10 @@ impl BlockBehaviour for BedBlock {
         let is_creative = args.player.gamemode.load() == GameMode::Creative;
         let flags = if bed_props.part == BedPart::Foot && !is_creative {
             // Breaking foot in survival -> allow head to drop
-            BlockFlags::NOTIFY_NEIGHBORS
+            BlockFlags::NOTIFY_ALL
         } else {
             // Breaking head OR creative mode -> skip drops
-            BlockFlags::SKIP_DROPS | BlockFlags::NOTIFY_NEIGHBORS
+            BlockFlags::SKIP_DROPS | BlockFlags::NOTIFY_ALL
         };
 
         args.world
@@ -162,15 +162,6 @@ impl BlockBehaviour for BedBlock {
 
     fn on_state_replaced(&self, args: OnStateReplacedArgs<'_>) {
         if args.moved {
-            return;
-        }
-
-        // If the block is being replaced with air (i.e., broken), the `broken` callback
-        // will handle breaking the other half with the correct drop flags. Only handle it here
-        // if the block is being replaced with something else (e.g., piston movement).
-        let new_state_id = args.world.get_block_state_id(args.position);
-        let new_block = Block::from_state_id(new_state_id);
-        if new_block == &Block::AIR {
             return;
         }
 
@@ -189,7 +180,7 @@ impl BlockBehaviour for BedBlock {
                 args.world.break_block(
                     &other_half_pos,
                     None,
-                    BlockFlags::SKIP_DROPS | BlockFlags::NOTIFY_NEIGHBORS,
+                    BlockFlags::SKIP_DROPS | BlockFlags::NOTIFY_ALL,
                 );
             }
         }

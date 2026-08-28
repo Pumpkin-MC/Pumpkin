@@ -4,7 +4,7 @@ use super::*;
 impl BedrockClient {
     #[expect(clippy::match_same_arms)]
     #[expect(clippy::too_many_lines)]
-    pub async fn handle_player_action(
+    pub fn handle_player_action(
         &self,
         player: &Arc<Player>,
         server: &Server,
@@ -46,7 +46,7 @@ impl BedrockClient {
                     let new_state = world.break_block(
                         &location,
                         Some(player),
-                        BlockFlags::NOTIFY_NEIGHBORS | BlockFlags::SKIP_DROPS,
+                        BlockFlags::NOTIFY_ALL | BlockFlags::SKIP_DROPS,
                     );
                     if new_state.is_some() {
                         server
@@ -60,9 +60,9 @@ impl BedrockClient {
                         let broken_state = world.get_block_state(&location);
                         let can_harvest = player.can_harvest(broken_state, block);
                         let flags = if can_harvest {
-                            BlockFlags::NOTIFY_NEIGHBORS
+                            BlockFlags::NOTIFY_ALL
                         } else {
-                            BlockFlags::SKIP_DROPS | BlockFlags::NOTIFY_NEIGHBORS
+                            BlockFlags::SKIP_DROPS | BlockFlags::NOTIFY_ALL
                         };
                         let new_state = world.break_block(&location, Some(player), flags);
                         if new_state.is_some() {
@@ -154,9 +154,9 @@ impl BedrockClient {
 
                         let can_harvest = player.can_harvest(state, block);
                         let flags = if can_harvest {
-                            BlockFlags::NOTIFY_NEIGHBORS
+                            BlockFlags::NOTIFY_ALL
                         } else {
-                            BlockFlags::SKIP_DROPS | BlockFlags::NOTIFY_NEIGHBORS
+                            BlockFlags::SKIP_DROPS | BlockFlags::NOTIFY_ALL
                         };
                         if world.break_block(&location, Some(player), flags).is_some() {
                             server
@@ -169,8 +169,10 @@ impl BedrockClient {
                         }
                     } else {
                         let runtime_id = pumpkin_data::BlockState::to_be_network_id(state.id);
-                        self.enqueue_client_packet(&CUpdateBlock::new(location, runtime_id as u32))
-                            .await;
+                        self.try_enqueue_client_packet(&CUpdateBlock::new(
+                            location,
+                            runtime_id as u32,
+                        ));
                         if matches!(action, PlayerAction::StopDestroyBlock) {
                             player.stop_mining();
                         } else {
@@ -198,13 +200,16 @@ impl BedrockClient {
                 player.stop_mining();
             }
             PlayerAction::DropItem => {
-                player.drop_held_item(false).await;
+                player.drop_held_item(false);
             }
             PlayerAction::Respawn
                 if player.living_entity.dead.load(Ordering::Relaxed)
                     || player.living_entity.health.load() <= 0.0 =>
             {
-                player.world().respawn_player(player, false).await;
+                let player_c = player.clone();
+                player.spawn_task(async move {
+                    player_c.world().respawn_player(&player_c, false).await;
+                });
             }
             // TODO
             _ => {}

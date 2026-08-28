@@ -210,7 +210,7 @@ pub async fn handle_packet(
     let players = server
         .get_status()
         .lock()
-        .await
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
         .status_response
         .players
         .as_ref()

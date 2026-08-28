@@ -3,7 +3,7 @@ use super::*;
 
 impl BedrockClient {
     #[allow(clippy::too_many_lines)]
-    pub async fn handle_item_stack_request(
+    pub fn handle_item_stack_request(
         &self,
         player: &Arc<Player>,
         packet: pumpkin_protocol::bedrock::server::item_stack_request::SItemStackRequest,
@@ -520,8 +520,7 @@ impl BedrockClient {
         };
 
         // Send Bedrock specific responses and updates
-        self.enqueue_client_packet(&CItemStackResponse { responses })
-            .await;
+        self.try_enqueue_client_packet(&CItemStackResponse { responses });
 
         if inventory_updated {
             let slots = player
@@ -532,7 +531,7 @@ impl BedrockClient {
                 .iter()
                 .map(NetworkItemStackDescriptor::from)
                 .collect();
-            self.enqueue_client_packet(&CInventoryContent {
+            self.try_enqueue_client_packet(&CInventoryContent {
                 container_id: VarUInt(0),
                 slots,
                 full_container_name: FullContainerName {
@@ -540,8 +539,7 @@ impl BedrockClient {
                     dynamic_id: None,
                 },
                 storage_item: NetworkItemStackDescriptor::default(),
-            })
-            .await;
+            });
         }
     }
 }

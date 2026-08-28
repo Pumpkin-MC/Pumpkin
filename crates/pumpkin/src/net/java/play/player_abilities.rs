@@ -2,10 +2,10 @@
 use super::*;
 
 impl JavaClient {
-    pub async fn handle_player_abilities(
+    pub fn handle_player_abilities(
         &self,
         player: &Arc<Player>,
-        player_abilities: SPlayerAbilities,
+        player_abilities: &SPlayerAbilities,
         server: &Arc<Server>,
     ) {
         let (flying, allow_flying) = {
@@ -19,7 +19,7 @@ impl JavaClient {
         // Set the flying ability
         let new_flying = player_abilities.is_flying() && allow_flying;
         if flying != new_flying {
-            send_cancellable! {{
+            send_cancellable_blocking! {{
                 server;
                 PlayerToggleFlightEvent::new(player.clone(), new_flying);
                 'after: {

@@ -2,10 +2,10 @@
 use super::*;
 
 impl JavaClient {
-    pub async fn handle_player_command(
+    pub fn handle_player_command(
         &self,
         player: &Arc<Player>,
-        command: SPlayerCommand,
+        command: &SPlayerCommand,
         server: &Arc<Server>,
     ) {
         if command.entity_id != player.entity_id().into() {
@@ -20,22 +20,24 @@ impl JavaClient {
         match command.action {
             Action::StartSprinting => {
                 if !entity.is_sprinting() {
-                    send_cancellable! {{
+                    send_cancellable_blocking! {{
                         server;
                         PlayerToggleSprintEvent::new(player.clone(), true);
                         'after: {
-                            player.get_entity().set_sprinting(event.is_sprinting);
+                            player.set_sprinting(event.is_sprinting);
+                            player.update_player_pose();
                         }
                     }}
                 }
             }
             Action::StopSprinting => {
                 if entity.is_sprinting() {
-                    send_cancellable! {{
+                    send_cancellable_blocking! {{
                         server;
                         PlayerToggleSprintEvent::new(player.clone(), false);
                         'after: {
-                            player.get_entity().set_sprinting(event.is_sprinting);
+                            player.set_sprinting(event.is_sprinting);
+                            player.update_player_pose();
                         }
                     }}
                 }
@@ -52,7 +54,7 @@ impl JavaClient {
                         entity.entity_id,
                         fall_flying,
                     );
-                    server.plugin_manager.fire(server, &mut event).await;
+                    server.plugin_manager.fire_blocking(server, &mut event);
                     if !event.cancelled {
                         entity.set_fall_flying(event.is_gliding);
                     }
@@ -62,12 +64,11 @@ impl JavaClient {
             Action::StartSneaking | Action::StopSneaking => {
                 self.handle_player_input(
                     player,
-                    SPlayerInput {
+                    &SPlayerInput {
                         input: SPlayerInput::SNEAK,
                     },
                     server,
-                )
-                .await;
+                );
             }
         }
     }

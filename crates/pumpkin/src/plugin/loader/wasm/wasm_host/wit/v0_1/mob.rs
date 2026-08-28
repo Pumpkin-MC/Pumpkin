@@ -226,7 +226,7 @@ impl Goal for CustomWasmGoal {
             let goal_id = self.goal_id;
             let world = entity_arc.get_entity().world.load();
             if let Some(server) = world.server.upgrade() {
-                server.spawn_task(async move {
+                let run = async move {
                     let mut store = plugin.store.lock().await;
                     match plugin.plugin_instance {
                         PluginInstance::V0_1(ref plugin_inst) => {
@@ -248,7 +248,12 @@ impl Goal for CustomWasmGoal {
                             let server_rep = server_res.rep();
                             let entity_rep = entity_res.rep();
                             let _ = plugin_inst
-                                .call_handle_ai_goal_start(&mut *store, goal_id, server_res, entity_res)
+                                .call_handle_ai_goal_start(
+                                    &mut *store,
+                                    goal_id,
+                                    server_res,
+                                    entity_res,
+                                )
                                 .await;
                             let _ = store
                                 .data_mut()
@@ -264,7 +269,15 @@ impl Goal for CustomWasmGoal {
                                 );
                         }
                     }
-                });
+                };
+
+                if tokio::runtime::Handle::try_current().is_ok() {
+                    tokio::task::block_in_place(|| {
+                        server.runtime.block_on(run);
+                    });
+                } else {
+                    server.runtime.block_on(run);
+                }
             }
         }
     }
@@ -275,7 +288,7 @@ impl Goal for CustomWasmGoal {
             let goal_id = self.goal_id;
             let world = entity_arc.get_entity().world.load();
             if let Some(server) = world.server.upgrade() {
-                server.spawn_task(async move {
+                let run = async move {
                     let mut store = plugin.store.lock().await;
                     match plugin.plugin_instance {
                         PluginInstance::V0_1(ref plugin_inst) => {
@@ -297,7 +310,12 @@ impl Goal for CustomWasmGoal {
                             let server_rep = server_res.rep();
                             let entity_rep = entity_res.rep();
                             let _ = plugin_inst
-                                .call_handle_ai_goal_tick(&mut *store, goal_id, server_res, entity_res)
+                                .call_handle_ai_goal_tick(
+                                    &mut *store,
+                                    goal_id,
+                                    server_res,
+                                    entity_res,
+                                )
                                 .await;
                             let _ = store
                                 .data_mut()
@@ -313,7 +331,15 @@ impl Goal for CustomWasmGoal {
                                 );
                         }
                     }
-                });
+                };
+
+                if tokio::runtime::Handle::try_current().is_ok() {
+                    tokio::task::block_in_place(|| {
+                        server.runtime.block_on(run);
+                    });
+                } else {
+                    server.runtime.block_on(run);
+                }
             }
         }
     }
@@ -324,7 +350,7 @@ impl Goal for CustomWasmGoal {
             let goal_id = self.goal_id;
             let world = entity_arc.get_entity().world.load();
             if let Some(server) = world.server.upgrade() {
-                server.spawn_task(async move {
+                let run = async move {
                     let mut store = plugin.store.lock().await;
                     match plugin.plugin_instance {
                         PluginInstance::V0_1(ref plugin_inst) => {
@@ -346,7 +372,12 @@ impl Goal for CustomWasmGoal {
                             let server_rep = server_res.rep();
                             let entity_rep = entity_res.rep();
                             let _ = plugin_inst
-                                .call_handle_ai_goal_stop(&mut *store, goal_id, server_res, entity_res)
+                                .call_handle_ai_goal_stop(
+                                    &mut *store,
+                                    goal_id,
+                                    server_res,
+                                    entity_res,
+                                )
                                 .await;
                             let _ = store
                                 .data_mut()
@@ -362,7 +393,15 @@ impl Goal for CustomWasmGoal {
                                 );
                         }
                     }
-                });
+                };
+
+                if tokio::runtime::Handle::try_current().is_ok() {
+                    tokio::task::block_in_place(|| {
+                        server.runtime.block_on(run);
+                    });
+                } else {
+                    server.runtime.block_on(run);
+                }
             }
         }
     }

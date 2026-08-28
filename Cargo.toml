@@ -135,7 +135,7 @@ futures = { version = "0.3", default-features = false, features = ["std"] }
 rayon = { version = "1.12", default-features = false }
 crossbeam = { version = "0.8", default-features = false, features = ["std"] }
 
-uuid = { version = "1.25", default-features = false, features = ["serde", "v3", "v4", "std"] }
+uuid = { version = "1.26", default-features = false, features = ["serde", "v3", "v4", "std"] }
 serde = { version = "1.0", default-features = false, features = ["derive", "std"] }
 serde_repr = { version = "0.1", default-features = false }
 serde_json = { version = "1.0", default-features = false, features = ["std"] }
@@ -156,13 +156,13 @@ crossbeam-utils = { version = "0.8.22", default-features = false, features = ["s
 crypto-bigint = { version = "0.7.5", default-features = false }
 dashmap = { version = "6.2", default-features = false }
 ecdsa = { version = "0.17.0", default-features = false, features = ["std"] }
-flate2 = { version = "1.1.9", default-features = false, features = ["rust_backend"] }
+flate2 = { version = "1.1.10", default-features = false, features = ["rust_backend"] }
 heck = { version = "0.5", default-features = false }
 hmac = { version = "=0.13.0", default-features = false }
 indexmap = { version = "2.14", default-features = false, features = ["std"] }
 itertools = { version = "0.15.0", default-features = false, features = ["use_std"] }
 libloading = { version = "0.9", default-features = false, features = ["std"] }
-lru = { version = "0.18.2", default-features = false }
+lru = { version = "0.18.3", default-features = false }
 lz4-java-wrc = { version = "0.2.0", default-features = false, features = ["lz4_flex"] }
 md5 = { version = "0.8", default-features = false }
 num-bigint = { version = "0.5", default-features = false, features = ["std"] }

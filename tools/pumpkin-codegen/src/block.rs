@@ -222,12 +222,9 @@ impl ToTokens for BlockPropertyStruct {
             }
         });
 
-        let block_ids = self
-            .data
-            .blocks
-            .iter()
-            .map(|(_, id)| *id)
-            .collect::<Vec<_>>();
+        let block_ids = self.data.blocks.iter().map(|(name, _)| {
+            Ident::new(&const_block_name_from_block_name(name), Span::call_site())
+        });
 
         let to_index_logic = self.data.variant_mappings.iter().rev().map(|entry| {
             let field = Ident::new_raw(&entry.original_name, Span::call_site());
@@ -389,7 +386,7 @@ impl ToTokens for BlockPropertyStruct {
                 #[inline]
                 #[allow(clippy::manual_range_patterns)]
                 fn handles_block_id(block_id: BlockId) -> bool where Self: Sized {
-                    matches!(block_id.as_u16(), #(#block_ids)|*)
+                    matches!(block_id, #(BlockId::#block_ids)|*)
                 }
 
                 fn to_state_id(&self, block: &Block) -> BlockStateId {
@@ -433,7 +430,7 @@ impl ToTokens for BlockPropertyStruct {
                 #[allow(clippy::manual_range_patterns)]
                 fn from_props(props: &[(&str, &str)], block: &Block) -> Self {
                     #[cfg(debug_assertions)]
-                    if !matches!(block.id.as_u16(), #(#block_ids)|*) {
+                    if !Self::handles_block_id(block.id) {
                         panic!("{} is not a valid block for {}", block.name, #struct_name);
                     }
                     let mut block_props = Self::default(block);
@@ -1072,21 +1069,18 @@ pub fn build() -> TokenStream {
             Span::call_site(),
         );
 
-        for (block_name, id) in &property_group.blocks {
-            let const_block_name = Ident::new(
-                &const_block_name_from_block_name(block_name),
-                Span::call_site(),
-            );
-            let id_lit = LitInt::new(&id.to_string(), Span::call_site());
+        let idents: Box<_> = property_group
+            .blocks
+            .iter()
+            .map(|(name, _)| Ident::new(&const_block_name_from_block_name(name), Span::call_site()))
+            .collect();
 
-            block_properties_from_state_and_block_id_arms.push(quote! {
-                #id_lit => Box::new(#property_name::from_state_id(state_id, &Block::#const_block_name)),
-            });
-
-            block_properties_from_props_and_name_arms.push(quote! {
-                #id_lit => Box::new(#property_name::from_props(props, &Block::#const_block_name)),
-            });
-        }
+        block_properties_from_state_and_block_id_arms.push(quote! {
+            #(BlockId::#idents)|* => Box::new(#property_name::from_state_id(state_id, self)),
+        });
+        block_properties_from_props_and_name_arms.push(quote! {
+            #(BlockId::#idents)|* => Box::new(#property_name::from_props(props, self)),
+        });
 
         block_properties.push(BlockPropertyStruct {
             data: property_group,
@@ -1351,7 +1345,7 @@ pub fn build() -> TokenStream {
             #[track_caller]
             #[doc = r" Get the properties of the block."]
             pub fn properties(&self, state_id: BlockStateId) -> Option<Box<dyn BlockProperties>> {
-                Some(match self.id.as_u16() {
+                Some(match self.id {
                     #(#block_properties_from_state_and_block_id_arms)*
                     _ => return None,
                 })
@@ -1360,7 +1354,7 @@ pub fn build() -> TokenStream {
             #[track_caller]
             #[doc = r" Get the properties of the block."]
             pub fn from_properties(&self, props: &[(&str, &str)]) -> Box<dyn BlockProperties> {
-                match self.id.as_u16() {
+                match self.id {
                     #(#block_properties_from_props_and_name_arms)*
                     _ => panic!("Invalid props")
                 }
