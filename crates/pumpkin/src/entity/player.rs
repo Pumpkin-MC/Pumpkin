@@ -1688,8 +1688,8 @@ impl Player {
         let current = current_guard.clone();
         drop(current_guard);
 
-        let player_screen_ptr = Arc::as_ptr(&self.player_screen_handler) as *const ();
-        let current_ptr = Arc::as_ptr(&current) as *const ();
+        let player_screen_ptr = Arc::as_ptr(&self.player_screen_handler).cast::<()>();
+        let current_ptr = Arc::as_ptr(&current).cast::<()>();
         if player_screen_ptr == current_ptr {
             return;
         }

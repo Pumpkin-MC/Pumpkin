@@ -1956,8 +1956,8 @@ impl LivingEntity {
                             .entity_equipment
                             .lock()
                             .unwrap_or_else(std::sync::PoisonError::into_inner);
-                        equipment.put(&slot, stack.clone());
-                    }
+                        equipment.put(&slot, stack.clone())
+                    };
                     equipment_updates.push((slot.clone(), stack.clone()));
                     if let Some(player) = caller.get_player() {
                         player.inventory.set_slot(slot_index, stack.clone());
