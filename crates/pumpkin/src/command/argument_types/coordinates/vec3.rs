@@ -1,5 +1,3 @@
-use std::pin::Pin;
-
 use crate::command::argument_types::argument_type::{ArgumentType, JavaClientArgumentType};
 use crate::command::argument_types::coordinates::Coordinates;
 use crate::command::context::command_context::CommandContext;
@@ -60,23 +58,21 @@ impl ArgumentType for Vec3ArgumentType {
         examples!("1 1 1", "3 ~34 ~-2", "40 50 60", "^ ^4 ^3")
     }
 
-    fn list_suggestions<'a>(
-        &'a self,
-        _context: &'a CommandContext,
+    fn list_suggestions(
+        &self,
+        _context: &CommandContext,
         builder: SuggestionsBuilder,
-    ) -> Pin<Box<dyn Future<Output = Suggestions> + Send + 'a>> {
-        Box::pin(async move {
-            let remainder = builder.remaining();
+    ) -> Suggestions {
+        let remainder = builder.remaining();
 
-            let suggestioned_coordinates = if remainder.bytes().next() == Some(b'^') {
-                TextCoordinates::Local
-            } else {
-                TextCoordinates::Global
-            };
+        let suggestioned_coordinates = if remainder.bytes().next() == Some(b'^') {
+            TextCoordinates::Local
+        } else {
+            TextCoordinates::Global
+        };
 
-            builder.suggest_3d_coordinates(suggestioned_coordinates, |value| {
-                self.parse(&mut StringReader::new(value)).is_ok()
-            })
+        builder.suggest_3d_coordinates(suggestioned_coordinates, |value| {
+            self.parse(&mut StringReader::new(value)).is_ok()
         })
     }
 }

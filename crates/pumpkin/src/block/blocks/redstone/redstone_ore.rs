@@ -1,6 +1,6 @@
 use crate::block::{
-    BlockBehaviour, BlockFuture, BlockMetadata, NormalUseArgs, OnEntityCollisionArgs,
-    OnEntityStepArgs, RandomTickArgs, registry::BlockActionResult,
+    BlockBehaviour, BlockMetadata, NormalUseArgs, OnEntityCollisionArgs, OnEntityStepArgs,
+    RandomTickArgs, registry::BlockActionResult,
 };
 use crate::world::World;
 use pumpkin_data::block_properties::{BlockProperties, RedstoneOreLikeProperties};
@@ -18,55 +18,43 @@ impl BlockMetadata for RedstoneOreBlock {
 }
 
 impl RedstoneOreBlock {
-    async fn light_up(world: &Arc<World>, pos: &BlockPos, block: &Block, state: &BlockState) {
+    fn light_up(world: &Arc<World>, pos: &BlockPos, block: &Block, state: &BlockState) {
         let mut props = RedstoneOreLikeProperties::from_state_id(state.id, block);
         if !props.lit {
             props.lit = true;
-            world
-                .set_block_state(pos, props.to_state_id(block), BlockFlags::NOTIFY_ALL)
-                .await;
+            world.set_block_state(pos, props.to_state_id(block), BlockFlags::NOTIFY_ALL);
         }
     }
 }
 
 impl BlockBehaviour for RedstoneOreBlock {
-    fn normal_use<'a>(&'a self, args: NormalUseArgs<'a>) -> BlockFuture<'a, BlockActionResult> {
-        Box::pin(async move {
-            let state = args.world.get_block_state(args.position);
-            Self::light_up(args.world, args.position, args.block, state).await;
-            BlockActionResult::Success
-        })
+    fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
+        let state = args.world.get_block_state(args.position);
+        Self::light_up(args.world, args.position, args.block, state);
+        BlockActionResult::Success
     }
 
-    fn on_entity_collision<'a>(&'a self, args: OnEntityCollisionArgs<'a>) -> BlockFuture<'a, ()> {
-        Box::pin(async move {
-            let state = args.world.get_block_state(args.position);
-            Self::light_up(args.world, args.position, args.block, state).await;
-        })
+    fn on_entity_collision(&self, args: OnEntityCollisionArgs<'_>) {
+        let state = args.world.get_block_state(args.position);
+        Self::light_up(args.world, args.position, args.block, state);
     }
 
-    fn on_entity_step<'a>(&'a self, args: OnEntityStepArgs<'a>) -> BlockFuture<'a, ()> {
-        Box::pin(async move {
-            let state = args.world.get_block_state(args.position);
-            Self::light_up(args.world, args.position, args.block, state).await;
-        })
+    fn on_entity_step(&self, args: OnEntityStepArgs<'_>) {
+        let state = args.world.get_block_state(args.position);
+        Self::light_up(args.world, args.position, args.block, state);
     }
 
-    fn random_tick<'a>(&'a self, args: RandomTickArgs<'a>) -> BlockFuture<'a, ()> {
-        Box::pin(async move {
-            let state = args.world.get_block_state(args.position);
-            let mut props = RedstoneOreLikeProperties::from_state_id(state.id, args.block);
+    fn random_tick(&self, args: RandomTickArgs<'_>) {
+        let state = args.world.get_block_state(args.position);
+        let mut props = RedstoneOreLikeProperties::from_state_id(state.id, args.block);
 
-            if props.lit {
-                props.lit = false;
-                args.world
-                    .set_block_state(
-                        args.position,
-                        props.to_state_id(args.block),
-                        BlockFlags::NOTIFY_ALL,
-                    )
-                    .await;
-            }
-        })
+        if props.lit {
+            props.lit = false;
+            args.world.set_block_state(
+                args.position,
+                props.to_state_id(args.block),
+                BlockFlags::NOTIFY_ALL,
+            );
+        }
     }
 }

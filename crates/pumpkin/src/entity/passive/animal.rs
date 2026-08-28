@@ -4,7 +4,7 @@ use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::particle::Particle;
 use pumpkin_data::sound::{Sound, SoundCategory};
 
-use crate::entity::{EntityBaseFuture, mob::Mob, player::Player};
+use crate::entity::{mob::Mob, player::Player};
 use pumpkin_protocol::bedrock::server::actor_event::ActorEventID;
 use pumpkin_util::math::vector3::Vector3;
 
@@ -36,72 +36,70 @@ pub trait Animal: Mob {
         mob_entity.set_love_ticks(in_love, love_cause);
     }
 
-    fn animal_interact<'a>(
-        &'a self,
-        player: &'a Arc<Player>,
-        item_stack: &'a mut ItemStack,
+    fn animal_interact(
+        &self,
+        player: &Arc<Player>,
+        item_stack: &mut ItemStack,
         ambient_sound: Sound,
-    ) -> EntityBaseFuture<'a, bool> {
-        Box::pin(async move {
-            let mob_entity = self.get_mob_entity();
-            if self.is_food(item_stack) {
-                let age = mob_entity
+    ) -> bool {
+        let mob_entity = self.get_mob_entity();
+        if self.is_food(item_stack) {
+            let age = mob_entity
+                .living_entity
+                .entity
+                .age
+                .load(std::sync::atomic::Ordering::Relaxed);
+
+            if age >= 0 && mob_entity.is_breeding_ready() && !mob_entity.is_in_love() {
+                item_stack.decrement_unless_creative(player.gamemode.load(), 1);
+
+                mob_entity.set_love_ticks(600, Some(player.gameprofile.id));
+                let entity = &mob_entity.living_entity.entity;
+                let world = entity.world.load();
+                let pos = entity.pos.load();
+
+                world.send_entity_status(
+                    entity,
+                    pumpkin_data::entity::EntityStatus::InLoveHearts,
+                    Some(ActorEventID::InLoveHearts),
+                );
+
+                world.spawn_particle(
+                    pos + Vector3::new(0.0, f64::from(entity.height()), 0.0),
+                    Vector3::new(0.5, 0.5, 0.5),
+                    1.0,
+                    7,
+                    Particle::Heart,
+                );
+                world.play_sound(ambient_sound, SoundCategory::Neutral, &entity.pos.load());
+                return true;
+            }
+
+            if age < 0 {
+                item_stack.decrement_unless_creative(player.gamemode.load(), 1);
+                let speedup = (-age / 10).max(1);
+                mob_entity
                     .living_entity
                     .entity
                     .age
-                    .load(std::sync::atomic::Ordering::Relaxed);
+                    .fetch_add(speedup, std::sync::atomic::Ordering::Relaxed);
 
-                if age >= 0 && mob_entity.is_breeding_ready() && !mob_entity.is_in_love() {
-                    item_stack.decrement_unless_creative(player.gamemode.load(), 1);
+                let entity = &mob_entity.living_entity.entity;
+                let world = entity.world.load();
+                let pos = entity.pos.load();
 
-                    mob_entity.set_love_ticks(600, Some(player.gameprofile.id));
-                    let entity = &mob_entity.living_entity.entity;
-                    let world = entity.world.load();
-                    let pos = entity.pos.load();
-
-                    world.send_entity_status(
-                        entity,
-                        pumpkin_data::entity::EntityStatus::InLoveHearts,
-                        Some(ActorEventID::InLoveHearts),
-                    );
-
-                    world.spawn_particle(
-                        pos + Vector3::new(0.0, f64::from(entity.height()), 0.0),
-                        Vector3::new(0.5, 0.5, 0.5),
-                        1.0,
-                        7,
-                        Particle::Heart,
-                    );
-                    world.play_sound(ambient_sound, SoundCategory::Neutral, &entity.pos.load());
-                    return true;
-                }
-
-                if age < 0 {
-                    item_stack.decrement_unless_creative(player.gamemode.load(), 1);
-                    let speedup = (-age / 10).max(1);
-                    mob_entity
-                        .living_entity
-                        .entity
-                        .age
-                        .fetch_add(speedup, std::sync::atomic::Ordering::Relaxed);
-
-                    let entity = &mob_entity.living_entity.entity;
-                    let world = entity.world.load();
-                    let pos = entity.pos.load();
-
-                    world.spawn_particle(
-                        pos + Vector3::new(0.0, f64::from(entity.height()), 0.0),
-                        Vector3::new(0.5, 0.5, 0.5),
-                        1.0,
-                        7,
-                        Particle::HappyVillager,
-                    );
-                    self.play_eating_sound(ambient_sound);
-                    return true;
-                }
+                world.spawn_particle(
+                    pos + Vector3::new(0.0, f64::from(entity.height()), 0.0),
+                    Vector3::new(0.5, 0.5, 0.5),
+                    1.0,
+                    7,
+                    Particle::HappyVillager,
+                );
+                self.play_eating_sound(ambient_sound);
+                return true;
             }
+        }
 
-            mob_entity.mob_interact(player, item_stack).await
-        })
+        mob_entity.mob_interact(player, item_stack)
     }
 }

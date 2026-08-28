@@ -38,222 +38,210 @@ enum Amplifier {
 struct GiveExecutor(Time, Amplifier, bool);
 
 impl CommandExecutor for GiveExecutor {
-    fn execute<'a>(
-        &'a self,
-        sender: &'a CommandSender,
-        _server: &'a crate::server::Server,
-        args: &'a ConsumedArgs<'a>,
-    ) -> CommandResult<'a> {
-        Box::pin(async move {
-            let Some(Arg::Players(targets)) = args.get(ARG_TARGET) else {
-                return Err(InvalidConsumption(Some(ARG_TARGET.into())));
-            };
-            let Some(Arg::Effect(effect)) = args.get(ARG_EFFECT) else {
-                return Err(InvalidConsumption(Some(ARG_EFFECT.into())));
-            };
+    fn execute(
+        &self,
+        sender: &CommandSender,
+        _server: &crate::server::Server,
+        args: &ConsumedArgs,
+    ) -> CommandResult {
+        let Some(Arg::Players(targets)) = args.get(ARG_TARGET) else {
+            return Err(InvalidConsumption(Some(ARG_TARGET.into())));
+        };
+        let Some(Arg::Effect(effect)) = args.get(ARG_EFFECT) else {
+            return Err(InvalidConsumption(Some(ARG_EFFECT.into())));
+        };
 
-            //duration is in tick, so * 20 (not for the infinite because -1*20 cause visual glitch)
-            let second = match self.0 {
-                Time::Base => 30 * 20,
-                Time::Specified => {
-                    BoundedNumArgumentConsumer::new()
-                        .name("seconds")
-                        .min(1)
-                        .max(1_000_000)
-                        .find_arg_default_name(args)??
-                        * 20
-                }
-                Time::Infinite => -1,
-            };
-
-            let amplifier: u8 = match self.1 {
-                Amplifier::Base => 0,
-                Amplifier::Specified => BoundedNumArgumentConsumer::<i32>::new()
-                    .name("amplifier")
-                    .min(0)
-                    .max(255)
-                    .find_arg_default_name(args)?? as u8,
-            };
-
-            let mut hide_particles = self.2;
-            //if false -> parameter is referred
-            if !hide_particles {
-                let Some(Arg::Bool(hide_particle)) = args.get(ARG_HIDE_PARTICLE) else {
-                    return Err(InvalidConsumption(Some(ARG_HIDE_PARTICLE.into())));
-                };
-
-                hide_particles = *hide_particle;
+        //duration is in tick, so * 20 (not for the infinite because -1*20 cause visual glitch)
+        let second = match self.0 {
+            Time::Base => 30 * 20,
+            Time::Specified => {
+                BoundedNumArgumentConsumer::new()
+                    .name("seconds")
+                    .min(1)
+                    .max(1_000_000)
+                    .find_arg_default_name(args)??
+                    * 20
             }
+            Time::Infinite => -1,
+        };
 
-            let mut successes = 0;
+        let amplifier: u8 = match self.1 {
+            Amplifier::Base => 0,
+            Amplifier::Specified => BoundedNumArgumentConsumer::<i32>::new()
+                .name("amplifier")
+                .min(0)
+                .max(255)
+                .find_arg_default_name(args)?? as u8,
+        };
 
-            for target in targets {
-                let should_skip = target
-                    .living_entity
-                    .get_effect(effect)
-                    .await
-                    .is_some_and(|existing| existing.amplifier >= amplifier);
+        let mut hide_particles = self.2;
+        //if false -> parameter is referred
+        if !hide_particles {
+            let Some(Arg::Bool(hide_particle)) = args.get(ARG_HIDE_PARTICLE) else {
+                return Err(InvalidConsumption(Some(ARG_HIDE_PARTICLE.into())));
+            };
 
-                if !should_skip {
-                    target
-                        .add_effect(Effect {
-                            effect_type: effect,
-                            duration: second,
-                            amplifier,
-                            ambient: false, //this is not a beacon effect
-                            show_particles: !hide_particles,
-                            show_icon: true,
-                            blend: true, //Currently only used in the DARKNESS effect to apply extra void fog and adjust the gamma value for lighting.
-                        })
-                        .await;
-                    successes += 1;
-                }
+            hide_particles = *hide_particle;
+        }
+
+        let mut successes = 0;
+
+        for target in targets {
+            let should_skip = target
+                .living_entity
+                .get_effect(effect)
+                .is_some_and(|existing| existing.amplifier >= amplifier);
+
+            if !should_skip {
+                target.add_effect(Effect {
+                    effect_type: effect,
+                    duration: second,
+                    amplifier,
+                    ambient: false, //this is not a beacon effect
+                    show_particles: !hide_particles,
+                    show_icon: true,
+                    blend: false,
+                });
+                successes += 1;
             }
+        }
 
-            let translation_name = TextComponent::translate_cross(
-                effect.translation_key.to_string(),
-                effect.translation_key.to_string(),
+        let translation_name = TextComponent::translate_cross(
+            effect.translation_key.to_string(),
+            effect.translation_key.to_string(),
+            [],
+        );
+
+        if successes == 0 {
+            return Err(CommandError::CommandFailed(TextComponent::translate_cross(
+                "commands.effect.give.failed",
+                "commands.effect.give.failed",
                 [],
-            );
+            )));
+        } else if targets.len() == 1 {
+            sender.send_message(TextComponent::translate_cross(
+                "commands.effect.give.success.single",
+                "commands.effect.give.success.single",
+                [translation_name, targets[0].get_display_name()],
+            ));
+        } else {
+            sender.send_message(TextComponent::translate_cross(
+                "commands.effect.give.success.multiple",
+                "commands.effect.give.success.multiple",
+                [
+                    translation_name,
+                    TextComponent::text(targets.len().to_string()),
+                ],
+            ));
+        }
 
-            if successes == 0 {
-                return Err(CommandError::CommandFailed(TextComponent::translate_cross(
-                    "commands.effect.give.failed",
-                    "commands.effect.give.failed",
-                    [],
-                )));
-            } else if targets.len() == 1 {
-                sender
-                    .send_message(TextComponent::translate_cross(
-                        "commands.effect.give.success.single",
-                        "commands.effect.give.success.single",
-                        [translation_name, targets[0].get_display_name().await],
-                    ))
-                    .await;
-            } else {
-                sender
-                    .send_message(TextComponent::translate_cross(
-                        "commands.effect.give.success.multiple",
-                        "commands.effect.give.success.multiple",
-                        [
-                            translation_name,
-                            TextComponent::text(targets.len().to_string()),
-                        ],
-                    ))
-                    .await;
-            }
-
-            Ok(successes)
-        })
+        Ok(successes)
     }
 }
 
 struct ClearExecutor(bool); //the param -> true = delete every effect, false = only one
 
 impl CommandExecutor for ClearExecutor {
-    fn execute<'a>(
-        &'a self,
-        sender: &'a CommandSender,
-        _server: &'a crate::server::Server,
-        args: &'a ConsumedArgs<'a>,
-    ) -> CommandResult<'a> {
-        Box::pin(async move {
-            let Some(Arg::Players(targets)) = args.get(ARG_TARGET) else {
-                return Err(InvalidConsumption(Some(ARG_TARGET.into())));
+    fn execute(
+        &self,
+        sender: &CommandSender,
+        _server: &crate::server::Server,
+        args: &ConsumedArgs,
+    ) -> CommandResult {
+        let Some(Arg::Players(targets)) = args.get(ARG_TARGET) else {
+            return Err(InvalidConsumption(Some(ARG_TARGET.into())));
+        };
+
+        let effect;
+        //Only one effect
+        if self.0 {
+            let mut succeeded_clears: i32 = 0;
+            for target in targets {
+                let has_effects = !target
+                    .living_entity
+                    .active_effects
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .is_empty();
+                if has_effects {
+                    target.remove_all_effects();
+                    succeeded_clears += 1;
+                }
+            }
+
+            //if the player or everyplayer don't have any effect
+            if succeeded_clears == 0 {
+                return Err(CommandError::CommandFailed(TextComponent::translate_cross(
+                    "commands.effect.clear.everything.failed",
+                    "commands.effect.clear.everything.failed",
+                    [],
+                )));
+            }
+            //a player have at least 1 effect
+            else if targets.len() == 1 {
+                sender.send_message(TextComponent::translate_cross(
+                    "commands.effect.clear.everything.success.single",
+                    "commands.effect.clear.everything.success.single",
+                    [targets[0].get_display_name()],
+                ));
+            } else {
+                sender.send_message(TextComponent::translate_cross(
+                    "commands.effect.clear.everything.success.multiple",
+                    "commands.effect.clear.everything.success.multiple",
+                    [TextComponent::text(targets.len().to_string())],
+                ));
+            }
+            Ok(succeeded_clears)
+        } else {
+            let Some(Arg::Effect(effect_type)) = args.get(ARG_EFFECT) else {
+                return Err(InvalidConsumption(Some(ARG_EFFECT.into())));
             };
 
-            let effect;
-            //Only one effect
-            if self.0 {
-                let mut succeeded_clears: i32 = 0;
-                for target in targets {
-                    if target.remove_all_effects().await {
-                        succeeded_clears += 1;
-                    }
-                }
+            effect = *effect_type;
 
-                //if the player or everyplayer don't have any effect
-                if succeeded_clears == 0 {
-                    return Err(CommandError::CommandFailed(TextComponent::translate_cross(
-                        "commands.effect.clear.everything.failed",
-                        "commands.effect.clear.everything.failed",
-                        [],
-                    )));
+            let mut succeeded_clears: i32 = 0;
+            for target in targets {
+                if target.living_entity.has_effect(effect) {
+                    target.remove_effect(effect);
+                    succeeded_clears += 1;
                 }
-                //a player have at least 1 effect
-                else if targets.len() == 1 {
-                    sender
-                        .send_message(TextComponent::translate_cross(
-                            "commands.effect.clear.everything.success.single",
-                            "commands.effect.clear.everything.success.single",
-                            [targets[0].get_display_name().await],
-                        ))
-                        .await;
-                } else {
-                    sender
-                        .send_message(TextComponent::translate_cross(
-                            "commands.effect.clear.everything.success.multiple",
-                            "commands.effect.clear.everything.success.multiple",
-                            [TextComponent::text(targets.len().to_string())],
-                        ))
-                        .await;
-                }
-                Ok(succeeded_clears)
-            } else {
-                let Some(Arg::Effect(effect_type)) = args.get(ARG_EFFECT) else {
-                    return Err(InvalidConsumption(Some(ARG_EFFECT.into())));
-                };
-
-                effect = *effect_type;
-
-                let mut succeeded_clears: i32 = 0;
-                for target in targets {
-                    if target.living_entity.has_effect(effect).await {
-                        target.remove_effect(effect).await;
-                        succeeded_clears += 1;
-                    }
-                }
-
-                if succeeded_clears == 0 {
-                    return Err(CommandError::CommandFailed(TextComponent::translate_cross(
-                        "commands.effect.clear.specific.failed",
-                        "commands.effect.clear.specific.failed",
-                        [],
-                    )));
-                } else if targets.len() == 1 {
-                    sender
-                        .send_message(TextComponent::translate_cross(
-                            "commands.effect.clear.specific.success.single",
-                            "commands.effect.clear.specific.success.single",
-                            [
-                                TextComponent::translate_cross(
-                                    effect.translation_key,
-                                    effect.translation_key,
-                                    [],
-                                ),
-                                targets[0].get_display_name().await,
-                            ],
-                        ))
-                        .await;
-                } else {
-                    sender
-                        .send_message(TextComponent::translate_cross(
-                            "commands.effect.clear.specific.success.multiple",
-                            "commands.effect.clear.specific.success.multiple",
-                            [
-                                TextComponent::translate_cross(
-                                    effect.translation_key,
-                                    effect.translation_key,
-                                    [],
-                                ),
-                                TextComponent::text(targets.len().to_string()),
-                            ],
-                        ))
-                        .await;
-                }
-                Ok(succeeded_clears)
             }
-        })
+
+            if succeeded_clears == 0 {
+                return Err(CommandError::CommandFailed(TextComponent::translate_cross(
+                    "commands.effect.clear.specific.failed",
+                    "commands.effect.clear.specific.failed",
+                    [],
+                )));
+            } else if targets.len() == 1 {
+                sender.send_message(TextComponent::translate_cross(
+                    "commands.effect.clear.specific.success.single",
+                    "commands.effect.clear.specific.success.single",
+                    [
+                        TextComponent::translate_cross(
+                            effect.translation_key,
+                            effect.translation_key,
+                            [],
+                        ),
+                        targets[0].get_display_name(),
+                    ],
+                ));
+            } else {
+                sender.send_message(TextComponent::translate_cross(
+                    "commands.effect.clear.specific.success.multiple",
+                    "commands.effect.clear.specific.success.multiple",
+                    [
+                        TextComponent::translate_cross(
+                            effect.translation_key,
+                            effect.translation_key,
+                            [],
+                        ),
+                        TextComponent::text(targets.len().to_string()),
+                    ],
+                ));
+            }
+            Ok(succeeded_clears)
+        }
     }
 }
 

@@ -344,51 +344,84 @@ impl JavaClient {
             return;
         };
 
-        if self.version.load() >= JavaMinecraftVersion::V_1_20_2 {
-            self.send_packet(&CChunkBatchStart).await;
-        }
+        let mut valid_chunks = Vec::with_capacity(chunks.len());
         for chunk in chunks {
             let mut event = ChunkSend::new(player.world(), chunk.clone());
             server.plugin_manager.fire(&server, &mut event).await;
-            if event.cancelled {
-                continue;
-            }
-
-            let mut buf = Vec::new();
-            let version = self.version.load();
-            if let Err(err) = buf.write_var_int(&VarInt(CChunkData::to_id(version))) {
-                error!("Failed to write chunk data id: {err:?}");
-                continue;
-            }
-            if let Err(err) = CChunkData(chunk).write_packet_data(&mut buf, &version) {
-                error!("Failed to write chunk data: {err:?}");
-                continue;
-            }
-            self.send_packet_now_data(buf.into()).await;
-
-            if version >= JavaMinecraftVersion::V_1_14 && version < JavaMinecraftVersion::V_1_18 {
-                match CLightUpdate::from_chunk(chunk, version) {
-                    Ok(light_packet) => {
-                        let mut light_buf = Vec::new();
-                        if let Err(err) =
-                            light_buf.write_var_int(&VarInt(CLightUpdate::to_id(version)))
-                        {
-                            error!("Failed to write light update id: {err:?}");
-                        } else if let Err(err) =
-                            light_packet.write_packet_data(&mut light_buf, &version)
-                        {
-                            error!("Failed to write light update data: {err:?}");
-                        } else {
-                            self.send_packet_now_data(light_buf.into()).await;
-                        }
-                    }
-                    Err(err) => {
-                        error!("Failed to create light update packet: {err:?}");
-                    }
-                }
+            if !event.cancelled {
+                valid_chunks.push(chunk.clone());
             }
         }
-        if self.version.load() >= JavaMinecraftVersion::V_1_20_2 {
+
+        if valid_chunks.is_empty() {
+            return;
+        }
+
+        let version = self.version.load();
+        let (tx, rx) = oneshot::channel();
+        rayon::spawn(move || {
+            let mut serialized = Vec::with_capacity(valid_chunks.len());
+            for chunk in valid_chunks {
+                let mut buf = Vec::with_capacity(32 * 1024);
+                if let Err(err) = buf.write_var_int(&VarInt(CChunkData::to_id(version))) {
+                    error!("Failed to write chunk data id: {err:?}");
+                    continue;
+                }
+                if let Err(err) = CChunkData(&chunk).write_packet_data(&mut buf, &version) {
+                    error!("Failed to write chunk data: {err:?}");
+                    continue;
+                }
+
+                let light_buf = if version >= JavaMinecraftVersion::V_1_14
+                    && version < JavaMinecraftVersion::V_1_18
+                {
+                    match CLightUpdate::from_chunk(&chunk, version) {
+                        Ok(light_packet) => {
+                            let mut light_buf = Vec::new();
+                            if let Err(err) =
+                                light_buf.write_var_int(&VarInt(CLightUpdate::to_id(version)))
+                            {
+                                error!("Failed to write light update id: {err:?}");
+                                None
+                            } else if let Err(err) =
+                                light_packet.write_packet_data(&mut light_buf, &version)
+                            {
+                                error!("Failed to write light update data: {err:?}");
+                                None
+                            } else {
+                                Some(Bytes::from(light_buf))
+                            }
+                        }
+                        Err(err) => {
+                            error!("Failed to create light update packet: {err:?}");
+                            None
+                        }
+                    }
+                } else {
+                    None
+                };
+
+                serialized.push((Bytes::from(buf), light_buf));
+            }
+            let _ = tx.send(serialized);
+        });
+
+        let Ok(serialized) = rx.await else {
+            return;
+        };
+
+        if version >= JavaMinecraftVersion::V_1_20_2 {
+            self.send_packet(&CChunkBatchStart).await;
+        }
+
+        for (chunk_data, light_data) in serialized {
+            self.enqueue_packet(chunk_data).await;
+            if let Some(light_data) = light_data {
+                self.enqueue_packet(light_data).await;
+            }
+        }
+
+        if version >= JavaMinecraftVersion::V_1_20_2 {
             self.send_packet(&CChunkBatchEnd::new(chunks.len() as u16))
                 .await;
         }
@@ -473,6 +506,35 @@ impl JavaClient {
                 }
             }
         }
+    }
+
+    pub fn try_kick(&self, reason: &TextComponent) {
+        match self.connection_state.load() {
+            ConnectionState::Login => {
+                let packet = CLoginDisconnect::new(
+                    serde_json::to_string(&reason.0).unwrap_or_else(|_| String::new()),
+                );
+                if let Ok(data) = self.serialize_packet(&packet) {
+                    self.try_enqueue_packet(data);
+                }
+            }
+            ConnectionState::Config => {
+                let reason_text = reason.clone().get_text();
+                let packet = CConfigDisconnect::new(&reason_text);
+                if let Ok(data) = self.serialize_packet(&packet) {
+                    self.try_enqueue_packet(data);
+                }
+            }
+            ConnectionState::Play => {
+                let packet = CPlayDisconnect::new(reason);
+                if let Ok(data) = self.serialize_packet(&packet) {
+                    self.try_enqueue_packet(data);
+                }
+            }
+            _ => {}
+        }
+        debug!("Closing connection for {}", self.id);
+        self.close();
     }
 
     pub async fn kick(&self, reason: TextComponent) {
@@ -715,9 +777,8 @@ impl JavaClient {
             id if id == SChangeGameMode::to_id(version) => {
                 self.handle_change_game_mode(
                     player,
-                    SChangeGameMode::read(&mut payload, &version)?,
-                )
-                .await;
+                    &SChangeGameMode::read(&mut payload, &version)?,
+                );
             }
             id if id == SChatAck::to_id(version) => {
                 let packet = SChatAck::read(&mut payload, &version)?;
@@ -775,8 +836,7 @@ impl JavaClient {
                     .await;
             }
             id if id == SPaddleBoat::to_id(version) => {
-                self.handle_paddle_boat(player, SPaddleBoat::read(&mut payload, &version)?)
-                    .await;
+                self.handle_paddle_boat(player, &SPaddleBoat::read(&mut payload, &version)?);
             }
             id if id == SInteract::to_id(version) => {
                 self.handle_interact(player, SInteract::read(&mut payload, &version)?, server)
@@ -902,13 +962,14 @@ impl JavaClient {
             id if id == SSetJigsawBlock::to_id(version) => {
                 self.handle_set_jigsaw_block(
                     player,
-                    SSetJigsawBlock::read(&mut payload, &version)?,
-                )
-                .await;
+                    &SSetJigsawBlock::read(&mut payload, &version)?,
+                );
             }
             id if id == SJigsawGenerate::to_id(version) => {
-                self.handle_jigsaw_generate(player, SJigsawGenerate::read(&mut payload, &version)?)
-                    .await;
+                self.handle_jigsaw_generate(
+                    player,
+                    &SJigsawGenerate::read(&mut payload, &version)?,
+                );
             }
             id if id == SPlayerCommand::to_id(version) => {
                 self.handle_player_command(
@@ -931,9 +992,10 @@ impl JavaClient {
                     .await;
             }
             id if id == SContainerButtonClick::to_id(version) => {
-                player
-                    .on_container_button_click(SContainerButtonClick::read(&mut payload, &version)?)
-                    .await;
+                player.on_container_button_click(&SContainerButtonClick::read(
+                    &mut payload,
+                    &version,
+                )?);
             }
             id if id == SSetHeldItem::to_id(version) => {
                 self.handle_set_held_item(
@@ -959,8 +1021,7 @@ impl JavaClient {
                     .await;
             }
             id if id == SEditBook::to_id(version) => {
-                self.handle_edit_book(player, SEditBook::read(&mut payload, &version)?)
-                    .await;
+                self.handle_edit_book(player, &SEditBook::read(&mut payload, &version)?);
             }
             id if id == SUseItemOn::to_id(version) => {
                 self.handle_use_item_on(player, SUseItemOn::read(&mut payload, &version)?, server)
@@ -986,12 +1047,10 @@ impl JavaClient {
                     player,
                     server,
                     SCloseContainer::read(&mut payload, &version)?,
-                )
-                .await;
+                );
             }
             id if id == SChunkBatch::to_id(version) => {
-                self.handle_chunk_batch(player, SChunkBatch::read(&mut payload, &version)?)
-                    .await;
+                self.handle_chunk_batch(player, &SChunkBatch::read(&mut payload, &version)?);
             }
             id if id == SPlayerSession::to_id(version) => {
                 self.handle_chat_session_update(
@@ -1057,8 +1116,7 @@ impl JavaClient {
                 self.handle_seen_advancement(
                     player,
                     SSeenAdvancement::read(&mut payload, &version)?,
-                )
-                .await;
+                );
             }
             id if id == SPlayResourcePack::to_id(version) => {
                 self.handle_play_resource_pack_response(
@@ -1076,16 +1134,14 @@ impl JavaClient {
                     server,
                     player,
                     &SLockDifficulty::read(&mut payload, &version)?,
-                )
-                .await;
+                );
             }
             id if id == SChangeDifficulty::to_id(version) => {
                 self.handle_change_difficulty(
                     server,
                     player,
                     &SChangeDifficulty::read(&mut payload, &version)?,
-                )
-                .await;
+                );
             }
             id if id == SSetBeacon::to_id(version) => {
                 self.handle_set_beacon(player, &SSetBeacon::read(&mut payload, &version)?)

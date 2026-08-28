@@ -25,15 +25,15 @@ impl GetClientSideArgParser for SoundCategoryArgumentConsumer {
 }
 
 impl ArgumentConsumer for SoundCategoryArgumentConsumer {
-    fn consume<'a, 'b>(
+    fn consume<'a>(
         &'a self,
         _sender: &'a CommandSender,
         _server: &'a Server,
-        args: &'b mut RawArgs<'a>,
+        args: &mut RawArgs<'a>,
     ) -> ConsumeResult<'a> {
         let s_opt: Option<&'a str> = args.pop().map(|arg| arg.value);
 
-        let result: Option<Arg<'a>> = s_opt.and_then(|s| {
+        s_opt.and_then(|s| {
             let category = match s.to_lowercase().as_str() {
                 "master" => Some(SoundCategory::Master),
                 "music" => Some(SoundCategory::Music),
@@ -50,28 +50,19 @@ impl ArgumentConsumer for SoundCategoryArgumentConsumer {
             };
 
             category.map(Arg::SoundCategory)
-        });
-
-        Box::pin(async move { result })
+        })
     }
 
-    fn suggest<'a>(
-        &'a self,
-        _sender: &CommandSender,
-        _server: &'a Server,
-        _input: &'a str,
-    ) -> SuggestResult<'a> {
-        Box::pin(async move {
-            let categories = [
-                "master", "music", "record", "weather", "block", "hostile", "neutral", "player",
-                "ambient", "voice",
-            ];
-            let suggestions: Vec<CommandSuggestion> = categories
-                .iter()
-                .map(|cat| CommandSuggestion::new((*cat).to_string(), None))
-                .collect();
-            Ok(Some(suggestions))
-        })
+    fn suggest(&self, _sender: &CommandSender, _server: &Server, _input: &str) -> SuggestResult {
+        let categories = [
+            "master", "music", "record", "weather", "block", "hostile", "neutral", "player",
+            "ambient", "voice",
+        ];
+        let suggestions: Vec<CommandSuggestion> = categories
+            .iter()
+            .map(|cat| CommandSuggestion::new((*cat).to_string(), None))
+            .collect();
+        Ok(Some(suggestions))
     }
 }
 

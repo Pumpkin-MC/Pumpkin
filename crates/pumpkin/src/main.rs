@@ -49,6 +49,11 @@ static MAIN_THREAD: OnceLock<ThreadId> = OnceLock::new();
 async fn main() {
     let _ = MAIN_THREAD.set(thread::current().id());
 
+    // Initialize global Rayon thread pool with named worker threads
+    let _ = rayon::ThreadPoolBuilder::new()
+        .thread_name(|i| format!("Rayon-Worker-{i}"))
+        .build_global();
+
     // Set the panic handler.
     std::panic::set_hook(Box::new(handle_panic));
 

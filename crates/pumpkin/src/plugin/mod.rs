@@ -297,8 +297,8 @@ impl PluginManager {
             .map_err(|e| ManagerError::IoError(std::io::Error::other(e)))?;
 
         let manager = self.clone();
-        let server = server.clone();
-        let task = tokio::spawn(async move {
+        let server_clone = Arc::clone(server);
+        let task = server.spawn_task(async move {
             // Keep watcher alive by moving it into the task
             let _watcher = watcher;
 
@@ -335,7 +335,9 @@ impl PluginManager {
                                 // For now, we just try to load it. If it's already loaded,
                                 // the loader might handle it or we might get a duplicate.
                                 // Most WASM loaders will just create a new instance.
-                                if let Err(e) = manager.start_loading_plugin(&server, &path).await {
+                                if let Err(e) =
+                                    manager.start_loading_plugin(&server_clone, &path).await
+                                {
                                     error!("Failed to hot-reload plugin {:?}: {}", path, e);
                                 }
                             }
@@ -544,7 +546,7 @@ impl PluginManager {
 
         let context = Arc::new(Context::new(
             metadata.clone(),
-            server,
+            server.clone(),
             Arc::clone(&self.handlers),
             Arc::clone(self),
             Arc::clone(&LOGGER_IMPL),
@@ -574,7 +576,7 @@ impl PluginManager {
         let plugin_name = metadata.name.clone();
         let loader_clone = loader.clone();
 
-        let task = tokio::spawn(async move {
+        let task = server.spawn_task(async move {
             // Initialize the plugin
             match instance.on_load(context.clone()).await {
                 Ok(()) => {
@@ -622,9 +624,7 @@ impl PluginManager {
 
                     // Try to unload the plugin data
                     if let Some(data) = loader_data {
-                        tokio::spawn(async move {
-                            loader_clone.unload(data).await.ok();
-                        });
+                        loader_clone.unload(data).await.ok();
                     }
 
                     {
@@ -1030,8 +1030,8 @@ impl PluginManager {
 
     /// Checks if plugin active
     #[must_use]
-    pub async fn is_plugin_active(&self, name: &str) -> bool {
-        let plugins = self.plugins.read().await;
+    pub fn is_plugin_active(&self, name: &str) -> bool {
+        let plugins = self.plugins.blocking_read();
         plugins
             .iter()
             .any(|p| p.metadata.name == name && p.is_active && p.instance.is_some())
@@ -1039,8 +1039,8 @@ impl PluginManager {
 
     /// Get list of active plugins
     #[must_use]
-    pub async fn active_plugins(&self) -> Vec<PluginMetadata> {
-        let plugins = self.plugins.read().await;
+    pub fn active_plugins(&self) -> Vec<PluginMetadata> {
+        let plugins = self.plugins.blocking_read();
         plugins
             .iter()
             .filter(|p| p.is_active && p.instance.is_some())
@@ -1050,15 +1050,15 @@ impl PluginManager {
 
     /// Checks if plugin loaded
     #[must_use]
-    pub async fn is_plugin_loaded(&self, name: &str) -> bool {
-        let plugins = self.plugins.read().await;
+    pub fn is_plugin_loaded(&self, name: &str) -> bool {
+        let plugins = self.plugins.blocking_read();
         plugins.iter().any(|p| p.metadata.name == name)
     }
 
     /// Get list of loaded plugins
     #[must_use]
-    pub async fn loaded_plugins(&self) -> Vec<PluginMetadata> {
-        let plugins = self.plugins.read().await;
+    pub fn loaded_plugins(&self) -> Vec<PluginMetadata> {
+        let plugins = self.plugins.blocking_read();
         plugins.iter().map(|p| p.metadata.clone()).collect()
     }
 
@@ -1190,6 +1190,35 @@ impl PluginManager {
             if !handler.is_blocking() {
                 handler.handle_dyn(server, event).await;
             }
+        }
+    }
+
+    /// Fire an event to all registered handlers synchronously (blocking if handlers exist).
+    /// If no handlers are registered for this event, returns immediately without runtime overhead.
+    pub fn fire_blocking<E: Payload + Send + Sync + 'static>(
+        &self,
+        server: &Arc<Server>,
+        event: &mut E,
+    ) {
+        let handlers_map = self.handlers.load();
+        if handlers_map.is_empty() {
+            return;
+        }
+
+        let Some(handlers) = handlers_map.get(E::get_name_static()) else {
+            return;
+        };
+
+        if handlers.is_empty() {
+            return;
+        }
+
+        if tokio::runtime::Handle::try_current().is_ok() {
+            tokio::task::block_in_place(|| {
+                server.runtime.block_on(self.fire(server, event));
+            });
+        } else {
+            server.runtime.block_on(self.fire(server, event));
         }
     }
 

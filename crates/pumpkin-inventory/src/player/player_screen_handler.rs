@@ -22,9 +22,7 @@ use super::player_inventory::PlayerInventory;
 use crate::crafting::crafting_inventory::CraftingInventory;
 use crate::crafting::crafting_screen_handler::CraftingScreenHandler;
 use crate::crafting::recipes::{RecipeFinderScreenHandler, RecipeInputInventory};
-use crate::screen_handler::{
-    InventoryPlayer, ItemStackFuture, ScreenHandler, ScreenHandlerBehaviour, ScreenHandlerFuture,
-};
+use crate::screen_handler::{InventoryPlayer, ScreenHandler, ScreenHandlerBehaviour};
 use crate::slot::{ArmorSlot, NormalSlot, Slot};
 use pumpkin_data::data_component_impl::{EquipmentSlot, EquipmentType, EquippableImpl};
 use pumpkin_data::item_stack::ItemStack;
@@ -77,7 +75,7 @@ impl PlayerScreenHandler {
     /// - `player_inventory` - The player's inventory
     /// - `window_type` - The window type (usually None for player inventory)
     /// - `sync_id` - The synchronization ID
-    pub async fn new(
+    pub fn new(
         player_inventory: &Arc<PlayerInventory>,
         window_type: Option<WindowType>,
         sync_id: u8,
@@ -91,9 +89,7 @@ impl PlayerScreenHandler {
             crafting_inventory: crafting_inventory.clone(),
         };
 
-        player_screen_handler
-            .add_recipe_slots(crafting_inventory, provider)
-            .await;
+        player_screen_handler.add_recipe_slots(crafting_inventory, provider);
 
         // Add armor slots (head, chest, legs, feet)
         for i in 0..4 {
@@ -134,13 +130,10 @@ impl ScreenHandler for PlayerScreenHandler {
         &mut self.behaviour
     }
 
-    fn on_closed<'a>(&'a mut self, player: &'a dyn InventoryPlayer) -> ScreenHandlerFuture<'a, ()> {
-        Box::pin(async move {
-            self.default_on_closed(player).await;
-            //TODO: this.craftingResultInventory.clear();
-            self.drop_inventory(player, self.crafting_inventory.clone())
-                .await;
-        })
+    fn on_closed(&mut self, player: &dyn InventoryPlayer) {
+        self.default_on_closed(player);
+        //TODO: this.craftingResultInventory.clear();
+        self.drop_inventory(player, self.crafting_inventory.clone());
     }
 
     /// Performs quick move (shift-click) for the given slot.
@@ -153,116 +146,100 @@ impl ScreenHandler for PlayerScreenHandler {
     /// - Offhand items -> Offhand slot if empty
     /// - Main inventory (9-35) -> Hotbar
     /// - Hotbar (36-44) -> Main inventory
-    fn quick_move<'a>(
-        &'a mut self,
-        player: &'a dyn InventoryPlayer,
-        slot_index: i32,
-    ) -> ItemStackFuture<'a> {
-        Box::pin(async move {
-            let slot = self.get_behaviour().slots[slot_index as usize].clone();
+    fn quick_move(&mut self, player: &dyn InventoryPlayer, slot_index: i32) -> ItemStack {
+        let slot = self.get_behaviour().slots[slot_index as usize].clone();
 
-            // TODO: Equippable component
+        // TODO: Equippable component
 
-            if slot.has_stack().await {
-                let mut slot_stack = slot.get_stack().await;
-                let stack_prev = slot_stack.clone();
+        if slot.has_stack() {
+            let mut slot_stack = slot.get_stack();
+            let stack_prev = slot_stack.clone();
 
-                let equipment_slot = slot_stack
-                    .get_data_component::<EquippableImpl>()
-                    .map_or(&EquipmentSlot::MAIN_HAND, |equippable| equippable.slot);
+            let equipment_slot = slot_stack
+                .get_data_component::<EquippableImpl>()
+                .map_or(&EquipmentSlot::MAIN_HAND, |equippable| equippable.slot);
 
-                // Quick move logic based on source slot
-                let success = if slot_index == 0 {
-                    // From crafting result slot (0) -> Player Inventory (9-45, from end)
-                    self.insert_item(&mut slot_stack, 9, 45, true).await
-                } else if (1..5).contains(&slot_index) {
-                    // From craft ingredient slots (1-4) -> Player Inventory (9-45, from start)
-                    self.insert_item(&mut slot_stack, 9, 45, false).await
-                } else if (5..9).contains(&slot_index) {
-                    // From armour slots (5-8) -> Player Inventory (9-45, from start)
-                    let result = self.insert_item(&mut slot_stack, 9, 45, false).await;
+            // Quick move logic based on source slot
+            let success = if slot_index == 0 {
+                // From crafting result slot (0) -> Player Inventory (9-45, from end)
+                self.insert_item(&mut slot_stack, 9, 45, true)
+            } else if (1..5).contains(&slot_index) {
+                // From craft ingredient slots (1-4) -> Player Inventory (9-45, from start)
+                self.insert_item(&mut slot_stack, 9, 45, false)
+            } else if (5..9).contains(&slot_index) {
+                // From armour slots (5-8) -> Player Inventory (9-45, from start)
+                let result = self.insert_item(&mut slot_stack, 9, 45, false);
 
-                    if result {
-                        player
-                            .enqueue_equipment_change(equipment_slot, ItemStack::EMPTY)
-                            .await;
-                    }
-                    result
-                } else if equipment_slot.slot_type() == EquipmentType::HumanoidArmor
-                    && self
-                        .get_slot((8 - equipment_slot.get_entity_slot_id()) as usize)
-                        .get_cloned_stack()
-                        .await
-                        .is_empty()
-                {
-                    // Into empty armour slots (5-8)
-                    let index = 8 - equipment_slot.get_entity_slot_id();
-                    let result = self
-                        .insert_item(&mut slot_stack, index, index + 1, false)
-                        .await;
-
-                    if result {
-                        player
-                            .enqueue_equipment_change(equipment_slot, &stack_prev)
-                            .await;
-                    }
-                    result
-                } else if matches!(equipment_slot, EquipmentSlot::OffHand(_))
-                    && slot_index != 45
-                    && self.get_slot(45).get_cloned_stack().await.is_empty()
-                {
-                    // Into empty offhand slot (45)
-                    let index = 45;
-                    self.insert_item(&mut slot_stack, index, index + 1, false)
-                        .await
-                } else if (9..36).contains(&slot_index) {
-                    // From main inventory (9-35) -> Hotbar (36-44)
-                    self.insert_item(&mut slot_stack, 36, 45, false).await
-                } else if (36..45).contains(&slot_index) {
-                    // From hotbar (36-44) -> Main inventory (9-35)
-                    self.insert_item(&mut slot_stack, 9, 36, false).await
-                } else {
-                    // Fallback to moving into the player inventory area
-                    self.insert_item(&mut slot_stack, 9, 45, false).await
-                };
-
-                if !success {
-                    return ItemStack::EMPTY.clone();
+                if result {
+                    player.enqueue_equipment_change(equipment_slot, ItemStack::EMPTY);
                 }
+                result
+            } else if equipment_slot.slot_type() == EquipmentType::HumanoidArmor
+                && self
+                    .get_slot((8 - equipment_slot.get_entity_slot_id()) as usize)
+                    .get_cloned_stack()
+                    .is_empty()
+            {
+                // Into empty armour slots (5-8)
+                let index = 8 - equipment_slot.get_entity_slot_id();
+                let result = self.insert_item(&mut slot_stack, index, index + 1, false);
 
-                let stack = slot_stack.clone();
-
-                if stack.is_empty() {
-                    slot.set_stack_prev(ItemStack::EMPTY.clone(), stack_prev.clone())
-                        .await;
-                } else {
-                    slot.set_stack(stack.clone()).await;
+                if result {
+                    player.enqueue_equipment_change(equipment_slot, &stack_prev);
                 }
+                result
+            } else if matches!(equipment_slot, EquipmentSlot::OffHand(_))
+                && slot_index != 45
+                && self.get_slot(45).get_cloned_stack().is_empty()
+            {
+                // Into empty offhand slot (45)
+                let index = 45;
+                self.insert_item(&mut slot_stack, index, index + 1, false)
+            } else if (9..36).contains(&slot_index) {
+                // From main inventory (9-35) -> Hotbar (36-44)
+                self.insert_item(&mut slot_stack, 36, 45, false)
+            } else if (36..45).contains(&slot_index) {
+                // From hotbar (36-44) -> Main inventory (9-35)
+                self.insert_item(&mut slot_stack, 9, 36, false)
+            } else {
+                // Fallback to moving into the player inventory area
+                self.insert_item(&mut slot_stack, 9, 45, false)
+            };
 
-                if stack.item_count == stack_prev.item_count {
-                    return ItemStack::EMPTY.clone();
-                }
-
-                let mut taken_stack = stack_prev.clone();
-                taken_stack.set_count(stack_prev.item_count - stack.item_count);
-                slot.on_take_item(player, &taken_stack).await;
-
-                if slot_index == 0 {
-                    // From crafting result slot (0)
-                    // Notify the result slot to refill
-                    slot.on_quick_move_crafted(stack.clone(), stack_prev.clone())
-                        .await;
-                    // For crafting result slot, drop any remaining items
-                    if !stack.is_empty() {
-                        player.drop_item(stack, false).await;
-                    }
-                }
-
-                return stack_prev;
+            if !success {
+                return ItemStack::EMPTY.clone();
             }
 
-            // Nothing changed
-            ItemStack::EMPTY.clone()
-        })
+            let stack = slot_stack.clone();
+
+            if stack.is_empty() {
+                slot.set_stack_prev(ItemStack::EMPTY.clone(), stack_prev.clone());
+            } else {
+                slot.set_stack(stack.clone());
+            }
+
+            if stack.item_count == stack_prev.item_count {
+                return ItemStack::EMPTY.clone();
+            }
+
+            let mut taken_stack = stack_prev.clone();
+            taken_stack.set_count(stack_prev.item_count - stack.item_count);
+            slot.on_take_item(player, &taken_stack);
+
+            if slot_index == 0 {
+                // From crafting result slot (0)
+                // Notify the result slot to refill
+                slot.on_quick_move_crafted(stack.clone(), stack_prev.clone());
+                // For crafting result slot, drop any remaining items
+                if !stack.is_empty() {
+                    player.drop_item(stack, false);
+                }
+            }
+
+            return stack_prev;
+        }
+
+        // Nothing changed
+        ItemStack::EMPTY.clone()
     }
 }

@@ -2,8 +2,7 @@ use super::BlockEntity;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
-use std::pin::Pin;
-use tokio::sync::Mutex;
+use std::sync::Mutex;
 
 pub struct BrushableBlockBlockEntity {
     pub position: BlockPos,
@@ -38,19 +37,20 @@ impl BlockEntity for BrushableBlockBlockEntity {
         }
     }
 
-    fn write_nbt<'a>(
-        &'a self,
-        nbt: &'a mut NbtCompound,
-    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
-        Box::pin(async move {
-            if let Some(it) = self.item.lock().await.as_ref() {
-                let mut it_nbt = NbtCompound::new();
-                it.write_item_stack(&mut it_nbt);
-                nbt.put_compound("item", it_nbt);
-            }
-            nbt.put_int("hits", *self.hits.lock().await);
-            nbt.put_byte("direction", *self.direction.lock().await as i8);
-        })
+    fn write_nbt(&self, nbt: &mut NbtCompound) {
+        if let Ok(item) = self.item.lock()
+            && let Some(it) = item.as_ref()
+        {
+            let mut it_nbt = NbtCompound::new();
+            it.write_item_stack(&mut it_nbt);
+            nbt.put_compound("item", it_nbt);
+        }
+        if let Ok(hits) = self.hits.lock() {
+            nbt.put_int("hits", *hits);
+        }
+        if let Ok(direction) = self.direction.lock() {
+            nbt.put_byte("direction", *direction as i8);
+        }
     }
 
     fn chunk_data_nbt(&self) -> Option<NbtCompound> {
@@ -78,9 +78,9 @@ impl BrushableBlockBlockEntity {
     pub const fn new(position: BlockPos) -> Self {
         Self {
             position,
-            item: Mutex::const_new(None),
-            hits: Mutex::const_new(0),
-            direction: Mutex::const_new(0),
+            item: Mutex::new(None),
+            hits: Mutex::new(0),
+            direction: Mutex::new(0),
         }
     }
 }

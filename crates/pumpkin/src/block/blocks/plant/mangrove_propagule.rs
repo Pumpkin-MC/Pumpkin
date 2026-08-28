@@ -11,8 +11,8 @@ use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::world::{BlockAccessor, BlockFlags};
 
 use crate::block::{
-    BlockBehaviour, BlockFuture, BonemealArgs, CanPlaceAtArgs, GetStateForNeighborUpdateArgs,
-    OnPlaceArgs, RandomTickArgs,
+    BlockBehaviour, BonemealArgs, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, OnPlaceArgs,
+    RandomTickArgs,
 };
 use crate::world::World;
 
@@ -57,7 +57,7 @@ impl MangrovePropaguleBlock {
         props.to_state_id(&Block::MANGROVE_PROPAGULE)
     }
 
-    async fn advance_tree(
+    fn advance_tree(
         world: &Arc<World>,
         pos: &BlockPos,
         block: &Block,
@@ -65,16 +65,13 @@ impl MangrovePropaguleBlock {
     ) {
         if props.stage == 0 {
             props.stage = 1;
-            world
-                .set_block_state(pos, props.to_state_id(block), BlockFlags::NOTIFY_ALL)
-                .await;
+            world.set_block_state(pos, props.to_state_id(block), BlockFlags::NOTIFY_ALL);
         } else {
             use crate::plugin::api::events::world::structure_grow::{StructureGrowEvent, TreeType};
             let mut event = StructureGrowEvent::new(*pos, TreeType::Mangrove, false);
             if let Some(server) = world.server.upgrade() {
-                server.plugin_manager.fire(&server, &mut event).await;
+                server.plugin_manager.fire_blocking(&server, &mut event);
             }
-            let _ = event.cancelled;
         }
     }
 }
@@ -86,52 +83,42 @@ impl BlockBehaviour for MangrovePropaguleBlock {
         Self::can_survive(args.block_accessor, args.position, &props)
     }
 
-    fn on_place<'a>(&'a self, args: OnPlaceArgs<'a>) -> BlockFuture<'a, BlockStateId> {
-        Box::pin(async move {
-            let mut props = MangrovePropaguleLikeProperties::from_state_id(
-                args.block.default_state.id,
-                args.block,
+    fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
+        let mut props =
+            MangrovePropaguleLikeProperties::from_state_id(args.block.default_state.id, args.block);
+        props.hanging = false;
+        props.age = MAX_AGE;
+        props.stage = 0;
+        props.waterlogged = args.replacing.water_source();
+        props.to_state_id(args.block)
+    }
+
+    fn get_state_for_neighbor_update(
+        &self,
+        args: GetStateForNeighborUpdateArgs<'_>,
+    ) -> BlockStateId {
+        let props = MangrovePropaguleLikeProperties::from_state_id(args.state_id, args.block);
+        if !Self::can_survive(args.world, args.position, &props) {
+            return Block::AIR.default_state.id;
+        }
+        args.state_id
+    }
+
+    fn random_tick(&self, args: RandomTickArgs<'_>) {
+        let state_id = args.world.get_block_state_id(args.position);
+        let mut props = MangrovePropaguleLikeProperties::from_state_id(state_id, args.block);
+        if !props.hanging {
+            if rand::random::<u8>().is_multiple_of(7) {
+                Self::advance_tree(args.world, args.position, args.block, props);
+            }
+        } else if props.age < MAX_AGE {
+            props.age += 1;
+            args.world.set_block_state(
+                args.position,
+                props.to_state_id(args.block),
+                BlockFlags::NOTIFY_ALL,
             );
-            props.hanging = false;
-            props.age = MAX_AGE;
-            props.stage = 0;
-            props.waterlogged = args.replacing.water_source();
-            props.to_state_id(args.block)
-        })
-    }
-
-    fn get_state_for_neighbor_update<'a>(
-        &'a self,
-        args: GetStateForNeighborUpdateArgs<'a>,
-    ) -> BlockFuture<'a, BlockStateId> {
-        Box::pin(async move {
-            let props = MangrovePropaguleLikeProperties::from_state_id(args.state_id, args.block);
-            if !Self::can_survive(args.world, args.position, &props) {
-                return Block::AIR.default_state.id;
-            }
-            args.state_id
-        })
-    }
-
-    fn random_tick<'a>(&'a self, args: RandomTickArgs<'a>) -> BlockFuture<'a, ()> {
-        Box::pin(async move {
-            let state_id = args.world.get_block_state_id(args.position);
-            let mut props = MangrovePropaguleLikeProperties::from_state_id(state_id, args.block);
-            if !props.hanging {
-                if rand::random::<u8>().is_multiple_of(7) {
-                    Self::advance_tree(args.world, args.position, args.block, props).await;
-                }
-            } else if props.age < MAX_AGE {
-                props.age += 1;
-                args.world
-                    .set_block_state(
-                        args.position,
-                        props.to_state_id(args.block),
-                        BlockFlags::NOTIFY_ALL,
-                    )
-                    .await;
-            }
-        })
+        }
     }
 
     fn is_valid_bonemeal_target(&self, args: BonemealArgs<'_>) -> bool {
@@ -148,22 +135,20 @@ impl BlockBehaviour for MangrovePropaguleBlock {
         }
     }
 
-    fn perform_bonemeal<'a>(&'a self, args: BonemealArgs<'a>) -> BlockFuture<'a, ()> {
-        Box::pin(async move {
+    fn perform_bonemeal(&self, args: BonemealArgs<'_>) {
+        {
             let mut props =
                 MangrovePropaguleLikeProperties::from_state_id(args.state_id, args.block);
             if props.hanging && props.age < MAX_AGE {
                 props.age += 1;
-                args.world
-                    .set_block_state(
-                        args.position,
-                        props.to_state_id(args.block),
-                        BlockFlags::NOTIFY_ALL,
-                    )
-                    .await;
+                args.world.set_block_state(
+                    args.position,
+                    props.to_state_id(args.block),
+                    BlockFlags::NOTIFY_ALL,
+                );
             } else {
-                Self::advance_tree(args.world, args.position, args.block, props).await;
+                Self::advance_tree(args.world, args.position, args.block, props);
             }
-        })
+        }
     }
 }
