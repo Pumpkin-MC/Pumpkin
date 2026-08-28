@@ -14,6 +14,7 @@ use pumpkin_util::resource_location::{FromResourceLocation, ResourceLocation, To
 use rustc_hash::FxHashMap;
 
 use crate::{
+    block::{block_state_from_nbt, block_state_to_nbt},
     chunk::{
         ChunkEntityData, ChunkReadingError, ChunkSerializingError,
         format::anvil::{SingleChunkDataSerializer, WORLD_DATA_VERSION},
@@ -96,18 +97,7 @@ fn extract_u16_array(tag: &pumpkin_nbt::tag::NbtTag) -> Option<Box<[BlockStateId
                     pumpkin_nbt::tag::NbtTag::Byte(x) => BlockStateId::new_or_air(*x as u16),
                     pumpkin_nbt::tag::NbtTag::Long(x) => BlockStateId::new_or_air(*x as u16),
                     pumpkin_nbt::tag::NbtTag::Compound(compound) => {
-                        if let Ok(entry) =
-                            crate::generation::structure::template::PaletteEntry::from_nbt_compound(
-                                compound,
-                            )
-                            && let Some(state) =
-                                crate::generation::structure::template::BlockStateResolver::resolve_simple(
-                                    &entry,
-                                )
-                        {
-                            return state.id;
-                        }
-                        BlockStateId::AIR
+                        block_state_from_nbt(compound).unwrap_or(BlockStateId::AIR)
                     }
                     _ => BlockStateId::AIR,
                 })
@@ -501,27 +491,7 @@ impl ChunkData {
             let palette_tags: Vec<NbtTag> = block_states_nbt
                 .palette
                 .iter()
-                .map(|&id| {
-                    let block = Block::from_state_id(id);
-                    let mut comp = NbtCompound::new();
-                    let name = if block.name.starts_with("minecraft:") {
-                        block.name.to_string()
-                    } else {
-                        format!("minecraft:{}", block.name)
-                    };
-                    comp.put_string("Name", name);
-                    if let Some(props) = block.properties(id) {
-                        let prop_vec = props.to_props();
-                        if !prop_vec.is_empty() {
-                            let mut props_comp = NbtCompound::new();
-                            for (k, v) in prop_vec {
-                                props_comp.put_string(k, v.to_string());
-                            }
-                            comp.put_compound("Properties", props_comp);
-                        }
-                    }
-                    NbtTag::Compound(comp)
-                })
+                .map(|&id| NbtTag::Compound(block_state_to_nbt(id)))
                 .collect();
             bs_comp.put_list("palette", palette_tags);
             section_comp.put_compound("block_states", bs_comp);
