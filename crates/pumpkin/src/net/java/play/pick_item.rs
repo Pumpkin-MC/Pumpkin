@@ -2,10 +2,10 @@
 use super::*;
 
 impl JavaClient {
-    pub async fn handle_pick_item_from_block(
+    pub fn handle_pick_item_from_block(
         &self,
         player: &Arc<Player>,
-        pick_item: SPickItemFromBlock,
+        pick_item: &SPickItemFromBlock,
     ) {
         if !player.can_interact_with_block_at(&pick_item.pos, 1.0) {
             return;
@@ -38,11 +38,9 @@ impl JavaClient {
             player.inventory.swap_stack_with_hotbar(stack);
         }
 
-        player
-            .send_client_packet(&CSetSelectedSlot::new(
-                player.inventory.get_selected_slot() as i8
-            ))
-            .await;
+        player.try_send_client_packet(&CSetSelectedSlot::new(
+            player.inventory.get_selected_slot() as i8
+        ));
         player
             .player_screen_handler
             .lock()
@@ -50,10 +48,10 @@ impl JavaClient {
             .send_content_updates();
     }
 
-    pub async fn handle_pick_item_from_entity(
+    pub fn handle_pick_item_from_entity(
         &self,
         player: &Arc<Player>,
-        pick_item: SPickItemFromEntity,
+        pick_item: &SPickItemFromEntity,
     ) {
         use pumpkin_data::entity::{entity_from_egg, spawn_egg_ids};
 
@@ -99,11 +97,9 @@ impl JavaClient {
                 player.inventory.swap_stack_with_hotbar(stack);
             }
 
-            player
-                .send_client_packet(&CSetSelectedSlot::new(
-                    player.inventory.get_selected_slot() as i8
-                ))
-                .await;
+            player.try_send_client_packet(&CSetSelectedSlot::new(
+                player.inventory.get_selected_slot() as i8,
+            ));
             player
                 .player_screen_handler
                 .lock()

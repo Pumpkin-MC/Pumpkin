@@ -777,24 +777,37 @@ impl<S: SingleChunkDataSerializer + 'static> ChunkSerializer for AnvilChunkFile<
         chunks: Vec<Vector2<i32>>,
         stream: tokio::sync::mpsc::Sender<LoadedData<Self::Data, ChunkReadingError>>,
     ) {
-        // Don't par iter here so we can prevent backpressure with the await in the async
-        // runtime
-        for chunk in chunks {
-            let index = Self::get_chunk_index(chunk.x, chunk.y);
-            let is_ok = match &self.chunks_data[index] {
-                None => stream.send(LoadedData::Missing(chunk)).await.is_ok(),
-                Some(chunk_metadata) => {
-                    let result = match chunk_metadata.serialized_data.to_chunk(chunk) {
-                        Ok(chunk_res) => LoadedData::Loaded(chunk_res),
-                        Err(err) => LoadedData::Error((chunk, err)),
-                    };
+        let chunk_items: Vec<(Vector2<i32>, Option<AnvilChunkData>)> = chunks
+            .into_iter()
+            .map(|chunk| {
+                let index = Self::get_chunk_index(chunk.x, chunk.y);
+                let data = self.chunks_data[index]
+                    .as_ref()
+                    .map(|chunk_metadata| chunk_metadata.serialized_data.clone());
+                (chunk, data)
+            })
+            .collect();
 
-                    stream.send(result).await.is_ok()
-                }
-            };
+        let (tx, mut rx) = tokio::sync::mpsc::channel(chunk_items.len().max(1));
 
-            if !is_ok {
-                // Stream is closed. Stop unneeded work and IO
+        rayon::spawn(move || {
+            use rayon::prelude::*;
+            chunk_items
+                .into_par_iter()
+                .for_each(|(chunk, serialized_data)| {
+                    let result = serialized_data.map_or_else(
+                        || LoadedData::Missing(chunk),
+                        |data| match data.to_chunk(chunk) {
+                            Ok(chunk_res) => LoadedData::Loaded(chunk_res),
+                            Err(err) => LoadedData::Error((chunk, err)),
+                        },
+                    );
+                    let _ = tx.blocking_send(result);
+                });
+        });
+
+        while let Some(item) = rx.recv().await {
+            if stream.send(item).await.is_err() {
                 return;
             }
         }

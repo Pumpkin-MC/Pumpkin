@@ -3,10 +3,10 @@ use super::*;
 
 impl JavaClient {
     #[expect(clippy::too_many_lines)]
-    pub async fn handle_player_action(
+    pub fn handle_player_action(
         &self,
         player: &Arc<Player>,
-        player_action: SPlayerAction,
+        player_action: &SPlayerAction,
         server: &Server,
     ) {
         if !player.has_client_loaded() {
@@ -21,7 +21,7 @@ impl JavaClient {
                             "Player {0} tried to interact with block out of reach at {1}",
                             player.gameprofile.name, player_action.position
                         );
-                        self.update_sequence(player, player_action.sequence.0);
+                        self.update_sequence(player_action.sequence.0);
                         return;
                     }
                     let position = player_action.position;
@@ -39,10 +39,9 @@ impl JavaClient {
                             );
                         server_arc
                             .plugin_manager
-                            .fire(&server_arc, &mut event)
-                            .await;
+                            .fire_blocking(&server_arc, &mut event);
                         if event.cancelled {
-                            self.update_sequence(player, player_action.sequence.0);
+                            self.update_sequence(player_action.sequence.0);
                             return;
                         }
                     }
@@ -63,12 +62,11 @@ impl JavaClient {
                     let inventory = player.inventory();
                     let held = inventory.held_item();
                     if !server.item_registry.can_mine(held.item, player) {
-                        self.enqueue_client_packet(&CBlockUpdate::new(
+                        player.try_send_client_packet(&CBlockUpdate::new(
                             position,
                             VarInt(i32::from(state.id.as_u16())),
-                        ))
-                        .await;
-                        self.update_sequence(player, player_action.sequence.0);
+                        ));
+                        self.update_sequence(player_action.sequence.0);
                         return;
                     }
 
@@ -86,8 +84,8 @@ impl JavaClient {
                                 .block_registry
                                 .broken(&world, block, player, &position, server, state);
                         }
-                        self.sync_block_state_to_client(&world, position).await;
-                        self.update_sequence(player, player_action.sequence.0);
+                        self.sync_block_state_to_client(&world, position);
+                        self.update_sequence(player_action.sequence.0);
                         return;
                     }
                     player.start_mining_time.store(
@@ -127,7 +125,7 @@ impl JavaClient {
                                     1,
                                 );
                             }
-                            self.sync_block_state_to_client(&world, position).await;
+                            self.sync_block_state_to_client(&world, position);
                         } else {
                             player.mining.store(true, Ordering::Relaxed);
                             *player
@@ -151,7 +149,7 @@ impl JavaClient {
                                 .store(progress, Ordering::Relaxed);
                         }
                     }
-                    self.update_sequence(player, player_action.sequence.0);
+                    self.update_sequence(player_action.sequence.0);
                 }
                 Status::CancelledDigging => {
                     if !player.can_interact_with_block_at(&player_action.position, 1.0) {
@@ -159,7 +157,7 @@ impl JavaClient {
                             "Player {0} tried to interact with block out of reach at {1}",
                             player.gameprofile.name, player_action.position
                         );
-                        self.update_sequence(player, player_action.sequence.0);
+                        self.update_sequence(player_action.sequence.0);
                         return;
                     }
                     player.mining.store(false, Ordering::Relaxed);
@@ -169,7 +167,7 @@ impl JavaClient {
                         player_action.position,
                         BlockBreakingProgress::Stop,
                     );
-                    self.update_sequence(player, player_action.sequence.0);
+                    self.update_sequence(player_action.sequence.0);
                 }
                 Status::FinishedDigging => {
                     // TODO: do validation
@@ -179,7 +177,7 @@ impl JavaClient {
                             "Player {0} tried to interact with block out of reach at {1}",
                             player.gameprofile.name, player_action.position
                         );
-                        self.update_sequence(player, player_action.sequence.0);
+                        self.update_sequence(player_action.sequence.0);
                         return;
                     }
 
@@ -221,15 +219,15 @@ impl JavaClient {
                         );
                     }
 
-                    self.sync_block_state_to_client(&world, location).await;
+                    self.sync_block_state_to_client(&world, location);
 
-                    self.update_sequence(player, player_action.sequence.0);
+                    self.update_sequence(player_action.sequence.0);
                 }
                 Status::DropItem => {
-                    player.drop_held_item(false).await;
+                    player.drop_held_item(false);
                 }
                 Status::DropItemStack => {
-                    player.drop_held_item(true).await;
+                    player.drop_held_item(true);
                 }
                 Status::ReleaseItemInUse => {
                     let item_in_use = player
@@ -245,17 +243,17 @@ impl JavaClient {
                     player.living_entity.clear_active_hand();
                 }
                 Status::SwapItem => {
-                    player.swap_item().await;
+                    player.swap_item();
                 }
                 Status::SpearJab => {
                     debug!("todo");
                 }
             },
-            Err(_) => self.kick(TextComponent::text("Invalid status")).await,
+            Err(_) => self.try_kick(&TextComponent::text("Invalid status")),
         }
     }
 
-    pub fn update_sequence(&self, _player: &Player, sequence: i32) {
+    pub fn update_sequence(&self, sequence: i32) {
         if sequence < 0 {
             error!("Expected packet sequence >= 0");
         }
@@ -265,12 +263,11 @@ impl JavaClient {
         );
     }
 
-    async fn sync_block_state_to_client(&self, world: &World, position: BlockPos) {
+    fn sync_block_state_to_client(&self, world: &World, position: BlockPos) {
         let synced_state_id = world.get_block_state_id(&position);
-        self.send_packet(&CBlockUpdate::new(
+        self.try_send_packet(&CBlockUpdate::new(
             position,
             VarInt(i32::from(synced_state_id.as_u16())),
-        ))
-        .await;
+        ));
     }
 }

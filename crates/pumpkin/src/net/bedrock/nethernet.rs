@@ -256,6 +256,7 @@ async fn negotiate_direct(
     Box::pin(negotiate_inner(state, address, offer, None, advertised_ip)).await
 }
 
+#[expect(clippy::too_many_lines)]
 async fn negotiate_inner(
     state: &EndpointState,
     address: SocketAddr,
@@ -266,11 +267,17 @@ async fn negotiate_inner(
     let signaling = if candidates.is_some() { "LAN" } else { "HTTP" };
     let direct_ip = candidates.is_none();
     trace!(%address, signaling, "Starting NetherNet negotiation");
-    let (offer, client_public_key) = authenticate_client_offer(
-        offer,
-        state.require_client_identity,
-        state.oidc_verifier.as_ref().and_then(|c| c.get()),
-    )?;
+    let (offer, client_public_key) = {
+        let offer = offer.to_string();
+        let require_identity = state.require_client_identity;
+        let oidc_verifier = state.oidc_verifier.as_ref().and_then(|c| c.get()).cloned();
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        rayon::spawn(move || {
+            let res = authenticate_client_offer(&offer, require_identity, oidc_verifier.as_ref());
+            let _ = tx.send(res);
+        });
+        rx.await.map_err(|_| "Task cancelled".to_string())??
+    };
     trace!(
         %address,
         signaling,
@@ -357,7 +364,17 @@ async fn negotiate_inner(
         "Gathered NetherNet ICE candidates"
     );
     trace!(%address, signaling, "Completed NetherNet negotiation");
-    Ok((add_server_identity(&answer, &state.identity_key)?, session))
+
+    let answer = {
+        let identity_key = state.identity_key.clone();
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        rayon::spawn(move || {
+            let res = add_server_identity(&answer, &identity_key);
+            let _ = tx.send(res);
+        });
+        rx.await.map_err(|_| "Task cancelled".to_string())??
+    };
+    Ok((answer, session))
 }
 
 async fn build_peer(

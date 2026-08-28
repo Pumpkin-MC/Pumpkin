@@ -12,7 +12,6 @@ use crate::chunk::io::Dirtiable;
 use crate::level::{Level, SyncChunk};
 use dashmap::DashMap;
 use pumpkin_config::lighting::LightingEngineConfig;
-use pumpkin_data::chunk_gen_settings::GenerationSettings;
 use pumpkin_util::math::vector2::Vector2;
 use slotmap::Key;
 use std::cmp::{Ordering, max};
@@ -76,6 +75,7 @@ pub struct GenerationSchedule {
     listener: Arc<ChunkListener>,
     lighting_config: LightingEngineConfig,
     last_unload: std::time::Instant,
+    generation_pool: Arc<rayon::ThreadPool>,
 }
 
 impl GenerationSchedule {
@@ -113,8 +113,16 @@ impl GenerationSchedule {
             io_lock.clone(),
         ));
 
-        let max_in_flight =
-            (thread::available_parallelism().map_or(1, std::num::NonZero::get) * 4) as u16;
+        let cpus = thread::available_parallelism().map_or(1, std::num::NonZero::get);
+        let gen_threads = (cpus / 2).clamp(2, 16);
+        let generation_pool = Arc::new(
+            rayon::ThreadPoolBuilder::new()
+                .num_threads(gen_threads)
+                .thread_name(|i| format!("ChunkGen-{i}"))
+                .build()
+                .expect("Failed to build Chunk Generation ThreadPool"),
+        );
+        let max_in_flight = (gen_threads * 2) as u16;
 
         let level_sched = level;
         let lighting_config = level_sched.lighting_config;
@@ -142,6 +150,7 @@ impl GenerationSchedule {
                     chunk_map: HashMap::default(),
                     lighting_config,
                     last_unload: std::time::Instant::now(),
+                    generation_pool,
                 };
                 scheduler.work(&level_sched);
             })
@@ -752,8 +761,10 @@ impl GenerationSchedule {
                             chunks.push((pos, Chunk::Level(chunk)));
                         }
                     }
-                    Chunk::Proto(chunk) => {
-                        chunks.push((pos, Chunk::Proto(chunk)));
+                    Chunk::Proto(_) => {
+                        // ProtoChunks are in-memory intermediate generation stages
+                        // (e.g. temporary border dependencies). Do not convert and save
+                        // incomplete chunks to disk during runtime unloads.
                     }
                 }
             }
@@ -1416,12 +1427,10 @@ impl GenerationSchedule {
                         let stage = node.stage;
                         let send_chunk = self.send_chunk.clone();
                         let level = level.clone();
-                        let settings =
-                            GenerationSettings::from_dimension(level.world_gen.load().dimension());
 
-                        rayon::spawn(move || {
+                        self.generation_pool.spawn(move || {
                             let result = crate::chunk_system::worker_logic::run_generation(
-                                pos, cache, stage, &level, settings,
+                                pos, cache, stage, &level,
                             );
                             let _ = send_chunk.send((pos, result));
                         });

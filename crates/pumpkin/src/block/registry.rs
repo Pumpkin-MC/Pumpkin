@@ -541,7 +541,7 @@ impl BlockRegistry {
     }
 
     #[expect(clippy::too_many_lines)]
-    pub async fn place_block(
+    pub fn place_block(
         &self,
         player: &Arc<Player>,
         placed_block: &'static Block,
@@ -697,11 +697,7 @@ impl BlockRegistry {
         };
         server
             .plugin_manager
-            .fire::<crate::plugin::block::block_can_build::BlockCanBuildEvent>(
-                server,
-                &mut can_build_event,
-            )
-            .await;
+            .fire_blocking(server, &mut can_build_event);
         if can_build_event.cancelled || !can_build_event.buildable {
             return Ok(None);
         }
@@ -713,10 +709,7 @@ impl BlockRegistry {
             final_block_pos,
             true,
         );
-        server
-            .plugin_manager
-            .fire::<crate::plugin::block::block_place::BlockPlaceEvent>(server, &mut event)
-            .await;
+        server.plugin_manager.fire_blocking(server, &mut event);
         if event.cancelled {
             return Ok(None);
         }
@@ -1204,13 +1197,7 @@ impl BlockRegistry {
         state_id
     }
 
-    pub fn update_neighbors(
-        &self,
-        world: &Arc<World>,
-        position: &BlockPos,
-        _block: &Block,
-        flags: BlockFlags,
-    ) {
+    pub fn update_neighbors(&self, world: &Arc<World>, position: &BlockPos, flags: BlockFlags) {
         for direction in BlockDirection::abstract_block_update_order() {
             let pos = position.offset(direction.to_offset());
 
