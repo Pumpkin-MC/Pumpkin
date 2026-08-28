@@ -14,7 +14,6 @@ use pumpkin_util::text::TextComponent;
 
 use crate::entity::EntityBase;
 use crate::entity::mob::raider::create_ominous_banner;
-use crate::entity::player::Player;
 use crate::entity::r#type::from_type;
 use crate::world::World;
 use crate::world::bossbar::{Bossbar, BossbarColor, BossbarDivisions};
@@ -260,7 +259,7 @@ impl Raid {
         self.players_in_raid.clear();
     }
 
-    pub fn absorb_raid_omen(&mut self, _player: &Player) -> bool {
+    pub fn absorb_raid_omen(&mut self) -> bool {
         self.raid_omen_level = (self.raid_omen_level + 1).clamp(1, Self::MAX_RAID_OMEN_LEVEL);
         true
     }
@@ -405,7 +404,7 @@ impl Raid {
     }
 
     #[must_use]
-    pub fn find_random_spawn_pos(&self, _world: &World, max_tries: usize) -> Option<BlockPos> {
+    pub fn find_random_spawn_pos(&self, max_tries: usize) -> Option<BlockPos> {
         let seconds_remaining = self.raid_cooldown_ticks / 20;
         let how_far = 0.22 * (seconds_remaining as f32) - 0.24;
         let start_angle = rand::random::<f32>() * std::f32::consts::PI * 2.0;
@@ -559,7 +558,7 @@ impl Raid {
                     }
                 } else {
                     if self.wave_spawn_pos.is_none() && self.raid_cooldown_ticks % 5 == 0 {
-                        self.wave_spawn_pos = self.find_random_spawn_pos(world, 8);
+                        self.wave_spawn_pos = self.find_random_spawn_pos(8);
                     }
 
                     if self.raid_cooldown_ticks == 300 || self.raid_cooldown_ticks % 20 == 0 {
@@ -590,7 +589,7 @@ impl Raid {
             while self.should_spawn_group() {
                 let spawn_pos = self
                     .wave_spawn_pos
-                    .or_else(|| self.find_random_spawn_pos(world, 20))
+                    .or_else(|| self.find_random_spawn_pos(20))
                     .unwrap_or(self.center);
 
                 self.started = true;
@@ -698,7 +697,6 @@ impl Raids {
 
     pub fn create_or_extend_raid(
         &mut self,
-        player: &Player,
         raid_position: BlockPos,
         world: &Arc<World>,
     ) -> Option<i32> {
@@ -714,14 +712,14 @@ impl Raids {
 
         if let Some(id) = existing_id {
             if let Some(raid) = self.raid_map.get_mut(&id) {
-                raid.absorb_raid_omen(player);
+                raid.absorb_raid_omen();
             }
             Some(id)
         } else {
             self.next_id += 1;
             let id = self.next_id;
             let mut raid = Raid::new(id, raid_center_pos, world.level_info.load().difficulty);
-            raid.absorb_raid_omen(player);
+            raid.absorb_raid_omen();
             self.raid_map.insert(id, raid);
             Some(id)
         }

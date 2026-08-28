@@ -516,12 +516,9 @@ fn move_blocks(
         );
         // Vanilla `air.updateNeighbourShapes(level, pos, 2)`: shape only. Block updates
         // wait for the `moved_blocks` loop after every placeholder and air fill is written.
-        world.block_registry.update_neighbors(
-            world,
-            pos,
-            &Block::AIR,
-            BlockFlags::NOTIFY_LISTENERS,
-        );
+        world
+            .block_registry
+            .update_neighbors(world, pos, BlockFlags::NOTIFY_LISTENERS);
         world.block_registry.prepare(
             world,
             pos,

@@ -4,7 +4,7 @@ use pumpkin_data::entity::EntityPose;
 
 impl BedrockClient {
     #[expect(clippy::too_many_lines)]
-    pub async fn handle_player_auth_input(
+    pub fn handle_player_auth_input(
         &self,
         player: &Arc<Player>,
         packet: SPlayerAuthInput,
@@ -144,7 +144,7 @@ impl BedrockClient {
             }
 
             if pos_changed {
-                chunker::update_position(player).await;
+                chunker::update_position(player);
                 player.progress_motion(delta);
             }
         }
@@ -178,7 +178,7 @@ impl BedrockClient {
                     .flying
             };
             if !flying {
-                send_cancellable! {{
+                send_cancellable_blocking! {{
                     server;
                     PlayerToggleFlightEvent::new(player.clone(), true);
                     'after: {
@@ -202,7 +202,7 @@ impl BedrockClient {
                     .flying
             };
             if flying {
-                send_cancellable! {{
+                send_cancellable_blocking! {{
                     server;
                     PlayerToggleFlightEvent::new(player.clone(), false);
                     'after: {
@@ -219,9 +219,8 @@ impl BedrockClient {
         }
 
         if let Some(block_actions) = packet.block_actions {
-            for action in block_actions {
-                self.handle_player_block_action(player, server, action)
-                    .await;
+            for action in &block_actions {
+                self.handle_player_block_action(player, server, action);
             }
         }
     }

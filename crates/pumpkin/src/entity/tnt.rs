@@ -67,14 +67,14 @@ impl EntityBase for TNTEntity {
         );
     }
 
-    fn tick(&self, caller: &dyn EntityBase, server: &Server) {
+    fn tick(&self, caller: &dyn EntityBase, _server: &Server) {
         let entity = &self.entity;
 
         let mut velo = entity.velocity.load();
         velo.y -= self.get_gravity();
 
         entity.move_entity(caller, velo);
-        entity.tick_block_collisions(caller, server);
+        entity.tick_block_collisions(caller);
 
         // Vanilla scales by air drag (0.98) unconditionally every tick, then multiplies by
         // (0.7, -0.5, 0.7) on top of that when on the ground. The two are cumulative, not

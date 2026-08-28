@@ -2,7 +2,7 @@
 use super::*;
 
 impl BedrockClient {
-    pub fn handle_emote(&self, player: &Arc<Player>, _server: &Server, packet: SEmote<'_>) {
+    pub fn handle_emote(&self, player: &Arc<Player>, packet: SEmote<'_>) {
         if !player.has_client_loaded() {
             return;
         }

@@ -2,7 +2,7 @@
 use super::*;
 
 impl BedrockClient {
-    pub fn handle_animate(&self, player: &Arc<Player>, _server: &Server, packet: &SAnimate) {
+    pub fn handle_animate(&self, player: &Arc<Player>, packet: &SAnimate) {
         if !player.has_client_loaded() {
             return;
         }

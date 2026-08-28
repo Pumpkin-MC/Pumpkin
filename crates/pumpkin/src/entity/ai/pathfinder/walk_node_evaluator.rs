@@ -94,8 +94,6 @@ impl WalkNodeEvaluator {
         pos: Vector3<i32>,
         max_y_step: i32,
         last_feet_y: f64,
-        facing: (i32, i32),
-        current_path_type: PathType,
     ) -> Option<Node> {
         let feet_y = self.get_floor_level(pos);
         if feet_y - last_feet_y > self.get_mob_jump_height() {
@@ -124,13 +122,7 @@ impl WalkNodeEvaluator {
                 && path_type != PathType::Trapdoor
                 && path_type != PathType::PowderSnow
             {
-                let jump_node = self.get_jump_on_top_node(
-                    pos,
-                    max_y_step,
-                    last_feet_y,
-                    facing,
-                    current_path_type,
-                );
+                let jump_node = self.get_jump_on_top_node(pos, max_y_step, last_feet_y);
                 if jump_node.is_some() {
                     node = jump_node;
                 }
@@ -157,8 +149,6 @@ impl WalkNodeEvaluator {
         pos: Vector3<i32>,
         max_y_step: i32,
         last_feet_y: f64,
-        _facing: (i32, i32),
-        _current_path_type: PathType,
     ) -> Option<Node> {
         for dy in 1..=max_y_step {
             let step_pos = Vector3::new(pos.x, pos.y + dy, pos.z);
@@ -419,13 +409,7 @@ impl NodeEvaluator for WalkNodeEvaluator {
         for (i, &(dx, dz)) in DIRECTIONS.iter().enumerate() {
             let neighbor_pos = current.pos.0.add_raw(dx, 0, dz);
 
-            let neighbor_opt = self.find_accepted_node(
-                neighbor_pos,
-                max_y_step,
-                floor_level,
-                (dx, dz),
-                current.path_type,
-            );
+            let neighbor_opt = self.find_accepted_node(neighbor_pos, max_y_step, floor_level);
 
             if let Some(neighbor) = neighbor_opt {
                 self.reusable_neighbors[i] = Some(neighbor);
@@ -452,13 +436,7 @@ impl NodeEvaluator for WalkNodeEvaluator {
             ) {
                 let diagonal_pos = current.pos.0.add_raw(dx, 0, dz);
 
-                let diagonal_opt = self.find_accepted_node(
-                    diagonal_pos,
-                    max_y_step,
-                    floor_level,
-                    (dx, dz),
-                    current.path_type,
-                );
+                let diagonal_opt = self.find_accepted_node(diagonal_pos, max_y_step, floor_level);
 
                 if let Some(diagonal) = diagonal_opt
                     && Self::is_diagonal_node_valid(Some(&diagonal))

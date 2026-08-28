@@ -586,22 +586,33 @@ impl<S: SingleChunkDataSerializer + 'static> ChunkSerializer for LinearV2File<S>
         chunks: Vec<Vector2<i32>>,
         stream: tokio::sync::mpsc::Sender<LoadedData<Self::Data, ChunkReadingError>>,
     ) {
-        for chunk in chunks {
-            let index = Self::get_chunk_index(chunk.x, chunk.y);
+        let chunk_items: Vec<(Vector2<i32>, Option<Bytes>)> = chunks
+            .into_iter()
+            .map(|chunk| {
+                let index = Self::get_chunk_index(chunk.x, chunk.y);
+                let data = self.chunks_data[index].clone();
+                (chunk, data)
+            })
+            .collect();
 
-            let is_ok = match &self.chunks_data[index] {
-                None => stream.send(LoadedData::Missing(chunk)).await.is_ok(),
-                Some(data) => {
-                    let result = match S::from_bytes(data, chunk) {
+        let (tx, mut rx) = tokio::sync::mpsc::channel(chunk_items.len().max(1));
+
+        rayon::spawn(move || {
+            use rayon::prelude::*;
+            chunk_items.into_par_iter().for_each(|(chunk, data)| {
+                let result = data.map_or_else(
+                    || LoadedData::Missing(chunk),
+                    |data| match S::from_bytes(&data, chunk) {
                         Ok(c) => LoadedData::Loaded(c),
                         Err(err) => LoadedData::Error((chunk, err)),
-                    };
-                    stream.send(result).await.is_ok()
-                }
-            };
+                    },
+                );
+                let _ = tx.blocking_send(result);
+            });
+        });
 
-            if !is_ok {
-                // Receiver dropped — stop early to avoid unnecessary work.
+        while let Some(item) = rx.recv().await {
+            if stream.send(item).await.is_err() {
                 return;
             }
         }

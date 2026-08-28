@@ -75,9 +75,7 @@ impl ItemBehaviour for SplashPotionItem {
         splash.set_item_stack(stack);
 
         let (yaw, pitch) = player.rotation();
-        splash
-            .thrown
-            .set_velocity_from(player.get_entity(), pitch, yaw, 0.0, POWER, 1.0);
+        splash.thrown.set_velocity_from(pitch, yaw, 0.0, POWER, 1.0);
 
         world.spawn_entity(Arc::new(splash));
 
@@ -129,8 +127,7 @@ impl ItemBehaviour for LingeringPotionItem {
         ling.set_item_stack(stack);
 
         let (yaw, pitch) = player.rotation();
-        ling.thrown
-            .set_velocity_from(player.get_entity(), pitch, yaw, 0.0, POWER, 1.0);
+        ling.thrown.set_velocity_from(pitch, yaw, 0.0, POWER, 1.0);
 
         world.spawn_entity(Arc::new(ling));
 

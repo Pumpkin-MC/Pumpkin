@@ -115,10 +115,12 @@ impl FireBlock {
         total_burn_chance
     }
 
-    const fn is_near_rain(_world: &World, _pos: &BlockPos) -> bool {
-        // TODO: Implement proper rain checking when weather is implemented
-        // For now, return false to allow fire to work
-        false
+    fn is_near_rain(world: &World, pos: &BlockPos) -> bool {
+        world.is_raining_at(pos)
+            || world.is_raining_at(&pos.west())
+            || world.is_raining_at(&pos.east())
+            || world.is_raining_at(&pos.north())
+            || world.is_raining_at(&pos.south())
     }
 
     // Get burn odds for a block, used in try_spreading_fire

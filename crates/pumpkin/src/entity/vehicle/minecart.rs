@@ -249,11 +249,6 @@ impl MinecartEntity {
     }
 
     /// Vanilla `ActivatorRailBlock`: a powered activator rail ejects every rider.
-    ///
-    /// `Entity::remove_passenger` is still async (it fires the dismount events and has to get
-    /// the `CSetPassengers`/teleport pair to the dismounting player in order), so the ejection
-    /// is handed to the runtime instead of blocking the tick. `caller` keeps the cart alive
-    /// until the task runs.
     fn dismount_all_passengers(&self, caller: &dyn EntityBase) {
         let passenger_ids: Vec<i32> = self
             .vehicle
@@ -269,16 +264,10 @@ impl MinecartEntity {
             return;
         }
 
-        let world = caller.get_entity().world.load();
-        let vehicle_id = caller.get_entity().entity_id;
-        let Some(vehicle) = world.get_entity_by_id(vehicle_id) else {
-            return;
-        };
-        tokio::spawn(async move {
-            for passenger_id in passenger_ids {
-                vehicle.get_entity().remove_passenger(passenger_id).await;
-            }
-        });
+        let entity = caller.get_entity();
+        for passenger_id in passenger_ids {
+            entity.remove_passenger(passenger_id);
+        }
     }
 }
 
@@ -304,7 +293,7 @@ impl EntityBase for MinecartEntity {
     }
 
     #[allow(clippy::too_many_lines)]
-    fn tick(&self, caller: &dyn EntityBase, server: &Server) {
+    fn tick(&self, caller: &dyn EntityBase, _server: &Server) {
         self.vehicle.tick();
         if let MinecartKind::Furnace(minecart) = &self.kind {
             minecart.tick(&self.vehicle.entity);
@@ -762,7 +751,7 @@ impl EntityBase for MinecartEntity {
             .block_collisions_checked_at_rest
             .swap(at_rest, Ordering::Relaxed);
         if !at_rest || !already_settled {
-            self.vehicle.entity.tick_block_collisions(caller, server);
+            self.vehicle.entity.tick_block_collisions(caller);
         }
 
         // Vanilla `OldMinecartBehavior.tick`: `pushAndPickupEntities` once, even at rest.

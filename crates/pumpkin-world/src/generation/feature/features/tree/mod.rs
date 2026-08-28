@@ -37,26 +37,15 @@ pub struct TreeNode {
 }
 
 impl TreeFeature {
-    #[expect(clippy::too_many_arguments)]
     pub fn generate<T: GenerationCache>(
         &self,
         block_registry: &dyn WorldPortalExt,
         chunk: &mut T,
-        min_y: i8,
-        height: u16,
-        feature_name: pumpkin_data::placed_feature::PlacedFeature, // This placed feature
         random: &mut RandomGenerator,
         pos: BlockPos,
     ) -> bool {
-        let (log_positions, root_positions, foliage_positions) = self.generate_main(
-            block_registry,
-            chunk,
-            min_y,
-            height,
-            feature_name,
-            random,
-            pos,
-        );
+        let (log_positions, root_positions, foliage_positions) =
+            self.generate_main(block_registry, chunk, random, pos);
 
         if log_positions.is_empty() && foliage_positions.is_empty() {
             return false;
@@ -205,14 +194,10 @@ impl TreeFeature {
         state.is_air() || id.has_tag(tag::Block::MINECRAFT_REPLACEABLE_BY_TREES)
     }
 
-    #[expect(clippy::too_many_arguments)]
     fn generate_main<T: GenerationCache>(
         &self,
         block_registry: &dyn WorldPortalExt,
         chunk: &mut T,
-        _min_y: i8,
-        _height: u16,
-        _feature_name: pumpkin_data::placed_feature::PlacedFeature, // This placed feature
         random: &mut RandomGenerator,
         pos: BlockPos,
     ) -> (Vec<BlockPos>, Vec<BlockPos>, Vec<BlockPos>) {

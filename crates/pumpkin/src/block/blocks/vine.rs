@@ -71,7 +71,6 @@ pub fn get_updated_state(
     mut props: VineLikeProperties,
     world: &dyn BlockAccessor,
     pos: &BlockPos,
-    _block: &Block,
 ) -> VineLikeProperties {
     let above_pos = pos.up();
     if props.up {
@@ -324,7 +323,6 @@ impl BlockBehaviour for VineBlock {
             VineLikeProperties::from_state_id(args.state_id, args.block),
             args.world,
             args.position,
-            args.block,
         );
         if count_faces(&updated_props) == 0 {
             Block::AIR.default_state.id

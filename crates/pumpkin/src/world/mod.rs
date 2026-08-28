@@ -3577,7 +3577,7 @@ impl World {
         player.living_entity.entity.set_pos(position);
         player.living_entity.entity.set_rotation(yaw, pitch);
         player.living_entity.entity.last_pos.store(position);
-        chunker::update_position(player).await;
+        chunker::update_position(player);
 
         let center_chunk = player.living_entity.entity.chunk_pos.load();
         let chunk = self
@@ -4185,7 +4185,7 @@ impl World {
         );
     }
 
-    pub async fn send_world_info(
+    pub fn send_world_info(
         &self,
         player: &Arc<Player>,
         position: Vector3<f64>,
@@ -4204,9 +4204,7 @@ impl World {
         if let ClientPlatform::Java(client) = player.client.as_ref()
             && client.version.load() >= JavaMinecraftVersion::V_1_20_2
         {
-            player
-                .send_client_packet(&CGameEvent::new(GameEvent::StartWaitingChunks, 0.0))
-                .await;
+            player.try_send_client_packet(&CGameEvent::new(GameEvent::StartWaitingChunks, 0.0));
         }
 
         let entity = &player.get_entity();
@@ -4229,7 +4227,7 @@ impl World {
 
         player.send_client_information();
 
-        chunker::update_position(player).await;
+        chunker::update_position(player);
         // Update commands
 
         player.set_health(20.0);
@@ -4609,9 +4607,7 @@ impl World {
         // TODO: difficulty, exp bar, status effect
 
         // Load chunks and send world info FIRST (before teleport packet)
-        target_world
-            .send_world_info(player, position, yaw, pitch)
-            .await;
+        target_world.send_world_info(player, position, yaw, pitch);
 
         // Ensure at least the center chunk is sent synchronously before teleport.
         if let crate::net::ClientPlatform::Java(java_client) = player.client.as_ref() {
@@ -5353,11 +5349,7 @@ impl World {
     /// Tells one client to forget entities in `chunks`.
     /// Vanilla `ChunkMap.TrackedEntity::removePairing`: per-player. A leftover ghost aims
     /// interact packets at an unknown id (`multiplayer.disconnect.invalid_entity_attacked`).
-    pub async fn despawn_entities_in_chunks_for_player(
-        &self,
-        player: &Player,
-        chunks: &[Vector2<i32>],
-    ) {
+    pub fn despawn_entities_in_chunks_for_player(&self, player: &Player, chunks: &[Vector2<i32>]) {
         if chunks.is_empty() {
             return;
         }
@@ -5371,11 +5363,11 @@ impl World {
             .map(|entity| entity.get_entity().entity_id)
             .collect();
 
-        Self::despawn_entity_ids_for_player(player, &entity_ids).await;
+        Self::try_despawn_entity_ids_for_player(player, &entity_ids);
     }
 
-    /// Sync counterpart of [`Self::despawn_entity_ids_for_player`], for the per-tick
-    /// visibility sync in [`Self::tick`], which runs off the runtime.
+    /// Tells one client to forget these entity ids. Shared by chunk-leave despawn and the
+    /// per-tick visibility sync in [`Self::tick`].
     fn try_despawn_entity_ids_for_player(player: &Player, entity_ids: &[i32]) {
         if entity_ids.is_empty() {
             return;
@@ -5395,28 +5387,6 @@ impl World {
                     {
                         client.try_enqueue_packet(data);
                     }
-                }
-            }
-        }
-    }
-
-    /// Tells one client to forget these entity ids. Shared by chunk-leave despawn and the
-    /// per-tick visibility sync in [`Self::tick`].
-    async fn despawn_entity_ids_for_player(player: &Player, entity_ids: &[i32]) {
-        if entity_ids.is_empty() {
-            return;
-        }
-
-        match player.client.as_ref() {
-            ClientPlatform::Java(_) => {
-                let ids: Vec<VarInt> = entity_ids.iter().map(|id| (*id).into()).collect();
-                player.send_client_packet(&CRemoveEntities::new(&ids)).await;
-            }
-            ClientPlatform::Bedrock(client) => {
-                for id in entity_ids {
-                    client
-                        .send_packet(&CRemoveActor::new(VarLong(i64::from(*id))))
-                        .await;
                 }
             }
         }
@@ -5605,7 +5575,7 @@ impl World {
             })
             .unwrap_or(Block::AIR.default_state.id);
 
-        if replaced_block_state_id == block_state_id {
+        if !flags.contains(BlockFlags::FORCE_STATE) && replaced_block_state_id == block_state_id {
             return block_state_id;
         }
 
@@ -5735,7 +5705,7 @@ impl World {
                     new_flags,
                 );
                 self.block_registry
-                    .update_neighbors(self, position, new_block, new_flags);
+                    .update_neighbors(self, position, new_flags);
                 self.block_registry
                     .prepare(self, position, new_block, block_state_id, new_flags);
             }
