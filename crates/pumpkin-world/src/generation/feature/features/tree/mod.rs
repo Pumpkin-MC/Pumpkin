@@ -182,14 +182,17 @@ impl TreeFeature {
         }
     }
 
+    #[must_use]
     pub fn can_replace_or_log(state: &BlockState, id: BlockId) -> bool {
         Self::can_replace(state, id) || id.has_tag(tag::Block::MINECRAFT_LOGS)
     }
 
+    #[must_use]
     pub fn is_air_or_leaves(state: &BlockState, id: BlockId) -> bool {
         state.is_air() || id.has_tag(tag::Block::MINECRAFT_LEAVES)
     }
 
+    #[must_use]
     pub fn can_replace(state: &BlockState, id: BlockId) -> bool {
         state.is_air() || id.has_tag(tag::Block::MINECRAFT_REPLACEABLE_BY_TREES)
     }

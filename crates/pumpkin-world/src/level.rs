@@ -628,6 +628,7 @@ impl Level {
             return res;
         }
         let chunk = self.fetch_chunk(pos).await;
+        self.loaded_chunks.insert(pos, chunk.clone());
         f(&chunk)
     }
 

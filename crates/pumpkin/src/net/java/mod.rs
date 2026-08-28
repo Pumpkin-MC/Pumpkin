@@ -90,6 +90,7 @@ pub struct JavaClient {
     pub player: ArcSwap<Option<Arc<Player>>>,
     /// A collection of tasks associated with this client. The tasks await completion when removing the client.
     tasks: TaskTracker,
+    rt_handle: tokio::runtime::Handle,
     /// An notifier that is triggered when this client is closed.
     close_token: CancellationToken,
     /// A normal-priority queue of serialized packets to send to the network.
@@ -167,6 +168,7 @@ impl JavaClient {
             connection_state: pending.connection_state,
             close_token: pending.close_token,
             tasks: TaskTracker::new(),
+            rt_handle: tokio::runtime::Handle::current(),
             outgoing_packet_queue_send: send,
             outgoing_packet_queue_recv: Some(recv),
             outgoing_packet_priority_send: priority_send,
@@ -306,6 +308,7 @@ impl JavaClient {
         if self.close_token.is_cancelled() {
             None
         } else {
+            let _guard = self.rt_handle.enter();
             Some(self.tasks.spawn(task))
         }
     }

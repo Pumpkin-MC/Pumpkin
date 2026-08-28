@@ -24,7 +24,8 @@ impl JavaClient {
                         server;
                         PlayerToggleSprintEvent::new(player.clone(), true);
                         'after: {
-                            player.get_entity().set_sprinting(event.is_sprinting);
+                            player.set_sprinting(event.is_sprinting);
+                            player.update_player_pose();
                         }
                     }}
                 }
@@ -35,7 +36,8 @@ impl JavaClient {
                         server;
                         PlayerToggleSprintEvent::new(player.clone(), false);
                         'after: {
-                            player.get_entity().set_sprinting(event.is_sprinting);
+                            player.set_sprinting(event.is_sprinting);
+                            player.update_player_pose();
                         }
                     }}
                 }
