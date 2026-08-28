@@ -2,7 +2,7 @@
 use super::*;
 
 impl JavaClient {
-    pub async fn handle_move_vehicle(&self, player: &Arc<Player>, packet: SMoveVehicle) {
+    pub fn handle_move_vehicle(&self, player: &Arc<Player>, packet: &SMoveVehicle) {
         let entity = player.get_entity();
         let pos = Vector3::new(packet.x, packet.y, packet.z);
         let vehicle = entity
@@ -16,6 +16,6 @@ impl JavaClient {
             vehicle_entity.set_rotation(packet.yaw, packet.pitch);
         }
         entity.set_pos(pos);
-        chunker::update_position(player).await;
+        chunker::update_position(player);
     }
 }

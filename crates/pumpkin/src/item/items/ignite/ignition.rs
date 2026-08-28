@@ -22,7 +22,7 @@ impl Ignition {
     where
         F: FnOnce(Arc<World>, BlockPos, BlockStateId),
     {
-        if world.get_fluid(&location).name != Fluid::EMPTY.name {
+        if *world.get_fluid(&location) != Fluid::EMPTY {
             return false;
         }
         let fire_block = FireBlockBase::get_fire_type(world, &fire_pos);

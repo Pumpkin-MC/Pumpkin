@@ -3,17 +3,17 @@ use super::*;
 
 impl JavaClient {
     #[allow(clippy::too_many_lines)]
-    pub async fn handle_use_item_on(
+    pub fn handle_use_item_on(
         &self,
         player: &Arc<Player>,
-        use_item_on: SUseItemOn,
+        use_item_on: &SUseItemOn,
         server: &Arc<Server>,
     ) -> Result<(), BlockPlacingError> {
         if !player.has_client_loaded() {
             return Ok(());
         }
         player.update_last_action_time();
-        self.update_sequence(player, use_item_on.sequence.0);
+        self.update_sequence(use_item_on.sequence.0);
 
         let position = use_item_on.position;
         let cursor_pos = use_item_on.cursor_pos;
@@ -59,16 +59,15 @@ impl JavaClient {
             Some(position),
         );
 
-        send_cancellable! {{
+        send_cancellable_blocking! {{
             server;
             event;
             'cancelled: {
                 let state_id = world.get_block_state_id(&position);
-                self.enqueue_client_packet(&CBlockUpdate::new(
+                player.try_send_client_packet(&CBlockUpdate::new(
                     position,
                     VarInt(i32::from(state_id.as_u16())),
-                ))
-                .await;
+                ));
                 return Ok(());
             }
         }}
@@ -125,9 +124,8 @@ impl JavaClient {
         // Check if the item is a block, because not every item can be placed :D
         let item_id = item.item.id;
         if let Some(block) = Block::from_item_id(item_id) {
-            should_try_decrement = self
-                .run_is_block_place(player, block, server, use_item_on, position, face)
-                .await?;
+            should_try_decrement =
+                Self::run_is_block_place(player, block, server, use_item_on, position, face)?;
         }
 
         if should_try_decrement {
@@ -216,26 +214,23 @@ impl JavaClient {
         BlockActionResult::Pass
     }
 
-    async fn run_is_block_place(
-        &self,
+    fn run_is_block_place(
         player: &Arc<Player>,
         block: &'static Block,
         server: &Arc<Server>,
-        use_item_on: SUseItemOn,
+        use_item_on: &SUseItemOn,
         location: BlockPos,
         face: BlockDirection,
     ) -> Result<bool, BlockPlacingError> {
         match server
             .block_registry
-            .place_block(player, block, server, &use_item_on, location, face)
-            .await
+            .place_block(player, block, server, use_item_on, location, face)
         {
             Ok(Some((final_block_pos, new_state))) => {
-                self.send_packet(&CBlockUpdate::new(
+                player.try_send_client_packet(&CBlockUpdate::new(
                     final_block_pos,
                     VarInt(i32::from(new_state.as_u16())),
-                ))
-                .await;
+                ));
                 Ok(true)
             }
             Ok(None) => Ok(false),

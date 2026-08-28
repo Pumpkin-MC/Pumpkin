@@ -2,11 +2,7 @@
 use super::*;
 
 impl JavaClient {
-    pub async fn handle_set_command_block(
-        &self,
-        player: &Arc<Player>,
-        command: SSetCommandBlock<'_>,
-    ) {
+    pub fn handle_set_command_block(&self, player: &Arc<Player>, command: &SSetCommandBlock<'_>) {
         if !player.is_creative() {
             return;
         }
@@ -22,8 +18,7 @@ impl JavaClient {
             }
 
             let Ok(command_block_mode) = CommandBlockMode::try_from(command.mode) else {
-                self.kick(TextComponent::text("Invalid Command block mode"))
-                    .await;
+                self.try_kick(&TextComponent::text("Invalid Command block mode"));
                 return;
             };
 

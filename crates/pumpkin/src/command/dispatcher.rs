@@ -793,7 +793,6 @@ impl CommandDispatcher {
 
 #[cfg(test)]
 mod test {
-    use pumpkin_config::BasicConfiguration;
     use pumpkin_data::translation;
     use pumpkin_util::permission::PermissionManager;
     use pumpkin_util::text::TextContent;
@@ -817,22 +816,18 @@ mod test {
 
     #[test]
     fn dynamic_command() {
-        let config = BasicConfiguration::default();
         let commands_config = pumpkin_config::CommandsConfig::default();
         let manager = PermissionManager::new();
-        let mut dispatcher =
-            default_dispatcher(&manager, &config, &commands_config).fallback_dispatcher;
+        let mut dispatcher = default_dispatcher(&manager, &commands_config).fallback_dispatcher;
         let tree = CommandTree::new(["test"], "test_desc");
         dispatcher.register(tree, "minecraft:test");
     }
 
     #[test]
     fn pumpkin_command_aliases() {
-        let config = BasicConfiguration::default();
         let commands_config = pumpkin_config::CommandsConfig::default();
         let manager = PermissionManager::new();
-        let dispatcher =
-            default_dispatcher(&manager, &config, &commands_config).fallback_dispatcher;
+        let dispatcher = default_dispatcher(&manager, &commands_config).fallback_dispatcher;
 
         let pumpkin_tree = dispatcher.get_tree("pumpkin").unwrap();
         let version_tree = dispatcher.get_tree("version").unwrap();

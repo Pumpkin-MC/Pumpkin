@@ -192,7 +192,7 @@ impl JavaClient {
             return;
         }
 
-        if let Err(err) = self.validate_chat_session(player, server, &session) {
+        if let Err(err) = self.validate_chat_session(player, server, &session).await {
             log_at_level!(
                 err.severity(),
                 "{} (uuid {}) {}",
@@ -234,7 +234,7 @@ impl JavaClient {
     }
 
     /// Runs vanilla checks for a valid player session
-    pub fn validate_chat_session(
+    pub async fn validate_chat_session(
         &self,
         player: &Player,
         server: &Server,
@@ -257,13 +257,17 @@ impl JavaClient {
         signable.extend_from_slice(&session.expires_at.to_be_bytes());
         signable.extend_from_slice(&session.public_key);
 
-        let public_keys_guard = server.mojang_public_keys.load();
+        let public_keys = server.mojang_public_keys.load_full();
 
-        // Verify signature with RSA-SHA1
-        let is_valid = public_keys_guard.iter().any(|key| {
-            let verifying_key = VerifyingKey::<Sha1>::new(key.clone());
-            verifying_key.verify(&signable, &key_signature).is_ok()
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        rayon::spawn(move || {
+            let is_valid = public_keys.iter().any(|key| {
+                let verifying_key = VerifyingKey::<Sha1>::new(key.clone());
+                verifying_key.verify(&signable, &key_signature).is_ok()
+            });
+            let _ = tx.send(is_valid);
         });
+        let is_valid = rx.await.unwrap_or(false);
 
         // Verify that the signable is valid for any one of Mojang's public keys
         if !is_valid {
