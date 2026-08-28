@@ -7,8 +7,36 @@ use pumpkin_nbt::{Nbt, NbtCompound, tag::NbtTag};
 use serde_json::Value;
 
 pub use pumpkin_gametest::model::{TestDefinition as TestInstance, TestRotation, TestType};
+use tracing::warn;
 
 pub type TestInstanceRegistry = HashMap<String, TestInstance>;
+
+/// Loads all test instances embedded in the binary at compile time.
+///
+/// Ids are fully qualified, so entries here can be overridden by later
+/// [`load_test_instances_from_dir`] calls for the same id.
+pub fn load_embedded_test_instances(registry: &mut TestInstanceRegistry) -> usize {
+    use pumpkin_world::generation::structure::template;
+
+    let before = registry.len();
+
+    for &id in template::all_test_instance_names() {
+        let Some(content) = template::test_instance_json(id) else {
+            warn!("Embedded test instance '{id}' has no JSON payload");
+            continue;
+        };
+
+        match serde_json::from_str::<TestInstance>(content) {
+            Ok(instance) if instance.is_valid() => {
+                registry.insert(id.to_owned(), instance);
+            }
+            Ok(_) => warn!("Embedded test instance '{id}' failed validation"),
+            Err(e) => warn!("Failed to parse embedded test instance '{id}': {e}"),
+        }
+    }
+
+    registry.len() - before
+}
 
 pub fn load_test_instances_from_dir(
     namespace: &str,

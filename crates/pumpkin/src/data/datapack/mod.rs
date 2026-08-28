@@ -85,57 +85,65 @@ impl DatapackManager {
         let mut all_recipes: Vec<DynamicRecipe> = Vec::new();
         let mut all_functions: HashMap<String, Vec<String>> = HashMap::new();
         let mut all_function_tags: HashMap<String, Vec<String>> = HashMap::new();
-        let mut all_test_instances = TestInstanceRegistry::new();
+        let mut all_test_instances: TestInstanceRegistry = HashMap::new();
 
+        // Embedded test instances are compile-time constants and always load,
+        // so on-disk packs can override them by id.
+        let embedded_count = test_loader::load_embedded_test_instances(&mut all_test_instances);
+        if embedded_count > 0 {
+            info!("Loaded {embedded_count} embedded test instance(s)");
+        }
         if datapacks_dir.is_dir() {
-            let Ok(entries) = fs::read_dir(&datapacks_dir) else {
-                warn!(
-                    "Failed to read datapacks directory: {}",
-                    datapacks_dir.display()
-                );
-                return;
-            };
+            match fs::read_dir(&datapacks_dir) {
+                Ok(entries) => {
+                    for entry in entries.flatten() {
+                        let pack_path = entry.path();
+                        let file_name = entry.file_name().to_string_lossy().to_string();
 
-            for entry in entries.flatten() {
-                let pack_path = entry.path();
-                let file_name = entry.file_name().to_string_lossy().to_string();
+                        if file_name.starts_with('.') || !pack_path.is_dir() {
+                            continue;
+                        }
 
-                if file_name.starts_with('.') || !pack_path.is_dir() {
-                    continue;
+                        let pack_id = format!("file/{file_name}");
+                        let is_enabled = enabled_packs
+                            .iter()
+                            .any(|p| p == &pack_id || p == &file_name);
+                        if !is_enabled {
+                            continue;
+                        }
+
+                        let (description, pack_format) = read_pack_mcmeta(&pack_path);
+
+                        let (pack_recipe_count, pack_function_count, pack_test_instance_count) =
+                            load_pack_contents(
+                                &pack_path,
+                                &mut all_recipes,
+                                &mut all_functions,
+                                &mut all_function_tags,
+                                &mut all_test_instances,
+                            );
+
+                        info!(
+                            "Loaded datapack '{file_name}': {pack_recipe_count} recipe(s), {pack_function_count} function(s), {pack_test_instance_count} test instance(s)"
+                        );
+
+                        loaded_packs_vec.push(LoadedDatapack {
+                            id: pack_id,
+                            name: file_name,
+                            description,
+                            pack_format,
+                            root_path: pack_path,
+                            recipe_count: pack_recipe_count,
+                            function_count: pack_function_count,
+                        });
+                    }
                 }
-
-                let pack_id = format!("file/{file_name}");
-                let is_enabled = enabled_packs
-                    .iter()
-                    .any(|p| p == &pack_id || p == &file_name);
-                if !is_enabled {
-                    continue;
-                }
-
-                let (description, pack_format) = read_pack_mcmeta(&pack_path);
-
-                let (pack_recipe_count, pack_function_count, pack_test_instance_count) =
-                    load_pack_contents(
-                        &pack_path,
-                        &mut all_recipes,
-                        &mut all_functions,
-                        &mut all_function_tags,
-                        &mut all_test_instances,
+                Err(error) => {
+                    warn!(
+                        "Failed to read datapacks directory '{}': {error}",
+                        datapacks_dir.display()
                     );
-
-                info!(
-                    "Loaded datapack '{file_name}': {pack_recipe_count} recipe(s), {pack_function_count} function(s), {pack_test_instance_count} test instance(s)"
-                );
-
-                loaded_packs_vec.push(LoadedDatapack {
-                    id: pack_id,
-                    name: file_name,
-                    description,
-                    pack_format,
-                    root_path: pack_path,
-                    recipe_count: pack_recipe_count,
-                    function_count: pack_function_count,
-                });
+                }
             }
         }
 
@@ -219,44 +227,58 @@ impl DatapackManager {
                 .loaded_packs
                 .read()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
+
             let mut nbt_path = None;
 
-            // Later-loaded packs take precedence, matching the overwrite behavior
-            // used by the other datapack registries.
+            // Runtime datapacks override embedded resources.
             'packs: for pack in loaded_packs.iter().rev() {
                 for structure_dir in ["structure", "structures"] {
-                    let base = pack
+                    let candidate = pack
                         .root_path
                         .join("data")
                         .join(namespace)
-                        .join(structure_dir);
+                        .join(structure_dir)
+                        .join(format!("{path}.nbt"));
 
-                    let candidate = base.join(format!("{path}.nbt"));
                     if candidate.is_file() {
                         nbt_path = Some(candidate);
                         break 'packs;
                     }
                 }
             }
+
             nbt_path
         };
 
-        let Some(nbt_path) = nbt_path else {
-            return Err(format!(
-                "Structure '{resource_location}' was not found in any enabled datapack"
-            ));
-        };
+        if let Some(nbt_path) = nbt_path {
+            let display_path = nbt_path.display().to_string();
 
-        // Gzip/NBT decoding is synchronous, so keep it off the async server task.
-        let display_path = nbt_path.display().to_string();
-        tokio::task::spawn_blocking(move || {
-            let file = fs::File::open(&nbt_path)
-                .map_err(|error| format!("Failed to open structure '{display_path}': {error}"))?;
-            read_gzip_compound_tag(file)
-                .map_err(|error| format!("Failed to parse structure '{display_path}': {error}"))
-        })
-        .await
-        .map_err(|error| format!("Structure loader task failed: {error}"))?
+            return tokio::task::spawn_blocking(move || {
+                let file = fs::File::open(&nbt_path).map_err(|error| {
+                    format!("Failed to open structure '{display_path}': {error}")
+                })?;
+
+                read_gzip_compound_tag(file)
+                    .map_err(|error| format!("Failed to parse structure '{display_path}': {error}"))
+            })
+            .await
+            .map_err(|error| format!("Structure loader task failed: {error}"))?;
+        }
+
+        // Fall back to compile-time embedded structures.
+        let structure_id = format!("{namespace}:{path}");
+
+        if let Some(bytes) =
+            pumpkin_world::generation::structure::template::template_bytes(&structure_id)
+        {
+            return read_gzip_compound_tag(std::io::Cursor::new(bytes)).map_err(|error| {
+                format!("Failed to parse embedded structure '{structure_id}': {error}")
+            });
+        }
+
+        Err(format!(
+            "Structure '{resource_location}' was not found in any enabled datapack or embedded resources"
+        ))
     }
 
     pub fn get_function_names(&self) -> Vec<String> {
@@ -321,11 +343,21 @@ impl DatapackManager {
         Ok(total_executed)
     }
 
-    pub fn get_all_known_packs(server: &Server) -> Vec<String> {
-        let mut packs = Vec::new();
-        packs.push("vanilla".to_string());
+    #[must_use]
+    pub fn is_embedded_pack(name: &str) -> bool {
+        pumpkin_world::generation::structure::template::all_embedded_datapack_names()
+            .contains(&name)
+    }
 
-        // Bundled feature packs
+    pub fn get_all_known_packs(server: &Server) -> Vec<String> {
+        let mut packs: Vec<String> =
+            pumpkin_world::generation::structure::template::all_embedded_datapack_names()
+                .iter()
+                .map(|name| (*name).to_owned())
+                .collect();
+
+        // Bundled feature packs that are known to the server independently of
+        // the compile-time structure/test resource embeddings.
         for bundled in [
             "trade_rebalance",
             "minecart_improvements",
@@ -336,15 +368,17 @@ impl DatapackManager {
             }
         }
 
-        // World datapacks directory
+        // World datapacks directory.
         let datapacks_dir = server.basic_config.get_world_path().join("datapacks");
         if let Ok(entries) = fs::read_dir(datapacks_dir) {
             for entry in entries.flatten() {
                 let path = entry.path();
                 let file_name = entry.file_name().to_string_lossy().to_string();
+
                 if file_name.starts_with('.') {
                     continue;
                 }
+
                 if path.is_dir()
                     || path
                         .extension()
@@ -359,11 +393,13 @@ impl DatapackManager {
         }
 
         let level_info = server.level_info.load();
+
         for pack in &level_info.data_packs.enabled {
             if !packs.iter().any(|p| p == pack) {
                 packs.push(pack.clone());
             }
         }
+
         for pack in &level_info.data_packs.disabled {
             if !packs.iter().any(|p| p == pack) {
                 packs.push(pack.clone());
@@ -374,7 +410,21 @@ impl DatapackManager {
     }
 
     pub fn get_enabled_packs(server: &Server) -> Vec<String> {
-        server.level_info.load().data_packs.enabled.clone()
+        // Compile-time embedded datapacks cannot be disabled at runtime, so
+        // expose them as permanently enabled.
+        let mut packs: Vec<String> =
+            pumpkin_world::generation::structure::template::all_embedded_datapack_names()
+                .iter()
+                .map(|name| (*name).to_owned())
+                .collect();
+
+        for pack in &server.level_info.load().data_packs.enabled {
+            if !packs.iter().any(|existing| existing == pack) {
+                packs.push(pack.clone());
+            }
+        }
+
+        packs
     }
 
     pub fn get_available_packs(server: &Server) -> Vec<String> {
@@ -427,6 +477,13 @@ impl DatapackManager {
                 "vanilla".to_string(),
                 "vanilla".to_string(),
                 "The default data pack".to_string(),
+                61,
+            )
+        } else if Self::is_embedded_pack(&resolved_name) {
+            (
+                resolved_name.clone(),
+                resolved_name.clone(),
+                format!("Embedded datapack: {resolved_name}"),
                 61,
             )
         } else if let Some(stripped) = resolved_name.strip_prefix("file/") {
@@ -589,8 +646,10 @@ impl DatapackManager {
             return Err(format!("Datapack '{target_pack}' is not enabled"));
         }
 
-        if target_pack == "vanilla" {
-            return Err("Cannot disable the default vanilla datapack".to_string());
+        if Self::is_embedded_pack(&target_pack) {
+            return Err(format!(
+                "Cannot disable embedded datapack '{target_pack}' because it is compiled into the server"
+            ));
         }
 
         let target = target_pack;
@@ -715,7 +774,6 @@ fn load_pack_contents(
                     all_function_tags,
                 );
             }
-
             // Load game test instances
             let test_instance_dir = ns_path.join("test_instance");
             if test_instance_dir.is_dir() {

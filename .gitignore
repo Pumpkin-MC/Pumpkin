@@ -100,7 +100,6 @@ target/
 # === PROJECT SPECIFIC ===
 plugins/
 world/*
-!world/datapacks
 logs/
 crash-reports/
 
