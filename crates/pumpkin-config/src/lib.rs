@@ -17,8 +17,6 @@ use tracing::{debug, error, warn};
 
 /// Fun and experimental configuration options.
 pub mod fun;
-/// `GameTest` framework configuration options.
-pub mod game_test;
 /// Server logging configuration options.
 pub mod logging;
 /// Networking and protocol configuration options.
@@ -64,11 +62,11 @@ pub mod whitelist;
 pub mod world;
 
 use advancement::AdvancementConfig;
-use game_test::GameTestConfig;
 use networking::NetworkingConfig;
 use player_data::PlayerDataConfig;
 use resource_pack::ResourcePackConfig;
 use world::LevelConfig;
+
 /// Root configuration container for Pumpkin server settings.
 #[derive(Deserialize, Serialize, Default)]
 #[serde(default)]
@@ -168,8 +166,6 @@ pub struct AdvancedConfiguration {
     pub plugins: PluginsConfig,
     /// Advancement configuration
     pub advancement: AdvancementConfig,
-    /// `GameTest` configuration
-    pub gametest: GameTestConfig,
 }
 
 /// Basic configuration for core server settings.
