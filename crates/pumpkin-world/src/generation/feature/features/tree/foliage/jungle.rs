@@ -46,6 +46,7 @@ impl JungleFoliagePlacer {
         }
         foliage_positions
     }
+    #[must_use]
     pub const fn get_random_height(&self) -> i32 {
         self.height
     }

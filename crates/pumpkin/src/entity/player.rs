@@ -2191,22 +2191,51 @@ impl Player {
         self.abilities.try_lock().is_ok_and(|a| a.flying)
     }
 
+    pub fn set_sprinting(&self, is_sprinting: bool) {
+        self.living_entity.set_sprinting(is_sprinting);
+    }
+
+    #[must_use]
+    pub fn get_block_speed_factor(&self) -> f32 {
+        self.living_entity.get_block_speed_factor()
+    }
+
     fn is_sleeping(&self) -> bool {
         // TODO: Track sleeping position state explicitly (vanilla checks sleepingPosition.isPresent()).
         self.sleeping_since.load().is_some()
     }
 
-    fn is_swimming(&self, flying: bool) -> bool {
-        let entity = self.get_entity();
-        let touching_water = entity.touching_water.load(Ordering::Relaxed);
-        let can_start_swimming = entity.water_height.load() > self.living_entity.get_swim_height();
+    #[must_use]
+    pub fn is_swimming(&self) -> bool {
+        !self.is_flying()
+            && self.gamemode.load() != GameMode::Spectator
+            && self.get_entity().is_swimming()
+    }
 
-        touching_water
-            && (entity.swimming.load(Ordering::Relaxed) || can_start_swimming)
-            && entity.is_sprinting()
-            && !entity.on_ground.load(Ordering::Relaxed)
-            && !flying
-            && !entity.has_vehicle()
+    pub fn update_swimming(&self) {
+        if self.is_flying() {
+            self.get_entity().set_swimming(false);
+        } else {
+            let entity = self.get_entity();
+            let is_sprinting = entity.is_sprinting();
+            let in_water = entity.is_in_water();
+            let is_passenger = entity.has_vehicle();
+
+            if entity.is_swimming() {
+                entity.set_swimming(is_sprinting && in_water && !is_passenger);
+            } else {
+                let is_under_water = entity.is_under_water();
+                let block_pos = entity.block_pos.load();
+                let world = entity.world.load();
+                let (fluid, _) = world.get_fluid_and_fluid_state(&block_pos);
+                let is_water_block = fluid.id == pumpkin_data::fluid::Fluid::WATER.id
+                    || fluid.id == pumpkin_data::fluid::Fluid::FLOWING_WATER.id;
+
+                entity.set_swimming(
+                    is_sprinting && is_under_water && !is_passenger && is_water_block,
+                );
+            }
+        }
     }
 
     const fn is_auto_spin_attack() -> bool {
@@ -2225,31 +2254,33 @@ impl Player {
             .is_space_empty(aabb.contract_all(1.0E-7))
     }
 
-    pub fn update_player_pose(&self) {
+    #[must_use]
+    pub fn get_desired_pose(&self) -> EntityPose {
         let entity = self.get_entity();
-        if !self.can_fit_pose(EntityPose::Swimming) {
-            return;
-        }
-
-        let flying = self.is_flying();
-        let swimming = self.is_swimming(flying);
-        entity.set_swimming(swimming);
-        let desired_pose = if self.is_sleeping() {
+        if self.is_sleeping() {
             EntityPose::Sleeping
-        } else if swimming {
+        } else if self.is_swimming() {
             EntityPose::Swimming
         } else if entity.is_fall_flying() {
             EntityPose::FallFlying
         } else if Self::is_auto_spin_attack() {
             EntityPose::SpinAttack
-        } else if entity.is_sneaking() && !flying {
+        } else if entity.is_sneaking() && !self.is_flying() {
             EntityPose::Crouching
         } else {
             EntityPose::Standing
-        };
+        }
+    }
 
-        let new_pose = if self.gamemode.load() == GameMode::Spectator
-            || entity.has_vehicle()
+    pub fn update_player_pose(&self) {
+        if !self.can_fit_pose(EntityPose::Swimming) {
+            return;
+        }
+
+        self.update_swimming();
+        let desired_pose = self.get_desired_pose();
+        let actual_pose = if self.gamemode.load() == GameMode::Spectator
+            || self.get_entity().has_vehicle()
             || self.can_fit_pose(desired_pose)
         {
             desired_pose
@@ -2259,9 +2290,7 @@ impl Player {
             EntityPose::Swimming
         };
 
-        if entity.pose.load() != new_pose {
-            entity.set_pose(new_pose);
-        }
+        self.get_entity().set_pose(actual_pose);
     }
 
     pub fn wake_up(&self) {
@@ -2648,10 +2677,10 @@ impl Player {
                     let block = Block::from_state_id(state.id);
                     let can_harvest = p.can_harvest(state, block);
                     let flags = if can_harvest {
-                        pumpkin_world::world::BlockFlags::NOTIFY_NEIGHBORS
+                        pumpkin_world::world::BlockFlags::NOTIFY_ALL
                     } else {
                         pumpkin_world::world::BlockFlags::SKIP_DROPS
-                            | pumpkin_world::world::BlockFlags::NOTIFY_NEIGHBORS
+                            | pumpkin_world::world::BlockFlags::NOTIFY_ALL
                     };
                     if world.break_block(&pos, Some(&p), flags).is_some() {
                         if let Some(server) = server_clone {
@@ -3689,7 +3718,8 @@ impl Player {
 
                 self.send_permission_lvl_update();
 
-                player.request_teleport(position, yaw, pitch);
+                player.get_entity().set_pos(position);
+                player.get_entity().set_rotation(yaw, pitch);
                 player.get_entity().last_pos.store(position);
 
                 self.send_abilities_update();
@@ -3703,6 +3733,17 @@ impl Player {
                 self.send_health();
 
                 new_world.send_world_info(&player, position, yaw, pitch);
+
+                if let ClientPlatform::Java(java_client) = player.client.as_ref() {
+                    let center_chunk = player.get_entity().chunk_pos.load();
+                    let chunk = new_world
+                        .level
+                        .get_or_fetch_chunk(center_chunk, std::clone::Clone::clone)
+                        .await;
+                    java_client.send_chunks(&[chunk]).await;
+                }
+
+                player.request_teleport(position, yaw, pitch);
             }
         }}
     }
