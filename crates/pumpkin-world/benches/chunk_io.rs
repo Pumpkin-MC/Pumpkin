@@ -73,11 +73,8 @@ fn bench_chunk_deserialization(c: &mut Criterion) {
     let Chunk::Level(chunk) = chunk else {
         panic!("full generation must return a level chunk");
     };
-    let runtime = tokio::runtime::Builder::new_current_thread()
-        .build()
-        .expect("failed to create benchmark runtime");
-    let bytes = runtime
-        .block_on(chunk.to_bytes())
+    let bytes = chunk
+        .to_bytes()
         .expect("failed to serialize benchmark chunk");
     let position = Vector2::new(chunk.x, chunk.z);
 

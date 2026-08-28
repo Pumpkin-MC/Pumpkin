@@ -12,7 +12,6 @@ use pumpkin_util::GameMode;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::world::BlockFlags;
-use std::pin::Pin;
 use std::sync::Arc;
 
 pub struct HoeItem;
@@ -24,88 +23,84 @@ impl ItemMetadata for HoeItem {
 }
 
 impl ItemBehaviour for HoeItem {
-    fn use_on_block<'a>(
-        &'a self,
-        item: &'a mut ItemStack,
-        player: &'a Player,
+    fn use_on_block(
+        &self,
+        item: &mut ItemStack,
+        player: &Player,
         location: BlockPos,
         face: BlockDirection,
         _cursor_pos: Vector3<f32>,
-        block: &'a Block,
-        _server: &'a Server,
-    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
-        Box::pin(async move {
-            // Yes, Minecraft does hardcode these
-            if block == &Block::GRASS_BLOCK
-                || block == &Block::DIRT_PATH
-                || block == &Block::DIRT
-                || block == &Block::COARSE_DIRT
-                || block == &Block::ROOTED_DIRT
-            {
-                let mut future_block = block;
-                let world = player.world();
-                let mut changed = false;
+        block: &Block,
+        _server: &Server,
+    ) {
+        // Yes, Minecraft does hardcode these
+        if block == &Block::GRASS_BLOCK
+            || block == &Block::DIRT_PATH
+            || block == &Block::DIRT
+            || block == &Block::COARSE_DIRT
+            || block == &Block::ROOTED_DIRT
+        {
+            let mut future_block = block;
+            let world = player.world();
+            let mut changed = false;
 
-                //Only rooted can be right-clicked on the bottom of the block
-                if face == BlockDirection::Down {
-                    if block == &Block::ROOTED_DIRT {
-                        future_block = &Block::DIRT;
-                        changed = true;
-                    }
-                } else {
-                    // grass, dirt && dirt path become farmland
-                    if (block == &Block::GRASS_BLOCK
-                        || block == &Block::DIRT_PATH
-                        || block == &Block::DIRT)
-                        && world.get_block_state(&location.up()).is_air()
-                    {
-                        future_block = &Block::FARMLAND;
-                        changed = true;
-                    }
-                    //Coarse dirt and rooted dirt become dirt
-                    else if block == &Block::COARSE_DIRT || block == &Block::ROOTED_DIRT {
-                        future_block = &Block::DIRT;
-                        changed = true;
-                    }
-                }
-
-                // Vanilla returns PASS without touching the block when nothing is tilled,
-                // otherwise the rewrite would reset properties such as `snowy` on grass blocks.
-                if changed {
-                    world
-                        .set_block_state(
-                            &location,
-                            future_block.default_state.id,
-                            BlockFlags::NOTIFY_ALL,
-                        )
-                        .await;
-                }
-
-                //Also rooted_dirt drop a hanging_root
+            //Only rooted can be right-clicked on the bottom of the block
+            if face == BlockDirection::Down {
                 if block == &Block::ROOTED_DIRT {
-                    let location = match face {
-                        BlockDirection::Up => location.up().to_f64(),
-                        BlockDirection::Down => location.down().to_f64(),
-                        BlockDirection::North => location.up().to_f64().add_raw(0.0, -0.4, -1.0),
-                        BlockDirection::South => location.up().to_f64().add_raw(0.0, -0.4, 1.0),
-                        BlockDirection::West => location.up().to_f64().add_raw(-1.0, -0.4, 0.0),
-                        BlockDirection::East => location.up().to_f64().add_raw(1.0, -0.4, 0.0),
-                    };
-                    let entity = Entity::new(world.clone(), location, &EntityType::ITEM);
-                    // TODO: Merge stacks together
-                    let item_entity = Arc::new(ItemEntity::new(
-                        entity,
-                        ItemStack::new(1, &Item::HANGING_ROOTS),
-                    ));
-                    world.spawn_entity(item_entity).await;
+                    future_block = &Block::DIRT;
+                    changed = true;
                 }
-
-                if changed && player.gamemode.load() != GameMode::Creative {
-                    // TODO: Handle DamageResult::Broken to broadcast item break and update player slot.
-                    let _ = item.damage_item(1);
+            } else {
+                // grass, dirt && dirt path become farmland
+                if (block == &Block::GRASS_BLOCK
+                    || block == &Block::DIRT_PATH
+                    || block == &Block::DIRT)
+                    && world.get_block_state(&location.up()).is_air()
+                {
+                    future_block = &Block::FARMLAND;
+                    changed = true;
+                }
+                //Coarse dirt and rooted dirt become dirt
+                else if block == &Block::COARSE_DIRT || block == &Block::ROOTED_DIRT {
+                    future_block = &Block::DIRT;
+                    changed = true;
                 }
             }
-        })
+
+            // Vanilla returns PASS without touching the block when nothing is tilled,
+            // otherwise the rewrite would reset properties such as `snowy` on grass blocks.
+            if changed {
+                world.set_block_state(
+                    &location,
+                    future_block.default_state.id,
+                    BlockFlags::NOTIFY_ALL,
+                );
+            }
+
+            //Also rooted_dirt drop a hanging_root
+            if block == &Block::ROOTED_DIRT {
+                let location = match face {
+                    BlockDirection::Up => location.up().to_f64(),
+                    BlockDirection::Down => location.down().to_f64(),
+                    BlockDirection::North => location.up().to_f64().add_raw(0.0, -0.4, -1.0),
+                    BlockDirection::South => location.up().to_f64().add_raw(0.0, -0.4, 1.0),
+                    BlockDirection::West => location.up().to_f64().add_raw(-1.0, -0.4, 0.0),
+                    BlockDirection::East => location.up().to_f64().add_raw(1.0, -0.4, 0.0),
+                };
+                let entity = Entity::new(world.clone(), location, &EntityType::ITEM);
+                // TODO: Merge stacks together
+                let item_entity = Arc::new(ItemEntity::new(
+                    entity,
+                    ItemStack::new(1, &Item::HANGING_ROOTS),
+                ));
+                world.spawn_entity(item_entity);
+            }
+
+            if changed && player.gamemode.load() != GameMode::Creative {
+                // TODO: Handle DamageResult::Broken to broadcast item break and update player slot.
+                let _ = item.damage_item(1);
+            }
+        }
     }
 
     fn as_any(&self) -> &dyn std::any::Any {

@@ -1,5 +1,5 @@
+use crate::block::UseWithItemArgs;
 use crate::block::registry::BlockActionResult;
-use crate::block::{BlockFuture, UseWithItemArgs};
 use crate::entity::Entity;
 use crate::entity::item::ItemEntity;
 use pumpkin_data::Block;
@@ -15,42 +15,33 @@ use std::sync::Arc;
 pub struct PumpkinBlock;
 
 impl crate::block::BlockBehaviour for PumpkinBlock {
-    fn use_with_item<'a>(
-        &'a self,
-        args: UseWithItemArgs<'a>,
-    ) -> BlockFuture<'a, BlockActionResult> {
-        Box::pin(async move {
-            if args.item_stack.item != &Item::SHEARS {
-                return BlockActionResult::Pass;
-            }
-            let mut props = WallTorchLikeProperties::default(&Block::CARVED_PUMPKIN);
-            props.facing = args
-                .player
-                .living_entity
-                .entity
-                .get_horizontal_facing()
-                .opposite();
-            args.world
-                .set_block_state(
-                    args.position,
-                    props.to_state_id(&Block::CARVED_PUMPKIN),
-                    BlockFlags::NOTIFY_ALL,
-                )
-                .await;
-            let entity = Entity::new(
-                args.world.clone(),
-                args.position.to_f64(),
-                &EntityType::ITEM,
-            );
-            let item_entity = Arc::new(ItemEntity::new(
-                entity,
-                ItemStack::new(4, &Item::PUMPKIN_SEEDS),
-            ));
-            args.world.spawn_entity(item_entity).await;
-            args.player
-                .damage_item_in_slot(args.equipment_slot, 1)
-                .await;
-            BlockActionResult::Consume
-        })
+    fn use_with_item(&self, args: UseWithItemArgs<'_>) -> BlockActionResult {
+        if args.item_stack.item != &Item::SHEARS {
+            return BlockActionResult::Pass;
+        }
+        let mut props = WallTorchLikeProperties::default(&Block::CARVED_PUMPKIN);
+        props.facing = args
+            .player
+            .living_entity
+            .entity
+            .get_horizontal_facing()
+            .opposite();
+        args.world.set_block_state(
+            args.position,
+            props.to_state_id(&Block::CARVED_PUMPKIN),
+            BlockFlags::NOTIFY_ALL,
+        );
+        let entity = Entity::new(
+            args.world.clone(),
+            args.position.to_f64(),
+            &EntityType::ITEM,
+        );
+        let item_entity = Arc::new(ItemEntity::new(
+            entity,
+            ItemStack::new(4, &Item::PUMPKIN_SEEDS),
+        ));
+        args.world.spawn_entity(item_entity);
+        args.player.damage_item_in_slot(args.equipment_slot, 1);
+        BlockActionResult::Consume
     }
 }

@@ -8,7 +8,7 @@ use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::java::client::play::Metadata;
 
 use crate::entity::{
-    Entity, EntityBaseFuture, NbtFuture,
+    Entity,
     ageable::AgeableMob,
     ai::goal::{
         breed::BreedGoal, eat_grass::EatGrassGoal, escape_danger::EscapeDangerGoal,
@@ -133,44 +133,30 @@ impl Mob for SheepEntity {
         Some(self)
     }
 
-    fn mob_write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
-        Box::pin(async {
-            nbt.put_bool("Sheared", self.is_sheared());
-            nbt.put_byte("Color", self.get_color() as i8);
-        })
+    fn mob_write_nbt(&self, nbt: &mut NbtCompound) {
+        nbt.put_bool("Sheared", self.is_sheared());
+        nbt.put_byte("Color", self.get_color() as i8);
     }
 
-    fn mob_read_nbt<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
-        Box::pin(async {
-            let sheared = nbt
-                .get_bool("Sheared")
-                .or_else(|| nbt.get_byte("Sheared").map(|b| b == 1))
-                .unwrap_or(false);
-            let color = nbt.get_byte("Color").unwrap_or(0) as u8;
-            let byte = (color & 0x0F) | if sheared { 0x10 } else { 0 };
-            self.color_and_sheared.store(byte, Ordering::Relaxed);
-        })
+    fn mob_read_nbt(&self, nbt: &NbtCompound) {
+        let sheared = nbt
+            .get_bool("Sheared")
+            .or_else(|| nbt.get_byte("Sheared").map(|b| b == 1))
+            .unwrap_or(false);
+        let color = nbt.get_byte("Color").unwrap_or(0) as u8;
+        let byte = (color & 0x0F) | if sheared { 0x10 } else { 0 };
+        self.color_and_sheared.store(byte, Ordering::Relaxed);
     }
 
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
     }
 
-    fn on_eating_grass(&self) -> EntityBaseFuture<'_, ()> {
-        Box::pin(async {
-            self.set_sheared(false);
-        })
+    fn on_eating_grass(&self) {
+        self.set_sheared(false);
     }
 
-    fn get_sheep(&self) -> Option<&SheepEntity> {
-        Some(self)
-    }
-
-    fn mob_interact<'a>(
-        &'a self,
-        player: &'a Arc<Player>,
-        item_stack: &'a mut ItemStack,
-    ) -> EntityBaseFuture<'a, bool> {
+    fn mob_interact(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {
         use super::animal::Animal;
         self.animal_interact(player, item_stack, Sound::EntitySheepAmbient)
     }

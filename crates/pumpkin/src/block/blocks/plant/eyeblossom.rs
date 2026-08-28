@@ -17,7 +17,7 @@ use rand::RngExt;
 
 use crate::{
     block::{
-        BlockBehaviour, BlockFuture, BlockMetadata, CanPlaceAtArgs, GetStateForNeighborUpdateArgs,
+        BlockBehaviour, BlockMetadata, CanPlaceAtArgs, GetStateForNeighborUpdateArgs,
         OnEntityCollisionArgs, OnScheduledTickArgs, RandomTickArgs, blocks::plant::PlantBlockBase,
     },
     world::World,
@@ -39,66 +39,58 @@ impl BlockBehaviour for EyeblossomBlock {
         <Self as PlantBlockBase>::can_place_at(self, args.block_accessor, args.position)
     }
 
-    fn get_state_for_neighbor_update<'a>(
-        &'a self,
-        args: GetStateForNeighborUpdateArgs<'a>,
-    ) -> BlockFuture<'a, BlockStateId> {
-        Box::pin(async move {
-            <Self as PlantBlockBase>::get_state_for_neighbor_update(
-                self,
-                args.world,
-                args.position,
-                args.state_id,
-            )
-            .await
-        })
+    fn get_state_for_neighbor_update(
+        &self,
+        args: GetStateForNeighborUpdateArgs<'_>,
+    ) -> BlockStateId {
+        <Self as PlantBlockBase>::get_state_for_neighbor_update(
+            self,
+            args.world,
+            args.position,
+            args.state_id,
+        )
     }
 
-    fn on_scheduled_tick<'a>(&'a self, args: OnScheduledTickArgs<'a>) -> BlockFuture<'a, ()> {
-        Box::pin(async move {
-            if !<Self as PlantBlockBase>::can_place_at(self, args.world.as_ref(), args.position) {
-                args.world
-                    .break_block(args.position, None, BlockFlags::empty())
-                    .await;
-                return;
-            }
+    fn on_scheduled_tick(&self, args: OnScheduledTickArgs<'_>) {
+        if !<Self as PlantBlockBase>::can_place_at(self, args.world.as_ref(), args.position) {
+            args.world
+                .break_block(args.position, None, BlockFlags::empty());
+            return;
+        }
 
-            let was_open = args.block == &Block::OPEN_EYEBLOSSOM;
-            if try_changing_state(args.world, args.block, args.position).await {
-                let sound = if was_open {
-                    Sound::BlockEyeblossomClose
-                } else {
-                    Sound::BlockEyeblossomOpen
-                };
-                args.world.play_sound(
-                    sound,
-                    SoundCategory::Blocks,
-                    &args.position.to_centered_f64(),
-                );
-            }
-        })
+        let was_open = args.block == &Block::OPEN_EYEBLOSSOM;
+        if try_changing_state(args.world, args.block, args.position) {
+            let sound = if was_open {
+                Sound::BlockEyeblossomClose
+            } else {
+                Sound::BlockEyeblossomOpen
+            };
+            args.world.play_sound(
+                sound,
+                SoundCategory::Blocks,
+                &args.position.to_centered_f64(),
+            );
+        }
     }
 
-    fn random_tick<'a>(&'a self, args: RandomTickArgs<'a>) -> BlockFuture<'a, ()> {
-        Box::pin(async move {
-            let was_open = args.block == &Block::OPEN_EYEBLOSSOM;
-            if try_changing_state(args.world, args.block, args.position).await {
-                let sound = if was_open {
-                    Sound::BlockEyeblossomCloseLong
-                } else {
-                    Sound::BlockEyeblossomOpenLong
-                };
-                args.world.play_sound(
-                    sound,
-                    SoundCategory::Blocks,
-                    &args.position.to_centered_f64(),
-                );
-            }
-        })
+    fn random_tick(&self, args: RandomTickArgs<'_>) {
+        let was_open = args.block == &Block::OPEN_EYEBLOSSOM;
+        if try_changing_state(args.world, args.block, args.position) {
+            let sound = if was_open {
+                Sound::BlockEyeblossomCloseLong
+            } else {
+                Sound::BlockEyeblossomOpenLong
+            };
+            args.world.play_sound(
+                sound,
+                SoundCategory::Blocks,
+                &args.position.to_centered_f64(),
+            );
+        }
     }
 
-    fn on_entity_collision<'a>(&'a self, args: OnEntityCollisionArgs<'a>) -> BlockFuture<'a, ()> {
-        Box::pin(async move {
+    fn on_entity_collision(&self, args: OnEntityCollisionArgs<'_>) {
+        {
             if args.world.level_info.load().difficulty == Difficulty::Peaceful {
                 return;
             }
@@ -115,20 +107,24 @@ impl BlockBehaviour for EyeblossomBlock {
                     show_icon: true,
                     blend: true,
                 };
-                living_entity.add_effect(effect).await;
+                living_entity.add_effect(effect);
             }
-        })
+        }
     }
 }
 
 impl PlantBlockBase for EyeblossomBlock {}
 
-pub async fn try_changing_state(world: &Arc<World>, current_block: &Block, pos: &BlockPos) -> bool {
+pub fn try_changing_state(world: &Arc<World>, current_block: &Block, pos: &BlockPos) -> bool {
     let is_open = current_block == &Block::OPEN_EYEBLOSSOM;
     let should_be_open = if world.dimension == Dimension::OVERWORLD
         || world.dimension == Dimension::OVERWORLD_CAVES
     {
-        world.level_time.lock().await.is_night()
+        world
+            .level_time
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .is_night()
     } else {
         is_open
     };
@@ -143,9 +139,7 @@ pub async fn try_changing_state(world: &Arc<World>, current_block: &Block, pos: 
         &Block::OPEN_EYEBLOSSOM
     };
 
-    world
-        .set_block_state(pos, new_block.default_state.id, BlockFlags::NOTIFY_ALL)
-        .await;
+    world.set_block_state(pos, new_block.default_state.id, BlockFlags::NOTIFY_ALL);
 
     world.spawn_particle(
         pos.to_centered_f64(),

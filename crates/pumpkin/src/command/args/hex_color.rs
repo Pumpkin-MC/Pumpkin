@@ -48,17 +48,15 @@ impl GetClientSideArgParser for HexColorArgumentConsumer {
 }
 
 impl ArgumentConsumer for HexColorArgumentConsumer {
-    fn consume<'a, 'b>(
+    fn consume<'a>(
         &'a self,
         _sender: &'a CommandSender,
         _server: &'a Server,
-        args: &'b mut RawArgs<'a>,
+        args: &mut RawArgs<'a>,
     ) -> ConsumeResult<'a> {
         let s_opt: Option<&'a str> = args.pop().map(|arg| arg.value);
 
-        let result = s_opt.and_then(|s| parse_hex_color(s).map(Arg::HexColor));
-
-        Box::pin(async move { result })
+        s_opt.and_then(|s| parse_hex_color(s).map(Arg::HexColor))
     }
 
     fn consume_with_syntax<'a>(
@@ -68,31 +66,24 @@ impl ArgumentConsumer for HexColorArgumentConsumer {
         args: &mut RawArgs<'a>,
     ) -> ConsumeResultWithSyntax<'a> {
         let Some(raw_arg) = args.pop() else {
-            return Box::pin(async { Ok(None) });
+            return Ok(None);
         };
 
-        let result = parse_hex_color(raw_arg.value)
+        parse_hex_color(raw_arg.value)
             .map(|color| Some(Arg::HexColor(color)))
             .ok_or_else(|| {
                 INVALID_HEX_ERROR_TYPE.create_without_context_args_slice(&[TextComponent::text(
                     raw_arg.value.to_string(),
                 )])
-            });
-
-        Box::pin(async move { result })
+            })
     }
 
-    fn suggest<'a>(
-        &'a self,
-        _sender: &CommandSender,
-        _server: &'a Server,
-        _input: &'a str,
-    ) -> SuggestResult<'a> {
+    fn suggest(&self, _sender: &CommandSender, _server: &Server, _input: &str) -> SuggestResult {
         let suggestions = vec![
             CommandSuggestion::new("F00".to_string(), None),
             CommandSuggestion::new("FF0000".to_string(), None),
         ];
-        Box::pin(async move { Ok(Some(suggestions)) })
+        Ok(Some(suggestions))
     }
 }
 

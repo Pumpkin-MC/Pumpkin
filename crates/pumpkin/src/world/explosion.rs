@@ -360,7 +360,7 @@ impl Explosion {
         map
     }
 
-    async fn damage_entities(&self, world: &Arc<World>) {
+    fn damage_entities(&self, world: &Arc<World>) {
         // Explosion is too small
         if self.power < 1.0e-5 {
             return;
@@ -410,7 +410,7 @@ impl Explosion {
             let exposure = if !should_damage && knockback_multiplier == 0.0 {
                 0.0
             } else {
-                Self::calculate_exposure(&self.pos, entity, world).await as f64
+                Self::calculate_exposure(&self.pos, entity, world) as f64
             };
 
             if exposure == 0.0 {
@@ -420,9 +420,7 @@ impl Explosion {
             if should_damage {
                 let damage =
                     calc.get_entity_damage_amount(self, entity_base.as_ref(), exposure as f32);
-                entity
-                    .damage(entity_base.as_ref(), damage, DamageType::EXPLOSION)
-                    .await;
+                entity.damage(entity_base.as_ref(), damage, DamageType::EXPLOSION);
             }
 
             // Calculate and apply knockback
@@ -442,7 +440,7 @@ impl Explosion {
         }
     }
 
-    async fn calculate_exposure(
+    fn calculate_exposure(
         explosion_pos: &Vector3<f64>,
         entity: &Entity,
         world: &Arc<World>,
@@ -476,11 +474,10 @@ impl Explosion {
                     let vec3d = Vector3::new(n + offset_x, o, p + offset_z);
 
                     if world
-                        .raycast(vec3d, *explosion_pos, async |pos, world_ref| {
+                        .raycast(vec3d, *explosion_pos, |pos, world_ref| {
                             let state = world_ref.get_block_state(pos);
                             !state.is_air() && !state.collision_shapes.is_empty()
                         })
-                        .await
                         .is_none()
                     {
                         visible_points += 1;
@@ -502,8 +499,8 @@ impl Explosion {
     }
 
     /// Returns the removed block count
-    pub async fn explode(&self, world: &Arc<World>) -> u32 {
-        self.damage_entities(world).await;
+    pub fn explode(&self, world: &Arc<World>) -> u32 {
+        self.damage_entities(world);
 
         match self.block_interaction {
             BlockInteraction::Keep => 0,
@@ -512,13 +509,11 @@ impl Explosion {
                 for (pos, (block, _state)) in &blocks {
                     let pumpkin_block = world.block_registry.get_pumpkin_block(block.id);
                     if let Some(pumpkin_block) = pumpkin_block {
-                        pumpkin_block
-                            .explode(ExplodeArgs {
-                                world,
-                                block,
-                                position: pos,
-                            })
-                            .await;
+                        pumpkin_block.explode(ExplodeArgs {
+                            world,
+                            block,
+                            position: pos,
+                        });
                     }
                 }
                 0
@@ -535,7 +530,7 @@ impl Explosion {
                         },
                     );
                 if let Some(server) = world.server.upgrade() {
-                    server.plugin_manager.fire(&server, &mut event).await;
+                    server.plugin_manager.fire_blocking(&server, &mut event);
                 }
                 if event.cancelled {
                     return 0;
@@ -546,16 +541,14 @@ impl Explosion {
                 let explosion_radius = decay_drops.then_some(self.power);
 
                 for (pos, (block, state)) in &blocks {
-                    world
-                        .set_block_state(pos, BlockStateId::AIR, BlockFlags::NOTIFY_ALL)
-                        .await;
-                    world.close_container_screens_at(pos).await;
+                    world.set_block_state(pos, BlockStateId::AIR, BlockFlags::NOTIFY_ALL);
+                    world.close_container_screens_at(pos);
 
                     let pumpkin_block = world.block_registry.get_pumpkin_block(block.id);
 
                     if pumpkin_block.is_none_or(|s| s.should_drop_items_on_explosion()) {
-                        let is_raining = world.is_raining().await;
-                        let is_thundering = world.is_thundering().await;
+                        let is_raining = world.is_raining();
+                        let is_thundering = world.is_thundering();
                         let params = LootContextParameters {
                             block_state: Some(state),
                             explosion_radius,
@@ -569,16 +562,14 @@ impl Explosion {
                             is_thundering: Some(is_thundering),
                             ..Default::default()
                         };
-                        drop_loot(world, block, pos, false, params).await;
+                        drop_loot(world, block, pos, false, params);
                     }
                     if let Some(pumpkin_block) = pumpkin_block {
-                        pumpkin_block
-                            .explode(ExplodeArgs {
-                                world,
-                                block,
-                                position: pos,
-                            })
-                            .await;
+                        pumpkin_block.explode(ExplodeArgs {
+                            world,
+                            block,
+                            position: pos,
+                        });
                     }
                 }
                 // TODO: fire

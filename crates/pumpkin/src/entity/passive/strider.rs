@@ -54,24 +54,14 @@ impl StriderEntity {
 }
 
 impl Mob for StriderEntity {
-    fn mob_write_nbt<'a>(
-        &'a self,
-        nbt: &'a mut pumpkin_nbt::compound::NbtCompound,
-    ) -> crate::entity::NbtFuture<'a, ()> {
-        Box::pin(async move {
-            nbt.put_bool("Saddle", self.is_saddled());
-        })
+    fn mob_write_nbt(&self, nbt: &mut pumpkin_nbt::compound::NbtCompound) {
+        nbt.put_bool("Saddle", self.is_saddled());
     }
 
-    fn mob_read_nbt<'a>(
-        &'a self,
-        nbt: &'a pumpkin_nbt::compound::NbtCompound,
-    ) -> crate::entity::NbtFuture<'a, ()> {
-        Box::pin(async move {
-            if let Some(saddle) = nbt.get_byte("Saddle") {
-                self.set_saddled(saddle == 1);
-            }
-        })
+    fn mob_read_nbt(&self, nbt: &pumpkin_nbt::compound::NbtCompound) {
+        if let Some(saddle) = nbt.get_byte("Saddle") {
+            self.set_saddled(saddle == 1);
+        }
     }
 
     fn get_mob_entity(&self) -> &MobEntity {
@@ -95,25 +85,22 @@ impl Mob for StriderEntity {
             .store(saddled, std::sync::atomic::Ordering::Relaxed);
     }
 
-    fn mob_interact<'a>(
-        &'a self,
-        player: &'a Arc<crate::entity::player::Player>,
-        _item_stack: &'a mut pumpkin_data::item_stack::ItemStack,
-    ) -> crate::entity::EntityBaseFuture<'a, bool> {
-        Box::pin(async move {
-            if self.is_saddled() {
-                let world = player.world();
-                let ent = &self.mob_entity.living_entity.entity;
-                if let Some(vehicle) = world.get_entity_by_id(ent.entity_id)
-                    && let Some(passenger) = world.get_player_by_id(player.entity_id())
-                {
-                    ent.add_passenger(vehicle, passenger as Arc<dyn EntityBase>)
-                        .await;
-                    return true;
-                }
+    fn mob_interact(
+        &self,
+        player: &Arc<crate::entity::player::Player>,
+        _item_stack: &mut pumpkin_data::item_stack::ItemStack,
+    ) -> bool {
+        if self.is_saddled() {
+            let world = player.world();
+            let ent = &self.mob_entity.living_entity.entity;
+            if let Some(vehicle) = world.get_entity_by_id(ent.entity_id)
+                && let Some(passenger) = world.get_player_by_id(player.entity_id())
+            {
+                ent.add_passenger(vehicle, passenger as Arc<dyn EntityBase>);
+                return true;
             }
-            false
-        })
+        }
+        false
     }
 }
 

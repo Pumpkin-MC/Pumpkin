@@ -76,16 +76,11 @@ impl ArgumentConsumer for GameProfilesArgumentConsumer {
         server: &'a Server,
         args: &mut RawArgs<'a>,
     ) -> ConsumeResult<'a> {
-        let Some(raw_arg) = args.pop() else {
-            return Box::pin(async { None });
-        };
+        let raw_arg = args.pop()?;
 
-        Box::pin(async move {
-            resolve_profiles_from_token(sender, server, raw_arg)
-                .await
-                .ok()
-                .map(Arg::GameProfiles)
-        })
+        resolve_profiles_from_token(sender, server, raw_arg)
+            .ok()
+            .map(Arg::GameProfiles)
     }
 
     fn consume_with_syntax<'a>(
@@ -95,78 +90,89 @@ impl ArgumentConsumer for GameProfilesArgumentConsumer {
         args: &mut RawArgs<'a>,
     ) -> ConsumeResultWithSyntax<'a> {
         let Some(raw_arg) = args.pop() else {
-            return Box::pin(async { Ok(None) });
+            return Ok(None);
         };
 
-        Box::pin(async move {
-            let resolved = resolve_profiles_from_token(sender, server, raw_arg).await?;
-            Ok(Some(Arg::GameProfiles(resolved)))
-        })
+        let resolved = resolve_profiles_from_token(sender, server, raw_arg)?;
+        Ok(Some(Arg::GameProfiles(resolved)))
     }
 
-    fn suggest<'a>(
-        &'a self,
-        _sender: &CommandSender,
-        server: &'a Server,
-        _input: &'a str,
-    ) -> SuggestResult<'a> {
-        Box::pin(async move {
-            let mut suggestions = Vec::new();
-            if self.suggest_selectors {
-                suggestions.extend(selector_suggestions());
-            }
+    fn suggest(&self, _sender: &CommandSender, server: &Server, _input: &str) -> SuggestResult {
+        let mut suggestions = Vec::new();
+        if self.suggest_selectors {
+            suggestions.extend(selector_suggestions());
+        }
 
-            let mut names = Vec::new();
-            match self.suggestion_mode {
-                GameProfileSuggestionMode::OnlinePlayers => {
-                    for player in server.get_all_players() {
+        let mut names = Vec::new();
+        match self.suggestion_mode {
+            GameProfileSuggestionMode::OnlinePlayers => {
+                for player in server.get_all_players() {
+                    push_name_if_missing(&mut names, player.gameprofile.name.clone());
+                }
+            }
+            GameProfileSuggestionMode::NonOpOnlinePlayers => {
+                let ops = server
+                    .data
+                    .operator_config
+                    .read()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                for player in server.get_all_players() {
+                    if ops.ops.iter().all(|op| op.uuid != player.gameprofile.id) {
                         push_name_if_missing(&mut names, player.gameprofile.name.clone());
                     }
                 }
-                GameProfileSuggestionMode::NonOpOnlinePlayers => {
-                    let ops = server.data.operator_config.read().await;
-                    for player in server.get_all_players() {
-                        if ops.ops.iter().all(|op| op.uuid != player.gameprofile.id) {
-                            push_name_if_missing(&mut names, player.gameprofile.name.clone());
-                        }
-                    }
+            }
+            GameProfileSuggestionMode::OpNames => {
+                let ops = server
+                    .data
+                    .operator_config
+                    .read()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                for op in &ops.ops {
+                    push_name_if_missing(&mut names, op.name.clone());
                 }
-                GameProfileSuggestionMode::OpNames => {
-                    let ops = server.data.operator_config.read().await;
-                    for op in &ops.ops {
-                        push_name_if_missing(&mut names, op.name.clone());
-                    }
+            }
+            GameProfileSuggestionMode::BannedNames => {
+                let banned = server
+                    .data
+                    .banned_player_list
+                    .read()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                for entry in &banned.banned_players {
+                    push_name_if_missing(&mut names, entry.name.clone());
                 }
-                GameProfileSuggestionMode::BannedNames => {
-                    let banned = server.data.banned_player_list.read().await;
-                    for entry in &banned.banned_players {
-                        push_name_if_missing(&mut names, entry.name.clone());
-                    }
-                }
-                GameProfileSuggestionMode::NonWhitelistedOnlinePlayers => {
-                    let whitelist = server.data.whitelist_config.read().await;
-                    for player in server.get_all_players() {
-                        if !whitelist.is_whitelisted(&player.gameprofile) {
-                            push_name_if_missing(&mut names, player.gameprofile.name.clone());
-                        }
-                    }
-                }
-                GameProfileSuggestionMode::WhitelistedNames => {
-                    let whitelist = server.data.whitelist_config.read().await;
-                    for entry in &whitelist.whitelist {
-                        push_name_if_missing(&mut names, entry.name.clone());
+            }
+            GameProfileSuggestionMode::NonWhitelistedOnlinePlayers => {
+                let whitelist = server
+                    .data
+                    .whitelist_config
+                    .read()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                for player in server.get_all_players() {
+                    if !whitelist.is_whitelisted(&player.gameprofile) {
+                        push_name_if_missing(&mut names, player.gameprofile.name.clone());
                     }
                 }
             }
+            GameProfileSuggestionMode::WhitelistedNames => {
+                let whitelist = server
+                    .data
+                    .whitelist_config
+                    .read()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                for entry in &whitelist.whitelist {
+                    push_name_if_missing(&mut names, entry.name.clone());
+                }
+            }
+        }
 
-            suggestions.extend(
-                names
-                    .into_iter()
-                    .map(|name| CommandSuggestion::new(name, None)),
-            );
+        suggestions.extend(
+            names
+                .into_iter()
+                .map(|name| CommandSuggestion::new(name, None)),
+        );
 
-            Ok(Some(suggestions))
-        })
+        Ok(Some(suggestions))
     }
 }
 
@@ -187,7 +193,7 @@ impl<'a> FindArg<'a> for GameProfilesArgumentConsumer {
     }
 }
 
-async fn resolve_profiles_from_token(
+fn resolve_profiles_from_token(
     sender: &CommandSender,
     server: &Server,
     raw_arg: RawArg<'_>,
@@ -212,12 +218,17 @@ async fn resolve_profiles_from_token(
             return Ok(vec![player.gameprofile.clone()]);
         }
 
-        let cached_entry = server.data.user_cache.write().await.get_by_uuid(uuid);
+        let cached_entry = server
+            .data
+            .user_cache
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .get_by_uuid(uuid);
         if let Some(entry) = cached_entry {
             return Ok(vec![profile_from_uuid_name(entry.uuid, entry.name)]);
         }
 
-        if let Some(profile) = resolve_known_profile_by_uuid(server, uuid).await {
+        if let Some(profile) = resolve_known_profile_by_uuid(server, uuid) {
             return Ok(vec![profile]);
         }
 
@@ -232,13 +243,13 @@ async fn resolve_profiles_from_token(
         .data
         .user_cache
         .write()
-        .await
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
         .get_by_name(raw_arg.value);
     if let Some(entry) = cached_entry {
         return Ok(vec![profile_from_uuid_name(entry.uuid, entry.name)]);
     }
 
-    if let Some(profile) = resolve_known_profile_by_name(server, raw_arg.value).await {
+    if let Some(profile) = resolve_known_profile_by_name(server, raw_arg.value) {
         return Ok(vec![profile]);
     }
 
@@ -252,7 +263,7 @@ async fn resolve_profiles_from_token(
                     .data
                     .user_cache
                     .write()
-                    .await
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
                     .upsert(uuid, resolved_name.clone());
                 return Ok(vec![profile_from_uuid_name(uuid, resolved_name)]);
             }
@@ -266,7 +277,7 @@ async fn resolve_profiles_from_token(
             .data
             .user_cache
             .write()
-            .await
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
             .upsert(profile.id, profile.name.clone());
         return Ok(vec![profile]);
     }
@@ -274,16 +285,24 @@ async fn resolve_profiles_from_token(
     Err(syntax_player_unknown(raw_arg))
 }
 
-async fn resolve_known_profile_by_name(server: &Server, name: &str) -> Option<GameProfile> {
+fn resolve_known_profile_by_name(server: &Server, name: &str) -> Option<GameProfile> {
     {
-        let ops = server.data.operator_config.read().await;
+        let ops = server
+            .data
+            .operator_config
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         if let Some(op) = ops.ops.iter().find(|op| op.name.eq_ignore_ascii_case(name)) {
             return Some(profile_from_uuid_name(op.uuid, op.name.clone()));
         }
     }
 
     {
-        let banned_players = server.data.banned_player_list.read().await;
+        let banned_players = server
+            .data
+            .banned_player_list
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         if let Some(entry) = banned_players
             .banned_players
             .iter()
@@ -294,7 +313,11 @@ async fn resolve_known_profile_by_name(server: &Server, name: &str) -> Option<Ga
     }
 
     {
-        let whitelist = server.data.whitelist_config.read().await;
+        let whitelist = server
+            .data
+            .whitelist_config
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         if let Some(entry) = whitelist
             .whitelist
             .iter()
@@ -307,16 +330,24 @@ async fn resolve_known_profile_by_name(server: &Server, name: &str) -> Option<Ga
     None
 }
 
-async fn resolve_known_profile_by_uuid(server: &Server, uuid: Uuid) -> Option<GameProfile> {
+fn resolve_known_profile_by_uuid(server: &Server, uuid: Uuid) -> Option<GameProfile> {
     {
-        let ops = server.data.operator_config.read().await;
+        let ops = server
+            .data
+            .operator_config
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         if let Some(op) = ops.ops.iter().find(|op| op.uuid == uuid) {
             return Some(profile_from_uuid_name(op.uuid, op.name.clone()));
         }
     }
 
     {
-        let banned_players = server.data.banned_player_list.read().await;
+        let banned_players = server
+            .data
+            .banned_player_list
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         if let Some(entry) = banned_players
             .banned_players
             .iter()
@@ -327,7 +358,11 @@ async fn resolve_known_profile_by_uuid(server: &Server, uuid: Uuid) -> Option<Ga
     }
 
     {
-        let whitelist = server.data.whitelist_config.read().await;
+        let whitelist = server
+            .data
+            .whitelist_config
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         if let Some(entry) = whitelist.whitelist.iter().find(|entry| entry.uuid == uuid) {
             return Some(profile_from_uuid_name(entry.uuid, entry.name.clone()));
         }

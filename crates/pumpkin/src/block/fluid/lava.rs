@@ -1,12 +1,11 @@
 use super::flowing_trait::FlowingFluid;
 use crate::{
-    block::{BlockFuture, FluidMetadata, blocks::fire::fire::FireBlock, fluid::FluidBehaviour},
+    block::{FluidMetadata, blocks::fire::fire::FireBlock, fluid::FluidBehaviour},
     entity::EntityBase,
     world::World,
 };
 use pumpkin_data::{
     Block, BlockDirection, BlockState, BlockStateId,
-    block_properties::blocks_movement,
     damage::DamageType,
     dimension::Dimension,
     fluid::{Falling, Fluid, FluidProperties, Level},
@@ -80,22 +79,16 @@ impl FlowingLava {
             .all(|dir| world.is_loaded(&pos.offset(dir.to_offset())))
     }
 
-    async fn ignite_fire_if_possible(world: &Arc<World>, pos: &BlockPos) {
+    fn ignite_fire_if_possible(world: &Arc<World>, pos: &BlockPos) {
         if !Self::can_resolve_fire_state_without_loading(world, pos) {
             return;
         }
 
         let fire_state_id = FireBlock.get_state_for_position(world.as_ref(), &Block::FIRE, pos);
-        world
-            .set_block_state(pos, fire_state_id, BlockFlags::NOTIFY_ALL)
-            .await;
+        world.set_block_state(pos, fire_state_id, BlockFlags::NOTIFY_ALL);
     }
 
-    async fn receive_neighbor_fluids(
-        world: &Arc<World>,
-        _fluid: &Fluid,
-        block_pos: &BlockPos,
-    ) -> bool {
+    fn receive_neighbor_fluids(world: &Arc<World>, _fluid: &Fluid, block_pos: &BlockPos) -> bool {
         // Logic to determine if we should replace the fluid with any of (cobble, obsidian, stone, etc.)
         let below_is_soul_soil = world
             .get_block(&block_pos.offset(BlockDirection::Down.to_offset()))
@@ -113,13 +106,11 @@ impl FlowingLava {
                 } else {
                     Block::COBBLESTONE
                 };
-                world
-                    .set_block_state(
-                        block_pos,
-                        block.default_state.id,
-                        BlockFlags::NOTIFY_NEIGHBORS,
-                    )
-                    .await;
+                world.set_block_state(
+                    block_pos,
+                    block.default_state.id,
+                    BlockFlags::NOTIFY_NEIGHBORS,
+                );
                 world.sync_world_event(WorldEvent::LavaFizz, *block_pos, 0);
                 return false;
             }
@@ -130,18 +121,16 @@ impl FlowingLava {
                             *block_pos,
                             &Block::BASALT,
                         );
-                    server.plugin_manager.fire(&server, &mut event).await;
+                    server.plugin_manager.fire_blocking(&server, &mut event);
                     if event.cancelled {
                         return false;
                     }
                 }
-                world
-                    .set_block_state(
-                        block_pos,
-                        Block::BASALT.default_state.id,
-                        BlockFlags::NOTIFY_NEIGHBORS,
-                    )
-                    .await;
+                world.set_block_state(
+                    block_pos,
+                    Block::BASALT.default_state.id,
+                    BlockFlags::NOTIFY_NEIGHBORS,
+                );
                 world.sync_world_event(WorldEvent::LavaFizz, *block_pos, 0);
                 return false;
             }
@@ -154,132 +143,102 @@ const LAVA_FLOW_SPEED_NETHER: u8 = 10;
 const LAVA_FLOW_SPEED_SLOW: u8 = 30;
 
 impl FluidBehaviour for FlowingLava {
-    fn placed<'a>(
-        &'a self,
-        world: &'a Arc<World>,
-        fluid: &'a Fluid,
+    fn placed(
+        &self,
+        world: &Arc<World>,
+        fluid: &Fluid,
         state_id: BlockStateId,
-        block_pos: &'a BlockPos,
+        block_pos: &BlockPos,
         old_state_id: BlockStateId,
         _notify: bool,
-    ) -> BlockFuture<'a, ()> {
-        Box::pin(async move {
-            if old_state_id != state_id
-                && Self::receive_neighbor_fluids(world, fluid, block_pos).await
-            {
-                let flow_speed = self.get_flow_speed(world);
-                world.schedule_fluid_tick(fluid, *block_pos, flow_speed, TickPriority::Normal);
-            }
-        })
+    ) {
+        if old_state_id != state_id && Self::receive_neighbor_fluids(world, fluid, block_pos) {
+            let flow_speed = self.get_flow_speed(world);
+            world.schedule_fluid_tick(fluid, *block_pos, flow_speed, TickPriority::Normal);
+        }
     }
 
-    fn on_scheduled_tick<'a>(
-        &'a self,
-        world: &'a Arc<World>,
-        fluid: &'a Fluid,
-        block_pos: &'a BlockPos,
-    ) -> BlockFuture<'a, ()> {
-        Box::pin(async move {
-            self.on_scheduled_tick_internal(world, fluid, block_pos)
-                .await;
-        })
+    fn on_scheduled_tick(&self, world: &Arc<World>, _fluid: &Fluid, block_pos: &BlockPos) {
+        Self.on_scheduled_tick_internal(world, &Fluid::FLOWING_LAVA, block_pos);
     }
 
-    fn on_neighbor_update<'a>(
-        &'a self,
-        world: &'a Arc<World>,
-        fluid: &'a Fluid,
-        block_pos: &'a BlockPos,
+    fn on_neighbor_update(
+        &self,
+        world: &Arc<World>,
+        fluid: &Fluid,
+        block_pos: &BlockPos,
         _notify: bool,
-    ) -> BlockFuture<'a, ()> {
-        Box::pin(async move {
-            if Self::receive_neighbor_fluids(world, fluid, block_pos).await {
-                let flow_speed = self.get_flow_speed(world);
-                world.schedule_fluid_tick(fluid, *block_pos, flow_speed, TickPriority::Normal);
-            }
-        })
+    ) {
+        if Self::receive_neighbor_fluids(world, fluid, block_pos) {
+            let flow_speed = self.get_flow_speed(world);
+            world.schedule_fluid_tick(fluid, *block_pos, flow_speed, TickPriority::Normal);
+        }
     }
 
-    fn on_entity_collision<'a>(&'a self, entity: &'a dyn EntityBase) -> BlockFuture<'a, ()> {
-        Box::pin(async move {
-            let base_entity = entity.get_entity();
-            if !base_entity.entity_type.fire_immune
-                && !base_entity.fire_immune.load(Ordering::Relaxed)
-            {
-                entity.set_on_fire_for(15.0);
+    fn on_entity_collision(&self, entity: &dyn EntityBase) {
+        let base_entity = entity.get_entity();
+        if !base_entity.entity_type.fire_immune && !base_entity.fire_immune.load(Ordering::Relaxed)
+        {
+            entity.set_on_fire_for(15.0);
 
-                // Also apply lava damage
-                base_entity.damage(entity, 4.0, DamageType::LAVA).await;
-            }
-        })
+            // Also apply lava damage
+            base_entity.damage(entity, 4.0, DamageType::LAVA);
+        }
     }
 
-    fn random_tick<'a>(
-        &'a self,
-        _fluid: &'a Fluid,
-        world: &'a Arc<World>,
-        block_pos: &'a BlockPos,
-    ) -> BlockFuture<'a, ()> {
-        Box::pin(async move {
-            if !Self::can_spread_fire_around(world, block_pos) {
-                return;
-            }
+    fn random_tick(&self, _fluid: &Fluid, world: &Arc<World>, block_pos: &BlockPos) {
+        if !Self::can_spread_fire_around(world, block_pos) {
+            return;
+        }
 
-            let passes = rand::random_range(0..3);
-            if passes > 0 {
-                let mut test_pos = *block_pos;
+        let passes = rand::random_range(0..3);
+        if passes > 0 {
+            let mut test_pos = *block_pos;
 
-                for _ in 0..passes {
-                    test_pos = test_pos.offset(Vector3::new(
-                        rand::random_range(-1..=1),
-                        1,
-                        rand::random_range(-1..=1),
-                    ));
+            for _ in 0..passes {
+                test_pos = test_pos.offset(Vector3::new(
+                    rand::random_range(-1..=1),
+                    1,
+                    rand::random_range(-1..=1),
+                ));
 
-                    if !world.is_loaded(&test_pos) {
+                let (block, _) = world.get_block_and_state_id(&test_pos);
+
+                if block.id == Block::AIR.id {
+                    if Self::has_flammable_neighbours(world, &test_pos) {
+                        world.set_block_state(
+                            &test_pos,
+                            Block::FIRE.default_state.id,
+                            BlockFlags::NOTIFY_ALL,
+                        );
                         return;
                     }
-
-                    let Some(block_state) = world.get_block_state_if_loaded(&test_pos) else {
-                        return;
-                    };
-
-                    if block_state.is_air() {
-                        if Self::has_flammable_neighbours(world, &test_pos) {
-                            Self::ignite_fire_if_possible(world, &test_pos).await;
-                            return;
-                        }
-                    } else if blocks_movement(block_state, block_state.id.to_block_id()) {
-                        return;
-                    }
-                }
-            } else {
-                for _ in 0..3 {
-                    let test_pos = block_pos.offset(Vector3::new(
-                        rand::random_range(-1..=1),
-                        0,
-                        rand::random_range(-1..=1),
-                    ));
-
-                    if !world.is_loaded(&test_pos) {
-                        return;
-                    }
-
-                    let above_pos = test_pos.up();
-                    if !world.is_loaded(&above_pos) {
-                        return;
-                    }
-
-                    if world
-                        .get_block_state_if_loaded(&above_pos)
-                        .is_some_and(BlockState::is_air)
-                        && Self::is_flammable(world, &test_pos)
-                    {
-                        Self::ignite_fire_if_possible(world, &above_pos).await;
-                    }
+                } else if block.is_solid() {
+                    return;
                 }
             }
-        })
+        } else {
+            for _ in 0..3 {
+                let test_pos = block_pos.offset(Vector3::new(
+                    rand::random_range(-1..=1),
+                    0,
+                    rand::random_range(-1..=1),
+                ));
+
+                if !world.is_loaded(&test_pos) {
+                    return;
+                }
+
+                let above_pos = test_pos.up();
+                if world
+                    .get_block_state_if_loaded(&above_pos)
+                    .is_some_and(BlockState::is_air)
+                    && Self::is_flammable(world, &test_pos)
+                {
+                    Self::ignite_fire_if_possible(world, &above_pos);
+                }
+            }
+        }
     }
 }
 
@@ -316,13 +275,7 @@ impl FlowingFluid for FlowingLava {
         world.level_info.load().game_rules.lava_source_conversion
     }
 
-    async fn spread_to(
-        &self,
-        world: &Arc<World>,
-        fluid: &Fluid,
-        pos: &BlockPos,
-        state_id: BlockStateId,
-    ) {
+    fn spread_to(&self, world: &Arc<World>, fluid: &Fluid, pos: &BlockPos, state_id: BlockStateId) {
         let new_props = FlowingFluidProperties::from_state_id(state_id, fluid);
         let current_state_id = world.get_block_state_id(pos);
         let block = Block::from_state_id(current_state_id);
@@ -330,9 +283,7 @@ impl FlowingFluid for FlowingLava {
         if new_props.level == Level::L8 && new_props.falling == Falling::True {
             // Stone creation when lava meets water
             if block == &Block::WATER {
-                world
-                    .set_block_state(pos, Block::STONE.default_state.id, BlockFlags::NOTIFY_ALL)
-                    .await;
+                world.set_block_state(pos, Block::STONE.default_state.id, BlockFlags::NOTIFY_ALL);
                 world.sync_world_event(WorldEvent::LavaFizz, *pos, 0);
                 return;
             }
@@ -344,7 +295,6 @@ impl FlowingFluid for FlowingLava {
         }
 
         // Delegate quiescence, replacement and scheduling to the shared helper
-        self.apply_spread(world, fluid, pos, state_id, new_props)
-            .await;
+        self.apply_spread(world, fluid, pos, state_id, new_props);
     }
 }

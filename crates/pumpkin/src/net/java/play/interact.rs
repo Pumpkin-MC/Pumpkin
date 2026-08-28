@@ -18,7 +18,7 @@ impl JavaClient {
         let sneaking = interact.sneaking;
         let player_entity = &player.get_entity();
         if player_entity.is_sneaking() != sneaking {
-            player_entity.set_sneaking(sneaking).await;
+            player_entity.set_sneaking(sneaking);
         }
         let Ok(action) = ActionType::try_from(interact.r#type.0) else {
             self.kick(TextComponent::text("Invalid action type")).await;
@@ -99,22 +99,21 @@ impl JavaClient {
                                     return;
                                 }
                             }
-                            let mut stack = player.inventory().held_item().await;
+                            let mut stack = player.inventory().held_item();
                             let target_entity = event.target.get_entity();
                             if target_entity.entity_type.resource_name == "zombie_villager"
                                 && stack.item.registry_key == "golden_apple"
                             {
-                                player.trigger_advancement(crate::entity::player::advancement::trigger::AdvancementTrigger::CuredZombieVillager).await;
+                                player.trigger_advancement(crate::entity::player::advancement::trigger::AdvancementTrigger::CuredZombieVillager);
                             }
 
-                            let interacted = event.target.interact(player, &mut stack).await;
+                            let interacted = event.target.interact(player, &mut stack);
                             if !interacted {
                                 server
                                     .item_registry
-                                    .use_on_entity(&mut stack, player, event.target)
-                                    .await;
+                                    .use_on_entity(&mut stack, player, event.target);
                             }
-                            player.inventory().set_held_item(stack).await;
+                            player.inventory().set_held_item(stack);
                         }
                     }
                 }

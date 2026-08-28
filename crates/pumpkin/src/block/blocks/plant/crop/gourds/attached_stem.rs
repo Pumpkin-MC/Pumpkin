@@ -7,7 +7,7 @@ use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::world::BlockAccessor;
 
 use crate::block::{
-    BlockBehaviour, BlockFuture, BlockMetadata, CanPlaceAtArgs, GetStateForNeighborUpdateArgs,
+    BlockBehaviour, BlockMetadata, CanPlaceAtArgs, GetStateForNeighborUpdateArgs,
     blocks::plant::PlantBlockBase,
 };
 
@@ -45,27 +45,24 @@ impl BlockBehaviour for AttachedStemBlock {
         <Self as PlantBlockBase>::can_place_at(self, args.block_accessor, args.position)
     }
 
-    fn get_state_for_neighbor_update<'a>(
-        &'a self,
-        args: GetStateForNeighborUpdateArgs<'a>,
-    ) -> BlockFuture<'a, BlockStateId> {
-        Box::pin(async move {
-            let props = AttachedStemProperties::from_state_id(args.state_id, args.block);
-            if args.direction.to_horizontal_facing() == Some(props.facing)
-                && args.neighbor_state_id != Self::get_gourd(args.block).default_state.id
-            {
-                let mut props = StemProperties::default(Self::get_stem(args.block));
-                props.age = 7;
-                return props.to_state_id(Self::get_stem(args.block));
-            }
-            <Self as PlantBlockBase>::get_state_for_neighbor_update(
-                self,
-                args.world,
-                args.position,
-                args.state_id,
-            )
-            .await
-        })
+    fn get_state_for_neighbor_update(
+        &self,
+        args: GetStateForNeighborUpdateArgs<'_>,
+    ) -> BlockStateId {
+        let props = AttachedStemProperties::from_state_id(args.state_id, args.block);
+        if args.direction.to_horizontal_facing() == Some(props.facing)
+            && args.neighbor_state_id != Self::get_gourd(args.block).default_state.id
+        {
+            let mut props = StemProperties::default(Self::get_stem(args.block));
+            props.age = 7;
+            return props.to_state_id(Self::get_stem(args.block));
+        }
+        <Self as PlantBlockBase>::get_state_for_neighbor_update(
+            self,
+            args.world,
+            args.position,
+            args.state_id,
+        )
     }
 }
 

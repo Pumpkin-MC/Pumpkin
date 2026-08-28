@@ -13,10 +13,7 @@ use pumpkin_world::{block::entities::ExperienceContainer, inventory::Inventory};
 
 use tracing::debug;
 
-use crate::{
-    screen_handler::InventoryPlayer,
-    slot::{BoxFuture, Slot},
-};
+use crate::{screen_handler::InventoryPlayer, slot::Slot};
 
 /// Type of furnace slot.
 #[derive(Debug, Clone, Copy)]
@@ -72,24 +69,17 @@ impl Slot for FurnaceLikeSlot {
     ///
     /// - Top slot: accepts any item (smeltables)
     /// - Bottom slot: only accepts fuel items and buckets
-    fn can_insert<'a>(
-        &'a self,
-        stack: &'a pumpkin_data::item_stack::ItemStack,
-    ) -> BoxFuture<'a, bool> {
-        Box::pin(async move {
-            match self.slot_type {
-                FurnaceLikeSlotType::Top => true,
-                FurnaceLikeSlotType::Bottom => {
-                    is_fuel(stack.item.id) || stack.item.id == Item::BUCKET.id
-                }
+    fn can_insert(&self, stack: &pumpkin_data::item_stack::ItemStack) -> bool {
+        match self.slot_type {
+            FurnaceLikeSlotType::Top => true,
+            FurnaceLikeSlotType::Bottom => {
+                is_fuel(stack.item.id) || stack.item.id == Item::BUCKET.id
             }
-        })
+        }
     }
 
-    fn mark_dirty(&self) -> BoxFuture<'_, ()> {
-        Box::pin(async move {
-            self.inventory.mark_dirty();
-        })
+    fn mark_dirty(&self) {
+        self.inventory.mark_dirty();
     }
 }
 
@@ -137,43 +127,34 @@ impl Slot for FurnaceOutputSlot {
     }
 
     /// Awards experience when items are taken from this slot.
-    fn on_take_item<'a>(
-        &'a self,
-        player: &'a dyn InventoryPlayer,
-        stack: &'a pumpkin_data::item_stack::ItemStack,
-    ) -> BoxFuture<'a, ()> {
-        Box::pin(async move {
-            debug!("FurnaceOutputSlot: on_take_item called");
-            player
-                .increment_stat(
-                    StatisticCategory::Crafted,
-                    stack.item.id as i32,
-                    stack.item_count as i32,
-                )
-                .await;
-            // Extract accumulated experience and award to player
-            let experience = self.experience_container.extract_experience();
-            debug!("FurnaceOutputSlot: extracted experience = {experience}");
-            if experience > 0 {
-                debug!("FurnaceOutputSlot: awarding {experience} xp to player");
-                player.award_experience(experience).await;
-            }
-            self.mark_dirty().await;
-        })
+    fn on_take_item(
+        &self,
+        player: &dyn InventoryPlayer,
+        stack: &pumpkin_data::item_stack::ItemStack,
+    ) {
+        debug!("FurnaceOutputSlot: on_take_item called");
+        player.increment_stat(
+            StatisticCategory::Crafted,
+            stack.item.id as i32,
+            stack.item_count as i32,
+        );
+        // Extract accumulated experience and award to player
+        let experience = self.experience_container.extract_experience();
+        debug!("FurnaceOutputSlot: extracted experience = {experience}");
+        if experience > 0 {
+            debug!("FurnaceOutputSlot: awarding {experience} xp to player");
+            player.award_experience(experience);
+        }
+        self.mark_dirty();
     }
 
     /// Output slot cannot receive inserted items.
-    fn can_insert<'a>(
-        &'a self,
-        _stack: &'a pumpkin_data::item_stack::ItemStack,
-    ) -> BoxFuture<'a, bool> {
+    fn can_insert(&self, _stack: &pumpkin_data::item_stack::ItemStack) -> bool {
         // Cannot insert items into the output slot
-        Box::pin(async move { false })
+        false
     }
 
-    fn mark_dirty(&self) -> BoxFuture<'_, ()> {
-        Box::pin(async move {
-            self.inventory.mark_dirty();
-        })
+    fn mark_dirty(&self) {
+        self.inventory.mark_dirty();
     }
 }

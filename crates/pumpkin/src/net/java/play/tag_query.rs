@@ -18,7 +18,7 @@ impl JavaClient {
 
         let mut compound = NbtCompound::new();
         if let Some(block_entity) = player.world().get_block_entity(&packet.location) {
-            block_entity.write_nbt(&mut compound).await;
+            block_entity.write_nbt(&mut compound);
         }
 
         let nbt_bytes = Nbt::new(String::new(), compound).write_unnamed();
@@ -33,7 +33,7 @@ impl JavaClient {
 
         let mut compound = NbtCompound::new();
         if let Some(entity) = player.world().get_entity_by_id(packet.entity_id.0) {
-            entity.write_nbt(&mut compound).await;
+            entity.write_nbt(&mut compound);
         }
 
         let nbt_bytes = Nbt::new(String::new(), compound).write_unnamed();
