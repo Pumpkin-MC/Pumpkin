@@ -3188,7 +3188,7 @@ impl World {
         player.living_entity.entity.set_pos(position);
         player.living_entity.entity.set_rotation(yaw, pitch);
         player.living_entity.entity.last_pos.store(position);
-        chunker::update_position(player).await;
+        chunker::update_position(player);
 
         let center_chunk = player.living_entity.entity.chunk_pos.load();
         let chunk = self
@@ -3796,7 +3796,7 @@ impl World {
         );
     }
 
-    pub async fn send_world_info(
+    pub fn send_world_info(
         &self,
         player: &Arc<Player>,
         position: Vector3<f64>,
@@ -3815,9 +3815,7 @@ impl World {
         if let ClientPlatform::Java(client) = player.client.as_ref()
             && client.version.load() >= JavaMinecraftVersion::V_1_20_2
         {
-            player
-                .send_client_packet(&CGameEvent::new(GameEvent::StartWaitingChunks, 0.0))
-                .await;
+            player.try_send_client_packet(&CGameEvent::new(GameEvent::StartWaitingChunks, 0.0));
         }
 
         let entity = &player.get_entity();
@@ -3840,7 +3838,7 @@ impl World {
 
         player.send_client_information();
 
-        chunker::update_position(player).await;
+        chunker::update_position(player);
         // Update commands
 
         player.set_health(20.0);
@@ -4220,9 +4218,7 @@ impl World {
         // TODO: difficulty, exp bar, status effect
 
         // Load chunks and send world info FIRST (before teleport packet)
-        target_world
-            .send_world_info(player, position, yaw, pitch)
-            .await;
+        target_world.send_world_info(player, position, yaw, pitch);
 
         // Ensure at least the center chunk is sent synchronously before teleport.
         if let crate::net::ClientPlatform::Java(java_client) = player.client.as_ref() {
@@ -5003,7 +4999,7 @@ impl World {
         self: &Arc<Self>,
         position: &BlockPos,
         block_state_id: BlockStateId,
-        _flags: BlockFlags,
+        flags: BlockFlags,
     ) -> BlockStateId {
         let (chunk_coordinate, relative) = position.chunk_and_chunk_relative_position();
         let replaced_block_state_id = self
@@ -5023,7 +5019,7 @@ impl World {
             })
             .unwrap_or(Block::AIR.default_state.id);
 
-        if replaced_block_state_id == block_state_id {
+        if !flags.contains(BlockFlags::FORCE_STATE) && replaced_block_state_id == block_state_id {
             return block_state_id;
         }
 

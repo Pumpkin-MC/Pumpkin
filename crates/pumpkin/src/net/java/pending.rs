@@ -418,8 +418,7 @@ impl PendingConnection {
                 }
             }
             id if id == SKnownPacks::to_id(version) => {
-                self.handle_known_packs(SKnownPacks::read(&mut payload, &version)?, server)
-                    .await;
+                self.handle_known_packs().await;
                 Ok(None)
             }
             id if id == SConfigResourcePack::to_id(version) => {

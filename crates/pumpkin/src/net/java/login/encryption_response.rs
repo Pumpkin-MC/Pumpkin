@@ -66,10 +66,7 @@ impl PendingConnection {
         };
 
         if server.advanced_config.networking.java.online_mode {
-            match self
-                .authenticate(server, &shared_secret, &profile_name)
-                .await
-            {
+            match self.authenticate(server, &shared_secret, &profile_name) {
                 Ok(new_profile) => self.gameprofile = Some(new_profile),
                 Err(error) => {
                     self.kick(match error {
@@ -171,13 +168,13 @@ impl PendingConnection {
         Some(PacketHandlerResult::ReadyToPlay(profile.clone(), config))
     }
 
-    async fn authenticate(
+    fn authenticate(
         &self,
         server: &Server,
         shared_secret: &[u8],
         username: &str,
     ) -> Result<GameProfile, AuthError> {
-        let hash = server.digest_secret(shared_secret).await;
+        let hash = server.digest_secret(shared_secret);
         let ip = self.address.ip();
         let profile = authentication::authenticate(
             username,

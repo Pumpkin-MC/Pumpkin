@@ -2,12 +2,7 @@
 use super::*;
 
 impl JavaClient {
-    pub fn handle_close_container(
-        &self,
-        player: &Arc<Player>,
-        _server: &Server,
-        _packet: SCloseContainer,
-    ) {
+    pub fn handle_close_container(&self, player: &Arc<Player>) {
         player.on_handled_screen_closed();
     }
 }
