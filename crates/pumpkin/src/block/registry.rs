@@ -30,6 +30,7 @@ use crate::block::blocks::decorated_pot::DecoratedPotBlock;
 use crate::block::blocks::dirt_path::DirtPathBlock;
 use crate::block::blocks::doors::DoorBlock;
 use crate::block::blocks::dripstone::DripstoneBlock;
+use crate::block::blocks::end_gateway::EndGatewayBlock;
 use crate::block::blocks::end_portal::EndPortalBlock;
 use crate::block::blocks::end_portal_frame::EndPortalFrameBlock;
 use crate::block::blocks::falling::FallingBlock;
@@ -331,6 +332,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(BeehiveBlock);
     manager.register(PressurePlateBlock);
     manager.register(WeightedPressurePlateBlock);
+    manager.register(EndGatewayBlock);
     manager.register(EndPortalBlock);
     manager.register(SpawnerBlock);
     manager.register(EndPortalFrameBlock);

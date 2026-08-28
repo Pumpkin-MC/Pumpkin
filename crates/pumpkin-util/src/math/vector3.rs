@@ -810,10 +810,20 @@ vector_codec_impl!(Vector3<T>, 3, x, y, z);
 pub const fn packed_chunk_pos(vec: &Vector3<i32>) -> i64 {
     let mut result = 0i64;
     // NOTE: Need to go to i64 first to conserve a sign.
-    result |= (vec.x as i64 & 0x03FF_FFFF) << 42;
+    result |= (vec.x as i64 & 0x003F_FFFF) << 42;
     result |= (vec.z as i64 & 0x003F_FFFF) << 20;
     result |= vec.y as i64 & 0xFFFFF;
     result
+}
+
+/// Unpacks a 64-bit integer into a chunk section position vector.
+#[inline]
+#[must_use]
+pub const fn unpacked_chunk_pos(packed: i64) -> Vector3<i32> {
+    let x = (packed >> 42) as i32;
+    let y = ((packed << 44) >> 44) as i32;
+    let z = ((packed << 22) >> 42) as i32;
+    Vector3::new(x, y, z)
 }
 
 /// Packs a local position within a chunk into a single 16-bit integer.

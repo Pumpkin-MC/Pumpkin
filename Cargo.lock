@@ -3518,6 +3518,7 @@ dependencies = [
  "async-compression",
  "bitflags 2.13.1",
  "bytes",
+ "cesu8",
  "cfb8",
  "flate2",
  "hybrid-array",

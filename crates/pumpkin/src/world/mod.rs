@@ -4995,12 +4995,17 @@ impl World {
         }
     }
 
+    #[expect(clippy::too_many_lines)]
     pub fn set_block_state(
         self: &Arc<Self>,
         position: &BlockPos,
         block_state_id: BlockStateId,
         flags: BlockFlags,
     ) -> BlockStateId {
+        if !self.is_in_build_limit(*position) {
+            return Block::AIR.default_state.id;
+        }
+
         let (chunk_coordinate, relative) = position.chunk_and_chunk_relative_position();
         let replaced_block_state_id = self
             .level
@@ -5023,39 +5028,104 @@ impl World {
             return block_state_id;
         }
 
-        self.unsent_block_changes
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .insert(*position, block_state_id);
-
         let old_block = Block::from_state_id(replaced_block_state_id);
         let new_block = Block::from_state_id(block_state_id);
-
-        self.villager_poi
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .update_block(*position, new_block);
-
         let is_new_block = old_block != new_block;
-
-        if is_new_block {
-            let mut poi = self
-                .portal_poi
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            if villager_poi::profession_for_block(old_block).is_some() {
-                poi.remove(position);
-            }
-            if let Some(poi_type) = villager_poi::poi_type_for_block(new_block) {
-                poi.add_with_free_tickets(*position, poi_type, 1);
-            }
-        }
+        let block_moved = flags.contains(BlockFlags::MOVED);
 
         if is_new_block
             && old_block.default_state.block_entity_type != u16::MAX
-            && self.get_block_entity(position).is_some()
+            && let Some(entity) = self.get_block_entity(position)
         {
+            if !flags.contains(BlockFlags::SKIP_BLOCK_ENTITY_REPLACED_CALLBACK) {
+                entity.on_block_replaced(self, position);
+            }
             self.remove_block_entity(position);
+        }
+
+        if is_new_block && (flags.contains(BlockFlags::NOTIFY_NEIGHBORS) || block_moved) {
+            self.block_registry.on_state_replaced(
+                self,
+                old_block,
+                position,
+                replaced_block_state_id,
+                block_moved,
+            );
+        }
+
+        if !flags.contains(BlockFlags::SKIP_BLOCK_ADDED_CALLBACK) && is_new_block {
+            self.block_registry.on_placed(
+                self,
+                new_block,
+                block_state_id,
+                position,
+                replaced_block_state_id,
+                block_moved,
+            );
+            let new_fluid = self.get_fluid(position);
+            self.block_registry.on_placed_fluid(
+                self,
+                new_fluid,
+                block_state_id,
+                position,
+                replaced_block_state_id,
+                block_moved,
+            );
+        }
+
+        // Level.java setBlock
+        if self.get_block_state_id(position) == block_state_id {
+            if flags.contains(BlockFlags::NOTIFY_LISTENERS) {
+                self.unsent_block_changes
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .insert(*position, block_state_id);
+            }
+
+            if flags.contains(BlockFlags::NOTIFY_NEIGHBORS) {
+                self.update_neighbors(position, None);
+                // TODO: updateNeighbourForOutputSignal if blockState.hasAnalogOutputSignal()
+            }
+
+            if !flags.contains(BlockFlags::MOVED) {
+                let mut neighbour_update_flags = flags;
+                neighbour_update_flags.remove(BlockFlags::NOTIFY_NEIGHBORS);
+                neighbour_update_flags.remove(BlockFlags::SKIP_REDSTONE_WIRE_STATE_REPLACEMENT);
+                self.block_registry.prepare(
+                    self,
+                    position,
+                    old_block,
+                    replaced_block_state_id,
+                    neighbour_update_flags,
+                );
+                self.block_registry
+                    .update_neighbors(self, position, neighbour_update_flags);
+                self.block_registry.prepare(
+                    self,
+                    position,
+                    new_block,
+                    block_state_id,
+                    neighbour_update_flags,
+                );
+            }
+
+            self.villager_poi
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .update_block(*position, new_block);
+
+            if is_new_block {
+                let mut poi = self
+                    .portal_poi
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                if villager_poi::profession_for_block(old_block).is_some() {
+                    poi.remove(position);
+                }
+                if let Some(poi_type) = villager_poi::poi_type_for_block(new_block) {
+                    poi.add_with_free_tickets(*position, poi_type, 1);
+                }
+            }
         }
 
         self.level

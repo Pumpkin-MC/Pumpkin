@@ -152,9 +152,9 @@ impl BedrockClient {
         let input_data = packet.input_data;
 
         if input_data.get(InputData::StartSprinting as usize) {
-            entity.set_sprinting(true);
+            player.set_sprinting(true);
         } else if input_data.get(InputData::StopSprinting as usize) {
-            entity.set_sprinting(false);
+            player.set_sprinting(false);
         }
 
         if input_data.get(InputData::StartSneaking as usize) {
