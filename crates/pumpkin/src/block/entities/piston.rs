@@ -152,7 +152,7 @@ impl PistonBlockEntity {
 
         // Vanilla `moveCollidedEntities`: no collision shape (rail, torch, plant) means no push.
         let shapes = self.animated_shapes(last);
-        let Some(block_aabb) = BoundingBox::union_all(&shapes) else {
+        let Some(block_aabb) = BoundingBox::union_all(shapes.iter().copied()) else {
             return;
         };
 

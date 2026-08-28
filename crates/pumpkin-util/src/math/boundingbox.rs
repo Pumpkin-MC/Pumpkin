@@ -403,7 +403,7 @@ impl BoundingBox {
         }
     }
 
-    /// Smallest box containing both. Vanilla: `AABB.minmax`.
+    /// Smallest box containing both. Vanilla `AABB.minmax`.
     #[must_use]
     pub const fn union(&self, other: &Self) -> Self {
         Self {
@@ -420,16 +420,17 @@ impl BoundingBox {
         }
     }
 
-    /// Smallest box containing every box in `shapes`. `None` if `shapes` is empty.
-    /// Vanilla: `voxelShape.getBoundingBox()`.
+    /// Smallest box containing every box. `None` if empty.
+    /// Same iterator shape as [`super::block_box::BlockBox::encompass_all`].
+    /// Vanilla `VoxelShape.bounds`.
     #[must_use]
-    pub fn union_all(shapes: &[Self]) -> Option<Self> {
-        let (first, rest) = shapes.split_first()?;
-        let mut result = *first;
-        for shape in rest {
-            result = result.union(shape);
-        }
-        Some(result)
+    pub fn union_all<I>(shapes: I) -> Option<Self>
+    where
+        I: IntoIterator<Item = Self>,
+    {
+        let mut iter = shapes.into_iter();
+        let first = iter.next()?;
+        Some(iter.fold(first, |acc, shape| acc.union(&shape)))
     }
 
     /// Checks if this bounding box intersects another bounding box.
@@ -485,5 +486,50 @@ impl EntityDimensions {
             height,
             eye_height,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::BoundingBox;
+    use crate::math::vector3::Vector3;
+
+    #[test]
+    fn union_covers_both_boxes() {
+        let a = BoundingBox::new(Vector3::new(0.0, 0.0, 0.0), Vector3::new(1.0, 1.0, 1.0));
+        let b = BoundingBox::new(Vector3::new(0.5, -1.0, 0.25), Vector3::new(2.0, 0.5, 0.75));
+        let u = a.union(&b);
+        assert_eq!(u.min, Vector3::new(0.0, -1.0, 0.0));
+        assert_eq!(u.max, Vector3::new(2.0, 1.0, 1.0));
+    }
+
+    #[test]
+    fn union_all_is_none_when_empty() {
+        assert!(BoundingBox::union_all([]).is_none());
+    }
+
+    #[test]
+    fn union_all_folds_every_box() {
+        let boxes = [
+            BoundingBox::new(Vector3::new(0.0, 0.0, 0.0), Vector3::new(1.0, 1.0, 1.0)),
+            BoundingBox::new(Vector3::new(2.0, 0.0, 0.0), Vector3::new(3.0, 0.5, 0.5)),
+            BoundingBox::new(Vector3::new(-1.0, -2.0, 0.0), Vector3::new(0.0, 0.0, 4.0)),
+        ];
+        let u = BoundingBox::union_all(boxes).unwrap();
+        assert_eq!(u.min, Vector3::new(-1.0, -2.0, 0.0));
+        assert_eq!(u.max, Vector3::new(3.0, 1.0, 4.0));
+    }
+
+    #[test]
+    fn exceeds_block_cell_matches_full_block_bounds() {
+        assert!(!BoundingBox::full_block().exceeds_block_cell());
+        assert!(
+            BoundingBox::new(Vector3::new(0.0, 0.0, 0.0), Vector3::new(1.0, 1.5, 1.0))
+                .exceeds_block_cell()
+        );
+        assert!(
+            BoundingBox::new(Vector3::new(-0.1, 0.0, 0.0), Vector3::new(1.0, 1.0, 1.0))
+                .exceeds_block_cell()
+        );
     }
 }
