@@ -564,8 +564,8 @@ impl BlockEntity for PistonBlockEntity {
                     // No-op when the pushed block was air to begin with.
                     world.break_block(&pos, None, BlockFlags::NOTIFY_ALL);
                 } else {
-                    let updated_state = Block::from_state_id(updated_state)
-                        .without_waterlogged(updated_state)
+                    let updated_state = BlockState::from_id(updated_state)
+                        .without_waterlogged()
                         .map_or(updated_state, |state| state.id);
                     world.set_block_state(
                         &pos,

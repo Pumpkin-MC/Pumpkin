@@ -162,61 +162,35 @@ impl Block {
         })
     }
 
-    /// Returns a new [`BlockState`] reference for the given [`BlockStateId`] with the
-    /// `waterlogged` property forced to `true` if the block supports that
-    /// property.  If the state is already waterlogged or the block does not
-    /// expose a `waterlogged` property then `None` is returned.
+    /// Same state with `waterlogged` set. `None` if this block has no such property
+    /// (vanilla `hasProperty(BlockStateProperties.WATERLOGGED)`). Already at `waterlogged`
+    /// is returned unchanged.
     #[must_use]
-    pub fn with_waterlogged(&self, id: BlockStateId) -> Option<&'static BlockState> {
-        // Check if already waterlogged
-        if self.is_waterlogged(id) {
+    pub fn set_waterlogged(
+        &self,
+        id: BlockStateId,
+        waterlogged: bool,
+    ) -> Option<&'static BlockState> {
+        let mut props = self.properties(id)?.to_props();
+        let idx = props.iter().position(|(key, _)| *key == "waterlogged")?;
+        let value = if waterlogged { "true" } else { "false" };
+        if props[idx].1 == value {
             return Some(BlockState::from_id(id));
         }
-
-        // Modify the property list if available
-        if let Some(props_source) = self.properties(id) {
-            let mut props: Vec<(&str, &str)> = props_source
-                .to_props()
-                .iter()
-                .map(|(k, v)| (*k, *v))
-                .collect();
-
-            // Look for an existing waterlogged key or add one
-            if let Some(idx) = props.iter().position(|(k, _)| *k == "waterlogged") {
-                props[idx] = ("waterlogged", "true");
-            } else {
-                props.push(("waterlogged", "true"));
-            }
-
-            let new_state_id = self.from_properties(&props).to_state_id(self);
-            return Some(BlockState::from_id(new_state_id));
-        }
-
-        None
+        props[idx] = ("waterlogged", value);
+        Some(BlockState::from_id(
+            self.from_properties(&props).to_state_id(self),
+        ))
     }
 
-    /// Returns a new [`BlockState`] reference for the given [`BlockStateId`] with the
-    /// `waterlogged` property forced to `false`, or `None` if the block does not expose a
-    /// `waterlogged` property. A state that is already not waterlogged is returned unchanged.
+    #[must_use]
+    pub fn with_waterlogged(&self, id: BlockStateId) -> Option<&'static BlockState> {
+        self.set_waterlogged(id, true)
+    }
+
     #[must_use]
     pub fn without_waterlogged(&self, id: BlockStateId) -> Option<&'static BlockState> {
-        let props_source = self.properties(id)?;
-        let mut props: Vec<(&str, &str)> = props_source
-            .to_props()
-            .iter()
-            .map(|(k, v)| (*k, *v))
-            .collect();
-
-        let idx = props.iter().position(|(k, _)| *k == "waterlogged")?;
-
-        if props[idx].1 == "false" {
-            return Some(BlockState::from_id(id));
-        }
-
-        props[idx] = ("waterlogged", "false");
-
-        let new_state_id = self.from_properties(&props).to_state_id(self);
-        Some(BlockState::from_id(new_state_id))
+        self.set_waterlogged(id, false)
     }
 
     /// Returns whether this block is solid (based on default state)

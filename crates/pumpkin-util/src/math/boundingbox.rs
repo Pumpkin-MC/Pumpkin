@@ -216,6 +216,18 @@ impl BoundingBox {
         }
     }
 
+    /// True if this box leaves the local block cell `[0, 1]^3`.
+    /// Vanilla `BlockStateBase.Cache.largeCollisionShape` tests the same bounds.
+    #[must_use]
+    pub const fn exceeds_block_cell(&self) -> bool {
+        self.min.x < 0.0
+            || self.max.x > 1.0
+            || self.min.y < 0.0
+            || self.max.y > 1.0
+            || self.min.z < 0.0
+            || self.max.z > 1.0
+    }
+
     /// Creates a bounding box from a block position covering a full block.
     ///
     /// # Arguments
