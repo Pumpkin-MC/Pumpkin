@@ -91,26 +91,6 @@ impl PlacedFeature {
         random: &mut RandomGenerator,
         pos: BlockPos,
     ) -> bool {
-        let mut stream: Vec<BlockPos> = vec![pos];
-        for modifier in &self.placement {
-            let mut new_stream = Vec::with_capacity(stream.len());
-
-            for block_pos in stream {
-                let positions = modifier.get_positions(
-                    chunk,
-                    block_registry,
-                    min_y,
-                    height,
-                    feature_name,
-                    random,
-                    block_pos,
-                );
-                new_stream.extend(positions);
-            }
-
-            stream = new_stream;
-        }
-
         let Some(feature) = (match &self.feature {
             Feature::Named(name) => CONFIGURED_FEATURES.get(name),
             Feature::Inlined(feature) => Some(feature.as_ref()),
@@ -118,9 +98,41 @@ impl PlacedFeature {
             return false;
         };
 
-        let mut ret = false;
-        for pos in stream {
-            if feature.generate(
+        self.generate_at(
+            chunk,
+            block_registry,
+            feature,
+            min_y,
+            height,
+            feature_name,
+            random,
+            pos,
+            0,
+        )
+    }
+
+    /// Runs `pos` through the placement modifiers starting at `modifier_index` and places the
+    /// feature once all of them have been applied.
+    ///
+    /// Vanilla chains the modifiers into a lazy stream, so a position is fully resolved and placed
+    /// before the next one is even computed. Resolving one modifier at a time for every position
+    /// instead would make later positions test the terrain as it was before any of the earlier
+    /// features were placed, which lets things like trees generate into each other.
+    #[expect(clippy::too_many_arguments)]
+    fn generate_at<T: GenerationCache>(
+        &self,
+        chunk: &mut T,
+        block_registry: &dyn WorldPortalExt,
+        feature: &ConfiguredFeature,
+        min_y: i8,
+        height: u16,
+        feature_name: pumpkin_data::placed_feature::PlacedFeature,
+        random: &mut RandomGenerator,
+        pos: BlockPos,
+        modifier_index: usize,
+    ) -> bool {
+        let Some(modifier) = self.placement.get(modifier_index) else {
+            return feature.generate(
                 chunk,
                 block_registry,
                 min_y,
@@ -128,6 +140,33 @@ impl PlacedFeature {
                 feature_name,
                 random,
                 pos,
+            );
+        };
+
+        let positions: Vec<BlockPos> = modifier
+            .get_positions(
+                chunk,
+                block_registry,
+                min_y,
+                height,
+                feature_name,
+                random,
+                pos,
+            )
+            .collect();
+
+        let mut ret = false;
+        for pos in positions {
+            if self.generate_at(
+                chunk,
+                block_registry,
+                feature,
+                min_y,
+                height,
+                feature_name,
+                random,
+                pos,
+                modifier_index + 1,
             ) {
                 ret = true;
             }
