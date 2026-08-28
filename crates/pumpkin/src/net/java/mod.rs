@@ -781,13 +781,14 @@ impl JavaClient {
             }
             id if id == SChatCommandSigned::to_id(version) => {
                 let mut signed_payload = payload;
-                let cmd = if let Ok(signed) =
-                    SChatCommandSigned::read(&mut signed_payload, &version)
-                {
-                    signed.command.to_string()
-                } else {
-                    SChatCommand::read(&mut payload, &version)?.command.to_string()
-                };
+                let cmd =
+                    if let Ok(signed) = SChatCommandSigned::read(&mut signed_payload, &version) {
+                        signed.command.to_string()
+                    } else {
+                        SChatCommand::read(&mut payload, &version)?
+                            .command
+                            .to_string()
+                    };
                 let client_platform = player.client.clone();
                 let player_c = player.clone();
                 let server_c = server.clone();
