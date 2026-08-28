@@ -1,6 +1,4 @@
 use std::any::Any;
-use std::future::Future;
-use std::pin::Pin;
 use std::sync::Arc;
 
 use crate::entity::Entity;
@@ -53,57 +51,50 @@ impl ItemBehaviour for ShearsItem {
         player.gamemode.load() != GameMode::Creative
     }
 
-    fn use_on_block<'a>(
-        &'a self,
-        _item: &'a mut ItemStack,
-        player: &'a Player,
+    fn use_on_block(
+        &self,
+        _item: &mut ItemStack,
+        player: &Player,
         location: BlockPos,
         _face: BlockDirection,
         _cursor_pos: Vector3<f32>,
-        block: &'a Block,
-        _server: &'a Server,
-    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
-        Box::pin(async move {
-            let world = player.world();
-            let state_id = world.get_block_state_id(&location);
+        block: &Block,
+        _server: &Server,
+    ) {
+        let world = player.world();
+        let state_id = world.get_block_state_id(&location);
 
-            if handle_growing_plant(player, &location, block, state_id).await {
-                return;
-            }
+        if handle_growing_plant(player, &location, block, state_id) {
+            return;
+        }
 
-            if handle_beehive(player, &location, block, state_id).await {
-                return;
-            }
+        if handle_beehive(player, &location, block, state_id) {
+            return;
+        }
 
-            handle_pumpkin(player, &location, block).await;
-        })
+        handle_pumpkin(player, &location, block);
     }
 
-    fn use_on_entity<'a>(
-        &'a self,
-        _item: &'a mut ItemStack,
-        player: &'a Player,
-        entity: Arc<dyn EntityBase>,
-    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
-        Box::pin(async move {
-            if let Some(sheep) = entity.get_mob().and_then(|m| m.get_sheep())
-                && !sheep.is_sheared()
-            {
-                sheep.set_sheared(true);
-                let world = player.world();
-                let pos = sheep.mob_entity.living_entity.entity.pos.load();
-                world.play_sound(Sound::EntitySheepShear, SoundCategory::Players, &pos);
+    fn use_on_entity(&self, _item: &mut ItemStack, player: &Player, entity: Arc<dyn EntityBase>) {
+        if let Some(sheep) = entity
+            .cast_any()
+            .downcast_ref::<crate::entity::passive::sheep::SheepEntity>()
+            && !sheep.is_sheared()
+        {
+            sheep.set_sheared(true);
+            let world = player.world();
+            let pos = sheep.mob_entity.living_entity.entity.pos.load();
+            world.play_sound(Sound::EntitySheepShear, SoundCategory::Players, &pos);
 
-                let wool_count = (rand::random::<u8>() % 3 + 1) as u8;
-                let wool_item = get_wool_item_for_color(sheep.get_color());
-                let item_entity = Arc::new(ItemEntity::new(
-                    Entity::new(world.clone(), pos, &EntityType::ITEM),
-                    ItemStack::new(wool_count, wool_item),
-                ));
-                world.spawn_entity(item_entity).await;
-                player.damage_held_item(1).await;
-            }
-        })
+            let wool_count = (rand::random::<u8>() % 3 + 1) as u8;
+            let wool_item = get_wool_item_for_color(sheep.get_color());
+            let item_entity = Arc::new(ItemEntity::new(
+                Entity::new(world.clone(), pos, &EntityType::ITEM),
+                ItemStack::new(wool_count, wool_item),
+            ));
+            world.spawn_entity(item_entity);
+            player.damage_held_item(1);
+        }
     }
 
     fn as_any(&self) -> &dyn Any {
@@ -111,7 +102,7 @@ impl ItemBehaviour for ShearsItem {
     }
 }
 
-async fn handle_growing_plant(
+fn handle_growing_plant(
     player: &Player,
     location: &BlockPos,
     block: &Block,
@@ -145,22 +136,20 @@ async fn handle_growing_plant(
     });
 
     if let Some(new_state_id) = action {
-        world
-            .set_block_state(location, new_state_id, BlockFlags::NOTIFY_ALL)
-            .await;
+        world.set_block_state(location, new_state_id, BlockFlags::NOTIFY_ALL);
         world.play_sound(
             Sound::BlockGrowingPlantCrop,
             SoundCategory::Blocks,
             &location.to_f64(),
         );
-        player.damage_held_item(1).await;
+        player.damage_held_item(1);
         return true;
     }
 
     false
 }
 
-async fn handle_beehive(
+fn handle_beehive(
     player: &Player,
     location: &BlockPos,
     block: &Block,
@@ -192,9 +181,7 @@ async fn handle_beehive(
     });
 
     if let Some(new_state_id) = action {
-        world
-            .set_block_state(location, new_state_id, BlockFlags::NOTIFY_ALL)
-            .await;
+        world.set_block_state(location, new_state_id, BlockFlags::NOTIFY_ALL);
         world.play_sound(
             Sound::BlockBeehiveShear,
             SoundCategory::Blocks,
@@ -210,21 +197,19 @@ async fn handle_beehive(
             Entity::new(world.clone(), drop_pos, &EntityType::ITEM),
             ItemStack::new(3, &Item::HONEYCOMB),
         ));
-        world.spawn_entity(item_entity).await;
-        player.damage_held_item(1).await;
+        world.spawn_entity(item_entity);
+        player.damage_held_item(1);
         return true;
     }
 
     false
 }
 
-async fn handle_pumpkin(player: &Player, location: &BlockPos, block: &Block) {
+fn handle_pumpkin(player: &Player, location: &BlockPos, block: &Block) {
     if block.id == Block::PUMPKIN.id {
         let world = player.world();
         let carved_state = Block::CARVED_PUMPKIN.default_state.id;
-        world
-            .set_block_state(location, carved_state, BlockFlags::NOTIFY_ALL)
-            .await;
+        world.set_block_state(location, carved_state, BlockFlags::NOTIFY_ALL);
         world.play_sound(
             Sound::BlockPumpkinCarve,
             SoundCategory::Blocks,
@@ -240,7 +225,7 @@ async fn handle_pumpkin(player: &Player, location: &BlockPos, block: &Block) {
             Entity::new(world.clone(), drop_pos, &EntityType::ITEM),
             ItemStack::new(4, &Item::PUMPKIN_SEEDS),
         ));
-        world.spawn_entity(item_entity).await;
-        player.damage_held_item(1).await;
+        world.spawn_entity(item_entity);
+        player.damage_held_item(1);
     }
 }

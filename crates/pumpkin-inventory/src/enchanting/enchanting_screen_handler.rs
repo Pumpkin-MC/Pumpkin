@@ -13,11 +13,8 @@ use pumpkin_world::inventory::Inventory;
 
 use crate::{
     player::player_inventory::PlayerInventory,
-    screen_handler::{
-        InventoryPlayer, ItemStackFuture, ScreenHandler, ScreenHandlerBehaviour,
-        ScreenHandlerFuture, offer_or_drop_stack,
-    },
-    slot::{BoxFuture, NormalSlot, Slot},
+    screen_handler::{InventoryPlayer, ScreenHandler, ScreenHandlerBehaviour, offer_or_drop_stack},
+    slot::{NormalSlot, Slot},
     window_property::{EnchantmentTable, WindowProperty},
 };
 
@@ -46,12 +43,12 @@ impl Slot for LapisSlot {
         self.0.set_id(id);
     }
 
-    fn can_insert<'a>(&'a self, stack: &'a ItemStack) -> BoxFuture<'a, bool> {
-        Box::pin(async move { is_lapis(stack) })
+    fn can_insert(&self, stack: &ItemStack) -> bool {
+        is_lapis(stack)
     }
 
-    fn mark_dirty(&self) -> BoxFuture<'_, ()> {
-        self.0.mark_dirty()
+    fn mark_dirty(&self) {
+        self.0.mark_dirty();
     }
 }
 
@@ -93,8 +90,8 @@ impl EnchantingTableScreenHandler {
         handler
     }
 
-    pub async fn update_enchantments(&mut self, player: &dyn InventoryPlayer) {
-        let item = self.inventory.get_stack(0).await;
+    pub fn update_enchantments(&mut self, player: &dyn InventoryPlayer) {
+        let item = self.inventory.get_stack(0);
 
         if item.is_empty() || item.has_enchantments() {
             for i in 0..3 {
@@ -146,16 +143,13 @@ impl EnchantingTableScreenHandler {
                     }
                 }
 
-                if player
-                    .fire_prepare_item_enchant_event(
-                        &item,
-                        &mut self.level_requirements,
-                        &mut self.enchantment_id,
-                        &mut self.enchantment_level,
-                        self.bookshelf_count,
-                    )
-                    .await
-                {
+                if player.fire_prepare_item_enchant_event(
+                    &item,
+                    &mut self.level_requirements,
+                    &mut self.enchantment_id,
+                    &mut self.enchantment_level,
+                    self.bookshelf_count,
+                ) {
                     for i in 0..3 {
                         self.level_requirements[i] = 0;
                         self.enchantment_id[i] = -1;
@@ -164,7 +158,7 @@ impl EnchantingTableScreenHandler {
                 }
             }
         }
-        self.send_property_updates().await;
+        self.send_property_updates();
     }
 
     fn calculate_level_requirement(
@@ -276,7 +270,7 @@ impl EnchantingTableScreenHandler {
         result
     }
 
-    async fn send_property_updates(&self) {
+    fn send_property_updates(&self) {
         if let Some(sync_handler) = self.behaviour.sync_handler.as_ref() {
             for i in 0..3 {
                 let (id, val) = WindowProperty::new(
@@ -284,27 +278,21 @@ impl EnchantingTableScreenHandler {
                     self.level_requirements[i] as i16,
                 )
                 .into_tuple();
-                sync_handler
-                    .update_property(&self.behaviour, id as i32, val as i32)
-                    .await;
+                sync_handler.update_property(&self.behaviour, id as i32, val as i32);
 
                 let (id, val) = WindowProperty::new(
                     EnchantmentTable::EnchantmentId { slot: i as u8 },
                     self.enchantment_id[i] as i16,
                 )
                 .into_tuple();
-                sync_handler
-                    .update_property(&self.behaviour, id as i32, val as i32)
-                    .await;
+                sync_handler.update_property(&self.behaviour, id as i32, val as i32);
 
                 let (id, val) = WindowProperty::new(
                     EnchantmentTable::EnchantmentLevel { slot: i as u8 },
                     self.enchantment_level[i] as i16,
                 )
                 .into_tuple();
-                sync_handler
-                    .update_property(&self.behaviour, id as i32, val as i32)
-                    .await;
+                sync_handler.update_property(&self.behaviour, id as i32, val as i32);
             }
 
             let (id, val) = WindowProperty::new(
@@ -312,9 +300,7 @@ impl EnchantingTableScreenHandler {
                 (self.enchantment_seed & 0xFFFF) as i16,
             )
             .into_tuple();
-            sync_handler
-                .update_property(&self.behaviour, id as i32, val as i32)
-                .await;
+            sync_handler.update_property(&self.behaviour, id as i32, val as i32);
         }
     }
 }
@@ -336,165 +322,141 @@ impl ScreenHandler for EnchantingTableScreenHandler {
         &mut self.behaviour
     }
 
-    fn on_closed<'a>(&'a mut self, player: &'a dyn InventoryPlayer) -> ScreenHandlerFuture<'a, ()> {
-        Box::pin(async move {
-            self.default_on_closed(player).await;
-            self.inventory.on_close().await;
-            // Return items to player
-            for i in 0..2 {
-                let stack = self.inventory.remove_stack(i).await;
-                if !stack.is_empty() {
-                    offer_or_drop_stack(player, stack).await;
+    fn on_closed(&mut self, player: &dyn InventoryPlayer) {
+        self.default_on_closed(player);
+        self.inventory.on_close();
+        // Return items to player
+        for i in 0..2 {
+            let stack = self.inventory.remove_stack(i);
+            if !stack.is_empty() {
+                offer_or_drop_stack(player, stack);
+            }
+        }
+    }
+
+    fn on_button_click(&mut self, player: &dyn InventoryPlayer, id: i32) -> bool {
+        if !(0..3).contains(&id) {
+            return false;
+        }
+
+        let level_req = self.level_requirements[id as usize];
+        if player.experience_level() < level_req && !player.is_creative() {
+            return false;
+        }
+
+        let mut lapis_stack = self.inventory.get_stack(1);
+        let lapis_cost = (id + 1) as u8;
+
+        if !player.is_creative()
+            && (lapis_stack.is_empty()
+                || !is_lapis(&lapis_stack)
+                || lapis_stack.item_count < lapis_cost)
+        {
+            return false;
+        }
+
+        // Perform enchantment
+        let mut item_stack = self.inventory.get_stack(0);
+
+        if item_stack.is_empty() || item_stack.has_enchantments() {
+            return false;
+        }
+
+        let mut random = self.create_enchantment_random(id as usize);
+        let mut enchantments =
+            Self::get_enchantment_list(&mut random, &item_stack, id as usize, level_req);
+
+        if enchantments.is_empty() {
+            return false;
+        }
+
+        if player.fire_enchant_item_event(&item_stack, id, level_req, &mut enchantments)
+            || enchantments.is_empty()
+        {
+            return false;
+        }
+
+        if !player.is_creative() {
+            player.add_experience_levels(-(id + 1));
+            lapis_stack.decrement(lapis_cost);
+            self.inventory.set_stack(1, lapis_stack);
+        }
+
+        for (enchant, level) in enchantments {
+            item_stack.add_enchantment(enchant, level as u16);
+        }
+        self.inventory.set_stack(0, item_stack);
+
+        // Update seed
+        player.set_enchantment_seed(rand::random());
+        self.enchantment_seed = player.enchantment_seed();
+
+        self.update_enchantments(player);
+        self.send_content_updates();
+
+        player.increment_stat(
+            StatisticCategory::Custom,
+            CustomStatistic::EnchantItem as i32,
+            1,
+        );
+
+        true
+    }
+
+    fn quick_move(&mut self, player: &dyn InventoryPlayer, slot_index: i32) -> ItemStack {
+        let mut stack_left = ItemStack::EMPTY.clone();
+        let slot = self.get_behaviour().slots[slot_index as usize].clone();
+
+        if slot.has_stack() {
+            let mut slot_stack = slot.get_stack();
+            stack_left = slot_stack.clone();
+
+            if slot_index < 2 {
+                // From enchanting to player
+                if !self.insert_item(
+                    &mut slot_stack,
+                    2,
+                    self.get_behaviour().slots.len() as i32,
+                    true,
+                ) {
+                    return ItemStack::EMPTY.clone();
                 }
-            }
-        })
-    }
-
-    fn on_button_click<'a>(
-        &'a mut self,
-        player: &'a dyn InventoryPlayer,
-        id: i32,
-    ) -> ScreenHandlerFuture<'a, bool> {
-        Box::pin(async move {
-            if !(0..3).contains(&id) {
-                return false;
-            }
-
-            let level_req = self.level_requirements[id as usize];
-            if player.experience_level() < level_req && !player.is_creative() {
-                return false;
-            }
-
-            let mut lapis_stack = self.inventory.get_stack(1).await;
-            let lapis_cost = (id + 1) as u8;
-
-            if !player.is_creative()
-                && (lapis_stack.is_empty()
-                    || !is_lapis(&lapis_stack)
-                    || lapis_stack.item_count < lapis_cost)
-            {
-                return false;
-            }
-
-            // Perform enchantment
-            let mut item_stack = self.inventory.get_stack(0).await;
-
-            if item_stack.is_empty() || item_stack.has_enchantments() {
-                return false;
-            }
-
-            let mut random = self.create_enchantment_random(id as usize);
-            let mut enchantments =
-                Self::get_enchantment_list(&mut random, &item_stack, id as usize, level_req);
-
-            if enchantments.is_empty() {
-                return false;
-            }
-
-            if player
-                .fire_enchant_item_event(&item_stack, id, level_req, &mut enchantments)
-                .await
-                || enchantments.is_empty()
-            {
-                return false;
-            }
-
-            if !player.is_creative() {
-                player.add_experience_levels(-(id + 1)).await;
-                lapis_stack.decrement(lapis_cost);
-                self.inventory.set_stack(1, lapis_stack).await;
-            }
-
-            for (enchant, level) in enchantments {
-                item_stack.add_enchantment(enchant, level as u16);
-            }
-            self.inventory.set_stack(0, item_stack).await;
-
-            // Update seed
-            player.set_enchantment_seed(rand::random()).await;
-            self.enchantment_seed = player.enchantment_seed();
-
-            self.update_enchantments(player).await;
-            self.send_content_updates().await;
-
-            player
-                .increment_stat(
-                    StatisticCategory::Custom,
-                    CustomStatistic::EnchantItem as i32,
-                    1,
-                )
-                .await;
-
-            true
-        })
-    }
-
-    fn quick_move<'a>(
-        &'a mut self,
-        player: &'a dyn InventoryPlayer, // FIX: Changed _player to player
-        slot_index: i32,
-    ) -> ItemStackFuture<'a> {
-        Box::pin(async move {
-            let mut stack_left = ItemStack::EMPTY.clone();
-            let slot = self.get_behaviour().slots[slot_index as usize].clone();
-
-            if slot.has_stack().await {
-                let mut slot_stack = slot.get_stack().await;
-                stack_left = slot_stack.clone();
-
-                if slot_index < 2 {
-                    // From enchanting to player
-                    if !self
-                        .insert_item(
-                            &mut slot_stack,
-                            2,
-                            self.get_behaviour().slots.len() as i32,
-                            true,
-                        )
-                        .await
-                    {
+            } else {
+                // From player to enchanting
+                // Lapis check
+                if slot_stack.item == &Item::LAPIS_LAZULI {
+                    if !self.insert_item(&mut slot_stack, 1, 2, false) {
                         return ItemStack::EMPTY.clone();
                     }
-                } else {
-                    // From player to enchanting
-                    // Lapis check
-                    if slot_stack.item == &Item::LAPIS_LAZULI {
-                        if !self.insert_item(&mut slot_stack, 1, 2, false).await {
-                            return ItemStack::EMPTY.clone();
-                        }
-                    } else if !self.insert_item(&mut slot_stack, 0, 1, false).await {
-                        return ItemStack::EMPTY.clone();
-                    }
+                } else if !self.insert_item(&mut slot_stack, 0, 1, false) {
+                    return ItemStack::EMPTY.clone();
                 }
-
-                if slot_stack.is_empty() {
-                    slot.set_stack(ItemStack::EMPTY.clone()).await;
-                } else {
-                    slot.set_stack(slot_stack).await;
-                }
-
-                // CRITICAL FIX: Ensure the client is notified when shift-clicking items into the slots
-                self.update_enchantments(player).await;
             }
 
-            stack_left
-        })
+            if slot_stack.is_empty() {
+                slot.set_stack(ItemStack::EMPTY.clone());
+            } else {
+                slot.set_stack(slot_stack);
+            }
+
+            // CRITICAL FIX: Ensure the client is notified when shift-clicking items into the slots
+            self.update_enchantments(player);
+        }
+
+        stack_left
     }
 
-    fn on_slot_click<'a>(
-        &'a mut self,
+    fn on_slot_click(
+        &mut self,
         slot_index: i32,
         button: i32,
         action_type: pumpkin_protocol::java::server::play::SlotActionType,
-        player: &'a dyn InventoryPlayer,
-    ) -> ScreenHandlerFuture<'a, ()> {
-        Box::pin(async move {
-            self.internal_on_slot_click(slot_index, button, action_type, player)
-                .await;
-            if slot_index == 0 || slot_index == 1 {
-                self.update_enchantments(player).await;
-            }
-        })
+        player: &dyn InventoryPlayer,
+    ) {
+        self.internal_on_slot_click(slot_index, button, action_type, player);
+        if slot_index == 0 || slot_index == 1 {
+            self.update_enchantments(player);
+        }
     }
 }
 

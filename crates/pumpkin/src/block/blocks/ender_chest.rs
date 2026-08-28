@@ -1,8 +1,9 @@
 use std::sync::Arc;
+use std::sync::Mutex;
 
 use crate::block::entities::ender_chest::EnderChestBlockEntity;
 use crate::block::{
-    BlockBehaviour, BlockFuture, NormalUseArgs, OnPlaceArgs, OnSyncedBlockEventArgs, PlacedArgs,
+    BlockBehaviour, NormalUseArgs, OnPlaceArgs, OnSyncedBlockEventArgs, PlacedArgs,
     registry::BlockActionResult,
 };
 use crate::world::World;
@@ -13,13 +14,12 @@ use pumpkin_inventory::{
     generic_container_screen_handler::create_generic_9x3,
     player::ender_chest_inventory::EnderChestInventory,
     player::player_inventory::PlayerInventory,
-    screen_handler::{BoxFuture, InventoryPlayer, ScreenHandlerFactory, SharedScreenHandler},
+    screen_handler::{InventoryPlayer, ScreenHandlerFactory, SharedScreenHandler},
 };
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::text::TextComponent;
 use pumpkin_world::block::viewer::ViewerCountTracker;
-use tokio::sync::Mutex;
 
 pub struct EnderChestScreenFactory {
     pub inventory: Arc<EnderChestInventory>,
@@ -27,22 +27,19 @@ pub struct EnderChestScreenFactory {
 }
 
 impl ScreenHandlerFactory for EnderChestScreenFactory {
-    fn create_screen_handler<'a>(
-        &'a self,
+    fn create_screen_handler(
+        &self,
         sync_id: u8,
-        player_inventory: &'a Arc<PlayerInventory>,
-        _player: &'a dyn InventoryPlayer,
-    ) -> BoxFuture<'a, Option<SharedScreenHandler>> {
-        Box::pin(async move {
-            if let Some(tracker) = &self.tracker {
-                self.inventory.set_tracker(tracker.clone()).await;
-            }
-            let handler =
-                create_generic_9x3(sync_id, player_inventory, self.inventory.clone()).await;
-            let concrete_arc = Arc::new(Mutex::new(handler));
+        player_inventory: &Arc<PlayerInventory>,
+        _player: &dyn InventoryPlayer,
+    ) -> Option<SharedScreenHandler> {
+        if let Some(tracker) = &self.tracker {
+            self.inventory.set_tracker(tracker.clone());
+        }
+        let handler = create_generic_9x3(sync_id, player_inventory, self.inventory.clone());
+        let concrete_arc = Arc::new(Mutex::new(handler));
 
-            Some(concrete_arc as SharedScreenHandler)
-        })
+        Some(concrete_arc as SharedScreenHandler)
     }
 
     fn get_display_name(&self) -> TextComponent {
@@ -57,77 +54,63 @@ impl ScreenHandlerFactory for EnderChestScreenFactory {
 pub struct EnderChestBlock;
 
 impl BlockBehaviour for EnderChestBlock {
-    fn on_place<'a>(&'a self, args: OnPlaceArgs<'a>) -> BlockFuture<'a, BlockStateId> {
-        Box::pin(async move {
-            let mut props = LadderLikeProperties::default(args.block);
-            props.facing = args
-                .player
-                .living_entity
-                .entity
-                .get_horizontal_facing()
-                .opposite();
-            props.waterlogged = args.replacing.water_source();
-            props.to_state_id(args.block)
-        })
+    fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
+        let mut props = LadderLikeProperties::default(args.block);
+        props.facing = args
+            .player
+            .living_entity
+            .entity
+            .get_horizontal_facing()
+            .opposite();
+        props.waterlogged = args.replacing.water_source();
+        props.to_state_id(args.block)
     }
 
-    fn on_synced_block_event<'a>(
-        &'a self,
-        args: OnSyncedBlockEventArgs<'a>,
-    ) -> BlockFuture<'a, bool> {
-        Box::pin(async move {
-            // On the server, we don't need to do more because the client is responsible for that.
-            args.r#type == Self::LID_ANIMATION_EVENT_TYPE
-        })
+    fn on_synced_block_event(&self, args: OnSyncedBlockEventArgs<'_>) -> bool {
+        // On the server, we don't need to do more because the client is responsible for that.
+        args.r#type == Self::LID_ANIMATION_EVENT_TYPE
     }
 
-    fn normal_use<'a>(&'a self, args: NormalUseArgs<'a>) -> BlockFuture<'a, BlockActionResult> {
-        Box::pin(async move {
-            if is_chest_blocked(args.world, args.position) {
-                return BlockActionResult::Success;
-            }
+    fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
+        if is_chest_blocked(args.world, args.position) {
+            return BlockActionResult::Success;
+        }
 
-            let block_entity = if let Some(be) = args.world.get_block_entity(args.position) {
-                be
-            } else {
-                let be = Arc::new(EnderChestBlockEntity::new(*args.position));
-                args.world.add_block_entity(be.clone());
-                be
-            };
+        let block_entity = if let Some(be) = args.world.get_block_entity(args.position) {
+            be
+        } else {
+            let be = Arc::new(EnderChestBlockEntity::new(*args.position));
+            args.world.add_block_entity(be.clone());
+            be
+        };
 
-            if let Some(block_entity) = block_entity
-                .as_any()
-                .downcast_ref::<EnderChestBlockEntity>()
-            {
-                let inventory = args.player.ender_chest_inventory();
-                args.player
-                    .increment_stat(
-                        pumpkin_data::statistic::StatisticCategory::Custom,
-                        pumpkin_data::statistic::CustomStatistic::OpenEnderchest as i32,
-                        1,
-                    )
-                    .await;
-                args.player
-                    .open_handled_screen(
-                        &EnderChestScreenFactory {
-                            inventory: inventory.clone(),
-                            tracker: Some(block_entity.get_tracker()),
-                        },
-                        Some(*args.position),
-                    )
-                    .await;
-                // TODO: PiglinBrain.onGuardedBlockInteracted(serverWorld, player, true);
-            }
+        if let Some(block_entity) = block_entity
+            .as_any()
+            .downcast_ref::<EnderChestBlockEntity>()
+        {
+            args.player.increment_stat(
+                pumpkin_data::statistic::StatisticCategory::Custom,
+                pumpkin_data::statistic::CustomStatistic::OpenEnderchest as i32,
+                1,
+            );
+            let tracker = block_entity.get_tracker();
+            let inventory = args.player.ender_chest_inventory();
+            args.player.open_handled_screen(
+                &EnderChestScreenFactory {
+                    inventory: inventory.clone(),
+                    tracker: Some(tracker),
+                },
+                Some(*args.position),
+            );
+            // TODO: PiglinBrain.onGuardedBlockInteracted(serverWorld, player, true);
+        }
 
-            BlockActionResult::Success
-        })
+        BlockActionResult::Success
     }
 
-    fn placed<'a>(&'a self, args: PlacedArgs<'a>) -> BlockFuture<'a, ()> {
-        Box::pin(async move {
-            let block_entity = EnderChestBlockEntity::new(*args.position);
-            args.world.add_block_entity(Arc::new(block_entity));
-        })
+    fn placed(&self, args: PlacedArgs<'_>) {
+        let block_entity = EnderChestBlockEntity::new(*args.position);
+        args.world.add_block_entity(Arc::new(block_entity));
     }
 }
 

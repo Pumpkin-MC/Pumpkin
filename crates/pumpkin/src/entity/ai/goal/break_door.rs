@@ -7,7 +7,7 @@ use pumpkin_world::world::BlockFlags;
 use rand::RngExt;
 
 use super::door_interact::DoorInteractGoal;
-use super::{Controls, Goal, GoalFuture};
+use super::{Controls, Goal};
 use crate::block::blocks::doors::DoorBlock;
 use crate::entity::mob::Mob;
 
@@ -71,112 +71,103 @@ impl Default for BreakDoorGoal {
 }
 
 impl Goal for BreakDoorGoal {
-    fn can_start<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
-        Box::pin(async move {
-            if !self.door_interact_goal.can_use(mob) {
-                return false;
-            }
-            let world = mob.get_entity().world.load();
-            let level_info = world.level_info.load();
-            if !level_info.game_rules.mob_griefing {
-                return false;
-            }
-            self.is_valid_difficulty(level_info.difficulty) && !self.door_interact_goal.is_open(mob)
-        })
+    fn can_start(&mut self, mob: &dyn Mob) -> bool {
+        if !self.door_interact_goal.can_use(mob) {
+            return false;
+        }
+        let world = mob.get_entity().world.load();
+        let level_info = world.level_info.load();
+        if !level_info.game_rules.mob_griefing {
+            return false;
+        }
+        self.is_valid_difficulty(level_info.difficulty) && !self.door_interact_goal.is_open(mob)
     }
 
-    fn should_continue<'a>(&'a self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
-        Box::pin(async move {
-            let world = mob.get_entity().world.load();
-            let level_info = world.level_info.load();
-            let mob_pos = mob.get_entity().pos.load();
-            let door_pos = self.door_interact_goal.door_pos;
-            let center_x = f64::from(door_pos.0.x) + 0.5;
-            let center_y = f64::from(door_pos.0.y) + 0.5;
-            let center_z = f64::from(door_pos.0.z) + 0.5;
-            let dx = center_x - mob_pos.x;
-            let dy = center_y - mob_pos.y;
-            let dz = center_z - mob_pos.z;
-            let dist_sq = dx * dx + dy * dy + dz * dz;
+    fn should_continue(&self, mob: &dyn Mob) -> bool {
+        let world = mob.get_entity().world.load();
+        let level_info = world.level_info.load();
+        let mob_pos = mob.get_entity().pos.load();
+        let door_pos = self.door_interact_goal.door_pos;
+        let center_x = f64::from(door_pos.0.x) + 0.5;
+        let center_y = f64::from(door_pos.0.y) + 0.5;
+        let center_z = f64::from(door_pos.0.z) + 0.5;
+        let dx = center_x - mob_pos.x;
+        let dy = center_y - mob_pos.y;
+        let dz = center_z - mob_pos.z;
+        let dist_sq = dx * dx + dy * dy + dz * dz;
 
-            self.break_time <= self.get_door_break_time()
-                && !DoorBlock::is_open(&world, &door_pos)
-                && dist_sq < 4.0
-                && self.is_valid_difficulty(level_info.difficulty)
-        })
+        self.break_time <= self.get_door_break_time()
+            && !DoorBlock::is_open(&world, &door_pos)
+            && dist_sq < 4.0
+            && self.is_valid_difficulty(level_info.difficulty)
     }
 
-    fn start<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
-        Box::pin(async move {
-            self.door_interact_goal.start_interaction(mob);
-            self.break_time = 0;
-            self.last_break_progress = -1;
-        })
+    fn start(&mut self, mob: &dyn Mob) {
+        self.door_interact_goal.start_interaction(mob);
+        self.break_time = 0;
+        self.last_break_progress = -1;
     }
 
-    fn stop<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
-        Box::pin(async move {
-            let world = mob.get_entity().world.load();
+    fn stop(&mut self, mob: &dyn Mob) {
+        let world = mob.get_entity().world.load();
+        world.set_block_destroy_stage(
+            mob.get_entity().entity_id,
+            self.door_interact_goal.door_pos,
+            -1,
+        );
+    }
+
+    fn tick(&mut self, mob: &dyn Mob) {
+        self.door_interact_goal.tick_interaction(mob);
+        let world = mob.get_entity().world.load_full();
+
+        if mob.get_random().random_range(0..20) == 0 {
+            world.sync_world_event(
+                WorldEvent::SoundZombieWoodenDoor,
+                self.door_interact_goal.door_pos,
+                0,
+            );
+            mob.get_mob_entity().living_entity.swing_hand();
+        }
+
+        self.break_time += 1;
+        let progress = (self.break_time as f32 / self.get_door_break_time() as f32 * 10.0) as i32;
+        if progress != self.last_break_progress {
             world.set_block_destroy_stage(
                 mob.get_entity().entity_id,
                 self.door_interact_goal.door_pos,
-                -1,
+                progress as i8,
             );
-        })
-    }
+            self.last_break_progress = progress;
+        }
 
-    fn tick<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
-        Box::pin(async move {
-            self.door_interact_goal.tick_interaction(mob);
-            let world = mob.get_entity().world.load_full();
-
-            if mob.get_random().random_range(0..20) == 0 {
-                world.sync_world_event(
-                    WorldEvent::SoundZombieWoodenDoor,
-                    self.door_interact_goal.door_pos,
-                    0,
-                );
-                mob.get_mob_entity().living_entity.swing_hand().await;
-            }
-
-            self.break_time += 1;
-            let progress =
-                (self.break_time as f32 / self.get_door_break_time() as f32 * 10.0) as i32;
-            if progress != self.last_break_progress {
-                world.set_block_destroy_stage(
+        let level_info = world.level_info.load();
+        if self.break_time == self.get_door_break_time()
+            && self.is_valid_difficulty(level_info.difficulty)
+        {
+            let (_, block_state_id) =
+                world.get_block_and_state_id(&self.door_interact_goal.door_pos);
+            let door_pos = self.door_interact_goal.door_pos;
+            let mut event =
+                crate::plugin::api::events::entity::entity_break_door::EntityBreakDoorEvent::new(
                     mob.get_entity().entity_id,
-                    self.door_interact_goal.door_pos,
-                    progress as i8,
+                    door_pos,
                 );
-                self.last_break_progress = progress;
+            if let Some(server) = world.server.upgrade() {
+                server.plugin_manager.fire_blocking(&server, &mut event);
             }
-
-            let level_info = world.level_info.load();
-            if self.break_time == self.get_door_break_time()
-                && self.is_valid_difficulty(level_info.difficulty)
-            {
-                let (_, block_state_id) =
-                    world.get_block_and_state_id(&self.door_interact_goal.door_pos);
-                mob.break_door(self.door_interact_goal.door_pos).await;
-                world
-                    .set_block_state(
-                        &self.door_interact_goal.door_pos,
-                        BlockStateId::AIR,
-                        BlockFlags::NOTIFY_ALL,
-                    )
-                    .await;
-                world.sync_world_event(
-                    WorldEvent::SoundZombieDoorCrash,
-                    self.door_interact_goal.door_pos,
-                    0,
-                );
-                world.sync_world_event(
-                    WorldEvent::ParticlesDestroyBlock,
-                    self.door_interact_goal.door_pos,
-                    i32::from(block_state_id.as_u16()),
-                );
-            }
-        })
+            world.set_block_state(&door_pos, BlockStateId::AIR, BlockFlags::NOTIFY_ALL);
+            world.sync_world_event(
+                WorldEvent::SoundZombieDoorCrash,
+                self.door_interact_goal.door_pos,
+                0,
+            );
+            world.sync_world_event(
+                WorldEvent::ParticlesDestroyBlock,
+                self.door_interact_goal.door_pos,
+                i32::from(block_state_id.as_u16()),
+            );
+        }
     }
 
     fn should_run_every_tick(&self) -> bool {

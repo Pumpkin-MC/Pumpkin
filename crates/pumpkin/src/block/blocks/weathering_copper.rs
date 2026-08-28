@@ -19,7 +19,7 @@ use crate::block::blocks::stairs::StairBlock;
 use crate::block::blocks::trapdoor::TrapDoorBlock;
 use crate::block::registry::BlockActionResult;
 use crate::block::{
-    BlockBehaviour, BlockFuture, BlockMetadata, BrokenArgs, CanPlaceAtArgs, CanUpdateAtArgs,
+    BlockBehaviour, BlockMetadata, BrokenArgs, CanPlaceAtArgs, CanUpdateAtArgs,
     GetStateForNeighborUpdateArgs, NormalUseArgs, OnNeighborUpdateArgs, OnPlaceArgs,
     OnStateReplacedArgs, PlacedArgs, RandomTickArgs,
 };
@@ -503,7 +503,7 @@ pub fn scan_neighbor_oxidation_levels(
 }
 
 /// Executes a random tick change-over-time attempt on a weathering copper block using vanilla's probability formula.
-pub async fn change_over_time(world: &Arc<World>, position: &BlockPos, block: &Block) {
+pub fn change_over_time(world: &Arc<World>, position: &BlockPos, block: &Block) {
     use rand::RngExt;
 
     // 1. Roll base degradation chance (~5.69%)
@@ -538,9 +538,7 @@ pub async fn change_over_time(world: &Arc<World>, position: &BlockPos, block: &B
     let current_state_id = world.get_block_state_id(position);
     let new_state_id = with_properties_of(block, current_state_id, next_block);
 
-    world
-        .set_block_state(position, new_state_id, BlockFlags::NOTIFY_ALL)
-        .await;
+    world.set_block_state(position, new_state_id, BlockFlags::NOTIFY_ALL);
 
     // Special handling for multi-block structures:
     // Door: update upper half if present
@@ -551,9 +549,7 @@ pub async fn change_over_time(world: &Arc<World>, position: &BlockPos, block: &B
             let (top_block, top_state_id) = world.get_block_and_state_id(&top_pos);
             if top_block == block {
                 let top_new_state_id = with_properties_of(top_block, top_state_id, next_block);
-                world
-                    .set_block_state(&top_pos, top_new_state_id, BlockFlags::NOTIFY_ALL)
-                    .await;
+                world.set_block_state(&top_pos, top_new_state_id, BlockFlags::NOTIFY_ALL);
             }
         }
     }
@@ -570,9 +566,7 @@ pub async fn change_over_time(world: &Arc<World>, position: &BlockPos, block: &B
             if right_block == block {
                 let right_new_state_id =
                     with_properties_of(right_block, right_state_id, next_block);
-                world
-                    .set_block_state(&right_pos, right_new_state_id, BlockFlags::NOTIFY_LISTENERS)
-                    .await;
+                world.set_block_state(&right_pos, right_new_state_id, BlockFlags::NOTIFY_LISTENERS);
             }
         }
     }
@@ -647,10 +641,8 @@ impl BlockMetadata for WeatheringCopperBlock {
 }
 
 impl BlockBehaviour for WeatheringCopperBlock {
-    fn random_tick<'a>(&'a self, args: RandomTickArgs<'a>) -> BlockFuture<'a, ()> {
-        Box::pin(async move {
-            change_over_time(args.world, args.position, args.block).await;
-        })
+    fn random_tick(&self, args: RandomTickArgs<'_>) {
+        change_over_time(args.world, args.position, args.block);
     }
 }
 
@@ -695,12 +687,12 @@ impl BlockMetadata for WeatheringCopperStairBlock {
 }
 
 impl BlockBehaviour for WeatheringCopperStairBlock {
-    fn on_place<'a>(&'a self, args: OnPlaceArgs<'a>) -> BlockFuture<'a, BlockStateId> {
+    fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
         StairBlock.on_place(args)
     }
 
-    fn on_neighbor_update<'a>(&'a self, args: OnNeighborUpdateArgs<'a>) -> BlockFuture<'a, ()> {
-        StairBlock.on_neighbor_update(args)
+    fn on_neighbor_update(&self, args: OnNeighborUpdateArgs<'_>) {
+        StairBlock.on_neighbor_update(args);
     }
 
     fn rotate(
@@ -716,10 +708,8 @@ impl BlockBehaviour for WeatheringCopperStairBlock {
         StairBlock.mirror(block, state_id, mirror)
     }
 
-    fn random_tick<'a>(&'a self, args: RandomTickArgs<'a>) -> BlockFuture<'a, ()> {
-        Box::pin(async move {
-            change_over_time(args.world, args.position, args.block).await;
-        })
+    fn random_tick(&self, args: RandomTickArgs<'_>) {
+        change_over_time(args.world, args.position, args.block);
     }
 }
 
@@ -764,22 +754,20 @@ impl BlockMetadata for WeatheringCopperTrapDoorBlock {
 }
 
 impl BlockBehaviour for WeatheringCopperTrapDoorBlock {
-    fn on_place<'a>(&'a self, args: OnPlaceArgs<'a>) -> BlockFuture<'a, BlockStateId> {
+    fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
         TrapDoorBlock.on_place(args)
     }
 
-    fn normal_use<'a>(&'a self, args: NormalUseArgs<'a>) -> BlockFuture<'a, BlockActionResult> {
+    fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
         TrapDoorBlock.normal_use(args)
     }
 
-    fn on_neighbor_update<'a>(&'a self, args: OnNeighborUpdateArgs<'a>) -> BlockFuture<'a, ()> {
-        TrapDoorBlock.on_neighbor_update(args)
+    fn on_neighbor_update(&self, args: OnNeighborUpdateArgs<'_>) {
+        TrapDoorBlock.on_neighbor_update(args);
     }
 
-    fn random_tick<'a>(&'a self, args: RandomTickArgs<'a>) -> BlockFuture<'a, ()> {
-        Box::pin(async move {
-            change_over_time(args.world, args.position, args.block).await;
-        })
+    fn random_tick(&self, args: RandomTickArgs<'_>) {
+        change_over_time(args.world, args.position, args.block);
     }
 }
 
@@ -824,7 +812,7 @@ impl BlockMetadata for WeatheringCopperSlabBlock {
 }
 
 impl BlockBehaviour for WeatheringCopperSlabBlock {
-    fn on_place<'a>(&'a self, args: OnPlaceArgs<'a>) -> BlockFuture<'a, BlockStateId> {
+    fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
         SlabBlock.on_place(args)
     }
 
@@ -832,10 +820,8 @@ impl BlockBehaviour for WeatheringCopperSlabBlock {
         SlabBlock.can_update_at(args)
     }
 
-    fn random_tick<'a>(&'a self, args: RandomTickArgs<'a>) -> BlockFuture<'a, ()> {
-        Box::pin(async move {
-            change_over_time(args.world, args.position, args.block).await;
-        })
+    fn random_tick(&self, args: RandomTickArgs<'_>) {
+        change_over_time(args.world, args.position, args.block);
     }
 }
 
@@ -880,11 +866,11 @@ impl BlockMetadata for WeatheringCopperDoorBlock {
 }
 
 impl BlockBehaviour for WeatheringCopperDoorBlock {
-    fn on_place<'a>(&'a self, args: OnPlaceArgs<'a>) -> BlockFuture<'a, BlockStateId> {
+    fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
         DoorBlock.on_place(args)
     }
 
-    fn normal_use<'a>(&'a self, args: NormalUseArgs<'a>) -> BlockFuture<'a, BlockActionResult> {
+    fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
         DoorBlock.normal_use(args)
     }
 
@@ -892,37 +878,35 @@ impl BlockBehaviour for WeatheringCopperDoorBlock {
         DoorBlock.can_place_at(args)
     }
 
-    fn placed<'a>(&'a self, args: PlacedArgs<'a>) -> BlockFuture<'a, ()> {
-        DoorBlock.placed(args)
+    fn placed(&self, args: PlacedArgs<'_>) {
+        DoorBlock.placed(args);
     }
 
-    fn broken<'a>(&'a self, args: BrokenArgs<'a>) -> BlockFuture<'a, ()> {
-        DoorBlock.broken(args)
+    fn broken(&self, args: BrokenArgs<'_>) {
+        DoorBlock.broken(args);
     }
 
-    fn on_neighbor_update<'a>(&'a self, args: OnNeighborUpdateArgs<'a>) -> BlockFuture<'a, ()> {
-        DoorBlock.on_neighbor_update(args)
+    fn on_neighbor_update(&self, args: OnNeighborUpdateArgs<'_>) {
+        DoorBlock.on_neighbor_update(args);
     }
 
-    fn get_state_for_neighbor_update<'a>(
-        &'a self,
-        args: GetStateForNeighborUpdateArgs<'a>,
-    ) -> BlockFuture<'a, BlockStateId> {
+    fn get_state_for_neighbor_update(
+        &self,
+        args: GetStateForNeighborUpdateArgs<'_>,
+    ) -> BlockStateId {
         DoorBlock.get_state_for_neighbor_update(args)
     }
 
-    fn on_state_replaced<'a>(&'a self, args: OnStateReplacedArgs<'a>) -> BlockFuture<'a, ()> {
-        DoorBlock.on_state_replaced(args)
+    fn on_state_replaced(&self, args: OnStateReplacedArgs<'_>) {
+        DoorBlock.on_state_replaced(args);
     }
 
-    fn random_tick<'a>(&'a self, args: RandomTickArgs<'a>) -> BlockFuture<'a, ()> {
-        Box::pin(async move {
-            let state_id = args.world.get_block_state_id(args.position);
-            let door_props = OakDoorLikeProperties::from_state_id(state_id, args.block);
-            if door_props.half == DoubleBlockHalf::Lower {
-                change_over_time(args.world, args.position, args.block).await;
-            }
-        })
+    fn random_tick(&self, args: RandomTickArgs<'_>) {
+        let state_id = args.world.get_block_state_id(args.position);
+        let door_props = OakDoorLikeProperties::from_state_id(state_id, args.block);
+        if door_props.half == DoubleBlockHalf::Lower {
+            change_over_time(args.world, args.position, args.block);
+        }
     }
 }
 
@@ -967,17 +951,13 @@ impl BlockMetadata for WeatheringCopperGrateBlock {
 }
 
 impl BlockBehaviour for WeatheringCopperGrateBlock {
-    fn on_place<'a>(&'a self, args: OnPlaceArgs<'a>) -> BlockFuture<'a, BlockStateId> {
-        Box::pin(async move {
-            let mut props = MangroveRootsLikeProperties::default(args.block);
-            props.waterlogged = args.replacing.water_source();
-            props.to_state_id(args.block)
-        })
+    fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
+        let mut props = MangroveRootsLikeProperties::default(args.block);
+        props.waterlogged = args.replacing.water_source();
+        props.to_state_id(args.block)
     }
 
-    fn random_tick<'a>(&'a self, args: RandomTickArgs<'a>) -> BlockFuture<'a, ()> {
-        Box::pin(async move {
-            change_over_time(args.world, args.position, args.block).await;
-        })
+    fn random_tick(&self, args: RandomTickArgs<'_>) {
+        change_over_time(args.world, args.position, args.block);
     }
 }

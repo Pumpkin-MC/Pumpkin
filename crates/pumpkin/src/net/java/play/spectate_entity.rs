@@ -31,9 +31,7 @@ impl JavaClient {
                 .send_client_packet(&CSetCamera::new(target_id.into()))
                 .await;
 
-            player
-                .request_teleport(target_pos, target_yaw, target_pitch)
-                .await;
+            player.request_teleport(target_pos, target_yaw, target_pitch);
         } else if let Some(target_player) = server.get_player_by_uuid(packet.target) {
             let target_pos = target_player.living_entity.entity.pos.load();
             let target_yaw = target_player.living_entity.entity.yaw.load();
@@ -45,9 +43,7 @@ impl JavaClient {
                 .send_client_packet(&CSetCamera::new(target_id.into()))
                 .await;
 
-            player
-                .request_teleport(target_pos, target_yaw, target_pitch)
-                .await;
+            player.request_teleport(target_pos, target_yaw, target_pitch);
         }
     }
 }

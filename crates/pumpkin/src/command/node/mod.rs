@@ -11,7 +11,6 @@ use crate::command::node::attached::NodeId;
 use crate::command::node::detached::GlobalNodeId;
 use crate::command::suggestion::provider::SuggestionProvider;
 use std::borrow::Cow;
-use std::pin::Pin;
 use std::sync::Arc;
 
 /// Represents a [`CommandExecutor`]'s result.
@@ -28,20 +27,19 @@ use std::sync::Arc;
 ///
 /// If the command **fails**, an [`Err`] is returned, containing the [`CommandSyntaxError`]
 /// that led to this result.
-pub type CommandExecutorResult<'a> =
-    Pin<Box<dyn Future<Output = Result<i32, CommandSyntaxError>> + Send + 'a>>;
+pub type CommandExecutorResult = Result<i32, CommandSyntaxError>;
 
 /// A struct implementing this trait is able to run with a given context.
 pub trait CommandExecutor: Sync + Send {
     /// Executes this executor for a command.
-    fn execute<'a>(&'a self, context: &'a CommandContext) -> CommandExecutorResult<'a>;
+    fn execute(&self, context: &CommandContext) -> CommandExecutorResult;
 }
 
 impl<F> CommandExecutor for F
 where
-    F: for<'c> Fn(&'c CommandContext) -> CommandExecutorResult<'c> + Send + Sync,
+    F: Fn(&CommandContext) -> CommandExecutorResult + Send + Sync,
 {
-    fn execute<'a>(&'a self, context: &'a CommandContext) -> CommandExecutorResult<'a> {
+    fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
         self(context)
     }
 }
@@ -50,12 +48,10 @@ where
 pub type Command = Arc<dyn CommandExecutor>;
 
 /// Represents the result of [`Arc<CommandSource>`]s from a [`CommandContext`].
-pub type RedirectModifierResult<'a> =
-    Pin<Box<dyn Future<Output = Result<Vec<Arc<CommandSource>>, CommandSyntaxError>> + Send + 'a>>;
+pub type RedirectModifierResult = Result<Vec<Arc<CommandSource>>, CommandSyntaxError>;
 
 /// A function that performs the required modification.
-pub type RedirectModifierExecutor =
-    dyn for<'c> Fn(&'c CommandContext) -> RedirectModifierResult<'c> + Send + Sync;
+pub type RedirectModifierExecutor = dyn Fn(&CommandContext) -> RedirectModifierResult + Send + Sync;
 
 /// A function that returns a new collection of sources from a given context.
 #[derive(Clone)]
@@ -71,34 +67,33 @@ pub enum RedirectModifier {
 impl RedirectModifier {
     /// Tries to provide a [`Vec`] of [`Arc<CommandSource>`] from a
     /// given [`CommandContext`].
-    #[must_use]
-    pub fn sources<'c>(&self, command_context: &'c CommandContext) -> RedirectModifierResult<'c> {
+    pub fn sources(&self, command_context: &CommandContext) -> RedirectModifierResult {
         match self {
-            Self::KeepSource => Box::pin(async move { Ok(vec![command_context.source.clone()]) }),
+            Self::KeepSource => Ok(vec![command_context.source.clone()]),
             Self::Custom(function) => function(command_context),
         }
     }
 }
 
-/// Represents the result of a node requirement as a pinned boxed [`Future`].
-pub type RequirementResult<'a> = Pin<Box<dyn Future<Output = bool> + Send + 'a>>;
+/// Represents the result of a node requirement.
+pub type RequirementResult = bool;
 
 /// A predicate that returns if the provided source satisfies it.
 #[derive(Clone)]
-pub struct Requirement(pub Arc<dyn Fn(&CommandSource) -> RequirementResult<'_> + Send + Sync>);
+pub struct Requirement(pub Arc<dyn Fn(&CommandSource) -> RequirementResult + Send + Sync>);
 
 impl Requirement {
     /// Evaluates the given condition, returning whether the
     /// given [`CommandSource`] satisfies this requirement.
     #[must_use]
-    pub fn evaluate<'a>(&'a self, command_source: &'a CommandSource) -> RequirementResult<'a> {
+    pub fn evaluate(&self, command_source: &CommandSource) -> RequirementResult {
         self.0(command_source)
     }
 }
 
 impl<F> From<F> for Requirement
 where
-    F: Fn(&CommandSource) -> RequirementResult<'_> + Send + Sync + 'static,
+    F: Fn(&CommandSource) -> RequirementResult + Send + Sync + 'static,
 {
     fn from(value: F) -> Self {
         Self(Arc::new(value))
@@ -111,19 +106,14 @@ impl From<String> for Requirement {
         Self(Arc::new({
             let permission = Arc::new(value);
 
-            move |source| {
-                let cloned_permission = permission.clone();
-                Box::pin(async move { source.has_permission(&cloned_permission).await })
-            }
+            move |source| source.has_permission(&permission)
         }))
     }
 }
 
 impl From<&'static str> for Requirement {
     fn from(value: &'static str) -> Self {
-        Self(Arc::new(move |source| {
-            Box::pin(async move { source.has_permission(value).await })
-        }))
+        Self(Arc::new(move |source| source.has_permission(value)))
     }
 }
 
@@ -142,19 +132,13 @@ impl Requirements {
     /// Evaluates the given condition, returning whether the
     /// given [`CommandSource`] satisfies all contained requirements.
     #[must_use]
-    pub fn evaluate<'a>(&'a self, command_source: &'a CommandSource) -> RequirementResult<'a> {
-        let futures = self
-            .0
-            .iter()
-            .map(|predicate| predicate.evaluate(command_source));
-        Box::pin(async move {
-            for future in futures {
-                if !future.await {
-                    return false;
-                }
+    pub fn evaluate(&self, command_source: &CommandSource) -> RequirementResult {
+        for predicate in &self.0 {
+            if !predicate.evaluate(command_source) {
+                return false;
             }
-            true
-        })
+        }
+        true
     }
 }
 

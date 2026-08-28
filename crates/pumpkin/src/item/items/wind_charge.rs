@@ -1,4 +1,3 @@
-use std::pin::Pin;
 use std::sync::Arc;
 
 use crate::entity::player::Player;
@@ -23,35 +22,26 @@ impl ItemMetadata for WindChargeItem {
 const POWER: f32 = 1.5;
 
 impl ItemBehaviour for WindChargeItem {
-    fn normal_use<'a>(
-        &'a self,
-        _block: &'a Item,
-        player: &'a Player,
-    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
-        Box::pin(async move {
-            let world = player.world();
-            let position = player.position();
+    fn normal_use(&self, _block: &Item, player: &Player) {
+        let world = player.world();
+        let position = player.position();
 
-            world.play_sound(
-                Sound::EntityWindChargeThrow,
-                pumpkin_data::sound::SoundCategory::Neutral,
-                &position,
-            );
+        world.play_sound(
+            Sound::EntityWindChargeThrow,
+            pumpkin_data::sound::SoundCategory::Neutral,
+            &position,
+        );
 
-            let entity = Entity::new(world.clone(), position, &EntityType::WIND_CHARGE);
+        let entity = Entity::new(world.clone(), position, &EntityType::WIND_CHARGE);
 
-            let wind_charge =
-                ThrownItemEntity::new(entity, player.get_entity(), WIND_CHARGE_GRAVITY);
-            let (yaw, pitch) = player.rotation();
+        let wind_charge = ThrownItemEntity::new(entity, player.get_entity(), WIND_CHARGE_GRAVITY);
+        let (yaw, pitch) = player.rotation();
 
-            wind_charge.set_velocity_from(player.get_entity(), pitch, yaw, 0.0, POWER, 1.0);
-            // TODO: player.incrementStat(Stats.USED)
+        wind_charge.set_velocity_from(player.get_entity(), pitch, yaw, 0.0, POWER, 1.0);
+        // TODO: player.incrementStat(Stats.USED)
 
-            // TODO: Implement that the projectile will explode on impact
-            world
-                .spawn_entity(Arc::new(WindChargeEntity::new_normal(wind_charge)))
-                .await;
-        })
+        // TODO: Implement that the projectile will explode on impact
+        world.spawn_entity(Arc::new(WindChargeEntity::new_normal(wind_charge)));
     }
 
     fn as_any(&self) -> &dyn std::any::Any {

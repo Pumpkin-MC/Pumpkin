@@ -1,8 +1,7 @@
 use super::BlockEntity;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
-use std::pin::Pin;
-use tokio::sync::Mutex;
+use std::sync::Mutex;
 
 pub struct EndGatewayBlockEntity {
     pub position: BlockPos,
@@ -41,21 +40,22 @@ impl BlockEntity for EndGatewayBlockEntity {
         }
     }
 
-    fn write_nbt<'a>(
-        &'a self,
-        nbt: &'a mut NbtCompound,
-    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
-        Box::pin(async move {
-            nbt.put_long("Age", *self.age.lock().await);
-            nbt.put_bool("ExactTeleport", *self.exact_teleport.lock().await);
-            if let Some(exit) = self.exit_portal.lock().await.as_ref() {
-                let mut exit_nbt = NbtCompound::new();
-                exit_nbt.put_int("X", exit.0.x);
-                exit_nbt.put_int("Y", exit.0.y);
-                exit_nbt.put_int("Z", exit.0.z);
-                nbt.put_compound("ExitPortal", exit_nbt);
-            }
-        })
+    fn write_nbt(&self, nbt: &mut NbtCompound) {
+        if let Ok(age) = self.age.lock() {
+            nbt.put_long("Age", *age);
+        }
+        if let Ok(exact_teleport) = self.exact_teleport.lock() {
+            nbt.put_bool("ExactTeleport", *exact_teleport);
+        }
+        if let Ok(exit_portal) = self.exit_portal.lock()
+            && let Some(exit) = exit_portal.as_ref()
+        {
+            let mut exit_nbt = NbtCompound::new();
+            exit_nbt.put_int("X", exit.0.x);
+            exit_nbt.put_int("Y", exit.0.y);
+            exit_nbt.put_int("Z", exit.0.z);
+            nbt.put_compound("ExitPortal", exit_nbt);
+        }
     }
 
     fn chunk_data_nbt(&self) -> Option<NbtCompound> {
@@ -82,7 +82,7 @@ impl BlockEntity for EndGatewayBlockEntity {
 impl EndGatewayBlockEntity {
     pub const ID: &'static str = "minecraft:end_gateway";
     #[must_use]
-    pub fn new(position: BlockPos) -> Self {
+    pub const fn new(position: BlockPos) -> Self {
         Self {
             position,
             age: Mutex::new(0),

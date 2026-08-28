@@ -25,15 +25,15 @@ impl<T: ToFromNumber> ArgumentConsumer for BoundedNumArgumentConsumer<T>
 where
     Self: GetClientSideArgParser,
 {
-    fn consume<'a, 'b>(
+    fn consume<'a>(
         &'a self,
         _sender: &'a CommandSender,
         _server: &'a Server,
-        args: &'b mut RawArgs<'a>,
+        args: &mut RawArgs<'a>,
     ) -> ConsumeResult<'a> {
         let s_opt: Option<&'a str> = args.pop().map(|arg| arg.value);
 
-        let result: Option<Arg<'a>> = s_opt
+        s_opt
             // Replace args.pop()?.parse::<T>().ok()?
             .and_then(|s| s.parse::<T>().ok())
             .map(|x| {
@@ -53,9 +53,7 @@ where
 
                 // Success case
                 Arg::Num(Ok(x.to_number()))
-            });
-
-        Box::pin(async move { result })
+            })
     }
 }
 

@@ -277,6 +277,10 @@ impl WasmPlugin {
             builder.inherit_network();
         }
 
+        if has_permission(permissions::HTTP_OUTBOUND) {
+            store.data_mut().wasi_http_hooks.allow_outbound = true;
+        }
+
         // --- System Permissions & Environment Variables ---
 
         // Environment Variables
@@ -366,11 +370,7 @@ impl WasmPlugin {
         if let Some(weak_plugin) = &store.data().plugin
             && let Some(plugin) = weak_plugin.upgrade()
         {
-            context
-                .server
-                .task_scheduler
-                .cancel_all_tasks(&plugin)
-                .await;
+            context.server.task_scheduler.cancel_all_tasks(&plugin);
         }
 
         match self.plugin_instance {

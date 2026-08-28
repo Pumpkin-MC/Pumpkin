@@ -4,7 +4,7 @@ use crate::block::blocks::weathering_copper::{
     get_first, get_next, get_previous, get_weather_state,
 };
 use crate::block::{
-    BlockBehaviour, BlockFuture, BlockMetadata, OnNeighborUpdateArgs, OnPlaceArgs, RandomTickArgs,
+    BlockBehaviour, BlockMetadata, OnNeighborUpdateArgs, OnPlaceArgs, RandomTickArgs,
 };
 use pumpkin_data::BlockId;
 use pumpkin_data::BlockStateId;
@@ -57,28 +57,26 @@ impl BlockMetadata for CopperBulbBlock {
 }
 
 impl BlockBehaviour for CopperBulbBlock {
-    fn on_place<'a>(&'a self, args: OnPlaceArgs<'a>) -> BlockFuture<'a, BlockStateId> {
-        Box::pin(async move {
-            let mut props = CopperBulbLikeProperties::default(args.block);
-            let is_receiving_power = block_receives_redstone_power(args.world, args.position).await;
-            if is_receiving_power {
-                props.lit = true;
-                args.world.play_block_sound(
-                    Sound::BlockCopperBulbTurnOn,
-                    SoundCategory::Blocks,
-                    *args.position,
-                );
-                props.powered = true;
-            }
-            props.to_state_id(args.block)
-        })
+    fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
+        let mut props = CopperBulbLikeProperties::default(args.block);
+        let is_receiving_power = block_receives_redstone_power(args.world, args.position);
+        if is_receiving_power {
+            props.lit = true;
+            args.world.play_block_sound(
+                Sound::BlockCopperBulbTurnOn,
+                SoundCategory::Blocks,
+                *args.position,
+            );
+            props.powered = true;
+        }
+        props.to_state_id(args.block)
     }
 
-    fn on_neighbor_update<'a>(&'a self, args: OnNeighborUpdateArgs<'a>) -> BlockFuture<'a, ()> {
-        Box::pin(async move {
+    fn on_neighbor_update(&self, args: OnNeighborUpdateArgs<'_>) {
+        {
             let state = args.world.get_block_state(args.position);
             let mut props = CopperBulbLikeProperties::from_state_id(state.id, args.block);
-            let is_receiving_power = block_receives_redstone_power(args.world, args.position).await;
+            let is_receiving_power = block_receives_redstone_power(args.world, args.position);
             if props.powered != is_receiving_power {
                 if !props.powered {
                     props.lit = !props.lit;
@@ -93,20 +91,16 @@ impl BlockBehaviour for CopperBulbBlock {
                     );
                 }
                 props.powered = is_receiving_power;
-                args.world
-                    .set_block_state(
-                        args.position,
-                        props.to_state_id(args.block),
-                        BlockFlags::NOTIFY_ALL,
-                    )
-                    .await;
+                args.world.set_block_state(
+                    args.position,
+                    props.to_state_id(args.block),
+                    BlockFlags::NOTIFY_ALL,
+                );
             }
-        })
+        }
     }
 
-    fn random_tick<'a>(&'a self, args: RandomTickArgs<'a>) -> BlockFuture<'a, ()> {
-        Box::pin(async move {
-            change_over_time(args.world, args.position, args.block).await;
-        })
+    fn random_tick(&self, args: RandomTickArgs<'_>) {
+        change_over_time(args.world, args.position, args.block);
     }
 }

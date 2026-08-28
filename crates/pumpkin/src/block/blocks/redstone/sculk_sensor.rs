@@ -3,7 +3,7 @@ use std::sync::Arc;
 use crate::block::entities::calibrated_sculk_sensor::CalibratedSculkSensorBlockEntity;
 use crate::block::entities::sculk_sensor::SculkSensorBlockEntity;
 use crate::block::{
-    BlockBehaviour, BlockFuture, BlockMetadata, EmitsRedstonePowerArgs, GetComparatorOutputArgs,
+    BlockBehaviour, BlockMetadata, EmitsRedstonePowerArgs, GetComparatorOutputArgs,
     GetRedstonePowerArgs, OnPlaceArgs, OnScheduledTickArgs, PlacedArgs,
 };
 use crate::world::World;
@@ -34,7 +34,7 @@ const fn horizontal_facing_to_dir(facing: HorizontalFacing) -> BlockDirection {
 }
 
 impl SculkSensorBlock {
-    pub async fn trigger(world: &Arc<World>, pos: &BlockPos, block: &Block, power: u8) {
+    pub fn trigger(world: &Arc<World>, pos: &BlockPos, block: &Block, power: u8) {
         if block.id == BlockId::SCULK_SENSOR {
             let state = world.get_block_state(pos);
             let mut props = SculkSensorLikeProperties::from_state_id(state.id, block);
@@ -42,15 +42,16 @@ impl SculkSensorBlock {
                 if let Some(be) = world.get_block_entity(pos)
                     && let Some(sensor_be) = be.as_any().downcast_ref::<SculkSensorBlockEntity>()
                 {
-                    *sensor_be.last_vibration_frequency.lock().await = power as i32;
+                    *sensor_be
+                        .last_vibration_frequency
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner) = power as i32;
                 }
 
                 props.sculk_sensor_phase = SculkSensorPhase::Active;
                 props.power = power;
-                world
-                    .set_block_state(pos, props.to_state_id(block), BlockFlags::NOTIFY_ALL)
-                    .await;
-                world.update_neighbors(pos, None).await;
+                world.set_block_state(pos, props.to_state_id(block), BlockFlags::NOTIFY_ALL);
+                world.update_neighbors(pos, None);
                 world.schedule_block_tick(block, *pos, 30, TickPriority::Normal);
             }
         } else if block.id == BlockId::CALIBRATED_SCULK_SENSOR {
@@ -64,8 +65,7 @@ impl SculkSensorBlock {
 
                 let calibrated_freq = world
                     .block_registry
-                    .get_weak_redstone_power(back_block, world, &back_pos, back_state, back_dir)
-                    .await;
+                    .get_weak_redstone_power(back_block, world, &back_pos, back_state, back_dir);
 
                 if calibrated_freq > 0 && calibrated_freq != power {
                     return;
@@ -76,15 +76,16 @@ impl SculkSensorBlock {
                         .as_any()
                         .downcast_ref::<CalibratedSculkSensorBlockEntity>()
                 {
-                    *cal_be.last_vibration_frequency.lock().await = power as i32;
+                    *cal_be
+                        .last_vibration_frequency
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner) = power as i32;
                 }
 
                 props.sculk_sensor_phase = SculkSensorPhase::Active;
                 props.power = power;
-                world
-                    .set_block_state(pos, props.to_state_id(block), BlockFlags::NOTIFY_ALL)
-                    .await;
-                world.update_neighbors(pos, None).await;
+                world.set_block_state(pos, props.to_state_id(block), BlockFlags::NOTIFY_ALL);
+                world.update_neighbors(pos, None);
                 world.schedule_block_tick(block, *pos, 30, TickPriority::Normal);
             }
         }
@@ -92,158 +93,137 @@ impl SculkSensorBlock {
 }
 
 impl BlockBehaviour for SculkSensorBlock {
-    fn on_place<'a>(&'a self, args: OnPlaceArgs<'a>) -> BlockFuture<'a, BlockStateId> {
-        Box::pin(async move {
-            if args.block.id == BlockId::CALIBRATED_SCULK_SENSOR {
-                let mut props = CalibratedSculkSensorLikeProperties::default(args.block);
-                props.facing = args.player.living_entity.entity.get_horizontal_facing();
-                props.to_state_id(args.block)
-            } else {
-                let props = SculkSensorLikeProperties::default(args.block);
-                props.to_state_id(args.block)
-            }
-        })
+    fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
+        if args.block.id == BlockId::CALIBRATED_SCULK_SENSOR {
+            let mut props = CalibratedSculkSensorLikeProperties::default(args.block);
+            props.facing = args.player.living_entity.entity.get_horizontal_facing();
+            props.to_state_id(args.block)
+        } else {
+            let props = SculkSensorLikeProperties::default(args.block);
+            props.to_state_id(args.block)
+        }
     }
 
-    fn placed<'a>(&'a self, args: PlacedArgs<'a>) -> BlockFuture<'a, ()> {
-        Box::pin(async move {
-            if args.block.id == BlockId::CALIBRATED_SCULK_SENSOR {
-                let entity = CalibratedSculkSensorBlockEntity::new(*args.position);
-                args.world.add_block_entity(Arc::new(entity));
-            } else if args.block.id == BlockId::SCULK_SENSOR {
-                let entity = SculkSensorBlockEntity::new(*args.position);
-                args.world.add_block_entity(Arc::new(entity));
-            }
-        })
+    fn placed(&self, args: PlacedArgs<'_>) {
+        if args.block.id == BlockId::CALIBRATED_SCULK_SENSOR {
+            let entity = CalibratedSculkSensorBlockEntity::new(*args.position);
+            args.world.add_block_entity(Arc::new(entity));
+        } else if args.block.id == BlockId::SCULK_SENSOR {
+            let entity = SculkSensorBlockEntity::new(*args.position);
+            args.world.add_block_entity(Arc::new(entity));
+        }
     }
 
-    fn emits_redstone_power<'a>(
-        &'a self,
-        _args: EmitsRedstonePowerArgs<'a>,
-    ) -> BlockFuture<'a, bool> {
-        Box::pin(async move { true })
+    fn emits_redstone_power(&self, _args: EmitsRedstonePowerArgs<'_>) -> bool {
+        true
     }
 
-    fn get_weak_redstone_power<'a>(
-        &'a self,
-        args: GetRedstonePowerArgs<'a>,
-    ) -> BlockFuture<'a, u8> {
-        Box::pin(async move {
-            if args.block.id == BlockId::SCULK_SENSOR {
-                let props = SculkSensorLikeProperties::from_state_id(args.state.id, args.block);
-                if props.sculk_sensor_phase == SculkSensorPhase::Active {
-                    props.power
-                } else {
-                    0
-                }
-            } else if args.block.id == BlockId::CALIBRATED_SCULK_SENSOR {
-                let props =
-                    CalibratedSculkSensorLikeProperties::from_state_id(args.state.id, args.block);
-                if props.sculk_sensor_phase == SculkSensorPhase::Active {
-                    props.power
-                } else {
-                    0
-                }
+    fn get_weak_redstone_power(&self, args: GetRedstonePowerArgs<'_>) -> u8 {
+        if args.block.id == BlockId::SCULK_SENSOR {
+            let props = SculkSensorLikeProperties::from_state_id(args.state.id, args.block);
+            if props.sculk_sensor_phase == SculkSensorPhase::Active {
+                props.power
             } else {
                 0
             }
-        })
+        } else if args.block.id == BlockId::CALIBRATED_SCULK_SENSOR {
+            let props =
+                CalibratedSculkSensorLikeProperties::from_state_id(args.state.id, args.block);
+            if props.sculk_sensor_phase == SculkSensorPhase::Active {
+                props.power
+            } else {
+                0
+            }
+        } else {
+            0
+        }
     }
 
-    fn get_comparator_output<'a>(
-        &'a self,
-        args: GetComparatorOutputArgs<'a>,
-    ) -> BlockFuture<'a, Option<u8>> {
-        Box::pin(async move {
-            let be = args.world.get_block_entity(args.position)?;
-            if let Some(sensor_be) = be.as_any().downcast_ref::<SculkSensorBlockEntity>() {
-                return Some(*sensor_be.last_vibration_frequency.lock().await as u8);
-            }
-            if let Some(cal_be) = be
-                .as_any()
-                .downcast_ref::<CalibratedSculkSensorBlockEntity>()
-            {
-                return Some(*cal_be.last_vibration_frequency.lock().await as u8);
-            }
-            None
-        })
+    fn get_comparator_output(&self, args: GetComparatorOutputArgs<'_>) -> Option<u8> {
+        let be = args.world.get_block_entity(args.position)?;
+        if let Some(sensor_be) = be.as_any().downcast_ref::<SculkSensorBlockEntity>() {
+            return Some(
+                *sensor_be
+                    .last_vibration_frequency
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner) as u8,
+            );
+        }
+        if let Some(cal_be) = be
+            .as_any()
+            .downcast_ref::<CalibratedSculkSensorBlockEntity>()
+        {
+            return Some(
+                *cal_be
+                    .last_vibration_frequency
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner) as u8,
+            );
+        }
+        None
     }
 
-    fn on_scheduled_tick<'a>(&'a self, args: OnScheduledTickArgs<'a>) -> BlockFuture<'a, ()> {
-        Box::pin(async move {
-            let state = args.world.get_block_state(args.position);
-            if args.block.id == BlockId::SCULK_SENSOR {
-                let mut props = SculkSensorLikeProperties::from_state_id(state.id, args.block);
-                match props.sculk_sensor_phase {
-                    SculkSensorPhase::Active => {
-                        props.sculk_sensor_phase = SculkSensorPhase::Cooldown;
-                        props.power = 0;
-                        args.world
-                            .set_block_state(
-                                args.position,
-                                props.to_state_id(args.block),
-                                BlockFlags::NOTIFY_ALL,
-                            )
-                            .await;
-                        args.world.schedule_block_tick(
-                            args.block,
-                            *args.position,
-                            10,
-                            TickPriority::Normal,
-                        );
-                        args.world.update_neighbors(args.position, None).await;
-                    }
-                    SculkSensorPhase::Cooldown => {
-                        props.sculk_sensor_phase = SculkSensorPhase::Inactive;
-                        props.power = 0;
-                        args.world
-                            .set_block_state(
-                                args.position,
-                                props.to_state_id(args.block),
-                                BlockFlags::NOTIFY_ALL,
-                            )
-                            .await;
-                        args.world.update_neighbors(args.position, None).await;
-                    }
-                    SculkSensorPhase::Inactive => {}
+    fn on_scheduled_tick(&self, args: OnScheduledTickArgs<'_>) {
+        let state = args.world.get_block_state(args.position);
+        if args.block.id == BlockId::SCULK_SENSOR {
+            let mut props = SculkSensorLikeProperties::from_state_id(state.id, args.block);
+            match props.sculk_sensor_phase {
+                SculkSensorPhase::Active => {
+                    props.sculk_sensor_phase = SculkSensorPhase::Cooldown;
+                    props.power = 0;
+                    args.world.set_block_state(
+                        args.position,
+                        props.to_state_id(args.block),
+                        BlockFlags::NOTIFY_ALL,
+                    );
+                    args.world.schedule_block_tick(
+                        args.block,
+                        *args.position,
+                        10,
+                        TickPriority::Normal,
+                    );
                 }
-            } else if args.block.id == BlockId::CALIBRATED_SCULK_SENSOR {
-                let mut props =
-                    CalibratedSculkSensorLikeProperties::from_state_id(state.id, args.block);
-                match props.sculk_sensor_phase {
-                    SculkSensorPhase::Active => {
-                        props.sculk_sensor_phase = SculkSensorPhase::Cooldown;
-                        props.power = 0;
-                        args.world
-                            .set_block_state(
-                                args.position,
-                                props.to_state_id(args.block),
-                                BlockFlags::NOTIFY_ALL,
-                            )
-                            .await;
-                        args.world.schedule_block_tick(
-                            args.block,
-                            *args.position,
-                            10,
-                            TickPriority::Normal,
-                        );
-                        args.world.update_neighbors(args.position, None).await;
-                    }
-                    SculkSensorPhase::Cooldown => {
-                        props.sculk_sensor_phase = SculkSensorPhase::Inactive;
-                        props.power = 0;
-                        args.world
-                            .set_block_state(
-                                args.position,
-                                props.to_state_id(args.block),
-                                BlockFlags::NOTIFY_ALL,
-                            )
-                            .await;
-                        args.world.update_neighbors(args.position, None).await;
-                    }
-                    SculkSensorPhase::Inactive => {}
+                SculkSensorPhase::Cooldown => {
+                    props.sculk_sensor_phase = SculkSensorPhase::Inactive;
+                    props.power = 0;
+                    args.world.set_block_state(
+                        args.position,
+                        props.to_state_id(args.block),
+                        BlockFlags::NOTIFY_ALL,
+                    );
                 }
+                SculkSensorPhase::Inactive => {}
             }
-        })
+        } else if args.block.id == BlockId::CALIBRATED_SCULK_SENSOR {
+            let mut props =
+                CalibratedSculkSensorLikeProperties::from_state_id(state.id, args.block);
+            match props.sculk_sensor_phase {
+                SculkSensorPhase::Active => {
+                    props.sculk_sensor_phase = SculkSensorPhase::Cooldown;
+                    props.power = 0;
+                    args.world.set_block_state(
+                        args.position,
+                        props.to_state_id(args.block),
+                        BlockFlags::NOTIFY_ALL,
+                    );
+                    args.world.schedule_block_tick(
+                        args.block,
+                        *args.position,
+                        10,
+                        TickPriority::Normal,
+                    );
+                }
+                SculkSensorPhase::Cooldown => {
+                    props.sculk_sensor_phase = SculkSensorPhase::Inactive;
+                    props.power = 0;
+                    args.world.set_block_state(
+                        args.position,
+                        props.to_state_id(args.block),
+                        BlockFlags::NOTIFY_ALL,
+                    );
+                }
+                SculkSensorPhase::Inactive => {}
+            }
+        }
     }
 }

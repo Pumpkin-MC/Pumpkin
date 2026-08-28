@@ -3,7 +3,7 @@ use super::chunk_holder::ChunkHolder;
 use super::chunk_state::{Chunk, StagedChunkEnum};
 use super::dag::{DAG, EdgeKey, Node, NodeKey};
 use super::generation_cache::Cache;
-use super::worker_logic::{RecvChunk, generation_work, io_read_work, io_write_work};
+use super::worker_logic::{RecvChunk, io_read_work, io_write_work};
 use super::{
     ChunkLevel, ChunkListener, ChunkLoading, ChunkPos, HashMapType, HashSetType, IOLock,
     LevelChannel,
@@ -69,12 +69,10 @@ pub struct GenerationSchedule {
     running_task_count: u16,
     max_in_flight: u16,
     queue_dirty: bool,
-    recv_chunk: crossfire::compat::MRx<(ChunkPos, RecvChunk)>,
-    io_read: crossfire::compat::MTx<Vec<ChunkPos>>,
-    io_write: crossfire::compat::Tx<Vec<(ChunkPos, Chunk)>>,
-    generate: crossfire::compat::MTx<(ChunkPos, Cache, StagedChunkEnum)>,
-    send_chunk: crossfire::compat::MTx<(ChunkPos, RecvChunk)>,
-    gen_pool: Option<Arc<rayon::ThreadPool>>,
+    recv_chunk: crossbeam::channel::Receiver<(ChunkPos, RecvChunk)>,
+    io_read: tokio::sync::mpsc::Sender<Vec<ChunkPos>>,
+    io_write: tokio::sync::mpsc::Sender<Vec<(ChunkPos, Chunk)>>,
+    send_chunk: crossbeam::channel::Sender<(ChunkPos, RecvChunk)>,
     listener: Arc<ChunkListener>,
     lighting_config: LightingEngineConfig,
     last_unload: std::time::Instant,
@@ -83,22 +81,17 @@ pub struct GenerationSchedule {
 impl GenerationSchedule {
     pub fn create(
         io_read_thread_count: usize,
-        gen_thread_count: usize,
         level: Arc<Level>,
         level_channel: Arc<LevelChannel>,
         listener: Arc<ChunkListener>,
         thread_tracker: &mut Vec<thread::JoinHandle<()>>,
-        gen_pool: Option<Arc<rayon::ThreadPool>>,
     ) {
-        let (send_chunk, recv_chunk) = crossfire::compat::mpmc::unbounded_blocking();
+        let (send_chunk, recv_chunk) = crossbeam::channel::unbounded();
 
-        let (send_read_io, recv_read_io) =
-            crossfire::compat::mpmc::bounded_tx_blocking_rx_async(io_read_thread_count + 5);
+        let (send_read_io, recv_read_io) = tokio::sync::mpsc::channel(io_read_thread_count + 5);
+        let recv_read_io = Arc::new(tokio::sync::Mutex::new(recv_read_io));
 
-        let (send_write_io, recv_write_io) =
-            crossfire::compat::spsc::bounded_tx_blocking_rx_async(500);
-
-        let (send_gen, recv_gen) = crossfire::compat::mpmc::bounded_blocking(gen_thread_count + 5);
+        let (send_write_io, recv_write_io) = tokio::sync::mpsc::channel(500);
 
         let io_lock = Arc::new((
             Mutex::new(HashMapType::default()),
@@ -120,28 +113,8 @@ impl GenerationSchedule {
             io_lock.clone(),
         ));
 
-        if gen_pool.is_none() {
-            for i in 0..gen_thread_count {
-                let recv_gen = recv_gen.clone();
-                let send_chunk = send_chunk.clone();
-                let level_clone = level.clone();
-
-                let handle = thread::Builder::new()
-                    .name(format!("Gen-{i}"))
-                    .spawn(move || {
-                        generation_work(&recv_gen, &send_chunk, &level_clone);
-                    })
-                    .expect("Failed to spawn Generation Thread");
-
-                thread_tracker.push(handle);
-            }
-        }
-
-        let max_in_flight = if gen_pool.is_some() {
-            (thread::available_parallelism().map_or(1, std::num::NonZero::get) * 4) as u16
-        } else {
-            gen_thread_count as u16
-        };
+        let max_in_flight =
+            (thread::available_parallelism().map_or(1, std::num::NonZero::get) * 4) as u16;
 
         let level_sched = level;
         let lighting_config = level_sched.lighting_config;
@@ -164,9 +137,7 @@ impl GenerationSchedule {
                     recv_chunk,
                     io_read: send_read_io,
                     io_write: send_write_io,
-                    generate: send_gen,
                     send_chunk,
-                    gen_pool,
                     listener,
                     chunk_map: HashMap::default(),
                     lighting_config,
@@ -446,8 +417,12 @@ impl GenerationSchedule {
                 })
             });
             if all_ready {
-                now_ready.push(node_key);
-                false
+                if node.in_degree == 0 {
+                    now_ready.push(node_key);
+                    false
+                } else {
+                    true
+                }
             } else {
                 true
             }
@@ -463,7 +438,6 @@ impl GenerationSchedule {
                     Self::calc_priority(&self.last_level, &self.last_high_priority, n.pos, n.stage);
                 self.queue.push(TaskHeapNode(priority, node_key));
             }
-            // If in_degree > 0, drop_node will re-queue when unblocked
         }
     }
 
@@ -796,7 +770,7 @@ impl GenerationSchedule {
             *data.entry(*pos).or_insert(0) += 1;
         }
         drop(data);
-        if let Err(e) = self.io_write.send(chunks) {
+        if let Err(e) = self.io_write.blocking_send(chunks) {
             error!(
                 "Failed to send chunks to io write thread during save (may have shut down): {:?}",
                 e
@@ -851,7 +825,7 @@ impl GenerationSchedule {
         }
         drop(data);
 
-        if let Err(e) = self.io_write.send(chunks) {
+        if let Err(e) = self.io_write.blocking_send(chunks) {
             error!("Failed to send chunks to io write thread: {:?}", e);
         }
     }
@@ -1311,7 +1285,10 @@ impl GenerationSchedule {
 
                         io_batch.push(node.pos);
                         if io_batch.len() >= 16
-                            && self.io_read.send(std::mem::take(&mut io_batch)).is_err()
+                            && self
+                                .io_read
+                                .blocking_send(std::mem::take(&mut io_batch))
+                                .is_err()
                         {
                             info!("IO read thread closed, saving remaining chunks...");
                             self.save_all_chunk(true);
@@ -1320,7 +1297,10 @@ impl GenerationSchedule {
                     } else {
                         // Send any pending IO batch before starting generation
                         if !io_batch.is_empty()
-                            && self.io_read.send(std::mem::take(&mut io_batch)).is_err()
+                            && self
+                                .io_read
+                                .blocking_send(std::mem::take(&mut io_batch))
+                                .is_err()
                         {
                             info!("IO read thread closed, saving remaining chunks...");
                             self.save_all_chunk(true);
@@ -1432,41 +1412,37 @@ impl GenerationSchedule {
                         }
 
                         self.running_task_count += 1;
-                        if let Some(pool) = &self.gen_pool {
-                            let pos = node.pos;
-                            let stage = node.stage;
-                            let send_chunk = self.send_chunk.clone();
-                            let level = level.clone();
-                            let settings = GenerationSettings::from_dimension(
-                                level.world_gen.load().dimension(),
-                            );
+                        let pos = node.pos;
+                        let stage = node.stage;
+                        let send_chunk = self.send_chunk.clone();
+                        let level = level.clone();
+                        let settings =
+                            GenerationSettings::from_dimension(level.world_gen.load().dimension());
 
-                            pool.spawn(move || {
-                                let result = crate::chunk_system::worker_logic::run_generation(
-                                    pos, cache, stage, &level, settings,
-                                );
-                                let _ = send_chunk.send((pos, result));
-                            });
-                        } else if self.generate.send((node.pos, cache, node.stage)).is_err() {
-                            self.running_task_count = self.running_task_count.saturating_sub(1);
-                            info!("Generation thread closed, saving remaining chunks...");
-                            self.save_all_chunk(true);
-                            break 'out2;
-                        }
+                        rayon::spawn(move || {
+                            let result = crate::chunk_system::worker_logic::run_generation(
+                                pos, cache, stage, &level, settings,
+                            );
+                            let _ = send_chunk.send((pos, result));
+                        });
                     }
                 }
             }
 
             // Flush any remaining IO batch
-            if !io_batch.is_empty() && self.io_read.send(std::mem::take(&mut io_batch)).is_err() {
+            if !io_batch.is_empty()
+                && self
+                    .io_read
+                    .blocking_send(std::mem::take(&mut io_batch))
+                    .is_err()
+            {
                 info!("IO read thread closed, saving remaining chunks...");
                 self.save_all_chunk(true);
             }
 
-            // 3. If queue is empty, wait for work or results
+            // 5. Wait for work or results
             if self.queue.is_empty() {
-                // If we have tasks in flight, wait for them with timeout
-                if self.running_task_count > 0 || !self.waiting_for_chunks.is_empty() {
+                if self.running_task_count > 0 {
                     match self.recv_chunk.recv_timeout(Duration::from_millis(5)) {
                         Ok((pos, data)) => {
                             self.receive_chunk(pos, data);
@@ -1474,16 +1450,17 @@ impl GenerationSchedule {
                                 self.garbage_collect_dependencies();
                             }
                         }
-                        Err(crossfire::compat::RecvTimeoutError::Timeout) => {
+                        Err(crossbeam::channel::RecvTimeoutError::Timeout) => {
                             // Periodically check LevelChannel for new requests
                             if self.resort_work(self.send_level.get()) {
                                 self.garbage_collect_dependencies();
                             }
                         }
-                        Err(crossfire::compat::RecvTimeoutError::Disconnected) => break,
+                        Err(crossbeam::channel::RecvTimeoutError::Disconnected) => break,
                     }
                 } else {
-                    // No tasks in flight, wait indefinitely for LevelChannel changes
+                    // No tasks in flight, check for any unblocked waiting tasks or stranded ready tasks
+                    self.check_waiting_tasks();
                     let restored = Self::restore_ready_tasks(
                         &mut self.graph,
                         &mut self.queue,
@@ -1492,10 +1469,14 @@ impl GenerationSchedule {
                         &self.last_high_priority,
                         &self.waiting_for_chunks,
                     );
-                    if restored > 0 {
+                    if restored > 0 || !self.queue.is_empty() {
                         debug!(
                             "Restored {restored} stranded ready chunk tasks to generation queue"
                         );
+                        if self.queue_dirty {
+                            self.sort_queue();
+                            self.queue_dirty = false;
+                        }
                         continue;
                     }
                     debug_assert!(self.debug_check());
@@ -1503,6 +1484,27 @@ impl GenerationSchedule {
                     if self.resort_work(self.send_level.wait_and_get(level)) {
                         self.garbage_collect_dependencies();
                     }
+                }
+                if self.queue_dirty {
+                    self.sort_queue();
+                    self.queue_dirty = false;
+                }
+            } else if self.running_task_count >= self.max_in_flight {
+                // Queue has tasks, but we are at maximum in-flight capacity.
+                // Wait for an in-flight worker to finish instead of busy-spinning.
+                match self.recv_chunk.recv_timeout(Duration::from_millis(5)) {
+                    Ok((pos, data)) => {
+                        self.receive_chunk(pos, data);
+                        if self.resort_work(self.send_level.get()) {
+                            self.garbage_collect_dependencies();
+                        }
+                    }
+                    Err(crossbeam::channel::RecvTimeoutError::Timeout) => {
+                        if self.resort_work(self.send_level.get()) {
+                            self.garbage_collect_dependencies();
+                        }
+                    }
+                    Err(crossbeam::channel::RecvTimeoutError::Disconnected) => break,
                 }
                 if self.queue_dirty {
                     self.sort_queue();
