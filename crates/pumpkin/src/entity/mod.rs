@@ -216,7 +216,7 @@ pub trait EntityBase: Send + Sync + std::any::Any {
         pitch: Option<f32>,
         world: Arc<World>,
     ) {
-        self.get_entity().teleport(position, yaw, pitch, world);
+        self.get_entity().teleport(position, yaw, pitch, &world);
     }
 
     fn is_pushed_by_fluids(&self) -> bool {
@@ -278,6 +278,21 @@ pub trait EntityBase: Send + Sync + std::any::Any {
 
     fn is_flutterer(&self) -> bool {
         false
+    }
+
+    fn set_sprinting(&self, is_sprinting: bool) {
+        if let Some(living) = self.get_living_entity() {
+            living.set_sprinting(is_sprinting);
+        } else {
+            self.get_entity().set_sprinting(is_sprinting);
+        }
+    }
+
+    fn get_block_speed_factor(&self) -> f32 {
+        self.get_living_entity().map_or_else(
+            || self.get_entity().get_block_speed_factor(),
+            LivingEntity::get_block_speed_factor,
+        )
     }
 
     /// Custom Y-axis velocity drag multiplier applied during `travel_in_air`.
@@ -1502,7 +1517,7 @@ impl Entity {
     }
 
     #[expect(dead_code)]
-    fn tick_block_underneath(_caller: &dyn EntityBase) {
+    const fn tick_block_underneath() {
         // let world = self.world.read();
 
         // let (pos, block, state) = self.get_block_with_y_offset(0.2);
@@ -1565,7 +1580,7 @@ impl Entity {
         */
     }
 
-    pub fn tick_block_collisions(&self, caller: &dyn EntityBase, _server: &Server) -> bool {
+    pub fn tick_block_collisions(&self, caller: &dyn EntityBase) -> bool {
         if !self.is_affected_by_blocks() {
             return false;
         }
@@ -2157,18 +2172,27 @@ impl Entity {
         )
     }
 
+    #[must_use]
+    pub fn get_block_pos_below_that_affects_my_movement(&self) -> BlockPos {
+        self.get_pos_with_y_offset(0.500_001).0
+    }
+
+    #[must_use]
     #[expect(clippy::float_cmp)]
-    fn get_velocity_multiplier(&self) -> f32 {
-        let block = self.world.load().get_block(&self.block_pos.load());
-
-        let multiplier = block.velocity_multiplier;
-
-        if multiplier != 1.0 || block == &Block::WATER || block == &Block::BUBBLE_COLUMN {
-            multiplier
+    pub fn get_block_speed_factor(&self) -> f32 {
+        let world = self.world.load();
+        let (block, _state) = world.get_block_and_state(&self.block_pos.load());
+        let speed_factor_here = block.get_speed_factor();
+        if block != &Block::WATER && block != &Block::BUBBLE_COLUMN {
+            if speed_factor_here == 1.0 {
+                let below_pos = self.get_block_pos_below_that_affects_my_movement();
+                let (below_block, _below_state) = world.get_block_and_state(&below_pos);
+                below_block.get_speed_factor()
+            } else {
+                speed_factor_here
+            }
         } else {
-            let (_pos, block, _state) = self.get_block_with_y_offset(0.500_001);
-
-            block.velocity_multiplier
+            speed_factor_here
         }
     }
 
@@ -2224,7 +2248,7 @@ impl Entity {
 
         self.move_pos(final_move);
 
-        let velocity_multiplier = f64::from(self.get_velocity_multiplier());
+        let velocity_multiplier = f64::from(caller.get_block_speed_factor());
 
         self.velocity.store(final_move * velocity_multiplier);
 
@@ -2313,12 +2337,13 @@ impl Entity {
                 let world_clone = self.world.load_full();
                 let portal_type = portal_processor.portal_type;
                 let dest_world_opt = portal_processor.destination_world.clone();
-                let entry_pos = portal_processor.entry_position;
                 let src_portal = portal_processor.source_portal.clone();
                 let entity_id = self.entity_id;
                 let yaw = self.yaw.load();
 
+                let rt_handle = world_clone.server.upgrade().map(|s| s.runtime.clone());
                 rayon::spawn(move || {
+                    let _guard = rt_handle.as_ref().map(tokio::runtime::Handle::enter);
                     let Some(entity_arc) = world_clone.get_entity_by_id(entity_id) else {
                         return;
                     };
@@ -2326,7 +2351,6 @@ impl Entity {
                         &world_clone,
                         dest_world_opt,
                         entity_arc.as_ref(),
-                        entry_pos,
                         src_portal.as_ref(),
                     );
 
@@ -2395,7 +2419,7 @@ impl Entity {
         }
     }
 
-    pub fn try_use_portal(&self, _portal_delay: u32, portal_world: Arc<World>, pos: BlockPos) {
+    pub fn try_use_portal(&self, portal_world: Arc<World>, pos: BlockPos) {
         let mut portal_event =
             crate::plugin::api::events::entity::entity_portal::EntityPortalEvent::new(
                 self.entity_id,
@@ -2447,23 +2471,15 @@ impl Entity {
 
             let mut new_manager = PortalProcessor::new(portal_type, pos, portal_world);
 
-            if let Some(portal) = NetherPortal::get_on_axis(
-                &world,
-                &pos,
-                pumpkin_data::block_properties::HorizontalAxis::X,
-            ) && portal.was_already_valid()
-            {
-                new_manager.set_source_portal(SourcePortalInfo {
-                    lower_corner: portal.lower_corner(),
-                    axis: portal.axis(),
-                    width: portal.width(),
-                    height: portal.height(),
-                });
-            } else if let Some(portal) = NetherPortal::get_on_axis(
-                &world,
-                &pos,
-                pumpkin_data::block_properties::HorizontalAxis::Z,
-            ) && portal.was_already_valid()
+            let (block, state) = world.get_block_and_state(&pos);
+            let source_axis = (block == &pumpkin_data::Block::NETHER_PORTAL).then(|| {
+                let props = <pumpkin_data::block_properties::NetherPortalLikeProperties as pumpkin_data::block_properties::BlockProperties>::from_state_id(state.id, block);
+                props.axis
+            });
+
+            if let Some(axis) = source_axis
+                && let Some(portal) = NetherPortal::get_on_axis(&world, &pos, axis)
+                && portal.was_already_valid()
             {
                 new_manager.set_source_portal(SourcePortalInfo {
                     lower_corner: portal.lower_corner(),
@@ -2477,6 +2493,22 @@ impl Entity {
         } else if let Some(manager) = manager.as_mut() {
             manager.entry_position = pos;
             manager.inside_portal_this_tick = true;
+            if manager.source_portal.is_none() {
+                let (block, state) = world.get_block_and_state(&pos);
+                if block == &pumpkin_data::Block::NETHER_PORTAL {
+                    let props = <pumpkin_data::block_properties::NetherPortalLikeProperties as pumpkin_data::block_properties::BlockProperties>::from_state_id(state.id, block);
+                    if let Some(portal) = NetherPortal::get_on_axis(&world, &pos, props.axis)
+                        && portal.was_already_valid()
+                    {
+                        manager.set_source_portal(SourcePortalInfo {
+                            lower_corner: portal.lower_corner(),
+                            axis: portal.axis(),
+                            width: portal.width(),
+                            height: portal.height(),
+                        });
+                    }
+                }
+            }
         }
     }
 
@@ -2667,6 +2699,41 @@ impl Entity {
     }
     pub fn is_sneaking(&self) -> bool {
         self.sneaking.load(Ordering::Relaxed)
+    }
+
+    #[must_use]
+    pub fn is_swimming(&self) -> bool {
+        self.swimming.load(Ordering::Relaxed)
+    }
+
+    #[must_use]
+    pub fn is_visually_swimming(&self) -> bool {
+        self.pose.load() == EntityPose::Swimming
+    }
+
+    #[must_use]
+    pub fn is_in_water(&self) -> bool {
+        self.touching_water.load(Ordering::Relaxed)
+    }
+
+    #[must_use]
+    pub fn is_submerged_in_water(&self) -> bool {
+        let pos = self.pos.load();
+        let eye_height = self.get_eye_height();
+        let eye_pos = BlockPos::floored(pos.x, pos.y + eye_height - 0.111_111_11, pos.z);
+        let world = self.world.load();
+        let (fluid, _) = world.get_fluid_and_fluid_state(&eye_pos);
+        fluid.id == Fluid::WATER.id || fluid.id == Fluid::FLOWING_WATER.id
+    }
+
+    #[must_use]
+    pub fn is_under_water(&self) -> bool {
+        self.is_in_water() && self.is_submerged_in_water()
+    }
+
+    #[must_use]
+    pub fn is_visually_crawling(&self) -> bool {
+        self.is_visually_swimming() && !self.is_in_water()
     }
 
     pub fn set_swimming(&self, swimming: bool) {
@@ -2972,6 +3039,10 @@ impl Entity {
     }
 
     pub fn set_pose(&self, pose: EntityPose) {
+        if self.pose.load() == pose {
+            return;
+        }
+
         let mut pose_event =
             crate::plugin::api::events::entity::entity_pose_change::EntityPoseChangeEvent::new(
                 self.entity_id,
@@ -2989,27 +3060,24 @@ impl Entity {
         let dimension = Self::get_entity_dimensions(pose);
         let position = self.pos.load();
         let aabb = BoundingBox::new_from_pos(position.x, position.y, position.z, &dimension);
-        if self.world.load().is_space_empty(aabb.contract_all(1.0E-7)) {
-            self.pose.store(pose);
-            let dimension = Self::get_entity_dimensions(pose);
-            self.bounding_box.store(aabb);
-            self.entity_dimension.store(dimension);
-            let pose = pose as i32;
-            let mut bedrock_meta = SyncedActorDataList::new();
-            bedrock_meta.set(entity_data_key::POSE_INDEX, MetadataValue::Int(pose));
-            bedrock_meta.set(
-                entity_data_key::WIDTH,
-                MetadataValue::Float(dimension.width),
-            );
-            bedrock_meta.set(
-                entity_data_key::HEIGHT,
-                MetadataValue::Float(dimension.height),
-            );
-            self.send_meta_data(
-                &[Metadata::new(tracked_data::entity::DATA_POSE, VarInt(pose))],
-                Some(&bedrock_meta),
-            );
-        }
+        self.pose.store(pose);
+        self.bounding_box.store(aabb);
+        self.entity_dimension.store(dimension);
+        let pose = pose as i32;
+        let mut bedrock_meta = SyncedActorDataList::new();
+        bedrock_meta.set(entity_data_key::POSE_INDEX, MetadataValue::Int(pose));
+        bedrock_meta.set(
+            entity_data_key::WIDTH,
+            MetadataValue::Float(dimension.width),
+        );
+        bedrock_meta.set(
+            entity_data_key::HEIGHT,
+            MetadataValue::Float(dimension.height),
+        );
+        self.send_meta_data(
+            &[Metadata::new(tracked_data::entity::DATA_POSE, VarInt(pose))],
+            Some(&bedrock_meta),
+        );
     }
 
     /// Checks if the entity is invulnerable to the given damage type, considering both general invulnerability and specific immunities.
@@ -3109,7 +3177,7 @@ impl Entity {
         position: Vector3<f64>,
         yaw: Option<f32>,
         pitch: Option<f32>,
-        _world: Arc<World>,
+        world: &World,
     ) {
         // Update server-side position and bounding box
         self.set_pos(position);
@@ -3132,7 +3200,7 @@ impl Entity {
                 .store((pitch * 256.0 / 360.0).rem_euclid(256.0) as u8, Relaxed);
         }
         let chunk_pos = self.chunk_pos.load();
-        self.world.load().broadcast_to_chunk(
+        world.broadcast_to_chunk(
             chunk_pos,
             &CEntityPositionSync::new(
                 self.entity_id.into(),
@@ -3429,16 +3497,16 @@ impl Entity {
         self.remove_passenger_on_disconnect(passenger_id);
     }
 
-    pub async fn remove_passenger(&self, passenger_id: i32) {
-        self.remove_passenger_internal(passenger_id, true).await;
+    pub fn remove_passenger(&self, passenger_id: i32) {
+        self.remove_passenger_internal(passenger_id, true);
     }
 
-    pub async fn remove_passenger_before_teleport(&self, passenger_id: i32) {
-        self.remove_passenger_internal(passenger_id, false).await;
+    pub fn remove_passenger_before_teleport(&self, passenger_id: i32) {
+        self.remove_passenger_internal(passenger_id, false);
     }
 
     #[allow(clippy::too_many_lines)]
-    async fn remove_passenger_internal(&self, passenger_id: i32, reposition: bool) {
+    fn remove_passenger_internal(&self, passenger_id: i32, reposition: bool) {
         let mut dismount_event =
             crate::plugin::api::events::entity::entity_dismount::EntityDismountEvent::new(
                 passenger_id,
@@ -3452,9 +3520,10 @@ impl Entity {
         if let Some(server) = self.world.load().server.upgrade() {
             server
                 .plugin_manager
-                .fire(&server, &mut dismount_event)
-                .await;
-            server.plugin_manager.fire(&server, &mut vehicle_exit).await;
+                .fire_blocking(&server, &mut dismount_event);
+            server
+                .plugin_manager
+                .fire_blocking(&server, &mut vehicle_exit);
         }
         if dismount_event.cancelled || vehicle_exit.cancelled {
             return;
@@ -3521,13 +3590,7 @@ impl Entity {
             let world = self.world.load();
             let passengers_packet = CSetPassengers::new(VarInt(self.entity_id), &passenger_ids);
             if let Some(player) = passenger.get_player() {
-                if reposition {
-                    player.send_client_packet(&passengers_packet).await;
-                } else if let ClientPlatform::Java(client) = player.client.as_ref()
-                    && let Ok(data) = client.serialize_packet(&passengers_packet)
-                {
-                    client.send_packet_now(data).await;
-                }
+                player.try_send_client_packet(&passengers_packet);
                 world.broadcast_to_chunk_except(
                     chunk_pos,
                     &[player.get_entity().entity_uuid],
@@ -3729,22 +3792,20 @@ impl Entity {
                     // the same packet queue as CSetPassengers, preserving send order.
                     // Vanilla uses DELTA | ROT flags: position absolute, delta/rotation relative.
                     // With rotation relative and yaw/pitch=0, the client preserves its current look.
-                    player
-                        .send_client_packet(&CPlayerPosition::new(
-                            id.into(),
-                            dismount_pos,
-                            Vector3::new(0.0, 0.0, 0.0),
-                            0.0,
-                            0.0,
-                            vec![
-                                PositionFlag::DeltaX,
-                                PositionFlag::DeltaY,
-                                PositionFlag::DeltaZ,
-                                PositionFlag::YRot,
-                                PositionFlag::XRot,
-                            ],
-                        ))
-                        .await;
+                    player.try_send_client_packet(&CPlayerPosition::new(
+                        id.into(),
+                        dismount_pos,
+                        Vector3::new(0.0, 0.0, 0.0),
+                        0.0,
+                        0.0,
+                        vec![
+                            PositionFlag::DeltaX,
+                            PositionFlag::DeltaY,
+                            PositionFlag::DeltaZ,
+                            PositionFlag::YRot,
+                            PositionFlag::XRot,
+                        ],
+                    ));
                 }
 
                 // Vanilla: setSneaking(false) after dismount via sneak input

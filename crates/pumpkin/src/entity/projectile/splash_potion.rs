@@ -118,8 +118,8 @@ impl EntityBase for SplashPotionEntity {
         );
     }
 
-    fn tick(&self, caller: &dyn EntityBase, server: &Server) {
-        self.thrown.process_tick(caller, server);
+    fn tick(&self, caller: &dyn EntityBase, _server: &Server) {
+        self.thrown.process_tick(caller);
     }
 
     fn get_entity(&self) -> &Entity {

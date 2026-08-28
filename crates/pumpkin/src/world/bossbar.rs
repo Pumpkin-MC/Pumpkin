@@ -174,7 +174,6 @@ impl Player {
         uuid: &Uuid,
         color: BossbarColor,
         dividers: BossbarDivisions,
-        _flags: BossbarFlags,
     ) {
         let boss_action = BosseventAction::UpdateStyle {
             color: (color as u8).into(),

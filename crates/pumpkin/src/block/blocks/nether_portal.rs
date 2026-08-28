@@ -139,11 +139,9 @@ impl BlockBehaviour for NetherPortalBlock {
             args.position,
             target_world.dimension.minecraft_name
         );
-        let portal_delay = Self::get_portal_time(args.world, args.entity);
-
         args.entity
             .get_entity()
-            .try_use_portal(portal_delay, target_world, *args.position);
+            .try_use_portal(target_world, *args.position);
     }
 
     fn on_state_replaced(&self, args: OnStateReplacedArgs<'_>) {

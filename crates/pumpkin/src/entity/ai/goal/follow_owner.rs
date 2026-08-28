@@ -117,7 +117,7 @@ impl FollowOwnerGoal {
                 ),
                 None,
                 None,
-                world.clone(),
+                &world,
             );
 
             let mut navigator = mob

@@ -363,7 +363,6 @@ impl CustomBossbars {
                         &bossbar.bossbar_data.uuid,
                         new_color,
                         bossbar.bossbar_data.division,
-                        bossbar.bossbar_data.flags,
                     );
                 }
             }
@@ -396,7 +395,6 @@ impl CustomBossbars {
                         &bossbar.bossbar_data.uuid,
                         bossbar.bossbar_data.color,
                         new_style,
-                        bossbar.bossbar_data.flags,
                     );
                 }
             }

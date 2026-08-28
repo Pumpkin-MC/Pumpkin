@@ -2,11 +2,7 @@
 use super::*;
 
 impl JavaClient {
-    pub async fn handle_confirm_teleport(
-        &self,
-        player: &Player,
-        confirm_teleport: SConfirmTeleport,
-    ) {
+    pub fn handle_confirm_teleport(&self, player: &Player, confirm_teleport: &SConfirmTeleport) {
         enum TeleportResult {
             Success,
             WrongId,
@@ -36,13 +32,12 @@ impl JavaClient {
         match result {
             TeleportResult::Success => {}
             TeleportResult::WrongId => {
-                self.kick(TextComponent::text("Wrong teleport id")).await;
+                self.try_kick(&TextComponent::text("Wrong teleport id"));
             }
             TeleportResult::NotTeleporting => {
-                self.kick(TextComponent::text(
+                self.try_kick(&TextComponent::text(
                     "Send Teleport confirm, but we did not teleport",
-                ))
-                .await;
+                ));
             }
         }
     }

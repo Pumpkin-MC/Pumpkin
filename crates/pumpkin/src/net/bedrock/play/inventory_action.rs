@@ -3,11 +3,7 @@ use super::*;
 
 impl BedrockClient {
     #[allow(clippy::too_many_lines, clippy::collapsible_if, clippy::unreachable)]
-    pub async fn handle_inventory_action(
-        &self,
-        player: &Arc<Player>,
-        packet: SInventoryTransaction,
-    ) {
+    pub fn handle_inventory_action(&self, player: &Arc<Player>, packet: SInventoryTransaction) {
         tracing::debug!("handle_inventory_action: packet={:?}", packet);
         let mut inventory_updated = false;
         let mut updates = Vec::new();
@@ -129,7 +125,7 @@ impl BedrockClient {
                 .iter()
                 .map(NetworkItemStackDescriptor::from)
                 .collect();
-            self.enqueue_client_packet(&CInventoryContent {
+            self.try_enqueue_client_packet(&CInventoryContent {
                 container_id: VarUInt(0),
                 slots,
                 full_container_name: FullContainerName {
@@ -137,8 +133,7 @@ impl BedrockClient {
                     dynamic_id: None,
                 },
                 storage_item: NetworkItemStackDescriptor::default(),
-            })
-            .await;
+            });
         }
 
         match packet.transaction_data {
@@ -173,10 +168,10 @@ impl BedrockClient {
                     let client_stack = descriptor_to_stack(&data.item_in_hand);
 
                     let mut held_item = player.inventory().held_item();
-                    if !client_stack.is_empty() {
-                        if held_item.is_empty() || held_item.item.id != client_stack.item.id {
-                            held_item = client_stack.clone();
-                        }
+                    if !client_stack.is_empty()
+                        && (held_item.is_empty() || held_item.item.id != client_stack.item.id)
+                    {
+                        held_item = client_stack;
                     }
 
                     let result = server.block_registry.use_with_item(
@@ -236,18 +231,14 @@ impl BedrockClient {
                                     sequence: VarInt(0),
                                 };
 
-                            if let Ok(Some(_)) = server
-                                .block_registry
-                                .place_block(
-                                    player,
-                                    placed_block,
-                                    &server,
-                                    &dummy_use_item_on,
-                                    data.block_position,
-                                    face,
-                                )
-                                .await
-                            {
+                            if let Ok(Some(_)) = server.block_registry.place_block(
+                                player,
+                                placed_block,
+                                &server,
+                                &dummy_use_item_on,
+                                data.block_position,
+                                face,
+                            ) {
                                 if player.gamemode.load() != GameMode::Creative {
                                     stack.decrement(1);
                                 }
@@ -263,7 +254,7 @@ impl BedrockClient {
                     if !client_stack.is_empty()
                         && (held.is_empty() || held.item.id != client_stack.item.id)
                     {
-                        held = client_stack.clone();
+                        held = client_stack;
                         player.inventory.set_held_item(held.clone());
                     }
 
@@ -352,7 +343,7 @@ impl BedrockClient {
                         }
                     }
 
-                    send_cancellable! {{
+                    send_cancellable_blocking! {{
                         &server;
                         event;
                         'after: {
@@ -385,7 +376,7 @@ impl BedrockClient {
                     1 => {
                         let world = player.world();
                         if let Some(target) = world.get_entity_by_id(target_runtime_id) {
-                            player.attack(target).await;
+                            player.attack(&target);
                         }
                     }
                     _ => {
@@ -450,14 +441,13 @@ impl BedrockClient {
                 }
             }
 
-            self.enqueue_client_packet(&CItemStackResponse {
+            self.try_enqueue_client_packet(&CItemStackResponse {
                 responses: vec![ItemStackResponseInfo {
                     result,
                     client_request_id: packet.legacy_request_id,
                     containers: container_infos,
                 }],
-            })
-            .await;
+            });
         }
     }
 }

@@ -6,7 +6,7 @@ use pumpkin_data::block_properties::{
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::{Sound, SoundCategory};
-use pumpkin_data::{Block, BlockStateId};
+use pumpkin_data::{BlockId, BlockStateId};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_world::world::BlockFlags;
 
@@ -17,8 +17,8 @@ use crate::block::{BlockBehaviour, BrokenArgs, OnNeighborUpdateArgs, OnPlaceArgs
 pub struct CreakingHeartBlock;
 
 impl CreakingHeartBlock {
-    fn is_pale_oak_log(block: &Block) -> bool {
-        block.name == "pale_oak_log" || block.name == "stripped_pale_oak_log"
+    const fn is_pale_oak_log(id: BlockId) -> bool {
+        matches!(id, BlockId::PALE_OAK_LOG | BlockId::STRIPPED_PALE_OAK_LOG)
     }
 
     fn check_active_logs(
@@ -32,11 +32,8 @@ impl CreakingHeartBlock {
             Axis::Z => (pos.north(), pos.south()),
         };
 
-        let state_a = world.get_block_state(&pos_a);
-        let state_b = world.get_block_state(&pos_b);
-
-        let block_a = Block::from_state_id(state_a.id);
-        let block_b = Block::from_state_id(state_b.id);
+        let block_a = world.get_block_state_id(&pos_a).to_block_id();
+        let block_b = world.get_block_state_id(&pos_b).to_block_id();
 
         Self::is_pale_oak_log(block_a) && Self::is_pale_oak_log(block_b)
     }
