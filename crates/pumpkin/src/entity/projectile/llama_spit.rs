@@ -56,12 +56,12 @@ impl LlamaSpitEntity {
 }
 
 impl EntityBase for LlamaSpitEntity {
-    fn tick(&self, caller: &dyn EntityBase, server: &Server) {
+    fn tick(&self, caller: &dyn EntityBase, _server: &Server) {
         if self.get_entity().touching_water.load(Ordering::Relaxed) {
             self.get_entity().remove();
             return;
         }
-        self.thrown.process_tick(caller, server);
+        self.thrown.process_tick(caller);
     }
 
     fn get_entity(&self) -> &Entity {

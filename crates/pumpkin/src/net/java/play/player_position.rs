@@ -43,11 +43,11 @@ impl JavaClient {
     }
 
     #[expect(clippy::too_many_lines)]
-    pub async fn handle_position(
+    pub fn handle_position(
         &self,
         player: &Arc<Player>,
         server: &Arc<Server>,
-        packet: SPlayerPosition,
+        packet: &SPlayerPosition,
     ) {
         if !player.has_client_loaded() {
             return;
@@ -67,12 +67,11 @@ impl JavaClient {
         // y = feet Y
         let position = packet.position;
         if position.x.is_nan() || position.y.is_nan() || position.z.is_nan() {
-            self.kick(TextComponent::translate_cross(
+            self.try_kick(&TextComponent::translate_cross(
                 translation::java::MULTIPLAYER_DISCONNECT_INVALID_PLAYER_MOVEMENT,
                 translation::java::MULTIPLAYER_DISCONNECT_INVALID_PLAYER_MOVEMENT,
                 [],
-            ))
-            .await;
+            ));
             return;
         }
         let position = Vector3::new(
@@ -81,7 +80,7 @@ impl JavaClient {
             Self::clamp_horizontal(position.z),
         );
 
-        send_cancellable! {{
+        send_cancellable_blocking! {{
             server;
             PlayerMoveEvent {
                 player: player.clone(),
@@ -157,7 +156,7 @@ impl JavaClient {
                         player.gamemode.load() == GameMode::Creative,
                     );
                 }
-                chunker::update_position(player).await;
+                chunker::update_position(player);
                 let delta = Vector3::new(
                     pos.x - last_pos.x,
                     pos.y - last_pos.y,
@@ -171,17 +170,17 @@ impl JavaClient {
             }
 
             'cancelled: {
-                self.force_tp(player, player.get_entity().pos.load()).await;
+                self.force_tp(player, player.get_entity().pos.load());
             }
         }}
     }
 
     #[expect(clippy::too_many_lines)]
-    pub async fn handle_position_rotation(
+    pub fn handle_position_rotation(
         &self,
         player: &Arc<Player>,
         server: &Arc<Server>,
-        packet: SPlayerPositionRotation,
+        packet: &SPlayerPositionRotation,
     ) {
         if !player.has_client_loaded() {
             return;
@@ -206,12 +205,11 @@ impl JavaClient {
             || !packet.yaw.is_finite()
             || !packet.pitch.is_finite()
         {
-            self.kick(TextComponent::translate_cross(
+            self.try_kick(&TextComponent::translate_cross(
                 translation::java::MULTIPLAYER_DISCONNECT_INVALID_PLAYER_MOVEMENT,
                 translation::java::MULTIPLAYER_DISCONNECT_INVALID_PLAYER_MOVEMENT,
                 [],
-            ))
-            .await;
+            ));
             return;
         }
 
@@ -221,7 +219,7 @@ impl JavaClient {
             Self::clamp_horizontal(position.z),
         );
 
-        send_cancellable! {{
+        send_cancellable_blocking! {{
             server;
             PlayerMoveEvent::new(
                 player.clone(),
@@ -314,7 +312,7 @@ impl JavaClient {
                         player.gamemode.load() == GameMode::Creative,
                     );
                 }
-                chunker::update_position(player).await;
+                chunker::update_position(player);
                 let delta = Vector3::new(
                     pos.x - last_pos.x,
                     pos.y - last_pos.y,
@@ -328,26 +326,25 @@ impl JavaClient {
             }
 
             'cancelled: {
-                self.force_tp(player, position).await;
+                self.force_tp(player, position);
             }
         }}
     }
 
-    pub async fn force_tp(&self, player: &Arc<Player>, position: Vector3<f64>) {
+    pub fn force_tp(&self, player: &Arc<Player>, position: Vector3<f64>) {
         let teleport_id = player.teleport_id_count.fetch_add(1, Ordering::Relaxed) + 1;
         *player
             .awaiting_teleport
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner) =
             Some((teleport_id.into(), position));
-        self.enqueue_client_packet(&CPlayerPosition::new(
+        player.try_send_client_packet(&CPlayerPosition::new(
             teleport_id.into(),
             player.get_entity().pos.load(),
             Vector3::new(0.0, 0.0, 0.0),
             player.get_entity().yaw.load(),
             player.get_entity().pitch.load(),
             Vec::new(),
-        ))
-        .await;
+        ));
     }
 }

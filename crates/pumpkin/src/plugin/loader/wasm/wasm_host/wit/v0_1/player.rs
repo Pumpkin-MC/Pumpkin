@@ -1691,7 +1691,7 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
 
     async fn send_stats(&mut self, player: Resource<Player>) -> wasmtime::Result<()> {
         let player = player_from_resource(self, &player)?;
-        player.send_stats().await;
+        player.send_stats();
         Ok(())
     }
 
@@ -1843,7 +1843,7 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
             pos_vec.y as i32,
             pos_vec.z as i32,
         );
-        player.set_compass_target(block_pos).await;
+        player.set_compass_target(block_pos);
         Ok(())
     }
 
@@ -2101,7 +2101,7 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         let header = text_component_from_resource(self, &header);
         let footer = text_component_from_resource(self, &footer);
         let player = player_from_resource(self, &player)?;
-        player.set_tab_list_header_footer(header, footer).await;
+        player.set_tab_list_header_footer(&header, &footer);
         Ok(())
     }
 
@@ -2350,7 +2350,7 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         level: u8,
     ) -> wasmtime::Result<()> {
         let player = player_from_resource(self, &player)?;
-        player.set_food_level(level).await;
+        player.set_food_level(level);
         Ok(())
     }
 

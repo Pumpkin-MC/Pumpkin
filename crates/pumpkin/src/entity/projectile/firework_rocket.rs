@@ -91,8 +91,8 @@ impl FireworkRocketEntity {
 }
 
 impl EntityBase for FireworkRocketEntity {
-    fn tick(&self, caller: &dyn EntityBase, server: &Server) {
-        self.entity.process_tick(caller, server);
+    fn tick(&self, caller: &dyn EntityBase, _server: &Server) {
+        self.entity.process_tick(caller);
 
         let entity = self.get_entity();
         let world = entity.world.load();
