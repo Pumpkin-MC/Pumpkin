@@ -355,10 +355,10 @@ impl LivingEntity {
         });
 
         self.entity.send_meta_data(
-            &[Metadata::new(
-                tracked_data::living_entity::DATA_LIVING_ENTITY_FLAGS,
-                b,
-            )],
+            &[
+                Metadata::new(tracked_data::living_entity::DATA_LIVING_ENTITY_FLAGS, b),
+                Metadata::new(tracked_data::living_entity::LIVING_FLAGS, b),
+            ],
             bedrock_meta.as_ref(),
         );
     }
@@ -2832,6 +2832,18 @@ impl EntityBase for LivingEntity {
                             .unwrap_or_else(|| item.item.registry_key.to_string());
                         player.start_cooldown(group, (cooldown.seconds * 20.0) as i32);
                     }
+
+                    player.sync_inventory_to_client();
+                    let hand = *self
+                        .active_hand
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner);
+                    let slot = match hand.unwrap_or(Hand::Right) {
+                        Hand::Left => EquipmentSlot::OFF_HAND,
+                        Hand::Right => EquipmentSlot::MAIN_HAND,
+                    };
+                    let stack = self.get_stack_in_hand(caller, hand.unwrap_or(Hand::Right));
+                    self.send_equipment_changes(&[(slot, stack)]);
                 }
 
                 self.clear_active_hand();

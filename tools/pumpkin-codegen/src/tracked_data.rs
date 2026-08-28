@@ -157,6 +157,7 @@ fn generate_entity_modules(
             .values()
             .filter_map(|entities| entities.get(entity))
             .flat_map(|fields| fields.keys().cloned())
+            .map(|name| canonicalize_tracked_field_name(&name))
             .collect();
 
         let mut field_consts = TokenStream::new();
@@ -173,7 +174,7 @@ fn generate_entity_modules(
 
             for (ver, entities) in versions {
                 let ver_ident = ver.to_field_ident();
-                let field_info = entities.get(entity).and_then(|f| f.get(field));
+                let field_info = entities.get(entity).and_then(|f| lookup_tracked_field(f, field));
                 let id = field_info.map_or(255u8, |info| info.id);
                 if let Some(info) = field_info {
                     latest_type = info.r#type.clone();
@@ -237,6 +238,26 @@ fn generate_entity_modules(
     }
 
     modules
+}
+
+fn canonicalize_tracked_field_name(name: &str) -> String {
+    match name.to_uppercase().as_str() {
+        // Yarn (1.21.x assets) vs Mojang (26.x assets) names for the same index.
+        "LIVING_FLAGS" => "DATA_LIVING_ENTITY_FLAGS".to_string(),
+        other => other.to_string(),
+    }
+}
+
+fn lookup_tracked_field<'a>(
+    fields: &'a BTreeMap<String, RawTrackedField>,
+    canonical: &str,
+) -> Option<&'a RawTrackedField> {
+    if let Some(info) = fields.get(canonical) {
+        return Some(info);
+    }
+    fields.iter().find_map(|(name, info)| {
+        (canonicalize_tracked_field_name(name) == canonical).then_some(info)
+    })
 }
 
 fn is_valid_ident(name: &str) -> bool {
@@ -308,6 +329,9 @@ fn is_valid_ident(name: &str) -> bool {
 
 fn add_semantic_aliases(entity: &str, field: &str, aliases: &mut Vec<String>) {
     match (entity, field) {
+        (_, "DATA_LIVING_ENTITY_FLAGS") => {
+            aliases.push("LIVING_FLAGS".to_string());
+        }
         (_, "DATA_FLAGS_ID") => {
             aliases.push("TAMEABLE_FLAGS".to_string());
             aliases.push("FLAGS".to_string());
@@ -441,6 +465,29 @@ fn add_semantic_aliases(entity: &str, field: &str, aliases: &mut Vec<String>) {
 mod tests {
     use super::build;
     use quote::quote;
+
+    #[test]
+    fn living_entity_flags_merge_yarn_and_mojang_names() {
+        let generated = build().to_string();
+        let living = generated
+            .split("pub mod living_entity")
+            .nth(1)
+            .expect("living_entity module");
+        let flags = living
+            .split("DATA_LIVING_ENTITY_FLAGS")
+            .nth(1)
+            .expect("DATA_LIVING_ENTITY_FLAGS constant")
+            .split("pub const")
+            .next()
+            .expect("constant body");
+        assert!(
+            !flags.contains("v1_21 : 255u8"),
+            "1.21.x Yarn LIVING_FLAGS (index 8) should merge into DATA_LIVING_ENTITY_FLAGS, got {flags}"
+        );
+        assert!(flags.contains("v1_21 : 8u8"));
+        assert!(flags.contains("v1_21_11 : 8u8"));
+        assert!(flags.contains("v26_1 : 8u8"));
+    }
 
     #[test]
     fn wolf_and_cat_have_correct_entity_specific_tracker_constants() {
