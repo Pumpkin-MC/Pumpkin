@@ -162,9 +162,8 @@ impl SyncHandler {
     /// Sent when the player's held (cursor) item changes.
     ///
     /// # Arguments
-    /// - `screen_handler` - The screen handler
     /// - `stack` - The new cursor item
-    pub fn update_cursor_stack(&self, _screen_handler: &ScreenHandlerBehaviour, stack: &ItemStack) {
+    pub fn update_cursor_stack(&self, stack: &ItemStack) {
         if let Some(player) = self
             .player
             .lock()

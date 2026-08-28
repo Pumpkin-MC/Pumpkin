@@ -122,33 +122,49 @@ where
         chunks: Vec<Vector2<i32>>,
         stream: tokio::sync::mpsc::Sender<LoadedData<Self::Data, ChunkReadingError>>,
     ) {
-        for pos in chunks {
-            let rel_x = pos.x.rem_euclid(32);
-            let rel_z = pos.y.rem_euclid(32);
-            let index = (rel_x + rel_z * 32) as usize;
+        let chunk_items: Vec<(Vector2<i32>, Option<Vec<u8>>)> = chunks
+            .into_iter()
+            .map(|pos| {
+                let rel_x = pos.x.rem_euclid(32);
+                let rel_z = pos.y.rem_euclid(32);
+                let index = (rel_x + rel_z * 32) as usize;
+                let data = self.data.chunks.get(&index.to_string()).cloned();
+                (pos, data)
+            })
+            .collect();
 
-            if let Some(chunk_bytes) = self.data.chunks.get(&index.to_string()) {
-                let res = (|| {
-                    let mut decoder = StreamingDecoder::new(&chunk_bytes[..]).map_err(|e| {
-                        ChunkReadingError::IoError(std::io::Error::other(e.to_string()))
-                    })?;
-                    let mut decompressed = Vec::new();
-                    std::io::Read::read_to_end(&mut decoder, &mut decompressed)
-                        .map_err(ChunkReadingError::IoError)?;
-                    let bytes = Bytes::from(decompressed);
-                    D::from_bytes(&bytes, pos)
-                })();
+        let (tx, mut rx) = tokio::sync::mpsc::channel(chunk_items.len().max(1));
 
-                let data_res = match res {
-                    Ok(data) => LoadedData::Loaded(data),
-                    Err(e) => LoadedData::Error((pos, e)),
-                };
+        rayon::spawn(move || {
+            use rayon::prelude::*;
+            chunk_items.into_par_iter().for_each(|(pos, chunk_bytes)| {
+                let data_res = chunk_bytes.map_or_else(
+                    || LoadedData::Missing(pos),
+                    |chunk_bytes| {
+                        let res = (|| {
+                            let mut decoder =
+                                StreamingDecoder::new(&chunk_bytes[..]).map_err(|e| {
+                                    ChunkReadingError::IoError(std::io::Error::other(e.to_string()))
+                                })?;
+                            let mut decompressed = Vec::new();
+                            std::io::Read::read_to_end(&mut decoder, &mut decompressed)
+                                .map_err(ChunkReadingError::IoError)?;
+                            let bytes = Bytes::from(decompressed);
+                            D::from_bytes(&bytes, pos)
+                        })();
+                        match res {
+                            Ok(data) => LoadedData::Loaded(data),
+                            Err(e) => LoadedData::Error((pos, e)),
+                        }
+                    },
+                );
+                let _ = tx.blocking_send(data_res);
+            });
+        });
 
-                if stream.send(data_res).await.is_err() {
-                    return;
-                }
-            } else {
-                let _ = stream.send(LoadedData::Missing(pos)).await;
+        while let Some(item) = rx.recv().await {
+            if stream.send(item).await.is_err() {
+                return;
             }
         }
     }

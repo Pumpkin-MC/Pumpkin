@@ -3,7 +3,7 @@ use super::*;
 
 impl BedrockClient {
     #[allow(clippy::too_many_lines)]
-    pub async fn handle_block_pick_request(&self, player: &Arc<Player>, packet: SBlockPickRequest) {
+    pub fn handle_block_pick_request(&self, player: &Arc<Player>, packet: &SBlockPickRequest) {
         if !player.can_interact_with_block_at(&packet.position, 1.0) {
             return;
         }
@@ -60,17 +60,14 @@ impl BedrockClient {
         player.inventory.set_selected_slot(target_hotbar_slot as u8);
 
         // Send hotbar updates
-        player
-            .client
-            .enqueue_packet_editioned(
-                &CSetSelectedSlot::new(player.inventory.get_selected_slot() as i8),
-                &CPlayerHotbar {
-                    selected_slot: VarUInt(player.inventory.get_selected_slot() as u32),
-                    container_id: 0,
-                    should_select_slot: true,
-                },
-            )
-            .await;
+        player.client.try_enqueue_packet_editioned(
+            &CSetSelectedSlot::new(player.inventory.get_selected_slot() as i8),
+            &CPlayerHotbar {
+                selected_slot: VarUInt(player.inventory.get_selected_slot() as u32),
+                container_id: 0,
+                should_select_slot: true,
+            },
+        );
 
         // Send screen handler / Java inventory updates
         player
@@ -93,7 +90,7 @@ impl BedrockClient {
             .iter()
             .map(NetworkItemStackDescriptor::from)
             .collect();
-        self.enqueue_client_packet(&CInventoryContent {
+        self.try_enqueue_client_packet(&CInventoryContent {
             container_id: VarUInt(0),
             slots,
             full_container_name: FullContainerName {
@@ -101,7 +98,6 @@ impl BedrockClient {
                 dynamic_id: None,
             },
             storage_item: NetworkItemStackDescriptor::default(),
-        })
-        .await;
+        });
     }
 }

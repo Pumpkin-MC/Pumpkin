@@ -434,7 +434,6 @@ impl EnderDragonEntity {
         target: Vector3<f64>,
         fly_speed: f32,
         turn_speed: f32,
-        _y_scale: f64,
     ) {
         let xdd = target.x - pos.x;
         let mut ydd = target.y - pos.y;
@@ -818,13 +817,7 @@ impl EnderDragonEntity {
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         if let Some(target) = target_location {
             let pos = self.mob_entity.living_entity.entity.pos.load();
-            self.steer_toward(
-                pos,
-                target,
-                phase.get_fly_speed(),
-                phase.get_turn_speed(),
-                0.5,
-            );
+            self.steer_toward(pos, target, phase.get_fly_speed(), phase.get_turn_speed());
         }
 
         self.mob_entity.living_entity.entity.send_pos_rot();
