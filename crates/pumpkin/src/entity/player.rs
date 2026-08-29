@@ -22,6 +22,7 @@ use pumpkin_inventory::merchant::merchant_screen_handler::MerchantScreenHandler;
 use pumpkin_inventory::player::ender_chest_inventory::EnderChestInventory;
 use pumpkin_protocol::RawPacket;
 use pumpkin_protocol::bedrock::client::play_status::CPlayStatus;
+use pumpkin_protocol::bedrock::client::remove_actor::CRemoveActor;
 use pumpkin_protocol::bedrock::client::set_time::CSetTime;
 use pumpkin_protocol::bedrock::client::update_abilities::{Ability, CUpdateAbilities};
 use pumpkin_protocol::bedrock::client::{
@@ -263,11 +264,12 @@ use pumpkin_protocol::java::client::play::{
     Animation, CActionBar, CAwardStats, CChangeDifficulty, CCloseContainer, CCombatDeath,
     CCustomPayload, CDisguisedChatMessage, CEntityAnimation, CEntityPositionSync, CGameEvent,
     CItemCooldown, CMapItemData, COpenScreen, CParticle, CPlayerAbilities, CPlayerInfoUpdate,
-    CPlayerPosition, CPlayerSpawnPosition, CRespawn, CSetCamera, CSetContainerContent,
-    CSetContainerProperty, CSetContainerSlot, CSetCursorItem, CSetExperience, CSetHealth,
-    CSetPlayerInventory, CSetSelectedSlot, CSoundEffect, CStopSound, CSubtitle, CSystemChatMessage,
-    CTabList, CTitleAnimation, CTitleText, CUpdateMobEffect, CUpdateTime, GameEvent, MapIcon,
-    MapPatch, Metadata, PlayerAction, PlayerInfoFlags, PlayerSpawnData, PreviousMessage, Statistic,
+    CPlayerPosition, CPlayerSpawnPosition, CRemoveEntities, CRespawn, CSetCamera,
+    CSetContainerContent, CSetContainerProperty, CSetContainerSlot, CSetCursorItem, CSetExperience,
+    CSetHealth, CSetPlayerInventory, CSetSelectedSlot, CSoundEffect, CStopSound, CSubtitle,
+    CSystemChatMessage, CTabList, CTitleAnimation, CTitleText, CUpdateMobEffect, CUpdateTime,
+    GameEvent, MapIcon, MapPatch, Metadata, PlayerAction, PlayerInfoFlags, PlayerSpawnData,
+    PreviousMessage, Statistic,
 };
 use pumpkin_protocol::java::server::play::{
     SClickSlot, SContainerButtonClick, SRenameItem, SlotActionType,
@@ -1116,6 +1118,7 @@ impl Player {
         center: Vector2<i32>,
         view_distance: u8,
     ) {
+        // One-chunk loading margin (vanilla `ChunkMap` view ticket).
         let view_distance = view_distance.saturating_add(1);
         let mut lock = level
             .chunk_loading
@@ -1143,6 +1146,8 @@ impl Player {
         lock.send_change();
     }
 
+    /// Drop old-dimension tickets and the chunk listener, then reset send state so the
+    /// new dimension can send immediately (same as the old `ChunkManager::change_world`).
     pub fn change_world_chunks(
         &self,
         old_level: &Arc<Level>,
@@ -3157,6 +3162,32 @@ impl Player {
         }
     }
 
+    /// Tell this client to forget these entity ids.
+    /// A leftover ghost aims interact packets at an unknown id
+    /// (`multiplayer.disconnect.invalid_entity_attacked`).
+    pub(crate) fn despawn_entity_ids(&self, entity_ids: &[i32]) {
+        if entity_ids.is_empty() {
+            return;
+        }
+        match self.client.as_ref() {
+            ClientPlatform::Java(client) => {
+                let ids: Vec<VarInt> = entity_ids.iter().map(|id| (*id).into()).collect();
+                if let Ok(data) = client.serialize_packet(&CRemoveEntities::new(&ids)) {
+                    client.try_enqueue_packet(data);
+                }
+            }
+            ClientPlatform::Bedrock(client) => {
+                for id in entity_ids {
+                    if let Ok(data) =
+                        client.serialize_packet(&CRemoveActor::new(VarLong(i64::from(*id))))
+                    {
+                        client.try_enqueue_packet(data);
+                    }
+                }
+            }
+        }
+    }
+
     pub async fn send_client_packet<C: pumpkin_protocol::ClientPacket + Sync>(&self, packet: &C) {
         if let ClientPlatform::Java(client) = self.client.as_ref()
             && let Ok(data) = client.serialize_packet(packet)
@@ -3374,11 +3405,12 @@ impl Player {
 
     pub async fn unload_watched_chunks(&self, world: &World) {
         let radial_chunks: Vec<_> = self.watched_section.load().all_chunks_within().collect();
-        // Drop pairings while this client can still take `CRemoveEntities`. Vanilla
-        // `TrackedEntity.removePairing` on dimension leave. `CRespawn` often clears the world
-        // anyway; this covers ghosts if it does not.
+        // Forget these chunks' entities while the client is still a watcher. Otherwise it
+        // keeps ghosts whose ids the server no longer knows (`invalid_entity_attacked`).
+        // Vanilla `TrackedEntity.removePairing` on dimension leave. `CRespawn` often
+        // clears the world; this covers the case where it does not.
         world.entity_tracker.drop_player_pairings(self);
-        // Persist live BEs before this player's tickets on these chunks can be released below.
+        // Persist live BEs before this player's tickets on these chunks can be released.
         world.flush_block_entities(&radial_chunks);
         let level = &world.level;
         let chunks_to_clean = level.mark_chunks_as_not_watched(&radial_chunks).await;

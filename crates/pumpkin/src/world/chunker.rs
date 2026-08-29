@@ -32,7 +32,7 @@ pub fn get_view_distance(player: &Player) -> NonZero<u8> {
         .clamp(fallback, max_view_distance)
 }
 
-/// Chebyshev distance in chunks.
+/// True if `target` is within Chebyshev `view_distance` of `center` (vanilla chunk load shape).
 #[must_use]
 #[inline]
 pub fn is_within_view_distance(
@@ -85,7 +85,8 @@ pub fn update_position(player: &Arc<Player>) {
     // is already the destination when this runs after a portal teleport.
     let world = player.world();
 
-    // Tickets below can let `GenerationSchedule` evict raw block data. Persist live BEs first.
+    // Tickets below can let `GenerationSchedule` evict raw block data before the tick
+    // loop persists live BEs. See `World::flush_block_entities`.
     world.flush_block_entities(&unloading_chunks);
 
     player.replace_chunk_tickets(
@@ -95,7 +96,9 @@ pub fn update_position(player: &Arc<Player>) {
         view_distance.into(),
     );
     player.watched_section.store(new_cylindrical);
-    // Pairing before `CUnloadChunk`: the client drops entities, then the chunk.
+    // Pairing before `CUnloadChunk`: drop entities, then the chunk. Covers every leaving
+    // chunk, including those another player still watches (`TrackedEntity.removePairing`).
+    // After unwatch, a chunk-scoped broadcast would not reach this client.
     world.entity_tracker.update_player_position(player, &world);
     {
         let mut sender = player
@@ -110,7 +113,7 @@ pub fn update_position(player: &Arc<Player>) {
         }
     }
 
-    // Watcher marks are async. Tickets already sit at `center`. Spawn after
+    // Watcher IO is async. Tickets already sit at `center`. Spawn after
     // `mark_chunks_as_newly_watched` so `spawn_world_entity_chunks` sees a watcher.
     // Unload via `queue_chunk_removal`: this is not the tick loop.
     if !loading_chunks.is_empty() || !unloading_chunks.is_empty() {

@@ -1251,17 +1251,11 @@ impl Entity {
         );
     }
 
-    fn send_to_watchers<P: ClientPacket + Sync>(&self, packet: &P) {
+    pub(crate) fn send_to_watchers<P: ClientPacket + Sync>(&self, packet: &P) {
         self.world.load().send_to_tracking_players(self, packet);
     }
 
-    fn send_to_watchers_bedrock<P: BClientPacket + Sync>(&self, packet: &P) {
-        self.world
-            .load()
-            .send_to_tracking_players_bedrock(self, packet);
-    }
-
-    fn send_to_watchers_editioned<J: ClientPacket + Sync, B: BClientPacket + Sync>(
+    pub(crate) fn send_to_watchers_editioned<J: ClientPacket + Sync, B: BClientPacket + Sync>(
         &self,
         je_packet: &J,
         be_packet: &B,
@@ -1269,6 +1263,25 @@ impl Entity {
         self.world
             .load()
             .send_to_tracking_players_editioned(self, je_packet, be_packet);
+    }
+
+    pub(crate) fn send_to_watchers_and_self_editioned<
+        J: ClientPacket + Sync,
+        B: BClientPacket + Sync,
+    >(
+        &self,
+        je_packet: &J,
+        be_packet: &B,
+    ) {
+        self.world
+            .load()
+            .send_to_tracking_players_and_self_editioned(self, je_packet, be_packet);
+    }
+
+    fn send_to_watchers_bedrock<P: BClientPacket + Sync>(&self, packet: &P) {
+        self.world
+            .load()
+            .send_to_tracking_players_bedrock(self, packet);
     }
 
     #[must_use]
@@ -1331,6 +1344,8 @@ impl Entity {
                     );
                     self.chunk_pos.store(new_chunk);
                     world.relocate_entity(self.entity_id, chunk_pos, new_chunk);
+                    // Same-tick pairing (piston shove). `update_all` would wait until the
+                    // end of the world tick.
                     world
                         .entity_tracker
                         .update_entity_position_by_id(self.entity_id, &world);

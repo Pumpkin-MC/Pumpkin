@@ -1,4 +1,5 @@
 //! Per-player chunk send: pending set, encode quota, in-flight batches, epoch.
+//!
 //! Vanilla `ChunkMap` send side. `chunk_send_epoch` drops encoded batches after teleport.
 
 use bytes::Bytes;
@@ -270,6 +271,8 @@ impl ChunkSender {
         let mut dispatched_positions = Vec::with_capacity(encoded_chunks.len());
         let version = batch.target_version;
 
+        // Java 1.20.2+: chunk batching protocol. Older Java and Bedrock get the
+        // payloads without `CChunkBatchStart` / `CChunkBatchEnd`.
         if version >= JavaMinecraftVersion::V_1_20_2
             && let ClientPlatform::Java(java_client) = client
         {

@@ -104,7 +104,6 @@ use pumpkin_protocol::{
             },
             level_sound_event::CLevelSoundEvent,
             player_list::{CPlayerList, PlayerListEntry, Skin},
-            remove_actor::CRemoveActor,
             start_game::{Experiments, GamePublishSetting, LevelSettings},
             update_attributes::{AttributeData, CUpdateAttributes},
         },
@@ -118,9 +117,9 @@ use pumpkin_protocol::{
         self,
         client::play::{
             CBlockEntityData, CDamageEvent, CEntityStatus, CGameEvent, CLogin, CMultiBlockUpdate,
-            CPlayerChatMessage, CPlayerInfoUpdate, CRemoveEntities, CRemovePlayerInfo,
-            CSetSelectedSlot, CSoundEffect, CSpawnEntity, FilterType, GameEvent, InitChat,
-            PlayerAction, PlayerInfoFlags,
+            CPlayerChatMessage, CPlayerInfoUpdate, CRemovePlayerInfo, CSetSelectedSlot,
+            CSoundEffect, CSpawnEntity, FilterType, GameEvent, InitChat, PlayerAction,
+            PlayerInfoFlags,
         },
         server::play::SChatMessage,
     },
@@ -651,9 +650,9 @@ impl World {
     }
 
     /// Serializes the live block entities of a chunk back into that chunk's block
-    /// entity data. The live map is the source of truth while a chunk is loaded ->
+    /// entity data. The live map is the source of truth while a chunk is loaded:
     /// `get_block_entity` takes the saved NBT out of the chunk when it wakes an
-    /// entity up -> so this has to run before the chunk is dropped, or everything
+    /// entity up, so this has to run before the chunk is dropped, or everything
     /// the entity did since it was loaded is lost.
     /// `false` if the raw chunk is gone: callers must keep the live BEs.
     fn save_block_entities(&self, chunk_pos: Vector2<i32>) -> bool {
@@ -718,27 +717,6 @@ impl World {
         }
     }
 
-    /// Vanilla `ServerLevel.broadcastEntityEvent`.
-    pub fn broadcast_entity_event(
-        &self,
-        entity: &Entity,
-        java_status: EntityStatus,
-        bedrock_status: Option<ActorEventID>,
-    ) {
-        let je_packet = CEntityStatus::new(entity.entity_id, java_status as i8);
-        if let Some(be_event) = bedrock_status {
-            let be_packet = SActorEvent {
-                target_runtime_id: VarULong(entity.entity_id as u64),
-                event_id: be_event,
-                data: VarInt(0),
-                fire_at_position: None,
-            };
-            self.send_to_tracking_players_and_self_editioned(entity, &je_packet, &be_packet);
-        } else {
-            self.send_to_tracking_players_and_self(entity, &je_packet);
-        }
-    }
-
     /// Vanilla `ServerLevel.broadcastDamageEvent`.
     pub fn broadcast_damage_event(
         &self,
@@ -758,14 +736,26 @@ impl World {
         self.send_to_tracking_players_and_self(entity, &je_packet);
     }
 
-    /// Sends an entity status update to all players tracking the specified entity.
+    /// Entity status to `seen_by` and to the entity if it is a player.
+    /// Vanilla `ServerLevel.broadcastEntityEvent`.
     pub fn send_entity_status(
         &self,
         entity: &Entity,
         java_status: EntityStatus,
         bedrock_status: Option<ActorEventID>,
     ) {
-        self.broadcast_entity_event(entity, java_status, bedrock_status);
+        let je_packet = CEntityStatus::new(entity.entity_id, java_status as i8);
+        if let Some(be_event) = bedrock_status {
+            let be_packet = SActorEvent {
+                target_runtime_id: VarULong(entity.entity_id as u64),
+                event_id: be_event,
+                data: VarInt(0),
+                fire_at_position: None,
+            };
+            self.send_to_tracking_players_and_self_editioned(entity, &je_packet, &be_packet);
+        } else {
+            self.send_to_tracking_players_and_self(entity, &je_packet);
+        }
     }
 
     pub fn send_remove_mob_effect(&self, entity: &Entity, effect_type: &'static StatusEffect) {
@@ -1739,7 +1729,9 @@ impl World {
             Self::tick_one_entity(entity, server, &players_cache, *entity_chunk);
         }
 
-        // Vanilla `ChunkMap.tick`: re-derive pairing every tick (range + view cylinder).
+        // Vanilla `ChunkMap.tick` / `TrackedEntity`: re-derive pairing every tick
+        // (range + view cylinder). An entity can walk into a standing player's view
+        // without changing chunk; `set_pos` also pairs on chunk-cross for same-tick piston.
         self.entity_tracker.update_all(self);
 
         let entity_elapsed = t_entities.elapsed();
@@ -4950,7 +4942,8 @@ impl World {
         });
     }
 
-    /// Take `ChunkEntityData.data` and `addEntity`. Broadcasts spawn to every tracker.
+    /// Take `ChunkEntityData.data` and vanilla `addEntity`.
+    /// `add_entity_silent` pairs via `EntityTracker.add_pairing` to current watchers.
     fn instantiate_entities_from_chunk_nbt(self: &Arc<Self>, position: Vector2<i32>) {
         let Some(chunk) = self.level.get_entity_chunk_sync(&position) else {
             self.entity_ready_chunks.insert(position);
@@ -5541,53 +5534,9 @@ impl World {
             new_entities
         });
         self.index_remove_entity(base_entity.chunk_pos.load(), base_entity.entity_id);
+        // Reloading the chunk spawns a new id (`CURRENT_ID` is never reused).
+        // Leftover ghosts disconnect on attack (`multiplayer.disconnect.invalid_entity_attacked`).
         self.entity_tracker.remove_entity(entity, self);
-    }
-
-    /// Tells one client to forget entities in `chunks`.
-    /// Vanilla `ChunkMap.TrackedEntity::removePairing`: per-player. A leftover ghost aims
-    /// interact packets at an unknown id (`multiplayer.disconnect.invalid_entity_attacked`).
-    pub fn despawn_entities_in_chunks_for_player(&self, player: &Player, chunks: &[Vector2<i32>]) {
-        if chunks.is_empty() {
-            return;
-        }
-        let chunks_set: FxHashSet<_> = chunks.iter().copied().collect();
-
-        let mut entity_ids = Vec::new();
-        for chunk in &chunks_set {
-            let Some(bucket) = self.entities_by_chunk.get(chunk) else {
-                continue;
-            };
-            entity_ids.extend(bucket.keys().copied());
-        }
-
-        Self::try_despawn_entity_ids_for_player(player, &entity_ids);
-    }
-
-    /// Tells one client to forget these entity ids. Shared by chunk-leave despawn and the
-    /// per-tick visibility sync in [`Self::tick`].
-    fn try_despawn_entity_ids_for_player(player: &Player, entity_ids: &[i32]) {
-        if entity_ids.is_empty() {
-            return;
-        }
-
-        match player.client.as_ref() {
-            ClientPlatform::Java(client) => {
-                let ids: Vec<VarInt> = entity_ids.iter().map(|id| (*id).into()).collect();
-                if let Ok(data) = client.serialize_packet(&CRemoveEntities::new(&ids)) {
-                    client.try_enqueue_packet(data);
-                }
-            }
-            ClientPlatform::Bedrock(client) => {
-                for id in entity_ids {
-                    if let Ok(data) =
-                        client.serialize_packet(&CRemoveActor::new(VarLong(i64::from(*id))))
-                    {
-                        client.try_enqueue_packet(data);
-                    }
-                }
-            }
-        }
     }
 
     /// Queue chunks for entity/BE teardown. `tick()` drains this; calling
@@ -5677,6 +5626,7 @@ impl World {
         for entity in entities_to_remove {
             self.entity_uuids.remove(&entity.get_entity().entity_uuid);
             self.spawn_state.load().remove_entity(self, entity.as_ref());
+            // Same as `remove_entity`: leftover ghosts disconnect on attack.
             self.entity_tracker.remove_entity(entity.as_ref(), self);
         }
 

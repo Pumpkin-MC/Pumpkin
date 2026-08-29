@@ -258,20 +258,14 @@ impl LivingEntity {
                     selected_slot: 0,
                     container_id: window_id,
                 };
-                self.entity.world.load().send_to_tracking_players_editioned(
-                    &self.entity,
-                    &je_packet,
-                    &be_packet,
-                );
+                self.entity
+                    .send_to_watchers_editioned(&je_packet, &be_packet);
                 sent_editioned = true;
             }
         }
 
         if !sent_editioned {
-            self.entity
-                .world
-                .load()
-                .send_to_tracking_players(&self.entity, &je_packet);
+            self.entity.send_to_watchers(&je_packet);
         }
     }
 
@@ -292,8 +286,7 @@ impl LivingEntity {
             }
         }
 
-        self.entity.world.load().send_to_tracking_players_editioned(
-            &self.entity,
+        self.entity.send_to_watchers_editioned(
             &CTakeItemEntity::new(
                 item.entity_id.into(),
                 self.entity.entity_id.into(),
@@ -691,7 +684,6 @@ impl LivingEntity {
             }
         }
 
-        // Broadcast effect to nearby players
         let mut flag: i8 = 0;
         if effect.ambient {
             flag |= 1;
@@ -726,9 +718,7 @@ impl LivingEntity {
         };
 
         self.entity
-            .world
-            .load()
-            .send_to_tracking_players_and_self_editioned(&self.entity, &je_packet, &be_packet);
+            .send_to_watchers_and_self_editioned(&je_packet, &be_packet);
         if effect.effect_type != &StatusEffect::INSTANT_HEALTH
             && effect.effect_type != &StatusEffect::INSTANT_DAMAGE
         {
@@ -2484,11 +2474,8 @@ impl LivingEntity {
                 fire_at_position: None,
             };
             let hurt_animation = CHurtAnimation::new(entity_id.into(), hurt_yaw);
-            world.send_to_tracking_players_and_self_editioned(
-                &self.entity,
-                &hurt_animation,
-                &hurt_event,
-            );
+            self.entity
+                .send_to_watchers_and_self_editioned(&hurt_animation, &hurt_event);
         }
 
         world.broadcast_damage_event(

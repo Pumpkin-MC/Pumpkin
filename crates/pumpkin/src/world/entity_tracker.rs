@@ -177,23 +177,9 @@ impl TrackedEntity {
         }
     }
 
-    /// Sends despawn packet to a player leaving visibility range.
+    /// Vanilla `ChunkMap.TrackedEntity.removePairing`.
     pub fn remove_pairing(&self, player: &Player) {
-        let entity_ids = [self.entity_id.into()];
-        match player.client.as_ref() {
-            ClientPlatform::Java(client) => {
-                let packet = CRemoveEntities::new(&entity_ids);
-                if let Ok(data) = client.serialize_packet(&packet) {
-                    client.try_enqueue_packet(data);
-                }
-            }
-            ClientPlatform::Bedrock(client) => {
-                let packet = CRemoveActor::new(VarLong(i64::from(self.entity_id)));
-                if let Ok(data) = client.serialize_packet(&packet) {
-                    client.try_enqueue_packet(data);
-                }
-            }
-        }
+        player.despawn_entity_ids(&[self.entity_id]);
     }
 
     /// Broadcasts removal of this entity to all current watchers.
@@ -451,10 +437,6 @@ impl EntityTracker {
         }
     }
 
-    pub fn update_entity_position(&self, entity: &dyn EntityBase, world: &World) {
-        self.update_entity_position_by_id(entity.get_entity().entity_id, world);
-    }
-
     pub fn update_entity_position_by_id(&self, entity_id: i32, world: &World) {
         if let Some(tracked) = self.entity_map.get(&entity_id) {
             let players = world.players.load();
@@ -462,8 +444,8 @@ impl EntityTracker {
         }
     }
 
-    /// Drops this player's pairings and sends despawn. Dimension leave: the client is still
-    /// connected, unlike disconnect (`remove_player` strips `seen_by` with no packet).
+    /// Drop this player's pairings and send despawn. Dimension leave: the client is still
+    /// connected. Disconnect uses `remove_player` (strips `seen_by`, no packet).
     pub fn drop_player_pairings(&self, player: &Player) {
         let uuid = player.gameprofile.id;
         for entry in &self.entity_map {

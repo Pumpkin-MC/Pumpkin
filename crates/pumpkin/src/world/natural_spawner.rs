@@ -825,6 +825,7 @@ pub fn is_valid_spawn_position_for_type(
     if !check_spawn_rules(entity_type, world, block_pos, is_thundering) {
         return false;
     }
+    // Vanilla `Mob.checkSpawnObstruction` / slime `getSpawnBox` (`spawn_dimensions_scale`).
     if !world.is_space_empty(entity_type.get_spawn_bounding_box(
         f64::from(block_pos.0.x) + 0.5,
         f64::from(block_pos.0.y),
