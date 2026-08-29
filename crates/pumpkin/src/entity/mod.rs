@@ -643,6 +643,10 @@ pub trait EntityBase: Send + Sync + std::any::Any {
 
     fn get_living_entity(&self) -> Option<&LivingEntity>;
 
+    fn get_vehicle_entity(&self) -> Option<&vehicle::vehicle::VehicleEntity> {
+        None
+    }
+
     fn cast_any(&self) -> &dyn std::any::Any;
 
     fn get_item_entity(&self) -> Option<&ItemEntity> {

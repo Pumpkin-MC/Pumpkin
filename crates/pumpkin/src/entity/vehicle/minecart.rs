@@ -134,6 +134,7 @@ impl EntityBase for MinecartEntity {
     #[allow(clippy::too_many_lines)]
     fn tick(&self, caller: &dyn EntityBase, _server: &Server) {
         self.vehicle.tick();
+        let from = self.vehicle.entity.pos.load();
         if let MinecartKind::Furnace(minecart) = &self.kind {
             minecart.tick(&self.vehicle.entity);
         }
@@ -424,16 +425,6 @@ impl EntityBase for MinecartEntity {
                 return;
             }
 
-            let new_pos = self.vehicle.entity.pos.load();
-
-            if let Ok(passengers) = self.vehicle.entity.passengers.try_lock() {
-                for passenger in passengers.iter() {
-                    passenger.get_entity().set_pos(new_pos);
-                }
-            }
-
-            self.vehicle.entity.send_pos_rot();
-
             #[allow(clippy::useless_let_if_seq)]
             let mut friction = 0.95; // Vanilla minecart air drag
 
@@ -483,6 +474,29 @@ impl EntityBase for MinecartEntity {
             }
         }
 
+        let attempted_to = self.vehicle.entity.pos.load();
+        let move_result = self.vehicle.move_vehicle(from, attempted_to);
+        let to = move_result.position;
+        self.vehicle.entity.set_pos(to);
+
+        if move_result.cancelled {
+            self.vehicle
+                .entity
+                .velocity
+                .store(Vector3::new(0.0, 0.0, 0.0));
+            self.vehicle.entity.send_velocity();
+        }
+
+        if attempted_to != from {
+            if let Ok(passengers) = self.vehicle.entity.passengers.try_lock() {
+                for passenger in passengers.iter() {
+                    passenger.get_entity().set_pos(to);
+                }
+            }
+
+            self.vehicle.entity.send_pos_rot();
+        }
+
         if let MinecartKind::Hopper(minecart) = &self.kind {
             minecart.tick(&self.vehicle.entity);
         }
@@ -494,6 +508,10 @@ impl EntityBase for MinecartEntity {
 
     fn get_living_entity(&self) -> Option<&LivingEntity> {
         None
+    }
+
+    fn get_vehicle_entity(&self) -> Option<&VehicleEntity> {
+        Some(&self.vehicle)
     }
 
     fn is_pushable(&self) -> bool {

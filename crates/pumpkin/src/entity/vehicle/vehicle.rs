@@ -8,6 +8,12 @@ use crate::entity::EntityBase;
 use crate::world::loot::{LootContextParameters, LootTableExt};
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_util::GameMode;
+use pumpkin_util::math::vector3::Vector3;
+
+pub struct VehicleMoveResult {
+    pub position: Vector3<f64>,
+    pub cancelled: bool,
+}
 
 pub struct VehicleEntity {
     pub entity: Entity,
@@ -58,11 +64,14 @@ impl VehicleEntity {
         }
     }
 
-    pub async fn move_vehicle(
-        &self,
-        from: pumpkin_util::math::vector3::Vector3<f64>,
-        to: pumpkin_util::math::vector3::Vector3<f64>,
-    ) {
+    pub fn move_vehicle(&self, from: Vector3<f64>, to: Vector3<f64>) -> VehicleMoveResult {
+        if from == to {
+            return VehicleMoveResult {
+                position: to,
+                cancelled: false,
+            };
+        }
+
         let mut move_event =
             crate::plugin::api::events::vehicle::vehicle_move::VehicleMoveEvent::new(
                 self.entity.entity_id,
@@ -70,7 +79,21 @@ impl VehicleEntity {
                 to,
             );
         if let Some(server) = self.entity.world.load().server.upgrade() {
-            server.plugin_manager.fire(&server, &mut move_event).await;
+            server
+                .plugin_manager
+                .fire_blocking(&server, &mut move_event);
+        }
+
+        if move_event.cancelled {
+            VehicleMoveResult {
+                position: from,
+                cancelled: true,
+            }
+        } else {
+            VehicleMoveResult {
+                position: move_event.to,
+                cancelled: false,
+            }
         }
     }
 
