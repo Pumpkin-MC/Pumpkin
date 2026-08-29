@@ -2453,7 +2453,13 @@ impl Entity {
         if caller.get_player().is_some() {
             return;
         }
+        self.move_external_clipped(caller, motion);
+    }
 
+    /// Vanilla `Entity.move(MoverType.PISTON)` body after `limitPistonMovement`.
+    /// Horizontal (`movedVertically` false): keep `onGround` on dedicated
+    /// (`ServerPlayer.isClientAuthoritative`, so `isLocalInstanceAuthoritative` is false).
+    fn move_external_clipped(&self, caller: &Arc<dyn EntityBase>, motion: Vector3<f64>) {
         if self.no_physics.load(Ordering::Relaxed) {
             self.move_no_physics(motion);
             return;
@@ -2564,6 +2570,10 @@ impl Entity {
     /// colliding with the entity they are carrying. Without the latter, an entity shoved out
     /// of a retracting piston head immediately collides with that head's placeholder and stays
     /// stuck inside it.
+    ///
+    /// Players are moved here (vanilla `moveStuckEntities`). Dedicated does not
+    /// send `CPlayerPosition` to the carried player: the client interpolates both
+    /// 0.5 steps on its animation BE.
     pub fn move_entity_piston(
         &self,
         caller: &Arc<dyn EntityBase>,
@@ -2577,7 +2587,7 @@ impl Entity {
         }
 
         self.piston_noclip.store(Some(piston_direction));
-        self.move_entity_external(caller, motion);
+        self.move_external_clipped(caller, motion);
         self.piston_noclip.store(None);
     }
 

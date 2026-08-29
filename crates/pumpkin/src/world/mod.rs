@@ -2743,7 +2743,7 @@ impl World {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .clone();
-        level_time.send_time(self);
+        level_time.send_game_time_sync(self);
     }
 
     pub fn get_time_of_day(&self) -> i64 {

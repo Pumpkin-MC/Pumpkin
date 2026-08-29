@@ -1121,8 +1121,12 @@ impl Server {
         // two client ticks, so `Entity.limitPistonMovement` keeps `pistonDeltas`
         // and clips a second honey/piston step at ±0.51.
         if self.tick_count.load(Ordering::Relaxed).wrapping_add(1) % 20 == 0 {
-            for world in worlds.iter() {
-                world.force_game_time_synchronization();
+            // Vanilla `MinecraftServer.forceGameTimeSynchronization`: one packet,
+            // overworld `getGameTime()` only.
+            if let Some(overworld) = worlds.iter().find(|world| {
+                world.dimension.minecraft_name == Dimension::OVERWORLD.minecraft_name
+            }) {
+                overworld.force_game_time_synchronization();
             }
         }
 

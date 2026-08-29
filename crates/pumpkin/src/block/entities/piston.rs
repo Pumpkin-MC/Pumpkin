@@ -12,6 +12,7 @@ use pumpkin_util::math::{boundingbox::BoundingBox, position::BlockPos, vector3::
 use pumpkin_world::block::{block_state_from_nbt, block_state_to_nbt};
 
 use crate::block::blocks::piston::piston::PistonBlock;
+use crate::entity::EntityBase;
 use crate::world::{BlockFlags, World};
 
 use super::BlockEntity;
@@ -281,34 +282,43 @@ impl PistonBlockEntity {
 
         let game_time = world.get_world_age();
 
-        for entity in world.get_entities_at_box(&query) {
-            let e = entity.get_entity();
-            // Vanilla `matchesStickyCritera`: `PushReaction.NORMAL` (IGNORE is not).
-            if e.ignores_piston_push() {
-                continue;
+        // Vanilla `level.getEntities` includes players. `get_entities_at_box` does not.
+        for player in world.get_players_at_box(&query) {
+            if self.matches_sticky(player.as_ref(), &query) {
+                let base: Arc<dyn EntityBase> = player.clone();
+                Self::move_entity(&base, motion_dir, delta_progress, motion_dir, game_time);
             }
+        }
+
+        for entity in world.get_entities_at_box(&query) {
             if entity.get_player().is_some() {
                 continue;
             }
-            if !e.on_ground.load(Ordering::Relaxed) {
+            if !self.matches_sticky(entity.as_ref(), &query) {
                 continue;
             }
-            // `isSupportedBy(pistonPos)`: the BE cell (dest). After `deleteAfterMove` the
-            // visual cell is air; supporting can still be that origin until the next collide.
-            let pos = e.pos.load();
-            let supporting = e.supporting_block_pos.load();
-            let origin = self.visual_origin_cell();
-            let supported_here = supporting == Some(self.position) || supporting == Some(origin);
-            let within_footprint = pos.x >= query.min.x
-                && pos.x <= query.max.x
-                && pos.z >= query.min.z
-                && pos.z <= query.max.z;
-            if !supported_here && !within_footprint {
-                continue;
-            }
-
             Self::move_entity(&entity, motion_dir, delta_progress, motion_dir, game_time);
         }
+    }
+
+    /// Vanilla `PistonMovingBlockEntity.matchesStickyCritera`.
+    fn matches_sticky(&self, entity: &dyn crate::entity::EntityBase, query: &BoundingBox) -> bool {
+        let e = entity.get_entity();
+        if e.ignores_piston_push() {
+            return false;
+        }
+        if !e.on_ground.load(Ordering::Relaxed) {
+            return false;
+        }
+        let pos = e.pos.load();
+        let supporting = e.supporting_block_pos.load();
+        let origin = self.visual_origin_cell();
+        let supported_here = supporting == Some(self.position) || supporting == Some(origin);
+        let within_footprint = pos.x >= query.min.x
+            && pos.x <= query.max.x
+            && pos.z >= query.min.z
+            && pos.z <= query.max.z;
+        supported_here || within_footprint
     }
 
     /// Vanilla `getIntersectionSize`: how much `entity` overlaps `swept` along
