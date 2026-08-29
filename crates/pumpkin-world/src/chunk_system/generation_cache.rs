@@ -1,6 +1,7 @@
 use super::chunk_state::{Chunk, StagedChunkEnum};
 use crate::ProtoChunk;
 use crate::chunk::ChunkHeightmapType;
+use crate::generation::biome_coords;
 use crate::generation::generator;
 use crate::generation::height_limit::HeightLimitView;
 use crate::generation::proto_chunk::GenerationCache;
@@ -21,6 +22,121 @@ pub struct Cache {
     pub z: i32,
     pub size: i32,
     pub chunks: Vec<Chunk>,
+    surface_biomes: Option<Box<SurfaceBiomeNeighborhood>>,
+}
+
+struct SurfaceBiomePalette {
+    chunk_x: i32,
+    chunk_z: i32,
+    bottom_quart_y: i32,
+    height_quarts: usize,
+    biomes: Box<[u8]>,
+}
+
+impl SurfaceBiomePalette {
+    fn from_chunk(chunk: &Chunk) -> Option<Self> {
+        match chunk {
+            Chunk::Proto(chunk) => Some(Self {
+                chunk_x: chunk.x,
+                chunk_z: chunk.z,
+                bottom_quart_y: biome_coords::from_block(chunk.bottom_y() as i32),
+                height_quarts: chunk.height() as usize >> 2,
+                biomes: chunk.flat_biome_map.clone(),
+            }),
+            Chunk::Level(chunk) => {
+                let bottom_y = chunk.section.min_y;
+                let height_quarts = chunk.section.count * 4;
+                let bottom_quart_y = biome_coords::from_block(bottom_y);
+                let mut biomes = vec![0; 4 * height_quarts * 4];
+
+                for local_x in 0..4 {
+                    for local_y in 0..height_quarts {
+                        for local_z in 0..4 {
+                            let index = height_quarts * 4 * local_x + 4 * local_y + local_z;
+                            biomes[index] = chunk.section.get_rough_biome_absolute_y(
+                                local_x << 2,
+                                biome_coords::to_block(bottom_quart_y + local_y as i32),
+                                local_z << 2,
+                            )?;
+                        }
+                    }
+                }
+
+                Some(Self {
+                    chunk_x: chunk.x,
+                    chunk_z: chunk.z,
+                    bottom_quart_y,
+                    height_quarts,
+                    biomes: biomes.into_boxed_slice(),
+                })
+            }
+        }
+    }
+
+    fn get_biome_id(&self, quart_x: i32, quart_y: i32, quart_z: i32) -> Option<u8> {
+        if quart_x >> 2 != self.chunk_x || quart_z >> 2 != self.chunk_z {
+            return None;
+        }
+        let local_y = quart_y - self.bottom_quart_y;
+        if !(0..self.height_quarts as i32).contains(&local_y) {
+            return None;
+        }
+        let local_x = (quart_x & 3) as usize;
+        let local_z = (quart_z & 3) as usize;
+        let index = self.height_quarts * 4 * local_x + 4 * local_y as usize + local_z;
+        self.biomes.get(index).copied()
+    }
+}
+
+pub(crate) struct SurfaceBiomeNeighborhood {
+    center_x: i32,
+    center_z: i32,
+    palettes: [Option<SurfaceBiomePalette>; 9],
+}
+
+impl SurfaceBiomeNeighborhood {
+    #[must_use]
+    pub(crate) fn new(center_x: i32, center_z: i32) -> Self {
+        Self {
+            center_x,
+            center_z,
+            palettes: std::array::from_fn(|_| None),
+        }
+    }
+
+    pub(crate) fn push_chunk(&mut self, chunk: &Chunk) -> bool {
+        let Some(palette) = SurfaceBiomePalette::from_chunk(chunk) else {
+            return false;
+        };
+        let dx = palette.chunk_x - self.center_x;
+        let dz = palette.chunk_z - self.center_z;
+        if !(-1..=1).contains(&dx) || !(-1..=1).contains(&dz) {
+            return false;
+        }
+        let slot = &mut self.palettes[((dx + 1) * 3 + dz + 1) as usize];
+        if slot.is_some() {
+            return false;
+        }
+        *slot = Some(palette);
+        true
+    }
+
+    #[must_use]
+    pub(crate) fn is_complete(&self) -> bool {
+        self.palettes.iter().all(Option::is_some)
+    }
+
+    #[must_use]
+    pub(crate) fn get_biome_id(&self, quart_x: i32, quart_y: i32, quart_z: i32) -> Option<u8> {
+        let dx = (quart_x >> 2) - self.center_x;
+        let dz = (quart_z >> 2) - self.center_z;
+        if !(-1..=1).contains(&dx) || !(-1..=1).contains(&dz) {
+            return None;
+        }
+        self.palettes[((dx + 1) * 3 + dz + 1) as usize]
+            .as_ref()
+            .and_then(|palette| palette.get_biome_id(quart_x, quart_y, quart_z))
+    }
 }
 
 impl HeightLimitView for Cache {
@@ -300,26 +416,31 @@ impl GenerationCache for Cache {
     }
 
     fn get_biome_for_terrain_gen(&self, x: i32, y: i32, z: i32) -> &'static Biome {
-        let dx = (x >> 4) - self.x;
-        let dy = (z >> 4) - self.z;
-        let (dx, dy) = if dx < 0 || dy < 0 || dx >= self.size || dy >= self.size {
+        let biome_pos = self.get_center_chunk().get_terrain_gen_biome_pos(x, y, z);
+        let dx = (biome_pos.x >> 2) - self.x;
+        let dz = (biome_pos.z >> 2) - self.z;
+        let (dx, dz) = if dx < 0 || dz < 0 || dx >= self.size || dz >= self.size {
             // Position is outside the cache — fall back to the centre chunk's biome
             let mid = self.size / 2;
             (mid, mid)
         } else {
-            (dx, dy)
+            (dx, dz)
         };
-        match &self.chunks[(dx * self.size + dy) as usize] {
+        match &self.chunks[(dx * self.size + dz) as usize] {
             Chunk::Level(data) => {
                 // Could this happen?
                 Biome::from_id(
                     data.section
-                        .get_rough_biome_absolute_y((x & 15) as usize, y, (z & 15) as usize)
+                        .get_rough_biome_absolute_y(
+                            (biome_coords::to_block(biome_pos.x) & 15) as usize,
+                            biome_coords::to_block(biome_pos.y),
+                            (biome_coords::to_block(biome_pos.z) & 15) as usize,
+                        )
                         .unwrap_or(0),
                 )
                 .unwrap_or(&Biome::PLAINS)
             }
-            Chunk::Proto(data) => data.get_terrain_gen_biome(x, y, z),
+            Chunk::Proto(data) => data.get_biome(biome_pos.x, biome_pos.y, biome_pos.z),
         }
     }
 
@@ -420,7 +541,33 @@ impl Cache {
             z,
             size,
             chunks: Vec::with_capacity((size * size) as usize),
+            surface_biomes: None,
         }
+    }
+
+    pub(crate) fn set_surface_biomes(&mut self, biomes: SurfaceBiomeNeighborhood) {
+        debug_assert!(biomes.is_complete());
+        self.surface_biomes = Some(Box::new(biomes));
+    }
+
+    fn prepare_surface_biomes(&mut self) {
+        if self.surface_biomes.is_some() || self.size < 3 {
+            return;
+        }
+        let center_x = self.x + self.size / 2;
+        let center_z = self.z + self.size / 2;
+        let mut neighborhood = SurfaceBiomeNeighborhood::new(center_x, center_z);
+        for chunk_x in center_x - 1..=center_x + 1 {
+            for chunk_z in center_z - 1..=center_z + 1 {
+                let dx = chunk_x - self.x;
+                let dz = chunk_z - self.z;
+                let index = (dx * self.size + dz) as usize;
+                if !neighborhood.push_chunk(&self.chunks[index]) {
+                    return;
+                }
+            }
+        }
+        self.surface_biomes = Some(Box::new(neighborhood));
     }
     #[allow(clippy::too_many_lines)]
     pub fn advance(
@@ -430,6 +577,9 @@ impl Cache {
         block_registry: &dyn WorldPortalExt,
         lighting_config: &LightingEngineConfig,
     ) {
+        if stage == StagedChunkEnum::Surface {
+            self.prepare_surface_biomes();
+        }
         let mid = ((self.size * self.size) >> 1) as usize;
         match &self.chunks[mid] {
             Chunk::Level(_) => return,
@@ -496,9 +646,13 @@ impl Cache {
             },
             StagedChunkEnum::Surface => match generator {
                 generator::WorldGenerator::Noise(noise_gen) => {
+                    let surface_biomes = self
+                        .surface_biomes
+                        .take()
+                        .expect("surface stage requires a complete biome neighborhood");
                     self.chunks[mid]
                         .get_proto_chunk_mut()
-                        .step_to_surface(noise_gen);
+                        .step_to_surface(noise_gen, &surface_biomes);
                 }
                 generator::WorldGenerator::Flat(flat_gen) => {
                     flat_gen.step_to_surface(self.chunks[mid].get_proto_chunk_mut());
@@ -558,5 +712,26 @@ impl Cache {
             }
             StagedChunkEnum::None => {}
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Chunk, SurfaceBiomeNeighborhood};
+    use crate::chunk::ChunkData;
+    use pumpkin_data::biome::Biome;
+
+    #[test]
+    fn surface_biome_snapshot_copies_level_chunk_palettes() {
+        let chunk = ChunkData::empty_sync(12, -4);
+        chunk.section.set_relative_biome(3, 0, 2, Biome::DESERT.id);
+
+        let mut neighborhood = SurfaceBiomeNeighborhood::new(12, -4);
+        assert!(neighborhood.push_chunk(&Chunk::Level(chunk)));
+        assert_eq!(
+            neighborhood.get_biome_id(12 * 4 + 3, -16, -4 * 4 + 2),
+            Some(Biome::DESERT.id)
+        );
+        assert_eq!(neighborhood.get_biome_id(13 * 4, -16, -4 * 4), None);
     }
 }
