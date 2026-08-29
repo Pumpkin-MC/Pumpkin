@@ -35,6 +35,7 @@ use crate::entity::player::statistics::{CustomStatistic, StatisticCategory};
 use crate::server::Server;
 use crate::world::loot::{LootContextParameters, LootTableExt};
 use crossbeam::atomic::AtomicCell;
+use pumpkin_data::AttributeModifierSlot;
 use pumpkin_data::attributes::Attributes;
 use pumpkin_data::damage::DeathMessageType;
 use pumpkin_data::data_component_impl::Operation;
@@ -120,6 +121,9 @@ pub struct LivingEntity {
 
     /// The attributes of the entity
     pub attributes: RwLock<FxHashMap<u8, AttributeInstance>>,
+    /// Modifier ids applied from the current item in each equipment slot.
+    /// Used to remove them on unequip without the previous stack.
+    equipment_attribute_modifier_ids: std::sync::Mutex<FxHashMap<EquipmentSlot, Vec<(u8, String)>>>,
 }
 
 struct EffectParticle {
@@ -222,6 +226,7 @@ impl LivingEntity {
             last_attack_time: AtomicI32::new(0),
             movement_input: AtomicCell::new(Vector3::default()),
             water_movement_speed_multiplier,
+            equipment_attribute_modifier_ids: std::sync::Mutex::new(FxHashMap::default()),
         }
     }
 
@@ -229,6 +234,7 @@ impl LivingEntity {
         if equipment.is_empty() {
             return;
         }
+        self.apply_and_send_equipment_attribute_modifiers(equipment);
         let equipment_java: Vec<(i8, ItemStackSerializer)> = equipment
             .iter()
             .map(|(slot, stack)| {
@@ -272,6 +278,106 @@ impl LivingEntity {
                 .world
                 .load()
                 .send_to_tracking_players(&self.entity, &je_packet);
+        }
+    }
+
+    /// Applies item `attribute_modifiers` for the given slots and notifies clients.
+    ///
+    /// The local HUD armor bar is driven by `minecraft:armor` / `minecraft:armor_toughness`
+    /// on `UPDATE_ATTRIBUTES`, not by `SET_EQUIPMENT`.
+    pub fn apply_and_send_equipment_attribute_modifiers(
+        &self,
+        equipment: &[(EquipmentSlot, ItemStack)],
+    ) {
+        let mut touched = Vec::new();
+        for (slot, stack) in equipment {
+            self.apply_equipment_slot_attribute_modifiers(slot, stack, &mut touched);
+        }
+        if !touched.is_empty() {
+            crate::entity::attributes::send_attribute_updates_for_living(self, touched);
+        }
+    }
+
+    /// Re-applies modifiers from every currently equipped stack without notifying clients.
+    pub fn apply_current_equipment_attribute_modifiers(&self) {
+        let equipment = self.snapshot_equipped_stacks();
+        let mut touched = Vec::new();
+        for (slot, stack) in &equipment {
+            self.apply_equipment_slot_attribute_modifiers(slot, stack, &mut touched);
+        }
+    }
+
+    /// Re-applies modifiers from every currently equipped stack and sends updates.
+    pub fn send_current_equipment_attribute_modifiers(&self) {
+        self.apply_and_send_equipment_attribute_modifiers(&self.snapshot_equipped_stacks());
+    }
+
+    fn snapshot_equipped_stacks(&self) -> Vec<(EquipmentSlot, ItemStack)> {
+        let guard = self
+            .entity_equipment
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        guard
+            .equipment
+            .iter()
+            .map(|(slot, stack)| (slot.clone(), stack.clone()))
+            .collect()
+    }
+
+    fn apply_equipment_slot_attribute_modifiers(
+        &self,
+        slot: &EquipmentSlot,
+        stack: &ItemStack,
+        touched: &mut Vec<Attributes>,
+    ) {
+        let previous = {
+            let mut map = self
+                .equipment_attribute_modifier_ids
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            map.remove(slot).unwrap_or_default()
+        };
+        for (attr_id, modifier_id) in previous {
+            if let Some(attr) = attributes_by_id(attr_id) {
+                self.update_attribute(attr, |inst| inst.remove_modifier(&modifier_id));
+                push_unique_attribute(touched, attr);
+            }
+        }
+
+        if stack.is_empty() {
+            return;
+        }
+        let Some(modifiers) = stack.get_data_component::<AttributeModifiersImpl>() else {
+            return;
+        };
+
+        let mut applied = Vec::new();
+        for item_mod in modifiers.attribute_modifiers.iter() {
+            if !attribute_modifier_slot_matches(&item_mod.slot, slot) {
+                continue;
+            }
+            let operation = match item_mod.operation {
+                Operation::AddValue => ModifierOperation::Add,
+                Operation::AddMultipliedBase => ModifierOperation::MultiplyBase,
+                Operation::AddMultipliedTotal => ModifierOperation::MultiplyTotal,
+            };
+            self.update_attribute(item_mod.r#type, |inst| {
+                inst.add_or_replace_modifier(Modifier {
+                    id: item_mod.id.to_string(),
+                    amount: item_mod.amount,
+                    operation,
+                });
+            });
+            applied.push((item_mod.r#type.id, item_mod.id.to_string()));
+            push_unique_attribute(touched, item_mod.r#type);
+        }
+
+        if !applied.is_empty() {
+            let mut map = self
+                .equipment_attribute_modifier_ids
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            map.insert(slot.clone(), applied);
         }
     }
 
@@ -3071,6 +3177,46 @@ fn random_teleport_coordinate(center: f64, diameter: f32, random: f64) -> f64 {
     center + (random - 0.5) * f64::from(diameter)
 }
 
+fn attributes_by_id(id: u8) -> Option<&'static Attributes> {
+    Attributes::ALL.iter().find(|attr| attr.id == id)
+}
+
+fn push_unique_attribute(touched: &mut Vec<Attributes>, attr: &Attributes) {
+    if !touched.iter().any(|existing| existing.id == attr.id) {
+        touched.push(attr.clone());
+    }
+}
+
+fn attribute_modifier_slot_matches(
+    modifier_slot: &AttributeModifierSlot,
+    equipment_slot: &EquipmentSlot,
+) -> bool {
+    match modifier_slot {
+        AttributeModifierSlot::Any => true,
+        AttributeModifierSlot::MainHand => matches!(equipment_slot, EquipmentSlot::MainHand(_)),
+        AttributeModifierSlot::OffHand => matches!(equipment_slot, EquipmentSlot::OffHand(_)),
+        AttributeModifierSlot::Hand => {
+            matches!(
+                equipment_slot,
+                EquipmentSlot::MainHand(_) | EquipmentSlot::OffHand(_)
+            )
+        }
+        AttributeModifierSlot::Feet => matches!(equipment_slot, EquipmentSlot::Feet(_)),
+        AttributeModifierSlot::Legs => matches!(equipment_slot, EquipmentSlot::Legs(_)),
+        AttributeModifierSlot::Chest => matches!(equipment_slot, EquipmentSlot::Chest(_)),
+        AttributeModifierSlot::Head => matches!(equipment_slot, EquipmentSlot::Head(_)),
+        AttributeModifierSlot::Armor => matches!(
+            equipment_slot,
+            EquipmentSlot::Feet(_)
+                | EquipmentSlot::Legs(_)
+                | EquipmentSlot::Chest(_)
+                | EquipmentSlot::Head(_)
+        ),
+        AttributeModifierSlot::Body => matches!(equipment_slot, EquipmentSlot::Body(_)),
+        AttributeModifierSlot::Saddle => matches!(equipment_slot, EquipmentSlot::Saddle(_)),
+    }
+}
+
 /// Mirrors vanilla's strict `random < probability` consume-effect gate.
 const fn consume_effect_probability_applies(probability: f32, random: f32) -> bool {
     random < probability
@@ -3288,5 +3434,29 @@ mod tests {
             .unwrap();
 
         assert_eq!(bytes, [10, 17, 1, 28, 0xff, 0xcd, 0x5c, 0xab]);
+    }
+
+    #[test]
+    fn armor_chest_modifiers_match_chest_slot_only() {
+        assert!(attribute_modifier_slot_matches(
+            &AttributeModifierSlot::Chest,
+            &EquipmentSlot::CHEST
+        ));
+        assert!(!attribute_modifier_slot_matches(
+            &AttributeModifierSlot::Chest,
+            &EquipmentSlot::HEAD
+        ));
+        assert!(attribute_modifier_slot_matches(
+            &AttributeModifierSlot::Armor,
+            &EquipmentSlot::FEET
+        ));
+        assert!(!attribute_modifier_slot_matches(
+            &AttributeModifierSlot::Armor,
+            &EquipmentSlot::MAIN_HAND
+        ));
+        assert!(attribute_modifier_slot_matches(
+            &AttributeModifierSlot::Any,
+            &EquipmentSlot::LEGS
+        ));
     }
 }

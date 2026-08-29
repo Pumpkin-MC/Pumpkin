@@ -3062,6 +3062,9 @@ impl World {
         );
 
         self.send_player_equipment(&player);
+        player
+            .living_entity
+            .send_current_equipment_attribute_modifiers();
 
         // Broadcast metadata to Java players so they can correctly interact with the new player
         let skin_parts = player.config.load().skin_parts;
@@ -3848,6 +3851,9 @@ impl World {
         player.send_active_effects();
         player.breath_manager.send_air_supply(player);
         self.send_player_equipment(player);
+        player
+            .living_entity
+            .send_current_equipment_attribute_modifiers();
 
         if let crate::net::ClientPlatform::Java(java_client) = player.client.as_ref()
             && server.advanced_config.recipe.send_recipes

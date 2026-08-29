@@ -6286,6 +6286,8 @@ impl EntityBase for Player {
     fn read_custom_nbt(&self, nbt: &NbtCompound) {
         self.inventory.read_nbt_non_mut(nbt);
         self.ender_chest_inventory.read_nbt_non_mut(nbt);
+        self.living_entity
+            .apply_current_equipment_attribute_modifiers();
 
         let xp_p = nbt.get_float("XpP").unwrap_or(0.0);
         let xp_level = nbt.get_int("XpLevel");

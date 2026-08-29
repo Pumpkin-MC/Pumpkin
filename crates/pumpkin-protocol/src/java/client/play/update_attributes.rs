@@ -404,3 +404,88 @@ impl<'a> ServerPacket<'a> for CUpdateAttributes {
         })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use pumpkin_data::attributes::Attributes;
+    use pumpkin_data::packet::clientbound::play::UPDATE_ATTRIBUTES;
+    use pumpkin_util::version::JavaMinecraftVersion;
+
+    use crate::{ClientPacket, VarInt, packet::MultiVersionJavaPacket, ser::NetworkReadExt};
+
+    use super::{AttributeModifier, CUpdateAttributes, Property};
+
+    fn encoded_armor_attributes(version: JavaMinecraftVersion) -> Vec<u8> {
+        let packet = CUpdateAttributes::new(
+            VarInt(1),
+            vec![Property::new(
+                VarInt(i32::from(Attributes::ARMOR.id)),
+                0.0,
+                vec![AttributeModifier::new(
+                    "minecraft:armor.chestplate".to_string(),
+                    8.0,
+                    0,
+                )],
+            )],
+        );
+        let mut buf = Vec::new();
+        packet.write_packet_data(&mut buf, &version).unwrap();
+        buf
+    }
+
+    fn assert_armor_attribute_payload(bytes: &[u8], version: JavaMinecraftVersion) {
+        let mut cursor = bytes;
+        let entity_id = cursor.get_var_int().unwrap();
+        assert_eq!(entity_id, VarInt(1));
+
+        let count = cursor.get_var_int().unwrap();
+        assert_eq!(count, VarInt(1));
+
+        let attr_id = cursor.get_var_int().unwrap();
+        let expected_id = pumpkin_data::attribute_id_remap::remap_attribute_id_for_version(
+            u32::from(Attributes::ARMOR.id),
+            version,
+        );
+        assert_eq!(attr_id.0, expected_id as i32);
+
+        let base = cursor.get_f64_be().unwrap();
+        assert_eq!(base, 0.0);
+
+        let modifier_count = cursor.get_var_int().unwrap();
+        assert_eq!(modifier_count, VarInt(1));
+
+        if version >= JavaMinecraftVersion::V_1_21 {
+            let id = cursor.get_str().unwrap();
+            assert_eq!(&*id, "minecraft:armor.chestplate");
+        } else {
+            let _uuid = cursor.get_uuid().unwrap();
+        }
+        let amount = cursor.get_f64_be().unwrap();
+        assert_eq!(amount, 8.0);
+        let operation = cursor.get_u8().unwrap();
+        assert_eq!(operation, 0);
+        assert!(cursor.is_empty());
+    }
+
+    #[test]
+    fn update_attributes_packet_id_for_1_21_and_26() {
+        assert_eq!(
+            CUpdateAttributes::to_id(JavaMinecraftVersion::V_1_21),
+            UPDATE_ATTRIBUTES.to_id(JavaMinecraftVersion::V_1_21)
+        );
+        assert_eq!(CUpdateAttributes::to_id(JavaMinecraftVersion::V_1_21), 117);
+        assert_eq!(CUpdateAttributes::to_id(JavaMinecraftVersion::V_26_2), 131);
+    }
+
+    #[test]
+    fn armor_attribute_encodes_for_1_21() {
+        let version = JavaMinecraftVersion::V_1_21;
+        assert_armor_attribute_payload(&encoded_armor_attributes(version), version);
+    }
+
+    #[test]
+    fn armor_attribute_encodes_for_26_2() {
+        let version = JavaMinecraftVersion::V_26_2;
+        assert_armor_attribute_payload(&encoded_armor_attributes(version), version);
+    }
+}
