@@ -5,7 +5,7 @@ use pumpkin_data::sound::Sound;
 use pumpkin_data::{entity::EntityType, item::Item};
 
 use crate::entity::{
-    Entity, EntityBaseFuture, NbtFuture,
+    Entity,
     ageable::AgeableMob,
     ai::goal::{
         breed::BreedGoal, escape_danger::EscapeDangerGoal, follow_parent::FollowParentGoal,
@@ -102,18 +102,14 @@ impl Mob for PigEntity {
         Some(self)
     }
 
-    fn mob_write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
-        Box::pin(async move {
-            nbt.put_bool("Saddle", self.is_saddled());
-        })
+    fn mob_write_nbt(&self, nbt: &mut NbtCompound) {
+        nbt.put_bool("Saddle", self.is_saddled());
     }
 
-    fn mob_read_nbt<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
-        Box::pin(async move {
-            if let Some(saddle) = nbt.get_byte("Saddle") {
-                self.set_saddled(saddle == 1);
-            }
-        })
+    fn mob_read_nbt(&self, nbt: &NbtCompound) {
+        if let Some(saddle) = nbt.get_byte("Saddle") {
+            self.set_saddled(saddle == 1);
+        }
     }
 
     fn get_mob_entity(&self) -> &MobEntity {
@@ -138,27 +134,19 @@ impl Mob for PigEntity {
             .store(saddled, std::sync::atomic::Ordering::Relaxed);
     }
 
-    fn mob_interact<'a>(
-        &'a self,
-        player: &'a Arc<Player>,
-        item_stack: &'a mut ItemStack,
-    ) -> EntityBaseFuture<'a, bool> {
+    fn mob_interact(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {
         use super::animal::Animal;
-        Box::pin(async move {
-            if self.is_saddled() && !self.is_food(item_stack) {
-                let world = player.world();
-                if let Some(vehicle) = world.get_entity_by_id(self.get_entity().entity_id)
-                    && let Some(passenger) = world.get_player_by_id(player.entity_id())
-                {
-                    self.get_entity()
-                        .add_passenger(vehicle, passenger as Arc<dyn EntityBase>)
-                        .await;
-                    return true;
-                }
+        if self.is_saddled() && !self.is_food(item_stack) {
+            let world = player.world();
+            if let Some(vehicle) = world.get_entity_by_id(self.get_entity().entity_id)
+                && let Some(passenger) = world.get_player_by_id(player.entity_id())
+            {
+                self.get_entity()
+                    .add_passenger(vehicle, passenger as Arc<dyn EntityBase>);
+                return true;
             }
-            self.animal_interact(player, item_stack, Sound::EntityPigAmbient)
-                .await
-        })
+        }
+        self.animal_interact(player, item_stack, Sound::EntityPigAmbient)
     }
 }
 

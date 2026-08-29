@@ -14,7 +14,6 @@ use pumpkin_util::text::TextComponent;
 
 use crate::entity::EntityBase;
 use crate::entity::mob::raider::create_ominous_banner;
-use crate::entity::player::Player;
 use crate::entity::r#type::from_type;
 use crate::world::World;
 use crate::world::bossbar::{Bossbar, BossbarColor, BossbarDivisions};
@@ -244,23 +243,23 @@ impl Raid {
         set
     }
 
-    pub async fn stop(&mut self, world: &World) {
+    pub fn stop(&mut self, world: &World) {
         self.active = false;
         self.status = RaidStatus::Stopped;
-        self.remove_all_players(world).await;
+        self.remove_all_players(world);
     }
 
-    pub async fn remove_all_players(&mut self, world: &World) {
+    pub fn remove_all_players(&mut self, world: &World) {
         let players = world.players.load();
         for player in players.iter() {
             if self.players_in_raid.contains(&player.gameprofile.id) {
-                player.remove_bossbar(self.bossbar.uuid).await;
+                player.remove_bossbar(self.bossbar.uuid);
             }
         }
         self.players_in_raid.clear();
     }
 
-    pub fn absorb_raid_omen(&mut self, _player: &Player) -> bool {
+    pub fn absorb_raid_omen(&mut self) -> bool {
         self.raid_omen_level = (self.raid_omen_level + 1).clamp(1, Self::MAX_RAID_OMEN_LEVEL);
         true
     }
@@ -312,7 +311,7 @@ impl Raid {
         }
     }
 
-    pub async fn spawn_group(&mut self, world: &Arc<World>, pos: BlockPos) {
+    pub fn spawn_group(&mut self, world: &Arc<World>, pos: BlockPos) {
         let mut leader_set = false;
         let group_number = self.groups_spawned + 1;
         self.total_health = 0.0;
@@ -346,9 +345,9 @@ impl Raid {
                         raider.set_patrol_leader(true);
                         let banner = create_ominous_banner();
                         let living = &mob.get_mob_entity().living_entity;
-                        let mut equipment = living.entity_equipment.lock().await;
-                        equipment.put(&EquipmentSlot::HEAD, banner.clone());
-                        drop(equipment);
+                        if let Ok(mut equipment) = living.entity_equipment.try_lock() {
+                            equipment.put(&EquipmentSlot::HEAD, banner.clone());
+                        }
                         living.send_equipment_changes(&[(EquipmentSlot::HEAD, banner)]);
                         self.group_to_leader_map.insert(group_number, uuid);
                         leader_set = true;
@@ -359,7 +358,7 @@ impl Raid {
                 }
 
                 self.join_raid(group_number, uuid, &entity_base);
-                world.spawn_entity(entity_base.clone()).await;
+                world.spawn_entity_non_save(entity_base.clone());
 
                 if *raider_type.entity_type() == EntityType::RAVAGER {
                     let mut riding_type: Option<&'static EntityType> = None;
@@ -385,7 +384,7 @@ impl Raid {
                             raider.apply_raid_buffs(group_number, false);
                         }
                         self.join_raid(group_number, rider_uuid, &rider_base);
-                        world.spawn_entity(rider_base).await;
+                        world.spawn_entity_non_save(rider_base);
                     }
                 }
             }
@@ -393,7 +392,7 @@ impl Raid {
 
         self.wave_spawn_pos = None;
         self.groups_spawned += 1;
-        self.update_bossbar(world).await;
+        self.update_bossbar(world);
     }
 
     pub fn join_raid(&mut self, wave: i32, uuid: Uuid, entity_base: &Arc<dyn EntityBase>) {
@@ -405,7 +404,7 @@ impl Raid {
     }
 
     #[must_use]
-    pub fn find_random_spawn_pos(&self, _world: &World, max_tries: usize) -> Option<BlockPos> {
+    pub fn find_random_spawn_pos(&self, max_tries: usize) -> Option<BlockPos> {
         let seconds_remaining = self.raid_cooldown_ticks / 20;
         let how_far = 0.22 * (seconds_remaining as f32) - 0.24;
         let start_angle = rand::random::<f32>() * std::f32::consts::PI * 2.0;
@@ -428,74 +427,60 @@ impl Raid {
         None
     }
 
-    pub fn play_sound(&self, world: &World, sound_origin: BlockPos) {
-        let raid_loc = sound_origin.to_f64();
+    pub fn play_sound(&self, world: &World, pos: BlockPos) {
+        let sound_pos = pos.to_centered_f64();
+        world.play_sound_fine(
+            Sound::EventRaidHorn,
+            pumpkin_data::sound::SoundCategory::Neutral,
+            &sound_pos,
+            64.0,
+            1.0,
+        );
+    }
+
+    pub fn update_players(&mut self, world: &World) {
+        let center_f64 = self.center.to_f64();
         let players = world.players.load();
+        let nearby_players: HashSet<Uuid> = players
+            .iter()
+            .filter(|player| {
+                let pos = player.get_entity().pos.load();
+                pos.squared_distance_to_vec(&center_f64) <= Self::VALID_RAID_RADIUS_SQR
+            })
+            .map(|player| player.gameprofile.id)
+            .collect();
+
         for player in players.iter() {
-            let player_loc = player.get_entity().pos.load();
-            let dx = raid_loc.x - player_loc.x;
-            let dz = raid_loc.z - player_loc.z;
-            let dist = dx.hypot(dz);
-            let sound_pos = if dist > 0.001 {
-                Vector3::new(
-                    player_loc.x + (13.0 / dist) * dx,
-                    player_loc.y,
-                    player_loc.z + (13.0 / dist) * dz,
-                )
-            } else {
-                player_loc
-            };
-            if dist <= 64.0 || self.players_in_raid.contains(&player.gameprofile.id) {
-                world.play_sound(
-                    Sound::EventRaidHorn,
-                    pumpkin_data::sound::SoundCategory::Neutral,
-                    &sound_pos,
-                );
+            let id = player.gameprofile.id;
+            let was_in = self.players_in_raid.contains(&id);
+            let is_in = nearby_players.contains(&id);
+
+            if !was_in && is_in {
+                player.send_bossbar(&self.bossbar);
+                self.players_in_raid.insert(id);
+            } else if was_in && !is_in {
+                player.remove_bossbar(self.bossbar.uuid);
+                self.players_in_raid.remove(&id);
             }
         }
     }
 
-    pub async fn update_players(&mut self, world: &World) {
+    pub fn update_living_raiders(&mut self, world: &World) {
         let center_f64 = self.center.to_f64();
-        let players = world.players.load();
-        let mut current_nearby = HashSet::new();
-
-        for player in players.iter() {
-            let pos = player.get_entity().pos.load();
-            let dist_sq = pos.squared_distance_to_vec(&center_f64);
-            if dist_sq <= Self::VALID_RAID_RADIUS_SQR && player.living_entity.health.load() > 0.0 {
-                current_nearby.insert(player.gameprofile.id);
-                if self.players_in_raid.insert(player.gameprofile.id) {
-                    player.send_bossbar(&self.bossbar).await;
-                }
-            }
-        }
-
-        let mut to_remove = Vec::new();
-        for player_uuid in &self.players_in_raid {
-            if !current_nearby.contains(player_uuid) {
-                to_remove.push(*player_uuid);
-            }
-        }
-
-        for player_uuid in to_remove {
-            self.players_in_raid.remove(&player_uuid);
-            if let Some(player) = players.iter().find(|p| p.gameprofile.id == player_uuid) {
-                player.remove_bossbar(self.bossbar.uuid).await;
-            }
-        }
-    }
-
-    pub fn update_raiders(&mut self, world: &World) {
-        let center_f64 = self.center.to_f64();
+        let entities = world.entities.load();
 
         for raiders in self.group_raider_map.values_mut() {
             let mut wave_dead = Vec::new();
             for &raider_uuid in raiders.iter() {
-                let entity = world.get_entity_by_uuid(raider_uuid);
+                let entity = entities
+                    .iter()
+                    .find(|e| e.get_entity().entity_uuid == raider_uuid);
+
                 match entity {
                     Some(e) => {
-                        let is_dead = e.get_living_entity().is_none_or(|l| l.health.load() <= 0.0);
+                        let is_dead = e
+                            .get_living_entity()
+                            .is_none_or(|living| living.health.load() <= 0.0);
                         let pos = e.get_entity().pos.load();
                         let dist_sq = pos.squared_distance_to_vec(&center_f64);
                         if is_dead || dist_sq >= Self::RAID_REMOVAL_THRESHOLD_SQR {
@@ -514,7 +499,7 @@ impl Raid {
         }
     }
 
-    pub async fn update_bossbar(&mut self, world: &World) {
+    pub fn update_bossbar(&mut self, world: &World) {
         let living_health = self.get_health_of_living_raiders(world);
         let progress = if self.total_health > 0.0 {
             (living_health / self.total_health).clamp(0.0, 1.0)
@@ -526,12 +511,8 @@ impl Raid {
         let players = world.players.load();
         for player in players.iter() {
             if self.players_in_raid.contains(&player.gameprofile.id) {
-                player
-                    .update_bossbar_health(&self.bossbar.uuid, self.bossbar.health)
-                    .await;
-                player
-                    .update_bossbar_title(&self.bossbar.uuid, self.bossbar.title.clone())
-                    .await;
+                player.update_bossbar_health(&self.bossbar.uuid, self.bossbar.health);
+                player.update_bossbar_title(&self.bossbar.uuid, self.bossbar.title.clone());
             }
         }
     }
@@ -551,20 +532,20 @@ impl Raid {
         health
     }
 
-    pub async fn tick(&mut self, world: &Arc<World>) {
+    pub fn tick(&mut self, world: &Arc<World>) {
         if self.is_stopped() {
             return;
         }
 
         if self.status == RaidStatus::Ongoing {
             if world.level_info.load().difficulty == Difficulty::Peaceful {
-                self.stop(world).await;
+                self.stop(world);
                 return;
             }
 
             self.ticks_active += 1;
             if self.ticks_active >= 48000 {
-                self.stop(world).await;
+                self.stop(world);
                 return;
             }
 
@@ -577,11 +558,11 @@ impl Raid {
                     }
                 } else {
                     if self.wave_spawn_pos.is_none() && self.raid_cooldown_ticks % 5 == 0 {
-                        self.wave_spawn_pos = self.find_random_spawn_pos(world, 8);
+                        self.wave_spawn_pos = self.find_random_spawn_pos(8);
                     }
 
                     if self.raid_cooldown_ticks == 300 || self.raid_cooldown_ticks % 20 == 0 {
-                        self.update_players(world).await;
+                        self.update_players(world);
                     }
 
                     self.raid_cooldown_ticks -= 1;
@@ -591,8 +572,8 @@ impl Raid {
             }
 
             if self.ticks_active.is_multiple_of(20) {
-                self.update_players(world).await;
-                self.update_raiders(world);
+                self.update_players(world);
+                self.update_living_raiders(world);
                 let alive = self.get_total_raiders_alive();
                 if alive > 0 && alive <= 2 {
                     self.bossbar.title = TextComponent::translate(
@@ -602,17 +583,17 @@ impl Raid {
                 } else {
                     self.bossbar.title = TextComponent::translate("event.minecraft.raid", []);
                 }
-                self.update_bossbar(world).await;
+                self.update_bossbar(world);
             }
 
             while self.should_spawn_group() {
                 let spawn_pos = self
                     .wave_spawn_pos
-                    .or_else(|| self.find_random_spawn_pos(world, 20))
+                    .or_else(|| self.find_random_spawn_pos(20))
                     .unwrap_or(self.center);
 
                 self.started = true;
-                self.spawn_group(world, spawn_pos).await;
+                self.spawn_group(world, spawn_pos);
                 self.play_sound(world, spawn_pos);
             }
 
@@ -634,7 +615,7 @@ impl Raid {
                     let players = world.players.load();
                     for player in players.iter() {
                         if self.heroes_of_the_village.contains(&player.gameprofile.id) {
-                            player.add_effect(effect.clone()).await;
+                            player.add_effect(effect.clone());
                         }
                     }
                 }
@@ -642,12 +623,12 @@ impl Raid {
         } else if self.is_over() {
             self.celebration_ticks += 1;
             if self.celebration_ticks >= 600 {
-                self.stop(world).await;
+                self.stop(world);
                 return;
             }
 
             if self.celebration_ticks.is_multiple_of(20) {
-                self.update_players(world).await;
+                self.update_players(world);
                 if self.is_victory() {
                     self.bossbar.health = 0.0;
                     self.bossbar.title =
@@ -656,7 +637,7 @@ impl Raid {
                     self.bossbar.title =
                         TextComponent::translate("event.minecraft.raid.defeat.full", []);
                 }
-                self.update_bossbar(world).await;
+                self.update_bossbar(world);
             }
         }
     }
@@ -716,7 +697,6 @@ impl Raids {
 
     pub fn create_or_extend_raid(
         &mut self,
-        player: &Player,
         raid_position: BlockPos,
         world: &Arc<World>,
     ) -> Option<i32> {
@@ -732,25 +712,25 @@ impl Raids {
 
         if let Some(id) = existing_id {
             if let Some(raid) = self.raid_map.get_mut(&id) {
-                raid.absorb_raid_omen(player);
+                raid.absorb_raid_omen();
             }
             Some(id)
         } else {
             self.next_id += 1;
             let id = self.next_id;
             let mut raid = Raid::new(id, raid_center_pos, world.level_info.load().difficulty);
-            raid.absorb_raid_omen(player);
+            raid.absorb_raid_omen();
             self.raid_map.insert(id, raid);
             Some(id)
         }
     }
 
-    pub async fn tick(&mut self, world: &Arc<World>) {
+    pub fn tick(&mut self, world: &Arc<World>) {
         self.tick_counter += 1;
 
         let mut stopped_ids = Vec::new();
         for (&id, raid) in &mut self.raid_map {
-            raid.tick(world).await;
+            raid.tick(world);
             if raid.is_stopped() {
                 stopped_ids.push(id);
             }
@@ -758,7 +738,7 @@ impl Raids {
 
         for id in stopped_ids {
             if let Some(mut raid) = self.raid_map.remove(&id) {
-                raid.remove_all_players(world).await;
+                raid.remove_all_players(world);
             }
         }
     }

@@ -2,7 +2,7 @@
 use super::*;
 
 impl JavaClient {
-    pub async fn handle_attack(&self, player: &Arc<Player>, attack: SAttack, server: &Arc<Server>) {
+    pub fn handle_attack(&self, player: &Arc<Player>, attack: &SAttack, server: &Arc<Server>) {
         if !player.has_client_loaded() {
             return;
         }
@@ -17,12 +17,11 @@ impl JavaClient {
         }
 
         if entity_id.0 == player.entity_id() {
-            self.kick(TextComponent::translate_cross(
+            self.try_kick(&TextComponent::translate_cross(
                 translation::java::MULTIPLAYER_DISCONNECT_INVALID_ENTITY_ATTACKED,
                 translation::java::MULTIPLAYER_DISCONNECT_INVALID_ENTITY_ATTACKED,
                 [],
-            ))
-            .await;
+            ));
             return;
         }
 
@@ -32,12 +31,11 @@ impl JavaClient {
             .map(|p| Arc::clone(p) as Arc<dyn EntityBase>)
             .or_else(|| world.get_entity_by_id(entity_id.0));
         let Some(target) = target else {
-            self.kick(TextComponent::translate_cross(
+            self.try_kick(&TextComponent::translate_cross(
                 translation::java::MULTIPLAYER_DISCONNECT_INVALID_ENTITY_ATTACKED,
                 translation::java::MULTIPLAYER_DISCONNECT_INVALID_ENTITY_ATTACKED,
                 [],
-            ))
-            .await;
+            ));
             return;
         };
         if let Some(player_victim) = &player_target {
@@ -53,6 +51,6 @@ impl JavaClient {
                 return;
             }
         }
-        player.attack(target).await;
+        player.attack(&target);
     }
 }

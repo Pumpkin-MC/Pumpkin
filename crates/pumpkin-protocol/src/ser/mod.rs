@@ -9,7 +9,9 @@ use crate::{
     },
 };
 
-use pumpkin_nbt::{serializer::NbtWriteHelperJava, tag::NbtTag};
+use pumpkin_nbt::{
+    compound::NbtCompound, deserializer::NbtReadHelper, serializer::NbtWriteHelperJava, tag::NbtTag,
+};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::{text::TextComponent, version::JavaMinecraftVersion};
 use thiserror::Error;
@@ -47,6 +49,71 @@ pub enum WritingError {
 impl serde::ser::Error for WritingError {
     fn custom<T: std::fmt::Display>(msg: T) -> Self {
         Self::Serde(msg.to_string())
+    }
+}
+
+struct NetworkReadDataSource<'a, R: NetworkReadExt + ?Sized>(&'a mut R);
+
+impl<'a, R: NetworkReadExt + ?Sized> pumpkin_nbt::deserializer::NbtDataSource<'a>
+    for NetworkReadDataSource<'a, R>
+{
+    fn read_u8(&mut self) -> Result<u8, pumpkin_nbt::Error> {
+        self.0.get_u8().map_err(|e| {
+            pumpkin_nbt::Error::Incomplete(std::io::Error::new(
+                std::io::ErrorKind::UnexpectedEof,
+                e.to_string(),
+            ))
+        })
+    }
+
+    fn read_bytes(&mut self, buf: &mut [u8]) -> Result<(), pumpkin_nbt::Error> {
+        self.0.read_bytes_to_buf(buf).map_err(|e| {
+            pumpkin_nbt::Error::Incomplete(std::io::Error::new(
+                std::io::ErrorKind::UnexpectedEof,
+                e.to_string(),
+            ))
+        })
+    }
+
+    fn seek_relative(&mut self, offset: i64) -> Result<(), pumpkin_nbt::Error> {
+        if offset < 0 {
+            return Err(pumpkin_nbt::Error::Incomplete(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "negative seek not supported",
+            )));
+        }
+        let mut skipped = vec![0u8; offset as usize];
+        self.0.read_bytes_to_buf(&mut skipped).map_err(|e| {
+            pumpkin_nbt::Error::Incomplete(std::io::Error::new(
+                std::io::ErrorKind::UnexpectedEof,
+                e.to_string(),
+            ))
+        })
+    }
+
+    fn read_string(&mut self, len: usize) -> Result<Cow<'a, str>, pumpkin_nbt::Error> {
+        let mut buf = vec![0u8; len];
+        self.0.read_bytes_to_buf(&mut buf).map_err(|e| {
+            pumpkin_nbt::Error::Incomplete(std::io::Error::new(
+                std::io::ErrorKind::UnexpectedEof,
+                e.to_string(),
+            ))
+        })?;
+        let string =
+            cesu8::from_java_cesu8(&buf).map_err(|_| pumpkin_nbt::Error::Cesu8DecodingError)?;
+        Ok(Cow::Owned(string.into_owned()))
+    }
+
+    fn read_byte_array(&mut self, len: usize) -> Result<Cow<'a, [i8]>, pumpkin_nbt::Error> {
+        let mut buf = vec![0u8; len];
+        self.0.read_bytes_to_buf(&mut buf).map_err(|e| {
+            pumpkin_nbt::Error::Incomplete(std::io::Error::new(
+                std::io::ErrorKind::UnexpectedEof,
+                e.to_string(),
+            ))
+        })?;
+        let i8_buf: Vec<i8> = buf.into_iter().map(|b| b as i8).collect();
+        Ok(Cow::Owned(i8_buf))
     }
 }
 
@@ -159,6 +226,83 @@ pub trait NetworkReadExt {
         }
         Ok(list)
     }
+
+    fn get_nbt_with_version(
+        &mut self,
+        version: &JavaMinecraftVersion,
+    ) -> Result<Option<NbtTag>, ReadingError> {
+        if *version >= JavaMinecraftVersion::V_1_8 {
+            let tag_id = self.get_u8()?;
+            if tag_id == pumpkin_nbt::END_ID {
+                return Ok(None);
+            }
+            let mut helper =
+                pumpkin_nbt::deserializer::NbtReadHelperJava::new(NetworkReadDataSource(self));
+            if *version < JavaMinecraftVersion::V_1_20_2 {
+                let _name = helper
+                    .get_string()
+                    .map_err(|e| ReadingError::Message(e.to_string()))?;
+            }
+            let tag = if tag_id == pumpkin_nbt::COMPOUND_ID {
+                NbtTag::Compound(
+                    NbtCompound::deserialize_content(&mut helper)
+                        .map_err(|e| ReadingError::Message(e.to_string()))?,
+                )
+            } else {
+                NbtTag::deserialize_data(&mut helper, tag_id)
+                    .map_err(|e| ReadingError::Message(e.to_string()))?
+            };
+            Ok(Some(tag))
+        } else {
+            let length = self.get_i16_be()?;
+            if length <= 0 {
+                return Ok(None);
+            }
+            let mut compressed = vec![0u8; length as usize];
+            self.read_bytes_to_buf(&mut compressed)?;
+            let mut decoder = flate2::read::GzDecoder::new(&compressed[..]);
+            let mut decompressed = Vec::new();
+            decoder
+                .read_to_end(&mut decompressed)
+                .map_err(|e| ReadingError::Message(e.to_string()))?;
+            let mut cursor = std::io::Cursor::new(decompressed);
+            let mut helper = pumpkin_nbt::deserializer::NbtReadHelperJava::new(&mut cursor);
+            let tag_id = helper
+                .get_u8()
+                .map_err(|e| ReadingError::Message(e.to_string()))?;
+            if tag_id == pumpkin_nbt::END_ID {
+                return Ok(None);
+            }
+            let _name = helper
+                .get_string()
+                .map_err(|e| ReadingError::Message(e.to_string()))?;
+            let tag = if tag_id == pumpkin_nbt::COMPOUND_ID {
+                NbtTag::Compound(
+                    NbtCompound::deserialize_content(&mut helper)
+                        .map_err(|e| ReadingError::Message(e.to_string()))?,
+                )
+            } else {
+                NbtTag::deserialize_data(&mut helper, tag_id)
+                    .map_err(|e| ReadingError::Message(e.to_string()))?
+            };
+            Ok(Some(tag))
+        }
+    }
+
+    #[inline]
+    fn get_compound_nbt_with_version(
+        &mut self,
+        version: &JavaMinecraftVersion,
+    ) -> Result<Option<NbtCompound>, ReadingError> {
+        match self.get_nbt_with_version(version)? {
+            Some(NbtTag::Compound(comp)) => Ok(Some(comp)),
+            Some(NbtTag::End) | None => Ok(None),
+            Some(other) => Err(ReadingError::Message(format!(
+                "Expected NBT compound, found tag ID {}",
+                other.get_type_id()
+            ))),
+        }
+    }
 }
 
 pub trait NetworkReadSliceExt<'a> {
@@ -177,6 +321,39 @@ pub trait NetworkReadSliceExt<'a> {
     fn get_str_bounded_borrowed(&mut self, bound: usize) -> Result<&'a str, ReadingError>;
     fn read_slice_borrowed(&mut self, count: usize) -> Result<&'a [u8], ReadingError>;
     fn read_remaining_slice_borrowed(&mut self, bound: usize) -> Result<&'a [u8], ReadingError>;
+
+    fn get_nbt_borrowed(
+        &mut self,
+        version: &JavaMinecraftVersion,
+    ) -> Result<Option<NbtTag>, ReadingError>;
+
+    #[inline]
+    fn get_nbt(&mut self, version: &JavaMinecraftVersion) -> Result<Option<NbtTag>, ReadingError> {
+        self.get_nbt_borrowed(version)
+    }
+
+    #[inline]
+    fn get_compound_nbt_borrowed(
+        &mut self,
+        version: &JavaMinecraftVersion,
+    ) -> Result<Option<NbtCompound>, ReadingError> {
+        match self.get_nbt_borrowed(version)? {
+            Some(NbtTag::Compound(comp)) => Ok(Some(comp)),
+            Some(NbtTag::End) | None => Ok(None),
+            Some(other) => Err(ReadingError::Message(format!(
+                "Expected NBT compound, found tag ID {}",
+                other.get_type_id()
+            ))),
+        }
+    }
+
+    #[inline]
+    fn get_compound_nbt(
+        &mut self,
+        version: &JavaMinecraftVersion,
+    ) -> Result<Option<NbtCompound>, ReadingError> {
+        self.get_compound_nbt_borrowed(version)
+    }
 
     #[inline]
     fn read_cow_slice_borrowed(&mut self, count: usize) -> Result<Cow<'a, [u8]>, ReadingError> {
@@ -284,6 +461,87 @@ impl<'a> NetworkReadSliceExt<'a> for &'a [u8] {
             })
         }
     }
+
+    fn get_nbt_borrowed(
+        &mut self,
+        version: &JavaMinecraftVersion,
+    ) -> Result<Option<NbtTag>, ReadingError> {
+        if *version >= JavaMinecraftVersion::V_1_8 {
+            if self.is_empty() {
+                return Ok(None);
+            }
+            if (*self)[0] == pumpkin_nbt::END_ID {
+                *self = &(*self)[1..];
+                return Ok(None);
+            }
+            let mut cursor = std::io::Cursor::new(*self);
+            let mut helper = pumpkin_nbt::deserializer::NbtReadHelperJava::new(&mut cursor);
+            let tag_id = helper
+                .get_u8()
+                .map_err(|e| ReadingError::Message(e.to_string()))?;
+            if tag_id == pumpkin_nbt::END_ID {
+                let pos = cursor.position() as usize;
+                *self = &(*self)[pos..];
+                return Ok(None);
+            }
+            if *version < JavaMinecraftVersion::V_1_20_2 {
+                let _name = helper
+                    .get_string()
+                    .map_err(|e| ReadingError::Message(e.to_string()))?;
+            }
+            let tag = if tag_id == pumpkin_nbt::COMPOUND_ID {
+                NbtTag::Compound(
+                    NbtCompound::deserialize_content(&mut helper)
+                        .map_err(|e| ReadingError::Message(e.to_string()))?,
+                )
+            } else {
+                NbtTag::deserialize_data(&mut helper, tag_id)
+                    .map_err(|e| ReadingError::Message(e.to_string()))?
+            };
+            let pos = cursor.position() as usize;
+            *self = &(*self)[pos..];
+            Ok(Some(tag))
+        } else {
+            let length = self.get_i16_be()?;
+            if length <= 0 {
+                return Ok(None);
+            }
+            let length = length as usize;
+            if self.len() < length {
+                return Err(ReadingError::Incomplete(
+                    "Not enough bytes for compressed NBT".into(),
+                ));
+            }
+            let compressed = &(*self)[..length];
+            *self = &(*self)[length..];
+            let mut decoder = flate2::read::GzDecoder::new(compressed);
+            let mut decompressed = Vec::new();
+            decoder
+                .read_to_end(&mut decompressed)
+                .map_err(|e| ReadingError::Message(e.to_string()))?;
+            let mut cursor = std::io::Cursor::new(decompressed);
+            let mut helper = pumpkin_nbt::deserializer::NbtReadHelperJava::new(&mut cursor);
+            let tag_id = helper
+                .get_u8()
+                .map_err(|e| ReadingError::Message(e.to_string()))?;
+            if tag_id == pumpkin_nbt::END_ID {
+                return Ok(None);
+            }
+            let _name = helper
+                .get_string()
+                .map_err(|e| ReadingError::Message(e.to_string()))?;
+            let tag = if tag_id == pumpkin_nbt::COMPOUND_ID {
+                NbtTag::Compound(
+                    NbtCompound::deserialize_content(&mut helper)
+                        .map_err(|e| ReadingError::Message(e.to_string()))?,
+                )
+            } else {
+                NbtTag::deserialize_data(&mut helper, tag_id)
+                    .map_err(|e| ReadingError::Message(e.to_string()))?
+            };
+            Ok(Some(tag))
+        }
+    }
 }
 
 impl<'a, R: NetworkReadSliceExt<'a> + ?Sized> NetworkReadSliceExt<'a> for &mut R {
@@ -309,6 +567,13 @@ impl<'a, R: NetworkReadSliceExt<'a> + ?Sized> NetworkReadSliceExt<'a> for &mut R
     #[inline]
     fn read_remaining_slice_borrowed(&mut self, bound: usize) -> Result<&'a [u8], ReadingError> {
         (**self).read_remaining_slice_borrowed(bound)
+    }
+    #[inline]
+    fn get_nbt_borrowed(
+        &mut self,
+        version: &JavaMinecraftVersion,
+    ) -> Result<Option<NbtTag>, ReadingError> {
+        (**self).get_nbt_borrowed(version)
     }
 }
 
@@ -434,10 +699,62 @@ impl<R: Read> NetworkReadExt for R {
     }
 }
 
-fn nbt_tag_to_json(tag: &NbtTag) -> serde_json::Value {
+#[must_use]
+pub fn json_to_nbt_tag(value: &serde_json::Value) -> NbtTag {
+    match value {
+        serde_json::Value::Null => NbtTag::Compound(NbtCompound::new()),
+        serde_json::Value::Bool(b) => NbtTag::Byte(i8::from(*b)),
+        serde_json::Value::Number(num) => num.as_i64().map_or_else(
+            || num.as_f64().map_or(NbtTag::Int(0), NbtTag::Double),
+            |i| {
+                i8::try_from(i).map_or_else(
+                    |_| {
+                        i16::try_from(i).map_or_else(
+                            |_| i32::try_from(i).map_or(NbtTag::Long(i), NbtTag::Int),
+                            NbtTag::Short,
+                        )
+                    },
+                    NbtTag::Byte,
+                )
+            },
+        ),
+        serde_json::Value::String(s) => NbtTag::String(s.clone().into_boxed_str()),
+        serde_json::Value::Array(arr) => {
+            let list: Vec<NbtTag> = arr.iter().map(json_to_nbt_tag).collect();
+            NbtTag::List(list)
+        }
+        serde_json::Value::Object(obj) => {
+            let mut compound = NbtCompound::new();
+            for (k, v) in obj {
+                compound.put(k, json_to_nbt_tag(v));
+            }
+            NbtTag::Compound(compound)
+        }
+    }
+}
+
+#[must_use]
+pub fn nbt_tag_to_json(tag: &NbtTag) -> serde_json::Value {
+    nbt_tag_to_json_ext(tag, false)
+}
+
+#[must_use]
+pub fn nbt_tag_to_json_ext(tag: &NbtTag, parse_byte_as_bool: bool) -> serde_json::Value {
     match tag {
         NbtTag::End => serde_json::Value::Null,
-        NbtTag::Byte(b) => serde_json::Value::Number((*b).into()),
+        NbtTag::Byte(b) => {
+            if parse_byte_as_bool {
+                if *b == 0 {
+                    serde_json::Value::Bool(false)
+                } else if *b == 1 {
+                    serde_json::Value::Bool(true)
+                } else {
+                    serde_json::Value::Number((*b).into())
+                }
+            } else {
+                serde_json::Value::Number((*b).into())
+            }
+        }
         NbtTag::Short(s) => serde_json::Value::Number((*s).into()),
         NbtTag::Int(i) => serde_json::Value::Number((*i).into()),
         NbtTag::Long(l) => serde_json::Value::Number((*l).into()),
@@ -452,11 +769,15 @@ fn nbt_tag_to_json(tag: &NbtTag) -> serde_json::Value {
                 .collect(),
         ),
         NbtTag::String(s) => serde_json::Value::String(s.to_string()),
-        NbtTag::List(list) => serde_json::Value::Array(list.iter().map(nbt_tag_to_json).collect()),
+        NbtTag::List(list) => serde_json::Value::Array(
+            list.iter()
+                .map(|t| nbt_tag_to_json_ext(t, parse_byte_as_bool))
+                .collect(),
+        ),
         NbtTag::Compound(compound) => {
             let mut map = serde_json::Map::new();
             for (k, v) in &compound.child_tags {
-                map.insert(k.to_string(), nbt_tag_to_json(v));
+                map.insert(k.to_string(), nbt_tag_to_json_ext(v, parse_byte_as_bool));
             }
             serde_json::Value::Object(map)
         }
@@ -474,8 +795,124 @@ fn nbt_tag_to_json(tag: &NbtTag) -> serde_json::Value {
     }
 }
 
+pub fn write_nbt_payload(
+    mut write: impl Write,
+    nbt_data: &[u8],
+    version: &JavaMinecraftVersion,
+) -> Result<(), WritingError> {
+    if *version >= JavaMinecraftVersion::V_1_8 {
+        if nbt_data.is_empty() || nbt_data == [0] {
+            write.write_u8(0)?;
+        } else if *version < JavaMinecraftVersion::V_1_20_2 {
+            if nbt_data.len() >= 3 && nbt_data[0] == 0x0A && nbt_data[1] == 0 && nbt_data[2] == 0 {
+                write.write_all(nbt_data).map_err(WritingError::IoError)?;
+            } else if nbt_data[0] == 0x0A {
+                write.write_u8(0x0A)?;
+                write.write_u16_be(0)?;
+                write
+                    .write_all(&nbt_data[1..])
+                    .map_err(WritingError::IoError)?;
+            } else {
+                write.write_all(nbt_data).map_err(WritingError::IoError)?;
+            }
+        } else {
+            write.write_all(nbt_data).map_err(WritingError::IoError)?;
+        }
+    } else {
+        if nbt_data.is_empty() || nbt_data == [0] {
+            write.write_i16_be(-1)?;
+        } else {
+            let mut named_bytes = Vec::with_capacity(nbt_data.len() + 2);
+            if nbt_data.len() >= 3 && nbt_data[0] == 0x0A && nbt_data[1] == 0 && nbt_data[2] == 0 {
+                named_bytes.extend_from_slice(nbt_data);
+            } else if nbt_data[0] == 0x0A {
+                named_bytes.push(0x0A);
+                named_bytes.extend_from_slice(&[0x00, 0x00]);
+                named_bytes.extend_from_slice(&nbt_data[1..]);
+            } else {
+                named_bytes.extend_from_slice(nbt_data);
+            }
+
+            let mut encoder =
+                flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
+            encoder
+                .write_all(&named_bytes)
+                .map_err(WritingError::IoError)?;
+            let compressed = encoder.finish().map_err(WritingError::IoError)?;
+
+            write.write_i16_be(compressed.len() as i16)?;
+            write
+                .write_all(&compressed)
+                .map_err(WritingError::IoError)?;
+        }
+    }
+    Ok(())
+}
+
+pub fn read_nbt_payload(
+    bytebuf: &mut &[u8],
+    version: &JavaMinecraftVersion,
+) -> Result<Box<[u8]>, ReadingError> {
+    if *version >= JavaMinecraftVersion::V_1_8 {
+        if bytebuf.is_empty() || bytebuf[0] == 0 {
+            if !bytebuf.is_empty() {
+                let _ = bytebuf.get_u8()?;
+            }
+            Ok(Box::new([]))
+        } else if *version < JavaMinecraftVersion::V_1_20_2 {
+            let all = bytebuf.to_vec();
+            *bytebuf = &[];
+            if all.len() >= 3 && all[0] == 0x0A && all[1] == 0 && all[2] == 0 {
+                let mut unnamed = Vec::with_capacity(all.len() - 2);
+                unnamed.push(0x0A);
+                unnamed.extend_from_slice(&all[3..]);
+                Ok(unnamed.into_boxed_slice())
+            } else {
+                Ok(all.into_boxed_slice())
+            }
+        } else {
+            let all = bytebuf.to_vec().into_boxed_slice();
+            *bytebuf = &[];
+            Ok(all)
+        }
+    } else {
+        let length = bytebuf.get_i16_be()?;
+        if length <= 0 {
+            Ok(Box::new([]))
+        } else {
+            if bytebuf.len() < length as usize {
+                return Err(ReadingError::Incomplete(
+                    "Not enough bytes for compressed NBT".into(),
+                ));
+            }
+            let compressed = &bytebuf[..length as usize];
+            *bytebuf = &bytebuf[length as usize..];
+            let mut decoder = flate2::read::GzDecoder::new(compressed);
+            let mut decompressed = Vec::new();
+            decoder
+                .read_to_end(&mut decompressed)
+                .map_err(|e| ReadingError::Message(e.to_string()))?;
+            if decompressed.len() >= 3
+                && decompressed[0] == 0x0A
+                && decompressed[1] == 0
+                && decompressed[2] == 0
+            {
+                let mut unnamed = Vec::with_capacity(decompressed.len() - 2);
+                unnamed.push(0x0A);
+                unnamed.extend_from_slice(&decompressed[3..]);
+                Ok(unnamed.into_boxed_slice())
+            } else {
+                Ok(decompressed.into_boxed_slice())
+            }
+        }
+    }
+}
+
 #[inline]
-pub fn read_remaining_bytes(read: &mut impl Read, bound: usize) -> Result<Box<[u8]>, ReadingError> {
+pub fn read_remaining_bytes(
+    read: &mut (impl Read + ?Sized),
+    bound: usize,
+) -> Result<Box<[u8]>, ReadingError> {
     let mut return_buf = Vec::with_capacity(bound.min(1024));
 
     // Take one extra byte to check for exceeding bound
@@ -623,8 +1060,26 @@ pub trait NetworkWriteExt {
 
         Ok(())
     }
+    fn write_nbt_with_version(
+        &mut self,
+        data: Option<&NbtTag>,
+        version: &JavaMinecraftVersion,
+    ) -> Result<(), WritingError>;
 
-    fn write_nbt(&mut self, data: NbtTag) -> Result<(), WritingError>;
+    #[inline]
+    fn write_compound_nbt_with_version(
+        &mut self,
+        data: Option<&NbtCompound>,
+        version: &JavaMinecraftVersion,
+    ) -> Result<(), WritingError> {
+        let tag = data.map(|c| NbtTag::Compound(c.clone()));
+        self.write_nbt_with_version(tag.as_ref(), version)
+    }
+
+    #[inline]
+    fn write_nbt(&mut self, data: NbtTag) -> Result<(), WritingError> {
+        self.write_nbt_with_version(Some(&data), &JavaMinecraftVersion::V_26_2)
+    }
 }
 
 macro_rules! write_number_be {
@@ -755,11 +1210,55 @@ impl<W: Write> NetworkWriteExt for W {
         Ok(())
     }
 
-    fn write_nbt(&mut self, data: NbtTag) -> Result<(), WritingError> {
-        let mut write_adaptor = NbtWriteHelperJava::new(self);
-        data.serialize(&mut write_adaptor)
-            .map_err(|e| WritingError::Message(e.to_string()))?;
+    fn write_nbt_with_version(
+        &mut self,
+        data: Option<&NbtTag>,
+        version: &JavaMinecraftVersion,
+    ) -> Result<(), WritingError> {
+        if *version >= JavaMinecraftVersion::V_1_8 {
+            if let Some(tag) = data
+                && !matches!(tag, NbtTag::End)
+            {
+                if *version < JavaMinecraftVersion::V_1_20_2 {
+                    self.write_u8(tag.get_type_id())?;
+                    self.write_u16_be(0)?; // empty root name
+                    let mut write_adaptor = NbtWriteHelperJava::new(self);
+                    tag.clone()
+                        .serialize_data(&mut write_adaptor)
+                        .map_err(|e| WritingError::Message(e.to_string()))?;
+                } else {
+                    let mut write_adaptor = NbtWriteHelperJava::new(self);
+                    tag.clone()
+                        .serialize(&mut write_adaptor)
+                        .map_err(|e| WritingError::Message(e.to_string()))?;
+                }
+            } else {
+                self.write_u8(pumpkin_nbt::END_ID)?;
+            }
+        } else {
+            // <= 1.7.10
+            if let Some(tag) = data
+                && !matches!(tag, NbtTag::End)
+            {
+                let mut buf = Vec::new();
+                buf.push(tag.get_type_id());
+                buf.extend_from_slice(&[0x00, 0x00]); // empty root name
+                let mut write_adaptor = NbtWriteHelperJava::new(&mut buf);
+                tag.clone()
+                    .serialize_data(&mut write_adaptor)
+                    .map_err(|e| WritingError::Message(e.to_string()))?;
 
+                let mut encoder =
+                    flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
+                encoder.write_all(&buf).map_err(WritingError::IoError)?;
+                let compressed = encoder.finish().map_err(WritingError::IoError)?;
+
+                self.write_i16_be(compressed.len() as i16)?;
+                self.write_slice(&compressed)?;
+            } else {
+                self.write_i16_be(-1)?;
+            }
+        }
         Ok(())
     }
 }

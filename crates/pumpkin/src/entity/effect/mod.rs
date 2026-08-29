@@ -9,9 +9,6 @@ pub mod weaving;
 pub mod wind_charged;
 pub mod wither;
 
-use std::future::Future;
-use std::pin::Pin;
-
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_nbt::compound::NbtCompound;
@@ -19,9 +16,7 @@ use pumpkin_nbt::tag::NbtTag;
 use tracing::warn;
 
 use crate::entity::living::LivingEntity;
-use crate::entity::{NBTInitFuture, NBTStorage, NBTStorageInit, NbtFuture};
-
-pub type EffectFuture<'a, T = ()> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
+use crate::entity::{NBTStorage, NBTStorageInit};
 
 pub trait MobEffect: Send + Sync {
     /// Returns true if `apply_effect_tick` should be called for the current tick and duration.
@@ -30,34 +25,20 @@ pub trait MobEffect: Send + Sync {
     }
 
     /// Applies periodic/tick-based effect logic on a living entity.
-    fn apply_effect_tick<'a>(
-        &'a self,
-        _living: &'a LivingEntity,
-        _amplifier: u8,
-    ) -> EffectFuture<'a, ()> {
-        Box::pin(async move {})
-    }
+    fn apply_effect_tick(&self, _living: &LivingEntity, _amplifier: u8) {}
 
     /// Called when an entity carrying this effect is hurt.
-    fn on_mob_hurt<'a>(
-        &'a self,
-        _living: &'a LivingEntity,
+    fn on_mob_hurt(
+        &self,
+        _living: &LivingEntity,
         _amplifier: u8,
-        _damage_type: &'a DamageType,
+        _damage_type: &DamageType,
         _damage_amount: f32,
-    ) -> EffectFuture<'a, ()> {
-        Box::pin(async move {})
+    ) {
     }
 
     /// Called when an entity carrying this effect dies.
-    fn on_mob_death<'a>(
-        &'a self,
-        _living: &'a LivingEntity,
-        _amplifier: u8,
-        _damage_type: &'a DamageType,
-    ) -> EffectFuture<'a, ()> {
-        Box::pin(async move {})
-    }
+    fn on_mob_death(&self, _living: &LivingEntity, _amplifier: u8, _damage_type: &DamageType) {}
 }
 
 pub static REGENERATION: regeneration::RegenerationMobEffect = regeneration::RegenerationMobEffect;
@@ -99,57 +80,50 @@ pub fn get_mob_effect(effect: &'static StatusEffect) -> Option<&'static dyn MobE
 }
 
 impl NBTStorage for pumpkin_data::potion::Effect {
-    fn write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
-        Box::pin(async {
-            nbt.put("id", self.effect_type.minecraft_name);
-            if self.amplifier > 0 {
-                nbt.put("amplifier", NbtTag::Int(i32::from(self.amplifier)));
-            }
-            nbt.put("duration", NbtTag::Int(self.duration));
-            if self.ambient {
-                nbt.put("ambient", NbtTag::Byte(1));
-            }
-            if !self.show_particles {
-                nbt.put("show_particles", NbtTag::Byte(0));
-            }
-            let show_icon: i8 = i8::from(self.show_icon);
-            nbt.put("show_icon", NbtTag::Byte(show_icon));
-        })
+    fn write_nbt(&self, nbt: &mut NbtCompound) {
+        nbt.put("id", self.effect_type.minecraft_name);
+        if self.amplifier > 0 {
+            nbt.put("amplifier", NbtTag::Int(i32::from(self.amplifier)));
+        }
+        nbt.put("duration", NbtTag::Int(self.duration));
+        if self.ambient {
+            nbt.put("ambient", NbtTag::Byte(1));
+        }
+        if !self.show_particles {
+            nbt.put("show_particles", NbtTag::Byte(0));
+        }
+        let show_icon: i8 = i8::from(self.show_icon);
+        nbt.put("show_icon", NbtTag::Byte(show_icon));
     }
 }
 
 impl NBTStorageInit for pumpkin_data::potion::Effect {
-    fn create_from_nbt<'a>(nbt: &'a mut NbtCompound) -> NBTInitFuture<'a, Self>
-    where
-        Self: 'a,
-    {
-        Box::pin(async move {
-            let Some(effect_id) = nbt.get_string("id") else {
-                warn!("Unable to read effect. Effect id is not present");
-                return None;
-            };
-            let Some(effect_type) = StatusEffect::from_minecraft_name(effect_id) else {
-                warn!("Unable to read effect. Unknown effect type: {effect_id}");
-                return None;
-            };
-            let Some(show_icon) = nbt.get_byte("show_icon") else {
-                warn!("Unable to read effect. Show icon is not present");
-                return None;
-            };
-            let amplifier = nbt.get_int("amplifier").unwrap_or(0) as u8;
-            let duration = nbt.get_int("duration").unwrap_or(0);
-            let ambient = nbt.get_byte("ambient").unwrap_or(0) == 1;
-            let show_particles = nbt.get_byte("show_particles").unwrap_or(1) == 1;
-            let show_icon = show_icon == 1;
-            Some(Self {
-                effect_type,
-                duration,
-                amplifier,
-                ambient,
-                show_particles,
-                show_icon,
-                blend: false,
-            })
+    fn create_from_nbt(nbt: &mut NbtCompound) -> Option<Self> {
+        let Some(effect_id) = nbt.get_string("id") else {
+            warn!("Unable to read effect. Effect id is not present");
+            return None;
+        };
+        let Some(effect_type) = StatusEffect::from_minecraft_name(effect_id) else {
+            warn!("Unable to read effect. Unknown effect type: {effect_id}");
+            return None;
+        };
+        let Some(show_icon) = nbt.get_byte("show_icon") else {
+            warn!("Unable to read effect. Show icon is not present");
+            return None;
+        };
+        let amplifier = nbt.get_int("amplifier").unwrap_or(0) as u8;
+        let duration = nbt.get_int("duration").unwrap_or(0);
+        let ambient = nbt.get_byte("ambient").unwrap_or(0) == 1;
+        let show_particles = nbt.get_byte("show_particles").unwrap_or(1) == 1;
+        let show_icon = show_icon == 1;
+        Some(Self {
+            effect_type,
+            duration,
+            amplifier,
+            ambient,
+            show_particles,
+            show_icon,
+            blend: false,
         })
     }
 }

@@ -13,7 +13,7 @@ use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::java::client::play::Metadata;
 
 use crate::entity::{
-    Entity, EntityBase, EntityBaseFuture, NbtFuture,
+    Entity, EntityBase,
     ai::goal::{
         look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal, swim::SwimGoal,
         wander_around::WanderAroundGoal,
@@ -203,104 +203,89 @@ impl CopperGolemEntity {
 }
 
 impl Mob for CopperGolemEntity {
-    fn mob_write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
-        Box::pin(async move {
-            nbt.put_long(
-                "next_weather_age",
-                self.next_weathering_tick.load(Ordering::Relaxed),
-            );
-            nbt.put_int("weather_state", self.get_weather_state().id());
-        })
+    fn mob_write_nbt(&self, nbt: &mut NbtCompound) {
+        nbt.put_long(
+            "next_weather_age",
+            self.next_weathering_tick.load(Ordering::Relaxed),
+        );
+        nbt.put_int("weather_state", self.get_weather_state().id());
     }
 
-    fn mob_read_nbt<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
-        Box::pin(async move {
-            if let Some(next) = nbt.get_long("next_weather_age") {
-                self.next_weathering_tick.store(next, Ordering::Relaxed);
-            }
-            if let Some(state) = nbt.get_int("weather_state") {
-                self.set_weather_state(WeatherState::from_id(state));
-            }
-        })
+    fn mob_read_nbt(&self, nbt: &NbtCompound) {
+        if let Some(next) = nbt.get_long("next_weather_age") {
+            self.next_weathering_tick.store(next, Ordering::Relaxed);
+        }
+        if let Some(state) = nbt.get_int("weather_state") {
+            self.set_weather_state(WeatherState::from_id(state));
+        }
     }
 
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
     }
 
-    fn mob_on_lightning_strike<'a>(
-        &'a self,
-        caller: &'a dyn EntityBase,
-        lightning: &'a crate::entity::lightning::LightningBoltEntity,
-    ) -> EntityBaseFuture<'a, ()> {
-        Box::pin(async move {
-            self.set_weather_state(WeatherState::Unaffected);
-            self.mob_entity
-                .living_entity
-                .on_lightning_strike(caller, lightning)
-                .await;
-        })
+    fn mob_on_lightning_strike(
+        &self,
+        caller: &dyn EntityBase,
+        lightning: &crate::entity::lightning::LightningBoltEntity,
+    ) {
+        self.set_weather_state(WeatherState::Unaffected);
+        self.mob_entity
+            .living_entity
+            .on_lightning_strike(caller, lightning);
     }
 
-    fn mob_init_data_tracker(&self) -> EntityBaseFuture<'_, ()> {
-        Box::pin(async move {
-            let entity = self.get_entity();
-            entity.send_meta_data(
-                &[
-                    Metadata::new(
-                        pumpkin_data::tracked_data::copper_golem::WEATHER_STATE,
-                        VarInt(self.get_weather_state().id()),
-                    ),
-                    Metadata::new(
-                        pumpkin_data::tracked_data::copper_golem::COPPER_GOLEM_STATE,
-                        VarInt(self.get_state().id()),
-                    ),
-                ],
-                None,
-            );
-        })
+    fn mob_init_data_tracker(&self) {
+        let entity = self.get_entity();
+        entity.send_meta_data(
+            &[
+                Metadata::new(
+                    pumpkin_data::tracked_data::copper_golem::WEATHER_STATE,
+                    VarInt(self.get_weather_state().id()),
+                ),
+                Metadata::new(
+                    pumpkin_data::tracked_data::copper_golem::COPPER_GOLEM_STATE,
+                    VarInt(self.get_state().id()),
+                ),
+            ],
+            None,
+        );
     }
 
-    fn mob_interact<'a>(
-        &'a self,
-        _player: &'a Arc<Player>,
-        item_stack: &'a mut ItemStack,
-    ) -> EntityBaseFuture<'a, bool> {
-        Box::pin(async move {
-            let entity = self.get_entity();
-            let world = entity.world.load();
+    fn mob_interact(&self, _player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {
+        let entity = self.get_entity();
+        let world = entity.world.load();
 
-            // Honeycomb waxing
-            if item_stack.item.id == Item::HONEYCOMB.id
-                && self.next_weathering_tick.load(Ordering::Relaxed) != -2
-            {
-                self.next_weathering_tick.store(-2, Ordering::Relaxed);
+        // Honeycomb waxing
+        if item_stack.item.id == Item::HONEYCOMB.id
+            && self.next_weathering_tick.load(Ordering::Relaxed) != -2
+        {
+            self.next_weathering_tick.store(-2, Ordering::Relaxed);
+            let pos = entity.pos.load();
+            world.play_sound(Sound::ItemHoneycombWaxOn, SoundCategory::Blocks, &pos);
+            return true;
+        }
+
+        // Axe scraping
+        if item_stack.item.has_tag(&tag::Item::MINECRAFT_AXES) {
+            let current_next = self.next_weathering_tick.load(Ordering::Relaxed);
+            if current_next == -2 {
+                self.next_weathering_tick.store(-1, Ordering::Relaxed);
                 let pos = entity.pos.load();
-                world.play_sound(Sound::ItemHoneycombWaxOn, SoundCategory::Blocks, &pos);
+                world.play_sound(Sound::ItemAxeScrape, SoundCategory::Blocks, &pos);
                 return true;
             }
 
-            // Axe scraping
-            if item_stack.item.has_tag(&tag::Item::MINECRAFT_AXES) {
-                let current_next = self.next_weathering_tick.load(Ordering::Relaxed);
-                if current_next == -2 {
-                    self.next_weathering_tick.store(-1, Ordering::Relaxed);
-                    let pos = entity.pos.load();
-                    world.play_sound(Sound::ItemAxeScrape, SoundCategory::Blocks, &pos);
-                    return true;
-                }
-
-                let weather_state = self.get_weather_state();
-                if weather_state != WeatherState::Unaffected {
-                    self.set_weather_state(weather_state.previous());
-                    self.next_weathering_tick.store(-1, Ordering::Relaxed);
-                    let pos = entity.pos.load();
-                    world.play_sound(Sound::ItemAxeScrape, SoundCategory::Blocks, &pos);
-                    return true;
-                }
+            let weather_state = self.get_weather_state();
+            if weather_state != WeatherState::Unaffected {
+                self.set_weather_state(weather_state.previous());
+                self.next_weathering_tick.store(-1, Ordering::Relaxed);
+                let pos = entity.pos.load();
+                world.play_sound(Sound::ItemAxeScrape, SoundCategory::Blocks, &pos);
+                return true;
             }
+        }
 
-            false
-        })
+        false
     }
 }

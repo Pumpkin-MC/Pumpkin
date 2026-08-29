@@ -1,5 +1,3 @@
-use std::pin::Pin;
-
 use crate::command::argument_types::FromStringReader;
 use crate::command::argument_types::argument_type::{ArgumentType, JavaClientArgumentType};
 use crate::command::context::command_context::CommandContext;
@@ -18,17 +16,15 @@ impl ArgumentType for PoolNameArgumentType {
         Identifier::from_reader(reader)
     }
 
-    fn list_suggestions<'a>(
-        &'a self,
-        _context: &'a CommandContext,
+    fn list_suggestions(
+        &self,
+        _context: &CommandContext,
         builder: SuggestionsBuilder,
-    ) -> Pin<Box<dyn Future<Output = Suggestions> + Send + 'a>> {
+    ) -> Suggestions {
         let names = pumpkin_world::generation::structure::template::all_pool_names();
-        Box::pin(async move {
-            builder
-                .filter_and_suggest_iter(names.iter().map(|n| format!("minecraft:{n}")))
-                .build()
-        })
+        builder
+            .filter_and_suggest_iter(names.iter().map(|n| format!("minecraft:{n}")))
+            .build()
     }
 
     fn client_side_parser(&'_ self) -> JavaClientArgumentType {

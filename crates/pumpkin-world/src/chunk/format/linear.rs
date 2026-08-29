@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 use std::io::{ErrorKind, Read};
 use std::marker::PhantomData;
 use std::path::PathBuf;
@@ -141,15 +141,15 @@ impl ChunkBitmap {
 // Repeated: u8 key_len, key bytes, u32 value
 // Terminated by a single 0x00 byte.
 
-struct NbtFeatures(HashMap<String, u32>);
+struct NbtFeatures(FxHashMap<String, u32>);
 
 impl NbtFeatures {
     fn empty() -> Self {
-        Self(HashMap::new())
+        Self(FxHashMap::default())
     }
 
     fn from_bytes(buf: &mut impl Buf) -> Result<Self, ChunkReadingError> {
-        let mut map = HashMap::new();
+        let mut map = FxHashMap::default();
         loop {
             if !buf.has_remaining() {
                 return Err(ChunkReadingError::IoError(std::io::Error::from(
@@ -407,26 +407,21 @@ impl<S: SingleChunkDataSerializer + 'static> ChunkSerializer for LinearV2File<S>
         let chunks_data = self.chunks_data.clone();
         let timestamps = self.timestamps;
 
-        let (bucket_entries, compressed_buckets) = tokio::task::spawn_blocking(move || {
-            let mut compressed_buckets: Vec<Box<[u8]>> = Vec::with_capacity(bucket_count);
-            let mut bucket_entries: Vec<BucketSizeEntry> = Vec::with_capacity(bucket_count);
+        let mut compressed_buckets: Vec<Box<[u8]>> = Vec::with_capacity(bucket_count);
+        let mut bucket_entries: Vec<BucketSizeEntry> = Vec::with_capacity(bucket_count);
 
-            for bucket_idx in 0..bucket_count {
-                let raw = Self::serialise_bucket(&chunks_data, &timestamps, bucket_idx, grid_size);
-                let compressed =
-                    compress_to_vec(raw.as_slice(), CompressionLevel::Fastest).into_boxed_slice();
-                let hash = xxh64(&compressed, 0);
-                bucket_entries.push(BucketSizeEntry {
-                    size: compressed.len() as u32,
-                    compression_level: 1,
-                    xxhash: hash,
-                });
-                compressed_buckets.push(compressed);
-            }
-            (bucket_entries, compressed_buckets)
-        })
-        .await
-        .map_err(std::io::Error::other)?;
+        for bucket_idx in 0..bucket_count {
+            let raw = Self::serialise_bucket(&chunks_data, &timestamps, bucket_idx, grid_size);
+            let compressed =
+                compress_to_vec(raw.as_slice(), CompressionLevel::Fastest).into_boxed_slice();
+            let hash = xxh64(&compressed, 0);
+            bucket_entries.push(BucketSizeEntry {
+                size: compressed.len() as u32,
+                compression_level: 1,
+                xxhash: hash,
+            });
+            compressed_buckets.push(compressed);
+        }
 
         let newest_timestamp = self.timestamps.iter().copied().max().unwrap_or(0);
 
@@ -577,7 +572,6 @@ impl<S: SingleChunkDataSerializer + 'static> ChunkSerializer for LinearV2File<S>
         let index = Self::get_chunk_index(chunk.position().0, chunk.position().1);
         let chunk_raw: Bytes = chunk
             .to_bytes()
-            .await
             .map_err(|err| ChunkWritingError::ChunkSerializingError(err.to_string()))?;
 
         self.timestamps[index] = SystemTime::now()
@@ -592,31 +586,33 @@ impl<S: SingleChunkDataSerializer + 'static> ChunkSerializer for LinearV2File<S>
         chunks: Vec<Vector2<i32>>,
         stream: tokio::sync::mpsc::Sender<LoadedData<Self::Data, ChunkReadingError>>,
     ) {
-        for chunk in chunks {
-            let index = Self::get_chunk_index(chunk.x, chunk.y);
+        let chunk_items: Vec<(Vector2<i32>, Option<Bytes>)> = chunks
+            .into_iter()
+            .map(|chunk| {
+                let index = Self::get_chunk_index(chunk.x, chunk.y);
+                let data = self.chunks_data[index].clone();
+                (chunk, data)
+            })
+            .collect();
 
-            let is_ok = match &self.chunks_data[index] {
-                None => stream.send(LoadedData::Missing(chunk)).await.is_ok(),
-                Some(data) => {
-                    let data = data.clone();
-                    let result = match tokio::task::spawn_blocking(move || {
-                        S::from_bytes(&data, chunk)
-                    })
-                    .await
-                    {
-                        Ok(Ok(c)) => LoadedData::Loaded(c),
-                        Ok(Err(err)) => LoadedData::Error((chunk, err)),
-                        Err(err) => LoadedData::Error((
-                            chunk,
-                            ChunkReadingError::IoError(std::io::Error::other(err)),
-                        )),
-                    };
-                    stream.send(result).await.is_ok()
-                }
-            };
+        let (tx, mut rx) = tokio::sync::mpsc::channel(chunk_items.len().max(1));
 
-            if !is_ok {
-                // Receiver dropped — stop early to avoid unnecessary work.
+        rayon::spawn(move || {
+            use rayon::prelude::*;
+            chunk_items.into_par_iter().for_each(|(chunk, data)| {
+                let result = data.map_or_else(
+                    || LoadedData::Missing(chunk),
+                    |data| match S::from_bytes(&data, chunk) {
+                        Ok(c) => LoadedData::Loaded(c),
+                        Err(err) => LoadedData::Error((chunk, err)),
+                    },
+                );
+                let _ = tx.blocking_send(result);
+            });
+        });
+
+        while let Some(item) = rx.recv().await {
+            if stream.send(item).await.is_err() {
                 return;
             }
         }

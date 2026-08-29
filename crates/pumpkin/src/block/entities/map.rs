@@ -1,6 +1,4 @@
 use std::any::Any;
-use std::future::Future;
-use std::pin::Pin;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 
@@ -162,19 +160,14 @@ impl BlockEntity for MapBlockEntity {
         entity
     }
 
-    fn write_nbt<'a>(
-        &'a self,
-        nbt: &'a mut NbtCompound,
-    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
-        Box::pin(async move {
-            nbt.put_int("MapId", self.get_map_id());
-            let colors = self
-                .colors
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            let colors_i8: Vec<i8> = colors.iter().map(|&b| b as i8).collect();
-            nbt.put("Colors", NbtTag::ByteArray(colors_i8.into_boxed_slice()));
-        })
+    fn write_nbt(&self, nbt: &mut NbtCompound) {
+        nbt.put_int("MapId", self.get_map_id());
+        let colors = self
+            .colors
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let colors_i8: Vec<i8> = colors.iter().map(|&b| b as i8).collect();
+        nbt.put("Colors", NbtTag::ByteArray(colors_i8.into_boxed_slice()));
     }
 
     fn is_dirty(&self) -> bool {

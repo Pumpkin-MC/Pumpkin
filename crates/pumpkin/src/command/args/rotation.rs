@@ -45,26 +45,19 @@ impl GetClientSideArgParser for RotationArgumentConsumer {
 }
 
 impl ArgumentConsumer for RotationArgumentConsumer {
-    fn consume<'a, 'b>(
+    fn consume<'a>(
         &'a self,
         _sender: &'a CommandSender,
         _server: &'a Server,
-        args: &'b mut RawArgs<'a>,
+        args: &mut RawArgs<'a>,
     ) -> ConsumeResult<'a> {
-        let yaw_str_opt = args.pop().map(|arg| arg.value);
-        let pitch_str_opt = args.pop().map(|arg| arg.value);
+        let yaw_str = args.pop()?.value;
+        let pitch_str = args.pop()?.value;
 
-        let (Some(yaw_str), Some(pitch_str)) = (yaw_str_opt, pitch_str_opt) else {
-            return Box::pin(async move { None });
-        };
+        let (yaw, yaw_rel) = parse_rotation_component(yaw_str)?;
+        let (pitch, pitch_rel) = parse_rotation_component(pitch_str)?;
 
-        let result: Option<Arg<'a>> =
-            parse_rotation_component(yaw_str).and_then(|(yaw, yaw_rel)| {
-                parse_rotation_component(pitch_str)
-                    .map(|(pitch, pitch_rel)| Arg::Rotation(yaw, yaw_rel, pitch, pitch_rel))
-            });
-
-        Box::pin(async move { result })
+        Some(Arg::Rotation(yaw, yaw_rel, pitch, pitch_rel))
     }
 }
 

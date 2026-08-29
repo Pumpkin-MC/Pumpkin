@@ -256,8 +256,8 @@ impl Tree {
 
     /// Returns whether the given node is able to be used by a given source.
     #[must_use]
-    pub async fn can_use(&self, node: NodeId, source: &CommandSource) -> bool {
-        self[node].requirements().evaluate(source).await
+    pub fn can_use(&self, node: NodeId, source: &CommandSource) -> bool {
+        self[node].requirements().evaluate(source)
     }
 
     /// Finds ambiguities of input and gives them to the [`AmbiguityConsumer`].
@@ -346,7 +346,7 @@ impl Tree {
     }
 
     /// Parses the given node, returning an error on failure.
-    pub async fn parse<'a>(
+    pub fn parse<'a>(
         &self,
         node_id: NodeId,
         reader: &'a mut StringReader<'_>,
@@ -375,8 +375,7 @@ impl Tree {
                 let result = node
                     .meta
                     .argument_type
-                    .parse_with_source(reader, &command_context_builder.source)
-                    .await?;
+                    .parse_with_source(reader, &command_context_builder.source)?;
                 let range = StringRange::between(start, reader.cursor());
                 let parsed = ParsedArgument::new(range, result);
                 command_context_builder.with_argument(node.meta.name.to_string(), Arc::new(parsed));

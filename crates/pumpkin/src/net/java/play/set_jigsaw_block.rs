@@ -2,7 +2,7 @@
 use super::*;
 
 impl JavaClient {
-    pub async fn handle_set_jigsaw_block(&self, player: &Arc<Player>, jigsaw: SSetJigsawBlock<'_>) {
+    pub fn handle_set_jigsaw_block(&self, player: &Arc<Player>, jigsaw: &SSetJigsawBlock<'_>) {
         if !player.is_creative() {
             return;
         }
@@ -22,11 +22,28 @@ impl JavaClient {
                 return;
             };
 
-            *jigsaw_block.name.lock().await = jigsaw.name.to_string();
-            *jigsaw_block.target.lock().await = jigsaw.target.to_string();
-            *jigsaw_block.pool.lock().await = jigsaw.pool.to_string();
-            *jigsaw_block.final_state.lock().await = jigsaw.final_state.to_string();
-            *jigsaw_block.joint.lock().await = JigsawJointType::from_str(jigsaw.joint);
+            *jigsaw_block
+                .name
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner) = jigsaw.name.to_string();
+            *jigsaw_block
+                .target
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner) = jigsaw.target.to_string();
+            *jigsaw_block
+                .pool
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner) = jigsaw.pool.to_string();
+            *jigsaw_block
+                .final_state
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner) =
+                jigsaw.final_state.to_string();
+            *jigsaw_block
+                .joint
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner) =
+                JigsawJointType::from_str(jigsaw.joint);
             jigsaw_block
                 .selection_priority
                 .store(jigsaw.selection_priority.0, Ordering::SeqCst);

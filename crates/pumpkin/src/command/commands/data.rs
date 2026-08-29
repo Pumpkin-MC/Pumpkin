@@ -22,18 +22,16 @@ const ARG_ENTITY: &str = "entity";
 struct GetEntityDataExecutor;
 
 impl CommandExecutor for GetEntityDataExecutor {
-    fn execute<'a>(
-        &'a self,
-        sender: &'a CommandSender,
-        _server: &'a crate::server::Server,
-        args: &'a ConsumedArgs<'a>,
-    ) -> CommandResult<'a> {
-        Box::pin(async move {
-            let Some(Arg::Entity(entity)) = args.get(&ARG_ENTITY) else {
-                return Err(InvalidConsumption(Some(ARG_ENTITY.into())));
-            };
-            display_data(entity.as_ref(), entity.get_display_name().await, sender).await
-        })
+    fn execute(
+        &self,
+        sender: &CommandSender,
+        _server: &crate::server::Server,
+        args: &ConsumedArgs,
+    ) -> CommandResult {
+        let Some(Arg::Entity(entity)) = args.get(&ARG_ENTITY) else {
+            return Err(InvalidConsumption(Some(ARG_ENTITY.into())));
+        };
+        display_data(entity.as_ref(), entity.get_display_name(), sender)
     }
 }
 
@@ -216,25 +214,23 @@ pub fn snbt_colorful_display(tag: &NbtTag, depth: usize) -> Result<TextComponent
     }
 }
 
-async fn display_data(
+fn display_data(
     entity: &dyn EntityBase,
     target_name: TextComponent,
     sender: &CommandSender,
 ) -> Result<i32, CommandError> {
     let mut nbt = NbtCompound::new();
-    entity.write_nbt(&mut nbt).await;
+    entity.write_nbt(&mut nbt);
     let tag = NbtTag::Compound(nbt);
 
     let result = get_i32_result(&tag)?;
     let display = snbt_colorful_display(&tag, 0)
         .map_err(|string| CommandError::CommandFailed(TextComponent::text(string)))?;
-    sender
-        .send_message(TextComponent::translate_cross(
-            translation::java::COMMANDS_DATA_ENTITY_QUERY,
-            translation::java::COMMANDS_DATA_ENTITY_QUERY,
-            [target_name, display],
-        ))
-        .await;
+    sender.send_message(TextComponent::translate_cross(
+        translation::java::COMMANDS_DATA_ENTITY_QUERY,
+        translation::java::COMMANDS_DATA_ENTITY_QUERY,
+        [target_name, display],
+    ));
 
     Ok(result)
 }

@@ -2,13 +2,13 @@
 use super::*;
 
 impl BedrockClient {
-    pub async fn handle_actor_event(&self, player: &Player, packet: SActorEvent) {
+    pub fn handle_actor_event(&self, player: &Player, packet: &SActorEvent) {
         if packet.event_id != ActorEventID::Feed
             || !player
                 .living_entity
                 .item_in_use
                 .lock()
-                .await
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
                 .as_ref()
                 .and_then(|item| item.get_data_component::<ConsumableImpl>())
                 .is_some_and(|consumable| consumable.animation == ConsumeAnimation::Eat)

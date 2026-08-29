@@ -306,9 +306,15 @@ impl PumpkinServer {
         // Ticker
         {
             let ticker_server = server.clone();
-            server.spawn_task(async move {
-                Ticker::run(&ticker_server).await;
-            });
+            if let Err(err) = std::thread::Builder::new()
+                .name("Server-Ticker".into())
+                .spawn(move || {
+                    Ticker::run(&ticker_server);
+                })
+            {
+                error!("Failed to spawn Server-Ticker thread: {err}");
+                std::process::exit(1);
+            }
         };
 
         let (bedrock_status, ice_socket) = Self::bind_bedrock_status(&server).await;
@@ -429,7 +435,7 @@ impl PumpkinServer {
                         "The input is not a TTY; falling back to simple logger and ignoring `use_tty` setting"
                     );
                 }
-                setup_stdin_console(self.server.clone());
+                setup_stdin_console(&self.server);
             }
         }
 
@@ -473,7 +479,6 @@ impl PumpkinServer {
             .server
             .player_data_storage
             .save_all_players(&self.server)
-            .await
         {
             error!("Error saving all players during shutdown: {e}");
         }
@@ -489,9 +494,7 @@ impl PumpkinServer {
 
         let kick_message = TextComponent::text("Server stopped");
         for player in self.server.get_all_players() {
-            player
-                .kick(DisconnectReason::Shutdown, kick_message.clone())
-                .await;
+            player.kick(DisconnectReason::Shutdown, &kick_message);
         }
 
         info!("Ending player tasks");
@@ -562,31 +565,31 @@ impl PumpkinServer {
                                      java_client.start_outgoing_packet_task();
 
                                      if let Some((player, world)) = server_clone
-                                     .add_player(Arc::new(ClientPlatform::Java(java_client)), profile, Some(config))
-                                          .await
-                                {
+                                         .add_player(Arc::new(ClientPlatform::Java(java_client)), profile, Some(config))
+                                 {
 
-                                    if let ClientPlatform::Java(client) = player.client.as_ref() {
-                                        client.set_player(player.clone());
-                                    }
-                                    world
-                                        .spawn_java_player(&server_clone.basic_config, &player, &server_clone)
-                                        .await;
+                                     if let ClientPlatform::Java(client) = player.client.as_ref() {
+                                         client.set_player(player.clone());
+                                     }
+                                     world
+                                         .spawn_java_player(&server_clone.basic_config, &player, &server_clone)
+                                         .await;
 
-                                    if let ClientPlatform::Java(client) = player.client.as_ref() {
-                                        client.progress_player_packets(&player, &server_clone).await;
+                                     if let ClientPlatform::Java(client) = player.client.as_ref() {
+                                         client.progress_player_packets(&player, &server_clone).await;
 
-                                        // Close when done
-                                        client.close();
-                                        client.await_tasks().await;
-                                    }
-                                    player.remove().await;
-                                    server_clone.remove_player(&player).await;
-                                    if let Err(e) = server_clone.player_data_storage
+                                         // Close when done
+                                         client.close();
+                                         client.await_tasks().await;
+                                     }
+                                     player.remove().await;
+                                     server_clone.remove_player(&player);
+                                    if let Err(e) = server_clone
+                                        .player_data_storage
                                         .handle_player_leave(&player)
-                                        .await {
-                                            error!("Failed to save player data on disconnect: {e}");
-                                        }
+                                    {
+                                        error!("Failed to save player data on disconnect: {e}");
+                                    }
                                     if let Err(e) = server_clone.advancement_manager
                                         .save_player(&player)
                                         .await {
@@ -668,24 +671,18 @@ impl PumpkinServer {
                     client.await_tasks().await;
                 }
                 PacketHandlerResult::ReadyToPlay(profile, config) => {
-                    if let Some((player, _world)) = server
-                        .add_player(
-                            Arc::new(ClientPlatform::Bedrock(client.clone())),
-                            profile,
-                            Some(config),
-                        )
-                        .await
-                    {
+                    if let Some((player, _world)) = server.add_player(
+                        Arc::new(ClientPlatform::Bedrock(client.clone())),
+                        profile,
+                        Some(config),
+                    ) {
                         client.set_player(player.clone());
-                        client.progress_player_packets(&player, &server).await;
+                        client.progress_player_packets(&player).await;
                         client.close().await;
                         client.await_tasks().await;
                         player.remove().await;
-                        server.remove_player(&player).await;
-                        if let Err(error) = server
-                            .player_data_storage
-                            .handle_player_leave(&player)
-                            .await
+                        server.remove_player(&player);
+                        if let Err(error) = server.player_data_storage.handle_player_leave(&player)
                         {
                             error!("Failed to save player data on disconnect: {error}");
                         }
@@ -696,7 +693,7 @@ impl PumpkinServer {
     }
 }
 
-fn setup_stdin_console(server: Arc<Server>) {
+fn setup_stdin_console(server: &Arc<Server>) {
     let (tx, mut rx) = tokio::sync::mpsc::channel(1);
     let rt = tokio::runtime::Handle::current();
     std::thread::spawn(move || {
@@ -716,21 +713,21 @@ fn setup_stdin_console(server: Arc<Server>) {
             let _ = rt.block_on(tx.send(line.trim().to_string()));
         }
     });
-    tokio::spawn(async move {
+    let server_clone = server.clone();
+    server.spawn_task(async move {
         while !SHOULD_STOP.load(Ordering::Relaxed)
             && let Some(command) = rx.recv().await
         {
             let mut event = ServerCommandEvent::new(command.clone());
-            server.plugin_manager.fire(&server, &mut event).await;
+            server_clone
+                .plugin_manager
+                .fire(&server_clone, &mut event)
+                .await;
             if !event.cancelled {
-                server
-                    .command_dispatcher
-                    .load()
-                    .handle_command(
-                        &command::CommandSender::Console.into_source(&server).await,
-                        command.as_str(),
-                    )
-                    .await;
+                server_clone.command_dispatcher.load().handle_command(
+                    &command::CommandSender::Console.into_source(&server_clone),
+                    command.as_str(),
+                );
             }
         }
     });
@@ -795,14 +792,10 @@ fn setup_console(mut rl: Editor<PumpkinCommandCompleter, FileHistory>, server: A
                 let mut event = ServerCommandEvent::new(line.clone());
                 server.plugin_manager.fire(&server, &mut event).await;
                 if !event.cancelled {
-                    server
-                        .command_dispatcher
-                        .load()
-                        .handle_command(
-                            &command::CommandSender::Console.into_source(&server).await,
-                            &line,
-                        )
-                        .await;
+                    server.command_dispatcher.load().handle_command(
+                        &command::CommandSender::Console.into_source(&server),
+                        &line,
+                    );
                 }
                 let _ = tx_reply.send(1).await;
             } else {

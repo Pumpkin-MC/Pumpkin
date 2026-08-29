@@ -45,7 +45,7 @@ trait PlantBlockBase {
         block.has_tag(&tag::Block::MINECRAFT_SUPPORTS_VEGETATION)
     }
 
-    async fn get_state_for_neighbor_update(
+    fn get_state_for_neighbor_update(
         &self,
         block_accessor: &dyn BlockAccessor,
         block_pos: &BlockPos,

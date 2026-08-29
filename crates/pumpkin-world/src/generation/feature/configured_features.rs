@@ -28,6 +28,7 @@ use super::features::{
     end_gateway::EndGatewayFeature,
     end_island::EndIslandFeature,
     end_platform::EndPlatformFeature,
+    end_podium::EndPodiumFeature,
     end_spike::EndSpikeFeature,
     fallen_tree::FallenTreeFeature,
     fill_layer::FillLayerFeature,
@@ -125,6 +126,7 @@ pub enum ConfiguredFeature {
     Lake(LakeFeature),
     Ore(OreFeature),
     EndPlatform(EndPlatformFeature),
+    EndPodium(EndPodiumFeature),
     EndSpike(EndSpikeFeature),
     EndIsland(EndIslandFeature),
     EndGateway(EndGatewayFeature),
@@ -228,15 +230,9 @@ impl ConfiguredFeature {
                 random,
                 pos,
             ),
-            Self::CoralClaw(_feature) => CoralClawFeature::generate(
-                chunk,
-                block_registry,
-                min_y,
-                height,
-                feature_name,
-                random,
-                pos,
-            ),
+            Self::CoralClaw(_feature) => {
+                CoralClawFeature::generate(chunk, block_registry, random, pos)
+            }
             Self::EndPlatform(_feature) => EndPlatformFeature::generate(
                 chunk,
                 block_registry,
@@ -246,6 +242,7 @@ impl ConfiguredFeature {
                 random,
                 pos,
             ),
+            Self::EndPodium(feature) => feature.generate(chunk, pos),
             Self::EndSpike(feature) => feature.generate(
                 chunk,
                 block_registry,
@@ -299,15 +296,7 @@ impl ConfiguredFeature {
                 random,
                 pos,
             ),
-            Self::Tree(feature) => feature.generate(
-                block_registry,
-                chunk,
-                min_y,
-                height,
-                feature_name,
-                random,
-                pos,
-            ),
+            Self::Tree(feature) => feature.generate(block_registry, chunk, random, pos),
             Self::RandomSelector(feature) => feature.generate(
                 chunk,
                 block_registry,
@@ -436,11 +425,9 @@ impl ConfiguredFeature {
             Self::DeltaFeature(_feature) => {
                 DeltaFeatureFeature::generate(chunk, min_y, height, feature_name, random, pos)
             }
-            Self::DripstoneCluster(feature) => feature.generate(chunk, random, pos),
+            Self::DripstoneCluster(feature) => feature.generate(chunk, pos),
             Self::LargeDripstone(feature) => feature.generate(chunk, random, pos),
-            Self::EndGateway(_feature) => {
-                EndGatewayFeature::generate(chunk, min_y, height, feature_name, random, pos)
-            }
+            Self::EndGateway(feature) => feature.generate(chunk, pos),
             Self::FillLayer(feature) => {
                 feature.generate(chunk, min_y, height, feature_name, random, pos)
             }
