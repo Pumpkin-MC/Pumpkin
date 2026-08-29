@@ -1,5 +1,5 @@
 use std::sync::Arc;
-use std::sync::atomic::Ordering;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use crossbeam::atomic::AtomicCell;
 use pumpkin_data::block_properties::{
@@ -24,9 +24,10 @@ pub struct PistonBlockEntity {
     pub last_progress: AtomicCell<f32>,
     pub extending: bool,
     pub source: bool,
-    /// World age this entity last ticked, `-1` if never. Vanilla `getRetractType` also
-    /// checks `lastTicked == level.getGameTime()` (extend can pass 50% in the same tick).
+    /// World age this entity last ticked, `-1` if never. Vanilla `getRetractType`.
     pub last_ticked: AtomicCell<i64>,
+    /// `from_nbt` only. Skip first-tick entity push: saved entities already sit at `progress`.
+    loaded_from_save: AtomicBool,
 }
 
 impl PistonBlockEntity {
@@ -50,14 +51,15 @@ impl PistonBlockEntity {
             extending,
             source,
             last_ticked: (-1i64).into(),
+            loaded_from_save: AtomicBool::new(false),
         }
     }
 
-    /// Vanilla `checkIfExtend` `TRIGGER_DROP`: dest still extending and (progress < 0.5,
-    /// `lastTicked == gameTime`, or `isHandlingTick`).
+    /// Vanilla `checkIfExtend` `TRIGGER_DROP`: dest still extending and (`getProgress(0)` =
+    /// `progressO` < 0.5, `lastTicked == gameTime`, or `isHandlingTick`).
     pub fn should_drop_instead_of_pull(&self, world: &World) -> bool {
         self.extending
-            && (self.current_progress.load() < 0.5
+            && (self.last_progress.load() < 0.5
                 || self.last_ticked.load() == world.get_world_age()
                 || world.is_handling_tick())
     }
@@ -164,10 +166,7 @@ impl PistonBlockEntity {
 
         for entity in world.get_entities_at_box(&query) {
             let e = entity.get_entity();
-            if e.no_physics.load(Ordering::Relaxed) {
-                continue;
-            }
-            // Vanilla: markers, displays, interaction, area effect clouds. No launch, no shove.
+            // Vanilla `moveCollidedEntities` skips `PushReaction.IGNORE` only, not `noPhysics`.
             if e.ignores_piston_push() {
                 continue;
             }
@@ -411,7 +410,6 @@ impl PistonBlockEntity {
             piston_direction,
             game_time,
         );
-        e.send_pos();
     }
 
     /// Vanilla `push`: when a piston head retracts, shove entities that ended up
@@ -477,7 +475,7 @@ impl PistonBlockEntity {
                 let state = if self.source {
                     Block::AIR.default_state.id
                 } else {
-                    // Vanilla `finalTick` does not strip `waterlogged`; `tick` does.
+                    // Vanilla `finalTick` resolved state, not tick-finish 340.
                     world.update_from_neighbor_shapes(self.pushed_block_state.id, &pos)
                 };
                 world.set_block_state(&pos, state, BlockFlags::NOTIFY_ALL);
@@ -490,22 +488,16 @@ impl PistonBlockEntity {
     /// Vanilla `ChunkHolder.broadcastChanges` sends the live cell. Re-queue after
     /// neighbour callbacks: the delivered block, even if `set_block_state` was a no-op.
     fn queue_delivered_block(world: &World, pos: BlockPos) {
-        let live = world.get_block_state_id(&pos);
-        if Block::from_state_id(live) != &Block::MOVING_PISTON {
-            world.defer_block_change(pos, live);
+        if world.get_block(&pos) != &Block::MOVING_PISTON {
+            world.defer_live_block_change(pos);
         }
     }
 
-    /// Vanilla `PistonMovingBlockEntity.saveAdditional`. Client codec names and types:
-    /// `blockState` as `{Name, Properties}`, `facing` as byte (`to_index`).
-    ///
-    /// Vanilla writes `progressO`. Load sets both `progress` and `progressO` to that value,
-    /// so a joining client (or a chunk reload) shows last tick while entities already sit
-    /// at `progress`. Write `progress` so a honey-dragged minecart stays on the block.
+    /// Vanilla `PistonMovingBlockEntity.saveAdditional`. Writes `progressO`.
     fn write_fields(&self, nbt: &mut NbtCompound) {
         nbt.put_compound(BLOCK_STATE, block_state_to_nbt(self.pushed_block_state.id));
         nbt.put_byte(FACING, self.facing.to_index() as i8);
-        nbt.put_float(PROGRESS, self.current_progress.load());
+        nbt.put_float(PROGRESS, self.last_progress.load());
         nbt.put_bool(EXTENDING, self.extending);
         nbt.put_bool(SOURCE, self.source);
     }
@@ -556,12 +548,14 @@ impl BlockEntity for PistonBlockEntity {
                     world.update_from_neighbor_shapes(self.pushed_block_state.id, &pos);
 
                 if BlockState::from_id(updated_state).is_air() {
+                    // Vanilla `setBlock(..., 340)` then `updateOrDestroy(..., AIR, 3)`.
                     world.set_block_state(
                         &pos,
                         self.pushed_block_state.id,
-                        BlockFlags::FORCE_STATE | BlockFlags::MOVED,
+                        BlockFlags::FORCE_STATE
+                            | BlockFlags::MOVED
+                            | BlockFlags::SKIP_BLOCK_ENTITY_REPLACED_CALLBACK,
                     );
-                    // No-op when the pushed block was air to begin with.
                     world.break_block(&pos, None, BlockFlags::NOTIFY_ALL);
                 } else {
                     let updated_state = BlockState::from_id(updated_state)
@@ -581,8 +575,11 @@ impl BlockEntity for PistonBlockEntity {
             return;
         }
         let new_progress = (current_progress + 0.5).min(1.0);
-        self.push_entities(world, new_progress);
-        self.move_stuck_entities(world, new_progress);
+        // NBT load: do not replay the half-step onto entities already at `progress`.
+        if !self.loaded_from_save.swap(false, Ordering::Relaxed) {
+            self.push_entities(world, new_progress);
+            self.move_stuck_entities(world, new_progress);
+        }
         self.current_progress.store(new_progress);
     }
 
@@ -609,6 +606,7 @@ impl BlockEntity for PistonBlockEntity {
             extending,
             source,
             last_ticked: (-1i64).into(),
+            loaded_from_save: AtomicBool::new(true),
         }
     }
 
@@ -624,6 +622,10 @@ impl BlockEntity for PistonBlockEntity {
 
     fn sends_update_packet(&self) -> bool {
         false
+    }
+
+    fn collision_shapes(&self, noclip: Option<BlockDirection>) -> Vec<BoundingBox> {
+        Self::collision_shapes(self, noclip)
     }
 
     fn as_any(&self) -> &dyn std::any::Any {

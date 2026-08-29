@@ -120,29 +120,26 @@ pub fn update_position(player: &Arc<Player>) {
         }
     }
 
-    // Watcher counts and entity-saver IO stay async. Do not `remove_entities_in_chunks` here:
-    // this can run off the tick loop (`handle_play_packet` / player tick). See
-    // `World::pending_chunk_removals`.
+    // Watcher IO is async. Tickets must land before `spawn_world_entity_chunks`.
     if !loading_chunks.is_empty() || !unloading_chunks.is_empty() {
         let level = world.level.clone();
         let world_clone = world.clone();
-        let loading_chunks_clone = loading_chunks.clone();
-        let unloading_chunks_clone = unloading_chunks;
-
+        let player = player.clone();
         if let Some(server) = world.server.upgrade() {
             server.spawn_task(async move {
-                level
-                    .mark_chunks_as_newly_watched(&loading_chunks_clone)
-                    .await;
-                let chunks_to_clean = level
-                    .mark_chunks_as_not_watched(&unloading_chunks_clone)
-                    .await;
-                world_clone.queue_chunk_removal(&chunks_to_clean);
+                if !loading_chunks.is_empty() {
+                    level.mark_chunks_as_newly_watched(&loading_chunks).await;
+                }
+                if !unloading_chunks.is_empty() {
+                    let chunks_to_clean = level.mark_chunks_as_not_watched(&unloading_chunks).await;
+                    world_clone.queue_chunk_removal(&chunks_to_clean);
+                }
+                if !loading_chunks.is_empty() {
+                    world_clone.spawn_world_entity_chunks(player, loading_chunks, new_chunk_center);
+                }
             });
+        } else if !loading_chunks.is_empty() {
+            world.spawn_world_entity_chunks(player, loading_chunks, new_chunk_center);
         }
-    }
-
-    if !loading_chunks.is_empty() {
-        world.spawn_world_entity_chunks(player.clone(), loading_chunks, new_chunk_center);
     }
 }

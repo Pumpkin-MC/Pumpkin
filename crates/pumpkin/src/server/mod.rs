@@ -1057,7 +1057,7 @@ impl Server {
         // `tickConnection` / `ServerGamePacketListenerImpl.tick` (block-changed
         // ack). A second flush picks up `setBlock` from packets that arrived
         // after this tick's in-world flush; do not `promote_deferred` here
-        // (piston dest `CBlockUpdate` stays on the next tick).
+        // (piston source air / dest stay on the next tick).
         self.flush_pending_block_updates();
         self.acknowledge_player_block_changes();
         self.resume_player_flushes();

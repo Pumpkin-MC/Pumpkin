@@ -229,6 +229,7 @@ impl PistonBlock {
                 props.to_state_id(block),
                 BlockFlags::NOTIFY_ALL | BlockFlags::MOVED,
             );
+            world.defer_live_block_change(*pos);
             // Play piston extend sound
             let pitch = rand::rng().random_range(0.6f32..0.85);
             world.play_sound_fine(
@@ -314,6 +315,7 @@ impl PistonBlock {
                         Block::AIR.default_state.id,
                         BlockFlags::NOTIFY_ALL,
                     );
+                    world.defer_live_block_change(extended_pos);
                 } else {
                     move_blocks(world, dir, pos, false, sticky);
                 }
@@ -324,6 +326,7 @@ impl PistonBlock {
                 Block::AIR.default_state.id,
                 BlockFlags::NOTIFY_ALL,
             );
+            world.defer_live_block_change(extended_pos);
         }
         // Play piston contract sound
         let pitch = rand::rng().random_range(0.6f32..0.75);
@@ -417,11 +420,13 @@ fn move_blocks(
 ) -> bool {
     let extended_pos = block_pos.offset(dir.to_offset());
     if !extending && world.get_block(&extended_pos) == &Block::PISTON_HEAD {
+        // Vanilla `setBlock(..., 276)`: `UPDATE_INVISIBLE`.
         world.set_block_state(
             &extended_pos,
             Block::AIR.default_state.id,
-            BlockFlags::FORCE_STATE,
+            PistonBlock::RETRACT_BODY_FLAGS,
         );
+        world.defer_live_block_change(extended_pos);
     }
     let mut handler = PistonHandler::new(world, *block_pos, dir, extending);
     if !handler.calculate_push() {
@@ -568,6 +573,13 @@ fn move_blocks(
         // Vanilla `level.updateNeighborsAt(armPos, Blocks.PISTON_HEAD)`: the arm is still
         // MOVING_PISTON, so the source is explicit.
         world.update_neighbors_from(&extended_pos, &Block::PISTON_HEAD, None);
+    }
+
+    for &pos in moved_blocks_map.keys() {
+        world.defer_live_block_change(pos);
+    }
+    for &pos in &broken_blocks {
+        world.defer_live_block_change(pos);
     }
 
     true

@@ -40,6 +40,8 @@ pub struct ItemEntity {
 }
 
 const ITEM_UPDATE_INTERVAL: u32 = 20;
+/// Vanilla `ItemEntity.merge(to, from, 64)`: extra cap on top of `getMaxStackSize`.
+const ITEM_MERGE_MAX_COUNT: u8 = 64;
 
 impl ItemEntity {
     pub fn new(entity: Entity, item_stack: ItemStack) -> Self {
@@ -125,7 +127,19 @@ impl ItemEntity {
         &self.entity
     }
 
+    /// Vanilla `ItemEntity.isMergable` without the stack lock.
+    fn is_mergable_entity(&self) -> bool {
+        !self.entity.removed.load(Ordering::SeqCst)
+            && !self.never_despawn.load(Ordering::Relaxed)
+            && !self.never_pickup.load(Ordering::Relaxed)
+            && self.item_age.load(Ordering::Relaxed) < 6000
+    }
+
+    /// Vanilla `ItemEntity.isMergable`.
     pub fn can_merge(&self) -> bool {
+        if !self.is_mergable_entity() {
+            return false;
+        }
         let Ok(item_stack) = self.item_stack.try_lock() else {
             return false;
         };
@@ -134,36 +148,26 @@ impl ItemEntity {
     }
 
     pub fn try_merge(&self) {
-        if !self.can_merge() || self.never_despawn.load(Ordering::Relaxed) {
+        if !self.can_merge() {
             return;
         }
 
+        // Vanilla `ItemEntity.mergeWithNeighbours`. Neighbor stack size is checked under lock.
         let bounding_box = self.entity.bounding_box.load().expand(0.5, 0.0, 0.5);
-
         let world = self.entity.world.load();
-        let entities = world.entities.load();
-        let items: Vec<&Self> = entities
-            .iter()
-            .filter_map(|entity: &Arc<dyn EntityBase>| {
-                entity.get_item_entity().filter(|item| {
-                    item.entity.entity_id != self.entity.entity_id
-                        && !item.never_despawn.load(Ordering::Relaxed)
-                        && item.entity.bounding_box.load().intersects(&bounding_box)
-                })
-            })
-            .collect();
-
-        for item in items {
-            if item.can_merge() {
-                if let Some(this_base) = world.get_entity_by_id(self.entity.entity_id)
-                    && let Some(this_item) = this_base.get_item_entity()
-                {
-                    this_item.try_merge_with(item);
-                }
-
-                if self.entity.removed.load(Ordering::SeqCst) {
-                    break;
-                }
+        for other in world.get_entities_at_box(&bounding_box) {
+            if other.get_entity().entity_id == self.entity.entity_id {
+                continue;
+            }
+            let Some(item) = other.get_item_entity() else {
+                continue;
+            };
+            if !item.is_mergable_entity() {
+                continue;
+            }
+            self.try_merge_with(item);
+            if self.entity.removed.load(Ordering::SeqCst) {
+                break;
             }
         }
     }
@@ -192,8 +196,10 @@ impl ItemEntity {
             (high_stack, low_stack)
         };
 
-        if !self_stack.are_equal(&other_stack)
-            || self_stack.item_count + other_stack.item_count > self_stack.get_max_stack_size()
+        // Vanilla `ItemEntity.areMergable`: `isSameItemSameComponents` and
+        // `this.count + other.count <= other.getMaxStackSize()`.
+        if !self_stack.are_items_and_components_equal(&other_stack)
+            || self_stack.item_count + other_stack.item_count > other_stack.get_max_stack_size()
         {
             return;
         }
@@ -217,54 +223,41 @@ impl ItemEntity {
             return;
         }
 
-        // Vanilla code adds a .min(64). Not needed with Vanilla item data
-
-        let max_size = stack1.get_max_stack_size();
-
-        let j = stack2.item_count.min(max_size - stack1.item_count);
+        // Vanilla `ItemEntity.merge(to, from, 64)`.
+        let max_size = stack1.get_max_stack_size().min(ITEM_MERGE_MAX_COUNT);
+        let j = stack2
+            .item_count
+            .min(max_size.saturating_sub(stack1.item_count));
 
         stack1.increment(j);
-
         stack2.decrement(j);
-
-        let empty1 = stack1.item_count == 0;
 
         let empty2 = stack2.item_count == 0;
 
         drop(stack1);
-
         drop(stack2);
 
-        let never_despawn = source.never_despawn.load(Ordering::Relaxed);
-
-        target.never_despawn.store(never_despawn, Ordering::Relaxed);
-
-        if !never_despawn {
+        if source.never_despawn.load(Ordering::Relaxed) {
+            target.never_despawn.store(true, Ordering::Relaxed);
+        }
+        if !target.never_despawn.load(Ordering::Relaxed) {
             let age = target
                 .item_age
                 .load(Ordering::Relaxed)
                 .min(source.item_age.load(Ordering::Relaxed));
-
             target.item_age.store(age, Ordering::Relaxed);
         }
-
-        let never_pickup = source.never_pickup.load(Ordering::Relaxed);
-
-        target.never_pickup.store(never_pickup, Ordering::Relaxed);
-
-        if !never_pickup {
+        if source.never_pickup.load(Ordering::Relaxed) {
+            target.never_pickup.store(true, Ordering::Relaxed);
+        }
+        if !target.never_pickup.load(Ordering::Relaxed) {
             let source_delay = source.pickup_delay.load(Ordering::Relaxed);
             target
                 .pickup_delay
                 .fetch_max(source_delay, Ordering::Relaxed);
         }
 
-        if empty1 {
-            target.entity.remove();
-        } else {
-            target.init_data_tracker();
-        }
-
+        target.init_data_tracker();
         if empty2 {
             source.entity.remove();
         } else {
@@ -302,15 +295,13 @@ impl ItemEntity {
         velo
     }
 
-    fn update_no_physics_and_push_out(&self) {
+    fn update_no_physics_and_push_out(&self, caller: &dyn EntityBase) {
         let entity = &self.entity;
         let pos = entity.pos.load();
         let bounding_box = entity.bounding_box.load();
-
-        let no_physics = !entity
-            .world
-            .load()
-            .is_space_empty(bounding_box.expand(-1.0e-7, -1.0e-7, -1.0e-7));
+        // Vanilla `ItemEntity`: `noPhysics = !level.noCollision(this, aabb.deflate(1e-7))`.
+        let deflated = bounding_box.expand(-1.0e-7, -1.0e-7, -1.0e-7);
+        let no_physics = !entity.world.load().no_collision(deflated, caller);
 
         entity.no_physics.store(no_physics, Ordering::Relaxed);
 
@@ -383,25 +374,19 @@ impl ItemEntity {
                     .plugin_manager
                     .fire_blocking(&server, &mut despawn_event);
             }
-            if !despawn_event.cancelled
-                && let Some(e) = world.get_entity_by_id(entity_id)
-            {
-                e.get_entity().remove();
+            if !despawn_event.cancelled {
+                entity.remove();
             }
             return false;
         }
 
-        let n = if entity
-            .last_pos
-            .load()
-            .sub(&entity.pos.load())
-            .length_squared()
-            == 0.0
-        {
-            40
-        } else {
-            2
-        };
+        // Vanilla merge rate: 2 if the block cell changed vs `xo/yo/zo`, else 40.
+        let xo = entity.last_pos.load();
+        let pos = entity.pos.load();
+        let moved = xo.x.floor() != pos.x.floor()
+            || xo.y.floor() != pos.y.floor()
+            || xo.z.floor() != pos.z.floor();
+        let n = if moved { 2 } else { 40 };
 
         if age.is_multiple_of(n) && self.can_merge() {
             self.try_merge();
@@ -415,24 +400,27 @@ impl ItemEntity {
 
         entity.update_fluid_state(caller);
 
-        let velocity_dirty = entity.velocity_dirty.swap(false, Ordering::SeqCst)
+        let marked = entity.velocity_dirty.swap(false, Ordering::SeqCst);
+        let velocity_dirty = marked
             || entity.touching_water.load(Ordering::SeqCst)
             || entity.touching_lava.load(Ordering::SeqCst)
             || entity.velocity.load().sub(&original_velo).length_squared() > 0.1;
         let moved = entity.pos.load() != entity.last_sent_pos.load();
-        let position_dirty = moved
-            && self
-                .item_age
-                .load(Ordering::Relaxed)
-                .is_multiple_of(ITEM_UPDATE_INTERVAL);
+        // Vanilla `ServerEntity.sendChanges`: `ItemEntity` `updateInterval` 20.
+        let on_interval = self
+            .item_age
+            .load(Ordering::Relaxed)
+            .is_multiple_of(ITEM_UPDATE_INTERVAL);
 
-        if position_dirty || velocity_dirty {
+        if on_interval && (moved || velocity_dirty) {
             entity.send_pos_rot();
         } else if moved {
             entity.send_bedrock_pos();
         }
-        if velocity_dirty {
+        if on_interval && velocity_dirty {
             entity.send_velocity();
+        } else if marked {
+            entity.velocity_dirty.store(true, Ordering::SeqCst);
         }
     }
 }
@@ -440,6 +428,7 @@ impl ItemEntity {
 impl EntityBase for ItemEntity {
     fn tick(&self, caller: &dyn EntityBase, _server: &Server) {
         let entity = &self.entity;
+        entity.update_last_pos();
         self.decrement_pickup_delay();
 
         let original_velo = entity.velocity.load();
@@ -447,7 +436,7 @@ impl EntityBase for ItemEntity {
             .velocity
             .store(self.apply_fluid_drag_or_gravity(original_velo));
 
-        self.update_no_physics_and_push_out();
+        self.update_no_physics_and_push_out(caller);
 
         let move_velo = entity.velocity.load(); // In case push_out_of_blocks modifies it
 

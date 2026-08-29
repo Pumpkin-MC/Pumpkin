@@ -125,8 +125,7 @@ pub struct JavaClient {
     pub packet_sequence: AtomicI32,
     /// Packet rate limiter for incoming client packets.
     pub packet_limiter: PacketRateLimiter,
-    /// Vanilla `suspendFlushingOnServerThread`: the writer holds the socket flush
-    /// until tick end so packets from this game tick are not mixed with the next.
+    /// Vanilla `suspendFlushingOnServerThread`.
     suspend_flushing: Arc<AtomicBool>,
 }
 
@@ -179,15 +178,7 @@ impl JavaClient {
         self.suspend_flushing.store(true, Ordering::Release);
     }
 
-    /// Vanilla `ServerGamePacketListenerImpl.tick` `ClientboundBlockChangedAckPacket`.
-    ///
-    /// Must run after `ChunkHolder.broadcastChanges` (`flush_block_updates`) and
-    /// on the normal outgoing queue. The client
-    /// `BlockStatePredictionHandler` keeps the predicted block (repeater delay)
-    /// until this ack. Acking first reapplies the pre-click `serverVerifiedState`;
-    /// the later `CBlockUpdate` then snaps to the new delay. `send_packet` is
-    /// high-priority and flushes immediately, so it can also overtake a queued
-    /// `CBlockUpdate`.
+    /// Vanilla `ClientboundBlockChangedAckPacket` after `broadcastChanges`, on the normal queue.
     pub fn acknowledge_pending_block_changes(&self) {
         let seq = self.packet_sequence.swap(-1, Ordering::Relaxed);
         if seq != -1
@@ -197,13 +188,12 @@ impl JavaClient {
         }
     }
 
-    /// Vanilla `ServerCommonPacketListenerImpl.resumeFlushing`: lift the hold and
-    /// enqueue a tick-end flush barrier.
+    /// Vanilla `resumeFlushing`: queue `flushChannel` then lift the hold.
     pub fn resume_flushing(&self) {
-        self.suspend_flushing.store(false, Ordering::Release);
         let _ = self
             .outgoing_packet_queue_send
             .try_send(OutgoingPacket::Flush);
+        self.suspend_flushing.store(false, Ordering::Release);
     }
 
     pub fn set_player(&self, player: Arc<Player>) {
@@ -466,22 +456,15 @@ impl JavaClient {
             .outgoing_packet_queue_send
             .try_send(OutgoingPacket::normal(packet_data))
         {
-            match err {
-                tokio::sync::mpsc::error::TrySendError::Full(_) => {
-                    debug!(
-                        "Failed to add packet to the outgoing packet queue for client {}: channel full",
-                        self.id
-                    );
-                }
-                tokio::sync::mpsc::error::TrySendError::Closed(_) => {
-                    if !self.close_token.is_cancelled() {
-                        warn!(
-                            "Failed to add packet to the outgoing packet queue for client {}: channel closed",
-                            self.id
-                        );
-                        self.close();
-                    }
-                }
+            // Full: drop. Logging every Full is O(dropped packets) on the tick thread.
+            if let tokio::sync::mpsc::error::TrySendError::Closed(_) = err
+                && !self.close_token.is_cancelled()
+            {
+                warn!(
+                    "Failed to add packet to the outgoing packet queue for client {}: channel closed",
+                    self.id
+                );
+                self.close();
             }
         }
     }

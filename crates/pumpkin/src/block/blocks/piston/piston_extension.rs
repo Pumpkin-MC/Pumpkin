@@ -4,7 +4,6 @@ use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_world::world::BlockFlags;
 
-use crate::block::entities::piston::PistonBlockEntity;
 use crate::block::{BlockBehaviour, BrokenArgs, GetCollisionShapesArgs};
 
 use super::piston::{PistonBlock, PistonProps};
@@ -52,12 +51,7 @@ impl BlockBehaviour for PistonExtensionBlock {
         let shapes = args
             .world
             .get_live_block_entity(args.position)
-            .and_then(|block_entity| {
-                block_entity
-                    .as_any()
-                    .downcast_ref::<PistonBlockEntity>()
-                    .map(|piston| piston.collision_shapes(noclip))
-            })
+            .map(|block_entity| block_entity.collision_shapes(noclip))
             .unwrap_or_default();
         Some(shapes)
     }

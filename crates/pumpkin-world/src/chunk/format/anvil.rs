@@ -355,12 +355,20 @@ impl AnvilChunkData {
             .compress_data(&raw_bytes, level)
             .map_err(ChunkWritingError::Compression)?;
 
-        let data = Self {
+        let mut data = Self {
             compression: Some(compression),
             compressed_data: compressed_data.into(),
         };
-        // Refuse before the location table is written: a count above 255 cannot be encoded
-        // and would overflow into the next offset. The in-memory chunk stays dirty.
+        // Location table stores one byte of sector count. Retry zlib before refuse.
+        if data.sector_count() > MAX_SECTORS_PER_CHUNK && compression != Compression::ZLib {
+            let zlib_data = Compression::ZLib
+                .compress_data(&raw_bytes, level)
+                .map_err(ChunkWritingError::Compression)?;
+            data = Self {
+                compression: Some(Compression::ZLib),
+                compressed_data: zlib_data.into(),
+            };
+        }
         if data.sector_count() > MAX_SECTORS_PER_CHUNK {
             return Err(ChunkWritingError::ChunkSerializingError(format!(
                 "chunk {:?} serializes to {} sectors; Anvil location table max is {MAX_SECTORS_PER_CHUNK} (no `.mcc` fallback)",

@@ -1,10 +1,6 @@
-//! Outgoing Java packet writer: tick-thread enqueue stays non-blocking, socket
-//! write/flush runs on a dedicated task.
-//!
-//! Vanilla (`ServerCommonPacketListenerImpl.suspendFlushing` /
-//! `resumeFlushing`, `Connection.tick`) writes every packet of a game tick
-//! without flushing, then flushes once at tick end (~50ms at 20 TPS). Flushing
-//! every N packets splits a tick across TCP flushes and lets tick N+1 mix in.
+//! Tick-thread enqueue is non-blocking; socket write/flush is a dedicated task.
+//! Vanilla `suspendFlushing` / `resumeFlushing` write a game tick without flushing,
+//! then `Connection.flushChannel` once so `CBlockEvent` and entity motion share a tick.
 
 use std::sync::{
     Arc,
@@ -23,9 +19,35 @@ use tokio::time::MissedTickBehavior;
 use tokio_util::sync::CancellationToken;
 use tracing::warn;
 
-/// Vanilla game-tick length (`MinecraftServer` 20 TPS). Socket flush cadence
-/// matches `Connection.tick` / `resumeFlushing`, not a packet-count batch.
+/// Off-tick fallback. Play ticks flush from `OutgoingPacket::Flush`.
 const TICK_FLUSH_INTERVAL: Duration = Duration::from_millis(50);
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum FlushRequest {
+    None,
+    /// `send_packet_now`. Vanilla `send(..., flush)` is false while suspended.
+    IfNotSuspended,
+    /// `Connection.flushChannel`. Always, including while still suspended.
+    Always,
+}
+
+impl FlushRequest {
+    const fn merge(self, other: Self) -> Self {
+        match (self, other) {
+            (Self::Always, _) | (_, Self::Always) => Self::Always,
+            (Self::IfNotSuspended, _) | (_, Self::IfNotSuspended) => Self::IfNotSuspended,
+            (Self::None, Self::None) => Self::None,
+        }
+    }
+
+    const fn should_flush(self, suspended: bool) -> bool {
+        match self {
+            Self::Always => true,
+            Self::IfNotSuspended => !suspended,
+            Self::None => false,
+        }
+    }
+}
 
 pub enum OutgoingPacket {
     Data {
@@ -88,20 +110,30 @@ impl<W: AsyncWrite + Unpin> WriterState<W> {
         true
     }
 
-    /// Returns `None` on a write/flush failure. `Some(true)` means flush now
-    /// (tick barrier or high-priority `send_packet_now`).
-    async fn handle(&mut self, packet: OutgoingPacket) -> Option<bool> {
+    /// Completions wait for TCP flush when we flush; complete immediately while suspended.
+    fn complete_pending(&mut self) {
+        for completion in self.pending_completions.drain(..) {
+            let _ = completion.send(());
+        }
+    }
+
+    /// Returns `None` on a write/flush failure.
+    async fn handle(&mut self, packet: OutgoingPacket) -> Option<FlushRequest> {
         match packet {
-            OutgoingPacket::Flush => Some(true),
+            OutgoingPacket::Flush => Some(FlushRequest::Always),
             OutgoingPacket::Data { data, completion } => {
                 if !self.write_data(data).await {
                     return None;
                 }
-                let immediate = completion.is_some();
+                let request = if completion.is_some() {
+                    FlushRequest::IfNotSuspended
+                } else {
+                    FlushRequest::None
+                };
                 if let Some(completion) = completion {
                     self.pending_completions.push(completion);
                 }
-                Some(immediate)
+                Some(request)
             }
         }
     }
@@ -169,7 +201,7 @@ pub async fn run_outgoing_packet_writer<W: AsyncWrite + Unpin>(
             break;
         };
 
-        let Some(mut flush_now) = state.handle(first).await else {
+        let Some(mut flush_request) = state.handle(first).await else {
             close_token.cancel();
             break;
         };
@@ -179,11 +211,11 @@ pub async fn run_outgoing_packet_writer<W: AsyncWrite + Unpin>(
         loop {
             match try_recv_next(&mut priority_packet_receiver, &mut packet_receiver) {
                 Ok(packet) => {
-                    let Some(immediate) = state.handle(packet).await else {
+                    let Some(request) = state.handle(packet).await else {
                         close_token.cancel();
                         return;
                     };
-                    flush_now |= immediate;
+                    flush_request = flush_request.merge(request);
                 }
                 Err(TryRecvError::Empty) => break,
                 Err(TryRecvError::Disconnected) => {
@@ -195,9 +227,14 @@ pub async fn run_outgoing_packet_writer<W: AsyncWrite + Unpin>(
             }
         }
 
-        if flush_now && !state.flush().await {
-            close_token.cancel();
-            break;
+        let suspended = suspend_flushing.load(Ordering::Acquire);
+        if flush_request.should_flush(suspended) {
+            if !state.flush().await {
+                close_token.cancel();
+                break;
+            }
+        } else {
+            state.complete_pending();
         }
     }
 
@@ -350,6 +387,81 @@ mod tests {
         tx.try_send(OutgoingPacket::Flush).unwrap();
         tokio::time::sleep(Duration::from_millis(20)).await;
         assert_eq!(flushes.load(Ordering::SeqCst), 1);
+
+        drop(tx);
+        close.cancel();
+        writer.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn high_priority_does_not_flush_while_suspended() {
+        let (tx, rx) = tokio::sync::mpsc::channel(4096);
+        let (pri_tx, pri_rx) = tokio::sync::mpsc::channel(4096);
+        let flushes = Arc::new(AtomicUsize::new(0));
+        let suspend = Arc::new(AtomicBool::new(true));
+        let close = CancellationToken::new();
+
+        let writer = tokio::spawn(run_writer(
+            rx,
+            pri_rx,
+            flushes.clone(),
+            suspend.clone(),
+            close.clone(),
+        ));
+
+        tx.try_send(packet(1)).unwrap();
+        let (done_tx, done_rx) = oneshot::channel();
+        pri_tx
+            .try_send(OutgoingPacket::high_priority(
+                Bytes::from_static(&[2]),
+                done_tx,
+            ))
+            .unwrap();
+        tokio::time::timeout(Duration::from_millis(50), done_rx)
+            .await
+            .expect("send_packet_now must complete without waiting for tick-end flush")
+            .expect("writer dropped");
+        tokio::time::sleep(Duration::from_millis(20)).await;
+        assert_eq!(
+            flushes.load(Ordering::SeqCst),
+            0,
+            "high-priority must not flush CBlockEvent / entity motion mid-tick"
+        );
+
+        tx.try_send(OutgoingPacket::Flush).unwrap();
+        tokio::time::sleep(Duration::from_millis(20)).await;
+        assert_eq!(flushes.load(Ordering::SeqCst), 1);
+
+        drop(tx);
+        drop(pri_tx);
+        close.cancel();
+        writer.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn flush_barrier_flushes_while_still_suspended() {
+        let (tx, rx) = tokio::sync::mpsc::channel(4096);
+        let (_pri_tx, pri_rx) = tokio::sync::mpsc::channel(4096);
+        let flushes = Arc::new(AtomicUsize::new(0));
+        let suspend = Arc::new(AtomicBool::new(true));
+        let close = CancellationToken::new();
+
+        let writer = tokio::spawn(run_writer(
+            rx,
+            pri_rx,
+            flushes.clone(),
+            suspend,
+            close.clone(),
+        ));
+
+        tx.try_send(packet(1)).unwrap();
+        tx.try_send(OutgoingPacket::Flush).unwrap();
+        tokio::time::sleep(Duration::from_millis(20)).await;
+        assert_eq!(
+            flushes.load(Ordering::SeqCst),
+            1,
+            "resumeFlushing queues Flush before lifting suspendFlushing"
+        );
 
         drop(tx);
         close.cancel();

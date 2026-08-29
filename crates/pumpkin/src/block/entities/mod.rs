@@ -1,7 +1,8 @@
 use std::{any::Any, sync::Arc};
 
-use pumpkin_data::{Block, block_properties::BLOCK_ENTITY_TYPES};
+use pumpkin_data::{Block, BlockDirection, block_properties::BLOCK_ENTITY_TYPES};
 use pumpkin_nbt::compound::NbtCompound;
+use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::position::BlockPos;
 
 use crate::world::World;
@@ -85,6 +86,11 @@ pub trait BlockEntity: Any + Send + Sync {
     /// where that order is actually observable: it serialises the tick for the whole batch.
     fn is_tick_order_sensitive(&self) -> bool {
         false
+    }
+
+    /// Vanilla `BlockEntity.getCollisionShape`. Empty: use the block state's voxels.
+    fn collision_shapes(&self, _noclip: Option<BlockDirection>) -> Vec<BoundingBox> {
+        Vec::new()
     }
 
     /// Atomically takes the pending loot-table key and seed from this block entity.

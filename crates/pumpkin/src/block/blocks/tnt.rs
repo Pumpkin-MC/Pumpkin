@@ -67,6 +67,7 @@ impl TNTBlock {
 
         let pos = entity.pos.load();
         let tnt = Arc::new(TNTEntity::new(entity, DEFAULT_POWER, DEFAULT_FUSE));
+        tnt.apply_prime_impulse();
         world.spawn_entity(tnt);
         world.play_sound(
             pumpkin_data::sound::Sound::EntityTntPrimed,

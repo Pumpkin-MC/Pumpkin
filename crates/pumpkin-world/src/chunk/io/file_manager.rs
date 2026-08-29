@@ -360,7 +360,13 @@ where
                         chunk.mark_dirty(false);
 
                         if was_dirty {
-                            writer.update_chunk(&**chunk, &self.chunk_config).await?;
+                            // Restore dirty if write refuses so unload does not drop the chunk.
+                            if let Err(err) =
+                                writer.update_chunk(&**chunk, &self.chunk_config).await
+                            {
+                                chunk.mark_dirty(true);
+                                return Err(err);
+                            }
                         }
                     }
                     // Write-lock released here — flush can proceed under a read-lock.

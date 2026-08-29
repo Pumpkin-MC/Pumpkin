@@ -2351,6 +2351,12 @@ impl Entity {
         self.set_pos(self.pos.load() + delta);
     }
 
+    /// Vanilla `Entity.move` `noPhysics`: `setPos`, clear collision flags, keep `onGround`.
+    fn move_no_physics(&self, motion: Vector3<f64>) {
+        self.move_pos(motion);
+        self.horizontal_collision.store(false, Ordering::Relaxed);
+    }
+
     // Move by a delta, adjust for collisions, and send
 
     // Does not send movement. That must be done separately
@@ -2360,10 +2366,7 @@ impl Entity {
         }
 
         if self.no_physics.load(Ordering::Relaxed) {
-            self.move_pos(motion);
-            self.horizontal_collision.store(false, Ordering::Relaxed);
-            self.on_ground.store(false, Ordering::Relaxed);
-
+            self.move_no_physics(motion);
             return;
         }
 
@@ -2414,12 +2417,20 @@ impl Entity {
         }
 
         if self.no_physics.load(Ordering::Relaxed) {
-            self.move_pos(motion);
+            self.move_no_physics(motion);
             return;
         }
 
+        // Vanilla `setOnGroundWithMovement` only when `movedVertically`.
+        let keep_ground = motion.y == 0.0;
+        let on_ground = self.on_ground.load(Ordering::SeqCst);
+        let supporting = self.supporting_block_pos.load();
         let final_move = self.adjust_movement_for_collisions(motion, caller.as_ref());
         self.move_pos(final_move);
+        if keep_ground {
+            self.on_ground.store(on_ground, Ordering::SeqCst);
+            self.supporting_block_pos.store(supporting);
+        }
     }
 
     /// Whether pistons pass straight through this entity instead of pushing it. Vanilla:

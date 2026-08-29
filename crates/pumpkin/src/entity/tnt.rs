@@ -39,6 +39,13 @@ impl TNTEntity {
             fuse: AtomicU32::new(fuse),
         }
     }
+
+    /// Vanilla primed-TNT ctor impulse. Not in `init_data_tracker` (chunk load has `Motion`).
+    pub fn apply_prime_impulse(&self) {
+        let yaw: f64 = rand::random::<f64>() * TAU;
+        self.entity
+            .set_velocity(Vector3::new(-yaw.sin() * 0.02, 0.2, -yaw.cos() * 0.02));
+    }
 }
 
 impl EntityBase for TNTEntity {
@@ -132,11 +139,6 @@ impl EntityBase for TNTEntity {
     }
 
     fn init_data_tracker(&self) {
-        let pos: f64 = rand::random::<f64>() * TAU;
-
-        self.entity
-            .set_velocity(Vector3::new(-pos.sin() * 0.02, 0.2, -pos.cos() * 0.02));
-
         self.entity.send_meta_data(
             &[
                 Metadata::new(

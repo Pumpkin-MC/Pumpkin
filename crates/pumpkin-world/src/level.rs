@@ -475,19 +475,16 @@ impl Level {
         let chunks_to_process: Vec<_> = chunks
             .into_iter()
             .filter_map(|pos_borrow| {
-                let pos = pos_borrow.borrow();
+                let pos = *pos_borrow.borrow();
                 // Only include chunks with no watchers
-                let has_watchers = self
-                    .chunk_watchers
-                    .get(pos)
-                    .is_some_and(|count| *count != 0);
-
-                if has_watchers {
+                if self.is_chunk_watched(&pos) {
                     return None;
                 }
 
-                // Remove immediately to prevent race conditions
-                self.loaded_entity_chunks.remove(pos)
+                // Keep the Arc until the write finishes so a fast relog does not load stale disk.
+                self.loaded_entity_chunks
+                    .get(&pos)
+                    .map(|chunk| (pos, chunk.clone()))
             })
             .collect();
 
@@ -498,7 +495,12 @@ impl Level {
         let level = self.clone();
         self.spawn_task(async move {
             debug!("Writing {} entity chunks to disk", chunks_to_process.len());
-            level.write_entity_chunks(chunks_to_process).await;
+            level.write_entity_chunks(chunks_to_process.clone()).await;
+            for (pos, _) in chunks_to_process {
+                if !level.is_chunk_watched(&pos) {
+                    level.loaded_entity_chunks.remove(&pos);
+                }
+            }
         });
     }
 
@@ -706,16 +708,20 @@ impl Level {
             let cancel_notifier = level.cancel_token.cancelled();
 
             let fetch_task = async {
-                let to_fetch: Vec<_> = chunks
-                    .iter()
-                    .filter(|pos| {
-                        level.loaded_entity_chunks.get(pos).is_none_or(|chunk| {
-                            let _ = sender.try_send((Arc::downgrade(chunk.value()), false));
-                            false // Don't fetch
-                        })
-                    })
-                    .copied()
-                    .collect();
+                let mut to_fetch = Vec::new();
+                for pos in &chunks {
+                    if let Some(chunk) = level.loaded_entity_chunks.get(pos) {
+                        if sender
+                            .send((Arc::downgrade(chunk.value()), false))
+                            .await
+                            .is_err()
+                        {
+                            return;
+                        }
+                    } else {
+                        to_fetch.push(*pos);
+                    }
+                }
 
                 if !to_fetch.is_empty() {
                     let (tx, mut rx) = tokio::sync::mpsc::channel::<
@@ -860,10 +866,14 @@ impl Level {
 
         trace!("Sending chunks to ChunkIO {:}", chunks_to_write.len());
         if let Err(error) = chunk_saver
-            .save_chunks(&level_folder, chunks_to_write)
+            .save_chunks(&level_folder, chunks_to_write.clone())
             .await
         {
             error!("Failed writing Chunk to disk {error}");
+            for (pos, chunk) in chunks_to_write {
+                chunk.mark_dirty(true);
+                self.loaded_entity_chunks.entry(pos).or_insert(chunk);
+            }
         }
     }
 

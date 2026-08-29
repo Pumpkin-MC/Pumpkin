@@ -266,6 +266,8 @@ pub struct World {
     /// `entitySectionStorage`). Kept in sync with [`Self::entities`] on spawn, despawn, and
     /// chunk-crossing `Entity::set_pos`.
     entities_by_chunk: DashMap<Vector2<i32>, FxHashMap<i32, Arc<dyn EntityBase>>>,
+    /// Vanilla `PersistentEntitySectionManager.knownUuids`.
+    entity_uuids: DashSet<Uuid>,
     /// The world's scoreboard, used for tracking scores, objectives, and display information.
     pub scoreboard: std::sync::Mutex<Scoreboard>,
     /// The world's worldborder, defining the playable area and controlling its expansion or contraction.
@@ -314,9 +316,7 @@ pub struct World {
     /// Chunks queued for entity/block-entity teardown by a caller outside the tick loop
     /// (disconnect, `chunker` watch-radius shrink). `tick()` drains this after those phases.
     pending_chunk_removals: DashSet<Vector2<i32>>,
-    /// Chunks whose entities are live in `entities`/`entities_by_chunk`.
-    /// Block data loads via `GenerationSchedule`; entities via `spawn_world_entity_chunks`.
-    /// `tick_chunks` waits on this so a detector rail does not re-derive `POWERED` first.
+    /// Entities instantiated for this column. Ticks, block events, and BEs wait on it.
     entity_ready_chunks: DashSet<Vector2<i32>>,
     /// Vanilla `ServerLevel.handlingTick`: true during scheduled ticks and `runBlockEvents`,
     /// false once entities and block entities run. Observable in `PistonBaseBlock.checkIfExtend`.
@@ -418,6 +418,7 @@ impl World {
             players: ArcSwap::new(Arc::new(Vec::new())),
             entities: ArcSwap::new(Arc::new(Vec::new())),
             entities_by_chunk: DashMap::new(),
+            entity_uuids: DashSet::new(),
             scoreboard: std::sync::Mutex::new(Scoreboard::default()),
             worldborder: std::sync::Mutex::new(Worldborder::new(
                 0.0,
@@ -487,6 +488,45 @@ impl World {
             &self.entities,
             self,
         )));
+    }
+
+    /// Vanilla does not tick a chunk until it is fully loaded (blocks + entities).
+    fn is_entity_ticking_chunk(&self, pos: Vector2<i32>, forced: &FxHashSet<Vector2<i32>>) -> bool {
+        forced.contains(&pos) || self.entity_ready_chunks.contains(&pos)
+    }
+
+    /// Vanilla `ChunkLevel.BLOCK_TICKING`: this column and watched 8-neighbours are `FULL`.
+    fn is_block_ticking_neighborhood(
+        &self,
+        chunk: Vector2<i32>,
+        forced: &FxHashSet<Vector2<i32>>,
+    ) -> bool {
+        let active = self.active_chunks.load();
+        for dx in -1..=1 {
+            for dz in -1..=1 {
+                let neighbour = Vector2::new(chunk.x + dx, chunk.y + dz);
+                let needed = (dx == 0 && dz == 0)
+                    || self.level.is_chunk_watched(&neighbour)
+                    || active.contains(&neighbour);
+                if !needed {
+                    continue;
+                }
+                if !self.level.is_chunk_loaded(&neighbour) {
+                    return false;
+                }
+                if !self.is_entity_ticking_chunk(neighbour, forced) {
+                    return false;
+                }
+            }
+        }
+        true
+    }
+
+    fn forced_chunk_set(&self) -> FxHashSet<Vector2<i32>> {
+        self.forced_chunks
+            .lock()
+            .map(|forced| forced.clone())
+            .unwrap_or_default()
     }
 
     pub fn get_lighting_config(&self) -> LightingEngineConfig {
@@ -565,7 +605,7 @@ impl World {
             if base_entity.is_removed() {
                 continue;
             }
-            let current_chunk = base_entity.block_pos.load().chunk_position();
+            let current_chunk = entity_column(base_entity);
             let mut nbt = NbtCompound::new();
             entity.write_nbt(&mut nbt);
             by_chunk.entry(current_chunk).or_default().push(nbt);
@@ -611,14 +651,18 @@ impl World {
     /// `get_block_entity` takes the saved NBT out of the chunk when it wakes an
     /// entity up - so this has to run before the chunk is dropped, or everything
     /// the entity did since it was loaded is lost.
-    fn save_block_entities(&self, chunk_pos: Vector2<i32>) {
+    /// `false` if the raw chunk is gone: callers must keep the live BEs.
+    fn save_block_entities(&self, chunk_pos: Vector2<i32>) -> bool {
         let Some(block_entities) = self
             .block_entities
             .get(&chunk_pos)
             .map(|chunk_block_entities| chunk_block_entities.values().cloned().collect::<Vec<_>>())
         else {
-            return;
+            return true;
         };
+        if !self.level.is_chunk_loaded(&chunk_pos) {
+            return false;
+        }
 
         for block_entity in block_entities {
             let mut nbt = NbtCompound::new();
@@ -637,6 +681,7 @@ impl World {
             }
             self.add_block_entity_nbt(block_entity.get_position(), &nbt);
         }
+        true
     }
 
     /// The live block entity at this position. Unlike `get_block_entity`, does not rebuild from
@@ -786,13 +831,11 @@ impl World {
         }
     }
 
-    pub fn flush_synced_block_events(self: &Arc<Self>) {
-        // Vanilla `runBlockEvents`: `while (!this.blockEvents.isEmpty())`, so a handler-queued
-        // event (chain piston) still runs this tick. The lock is never held across a handler,
-        // which also keeps `add_synced_block_event` from blocking on it.
-        // Cap is not vanilla; a self-requeue would otherwise spin the tick.
+    pub fn flush_synced_block_events(self: &Arc<Self>, forced_chunks: &FxHashSet<Vector2<i32>>) {
+        // Vanilla `runBlockEvents`: drain until empty. Cap is not vanilla.
         const MAX_EVENTS_PER_TICK: usize = 65536;
         let mut processed = 0usize;
+        let mut deferred = Vec::new();
 
         loop {
             let events = {
@@ -812,9 +855,13 @@ impl World {
                 );
                 break;
             }
-            processed += events.len();
 
             for event in events {
+                if !self.is_block_ticking_neighborhood(event.pos.chunk_position(), forced_chunks) {
+                    deferred.push(event);
+                    continue;
+                }
+                processed += 1;
                 let block = self.get_block(&event.pos);
                 if !self.block_registry.on_synced_block_event(
                     block,
@@ -840,6 +887,18 @@ impl World {
                         event_value: event.data.into(),
                     },
                 );
+            }
+        }
+
+        if !deferred.is_empty() {
+            let mut queue = self
+                .synced_block_event_queue
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            for event in deferred {
+                if !queue.contains(&event) {
+                    queue.push(event);
+                }
             }
         }
     }
@@ -1427,6 +1486,9 @@ impl World {
         let t_chunks = std::time::Instant::now();
         self.tick_chunks(server);
         let chunk_elapsed = t_chunks.elapsed();
+        // Vanilla `ThreadedLevelLightEngine` drains on the light thread. One tick-thread
+        // slice here; leftover lighting can lag a few ticks behind the blocks.
+        let light_stats = self.level.light_engine.drain_queued(&self.level);
 
         let handle = server.runtime.clone();
 
@@ -1469,28 +1531,30 @@ impl World {
         self.flush_block_updates();
 
         // Vanilla `ServerLevel.tick`: tickPending, then `runBlockEvents` (pistons).
-        self.flush_synced_block_events();
+        let forced_chunks = self.forced_chunk_set();
+        self.flush_synced_block_events(&forced_chunks);
         self.handling_tick.store(false, Relaxed);
 
-        // Vanilla: `entityTickList` after blockEvents. Snapshot here so a TNT/item spawned
-        // by this tick's redstone still gets this tick's entity pass.
+        // Vanilla: `entityTickList` after blockEvents.
         let active_chunks = self.active_chunks.load();
 
-        // Snapshot BEs after block events too (`pendingBlockEntityTickers`).
-        // `is_tick_order_sensitive` goes to `piston_batch` (sequential, creation order);
-        // collected here so the entity phase can skip those overlapping (`PistonBatch::overlaps`).
+        // Snapshot BEs after block events (`pendingBlockEntityTickers`).
         let mut block_entities: Vec<Arc<dyn BlockEntity>> = Vec::new();
         let mut piston_batch = PistonBatch::default();
         for chunk_pos in active_chunks.iter() {
+            let entity_ticking = self.is_entity_ticking_chunk(*chunk_pos, &forced_chunks);
             if let Some(chunk_block_entities) = self.block_entities.get(chunk_pos) {
                 for block_entity in chunk_block_entities.values() {
                     if block_entity.is_tick_order_sensitive() {
+                        if !self.is_block_ticking_neighborhood(*chunk_pos, &forced_chunks) {
+                            continue;
+                        }
                         let order = self
                             .block_entity_tick_order
                             .get(&block_entity.get_position())
                             .map(|order| *order);
                         piston_batch.push(order, block_entity.clone());
-                    } else {
+                    } else if entity_ticking {
                         block_entities.push(block_entity.clone());
                     }
                 }
@@ -1509,15 +1573,14 @@ impl World {
         let tickable: Vec<_> = entities_to_tick
             .par_iter()
             .filter_map(|entity| {
-                let entity_pos = entity.get_entity().pos.load();
-                let entity_chunk = Vector2::new(
-                    get_section_cord(entity_pos.x.floor() as i32),
-                    get_section_cord(entity_pos.z.floor() as i32),
-                );
+                let entity_chunk = entity_column(entity.get_entity());
                 if !active_chunks.contains(&entity_chunk) {
                     return None;
                 }
                 if !level_for_entities.is_chunk_loaded(&entity_chunk) {
+                    return None;
+                }
+                if !self.is_entity_ticking_chunk(entity_chunk, &forced_chunks) {
                     return None;
                 }
                 Some((entity, entity_chunk))
@@ -1630,9 +1693,10 @@ impl World {
         let total_elapsed = start.elapsed();
         if total_elapsed.as_millis() > 50 {
             debug!(
-                "Slow Tick [{}ms]: Chunks: {:?} | Players({}): {:?} | Entities({}): {:?} | Block Entities({}): {:?}",
+                "Slow Tick [{}ms]: Chunks: {:?} | Light: {} | Players({}): {:?} | Entities({}): {:?} | Block Entities({}): {:?}",
                 total_elapsed.as_millis(),
                 chunk_elapsed,
+                light_stats,
                 player_count,
                 player_elapsed,
                 entity_count,
@@ -1660,6 +1724,11 @@ impl World {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .insert(position, block_state_id);
+    }
+
+    /// Queue the live cell for next tick's `broadcastChanges` (vanilla piston 82 / 67).
+    pub fn defer_live_block_change(&self, position: BlockPos) {
+        self.defer_block_change(position, self.get_block_state_id(&position));
     }
 
     pub(crate) fn promote_deferred_block_changes(&self) {
@@ -1961,14 +2030,10 @@ impl World {
         let active_chunks = self.active_chunks.load();
         // Skip chunks not in `entity_ready_chunks` (entities load later than block data).
         // Forced chunks are exempt: nothing marks them entity-ready with no watcher.
-        let forced_chunks: FxHashSet<Vector2<i32>> = self
-            .forced_chunks
-            .lock()
-            .map(|forced| forced.clone())
-            .unwrap_or_default();
+        let forced_chunks = self.forced_chunk_set();
         let tickable_chunks: FxHashSet<Vector2<i32>> = active_chunks
             .iter()
-            .filter(|pos| forced_chunks.contains(pos) || self.entity_ready_chunks.contains(pos))
+            .filter(|pos| self.is_entity_ticking_chunk(**pos, &forced_chunks))
             .copied()
             .collect();
         let tick_data = self.level.get_tick_data(&tickable_chunks);
@@ -2415,6 +2480,29 @@ impl World {
         }
 
         (collisions, positions)
+    }
+
+    /// Vanilla `CollisionGetter.noCollision(entity, aabb)`.
+    #[must_use]
+    pub fn no_collision(&self, bounding_box: BoundingBox, entity: &dyn EntityBase) -> bool {
+        self.get_block_collisions(bounding_box, entity).0.is_empty()
+    }
+
+    /// Vanilla `BlockState.isFaceSturdy(level, pos, face, SupportType.FULL)`.
+    /// `MOVING_PISTON` is `dynamicShape()`: live BE collision, not baked `side_flags`.
+    #[must_use]
+    pub fn is_face_sturdy(&self, pos: &BlockPos, face: BlockDirection) -> bool {
+        let state = self.get_block_state(pos);
+        if Block::from_state_id(state.id) == &Block::MOVING_PISTON {
+            let shapes = self
+                .get_live_block_entity(pos)
+                .map(|block_entity| block_entity.collision_shapes(None))
+                .unwrap_or_default();
+            return shapes
+                .iter()
+                .any(|shape| aabb_covers_cell_face(*shape, pos, face));
+        }
+        state.is_side_solid(face)
     }
 
     pub fn is_space_empty(&self, bounding_box: BoundingBox) -> bool {
@@ -4710,74 +4798,83 @@ impl World {
                     continue 'main;
                 }
 
-                if first_load {
-                    // First watcher: take NBT, make entities live (clears the buffer so unload
-                    // does not double them).
-                    let entity_nbts = std::mem::take(
-                        &mut *chunk
-                            .data
-                            .lock()
-                            .unwrap_or_else(std::sync::PoisonError::into_inner),
-                    );
-                    let mut entities_to_add: Vec<Arc<dyn EntityBase>> =
-                        Vec::with_capacity(entity_nbts.len());
-                    for entity_nbt in &entity_nbts {
-                        let Some(id) = entity_nbt.get_string("id") else {
-                            debug!("Entity has no ID");
-                            continue;
-                        };
-                        let Some(entity_type) =
-                            EntityType::from_name(id.strip_prefix("minecraft:").unwrap_or(id))
-                        else {
-                            warn!("Entity has no valid Entity Type {id}");
-                            continue;
-                        };
-
-                        // Persisted UUID (vanilla identity across reloads); fresh if missing.
-                        let uuid = entity_nbt.get_uuid("UUID").unwrap_or_else(Uuid::new_v4);
-                        // Pos is zero since it will be read from nbt.
-                        let entity =
-                            from_type(entity_type, Vector3::new(0.0, 0.0, 0.0), &world, uuid);
-                        entity.read_nbt_non_mut(entity_nbt);
-                        entity.init_data_tracker();
-
-                        // `Motion` is restored by `read_nbt_non_mut` and travels to the client in
-                        // the spawn packet below (`create_spawn_packet` reads `velocity`), so
-                        // server and client agree. Vanilla `ClientboundAddEntityPacket` carries
-                        // `getDeltaMovement()` the same way; zeroing it here would rob a thrown
-                        // or launched entity of its momentum across a reload.
-                        player.client.enqueue_spawn_packet(&entity);
-                        player.try_restore_vehicle(&entity);
-                        entities_to_add.push(entity);
+                let mut had_live = false;
+                for entity in world.entities.load().iter() {
+                    if entity_column(entity.get_entity()) != position {
+                        continue;
                     }
+                    had_live = true;
+                    player.client.try_enqueue_spawn_packet(entity);
+                    player.try_restore_vehicle(entity);
+                }
 
-                    if !entities_to_add.is_empty() {
-                        world.entities.rcu(|current_entities| {
-                            let mut new_entities = (**current_entities).clone();
-                            new_entities.extend(entities_to_add.iter().cloned());
-                            new_entities
-                        });
-                        for entity in &entities_to_add {
-                            world.index_insert_entity(entity);
-                        }
-                    }
-                    // Entities are live, even if none were added. `tick_chunks` waits on this.
+                let nbt_empty = chunk
+                    .data
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .is_empty();
+                let instantiate_from_nbt = !had_live
+                    && (first_load
+                        || !world.entity_ready_chunks.contains(&position)
+                        || !nbt_empty);
+                if instantiate_from_nbt {
+                    world.instantiate_entities_from_chunk_nbt(position);
+                } else if had_live {
                     world.entity_ready_chunks.insert(position);
-                } else {
-                    // Already live (another watcher). Send this player the spawn packets.
-                    for entity in world.entities.load().iter() {
-                        let base_entity = entity.get_entity();
-                        if base_entity.chunk_pos.load() == position {
-                            player.client.enqueue_spawn_packet(entity);
-                            player.try_restore_vehicle(entity);
-                        }
-                    }
                 }
             }
 
             #[cfg(debug_assertions)]
             debug!("Chunks queued after {}ms", inst.elapsed().as_millis());
         });
+    }
+
+    /// Take `ChunkEntityData.data` and `addEntity`. Broadcasts spawn to every tracker.
+    fn instantiate_entities_from_chunk_nbt(self: &Arc<Self>, position: Vector2<i32>) {
+        let Some(chunk) = self.level.get_entity_chunk_sync(&position) else {
+            self.entity_ready_chunks.insert(position);
+            return;
+        };
+        let entity_nbts = std::mem::take(
+            &mut *chunk
+                .data
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner),
+        );
+        let mut leftover = Vec::new();
+        for entity_nbt in entity_nbts {
+            let Some(id) = entity_nbt.get_string("id") else {
+                debug!("Entity has no ID");
+                continue;
+            };
+            let Some(entity_type) =
+                EntityType::from_name(id.strip_prefix("minecraft:").unwrap_or(id))
+            else {
+                warn!("Entity has no valid Entity Type {id}");
+                continue;
+            };
+            let uuid = entity_nbt.get_uuid("UUID").unwrap_or_else(Uuid::new_v4);
+            if self.get_entity_by_uuid(uuid).is_some() {
+                leftover.push(entity_nbt);
+                continue;
+            }
+            let entity = from_type(entity_type, Vector3::new(0.0, 0.0, 0.0), self, uuid);
+            entity.read_nbt_non_mut(&entity_nbt);
+            if !self.add_entity_silent(entity.clone()) {
+                leftover.push(entity_nbt);
+                continue;
+            }
+            self.broadcast_entity_spawn(&entity);
+            entity.init_data_tracker();
+        }
+        if !leftover.is_empty() {
+            chunk
+                .data
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .extend(leftover);
+        }
+        self.entity_ready_chunks.insert(position);
     }
 
     /// Gets a `Player` by an entity id
@@ -4874,10 +4971,10 @@ impl World {
     }
 
     /// Non-player entities whose AABB intersects `aabb`. Walks `entities_by_chunk` columns
-    /// overlapping the box (plus one column of slack). Vanilla: `Level.getEntities` over
-    /// `entitySectionStorage`.
+    /// whose sections overlap the box. Vanilla: `Level.getEntities` over
+    /// `EntitySectionStorage.forEachAccessibleNonEmptySection`.
     pub fn get_entities_at_box(&self, aabb: &BoundingBox) -> Vec<Arc<dyn EntityBase>> {
-        let (min_x, max_x, min_z, max_z) = overlapping_entity_chunks(aabb);
+        let (min_x, max_x, min_y, max_y, min_z, max_z) = overlapping_entity_sections(aabb);
         let mut out = Vec::new();
         for cx in min_x..=max_x {
             for cz in min_z..=max_z {
@@ -4885,7 +4982,18 @@ impl World {
                     continue;
                 };
                 for entity in bucket.values() {
-                    if entity.get_entity().bounding_box.load().intersects(aabb) {
+                    let base = entity.get_entity();
+                    if base.removed.load(Ordering::Relaxed) {
+                        continue;
+                    }
+                    let bb = base.bounding_box.load();
+                    // Vanilla `getEntities` is by section of the AABB, not foot pos.
+                    let y_lo = bb.min.y.floor() as i32 >> 4;
+                    let y_hi = bb.max.y.floor() as i32 >> 4;
+                    if y_hi < min_y || y_lo > max_y {
+                        continue;
+                    }
+                    if bb.intersects(aabb) {
                         out.push(entity.clone());
                     }
                 }
@@ -4897,17 +5005,21 @@ impl World {
     /// Players whose AABB intersects `aabb`. Players stay on the short `players` list; a
     /// chunk-column filter is enough there.
     pub fn get_players_at_box(&self, aabb: &BoundingBox) -> Vec<Arc<Player>> {
-        let (min_x, max_x, min_z, max_z) = overlapping_entity_chunks(aabb);
+        let (min_x, max_x, min_y, max_y, min_z, max_z) = overlapping_entity_sections(aabb);
         self.players
             .load()
             .iter()
             .filter(|player| {
-                let chunk = player.get_entity().chunk_pos.load();
+                let base = player.get_entity();
+                let chunk = base.chunk_pos.load();
+                let y_section = base.pos.load().y.floor() as i32 >> 4;
                 chunk.x >= min_x
                     && chunk.x <= max_x
                     && chunk.y >= min_z
                     && chunk.y <= max_z
-                    && player.get_entity().bounding_box.load().intersects(aabb)
+                    && y_section >= min_y
+                    && y_section <= max_y
+                    && base.bounding_box.load().intersects(aabb)
             })
             .cloned()
             .collect()
@@ -5246,18 +5358,9 @@ impl World {
         removed_player
     }
 
-    #[expect(clippy::needless_pass_by_value)]
     pub fn spawn_entity_non_save(&self, entity: Arc<dyn EntityBase>) {
-        let _base_entity = entity.get_entity();
         self.broadcast_entity_spawn(&entity);
-        self.spawn_state.load().add_entity(self, entity.as_ref());
-
-        self.entities.rcu(|current_entities| {
-            let mut new_entities = (**current_entities).clone();
-            new_entities.push(entity.clone());
-            new_entities
-        });
-        self.index_insert_entity(&entity);
+        let _ = self.add_entity_silent(entity);
     }
 
     pub fn spawn_entity(self: &Arc<Self>, entity: Arc<dyn EntityBase>) {
@@ -5276,7 +5379,7 @@ impl World {
 
         self.broadcast_entity_spawn(&entity);
         entity.init_data_tracker();
-        self.add_entity_silent(entity);
+        let _ = self.add_entity_silent(entity);
     }
 
     pub fn broadcast_entity_spawn(&self, entity: &Arc<dyn EntityBase>) {
@@ -5294,18 +5397,14 @@ impl World {
         }
     }
 
+    /// Vanilla `PersistentEntitySectionManager.addEntity`: reject a known UUID.
+    #[must_use]
     #[expect(clippy::needless_pass_by_value)]
-    pub fn add_entity_silent(&self, entity: Arc<dyn EntityBase>) {
+    pub fn add_entity_silent(&self, entity: Arc<dyn EntityBase>) -> bool {
         let base_entity = entity.get_entity();
 
-        // Guard against duplicate UUIDs (chunk load while another player is still tracking it).
-        let already_exists = self
-            .entities
-            .load()
-            .iter()
-            .any(|e| e.get_entity().entity_uuid == base_entity.entity_uuid);
-        if already_exists {
-            return;
+        if !self.entity_uuids.insert(base_entity.entity_uuid) {
+            return false;
         }
 
         // Live-only until unload (`save_entity`); never serialized at spawn.
@@ -5317,6 +5416,7 @@ impl World {
             new_entities
         });
         self.index_insert_entity(&entity);
+        true
     }
 
     pub fn remove_entity(&self, entity: &dyn EntityBase) {
@@ -5329,6 +5429,7 @@ impl World {
             return;
         }
         base_entity.removed.store(true, Ordering::Release);
+        self.entity_uuids.remove(&base_entity.entity_uuid);
 
         self.spawn_state.load().remove_entity(self, entity);
         self.entities.rcu(|current_entities| {
@@ -5355,13 +5456,13 @@ impl World {
         }
         let chunks_set: FxHashSet<_> = chunks.iter().copied().collect();
 
-        let entity_ids: Vec<i32> = self
-            .entities
-            .load()
-            .iter()
-            .filter(|entity| chunks_set.contains(&entity.get_entity().chunk_pos.load()))
-            .map(|entity| entity.get_entity().entity_id)
-            .collect();
+        let mut entity_ids = Vec::new();
+        for chunk in &chunks_set {
+            let Some(bucket) = self.entities_by_chunk.get(chunk) else {
+                continue;
+            };
+            entity_ids.extend(bucket.keys().copied());
+        }
 
         Self::try_despawn_entity_ids_for_player(player, &entity_ids);
     }
@@ -5404,7 +5505,7 @@ impl World {
     }
 
     /// Drains `pending_chunk_removals` after entity and BE phases finish.
-    async fn drain_pending_chunk_removals(&self) {
+    async fn drain_pending_chunk_removals(self: &Arc<Self>) {
         if self.pending_chunk_removals.is_empty() {
             return;
         }
@@ -5425,29 +5526,25 @@ impl World {
     /// Remove live entities and block entities of these chunks. Only from `tick()`, via
     /// `drain_pending_chunk_removals`. Other callers: `queue_chunk_removal`.
     async fn remove_entities_in_chunks(
-        &self,
+        self: &Arc<Self>,
         chunks: impl IntoIterator<Item = impl std::borrow::Borrow<Vector2<i32>>>,
     ) {
-        let chunks_set: FxHashSet<_> = chunks.into_iter().map(|c| *c.borrow()).collect();
+        let mut chunks_set: FxHashSet<_> = chunks.into_iter().map(|c| *c.borrow()).collect();
+        // Vanilla keeps the in-memory section while the chunk is still loaded.
+        chunks_set.retain(|pos| !self.level.is_chunk_watched(pos));
         if chunks_set.is_empty() {
             return;
         }
-        let mut entities_to_remove = Vec::new();
 
-        self.entities.rcu(|current_entities| {
-            let mut new_entities = (**current_entities).clone();
-            new_entities.retain(|entity| {
-                let base_entity = entity.get_entity();
-                let pos = base_entity.chunk_pos.load();
-                if chunks_set.contains(&pos) {
-                    entities_to_remove.push(entity.clone());
-                    false
-                } else {
-                    true
-                }
-            });
-            new_entities
-        });
+        let mut entities_to_remove = Vec::new();
+        for entity in self.entities.load().iter() {
+            let base = entity.get_entity();
+            if chunks_set.contains(&entity_column(base))
+                || chunks_set.contains(&base.chunk_pos.load())
+            {
+                entities_to_remove.push(entity.clone());
+            }
+        }
 
         // Only chunks that went live can have their list rebuilt. Read the mark before clearing.
         let rebuilt_chunks: Vec<Vector2<i32>> = chunks_set
@@ -5456,16 +5553,32 @@ impl World {
             .filter(|pos| self.entity_ready_chunks.contains(pos))
             .collect();
 
+        self.save_entities(&entities_to_remove, &rebuilt_chunks)
+            .await;
+
+        chunks_set.retain(|pos| !self.level.is_chunk_watched(pos));
+        if chunks_set.is_empty() {
+            return;
+        }
+        entities_to_remove.retain(|entity| {
+            let base = entity.get_entity();
+            chunks_set.contains(&entity_column(base))
+        });
+
+        self.entities.rcu(|current_entities| {
+            let mut new_entities = (**current_entities).clone();
+            new_entities.retain(|entity| !chunks_set.contains(&entity_column(entity.get_entity())));
+            new_entities
+        });
+
         for chunk_pos in &chunks_set {
             self.entities_by_chunk.remove(chunk_pos);
             // A later re-watch must wait for entities to load again.
             self.entity_ready_chunks.remove(chunk_pos);
         }
 
-        self.save_entities(&entities_to_remove, &rebuilt_chunks)
-            .await;
-
         for entity in entities_to_remove {
+            self.entity_uuids.remove(&entity.get_entity().entity_uuid);
             self.spawn_state.load().remove_entity(self, entity.as_ref());
 
             // Same as `remove_entity`: broadcast despawn. Reloading the chunk spawns a new
@@ -5480,12 +5593,24 @@ impl World {
         }
 
         for chunk_pos in &chunks_set {
-            self.save_block_entities(*chunk_pos);
+            if !self.save_block_entities(*chunk_pos) {
+                // Raw column already evicted: dest `moving_piston` NBT would not land.
+                // Keep the live BE so a relog in the neighbour (slime) column can still
+                // deliver the TNT.
+                continue;
+            }
             if let Some((_, block_entities)) = self.block_entities.remove(chunk_pos) {
                 // Wholesale drop, not `remove_block_entity`: sequence numbers go with them.
                 for position in block_entities.keys() {
                     self.block_entity_tick_order.remove(position);
                 }
+            }
+        }
+
+        // Relog watched the column while we tore it down. NBT is the source of truth now.
+        for chunk_pos in &chunks_set {
+            if self.level.is_chunk_watched(chunk_pos) {
+                self.instantiate_entities_from_chunk_nbt(*chunk_pos);
             }
         }
     }
@@ -5617,9 +5742,11 @@ impl World {
             flags,
         );
 
-        self.level
-            .light_engine
-            .update_lighting_at(&self.level, *position);
+        if self.is_in_height_limit(position.0.y) {
+            self.level
+                .light_engine
+                .update_lighting_at(&self.level, *position);
+        }
 
         replaced_block_state_id
     }
@@ -5721,6 +5848,19 @@ impl World {
         let (broken_block, broken_block_state) = self.get_block_and_state(position);
         if broken_block_state.is_air() {
             return None;
+        }
+
+        // Vanilla `Level.destroyBlock`: `levelEvent(2001)` unless `BaseFireBlock`.
+        // Player mine is `spawnDestroyParticles` → `levelEvent(player, 2001)`: the breaker
+        // already plays locally, so omit them (`play_sound_expect` / `broadcast_to_chunk_except`).
+        // Coral pop / dest-finish 340 have no cause and still broadcast to everyone.
+        if broken_block != &Block::FIRE && broken_block != &Block::SOUL_FIRE {
+            self.sync_world_event_except(
+                cause,
+                WorldEvent::ParticlesDestroyBlock,
+                *position,
+                i32::from(broken_block_state.id.as_u16()),
+            );
         }
 
         if !flags.contains(BlockFlags::SKIP_DROPS) {
@@ -5966,11 +6106,25 @@ impl World {
     /* End ItemScatterer.java */
 
     pub fn sync_world_event(&self, world_event: WorldEvent, position: BlockPos, data: i32) {
+        self.sync_world_event_except(None, world_event, position, data);
+    }
+
+    /// Vanilla `Level.levelEvent(@Nullable Player, type, pos, data)`.
+    /// `except` already played the effect locally (`spawnDestroyParticles`).
+    pub fn sync_world_event_except(
+        &self,
+        except: Option<&Player>,
+        world_event: WorldEvent,
+        position: BlockPos,
+        data: i32,
+    ) {
         let chunk_pos = position.chunk_position();
-        self.broadcast_to_chunk(
-            chunk_pos,
-            &CWorldEvent::new(world_event as i32, position, data, false),
-        );
+        let packet = CWorldEvent::new(world_event as i32, position, data, false);
+        if let Some(player) = except {
+            self.broadcast_to_chunk_except(chunk_pos, &[player.get_entity().entity_uuid], &packet);
+        } else {
+            self.broadcast_to_chunk(chunk_pos, &packet);
+        }
     }
 
     pub fn set_block_destroy_stage(&self, entity_id: i32, location: BlockPos, stage: i8) {
@@ -6273,10 +6427,12 @@ impl World {
         pos: &BlockPos,
     ) -> BlockStateId {
         let mut current_state_id = state_id;
-        let block = Block::from_state_id(state_id);
         // Vanilla `Block.updateFromNeighbourShapes`: `UPDATE_SHAPE_ORDER`, each step feeds
-        // the next. Pistons use this to settle a moved block after the animation.
+        // the next (`newState.updateShape`). After a pop the next step is air's `updateShape`,
+        // not the old block (`from_state_id(air, coral)` panics). Pistons use this to settle
+        // a moved block after the animation.
         for direction in BlockDirection::abstract_block_update_order() {
+            let block = Block::from_state_id(current_state_id);
             let neighbor_pos = pos.offset(direction.to_offset());
             let neighbor_state_id = self.get_block_state_id(&neighbor_pos);
             current_state_id = self.block_registry.get_state_for_neighbor_update(
@@ -7472,17 +7628,81 @@ impl World {
     }
 }
 
-/// Chunk columns a box can overlap, plus one column of slack so an entity whose origin sits
-/// in a neighbour chunk but whose AABB reaches in is still found. Vanilla walks
-/// `entitySectionStorage` the same way (`Level.getEntities`).
-const fn overlapping_entity_chunks(aabb: &BoundingBox) -> (i32, i32, i32, i32) {
-    const SLACK: i32 = 1;
+/// Vanilla `Entity.blockPosition` column. `chunk_pos` can lag a piston shove.
+fn entity_column(entity: &Entity) -> Vector2<i32> {
+    entity.block_pos.load().chunk_position()
+}
+
+/// Section range `EntitySectionStorage.forEachAccessibleNonEmptySection` walks for `bb`.
+/// X/Z: `CHONKY_ENTITY_SEARCH_GRACE` (2). Y: `MAX_NON_CHONKY_ENTITY_SIZE` (4) down, 0 up.
+const fn overlapping_entity_sections(aabb: &BoundingBox) -> (i32, i32, i32, i32, i32, i32) {
+    const XZ_GRACE: f64 = 2.0;
+    const Y_GRACE_DOWN: f64 = 4.0;
     (
-        (aabb.min.x.floor() as i32 >> 4) - SLACK,
-        (aabb.max.x.floor() as i32 >> 4) + SLACK,
-        (aabb.min.z.floor() as i32 >> 4) - SLACK,
-        (aabb.max.z.floor() as i32 >> 4) + SLACK,
+        (aabb.min.x - XZ_GRACE).floor() as i32 >> 4,
+        (aabb.max.x + XZ_GRACE).floor() as i32 >> 4,
+        (aabb.min.y - Y_GRACE_DOWN).floor() as i32 >> 4,
+        aabb.max.y.floor() as i32 >> 4,
+        (aabb.min.z - XZ_GRACE).floor() as i32 >> 4,
+        (aabb.max.z + XZ_GRACE).floor() as i32 >> 4,
     )
+}
+
+/// Vanilla `Block.isFaceFull` / `SupportType.FULL` for `cell`'s `face`.
+const fn aabb_covers_cell_face(aabb: BoundingBox, cell: &BlockPos, face: BlockDirection) -> bool {
+    const EPS: f64 = 1.0e-7;
+    let min = Vector3::new(cell.0.x as f64, cell.0.y as f64, cell.0.z as f64);
+    let max = Vector3::new(min.x + 1.0, min.y + 1.0, min.z + 1.0);
+    match face {
+        BlockDirection::Up => {
+            aabb.max.y >= max.y - EPS
+                && aabb.min.y <= max.y - EPS
+                && aabb.min.x <= min.x + EPS
+                && aabb.max.x >= max.x - EPS
+                && aabb.min.z <= min.z + EPS
+                && aabb.max.z >= max.z - EPS
+        }
+        BlockDirection::Down => {
+            aabb.min.y <= min.y + EPS
+                && aabb.max.y >= min.y + EPS
+                && aabb.min.x <= min.x + EPS
+                && aabb.max.x >= max.x - EPS
+                && aabb.min.z <= min.z + EPS
+                && aabb.max.z >= max.z - EPS
+        }
+        BlockDirection::North => {
+            aabb.min.z <= min.z + EPS
+                && aabb.max.z >= min.z + EPS
+                && aabb.min.x <= min.x + EPS
+                && aabb.max.x >= max.x - EPS
+                && aabb.min.y <= min.y + EPS
+                && aabb.max.y >= max.y - EPS
+        }
+        BlockDirection::South => {
+            aabb.max.z >= max.z - EPS
+                && aabb.min.z <= max.z - EPS
+                && aabb.min.x <= min.x + EPS
+                && aabb.max.x >= max.x - EPS
+                && aabb.min.y <= min.y + EPS
+                && aabb.max.y >= max.y - EPS
+        }
+        BlockDirection::West => {
+            aabb.min.x <= min.x + EPS
+                && aabb.max.x >= min.x + EPS
+                && aabb.min.z <= min.z + EPS
+                && aabb.max.z >= max.z - EPS
+                && aabb.min.y <= min.y + EPS
+                && aabb.max.y >= max.y - EPS
+        }
+        BlockDirection::East => {
+            aabb.max.x >= max.x - EPS
+                && aabb.min.x <= max.x - EPS
+                && aabb.min.z <= min.z + EPS
+                && aabb.max.z >= max.z - EPS
+                && aabb.min.y <= min.y + EPS
+                && aabb.max.y >= max.y - EPS
+        }
+    }
 }
 
 /// Vanilla `getBlockState`: the cell as stored. `MOVING_PISTON` is not the pushed block;

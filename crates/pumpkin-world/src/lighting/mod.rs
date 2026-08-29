@@ -4,4 +4,4 @@ pub mod storage;
 pub use engine::LightEngine;
 
 pub mod runtime;
-pub use runtime::DynamicLightEngine;
+pub use runtime::{DynamicLightEngine, LightPassStats};

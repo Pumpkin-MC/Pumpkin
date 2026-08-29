@@ -8,7 +8,10 @@ use pumpkin_world::world::BlockFlags;
 use crate::block::{
     BlockBehaviour, BlockMetadata, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, OnPlaceArgs,
     OnScheduledTickArgs, PlacedArgs,
-    blocks::coral::{is_dead_coral, scan_for_water, try_schedule_die_tick},
+    blocks::coral::{
+        coral_still_present, floor_coral_can_survive, floor_coral_can_survive_at, is_dead_coral,
+        scan_for_water, try_schedule_die_tick,
+    },
 };
 pub struct CoralPlantBlock;
 impl BlockMetadata for CoralPlantBlock {
@@ -40,6 +43,9 @@ impl BlockBehaviour for CoralPlantBlock {
     }
     fn on_scheduled_tick(&self, args: OnScheduledTickArgs<'_>) {
         if !scan_for_water(args.world, args.position) && !is_dead_coral(args.block) {
+            if !coral_still_present(args.world, args.position, args.block) {
+                return;
+            }
             let current_state = args.world.get_block_state(args.position);
             let dead_block_state_id = {
                 let props = CoralPlantLikeProperties::from_state_id(current_state.id, args.block);
@@ -50,23 +56,17 @@ impl BlockBehaviour for CoralPlantBlock {
         }
     }
     fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
-        let support_block = args.block_accessor.get_block_state(&args.position.down());
-        if support_block.is_center_solid(BlockDirection::Up) {
-            return true;
-        }
-        false
+        floor_coral_can_survive_at(args.world, args.block_accessor, args.position)
     }
 
     fn get_state_for_neighbor_update(
         &self,
         args: GetStateForNeighborUpdateArgs<'_>,
     ) -> BlockStateId {
-        if args.direction == BlockDirection::Down {
-            // Vanilla `canSurvive`: raw cell. `MOVING_PISTON` is not face-sturdy.
-            let support_block = args.world.get_block_state(&args.position.down());
-            if !support_block.is_center_solid(BlockDirection::Up) {
-                return BlockStateId::AIR;
-            }
+        if args.direction == BlockDirection::Down
+            && !floor_coral_can_survive(args.world, args.position)
+        {
+            return BlockStateId::AIR;
         }
         args.state_id
     }
