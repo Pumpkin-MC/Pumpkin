@@ -64,6 +64,10 @@ impl JavaClient {
         {
             return;
         }
+        if player.is_movement_locked.load(Ordering::Relaxed) {
+            self.force_tp(player, player.get_entity().pos.load());
+            return;
+        }
         // y = feet Y
         let position = packet.position;
         if position.x.is_nan() || position.y.is_nan() || position.z.is_nan() {
@@ -195,6 +199,12 @@ impl JavaClient {
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .is_some()
         {
+            return;
+        }
+        if player.is_movement_locked.load(Ordering::Relaxed) {
+            let entity = player.get_entity();
+            entity.set_rotation(packet.yaw, packet.pitch);
+            self.force_tp(player, entity.pos.load());
             return;
         }
         // y = feet Y

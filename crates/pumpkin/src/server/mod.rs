@@ -748,6 +748,12 @@ impl Server {
         }
     }
 
+    /// Broadcasts custom server links to all players on the server.
+    pub fn broadcast_server_links(&self, links: &[pumpkin_protocol::Link<'_>]) {
+        let packet = pumpkin_protocol::java::client::play::CPlayServerLinks::new(links);
+        self.broadcast_packet_all(&packet);
+    }
+
     pub fn broadcast_tab_list_header_footer(&self, header: &TextComponent, footer: &TextComponent) {
         let packet = CTabList::new(header, footer);
         for world in self.worlds.load().iter() {

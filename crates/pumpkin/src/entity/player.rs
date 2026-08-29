@@ -260,15 +260,16 @@ use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::codec::var_long::VarLong;
 use pumpkin_protocol::codec::var_ulong::VarULong;
 use pumpkin_protocol::java::client::play::{
-    Animation, CAcknowledgeBlockChange, CActionBar, CAwardStats, CChangeDifficulty,
+    Animation, CAcknowledgeBlockChange, CActionBar, CAwardStats, CBlockUpdate, CChangeDifficulty,
     CCloseContainer, CCombatDeath, CCustomPayload, CDisguisedChatMessage, CEntityAnimation,
-    CEntityPositionSync, CGameEvent, CItemCooldown, CMapItemData, COpenScreen, CParticle,
-    CPlayerAbilities, CPlayerInfoUpdate, CPlayerPosition, CPlayerSpawnPosition, CRespawn,
-    CSetCamera, CSetContainerContent, CSetContainerProperty, CSetContainerSlot, CSetCursorItem,
-    CSetExperience, CSetHealth, CSetPlayerInventory, CSetSelectedSlot, CSoundEffect, CStopSound,
-    CSubtitle, CSystemChatMessage, CTabList, CTitleAnimation, CTitleText, CUnloadChunk,
-    CUpdateMobEffect, CUpdateTime, GameEvent, MapIcon, MapPatch, Metadata, PlayerAction,
-    PlayerInfoFlags, PlayerSpawnData, PreviousMessage, Statistic,
+    CEntityPositionSync, CEntityVelocity, CGameEvent, CHurtAnimation, CItemCooldown, CMapItemData,
+    COpenBook, COpenScreen, COpenSignEditor, CParticle, CPlayServerLinks, CPlayerAbilities,
+    CPlayerInfoUpdate, CPlayerPosition, CPlayerSpawnPosition, CRespawn, CSetCamera,
+    CSetContainerContent, CSetContainerProperty, CSetContainerSlot, CSetCursorItem, CSetExperience,
+    CSetHealth, CSetPlayerInventory, CSetSelectedSlot, CSoundEffect, CStopSound, CSubtitle,
+    CSystemChatMessage, CTabList, CTitleAnimation, CTitleText, CUnloadChunk, CUpdateMobEffect,
+    CUpdateTime, GameEvent, MapIcon, MapPatch, Metadata, PlayerAction, PlayerInfoFlags,
+    PlayerSpawnData, PreviousMessage, Statistic,
 };
 use pumpkin_protocol::java::server::play::{
     SClickSlot, SContainerButtonClick, SRenameItem, SlotActionType,
@@ -462,6 +463,8 @@ pub struct Player {
     /// Whether the client has reported that it has loaded.
     pub client_loaded: AtomicBool,
     pub bedrock_spawned: AtomicBool,
+    /// Whether the player is frozen in place (movement locked for dialogues/cutscenes).
+    pub is_movement_locked: AtomicBool,
     /// The amount of time (in ticks) the client has to report having finished loading before being timed out.
     pub client_loaded_timeout: AtomicU32,
     /// Counter for tracking chat and command spam. Decays each server tick.
@@ -733,6 +736,7 @@ impl Player {
             gamemode: AtomicCell::new(gamemode),
             previous_gamemode: AtomicCell::new(None),
             camera_target_id: AtomicCell::new(None),
+            is_movement_locked: AtomicBool::new(false),
             // TODO: Send the CPlayerSpawnPosition packet when the client connects with proper values
             respawn_point: std::sync::Mutex::new(None),
             sleeping_since: AtomicCell::new(None),
@@ -2188,6 +2192,126 @@ impl Player {
         self.try_send_client_packet(&packet);
     }
 
+    /// Plays a custom sound event by identifier for the player.
+    pub fn play_custom_sound(
+        &self,
+        sound_name: &str,
+        category: SoundCategory,
+        position: &Vector3<f64>,
+        volume: f32,
+        pitch: f32,
+    ) {
+        self.play_sound_event(
+            pumpkin_protocol::SoundEvent {
+                sound_name: sound_name.into(),
+                range: None,
+            },
+            category,
+            position,
+            volume,
+            pitch,
+            rand::random::<f64>(),
+        );
+    }
+
+    pub fn spawn_particles(
+        &self,
+        particle: Particle,
+        pos: Vector3<f64>,
+        count: u32,
+        offset: Vector3<f32>,
+        max_speed: f32,
+    ) {
+        let packet = CParticle::new(
+            false,
+            false,
+            pos,
+            offset,
+            max_speed,
+            count as i32,
+            (particle.to_id() as i32).into(),
+            &[],
+        );
+        self.try_send_client_packet(&packet);
+    }
+
+    pub fn send_block_change(&self, location: BlockPos, state_id: u16) {
+        let packet = CBlockUpdate::new(location, (state_id as i32).into());
+        self.try_send_client_packet(&packet);
+    }
+
+    pub fn reset_block_change(&self, location: BlockPos) {
+        let state_id = self.world().get_block_state_id(&location);
+        let packet = CBlockUpdate::new(location, (state_id.as_u16() as i32).into());
+        self.try_send_client_packet(&packet);
+    }
+
+    pub fn send_hurt_animation(&self, yaw: f32) {
+        let packet = CHurtAnimation::new(self.entity_id().into(), yaw);
+        self.try_send_client_packet(&packet);
+    }
+
+    pub fn open_book(&self, hand: Hand) {
+        let hand_val = match hand {
+            Hand::Right => 0,
+            Hand::Left => 1,
+        };
+        let packet = COpenBook::new(hand_val.into());
+        self.try_send_client_packet(&packet);
+    }
+
+    pub fn open_sign_editor(&self, location: BlockPos, is_front_text: bool) {
+        let packet = COpenSignEditor::new(location, is_front_text);
+        self.try_send_client_packet(&packet);
+    }
+
+    pub fn set_velocity(&self, velocity: Vector3<f64>) {
+        self.living_entity.entity.set_velocity(velocity);
+        self.try_send_client_packet(&CEntityVelocity::new(self.entity_id().into(), velocity));
+    }
+
+    pub fn apply_knockback(&self, strength: f64, x: f64, z: f64) {
+        let current_vel = self.living_entity.entity.velocity.load();
+        let norm = x.hypot(z);
+        if norm > 0.0 {
+            let vx = current_vel.x / 2.0 - (x / norm) * strength;
+            let vz = current_vel.z / 2.0 - (z / norm) * strength;
+            let vy = (current_vel.y / 2.0 + strength).min(0.4);
+            self.set_velocity(Vector3::new(vx, vy, vz));
+        }
+    }
+
+    pub fn set_movement_locked(&self, locked: bool) {
+        self.is_movement_locked.store(locked, Ordering::Relaxed);
+    }
+
+    pub fn is_movement_locked(&self) -> bool {
+        self.is_movement_locked.load(Ordering::Relaxed)
+    }
+
+    pub fn set_freeze_ticks(&self, ticks: i32) {
+        self.living_entity.entity.set_frozen_ticks(ticks);
+    }
+
+    pub fn get_freeze_ticks(&self) -> i32 {
+        self.living_entity.entity.get_frozen_ticks()
+    }
+
+    pub fn send_game_event(
+        &self,
+        event: pumpkin_protocol::java::client::play::GameEvent,
+        value: f32,
+    ) {
+        let packet = CGameEvent::new(event, value);
+        self.try_send_client_packet(&packet);
+    }
+
+    /// Sends custom server links to the player (displayed in the client Esc pause menu).
+    pub fn set_server_links(&self, links: &[pumpkin_protocol::Link<'_>]) {
+        let packet = CPlayServerLinks::new(links);
+        self.try_send_client_packet(&packet);
+    }
+
     pub fn process_inbound_packets(&self) {
         const MAX_PACKETS_PER_TICK: usize = 64;
 
@@ -2660,6 +2784,32 @@ impl Player {
 
     pub const fn entity_id(&self) -> i32 {
         self.living_entity.entity.entity_id
+    }
+
+    /// Sets the player's camera target entity ID.
+    /// If `target_id` matches the player's own entity ID, resets the camera back to the player.
+    pub fn set_camera_entity_id(&self, target_id: i32) {
+        if target_id == self.entity_id() {
+            self.camera_target_id.store(None);
+            self.try_send_client_packet(&CSetCamera::new(self.entity_id().into()));
+        } else {
+            self.camera_target_id.store(Some(target_id));
+            self.try_send_client_packet(&CSetCamera::new(target_id.into()));
+        }
+    }
+
+    /// Resets the player's camera back to their own perspective.
+    pub fn reset_camera(&self) {
+        self.camera_target_id.store(None);
+        self.try_send_client_packet(&CSetCamera::new(self.entity_id().into()));
+    }
+
+    /// Gets the entity ID of the entity that the player's camera is currently attached to,
+    /// or the player's own entity ID if not overridden.
+    pub fn get_camera_entity_id(&self) -> i32 {
+        self.camera_target_id
+            .load()
+            .unwrap_or_else(|| self.entity_id())
     }
 
     pub fn world(&self) -> Arc<World> {

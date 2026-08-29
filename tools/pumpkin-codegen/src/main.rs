@@ -73,6 +73,7 @@ mod registry;
 mod remap;
 mod scoreboard_slot;
 mod screen;
+mod sdk;
 mod sound;
 mod sound_category;
 mod spawn_egg;
@@ -174,6 +175,7 @@ pub fn main() {
     let filters: Vec<String> = std::env::args().skip(1).collect();
     let build_functions: Vec<_> = if filters.is_empty() {
         wit::main();
+        sdk::main();
         build_functions
     } else {
         build_functions

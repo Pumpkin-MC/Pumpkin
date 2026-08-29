@@ -25,7 +25,6 @@ use pumpkin_util::random::xoroshiro128::Xoroshiro;
 use pumpkin_util::random::{RandomGenerator, get_seed};
 use pumpkin_util::version::JavaMinecraftVersion;
 use rand::RngExt;
-use std::pin::Pin;
 use std::sync::Arc;
 use std::sync::atomic::Ordering::Relaxed;
 use std::sync::atomic::{AtomicI32, AtomicU8, Ordering};
@@ -1305,15 +1304,13 @@ pub trait PathAwareEntity: Mob + Send + Sync {
         ) >= 0.0
     }
 
-    fn is_navigation<'a>(&'a self) -> Pin<Box<dyn Future<Output = bool> + Send + 'a>> {
-        Box::pin(async {
-            let navigator = self
-                .get_mob_entity()
-                .navigator
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            !navigator.is_idle()
-        })
+    fn is_navigation(&self) -> bool {
+        let navigator = self
+            .get_mob_entity()
+            .navigator
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        !navigator.is_idle()
     }
 
     // TODO: implement
