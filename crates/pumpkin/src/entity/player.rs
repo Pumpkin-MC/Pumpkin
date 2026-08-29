@@ -1590,10 +1590,9 @@ impl Player {
         );
 
         if victim.get_living_entity().is_some() {
-            // Vanilla `Player.attack` adds `LivingEntity.getKnockback()` - the Knockback
-            // enchantment bonus, halved - plus 0.5 for a sprint attack, on top of the base
-            // knockback the victim's damage handling applies. A plain hit adds nothing.
-            // `handle_knockback` halves `strength`, so these are twice the vanilla amount.
+            // Vanilla `Player#attack`: extra is `getKnockback()` plus 0.5 on sprint.
+            // A plain hit is 0. `handle_knockback` halves `strength`, so these are twice
+            // the vanilla amount.
             let mut knockback_strength = f64::from(knockback_level);
             match attack_type {
                 AttackType::Knockback => knockback_strength += 1.0,
@@ -1633,9 +1632,8 @@ impl Player {
                 }
                 _ => {}
             }
-            // Vanilla only pushes the victim when the extra knockback is non-zero;
-            // `Entity::knockback` halves the current velocity, so calling it with 0.0
-            // would still slow the victim down.
+            // Vanilla skips the push when extra is 0. `Entity.knockback(0)` still scales
+            // velocity by 0.5.
             if config.knockback && knockback_strength > 0.0 {
                 combat::handle_knockback(attacker_entity, victim.as_ref(), knockback_strength);
             }

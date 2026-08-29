@@ -1675,6 +1675,7 @@ impl Entity {
         let max = aabb.max_block_pos();
 
         let eye_height = self.get_eye_height();
+        // Vanilla `Entity.isInWall`: `AABB.ofSize(getEyePosition(), width * 0.8, 1e-6, width * 0.8)`.
         let eye_width = f64::from(self.width()) * 0.8;
         let mut eye_level_box = aabb;
         let shrink_x = (aabb.max.x - aabb.min.x - eye_width) / 2.0;

@@ -2059,7 +2059,9 @@ impl World {
             .filter(|pos| self.is_entity_ticking_chunk(**pos, &forced_chunks))
             .copied()
             .collect();
-        let tick_data = self.level.get_tick_data(&tickable_chunks, random_tick_speed);
+        let tick_data = self
+            .level
+            .get_tick_data(&tickable_chunks, random_tick_speed);
         let handle = server.runtime.clone();
 
         // 1. Sequential Block Ticks (vanilla: one ordered queue). `tick_data.block_ticks` is
