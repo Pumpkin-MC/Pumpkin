@@ -2087,7 +2087,7 @@ impl Entity {
         }
     }
 
-    fn get_pos_with_y_offset(
+    pub(crate) fn get_pos_with_y_offset(
         &self,
         offset: f64,
     ) -> (
