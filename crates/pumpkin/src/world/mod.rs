@@ -4079,7 +4079,7 @@ impl World {
             return;
         }
 
-        let block_count = explosion.explode(self);
+        let (block_count, hit_players) = explosion.explode(self);
         let particle = if power < 2.0 {
             Particle::Explosion
         } else {
@@ -4098,7 +4098,7 @@ impl World {
                 position,
                 power,
                 block_count as i32,
-                None,
+                hit_players.get(&player.entity_id()).copied(),
                 VarInt(particle as i32),
                 sound,
             ));
