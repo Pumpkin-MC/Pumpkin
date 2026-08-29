@@ -14,12 +14,12 @@ use pumpkin_util::Hand;
 use pumpkin_util::math::position::BlockPos;
 use rustc_hash::FxHashMap;
 use std::sync::Arc;
-use std::sync::atomic::AtomicI32;
 use std::sync::atomic::Ordering;
 use std::sync::atomic::{
     AtomicBool, AtomicU8,
     Ordering::{Relaxed, SeqCst},
 };
+use std::{collections::HashMap, sync::atomic::AtomicI32};
 use tracing::warn;
 
 use super::experience_orb::ExperienceOrbEntity;
@@ -91,9 +91,9 @@ pub struct LivingEntity {
     pub dead: AtomicBool,
     /// The distance the entity has been falling.
     pub fall_distance: AtomicCell<f32>,
-    pub active_effects: std::sync::Mutex<FxHashMap<&'static StatusEffect, Effect>>,
+    pub active_effects: std::sync::Mutex<HashMap<&'static StatusEffect, Effect>>,
     pub entity_equipment: Arc<std::sync::Mutex<EntityEquipment>>,
-    pub equipment_drop_chances: Arc<std::sync::Mutex<FxHashMap<EquipmentSlot, f32>>>,
+    pub equipment_drop_chances: Arc<std::sync::Mutex<HashMap<EquipmentSlot, f32>>>,
     pub movement_input: AtomicCell<Vector3<f64>>,
     pub equipment_slots: Arc<FxHashMap<usize, EquipmentSlot>>,
 
@@ -120,7 +120,7 @@ pub struct LivingEntity {
     livings_flags: AtomicU8,
 
     /// The attributes of the entity
-    pub attributes: RwLock<FxHashMap<u8, AttributeInstance>>,
+    pub attributes: RwLock<HashMap<u8, AttributeInstance>>,
 }
 
 struct EffectParticle {
@@ -187,7 +187,7 @@ impl LivingEntity {
         Self {
             // Populate local attribute instances from the default registry and get initial vars
             attributes: {
-                let mut m = FxHashMap::default();
+                let mut m = std::collections::HashMap::new();
 
                 for (attr, base) in entity.entity_type.attributes {
                     if attr.id == Attributes::MAX_HEALTH.id {
@@ -209,9 +209,9 @@ impl LivingEntity {
             item_in_use: std::sync::Mutex::new(None),
             active_hand: std::sync::Mutex::new(None),
             livings_flags: AtomicU8::new(0),
-            active_effects: std::sync::Mutex::new(FxHashMap::default()),
+            active_effects: std::sync::Mutex::new(HashMap::new()),
             entity_equipment: Arc::new(std::sync::Mutex::new(EntityEquipment::new())),
-            equipment_drop_chances: Arc::new(std::sync::Mutex::new(FxHashMap::default())),
+            equipment_drop_chances: Arc::new(std::sync::Mutex::new(HashMap::new())),
             equipment_slots: Arc::new(build_equipment_slots()),
             jumping: AtomicBool::new(false),
             jumping_cooldown: AtomicU8::new(0),
@@ -259,20 +259,14 @@ impl LivingEntity {
                     selected_slot: 0,
                     container_id: window_id,
                 };
-                self.entity.world.load().send_to_tracking_players_editioned(
-                    &self.entity,
-                    &je_packet,
-                    &be_packet,
-                );
+                self.entity
+                    .send_to_watchers_editioned(&je_packet, &be_packet);
                 sent_editioned = true;
             }
         }
 
         if !sent_editioned {
-            self.entity
-                .world
-                .load()
-                .send_to_tracking_players(&self.entity, &je_packet);
+            self.entity.send_to_watchers(&je_packet);
         }
     }
 
@@ -293,9 +287,7 @@ impl LivingEntity {
             }
         }
 
-        let chunk_pos = self.entity.chunk_pos.load();
-        self.entity.world.load().broadcast_to_chunk_editioned(
-            chunk_pos,
+        self.entity.send_to_watchers_editioned(
             &CTakeItemEntity::new(
                 item.entity_id.into(),
                 self.entity.entity_id.into(),
@@ -693,7 +685,6 @@ impl LivingEntity {
             }
         }
 
-        // Broadcast effect to nearby players
         let mut flag: i8 = 0;
         if effect.ambient {
             flag |= 1;
@@ -727,11 +718,8 @@ impl LivingEntity {
             ambient: effect.ambient,
         };
 
-        let chunk_pos = self.entity.chunk_pos.load();
         self.entity
-            .world
-            .load()
-            .broadcast_to_chunk_editioned(chunk_pos, &je_packet, &be_packet);
+            .send_to_watchers_and_self_editioned(&je_packet, &be_packet);
         if effect.effect_type != &StatusEffect::INSTANT_HEALTH
             && effect.effect_type != &StatusEffect::INSTANT_DAMAGE
         {
@@ -1823,7 +1811,7 @@ impl LivingEntity {
 
     /// Tries to use a totem of undying from the entity's hands. If successful, applies the totem effects and returns true.
     #[allow(dead_code)]
-    async fn try_use_death_protector(&self, caller: &dyn EntityBase) -> bool {
+    fn try_use_death_protector(&self, caller: &dyn EntityBase) -> bool {
         for hand in Hand::all() {
             let mut stack = self.get_stack_in_hand(caller, hand);
 
@@ -1836,8 +1824,7 @@ impl LivingEntity {
                 if let Some(server) = self.entity.world.load().server.upgrade() {
                     server
                         .plugin_manager
-                        .fire(&server, &mut resurrect_event)
-                        .await;
+                        .fire_blocking(&server, &mut resurrect_event);
                 }
                 if resurrect_event.cancelled {
                     return false;
@@ -2487,11 +2474,8 @@ impl LivingEntity {
                 fire_at_position: None,
             };
             let hurt_animation = CHurtAnimation::new(entity_id.into(), hurt_yaw);
-            world.send_to_tracking_players_and_self_editioned(
-                &self.entity,
-                &hurt_animation,
-                &hurt_event,
-            );
+            self.entity
+                .send_to_watchers_and_self_editioned(&hurt_animation, &hurt_event);
         }
 
         world.broadcast_damage_event(

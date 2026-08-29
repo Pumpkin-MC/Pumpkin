@@ -23,6 +23,7 @@ use crate::{
 pub struct BlastingFurnaceBlockEntity {
     pub position: BlockPos,
     pub dirty: AtomicBool,
+    comparator_dirty: AtomicBool,
 
     pub cooking_time_spent: AtomicU16,
     pub cooking_total_time: AtomicU16,
@@ -45,6 +46,7 @@ impl BlastingFurnaceBlockEntity {
         Self {
             position,
             dirty: AtomicBool::new(false),
+            comparator_dirty: AtomicBool::new(false),
             items: RwLock::new(from_fn(|_| ItemStack::EMPTY.clone())),
             cooking_total_time: AtomicU16::new(0),
             cooking_time_spent: AtomicU16::new(0),

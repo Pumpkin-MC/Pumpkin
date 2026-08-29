@@ -1,6 +1,7 @@
 use crate::block::entities::BlockEntity;
 use crate::entity::experience_orb::ExperienceOrbEntity;
 use crate::world::World;
+use crossbeam::atomic::AtomicCell;
 use pumpkin_data::BlockStateId;
 use pumpkin_data::block_properties::{BlockProperties, FacingHopper, HopperLikeProperties};
 use pumpkin_data::item_stack::ItemStack;
@@ -22,7 +23,8 @@ pub struct HopperBlockEntity {
     pub position: BlockPos,
     pub items: RwLock<[ItemStack; Self::INVENTORY_SIZE]>,
     pub dirty: AtomicBool,
-    pub facing: FacingHopper,
+    comparator_dirty: AtomicBool,
+    pub facing: AtomicCell<FacingHopper>,
     pub cooldown_time: AtomicI32,
     pub ticked_game_time: AtomicI64,
 }
@@ -56,7 +58,10 @@ impl BlockEntity for HopperBlockEntity {
             position,
             items: RwLock::new(from_fn(|_| ItemStack::EMPTY.clone())),
             dirty: AtomicBool::new(false),
-            facing: FacingHopper::Down,
+            comparator_dirty: AtomicBool::new(false),
+            // Facing is state, not saved data. `World::get_block_entity` corrects this via
+            // `set_block_state` right after construction, using the block's actual state.
+            facing: AtomicCell::new(FacingHopper::Down),
             cooldown_time: AtomicI32::from(nbt.get_int("TransferCooldown").unwrap_or(-1)),
             ticked_game_time: AtomicI64::new(0),
         };
@@ -73,14 +78,18 @@ impl BlockEntity for HopperBlockEntity {
     }
 
     fn tick(&self, world: &Arc<World>) {
+        let (block, block_state) = world.get_block_and_state(&self.position);
+        if block != &Block::HOPPER {
+            // Chunk gone (player left, last watcher) or the hopper was broken/moved
+            // while this BE was already in the tick snapshot.
+            // `HopperLikeProperties::from_state_id` panics on any other block, including air.
+            return;
+        }
         self.ticked_game_time
             .store(world.get_world_age(), Ordering::Relaxed);
         if self.cooldown_time.fetch_sub(1, Ordering::Relaxed) <= 0 {
             self.cooldown_time.store(0, Ordering::Relaxed);
-            let state = HopperLikeProperties::from_state_id(
-                world.get_block_state(&self.position).id,
-                &Block::HOPPER,
-            );
+            let state = HopperLikeProperties::from_state_id(block_state.id, block);
             if state.enabled
                 && let Some(entity) = world.get_block_entity(&self.position)
                 && let Some(hopper) = entity.as_any().downcast_ref::<Self>()
@@ -102,9 +111,20 @@ impl BlockEntity for HopperBlockEntity {
         Some(self)
     }
 
-    fn set_block_state(&mut self, block_state: BlockStateId) {
-        // TODO !!!IMPORTANT!!! set block state when loading the chunk
-        self.facing = HopperLikeProperties::from_state_id(block_state, &Block::HOPPER).facing;
+    fn set_block_state(&self, block_state: BlockStateId) {
+        if Block::from_state_id(block_state) != &Block::HOPPER {
+            return;
+        }
+        self.facing
+            .store(HopperLikeProperties::from_state_id(block_state, &Block::HOPPER).facing);
+    }
+
+    fn is_comparator_dirty(&self) -> bool {
+        self.comparator_dirty.load(Ordering::Relaxed)
+    }
+
+    fn clear_comparator_dirty(&self) {
+        self.comparator_dirty.store(false, Ordering::Relaxed);
     }
 
     fn is_dirty(&self) -> bool {
@@ -142,7 +162,8 @@ impl HopperBlockEntity {
             position,
             items: RwLock::new(from_fn(|_| ItemStack::EMPTY.clone())),
             dirty: AtomicBool::new(false),
-            facing,
+            comparator_dirty: AtomicBool::new(false),
+            facing: AtomicCell::new(facing),
             cooldown_time: AtomicI32::new(-1),
             ticked_game_time: AtomicI64::new(0),
         }
@@ -290,7 +311,8 @@ impl HopperBlockEntity {
     fn eject_items(&self, world: &Arc<World>) -> bool {
         // TODO getEntityContainer
 
-        if let Some(entity) = world.get_block_entity(&self.position.offset(to_offset(&self.facing)))
+        if let Some(entity) =
+            world.get_block_entity(&self.position.offset(to_offset(&self.facing.load())))
             && let Some(container) = entity.get_inventory()
         {
             // TODO check WorldlyContainer
@@ -305,13 +327,9 @@ impl HopperBlockEntity {
             if is_full {
                 return false;
             }
-            let target_pos = self.position.offset(to_offset(&self.facing));
-            let items: [ItemStack; 5] = self
-                .items
-                .read()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .clone();
-            for item in &items {
+            let target_pos = self.position.offset(to_offset(&self.facing.load()));
+            for i in 0..Self::INVENTORY_SIZE {
+                let mut item = self.get_stack(i);
                 if !item.is_empty() {
                     let mut move_event = crate::plugin::api::events::inventory::inventory_move_item::InventoryMoveItemEvent::new(
                         self.position,
@@ -327,9 +345,11 @@ impl HopperBlockEntity {
                     if move_event.cancelled {
                         continue;
                     }
-                    let mut item_clone = item.clone();
-                    let one_item = item_clone.split(1);
+                    let one_item = item.split(1);
                     if Self::add_one_item(self, container.as_ref(), &one_item) {
+                        // Write the now-reduced stack back into the source slot; `add_one_item`
+                        // only mutates the destination inventory, not `from`.
+                        self.set_stack(i, item);
                         return true;
                     }
                 }
@@ -435,6 +455,7 @@ impl Inventory for HopperBlockEntity {
 
     fn mark_dirty(&self) {
         self.dirty.store(true, Ordering::Relaxed);
+        self.comparator_dirty.store(true, Ordering::Relaxed);
     }
 
     fn as_any(&self) -> &dyn Any {

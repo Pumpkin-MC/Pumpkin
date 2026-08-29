@@ -6,7 +6,7 @@ mod rideable;
 mod tnt;
 
 use std::sync::Arc;
-use std::sync::atomic::Ordering;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use pumpkin_protocol::java::server::play::SPlayerInput;
 use rand::RngExt;
@@ -14,9 +14,10 @@ use rand::RngExt;
 use crate::{
     entity::{Entity, EntityBase, living::LivingEntity, player::Player},
     server::Server,
+    world::World,
 };
 use pumpkin_data::Block;
-use pumpkin_data::block_properties::{BlockProperties, PoweredRailLikeProperties};
+use pumpkin_data::block_properties::{BlockProperties, PoweredRailLikeProperties, RailShape};
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
@@ -26,6 +27,7 @@ use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::GameMode;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
+use pumpkin_util::math::wrap_degrees;
 use pumpkin_world::inventory::Inventory;
 
 use crate::entity::vehicle::vehicle::VehicleEntity;
@@ -35,6 +37,102 @@ use furnace::FurnaceMinecart;
 use hopper::HopperMinecart;
 use rideable::RideableMinecart;
 use tnt::TntMinecart;
+
+/// Vanilla `AbstractMinecart` entity types. Scopes [`rail_collision_ignore_positions`]
+/// the same way `CollisionContext.of` matches `case AbstractMinecart` (Java class, not a block).
+#[must_use]
+pub const fn is_minecart(entity_type: &EntityType) -> bool {
+    entity_type.id == EntityType::MINECART.id
+        || entity_type.id == EntityType::CHEST_MINECART.id
+        || entity_type.id == EntityType::COMMAND_BLOCK_MINECART.id
+        || entity_type.id == EntityType::FURNACE_MINECART.id
+        || entity_type.id == EntityType::HOPPER_MINECART.id
+        || entity_type.id == EntityType::SPAWNER_MINECART.id
+        || entity_type.id == EntityType::TNT_MINECART.id
+}
+
+/// Vanilla `MinecartCollisionContext.setupContext`: ignore the cell under the rail, and on a
+/// slope the cell the rail climbs into.
+///
+/// Recomputed from current position (a piston-carried cart moves through
+/// `Entity::move_entity_piston`, not this `tick`).
+pub fn rail_collision_ignore_positions(
+    world: &World,
+    entity_pos: Vector3<f64>,
+) -> [Option<BlockPos>; 2] {
+    use pumpkin_data::block_properties::RailLikeProperties;
+    use pumpkin_data::block_properties::{RailShape, RailShapeStraight};
+
+    let mut block_pos = BlockPos(Vector3::new(
+        entity_pos.x.floor() as i32,
+        entity_pos.y.floor() as i32,
+        entity_pos.z.floor() as i32,
+    ));
+
+    // Vanilla `getCurrentBlockPosOrRailBelow`: drop one cell if the cell below is a rail,
+    // then test that cell. Stacked rails: vanilla picks the lower.
+    let below_block_pos = BlockPos(Vector3::new(
+        block_pos.0.x,
+        block_pos.0.y - 1,
+        block_pos.0.z,
+    ));
+    if world
+        .get_block(&below_block_pos)
+        .has_tag(&tag::Block::MINECRAFT_RAILS)
+    {
+        block_pos = below_block_pos;
+    }
+
+    let block = world.get_block(&block_pos);
+    if !block.has_tag(&tag::Block::MINECRAFT_RAILS) {
+        return [None, None];
+    }
+
+    let state_id = world.get_block_state_id(&block_pos);
+    let shape = if block.id == Block::RAIL.id {
+        RailLikeProperties::from_state_id(state_id, block).shape
+    } else {
+        match PoweredRailLikeProperties::from_state_id(state_id, block).shape {
+            RailShapeStraight::NorthSouth => RailShape::NorthSouth,
+            RailShapeStraight::EastWest => RailShape::EastWest,
+            RailShapeStraight::AscendingEast => RailShape::AscendingEast,
+            RailShapeStraight::AscendingWest => RailShape::AscendingWest,
+            RailShapeStraight::AscendingNorth => RailShape::AscendingNorth,
+            RailShapeStraight::AscendingSouth => RailShape::AscendingSouth,
+        }
+    };
+
+    let below_pos = BlockPos(Vector3::new(
+        block_pos.0.x,
+        block_pos.0.y - 1,
+        block_pos.0.z,
+    ));
+    let slope_ignore_pos = match shape {
+        RailShape::AscendingEast => Some(BlockPos(Vector3::new(
+            block_pos.0.x + 1,
+            block_pos.0.y,
+            block_pos.0.z,
+        ))),
+        RailShape::AscendingWest => Some(BlockPos(Vector3::new(
+            block_pos.0.x - 1,
+            block_pos.0.y,
+            block_pos.0.z,
+        ))),
+        RailShape::AscendingNorth => Some(BlockPos(Vector3::new(
+            block_pos.0.x,
+            block_pos.0.y,
+            block_pos.0.z - 1,
+        ))),
+        RailShape::AscendingSouth => Some(BlockPos(Vector3::new(
+            block_pos.0.x,
+            block_pos.0.y,
+            block_pos.0.z + 1,
+        ))),
+        _ => None,
+    };
+
+    [Some(below_pos), slope_ignore_pos]
+}
 
 const fn get_exits(
     shape: pumpkin_data::block_properties::RailShape,
@@ -55,11 +153,12 @@ const fn get_exits(
 }
 
 const GRAVITY: f64 = 0.04;
-const RAIL_HEIGHT_OFFSET: f64 = 0.0625;
 
 pub struct MinecartEntity {
     pub vehicle: VehicleEntity,
     kind: MinecartKind,
+    /// One-time `tick_block_collisions` while at rest. Cleared when velocity is nonzero.
+    block_collisions_checked_at_rest: AtomicBool,
 }
 
 enum MinecartKind {
@@ -88,6 +187,7 @@ impl MinecartEntity {
         Self {
             vehicle: VehicleEntity::new(entity),
             kind,
+            block_collisions_checked_at_rest: AtomicBool::new(false),
         }
     }
 
@@ -99,6 +199,21 @@ impl MinecartEntity {
         }
     }
 
+    /// Vanilla `DetectorRailBlock.getAnalogOutputSignal`: fill of a chest/hopper minecart.
+    /// Plain, furnace, TNT, or a player: `0` (they still power the rail's redstone).
+    pub fn container_comparator_output(&self) -> Option<u8> {
+        let inventory = self.container()?;
+        Some(crate::block::calculate_comparator_output(
+            inventory.as_ref(),
+        ))
+    }
+
+    /// Cargo changed since last call. Always `false` without a container ([`MinecartInventory::take_dirty`]).
+    pub fn take_container_dirty(&self) -> bool {
+        self.container()
+            .is_some_and(|inventory| inventory.take_dirty())
+    }
+
     const fn drop_item(&self) -> Option<&'static Item> {
         match &self.kind {
             MinecartKind::Chest(_) => Some(&Item::CHEST_MINECART),
@@ -106,6 +221,52 @@ impl MinecartEntity {
             MinecartKind::Hopper(_) => Some(&Item::HOPPER_MINECART),
             MinecartKind::Tnt(_) => Some(&Item::TNT_MINECART),
             _ => None,
+        }
+    }
+
+    /// Vanilla `MinecartBehavior.getMaxSpeed`: `max_minecart_speed` game rule in blocks/s
+    /// (default 8, 0.4 per tick), halved in water. Caps the step `moveAlongTrack` /
+    /// `comeOffTrack` hands to `move`.
+    fn max_speed(&self) -> f64 {
+        let world = self.vehicle.entity.world.load();
+        let per_second = world.level_info.load().game_rules.max_minecart_speed;
+        let in_water = self.vehicle.entity.touching_water.load(Ordering::Relaxed);
+        per_second as f64 * if in_water { 0.5 } else { 1.0 } / 20.0
+    }
+
+    /// Vanilla `comeOffTrack` `onGround()`: `Entity::on_ground`, or a solid block below
+    /// (`on_ground` is only set by a downward collision).
+    fn grounded_off_rail(&self, world: &World, block_pos: BlockPos) -> bool {
+        if self.vehicle.entity.on_ground.load(Ordering::Relaxed) {
+            return true;
+        }
+        let below = world.get_block(&BlockPos(Vector3::new(
+            block_pos.0.x,
+            block_pos.0.y - 1,
+            block_pos.0.z,
+        )));
+        below.id != Block::AIR.id && below.id != Block::WATER.id && below.id != Block::LAVA.id
+    }
+
+    /// Vanilla `ActivatorRailBlock`: a powered activator rail ejects every rider.
+    fn dismount_all_passengers(&self, caller: &dyn EntityBase) {
+        let passenger_ids: Vec<i32> = self
+            .vehicle
+            .entity
+            .passengers
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .iter()
+            .map(|passenger| passenger.get_entity().entity_id)
+            .collect();
+
+        if passenger_ids.is_empty() {
+            return;
+        }
+
+        let entity = caller.get_entity();
+        for passenger_id in passenger_ids {
+            entity.remove_passenger(passenger_id);
         }
     }
 }
@@ -146,36 +307,30 @@ impl EntityBase for MinecartEntity {
             pos.z.floor() as i32,
         ));
 
-        let (mut block, mut state_id) = world.get_block_and_state_id(&block_pos);
-
-        let mut is_powered_rail = block.id == Block::POWERED_RAIL.id;
-        let mut is_activator_rail = block.id == Block::ACTIVATOR_RAIL.id;
-        let mut is_on_rails = is_powered_rail
-            || is_activator_rail
-            || block.id == Block::RAIL.id
-            || block.id == Block::DETECTOR_RAIL.id;
-
-        // If not on rails at current Y level, check the block directly below
-        if !is_on_rails {
-            let below_block_pos = BlockPos(Vector3::new(
-                block_pos.0.x,
-                block_pos.0.y - 1,
-                block_pos.0.z,
-            ));
-            let (below_block, below_state_id) = world.get_block_and_state_id(&below_block_pos);
-            if below_block.id == Block::RAIL.id
-                || below_block.id == Block::POWERED_RAIL.id
-                || below_block.id == Block::DETECTOR_RAIL.id
-                || below_block.id == Block::ACTIVATOR_RAIL.id
-            {
-                block_pos = below_block_pos;
-                block = below_block;
-                state_id = below_state_id;
-                is_powered_rail = block.id == Block::POWERED_RAIL.id;
-                is_activator_rail = block.id == Block::ACTIVATOR_RAIL.id;
-                is_on_rails = true;
-            }
+        // While the rail is a `MOVING_PISTON` placeholder the cart is off rails.
+        // Same descent as `rail_collision_ignore_positions` (`ignoreBelow`).
+        let below_block_pos = BlockPos(Vector3::new(
+            block_pos.0.x,
+            block_pos.0.y - 1,
+            block_pos.0.z,
+        ));
+        if world
+            .get_block(&below_block_pos)
+            .has_tag(&tag::Block::MINECRAFT_RAILS)
+        {
+            block_pos = below_block_pos;
         }
+
+        let (block, state_id) = world.get_block_and_state_id(&block_pos);
+
+        let is_powered_rail = block.id == Block::POWERED_RAIL.id;
+        let is_activator_rail = block.id == Block::ACTIVATOR_RAIL.id;
+        let is_on_rails = block.has_tag(&tag::Block::MINECRAFT_RAILS);
+
+        // Vanilla `moveAlongTrack`: `halt_track` brakes before the move, `power_track`
+        // boosts after the move and after friction.
+        let mut power_track = false;
+        let mut halt_track = false;
 
         if is_powered_rail || is_activator_rail {
             let props = PoweredRailLikeProperties::from_state_id(state_id, block);
@@ -185,68 +340,27 @@ impl EntityBase for MinecartEntity {
                 minecart.set_enabled(!powered);
             }
 
-            if powered {
-                if is_powered_rail {
-                    let mut velocity = self.vehicle.entity.velocity.load();
-                    let speed = velocity.length();
-                    if speed > 0.01 {
-                        let new_speed = (speed + 0.06).min(0.4);
-                        velocity = velocity
-                            .normalize()
-                            .multiply(new_speed, new_speed, new_speed);
-                        self.vehicle.entity.velocity.store(velocity);
-                    } else {
-                        let yaw = self.vehicle.entity.yaw.load();
-                        let push_dir = Vector3::new(
-                            -f64::from((yaw.to_radians()).sin()),
-                            0.0,
-                            f64::from((yaw.to_radians()).cos()),
-                        );
-                        self.vehicle
-                            .entity
-                            .velocity
-                            .store(push_dir.multiply(0.1, 0.1, 0.1));
+            if is_powered_rail {
+                power_track = powered;
+                halt_track = !powered;
+            }
+
+            if powered && is_activator_rail {
+                match &self.kind {
+                    MinecartKind::Tnt(minecart) => {
+                        minecart.prime(&self.vehicle.entity, 80);
                     }
-                    self.vehicle.entity.send_velocity();
-                } else if is_activator_rail {
-                    match &self.kind {
-                        MinecartKind::Tnt(minecart) => {
-                            minecart.prime(&self.vehicle.entity, 80);
+                    MinecartKind::Rideable(_) => {
+                        self.dismount_all_passengers(caller);
+                        if self.vehicle.get_hurt_time() == 0 {
+                            self.vehicle.set_hurt_dir(-self.vehicle.get_hurt_dir());
+                            self.vehicle.set_hurt_time(10);
+                            self.vehicle.set_damage(50.0);
+                            self.vehicle.send_wobble_metadata();
                         }
-                        MinecartKind::Rideable(_) => {
-                            if let Ok(passengers) = self.vehicle.entity.passengers.try_lock() {
-                                let p_ids: Vec<i32> = passengers
-                                    .iter()
-                                    .map(|p| p.get_entity().entity_id)
-                                    .collect();
-                                if !p_ids.is_empty() {
-                                    let world = self.vehicle.entity.world.load();
-                                    let vid = self.vehicle.entity.entity_id;
-                                    if let Some(v) = world.get_entity_by_id(vid) {
-                                        for pid in p_ids {
-                                            v.get_entity().remove_passenger_sync(pid);
-                                        }
-                                    }
-                                }
-                            }
-                            if self.vehicle.get_hurt_time() == 0 {
-                                self.vehicle.set_hurt_dir(-self.vehicle.get_hurt_dir());
-                                self.vehicle.set_hurt_time(10);
-                                self.vehicle.set_damage(50.0);
-                                self.vehicle.send_wobble_metadata();
-                            }
-                        }
-                        _ => {}
                     }
+                    _ => {}
                 }
-            } else if is_powered_rail {
-                let mut velocity = self.vehicle.entity.velocity.load();
-                velocity = velocity.multiply(0.5, 0.5, 0.5);
-                if velocity.length() < 0.01 {
-                    velocity = Vector3::new(0.0, 0.0, 0.0);
-                }
-                self.vehicle.entity.velocity.store(velocity);
-                self.vehicle.entity.send_velocity();
             }
         }
 
@@ -262,13 +376,20 @@ impl EntityBase for MinecartEntity {
         let mut driver_input = 0;
         let mut driver_yaw = 0.0f32;
 
-        if let Ok(passengers) = self.vehicle.entity.passengers.try_lock()
-            && let Some(passenger) = passengers.first()
-            && let Some(player) = passenger.get_player()
         {
-            driver_input = player.last_input.load(Ordering::Relaxed);
-            driver_yaw = player.get_entity().yaw.load();
-            has_driver = true;
+            let passengers = self
+                .vehicle
+                .entity
+                .passengers
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            if let Some(passenger) = passengers.first()
+                && let Some(player) = passenger.get_player()
+            {
+                driver_input = player.last_input.load(Ordering::Relaxed);
+                driver_yaw = player.get_entity().yaw.load();
+                has_driver = true;
+            }
         }
 
         if has_driver && is_on_rails {
@@ -314,9 +435,12 @@ impl EntityBase for MinecartEntity {
 
         let mut velocity = self.vehicle.entity.velocity.load();
 
+        // Vanilla post-move booster kick: shape picks a heading from a standstill.
+        let mut rail_shape = None;
+
         if is_on_rails {
             use pumpkin_data::block_properties::RailLikeProperties;
-            use pumpkin_data::block_properties::{RailShape, RailShapeStraight};
+            use pumpkin_data::block_properties::RailShapeStraight;
 
             let shape = if block.id == Block::RAIL.id {
                 let props = RailLikeProperties::from_state_id(state_id, block);
@@ -332,6 +456,8 @@ impl EntityBase for MinecartEntity {
                     RailShapeStraight::AscendingSouth => RailShape::AscendingSouth,
                 }
             };
+
+            rail_shape = Some(shape);
 
             let pos = self.vehicle.entity.pos.load();
             let block_center_bottom = Vector3::new(
@@ -368,14 +494,17 @@ impl EntityBase for MinecartEntity {
                 }
             }
 
+            // Vanilla `moveAlongTrack`: `y = pos.getY()` (rail floor). Slope: `y++`.
             target_position.y = match shape {
                 RailShape::AscendingEast
                 | RailShape::AscendingWest
                 | RailShape::AscendingNorth
-                | RailShape::AscendingSouth => pos.y,
-                _ => f64::from(block_pos.0.y) + RAIL_HEIGHT_OFFSET,
+                | RailShape::AscendingSouth => f64::from(block_pos.0.y) + 1.0,
+                _ => f64::from(block_pos.0.y),
             };
-            self.vehicle.entity.pos.store(target_position);
+            // Vanilla `this.setPos(x, y, z)`: teleport onto the rail line (corner: the
+            // diagonal). `set_pos` so the bounding box follows (`setPos` + `setBoundingBox`).
+            self.vehicle.entity.set_pos(target_position);
 
             let horizontal_in_direction = Vector3::new(exit1.x, 0.0, exit1.z);
             let mut horizontal_out_direction = Vector3::new(exit0.x, 0.0, exit0.z);
@@ -390,13 +519,26 @@ impl EntityBase for MinecartEntity {
                     .multiply(1e-5, 1e-5, 1e-5),
             );
 
+            // After the teleport: travel along the rail line.
             let mut towards_out = out_position - target_position;
             towards_out.y = 0.0;
             let towards_length = towards_out.length();
             if towards_length > 1e-5 {
                 towards_out = towards_out.normalize();
-                let speed = velocity.length();
+                // Vanilla `moveAlongTrack`: `Math.min(2.0, movement.horizontalDistance())`.
+                // Horizontal only; a slime launch would otherwise become forward speed.
+                let speed = velocity.x.hypot(velocity.z).min(2.0);
                 velocity = towards_out.multiply(speed, speed, speed);
+            }
+
+            // Vanilla unpowered powered rail: after re-project, before `move`. Horizontal
+            // distance; `y` zeroed (`multiply(0.5, 0.0, 0.5)` or `Vec3.ZERO` below 0.03).
+            if halt_track {
+                if velocity.x.hypot(velocity.z) < 0.03 {
+                    velocity = Vector3::new(0.0, 0.0, 0.0);
+                } else {
+                    velocity = Vector3::new(velocity.x * 0.5, 0.0, velocity.z * 0.5);
+                }
             }
 
             velocity.y = 0.0;
@@ -406,8 +548,66 @@ impl EntityBase for MinecartEntity {
             self.vehicle.entity.velocity.store(velocity);
         }
 
-        if velocity.length() > 0.001 {
-            self.move_entity(caller, velocity);
+        // Vanilla: `getMaxSpeed` clamp on the step handed to `move` (`moveAlongTrack` /
+        // `comeOffTrack`). A slime launch is 1 block/tick; an oversized sweep uses the
+        // collision context of the cell the cart is in (`rail_collision_ignore_positions`).
+        let max_speed = self.max_speed();
+        // Vanilla `isVehicle()`: rail step scale and post-move friction.
+        let has_passengers = self.vehicle.entity.has_passengers();
+        let step = if is_on_rails {
+            // Vanilla `moveAlongTrack`: per-component clamp of the step, not of
+            // `deltaMovement`. Occupied: 0.75. Diagonal: each axis capped, not the length.
+            let scale = if has_passengers { 0.75 } else { 1.0 };
+            Vector3::new(
+                (scale * velocity.x).clamp(-max_speed, max_speed),
+                0.0,
+                (scale * velocity.z).clamp(-max_speed, max_speed),
+            )
+        } else {
+            if velocity.x.abs() > max_speed || velocity.z.abs() > max_speed {
+                // Vanilla `comeOffTrack`: clamp X/Z separately, leave `y` (gravity).
+                velocity.x = velocity.x.clamp(-max_speed, max_speed);
+                velocity.z = velocity.z.clamp(-max_speed, max_speed);
+            }
+
+            // Vanilla `comeOffTrack`: ground halves the delta before `move`; air drag
+            // (0.95) after `move` only while airborne. Never both.
+            if self.grounded_off_rail(&world, block_pos) {
+                velocity = velocity.multiply(0.5, 0.5, 0.5);
+            }
+            self.vehicle.entity.velocity.store(velocity);
+            velocity
+        };
+
+        // Skip idle ticks. Vanilla always `move`s; `power_track` still runs so a parked
+        // booster can kick a standing cart.
+        if step.length() > 0.001 || (is_on_rails && power_track) {
+            let pre_move_pos = self.vehicle.entity.pos.load();
+            self.move_entity(caller, step);
+
+            // Vanilla `Entity.move`: zero a blocked axis, leave the rest of `deltaMovement`
+            // (the step is a capped/scaled copy, not the velocity). Skip when the step
+            // was not reduced, so cobweb multipliers from `move_entity` stay.
+            if is_on_rails
+                && ((step.x - velocity.x).abs() > 1.0e-9 || (step.z - velocity.z).abs() > 1.0e-9)
+            {
+                let displacement = self.vehicle.entity.pos.load() - pre_move_pos;
+                let multiplier = f64::from(self.vehicle.entity.get_block_speed_factor());
+                let blocked = |requested: f64, achieved: f64| (requested - achieved).abs() > 1.0e-9;
+                self.vehicle.entity.velocity.store(Vector3::new(
+                    if blocked(step.x, displacement.x) {
+                        0.0
+                    } else {
+                        velocity.x * multiplier
+                    },
+                    0.0,
+                    if blocked(step.z, displacement.z) {
+                        0.0
+                    } else {
+                        velocity.z * multiplier
+                    },
+                ));
+            }
 
             if let MinecartKind::Tnt(minecart) = &self.kind
                 && self
@@ -424,9 +624,35 @@ impl EntityBase for MinecartEntity {
                 return;
             }
 
+            // Vanilla `OldMinecartBehavior.moveAlongTrack`: re-read `getDeltaMovement()`
+            // after `move` (`restituteMovementAfterCollisions`) before `applyNaturalSlowdown`.
+            let velocity = self.vehicle.entity.velocity.load();
+
             let new_pos = self.vehicle.entity.pos.load();
 
-            if let Ok(passengers) = self.vehicle.entity.passengers.try_lock() {
+            // Vanilla `OldMinecartBehavior.tick`: facing from position delta, not rail
+            // shape. Compare to stored yaw so `atan2` does not flip at +/-180.
+            let x_diff = pos.x - new_pos.x;
+            let z_diff = pos.z - new_pos.z;
+            if x_diff.mul_add(x_diff, z_diff * z_diff) > 0.001 {
+                let new_yaw = wrap_degrees(z_diff.atan2(x_diff).to_degrees() as f32);
+                let old_yaw = self.vehicle.entity.yaw.load();
+                let rot_diff = wrap_degrees(new_yaw - old_yaw);
+                let final_yaw = if (-170.0..170.0).contains(&rot_diff) {
+                    new_yaw
+                } else {
+                    wrap_degrees(new_yaw + 180.0)
+                };
+                self.vehicle.entity.yaw.store(final_yaw);
+            }
+
+            {
+                let passengers = self
+                    .vehicle
+                    .entity
+                    .passengers
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
                 for passenger in passengers.iter() {
                     passenger.get_entity().set_pos(new_pos);
                 }
@@ -438,33 +664,11 @@ impl EntityBase for MinecartEntity {
             let mut friction = 0.95; // Vanilla minecart air drag
 
             if is_on_rails {
-                let has_passengers = self
-                    .vehicle
-                    .entity
-                    .passengers
-                    .try_lock()
-                    .is_ok_and(|p| !p.is_empty());
                 friction = if has_passengers { 0.99 } else { 0.96 };
-            } else {
-                let below_block_pos = BlockPos(Vector3::new(
-                    block_pos.0.x,
-                    block_pos.0.y - 1,
-                    block_pos.0.z,
-                ));
-                let below_block = world.get_block(&below_block_pos);
-
-                let is_on_ground = self.vehicle.entity.on_ground.load(Ordering::Relaxed)
-                    || (below_block.id != Block::AIR.id
-                        && below_block.id != Block::WATER.id
-                        && below_block.id != Block::LAVA.id);
-                let is_in_water = self.vehicle.entity.touching_water.load(Ordering::Relaxed)
-                    || below_block.id == Block::WATER.id;
-
-                if is_on_ground {
-                    friction = 0.5;
-                } else if is_in_water {
-                    friction = 0.95;
-                }
+            } else if self.grounded_off_rail(&world, block_pos) {
+                // Vanilla `if (!this.onGround()) scale(getAirDrag())`: ground already
+                // halved the delta before `move`.
+                friction = 1.0;
             }
 
             let mut next_vel = if is_on_rails && let MinecartKind::Furnace(minecart) = &self.kind {
@@ -474,6 +678,63 @@ impl EntityBase for MinecartEntity {
             } else {
                 velocity.multiply(friction, friction, friction)
             };
+            // Vanilla `moveAlongTrack` after `move` and `applyNaturalSlowdown`.
+            if is_on_rails {
+                // Vanilla: if the cart crossed a cell, replace heading with the integer
+                // step at current speed (`pow * (xn - pos.getX())`).
+                let xn = new_pos.x.floor() as i32;
+                let zn = new_pos.z.floor() as i32;
+                if xn != block_pos.0.x || zn != block_pos.0.z {
+                    let pow = next_vel.x.hypot(next_vel.z);
+                    next_vel = Vector3::new(
+                        pow * f64::from(xn - block_pos.0.x),
+                        next_vel.y,
+                        pow * f64::from(zn - block_pos.0.z),
+                    );
+                }
+            }
+
+            if power_track {
+                // Vanilla `+0.06` along heading. Cap is on the step, not `deltaMovement`.
+                let speed = next_vel.x.hypot(next_vel.z);
+                if speed > 0.01 {
+                    next_vel = Vector3::new(
+                        next_vel.x + next_vel.x / speed * 0.06,
+                        next_vel.y,
+                        next_vel.z + next_vel.z / speed * 0.06,
+                    );
+                } else if let Some(shape) = rail_shape {
+                    // Vanilla parked booster: nudge away from a redstone-conductor wall.
+                    // Track free end, not yaw.
+                    let conducts = |dx: i32, dz: i32| {
+                        world
+                            .get_block_state(&BlockPos(Vector3::new(
+                                block_pos.0.x + dx,
+                                block_pos.0.y,
+                                block_pos.0.z + dz,
+                            )))
+                            .is_solid_block()
+                    };
+                    match shape {
+                        RailShape::EastWest => {
+                            if conducts(-1, 0) {
+                                next_vel.x = 0.02;
+                            } else if conducts(1, 0) {
+                                next_vel.x = -0.02;
+                            }
+                        }
+                        RailShape::NorthSouth => {
+                            if conducts(0, -1) {
+                                next_vel.z = 0.02;
+                            } else if conducts(0, 1) {
+                                next_vel.z = -0.02;
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+            }
+
             if next_vel.length() < 0.005 {
                 next_vel = Vector3::new(0.0, 0.0, 0.0);
             }
@@ -482,6 +743,19 @@ impl EntityBase for MinecartEntity {
                 self.vehicle.entity.send_velocity();
             }
         }
+
+        // Vanilla `applyEffectsFromBlocks` every tick. At rest: once, then skip until
+        // velocity is nonzero.
+        let at_rest = self.vehicle.entity.velocity.load() == Vector3::new(0.0, 0.0, 0.0);
+        let already_settled = self
+            .block_collisions_checked_at_rest
+            .swap(at_rest, Ordering::Relaxed);
+        if !at_rest || !already_settled {
+            self.vehicle.entity.tick_block_collisions(caller);
+        }
+
+        // Vanilla `OldMinecartBehavior.tick`: `pushAndPickupEntities` once, even at rest.
+        self.push_entities(caller);
 
         if let MinecartKind::Hopper(minecart) = &self.kind {
             minecart.tick(&self.vehicle.entity);
@@ -649,6 +923,10 @@ impl EntityBase for MinecartEntity {
         true
     }
 
+    fn requires_precise_player_collision(&self) -> bool {
+        true
+    }
+
     fn init_data_tracker(&self) {
         self.vehicle.send_wobble_metadata();
         if let MinecartKind::Furnace(minecart) = &self.kind {
@@ -798,20 +1076,9 @@ impl EntityBase for MinecartEntity {
         }
     }
 
-    fn move_entity(&self, caller: &dyn EntityBase, motion: Vector3<f64>) {
-        let to_position = self.vehicle.entity.pos.load().add(&motion);
-        self.vehicle.entity.move_entity(caller, motion);
-        let entity_id = self.vehicle.entity.entity_id;
-        let world = self.vehicle.entity.world.load().clone();
-        if let Some(dyn_self) = world.get_entity_by_id(entity_id) {
-            let should_continue = dyn_self.push_entities(caller);
-            if should_continue {
-                let current_pos = dyn_self.get_entity().pos.load();
-                let back_motion = to_position.sub(&current_pos);
-                dyn_self.get_entity().move_entity(caller, back_motion);
-            }
-        }
-    }
+    // No `move_entity` override: vanilla `AbstractMinecart.move` extra body is
+    // `useExperimentalMovement` (`minecart_improvements`, off). Default `super.move`.
+    // `push_entities` runs at the end of `tick` (`OldMinecartBehavior`).
 
     fn cast_any(&self) -> &dyn std::any::Any {
         self

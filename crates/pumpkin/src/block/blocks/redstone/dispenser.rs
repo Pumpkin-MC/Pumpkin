@@ -450,6 +450,7 @@ impl DispenserBlock {
 
         let entity = Entity::new(ctx.world.clone(), spawn_pos, &EntityType::TNT);
         let tnt = Arc::new(TNTEntity::new(entity, TNT_POWER, TNT_FUSE));
+        tnt.apply_prime_impulse();
         ctx.world.spawn_entity(tnt);
         ctx.world
             .play_sound(Sound::EntityTntPrimed, SoundCategory::Blocks, &spawn_pos);

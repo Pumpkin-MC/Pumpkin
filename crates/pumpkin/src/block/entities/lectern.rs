@@ -19,6 +19,7 @@ pub struct LecternBlockEntity {
     pub book: Arc<Mutex<ItemStack>>,
     pub page: AtomicUsize,
     pub dirty: AtomicBool,
+    comparator_dirty: AtomicBool,
 }
 
 impl BlockEntity for LecternBlockEntity {
@@ -51,6 +52,7 @@ impl BlockEntity for LecternBlockEntity {
             book,
             page: AtomicUsize::new(page),
             dirty: AtomicBool::new(false),
+            comparator_dirty: AtomicBool::new(false),
         }
     }
 
@@ -77,6 +79,14 @@ impl BlockEntity for LecternBlockEntity {
 
     fn clear_dirty(&self) {
         self.dirty.store(false, Ordering::Relaxed);
+    }
+
+    fn is_comparator_dirty(&self) -> bool {
+        self.comparator_dirty.load(Ordering::Relaxed)
+    }
+
+    fn clear_comparator_dirty(&self) {
+        self.comparator_dirty.store(false, Ordering::Relaxed);
     }
 
     fn chunk_data_nbt(&self) -> Option<NbtCompound> {
@@ -107,6 +117,7 @@ impl LecternBlockEntity {
             book: Arc::new(Mutex::new(ItemStack::EMPTY.clone())),
             page: AtomicUsize::new(0),
             dirty: AtomicBool::new(false),
+            comparator_dirty: AtomicBool::new(false),
         }
     }
 
@@ -208,6 +219,7 @@ impl Inventory for LecternBlockEntity {
 
     fn mark_dirty(&self) {
         self.dirty.store(true, Ordering::Relaxed);
+        self.comparator_dirty.store(true, Ordering::Relaxed);
     }
 
     fn as_any(&self) -> &dyn Any {

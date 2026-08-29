@@ -30,7 +30,7 @@ use std::sync::{Arc, Mutex, Weak};
 use std::time::Duration;
 use std::{
     path::PathBuf,
-    sync::atomic::{AtomicBool, AtomicU64, Ordering},
+    sync::atomic::{AtomicBool, AtomicI64, Ordering},
     thread,
 };
 use tokio::time::timeout;
@@ -75,7 +75,11 @@ pub struct Level {
     pub lighting_config: LightingEngineConfig,
 
     /// Counts the number of ticks that have been scheduled for this world
-    schedule_tick_counts: AtomicU64,
+    /// Vanilla `LevelTicks.nextSubTickCount`: hands out `ScheduledTick.subTickOrder`, the
+    /// tiebreak between ticks due on the same game tick at the same priority. Counts up from 0
+    /// for the level's lifetime; ticks restored from a chunk's NBT get negative orders instead
+    /// (see `ChunkTickScheduler::from_iter`) so they always sort ahead of these.
+    schedule_tick_counts: AtomicI64,
 
     // Chunks that are paired with chunk watchers. When a chunk is no longer watched, it is removed
     // from the loaded chunks map and sent to the underlying ChunkIO
@@ -261,7 +265,7 @@ impl Level {
             light_engine: DynamicLightEngine::new(),
             chunk_saver,
             entity_saver,
-            schedule_tick_counts: AtomicU64::new(0),
+            schedule_tick_counts: AtomicI64::new(0),
             loaded_chunks: Arc::new(DashMap::new()),
             loaded_entity_chunks: Arc::new(DashMap::new()),
             chunks_with_scheduled_ticks: Arc::new(dashmap::DashSet::new()),
@@ -471,19 +475,16 @@ impl Level {
         let chunks_to_process: Vec<_> = chunks
             .into_iter()
             .filter_map(|pos_borrow| {
-                let pos = pos_borrow.borrow();
+                let pos = *pos_borrow.borrow();
                 // Only include chunks with no watchers
-                let has_watchers = self
-                    .chunk_watchers
-                    .get(pos)
-                    .is_some_and(|count| *count != 0);
-
-                if has_watchers {
+                if self.is_chunk_watched(&pos) {
                     return None;
                 }
 
-                // Remove immediately to prevent race conditions
-                self.loaded_entity_chunks.remove(pos)
+                // Keep the Arc until the write finishes so a fast relog does not load stale disk.
+                self.loaded_entity_chunks
+                    .get(&pos)
+                    .map(|chunk| (pos, chunk.clone()))
             })
             .collect();
 
@@ -494,7 +495,12 @@ impl Level {
         let level = self.clone();
         self.spawn_task(async move {
             debug!("Writing {} entity chunks to disk", chunks_to_process.len());
-            level.write_entity_chunks(chunks_to_process).await;
+            level.write_entity_chunks(chunks_to_process.clone()).await;
+            for (pos, _) in chunks_to_process {
+                if !level.is_chunk_watched(&pos) {
+                    level.loaded_entity_chunks.remove(&pos);
+                }
+            }
         });
     }
 
@@ -562,19 +568,31 @@ impl Level {
 
         // 2. Process chunks with scheduled ticks
         // We collect keys first to avoid holding DashSet shard lock while accessing loaded_chunks (deadlock risk)
-        let scheduled_chunk_pos: Vec<_> = self
+        let mut scheduled_chunk_pos: Vec<_> = self
             .chunks_with_scheduled_ticks
             .iter()
             .map(|p| *p)
             .collect();
+        // A `DashSet` iterates in hash order, which decides the order equal-comparing ticks end
+        // up in below. Ticks restored from different chunks' NBT can compare equal (each chunk
+        // numbers its own restored ticks from `-len`, see `ChunkTickScheduler::from_iter`), so
+        // without a fixed order here a construction spanning two chunks would run its ticks in a
+        // different sequence on every load.
+        scheduled_chunk_pos.sort_unstable_by_key(|pos| (pos.x, pos.y));
         for pos in scheduled_chunk_pos {
+            // Same skip as the entity-tick pass in `World::tick`: a chunk outside `active_chunks`
+            // is not ticked this call, so its `ChunkTickScheduler` stays queued. `step_tick()`
+            // pops only the current ring-buffer slot; skipping the chunk leaves that slot for a
+            // later call when entities are ticked too.
+            if !active_chunks.contains(&pos) {
+                continue;
+            }
             if let Some(chunk) = self.loaded_chunks.get(&pos) {
                 let chunk = chunk.value();
                 ticks.block_ticks.append(&mut chunk.block_ticks.step_tick());
                 ticks.fluid_ticks.append(&mut chunk.fluid_ticks.step_tick());
 
-                // Remove from set if it no longer has ticks
-                if !chunk.block_ticks.has_ticks() && !chunk.fluid_ticks.has_ticks() {
+                if !chunk.has_scheduled_ticks() {
                     self.chunks_with_scheduled_ticks.remove(&pos);
                 }
             } else {
@@ -582,8 +600,11 @@ impl Level {
             }
         }
 
-        ticks.block_ticks.sort_unstable();
-        ticks.fluid_ticks.sort_unstable();
+        // Stable: `OrderedTick`'s ordering is only (priority, sub_tick_order), so ties are
+        // possible across chunks and a stable sort keeps them in the fixed collection order
+        // established above instead of an arbitrary one.
+        ticks.block_ticks.sort();
+        ticks.fluid_ticks.sort();
 
         ticks
     }
@@ -693,16 +714,20 @@ impl Level {
             let cancel_notifier = level.cancel_token.cancelled();
 
             let fetch_task = async {
-                let to_fetch: Vec<_> = chunks
-                    .iter()
-                    .filter(|pos| {
-                        level.loaded_entity_chunks.get(pos).is_none_or(|chunk| {
-                            let _ = sender.try_send((Arc::downgrade(chunk.value()), false));
-                            false // Don't fetch
-                        })
-                    })
-                    .copied()
-                    .collect();
+                let mut to_fetch = Vec::new();
+                for pos in &chunks {
+                    if let Some(chunk) = level.loaded_entity_chunks.get(pos) {
+                        if sender
+                            .send((Arc::downgrade(chunk.value()), false))
+                            .await
+                            .is_err()
+                        {
+                            return;
+                        }
+                    } else {
+                        to_fetch.push(*pos);
+                    }
+                }
 
                 if !to_fetch.is_empty() {
                     let (tx, mut rx) = tokio::sync::mpsc::channel::<
@@ -847,10 +872,14 @@ impl Level {
 
         trace!("Sending chunks to ChunkIO {:}", chunks_to_write.len());
         if let Err(error) = chunk_saver
-            .save_chunks(&level_folder, chunks_to_write)
+            .save_chunks(&level_folder, chunks_to_write.clone())
             .await
         {
             error!("Failed writing Chunk to disk {error}");
+            for (pos, chunk) in chunks_to_write {
+                chunk.mark_dirty(true);
+                self.loaded_entity_chunks.entry(pos).or_insert(chunk);
+            }
         }
     }
 
@@ -977,6 +1006,30 @@ impl Level {
     pub fn is_fluid_tick_scheduled(&self, block_pos: &BlockPos, fluid: &Fluid) -> bool {
         self.read_chunk_sync(&block_pos.chunk_position(), |chunk| {
             chunk.fluid_ticks.is_scheduled(*block_pos, fluid)
+        })
+        .unwrap_or(false)
+    }
+
+    pub fn cancel_block_tick(&self, block_pos: &BlockPos, block: &Block) -> bool {
+        let chunk_pos = block_pos.chunk_position();
+        self.read_chunk_sync(&chunk_pos, |chunk| {
+            let cancelled = chunk.block_ticks.cancel_tick(*block_pos, block);
+            if cancelled && !chunk.has_scheduled_ticks() {
+                self.chunks_with_scheduled_ticks.remove(&chunk_pos);
+            }
+            cancelled
+        })
+        .unwrap_or(false)
+    }
+
+    pub fn cancel_fluid_tick(&self, block_pos: &BlockPos, fluid: &Fluid) -> bool {
+        let chunk_pos = block_pos.chunk_position();
+        self.read_chunk_sync(&chunk_pos, |chunk| {
+            let cancelled = chunk.fluid_ticks.cancel_tick(*block_pos, fluid);
+            if cancelled && !chunk.has_scheduled_ticks() {
+                self.chunks_with_scheduled_ticks.remove(&chunk_pos);
+            }
+            cancelled
         })
         .unwrap_or(false)
     }

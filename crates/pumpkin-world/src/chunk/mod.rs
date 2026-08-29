@@ -599,6 +599,11 @@ impl ChunkSections {
 
 impl ChunkData {
     #[must_use]
+    pub fn has_scheduled_ticks(&self) -> bool {
+        self.block_ticks.has_ticks() || self.fluid_ticks.has_ticks()
+    }
+
+    #[must_use]
     pub fn empty(x: i32, z: i32) -> Self {
         Self {
             section: ChunkSections::new(24, -64),

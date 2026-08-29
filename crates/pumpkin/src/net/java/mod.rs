@@ -1,5 +1,6 @@
 use pumpkin_protocol::java::client::play::{
-    CChunkBatchEnd, CChunkBatchStart, CChunkData, CLightUpdate, CPlayDisconnect,
+    CAcknowledgeBlockChange, CChunkBatchEnd, CChunkBatchStart, CChunkData, CLightUpdate,
+    CPlayDisconnect,
 };
 use pumpkin_world::level::SyncChunk;
 use std::net::SocketAddr;
@@ -37,6 +38,7 @@ use pumpkin_protocol::{
     },
     ser::{NetworkWriteExt, WritingError},
 };
+use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::version::JavaMinecraftVersion;
 use tokio::{
@@ -45,7 +47,7 @@ use tokio::{
     sync::oneshot,
 };
 use tokio::{
-    sync::mpsc::{Receiver, Sender, error::TryRecvError},
+    sync::mpsc::{Receiver, Sender},
     task::JoinHandle,
 };
 use tokio_util::sync::CancellationToken;
@@ -55,10 +57,13 @@ use tracing::{debug, error, warn};
 pub mod config;
 pub mod handshake;
 pub mod login;
+mod outgoing;
 pub mod pending;
 pub mod play;
 pub mod recipe_helper;
 pub mod status;
+
+use outgoing::{OutgoingPacket, run_outgoing_packet_writer};
 
 use arc_swap::ArcSwap;
 use pending::PendingConnection;
@@ -121,32 +126,13 @@ pub struct JavaClient {
     pub packet_sequence: AtomicI32,
     /// Packet rate limiter for incoming client packets.
     pub packet_limiter: PacketRateLimiter,
+    /// Vanilla `suspendFlushingOnServerThread`.
+    suspend_flushing: Arc<AtomicBool>,
 }
 
 pub enum OutgoingPacketType {
     Normal,
     HighPriority,
-}
-
-struct OutgoingPacket {
-    data: Bytes,
-    completion: Option<oneshot::Sender<()>>,
-}
-
-impl OutgoingPacket {
-    const fn normal(data: Bytes) -> Self {
-        Self {
-            data,
-            completion: None,
-        }
-    }
-
-    const fn high_priority(data: Bytes, completion: oneshot::Sender<()>) -> Self {
-        Self {
-            data,
-            completion: Some(completion),
-        }
-    }
 }
 
 impl JavaClient {
@@ -185,7 +171,31 @@ impl JavaClient {
             pending_keep_alives: std::sync::Mutex::new(Vec::new()),
             packet_sequence: AtomicI32::new(-1),
             packet_limiter: pending.packet_limiter,
+            suspend_flushing: Arc::new(AtomicBool::new(false)),
         }
+    }
+
+    /// Vanilla `ServerCommonPacketListenerImpl.suspendFlushing`.
+    pub fn suspend_flushing(&self) {
+        self.suspend_flushing.store(true, Ordering::Release);
+    }
+
+    /// Vanilla `ClientboundBlockChangedAckPacket` after `broadcastChanges`, on the normal queue.
+    pub fn acknowledge_pending_block_changes(&self) {
+        let seq = self.packet_sequence.swap(-1, Ordering::Relaxed);
+        if seq != -1
+            && let Ok(data) = self.serialize_packet(&CAcknowledgeBlockChange::new(seq.into()))
+        {
+            self.try_enqueue_packet(data);
+        }
+    }
+
+    /// Vanilla `resumeFlushing`: queue `flushChannel` then lift the hold.
+    pub fn resume_flushing(&self) {
+        let _ = self
+            .outgoing_packet_queue_send
+            .try_send(OutgoingPacket::Flush);
+        self.suspend_flushing.store(false, Ordering::Release);
     }
 
     pub fn set_player(&self, player: Arc<Player>) {
@@ -284,6 +294,9 @@ impl JavaClient {
                         break;
                     }
 
+                    // Handle on the player tick. Sequence is recorded in `update_sequence`;
+                    // ack after `broadcastChanges` (`Server::acknowledge_player_block_changes`),
+                    // not here: see `acknowledge_pending_block_changes`.
                     player.inbound_packets.push(packet);
                 }
             }
@@ -334,6 +347,15 @@ impl JavaClient {
         if valid_chunks.is_empty() {
             return;
         }
+
+        // `CChunkData` reads `pending_block_entities`. Live piston progress only lands
+        // there on flush; otherwise a joining client gets the create-time snapshot and a
+        // honey-dragged minecart sits off the interpolated block.
+        player.world().flush_block_entities(
+            valid_chunks
+                .iter()
+                .map(|chunk| Vector2::new(chunk.x, chunk.z)),
+        );
 
         let version = self.version.load();
         let (tx, rx) = oneshot::channel();
@@ -437,22 +459,15 @@ impl JavaClient {
             .outgoing_packet_queue_send
             .try_send(OutgoingPacket::normal(packet_data))
         {
-            match err {
-                tokio::sync::mpsc::error::TrySendError::Full(_) => {
-                    debug!(
-                        "Failed to add packet to the outgoing packet queue for client {}: channel full",
-                        self.id
-                    );
-                }
-                tokio::sync::mpsc::error::TrySendError::Closed(_) => {
-                    if !self.close_token.is_cancelled() {
-                        warn!(
-                            "Failed to add packet to the outgoing packet queue for client {}: channel closed",
-                            self.id
-                        );
-                        self.close();
-                    }
-                }
+            // Full: drop. Logging every Full is O(dropped packets) on the tick thread.
+            if let tokio::sync::mpsc::error::TrySendError::Closed(_) = err
+                && !self.close_token.is_cancelled()
+            {
+                warn!(
+                    "Failed to add packet to the outgoing packet queue for client {}: channel closed",
+                    self.id
+                );
+                self.close();
             }
         }
     }
@@ -627,16 +642,14 @@ impl JavaClient {
     /// - **Login/Transfer:** Handles login and transfer packets.
     /// - **Config:** Handles configuration packets.
     pub fn start_outgoing_packet_task(&mut self) {
-        const MAX_BATCH_SIZE: usize = 64;
-
-        let Some(mut packet_receiver) = self.outgoing_packet_queue_recv.take() else {
+        let Some(packet_receiver) = self.outgoing_packet_queue_recv.take() else {
             return;
         };
-        let Some(mut priority_packet_receiver) = self.outgoing_packet_priority_recv.take() else {
+        let Some(priority_packet_receiver) = self.outgoing_packet_priority_recv.take() else {
             return;
         };
         let close_token = self.close_token.clone();
-        let Some(mut writer) = self
+        let Some(writer) = self
             .network_writer
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
@@ -645,71 +658,17 @@ impl JavaClient {
             return;
         };
         let id = self.id;
+        let suspend_flushing = self.suspend_flushing.clone();
         self.spawn_task(async move {
-            while !close_token.is_cancelled() {
-                let recv_result = tokio::select! {
-                    biased;
-                    () = close_token.cancelled() => None,
-                    res = priority_packet_receiver.recv() => res,
-                    res = packet_receiver.recv() => res,
-                };
-
-                let Some(packet_data) = recv_result else {
-                    break;
-                };
-
-                let mut packet_batch = Vec::with_capacity(MAX_BATCH_SIZE);
-                packet_batch.push(packet_data);
-
-                while packet_batch.len() < MAX_BATCH_SIZE {
-                    match priority_packet_receiver.try_recv() {
-                        Ok(packet_data) => {
-                            packet_batch.push(packet_data);
-                            continue;
-                        }
-                        Err(TryRecvError::Disconnected | TryRecvError::Empty) => {}
-                    }
-
-                    match packet_receiver.try_recv() {
-                        Ok(packet_data) => packet_batch.push(packet_data),
-                        Err(TryRecvError::Disconnected | TryRecvError::Empty) => break,
-                    }
-                }
-
-                let send_failed = {
-                    let mut failed = false;
-                    for packet in &packet_batch {
-                        if let Err(err) = writer.write_packet(packet.data.clone()).await {
-                            failed = true;
-                            // It is expected that the packet will fail if we are closed
-                            if !close_token.is_cancelled() {
-                                warn!("Failed to send packet to client {id}: {err}");
-                            }
-                            break;
-                        }
-                    }
-
-                    if !failed && let Err(err) = writer.flush().await {
-                        failed = true;
-                        if !close_token.is_cancelled() {
-                            warn!("Failed to flush packet batch for client {id}: {err}");
-                        }
-                    }
-                    failed
-                };
-
-                if send_failed {
-                    // We now need to close the connection to the client since the stream is in an unknown state.
-                    close_token.cancel();
-                    break;
-                }
-
-                for packet in packet_batch {
-                    if let Some(completion) = packet.completion {
-                        let _ = completion.send(());
-                    }
-                }
-            }
+            run_outgoing_packet_writer(
+                packet_receiver,
+                priority_packet_receiver,
+                writer,
+                close_token,
+                suspend_flushing,
+                id,
+            )
+            .await;
         });
     }
 

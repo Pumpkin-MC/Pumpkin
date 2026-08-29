@@ -10,7 +10,7 @@ use super::{
 };
 use crate::chunk::io::Dirtiable;
 use crate::level::{Level, SyncChunk};
-use dashmap::DashMap;
+use dashmap::{DashMap, DashSet};
 use pumpkin_config::lighting::LightingEngineConfig;
 use pumpkin_util::math::vector2::Vector2;
 use slotmap::Key;
@@ -56,6 +56,9 @@ pub struct GenerationSchedule {
     send_level: Arc<LevelChannel>,
 
     public_chunk_map: Arc<DashMap<Vector2<i32>, SyncChunk>>,
+    /// Same `DashSet` as `Level::chunks_with_scheduled_ticks` (`get_tick_data`).
+    /// Restored NBT `block_ticks`/`fluid_ticks` are inserted in `index_scheduled_ticks`.
+    chunks_with_scheduled_ticks: Arc<DashSet<Vector2<i32>>>,
     chunk_map: HashMap<ChunkPos, ChunkHolder>,
     unload_chunks: HashSetType<ChunkPos>,
 
@@ -136,6 +139,7 @@ impl GenerationSchedule {
                     last_high_priority: Vec::new(),
                     send_level: level_channel,
                     public_chunk_map: level_sched.loaded_chunks.clone(),
+                    chunks_with_scheduled_ticks: level_sched.chunks_with_scheduled_ticks.clone(),
                     unload_chunks: HashSetType::default(),
                     waiting_for_chunks: HashSetType::default(),
                     io_lock,
@@ -189,6 +193,18 @@ impl GenerationSchedule {
             }
             LightingEngineConfig::Default => {}
         }
+    }
+
+    /// Vanilla `LevelChunkTicks` rides on the chunk, not `scheduleBlockTick`.
+    /// `get_tick_data` only steps positions in this set.
+    fn index_scheduled_ticks(&self, pos: ChunkPos, chunk: &SyncChunk) {
+        if chunk.has_scheduled_ticks() {
+            self.chunks_with_scheduled_ticks.insert(pos);
+        }
+    }
+
+    fn unindex_scheduled_ticks(&self, pos: ChunkPos) {
+        self.chunks_with_scheduled_ticks.remove(&pos);
     }
 
     fn calc_priority(
@@ -578,6 +594,7 @@ impl GenerationSchedule {
                             Chunk::Level(chunk) => {
                                 self.apply_lighting_override(chunk);
                                 self.public_chunk_map.insert(pos, chunk.clone());
+                                self.index_scheduled_ticks(pos, chunk);
                                 self.listener.process_new_chunk(pos, chunk);
                             }
                             Chunk::Proto(_) => panic!(),
@@ -863,6 +880,7 @@ impl GenerationSchedule {
 
             if holder.public {
                 self.public_chunk_map.remove(&pos);
+                self.unindex_scheduled_ticks(pos);
                 holder.public = false;
             }
 
@@ -1024,6 +1042,7 @@ impl GenerationSchedule {
                                 pos
                             );
                         }
+                        self.index_scheduled_ticks(pos, data);
                         holder.public = true;
                         trace!(
                             "Notifying players: chunk {:?} loaded from disk (Full status)",
@@ -1038,6 +1057,7 @@ impl GenerationSchedule {
                                 pos
                             );
                             self.public_chunk_map.remove(&pos);
+                            self.unindex_scheduled_ticks(pos);
                             holder.public = false;
                         }
                     }
@@ -1079,6 +1099,7 @@ impl GenerationSchedule {
                                 let public_chunk = chunk.clone();
                                 if was_public {
                                     self.public_chunk_map.insert(new_pos, public_chunk);
+                                    self.index_scheduled_ticks(new_pos, &chunk);
                                     info!(
                                         "Notifying players: regenerated chunk at {:?} (was already public)",
                                         new_pos
@@ -1090,6 +1111,9 @@ impl GenerationSchedule {
                                     let result =
                                         self.public_chunk_map.insert(new_pos, public_chunk);
                                     holder.public = true;
+                                    if let Some(Chunk::Level(sync)) = holder.chunk.as_ref() {
+                                        self.index_scheduled_ticks(new_pos, sync);
+                                    }
                                     if result.is_some() {
                                         warn!(
                                             "public_chunk_map.insert returned existing chunk for {new_pos:?}"

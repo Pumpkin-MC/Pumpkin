@@ -438,19 +438,13 @@ impl BedrockClient {
             .outgoing_packet_queue_send
             .try_send(OutgoingPacket::normal(packet_data))
         {
-            match err {
-                tokio::sync::mpsc::error::TrySendError::Full(_) => {
-                    debug!(
-                        "Failed to add packet to the outgoing packet queue for client: channel full"
-                    );
-                }
-                tokio::sync::mpsc::error::TrySendError::Closed(_) => {
-                    if !self.is_closed() {
-                        error!(
-                            "Failed to add packet to the outgoing packet queue for client: channel closed"
-                        );
-                    }
-                }
+            // Full: drop.
+            if let tokio::sync::mpsc::error::TrySendError::Closed(_) = err
+                && !self.is_closed()
+            {
+                error!(
+                    "Failed to add packet to the outgoing packet queue for client: channel closed"
+                );
             }
         }
     }

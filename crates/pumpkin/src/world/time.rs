@@ -106,6 +106,8 @@ impl LevelTime {
         self.world_age = world_age;
     }
 
+    /// Vanilla `ServerLevel.tickTime`. Callers that emit periodic `CUpdateTime`
+    /// (`forceGameTimeSynchronization`) must do so before this increment.
     pub fn tick(&mut self, advance_time: bool) {
         self.world_age += 1;
         if advance_time && !self.paused {
@@ -127,6 +129,19 @@ impl LevelTime {
         world.broadcast_editioned(
             &CUpdateTime::new_clock(self.world_age, 0, total_ticks, partial_tick, rate),
             &CSetTime::new(self.time_of_day as _), // TODO do we need to tell bedrock that time is frozen?
+        );
+    }
+
+    /// Vanilla `ClientboundSetTimePacket(overworld.getGameTime(), Map.of())`.
+    /// Clock entries would rewind `clockManager` and can freeze client
+    /// `getGameTime()` across two piston animation ticks.
+    pub fn send_game_time_sync(&self, world: &World) {
+        world.broadcast_editioned(
+            &CUpdateTime {
+                game_time: self.world_age,
+                clock_updates: Vec::new(),
+            },
+            &CSetTime::new(self.time_of_day as _),
         );
     }
 

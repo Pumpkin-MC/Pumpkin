@@ -342,6 +342,7 @@ macro_rules! impl_inventory_for_cooking {
 
             fn mark_dirty(&self) {
                 self.dirty.store(true, Ordering::Relaxed);
+                self.comparator_dirty.store(true, Ordering::Relaxed);
             }
 
             fn as_any(&self) -> &dyn std::any::Any {
@@ -540,6 +541,7 @@ macro_rules! impl_block_entity_for_cooking {
                 let mut furnace = Self {
                     position,
                     dirty: AtomicBool::new(false),
+                    comparator_dirty: AtomicBool::new(false),
                     items: std::sync::RwLock::new(from_fn(|_| ItemStack::EMPTY.clone())),
                     cooking_total_time,
                     cooking_time_spent,
@@ -590,6 +592,14 @@ macro_rules! impl_block_entity_for_cooking {
 
             fn is_dirty(&self) -> bool {
                 self.dirty.load(Ordering::Relaxed)
+            }
+
+            fn is_comparator_dirty(&self) -> bool {
+                self.comparator_dirty.load(Ordering::Relaxed)
+            }
+
+            fn clear_comparator_dirty(&self) {
+                self.comparator_dirty.store(false, Ordering::Relaxed);
             }
 
             fn chunk_data_nbt(&self) -> Option<pumpkin_nbt::compound::NbtCompound> {

@@ -1,7 +1,7 @@
 use pumpkin_data::enchantment::AttributeModifierSlot;
 use pumpkin_util::text::TextComponent;
 use rustc_hash::FxHashMap;
-use tokio::sync::RwLock;
+use std::sync::RwLock;
 
 #[derive(Clone, Debug)]
 pub struct CustomEnchantmentEntry {
@@ -33,8 +33,11 @@ impl EnchantmentManager {
         }
     }
 
-    pub async fn register(&self, enchantment: CustomEnchantmentEntry) -> Result<(), String> {
-        let mut map = self.custom_enchantments.write().await;
+    pub fn register(&self, enchantment: CustomEnchantmentEntry) -> Result<(), String> {
+        let mut map = self
+            .custom_enchantments
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         if map.contains_key(&enchantment.id) {
             return Err(format!(
                 "Enchantment '{}' is already registered",
@@ -45,18 +48,27 @@ impl EnchantmentManager {
         Ok(())
     }
 
-    pub async fn get(&self, id: &str) -> Option<CustomEnchantmentEntry> {
-        let map = self.custom_enchantments.read().await;
+    pub fn get(&self, id: &str) -> Option<CustomEnchantmentEntry> {
+        let map = self
+            .custom_enchantments
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         map.get(id).cloned()
     }
 
-    pub async fn has(&self, id: &str) -> bool {
-        let map = self.custom_enchantments.read().await;
+    pub fn has(&self, id: &str) -> bool {
+        let map = self
+            .custom_enchantments
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         map.contains_key(id)
     }
 
-    pub async fn get_all_ids(&self) -> Vec<String> {
-        let map = self.custom_enchantments.read().await;
+    pub fn get_all_ids(&self) -> Vec<String> {
+        let map = self
+            .custom_enchantments
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         map.keys().cloned().collect()
     }
 }

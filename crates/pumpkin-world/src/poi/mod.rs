@@ -10,17 +10,15 @@ use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use serde::{Deserialize, Serialize};
 
+use crate::chunk::format::anvil::{
+    CHUNK_COUNT, Compression as AnvilCompression, MAX_SECTORS_PER_CHUNK, SECTOR_BYTES, chunk_index,
+    pack_location, unpack_location,
+};
+
 /// POI type identifier for nether portals
 pub const POI_TYPE_NETHER_PORTAL: &str = "minecraft:nether_portal";
 
-/// MCA format constants
-const SECTOR_SIZE: usize = 4096;
-const REGION_SIZE: usize = 32;
-const CHUNK_COUNT: usize = REGION_SIZE * REGION_SIZE;
-const HEADER_SIZE: usize = SECTOR_SIZE * 2; // Location table + timestamp table
-
-/// Compression type for MCA format
-const COMPRESSION_ZLIB: u8 = 2;
+const HEADER_SIZE: usize = SECTOR_BYTES * 2;
 
 // Data version for 1.21
 const DATA_VERSION: i32 = 3955;
@@ -91,13 +89,6 @@ impl PoiRegion {
 
     const fn pos_key(pos: &BlockPos) -> (i32, i32, i32) {
         (pos.0.x, pos.0.y, pos.0.z)
-    }
-
-    /// Get chunk index in MCA file (0-1023)
-    const fn chunk_index(chunk_x: i32, chunk_z: i32) -> usize {
-        let local_x = chunk_x & 31;
-        let local_z = chunk_z & 31;
-        ((local_z << 5) | local_x) as usize
     }
 
     /// Returns section key as just the Y section coordinate (like vanilla)
@@ -281,7 +272,7 @@ impl PoiRegion {
         for (chunk_x, chunk_z) in &chunks_with_data {
             if let Some(chunk_data) = self.get_chunk_data(*chunk_x, *chunk_z) {
                 let compressed = Self::compress_chunk_data(&chunk_data)?;
-                let index = Self::chunk_index(*chunk_x, *chunk_z);
+                let index = chunk_index(*chunk_x, *chunk_z);
                 chunk_data_map.insert(index, compressed);
             }
         }
@@ -302,18 +293,23 @@ impl PoiRegion {
             if let Some(compressed) = chunk_data_map.get(&index) {
                 // Calculate sector count needed
                 let data_len = compressed.len() + 5; // 4 bytes length + 1 byte compression + data
-                let sector_count = data_len.div_ceil(SECTOR_SIZE) as u32;
+                let sector_count = data_len.div_ceil(SECTOR_BYTES) as u32;
+                let Some(location) = pack_location(current_sector, sector_count) else {
+                    return Err(std::io::Error::other(format!(
+                        "POI chunk at index {index} serializes to {sector_count} sectors; Anvil location table max is {MAX_SECTORS_PER_CHUNK} (no `.mcc` fallback)"
+                    )));
+                };
 
                 // Build padded sector data
-                let mut padded = Vec::with_capacity(sector_count as usize * SECTOR_SIZE);
+                let mut padded = Vec::with_capacity(sector_count as usize * SECTOR_BYTES);
                 let length = (compressed.len() + 1) as u32; // +1 for compression byte
                 padded.extend_from_slice(&length.to_be_bytes());
-                padded.push(COMPRESSION_ZLIB);
+                padded.push(AnvilCompression::ZLib as u8);
                 padded.extend_from_slice(compressed);
                 // Pad to sector boundary
-                padded.resize(sector_count as usize * SECTOR_SIZE, 0);
+                padded.resize(sector_count as usize * SECTOR_BYTES, 0);
 
-                location_table[index] = (current_sector << 8) | sector_count;
+                location_table[index] = location;
                 timestamp_table[index] = timestamp;
                 sector_data.push(padded);
 
@@ -370,15 +366,16 @@ impl PoiRegion {
                 file_data[offset + 3],
             ]);
 
-            let sector_offset = (location >> 8) as usize;
-            let sector_count = (location & 0xFF) as usize;
+            let (sector_offset, sector_count) = unpack_location(location);
+            let sector_offset = sector_offset as usize;
+            let sector_count = sector_count as usize;
 
             if sector_offset == 0 || sector_count == 0 {
                 continue;
             }
 
-            let byte_offset = sector_offset * SECTOR_SIZE;
-            let byte_end = byte_offset + sector_count * SECTOR_SIZE;
+            let byte_offset = sector_offset * SECTOR_BYTES;
+            let byte_end = byte_offset + sector_count * SECTOR_BYTES;
 
             if byte_end > file_data.len() {
                 continue;
@@ -398,7 +395,10 @@ impl PoiRegion {
             ]) as usize;
             let compression = chunk_bytes[4];
 
-            if compression != COMPRESSION_ZLIB || length < 1 || length > chunk_bytes.len() - 4 {
+            if compression != AnvilCompression::ZLib as u8
+                || length < 1
+                || length > chunk_bytes.len() - 4
+            {
                 continue;
             }
 

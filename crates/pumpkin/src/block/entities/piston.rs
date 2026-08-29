@@ -1,11 +1,18 @@
 use std::sync::Arc;
-use std::sync::atomic::Ordering;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use crossbeam::atomic::AtomicCell;
-use pumpkin_data::{Block, BlockDirection, BlockState};
+use pumpkin_data::block_properties::{
+    Axis as BlockAxis, BlockProperties, PistonHeadLikeProperties,
+    StickyPistonLikeProperties as PistonProps,
+};
+use pumpkin_data::{Block, BlockDirection, BlockState, BlockStateId};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::{boundingbox::BoundingBox, position::BlockPos, vector3::Vector3};
+use pumpkin_world::block::{block_state_from_nbt, block_state_to_nbt};
 
+use crate::block::blocks::piston::piston::PistonBlock;
+use crate::entity::EntityBase;
 use crate::world::{BlockFlags, World};
 
 use super::BlockEntity;
@@ -18,10 +25,58 @@ pub struct PistonBlockEntity {
     pub last_progress: AtomicCell<f32>,
     pub extending: bool,
     pub source: bool,
+    /// World age this entity last ticked, `-1` if never. Vanilla `getRetractType`.
+    pub last_ticked: AtomicCell<i64>,
+    /// `from_nbt` only. Skip first-tick entity push: saved entities already sit at `progress`.
+    loaded_from_save: AtomicBool,
 }
 
 impl PistonBlockEntity {
     pub const ID: &'static str = "minecraft:piston";
+
+    /// Animation start: progress 0, `lastTicked` unset (`-1`). Vanilla `PistonMovingBlockEntity` ctor.
+    #[must_use]
+    pub fn new(
+        position: BlockPos,
+        facing: BlockDirection,
+        pushed_block_state: &'static BlockState,
+        extending: bool,
+        source: bool,
+    ) -> Self {
+        Self {
+            position,
+            facing,
+            pushed_block_state,
+            current_progress: 0.0.into(),
+            last_progress: 0.0.into(),
+            extending,
+            source,
+            last_ticked: (-1i64).into(),
+            loaded_from_save: AtomicBool::new(false),
+        }
+    }
+
+    /// Vanilla `checkIfExtend` `TRIGGER_DROP`: dest still extending and (`getProgress(0)` =
+    /// `progressO` < 0.5, `lastTicked == gameTime`, or `isHandlingTick`).
+    pub fn should_drop_instead_of_pull(&self, world: &World) -> bool {
+        self.extending
+            && (self.last_progress.load() < 0.5
+                || self.last_ticked.load() == world.get_world_age()
+                || world.is_handling_tick())
+    }
+
+    /// True while this instance is still the live BE at its position. A re-trigger can
+    /// replace it mid-animation. Live-map only; `get_block_entity` would rebuild from NBT
+    /// and restart the animation.
+    fn is_current(&self, world: &World) -> bool {
+        world
+            .get_live_block_entity(&self.position)
+            .is_some_and(|be| {
+                be.as_any()
+                    .downcast_ref::<Self>()
+                    .is_some_and(|piston| std::ptr::eq(piston, self))
+            })
+    }
 
     const fn movement_direction(&self) -> BlockDirection {
         if self.extending {
@@ -41,6 +96,18 @@ impl PistonBlockEntity {
         }
     }
 
+    /// Cell the pushed block occupies visually at `last_progress`. After `deleteAfterMove`
+    /// that cell is air; `matchesStickyCritera` `isSupportedBy` still names this piston BE.
+    fn visual_origin_cell(&self) -> BlockPos {
+        let ext = self.amount_extended(self.last_progress.load());
+        let off = self.facing.to_offset();
+        self.position.offset(Vector3::new(
+            (f64::from(off.x) * f64::from(ext)).round() as i32,
+            (f64::from(off.y) * f64::from(ext)).round() as i32,
+            (f64::from(off.z) * f64::from(ext)).round() as i32,
+        ))
+    }
+
     fn dir_vec(dir: BlockDirection, scale: f64) -> Vector3<f64> {
         let off = dir.to_offset();
         Vector3::new(
@@ -50,8 +117,45 @@ impl PistonBlockEntity {
         )
     }
 
-    /// Ports vanilla `PistonBlockEntity.pushEntities`: pushes entities whose
-    /// bounding box intersects the moving block's swept volume during this tick.
+    /// Vanilla `PistonMath.getMovementArea`: slab the leading face of `aabb` sweeps by
+    /// `amount` along `dir`. Not `aabb.stretch(motion)` (that includes the block itself).
+    fn movement_area(aabb: BoundingBox, dir: BlockDirection, amount: f64) -> BoundingBox {
+        let step = f64::from(dir.to_offset().get_axis(dir.to_axis().into()));
+        let delta = amount * step;
+        let (lo, hi) = (delta.min(0.0), delta.max(0.0));
+
+        let (mut min, mut max) = (aabb.min, aabb.max);
+        match dir {
+            BlockDirection::West => {
+                max.x = aabb.min.x + hi;
+                min.x = aabb.min.x + lo;
+            }
+            BlockDirection::East => {
+                min.x = aabb.max.x + lo;
+                max.x = aabb.max.x + hi;
+            }
+            BlockDirection::Down => {
+                max.y = aabb.min.y + hi;
+                min.y = aabb.min.y + lo;
+            }
+            BlockDirection::Up => {
+                min.y = aabb.max.y + lo;
+                max.y = aabb.max.y + hi;
+            }
+            BlockDirection::North => {
+                max.z = aabb.min.z + hi;
+                min.z = aabb.min.z + lo;
+            }
+            BlockDirection::South => {
+                min.z = aabb.max.z + lo;
+                max.z = aabb.max.z + hi;
+            }
+        }
+        BoundingBox::new(min, max)
+    }
+
+    /// Ports vanilla `PistonMovingBlockEntity.moveCollidedEntities`: pushes entities whose
+    /// bounding box the moving block's leading face sweeps into during this tick.
     fn push_entities(&self, world: &Arc<World>, new_progress: f32) {
         let last = self.last_progress.load();
         let delta = f64::from(new_progress - last);
@@ -60,53 +164,161 @@ impl PistonBlockEntity {
         }
 
         let motion_dir = self.movement_direction();
-        let amount = f64::from(self.amount_extended(last));
 
-        // Block AABB at the current visual position (start of this tick).
-        // For source=true (the piston head BE), vanilla uses the piston-head
-        // collision shape — a 4-pixel-thick slab at the front face — rather than
-        // the full cube. Without this, the head "sweeps" too much volume and
-        // drags entities (e.g. end crystals) back with it during retraction.
-        let raw_block_aabb = BoundingBox::from_block(&self.position);
-        let block_aabb = if self.source {
-            Self::head_shape_aabb(raw_block_aabb, self.facing)
-        } else {
-            raw_block_aabb
-        }
-        .shift(Self::dir_vec(self.facing, amount));
+        // Vanilla `moveCollidedEntities`: no collision shape (rail, torch, plant) means no push.
+        let shapes = self.animated_shapes(last);
+        let Some(block_aabb) = BoundingBox::union_all(shapes.iter().copied()) else {
+            return;
+        };
 
-        // Stretch by motion to get the swept volume (one tick of animation).
-        let motion = Self::dir_vec(motion_dir, delta);
-        let swept = block_aabb.stretch(motion);
+        // Vanilla `getMovementArea(aabb, ...).minmax(aabb)`. Overlap is re-measured per sub-box.
+        let query = block_aabb.union(&Self::movement_area(block_aabb, motion_dir, delta));
 
-        for entity in world.get_entities_at_box(&swept) {
+        let launches = Self::launches_entities(self.pushed_block_state);
+        let game_time = world.get_world_age();
+
+        for entity in world.get_entities_at_box(&query) {
             let e = entity.get_entity();
-            if e.no_physics.load(Ordering::Relaxed) {
+            // Vanilla `moveCollidedEntities` skips `PushReaction.IGNORE` only, not `noPhysics`.
+            if e.ignores_piston_push() {
                 continue;
             }
-            // Player movement is client-authoritative; vanilla still nudges them
-            // via Entity.move(PISTON), but we skip them here to avoid teleport jank.
+
+            if launches {
+                // Vanilla skips the whole push for `ServerPlayer` (client `LocalPlayer` flings).
+                if entity.get_player().is_some() {
+                    continue;
+                }
+
+                // Vanilla sets this as soon as the entity is in the list: replace the movement
+                // axis with a full block per tick, leave the other two.
+                let axis = motion_dir.to_axis().into();
+                let unit = Self::dir_vec(motion_dir, 1.0);
+                let mut velocity = e.velocity.load();
+                velocity.set_axis(axis, unit.get_axis(axis));
+                e.velocity.store(velocity);
+                e.send_velocity();
+            }
+
+            // Player position is client-authoritative. Vanilla uses `Entity.move(PISTON)`.
+            // Do not also `move` here: the client already applied the 0.5 animation step.
             if entity.get_player().is_some() {
                 continue;
             }
 
+            // Vanilla: max overlap per sub-box swept slab, not the union (fence/stair gaps).
+            // Cap at `delta`.
             let entity_aabb = e.bounding_box.load();
-            let intersection = Self::intersection_size(swept, motion_dir, entity_aabb);
-            if intersection <= 0.0 {
+            let mut overlap = 0.0f64;
+            for shape in &shapes {
+                let swept_shape = Self::movement_area(*shape, motion_dir, delta);
+                if swept_shape.intersects(&entity_aabb) {
+                    overlap = overlap.max(Self::intersection_size(
+                        swept_shape,
+                        motion_dir,
+                        entity_aabb,
+                    ));
+                    if overlap >= delta {
+                        break;
+                    }
+                }
+            }
+            if overlap <= 0.0 {
                 continue;
             }
-            let push_amount = intersection.min(delta) + 0.01;
-            Self::move_entity(e, motion_dir, push_amount);
+            let push_amount = overlap.min(delta) + 0.01;
+            Self::move_entity(&entity, motion_dir, push_amount, motion_dir, game_time);
 
-            // For a retracting head, vanilla also shoves the entity OUT of the
-            // piston body cube. Without this, entities get pulled into the
-            // piston and "stick" to it (looks like a sticky-piston drag).
-            // For a retract-head BE, `self.position` already IS the piston
-            // block position (it replaces the piston during animation).
+            // Vanilla `push`: retracting head also shoves out of the piston body cube.
             if !self.extending && self.source {
-                Self::push_out_of_piston_body(e, &self.position, motion_dir, delta);
+                Self::push_out_of_piston_body(
+                    &entity,
+                    &self.position,
+                    motion_dir,
+                    delta,
+                    game_time,
+                );
             }
         }
+    }
+
+    /// Vanilla `PistonMovingBlockEntity.moveStuckEntities`. Honey only
+    /// (`isStickyForEntities`). Horizontal movement only.
+    fn move_stuck_entities(&self, world: &Arc<World>, new_progress: f32) {
+        if Block::from_state_id(self.pushed_block_state.id) != &Block::HONEY_BLOCK {
+            return;
+        }
+
+        let motion_dir = self.movement_direction();
+        if motion_dir.to_axis() == BlockAxis::Y {
+            return;
+        }
+
+        let last = self.last_progress.load();
+        let delta_progress = f64::from(new_progress - last);
+        if delta_progress <= 0.0 {
+            return;
+        }
+
+        // Vanilla: `movedState.getCollisionShape().max(Y)`, then local
+        // `AABB(0, stickyTop, 0, 1, 1.500001, 1)` shifted by `getExtendedProgress`.
+        let sticky_top = self
+            .pushed_block_state
+            .get_block_collision_shapes()
+            .map(|shape| shape.max.y)
+            .fold(f64::NEG_INFINITY, f64::max);
+        if !sticky_top.is_finite() {
+            return;
+        }
+        let query = BoundingBox::new(
+            Vector3::new(0.0, sticky_top, 0.0),
+            Vector3::new(1.0, 1.500_001_000_000_000_1, 1.0),
+        )
+        .at_pos(self.position)
+        .shift(Self::dir_vec(
+            self.facing,
+            f64::from(self.amount_extended(last)),
+        ));
+
+        let game_time = world.get_world_age();
+
+        // Vanilla `level.getEntities` includes players. `get_entities_at_box` does not.
+        for player in world.get_players_at_box(&query) {
+            if self.matches_sticky(player.as_ref(), &query) {
+                let base: Arc<dyn EntityBase> = player.clone();
+                Self::move_entity(&base, motion_dir, delta_progress, motion_dir, game_time);
+            }
+        }
+
+        for entity in world.get_entities_at_box(&query) {
+            if entity.get_player().is_some() {
+                continue;
+            }
+            if !self.matches_sticky(entity.as_ref(), &query) {
+                continue;
+            }
+            Self::move_entity(&entity, motion_dir, delta_progress, motion_dir, game_time);
+        }
+    }
+
+    /// Vanilla `PistonMovingBlockEntity.matchesStickyCritera`.
+    fn matches_sticky(&self, entity: &dyn crate::entity::EntityBase, query: &BoundingBox) -> bool {
+        let e = entity.get_entity();
+        if e.ignores_piston_push() {
+            return false;
+        }
+        if !e.on_ground.load(Ordering::Relaxed) {
+            return false;
+        }
+        let pos = e.pos.load();
+        let supporting = e.supporting_block_pos.load();
+        let origin = self.visual_origin_cell();
+        let supported_here = supporting == Some(self.position) || supporting == Some(origin);
+        let within_footprint = pos.x >= query.min.x
+            && pos.x <= query.max.x
+            && pos.z >= query.min.z
+            && pos.z <= query.max.z;
+        supported_here || within_footprint
     }
 
     /// Vanilla `getIntersectionSize`: how much `entity` overlaps `swept` along
@@ -126,90 +338,182 @@ impl PistonBlockEntity {
         }
     }
 
-    fn move_entity(entity: &crate::entity::Entity, dir: BlockDirection, distance: f64) {
-        let new_pos = entity.pos.load() + Self::dir_vec(dir, distance);
-        entity.set_pos(new_pos);
-        entity.send_pos();
+    /// Slime only. Not `PistonHandler::is_block_sticky` (honey drags, does not launch).
+    /// Vanilla asks the pushed block, so a `source` BE never launches.
+    fn launches_entities(pushed: &BlockState) -> bool {
+        Block::from_state_id(pushed.id) == &Block::SLIME_BLOCK
+    }
+
+    /// Vanilla `movedState.getBlock() instanceof PistonBaseBlock`.
+    fn is_piston_base(state: &BlockState) -> bool {
+        PistonBlock::is_base(Block::from_state_id(state.id))
+    }
+
+    /// The piston head state this placeholder animates, with `short` as given. Used wherever
+    /// vanilla substitutes a `PISTON_HEAD` for the stored `movedState`.
+    fn head_state(&self, short: bool) -> &'static BlockState {
+        let mut props = PistonHeadLikeProperties::default(&Block::PISTON_HEAD);
+        props.facing = self.facing.to_facing();
+        props.short = short;
+        props.r#type = PistonBlock::piston_type(Block::from_state_id(self.pushed_block_state.id));
+        BlockState::from_id(props.to_state_id(&Block::PISTON_HEAD))
+    }
+
+    /// Vanilla `getCollisionRelatedBlockState`. Retracting `source` uses the head shape;
+    /// the stored state is the piston body it replaced.
+    fn collision_related_state(&self, progress: f32) -> &'static BlockState {
+        if !self.extending && self.source && Self::is_piston_base(self.pushed_block_state) {
+            self.head_state(progress > 0.25)
+        } else {
+            self.pushed_block_state
+        }
+    }
+
+    /// `state` boxes at this cell, shifted by the current animation offset. Individual
+    /// boxes, not the union (vanilla `MovingPistonBlock` collision query).
+    fn shifted_shapes(&self, state: &'static BlockState, progress: f32) -> Vec<BoundingBox> {
+        let offset = Self::dir_vec(self.facing, f64::from(self.amount_extended(progress)));
+        state
+            .get_block_collision_shapes_at(&self.position)
+            .map(|shape| shape.at_pos(self.position).shift(offset))
+            .collect()
+    }
+
+    /// The moving boxes this placeholder pushes entities with at a given animation progress.
+    fn animated_shapes(&self, progress: f32) -> Vec<BoundingBox> {
+        self.shifted_shapes(self.collision_related_state(progress), progress)
+    }
+
+    /// Retracting `source`: stationary piston body. Vanilla `pistonHeadShape` in
+    /// `getCollisionShape` (the base, not the head).
+    fn stationary_base_shapes(&self) -> Vec<BoundingBox> {
+        if !(!self.extending && self.source && Self::is_piston_base(self.pushed_block_state)) {
+            return Vec::new();
+        }
+
+        let block = Block::from_state_id(self.pushed_block_state.id);
+        let mut props = PistonProps::from_state_id(self.pushed_block_state.id, block);
+        props.extended = true;
+        BlockState::from_id(props.to_state_id(block))
+            .get_block_collision_shapes_at(&self.position)
+            .map(|shape| shape.at_pos(self.position))
+            .collect()
+    }
+
+    /// Vanilla `PistonMovingBlockEntity.getCollisionShape`. `noclip` matching this cell's
+    /// motion reports only the stationary part (`Entity::piston_noclip`).
+    pub fn collision_shapes(&self, noclip: Option<BlockDirection>) -> Vec<BoundingBox> {
+        let progress = self.current_progress.load();
+        let mut shapes = self.stationary_base_shapes();
+
+        if progress < 1.0 && noclip == Some(self.movement_direction()) {
+            return shapes;
+        }
+
+        // `source` always animates the head. Vanilla `short`: `extending != (1.0 - progress < 0.25)`.
+        let state = if self.source {
+            self.head_state(self.extending != (1.0 - progress < 0.25))
+        } else {
+            self.pushed_block_state
+        };
+        shapes.extend(self.shifted_shapes(state, progress));
+        shapes
+    }
+
+    /// Collision-clipped move, not a teleport. `move_entity_external`: do not write into
+    /// `velocity` (a minecart would re-integrate it).
+    fn move_entity(
+        entity: &Arc<dyn crate::entity::EntityBase>,
+        dir: BlockDirection,
+        distance: f64,
+        piston_direction: BlockDirection,
+        game_time: i64,
+    ) {
+        let e = entity.get_entity();
+        e.move_entity_piston(
+            entity,
+            Self::dir_vec(dir, distance),
+            piston_direction,
+            game_time,
+        );
     }
 
     /// Vanilla `push`: when a piston head retracts, shove entities that ended up
     /// inside the piston-body cube back out the opposite direction (slightly past
     /// the move they just got, so the net motion is essentially zero).
     fn push_out_of_piston_body(
-        entity: &crate::entity::Entity,
+        entity: &Arc<dyn crate::entity::EntityBase>,
         piston_pos: &BlockPos,
         motion_dir: BlockDirection,
         amount: f64,
+        game_time: i64,
     ) {
         let body_aabb = BoundingBox::from_block(piston_pos);
-        let entity_aabb = entity.bounding_box.load();
+        let entity_aabb = entity.get_entity().bounding_box.load();
         if !body_aabb.intersects(&entity_aabb) {
             return;
         }
         let back = motion_dir.opposite();
         let e = Self::intersection_size(body_aabb, back, entity_aabb) + 0.01;
-        let f = Self::intersection_size(
-            body_aabb,
-            back,
-            Self::aabb_intersection(body_aabb, entity_aabb),
-        ) + 0.01;
+        let f =
+            Self::intersection_size(body_aabb, back, body_aabb.intersection(&entity_aabb)) + 0.01;
         if (e - f).abs() < 0.01 {
             let distance = e.min(amount) + 0.01;
-            Self::move_entity(entity, back, distance);
+            // Vanilla `moveEntityByPiston(direction, entity, delta, opposite)`: noclip stays
+            // `motion_dir` so the entity can leave the retracting head's cell.
+            Self::move_entity(entity, back, distance, motion_dir, game_time);
         }
-    }
-
-    /// Approximation of vanilla `PistonHeadBlock` collision shape: a 4-pixel
-    /// (0.25 block) slab at the front face of the block in the facing direction.
-    fn head_shape_aabb(block_aabb: BoundingBox, facing: BlockDirection) -> BoundingBox {
-        const HEAD_THICKNESS: f64 = 0.25;
-        let mut min = block_aabb.min;
-        let mut max = block_aabb.max;
-        match facing {
-            BlockDirection::East => min.x = max.x - HEAD_THICKNESS,
-            BlockDirection::West => max.x = min.x + HEAD_THICKNESS,
-            BlockDirection::Up => min.y = max.y - HEAD_THICKNESS,
-            BlockDirection::Down => max.y = min.y + HEAD_THICKNESS,
-            BlockDirection::South => min.z = max.z - HEAD_THICKNESS,
-            BlockDirection::North => max.z = min.z + HEAD_THICKNESS,
-        }
-        BoundingBox::new(min, max)
-    }
-
-    const fn aabb_intersection(a: BoundingBox, b: BoundingBox) -> BoundingBox {
-        BoundingBox::new(
-            Vector3::new(
-                a.min.x.max(b.min.x),
-                a.min.y.max(b.min.y),
-                a.min.z.max(b.min.z),
-            ),
-            Vector3::new(
-                a.max.x.min(b.max.x),
-                a.max.y.min(b.max.y),
-                a.max.z.min(b.max.z),
-            ),
-        )
     }
 
     pub fn finish(&self, world: &Arc<World>) {
         if self.last_progress.load() < 1.0 {
+            // Vanilla parks the animation at its end before doing anything else, so a second
+            // `finish` on the same instance is a no-op.
+            self.current_progress.store(1.0);
+            self.last_progress.store(1.0);
+
             let pos = self.position;
+            if !self.is_current(world) {
+                return;
+            }
+            // Vanilla `finalTick`: drop the BE first, then `setBlock` if the cell is
+            // still `MOVING_PISTON`. Neighbour callbacks must not see the placeholder.
             world.remove_block_entity(&pos);
             if world.get_block(&pos) == &Block::MOVING_PISTON {
                 let state = if self.source {
                     Block::AIR.default_state.id
                 } else {
+                    // Vanilla `finalTick` resolved state, not tick-finish 340.
                     world.update_from_neighbor_shapes(self.pushed_block_state.id, &pos)
                 };
                 world.set_block_state(&pos, state, BlockFlags::NOTIFY_ALL);
-                world.update_neighbors(&pos, None);
+                world.update_neighbor(&pos, Block::from_state_id(state));
+                Self::queue_delivered_block(world, pos);
             }
         }
     }
+
+    /// Vanilla `ChunkHolder.broadcastChanges` sends the live cell. Re-queue after
+    /// neighbour callbacks: the delivered block, even if `set_block_state` was a no-op.
+    fn queue_delivered_block(world: &World, pos: BlockPos) {
+        if world.get_block(&pos) != &Block::MOVING_PISTON {
+            world.defer_live_block_change(pos);
+        }
+    }
+
+    /// Vanilla `PistonMovingBlockEntity.saveAdditional`. Writes `progressO`.
+    fn write_fields(&self, nbt: &mut NbtCompound) {
+        nbt.put_compound(BLOCK_STATE, block_state_to_nbt(self.pushed_block_state.id));
+        nbt.put_byte(FACING, self.facing.to_index() as i8);
+        nbt.put_float(PROGRESS, self.last_progress.load());
+        nbt.put_bool(EXTENDING, self.extending);
+        nbt.put_bool(SOURCE, self.source);
+    }
 }
 
+const BLOCK_STATE: &str = "blockState";
 const FACING: &str = "facing";
-const LAST_PROGRESS: &str = "progress";
+const PROGRESS: &str = "progress";
 const EXTENDING: &str = "extending";
 const SOURCE: &str = "source";
 
@@ -222,34 +526,68 @@ impl BlockEntity for PistonBlockEntity {
         self.position
     }
 
+    /// Placeholders place their block when the animation ends. Tick in vanilla creation order.
+    fn is_tick_order_sensitive(&self) -> bool {
+        true
+    }
+
     fn tick(&self, world: &Arc<World>) {
+        // Superseded by a re-trigger: further `finish` would clobber the new animation.
+        if !self.is_current(world) {
+            return;
+        }
+
+        self.last_ticked.store(world.get_world_age());
+
         let current_progress = self.current_progress.load();
         self.last_progress.store(current_progress);
         if current_progress >= 1.0 {
             let pos = self.position;
+            // Vanilla `PistonMovingBlockEntity.tick`: `removeBlockEntity` first, then
+            // `setBlock` if the cell is still `MOVING_PISTON`.
+            if !self.is_current(world) {
+                return;
+            }
             world.remove_block_entity(&pos);
             if world.get_block(&pos) == &Block::MOVING_PISTON {
-                if self.pushed_block_state.is_air() {
+                // Vanilla uses the post-processed state. Unsurvivable (rail, torch) becomes
+                // air: place then break so it drops.
+                let updated_state =
+                    world.update_from_neighbor_shapes(self.pushed_block_state.id, &pos);
+
+                if BlockState::from_id(updated_state).is_air() {
+                    // Vanilla `setBlock(..., 340)` then `updateOrDestroy(..., AIR, 3)`.
                     world.set_block_state(
                         &pos,
                         self.pushed_block_state.id,
-                        BlockFlags::FORCE_STATE | BlockFlags::MOVED,
+                        BlockFlags::FORCE_STATE
+                            | BlockFlags::MOVED
+                            | BlockFlags::SKIP_BLOCK_ENTITY_REPLACED_CALLBACK,
                     );
+                    world.break_block(&pos, None, BlockFlags::NOTIFY_ALL);
                 } else {
-                    let updated_state =
-                        world.update_from_neighbor_shapes(self.pushed_block_state.id, &pos);
+                    let updated_state = BlockState::from_id(updated_state)
+                        .without_waterlogged()
+                        .map_or(updated_state, |state| state.id);
                     world.set_block_state(
                         &pos,
                         updated_state,
                         BlockFlags::NOTIFY_ALL | BlockFlags::MOVED,
                     );
-                    world.update_neighbors(&pos, None);
+                    // Vanilla `updateNeighbor(pos, block, pos)`: the delivered block
+                    // re-examines its support. Neighbours already got `NOTIFY_NEIGHBORS`.
+                    world.update_neighbor(&pos, Block::from_state_id(updated_state));
                 }
+                Self::queue_delivered_block(world, pos);
             }
             return;
         }
         let new_progress = (current_progress + 0.5).min(1.0);
-        self.push_entities(world, new_progress);
+        // NBT load: do not replay the half-step onto entities already at `progress`.
+        if !self.loaded_from_save.swap(false, Ordering::Relaxed) {
+            self.push_entities(world, new_progress);
+            self.move_stuck_entities(world, new_progress);
+        }
         self.current_progress.store(new_progress);
     }
 
@@ -257,10 +595,14 @@ impl BlockEntity for PistonBlockEntity {
     where
         Self: Sized,
     {
-        // TODO
-        let pushed_block_state = Block::AIR.default_state;
+        // Vanilla `DEFAULT_BLOCK_STATE` (air) for a missing or unknown `blockState` tag.
+        // Pumpkin has no data-fixers. The placeholder still animates and delivers air.
+        let pushed_block_state = nbt
+            .get_compound(BLOCK_STATE)
+            .and_then(block_state_from_nbt)
+            .map_or(Block::AIR.default_state, BlockStateId::to_state);
         let facing = nbt.get_byte(FACING).unwrap_or(0);
-        let last_progress = nbt.get_float(LAST_PROGRESS).unwrap_or(0.0);
+        let last_progress = nbt.get_float(PROGRESS).unwrap_or(0.0);
         let extending = nbt.get_bool(EXTENDING).unwrap_or(false);
         let source = nbt.get_bool(SOURCE).unwrap_or(false);
         Self {
@@ -271,26 +613,27 @@ impl BlockEntity for PistonBlockEntity {
             last_progress: last_progress.into(),
             extending,
             source,
+            last_ticked: (-1i64).into(),
+            loaded_from_save: AtomicBool::new(true),
         }
     }
 
     fn write_nbt(&self, nbt: &mut NbtCompound) {
-        // TODO: pushed_block_state
-        nbt.put_byte(FACING, self.facing.to_index() as i8);
-        nbt.put_float(LAST_PROGRESS, self.last_progress.load());
-        nbt.put_bool(EXTENDING, self.extending);
-        nbt.put_bool(SOURCE, self.source);
+        self.write_fields(nbt);
     }
 
     fn chunk_data_nbt(&self) -> Option<NbtCompound> {
         let mut nbt = NbtCompound::new();
-        // TODO: pushed_block_state
-        nbt.put_byte(FACING, self.facing.to_index() as i8);
-        nbt.put_float(LAST_PROGRESS, self.last_progress.load());
-        nbt.put_bool(EXTENDING, self.extending);
-        nbt.put_bool(SOURCE, self.source);
-        // TODO: duplicated code because of async :c
+        self.write_fields(&mut nbt);
         Some(nbt)
+    }
+
+    fn sends_update_packet(&self) -> bool {
+        false
+    }
+
+    fn collision_shapes(&self, noclip: Option<BlockDirection>) -> Vec<BoundingBox> {
+        Self::collision_shapes(self, noclip)
     }
 
     fn as_any(&self) -> &dyn std::any::Any {

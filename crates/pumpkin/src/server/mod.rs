@@ -1027,26 +1027,72 @@ impl Server {
         )
     }
 
+    /// Vanilla `ServerCommonPacketListenerImpl.suspendFlushing`.
+    fn suspend_player_flushes(&self) {
+        self.for_each_player(|player| {
+            if let Some(java) = player.client.java() {
+                java.suspend_flushing();
+            }
+        });
+    }
+
+    /// Vanilla `resumeFlushing` / `Connection.flushChannel` at tick end (~50ms).
+    fn resume_player_flushes(&self) {
+        self.for_each_player(|player| {
+            if let Some(java) = player.client.java() {
+                java.resume_flushing();
+            }
+        });
+    }
+
     /// Main server tick method. This now handles both player/network ticking (which always runs)
     /// and world/game logic ticking (which is affected by freeze state).
     pub fn tick(self: &Arc<Self>) {
+        // Hold the socket flush for the whole tick so packets from this game tick
+        // land in one TCP flush instead of mixing with tick N+1.
+        self.suspend_player_flushes();
         if self.tick_rate_manager.runs_normally() || self.tick_rate_manager.is_sprinting() {
             self.tick_worlds();
             // Always run player and network ticking, even when game is frozen
         } else {
             self.tick_players_and_network();
         }
+        // Vanilla `tickChildren`: `level.tick` (`broadcastChanges`) then
+        // `tickConnection` / `ServerGamePacketListenerImpl.tick` (block-changed
+        // ack). A second flush picks up `setBlock` from packets that arrived
+        // after this tick's in-world flush; do not `promote_deferred` here
+        // (piston source air / dest stay on the next tick).
+        self.flush_pending_block_updates();
+        self.acknowledge_player_block_changes();
+        self.resume_player_flushes();
+    }
+
+    fn flush_pending_block_updates(&self) {
+        for world in self.worlds.load().iter() {
+            world.flush_block_updates();
+        }
+    }
+
+    /// Vanilla `ServerGamePacketListenerImpl.tick` `ClientboundBlockChangedAckPacket`.
+    fn acknowledge_player_block_changes(&self) {
+        self.for_each_player(|player| {
+            if let Some(java) = player.client.java() {
+                java.acknowledge_pending_block_changes();
+            }
+        });
     }
 
     /// Ticks essential server functions that must run even when the game is frozen.
-    /// This includes player ticking (network, keep-alives) and flushing world updates to clients.
+    /// Player ticking (network, keep-alives) and flushing already-written block updates to
+    /// clients. Block events stay in [`World::tick`]: flushing them here would run pistons
+    /// while `/tick freeze` is on.
     pub fn tick_players_and_network(self: &Arc<Self>) {
         let worlds = self.worlds.load();
         let handle = self.runtime.clone();
 
         for world in worlds.iter() {
+            world.promote_deferred_block_changes();
             world.flush_block_updates();
-            world.flush_synced_block_events();
 
             let players = world.players.load();
             let player_handle = handle.clone();
@@ -1063,6 +1109,27 @@ impl Server {
 
         let worlds = self.worlds.load();
         let handle = self.runtime.clone();
+
+        // Vanilla `MinecraftServer.tickChildren`: `tickCount++` then
+        // `forceGameTimeSynchronization` then `ServerLevel.tick` -> `tickTime()`.
+        // Pumpkin increments `tick_count` after the tick (`update_tick_times`), so
+        // `tick_count + 1` is vanilla's `tickCount` for this tick.
+        //
+        // The packet must carry the current `getGameTime()`, not the value after
+        // this ticks increment. Client `ClientLevel.tickTime()` already produced
+        // that number; sending the incremented value lets `getGameTime()` hold for
+        // two client ticks, so `Entity.limitPistonMovement` keeps `pistonDeltas`
+        // and clips a second honey/piston step at ±0.51.
+        if self.tick_count.load(Ordering::Relaxed).wrapping_add(1) % 20 == 0 {
+            // Vanilla `MinecraftServer.forceGameTimeSynchronization`: one packet,
+            // overworld `getGameTime()` only.
+            if let Some(overworld) = worlds
+                .iter()
+                .find(|world| world.dimension.minecraft_name == Dimension::OVERWORLD.minecraft_name)
+            {
+                overworld.force_game_time_synchronization();
+            }
+        }
 
         worlds.par_iter().for_each(|world| {
             let _guard = handle.enter();

@@ -1,7 +1,8 @@
 use std::{any::Any, sync::Arc};
 
-use pumpkin_data::{Block, block_properties::BLOCK_ENTITY_TYPES};
+use pumpkin_data::{Block, BlockDirection, block_properties::BLOCK_ENTITY_TYPES};
 use pumpkin_nbt::compound::NbtCompound;
+use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::position::BlockPos;
 
 use crate::world::World;
@@ -76,6 +77,22 @@ pub trait BlockEntity: Any + Send + Sync {
     fn resource_location(&self) -> &'static str;
     fn get_position(&self) -> BlockPos;
 
+    /// Whether this block entity's tick order relative to its neighbours is observable.
+    ///
+    /// Vanilla ticks every block entity from one list, in creation order, on one thread.
+    /// Pumpkin ticks them concurrently, which is fine for furnaces, chests, spawners, and
+    /// almost everything else. `true` takes this entity out of that pass and into
+    /// `world::piston_batch`, which ticks in vanilla's creation order. Only return `true`
+    /// where that order is actually observable: it serialises the tick for the whole batch.
+    fn is_tick_order_sensitive(&self) -> bool {
+        false
+    }
+
+    /// Vanilla `BlockEntity.getCollisionShape`. Empty: use the block state's voxels.
+    fn collision_shapes(&self, _noclip: Option<BlockDirection>) -> Vec<BoundingBox> {
+        Vec::new()
+    }
+
     /// Atomically takes the pending loot-table key and seed from this block entity.
     ///
     /// Returns `Some((key, seed))` if a deferred loot table was set, clearing it in the
@@ -116,6 +133,16 @@ pub trait BlockEntity: Any + Send + Sync {
         None
     }
 
+    /// Vanilla `BlockEntity.getUpdatePacket`. When `false`, incremental
+    /// `CBlockEntityData` is not sent; chunk packets still use [`chunk_data_nbt`].
+    ///
+    /// Pistons return `false`: the client creates the moving-piston BE from
+    /// `CBlockEvent`, and a standalone update packet would not attach (client
+    /// `MovingPistonBlock.newBlockEntity` is null).
+    fn sends_update_packet(&self) -> bool {
+        true
+    }
+
     /// Obtain block actor NBT for fields Bedrock does not include in its block state.
     fn bedrock_block_actor_data(&self, _state_id: BlockStateId) -> Option<NbtCompound> {
         None
@@ -124,10 +151,17 @@ pub trait BlockEntity: Any + Send + Sync {
     fn get_inventory(self: Arc<Self>) -> Option<Arc<dyn Inventory>> {
         None
     }
-    fn set_block_state(&mut self, _block_state: BlockStateId) {}
-    fn on_block_replaced(self: Arc<Self>, world: &Arc<World>, position: &BlockPos) {
+    /// Called with the block's actual, current state right after this block entity is attached
+    /// to the world, on fresh placement and when it is (re)loaded from a chunk. NBT often does
+    /// not carry state-derived facts like facing (they live in the block state), so this is the
+    /// hook implementors use to pick those up.
+    fn set_block_state(&self, _block_state: BlockStateId) {}
+    /// Vanilla `BlockBehaviour.onRemove`'s container branch: the block at this position is being
+    /// replaced by a different one, so whatever this block entity holds is dropped. Called from
+    /// [`World::set_block_state`] just before the block entity itself goes away.
+    fn on_block_replaced(self: Arc<Self>, world: Arc<World>, position: BlockPos) {
         if let Some(inventory) = self.get_inventory() {
-            world.scatter_inventory(position, &inventory);
+            world.scatter_inventory(&position, &inventory);
         }
     }
     fn is_dirty(&self) -> bool {
@@ -138,6 +172,16 @@ pub trait BlockEntity: Any + Send + Sync {
         // Default implementation does nothing
         // Override in implementations that have a dirty flag
     }
+
+    /// Same idea as [`Self::is_dirty`]/[`Self::clear_dirty`], tracked separately. Consumed every
+    /// tick to re-poke a comparator reading this block entity (see `World`'s block-entity tick
+    /// loop). `is_dirty`/`clear_dirty` are also reachable from the WASM plugin API, which may
+    /// consume them on its own schedule.
+    fn is_comparator_dirty(&self) -> bool {
+        false
+    }
+
+    fn clear_comparator_dirty(&self) {}
 
     fn as_any(&self) -> &dyn Any;
     fn to_property_delegate(self: Arc<Self>) -> Option<Arc<dyn PropertyDelegate>> {
@@ -340,10 +384,6 @@ pub fn create_block_entity(
             position, None,
         ))),
         "creaking_heart" => Some(Arc::new(creaking_heart::CreakingHeartBlockEntity::new(
-            position,
-        ))),
-        "piston" => Some(Arc::new(piston::PistonBlockEntity::from_nbt(
-            &pumpkin_nbt::compound::NbtCompound::new(),
             position,
         ))),
         "brewing_stand" => Some(Arc::new(brewing_stand::BrewingStandBlockEntity::new(

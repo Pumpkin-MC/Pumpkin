@@ -6,7 +6,7 @@ use crate::block::{
 };
 use pumpkin_data::{
     Block, BlockDirection, BlockStateId, HorizontalFacingExt,
-    block_properties::{AttachFace, BlockProperties, HorizontalFacing, LeverLikeProperties},
+    block_properties::{AttachFace, BlockProperties, LeverLikeProperties},
 };
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
@@ -62,40 +62,26 @@ impl BlockBehaviour for LeverBlock {
     }
 
     fn on_state_replaced(&self, args: OnStateReplacedArgs<'_>) {
-        let block_pos = args.position;
-        let block = args.block;
+        // Vanilla `LeverBlock.onRemove` skips this when the lever is only being moved (a piston
+        // carrying it): it is not losing power, so its neighbours must not be told it did.
+        if args.moved {
+            return;
+        }
 
-        let lever_props = LeverLikeProperties::from_state_id(args.old_state_id, block);
-
+        let lever_props = LeverLikeProperties::from_state_id(args.old_state_id, args.block);
         if lever_props.powered {
-            Self::update_neighbors(args.world, block_pos, lever_props);
+            Self::update_neighbors(args.world, args.position, lever_props);
         }
     }
 
     fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
-        let mut props = LeverLikeProperties::default(&pumpkin_data::Block::LEVER);
-
-        props.face = match args.direction {
-            BlockDirection::Down => AttachFace::Ceiling,
-            BlockDirection::Up => AttachFace::Floor,
-            _ => AttachFace::Wall,
-        };
-
-        props.facing = match props.face {
-            AttachFace::Floor | AttachFace::Ceiling => {
-                let player_direction = args.player.living_entity.entity.get_horizontal_facing();
-                match player_direction {
-                    HorizontalFacing::North | HorizontalFacing::South => HorizontalFacing::South,
-                    HorizontalFacing::West | HorizontalFacing::East => HorizontalFacing::East,
-                }
-            }
-            AttachFace::Wall => match args.direction {
-                BlockDirection::South => HorizontalFacing::South,
-                BlockDirection::West => HorizontalFacing::West,
-                BlockDirection::East => HorizontalFacing::East,
-                _ => HorizontalFacing::North,
-            },
-        };
+        let mut props = LeverLikeProperties::from_state_id(args.block.default_state.id, args.block);
+        // `args.direction` points from the new block *into* its support (registry passes
+        // `clicked_face.opposite()`), which is the convention every other wall-mounted block
+        // shares through this helper. Deriving the face from it directly inverts floor and
+        // ceiling and mirrors the wall facing.
+        (props.face, props.facing) =
+            WallMountedBlock::get_placement_face(self, args.player, args.direction);
 
         props.to_state_id(args.block)
     }

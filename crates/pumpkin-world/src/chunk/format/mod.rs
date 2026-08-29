@@ -1,6 +1,5 @@
 use std::{
     path::PathBuf,
-    str::FromStr,
     sync::{
         RwLock,
         atomic::{AtomicBool, AtomicU64, Ordering},
@@ -10,10 +9,10 @@ use std::{
 use bytes::Bytes;
 use pumpkin_data::{Block, BlockStateId, chunk::ChunkStatus, fluid::Fluid};
 use pumpkin_nbt::compound::NbtCompound;
-use pumpkin_util::resource_location::{FromResourceLocation, ResourceLocation, ToResourceLocation};
 use rustc_hash::FxHashMap;
 
 use crate::{
+    block::{block_state_from_nbt, block_state_to_nbt},
     chunk::{
         ChunkEntityData, ChunkReadingError, ChunkSerializingError,
         format::anvil::{SingleChunkDataSerializer, WORLD_DATA_VERSION},
@@ -21,7 +20,7 @@ use crate::{
     },
     generation::section_coords,
     level::LevelFolder,
-    tick::{ScheduledTick, TickPriority, scheduler::ChunkTickScheduler},
+    tick::{ScheduledTick, scheduler::ChunkTickScheduler},
 };
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector2::Vector2;
@@ -96,18 +95,7 @@ fn extract_u16_array(tag: &pumpkin_nbt::tag::NbtTag) -> Option<Box<[BlockStateId
                     pumpkin_nbt::tag::NbtTag::Byte(x) => BlockStateId::new_or_air(*x as u16),
                     pumpkin_nbt::tag::NbtTag::Long(x) => BlockStateId::new_or_air(*x as u16),
                     pumpkin_nbt::tag::NbtTag::Compound(compound) => {
-                        if let Ok(entry) =
-                            crate::generation::structure::template::PaletteEntry::from_nbt_compound(
-                                compound,
-                            )
-                            && let Some(state) =
-                                crate::generation::structure::template::BlockStateResolver::resolve_simple(
-                                    &entry,
-                                )
-                        {
-                            return state.id;
-                        }
-                        BlockStateId::AIR
+                        block_state_from_nbt(compound).unwrap_or(BlockStateId::AIR)
                     }
                     _ => BlockStateId::AIR,
                 })
@@ -140,26 +128,6 @@ fn extract_u8_array(tag: &pumpkin_nbt::tag::NbtTag) -> Option<Box<[u8]>> {
         }
         _ => None,
     }
-}
-
-fn parse_scheduled_tick<T>(nbt: &pumpkin_nbt::compound::NbtCompound) -> Option<ScheduledTick<T>>
-where
-    T: FromResourceLocation,
-{
-    let x = nbt.get_int("x")?;
-    let y = nbt.get_int("y")?;
-    let z = nbt.get_int("z")?;
-    let delay = nbt.get_int("t")? as u8;
-    let priority = TickPriority::try_from(nbt.get_int("p")?).ok()?;
-    let res_loc_str = nbt.get_string("i")?;
-    let res_loc = ResourceLocation::from_str(res_loc_str).ok()?;
-    let value = T::from_resource_location(&res_loc)?;
-    Some(ScheduledTick {
-        delay,
-        priority,
-        position: BlockPos::new(x, y, z),
-        value,
-    })
 }
 
 impl ChunkData {
@@ -334,7 +302,7 @@ impl ChunkData {
         if let Some(list) = root_tag.get_list("block_ticks") {
             for tag in list {
                 if let pumpkin_nbt::tag::NbtTag::Compound(compound) = tag
-                    && let Some(tick) = parse_scheduled_tick::<&'static Block>(compound)
+                    && let Some(tick) = ScheduledTick::<&'static Block>::from_nbt_compound(compound)
                 {
                     block_ticks.push(tick);
                 }
@@ -345,7 +313,7 @@ impl ChunkData {
         if let Some(list) = root_tag.get_list("fluid_ticks") {
             for tag in list {
                 if let pumpkin_nbt::tag::NbtTag::Compound(compound) = tag
-                    && let Some(tick) = parse_scheduled_tick::<&'static Fluid>(compound)
+                    && let Some(tick) = ScheduledTick::<&'static Fluid>::from_nbt_compound(compound)
                 {
                     fluid_ticks.push(tick);
                 }
@@ -501,27 +469,7 @@ impl ChunkData {
             let palette_tags: Vec<NbtTag> = block_states_nbt
                 .palette
                 .iter()
-                .map(|&id| {
-                    let block = Block::from_state_id(id);
-                    let mut comp = NbtCompound::new();
-                    let name = if block.name.starts_with("minecraft:") {
-                        block.name.to_string()
-                    } else {
-                        format!("minecraft:{}", block.name)
-                    };
-                    comp.put_string("Name", name);
-                    if let Some(props) = block.properties(id) {
-                        let prop_vec = props.to_props();
-                        if !prop_vec.is_empty() {
-                            let mut props_comp = NbtCompound::new();
-                            for (k, v) in prop_vec {
-                                props_comp.put_string(k, v.to_string());
-                            }
-                            comp.put_compound("Properties", props_comp);
-                        }
-                    }
-                    NbtTag::Compound(comp)
-                })
+                .map(|&id| NbtTag::Compound(block_state_to_nbt(id)))
                 .collect();
             bs_comp.put_list("palette", palette_tags);
             section_comp.put_compound("block_states", bs_comp);
@@ -567,27 +515,13 @@ impl ChunkData {
 
         let mut block_ticks_list = Vec::new();
         for tick in self.block_ticks.to_vec() {
-            let mut tick_comp = NbtCompound::new();
-            tick_comp.put_int("x", tick.position.0.x);
-            tick_comp.put_int("y", tick.position.0.y);
-            tick_comp.put_int("z", tick.position.0.z);
-            tick_comp.put_int("t", tick.delay as i32);
-            tick_comp.put_int("p", tick.priority as i32);
-            tick_comp.put_string("i", tick.value.to_resource_location());
-            block_ticks_list.push(NbtTag::Compound(tick_comp));
+            block_ticks_list.push(NbtTag::Compound(tick.to_nbt_compound()));
         }
         root_compound.put_list("block_ticks", block_ticks_list);
 
         let mut fluid_ticks_list = Vec::new();
         for tick in self.fluid_ticks.to_vec() {
-            let mut tick_comp = NbtCompound::new();
-            tick_comp.put_int("x", tick.position.0.x);
-            tick_comp.put_int("y", tick.position.0.y);
-            tick_comp.put_int("z", tick.position.0.z);
-            tick_comp.put_int("t", tick.delay as i32);
-            tick_comp.put_int("p", tick.priority as i32);
-            tick_comp.put_string("i", tick.value.to_resource_location());
-            fluid_ticks_list.push(NbtTag::Compound(tick_comp));
+            fluid_ticks_list.push(NbtTag::Compound(tick.to_nbt_compound()));
         }
         root_compound.put_list("fluid_ticks", fluid_ticks_list);
 

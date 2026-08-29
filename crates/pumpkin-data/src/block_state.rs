@@ -152,29 +152,37 @@ impl BlockState {
 
     #[must_use]
     pub fn is_waterlogged(&self) -> bool {
-        let block = Block::from_state_id(self.id);
-
-        block.properties(self.id).is_some_and(|props| {
-            props
-                .to_props()
-                .iter()
-                .any(|(k, v)| k == &"waterlogged" && v == &"true")
-        })
+        Block::from_state_id(self.id).is_waterlogged(self.id)
     }
 
-    /// Produce a new state identical to `self` except the waterlogged property
-    /// is set to `true`.  If the block type does not support waterlogging or
-    /// the state was already waterlogged, `None` is returned.
+    /// Same state with `waterlogged` set. `None` if the block has no such property.
     #[must_use]
-    pub fn with_waterlogged(&self) -> Option<&'static BlockState> {
-        let block = Block::from_state_id(self.id);
-        block.with_waterlogged(self.id)
+    pub fn set_waterlogged(&self, waterlogged: bool) -> Option<&'static Self> {
+        Block::from_state_id(self.id).set_waterlogged(self.id, waterlogged)
+    }
+
+    #[must_use]
+    pub fn with_waterlogged(&self) -> Option<&'static Self> {
+        self.set_waterlogged(true)
+    }
+
+    #[must_use]
+    pub fn without_waterlogged(&self) -> Option<&'static Self> {
+        self.set_waterlogged(false)
     }
 
     pub fn get_block_collision_shapes(&self) -> impl Iterator<Item = BoundingBox> + '_ {
         self.collision_shapes
             .iter()
             .map(|&id| COLLISION_SHAPES[id as usize])
+    }
+
+    /// Vanilla `BlockStateBase.Cache.largeCollisionShape`: any collision box leaves the cell.
+    /// Face-boundary queries in `World::get_block_collisions` skip states that stay inside.
+    #[must_use]
+    pub fn has_large_collision_shape(&self) -> bool {
+        self.get_block_collision_shapes()
+            .any(|shape| shape.exceeds_block_cell())
     }
 
     /// Returns block-local collision shapes with vanilla's coordinate-derived offset applied.
@@ -361,6 +369,41 @@ mod tests {
         assert_close(shifted_shape.max.x, 0.84375);
         assert_close(shifted_shape.min.z, 0.65625);
         assert_close(shifted_shape.max.z, 0.84375);
+    }
+
+    #[test]
+    fn tall_blocks_report_a_large_collision_shape() {
+        for block in [Block::OAK_FENCE, Block::COBBLESTONE_WALL] {
+            assert!(
+                block.default_state.has_large_collision_shape(),
+                "{} should reach outside its own cell",
+                block.name
+            );
+        }
+
+        for block in [Block::STONE, Block::OAK_SLAB, Block::AIR] {
+            assert!(
+                !block.default_state.has_large_collision_shape(),
+                "{} should stay inside its own cell",
+                block.name
+            );
+        }
+    }
+
+    #[test]
+    fn waterlogged_property_round_trip() {
+        let dry = Block::OAK_SLAB.default_state;
+        assert!(!dry.is_waterlogged());
+        assert_eq!(dry.without_waterlogged(), Some(dry));
+
+        let wet = dry.with_waterlogged().expect("oak slab is waterloggable");
+        assert!(wet.is_waterlogged());
+        assert_eq!(wet.without_waterlogged(), Some(dry));
+        assert_eq!(wet.with_waterlogged(), Some(wet));
+
+        assert!(Block::STONE.default_state.with_waterlogged().is_none());
+        assert!(Block::STONE.default_state.without_waterlogged().is_none());
+        assert!(Block::FURNACE.default_state.with_waterlogged().is_none());
     }
 
     #[test]

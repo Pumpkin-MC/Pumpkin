@@ -2,9 +2,13 @@ use crate::{
     block::{
         BlockBehaviour, BlockIsReplacing, BlockMetadata, CanPlaceAtArgs,
         GetStateForNeighborUpdateArgs, OnPlaceArgs, OnScheduledTickArgs, PlacedArgs,
-        blocks::coral::{is_dead_coral, scan_for_water, try_schedule_die_tick},
+        blocks::coral::{
+            coral_still_present, floor_coral_can_survive, floor_coral_can_survive_at,
+            is_dead_coral, scan_for_water, try_schedule_die_tick,
+        },
     },
     entity::EntityBase,
+    world::World,
 };
 use pumpkin_data::{
     Block, BlockDirection, BlockId, BlockStateId, FacingExt, HorizontalFacingExt,
@@ -48,11 +52,10 @@ pub type CoralFanLikeProperties = MangroveRootsLikeProperties;
 
 impl BlockBehaviour for CoralFanBlock {
     fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
-        if args.direction == BlockDirection::Down {
-            let support_block = args.world.get_block_state(&args.position.down());
-            if support_block.is_center_solid(BlockDirection::Up) {
-                return get_default_coral_fan_state_id(args.block, args.replacing.water_source());
-            }
+        if args.direction == BlockDirection::Down
+            && floor_coral_can_survive(args.world, args.position)
+        {
+            return get_default_coral_fan_state_id(args.block, args.replacing.water_source());
         }
         let mut directions = args.player.get_entity().get_entity_facing_order();
 
@@ -67,18 +70,15 @@ impl BlockBehaviour for CoralFanBlock {
                 directions.copy_within(0..i, 1);
                 directions[0] = face;
             }
-        } else if directions[0] == Facing::Down {
-            let support_block = args.world.get_block_state(&args.position.down());
-            if support_block.is_center_solid(BlockDirection::Up) {
-                return get_default_coral_fan_state_id(args.block, args.replacing.water_source());
-            }
+        } else if directions[0] == Facing::Down
+            && floor_coral_can_survive(args.world, args.position)
+        {
+            return get_default_coral_fan_state_id(args.block, args.replacing.water_source());
         }
 
         for dir in directions {
-            if let (Some(h_facing), Some(opp_facing)) = (
-                dir.to_horizontal_facing(),
-                dir.opposite().to_horizontal_facing(),
-            ) && can_place_at(args.world, args.position, h_facing)
+            if let Some(opp_facing) = dir.opposite().to_horizontal_facing()
+                && wall_fan_can_survive(args.world, args.position, opp_facing)
             {
                 let Some(wall_block) = get_corresponding_wall_fan_type(args.block.id) else {
                     return BlockStateId::AIR;
@@ -90,23 +90,23 @@ impl BlockBehaviour for CoralFanBlock {
             }
         }
 
-        let support_block = args.world.get_block_state(&args.position.down());
-        if support_block.is_center_solid(BlockDirection::Up) {
+        if floor_coral_can_survive(args.world, args.position) {
             return get_default_coral_fan_state_id(args.block, args.replacing.water_source());
         }
         BlockStateId::AIR
     }
 
     fn placed(&self, args: PlacedArgs<'_>) {
-        {
-            if !scan_for_water(args.world, args.position) {
-                try_schedule_die_tick(args.block, args.world, args.position);
-            }
+        if !is_dead_coral(args.block) && !scan_for_water(args.world, args.position) {
+            try_schedule_die_tick(args.block, args.world, args.position);
         }
     }
 
     fn on_scheduled_tick(&self, args: OnScheduledTickArgs<'_>) {
         if !scan_for_water(args.world, args.position) && !is_dead_coral(args.block) {
+            if !coral_still_present(args.world, args.position, args.block) {
+                return;
+            }
             let current_state = args.world.get_block_state(args.position);
 
             let Some(dead_block) = get_dead_type(args.block.id) else {
@@ -131,12 +131,13 @@ impl BlockBehaviour for CoralFanBlock {
     }
 
     fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
-        let support_block = args.block_accessor.get_block_state(&args.position.down());
-        if support_block.is_center_solid(BlockDirection::Up) && !is_wall_fan(args.block) {
+        if floor_coral_can_survive_at(args.world, args.block_accessor, args.position)
+            && !is_wall_fan(args.block)
+        {
             return true;
         }
         for dir in BlockDirection::horizontal() {
-            if can_place_at(args.block_accessor, args.position, dir) {
+            if wall_attachment_can_place(args.world, args.block_accessor, args.position, dir) {
                 return true;
             }
         }
@@ -147,18 +148,18 @@ impl BlockBehaviour for CoralFanBlock {
         &self,
         args: GetStateForNeighborUpdateArgs<'_>,
     ) -> BlockStateId {
+        // Vanilla `canSurvive` on the support face only. Not a dryness pop.
         if is_wall_fan(args.block) {
             let props = CoralWallFanLikeProperties::from_state_id(args.state_id, args.block);
             if props.facing.to_block_direction().opposite() == args.direction
-                && !can_place_at(args.world, args.position, props.facing.opposite())
+                && !wall_fan_can_survive(args.world, args.position, props.facing)
             {
                 return BlockStateId::AIR;
             }
-        } else if args.direction == BlockDirection::Down {
-            let support_block = args.world.get_block_state(&args.position.down());
-            if !support_block.is_center_solid(BlockDirection::Up) {
-                return BlockStateId::AIR;
-            }
+        } else if args.direction == BlockDirection::Down
+            && !floor_coral_can_survive(args.world, args.position)
+        {
+            return BlockStateId::AIR;
         }
 
         args.state_id
@@ -212,8 +213,29 @@ const fn get_corresponding_wall_fan_type(id: BlockId) -> Option<&'static Block> 
     }
 }
 
-fn can_place_at(world: &dyn BlockAccessor, block_pos: &BlockPos, facing: HorizontalFacing) -> bool {
-    world
-        .get_block_state(&block_pos.offset(facing.to_offset()))
-        .is_side_solid(facing.opposite().to_block_direction())
+/// `wall_dir` is the wall (vanilla placement click). Fan `FACING` is the opposite.
+fn wall_attachment_can_place(
+    world: Option<&World>,
+    accessor: &dyn BlockAccessor,
+    block_pos: &BlockPos,
+    wall_dir: HorizontalFacing,
+) -> bool {
+    let fan_facing = wall_dir.opposite();
+    world.map_or_else(
+        || {
+            accessor
+                .get_block_state(&block_pos.offset(wall_dir.to_offset()))
+                .is_side_solid(fan_facing.to_block_direction())
+        },
+        |world| wall_fan_can_survive(world, block_pos, fan_facing),
+    )
+}
+
+/// Vanilla `BaseCoralWallFanBlock.canSurvive`: `isFaceSturdy(level, support, FACING)`.
+fn wall_fan_can_survive(world: &World, block_pos: &BlockPos, facing: HorizontalFacing) -> bool {
+    let support = facing.opposite();
+    world.is_face_sturdy(
+        &block_pos.offset(support.to_offset()),
+        facing.to_block_direction(),
+    )
 }

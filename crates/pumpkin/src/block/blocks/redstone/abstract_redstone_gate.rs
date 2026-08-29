@@ -71,19 +71,23 @@ pub trait RedstoneGateBlock<T: Send + Sync + BlockProperties + RedstoneGateBlock
     where
         Self: Send + Sync,
     {
+        // Vanilla `DiodeBlock.neighborChanged`: `getBlockState(pos).is(this)` first.
+        // Shape updates may already have popped this cell (`replaceWithStateForNeighborUpdate`).
+        if args.world.get_block(args.position) != args.block {
+            return;
+        }
         let state = args.world.get_block_state(args.position);
         if RedstoneGateBlock::can_place_at(self, args.world.as_ref(), *args.position) {
             self.update_powered(args.world, *args.position, state, args.block);
             return;
         }
-        args.world.set_block_state(
-            args.position,
-            Block::AIR.default_state.id,
-            BlockFlags::NOTIFY_ALL,
-        );
+        // Vanilla `dropResources` then `removeBlock`, then `updateNeighborsAt` on each
+        // neighbour with source `this` (the diode, not the block that poked).
+        args.world
+            .break_block(args.position, None, BlockFlags::NOTIFY_ALL);
         for dir in BlockDirection::all() {
             args.world
-                .update_neighbor(&args.position.offset(dir.to_offset()), args.source_block);
+                .update_neighbor(&args.position.offset(dir.to_offset()), args.block);
         }
     }
 

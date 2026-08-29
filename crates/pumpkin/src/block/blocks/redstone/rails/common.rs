@@ -17,6 +17,11 @@ pub(super) fn rail_placement_is_valid(world: &World, block: &Block, pos: &BlockP
     }
 
     let state_id = world.get_block_state_id(pos);
+    // Neighbor updates from a support that just became air can pop this rail
+    // first (`from_state_id` panics on air).
+    if Block::from_state_id(state_id) != block {
+        return false;
+    }
     let rail_props = RailProperties::new(state_id, block);
     let rail_leaning_direction = match rail_props.shape() {
         RailShape::AscendingNorth => Some(HorizontalFacing::North),

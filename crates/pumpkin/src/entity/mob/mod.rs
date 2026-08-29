@@ -1113,7 +1113,6 @@ impl<T: Mob + Send + 'static> EntityBase for T {
         mob_entity.living_entity.tick(caller, server);
         self.post_tick();
 
-        // --- Packet logic remains the same ---
         let entity = &mob_entity.living_entity.entity;
         let yaw = (entity.yaw.load() * 256.0 / 360.0).rem_euclid(256.0) as u8;
         let pitch = (entity.pitch.load() * 256.0 / 360.0).rem_euclid(256.0) as u8;
@@ -1123,11 +1122,10 @@ impl<T: Mob + Send + 'static> EntityBase for T {
         let last_pitch = mob_entity.last_sent_pitch.load(Relaxed);
         let last_head_yaw = mob_entity.last_sent_head_yaw.load(Relaxed);
 
-        let chunk_pos = entity.chunk_pos.load();
         if yaw.abs_diff(last_yaw) >= 1 || pitch.abs_diff(last_pitch) >= 1 {
             let world = entity.world.load();
-            world.broadcast_to_chunk(
-                chunk_pos,
+            world.send_to_tracking_players(
+                entity,
                 &CUpdateEntityRot::new(
                     entity.entity_id.into(),
                     yaw,
@@ -1141,8 +1139,10 @@ impl<T: Mob + Send + 'static> EntityBase for T {
 
         if head_yaw.abs_diff(last_head_yaw) >= 1 {
             let world = entity.world.load();
-
-            world.broadcast_to_chunk(chunk_pos, &CHeadRot::new(entity.entity_id.into(), head_yaw));
+            world.send_to_tracking_players(
+                entity,
+                &CHeadRot::new(entity.entity_id.into(), head_yaw),
+            );
             mob_entity.last_sent_head_yaw.store(head_yaw, Relaxed);
         }
     }
@@ -1190,6 +1190,10 @@ impl<T: Mob + Send + 'static> EntityBase for T {
 
     fn on_player_collision(&self, player: &Arc<Player>) {
         self.mob_player_collision(player);
+    }
+
+    fn requires_precise_player_collision(&self) -> bool {
+        true
     }
 
     fn get_entity(&self) -> &Entity {

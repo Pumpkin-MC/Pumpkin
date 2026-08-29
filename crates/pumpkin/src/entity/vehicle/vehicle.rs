@@ -37,28 +37,31 @@ impl VehicleEntity {
             self.damage.store(current_damage - 1.0);
         }
 
+        let Some(server) = self.entity.world.load().server.upgrade() else {
+            return;
+        };
         let mut update_event =
             crate::plugin::api::events::vehicle::vehicle_update::VehicleUpdateEvent::new(
                 self.entity.entity_id,
             );
-        if let Some(server) = self.entity.world.load().server.upgrade() {
-            server
-                .plugin_manager
-                .fire_blocking(&server, &mut update_event);
-        }
+        server
+            .plugin_manager
+            .fire_blocking(&server, &mut update_event);
     }
 
-    pub async fn create(&self) {
+    pub fn create(&self) {
         let mut create_event =
             crate::plugin::api::events::vehicle::vehicle_create::VehicleCreateEvent::new(
                 self.entity.entity_id,
             );
         if let Some(server) = self.entity.world.load().server.upgrade() {
-            server.plugin_manager.fire(&server, &mut create_event).await;
+            server
+                .plugin_manager
+                .fire_blocking(&server, &mut create_event);
         }
     }
 
-    pub async fn move_vehicle(
+    pub fn move_vehicle(
         &self,
         from: pumpkin_util::math::vector3::Vector3<f64>,
         to: pumpkin_util::math::vector3::Vector3<f64>,
@@ -70,11 +73,13 @@ impl VehicleEntity {
                 to,
             );
         if let Some(server) = self.entity.world.load().server.upgrade() {
-            server.plugin_manager.fire(&server, &mut move_event).await;
+            server
+                .plugin_manager
+                .fire_blocking(&server, &mut move_event);
         }
     }
 
-    pub async fn collide_entity(&self, collided_entity_id: i32) {
+    pub fn collide_entity(&self, collided_entity_id: i32) {
         let mut base_event =
             crate::plugin::api::events::vehicle::vehicle_collision::VehicleCollisionEvent::new(
                 self.entity.entity_id,
@@ -84,15 +89,16 @@ impl VehicleEntity {
             collided_entity_id,
         );
         if let Some(server) = self.entity.world.load().server.upgrade() {
-            server.plugin_manager.fire(&server, &mut base_event).await;
             server
                 .plugin_manager
-                .fire(&server, &mut collide_event)
-                .await;
+                .fire_blocking(&server, &mut base_event);
+            server
+                .plugin_manager
+                .fire_blocking(&server, &mut collide_event);
         }
     }
 
-    pub async fn collide_block(&self, block_pos: pumpkin_util::math::position::BlockPos) {
+    pub fn collide_block(&self, block_pos: pumpkin_util::math::position::BlockPos) {
         let mut base_event =
             crate::plugin::api::events::vehicle::vehicle_collision::VehicleCollisionEvent::new(
                 self.entity.entity_id,
@@ -102,11 +108,12 @@ impl VehicleEntity {
             block_pos,
         );
         if let Some(server) = self.entity.world.load().server.upgrade() {
-            server.plugin_manager.fire(&server, &mut base_event).await;
             server
                 .plugin_manager
-                .fire(&server, &mut collide_event)
-                .await;
+                .fire_blocking(&server, &mut base_event);
+            server
+                .plugin_manager
+                .fire_blocking(&server, &mut collide_event);
         }
     }
 

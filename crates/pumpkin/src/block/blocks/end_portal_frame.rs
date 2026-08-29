@@ -3,7 +3,7 @@ use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_macros::pumpkin_block;
 
 use crate::{
-    block::{BlockBehaviour, OnPlaceArgs},
+    block::{BlockBehaviour, GetComparatorOutputArgs, OnPlaceArgs},
     entity::EntityBase,
 };
 
@@ -18,5 +18,13 @@ impl BlockBehaviour for EndPortalFrameBlock {
         end_portal_frame_props.facing = args.player.get_entity().get_horizontal_facing().opposite();
 
         end_portal_frame_props.to_state_id(args.block)
+    }
+
+    // Vanilla `EndPortalFrameBlock.getAnalogOutputSignal`: full signal once the eye of ender
+    // sits in the frame.
+    fn get_comparator_output(&self, args: GetComparatorOutputArgs<'_>) -> Option<u8> {
+        let state_id = args.world.get_block_state_id(args.position);
+        let props = EndPortalFrameProperties::from_state_id(state_id, args.block);
+        Some(if props.eye { 15 } else { 0 })
     }
 }

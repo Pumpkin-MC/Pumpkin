@@ -206,6 +206,20 @@ impl HostBlockEntity for PluginHostState {
         Ok(())
     }
 
+    // TODO: is-comparator-dirty/clear-comparator-dirty need to be re-added to
+    // block-entity.wit in pumpkin-plugin-wit; the submodule was pointed at master's
+    // commit during the master merge, which doesn't have these entries yet.
+    // async fn is_comparator_dirty(&mut self, res: Resource<BlockEntity>) -> wasmtime::Result<bool> {
+    //     let entity = block_entity_from_resource(self, &res)?;
+    //     Ok(entity.is_comparator_dirty())
+    // }
+    //
+    // async fn clear_comparator_dirty(&mut self, res: Resource<BlockEntity>) -> wasmtime::Result<()> {
+    //     let entity = block_entity_from_resource(self, &res)?;
+    //     entity.clear_comparator_dirty();
+    //     Ok(())
+    // }
+
     async fn set_custom_data(
         &mut self,
         res: Resource<BlockEntity>,

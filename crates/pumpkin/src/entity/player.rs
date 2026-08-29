@@ -22,6 +22,7 @@ use pumpkin_inventory::merchant::merchant_screen_handler::MerchantScreenHandler;
 use pumpkin_inventory::player::ender_chest_inventory::EnderChestInventory;
 use pumpkin_protocol::RawPacket;
 use pumpkin_protocol::bedrock::client::play_status::CPlayStatus;
+use pumpkin_protocol::bedrock::client::remove_actor::CRemoveActor;
 use pumpkin_protocol::bedrock::client::set_time::CSetTime;
 use pumpkin_protocol::bedrock::client::update_abilities::{Ability, CUpdateAbilities};
 use pumpkin_protocol::bedrock::client::{
@@ -230,7 +231,7 @@ impl BedrockPlayer<'_> {
 }
 use pumpkin_data::attributes::Attributes;
 use pumpkin_data::block_properties::{BlockProperties, HorizontalFacing};
-use pumpkin_data::damage::DamageType;
+use pumpkin_data::damage::{DamageScaling, DamageType};
 use pumpkin_data::data_component_impl::{AttributeModifiersImpl, EnchantmentsImpl, Operation};
 use pumpkin_data::data_component_impl::{EquipmentSlot, EquippableImpl, ToolImpl, WeaponImpl};
 use pumpkin_data::effect::StatusEffect;
@@ -260,15 +261,15 @@ use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::codec::var_long::VarLong;
 use pumpkin_protocol::codec::var_ulong::VarULong;
 use pumpkin_protocol::java::client::play::{
-    Animation, CAcknowledgeBlockChange, CActionBar, CAwardStats, CChangeDifficulty,
-    CCloseContainer, CCombatDeath, CCustomPayload, CDisguisedChatMessage, CEntityAnimation,
-    CEntityPositionSync, CGameEvent, CItemCooldown, CMapItemData, COpenScreen, CParticle,
-    CPlayerAbilities, CPlayerInfoUpdate, CPlayerPosition, CPlayerSpawnPosition, CRespawn,
-    CSetCamera, CSetContainerContent, CSetContainerProperty, CSetContainerSlot, CSetCursorItem,
-    CSetExperience, CSetHealth, CSetPlayerInventory, CSetSelectedSlot, CSoundEffect, CStopSound,
-    CSubtitle, CSystemChatMessage, CTabList, CTitleAnimation, CTitleText, CUnloadChunk,
-    CUpdateMobEffect, CUpdateTime, GameEvent, MapIcon, MapPatch, Metadata, PlayerAction,
-    PlayerInfoFlags, PlayerSpawnData, PreviousMessage, Statistic,
+    Animation, CActionBar, CAwardStats, CChangeDifficulty, CCloseContainer, CCombatDeath,
+    CCustomPayload, CDisguisedChatMessage, CEntityAnimation, CEntityPositionSync, CGameEvent,
+    CItemCooldown, CMapItemData, COpenScreen, CParticle, CPlayerAbilities, CPlayerInfoUpdate,
+    CPlayerPosition, CPlayerSpawnPosition, CRemoveEntities, CRespawn, CSetCamera,
+    CSetContainerContent, CSetContainerProperty, CSetContainerSlot, CSetCursorItem, CSetExperience,
+    CSetHealth, CSetPlayerInventory, CSetSelectedSlot, CSoundEffect, CStopSound, CSubtitle,
+    CSystemChatMessage, CTabList, CTitleAnimation, CTitleText, CUpdateMobEffect, CUpdateTime,
+    GameEvent, MapIcon, MapPatch, Metadata, PlayerAction, PlayerInfoFlags, PlayerSpawnData,
+    PreviousMessage, Statistic,
 };
 use pumpkin_protocol::java::server::play::{
     SClickSlot, SContainerButtonClick, SRenameItem, SlotActionType,
@@ -281,9 +282,10 @@ use pumpkin_util::resource_location::ResourceLocation;
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::click::ClickEvent;
 use pumpkin_util::text::hover::HoverEvent;
-use pumpkin_util::{GameMode, Hand};
+use pumpkin_util::{Difficulty, GameMode, Hand};
 use pumpkin_world::biome;
 use pumpkin_world::cylindrical_chunk_iterator::Cylindrical;
+use pumpkin_world::level::Level;
 
 use crate::block;
 use crate::block::blocks::bed::BedBlock;
@@ -481,6 +483,7 @@ pub struct Player {
     pub chunk_sender: Mutex<crate::net::ChunkSender>,
     pub chunk_listener: Mutex<Receiver<(Vector2<i32>, Weak<ChunkData>)>>,
     pub held_chunk_tickets: Mutex<Option<(i8, i8)>>,
+    /// Bumped on teleport and dimension change. Encoded batches with a stale epoch are dropped.
     pub chunk_send_epoch: AtomicU32,
     pub has_played_before: AtomicBool,
     root_vehicle_uuid: AtomicCell<Option<Uuid>>,
@@ -519,7 +522,6 @@ pub struct Player {
 use base64::prelude::*;
 use pumpkin_protocol::Property;
 use serde::Deserialize;
-
 // Bit masks for the Java skin pixels that Bedrock requires to be opaque.
 // Adapted from Geyser's SkinProvider under the MIT License.
 const SKIN_OPAQUE_MASK: &str = "AP//AAAAAAAA//8AAAAAAAD//wAAAAAAAP//AAAAAAAA//8AAAAAAAD//wAAAAAAAP//AAAAAAAA//8AAAAAAP////8AAAAA/////wAAAAD/////AAAAAP////8AAAAA/////wAAAAD/////AAAAAP////8AAAAA/////wAAAADwD/D/D/8AAPAP8P8P/wAA8A/w/w//AADwD/D/D/8AAP///////w8A////////DwD///////8PAP///////w8A////////DwD///////8PAP///////w8A////////DwD///////8PAP///////w8A////////DwD///////8PAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADwD/APAAAAAPAP8A8AAAAA8A/wDwAAAADwD/APAAAAAP////8AAAAA/////wAAAAD/////AAAAAP////8AAAAA/////wAAAAD/////AAAAAP////8AAAAA/////wAAAAD/////AAAAAP////8AAAAA/////wAAAAD/////AAA=";
@@ -1028,17 +1030,22 @@ impl Player {
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .increment_custom(statistics::CustomStatistic::LeaveGame, 1);
         let world = self.world();
-        world.remove_player(self, true).await;
+        world.remove_player(self, true);
 
         let cylindrical = self.watched_section.load();
+
+        // Radial chunks are all of the chunks the player is theoretically viewing.
+        // Given enough time, all of these chunks will be in memory.
+        let radial_chunks: Vec<_> = cylindrical.all_chunks_within().collect();
+
+        // Before `clean_up_chunk_tickets` below: releasing this player's chunk tickets can let
+        // `GenerationSchedule` evict a chunk's raw block data immediately (it force-sets
+        // `Level::should_unload` and notifies the scheduler).
+        world.flush_block_entities(&radial_chunks);
         self.clean_up_chunk_tickets(&world.level);
         if let Ok(mut sender) = self.chunk_sender.lock() {
             sender.reset();
         }
-
-        // Radial chunks are all of the chunks the player is theoretically viewing.
-        // Given enough time, all of these chunks will be in memory.
-        let radial_chunks = cylindrical.all_chunks_within();
 
         debug!(
             "Removing player {}, unwatching {} chunks",
@@ -1050,16 +1057,16 @@ impl Player {
 
         // Decrement the value of watched chunks
         let chunks_to_clean = level.mark_chunks_as_not_watched(radial_chunks).await;
-        // Remove chunks with no watchers from the cache
+        // Remove chunks with no watchers from the cache. Queued rather than removed here: this
+        // runs from the disconnecting player's own task, not the tick loop. See
+        // `World::pending_chunk_removals`.
         if !chunks_to_clean.is_empty() {
-            world.remove_entities_in_chunks(&chunks_to_clean).await;
-            level.clean_entity_chunks(&chunks_to_clean);
+            world.queue_chunk_removal(&chunks_to_clean);
         }
         // Remove left over entries from all possiblily loaded chunks
         let cleaned_chunks = level.clean_memory();
         if !cleaned_chunks.is_empty() {
-            world.remove_entities_in_chunks(&cleaned_chunks).await;
-            level.clean_entity_chunks(&cleaned_chunks);
+            world.queue_chunk_removal(&cleaned_chunks);
         }
 
         debug!(
@@ -1086,7 +1093,11 @@ impl Player {
             .add_passenger(vehicle.clone(), self.clone());
     }
 
-    pub fn clean_up_chunk_tickets(&self, level: &Arc<pumpkin_world::level::Level>) {
+    /// Drops the view and simulation tickets last added for this player.
+    ///
+    /// Center is `watched_section`, not `chunk_pos`: teleport writes the entity first, tickets
+    /// stay at the last `update_position` center until the next view update.
+    pub fn clean_up_chunk_tickets(&self, level: &Arc<Level>) {
         let mut lock = level
             .chunk_loading
             .lock()
@@ -1097,7 +1108,7 @@ impl Player {
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .take();
         if let Some((view_level, sim_level)) = held {
-            let center = self.get_entity().chunk_pos.load();
+            let center = self.watched_section.load().center;
             lock.remove_ticket(center, view_level);
             lock.remove_ticket(center, sim_level);
         }
@@ -1106,9 +1117,48 @@ impl Player {
         level.level_channel.notify();
     }
 
+    /// View + simulation tickets at `center`. Drops the pair last added, not a recomputed pair:
+    /// sim level follows live config and view level follows the previous view distance.
+    pub fn replace_chunk_tickets(
+        &self,
+        level: &Level,
+        old_center: Vector2<i32>,
+        center: Vector2<i32>,
+        view_distance: u8,
+    ) {
+        // One-chunk loading margin (vanilla `ChunkMap` view ticket).
+        let view_distance = view_distance.saturating_add(1);
+        let mut lock = level
+            .chunk_loading
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let new_level =
+            pumpkin_world::chunk_system::ChunkLoading::get_level_from_view_distance(view_distance);
+        lock.add_ticket(center, new_level);
+
+        let sim_dist = self.world().server.upgrade().map_or(10, |s| {
+            s.advanced_config.networking.java.simulation_distance.get()
+        });
+        let sim_level =
+            pumpkin_world::chunk_system::ChunkLoading::get_level_from_simulation_distance(sim_dist);
+        lock.add_ticket(center, sim_level);
+
+        let mut held = self
+            .held_chunk_tickets
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if let Some((held_view, held_sim)) = held.replace((new_level, sim_level)) {
+            lock.remove_ticket(old_center, held_view);
+            lock.remove_ticket(old_center, held_sim);
+        }
+        lock.send_change();
+    }
+
+    /// Drop old-dimension tickets and the chunk listener, then reset send state so the
+    /// new dimension can send immediately (same as the old `ChunkManager::change_world`).
     pub fn change_world_chunks(
         &self,
-        old_level: &Arc<pumpkin_world::level::Level>,
+        old_level: &Arc<Level>,
         new_world: &Arc<crate::world::World>,
     ) {
         self.clean_up_chunk_tickets(old_level);
@@ -1310,10 +1360,9 @@ impl Player {
         );
 
         if victim.get_living_entity().is_some() {
-            // Vanilla `Player.attack` adds `LivingEntity.getKnockback()` - the Knockback
-            // enchantment bonus, halved - plus 0.5 for a sprint attack, on top of the base
-            // knockback the victim's damage handling applies. A plain hit adds nothing.
-            // `handle_knockback` halves `strength`, so these are twice the vanilla amount.
+            // Vanilla `Player#attack`: extra is `getKnockback()` plus 0.5 on sprint.
+            // A plain hit is 0. `handle_knockback` halves `strength`, so these are twice
+            // the vanilla amount.
             let mut knockback_strength = f64::from(knockback_level);
             match attack_type {
                 AttackType::Knockback => knockback_strength += 1.0,
@@ -1353,9 +1402,8 @@ impl Player {
                 }
                 _ => {}
             }
-            // Vanilla only pushes the victim when the extra knockback is non-zero;
-            // `Entity::knockback` halves the current velocity, so calling it with 0.0
-            // would still slow the victim down.
+            // Vanilla skips the push when extra is 0. `Entity.knockback(0)` still scales
+            // velocity by 0.5.
             if config.knockback && knockback_strength > 0.0 {
                 combat::handle_knockback(attacker_entity, victim.as_ref(), knockback_strength);
             }
@@ -2063,9 +2111,8 @@ impl Player {
             0,
         );
 
-        let chunk_pos = self.living_entity.entity.chunk_pos.load();
-        world.broadcast_to_chunk(
-            chunk_pos,
+        world.send_to_tracking_players(
+            self.get_entity(),
             &CEntityAnimation::new(self.entity_id().into(), Animation::LeaveBed),
         );
 
@@ -2225,10 +2272,9 @@ impl Player {
                         );
                     }
 
-                    let seq = client.packet_sequence.swap(-1, Ordering::Relaxed);
-                    if seq != -1 {
-                        client.try_send_packet(&CAcknowledgeBlockChange::new(seq.into()));
-                    }
+                    // Sequence is recorded in `update_sequence`. Ack after
+                    // `broadcastChanges` (`Server::acknowledge_player_block_changes`),
+                    // not here: see `JavaClient::acknowledge_pending_block_changes`.
                 }
                 ClientPlatform::Bedrock(client) => {
                     let mut event = crate::plugin::server::packet::PacketReceivedEvent::new(
@@ -3124,6 +3170,32 @@ impl Player {
         }
     }
 
+    /// Tell this client to forget these entity ids.
+    /// A leftover ghost aims interact packets at an unknown id
+    /// (`multiplayer.disconnect.invalid_entity_attacked`).
+    pub(crate) fn despawn_entity_ids(&self, entity_ids: &[i32]) {
+        if entity_ids.is_empty() {
+            return;
+        }
+        match self.client.as_ref() {
+            ClientPlatform::Java(client) => {
+                let ids: Vec<VarInt> = entity_ids.iter().map(|id| (*id).into()).collect();
+                if let Ok(data) = client.serialize_packet(&CRemoveEntities::new(&ids)) {
+                    client.try_enqueue_packet(data);
+                }
+            }
+            ClientPlatform::Bedrock(client) => {
+                for id in entity_ids {
+                    if let Ok(data) =
+                        client.serialize_packet(&CRemoveActor::new(VarLong(i64::from(*id))))
+                    {
+                        client.try_enqueue_packet(data);
+                    }
+                }
+            }
+        }
+    }
+
     pub async fn send_client_packet<C: pumpkin_protocol::ClientPacket + Sync>(&self, packet: &C) {
         if let ClientPlatform::Java(client) = self.client.as_ref()
             && let Ok(data) = client.serialize_packet(packet)
@@ -3340,16 +3412,27 @@ impl Player {
     }
 
     pub async fn unload_watched_chunks(&self, world: &World) {
-        let radial_chunks = self.watched_section.load().all_chunks_within();
+        let radial_chunks: Vec<_> = self.watched_section.load().all_chunks_within().collect();
+        // Forget these chunks' entities while the client is still a watcher. Otherwise it
+        // keeps ghosts whose ids the server no longer knows (`invalid_entity_attacked`).
+        // Vanilla `TrackedEntity.removePairing` on dimension leave. `CRespawn` often
+        // clears the world; this covers the case where it does not.
+        world.entity_tracker.drop_player_pairings(self);
+        // Persist live BEs before this player's tickets on these chunks can be released.
+        world.flush_block_entities(&radial_chunks);
         let level = &world.level;
-        let chunks_to_clean = level.mark_chunks_as_not_watched(radial_chunks).await;
+        let chunks_to_clean = level.mark_chunks_as_not_watched(&radial_chunks).await;
+        // Queued rather than removed here: this runs from the player's own task, not the tick
+        // loop.
         if !chunks_to_clean.is_empty() {
-            world.remove_entities_in_chunks(&chunks_to_clean).await;
-            level.clean_entity_chunks(&chunks_to_clean);
+            world.queue_chunk_removal(&chunks_to_clean);
         }
-        for chunk in &chunks_to_clean {
-            self.send_client_packet(&CUnloadChunk::new(chunk.x, chunk.y))
-                .await;
+        // `ChunkSender::unload_chunk` only emits `CUnloadChunk` for chunks this client was
+        // actually sent, covering every radial chunk (same as `chunker::update_position`).
+        if let Ok(mut sender) = self.chunk_sender.lock() {
+            for pos in &radial_chunks {
+                sender.unload_chunk(&self.client, *pos);
+            }
         }
 
         self.watched_section.store(Cylindrical::new(
@@ -3395,7 +3478,7 @@ impl Player {
                 let new_world = event.new_world;
 
                 self.set_client_loaded(false);
-                let Some(player) = current_world.remove_player(self, false).await else {
+                let Some(player) = current_world.remove_player(self, false) else {
                     return;
                 };
                new_world.players.rcu(|current_list| {
@@ -3692,6 +3775,29 @@ impl Player {
         self.send_health();
     }
 
+    /// Vanilla `Player.hurtServer` difficulty scaling.
+    fn scale_player_damage(
+        amount: f32,
+        scaling: DamageScaling,
+        difficulty: Difficulty,
+        caused_by_living_non_player: bool,
+    ) -> f32 {
+        let scales = match scaling {
+            DamageScaling::Always => true,
+            DamageScaling::WhenCausedByLivingNonPlayer => caused_by_living_non_player,
+            DamageScaling::Never => false,
+        };
+        if !scales {
+            return amount;
+        }
+        match difficulty {
+            Difficulty::Peaceful => 0.0,
+            Difficulty::Easy => (amount / 2.0 + 1.0).min(amount),
+            Difficulty::Normal => amount,
+            Difficulty::Hard => amount * 3.0 / 2.0,
+        }
+    }
+
     pub fn damage(
         &self,
         caller: &dyn crate::entity::EntityBase,
@@ -3705,7 +3811,7 @@ impl Player {
         &self,
         caller: &dyn crate::entity::EntityBase,
         amount: f32,
-        damage_type: pumpkin_data::damage::DamageType,
+        damage_type: DamageType,
         position: Option<Vector3<f64>>,
         source: Option<&dyn crate::entity::EntityBase>,
         cause: Option<&dyn crate::entity::EntityBase>,
@@ -3718,6 +3824,18 @@ impl Player {
             && damage_type != pumpkin_data::damage::DamageType::GENERIC_KILL
             && damage_type != pumpkin_data::damage::DamageType::OUT_OF_WORLD
         {
+            return false;
+        }
+        // Vanilla `Player.hurtServer`: `DamageSource.scalesWithDifficulty`.
+        let caused_by_living_non_player =
+            cause.is_some_and(|c| c.get_living_entity().is_some() && c.get_player().is_none());
+        let amount = Self::scale_player_damage(
+            amount,
+            damage_type.scaling,
+            self.world().level_info.load().difficulty,
+            caused_by_living_non_player,
+        );
+        if amount == 0.0 {
             return false;
         }
         self.living_entity
@@ -6052,10 +6170,8 @@ impl EntityBase for Player {
             let pitch = pitch.unwrap_or_else(|| self.living_entity.entity.pitch.load());
             self.request_teleport(position, yaw, pitch);
             let entity = self.get_entity();
-            let chunk_pos = entity.chunk_pos.load();
-            entity.world.load().broadcast_to_chunk_except(
-                chunk_pos,
-                &[self.living_entity.entity.entity_uuid],
+            entity.world.load().send_to_tracking_players(
+                entity,
                 &CEntityPositionSync::new(
                     self.living_entity.entity.entity_id.into(),
                     position,
@@ -6299,23 +6415,18 @@ impl EntityBase for Player {
                 .and_then(|val| GameMode::try_from(val).ok()),
         );
 
-        {
-            let mut abilities = self
-                .abilities
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            abilities.set_for_gamemode(gamemode);
-            abilities.read_nbt(nbt);
-            if gamemode == GameMode::Creative {
-                abilities.allow_flying = true;
-                abilities.creative = true;
-                abilities.invulnerable = true;
-            } else if gamemode == GameMode::Spectator {
-                abilities.allow_flying = true;
-                abilities.creative = false;
-                abilities.invulnerable = true;
-            }
-        }
+        // Abilities are restored and only then re-derived from the gamemode. Vanilla
+        // order in `ServerPlayer.readAdditionalSaveData`: load player data first,
+        // `setGameModeForPlayer` (`GameType.updatePlayerAbilities`) after. Saved values
+        // carry what a gamemode does not imply (fly/walk speed, mid-flight); the gamemode
+        // then has the final say on `mayfly`, `instabuild` and `invulnerable`.
+        let mut abilities = self
+            .abilities
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        abilities.read_nbt(nbt);
+        abilities.set_for_gamemode(gamemode);
+        drop(abilities);
 
         self.living_entity.entity.invulnerable.store(
             matches!(gamemode, GameMode::Creative | GameMode::Spectator),
@@ -6492,10 +6603,16 @@ impl Abilities {
         }
     }
 
+    /// Vanilla `GameType.updatePlayerAbilities`: derives the ability flags a gamemode implies.
+    ///
+    /// Run after anything that sets the gamemode, including restoring it from player data:
+    /// these flags are what the client actually obeys. The gamemode itself only decides what
+    /// the client displays; whether you can fly, insta-break and place without consuming
+    /// comes from here. `flying` is left alone in the creative branch (vanilla does the same),
+    /// so switching to creative does not yank a player out of flight.
     pub const fn set_for_gamemode(&mut self, gamemode: GameMode) {
         match gamemode {
             GameMode::Creative => {
-                // self.flying = false; // Start not flying
                 self.allow_flying = true;
                 self.creative = true;
                 self.invulnerable = true;
@@ -6513,6 +6630,8 @@ impl Abilities {
                 self.invulnerable = false;
             }
         }
+        // Vanilla's `mayBuild = !gameType.isBlockPlacingRestricted()`.
+        self.allow_modify_world = !matches!(gamemode, GameMode::Adventure | GameMode::Spectator);
     }
 }
 

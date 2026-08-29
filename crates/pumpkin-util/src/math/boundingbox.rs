@@ -216,6 +216,18 @@ impl BoundingBox {
         }
     }
 
+    /// True if this box leaves the local block cell `[0, 1]^3`.
+    /// Vanilla `BlockStateBase.Cache.largeCollisionShape` tests the same bounds.
+    #[must_use]
+    pub const fn exceeds_block_cell(&self) -> bool {
+        self.min.x < 0.0
+            || self.max.x > 1.0
+            || self.min.y < 0.0
+            || self.max.y > 1.0
+            || self.min.z < 0.0
+            || self.max.z > 1.0
+    }
+
     /// Creates a bounding box from a block position covering a full block.
     ///
     /// # Arguments
@@ -246,11 +258,19 @@ impl BoundingBox {
         if max { self.max } else { self.min }
     }
 
-    /// Calculates the collision time with another bounding box along a movement vector.
+    /// Calculates the collision time with another bounding box along a single axis.
+    ///
+    /// `self` must already sit at the offset resolved by any axes processed before this one
+    /// (vanilla `Entity.collideWithShapes`: `boundingBox.move(resolvedMovement)` before each
+    /// axis' `Shapes.collide`). Only `axis` itself is swept; the other two stay fixed at
+    /// `self`'s current position for the whole sweep. The perpendicular axes stay unscaled so
+    /// a corner overlap is measured against the already-decided offset, not a blend of it.
     ///
     /// # Arguments
     /// * `other` – The bounding box to test collision against.
-    /// * `movement` – Movement vector of this box.
+    /// * `movement_on_axis`: This box's movement along `axis` (the other two axes are not
+    ///   part of this sweep; the caller resolves them via separate calls with `self` shifted
+    ///   in between).
     /// * `axis` – Axis along which to calculate collision.
     /// * `max_time` – Maximum allowed collision time.
     ///
@@ -260,12 +280,10 @@ impl BoundingBox {
     pub fn calculate_collision_time(
         &self,
         other: &Self,
-        movement: Vector3<f64>,
+        movement_on_axis: f64,
         axis: Axis,
         max_time: f64, // NOTE: Start with 1.0
     ) -> Option<f64> {
-        let movement_on_axis = movement.get_axis(axis);
-
         if movement_on_axis == 0.0 {
             return None;
         }
@@ -279,7 +297,9 @@ impl BoundingBox {
             return None;
         }
 
-        let self_moved = self.shift(movement * collision_time);
+        let mut axis_delta = Vector3::default();
+        axis_delta.set_axis(axis, movement_on_axis * collision_time);
+        let self_moved = self.shift(axis_delta);
         let self_plane_moved = BoundingPlane::from_box(&self_moved, axis);
         let other_plane = BoundingPlane::from_box(other, axis);
 
@@ -383,6 +403,53 @@ impl BoundingBox {
         }
     }
 
+    /// Overlap of both boxes. Vanilla `AABB` min-of-max / max-of-min.
+    #[must_use]
+    pub const fn intersection(&self, other: &Self) -> Self {
+        Self {
+            min: Vector3::new(
+                self.min.x.max(other.min.x),
+                self.min.y.max(other.min.y),
+                self.min.z.max(other.min.z),
+            ),
+            max: Vector3::new(
+                self.max.x.min(other.max.x),
+                self.max.y.min(other.max.y),
+                self.max.z.min(other.max.z),
+            ),
+        }
+    }
+
+    /// Smallest box containing both. Vanilla `AABB.minmax`.
+    #[must_use]
+    pub const fn union(&self, other: &Self) -> Self {
+        Self {
+            min: Vector3::new(
+                self.min.x.min(other.min.x),
+                self.min.y.min(other.min.y),
+                self.min.z.min(other.min.z),
+            ),
+            max: Vector3::new(
+                self.max.x.max(other.max.x),
+                self.max.y.max(other.max.y),
+                self.max.z.max(other.max.z),
+            ),
+        }
+    }
+
+    /// Smallest box containing every box. `None` if empty.
+    /// Same iterator shape as [`super::block_box::BlockBox::encompass_all`].
+    /// Vanilla `VoxelShape.bounds`.
+    #[must_use]
+    pub fn union_all<I>(shapes: I) -> Option<Self>
+    where
+        I: IntoIterator<Item = Self>,
+    {
+        let mut iter = shapes.into_iter();
+        let first = iter.next()?;
+        Some(iter.fold(first, |acc, shape| acc.union(&shape)))
+    }
+
     /// Checks if this bounding box intersects another bounding box.
     ///
     /// # Arguments
@@ -436,5 +503,59 @@ impl EntityDimensions {
             height,
             eye_height,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::BoundingBox;
+    use crate::math::vector3::Vector3;
+
+    #[test]
+    fn intersection_is_overlap() {
+        let a = BoundingBox::new(Vector3::new(0.0, 0.0, 0.0), Vector3::new(1.0, 1.0, 1.0));
+        let b = BoundingBox::new(Vector3::new(0.5, -1.0, 0.25), Vector3::new(2.0, 0.5, 0.75));
+        let i = a.intersection(&b);
+        assert_eq!(i.min, Vector3::new(0.5, 0.0, 0.25));
+        assert_eq!(i.max, Vector3::new(1.0, 0.5, 0.75));
+    }
+
+    #[test]
+    fn union_covers_both_boxes() {
+        let a = BoundingBox::new(Vector3::new(0.0, 0.0, 0.0), Vector3::new(1.0, 1.0, 1.0));
+        let b = BoundingBox::new(Vector3::new(0.5, -1.0, 0.25), Vector3::new(2.0, 0.5, 0.75));
+        let u = a.union(&b);
+        assert_eq!(u.min, Vector3::new(0.0, -1.0, 0.0));
+        assert_eq!(u.max, Vector3::new(2.0, 1.0, 1.0));
+    }
+
+    #[test]
+    fn union_all_is_none_when_empty() {
+        assert!(BoundingBox::union_all([]).is_none());
+    }
+
+    #[test]
+    fn union_all_folds_every_box() {
+        let boxes = [
+            BoundingBox::new(Vector3::new(0.0, 0.0, 0.0), Vector3::new(1.0, 1.0, 1.0)),
+            BoundingBox::new(Vector3::new(2.0, 0.0, 0.0), Vector3::new(3.0, 0.5, 0.5)),
+            BoundingBox::new(Vector3::new(-1.0, -2.0, 0.0), Vector3::new(0.0, 0.0, 4.0)),
+        ];
+        let u = BoundingBox::union_all(boxes).unwrap();
+        assert_eq!(u.min, Vector3::new(-1.0, -2.0, 0.0));
+        assert_eq!(u.max, Vector3::new(3.0, 1.0, 4.0));
+    }
+
+    #[test]
+    fn exceeds_block_cell_matches_full_block_bounds() {
+        assert!(!BoundingBox::full_block().exceeds_block_cell());
+        assert!(
+            BoundingBox::new(Vector3::new(0.0, 0.0, 0.0), Vector3::new(1.0, 1.5, 1.0))
+                .exceeds_block_cell()
+        );
+        assert!(
+            BoundingBox::new(Vector3::new(-0.1, 0.0, 0.0), Vector3::new(1.0, 1.0, 1.0))
+                .exceeds_block_cell()
+        );
     }
 }

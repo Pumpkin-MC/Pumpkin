@@ -1,3 +1,7 @@
+//! Player view cylinder: tickets, chunk send, per-player entity leave, watcher IO.
+//!
+//! Vanilla `ChunkMap.move`. Leave/enter pairing is `TrackedEntity.updatePlayer`.
+
 use pumpkin_util::math::vector2::Vector2;
 use std::{num::NonZero, sync::Arc};
 
@@ -28,8 +32,7 @@ pub fn get_view_distance(player: &Player) -> NonZero<u8> {
         .clamp(fallback, max_view_distance)
 }
 
-// Checks if the target chunk is within the view distance
-// of the center chunk. Uses Chebyshev distance.
+/// True if `target` is within Chebyshev `view_distance` of `center` (vanilla chunk load shape).
 #[must_use]
 #[inline]
 pub fn is_within_view_distance(
@@ -78,38 +81,25 @@ pub fn update_position(player: &Arc<Player>) {
     let loading_chunks: Vec<_> = loading_iter.collect();
     let unloading_chunks: Vec<_> = unloading_iter.collect();
 
+    // `change_world_chunks` then `set_world` run with no await between them, so `player.world()`
+    // is already the destination when this runs after a portal teleport.
     let world = player.world();
-    let level = &world.level;
-    let mut held_tickets = player
-        .held_chunk_tickets
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner);
 
-    {
-        let mut lock = level
-            .chunk_loading
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let new_level = pumpkin_world::chunk_system::ChunkLoading::get_level_from_view_distance(
-            u8::from(view_distance) + 1,
-        );
-        lock.add_ticket(new_chunk_center, new_level);
+    // Tickets below can let `GenerationSchedule` evict raw block data before the tick
+    // loop persists live BEs. See `World::flush_block_entities`.
+    world.flush_block_entities(&unloading_chunks);
 
-        let sim_dist = world.server.upgrade().map_or(10, |s| {
-            s.advanced_config.networking.java.simulation_distance.get()
-        });
-        let sim_level =
-            pumpkin_world::chunk_system::ChunkLoading::get_level_from_simulation_distance(sim_dist);
-        lock.add_ticket(new_chunk_center, sim_level);
-
-        if let Some((held_view, held_sim)) = held_tickets.replace((new_level, sim_level)) {
-            lock.remove_ticket(old_cylindrical.center, held_view);
-            lock.remove_ticket(old_cylindrical.center, held_sim);
-        }
-        lock.send_change();
-    };
-    drop(held_tickets);
-
+    player.replace_chunk_tickets(
+        &world.level,
+        old_cylindrical.center,
+        new_chunk_center,
+        view_distance.into(),
+    );
+    player.watched_section.store(new_cylindrical);
+    // Pairing before `CUnloadChunk`: drop entities, then the chunk. Covers every leaving
+    // chunk, including those another player still watches (`TrackedEntity.removePairing`).
+    // After unwatch, a chunk-scoped broadcast would not reach this client.
+    world.entity_tracker.update_player_position(player, &world);
     {
         let mut sender = player
             .chunk_sender
@@ -122,37 +112,29 @@ pub fn update_position(player: &Arc<Player>) {
             sender.enqueue_chunk(*pos);
         }
     }
-    player.watched_section.store(new_cylindrical);
 
-    // Make sure the watched section and the chunk watcher updates are async atomic. We want to
-    // ensure what we unload when the player disconnects is correct.
+    // Watcher IO is async. Tickets already sit at `center`. Spawn after
+    // `mark_chunks_as_newly_watched` so `spawn_world_entity_chunks` sees a watcher.
+    // Unload via `queue_chunk_removal`: this is not the tick loop.
     if !loading_chunks.is_empty() || !unloading_chunks.is_empty() {
         let level = world.level.clone();
         let world_clone = world.clone();
-        let loading_chunks_clone = loading_chunks.clone();
-        let unloading_chunks_clone = unloading_chunks;
-
+        let player = player.clone();
         if let Some(server) = world.server.upgrade() {
             server.spawn_task(async move {
-                level
-                    .mark_chunks_as_newly_watched(&loading_chunks_clone)
-                    .await;
-                let chunks_to_clean = level
-                    .mark_chunks_as_not_watched(&unloading_chunks_clone)
-                    .await;
-
-                if !chunks_to_clean.is_empty() {
-                    world_clone
-                        .remove_entities_in_chunks(&chunks_to_clean)
-                        .await;
-                    world_clone.level.clean_entity_chunks(&chunks_to_clean);
+                if !loading_chunks.is_empty() {
+                    level.mark_chunks_as_newly_watched(&loading_chunks).await;
+                }
+                if !unloading_chunks.is_empty() {
+                    let chunks_to_clean = level.mark_chunks_as_not_watched(&unloading_chunks).await;
+                    world_clone.queue_chunk_removal(&chunks_to_clean);
+                }
+                if !loading_chunks.is_empty() {
+                    world_clone.spawn_world_entity_chunks(player, loading_chunks, new_chunk_center);
                 }
             });
+        } else if !loading_chunks.is_empty() {
+            world.spawn_world_entity_chunks(player, loading_chunks, new_chunk_center);
         }
     }
-
-    if !loading_chunks.is_empty() {
-        world.spawn_world_entity_chunks(player.clone(), loading_chunks, new_chunk_center);
-    }
-    world.entity_tracker.update_player_position(player, &world);
 }
