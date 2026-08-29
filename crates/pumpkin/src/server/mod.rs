@@ -1106,6 +1106,22 @@ impl Server {
         let worlds = self.worlds.load();
         let handle = self.runtime.clone();
 
+        // Vanilla `MinecraftServer.tickChildren`: `tickCount++` then
+        // `forceGameTimeSynchronization` then `ServerLevel.tick` -> `tickTime()`.
+        // Pumpkin increments `tick_count` after the tick (`update_tick_times`), so
+        // `tick_count + 1` is vanilla's `tickCount` for this tick.
+        //
+        // The packet must carry the current `getGameTime()`, not the value after
+        // this ticks increment. Client `ClientLevel.tickTime()` already produced
+        // that number; sending the incremented value lets `getGameTime()` hold for
+        // two client ticks, so `Entity.limitPistonMovement` keeps `pistonDeltas`
+        // and clips a second honey/piston step at ±0.51.
+        if self.tick_count.load(Ordering::Relaxed).wrapping_add(1) % 20 == 0 {
+            for world in worlds.iter() {
+                world.force_game_time_synchronization();
+            }
+        }
+
         worlds.par_iter().for_each(|world| {
             let _guard = handle.enter();
             world.tick(self);

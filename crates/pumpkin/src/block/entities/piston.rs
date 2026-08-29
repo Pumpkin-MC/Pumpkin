@@ -280,6 +280,7 @@ impl PistonBlockEntity {
         ));
 
         let game_time = world.get_world_age();
+
         for entity in world.get_entities_at_box(&query) {
             let e = entity.get_entity();
             // Vanilla `matchesStickyCritera`: `PushReaction.NORMAL` (IGNORE is not).
@@ -297,8 +298,7 @@ impl PistonBlockEntity {
             let pos = e.pos.load();
             let supporting = e.supporting_block_pos.load();
             let origin = self.visual_origin_cell();
-            let supported_here =
-                supporting == Some(self.position) || supporting == Some(origin);
+            let supported_here = supporting == Some(self.position) || supporting == Some(origin);
             let within_footprint = pos.x >= query.min.x
                 && pos.x <= query.max.x
                 && pos.z >= query.min.z

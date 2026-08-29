@@ -106,6 +106,8 @@ impl LevelTime {
         self.world_age = world_age;
     }
 
+    /// Vanilla `ServerLevel.tickTime`. Callers that emit periodic `CUpdateTime`
+    /// (`forceGameTimeSynchronization`) must do so before this increment.
     pub fn tick(&mut self, advance_time: bool) {
         self.world_age += 1;
         if advance_time && !self.paused {

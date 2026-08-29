@@ -1963,12 +1963,15 @@ impl World {
     }
 
     pub fn tick_environment(self: &Arc<Self>) {
-        let (world_age, is_night, time_of_day) = {
+        let (is_night, time_of_day) = {
             let mut level_time = self
                 .level_time
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
             let advance_time = self.level_info.load().game_rules.advance_time;
+            // Vanilla `ServerLevel.tickTime`. Periodic `CUpdateTime` is
+            // `forceGameTimeSynchronization` in `Server::tick_worlds`, *before*
+            // this increment.
             level_time.tick(advance_time);
 
             // Auto-save logic
@@ -2001,11 +2004,7 @@ impl World {
                     self.level.level_channel.notify();
                 }
             }
-            (
-                level_time.world_age,
-                level_time.is_night(),
-                level_time.time_of_day,
-            )
+            (level_time.is_night(), level_time.time_of_day)
         };
 
         let (should_reset_weather, weather_cycle_enabled) = {
@@ -2043,13 +2042,6 @@ impl World {
                     .unwrap_or_else(std::sync::PoisonError::into_inner);
                 weather.reset_weather_cycle(self);
             }
-        } else if world_age % 20 == 0 {
-            let level_time = self
-                .level_time
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .clone();
-            level_time.send_time(self);
         }
     }
 
@@ -2652,6 +2644,23 @@ impl World {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .world_age
+    }
+
+    /// Vanilla `MinecraftServer.forceGameTimeSynchronization`.
+    ///
+    /// Broadcasts the current `getGameTime()` and clock snapshot. Must run
+    /// before [`crate::world::time::LevelTime::tick`]: the client already
+    /// advanced to this number in `ClientLevel.tickTime()`. Sending the
+    /// post-increment value makes `getGameTime()` hold for two client ticks, so
+    /// `Entity.limitPistonMovement` does not reset `pistonDeltas` and clips the
+    /// second honey/piston step at ±0.51.
+    pub fn force_game_time_synchronization(&self) {
+        let level_time = self
+            .level_time
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone();
+        level_time.send_time(self);
     }
 
     pub fn get_time_of_day(&self) -> i64 {
