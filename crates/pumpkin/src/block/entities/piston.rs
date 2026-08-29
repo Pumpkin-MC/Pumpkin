@@ -95,6 +95,18 @@ impl PistonBlockEntity {
         }
     }
 
+    /// Cell the pushed block occupies visually at `last_progress`. After `deleteAfterMove`
+    /// that cell is air; `matchesStickyCritera` `isSupportedBy` still names this piston BE.
+    fn visual_origin_cell(&self) -> BlockPos {
+        let ext = self.amount_extended(self.last_progress.load());
+        let off = self.facing.to_offset();
+        self.position.offset(Vector3::new(
+            (f64::from(off.x) * f64::from(ext)).round() as i32,
+            (f64::from(off.y) * f64::from(ext)).round() as i32,
+            (f64::from(off.z) * f64::from(ext)).round() as i32,
+        ))
+    }
+
     fn dir_vec(dir: BlockDirection, scale: f64) -> Vector3<f64> {
         let off = dir.to_offset();
         Vector3::new(
@@ -172,7 +184,7 @@ impl PistonBlockEntity {
             }
 
             if launches {
-                // Vanilla skips `ServerPlayer`. The client (`LocalPlayer`) applies the fling.
+                // Vanilla skips the whole push for `ServerPlayer` (client `LocalPlayer` flings).
                 if entity.get_player().is_some() {
                     continue;
                 }
@@ -188,6 +200,7 @@ impl PistonBlockEntity {
             }
 
             // Player position is client-authoritative. Vanilla uses `Entity.move(PISTON)`.
+            // Do not also `move` here: the client already applied the 0.5 animation step.
             if entity.get_player().is_some() {
                 continue;
             }
@@ -273,16 +286,19 @@ impl PistonBlockEntity {
             if e.ignores_piston_push() {
                 continue;
             }
-            // Player position is client-authoritative. Vanilla still `Entity.move(PISTON)`.
             if entity.get_player().is_some() {
                 continue;
             }
             if !e.on_ground.load(Ordering::Relaxed) {
                 continue;
             }
-            // `isSupportedBy(pos)` or entity x/z inside the band, not the AABB.
+            // `isSupportedBy(pistonPos)`: the BE cell (dest). After `deleteAfterMove` the
+            // visual cell is air; supporting can still be that origin until the next collide.
             let pos = e.pos.load();
-            let supported_here = e.supporting_block_pos.load() == Some(self.position);
+            let supporting = e.supporting_block_pos.load();
+            let origin = self.visual_origin_cell();
+            let supported_here =
+                supporting == Some(self.position) || supporting == Some(origin);
             let within_footprint = pos.x >= query.min.x
                 && pos.x <= query.max.x
                 && pos.z >= query.min.z

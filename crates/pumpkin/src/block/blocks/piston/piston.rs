@@ -504,11 +504,16 @@ fn move_blocks(
 
     let air_state = Block::AIR.default_state.id;
     for &pos in moved_blocks_map.keys() {
+        // Vanilla `setBlock(pos, AIR, 82)`. The client must not see this air before
+        // `CBlockEvent` runs `moveBlocks` (dest `moving_piston` BE + offset collision).
+        // `set_block_state` always queues a `CBlockUpdate`; drop it. The event packet
+        // is the client write. `ChunkHolder.broadcastChanges` would send 82 next tick.
         world.set_block_state(
             &pos,
             air_state,
             BlockFlags::NOTIFY_LISTENERS | BlockFlags::FORCE_STATE | BlockFlags::MOVED,
         );
+        world.discard_queued_block_change(pos);
     }
 
     for (pos, state) in &moved_blocks_map {
@@ -576,7 +581,7 @@ fn move_blocks(
     }
 
     for &pos in moved_blocks_map.keys() {
-        world.defer_live_block_change(pos);
+        world.discard_queued_block_change(pos);
     }
     for &pos in &broken_blocks {
         world.defer_live_block_change(pos);

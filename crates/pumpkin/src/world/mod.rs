@@ -1744,6 +1744,23 @@ impl World {
         self.defer_block_change(position, self.get_block_state_id(&position));
     }
 
+    /// Drop a queued `CBlockUpdate` for `position`. Vanilla piston source air is 82
+    /// (`UPDATE_CLIENTS | KNOWN_SHAPE | MOVE_BY_PISTON`) but `ChunkHolder.broadcastChanges`
+    /// runs the tick *after* `runBlockEvents`. The client already applied that air inside
+    /// `CBlockEvent` `moveBlocks`; sending it in the same flush (or before the event) makes
+    /// the source a collision-less air cell for one client tick (`onGround` / honey stick
+    /// miss = 0.5).
+    pub fn discard_queued_block_change(&self, position: BlockPos) {
+        self.unsent_block_changes
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .remove(&position);
+        self.deferred_block_changes
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .remove(&position);
+    }
+
     pub(crate) fn promote_deferred_block_changes(&self) {
         let deferred = {
             let mut guard = self
