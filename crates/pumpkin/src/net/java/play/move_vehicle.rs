@@ -4,6 +4,10 @@ use super::*;
 impl JavaClient {
     pub fn handle_move_vehicle(&self, player: &Arc<Player>, packet: &SMoveVehicle) {
         let entity = player.get_entity();
+        if player.is_movement_locked() {
+            self.force_tp(player, entity.pos.load());
+            return;
+        }
         let pos = Vector3::new(packet.x, packet.y, packet.z);
         let vehicle = entity
             .vehicle
