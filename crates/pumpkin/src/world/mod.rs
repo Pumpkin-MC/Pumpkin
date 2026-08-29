@@ -175,13 +175,12 @@ use weather::Weather;
 
 const MAX_LIGHT_LEVEL: u8 = 15;
 
-/// The player's collision dimensions, mirroring vanilla's
-/// `EntityTypes.PLAYER.getDimensions()`.
+/// Width of the player collision box.
 const PLAYER_WIDTH: f64 = 0.6;
+/// Height of the player collision box.
 const PLAYER_HEIGHT: f64 = 1.8;
 
-/// The maximum spawn search radius, mirroring vanilla's candidate cap of 1024
-/// (`(2r+1)^2 <= 1024` → `r <= 15`).
+/// Maximum spawn search radius; keeps the candidate count at or below 1024.
 const MAX_SPAWN_SEARCH_RADIUS: i32 = 15;
 
 fn bedrock_chest_block_actor(state_id: BlockStateId, position: BlockPos) -> Option<NbtCompound> {
@@ -310,28 +309,18 @@ impl PartialEq for World {
 
 impl Eq for World {}
 
-/// Mirrors vanilla's `Block#isPossibleToRespawnInThis`: a block state is a
-/// possible respawn location when it is neither solid nor liquid, so it can
-/// neither obstruct the player nor suffocate, drown, or burn them.
+/// A block state is safe to spawn in when it is neither solid nor liquid.
 const fn is_possible_to_respawn_in_state(state: &BlockState) -> bool {
     !state.is_solid() && !state.is_liquid()
 }
 
-/// Checks whether the block at the player's feet and the block at the
-/// player's head are both safe to spawn in, mirroring vanilla's
-/// `ServerPlayer#findRespawnAndUseSpawnBlock`:
-///
-/// - the feet block must not be solid or liquid (no collision, no drowning,
-///   no burning),
-/// - the head block must not be solid or liquid (no obstruction, no
-///   suffocation).
+/// Whether both the feet block and the head block are safe to spawn in.
 const fn is_safe_player_spawn_position_states(feet: &BlockState, head: &BlockState) -> bool {
     is_possible_to_respawn_in_state(feet) && is_possible_to_respawn_in_state(head)
 }
 
-/// Returns the player's bounding box anchored at the given feet position,
-/// mirroring vanilla's `EntityDimensions#makeBoundingBox(Vec3#atBottomCenterOf)`:
-/// a 0.6 wide, 1.8 tall box centered on the block column.
+/// The player's 0.6 x 1.8 collision box anchored at the feet, in world
+/// coordinates.
 fn player_bounding_box(feet: &BlockPos) -> BoundingBox {
     let x = f64::from(feet.0.x);
     let y = f64::from(feet.0.y);
@@ -350,11 +339,9 @@ fn player_bounding_box(feet: &BlockPos) -> BoundingBox {
     )
 }
 
-/// Mirrors vanilla's `PlayerSpawnFinder#noCollisionNoLiquid`: the player's
-/// bounding box must not intersect any block collision shape and must not
-/// contain any fluid, so the player is neither obstructed nor suffocated,
-/// drowned, or burned. The box only spans the feet and head blocks, so only
-/// those two states are checked.
+/// Checks the two blocks the player box spans (feet and head): no collision
+/// shape may intersect the box, and fluids and waterlogged blocks are not
+/// allowed.
 fn no_collision_no_liquid(
     feet: &BlockPos,
     feet_state: &BlockState,
@@ -380,10 +367,8 @@ fn no_collision_no_liquid(
         .all(|shape| !shape.intersects(&player_box))
 }
 
-/// Yields the column offsets of the square ring at Chebyshev distance
-/// `radius` from a suggested spawn position, starting with the top and bottom
-/// edges and finishing with the left and right edges. Used by the spawn search
-/// to expand outward in a square spiral.
+/// `(dx, dz)` offsets of the square ring at Chebyshev distance `radius`,
+/// top/bottom edges first, then left/right.
 fn spawn_search_ring_offsets(radius: i32) -> Vec<(i32, i32)> {
     let mut offsets = Vec::with_capacity((radius * 8) as usize);
     for x in -radius..=radius {
@@ -397,11 +382,8 @@ fn spawn_search_ring_offsets(radius: i32) -> Vec<(i32, i32)> {
     offsets
 }
 
-/// Computes the spawn search radius, mirroring vanilla's
-/// `PlayerSpawnFinder#findSpawn`: the `respawn_radius` game rule is clamped by
-/// the distance to the world border, forced to at least 1 when the spawn is on
-/// the border, and capped at `MAX_SPAWN_SEARCH_RADIUS` to respect vanilla's
-/// 1024 candidate limit.
+/// Clamps the `respawn_radius` game rule by the border distance: at least 1
+/// near the border, at most 1024 candidates.
 fn spawn_search_radius(respawn_radius: i32, border_distance: f64) -> i32 {
     let border_distance = border_distance.floor() as i32;
     let mut radius = respawn_radius.max(0);
@@ -414,11 +396,9 @@ fn spawn_search_radius(respawn_radius: i32, border_distance: f64) -> i32 {
     radius.min(MAX_SPAWN_SEARCH_RADIUS)
 }
 
-/// Moves the spawn position up while it is unsafe and then down until the
-/// position is just above the ground again, mirroring vanilla's
-/// `PlayerSpawnFinder#fixupSpawnHeight`. `is_safe` decides whether the block
-/// at the player's feet and the block at the player's head are safe to
-/// spawn in.
+/// Moves `position` up while unsafe, then down until it stands on the
+/// ground, then one step up. `is_safe` decides whether a feet position is
+/// safe.
 fn fixup_spawn_height_with(
     mut position: BlockPos,
     min_y: i32,
@@ -2544,21 +2524,12 @@ impl World {
             .unwrap_or(self.min_y)
     }
 
-    /// Mirrors vanilla's `Block#isPossibleToRespawnInThis` (see
-    /// [`is_possible_to_respawn_in_state`]): a block is a possible respawn
-    /// location when it is neither solid nor liquid, so it can neither
-    /// obstruct the player nor suffocate, drown, or burn them.
+    /// Whether the block at `position` is safe to spawn in.
     pub fn is_possible_to_respawn_in(&self, position: &BlockPos) -> bool {
         is_possible_to_respawn_in_state(self.get_block_state(position))
     }
 
-    /// Checks whether a position is safe for a player to spawn at, mirroring
-    /// vanilla's `ServerPlayer#findRespawnAndUseSpawnBlock`:
-    ///
-    /// - the block at the player's feet must not be solid or liquid (no
-    ///   collision, no drowning, no burning),
-    /// - the block at the player's head must not be solid or liquid (no
-    ///   obstruction, no suffocation).
+    /// Whether the feet and head blocks at `position` are safe to spawn in.
     pub fn is_safe_player_spawn_position(&self, position: &BlockPos) -> bool {
         is_safe_player_spawn_position_states(
             self.get_block_state(position),
@@ -2566,11 +2537,9 @@ impl World {
         )
     }
 
-    /// Mirrors vanilla's `CollisionGetter#noCollision` for the player box: the
-    /// player's bounding box must not intersect block collision shapes, fluids,
-    /// or other entities. `exclude_uuid` is the entity that is ignored (the
-    /// joining or respawning player themselves), matching vanilla where the
-    /// player is not part of the level yet while the spawn is prepared.
+    /// The block/fluid check plus the entity check: entities other than
+    /// `exclude_uuid` (the joining/respawning player) make the position
+    /// unsafe.
     fn no_collision_no_liquid_at(&self, feet: &BlockPos, exclude_uuid: Option<Uuid>) -> bool {
         no_collision_no_liquid(
             feet,
@@ -2582,13 +2551,9 @@ impl World {
             .all(|entity| Some(entity.get_entity().entity_uuid) == exclude_uuid)
     }
 
-    /// Moves the spawn position up while it is unsafe and then down until the
-    /// position is just above the ground again, mirroring vanilla's
-    /// `PlayerSpawnFinder#fixupSpawnHeight`. Used as a last resort when no safe
-    /// position could be found around the suggested one.
+    /// Fixes up the height with the block/fluid/entity safety check.
     fn fixup_spawn_height_at(&self, position: BlockPos, exclude_uuid: Option<Uuid>) -> BlockPos {
-        // The head block also has to fit in the world, so the feet can only go
-        // as high as one block below the top.
+        // The head block also has to fit in the world.
         fixup_spawn_height_with(
             position,
             self.dimension.min_y,
@@ -2597,14 +2562,10 @@ impl World {
         )
     }
 
-    /// Computes the position a player joining the server for the first time
-    /// spawns at, mirroring vanilla's `PlayerSpawnFinder#findSpawn`:
-    ///
-    /// The world spawn column is checked first. When the player's bounding box
-    /// would collide there, the columns around the spawn point are searched for
-    /// a safe position within the `respawn_radius` game rule (clamped by the
-    /// world border). As a last resort the suggested height is fixed up so the
-    /// player stands on the ground.
+    /// Computes a safe world-spawn position for a joining or respawning
+    /// player: check the spawn column, search around it within
+    /// `respawn_radius`, and fix up the height as a last resort. Returns the
+    /// bottom-center position (x+0.5, y, z+0.5).
     pub async fn get_safe_player_spawn_position(
         &self,
         spawn_x: i32,
@@ -2614,18 +2575,23 @@ impl World {
     ) -> Vector3<f64> {
         let suggestion = BlockPos::new(spawn_x, fallback_y, spawn_z);
 
-        // Mirrors vanilla: with adventure as the server's default game mode the
-        // search is skipped entirely and the suggested height is fixed up.
-        let default_adventure = match self.server.upgrade() {
-            Some(server) => server.defaultgamemode.lock().await.gamemode == GameMode::Adventure,
-            None => false,
-        };
+        // Skip the search when the default game mode is adventure.
+        let default_adventure = self.server.upgrade().is_some_and(|server| {
+            server
+                .defaultgamemode
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .gamemode
+                == GameMode::Adventure
+        });
 
-        // Mirrors vanilla: the `respawn_radius` game rule is clamped by the
-        // distance to the world border and capped at 1024 candidates.
+        // Clamp the `respawn_radius` game rule by the border distance.
         let (respawn_radius, border_distance) = {
             let info = self.level_info.load();
-            let border = self.worldborder.lock().await;
+            let border = self
+                .worldborder
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
             let half = border.new_diameter / 2.0;
             let distance = (f64::from(spawn_x) - (border.center_x - half))
                 .min(border.center_x + half - f64::from(spawn_x))
@@ -2653,8 +2619,7 @@ impl World {
                     )
                     .await
                     .unwrap_or_else(|| {
-                        // Vanilla's last resort: fix up the height of the
-                        // suggested spawn position itself.
+                        // Last resort: fix up the suggested spawn height.
                         self.fixup_spawn_height_at(suggestion, exclude_uuid)
                     }),
             }
@@ -2667,9 +2632,8 @@ impl World {
         )
     }
 
-    /// Searches the columns around `suggestion` for a safe player spawn
-    /// position, expanding outward in a square spiral until `radius` is
-    /// reached. Mirrors vanilla's `PlayerSpawnFinder`.
+    /// Returns the first safe column found in a square spiral around
+    /// `suggestion`, expanding outward up to `radius`.
     async fn find_safe_player_spawn_position(
         &self,
         suggestion: BlockPos,
@@ -2696,12 +2660,9 @@ impl World {
         None
     }
 
-    /// Checks whether the column at `x`, `z` offers a safe spawn position,
-    /// mirroring vanilla's `PlayerSpawnFinder#getLevelRespawnPos`: scan down
-    /// from the motion-blocking top of the column until a block with a solid
-    /// top face is found, rejecting fluid columns, and then check that the
-    /// player's bounding box does not collide at the position above it. The
-    /// chunk is fetched first when it has not been loaded yet.
+    /// Scans one column for a spawn position: fetch the chunk if needed, walk
+    /// down from the motion-blocking top to the first block with a solid top
+    /// face (skipping fluid columns), and check the player box above it.
     async fn check_spawn_column(
         &self,
         x: i32,
@@ -2722,11 +2683,11 @@ impl World {
 
         for y in (self.dimension.min_y..=top + 1).rev() {
             let state = self.get_block_state(&BlockPos::new(x, y, z));
-            // Fluid columns (e.g. the middle of an ocean) are rejected.
+            // Skip fluid columns (oceans).
             if state.is_liquid() {
                 return None;
             }
-            // The player needs a block with a solid top face below their feet.
+            // Needs a solid top face below the feet.
             if state.is_side_solid(BlockDirection::Up) {
                 let feet = BlockPos::new(x, y + 1, z);
                 return self
@@ -4434,9 +4395,7 @@ impl World {
                 }
             }
 
-            // Mirrors vanilla's `PlayerSpawnFinder`: use the world spawn as the
-            // suggestion and search for a position where the player's bounding
-            // box does not collide with blocks, fluids, or other entities.
+            // Search around the world spawn for a safe position.
             let position = default_world
                 .get_safe_player_spawn_position(
                     spawn_x,
@@ -7393,9 +7352,9 @@ mod tests {
     }
 
     #[test]
-    fn respawn_block_check_matches_vanilla_flags() {
-        // Vanilla `Block#isPossibleToRespawnInThis` = `!isSolid() && !liquid()`.
-        // Air-like and pass-through blocks are safe to spawn in...
+    fn block_spawn_safety_uses_solid_and_liquid_flags() {
+        // A block is safe when `!is_solid() && !is_liquid()`.
+        // Air-like and pass-through blocks are safe...
         for state in [
             Block::AIR.default_state,
             Block::VOID_AIR.default_state,
@@ -7408,14 +7367,11 @@ mod tests {
             );
         }
 
-        // ...solid blocks obstruct the player...
+        // ...solid blocks are not (leaves are solid in Pumpkin's data)...
         for state in [
             Block::STONE.default_state,
             Block::GRASS_BLOCK.default_state,
             Block::BEDROCK.default_state,
-            // Pumpkin's block data marks leaves as solid, so they are rejected
-            // as well even though vanilla's collision-shape based check would
-            // allow respawning inside them.
             Block::OAK_LEAVES.default_state,
         ] {
             assert!(
@@ -7424,7 +7380,7 @@ mod tests {
             );
         }
 
-        // ...and fluids drown or burn the player.
+        // ...and fluids are not.
         for state in [Block::WATER.default_state, Block::LAVA.default_state] {
             assert!(
                 !is_possible_to_respawn_in_state(state),
@@ -7445,17 +7401,14 @@ mod tests {
         assert!(!is_safe_player_spawn_position_states(stone, air));
         assert!(!is_safe_player_spawn_position_states(air, stone));
 
-        // A fluid at the feet drowns/burns the player and a fluid at the head
-        // suffocates them, so both are unsafe.
+        // A fluid at the feet or head is also unsafe.
         assert!(!is_safe_player_spawn_position_states(water, air));
         assert!(!is_safe_player_spawn_position_states(air, water));
     }
 
     #[test]
     fn spawn_search_rings_expand_outward() {
-        // Every ring contains exactly 8 * radius columns, all at Chebyshev
-        // distance `radius`, with no duplicates within or across rings and
-        // never the suggested column itself.
+        // Each ring has 8r columns at Chebyshev distance r, without duplicates.
         let mut seen = std::collections::HashSet::new();
         let mut total = 0;
         for radius in 1..=3 {
@@ -7480,8 +7433,7 @@ mod tests {
 
     #[test]
     fn spawn_search_ring_offsets_follow_expected_order() {
-        // The search walks the top/bottom edges of each ring first and then
-        // the left/right edges, so positions closest in z are checked first.
+        // Top/bottom edges first, then left/right.
         assert_eq!(
             spawn_search_ring_offsets(1),
             vec![
@@ -7497,8 +7449,7 @@ mod tests {
         );
     }
 
-    /// Fixes up the height of a column whose solid ground ends at `ground_y`
-    /// and whose solid canopy spans `canopy`; every other position is air.
+    /// Column with solid ground up to `ground_y` and a solid canopy `canopy`.
     fn fixup_on_column(
         start: BlockPos,
         ground_y: i32,
@@ -7522,8 +7473,7 @@ mod tests {
 
     #[test]
     fn fixup_lifts_a_position_inside_the_ground() {
-        // Feet buried in the ground: walk up to the first safe position and
-        // back down until the player stands on the surface.
+        // Buried feet: walk up to the surface.
         assert_eq!(
             fixup_on_column(BlockPos::new(0, 60, 0), 64, 70..=70),
             BlockPos::new(0, 65, 0),
@@ -7532,8 +7482,7 @@ mod tests {
 
     #[test]
     fn fixup_places_the_player_on_top_of_a_canopy() {
-        // A solid canopy spans y=70..=72: starting inside it walks up over the
-        // top and settles one block above the canopy.
+        // Starting inside the canopy settles one block above it.
         assert_eq!(
             fixup_on_column(BlockPos::new(0, 71, 0), 64, 70..=72),
             BlockPos::new(0, 73, 0),
@@ -7542,8 +7491,7 @@ mod tests {
 
     #[test]
     fn fixup_does_not_suffocate_the_player_in_a_canopy() {
-        // Feet at y=69 put the head (y=70) inside the solid canopy, so the
-        // position is unsafe and must be moved on top of the canopy.
+        // Head (y=70) inside the canopy: moved on top of it.
         assert_eq!(
             fixup_on_column(BlockPos::new(0, 69, 0), 64, 70..=72),
             BlockPos::new(0, 73, 0),
@@ -7552,16 +7500,14 @@ mod tests {
 
     #[test]
     fn fixup_lands_above_the_world_floor_in_a_void_column() {
-        // No ground at all: the position sinks to the world floor and steps
-        // back up one block, mirroring vanilla's `fixupSpawnHeight`.
+        // No ground: sinks to the world floor and steps up one.
         let result = fixup_spawn_height_with(BlockPos::new(0, 0, 0), -64, 319, |_| true);
         assert_eq!(result, BlockPos::new(0, -63, 0));
     }
 
     #[test]
-    fn player_bounding_box_matches_vanilla_dimensions() {
-        // Vanilla's `EntityDimensions#makeBoundingBox` for the player:
-        // 0.6 wide, 1.8 tall, centered on the block column.
+    fn player_bounding_box_dimensions() {
+        // 0.6 wide, 1.8 tall, centered on the column.
         let feet = BlockPos::new(10, 64, -5);
         let box_ = player_bounding_box(&feet);
         assert_eq!(box_.min.x, 10.2);
@@ -7573,9 +7519,8 @@ mod tests {
     }
 
     #[test]
-    fn spawn_box_check_matches_vanilla_no_collision_no_liquid() {
-        // Vanilla's `PlayerSpawnFinder#noCollisionNoLiquid`: the player box
-        // must not intersect block collision shapes and fluids always collide.
+    fn spawn_box_check_rejects_collision_and_liquids() {
+        // The player box must not intersect collision shapes; fluids always collide.
         let feet = BlockPos::new(0, 64, 0);
         let air = Block::AIR.default_state;
         let stone = Block::STONE.default_state;
@@ -7588,42 +7533,39 @@ mod tests {
         // Empty space is fine.
         assert!(no_collision_no_liquid(&feet, air, air));
 
-        // A solid block at the feet or at the head collides with the player box.
+        // A solid block at the feet or head collides with the player box.
         assert!(!no_collision_no_liquid(&feet, stone, air));
         assert!(!no_collision_no_liquid(&feet, air, stone));
 
-        // Fluids always collide (`alwaysCollideWithFluids`).
+        // Fluids always collide.
         assert!(!no_collision_no_liquid(&feet, water, air));
         assert!(!no_collision_no_liquid(&feet, air, water));
 
-        // Pumpkin's block data gives leaves a full collision shape, so a head
-        // inside a canopy also collides.
+        // Leaves have a full collision shape in Pumpkin's data.
         assert!(!no_collision_no_liquid(&feet, air, leaves));
 
-        // Partial collision shapes (fence post, bed, bottom slab) still
-        // intersect the player box.
+        // Partial collision shapes (fence, bed, slab) also collide.
         assert!(!no_collision_no_liquid(&feet, fence, air));
         assert!(!no_collision_no_liquid(&feet, bed, air));
         assert!(!no_collision_no_liquid(&feet, slab, air));
 
-        // Standing on top of a bottom slab: the slab below the feet is outside
-        // the player box, so the position is safe.
+        // Standing on a bottom slab is safe (it is below the player box).
         let above_slab = BlockPos::new(0, 65, 0);
         assert!(no_collision_no_liquid(&above_slab, air, air));
     }
 
     #[test]
-    fn spawn_search_radius_is_clamped_like_vanilla() {
-        // The `respawn_radius` game rule is used as-is when the border is far.
+    fn spawn_search_radius_is_clamped() {
+        // Game rule as-is when the border is far, negative clamped to 0.
         assert_eq!(spawn_search_radius(10, 1000.0), 10);
         assert_eq!(spawn_search_radius(0, 1000.0), 0);
         assert_eq!(spawn_search_radius(-5, 1000.0), 0);
-        // The border distance clamps the radius down.
+        // Border distance clamps down...
         assert_eq!(spawn_search_radius(10, 3.9), 3);
-        // A spawn on the border still searches a radius of at least 1.
+        // ...with a minimum of 1 on the border...
         assert_eq!(spawn_search_radius(10, 0.5), 1);
         assert_eq!(spawn_search_radius(10, 1.0), 1);
-        // Vanilla's 1024 candidate cap limits the radius to 15.
+        // ...and the 1024 candidate cap (radius 15).
         assert_eq!(spawn_search_radius(100, 1000.0), MAX_SPAWN_SEARCH_RADIUS);
     }
 }
