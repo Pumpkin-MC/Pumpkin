@@ -6,6 +6,7 @@ mod block_predicate;
 mod block_state_provider;
 pub mod carver;
 pub mod feature;
+mod feature_order;
 pub mod generator;
 pub mod height_limit;
 pub mod height_provider;

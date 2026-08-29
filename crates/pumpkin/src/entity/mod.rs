@@ -1592,7 +1592,14 @@ impl Entity {
         let max = aabb.max_block_pos();
 
         let eye_height = self.get_eye_height();
+        let eye_width = f64::from(self.width()) * 0.8;
         let mut eye_level_box = aabb;
+        let shrink_x = (aabb.max.x - aabb.min.x - eye_width) / 2.0;
+        let shrink_z = (aabb.max.z - aabb.min.z - eye_width) / 2.0;
+        eye_level_box.min.x += shrink_x;
+        eye_level_box.max.x -= shrink_x;
+        eye_level_box.min.z += shrink_z;
+        eye_level_box.max.z -= shrink_z;
         eye_level_box.min.y += eye_height;
         eye_level_box.max.y = eye_level_box.min.y;
 
