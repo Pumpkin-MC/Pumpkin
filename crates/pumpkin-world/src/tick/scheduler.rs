@@ -4,10 +4,14 @@ use std::sync::{
 };
 
 use pumpkin_util::math::position::BlockPos;
-use rustc_hash::FxHashSet;
+use rustc_hash::FxHashMap;
 
 use crate::tick::{MAX_TICK_DELAY, OrderedTick, ScheduledTick};
 
+/// Vanilla `LevelChunkTicks` for one chunk.
+///
+/// `tick_queue` is a delay ring instead of `PriorityQueue(ScheduledTick.DRAIN_ORDER)` over `triggerTick`.
+/// `queued_ticks` is vanilla `ticksPerPosition` / `UNIQUE_TICK_HASH` (`pos` + type) plus the ring slot.
 pub struct ChunkTickScheduler<T> {
     inner: Mutex<Option<Box<ChunkTickSchedulerInner<T>>>>,
     offset: AtomicUsize,
@@ -15,29 +19,42 @@ pub struct ChunkTickScheduler<T> {
 
 struct ChunkTickSchedulerInner<T> {
     tick_queue: [Vec<OrderedTick<T>>; MAX_TICK_DELAY],
-    queued_ticks: FxHashSet<(BlockPos, T)>,
+    queued_ticks: FxHashMap<(BlockPos, T), usize>,
 }
 
 impl<T> ChunkTickSchedulerInner<T> {
     fn boxed() -> Box<Self> {
         Box::new(Self {
             tick_queue: std::array::from_fn(|_| Vec::new()),
-            queued_ticks: FxHashSet::default(),
+            queued_ticks: FxHashMap::default(),
         })
     }
 }
 
 impl<T: std::hash::Hash + Eq + Copy> ChunkTickSchedulerInner<T> {
+    /// Vanilla `LevelChunkTicks.schedule`: first `(pos, type)` wins; later calls no-op.
     fn schedule(&mut self, offset: usize, tick: &ScheduledTick<T>, sub_tick_order: i64) {
-        if self.queued_ticks.insert((tick.position, tick.value)) {
-            let index = (offset + tick.delay as usize) % MAX_TICK_DELAY;
-            self.tick_queue[index].push(OrderedTick {
-                priority: tick.priority,
-                sub_tick_order,
-                position: tick.position,
-                value: tick.value,
-            });
+        let key = (tick.position, tick.value);
+        if self.queued_ticks.contains_key(&key) {
+            return;
         }
+        let index = (offset + tick.delay as usize) % MAX_TICK_DELAY;
+        self.queued_ticks.insert(key, index);
+        self.tick_queue[index].push(OrderedTick {
+            priority: tick.priority,
+            sub_tick_order,
+            position: tick.position,
+            value: tick.value,
+        });
+    }
+}
+
+impl<'a, T: PartialEq> ChunkTickSchedulerInner<&'a T> {
+    /// Stored keys are `&'a T`; callers pass `&T`. Compare pointees, not the reference lifetime.
+    fn queued_entry(&self, pos: BlockPos, value: &T) -> Option<((BlockPos, &'a T), usize)> {
+        self.queued_ticks.iter().find_map(|(&(p, v), &index)| {
+            (p == pos && *v == *value).then_some(((p, v), index))
+        })
     }
 }
 
@@ -60,9 +77,24 @@ impl<T> ChunkTickScheduler<T> {
             .store((current + 1) % MAX_TICK_DELAY, Ordering::Relaxed);
         current
     }
+
+    fn drop_inner_if_empty(
+        inner_guard: &mut MutexGuard<'_, Option<Box<ChunkTickSchedulerInner<T>>>>,
+    ) {
+        if inner_guard
+            .as_ref()
+            .is_some_and(|inner| inner.queued_ticks.is_empty())
+        {
+            **inner_guard = None;
+        }
+    }
 }
 
 impl<'a, T: std::hash::Hash + Eq> ChunkTickScheduler<&'a T> {
+    /// Drain the current ring slot (`triggerTick == now`).
+    ///
+    /// Always advances the offset so delay is wall-clock ticks; skipping this call (inactive chunk)
+    /// freezes remaining delay.
     pub fn step_tick(&self) -> Vec<OrderedTick<&'a T>> {
         let mut inner_guard = self.lock_inner();
         let current_offset = self.advance_ring_offset();
@@ -79,9 +111,7 @@ impl<'a, T: std::hash::Hash + Eq> ChunkTickScheduler<&'a T> {
                     .queued_ticks
                     .remove(&(next_tick.position, next_tick.value));
             }
-            if inner.queued_ticks.is_empty() {
-                *inner_guard = None;
-            }
+            Self::drop_inner_if_empty(&mut inner_guard);
         }
         res
     }
@@ -94,38 +124,31 @@ impl<'a, T: std::hash::Hash + Eq> ChunkTickScheduler<&'a T> {
             .schedule(offset, tick, sub_tick_order);
     }
 
+    /// Vanilla `LevelChunkTicks.hasScheduledTick`.
     pub fn is_scheduled(&self, pos: BlockPos, value: &T) -> bool {
         self.lock_inner()
             .as_ref()
-            .is_some_and(|inner| inner.queued_ticks.contains(&(pos, value)))
+            .is_some_and(|inner| inner.queued_entry(pos, value).is_some())
     }
 
-    /// Drops the pending `(pos, type)` tick so `step_tick` will not run it.
+    /// Vanilla `LevelChunkTicks.removeIf` for one `(pos, type)`.
     #[must_use]
     pub fn cancel_tick(&self, pos: BlockPos, value: &T) -> bool {
         let mut inner_guard = self.lock_inner();
         let Some(inner) = inner_guard.as_mut() else {
             return false;
         };
-        let before = inner.queued_ticks.len();
-        inner
-            .queued_ticks
-            .retain(|(p, v)| *p != pos || **v != *value);
-        if inner.queued_ticks.len() == before {
+        let Some((key, index)) = inner.queued_entry(pos, value) else {
             return false;
+        };
+        inner.queued_ticks.remove(&key);
+        if let Some(i) = inner.tick_queue[index]
+            .iter()
+            .position(|tick| tick.position == pos && *tick.value == *value)
+        {
+            inner.tick_queue[index].swap_remove(i);
         }
-        for bucket in &mut inner.tick_queue {
-            if let Some(i) = bucket
-                .iter()
-                .position(|tick| tick.position == pos && *tick.value == *value)
-            {
-                bucket.swap_remove(i);
-                break;
-            }
-        }
-        if inner.queued_ticks.is_empty() {
-            *inner_guard = None;
-        }
+        Self::drop_inner_if_empty(&mut inner_guard);
         true
     }
 
@@ -135,6 +158,7 @@ impl<'a, T: std::hash::Hash + Eq> ChunkTickScheduler<&'a T> {
             .is_some_and(|inner| !inner.queued_ticks.is_empty())
     }
 
+    /// Vanilla `SerializableTickContainer.pack` -> `SavedTick` list (`block_ticks` / `fluid_ticks`).
     #[must_use]
     pub fn to_vec(&self) -> Vec<ScheduledTick<&'a T>> {
         let inner_guard = self.lock_inner();
