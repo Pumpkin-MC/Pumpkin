@@ -5682,6 +5682,10 @@ impl World {
         block_state_id: BlockStateId,
         flags: BlockFlags,
     ) -> BlockStateId {
+        if !self.is_in_build_limit(*position) {
+            return Block::AIR.default_state.id;
+        }
+
         let (chunk_coordinate, relative) = position.chunk_and_chunk_relative_position();
         let replaced_block_state_id = self
             .level

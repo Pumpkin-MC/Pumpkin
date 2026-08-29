@@ -77,7 +77,7 @@ impl JavaClient {
                         let new_state = world.break_block(
                             &position,
                             Some(player),
-                            BlockFlags::NOTIFY_NEIGHBORS | BlockFlags::SKIP_DROPS,
+                            BlockFlags::NOTIFY_ALL | BlockFlags::SKIP_DROPS,
                         );
                         if new_state.is_some() {
                             server
@@ -99,9 +99,9 @@ impl JavaClient {
                             let broken_state = world.get_block_state(&position);
                             let can_harvest = player.can_harvest(broken_state, block);
                             let flags = if can_harvest {
-                                BlockFlags::NOTIFY_NEIGHBORS
+                                BlockFlags::NOTIFY_ALL
                             } else {
-                                BlockFlags::SKIP_DROPS | BlockFlags::NOTIFY_NEIGHBORS
+                                BlockFlags::SKIP_DROPS | BlockFlags::NOTIFY_ALL
                             };
                             let new_state = world.break_block(&position, Some(player), flags);
                             if new_state.is_some() {
@@ -196,9 +196,9 @@ impl JavaClient {
                         &location,
                         Some(player),
                         if block_drop {
-                            BlockFlags::NOTIFY_NEIGHBORS
+                            BlockFlags::NOTIFY_ALL
                         } else {
-                            BlockFlags::SKIP_DROPS | BlockFlags::NOTIFY_NEIGHBORS
+                            BlockFlags::SKIP_DROPS | BlockFlags::NOTIFY_ALL
                         },
                     );
                     if new_state.is_some() {

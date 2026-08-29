@@ -28,6 +28,7 @@ use super::features::{
     end_gateway::EndGatewayFeature,
     end_island::EndIslandFeature,
     end_platform::EndPlatformFeature,
+    end_podium::EndPodiumFeature,
     end_spike::EndSpikeFeature,
     fallen_tree::FallenTreeFeature,
     fill_layer::FillLayerFeature,
@@ -125,6 +126,7 @@ pub enum ConfiguredFeature {
     Lake(LakeFeature),
     Ore(OreFeature),
     EndPlatform(EndPlatformFeature),
+    EndPodium(EndPodiumFeature),
     EndSpike(EndSpikeFeature),
     EndIsland(EndIslandFeature),
     EndGateway(EndGatewayFeature),
@@ -240,6 +242,7 @@ impl ConfiguredFeature {
                 random,
                 pos,
             ),
+            Self::EndPodium(feature) => feature.generate(chunk, pos),
             Self::EndSpike(feature) => feature.generate(
                 chunk,
                 block_registry,
@@ -424,9 +427,7 @@ impl ConfiguredFeature {
             }
             Self::DripstoneCluster(feature) => feature.generate(chunk, pos),
             Self::LargeDripstone(feature) => feature.generate(chunk, random, pos),
-            Self::EndGateway(_feature) => {
-                EndGatewayFeature::generate(chunk, min_y, height, feature_name, random, pos)
-            }
+            Self::EndGateway(feature) => feature.generate(chunk, pos),
             Self::FillLayer(feature) => {
                 feature.generate(chunk, min_y, height, feature_name, random, pos)
             }

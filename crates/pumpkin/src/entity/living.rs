@@ -2643,9 +2643,16 @@ impl EntityBase for LivingEntity {
         // We allow movement during death animation (20 ticks) so knockback is applied.
         let is_alive = !self.dead.load(Relaxed) && self.health.load() > 0.0;
         let in_death_animation = self.health.load() <= 0.0 && self.death_time.load(Relaxed) < 20;
-        if is_alive || (in_death_animation && self.entity.entity_type != &EntityType::PLAYER) {
+        let is_player = self.entity.entity_type == &EntityType::PLAYER;
+        if (is_alive || in_death_animation) && !is_player {
             self.tick_movement(caller);
             // Vanilla-like order: freeze logic runs after movement/collisions.
+            self.entity.tick_frozen(caller);
+        } else if is_alive {
+            let suffocating = self.entity.tick_block_collisions(caller);
+            if suffocating {
+                caller.damage(caller, 1.0, DamageType::IN_WALL);
+            }
             self.entity.tick_frozen(caller);
         }
 
@@ -2860,7 +2867,35 @@ impl EntityBase for LivingEntity {
     }
 }
 
+pub const SPEED_MODIFIER_SPRINTING_ID: &str = "minecraft:sprinting";
+pub const SPEED_MODIFIER_SPRINTING_AMOUNT: f64 = 0.300_000_011_920_928_96;
+
 impl LivingEntity {
+    pub fn set_sprinting(&self, is_sprinting: bool) {
+        self.entity.set_sprinting(is_sprinting);
+        self.update_attribute(&Attributes::MOVEMENT_SPEED, |speed| {
+            speed.remove_modifier(SPEED_MODIFIER_SPRINTING_ID);
+            if is_sprinting {
+                speed.add_or_replace_modifier(Modifier {
+                    id: SPEED_MODIFIER_SPRINTING_ID.to_string(),
+                    amount: SPEED_MODIFIER_SPRINTING_AMOUNT,
+                    operation: ModifierOperation::MultiplyTotal,
+                });
+            }
+        });
+        crate::entity::attributes::send_attribute_updates_for_living(
+            self,
+            vec![Attributes::MOVEMENT_SPEED],
+        );
+    }
+
+    #[must_use]
+    pub fn get_block_speed_factor(&self) -> f32 {
+        let efficiency = self.get_attribute_value(&Attributes::MOVEMENT_EFFICIENCY) as f32;
+        let super_factor = self.entity.get_block_speed_factor();
+        super_factor + efficiency * (1.0 - super_factor)
+    }
+
     /// Applies data-driven `apply_effects` consume effects after an item completes use.
     /// Vanilla: `Consumable.onConsume` invokes every configured effect server-side.
     fn apply_consumable_effects(&self, caller: &dyn EntityBase, item: &ItemStack) {

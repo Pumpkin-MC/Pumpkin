@@ -691,6 +691,13 @@ pub fn value_to_configured_feature(v: &Value) -> TokenStream {
         "minecraft:end_platform" => {
             quote! { ConfiguredFeature::EndPlatform(crate::generation::feature::features::end_platform::EndPlatformFeature) }
         }
+        "minecraft:end_podium" => {
+            let active = config
+                .get("active")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
+            quote! { ConfiguredFeature::EndPodium(crate::generation::feature::features::end_podium::EndPodiumFeature::new(#active)) }
+        }
         "minecraft:end_island" => {
             quote! { ConfiguredFeature::EndIsland(crate::generation::feature::features::end_island::EndIslandFeature {}) }
         }
@@ -809,7 +816,21 @@ pub fn value_to_configured_feature(v: &Value) -> TokenStream {
             quote! { ConfiguredFeature::BlueIce(crate::generation::feature::features::blue_ice::BlueIceFeature {}) }
         }
         "minecraft:end_gateway" => {
-            quote! { ConfiguredFeature::EndGateway(crate::generation::feature::features::end_gateway::EndGatewayFeature {}) }
+            let exit = if let Some(exit_arr) = config["exit"].as_array() {
+                let x = exit_arr[0].as_i64().unwrap_or(0) as i32;
+                let y = exit_arr[1].as_i64().unwrap_or(0) as i32;
+                let z = exit_arr[2].as_i64().unwrap_or(0) as i32;
+                quote! { Some(pumpkin_util::math::position::BlockPos::new(#x, #y, #z)) }
+            } else {
+                quote! { None }
+            };
+            let exact = config["exact"].as_bool().unwrap_or(false);
+            quote! {
+                ConfiguredFeature::EndGateway(crate::generation::feature::features::end_gateway::EndGatewayFeature {
+                    exit: #exit,
+                    exact: #exact,
+                })
+            }
         }
         "minecraft:coral_tree" => {
             quote! { ConfiguredFeature::CoralTree(crate::generation::feature::features::coral::coral_tree::CoralTreeFeature) }

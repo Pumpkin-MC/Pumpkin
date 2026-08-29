@@ -592,7 +592,7 @@ impl EntityBase for MinecartEntity {
                 && ((step.x - velocity.x).abs() > 1.0e-9 || (step.z - velocity.z).abs() > 1.0e-9)
             {
                 let displacement = self.vehicle.entity.pos.load() - pre_move_pos;
-                let multiplier = f64::from(self.vehicle.entity.get_velocity_multiplier());
+                let multiplier = f64::from(self.vehicle.entity.get_block_speed_factor());
                 let blocked = |requested: f64, achieved: f64| (requested - achieved).abs() > 1.0e-9;
                 self.vehicle.entity.velocity.store(Vector3::new(
                     if blocked(step.x, displacement.x) {
