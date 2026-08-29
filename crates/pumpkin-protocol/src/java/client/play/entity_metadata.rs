@@ -338,9 +338,9 @@ impl MetadataSerializer for crate::codec::item_stack_seralizer::ItemStackSeriali
     fn write_metadata(
         &self,
         writer: &mut impl std::io::Write,
-        _version: &JavaMinecraftVersion,
+        version: &JavaMinecraftVersion,
     ) -> Result<(), WritingError> {
-        self.write(writer)
+        self.write_with_version(writer, version)
     }
 }
 

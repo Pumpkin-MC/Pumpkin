@@ -45,14 +45,14 @@ use pumpkin_world::world_info::{LevelData, WorldInfoError, WorldInfoReader, Worl
 use rand::seq::{IndexedRandom, SliceRandom};
 use rayon::prelude::*;
 use rsa::RsaPublicKey;
-use std::collections::HashSet;
+use rustc_hash::FxHashSet;
 use std::fs;
 use std::net::IpAddr;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicI32, AtomicI64, AtomicU32};
 use std::{future::Future, sync::atomic::Ordering, time::Duration};
-use tokio::sync::{Mutex, OnceCell};
+use tokio::sync::OnceCell;
 use tokio::task::JoinHandle;
 use tokio_util::task::TaskTracker;
 
@@ -94,7 +94,7 @@ pub struct Server {
     /// Cached Bedrock server private key (process-lifetime). Generated on first Bedrock login and reused.
     pub bedrock_private_key: OnceCell<Arc<pumpkin_util::p384::ecdsa::SigningKey>>,
     /// Manages server status information.
-    listing: Mutex<CachedStatus>,
+    listing: std::sync::Mutex<CachedStatus>,
     /// Saves server branding information.
     branding: CachedBranding,
     /// Saves and dispatches commands to appropriate handlers.
@@ -166,7 +166,6 @@ impl Server {
         // First register the default commands. After that, plugins can put in their own.
         let command_dispatcher = ArcSwap::from_pointee(default_dispatcher(
             &permission_manager,
-            &basic_config,
             &advanced_config.commands,
         ));
 
@@ -228,7 +227,7 @@ impl Server {
 
         let level_info = Arc::new(ArcSwap::new(Arc::new(level_info)));
 
-        let listing = Mutex::new(CachedStatus::new(
+        let listing = std::sync::Mutex::new(CachedStatus::new(
             &basic_config,
             &advanced_config.networking.java.motd,
             advanced_config.networking.java.max_players,
@@ -335,10 +334,12 @@ impl Server {
                     .java
                     .authentication
                     .clone();
-                let keys = fetch_mojang_public_keys(&auth_config).unwrap_or_else(|e| {
-                    error!("Failed to fetch Mojang keys: {e}");
-                    Vec::new()
-                });
+                let keys = fetch_mojang_public_keys(&auth_config)
+                    .await
+                    .unwrap_or_else(|e| {
+                        error!("Failed to fetch Mojang keys: {e}");
+                        Vec::new()
+                    });
                 server_clone.mojang_public_keys.store(Arc::new(keys));
             });
         }
@@ -363,7 +364,9 @@ impl Server {
                     auth.url.as_deref(),
                     auth.connect_timeout,
                     auth.read_timeout,
-                ) {
+                )
+                .await
+                {
                     Ok(keys) => keys,
                     Err(error) => {
                         error!("Failed to fetch Bedrock OIDC keys: {error}");
@@ -614,7 +617,7 @@ impl Server {
     /// # Note
     ///
     /// You still have to spawn the `Player` in a `World` to let them join and make them visible.
-    pub async fn add_player(
+    pub fn add_player(
         self: &Arc<Self>,
         client: Arc<ClientPlatform>,
         profile: GameProfile,
@@ -674,14 +677,12 @@ impl Server {
             advancements.player = Arc::downgrade(&player);
         };
 
-        send_cancellable! {{
+        send_cancellable_blocking! {{
             self;
             &mut PlayerLoginEvent::new(player.clone(), TextComponent::text("You have been kicked from the server"));
             'after: {
                 player.screen_handler_sync_handler.store_player(player.clone());
-                if world
-                    .add_player(&player)
-                    .is_ok() {
+                world.add_player(&player).is_ok().then(|| {
                     {
                         let mut user_cache = self
                             .data
@@ -695,14 +696,15 @@ impl Server {
                     if let Some(config) = config {
                         // TODO: Config so we can also just ignore this hehe
                         if config.server_listing {
-                            self.listing.lock().await.add_player(&player);
+                            self.listing
+                                .lock()
+                                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                                .add_player(&player);
                         }
                     }
 
-                    Some((player, world.clone()))
-                } else {
-                    None
-                }
+                    (player, world)
+                })
             }
 
             'cancelled: {
@@ -712,14 +714,17 @@ impl Server {
         }}
     }
 
-    pub async fn remove_player(&self, player: &Player) {
+    pub fn remove_player(&self, player: &Player) {
         player.increment_stat(
             pumpkin_data::statistic::StatisticCategory::Custom,
             pumpkin_data::statistic::CustomStatistic::LeaveGame as i32,
             1,
         );
         // TODO: Config if we want decrease online
-        self.listing.lock().await.remove_player(player);
+        self.listing
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .remove_player(player);
     }
 
     pub async fn shutdown(&self) {
@@ -755,6 +760,12 @@ impl Server {
         for world in self.worlds.load().iter() {
             world.broadcast_packet_all(packet);
         }
+    }
+
+    /// Broadcasts custom server links to all players on the server.
+    pub fn broadcast_server_links(&self, links: &[pumpkin_protocol::Link<'_>]) {
+        let packet = pumpkin_protocol::java::client::play::CPlayServerLinks::new(links);
+        self.broadcast_packet_all(&packet);
     }
 
     pub fn broadcast_tab_list_header_footer(&self, header: &TextComponent, footer: &TextComponent) {
@@ -991,8 +1002,20 @@ impl Server {
         self.branding.get_branding()
     }
 
-    pub const fn get_status(&self) -> &Mutex<CachedStatus> {
+    pub const fn get_status(&self) -> &std::sync::Mutex<CachedStatus> {
         &self.listing
+    }
+
+    async fn get_or_init_key_store(&self) -> &Arc<KeyStore> {
+        self.key_store
+            .get_or_init(|| async {
+                let (tx, rx) = tokio::sync::oneshot::channel();
+                rayon::spawn(move || {
+                    let _ = tx.send(Arc::new(KeyStore::new()));
+                });
+                rx.await.unwrap_or_else(|_| Arc::new(KeyStore::new()))
+            })
+            .await
     }
 
     pub async fn encryption_request<'a>(
@@ -1000,24 +1023,28 @@ impl Server {
         verification_token: &'a [u8; 4],
         should_authenticate: bool,
     ) -> CEncryptionRequest<'a> {
-        self.key_store
-            .get_or_init(|| async { Arc::new(KeyStore::new()) })
-            .await
-            .encryption_request("", verification_token, should_authenticate)
+        self.get_or_init_key_store().await.encryption_request(
+            "",
+            verification_token,
+            should_authenticate,
+        )
     }
 
     pub async fn decrypt(&self, data: &[u8]) -> Result<Vec<u8>, EncryptionError> {
-        self.key_store
-            .get_or_init(|| async { Arc::new(KeyStore::new()) })
-            .await
-            .decrypt(data)
+        let key_store = self.get_or_init_key_store().await.clone();
+        let data = data.to_vec();
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        rayon::spawn(move || {
+            let _ = tx.send(key_store.decrypt(&data));
+        });
+        rx.await.map_err(|_| EncryptionError::FailedDecrypt)?
     }
 
-    pub async fn digest_secret(&self, secret: &[u8]) -> String {
-        self.key_store
-            .get_or_init(|| async { Arc::new(KeyStore::new()) })
-            .await
-            .get_digest(secret)
+    pub fn digest_secret(&self, secret: &[u8]) -> String {
+        self.key_store.get().map_or_else(
+            || KeyStore::new().get_digest(secret),
+            |key_store| key_store.get_digest(secret),
+        )
     }
 
     /// Main server tick method. This now handles both player/network ticking (which always runs)
@@ -1176,7 +1203,7 @@ impl Server {
                     None
                 }
             })
-            .collect::<HashSet<_>>();
+            .collect::<FxHashSet<_>>();
         let type_excluded = target_selector
             .conditions
             .iter()
@@ -1187,7 +1214,7 @@ impl Server {
                     None
                 }
             })
-            .collect::<HashSet<_>>();
+            .collect::<FxHashSet<_>>();
 
         players.retain(|_| {
             (type_excluded.is_empty() || !type_excluded.contains(player_type))
@@ -1287,7 +1314,7 @@ impl Server {
                     None
                 }
             })
-            .collect::<HashSet<_>>();
+            .collect::<FxHashSet<_>>();
         let type_excluded = target_selector
             .conditions
             .iter()
@@ -1298,7 +1325,7 @@ impl Server {
                     None
                 }
             })
-            .collect::<HashSet<_>>();
+            .collect::<FxHashSet<_>>();
         entities.retain(|entity| {
             // Filter by entity type
             (type_excluded.is_empty() || !type_excluded.contains(&entity.get_entity().entity_type))

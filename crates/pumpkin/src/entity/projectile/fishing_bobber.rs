@@ -91,7 +91,7 @@ impl FishingBobberEntity {
     }
 
     #[expect(clippy::too_many_lines)]
-    pub fn process_tick(&self, caller: &dyn EntityBase, _server: &Server) {
+    pub fn process_tick(&self, caller: &dyn EntityBase) {
         let entity = self.get_entity();
         let world = entity.world.load();
 
@@ -233,7 +233,7 @@ impl EntityBase for FishingBobberEntity {
         self.has_hit.store(true, Ordering::Relaxed);
     }
 
-    fn tick(&self, caller: &dyn EntityBase, server: &Server) {
-        self.process_tick(caller, server);
+    fn tick(&self, caller: &dyn EntityBase, _server: &Server) {
+        self.process_tick(caller);
     }
 }

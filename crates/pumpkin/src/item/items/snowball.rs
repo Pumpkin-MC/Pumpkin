@@ -33,7 +33,7 @@ impl ItemBehaviour for SnowBallItem {
         let (yaw, pitch) = player.rotation();
         snowball
             .thrown
-            .set_velocity_from(player.get_entity(), pitch, yaw, 0.0, POWER, 1.0);
+            .set_velocity_from(pitch, yaw, 0.0, POWER, 1.0);
         world.spawn_entity(Arc::new(snowball));
 
         // Consume item

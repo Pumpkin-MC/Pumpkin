@@ -21,7 +21,7 @@ impl MobEffect for RaidOmenMobEffect {
                 .raids
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
-            raids.create_or_extend_raid(player, raid_pos, &world);
+            raids.create_or_extend_raid(raid_pos, &world);
             player.clear_raid_omen_position();
         }
     }

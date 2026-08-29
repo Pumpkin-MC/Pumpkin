@@ -113,7 +113,9 @@ impl BlockBehaviour for TallPlantBlock {
                     args.world.break_block(
                         &other_block_pos,
                         None,
-                        BlockFlags::SKIP_DROPS | BlockFlags::SKIP_BLOCK_ADDED_CALLBACK,
+                        BlockFlags::SKIP_DROPS
+                            | BlockFlags::SKIP_BLOCK_ADDED_CALLBACK
+                            | BlockFlags::NOTIFY_ALL,
                     );
                 }
             }

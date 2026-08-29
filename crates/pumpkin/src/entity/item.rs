@@ -341,16 +341,11 @@ impl ItemEntity {
         Some(tick_move)
     }
 
-    fn move_and_apply_friction(
-        &self,
-        caller: &dyn EntityBase,
-        server: &Server,
-        move_velo: Vector3<f64>,
-    ) {
+    fn move_and_apply_friction(&self, caller: &dyn EntityBase, move_velo: Vector3<f64>) {
         let entity = &self.entity;
 
         entity.move_entity(caller, move_velo);
-        entity.tick_block_collisions(caller, server);
+        entity.tick_block_collisions(caller);
 
         let mut friction = 0.98;
         let on_ground = entity.on_ground.load(Ordering::SeqCst);
@@ -443,7 +438,7 @@ impl ItemEntity {
 }
 
 impl EntityBase for ItemEntity {
-    fn tick(&self, caller: &dyn EntityBase, server: &Server) {
+    fn tick(&self, caller: &dyn EntityBase, _server: &Server) {
         let entity = &self.entity;
         self.decrement_pickup_delay();
 
@@ -461,7 +456,7 @@ impl EntityBase for ItemEntity {
         };
 
         if tick_move {
-            self.move_and_apply_friction(caller, server, move_velo);
+            self.move_and_apply_friction(caller, move_velo);
         }
 
         if self.process_age_and_merge() {

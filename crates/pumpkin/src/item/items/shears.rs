@@ -12,7 +12,6 @@ use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::{Block, BlockDirection, BlockStateId};
-use pumpkin_util::GameMode;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::world::BlockFlags;
@@ -47,10 +46,6 @@ const fn get_wool_item_for_color(color: u8) -> &'static Item {
 }
 
 impl ItemBehaviour for ShearsItem {
-    fn can_mine(&self, player: &Player) -> bool {
-        player.gamemode.load() != GameMode::Creative
-    }
-
     fn use_on_block(
         &self,
         _item: &mut ItemStack,

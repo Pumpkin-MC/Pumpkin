@@ -3,7 +3,7 @@ use crate::entity::player::Player;
 use crate::server::Server;
 use crate::world::bossbar::{Bossbar, BossbarColor, BossbarDivisions};
 use pumpkin_util::text::TextComponent;
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 use std::sync::Arc;
 use thiserror::Error;
 use uuid::Uuid;
@@ -43,7 +43,7 @@ impl CustomBossbar {
 }
 
 pub struct CustomBossbars {
-    pub custom_bossbars: HashMap<String, CustomBossbar>,
+    pub custom_bossbars: FxHashMap<String, CustomBossbar>,
 }
 
 impl Default for CustomBossbars {
@@ -56,7 +56,7 @@ impl CustomBossbars {
     #[must_use]
     pub fn new() -> Self {
         Self {
-            custom_bossbars: HashMap::new(),
+            custom_bossbars: FxHashMap::default(),
         }
     }
 
@@ -363,7 +363,6 @@ impl CustomBossbars {
                         &bossbar.bossbar_data.uuid,
                         new_color,
                         bossbar.bossbar_data.division,
-                        bossbar.bossbar_data.flags,
                     );
                 }
             }
@@ -396,7 +395,6 @@ impl CustomBossbars {
                         &bossbar.bossbar_data.uuid,
                         bossbar.bossbar_data.color,
                         new_style,
-                        bossbar.bossbar_data.flags,
                     );
                 }
             }

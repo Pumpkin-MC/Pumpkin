@@ -8,7 +8,6 @@ use crate::chunk::io::{FileIO, LoadedData};
 use crate::level::Level;
 use pumpkin_config::lighting::LightingEngineConfig;
 use pumpkin_data::chunk::ChunkStatus;
-use pumpkin_data::chunk_gen_settings::GenerationSettings;
 use std::collections::hash_map::Entry;
 use std::sync::Arc;
 use std::sync::atomic::Ordering::Relaxed;
@@ -55,19 +54,11 @@ fn needs_relighting(chunk: &crate::chunk::ChunkData, config: LightingEngineConfi
     !has_complex_light
 }
 
-async fn load_proto_chunk(chunk: &Arc<crate::chunk::ChunkData>, level: &Level) -> ProtoChunk {
-    let (tx, rx) = tokio::sync::oneshot::channel();
-    let world_gen = level.world_gen.load();
-    let chunk_clone = chunk.clone();
-    rayon::spawn(move || {
-        let p = ProtoChunk::from_chunk_data(&chunk_clone, &world_gen);
-        let _ = tx.send(p);
-    });
-    rx.await
-        .unwrap_or_else(|_| ProtoChunk::from_chunk_data(chunk, &level.world_gen.load()))
+fn load_proto_chunk(chunk: &crate::chunk::ChunkData, level: &Level) -> ProtoChunk {
+    ProtoChunk::from_chunk_data(chunk, &level.world_gen.load())
 }
 
-async fn process_loaded_chunk(chunk: Arc<crate::chunk::ChunkData>, level: &Level) -> Chunk {
+fn process_loaded_chunk(chunk: Arc<crate::chunk::ChunkData>, level: &Level) -> Chunk {
     let pos = ChunkPos::new(chunk.x, chunk.z);
     if chunk.status == ChunkStatus::Full {
         let needs_relight = needs_relighting(&chunk, level.lighting_config);
@@ -76,7 +67,7 @@ async fn process_loaded_chunk(chunk: Arc<crate::chunk::ChunkData>, level: &Level
                 "Chunk {pos:?} has uniform lighting, downgrading to Features stage for relighting"
             );
 
-            let mut proto = load_proto_chunk(&chunk, level).await;
+            let mut proto = load_proto_chunk(&chunk, level);
 
             // Clear all lighting data
             let section_count = proto.light.sky_light.len();
@@ -92,7 +83,7 @@ async fn process_loaded_chunk(chunk: Arc<crate::chunk::ChunkData>, level: &Level
             Chunk::Level(chunk)
         }
     } else {
-        let proto = load_proto_chunk(&chunk, level).await;
+        let proto = load_proto_chunk(&chunk, level);
         Chunk::Proto(Box::new(proto))
     }
 }
@@ -150,7 +141,7 @@ pub async fn io_read_work(
             match data {
                 Loaded(chunk) => {
                     let pos = ChunkPos::new(chunk.x, chunk.z);
-                    let processed = process_loaded_chunk(chunk, &level).await;
+                    let processed = process_loaded_chunk(chunk, &level);
                     if send.send((pos, RecvChunk::IO(processed))).is_err() {
                         break;
                     }
@@ -212,31 +203,31 @@ pub async fn io_write_work(
             error!("Failed to save chunks: {:?}", e);
         }
 
-        for i in positions {
+        {
             let mut data = lock
                 .0
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
-            match data.entry(i) {
-                Entry::Occupied(mut entry) => {
-                    let rc = entry.get_mut();
-                    if *rc == 1 {
-                        entry.remove();
-                        drop(data);
-                        lock.1.notify_waiters();
-                    } else {
-                        *rc -= 1;
+            for i in positions {
+                match data.entry(i) {
+                    Entry::Occupied(mut entry) => {
+                        let rc = entry.get_mut();
+                        if *rc <= 1 {
+                            entry.remove();
+                        } else {
+                            *rc -= 1;
+                        }
                     }
-                }
-                Entry::Vacant(_) => {
-                    warn!(
-                        "io_write: attempted to release missing lock entry for {:?}",
-                        i
-                    );
-                    // continue without panicking to avoid crashing on shutdown races
+                    Entry::Vacant(_) => {
+                        warn!(
+                            "io_write: attempted to release missing lock entry for {:?}",
+                            i
+                        );
+                    }
                 }
             }
         }
+        lock.1.notify_waiters();
     }
 }
 
@@ -245,7 +236,6 @@ pub fn run_generation(
     mut cache: Cache,
     stage: StagedChunkEnum,
     level: &Level,
-    _settings: &GenerationSettings,
 ) -> RecvChunk {
     let portal = level.world_portal.load_full();
     let Some(portal_ref) = portal.as_deref() else {

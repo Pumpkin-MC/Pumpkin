@@ -30,13 +30,12 @@ impl CommandBlock {
     ) -> Option<(BlockPos, CommandBlockLikeProperties)> {
         let target_pos = pos.offset(dir.to_block_direction().to_offset());
         let (block, state_id) = world.get_block_and_state_id(&target_pos);
-
-        let allowed_blocks = [
-            Block::COMMAND_BLOCK.name,
-            Block::CHAIN_COMMAND_BLOCK.name,
-            Block::REPEATING_COMMAND_BLOCK.name,
-        ];
-        if !allowed_blocks.contains(&block.name) {
+        if !matches!(
+            block.id,
+            BlockId::COMMAND_BLOCK
+                | BlockId::CHAIN_COMMAND_BLOCK
+                | BlockId::REPEATING_COMMAND_BLOCK
+        ) {
             return None;
         }
 

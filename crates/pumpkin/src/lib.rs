@@ -565,26 +565,25 @@ impl PumpkinServer {
                                      java_client.start_outgoing_packet_task();
 
                                      if let Some((player, world)) = server_clone
-                                     .add_player(Arc::new(ClientPlatform::Java(java_client)), profile, Some(config))
-                                          .await
-                                {
+                                         .add_player(Arc::new(ClientPlatform::Java(java_client)), profile, Some(config))
+                                 {
 
-                                    if let ClientPlatform::Java(client) = player.client.as_ref() {
-                                        client.set_player(player.clone());
-                                    }
-                                    world
-                                        .spawn_java_player(&server_clone.basic_config, &player, &server_clone)
-                                        .await;
+                                     if let ClientPlatform::Java(client) = player.client.as_ref() {
+                                         client.set_player(player.clone());
+                                     }
+                                     world
+                                         .spawn_java_player(&server_clone.basic_config, &player, &server_clone)
+                                         .await;
 
-                                    if let ClientPlatform::Java(client) = player.client.as_ref() {
-                                        client.progress_player_packets(&player, &server_clone).await;
+                                     if let ClientPlatform::Java(client) = player.client.as_ref() {
+                                         client.progress_player_packets(&player, &server_clone).await;
 
-                                        // Close when done
-                                        client.close();
-                                        client.await_tasks().await;
-                                    }
-                                    player.remove().await;
-                                    server_clone.remove_player(&player).await;
+                                         // Close when done
+                                         client.close();
+                                         client.await_tasks().await;
+                                     }
+                                     player.remove().await;
+                                     server_clone.remove_player(&player);
                                     if let Err(e) = server_clone
                                         .player_data_storage
                                         .handle_player_leave(&player)
@@ -672,20 +671,17 @@ impl PumpkinServer {
                     client.await_tasks().await;
                 }
                 PacketHandlerResult::ReadyToPlay(profile, config) => {
-                    if let Some((player, _world)) = server
-                        .add_player(
-                            Arc::new(ClientPlatform::Bedrock(client.clone())),
-                            profile,
-                            Some(config),
-                        )
-                        .await
-                    {
+                    if let Some((player, _world)) = server.add_player(
+                        Arc::new(ClientPlatform::Bedrock(client.clone())),
+                        profile,
+                        Some(config),
+                    ) {
                         client.set_player(player.clone());
-                        client.progress_player_packets(&player, &server).await;
+                        client.progress_player_packets(&player).await;
                         client.close().await;
                         client.await_tasks().await;
                         player.remove().await;
-                        server.remove_player(&player).await;
+                        server.remove_player(&player);
                         if let Err(error) = server.player_data_storage.handle_player_leave(&player)
                         {
                             error!("Failed to save player data on disconnect: {error}");

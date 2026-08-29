@@ -528,8 +528,7 @@ impl HostEntity for PluginHostState {
             .clone();
         if let Some(v) = current_vehicle {
             v.get_entity()
-                .remove_passenger(entity_base.get_entity().entity_id)
-                .await;
+                .remove_passenger(entity_base.get_entity().entity_id);
         }
 
         if let Some(vehicle_res) = vehicle {
@@ -584,8 +583,7 @@ impl HostEntity for PluginHostState {
         let passenger = entity_from_resource(self, &passenger)?;
         entity
             .get_entity()
-            .remove_passenger(passenger.get_entity().entity_id)
-            .await;
+            .remove_passenger(passenger.get_entity().entity_id);
         Ok(())
     }
 
@@ -600,7 +598,7 @@ impl HostEntity for PluginHostState {
             .map(|p| p.get_entity().entity_id)
             .collect();
         for id in ids {
-            entity.get_entity().remove_passenger(id).await;
+            entity.get_entity().remove_passenger(id);
         }
         Ok(())
     }

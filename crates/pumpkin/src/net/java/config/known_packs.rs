@@ -2,11 +2,7 @@
 use super::*;
 
 impl JavaClient {
-    pub async fn handle_known_packs(
-        &self,
-        _config_acknowledged: SKnownPacks<'_>,
-        server: &Server,
-    ) -> Option<PacketHandlerResult> {
+    pub async fn handle_known_packs(&self, server: &Server) -> Option<PacketHandlerResult> {
         debug!("Handling known packs");
         // let mut tags_to_send = Vec::new();
         let version = self.version.load();

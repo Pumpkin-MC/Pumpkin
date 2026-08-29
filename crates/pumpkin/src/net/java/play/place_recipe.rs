@@ -3,11 +3,11 @@ use super::*;
 
 impl JavaClient {
     #[allow(clippy::too_many_lines)]
-    pub async fn handle_place_recipe(
+    pub fn handle_place_recipe(
         &self,
         server: &Arc<Server>,
         player: &Arc<Player>,
-        packet: SPlaceRecipe,
+        packet: &SPlaceRecipe,
     ) {
         use crate::net::java::recipe_helper::{
             GenericIngredient, compute_biggest_craftable, take_n_ingredient,
@@ -25,7 +25,9 @@ impl JavaClient {
             format!("display_{}", packet.recipe_display_id.0),
             use_max,
         );
-        server.plugin_manager.fire(server, &mut click_event).await;
+        server
+            .plugin_manager
+            .fire_blocking(server, &mut click_event);
         if click_event.cancelled {
             return;
         }
