@@ -1821,8 +1821,7 @@ impl LivingEntity {
     }
 
     /// Tries to use a totem of undying from the entity's hands. If successful, applies the totem effects and returns true.
-    #[allow(dead_code)]
-    async fn try_use_death_protector(&self, caller: &dyn EntityBase) -> bool {
+    fn try_use_death_protector(&self, caller: &dyn EntityBase) -> bool {
         for hand in Hand::all() {
             let mut stack = self.get_stack_in_hand(caller, hand);
 
@@ -1835,8 +1834,7 @@ impl LivingEntity {
                 if let Some(server) = self.entity.world.load().server.upgrade() {
                     server
                         .plugin_manager
-                        .fire(&server, &mut resurrect_event)
-                        .await;
+                        .fire_blocking(&server, &mut resurrect_event);
                 }
                 if resurrect_event.cancelled {
                     return false;
@@ -2587,7 +2585,9 @@ impl LivingEntity {
             }
         }
 
-        if clamped_health <= 0.0 {
+        if clamped_health <= 0.0
+            && (bypasses_cooldown_protection || !self.try_use_death_protector(caller))
+        {
             let mut death_event =
                 crate::plugin::api::events::entity::entity_death::EntityDeathEvent::new(
                     self.entity.entity_id,
@@ -2598,11 +2598,29 @@ impl LivingEntity {
                     .plugin_manager
                     .fire_blocking(&server, &mut death_event);
             }
-            world.send_entity_status(
-                &self.entity,
-                pumpkin_data::entity::EntityStatus::Death,
-                None,
-            );
+
+            if let Some(player) = caller.get_player()
+                && let Some(player) = world.get_player_by_uuid(player.gameprofile.id)
+            {
+                let mut player_death_event =
+                    crate::plugin::api::events::entity::entity_death::PlayerDeathEvent::new(
+                        player,
+                        TextComponent::text("Died"),
+                        0,
+                    );
+                if let Some(server) = world.server.upgrade() {
+                    server
+                        .plugin_manager
+                        .fire_blocking(&server, &mut player_death_event);
+                }
+            }
+
+            self.on_death(damage_type, source, cause);
+        }
+
+        // Armor durability is based on incoming raw damage, not post-absorption remaining.
+        if damage_amount > 0.0 && !bypasses_armor_durability(&damage_type) {
+            self.damage_armor_items(caller, damage_amount);
         }
 
         true

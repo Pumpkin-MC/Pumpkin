@@ -4150,9 +4150,11 @@ impl World {
                 .await;
         }
 
-        // Send respawn packet with target dimension (using send_packet_now to ensure proper order)
-        player
-            .send_client_packet(&CRespawn::new(
+        // Flush respawn before the high-priority spawn-position packet below.
+        // Otherwise the spawn position can overtake respawn and leave Java clients
+        // stuck on the loading-terrain screen.
+        if let crate::net::ClientPlatform::Java(java_client) = player.client.as_ref() {
+            let packet = CRespawn::new(
                 PlayerSpawnData::new(
                     target_world.dimension.clone(),
                     biome::hash_seed(target_world.level.seed.0),
@@ -4165,8 +4167,11 @@ impl World {
                     target_world.sea_level.into(),
                 ),
                 data_kept,
-            ))
-            .await;
+            );
+            if let Ok(data) = java_client.serialize_packet(&packet) {
+                java_client.send_packet_now(data).await;
+            }
+        }
 
         // Inform the client of the default spawn position so the client doesn't
         // fall back to (0, 2, 0) while the world reloads (fixes rubberbanding).
