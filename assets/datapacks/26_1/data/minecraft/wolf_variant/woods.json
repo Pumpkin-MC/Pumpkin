@@ -1,0 +1,12 @@
+{
+  "assets": {
+    "wild": "minecraft:entity/wolf/wolf_woods",
+    "tame": "minecraft:entity/wolf/wolf_woods_tame",
+    "angry": "minecraft:entity/wolf/wolf_woods_angry"
+  },
+  "baby_assets": {
+    "wild": "minecraft:entity/wolf/wolf_woods_baby",
+    "tame": "minecraft:entity/wolf/wolf_woods_tame_baby",
+    "angry": "minecraft:entity/wolf/wolf_woods_angry_baby"
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "gives": {
+    "count": 2,
+    "id": "minecraft:moss_block"
+  },
+  "max_uses": 5.0,
+  "reputation_discount": 0.05,
+  "wants": {
+    "id": "minecraft:emerald"
+  }
+}

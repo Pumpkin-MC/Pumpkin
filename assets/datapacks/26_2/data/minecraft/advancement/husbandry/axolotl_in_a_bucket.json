@@ -1,0 +1,30 @@
+{
+  "parent": "minecraft:husbandry/tactical_fishing",
+  "criteria": {
+    "axolotl_bucket": {
+      "conditions": {
+        "item": {
+          "items": "minecraft:axolotl_bucket"
+        }
+      },
+      "trigger": "minecraft:filled_bucket"
+    }
+  },
+  "display": {
+    "description": {
+      "translate": "advancements.husbandry.axolotl_in_a_bucket.description"
+    },
+    "icon": {
+      "id": "minecraft:axolotl_bucket"
+    },
+    "title": {
+      "translate": "advancements.husbandry.axolotl_in_a_bucket.title"
+    }
+  },
+  "requirements": [
+    [
+      "axolotl_bucket"
+    ]
+  ],
+  "sends_telemetry_event": true
+}

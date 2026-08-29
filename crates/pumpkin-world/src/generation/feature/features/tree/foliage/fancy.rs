@@ -1,0 +1,62 @@
+use pumpkin_data::BlockState;
+use pumpkin_util::math::position::BlockPos;
+use pumpkin_util::math::square_f32;
+use pumpkin_util::random::RandomGenerator;
+
+use super::{FoliagePlacer, LeaveValidator};
+use crate::generation::feature::features::tree::TreeNode;
+use crate::generation::proto_chunk::GenerationCache;
+
+pub struct LargeOakFoliagePlacer {
+    pub height: i32,
+}
+
+impl LargeOakFoliagePlacer {
+    #[expect(clippy::too_many_arguments)]
+    pub fn generate<T: GenerationCache>(
+        &self,
+        chunk: &mut T,
+        random: &mut RandomGenerator,
+        node: &TreeNode,
+        foliage_height: i32,
+        radius: i32,
+        offset: i32,
+        foliage_provider: &BlockState,
+    ) -> Vec<BlockPos> {
+        let mut foliage_positions = Vec::new();
+        for y in (offset - foliage_height..=offset).rev() {
+            let radius = radius + i32::from(!(y == offset || y == offset - foliage_height));
+            FoliagePlacer::generate_square(
+                &mut foliage_positions,
+                self,
+                chunk,
+                random,
+                node.center,
+                radius,
+                y,
+                node.giant_trunk,
+                foliage_provider,
+            );
+        }
+        foliage_positions
+    }
+
+    #[must_use]
+    pub const fn get_random_height(&self) -> i32 {
+        self.height
+    }
+}
+
+impl LeaveValidator for LargeOakFoliagePlacer {
+    fn is_invalid_for_leaves(
+        &self,
+        _random: &mut pumpkin_util::random::RandomGenerator,
+        dx: i32,
+        _y: i32,
+        dz: i32,
+        radius: i32,
+        _giant_trunk: bool,
+    ) -> bool {
+        square_f32(dx as f32 + 0.5) + square_f32(dz as f32 + 0.5) > (radius * radius) as f32
+    }
+}

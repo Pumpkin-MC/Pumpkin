@@ -1,0 +1,11 @@
+{
+  "gives": {
+    "id": "minecraft:iron_helmet"
+  },
+  "max_uses": 12.0,
+  "reputation_discount": 0.2,
+  "wants": {
+    "count": 5.0,
+    "id": "minecraft:emerald"
+  }
+}

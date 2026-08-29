@@ -1,0 +1,13 @@
+{
+  "asset_id": "minecraft:donkey_kong",
+  "author": {
+    "color": "gray",
+    "translate": "painting.minecraft.donkey_kong.author"
+  },
+  "height": 3,
+  "title": {
+    "color": "yellow",
+    "translate": "painting.minecraft.donkey_kong.title"
+  },
+  "width": 4
+}

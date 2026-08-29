@@ -1,0 +1,42 @@
+{
+  "parent": "minecraft:adventure/trade",
+  "criteria": {
+    "trade_at_world_height": {
+      "conditions": {
+        "player": [
+          {
+            "condition": "minecraft:entity_properties",
+            "entity": "this",
+            "predicate": {
+              "minecraft:location": {
+                "position": {
+                  "y": {
+                    "min": 319.0
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "trigger": "minecraft:villager_trade"
+    }
+  },
+  "display": {
+    "description": {
+      "translate": "advancements.adventure.trade_at_world_height.description"
+    },
+    "icon": {
+      "id": "minecraft:emerald"
+    },
+    "title": {
+      "translate": "advancements.adventure.trade_at_world_height.title"
+    }
+  },
+  "requirements": [
+    [
+      "trade_at_world_height"
+    ]
+  ],
+  "sends_telemetry_event": true
+}

@@ -1,0 +1,8 @@
+{
+  "template_item": "minecraft:silence_armor_trim_smithing_template",
+  "description": {
+    "translate": "trim_pattern.minecraft.silence"
+  },
+  "asset_id": "minecraft:silence",
+  "decal": 0
+}

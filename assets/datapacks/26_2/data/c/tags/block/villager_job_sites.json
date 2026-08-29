@@ -1,0 +1,20 @@
+{
+  "values": [
+    "barrel",
+    "blast_furnace",
+    "brewing_stand",
+    "cartography_table",
+    "cauldron",
+    "composter",
+    "fletching_table",
+    "grindstone",
+    "lectern",
+    "loom",
+    "smithing_table",
+    "smoker",
+    "stonecutter",
+    "lava_cauldron",
+    "water_cauldron",
+    "powder_snow_cauldron"
+  ]
+}

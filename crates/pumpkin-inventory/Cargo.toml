@@ -1,0 +1,31 @@
+[package]
+name = "pumpkin-inventory"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+pumpkin-protocol.workspace = true
+pumpkin-data = { workspace = true, features = [
+    "item",
+    "screen",
+    "data_component",
+    "recipes",
+    "tag",
+    "fuels",
+    "enchantment",
+    "potion",
+    "statistic",
+] }
+
+pumpkin-world.workspace = true
+pumpkin-util.workspace = true
+
+rand.workspace = true
+tracing.workspace = true
+thiserror.workspace = true
+rustc-hash.workspace = true
+
+[lints]
+workspace = true

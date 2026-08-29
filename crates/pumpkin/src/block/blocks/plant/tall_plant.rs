@@ -1,0 +1,126 @@
+use crate::block::{BrokenArgs, PlacedArgs};
+use pumpkin_data::Block;
+use pumpkin_data::BlockDirection;
+use pumpkin_data::BlockId;
+use pumpkin_data::BlockStateId;
+use pumpkin_data::block_properties::{
+    BlockProperties, DoubleBlockHalf, TallSeagrassLikeProperties,
+};
+use pumpkin_world::world::BlockFlags;
+
+use crate::block::{
+    BlockBehaviour, BlockMetadata, CanPlaceAtArgs, GetStateForNeighborUpdateArgs,
+    blocks::plant::PlantBlockBase,
+};
+
+pub struct TallPlantBlock;
+
+impl BlockMetadata for TallPlantBlock {
+    fn ids() -> Box<[BlockId]> {
+        [
+            BlockId::TALL_GRASS,
+            BlockId::LARGE_FERN,
+            BlockId::PITCHER_PLANT,
+            // TallFlowerBlocks
+            BlockId::SUNFLOWER,
+            BlockId::LILAC,
+            BlockId::PEONY,
+            BlockId::ROSE_BUSH,
+        ]
+        .into()
+    }
+}
+
+impl BlockBehaviour for TallPlantBlock {
+    fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
+        let up_pos = args.position.up();
+
+        let upper_state = args.block_accessor.get_block_state(&up_pos);
+        let Some(world) = args.world else {
+            return <Self as PlantBlockBase>::can_place_at(
+                self,
+                args.block_accessor,
+                args.position,
+            ) && upper_state.is_air();
+        };
+
+        if up_pos.0.y > world.get_top_y() {
+            return false;
+        }
+        <Self as PlantBlockBase>::can_place_at(self, args.block_accessor, args.position)
+            && upper_state.is_air()
+    }
+
+    fn get_state_for_neighbor_update(
+        &self,
+        args: GetStateForNeighborUpdateArgs<'_>,
+    ) -> BlockStateId {
+        let tall_plant_props = TallSeagrassLikeProperties::from_state_id(args.state_id, args.block);
+        let (support_block_pos, other_block_pos) = match tall_plant_props.half {
+            DoubleBlockHalf::Upper => (args.position.down_height(2), args.position.down()),
+            DoubleBlockHalf::Lower => (args.position.down(), args.position.up()),
+        };
+        if !<Self as PlantBlockBase>::can_place_at(self, args.world, &support_block_pos.up()) {
+            return Block::AIR.default_state.id;
+        }
+
+        let (other_block, other_state_id) = args.world.get_block_and_state_id(&other_block_pos);
+        if Self::ids().contains(&other_block.id) {
+            let other_props =
+                TallSeagrassLikeProperties::from_state_id(other_state_id, other_block);
+            let opposite_half = match tall_plant_props.half {
+                DoubleBlockHalf::Upper => DoubleBlockHalf::Lower,
+                DoubleBlockHalf::Lower => DoubleBlockHalf::Upper,
+            };
+            if other_props.half == opposite_half {
+                return args.state_id;
+            }
+        }
+        Block::AIR.default_state.id
+    }
+    fn placed(&self, args: PlacedArgs<'_>) {
+        {
+            let mut tall_plant_props =
+                TallSeagrassLikeProperties::from_state_id(args.state_id, args.block);
+            tall_plant_props.half = DoubleBlockHalf::Upper;
+            args.world.set_block_state(
+                &args.position.offset(BlockDirection::Up.to_offset()),
+                tall_plant_props.to_state_id(args.block),
+                BlockFlags::NOTIFY_ALL | BlockFlags::SKIP_BLOCK_ADDED_CALLBACK,
+            );
+        }
+    }
+
+    fn broken(&self, args: BrokenArgs<'_>) {
+        {
+            // When one half of a tall plant is broken, break the other half too
+            let tall_plant_props =
+                TallSeagrassLikeProperties::from_state_id(args.state.id, args.block);
+            let other_block_pos = match tall_plant_props.half {
+                DoubleBlockHalf::Upper => args.position.down(),
+                DoubleBlockHalf::Lower => args.position.up(),
+            };
+            let (other_block, other_state_id) = args.world.get_block_and_state_id(&other_block_pos);
+            if Self::ids().contains(&other_block.id) {
+                let other_props =
+                    TallSeagrassLikeProperties::from_state_id(other_state_id, other_block);
+                let opposite_half = match tall_plant_props.half {
+                    DoubleBlockHalf::Upper => DoubleBlockHalf::Lower,
+                    DoubleBlockHalf::Lower => DoubleBlockHalf::Upper,
+                };
+                if other_props.half == opposite_half {
+                    // Break the other half, using SKIP_DROPS to prevent double drops
+                    args.world.break_block(
+                        &other_block_pos,
+                        None,
+                        BlockFlags::SKIP_DROPS
+                            | BlockFlags::SKIP_BLOCK_ADDED_CALLBACK
+                            | BlockFlags::NOTIFY_ALL,
+                    );
+                }
+            }
+        }
+    }
+}
+
+impl PlantBlockBase for TallPlantBlock {}

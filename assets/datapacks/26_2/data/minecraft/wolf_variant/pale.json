@@ -1,0 +1,17 @@
+{
+  "assets": {
+    "angry": "minecraft:entity/wolf/wolf_angry",
+    "tame": "minecraft:entity/wolf/wolf_tame",
+    "wild": "minecraft:entity/wolf/wolf"
+  },
+  "baby_assets": {
+    "angry": "minecraft:entity/wolf/wolf_angry_baby",
+    "tame": "minecraft:entity/wolf/wolf_tame_baby",
+    "wild": "minecraft:entity/wolf/wolf_baby"
+  },
+  "spawn_conditions": [
+    {
+      "priority": 0
+    }
+  ]
+}

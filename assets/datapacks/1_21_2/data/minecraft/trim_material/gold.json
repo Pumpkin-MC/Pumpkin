@@ -1,0 +1,12 @@
+{
+  "item_model_index": 0.6,
+  "override_armor_materials": {
+    "minecraft:gold": "gold_darker"
+  },
+  "description": {
+    "translate": "trim_material.minecraft.gold",
+    "color": "#DEB12D"
+  },
+  "asset_name": "gold",
+  "ingredient": "minecraft:gold_ingot"
+}
