@@ -3187,7 +3187,7 @@ fn push_unique_attribute(touched: &mut Vec<Attributes>, attr: &Attributes) {
     }
 }
 
-fn attribute_modifier_slot_matches(
+const fn attribute_modifier_slot_matches(
     modifier_slot: &AttributeModifierSlot,
     equipment_slot: &EquipmentSlot,
 ) -> bool {
