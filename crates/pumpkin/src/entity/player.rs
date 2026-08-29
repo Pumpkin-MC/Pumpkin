@@ -522,8 +522,6 @@ pub struct Player {
 use base64::prelude::*;
 use pumpkin_protocol::Property;
 use serde::Deserialize;
-use std::io::Read;
-
 // Bit masks for the Java skin pixels that Bedrock requires to be opaque.
 // Adapted from Geyser's SkinProvider under the MIT License.
 const SKIN_OPAQUE_MASK: &str = "AP//AAAAAAAA//8AAAAAAAD//wAAAAAAAP//AAAAAAAA//8AAAAAAAD//wAAAAAAAP//AAAAAAAA//8AAAAAAP////8AAAAA/////wAAAAD/////AAAAAP////8AAAAA/////wAAAAD/////AAAAAP////8AAAAA/////wAAAADwD/D/D/8AAPAP8P8P/wAA8A/w/w//AADwD/D/D/8AAP///////w8A////////DwD///////8PAP///////w8A////////DwD///////8PAP///////w8A////////DwD///////8PAP///////w8A////////DwD///////8PAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADwD/APAAAAAPAP8A8AAAAA8A/wDwAAAADwD/APAAAAAP////8AAAAA/////wAAAAD/////AAAAAP////8AAAAA/////wAAAAD/////AAAAAP////8AAAAA/////wAAAAD/////AAAAAP////8AAAAA/////wAAAAD/////AAA=";
@@ -569,10 +567,20 @@ impl Player {
             .and_then(|m| m.model.as_deref())
             .is_some_and(|model| model == "slim");
 
-        let resp = ureq::get(&url).call().ok()?;
-        let mut buf = Vec::new();
-        resp.into_body().into_reader().read_to_end(&mut buf).ok()?;
-        let img = image::load_from_memory(&buf).ok()?;
+        let bytes = if let Ok(handle) = tokio::runtime::Handle::try_current() {
+            tokio::task::block_in_place(|| {
+                handle.block_on(async {
+                    let client = reqwest::Client::new();
+                    client.get(&url).send().await.ok()?.bytes().await.ok()
+                })
+            })?
+        } else {
+            tokio::runtime::Runtime::new().ok()?.block_on(async {
+                let client = reqwest::Client::new();
+                client.get(&url).send().await.ok()?.bytes().await.ok()
+            })?
+        };
+        let img = image::load_from_memory(&bytes).ok()?;
 
         let width = img.width();
         let height = img.height();

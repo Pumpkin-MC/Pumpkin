@@ -43,7 +43,7 @@ use pumpkin_world::world_info::{LevelData, WorldInfoError, WorldInfoReader, Worl
 use rand::seq::{IndexedRandom, SliceRandom};
 use rayon::prelude::*;
 use rsa::RsaPublicKey;
-use std::collections::HashSet;
+use rustc_hash::FxHashSet;
 use std::fs;
 use std::net::IpAddr;
 use std::sync::Arc;
@@ -330,10 +330,12 @@ impl Server {
                     .java
                     .authentication
                     .clone();
-                let keys = fetch_mojang_public_keys(&auth_config).unwrap_or_else(|e| {
-                    error!("Failed to fetch Mojang keys: {e}");
-                    Vec::new()
-                });
+                let keys = fetch_mojang_public_keys(&auth_config)
+                    .await
+                    .unwrap_or_else(|e| {
+                        error!("Failed to fetch Mojang keys: {e}");
+                        Vec::new()
+                    });
                 server_clone.mojang_public_keys.store(Arc::new(keys));
             });
         }
@@ -358,7 +360,9 @@ impl Server {
                     auth.url.as_deref(),
                     auth.connect_timeout,
                     auth.read_timeout,
-                ) {
+                )
+                .await
+                {
                     Ok(keys) => keys,
                     Err(error) => {
                         error!("Failed to fetch Bedrock OIDC keys: {error}");
@@ -1241,7 +1245,7 @@ impl Server {
                     None
                 }
             })
-            .collect::<HashSet<_>>();
+            .collect::<FxHashSet<_>>();
         let type_excluded = target_selector
             .conditions
             .iter()
@@ -1252,7 +1256,7 @@ impl Server {
                     None
                 }
             })
-            .collect::<HashSet<_>>();
+            .collect::<FxHashSet<_>>();
 
         players.retain(|_| {
             (type_excluded.is_empty() || !type_excluded.contains(player_type))
@@ -1352,7 +1356,7 @@ impl Server {
                     None
                 }
             })
-            .collect::<HashSet<_>>();
+            .collect::<FxHashSet<_>>();
         let type_excluded = target_selector
             .conditions
             .iter()
@@ -1363,7 +1367,7 @@ impl Server {
                     None
                 }
             })
-            .collect::<HashSet<_>>();
+            .collect::<FxHashSet<_>>();
         entities.retain(|entity| {
             // Filter by entity type
             (type_excluded.is_empty() || !type_excluded.contains(&entity.get_entity().entity_type))

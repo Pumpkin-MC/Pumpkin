@@ -12,6 +12,7 @@ use pumpkin_protocol::codec::var_ulong::VarULong;
 use pumpkin_util::GameMode;
 use pumpkin_util::Hand;
 use pumpkin_util::math::position::BlockPos;
+use rustc_hash::FxHashMap;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use std::sync::atomic::{
@@ -94,7 +95,7 @@ pub struct LivingEntity {
     pub entity_equipment: Arc<std::sync::Mutex<EntityEquipment>>,
     pub equipment_drop_chances: Arc<std::sync::Mutex<HashMap<EquipmentSlot, f32>>>,
     pub movement_input: AtomicCell<Vector3<f64>>,
-    pub equipment_slots: Arc<HashMap<usize, EquipmentSlot>>,
+    pub equipment_slots: Arc<FxHashMap<usize, EquipmentSlot>>,
 
     pub jumping: AtomicBool,
 

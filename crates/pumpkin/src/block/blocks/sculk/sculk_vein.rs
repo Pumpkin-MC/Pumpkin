@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use rustc_hash::FxHashSet;
 
 use crate::block::{
     BlockBehaviour, BlockIsReplacing, BlockMetadata, CanPlaceAtArgs, CanUpdateAtArgs,
@@ -154,7 +154,7 @@ fn get_attach_direction(
             replacing_block,
         ))
     } else {
-        HashSet::new()
+        FxHashSet::default()
     };
 
     if let Some(player) = player_wrapper {
@@ -183,8 +183,8 @@ const fn is_solid_face(block: &Block) -> bool {
     block.default_state.is_full_cube()
 }
 
-fn active_directions(props: GlowLichenLikeProperties) -> HashSet<BlockDirection> {
-    let mut set = HashSet::new();
+fn active_directions(props: GlowLichenLikeProperties) -> FxHashSet<BlockDirection> {
+    let mut set = FxHashSet::default();
     if props.down {
         set.insert(BlockDirection::Down);
     }

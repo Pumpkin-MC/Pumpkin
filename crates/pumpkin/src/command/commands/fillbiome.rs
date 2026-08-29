@@ -13,7 +13,7 @@ use pumpkin_util::PermissionLvl;
 use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::permission::{Permission, PermissionDefault, PermissionRegistry};
 use pumpkin_util::text::TextComponent;
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 
 const DESCRIPTION: &str = "Changes biomes of an area.";
 const PERMISSION: &str = "minecraft:command.fillbiome";
@@ -72,8 +72,8 @@ impl CommandExecutor for FillBiomeExecutor {
             None
         };
 
-        let mut chunk_modifications: HashMap<Vector2<i32>, Vec<(usize, usize, usize)>> =
-            HashMap::new();
+        let mut chunk_modifications: FxHashMap<Vector2<i32>, Vec<(usize, usize, usize)>> =
+            FxHashMap::default();
         for y in biome_min_y..=biome_max_y {
             for z in biome_min_z..=biome_max_z {
                 for x in biome_min_x..=biome_max_x {

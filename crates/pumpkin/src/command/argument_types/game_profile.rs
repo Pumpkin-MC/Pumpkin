@@ -10,7 +10,7 @@ use crate::command::errors::command_syntax_error::CommandSyntaxError;
 use crate::command::errors::error_types::CommandErrorType;
 use crate::command::string_reader::StringReader;
 use crate::command::suggestion::suggestions::{Suggestions, SuggestionsBuilder};
-use crate::net::authentication::lookup_profile_by_name;
+use crate::net::authentication::lookup_profile_by_name_blocking;
 use crate::net::{GameProfile, offline_uuid};
 use crate::server::Server;
 use arc_swap::ArcSwap;
@@ -72,7 +72,7 @@ impl GameProfileResult {
                 }
 
                 if server.advanced_config.networking.java.online_mode {
-                    return match lookup_profile_by_name(
+                    return match lookup_profile_by_name_blocking(
                         name,
                         &server.advanced_config.networking.java.authentication,
                     ) {
