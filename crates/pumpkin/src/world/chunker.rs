@@ -1,3 +1,8 @@
+//! Player view cylinder: tickets, chunk send, per-player entity leave, watcher IO.
+//!
+//! Vanilla `ChunkMap.move`. Leave pairing is `despawn_entities_in_chunks_for_player` until
+//! `World.entity_tracker` (`TrackedEntity.updatePlayer`) is wired.
+
 use pumpkin_util::math::vector2::Vector2;
 use std::{num::NonZero, sync::Arc};
 
@@ -28,8 +33,7 @@ pub fn get_view_distance(player: &Player) -> NonZero<u8> {
         .clamp(fallback, max_view_distance)
 }
 
-// Checks if the target chunk is within the view distance
-// of the center chunk. Uses Chebyshev distance.
+/// Chebyshev distance in chunks.
 #[must_use]
 #[inline]
 pub fn is_within_view_distance(
@@ -81,10 +85,16 @@ pub fn update_position(player: &Arc<Player>) {
     // `change_world_chunks` then `set_world` run with no await between them, so `player.world()`
     // is already the destination when this runs after a portal teleport.
     let world = player.world();
-    // Before replacing this player's tickets on the unloading chunks below: that can let
-    // `GenerationSchedule` evict their raw block data before the tick loop persists any live
-    // BE in them. See `World::flush_block_entities`.
+
+    // Tickets below can let `GenerationSchedule` evict raw block data. Persist live BEs first.
     world.flush_block_entities(&unloading_chunks);
+
+    // Client drops these entities while it is still a watcher. Vanilla
+    // `ChunkMap.TrackedEntity.removePairing` when the *player* moves (the tick visibility
+    // sync only runs when the entity changes chunk). Covers every leaving chunk, including
+    // those another player still watches.
+    world.despawn_entities_in_chunks_for_player(player, &unloading_chunks);
+
     player.replace_chunk_tickets(
         &world.level,
         old_cylindrical.center,
@@ -105,14 +115,9 @@ pub fn update_position(player: &Arc<Player>) {
     }
     player.watched_section.store(new_cylindrical);
 
-    // Drop the entities of the leaving chunks on this client before unwatching them: past that
-    // point the player is no longer a chunk watcher, so no chunk-scoped broadcast can reach them.
-    // Covers every unloading chunk, not just those with zero watchers. Visibility is per player
-    // (`ChunkMap.TrackedEntity::removePairing`), so a chunk another player still watches must
-    // equally stop being rendered here.
-    world.despawn_entities_in_chunks_for_player(player, &unloading_chunks);
-
-    // Watcher IO is async. Tickets must land before `spawn_world_entity_chunks`.
+    // Watcher marks are async. Tickets already sit at `center`. Spawn after
+    // `mark_chunks_as_newly_watched` so `spawn_world_entity_chunks` sees a watcher.
+    // Unload via `queue_chunk_removal`: this is not the tick loop.
     if !loading_chunks.is_empty() || !unloading_chunks.is_empty() {
         let level = world.level.clone();
         let world_clone = world.clone();
