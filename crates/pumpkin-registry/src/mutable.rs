@@ -5,7 +5,7 @@ use crate::{
 };
 use arc_swap::ArcSwap;
 use pumpkin_util::identifier::Identifier;
-use rustc_hash::{FxBuildHasher, FxHashMap};
+use rustc_hash::FxHashMap;
 use std::{
     any::{TypeId, type_name},
     marker::PhantomData,
@@ -43,25 +43,36 @@ impl<T: Send + Sync + 'static> ReloadableRegistry<T> {
         Ok(())
     }
 
-    /// Atomically replaces all entries while preserving caller-provided order.
+    /// Atomically rebuilds this registry from its bootstrap providers, then
+    /// applies the supplied entries as an overlay.
     ///
-    /// If validation fails, the existing registry snapshot remains unchanged.
+    /// Duplicate identifiers are handled according to the registry's
+    /// [`RegistryConfig`]. If bootstrap population or overlay validation fails,
+    /// the existing registry snapshot remains unchanged.
     pub fn replace_entries<I>(&self, entries: I) -> Result<(), BootstrapError>
     where
         I: IntoIterator<Item = (Identifier, T)>,
     {
-        let entries: Vec<_> = entries.into_iter().collect();
-        let mut values = Vec::with_capacity(entries.len());
-        let mut mapping = FxHashMap::with_capacity_and_hasher(entries.len(), FxBuildHasher);
+        let (mut values, mut mapping) = BOOTSTRAP
+            .get()
+            .ok_or(BootstrapError::Uninitialized)
+            .and_then(|manager| manager.populate_with_config::<T>(&self.name, self.config))?;
 
         for (identifier, value) in entries {
-            let id = values.len();
-            if mapping.insert(identifier.clone(), id).is_some() {
-                return Err(BootstrapError::DuplicateEntry {
-                    registry: self.name.clone(),
-                    identifier,
-                });
+            if let Some(&id) = mapping.get(&identifier) {
+                if !self.config.allow_overwrites {
+                    return Err(BootstrapError::DuplicateEntry {
+                        registry: self.name.clone(),
+                        identifier,
+                    });
+                }
+
+                values[id] = value;
+                continue;
             }
+
+            let id = values.len();
+            mapping.insert(identifier, id);
             values.push(value);
         }
 
