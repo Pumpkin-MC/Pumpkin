@@ -12,7 +12,7 @@ pub mod coral_block;
 pub mod coral_fan;
 pub mod coral_plant;
 
-pub fn scan_for_water(world: &Arc<World>, pos: &BlockPos) -> bool {
+pub fn scan_for_water(world: &World, pos: &BlockPos) -> bool {
     for direction in BlockDirection::all() {
         let neighbor_pos = pos.offset(direction.to_offset());
         let block = world.get_fluid(&neighbor_pos);

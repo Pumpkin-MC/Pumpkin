@@ -21,6 +21,7 @@ use crate::block::blocks::chests::{ChestBlock, CopperChestBlock, TrappedChestBlo
 use crate::block::blocks::chiseled_bookshelf::ChiseledBookshelfBlock;
 use crate::block::blocks::command::CommandBlock;
 use crate::block::blocks::composter::ComposterBlock;
+use crate::block::blocks::concrete_powder::ConcretePowderBlock;
 use crate::block::blocks::conduit::ConduitBlock;
 use crate::block::blocks::coral::coral_block::CoralBlock;
 use crate::block::blocks::coral::coral_fan::CoralFanBlock;
@@ -378,6 +379,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(BubbleColumnBlock);
 
     manager.register(FallingBlock);
+    manager.register(ConcretePowderBlock);
 
     // Fire
     manager.register(SoulFireBlock);
