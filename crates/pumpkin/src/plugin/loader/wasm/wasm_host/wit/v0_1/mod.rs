@@ -84,6 +84,9 @@ impl pumpkin::plugin::damage_types::Host for PluginHostState {}
 impl pumpkin::plugin::screens::Host for PluginHostState {}
 impl pumpkin::plugin::statistics::Host for PluginHostState {}
 impl pumpkin::plugin::game_rules::Host for PluginHostState {}
+impl pumpkin::plugin::game_events::Host for PluginHostState {}
+impl pumpkin::plugin::potions::Host for PluginHostState {}
+impl pumpkin::plugin::entity_statuses::Host for PluginHostState {}
 
 pub fn add_to_linker(linker: &mut Linker<PluginHostState>) -> wasmtime::Result<()> {
     Plugin::add_to_linker::<_, HasSelf<_>>(linker, |state: &mut PluginHostState| state)?;

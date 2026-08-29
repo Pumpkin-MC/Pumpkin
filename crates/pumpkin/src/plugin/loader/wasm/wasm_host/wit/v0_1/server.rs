@@ -304,6 +304,34 @@ impl pumpkin::plugin::server::HostServer for PluginHostState {
         Ok(())
     }
 
+    async fn delete_message_by_signature(
+        &mut self,
+        _rep: Resource<Server>,
+        signature: Vec<u8>,
+    ) -> wasmtime::Result<()> {
+        let server = self
+            .server
+            .as_ref()
+            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+        let packet = pumpkin_protocol::java::client::play::CDeleteChat::from_signature(&signature);
+        server.broadcast_packet_all(&packet);
+        Ok(())
+    }
+
+    async fn delete_message_by_id(
+        &mut self,
+        _rep: Resource<Server>,
+        signature_id: i32,
+    ) -> wasmtime::Result<()> {
+        let server = self
+            .server
+            .as_ref()
+            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+        let packet = pumpkin_protocol::java::client::play::CDeleteChat::from_cache_id(signature_id);
+        server.broadcast_packet_all(&packet);
+        Ok(())
+    }
+
     async fn broadcast_tab_list_header_footer(
         &mut self,
         _rep: Resource<Server>,
@@ -616,6 +644,27 @@ impl pumpkin::plugin::server::HostServer for PluginHostState {
             .as_ref()
             .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
         self.add_datapack_manager(server.clone())
+    }
+
+    async fn set_server_links(
+        &mut self,
+        _rep: Resource<Server>,
+        links: Vec<pumpkin::plugin::player::ServerLink>,
+    ) -> wasmtime::Result<()> {
+        let server = self
+            .server
+            .clone()
+            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+        let mut converted = Vec::new();
+        for link in links {
+            converted.push(super::player::from_wit_server_link(self, link)?);
+        }
+        let protocol_links: Vec<pumpkin_protocol::Link<'_>> = converted
+            .iter()
+            .map(|(label, url)| pumpkin_protocol::Link::new(label.clone(), url))
+            .collect();
+        server.broadcast_server_links(&protocol_links);
+        Ok(())
     }
 
     async fn drop(&mut self, rep: Resource<Server>) -> wasmtime::Result<()> {
