@@ -40,7 +40,7 @@ pub struct LeverBlock;
 impl BlockBehaviour for LeverBlock {
     fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
         toggle_lever(args.world, args.position);
-        BlockActionResult::Consume
+        BlockActionResult::Success
     }
 
     fn emits_redstone_power(&self, _args: EmitsRedstonePowerArgs<'_>) -> bool {
@@ -62,13 +62,11 @@ impl BlockBehaviour for LeverBlock {
     }
 
     fn on_state_replaced(&self, args: OnStateReplacedArgs<'_>) {
-        let block_pos = args.position;
-        let block = args.block;
-
-        let lever_props = LeverLikeProperties::from_state_id(args.old_state_id, block);
-
-        if lever_props.powered {
-            Self::update_neighbors(args.world, block_pos, lever_props);
+        if !args.moved {
+            let lever_props = LeverLikeProperties::from_state_id(args.old_state_id, args.block);
+            if lever_props.powered {
+                Self::update_neighbors(args.world, args.position, lever_props);
+            }
         }
     }
 
