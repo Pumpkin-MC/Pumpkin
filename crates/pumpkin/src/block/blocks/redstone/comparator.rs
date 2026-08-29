@@ -19,7 +19,7 @@ use crate::{
         NormalUseArgs, OnNeighborUpdateArgs, OnPlaceArgs, OnScheduledTickArgs, OnStateReplacedArgs,
         PlacedArgs, PlayerPlacedArgs, registry::BlockActionResult,
     },
-    entity::decoration::item_frame::ItemFrameEntity,
+    entity::{decoration::item_frame::ItemFrameEntity, player::Player},
     world::World,
 };
 
@@ -36,7 +36,7 @@ impl BlockBehaviour for ComparatorBlock {
     fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
         let state = args.world.get_block_state(args.position);
         let props = ComparatorLikeProperties::from_state_id(state.id, args.block);
-        self.on_use(props, args.world, *args.position, args.block);
+        self.on_use(props, args.world, *args.position, args.block, args.player);
 
         BlockActionResult::Success
     }
@@ -234,24 +234,23 @@ impl ComparatorBlock {
         world: &Arc<World>,
         block_pos: BlockPos,
         block: &Block,
+        player: &Player,
     ) {
-        // Vanilla Parity TODO:
-        // playSound(player, pos, SoundEvents.COMPARATOR_CLICK, SoundSource.BLOCKS, 0.3F, pitch);
-        // Pitch is 0.55F if SUBTRACT, 0.5F if COMPARE.
-
         props.mode = match props.mode {
             ModeComparator::Compare => ModeComparator::Subtract,
             ModeComparator::Subtract => ModeComparator::Compare,
         };
 
-        // Vanilla `ComparatorBlock.useWithoutItem`: click at 0.55 (SUBTRACT) / 0.5 (COMPARE),
-        // `setBlock(..., 2)`, then `refreshOutputState` if the cell is still this.
+        // Vanilla `ComparatorBlock.useWithoutItem`: `playSound(player, ...)` so the clicker
+        // does not hear the server packet (client already played it). Pitch 0.55 SUBTRACT / 0.5
+        // COMPARE. `setBlock(..., 2)`, then `refreshOutputState` if the cell is still this.
         let pitch = if props.mode == ModeComparator::Subtract {
             0.55
         } else {
             0.5
         };
-        world.play_sound_fine(
+        world.play_sound_fine_expect(
+            player,
             Sound::BlockComparatorClick,
             SoundCategory::Blocks,
             &block_pos.to_centered_f64(),

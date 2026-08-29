@@ -1332,6 +1332,19 @@ impl World {
         self.play_sound_raw_expect(player, sound as u16, category, position, 1.0, 1.0);
     }
 
+    /// Vanilla `Level.playSound(Player except, ..., volume, pitch)`.
+    pub fn play_sound_fine_expect(
+        &self,
+        player: &Player,
+        sound: Sound,
+        category: SoundCategory,
+        position: &Vector3<f64>,
+        volume: f32,
+        pitch: f32,
+    ) {
+        self.play_sound_raw_expect(player, sound as u16, category, position, volume, pitch);
+    }
+
     pub fn play_sound_raw(
         &self,
         sound_id: u16,
