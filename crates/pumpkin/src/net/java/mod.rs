@@ -1,5 +1,6 @@
 use pumpkin_protocol::java::client::play::{
-    CChunkBatchEnd, CChunkBatchStart, CChunkData, CLightUpdate, CPlayDisconnect,
+    CAcknowledgeBlockChange, CChunkBatchEnd, CChunkBatchStart, CChunkData, CLightUpdate,
+    CPlayDisconnect,
 };
 use pumpkin_world::level::SyncChunk;
 use std::net::SocketAddr;
@@ -594,6 +595,19 @@ impl JavaClient {
     pub fn try_send_packet<P: ClientPacket>(&self, packet: &P) {
         if let Ok(data) = self.serialize_packet(packet) {
             self.try_enqueue_packet(data);
+        }
+    }
+
+    /// Vanilla `ClientboundBlockChangedAckPacket`, sent once per tick after the tick's block
+    /// changes are broadcast. The client predicts `useItemOn` locally and only stops
+    /// reconciling against its own prediction once this ack for the packet's sequence arrives;
+    /// sending it before the corresponding block-update packet (instead of after, like here)
+    /// makes the client briefly revert its prediction before the real update lands, which
+    /// shows up as a visible flicker/snap (e.g. a repeater's delay dot on right-click).
+    pub fn acknowledge_pending_block_changes(&self) {
+        let seq = self.packet_sequence.swap(-1, Ordering::Relaxed);
+        if seq != -1 {
+            self.try_send_packet(&CAcknowledgeBlockChange::new(seq.into()));
         }
     }
 
