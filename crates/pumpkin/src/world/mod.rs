@@ -2048,6 +2048,7 @@ impl World {
     #[expect(clippy::too_many_lines)]
     pub fn tick_chunks(self: &Arc<Self>, server: &Arc<Server>) {
         const BATCH_SIZE: usize = 32;
+        let random_tick_speed = self.level_info.load().game_rules.random_tick_speed;
 
         let active_chunks = self.active_chunks.load();
         // Skip chunks not in `entity_ready_chunks` (entities load later than block data).
@@ -2058,7 +2059,7 @@ impl World {
             .filter(|pos| self.is_entity_ticking_chunk(**pos, &forced_chunks))
             .copied()
             .collect();
-        let tick_data = self.level.get_tick_data(&tickable_chunks);
+        let tick_data = self.level.get_tick_data(&tickable_chunks, random_tick_speed);
         let handle = server.runtime.clone();
 
         // 1. Sequential Block Ticks (vanilla: one ordered queue). `tick_data.block_ticks` is
