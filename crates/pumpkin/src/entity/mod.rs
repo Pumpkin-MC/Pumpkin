@@ -2589,13 +2589,16 @@ impl Entity {
             let mut bedrock_meta = SyncedActorDataList::new();
             bedrock_meta.set(
                 entity_data_key::FREEZING_EFFECT_STRENGTH,
-                MetadataValue::Float(new_frozen_ticks as f32),
+                MetadataValue::Float(new_frozen_ticks as f32 / Self::MAX_FROZEN_TICKS as f32),
             );
             self.send_meta_data(
-                &[Metadata::new(
-                    tracked_data::entity::DATA_TICKS_FROZEN,
-                    VarInt(new_frozen_ticks),
-                )],
+                &[
+                    Metadata::new(
+                        tracked_data::entity::DATA_TICKS_FROZEN,
+                        VarInt(new_frozen_ticks),
+                    ),
+                    Metadata::new(tracked_data::entity::FROZEN_TICKS, VarInt(new_frozen_ticks)),
+                ],
                 Some(&bedrock_meta),
             );
         }

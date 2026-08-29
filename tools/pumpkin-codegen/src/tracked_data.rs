@@ -174,7 +174,9 @@ fn generate_entity_modules(
 
             for (ver, entities) in versions {
                 let ver_ident = ver.to_field_ident();
-                let field_info = entities.get(entity).and_then(|f| lookup_tracked_field(f, field));
+                let field_info = entities
+                    .get(entity)
+                    .and_then(|f| lookup_tracked_field(f, field));
                 let id = field_info.map_or(255u8, |info| info.id);
                 if let Some(info) = field_info {
                     latest_type = info.r#type.clone();
