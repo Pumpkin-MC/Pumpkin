@@ -2098,9 +2098,8 @@ impl Player {
             0,
         );
 
-        let chunk_pos = self.living_entity.entity.chunk_pos.load();
-        world.broadcast_to_chunk(
-            chunk_pos,
+        world.send_to_tracking_players(
+            self.get_entity(),
             &CEntityAnimation::new(self.entity_id().into(), Animation::LeaveBed),
         );
 
@@ -3375,12 +3374,11 @@ impl Player {
 
     pub async fn unload_watched_chunks(&self, world: &World) {
         let radial_chunks: Vec<_> = self.watched_section.load().all_chunks_within().collect();
-        // Same reasoning as the incremental unload in `chunker::update_position`: the client has to
-        // be told to forget these chunks' entities while it is still a watcher, otherwise it keeps
-        // ghosts whose ids the server no longer knows.
-        world.despawn_entities_in_chunks_for_player(self, &radial_chunks);
-        // See `World::flush_block_entities`: persist live block entities before this player's
-        // tickets on these chunks can be released below.
+        // Drop pairings while this client can still take `CRemoveEntities`. Vanilla
+        // `TrackedEntity.removePairing` on dimension leave. `CRespawn` often clears the world
+        // anyway; this covers ghosts if it does not.
+        world.entity_tracker.drop_player_pairings(self);
+        // Persist live BEs before this player's tickets on these chunks can be released below.
         world.flush_block_entities(&radial_chunks);
         let level = &world.level;
         let chunks_to_clean = level.mark_chunks_as_not_watched(&radial_chunks).await;
@@ -6132,10 +6130,8 @@ impl EntityBase for Player {
             let pitch = pitch.unwrap_or_else(|| self.living_entity.entity.pitch.load());
             self.request_teleport(position, yaw, pitch);
             let entity = self.get_entity();
-            let chunk_pos = entity.chunk_pos.load();
-            entity.world.load().broadcast_to_chunk_except(
-                chunk_pos,
-                &[self.living_entity.entity.entity_uuid],
+            entity.world.load().send_to_tracking_players(
+                entity,
                 &CEntityPositionSync::new(
                     self.living_entity.entity.entity_id.into(),
                     position,

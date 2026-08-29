@@ -178,7 +178,7 @@ impl TrackedEntity {
     }
 
     /// Sends despawn packet to a player leaving visibility range.
-    pub fn remove_pairing(&self, player: &Arc<Player>) {
+    pub fn remove_pairing(&self, player: &Player) {
         let entity_ids = [self.entity_id.into()];
         match player.client.as_ref() {
             ClientPlatform::Java(client) => {
@@ -452,9 +452,24 @@ impl EntityTracker {
     }
 
     pub fn update_entity_position(&self, entity: &dyn EntityBase, world: &World) {
-        if let Some(tracked) = self.entity_map.get(&entity.get_entity().entity_id) {
+        self.update_entity_position_by_id(entity.get_entity().entity_id, world);
+    }
+
+    pub fn update_entity_position_by_id(&self, entity_id: i32, world: &World) {
+        if let Some(tracked) = self.entity_map.get(&entity_id) {
             let players = world.players.load();
             tracked.update_players(players.as_ref(), world);
+        }
+    }
+
+    /// Drops this player's pairings and sends despawn. Dimension leave: the client is still
+    /// connected, unlike disconnect (`remove_player` strips `seen_by` with no packet).
+    pub fn drop_player_pairings(&self, player: &Player) {
+        let uuid = player.gameprofile.id;
+        for entry in &self.entity_map {
+            if entry.value().seen_by.remove(&uuid).is_some() {
+                entry.value().remove_pairing(player);
+            }
         }
     }
 

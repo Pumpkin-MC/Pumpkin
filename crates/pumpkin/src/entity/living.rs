@@ -258,8 +258,8 @@ impl LivingEntity {
                     selected_slot: 0,
                     container_id: window_id,
                 };
-                self.entity.world.load().broadcast_packet_except_editioned(
-                    &[self.entity.entity_uuid],
+                self.entity.world.load().send_to_tracking_players_editioned(
+                    &self.entity,
                     &je_packet,
                     &be_packet,
                 );
@@ -271,7 +271,7 @@ impl LivingEntity {
             self.entity
                 .world
                 .load()
-                .broadcast_packet_except(&[self.entity.entity_uuid], &je_packet);
+                .send_to_tracking_players(&self.entity, &je_packet);
         }
     }
 
@@ -292,9 +292,8 @@ impl LivingEntity {
             }
         }
 
-        let chunk_pos = self.entity.chunk_pos.load();
-        self.entity.world.load().broadcast_to_chunk_editioned(
-            chunk_pos,
+        self.entity.world.load().send_to_tracking_players_editioned(
+            &self.entity,
             &CTakeItemEntity::new(
                 item.entity_id.into(),
                 self.entity.entity_id.into(),
@@ -726,11 +725,10 @@ impl LivingEntity {
             ambient: effect.ambient,
         };
 
-        let chunk_pos = self.entity.chunk_pos.load();
         self.entity
             .world
             .load()
-            .broadcast_to_chunk_editioned(chunk_pos, &je_packet, &be_packet);
+            .send_to_tracking_players_and_self_editioned(&self.entity, &je_packet, &be_packet);
         if effect.effect_type != &StatusEffect::INSTANT_HEALTH
             && effect.effect_type != &StatusEffect::INSTANT_DAMAGE
         {
@@ -2485,11 +2483,12 @@ impl LivingEntity {
                 data: VarInt(0),
                 fire_at_position: None,
             };
-            world.broadcast_to_chunk(
-                self.entity.chunk_pos.load(),
-                &CHurtAnimation::new(entity_id.into(), hurt_yaw),
+            let hurt_animation = CHurtAnimation::new(entity_id.into(), hurt_yaw);
+            world.send_to_tracking_players_and_self_editioned(
+                &self.entity,
+                &hurt_animation,
+                &hurt_event,
             );
-            world.broadcast_to_chunk_bedrock(self.entity.chunk_pos.load(), &hurt_event);
         }
 
         world.broadcast_damage_event(
