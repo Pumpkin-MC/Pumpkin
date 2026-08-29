@@ -50,6 +50,9 @@ impl BlockBehaviour for RepeaterBlock {
         let now_powered = props.powered;
         let should_be_powered = self.has_power(args.world, *args.position, state, block);
 
+        // Vanilla `DiodeBlock.tick` is `setBlock(..., 2)` only. That still runs `onPlace`,
+        // which calls `updateNeighborsInFront`. Pumpkin `placed` is block-type-only, so
+        // the front poke is explicit here.
         if now_powered && !should_be_powered {
             props.powered = false;
             args.world.set_block_state(
@@ -98,7 +101,8 @@ impl BlockBehaviour for RepeaterBlock {
         let props = RepeaterProperties::from_state_id(state.id, args.block);
         Self::on_use(props, args.world, *args.position, args.block);
 
-        BlockActionResult::SuccessServer
+        // Vanilla `RepeaterBlock.useWithoutItem`: `InteractionResult.SUCCESS`.
+        BlockActionResult::Success
     }
 
     fn get_weak_redstone_power(&self, args: GetRedstonePowerArgs<'_>) -> u8 {
@@ -110,6 +114,8 @@ impl BlockBehaviour for RepeaterBlock {
     }
 
     fn emits_redstone_power(&self, args: EmitsRedstonePowerArgs<'_>) -> bool {
+        // Vanilla `DiodeBlock.isSignalSource` is always true; wire `shouldConnectTo` uses
+        // facing and its opposite (input and output). Power amount is still facing-only.
         let repeater_props = RepeaterProperties::from_state_id(args.state.id, args.block);
         repeater_props.facing.to_block_direction() == args.direction
             || repeater_props.facing.to_block_direction() == args.direction.opposite()
@@ -185,8 +191,6 @@ impl RedstoneGateBlock<RepeaterProperties> for RepeaterBlock {
         }
         let props = RepeaterProperties::from_state_id(state.id, block);
         let powered = props.powered;
-
-        // Note: The signature for has_power must be called without self, as it's a trait method.
         let has_power = RedstoneGateBlock::has_power(self, world, pos, state, block);
 
         if powered != has_power && !world.is_block_tick_scheduled(&pos, block) {
@@ -219,7 +223,8 @@ impl RepeaterBlock {
         let mut props = props;
         props.delay = if props.delay == 4 { 1 } else { props.delay + 1 };
         let state = props.to_state_id(block);
-        world.set_block_state(&block_pos, state, BlockFlags::empty());
+        // Vanilla `RepeaterBlock.useWithoutItem`: `setBlock(..., 3)` (`NOTIFY_ALL`).
+        world.set_block_state(&block_pos, state, BlockFlags::NOTIFY_ALL);
     }
 
     fn is_locked(
