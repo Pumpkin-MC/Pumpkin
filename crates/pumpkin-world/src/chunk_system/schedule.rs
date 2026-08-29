@@ -2,7 +2,7 @@ use super::channel::LevelChange;
 use super::chunk_holder::ChunkHolder;
 use super::chunk_state::{Chunk, StagedChunkEnum};
 use super::dag::{DAG, EdgeKey, Node, NodeKey};
-use super::generation_cache::Cache;
+use super::generation_cache::{Cache, SurfaceBiomeNeighborhood};
 use super::worker_logic::{RecvChunk, io_read_work, io_write_work};
 use super::{
     ChunkLevel, ChunkListener, ChunkLoading, ChunkPos, HashMapType, HashSetType, IOLock,
@@ -416,10 +416,10 @@ impl GenerationSchedule {
             let Some(node) = self.graph.nodes.get(node_key) else {
                 return false; // node was dropped, discard silently
             };
-            let write_radius = node.stage.get_write_radius();
+            let read_radius = node.stage.get_read_radius();
             let pos = node.pos;
-            let all_ready = (-write_radius..=write_radius).all(|dx| {
-                (-write_radius..=write_radius).all(|dy| {
+            let all_ready = (-read_radius..=read_radius).all(|dx| {
+                (-read_radius..=read_radius).all(|dy| {
                     self.chunk_map
                         .get(&pos.add_raw(dx, dy))
                         .is_some_and(|h| h.chunk.is_some())
@@ -1319,10 +1319,10 @@ impl GenerationSchedule {
                         }
 
                         let write_radius = node.stage.get_write_radius();
+                        let read_radius = node.stage.get_read_radius();
 
-                        // Pre-validate that every chunk in the write area (including the
-                        // center for write_radius==0 stages like Biomes, StructureStart,
-                        // Noise, Surface) has its data present before we swap anything out.
+                        // Pre-validate that every chunk in the read area has its data present
+                        // before we snapshot neighbors or swap the write area out.
                         //
                         // The dependency graph ensures predecessor *tasks* are complete, but
                         // there is a brief window between a task completing on a generation
@@ -1331,8 +1331,8 @@ impl GenerationSchedule {
                         // see chunk==None in that window. We park here and let
                         // check_waiting_tasks() re-queue once all data has arrived.
                         {
-                            let all_ready = (-write_radius..=write_radius).all(|dx| {
-                                (-write_radius..=write_radius).all(|dy| {
+                            let all_ready = (-read_radius..=read_radius).all(|dx| {
+                                (-read_radius..=read_radius).all(|dy| {
                                     self.chunk_map
                                         .get(&node.pos.add_raw(dx, dy))
                                         .is_some_and(|h| h.chunk.is_some())
@@ -1360,6 +1360,28 @@ impl GenerationSchedule {
                             node.pos.y - write_radius,
                             write_radius << 1 | 1,
                         );
+
+                        if node.stage == StagedChunkEnum::Surface {
+                            let mut neighborhood =
+                                SurfaceBiomeNeighborhood::new(node.pos.x, node.pos.y);
+                            for dx in -1..=1 {
+                                for dz in -1..=1 {
+                                    let holder = self
+                                        .chunk_map
+                                        .get(&node.pos.add_raw(dx, dz))
+                                        .expect("surface biome dependency holder exists");
+                                    let chunk = holder
+                                        .chunk
+                                        .as_ref()
+                                        .expect("surface biome dependency is available");
+                                    assert!(
+                                        neighborhood.push_chunk(chunk),
+                                        "surface biome dependency has an incomplete palette"
+                                    );
+                                }
+                            }
+                            cache.set_surface_biomes(neighborhood);
+                        }
 
                         let occupy = self.graph.nodes.insert(Node::new(
                             ChunkPos::new(i32::MAX, i32::MAX),
