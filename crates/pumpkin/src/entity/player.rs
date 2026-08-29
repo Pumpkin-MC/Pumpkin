@@ -2466,6 +2466,7 @@ impl Player {
 
                     let seq = client.packet_sequence.swap(-1, Ordering::Relaxed);
                     if seq != -1 {
+                        self.world().flush_block_updates();
                         client.try_send_packet(&CAcknowledgeBlockChange::new(seq.into()));
                     }
                 }
