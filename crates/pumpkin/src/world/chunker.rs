@@ -3,7 +3,7 @@ use std::{num::NonZero, sync::Arc};
 
 use pumpkin_protocol::{
     bedrock::client::network_chunk_publisher_update::CNetworkChunkPublisherUpdate,
-    java::client::play::{CCenterChunk, CUnloadChunk},
+    java::client::play::CCenterChunk,
 };
 use pumpkin_world::cylindrical_chunk_iterator::Cylindrical;
 
@@ -78,33 +78,31 @@ pub fn update_position(player: &Arc<Player>) {
     let loading_chunks: Vec<_> = loading_iter.collect();
     let unloading_chunks: Vec<_> = unloading_iter.collect();
 
-    // Use the chunk_manager's world reference, which is updated on dimension change.
-    // This ensures we load chunks from the correct world after portal teleportation.
-    let world = {
-        player
-            .chunk_manager
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .world()
-            .clone()
-    };
-    // Before releasing this player's tickets on the unloading chunks below: that can let
+    // `change_world_chunks` then `set_world` run with no await between them, so `player.world()`
+    // is already the destination when this runs after a portal teleport.
+    let world = player.world();
+    // Before replacing this player's tickets on the unloading chunks below: that can let
     // `GenerationSchedule` evict their raw block data before the tick loop persists any live
     // BE in them. See `World::flush_block_entities`.
     world.flush_block_entities(&unloading_chunks);
+    player.replace_chunk_tickets(
+        &world.level,
+        old_cylindrical.center,
+        new_chunk_center,
+        view_distance.into(),
+    );
     {
-        let mut chunk_manager = player
-            .chunk_manager
+        let mut sender = player
+            .chunk_sender
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        chunk_manager.update_center_and_view_distance(
-            new_chunk_center,
-            view_distance.into(),
-            &world.level,
-            &loading_chunks,
-            &unloading_chunks,
-        );
-    };
+        for pos in &unloading_chunks {
+            sender.unload_chunk(&player.client, *pos);
+        }
+        for pos in &loading_chunks {
+            sender.enqueue_chunk(*pos);
+        }
+    }
     player.watched_section.store(new_cylindrical);
 
     // Drop the entities of the leaving chunks on this client before unwatching them: past that
@@ -113,12 +111,6 @@ pub fn update_position(player: &Arc<Player>) {
     // (`ChunkMap.TrackedEntity::removePairing`), so a chunk another player still watches must
     // equally stop being rendered here.
     world.despawn_entities_in_chunks_for_player(player, &unloading_chunks);
-
-    if let ClientPlatform::Java(client) = player.client.as_ref() {
-        for chunk in &unloading_chunks {
-            client.try_send_packet(&CUnloadChunk::new(chunk.x, chunk.y));
-        }
-    }
 
     // Watcher IO is async. Tickets must land before `spawn_world_entity_chunks`.
     if !loading_chunks.is_empty() || !unloading_chunks.is_empty() {

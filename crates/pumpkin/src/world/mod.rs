@@ -702,9 +702,9 @@ impl World {
     /// Persists live block entities of these chunks into `pending_block_entities` NBT.
     /// Reads only `self.block_entities`, so it is safe from any task.
     ///
-    /// Call before `GenerationSchedule` can evict the chunk (`ChunkManager::clean_up`, view-distance
-    /// shrink). If the raw chunk is already gone, `save_block_entities` no-ops and a mid-animation
-    /// piston NBT is lost (the `MOVING_PISTON` block id is saved separately).
+    /// Call before `GenerationSchedule` can evict the chunk (`Player::clean_up_chunk_tickets`,
+    /// view-distance shrink). If the raw chunk is already gone, `save_block_entities` no-ops and a
+    /// mid-animation piston NBT is lost (the `MOVING_PISTON` block id is saved separately).
     pub fn flush_block_entities(
         &self,
         chunks: impl IntoIterator<Item = impl std::borrow::Borrow<Vector2<i32>>>,
@@ -4613,11 +4613,7 @@ impl World {
                         // observer sees the player in a world whose chunk manager doesn't match.
                         self.remove_player(player, false).await;
                         player.unload_watched_chunks(self).await;
-                        player
-                            .chunk_manager
-                            .lock()
-                            .unwrap_or_else(std::sync::PoisonError::into_inner)
-                            .change_world(&self.level, destination.clone());
+                        player.change_world_chunks(&self.level, &destination);
                         player.living_entity.entity.set_world(destination.clone());
                         destination.players.rcu(|current_list| {
                             let mut new_list = (**current_list).clone();
