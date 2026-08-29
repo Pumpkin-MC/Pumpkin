@@ -6060,9 +6060,20 @@ impl Player {
         advancement: &'static pumpkin_data::advancement::Advancement,
         criterion: &str,
     ) {
-        if let Ok(mut advancements) = self.advancements.try_lock() {
-            advancements.award(advancement, criterion);
-        }
+        let Some((player, result)) =
+            self.advancements
+                .try_lock()
+                .ok()
+                .and_then(|mut advancements| {
+                    let player = advancements.player.upgrade()?;
+                    let result = advancements.award(advancement, criterion);
+                    Some((player, result))
+                })
+        else {
+            return;
+        };
+
+        PlayerAdvancement::finish_award(&player, advancement, result);
     }
 
     pub fn check_inventory_advancements(&self) {

@@ -237,6 +237,19 @@ impl Context {
         self.reload_commands_for_everyone();
     }
 
+    pub(crate) fn unregister_commands(&self) {
+        let source = self.metadata.name.clone();
+        self.server.command_dispatcher.rcu(|dispatcher| {
+            let mut new_dispatcher = (**dispatcher).clone();
+            new_dispatcher
+                .fallback_dispatcher
+                .unregister_source(&source);
+            Arc::new(new_dispatcher)
+        });
+
+        self.reload_commands_for_everyone();
+    }
+
     /// Reloads (resends) all commands for all currently online players.
     pub fn reload_commands_for_everyone(&self) {
         for world in self.server.worlds.load().iter() {
@@ -317,6 +330,7 @@ impl Context {
             handler,
             priority,
             blocking,
+            source: Some(self.metadata.name.clone()),
             _phantom: std::marker::PhantomData,
         });
 

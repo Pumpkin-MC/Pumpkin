@@ -1,5 +1,5 @@
 use std::{collections::HashMap, sync::Arc};
-use wasmtime::component::Resource;
+use wasmtime::component::{Access, HasSelf, Resource};
 
 use crate::plugin::loader::wasm::wasm_host::{
     DowncastResourceExt,
@@ -29,7 +29,7 @@ macro_rules! register_host_event {
     };
 }
 
-fn register_typed_event<E: crate::plugin::Payload + ToFromWasmEvent + 'static>(
+fn register_typed_event<E: crate::plugin::Payload + ToFromWasmEvent + Clone + 'static>(
     resource: &ContextResource,
     handler: &Arc<WasmPluginEventHandler>,
     priority: crate::plugin::EventPriority,
@@ -1843,5 +1843,33 @@ impl pumpkin::plugin::context::HostContext for PluginHostState {
             .resource_table
             .delete::<ContextResource>(Resource::new_own(rep.rep()));
         Ok(())
+    }
+}
+
+impl pumpkin::plugin::context::HostContextWithStore<PluginHostState> for HasSelf<PluginHostState> {
+    async fn register_command(
+        mut host: Access<'_, PluginHostState, Self>,
+        context: Resource<Context>,
+        command: Resource<Command>,
+        permission: String,
+    ) -> wasmtime::Result<()> {
+        let (context, command, plugin) = {
+            let state = host.get();
+            let command = state.take_command(&command)?.provider;
+            let context = state.get_context(&context)?.provider.clone();
+            let plugin = state
+                .plugin
+                .as_ref()
+                .and_then(std::sync::Weak::upgrade)
+                .ok_or_else(|| wasmtime::Error::msg("Plugin instance not available"))?;
+            (context, command, plugin)
+        };
+
+        plugin
+            .store
+            .pump_blocking(&mut host, move || {
+                context.register_command(command, permission);
+            })
+            .await
     }
 }

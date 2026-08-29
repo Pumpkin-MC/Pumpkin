@@ -73,6 +73,11 @@ pub trait DynEventHandler: Send + Sync {
     /// # Returns
     /// The priority of the event handler.
     fn get_priority(&self) -> &EventPriority;
+
+    /// Returns the plugin that registered this handler, when applicable.
+    fn source(&self) -> Option<&str> {
+        None
+    }
 }
 
 /// A trait for handling specific events.
@@ -111,6 +116,7 @@ where
     pub handler: Arc<H>,
     pub priority: EventPriority,
     pub blocking: bool,
+    pub source: Option<String>,
     pub _phantom: std::marker::PhantomData<E>,
 }
 
@@ -155,6 +161,10 @@ where
     /// Retrieves the priority of the handler.
     fn get_priority(&self) -> &EventPriority {
         &self.priority
+    }
+
+    fn source(&self) -> Option<&str> {
+        self.source.as_deref()
     }
 }
 
@@ -1085,6 +1095,9 @@ impl PluginManager {
             plugins.remove(index)
         };
 
+        self.unregister_handlers(name);
+        plugin.context.unregister_commands();
+
         if let Some(instance) = plugin.instance.take() {
             instance.on_unload(plugin.context.clone()).await.ok();
         }
@@ -1105,6 +1118,17 @@ impl PluginManager {
         self.plugin_states.write().await.remove(name);
 
         Ok(())
+    }
+
+    fn unregister_handlers(&self, source: &str) {
+        self.handlers.rcu(|handlers| {
+            let mut new_handlers = (**handlers).clone();
+            new_handlers.retain(|_, handlers| {
+                handlers.retain(|handler| handler.source() != Some(source));
+                !handlers.is_empty()
+            });
+            Arc::new(new_handlers)
+        });
     }
 
     /// Get all plugins that are currently loading
@@ -1157,6 +1181,7 @@ impl PluginManager {
             handler,
             priority,
             blocking,
+            source: None,
             _phantom: std::marker::PhantomData,
         });
 

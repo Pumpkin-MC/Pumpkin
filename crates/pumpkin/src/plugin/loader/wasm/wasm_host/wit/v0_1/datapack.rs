@@ -3,8 +3,9 @@ use crate::plugin::loader::wasm::wasm_host::state::PluginHostState;
 use crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::datapack::{
     DatapackInfo as WitDatapackInfo, DatapackManager as WitDatapackManager,
     EnablePosition as WitEnablePosition, Host as DatapackHost, HostDatapackManager,
+    HostDatapackManagerWithStore,
 };
-use wasmtime::component::Resource;
+use wasmtime::component::{Access, HasSelf, Resource};
 
 impl DatapackHost for PluginHostState {}
 
@@ -70,56 +71,6 @@ impl HostDatapackManager for PluginHostState {
         Ok(DatapackManager::is_pack_enabled(server, &name))
     }
 
-    async fn enable_pack(
-        &mut self,
-        _res: Resource<WitDatapackManager>,
-        name: String,
-        position: WitEnablePosition,
-    ) -> wasmtime::Result<Result<(), String>> {
-        let server = self
-            .server
-            .as_ref()
-            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
-        let pos = to_data_enable_position(position);
-        Ok(DatapackManager::enable_pack(server, &name, pos))
-    }
-
-    async fn disable_pack(
-        &mut self,
-        _res: Resource<WitDatapackManager>,
-        name: String,
-    ) -> wasmtime::Result<Result<(), String>> {
-        let server = self
-            .server
-            .as_ref()
-            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
-        Ok(DatapackManager::disable_pack(server, &name))
-    }
-
-    async fn reload(
-        &mut self,
-        _res: Resource<WitDatapackManager>,
-    ) -> wasmtime::Result<Result<(), String>> {
-        let server = self
-            .server
-            .as_ref()
-            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
-        Ok(DatapackManager::reload(server))
-    }
-
-    async fn execute_function(
-        &mut self,
-        _res: Resource<WitDatapackManager>,
-        name: String,
-    ) -> wasmtime::Result<Result<u32, String>> {
-        let server = self
-            .server
-            .as_ref()
-            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
-        let result = DatapackManager::execute_function_from_console(server, &name);
-        Ok(result.map(|count| count as u32))
-    }
-
     async fn drop(&mut self, rep: Resource<WitDatapackManager>) -> wasmtime::Result<()> {
         let _ = self
             .resource_table
@@ -127,6 +78,116 @@ impl HostDatapackManager for PluginHostState {
             Resource::new_own(rep.rep()),
         );
         Ok(())
+    }
+}
+
+impl HostDatapackManagerWithStore<PluginHostState> for HasSelf<PluginHostState> {
+    async fn enable_pack(
+        mut host: Access<'_, PluginHostState, Self>,
+        _res: Resource<WitDatapackManager>,
+        name: String,
+        position: WitEnablePosition,
+    ) -> wasmtime::Result<Result<(), String>> {
+        let (server, plugin) = {
+            let state = host.get();
+            let server = state
+                .server
+                .clone()
+                .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+            let plugin = state
+                .plugin
+                .as_ref()
+                .and_then(std::sync::Weak::upgrade)
+                .ok_or_else(|| wasmtime::Error::msg("Plugin instance not available"))?;
+            (server, plugin)
+        };
+        let position = to_data_enable_position(position);
+
+        plugin
+            .store
+            .pump_blocking(&mut host, move || {
+                DatapackManager::enable_pack(&server, &name, position)
+            })
+            .await
+    }
+
+    async fn disable_pack(
+        mut host: Access<'_, PluginHostState, Self>,
+        _res: Resource<WitDatapackManager>,
+        name: String,
+    ) -> wasmtime::Result<Result<(), String>> {
+        let (server, plugin) = {
+            let state = host.get();
+            let server = state
+                .server
+                .clone()
+                .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+            let plugin = state
+                .plugin
+                .as_ref()
+                .and_then(std::sync::Weak::upgrade)
+                .ok_or_else(|| wasmtime::Error::msg("Plugin instance not available"))?;
+            (server, plugin)
+        };
+
+        plugin
+            .store
+            .pump_blocking(&mut host, move || {
+                DatapackManager::disable_pack(&server, &name)
+            })
+            .await
+    }
+
+    async fn reload(
+        mut host: Access<'_, PluginHostState, Self>,
+        _res: Resource<WitDatapackManager>,
+    ) -> wasmtime::Result<Result<(), String>> {
+        let (server, plugin) = {
+            let state = host.get();
+            let server = state
+                .server
+                .clone()
+                .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+            let plugin = state
+                .plugin
+                .as_ref()
+                .and_then(std::sync::Weak::upgrade)
+                .ok_or_else(|| wasmtime::Error::msg("Plugin instance not available"))?;
+            (server, plugin)
+        };
+
+        plugin
+            .store
+            .pump_blocking(&mut host, move || DatapackManager::reload(&server))
+            .await
+    }
+
+    async fn execute_function(
+        mut host: Access<'_, PluginHostState, Self>,
+        _res: Resource<WitDatapackManager>,
+        name: String,
+    ) -> wasmtime::Result<Result<u32, String>> {
+        let (server, plugin) = {
+            let state = host.get();
+            let server = state
+                .server
+                .clone()
+                .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+            let plugin = state
+                .plugin
+                .as_ref()
+                .and_then(std::sync::Weak::upgrade)
+                .ok_or_else(|| wasmtime::Error::msg("Plugin instance not available"))?;
+            (server, plugin)
+        };
+
+        plugin
+            .store
+            .pump_blocking(&mut host, move || {
+                DatapackManager::execute_function_from_console(&server, &name)
+                    .map(|count| count as u32)
+            })
+            .await
     }
 }
 

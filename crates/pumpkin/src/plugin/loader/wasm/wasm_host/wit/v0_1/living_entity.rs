@@ -1,5 +1,5 @@
 use std::sync::Arc;
-use wasmtime::component::Resource;
+use wasmtime::component::{Access, HasSelf, Resource};
 
 use crate::plugin::loader::wasm::wasm_host::{
     state::{LivingEntityResource, PluginHostState},
@@ -27,6 +27,16 @@ pub fn living_entity_from_resource(
         .get::<LivingEntityResource>(&Resource::new_own(entity.rep()))
         .map_err(|_| wasmtime::Error::msg("invalid living entity resource handle"))
         .map(|resource| resource.provider.clone())
+}
+
+fn active_plugin(
+    state: &PluginHostState,
+) -> wasmtime::Result<Arc<crate::plugin::loader::wasm::wasm_host::WasmPlugin>> {
+    state
+        .plugin
+        .as_ref()
+        .and_then(std::sync::Weak::upgrade)
+        .ok_or_else(|| wasmtime::Error::msg("Plugin instance not available"))
 }
 
 #[must_use]
@@ -196,17 +206,6 @@ impl HostLivingEntity for PluginHostState {
         if let Some(living) = entity.get_living_entity() {
             living.set_max_health(max_health);
         }
-        Ok(())
-    }
-
-    async fn damage(
-        &mut self,
-        this: Resource<WitLivingEntity>,
-        amount: f32,
-        damage_type: WitDamageType,
-    ) -> wasmtime::Result<()> {
-        let entity = living_entity_from_resource(self, &this)?;
-        entity.damage(&*entity, amount, from_wit_damage_type(damage_type));
         Ok(())
     }
 
@@ -498,5 +497,32 @@ impl HostLivingEntity for PluginHostState {
             .resource_table
             .delete::<LivingEntityResource>(Resource::new_own(rep.rep()));
         Ok(())
+    }
+}
+
+impl crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::world::HostLivingEntityWithStore<
+    PluginHostState,
+> for HasSelf<PluginHostState>
+{
+    async fn damage(
+        mut host: Access<'_, PluginHostState, Self>,
+        this: Resource<WitLivingEntity>,
+        amount: f32,
+        damage_type: WitDamageType,
+    ) -> wasmtime::Result<()> {
+        let (entity, plugin) = {
+            let state = host.get();
+            (
+                living_entity_from_resource(state, &this)?,
+                active_plugin(state)?,
+            )
+        };
+        let damage_type = from_wit_damage_type(damage_type);
+        plugin
+            .store
+            .pump_blocking(&mut host, move || {
+                entity.damage(&*entity, amount, damage_type);
+            })
+            .await
     }
 }

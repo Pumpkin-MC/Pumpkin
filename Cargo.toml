@@ -105,7 +105,7 @@ unused_async_trait_impl = "allow"
 [workspace.package]
 version = "0.1.0-dev+26.2-26.40"
 edition = "2024"
-rust-version = "1.95"
+rust-version = "1.96"
 license = "GPL-3.0"
 
 [profile.release]
@@ -217,9 +217,11 @@ rustc_version_runtime = { version = "0.3", default-features = false }
 ordered-float = { version = "5.4", default-features = false, features = ["std"] }
 xxhash-rust = { version = "0.8", default-features = false, features = ["xxh64"] }
 
-wasmtime = { version = "48.0", default-features = false, features = ["runtime", "component-model", "async", "cache", "cranelift", "gc", "gc-drc", "threads", "std"] }
-wasmtime-wasi = { version = "48.0", default-features = false, features = ["p2", "p3"] }
-wasmtime-wasi-http = { version = "48.0", default-features = false, features = ["p2", "p3", "default-send-request"] }
+# Temporary pin to the approved implementation of Component Model sync reentry:
+# https://github.com/bytecodealliance/wasmtime/pull/14146
+wasmtime = { git = "https://github.com/dicej/wasmtime", rev = "9482ebf2902439c5db02d7162ee90f2ac4182da9", default-features = false, features = ["runtime", "component-model", "component-model-async", "async", "cache", "cranelift", "gc", "gc-drc", "threads", "std"] }
+wasmtime-wasi = { git = "https://github.com/dicej/wasmtime", rev = "9482ebf2902439c5db02d7162ee90f2ac4182da9", default-features = false, features = ["p2", "p3"] }
+wasmtime-wasi-http = { git = "https://github.com/dicej/wasmtime", rev = "9482ebf2902439c5db02d7162ee90f2ac4182da9", default-features = false, features = ["p2", "p3", "default-send-request"] }
 # needed for interacting with wasmtime-wasi-http - keep in sync
 hyper = { version = "^1.11", default-features = false }
 axum = { version = "0.8.9", default-features = false, features = ["http1", "tokio"] }

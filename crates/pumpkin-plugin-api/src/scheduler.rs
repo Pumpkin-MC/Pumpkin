@@ -16,10 +16,13 @@
 use crate::wit::pumpkin::plugin::context::Server;
 use crate::wit::pumpkin::plugin::scheduler;
 use std::collections::BTreeMap;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 /// A type alias for a closure that can be scheduled as a task.
-pub type TaskHandler = Box<dyn FnMut(Server) + Send>;
+///
+/// Scheduled callbacks can be re-entered, so mutable captured state must use thread-safe
+/// interior mutability.
+pub type TaskHandler = Arc<dyn Fn(Server) + Send + Sync>;
 
 pub(crate) struct Task {
     handler: TaskHandler,
@@ -44,11 +47,10 @@ impl LazyTaskHandlers {
         id
     }
 
-    /// Executes the task handler for the given ID.
-    pub fn handle(&mut self, id: u32, server: Server) {
-        if let Some(task) = self.handlers.get_mut(&id) {
-            (task.handler)(server);
-        }
+    /// Returns the task handler for the given ID.
+    #[must_use]
+    pub fn get(&self, id: u32) -> Option<TaskHandler> {
+        self.handlers.get(&id).map(|task| Arc::clone(&task.handler))
     }
 }
 
@@ -62,7 +64,7 @@ pub trait SchedulerExt {
     /// Returns a unique task ID.
     fn schedule_delayed_task<F>(&self, delay_ticks: u64, handler: F) -> u32
     where
-        F: FnMut(Server) + Send + 'static;
+        F: Fn(Server) + Send + Sync + 'static;
 
     /// Schedules a task to be executed repeatedly.
     ///
@@ -73,20 +75,20 @@ pub trait SchedulerExt {
     /// Returns a unique task ID.
     fn schedule_repeating_task<F>(&self, delay_ticks: u64, period_ticks: u64, handler: F) -> u32
     where
-        F: FnMut(Server) + Send + 'static;
+        F: Fn(Server) + Send + Sync + 'static;
 }
 
 impl SchedulerExt for crate::Context {
     fn schedule_delayed_task<F>(&self, delay_ticks: u64, handler: F) -> u32
     where
-        F: FnMut(Server) + Send + 'static,
+        F: Fn(Server) + Send + Sync + 'static,
     {
         schedule_delayed_task(delay_ticks, handler)
     }
 
     fn schedule_repeating_task<F>(&self, delay_ticks: u64, period_ticks: u64, handler: F) -> u32
     where
-        F: FnMut(Server) + Send + 'static,
+        F: Fn(Server) + Send + Sync + 'static,
     {
         schedule_repeating_task(delay_ticks, period_ticks, handler)
     }
@@ -95,14 +97,14 @@ impl SchedulerExt for crate::Context {
 impl SchedulerExt for crate::Server {
     fn schedule_delayed_task<F>(&self, delay_ticks: u64, handler: F) -> u32
     where
-        F: FnMut(Self) + Send + 'static,
+        F: Fn(Self) + Send + Sync + 'static,
     {
         schedule_delayed_task(delay_ticks, handler)
     }
 
     fn schedule_repeating_task<F>(&self, delay_ticks: u64, period_ticks: u64, handler: F) -> u32
     where
-        F: FnMut(Self) + Send + 'static,
+        F: Fn(Self) + Send + Sync + 'static,
     {
         schedule_repeating_task(delay_ticks, period_ticks, handler)
     }
@@ -112,12 +114,12 @@ impl SchedulerExt for crate::Server {
 /// Prefer using [`SchedulerExt`] for a more ergonomic API.
 pub fn schedule_delayed_task<F>(delay_ticks: u64, handler: F) -> u32
 where
-    F: FnMut(Server) + Send + 'static,
+    F: Fn(Server) + Send + Sync + 'static,
 {
     let handler_id = TASK_HANDLERS
         .lock()
         .unwrap_or_else(|e| e.into_inner())
-        .register(Box::new(handler));
+        .register(Arc::new(handler));
     scheduler::schedule_delayed_task(handler_id, delay_ticks)
 }
 
@@ -125,12 +127,12 @@ where
 /// Prefer using [`SchedulerExt`] for a more ergonomic API.
 pub fn schedule_repeating_task<F>(delay_ticks: u64, period_ticks: u64, handler: F) -> u32
 where
-    F: FnMut(Server) + Send + 'static,
+    F: Fn(Server) + Send + Sync + 'static,
 {
     let handler_id = TASK_HANDLERS
         .lock()
         .unwrap_or_else(|e| e.into_inner())
-        .register(Box::new(handler));
+        .register(Arc::new(handler));
     scheduler::schedule_repeating_task(handler_id, delay_ticks, period_ticks)
 }
 
