@@ -1,7 +1,6 @@
 //! Player view cylinder: tickets, chunk send, per-player entity leave, watcher IO.
 //!
-//! Vanilla `ChunkMap.move`. Leave pairing is `despawn_entities_in_chunks_for_player` until
-//! `World.entity_tracker` (`TrackedEntity.updatePlayer`) is wired.
+//! Vanilla `ChunkMap.move`. Leave/enter pairing is `TrackedEntity.updatePlayer`.
 
 use pumpkin_util::math::vector2::Vector2;
 use std::{num::NonZero, sync::Arc};
@@ -89,18 +88,15 @@ pub fn update_position(player: &Arc<Player>) {
     // Tickets below can let `GenerationSchedule` evict raw block data. Persist live BEs first.
     world.flush_block_entities(&unloading_chunks);
 
-    // Client drops these entities while it is still a watcher. Vanilla
-    // `ChunkMap.TrackedEntity.removePairing` when the *player* moves (the tick visibility
-    // sync only runs when the entity changes chunk). Covers every leaving chunk, including
-    // those another player still watches.
-    world.despawn_entities_in_chunks_for_player(player, &unloading_chunks);
-
     player.replace_chunk_tickets(
         &world.level,
         old_cylindrical.center,
         new_chunk_center,
         view_distance.into(),
     );
+    player.watched_section.store(new_cylindrical);
+    // Pairing before `CUnloadChunk`: the client drops entities, then the chunk.
+    world.entity_tracker.update_player_position(player, &world);
     {
         let mut sender = player
             .chunk_sender
@@ -113,7 +109,6 @@ pub fn update_position(player: &Arc<Player>) {
             sender.enqueue_chunk(*pos);
         }
     }
-    player.watched_section.store(new_cylindrical);
 
     // Watcher marks are async. Tickets already sit at `center`. Spawn after
     // `mark_chunks_as_newly_watched` so `spawn_world_entity_chunks` sees a watcher.

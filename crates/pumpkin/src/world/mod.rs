@@ -117,7 +117,7 @@ use pumpkin_protocol::{
     java::{
         self,
         client::play::{
-            CBlockEntityData, CEntityStatus, CGameEvent, CLogin, CMultiBlockUpdate,
+            CBlockEntityData, CDamageEvent, CEntityStatus, CGameEvent, CLogin, CMultiBlockUpdate,
             CPlayerChatMessage, CPlayerInfoUpdate, CRemoveEntities, CRemovePlayerInfo,
             CSetSelectedSlot, CSoundEffect, CSpawnEntity, FilterType, GameEvent, InitChat,
             PlayerAction, PlayerInfoFlags,
@@ -161,6 +161,7 @@ pub mod bossbar;
 pub mod custom_bossbar;
 pub mod dragon_fight;
 pub mod end_podium;
+pub mod entity_tracker;
 pub mod natural_spawner;
 pub mod piston_batch;
 pub mod scoreboard;
@@ -322,6 +323,8 @@ pub struct World {
     /// false once entities and block entities run. Observable in `PistonBaseBlock.checkIfExtend`.
     /// Player ticks and packet handlers can see true here while vanilla would already be false.
     handling_tick: AtomicBool,
+    /// Vanilla `ChunkMap.entityMap`. Spawn, despawn, and entity packets go to `seen_by`.
+    pub entity_tracker: entity_tracker::EntityTracker,
 }
 
 #[derive(Clone, Copy)]
@@ -453,6 +456,7 @@ impl World {
             pending_chunk_removals: DashSet::new(),
             entity_ready_chunks: DashSet::new(),
             handling_tick: AtomicBool::new(false),
+            entity_tracker: entity_tracker::EntityTracker::new(),
         }
     }
 
@@ -647,9 +651,9 @@ impl World {
     }
 
     /// Serializes the live block entities of a chunk back into that chunk's block
-    /// entity data. The live map is the source of truth while a chunk is loaded -
+    /// entity data. The live map is the source of truth while a chunk is loaded ->
     /// `get_block_entity` takes the saved NBT out of the chunk when it wakes an
-    /// entity up - so this has to run before the chunk is dropped, or everything
+    /// entity up -> so this has to run before the chunk is dropped, or everything
     /// the entity did since it was loaded is lost.
     /// `false` if the raw chunk is gone: callers must keep the live BEs.
     fn save_block_entities(&self, chunk_pos: Vector2<i32>) -> bool {
@@ -714,14 +718,13 @@ impl World {
         }
     }
 
-    /// Sends an entity status update to all players tracking the specified entity.
-    pub fn send_entity_status(
+    /// Vanilla `ServerLevel.broadcastEntityEvent`.
+    pub fn broadcast_entity_event(
         &self,
         entity: &Entity,
         java_status: EntityStatus,
         bedrock_status: Option<ActorEventID>,
     ) {
-        let chunk_pos = entity.chunk_pos.load();
         let je_packet = CEntityStatus::new(entity.entity_id, java_status as i8);
         if let Some(be_event) = bedrock_status {
             let be_packet = SActorEvent {
@@ -730,14 +733,42 @@ impl World {
                 data: VarInt(0),
                 fire_at_position: None,
             };
-            self.broadcast_to_chunk_editioned(chunk_pos, &je_packet, &be_packet);
+            self.send_to_tracking_players_and_self_editioned(entity, &je_packet, &be_packet);
         } else {
-            self.broadcast_to_chunk(chunk_pos, &je_packet);
+            self.send_to_tracking_players_and_self(entity, &je_packet);
         }
     }
 
+    /// Vanilla `ServerLevel.broadcastDamageEvent`.
+    pub fn broadcast_damage_event(
+        &self,
+        entity: &Entity,
+        damage_type_id: i32,
+        source_entity_id: Option<i32>,
+        cause_entity_id: Option<i32>,
+        position: Option<Vector3<f64>>,
+    ) {
+        let je_packet = CDamageEvent::new(
+            entity.entity_id.into(),
+            damage_type_id.into(),
+            source_entity_id.map(Into::into),
+            cause_entity_id.map(Into::into),
+            position,
+        );
+        self.send_to_tracking_players_and_self(entity, &je_packet);
+    }
+
+    /// Sends an entity status update to all players tracking the specified entity.
+    pub fn send_entity_status(
+        &self,
+        entity: &Entity,
+        java_status: EntityStatus,
+        bedrock_status: Option<ActorEventID>,
+    ) {
+        self.broadcast_entity_event(entity, java_status, bedrock_status);
+    }
+
     pub fn send_remove_mob_effect(&self, entity: &Entity, effect_type: &'static StatusEffect) {
-        let chunk_pos = entity.chunk_pos.load();
         let je_packet =
             CRemoveMobEffect::new(entity.entity_id.into(), VarInt(i32::from(effect_type.id)));
 
@@ -751,11 +782,10 @@ impl World {
             tick: VarULong(0),
             ambient: false,
         };
-        self.broadcast_to_chunk_editioned(chunk_pos, &je_packet, &be_packet);
+        self.send_to_tracking_players_and_self_editioned(entity, &je_packet, &be_packet);
     }
 
     pub fn send_add_mob_effect(&self, entity: &Entity, effect: &pumpkin_data::potion::Effect) {
-        let chunk_pos = entity.chunk_pos.load();
         let mut flags: i8 = 0;
         if effect.ambient {
             flags |= 0x01;
@@ -786,7 +816,91 @@ impl World {
             ambient: effect.ambient,
         };
 
-        self.broadcast_to_chunk_editioned(chunk_pos, &je_packet, &be_packet);
+        self.send_to_tracking_players_and_self_editioned(entity, &je_packet, &be_packet);
+    }
+
+    pub fn send_to_tracking_players<P: ClientPacket + Sync>(&self, entity: &Entity, packet: &P) {
+        if let Some(tracked) = self.entity_tracker.get_tracked_entity(entity.entity_id) {
+            tracked.send_to_tracking_players(packet, self);
+        }
+    }
+
+    pub fn send_to_tracking_players_bedrock<P: BClientPacket + Sync>(
+        &self,
+        entity: &Entity,
+        packet: &P,
+    ) {
+        if let Some(tracked) = self.entity_tracker.get_tracked_entity(entity.entity_id) {
+            tracked.send_to_tracking_players_bedrock(packet, self);
+        }
+    }
+
+    pub fn send_to_tracking_players_editioned<J: ClientPacket + Sync, B: BClientPacket + Sync>(
+        &self,
+        entity: &Entity,
+        je_packet: &J,
+        be_packet: &B,
+    ) {
+        if let Some(tracked) = self.entity_tracker.get_tracked_entity(entity.entity_id) {
+            tracked.send_to_tracking_players_editioned(je_packet, be_packet, self);
+        }
+    }
+
+    pub fn send_to_tracking_players_and_self<P: ClientPacket + Sync>(
+        &self,
+        entity: &Entity,
+        packet: &P,
+    ) {
+        if let Some(tracked) = self.entity_tracker.get_tracked_entity(entity.entity_id) {
+            tracked.send_to_tracking_players_and_self(packet, self);
+        }
+    }
+
+    pub fn send_to_tracking_players_and_self_editioned<
+        J: ClientPacket + Sync,
+        B: BClientPacket + Sync,
+    >(
+        &self,
+        entity: &Entity,
+        je_packet: &J,
+        be_packet: &B,
+    ) {
+        if let Some(tracked) = self.entity_tracker.get_tracked_entity(entity.entity_id) {
+            tracked.send_to_tracking_players_and_self_editioned(je_packet, be_packet, self);
+        }
+    }
+
+    pub fn send_to_tracking_players_filtered<P: ClientPacket + Sync, F: Fn(&Player) -> bool>(
+        &self,
+        entity: &Entity,
+        packet: &P,
+        filter: F,
+    ) {
+        if let Some(tracked) = self.entity_tracker.get_tracked_entity(entity.entity_id) {
+            tracked.send_to_tracking_players_filtered(packet, self, filter);
+        }
+    }
+
+    pub fn send_to_tracking_players_filtered_editioned<
+        J: ClientPacket + Sync,
+        B: BClientPacket + Sync,
+        F: Fn(&Player) -> bool,
+    >(
+        &self,
+        entity: &Entity,
+        je_packet: &J,
+        be_packet: &B,
+        filter: F,
+    ) {
+        if let Some(tracked) = self.entity_tracker.get_tracked_entity(entity.entity_id) {
+            tracked.send_to_tracking_players_filtered_editioned(je_packet, be_packet, self, filter);
+        }
+    }
+
+    #[must_use]
+    pub fn is_tracked_by_any_player(&self, entity: &Entity) -> bool {
+        self.entity_tracker
+            .is_tracked_by_any_player(entity.entity_id)
     }
 
     pub fn set_difficulty(&self, difficulty: Difficulty) {
@@ -1625,34 +1739,8 @@ impl World {
             Self::tick_one_entity(entity, server, &players_cache, *entity_chunk);
         }
 
-        // Vanilla `ChunkMap.tick` / `TrackedEntity`: re-derive visibility every tick
-        // (an entity can walk into a standing player's view on its own).
-        let players = self.players.load();
-        for entity in entities_to_tick.iter() {
-            let base = entity.get_entity();
-            let new_chunk = base.chunk_pos.load();
-            let old_chunk = base.synced_chunk_pos.swap(new_chunk);
-            if old_chunk == new_chunk {
-                continue;
-            }
-
-            for player in players.iter() {
-                let center = player.get_entity().chunk_pos.load();
-                let view_distance = get_view_distance(player).get() as i32;
-                let was_visible = is_within_view_distance(old_chunk, center, view_distance);
-                let is_visible = is_within_view_distance(new_chunk, center, view_distance);
-                if was_visible == is_visible {
-                    continue;
-                }
-
-                if is_visible {
-                    player.client.try_enqueue_spawn_packet(entity);
-                    player.try_restore_vehicle(entity);
-                } else {
-                    Self::try_despawn_entity_ids_for_player(player, &[base.entity_id]);
-                }
-            }
-        }
+        // Vanilla `ChunkMap.tick`: re-derive pairing every tick (range + view cylinder).
+        self.entity_tracker.update_all(self);
 
         let entity_elapsed = t_entities.elapsed();
 
@@ -4306,13 +4394,7 @@ impl World {
             container_id: 0,
         };
 
-        let chunk_pos = from.get_entity().chunk_pos.load();
-        self.broadcast_to_chunk_except_editioned(
-            chunk_pos,
-            &[from.get_entity().entity_uuid],
-            &je_packet,
-            &be_mob_equipment,
-        );
+        self.send_to_tracking_players_editioned(from.get_entity(), &je_packet, &be_mob_equipment);
     }
 
     pub fn send_world_info(
@@ -4842,7 +4924,8 @@ impl World {
                         continue;
                     }
                     had_live = true;
-                    player.client.try_enqueue_spawn_packet(entity);
+                    // Spawn packets come from `EntityTracker.add_pairing`. This path only
+                    // restores the vehicle after the chunk's entities are live.
                     player.try_restore_vehicle(entity);
                 }
 
@@ -4902,7 +4985,6 @@ impl World {
                 leftover.push(entity_nbt);
                 continue;
             }
-            self.broadcast_entity_spawn(&entity);
             entity.init_data_tracker();
         }
         if !leftover.is_empty() {
@@ -5304,6 +5386,8 @@ impl World {
             new_list.push(player.clone());
             new_list
         });
+        self.entity_tracker
+            .add_entity(&(player.clone() as Arc<dyn EntityBase>), self);
         Ok(())
     }
 
@@ -5345,6 +5429,8 @@ impl World {
             new_list
         });
         if let Some(ref player) = removed_player {
+            self.entity_tracker
+                .remove_entity(player.as_ref() as &dyn EntityBase, self);
             let uuid = player.gameprofile.id;
             let entity_id = player.entity_id();
 
@@ -5366,11 +5452,6 @@ impl World {
             };
 
             self.broadcast_editioned(&CRemovePlayerInfo::new(&[uuid]), &bedrock_remove_player);
-
-            self.broadcast_editioned(
-                &CRemoveEntities::new(&[entity_id.into()]),
-                &CRemoveActor::new(VarLong(entity_id as i64)),
-            );
 
             if fire_event {
                 let msg_comp = TextComponent::translate_cross(
@@ -5397,7 +5478,6 @@ impl World {
     }
 
     pub fn spawn_entity_non_save(&self, entity: Arc<dyn EntityBase>) {
-        self.broadcast_entity_spawn(&entity);
         let _ = self.add_entity_silent(entity);
     }
 
@@ -5415,24 +5495,8 @@ impl World {
             return;
         }
 
-        self.broadcast_entity_spawn(&entity);
         entity.init_data_tracker();
         let _ = self.add_entity_silent(entity);
-    }
-
-    pub fn broadcast_entity_spawn(&self, entity: &Arc<dyn EntityBase>) {
-        let base_entity = entity.get_entity();
-        let chunk_pos = base_entity.chunk_pos.load();
-
-        let players = self.players.load();
-        for player in players.iter() {
-            let center = player.get_entity().chunk_pos.load();
-            let view_distance = get_view_distance(player).get() as i32;
-
-            if is_within_view_distance(chunk_pos, center, view_distance) {
-                player.client.try_enqueue_spawn_packet(entity);
-            }
-        }
     }
 
     /// Vanilla `PersistentEntitySectionManager.addEntity`: reject a known UUID.
@@ -5454,6 +5518,7 @@ impl World {
             new_entities
         });
         self.index_insert_entity(&entity);
+        self.entity_tracker.add_entity(&entity, self);
         true
     }
 
@@ -5476,13 +5541,7 @@ impl World {
             new_entities
         });
         self.index_remove_entity(base_entity.chunk_pos.load(), base_entity.entity_id);
-
-        let chunk_pos = base_entity.chunk_pos.load();
-        self.broadcast_to_chunk_editioned(
-            chunk_pos,
-            &CRemoveEntities::new(&[base_entity.entity_id.into()]),
-            &CRemoveActor::new(VarLong(base_entity.entity_id as i64)),
-        );
+        self.entity_tracker.remove_entity(entity, self);
     }
 
     /// Tells one client to forget entities in `chunks`.
@@ -5618,16 +5677,7 @@ impl World {
         for entity in entities_to_remove {
             self.entity_uuids.remove(&entity.get_entity().entity_uuid);
             self.spawn_state.load().remove_entity(self, entity.as_ref());
-
-            // Same as `remove_entity`: broadcast despawn. Reloading the chunk spawns a new
-            // id (`CURRENT_ID` is never reused); leftover ghosts disconnect on attack.
-            let base_entity = entity.get_entity();
-            let chunk_pos = base_entity.chunk_pos.load();
-            self.broadcast_to_chunk_editioned(
-                chunk_pos,
-                &CRemoveEntities::new(&[base_entity.entity_id.into()]),
-                &CRemoveActor::new(VarLong(base_entity.entity_id as i64)),
-            );
+            self.entity_tracker.remove_entity(entity.as_ref(), self);
         }
 
         for chunk_pos in &chunks_set {

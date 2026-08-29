@@ -36,10 +36,18 @@ pub struct EntityType {
     pub category: MobCategory,
     /// Whether this entity can spawn far from the player (beyond normal spawn range).
     pub can_spawn_far_from_player: bool,
+    /// Client tracking range in chunks.
+    pub client_tracking_range: u32,
+    /// Update interval in ticks.
+    pub update_interval: u32,
+    /// Whether movement deltas should be tracked.
+    pub track_deltas: bool,
     /// Bounding box dimensions as `[width, height]` in blocks.
     pub dimension: [f32; 2],
     /// Eye height in blocks, used for line-of-sight calculations.
     pub eye_height: f32,
+    /// Scale factor for spawn dimensions (e.g. slimes/magma cubes).
+    pub spawn_dimensions_scale: f32,
     /// Spawn location restrictions for natural spawning.
     pub spawn_restriction: SpawnRestriction,
 }
@@ -173,6 +181,7 @@ impl ToTokens for NamedEntityType<'_> {
 
         let dimension0 = entity.dimension[0];
         let dimension1 = entity.dimension[1];
+        let spawn_dimensions_scale = entity.spawn_dimensions_scale;
 
         let loot_table = if let Some(table) = &entity.loot_table {
             let table_tokens = table.to_token_stream();
@@ -182,6 +191,9 @@ impl ToTokens for NamedEntityType<'_> {
         };
 
         let experience_reward = entity.experience_reward.unwrap_or(0);
+        let client_tracking_range = entity.client_tracking_range;
+        let update_interval = entity.update_interval;
+        let track_deltas = entity.track_deltas;
 
         tokens.extend(quote! {
             EntityType {
@@ -197,9 +209,13 @@ impl ToTokens for NamedEntityType<'_> {
                 fire_immune: #fire_immune,
                 category: &#spawn_category,
                 can_spawn_far_from_player: #can_spawn_far_from_player,
+                client_tracking_range: #client_tracking_range,
+                update_interval: #update_interval,
+                track_deltas: #track_deltas,
                 loot_table: #loot_table,
                 dimension: [#dimension0, #dimension1], // Correctly construct the array
                 eye_height: #eye_height,
+                spawn_dimensions_scale: #spawn_dimensions_scale,
                 spawn_restriction: #spawn_restriction,
                 resource_name: #name,
             }
@@ -250,6 +266,8 @@ pub fn build() -> TokenStream {
         use crate::sound::Sound;
         use pumpkin_util::loot_table::*;
         use pumpkin_util::HeightMap;
+        use pumpkin_util::math::boundingbox::BoundingBox;
+        use pumpkin_util::math::vector3::Vector3;
         use std::hash::Hash;
 
         #[derive(Debug, Clone)]
@@ -266,9 +284,13 @@ pub fn build() -> TokenStream {
             pub fire_immune: bool,
             pub category: &'static MobCategory,
             pub can_spawn_far_from_player: bool,
+            pub client_tracking_range: u32,
+            pub update_interval: u32,
+            pub track_deltas: bool,
             pub loot_table: Option<LootTable>,
             pub dimension: [f32; 2],
             pub eye_height: f32,
+            pub spawn_dimensions_scale: f32,
             pub spawn_restriction: SpawnRestriction,
             pub resource_name: &'static str,
         }
@@ -422,6 +444,31 @@ pub fn build() -> TokenStream {
                     #type_from_name
                     _ => None
                 }
+            }
+
+            #[must_use]
+            pub const fn width(&self) -> f32 {
+                self.dimension[0]
+            }
+
+            #[must_use]
+            pub const fn height(&self) -> f32 {
+                self.dimension[1]
+            }
+
+            #[must_use]
+            pub fn get_spawn_bounding_box(&self, x: f64, y: f64, z: f64) -> BoundingBox {
+                let half_width = f64::from(self.spawn_dimensions_scale * self.dimension[0] / 2.0);
+                let height = f64::from(self.spawn_dimensions_scale * self.dimension[1]);
+                BoundingBox::new(
+                    Vector3::new(x - half_width, y, z - half_width),
+                    Vector3::new(x + half_width, y + height, z + half_width),
+                )
+            }
+
+            #[must_use]
+            pub fn get_spawn_aabb(&self, x: f64, y: f64, z: f64) -> BoundingBox {
+                self.get_spawn_bounding_box(x, y, z)
             }
         }
 

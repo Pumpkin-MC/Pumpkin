@@ -59,7 +59,7 @@ use pumpkin_protocol::java::client::play::{
 };
 use pumpkin_protocol::{
     codec::item_stack_seralizer::ItemStackSerializer,
-    java::client::play::{CDamageEvent, CSetEquipment, Metadata, MetadataSerializer},
+    java::client::play::{CSetEquipment, Metadata, MetadataSerializer},
     ser::{NetworkWriteExt, WritingError},
 };
 use pumpkin_util::math::boundingbox::BoundingBox;
@@ -2492,13 +2492,13 @@ impl LivingEntity {
             world.broadcast_to_chunk_bedrock(self.entity.chunk_pos.load(), &hurt_event);
         }
 
-        world.broadcast_packet_all(&CDamageEvent::new(
-            self.entity.entity_id.into(),
-            damage_type.id.into(),
-            source.map(|e| e.get_entity().entity_id.into()),
-            cause.map(|e| e.get_entity().entity_id.into()),
+        world.broadcast_damage_event(
+            &self.entity,
+            i32::from(damage_type.id),
+            source.map(|e| e.get_entity().entity_id),
+            cause.map(|e| e.get_entity().entity_id),
             position,
-        ));
+        );
 
         if play_sound {
             world.play_sound(
