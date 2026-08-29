@@ -572,10 +572,6 @@ mod tests {
                 "{} leaked latest id {} to 1.21.6 (client would show whatever item has that id)",
                 item.registry_key, item.id
             );
-            eprintln!(
-                "{} 26.2 id {} -> 1.21.6 id {remapped}",
-                item.registry_key, item.id
-            );
         }
     }
 }
