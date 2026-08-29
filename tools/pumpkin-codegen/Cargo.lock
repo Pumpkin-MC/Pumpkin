@@ -312,7 +312,6 @@ dependencies = [
  "digest 0.11.2",
  "ff",
  "group",
- "hkdf",
  "hybrid-array",
  "pkcs8",
  "rand_core",
@@ -440,15 +439,6 @@ name = "heck"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
-
-[[package]]
-name = "hkdf"
-version = "0.13.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4aaa26c720c68b866f2c96ef5c1264b3e6f473fe5d4ce61cd44bbe913e553018"
-dependencies = [
- "hmac",
-]
 
 [[package]]
 name = "hmac"

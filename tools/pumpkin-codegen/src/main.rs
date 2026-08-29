@@ -96,6 +96,7 @@ pub fn main() {
     std::env::set_current_dir(manifest_dir).expect("Failed to set current dir to manifest dir");
 
     type BuilderFn = fn() -> TokenStream;
+    type BuilderFn2 = fn() -> (TokenStream, TokenStream);
 
     fs::create_dir_all(OUT_DIR).expect("Failed to create output directory");
 
@@ -128,13 +129,11 @@ pub fn main() {
         (damage_type::build, "damage_type.rs"),
         (message_type::build, "message_type.rs"),
         (spawn_egg::build, "spawn_egg.rs"),
-        (block::build, "block.rs"),
         (item::build, "item.rs"),
         (structures::build, "structures.rs"),
         (chunk_gen_settings::build, "chunk_gen_settings.rs"),
         (fluid::build, "fluid.rs"),
         (entity_status::build, "entity_status.rs"),
-        (tag::build, "tag.rs"),
         (noise_router::build, "noise_router.rs"),
         (villager::build, "villager.rs"),
         (
@@ -168,6 +167,10 @@ pub fn main() {
         (dye_color::build, "dye_color.rs"),
     ];
     build_functions.extend(remap::build());
+    let mut build_2_functions: Vec<(BuilderFn2, &str, &str)> = vec![
+        (block::build, "block.rs", "block_id_map.rs"),
+        (tag::build, "tag.rs", "block_tag.rs"),
+    ];
 
     // If any arguments are given, treat them as file-stem filters.
     // e.g. `cargo run -- chest_loot` only regenerates chest_loot.rs.
@@ -184,6 +187,30 @@ pub fn main() {
             })
             .collect()
     };
+    rayon::spawn(move || {
+        build_2_functions
+            .par_iter()
+            .for_each(|(build_fn, file_a, file_b)| {
+                let header = "/* This file is generated. Do not edit manually. */\n";
+                println!("Parsing {} & {}", file_a, file_b);
+
+                let (a, b) = build_fn();
+                let (a, b) = (a.to_string(), b.to_string());
+                let (a, b) = (
+                    format_code(&a).map_or_else(
+                        |_| format!("{header}{a}"),
+                        |formatted| format!("{header}{formatted}"),
+                    ),
+                    format_code(&b).map_or_else(
+                        |_| format!("{header}{b}"),
+                        |formatted| format!("{header}{formatted}"),
+                    ),
+                );
+
+                write_generated_file(&a, file_a);
+                write_generated_file(&b, file_b);
+            });
+    });
 
     build_functions.par_iter().for_each(|(build_fn, file)| {
         println!("Parsing {}", file);
