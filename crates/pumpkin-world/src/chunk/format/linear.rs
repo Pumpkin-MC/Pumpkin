@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 use std::io::{ErrorKind, Read};
 use std::marker::PhantomData;
 use std::path::PathBuf;
@@ -141,15 +141,15 @@ impl ChunkBitmap {
 // Repeated: u8 key_len, key bytes, u32 value
 // Terminated by a single 0x00 byte.
 
-struct NbtFeatures(HashMap<String, u32>);
+struct NbtFeatures(FxHashMap<String, u32>);
 
 impl NbtFeatures {
     fn empty() -> Self {
-        Self(HashMap::new())
+        Self(FxHashMap::default())
     }
 
     fn from_bytes(buf: &mut impl Buf) -> Result<Self, ChunkReadingError> {
-        let mut map = HashMap::new();
+        let mut map = FxHashMap::default();
         loop {
             if !buf.has_remaining() {
                 return Err(ChunkReadingError::IoError(std::io::Error::from(

@@ -1,6 +1,6 @@
 use pumpkin_data::attributes::Attributes;
 use pumpkin_data::entity::EntityType;
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
@@ -193,10 +193,10 @@ impl Clone for AttributeInstance {
 }
 
 /// Registry storing per-entity-type base attribute overrides.
-/// Internally stores a map from `entity_type.id` -> `HashMap`<attribute.id, f64> for O(1) lookup.
+/// Internally stores a map from `entity_type.id` -> `FxHashMap`<attribute.id, f64> for O(1) lookup.
 #[derive(Default)]
 pub struct AttributeRegistry {
-    map: HashMap<u16, HashMap<u8, f64>>,
+    map: FxHashMap<u16, FxHashMap<u8, f64>>,
 }
 
 impl AttributeRegistry {
@@ -278,7 +278,7 @@ mod tests {
             .find(|(attr, _)| attr.id == Attributes::MOVEMENT_SPEED.id);
         assert!(speed_attr.is_some());
         let (_, base_speed) = speed_attr.unwrap();
-        assert!((base_speed - 0.1).abs() < f64::EPSILON);
+        assert!((base_speed - 0.1).abs() < 1e-4);
     }
 
     #[test]

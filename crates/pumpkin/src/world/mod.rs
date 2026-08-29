@@ -116,7 +116,7 @@ use pumpkin_protocol::{
     java::{
         self,
         client::play::{
-            CBlockEntityData, CEntityStatus, CGameEvent, CLogin, CMultiBlockUpdate,
+            CBlockEntityData, CDamageEvent, CEntityStatus, CGameEvent, CLogin, CMultiBlockUpdate,
             CPlayerChatMessage, CPlayerInfoUpdate, CRemoveEntities, CRemovePlayerInfo,
             CSetSelectedSlot, CSoundEffect, CSpawnEntity, FilterType, GameEvent, InitChat,
             PlayerAction, PlayerInfoFlags,
@@ -160,6 +160,7 @@ pub mod bossbar;
 pub mod custom_bossbar;
 pub mod dragon_fight;
 pub mod end_podium;
+pub mod entity_tracker;
 pub mod natural_spawner;
 pub mod scoreboard;
 pub mod weather;
@@ -280,6 +281,8 @@ pub struct World {
     pub custom_data: std::sync::Mutex<NbtCompound>,
     /// Persistent custom data for block entities at specific positions
     pub custom_block_entity_data: DashMap<BlockPos, NbtCompound>,
+    /// Entity tracker responsible for tracking entity visibility and sending delta/status packets to watchers.
+    pub entity_tracker: entity_tracker::EntityTracker,
 }
 
 #[derive(Clone, Copy)]
@@ -403,6 +406,7 @@ impl World {
             block_entities: DashMap::new(),
             custom_data: std::sync::Mutex::new(custom_data),
             custom_block_entity_data: DashMap::new(),
+            entity_tracker: entity_tracker::EntityTracker::new(),
         }
     }
 
@@ -546,14 +550,15 @@ impl World {
         }
     }
 
-    /// Sends an entity status update to all players tracking the specified entity.
-    pub fn send_entity_status(
+    /// Broadcasts an entity status update / event to all players tracking the specified entity,
+    /// and to the entity itself if it is a player.
+    /// Matching Vanilla's `ServerLevel.broadcastEntityEvent(entity, event)`.
+    pub fn broadcast_entity_event(
         &self,
         entity: &Entity,
         java_status: EntityStatus,
         bedrock_status: Option<ActorEventID>,
     ) {
-        let chunk_pos = entity.chunk_pos.load();
         let je_packet = CEntityStatus::new(entity.entity_id, java_status as i8);
         if let Some(be_event) = bedrock_status {
             let be_packet = SActorEvent {
@@ -562,14 +567,44 @@ impl World {
                 data: VarInt(0),
                 fire_at_position: None,
             };
-            self.broadcast_to_chunk_editioned(chunk_pos, &je_packet, &be_packet);
+            self.send_to_tracking_players_and_self_editioned(entity, &je_packet, &be_packet);
         } else {
-            self.broadcast_to_chunk(chunk_pos, &je_packet);
+            self.send_to_tracking_players_and_self(entity, &je_packet);
         }
     }
 
+    /// Broadcasts a damage event to all players tracking the specified entity,
+    /// and to the entity itself if it is a player.
+    /// Matching Vanilla's `ServerLevel.broadcastDamageEvent(entity, source)`.
+    pub fn broadcast_damage_event(
+        &self,
+        entity: &Entity,
+        damage_type_id: i32,
+        source_entity_id: Option<i32>,
+        cause_entity_id: Option<i32>,
+        position: Option<Vector3<f64>>,
+    ) {
+        let je_packet = CDamageEvent::new(
+            entity.entity_id.into(),
+            damage_type_id.into(),
+            source_entity_id.map(Into::into),
+            cause_entity_id.map(Into::into),
+            position,
+        );
+        self.send_to_tracking_players_and_self(entity, &je_packet);
+    }
+
+    /// Sends an entity status update to all players tracking the specified entity.
+    pub fn send_entity_status(
+        &self,
+        entity: &Entity,
+        java_status: EntityStatus,
+        bedrock_status: Option<ActorEventID>,
+    ) {
+        self.broadcast_entity_event(entity, java_status, bedrock_status);
+    }
+
     pub fn send_remove_mob_effect(&self, entity: &Entity, effect_type: &'static StatusEffect) {
-        let chunk_pos = entity.chunk_pos.load();
         let je_packet =
             CRemoveMobEffect::new(entity.entity_id.into(), VarInt(i32::from(effect_type.id)));
 
@@ -583,11 +618,10 @@ impl World {
             tick: VarULong(0),
             ambient: false,
         };
-        self.broadcast_to_chunk_editioned(chunk_pos, &je_packet, &be_packet);
+        self.send_to_tracking_players_and_self_editioned(entity, &je_packet, &be_packet);
     }
 
     pub fn send_add_mob_effect(&self, entity: &Entity, effect: &pumpkin_data::potion::Effect) {
-        let chunk_pos = entity.chunk_pos.load();
         let mut flags: i8 = 0;
         if effect.ambient {
             flags |= 0x01;
@@ -618,7 +652,91 @@ impl World {
             ambient: effect.ambient,
         };
 
-        self.broadcast_to_chunk_editioned(chunk_pos, &je_packet, &be_packet);
+        self.send_to_tracking_players_and_self_editioned(entity, &je_packet, &be_packet);
+    }
+
+    pub fn send_to_tracking_players<P: ClientPacket + Sync>(&self, entity: &Entity, packet: &P) {
+        if let Some(tracked) = self.entity_tracker.get_tracked_entity(entity.entity_id) {
+            tracked.send_to_tracking_players(packet, self);
+        }
+    }
+
+    pub fn send_to_tracking_players_bedrock<P: BClientPacket + Sync>(
+        &self,
+        entity: &Entity,
+        packet: &P,
+    ) {
+        if let Some(tracked) = self.entity_tracker.get_tracked_entity(entity.entity_id) {
+            tracked.send_to_tracking_players_bedrock(packet, self);
+        }
+    }
+
+    pub fn send_to_tracking_players_editioned<J: ClientPacket + Sync, B: BClientPacket + Sync>(
+        &self,
+        entity: &Entity,
+        je_packet: &J,
+        be_packet: &B,
+    ) {
+        if let Some(tracked) = self.entity_tracker.get_tracked_entity(entity.entity_id) {
+            tracked.send_to_tracking_players_editioned(je_packet, be_packet, self);
+        }
+    }
+
+    pub fn send_to_tracking_players_and_self<P: ClientPacket + Sync>(
+        &self,
+        entity: &Entity,
+        packet: &P,
+    ) {
+        if let Some(tracked) = self.entity_tracker.get_tracked_entity(entity.entity_id) {
+            tracked.send_to_tracking_players_and_self(packet, self);
+        }
+    }
+
+    pub fn send_to_tracking_players_and_self_editioned<
+        J: ClientPacket + Sync,
+        B: BClientPacket + Sync,
+    >(
+        &self,
+        entity: &Entity,
+        je_packet: &J,
+        be_packet: &B,
+    ) {
+        if let Some(tracked) = self.entity_tracker.get_tracked_entity(entity.entity_id) {
+            tracked.send_to_tracking_players_and_self_editioned(je_packet, be_packet, self);
+        }
+    }
+
+    pub fn send_to_tracking_players_filtered<P: ClientPacket + Sync, F: Fn(&Player) -> bool>(
+        &self,
+        entity: &Entity,
+        packet: &P,
+        filter: F,
+    ) {
+        if let Some(tracked) = self.entity_tracker.get_tracked_entity(entity.entity_id) {
+            tracked.send_to_tracking_players_filtered(packet, self, filter);
+        }
+    }
+
+    pub fn send_to_tracking_players_filtered_editioned<
+        J: ClientPacket + Sync,
+        B: BClientPacket + Sync,
+        F: Fn(&Player) -> bool,
+    >(
+        &self,
+        entity: &Entity,
+        je_packet: &J,
+        be_packet: &B,
+        filter: F,
+    ) {
+        if let Some(tracked) = self.entity_tracker.get_tracked_entity(entity.entity_id) {
+            tracked.send_to_tracking_players_filtered_editioned(je_packet, be_packet, self, filter);
+        }
+    }
+
+    #[must_use]
+    pub fn is_tracked_by_any_player(&self, entity: &Entity) -> bool {
+        self.entity_tracker
+            .is_tracked_by_any_player(entity.entity_id)
     }
 
     pub fn set_difficulty(&self, difficulty: Difficulty) {
@@ -1322,6 +1440,8 @@ impl World {
                 }
             });
         let entity_elapsed = t_entities.elapsed();
+
+        self.entity_tracker.update_all(self);
 
         let mut block_entities: Vec<Arc<dyn BlockEntity>> = Vec::new();
         for chunk_pos in active_chunks.iter() {
@@ -3788,13 +3908,7 @@ impl World {
             container_id: 0,
         };
 
-        let chunk_pos = from.get_entity().chunk_pos.load();
-        self.broadcast_to_chunk_except_editioned(
-            chunk_pos,
-            &[from.get_entity().entity_uuid],
-            &je_packet,
-            &be_mob_equipment,
-        );
+        self.send_to_tracking_players_editioned(from.get_entity(), &je_packet, &be_mob_equipment);
     }
 
     pub fn send_world_info(
@@ -4095,11 +4209,7 @@ impl World {
                         // observer sees the player in a world whose chunk manager doesn't match.
                         self.remove_player(player, false).await;
                         player.unload_watched_chunks(self).await;
-                        player
-                            .chunk_manager
-                            .lock()
-                            .unwrap_or_else(std::sync::PoisonError::into_inner)
-                            .change_world(&self.level, destination.clone());
+                        player.change_world_chunks(&self.level, &destination);
                         player.living_entity.entity.set_world(destination.clone());
                         destination.players.rcu(|current_list| {
                             let mut new_list = (**current_list).clone();
@@ -4710,6 +4820,8 @@ impl World {
             new_list.push(player.clone());
             new_list
         });
+        self.entity_tracker
+            .add_entity(&(player.clone() as Arc<dyn EntityBase>), self);
         Ok(())
     }
 
@@ -4751,6 +4863,8 @@ impl World {
             new_list
         });
         if let Some(ref player) = removed_player {
+            self.entity_tracker
+                .remove_entity(player.as_ref() as &dyn EntityBase, self);
             let uuid = player.gameprofile.id;
             let entity_id = player.entity_id();
 
@@ -4805,7 +4919,7 @@ impl World {
     #[expect(clippy::needless_pass_by_value)]
     pub fn spawn_entity_non_save(&self, entity: Arc<dyn EntityBase>) {
         let _base_entity = entity.get_entity();
-        self.broadcast_entity_spawn(&entity);
+        self.entity_tracker.add_entity(&entity, self);
         self.spawn_state.load().add_entity(self, entity.as_ref());
 
         self.entities.rcu(|current_entities| {
@@ -4829,7 +4943,6 @@ impl World {
             return;
         }
 
-        self.broadcast_entity_spawn(&entity);
         entity.init_data_tracker();
         self.add_entity_silent(entity);
     }
@@ -4869,6 +4982,7 @@ impl World {
         // unload (see `save_entity`), never at spawn, so it can't be both live and
         // serialized at once (which would double it on the next reload).
         self.spawn_state.load().add_entity(self, entity.as_ref());
+        self.entity_tracker.add_entity(&entity, self);
 
         self.entities.rcu(|current_entities| {
             let mut new_entities = (**current_entities).clone();
@@ -4889,18 +5003,12 @@ impl World {
         base_entity.removed.store(true, Ordering::Release);
 
         self.spawn_state.load().remove_entity(self, entity);
+        self.entity_tracker.remove_entity(entity, self);
         self.entities.rcu(|current_entities| {
             let mut new_entities = (**current_entities).clone();
             new_entities.retain(|e| e.get_entity().entity_uuid != base_entity.entity_uuid);
             new_entities
         });
-
-        let chunk_pos = base_entity.chunk_pos.load();
-        self.broadcast_to_chunk_editioned(
-            chunk_pos,
-            &CRemoveEntities::new(&[base_entity.entity_id.into()]),
-            &CRemoveActor::new(VarLong(base_entity.entity_id as i64)),
-        );
     }
 
     pub async fn remove_entities_in_chunks(
@@ -4929,6 +5037,7 @@ impl World {
         });
 
         for entity in entities_to_remove {
+            self.entity_tracker.remove_entity(entity.as_ref(), self);
             self.save_entity(&entity).await;
             self.spawn_state.load().remove_entity(self, entity.as_ref());
         }
