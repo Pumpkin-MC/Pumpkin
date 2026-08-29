@@ -1,7 +1,7 @@
 #![allow(clippy::unwrap_used)]
 
 use pumpkin_registry::{
-    BOOTSTRAP, RegistryConfig,
+    BOOTSTRAP, Registry, RegistryBuilder, RegistryConfig, TypedRegistry,
     bootstrap::{BootstrapManager, RegistryEntry},
     bootstrap_provider,
 };
@@ -109,4 +109,76 @@ fn duplicate_entries_can_be_overwritten() {
     assert_eq!(mapping.len(), 1);
     assert_eq!(mapping[&Identifier::parse_static("test:value")], 0);
     assert!(matches!(entries[0], Block(1 | 2)));
+}
+
+#[test]
+fn replacement_preserves_bootstrap_entries() {
+    let _ = BOOTSTRAP.set(BootstrapManager::new());
+    let registry = RegistryBuilder::<Block>::reloadable(&BLOCK_REGISTRY, &[], &[]).unwrap();
+
+    registry
+        .replace_entries([
+            (Identifier::parse_static("test:new_one"), Block(10)),
+            (Identifier::parse_static("test:new_two"), Block(20)),
+        ])
+        .unwrap();
+
+    let new_one = Identifier::parse_static("test:new_one");
+    let old_one = Identifier::parse_static("test:one");
+    assert_eq!(*registry.get(&new_one).unwrap(), Block(10));
+    assert_eq!(*registry.get(&old_one).unwrap(), Block(1));
+}
+
+#[test]
+fn replacement_rejects_bootstrap_overwrite_by_default() {
+    let _ = BOOTSTRAP.set(BootstrapManager::new());
+    let registry = RegistryBuilder::<Block>::reloadable(&BLOCK_REGISTRY, &[], &[]).unwrap();
+    let original = Identifier::parse_static("test:one");
+
+    let result = registry.replace_entries([(original.clone(), Block(10))]);
+
+    assert!(result.is_err());
+    assert_eq!(*registry.get(&original).unwrap(), Block(1));
+}
+
+#[test]
+fn replacement_overwrites_bootstrap_entry_when_configured() {
+    let _ = BOOTSTRAP.set(BootstrapManager::new());
+    let registry = RegistryBuilder::<Block>::reloadable_with_config(
+        &BLOCK_REGISTRY,
+        &[],
+        &[],
+        RegistryConfig {
+            allow_overwrites: true,
+        },
+    )
+    .unwrap();
+    let original = Identifier::parse_static("test:one");
+    let untouched = Identifier::parse_static("test:two");
+    let original_id = registry.get_id(&original).unwrap();
+
+    registry
+        .replace_entries([(original.clone(), Block(10))])
+        .unwrap();
+
+    assert_eq!(registry.get_id(&original), Some(original_id));
+    assert_eq!(*registry.get(&original).unwrap(), Block(10));
+    assert_eq!(*registry.get(&untouched).unwrap(), Block(2));
+}
+
+#[test]
+fn failed_replacement_preserves_existing_snapshot() {
+    let _ = BOOTSTRAP.set(BootstrapManager::new());
+    let registry = RegistryBuilder::<Block>::reloadable(&BLOCK_REGISTRY, &[], &[]).unwrap();
+    let retained = Identifier::parse_static("test:retained");
+
+    registry
+        .replace_entries([(retained.clone(), Block(10))])
+        .unwrap();
+
+    let duplicate = Identifier::parse_static("test:duplicate");
+    let result = registry.replace_entries([(duplicate.clone(), Block(20)), (duplicate, Block(30))]);
+
+    assert!(result.is_err());
+    assert_eq!(*registry.get(&retained).unwrap(), Block(10));
 }

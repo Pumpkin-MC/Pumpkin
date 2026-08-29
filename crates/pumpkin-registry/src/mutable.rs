@@ -42,6 +42,44 @@ impl<T: Send + Sync + 'static> ReloadableRegistry<T> {
         self.inner.store(Arc::new(replacement));
         Ok(())
     }
+
+    /// Atomically rebuilds this registry from its bootstrap providers, then
+    /// applies the supplied entries as an overlay.
+    ///
+    /// Duplicate identifiers are handled according to the registry's
+    /// [`RegistryConfig`]. If bootstrap population or overlay validation fails,
+    /// the existing registry snapshot remains unchanged.
+    pub fn replace_entries<I>(&self, entries: I) -> Result<(), BootstrapError>
+    where
+        I: IntoIterator<Item = (Identifier, T)>,
+    {
+        let (mut values, mut mapping) = BOOTSTRAP
+            .get()
+            .ok_or(BootstrapError::Uninitialized)
+            .and_then(|manager| manager.populate_with_config::<T>(&self.name, self.config))?;
+
+        for (identifier, value) in entries {
+            if let Some(&id) = mapping.get(&identifier) {
+                if !self.config.allow_overwrites {
+                    return Err(BootstrapError::DuplicateEntry {
+                        registry: self.name.clone(),
+                        identifier,
+                    });
+                }
+
+                values[id] = value;
+                continue;
+            }
+
+            let id = values.len();
+            mapping.insert(identifier, id);
+            values.push(value);
+        }
+
+        let replacement = StaticRegistry::new(&[], values.into_boxed_slice(), mapping);
+        self.inner.store(Arc::new(replacement));
+        Ok(())
+    }
 }
 
 impl<T: Send + Sync + 'static> Registry for ReloadableRegistry<T> {
