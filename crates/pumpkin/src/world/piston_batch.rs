@@ -13,7 +13,8 @@ use crate::world::World;
 
 /// One cell of slack around a moving block (`PistonMath.getMovementArea` sweeps a full cell).
 ///
-/// The destination occupant is pushed, so it must tick in this batch, not in the entity `JoinSet`.
+/// The destination occupant is pushed, so it must tick in this batch, not in the parallel
+/// entity batches.
 const CONSTRUCTION_REACH: f64 = 1.0;
 
 struct Entry {
@@ -24,7 +25,7 @@ struct Entry {
 }
 
 /// Order-sensitive BEs of one tick. Gathered before the entity phase so `overlaps` can pull
-/// colliding entities out of the concurrent `JoinSet`.
+/// colliding entities out of the parallel entity batches.
 #[derive(Default)]
 pub struct PistonBatch {
     entries: Vec<Entry>,
@@ -69,7 +70,8 @@ impl PistonBatch {
         self.entries.is_empty()
     }
 
-    /// True if this entity must tick sequentially with the construction, not in the `JoinSet`.
+    /// True if this entity must tick sequentially with the construction, not in the parallel
+    /// entity batches.
     ///
     /// A cart on a piston-driven slime reads the rail the placeholders rewrite this tick; a
     /// concurrent tick would race that write.
@@ -80,8 +82,8 @@ impl PistonBatch {
 
     /// Ticks placeholders one at a time, in the order `sort` established.
     ///
-    /// After the concurrent BE `JoinSet`. Sequential `await`: two placeholders cannot place
-    /// into the same neighbour on the same tick.
+    /// After the parallel BE batches. Sequential: two placeholders cannot place into the
+    /// same neighbour on the same tick.
     pub fn tick_block_entities(&self, world: &Arc<World>) {
         for entry in &self.entries {
             if world

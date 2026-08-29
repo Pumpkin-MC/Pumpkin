@@ -1811,7 +1811,7 @@ impl LivingEntity {
 
     /// Tries to use a totem of undying from the entity's hands. If successful, applies the totem effects and returns true.
     #[allow(dead_code)]
-    async fn try_use_death_protector(&self, caller: &dyn EntityBase) -> bool {
+    fn try_use_death_protector(&self, caller: &dyn EntityBase) -> bool {
         for hand in Hand::all() {
             let mut stack = self.get_stack_in_hand(caller, hand);
 
@@ -1824,8 +1824,7 @@ impl LivingEntity {
                 if let Some(server) = self.entity.world.load().server.upgrade() {
                     server
                         .plugin_manager
-                        .fire(&server, &mut resurrect_event)
-                        .await;
+                        .fire_blocking(&server, &mut resurrect_event);
                 }
                 if resurrect_event.cancelled {
                     return false;

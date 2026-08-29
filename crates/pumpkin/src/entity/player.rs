@@ -1030,7 +1030,7 @@ impl Player {
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .increment_custom(statistics::CustomStatistic::LeaveGame, 1);
         let world = self.world();
-        world.remove_player(self, true).await;
+        world.remove_player(self, true);
 
         let cylindrical = self.watched_section.load();
 
@@ -3478,7 +3478,7 @@ impl Player {
                 let new_world = event.new_world;
 
                 self.set_client_loaded(false);
-                let Some(player) = current_world.remove_player(self, false).await else {
+                let Some(player) = current_world.remove_player(self, false) else {
                     return;
                 };
                new_world.players.rcu(|current_list| {

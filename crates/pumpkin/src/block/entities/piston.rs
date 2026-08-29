@@ -65,9 +65,9 @@ impl PistonBlockEntity {
                 || world.is_handling_tick())
     }
 
-    /// True while this instance is still the live BE at its position. Re-check after every
-    /// `.await`: a re-trigger can replace it. Live-map only; `get_block_entity` would rebuild
-    /// from NBT and restart the animation.
+    /// True while this instance is still the live BE at its position. A re-trigger can
+    /// replace it mid-animation. Live-map only; `get_block_entity` would rebuild from NBT
+    /// and restart the animation.
     fn is_current(&self, world: &World) -> bool {
         world
             .get_live_block_entity(&self.position)
@@ -455,32 +455,14 @@ impl PistonBlockEntity {
         }
         let back = motion_dir.opposite();
         let e = Self::intersection_size(body_aabb, back, entity_aabb) + 0.01;
-        let f = Self::intersection_size(
-            body_aabb,
-            back,
-            Self::aabb_intersection(body_aabb, entity_aabb),
-        ) + 0.01;
+        let f =
+            Self::intersection_size(body_aabb, back, body_aabb.intersection(&entity_aabb)) + 0.01;
         if (e - f).abs() < 0.01 {
             let distance = e.min(amount) + 0.01;
             // Vanilla `moveEntityByPiston(direction, entity, delta, opposite)`: noclip stays
             // `motion_dir` so the entity can leave the retracting head's cell.
             Self::move_entity(entity, back, distance, motion_dir, game_time);
         }
-    }
-
-    const fn aabb_intersection(a: BoundingBox, b: BoundingBox) -> BoundingBox {
-        BoundingBox::new(
-            Vector3::new(
-                a.min.x.max(b.min.x),
-                a.min.y.max(b.min.y),
-                a.min.z.max(b.min.z),
-            ),
-            Vector3::new(
-                a.max.x.min(b.max.x),
-                a.max.y.min(b.max.y),
-                a.max.z.min(b.max.z),
-            ),
-        )
     }
 
     pub fn finish(&self, world: &Arc<World>) {

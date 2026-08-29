@@ -62,7 +62,7 @@ impl JavaClient {
                 let entity = &player.get_entity();
                 let world = entity.world.load_full();
                 if server.basic_config.allow_chat_reports {
-                    world.broadcast_secure_player_chat(player, &chat_message, &decorated_message).await;
+                    world.broadcast_secure_player_chat(player, &chat_message, &decorated_message);
                 } else {
                     let je_packet = CSystemChatMessage::new(
                         &decorated_message,

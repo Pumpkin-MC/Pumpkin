@@ -342,45 +342,6 @@ impl PartialEq for World {
 impl Eq for World {}
 
 impl World {
-    pub async fn get_block_state_id_async(&self, position: &BlockPos) -> BlockStateId {
-        if !self.is_in_build_limit(*position) {
-            return Block::AIR.default_state.id;
-        }
-
-        let (chunk_coordinate, relative) = position.chunk_and_chunk_relative_position();
-        self.level
-            .get_or_fetch_chunk(chunk_coordinate, |chunk| {
-                chunk
-                    .section
-                    .get_block_absolute_y(relative.x as usize, relative.y, relative.z as usize)
-                    .unwrap_or(Block::AIR.default_state.id)
-            })
-            .await
-    }
-
-    pub async fn get_block_state_async(&self, position: &BlockPos) -> &'static BlockState {
-        let id = self.get_block_state_id_async(position).await;
-        BlockState::from_id(id)
-    }
-
-    pub async fn get_heightmap_height_async(
-        &self,
-        height_map: ChunkHeightmapType,
-        x: i32,
-        z: i32,
-    ) -> i32 {
-        let chunk_pos = Vector2::new(x >> 4, z >> 4);
-        self.level
-            .get_or_fetch_chunk(chunk_pos, |chunk| {
-                chunk
-                    .heightmap
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .get(height_map, x, z, self.min_y)
-            })
-            .await
-    }
-
     #[must_use]
     pub fn load(
         level: Arc<Level>,
@@ -1156,7 +1117,7 @@ impl World {
         );
     }
 
-    pub async fn broadcast_secure_player_chat(
+    pub fn broadcast_secure_player_chat(
         &self,
         sender: &Arc<Player>,
         chat_message: &SChatMessage<'_>,
@@ -1206,7 +1167,7 @@ impl World {
                 |j| j.serialize_packet(packet),
             );
             if let Ok(data) = packet_data {
-                recipient.client.enqueue_packet(data).await;
+                recipient.client.try_enqueue_packet(data);
             }
 
             if let Some(signature) = chat_message.signature {
@@ -1767,7 +1728,8 @@ impl World {
         piston_batch.tick_block_entities(self);
         let block_entity_elapsed = t_be.elapsed();
 
-        // After the entity and BE phases: teardown queued by player tasks during this tick.
+        // Disk IO island after entity and BE phases: persist, then drop live entities
+        // of chunks queued by player tasks this tick.
         let world_for_removals = self.clone();
         server.runtime.spawn(async move {
             world_for_removals.drain_pending_chunk_removals().await;
@@ -2731,12 +2693,12 @@ impl World {
 
     /// Vanilla `MinecraftServer.forceGameTimeSynchronization`.
     ///
-    /// Broadcasts the current `getGameTime()` and clock snapshot. Must run
-    /// before [`crate::world::time::LevelTime::tick`]: the client already
-    /// advanced to this number in `ClientLevel.tickTime()`. Sending the
-    /// post-increment value makes `getGameTime()` hold for two client ticks, so
-    /// `Entity.limitPistonMovement` does not reset `pistonDeltas` and clips the
-    /// second honey/piston step at ±0.51.
+    /// Broadcasts current overworld `getGameTime()` with an empty clock map.
+    /// Must run before [`crate::world::time::LevelTime::tick`]: the client
+    /// already advanced to this number in `ClientLevel.tickTime()`. Sending the
+    /// post-increment value, or a clock snapshot, makes `getGameTime()` hold
+    /// for two client ticks, so `Entity.limitPistonMovement` does not reset
+    /// `pistonDeltas` and clips the second honey/piston step at ±0.51.
     pub fn force_game_time_synchronization(&self) {
         let level_time = self
             .level_time
@@ -4685,7 +4647,7 @@ impl World {
 
                         // Detach from the old world before publishing into the new one, so no
                         // observer sees the player in a world whose chunk manager doesn't match.
-                        self.remove_player(player, false).await;
+                        self.remove_player(player, false);
                         player.unload_watched_chunks(self).await;
                         player.change_world_chunks(&self.level, &destination);
                         player.living_entity.entity.set_world(destination.clone());
@@ -5403,11 +5365,7 @@ impl World {
     ///
     /// - This function assumes `broadcast_packet_expect` and `remove_entity` are defined elsewhere.
     /// - The disconnect message sending is currently optional. Consider making it a configurable option.
-    pub async fn remove_player(
-        &self,
-        player: &Arc<Player>,
-        fire_event: bool,
-    ) -> Option<Arc<Player>> {
+    pub fn remove_player(&self, player: &Arc<Player>, fire_event: bool) -> Option<Arc<Player>> {
         let mut removed_player: Option<Arc<Player>> = None;
 
         self.players.rcu(|current_list| {
@@ -5456,7 +5414,7 @@ impl World {
                 let mut event = PlayerLeaveEvent::new(player.clone(), msg_comp);
 
                 if let Some(server) = self.server.upgrade() {
-                    server.plugin_manager.fire(&server, &mut event).await;
+                    server.plugin_manager.fire_blocking(&server, &mut event);
 
                     if !event.cancelled {
                         for player in self.players.load().iter() {

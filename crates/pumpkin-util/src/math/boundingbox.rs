@@ -403,6 +403,23 @@ impl BoundingBox {
         }
     }
 
+    /// Overlap of both boxes. Vanilla `AABB` min-of-max / max-of-min.
+    #[must_use]
+    pub const fn intersection(&self, other: &Self) -> Self {
+        Self {
+            min: Vector3::new(
+                self.min.x.max(other.min.x),
+                self.min.y.max(other.min.y),
+                self.min.z.max(other.min.z),
+            ),
+            max: Vector3::new(
+                self.max.x.min(other.max.x),
+                self.max.y.min(other.max.y),
+                self.max.z.min(other.max.z),
+            ),
+        }
+    }
+
     /// Smallest box containing both. Vanilla `AABB.minmax`.
     #[must_use]
     pub const fn union(&self, other: &Self) -> Self {
@@ -493,6 +510,15 @@ impl EntityDimensions {
 mod tests {
     use super::BoundingBox;
     use crate::math::vector3::Vector3;
+
+    #[test]
+    fn intersection_is_overlap() {
+        let a = BoundingBox::new(Vector3::new(0.0, 0.0, 0.0), Vector3::new(1.0, 1.0, 1.0));
+        let b = BoundingBox::new(Vector3::new(0.5, -1.0, 0.25), Vector3::new(2.0, 0.5, 0.75));
+        let i = a.intersection(&b);
+        assert_eq!(i.min, Vector3::new(0.5, 0.0, 0.25));
+        assert_eq!(i.max, Vector3::new(1.0, 0.5, 0.75));
+    }
 
     #[test]
     fn union_covers_both_boxes() {
