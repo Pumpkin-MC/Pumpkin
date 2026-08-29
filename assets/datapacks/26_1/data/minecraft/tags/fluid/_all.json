@@ -1,0 +1,1 @@
+{"bubble_column_can_occupy":{"values":["minecraft:water"]},"lava":{"values":["minecraft:lava","minecraft:flowing_lava"]},"supports_frogspawn":{"values":["minecraft:water"]},"supports_lily_pad":{"values":["minecraft:water"]},"supports_sugar_cane_adjacently":{"values":["#minecraft:water"]},"water":{"values":["minecraft:water","minecraft:flowing_water"]}}

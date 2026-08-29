@@ -327,7 +327,7 @@ pub fn write_packet<P: ClientPacket + ?Sized>(
 ) -> Result<(), WritingError> {
     let version_number = P::to_id(*version);
     if version_number == -1 {
-        return Ok(());
+        return Err(WritingError::UnsupportedVersion(*version));
     }
     write.write_var_int(&VarInt(version_number))?;
     packet.write_packet_data(write, version)
@@ -358,12 +358,12 @@ mod tests {
     use aes::Aes128;
     use cfb8::Decryptor as Cfb8Decryptor;
     use flate2::read::ZlibDecoder;
-    use pumpkin_data::packet::clientbound::STATUS_STATUS_RESPONSE;
+    use pumpkin_data::packet::clientbound::status::STATUS_RESPONSE;
     use pumpkin_macros::java_packet;
     use pumpkin_util::version::JavaMinecraftVersion;
 
     /// Define a custom packet for testing maximum packet size
-    #[java_packet(STATUS_STATUS_RESPONSE)]
+    #[java_packet(STATUS_RESPONSE)]
     pub struct MaxSizePacket {
         data: Vec<u8>,
     }

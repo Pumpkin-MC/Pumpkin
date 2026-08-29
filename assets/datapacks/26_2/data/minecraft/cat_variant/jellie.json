@@ -1,0 +1,9 @@
+{
+  "asset_id": "minecraft:entity/cat/cat_jellie",
+  "baby_asset_id": "minecraft:entity/cat/cat_jellie_baby",
+  "spawn_conditions": [
+    {
+      "priority": 0
+    }
+  ]
+}

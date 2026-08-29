@@ -3,7 +3,7 @@ use std::sync::Arc;
 use crate::block::entities::jukebox::JukeboxBlockEntity;
 use crate::block::registry::BlockActionResult;
 use crate::block::{
-    BlockBehaviour, BlockFuture, BrokenArgs, EmitsRedstonePowerArgs, GetComparatorOutputArgs,
+    BlockBehaviour, BrokenArgs, EmitsRedstonePowerArgs, GetComparatorOutputArgs,
     GetRedstonePowerArgs, NormalUseArgs, OnStateReplacedArgs, PlacedArgs, UseWithItemArgs,
 };
 use crate::entity::Entity;
@@ -33,29 +33,22 @@ impl JukeboxBlock {
         JukeboxLikeProperties::from_state_id(state_id, block).has_record
     }
 
-    async fn set_record_state(
-        has_record: bool,
-        block: &Block,
-        position: &BlockPos,
-        world: &Arc<World>,
-    ) {
+    fn set_record_state(has_record: bool, block: &Block, position: &BlockPos, world: &Arc<World>) {
         let new_state = JukeboxLikeProperties { has_record };
-        world
-            .set_block_state(
-                position,
-                new_state.to_state_id(block),
-                BlockFlags::NOTIFY_LISTENERS,
-            )
-            .await;
+        world.set_block_state(
+            position,
+            new_state.to_state_id(block),
+            BlockFlags::NOTIFY_LISTENERS,
+        );
     }
 
     /// Drops the record from the jukebox - matches vanilla's `JukeboxBlockEntity.dropRecord()`
     /// Spawns item at (pos + 0.5, pos + 1.01, pos + 0.5) with horizontal random offset
-    async fn drop_record(position: &BlockPos, world: &Arc<World>) {
+    fn drop_record(position: &BlockPos, world: &Arc<World>) {
         if let Some(block_entity) = world.get_block_entity(position)
             && let Some(jukebox_entity) = block_entity.as_any().downcast_ref::<JukeboxBlockEntity>()
         {
-            let record = jukebox_entity.clear_record().await;
+            let record = jukebox_entity.clear_record();
             if !record.is_empty() {
                 // Vanilla: Vec3d.add(pos, 0.5, 1.01, 0.5).addHorizontalRandom(random, 0.7F)
                 // addHorizontalRandom adds random in range [-0.35, 0.35] to x and z
@@ -68,14 +61,14 @@ impl JukeboxBlock {
                 let entity = Entity::new(world.clone(), spawn_pos, &EntityType::ITEM);
                 // Vanilla: setToDefaultPickupDelay() = 10 ticks
                 let item_entity = Arc::new(ItemEntity::new(entity, record));
-                world.spawn_entity(item_entity).await;
+                world.spawn_entity(item_entity);
             }
         }
     }
 
     /// Stops the music and updates block state
-    async fn stop_playing(block: &Block, position: &BlockPos, world: &Arc<World>) {
-        Self::set_record_state(false, block, position, world).await;
+    fn stop_playing(block: &Block, position: &BlockPos, world: &Arc<World>) {
+        Self::set_record_state(false, block, position, world);
         world.sync_world_event(WorldEvent::SoundStopJukeboxSong, *position, 0);
     }
 
@@ -87,168 +80,137 @@ impl JukeboxBlock {
 
 impl BlockBehaviour for JukeboxBlock {
     /// Called when the jukebox is placed - creates the block entity
-    fn placed<'a>(&'a self, args: PlacedArgs<'a>) -> BlockFuture<'a, ()> {
-        Box::pin(async move {
-            let block_entity = JukeboxBlockEntity::new(*args.position);
-            args.world.add_block_entity(Arc::new(block_entity));
-        })
+    fn placed(&self, args: PlacedArgs<'_>) {
+        let block_entity = JukeboxBlockEntity::new(*args.position);
+        args.world.add_block_entity(Arc::new(block_entity));
     }
 
     /// Called when player right-clicks with empty hand or non-disc item
     /// Vanilla: `JukeboxBlock.onUse()` - drops record if present
-    fn normal_use<'a>(&'a self, args: NormalUseArgs<'a>) -> BlockFuture<'a, BlockActionResult> {
-        Box::pin(async move {
-            let state_id = args.world.get_block_state(args.position).id;
+    fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
+        let state_id = args.world.get_block_state(args.position).id;
 
-            // Vanilla: if (state.get(HAS_RECORD) && world.getBlockEntity(pos) instanceof JukeboxBlockEntity lv)
-            if Self::has_record_state(args.block, state_id) {
-                // Drop the record
-                Self::drop_record(args.position, args.world).await;
-                // Stop the music and update block state
-                Self::stop_playing(args.block, args.position, args.world).await;
-                return BlockActionResult::Success;
-            }
+        // Vanilla: if (state.get(HAS_RECORD) && world.getBlockEntity(pos) instanceof JukeboxBlockEntity lv)
+        if Self::has_record_state(args.block, state_id) {
+            // Drop the record
+            Self::drop_record(args.position, args.world);
+            // Stop the music and update block state
+            Self::stop_playing(args.block, args.position, args.world);
+            return BlockActionResult::Success;
+        }
 
-            BlockActionResult::Pass
-        })
+        BlockActionResult::Pass
     }
 
     /// Called when player right-clicks with an item
     /// Vanilla: `JukeboxBlock.onUseWithItem()` -> `JukeboxPlayableComponent.tryPlayStack()`
-    fn use_with_item<'a>(
-        &'a self,
-        args: UseWithItemArgs<'a>,
-    ) -> BlockFuture<'a, BlockActionResult> {
-        Box::pin(async move {
-            let world = args.world;
-            let state_id = world.get_block_state(args.position).id;
+    fn use_with_item(&self, args: UseWithItemArgs<'_>) -> BlockActionResult {
+        let world = args.world;
+        let state_id = world.get_block_state(args.position).id;
 
-            // Vanilla: if (state.get(HAS_RECORD)) return PASS_TO_DEFAULT_BLOCK_ACTION
-            if Self::has_record_state(args.block, state_id) {
-                return BlockActionResult::PassToDefaultBlockAction;
-            }
+        // Vanilla: if (state.get(HAS_RECORD)) return PASS_TO_DEFAULT_BLOCK_ACTION
+        if Self::has_record_state(args.block, state_id) {
+            return BlockActionResult::PassToDefaultBlockAction;
+        }
 
-            let item_stack = &mut *args.item_stack;
+        let item_stack = &mut *args.item_stack;
 
-            // Vanilla: JukeboxPlayableComponent lv = stack.get(DataComponentTypes.JUKEBOX_PLAYABLE)
-            let jukebox_playable = item_stack
-                .get_data_component::<JukeboxPlayableImpl>()
-                .map(|i| i.song);
+        // Vanilla: JukeboxPlayableComponent lv = stack.get(DataComponentTypes.JUKEBOX_PLAYABLE)
+        let jukebox_playable = item_stack
+            .get_data_component::<JukeboxPlayableImpl>()
+            .map(|i| i.song);
 
-            // Vanilla: if (lv == null) return PASS_TO_DEFAULT_BLOCK_ACTION
-            let Some(jukebox_playable) = jukebox_playable else {
-                return BlockActionResult::PassToDefaultBlockAction;
-            };
+        // Vanilla: if (lv == null) return PASS_TO_DEFAULT_BLOCK_ACTION
+        let Some(jukebox_playable) = jukebox_playable else {
+            return BlockActionResult::PassToDefaultBlockAction;
+        };
 
-            let Some(song_name) = jukebox_playable.split(':').nth(1) else {
-                return BlockActionResult::PassToDefaultBlockAction;
-            };
+        let Some(song_name) = jukebox_playable.split(':').nth(1) else {
+            return BlockActionResult::PassToDefaultBlockAction;
+        };
 
-            let Some(jukebox_song) = JukeboxSong::from_name(song_name) else {
-                error!("Jukebox playable song not registered: {song_name}");
-                return BlockActionResult::PassToDefaultBlockAction;
-            };
+        let Some(jukebox_song) = JukeboxSong::from_name(song_name) else {
+            error!("Jukebox playable song not registered: {song_name}");
+            return BlockActionResult::PassToDefaultBlockAction;
+        };
 
-            // Vanilla: ItemStack lv3 = stack.splitUnlessCreative(1, player)
-            let record = item_stack.split_unless_creative(args.player.gamemode.load(), 1);
+        // Vanilla: ItemStack lv3 = stack.splitUnlessCreative(1, player)
+        let record = item_stack.split_unless_creative(args.player.gamemode.load(), 1);
 
-            // Vanilla: lv4.setStack(lv3)
-            if let Some(block_entity) = world.get_block_entity(args.position)
-                && let Some(jukebox_entity) =
-                    block_entity.as_any().downcast_ref::<JukeboxBlockEntity>()
-            {
-                jukebox_entity.set_record(record).await;
-                // Start tracking playback with song duration
-                jukebox_entity.start_playing(jukebox_song.length_in_ticks());
-            }
+        // Vanilla: lv4.setStack(lv3)
+        if let Some(block_entity) = world.get_block_entity(args.position)
+            && let Some(jukebox_entity) = block_entity.as_any().downcast_ref::<JukeboxBlockEntity>()
+        {
+            jukebox_entity.set_record(record);
+            // Start tracking playback with song duration
+            jukebox_entity.start_playing(jukebox_song.length_in_ticks());
+        }
 
-            // Update block state to has_record = true
-            Self::set_record_state(true, args.block, args.position, world).await;
+        // Update block state to has_record = true
+        Self::set_record_state(true, args.block, args.position, world);
 
-            // Start playing the music (client-side audio)
-            Self::start_playing(args.position, world, jukebox_song.get_id());
+        // Start playing the music (client-side audio)
+        Self::start_playing(args.position, world, jukebox_song.get_id());
 
-            args.player
-                .increment_stat(
-                    pumpkin_data::statistic::StatisticCategory::Custom,
-                    pumpkin_data::statistic::CustomStatistic::PlayRecord as i32,
-                    1,
-                )
-                .await;
+        args.player.increment_stat(
+            pumpkin_data::statistic::StatisticCategory::Custom,
+            pumpkin_data::statistic::CustomStatistic::PlayRecord as i32,
+            1,
+        );
 
-            // TODO: world.emitGameEvent(GameEvent.BLOCK_CHANGE, pos, ...)
+        // TODO: world.emitGameEvent(GameEvent.BLOCK_CHANGE, pos, ...)
 
-            BlockActionResult::Success
-        })
+        BlockActionResult::Success
     }
 
     /// Called when the jukebox is broken
-    fn broken<'a>(&'a self, args: BrokenArgs<'a>) -> BlockFuture<'a, ()> {
-        Box::pin(async move {
-            // Drop the record if there is one
-            Self::drop_record(args.position, args.world).await;
-            // Stop the music
-            args.world
-                .sync_world_event(WorldEvent::SoundStopJukeboxSong, *args.position, 0);
-        })
+    fn broken(&self, args: BrokenArgs<'_>) {
+        // Drop the record if there is one
+        Self::drop_record(args.position, args.world);
+        // Stop the music
+        args.world
+            .sync_world_event(WorldEvent::SoundStopJukeboxSong, *args.position, 0);
     }
 
     /// Vanilla: `JukeboxBlock.onStateReplaced()` -> `ItemScatterer.onStateReplaced()`
-    fn on_state_replaced<'a>(&'a self, _args: OnStateReplacedArgs<'a>) -> BlockFuture<'a, ()> {
-        Box::pin(async move {
-            // Vanilla calls ItemScatterer.onStateReplaced which updates comparators
-            // TODO: world.updateComparators(pos, block) when implemented
-        })
+    fn on_state_replaced(&self, _args: OnStateReplacedArgs<'_>) {
+        // Vanilla calls ItemScatterer.onStateReplaced which updates comparators
+        // TODO: world.updateComparators(pos, block) when implemented
     }
 
     /// Vanilla: `JukeboxBlock.emitsRedstonePower()` returns true
-    fn emits_redstone_power<'a>(
-        &'a self,
-        _args: EmitsRedstonePowerArgs<'a>,
-    ) -> BlockFuture<'a, bool> {
-        Box::pin(async move { true })
+    fn emits_redstone_power(&self, _args: EmitsRedstonePowerArgs<'_>) -> bool {
+        true
     }
 
     /// Vanilla: Returns 15 if playing, 0 otherwise
-    fn get_weak_redstone_power<'a>(
-        &'a self,
-        args: GetRedstonePowerArgs<'a>,
-    ) -> BlockFuture<'a, u8> {
-        Box::pin(async move {
-            // Vanilla: return world.getBlockEntity(pos) instanceof JukeboxBlockEntity lv && lv.getManager().isPlaying() ? 15 : 0
-            if let Some(block_entity) = args.world.get_block_entity(args.position)
-                && let Some(jukebox_entity) =
-                    block_entity.as_any().downcast_ref::<JukeboxBlockEntity>()
-                && jukebox_entity.is_playing()
-            {
-                15
-            } else {
-                0
-            }
-        })
+    fn get_weak_redstone_power(&self, args: GetRedstonePowerArgs<'_>) -> u8 {
+        // Vanilla: return world.getBlockEntity(pos) instanceof JukeboxBlockEntity lv && lv.getManager().isPlaying() ? 15 : 0
+        if let Some(block_entity) = args.world.get_block_entity(args.position)
+            && let Some(jukebox_entity) = block_entity.as_any().downcast_ref::<JukeboxBlockEntity>()
+            && jukebox_entity.is_playing()
+        {
+            15
+        } else {
+            0
+        }
     }
 
     /// Vanilla: Returns the song's comparator output (0-15)
-    fn get_comparator_output<'a>(
-        &'a self,
-        args: GetComparatorOutputArgs<'a>,
-    ) -> BlockFuture<'a, Option<u8>> {
-        Box::pin(async move {
-            // Vanilla: return world.getBlockEntity(pos) instanceof JukeboxBlockEntity lv ? lv.getComparatorOutput() : 0
-            if let Some(block_entity) = args.world.get_block_entity(args.position)
-                && let Some(jukebox_entity) =
-                    block_entity.as_any().downcast_ref::<JukeboxBlockEntity>()
+    fn get_comparator_output(&self, args: GetComparatorOutputArgs<'_>) -> Option<u8> {
+        // Vanilla: return world.getBlockEntity(pos) instanceof JukeboxBlockEntity lv ? lv.getComparatorOutput() : 0
+        if let Some(block_entity) = args.world.get_block_entity(args.position)
+            && let Some(jukebox_entity) = block_entity.as_any().downcast_ref::<JukeboxBlockEntity>()
+        {
+            let record = jukebox_entity.get_record();
+            // Get the song from the record's jukebox_playable component
+            if let Some(playable) = record.get_data_component::<JukeboxPlayableImpl>()
+                && let Some(song_name) = playable.song.split(':').nth(1)
+                && let Some(song) = JukeboxSong::from_name(song_name)
             {
-                let record = jukebox_entity.get_record().await;
-                // Get the song from the record's jukebox_playable component
-                if let Some(playable) = record.get_data_component::<JukeboxPlayableImpl>()
-                    && let Some(song_name) = playable.song.split(':').nth(1)
-                    && let Some(song) = JukeboxSong::from_name(song_name)
-                {
-                    return Some(song.comparator_output());
-                }
+                return Some(song.comparator_output());
             }
-            Some(0)
-        })
+        }
+        Some(0)
     }
 }

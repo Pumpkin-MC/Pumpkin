@@ -7,7 +7,8 @@ use std::{
     collections::{HashMap, HashSet},
     path::{Path, PathBuf},
     pin::Pin,
-    sync::{Arc, atomic::AtomicBool},
+    sync::{Arc, RwLock as SyncRwLock, atomic::AtomicBool},
+    thread::ThreadId,
     time::Duration,
 };
 use thiserror::Error;
@@ -171,7 +172,7 @@ pub enum PluginState {
 
 /// Core plugin management system
 pub struct PluginManager {
-    plugins: RwLock<Vec<LoadedPlugin>>,
+    plugins: SyncRwLock<Vec<LoadedPlugin>>,
     loaders: RwLock<Vec<Arc<dyn PluginLoader>>>,
     handlers: Arc<ArcSwap<HandlerMap>>,
     unloaded_files: RwLock<HashSet<PathBuf>>,
@@ -183,6 +184,9 @@ pub struct PluginManager {
     // Background task for hot reloading
     hot_reload_task: RwLock<Option<JoinHandle<()>>>,
     hot_reload_enabled: AtomicBool,
+    // Thread ID of the thread that created the plugin manager.
+    // Permission prompts use rustyline, which is only safe on this thread.
+    main_thread_id: ThreadId,
 }
 
 /// Represents a successfully loaded plugin
@@ -214,19 +218,19 @@ pub enum ManagerError {
 
 impl Default for PluginManager {
     fn default() -> Self {
-        Self::new()
+        Self::new(true)
     }
 }
 
 impl PluginManager {
     /// Create a new plugin manager with default loaders
     #[must_use]
-    pub fn new() -> Self {
+    pub fn new(verify_plugin_signatures: bool) -> Self {
         Self {
-            plugins: RwLock::new(Vec::new()),
+            plugins: SyncRwLock::new(Vec::new()),
             loaders: RwLock::new(vec![
                 Arc::new(NativePluginLoader),
-                Arc::new(WasmPluginLoader),
+                Arc::new(WasmPluginLoader::new(verify_plugin_signatures)),
             ]),
             handlers: Arc::new(ArcSwap::from_pointee(HashMap::new())),
             unloaded_files: RwLock::new(HashSet::new()),
@@ -235,13 +239,17 @@ impl PluginManager {
             state_notify: Arc::new(Notify::new()),
             hot_reload_task: RwLock::new(None),
             hot_reload_enabled: AtomicBool::new(false),
+            main_thread_id: std::thread::current().id(),
         }
     }
 
     /// Unload all loaded plugins
     pub async fn unload_all_plugins(&self) -> Result<(), ManagerError> {
         let plugin_names: Vec<String> = {
-            let plugins = self.plugins.read().await;
+            let plugins = self
+                .plugins
+                .read()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
             plugins
                 .iter()
                 .filter(|p| p.is_active)
@@ -290,8 +298,8 @@ impl PluginManager {
             .map_err(|e| ManagerError::IoError(std::io::Error::other(e)))?;
 
         let manager = self.clone();
-        let server = server.clone();
-        let task = tokio::spawn(async move {
+        let server_clone = Arc::clone(server);
+        let task = server.spawn_task(async move {
             // Keep watcher alive by moving it into the task
             let _watcher = watcher;
 
@@ -313,7 +321,10 @@ impl PluginManager {
 
                                 // We need to find if this plugin is already loaded to unload it first
                                 let plugin_name = {
-                                    let plugins = manager.plugins.read().await;
+                                    let plugins = manager
+                                        .plugins
+                                        .read()
+                                        .unwrap_or_else(std::sync::PoisonError::into_inner);
                                     plugins
                                         .iter()
                                         .find(|p| p.path == path)
@@ -328,7 +339,9 @@ impl PluginManager {
                                 // For now, we just try to load it. If it's already loaded,
                                 // the loader might handle it or we might get a duplicate.
                                 // Most WASM loaders will just create a new instance.
-                                if let Err(e) = manager.start_loading_plugin(&server, &path).await {
+                                if let Err(e) =
+                                    manager.start_loading_plugin(&server_clone, &path).await
+                                {
                                     error!("Failed to hot-reload plugin {:?}: {}", path, e);
                                 }
                             }
@@ -438,13 +451,32 @@ impl PluginManager {
     }
 
     /// Ask the server owner if they allow the permissions requested by a plugin
+    ///
+    /// This must only be called from the main thread, because the underlying
+    /// `rustyline` console handle is neither `Send` nor `Sync`. Calling it from a
+    /// different thread (e.g. the hot-reload watcher task) will panic.
+    ///
+    /// Returns `(allowed, wait_time, cacheable)`. Non-main-thread denials are not
+    /// cacheable so the user gets prompted again on the next cold load.
     #[expect(clippy::print_stdout)]
-    fn ask_permission_confirmation(metadata: &PluginMetadata) -> (bool, std::time::Duration) {
+    fn ask_permission_confirmation(
+        &self,
+        metadata: &PluginMetadata,
+    ) -> (bool, std::time::Duration, bool) {
         use colored::Colorize;
-        use rustyline::DefaultEditor;
 
         if metadata.permissions.is_empty() {
-            return (true, std::time::Duration::ZERO);
+            return (true, std::time::Duration::ZERO, true);
+        }
+
+        if std::thread::current().id() != self.main_thread_id {
+            warn!(
+                "Plugin \"{}\" ({}) requests permissions from a non-main thread. \
+                 Permission prompts are only supported on the main thread. \
+                 Denying permissions. To load this plugin interactively, restart the server.",
+                metadata.name, metadata.version
+            );
+            return (false, Duration::ZERO, false);
         }
 
         let start_time = std::time::Instant::now();
@@ -484,12 +516,11 @@ impl PluginManager {
                 let input = line.trim().to_lowercase();
                 input == "y" || input == "yes"
             })
-        } else if let Ok(mut rl) = DefaultEditor::new() {
-            rl.readline(&prompt).is_ok_and(|line| {
-                let input = line.trim().to_lowercase();
-                input == "y" || input == "yes"
-            })
         } else {
+            warn!(
+                "Console readline is not available; cannot prompt for plugin \"{}\" permissions",
+                metadata.name
+            );
             false
         };
 
@@ -497,7 +528,7 @@ impl PluginManager {
             wrapper.return_readline(rl);
         }
 
-        (result, start_time.elapsed())
+        (result, start_time.elapsed(), true)
     }
 
     /// Spawn initialization for a single plugin
@@ -519,7 +550,7 @@ impl PluginManager {
 
         let context = Arc::new(Context::new(
             metadata.clone(),
-            server,
+            server.clone(),
             Arc::clone(&self.handlers),
             Arc::clone(self),
             Arc::clone(&LOGGER_IMPL),
@@ -537,7 +568,10 @@ impl PluginManager {
         };
 
         let plugin_index = {
-            let mut plugins = self.plugins.write().await;
+            let mut plugins = self
+                .plugins
+                .write()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
             plugins.push(plugin);
             plugins.len() - 1
         };
@@ -548,13 +582,16 @@ impl PluginManager {
         let plugin_name = metadata.name.clone();
         let loader_clone = loader.clone();
 
-        let task = tokio::spawn(async move {
+        let task = server.spawn_task(async move {
             // Initialize the plugin
             match instance.on_load(context.clone()).await {
                 Ok(()) => {
                     // Update plugin state to loaded
                     {
-                        let mut plugins = self_ref_clone.plugins.write().await;
+                        let mut plugins = self_ref_clone
+                            .plugins
+                            .write()
+                            .unwrap_or_else(std::sync::PoisonError::into_inner);
                         if let Some(plugin) = plugins.get_mut(plugin_index) {
                             plugin.instance = Some(instance);
                             plugin.is_active = true;
@@ -583,7 +620,10 @@ impl PluginManager {
 
                     // Get the loader data before removing the plugin
                     let loader_data: Option<Box<dyn Any + Send + Sync>> = {
-                        let mut plugins = self_ref_clone.plugins.write().await;
+                        let mut plugins = self_ref_clone
+                            .plugins
+                            .write()
+                            .unwrap_or_else(std::sync::PoisonError::into_inner);
                         if let Some(plugin) = plugins.get_mut(plugin_index) {
                             plugin.loader_data.take()
                         } else {
@@ -593,13 +633,14 @@ impl PluginManager {
 
                     // Try to unload the plugin data
                     if let Some(data) = loader_data {
-                        tokio::spawn(async move {
-                            loader_clone.unload(data).await.ok();
-                        });
+                        loader_clone.unload(data).await.ok();
                     }
 
                     {
-                        let mut plugins = self_ref_clone.plugins.write().await;
+                        let mut plugins = self_ref_clone
+                            .plugins
+                            .write()
+                            .unwrap_or_else(std::sync::PoisonError::into_inner);
                         if plugin_index < plugins.len() {
                             plugins.remove(plugin_index);
                         }
@@ -842,15 +883,17 @@ impl PluginManager {
             return (true, std::time::Duration::ZERO);
         }
 
-        let (allowed, wait_time) = Self::ask_permission_confirmation(metadata);
-        cache.entries.insert(
-            hash,
-            cache::PermissionCacheEntry {
-                permissions_requested: metadata.permissions.clone(),
-                approved: allowed,
-            },
-        );
-        let _ = cache.save(cache_path).await;
+        let (allowed, wait_time, cacheable) = self.ask_permission_confirmation(metadata);
+        if cacheable {
+            cache.entries.insert(
+                hash,
+                cache::PermissionCacheEntry {
+                    permissions_requested: metadata.permissions.clone(),
+                    approved: allowed,
+                },
+            );
+            let _ = cache.save(cache_path).await;
+        }
         (allowed, wait_time)
     }
 
@@ -984,8 +1027,11 @@ impl PluginManager {
 
     /// Checks if plugin active
     #[must_use]
-    pub async fn is_plugin_active(&self, name: &str) -> bool {
-        let plugins = self.plugins.read().await;
+    pub fn is_plugin_active(&self, name: &str) -> bool {
+        let plugins = self
+            .plugins
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         plugins
             .iter()
             .any(|p| p.metadata.name == name && p.is_active && p.instance.is_some())
@@ -993,8 +1039,11 @@ impl PluginManager {
 
     /// Get list of active plugins
     #[must_use]
-    pub async fn active_plugins(&self) -> Vec<PluginMetadata> {
-        let plugins = self.plugins.read().await;
+    pub fn active_plugins(&self) -> Vec<PluginMetadata> {
+        let plugins = self
+            .plugins
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         plugins
             .iter()
             .filter(|p| p.is_active && p.instance.is_some())
@@ -1004,30 +1053,35 @@ impl PluginManager {
 
     /// Checks if plugin loaded
     #[must_use]
-    pub async fn is_plugin_loaded(&self, name: &str) -> bool {
-        let plugins = self.plugins.read().await;
+    pub fn is_plugin_loaded(&self, name: &str) -> bool {
+        let plugins = self
+            .plugins
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         plugins.iter().any(|p| p.metadata.name == name)
     }
 
     /// Get list of loaded plugins
     #[must_use]
-    pub async fn loaded_plugins(&self) -> Vec<PluginMetadata> {
-        let plugins = self.plugins.read().await;
+    pub fn loaded_plugins(&self) -> Vec<PluginMetadata> {
+        let plugins = self
+            .plugins
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         plugins.iter().map(|p| p.metadata.clone()).collect()
     }
 
     /// Unload a plugin by name
     pub async fn unload_plugin(&self, name: &str) -> Result<(), ManagerError> {
-        let index = {
-            let plugins = self.plugins.read().await;
-            plugins
+        let mut plugin = {
+            let mut plugins = self
+                .plugins
+                .write()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let index = plugins
                 .iter()
                 .position(|p| p.metadata.name == name)
-                .ok_or_else(|| ManagerError::PluginNotFound(name.to_string()))?
-        };
-
-        let mut plugin = {
-            let mut plugins = self.plugins.write().await;
+                .ok_or_else(|| ManagerError::PluginNotFound(name.to_string()))?;
             plugins.remove(index)
         };
 
@@ -1041,7 +1095,10 @@ impl PluginManager {
             }
         } else {
             plugin.is_active = false;
-            self.plugins.write().await.push(plugin);
+            self.plugins
+                .write()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .push(plugin);
         }
 
         // Remove from plugin states
@@ -1147,6 +1204,36 @@ impl PluginManager {
         }
     }
 
+    /// Fire an event to all registered handlers synchronously (blocking if handlers exist).
+    /// If no handlers are registered for this event, returns immediately without runtime overhead.
+    pub fn fire_blocking<E: Payload + Send + Sync + 'static>(
+        &self,
+        server: &Arc<Server>,
+        event: &mut E,
+    ) {
+        let handlers_map = self.handlers.load();
+        if handlers_map.is_empty() {
+            return;
+        }
+
+        let Some(handlers) = handlers_map.get(E::get_name_static()) else {
+            return;
+        };
+
+        if handlers.is_empty() {
+            return;
+        }
+
+        if tokio::runtime::Handle::try_current().is_ok() {
+            tokio::task::block_in_place(|| {
+                server.runtime.block_on(self.fire(server, event));
+            });
+        } else {
+            server.runtime.block_on(self.fire(server, event));
+        }
+    }
+
+    #[expect(clippy::result_unit_err)]
     pub async fn send_message(
         &self,
         sender: &str,
@@ -1157,12 +1244,18 @@ impl PluginManager {
             return Err(());
         }
 
-        let plugins = self.plugins.read().await;
-        let target_plugin = &plugins
-            .iter()
-            .find(|p| p.metadata.name == recipient)
-            .ok_or(())?;
-        if let Some(instance) = &target_plugin.instance {
+        let instance = {
+            let plugins = self
+                .plugins
+                .read()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let target_plugin = plugins
+                .iter()
+                .find(|p| p.metadata.name == recipient)
+                .ok_or(())?;
+            target_plugin.instance.clone()
+        };
+        if let Some(instance) = instance {
             Ok(instance.on_ipc_message(sender, message).await)
         } else {
             Err(())

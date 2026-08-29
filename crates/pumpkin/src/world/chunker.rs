@@ -40,7 +40,7 @@ pub fn is_within_view_distance(
     (target.x - center.x).abs().max((target.y - center.y).abs()) <= view_distance
 }
 
-pub async fn update_position(player: &Arc<Player>) {
+pub fn update_position(player: &Arc<Player>) {
     let entity = &player.get_entity();
     let new_chunk_center = entity.chunk_pos.load();
     let old_cylindrical = player.watched_section.load();
@@ -59,23 +59,20 @@ pub async fn update_position(player: &Arc<Player>) {
 
     match player.client.as_ref() {
         ClientPlatform::Java(java_client) => {
-            java_client
-                .send_packet(&CCenterChunk {
-                    chunk_x: new_chunk_center.x.into(),
-                    chunk_z: new_chunk_center.y.into(),
-                })
-                .await;
+            java_client.try_send_packet(&CCenterChunk {
+                chunk_x: new_chunk_center.x.into(),
+                chunk_z: new_chunk_center.y.into(),
+            });
         }
         ClientPlatform::Bedrock(bedrock_client) => {
-            bedrock_client
-                .send_packet(&CNetworkChunkPublisherUpdate::new(
-                    player.get_entity().block_pos.load(),
-                    u32::from(view_distance.get()) * 16,
-                ))
-                .await;
+            if let Ok(data) = bedrock_client.serialize_packet(&CNetworkChunkPublisherUpdate::new(
+                player.get_entity().block_pos.load(),
+                u32::from(view_distance.get()) * 16,
+            )) {
+                bedrock_client.try_enqueue_packet(data);
+            }
         }
     }
-
     let (loading_iter, unloading_iter) =
         Cylindrical::changed_chunks(old_cylindrical, new_cylindrical);
     let loading_chunks: Vec<_> = loading_iter.collect();
@@ -84,7 +81,10 @@ pub async fn update_position(player: &Arc<Player>) {
     // Use the chunk_manager's world reference, which is updated on dimension change.
     // This ensures we load chunks from the correct world after portal teleportation.
     let world = {
-        let mut chunk_manager = player.chunk_manager.lock().await;
+        let mut chunk_manager = player
+            .chunk_manager
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let world = chunk_manager.world().clone();
         chunk_manager.update_center_and_view_distance(
             new_chunk_center,
@@ -99,26 +99,35 @@ pub async fn update_position(player: &Arc<Player>) {
 
     if let ClientPlatform::Java(client) = player.client.as_ref() {
         for chunk in &unloading_chunks {
-            client
-                .enqueue_client_packet(&CUnloadChunk::new(chunk.x, chunk.y))
-                .await;
+            client.try_send_packet(&CUnloadChunk::new(chunk.x, chunk.y));
         }
     }
 
     // Make sure the watched section and the chunk watcher updates are async atomic. We want to
     // ensure what we unload when the player disconnects is correct.
-    world
-        .level
-        .mark_chunks_as_newly_watched(&loading_chunks)
-        .await;
-    let chunks_to_clean = world
-        .level
-        .mark_chunks_as_not_watched(&unloading_chunks)
-        .await;
+    if !loading_chunks.is_empty() || !unloading_chunks.is_empty() {
+        let level = world.level.clone();
+        let world_clone = world.clone();
+        let loading_chunks_clone = loading_chunks.clone();
+        let unloading_chunks_clone = unloading_chunks;
 
-    if !chunks_to_clean.is_empty() {
-        world.remove_entities_in_chunks(&chunks_to_clean).await;
-        world.level.clean_entity_chunks(&chunks_to_clean);
+        if let Some(server) = world.server.upgrade() {
+            server.spawn_task(async move {
+                level
+                    .mark_chunks_as_newly_watched(&loading_chunks_clone)
+                    .await;
+                let chunks_to_clean = level
+                    .mark_chunks_as_not_watched(&unloading_chunks_clone)
+                    .await;
+
+                if !chunks_to_clean.is_empty() {
+                    world_clone
+                        .remove_entities_in_chunks(&chunks_to_clean)
+                        .await;
+                    world_clone.level.clean_entity_chunks(&chunks_to_clean);
+                }
+            });
+        }
     }
 
     if !loading_chunks.is_empty() {

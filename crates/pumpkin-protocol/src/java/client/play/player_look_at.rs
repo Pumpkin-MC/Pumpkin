@@ -1,10 +1,10 @@
-use pumpkin_data::packet::clientbound::PLAY_PLAYER_LOOK_AT;
+use pumpkin_data::packet::clientbound::play::PLAYER_LOOK_AT;
 use pumpkin_macros::java_packet;
 
 use crate::{ClientPacket, codec::var_int::VarInt, ser::NetworkWriteExt};
 use pumpkin_util::version::JavaMinecraftVersion;
 
-#[java_packet(PLAY_PLAYER_LOOK_AT)]
+#[java_packet(PLAYER_LOOK_AT)]
 pub struct CPlayerLookAt {
     pub from_anchor: VarInt,
     pub target_x: f64,

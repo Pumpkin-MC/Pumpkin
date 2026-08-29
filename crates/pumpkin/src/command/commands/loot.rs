@@ -50,7 +50,7 @@ struct LootExecutor {
     source: Source,
 }
 
-async fn insert_into_inventory(
+fn insert_into_inventory(
     inventory: &dyn pumpkin_world::inventory::Inventory,
     mut stack: pumpkin_data::item_stack::ItemStack,
 ) -> pumpkin_data::item_stack::ItemStack {
@@ -58,7 +58,7 @@ async fn insert_into_inventory(
         if stack.is_empty() {
             break;
         }
-        let mut slot_stack = inventory.get_stack(i).await;
+        let mut slot_stack = inventory.get_stack(i);
         if !slot_stack.is_empty() && slot_stack.get_item().id == stack.get_item().id {
             let max_stack_size = 64;
             let space = max_stack_size - slot_stack.item_count;
@@ -66,7 +66,7 @@ async fn insert_into_inventory(
                 let to_add = stack.item_count.min(space);
                 slot_stack.item_count += to_add;
                 stack.item_count -= to_add;
-                inventory.set_stack(i, slot_stack).await;
+                inventory.set_stack(i, slot_stack);
             }
         }
     }
@@ -75,9 +75,9 @@ async fn insert_into_inventory(
         if stack.is_empty() {
             break;
         }
-        let slot_stack = inventory.get_stack(i).await;
+        let slot_stack = inventory.get_stack(i);
         if slot_stack.is_empty() {
-            inventory.set_stack(i, stack.clone()).await;
+            inventory.set_stack(i, stack.clone());
             stack.item_count = 0;
             break;
         }
@@ -88,134 +88,128 @@ async fn insert_into_inventory(
 
 impl CommandExecutor for LootExecutor {
     #[allow(clippy::too_many_lines)]
-    fn execute<'a>(&'a self, context: &'a CommandContext) -> CommandExecutorResult<'a> {
-        Box::pin(async move {
-            let mut stacks = Vec::new();
+    fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
+        let mut stacks = Vec::new();
 
-            match self.source {
-                Source::Loot => {
-                    let loot_table_str = StringArgumentType::get(context, "loot_table")?;
-                    let formatted_key = if loot_table_str.contains(':') {
-                        loot_table_str.to_string()
-                    } else {
-                        format!("minecraft:{loot_table_str}")
-                    };
+        match self.source {
+            Source::Loot => {
+                let loot_table_str = StringArgumentType::get(context, "loot_table")?;
+                let formatted_key = if loot_table_str.contains(':') {
+                    loot_table_str.to_string()
+                } else {
+                    format!("minecraft:{loot_table_str}")
+                };
 
-                    let chest_table =
-                        pumpkin_data::chest_loot_table::get_chest_loot_table(&formatted_key);
-                    if let Some(table) = chest_table {
-                        let seed: i64 = rand::random();
-                        stacks = crate::world::loot::generate_chest_loot(table, seed);
-                    } else {
-                        return Err(ERROR_INVALID_LOOT_TABLE.create_without_context(
-                            TextComponent::text(loot_table_str.to_string()),
-                        ));
-                    }
+                let chest_table =
+                    pumpkin_data::chest_loot_table::get_chest_loot_table(&formatted_key);
+                if let Some(table) = chest_table {
+                    let seed: i64 = rand::random();
+                    stacks = crate::world::loot::generate_chest_loot(table, seed);
+                } else {
+                    return Err(ERROR_INVALID_LOOT_TABLE
+                        .create_without_context(TextComponent::text(loot_table_str.to_string())));
                 }
-                Source::Kill => {
-                    let target_entities =
-                        EntityArgumentType::get_entities(context, "target_entity").await?;
-                    let mut has_loot = false;
-                    for entity in target_entities {
-                        if let Some(loot_table) = &entity.get_entity().entity_type.loot_table {
-                            has_loot = true;
-                            let params = crate::world::loot::LootContextParameters {
-                                world_time: context.world().level_info.load().day_time as u64,
-                                ..Default::default()
-                            };
-                            stacks.extend(loot_table.get_loot(params));
-                        }
-                    }
-                    if !has_loot {
-                        let entity_name = "selected entity".to_string();
-                        return Err(ERROR_ENTITY_NO_LOOT_TABLE
-                            .create_without_context(TextComponent::text(entity_name)));
-                    }
-                }
-                Source::Mine { has_tool } => {
-                    let pos = BlockPosArgumentType::get_block_pos(context, "mine_pos")
-                        .or_else(|_| BlockPosArgumentType::get_block_pos(context, "pos"))?;
-                    let world = context.world();
-                    let block = world.get_block(&pos);
-
-                    if let Some(loot_table) = &block.loot_table {
-                        let tool_item = if has_tool {
-                            let tool_str = StringArgumentType::get(context, "tool")?;
-                            let key = tool_str.strip_prefix("minecraft:").unwrap_or(tool_str);
-                            pumpkin_data::item::Item::from_registry_key(key)
-                        } else {
-                            None
-                        };
-
-                        let tool_stack =
-                            tool_item.map(|item| pumpkin_data::item_stack::ItemStack::new(1, item));
-
+            }
+            Source::Kill => {
+                let target_entities = EntityArgumentType::get_entities(context, "target_entity")?;
+                let mut has_loot = false;
+                for entity in target_entities {
+                    if let Some(loot_table) = &entity.get_entity().entity_type.loot_table {
+                        has_loot = true;
                         let params = crate::world::loot::LootContextParameters {
-                            block_state: Some(world.get_block_state(&pos)),
-                            tool: tool_stack,
-                            world_time: world.level_info.load().day_time as u64,
+                            world_time: context.world().level_info.load().day_time as u64,
                             ..Default::default()
                         };
-
                         stacks.extend(loot_table.get_loot(params));
                     }
                 }
+                if !has_loot {
+                    let entity_name = "selected entity".to_string();
+                    return Err(ERROR_ENTITY_NO_LOOT_TABLE
+                        .create_without_context(TextComponent::text(entity_name)));
+                }
             }
+            Source::Mine { has_tool } => {
+                let pos = BlockPosArgumentType::get_block_pos(context, "mine_pos")
+                    .or_else(|_| BlockPosArgumentType::get_block_pos(context, "pos"))?;
+                let world = context.world();
+                let block = world.get_block(&pos);
 
-            let total_items: i32 = stacks.iter().map(|s| s.item_count as i32).sum();
-
-            match self.target {
-                Target::Give => {
-                    let targets = EntityArgumentType::get_players(context, "targets").await?;
-                    for player in &targets {
-                        for stack in &stacks {
-                            let mut remaining = stack.clone();
-                            player.inventory.insert_stack_anywhere(&mut remaining).await;
-                            if !remaining.is_empty() {
-                                player.drop_item(remaining).await;
-                            }
-                        }
-                    }
-                }
-                Target::Spawn => {
-                    let pos = BlockPosArgumentType::get_block_pos(context, "pos")?;
-                    let world = context.world();
-                    for stack in stacks {
-                        world.drop_stack(&pos, stack).await;
-                    }
-                }
-                Target::Insert => {
-                    let pos = BlockPosArgumentType::get_block_pos(context, "pos")?;
-                    let world = context.world();
-                    if let Some(block_entity) = world.get_block_entity(&pos) {
-                        if let Some(inventory) = block_entity.get_inventory() {
-                            for stack in stacks {
-                                let remaining =
-                                    insert_into_inventory(inventory.as_ref(), stack).await;
-                                if !remaining.is_empty() {
-                                    world.drop_stack(&pos, remaining).await;
-                                }
-                            }
-                        } else {
-                            return Err(ERROR_NO_CONTAINER
-                                .create_without_context(TextComponent::text(pos.to_string())));
-                        }
+                if let Some(loot_table) = &block.loot_table {
+                    let tool_item = if has_tool {
+                        let tool_str = StringArgumentType::get(context, "tool")?;
+                        let key = tool_str.strip_prefix("minecraft:").unwrap_or(tool_str);
+                        pumpkin_data::item::Item::from_registry_key(key)
                     } else {
-                        return Err(ERROR_NO_CONTAINER
-                            .create_without_context(TextComponent::text(pos.to_string())));
+                        None
+                    };
+
+                    let tool_stack =
+                        tool_item.map(|item| pumpkin_data::item_stack::ItemStack::new(1, item));
+
+                    let params = crate::world::loot::LootContextParameters {
+                        block_state: Some(world.get_block_state(&pos)),
+                        tool: tool_stack,
+                        world_time: world.level_info.load().day_time as u64,
+                        ..Default::default()
+                    };
+
+                    stacks.extend(loot_table.get_loot(params));
+                }
+            }
+        }
+
+        let total_items: i32 = stacks.iter().map(|s| s.item_count as i32).sum();
+
+        match self.target {
+            Target::Give => {
+                let targets = EntityArgumentType::get_players(context, "targets")?;
+                for player in &targets {
+                    for stack in &stacks {
+                        let mut remaining = stack.clone();
+                        player.inventory.insert_stack_anywhere(&mut remaining);
+                        if !remaining.is_empty() {
+                            player.drop_item(remaining);
+                        }
                     }
                 }
             }
+            Target::Spawn => {
+                let pos = BlockPosArgumentType::get_block_pos(context, "pos")?;
+                let world = context.world();
+                for stack in stacks {
+                    world.drop_stack(&pos, stack);
+                }
+            }
+            Target::Insert => {
+                let pos = BlockPosArgumentType::get_block_pos(context, "pos")?;
+                let world = context.world().clone();
+                let Some(block_entity) = world.get_block_entity(&pos) else {
+                    return Err(ERROR_NO_CONTAINER
+                        .create_without_context(TextComponent::text(pos.to_string())));
+                };
+                let Some(inventory) = block_entity.get_inventory() else {
+                    return Err(ERROR_NO_CONTAINER
+                        .create_without_context(TextComponent::text(pos.to_string())));
+                };
 
-            let msg = TextComponent::translate_cross(
-                translation::bedrock::COMMANDS_LOOT_SUCCESS,
-                translation::bedrock::COMMANDS_LOOT_SUCCESS,
-                [TextComponent::text(total_items.to_string())],
-            );
-            context.source.send_feedback(msg, true).await;
+                for stack in stacks {
+                    let remaining = insert_into_inventory(inventory.as_ref(), stack);
+                    if !remaining.is_empty() {
+                        world.drop_stack(&pos, remaining);
+                    }
+                }
+            }
+        }
 
-            Ok(total_items)
-        })
+        let msg = TextComponent::translate_cross(
+            translation::bedrock::COMMANDS_LOOT_SUCCESS,
+            translation::bedrock::COMMANDS_LOOT_SUCCESS,
+            [TextComponent::text(total_items.to_string())],
+        );
+        context.source.send_feedback(msg, true);
+
+        Ok(total_items)
     }
 }
 

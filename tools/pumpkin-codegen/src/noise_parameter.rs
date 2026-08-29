@@ -4,10 +4,39 @@ use proc_macro2::TokenStream;
 use pumpkin_util::DoublePerlinNoiseParametersCodec;
 use quote::{format_ident, quote};
 
+fn collect_noise_files(
+    base: &std::path::Path,
+    dir: &std::path::Path,
+    result: &mut BTreeMap<String, DoublePerlinNoiseParametersCodec>,
+) {
+    let Ok(entries) = fs::read_dir(dir) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            collect_noise_files(base, &path, result);
+        } else if path.extension().is_some_and(|ext| ext == "json") {
+            let rel = path.strip_prefix(base).unwrap();
+            let rel_str = rel
+                .with_extension("")
+                .components()
+                .map(|c| c.as_os_str().to_string_lossy().into_owned())
+                .collect::<Vec<_>>()
+                .join("/");
+            let key = format!("minecraft:{rel_str}");
+            let content = fs::read_to_string(&path).expect("Failed to read noise file");
+            let param: DoublePerlinNoiseParametersCodec =
+                serde_json::from_str(&content).expect("Failed to parse noise parameter JSON");
+            result.insert(key, param);
+        }
+    }
+}
+
 pub fn build() -> TokenStream {
-    let json: BTreeMap<String, DoublePerlinNoiseParametersCodec> =
-        serde_json::from_str(&fs::read_to_string("../../assets/noise_parameters.json").unwrap())
-            .expect("Failed to parse noise_parameters.json");
+    let dir = std::path::Path::new("../../assets/datapacks/26_2/data/minecraft/worldgen/noise");
+    let mut json: BTreeMap<String, DoublePerlinNoiseParametersCodec> = BTreeMap::new();
+    collect_noise_files(dir, dir, &mut json);
 
     let mut variants = TokenStream::new();
     let mut match_variants = TokenStream::new();

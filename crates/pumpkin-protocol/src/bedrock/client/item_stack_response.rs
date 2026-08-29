@@ -9,10 +9,10 @@ use pumpkin_macros::packet;
 
 #[derive(Debug, Clone)]
 pub struct ItemStackResponseSlotInfo {
+    pub requested_slot: u8,
     pub slot: u8,
-    pub hotbar_slot: u8,
-    pub count: u8,
-    pub item_stack_id: VarInt,
+    pub amount: u8,
+    pub item_stack_net_id: VarInt,
     pub custom_name: String,
     pub filtered_custom_name: String,
     pub durability_correction: VarInt,
@@ -26,13 +26,13 @@ impl PacketWrite for ItemStackResponseSlotInfo {
                 "durability correction must fit in an i16",
             ));
         }
+        self.requested_slot.write(writer)?;
         self.slot.write(writer)?;
-        self.hotbar_slot.write(writer)?;
-        self.count.write(writer)?;
+        self.amount.write(writer)?;
         true.write(writer)?;
-        (self.item_stack_id.0 > 0).write(writer)?;
-        if self.item_stack_id.0 > 0 {
-            self.item_stack_id.write(writer)?;
+        (self.item_stack_net_id.0 > 0).write(writer)?;
+        if self.item_stack_net_id.0 > 0 {
+            self.item_stack_net_id.write(writer)?;
         }
         self.custom_name.write(writer)?;
         self.filtered_custom_name.write(writer)?;
@@ -42,26 +42,27 @@ impl PacketWrite for ItemStackResponseSlotInfo {
 
 #[derive(PacketWrite, Debug, Clone)]
 pub struct ItemStackResponseContainerInfo {
-    pub container_name: FullContainerName,
+    pub full_container_name: FullContainerName,
     pub slots: Vec<ItemStackResponseSlotInfo>,
 }
 
 #[derive(Debug, Clone)]
-pub struct ItemStackResponse {
+pub struct ItemStackResponseInfo {
+    // TODO: proper enum
     pub result: u8, // 0 = SUCCESS, 1 = ERROR
-    pub request_id: VarInt,
-    pub container_infos: Vec<ItemStackResponseContainerInfo>,
+    pub client_request_id: VarInt,
+    pub containers: Vec<ItemStackResponseContainerInfo>,
 }
 
-impl PacketWrite for ItemStackResponse {
+impl PacketWrite for ItemStackResponseInfo {
     fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
         self.result.write(writer)?;
-        self.request_id.write(writer)?;
+        self.client_request_id.write(writer)?;
         true.write(writer)?;
-        (!self.container_infos.is_empty()).write(writer)?;
-        if !self.container_infos.is_empty() {
-            VarUInt(self.container_infos.len() as u32).write(writer)?;
-            for info in &self.container_infos {
+        (!self.containers.is_empty()).write(writer)?;
+        if !self.containers.is_empty() {
+            VarUInt(self.containers.len() as u32).write(writer)?;
+            for info in &self.containers {
                 info.write(writer)?;
             }
         }
@@ -72,7 +73,7 @@ impl PacketWrite for ItemStackResponse {
 #[derive(Debug, Clone)]
 #[packet(148)]
 pub struct CItemStackResponse {
-    pub responses: Vec<ItemStackResponse>,
+    pub responses: Vec<ItemStackResponseInfo>,
 }
 
 impl PacketWrite for CItemStackResponse {
@@ -98,10 +99,10 @@ mod tests {
     #[test]
     fn rejects_out_of_range_durability_correction() {
         let slot = ItemStackResponseSlotInfo {
+            requested_slot: 0,
             slot: 0,
-            hotbar_slot: 0,
-            count: 1,
-            item_stack_id: VarInt(1),
+            amount: 1,
+            item_stack_net_id: VarInt(1),
             custom_name: String::new(),
             filtered_custom_name: String::new(),
             durability_correction: VarInt(32768),

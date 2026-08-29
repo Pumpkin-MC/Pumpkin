@@ -1,4 +1,3 @@
-use std::pin::Pin;
 use std::sync::Arc;
 
 use crate::entity::player::Player;
@@ -23,49 +22,41 @@ impl ItemMetadata for FireworkRocketItem {
 }
 
 impl ItemBehaviour for FireworkRocketItem {
-    fn use_on_block<'a>(
-        &'a self,
-        _item: &'a mut ItemStack,
-        player: &'a Player,
+    fn use_on_block(
+        &self,
+        _item: &mut ItemStack,
+        player: &Player,
         location: BlockPos,
         _face: BlockDirection,
         cursor_pos: Vector3<f32>,
-        _block: &'a Block,
-        _server: &'a Server,
-    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
-        Box::pin(async move {
+        _block: &Block,
+        _server: &Server,
+    ) {
+        let world = player.world();
+        let entity = Entity::new(
+            world.clone(),
+            Vector3::new(
+                f64::from(location.0.x) + f64::from(cursor_pos.x),
+                f64::from(location.0.y) + f64::from(cursor_pos.y),
+                f64::from(location.0.z) + f64::from(cursor_pos.z),
+            ),
+            &EntityType::FIREWORK_ROCKET,
+        );
+        let entity = FireworkRocketEntity::new(entity);
+        world.spawn_entity(Arc::new(entity));
+    }
+
+    fn normal_use(&self, _item: &Item, player: &Player) {
+        if player.get_entity().is_fall_flying() {
             let world = player.world();
             let entity = Entity::new(
                 world.clone(),
-                Vector3::new(
-                    f64::from(location.0.x) + f64::from(cursor_pos.x),
-                    f64::from(location.0.y) + f64::from(cursor_pos.y),
-                    f64::from(location.0.z) + f64::from(cursor_pos.z),
-                ),
+                player.get_entity().pos.load(),
                 &EntityType::FIREWORK_ROCKET,
             );
-            let entity = FireworkRocketEntity::new(entity);
-            world.spawn_entity(Arc::new(entity)).await;
-        })
-    }
-
-    fn normal_use<'a>(
-        &'a self,
-        _item: &'a Item,
-        player: &'a Player,
-    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
-        Box::pin(async {
-            if player.get_entity().is_fall_flying() {
-                let world = player.world();
-                let entity = Entity::new(
-                    world.clone(),
-                    player.get_entity().pos.load(),
-                    &EntityType::FIREWORK_ROCKET,
-                );
-                let entity = FireworkRocketEntity::new_shot(entity, player.get_entity());
-                world.spawn_entity(Arc::new(entity)).await;
-            }
-        })
+            let entity = FireworkRocketEntity::new_shot(entity, player.get_entity());
+            world.spawn_entity(Arc::new(entity));
+        }
     }
 
     fn as_any(&self) -> &dyn std::any::Any {

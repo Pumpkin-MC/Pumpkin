@@ -23,53 +23,39 @@ impl GetClientSideArgParser for BossbarStyleArgumentConsumer {
 }
 
 impl ArgumentConsumer for BossbarStyleArgumentConsumer {
-    fn consume<'a, 'b>(
+    fn consume<'a>(
         &'a self,
         _sender: &'a CommandSender,
         _server: &'a Server,
-        args: &'b mut RawArgs<'a>,
+        args: &mut RawArgs<'a>,
     ) -> ConsumeResult<'a> {
         let s_opt: Option<&'a str> = args.pop().map(|arg| arg.value);
 
-        let result: Option<Arg<'a>> = s_opt.map_or_else(
-            || None,
-            |s| {
-                let style = match s {
-                    "notched_10" => Some(BossbarDivisions::Notches10),
-                    "notched_12" => Some(BossbarDivisions::Notches12),
-                    "notched_20" => Some(BossbarDivisions::Notches20),
-                    "notched_6" => Some(BossbarDivisions::Notches6),
-                    "progress" => Some(BossbarDivisions::NoDivision),
-                    _ => None,
-                };
+        let style = match s_opt? {
+            "notched_10" => Some(BossbarDivisions::Notches10),
+            "notched_12" => Some(BossbarDivisions::Notches12),
+            "notched_20" => Some(BossbarDivisions::Notches20),
+            "notched_6" => Some(BossbarDivisions::Notches6),
+            "progress" => Some(BossbarDivisions::NoDivision),
+            _ => None,
+        };
 
-                style.map(Arg::BossbarStyle)
-            },
-        );
-
-        Box::pin(async move { result })
+        style.map(Arg::BossbarStyle)
     }
 
-    fn suggest<'a>(
-        &'a self,
-        _sender: &CommandSender,
-        _server: &'a Server,
-        _input: &'a str,
-    ) -> SuggestResult<'a> {
-        Box::pin(async move {
-            let styles = [
-                "notched_10",
-                "notched_12",
-                "notched_20",
-                "notched_6",
-                "progress",
-            ];
-            let suggestions: Vec<CommandSuggestion> = styles
-                .iter()
-                .map(|style| CommandSuggestion::new((*style).to_string(), None))
-                .collect();
-            Ok(Some(suggestions))
-        })
+    fn suggest(&self, _sender: &CommandSender, _server: &Server, _input: &str) -> SuggestResult {
+        let styles = [
+            "notched_10",
+            "notched_12",
+            "notched_20",
+            "notched_6",
+            "progress",
+        ];
+        let suggestions: Vec<CommandSuggestion> = styles
+            .iter()
+            .map(|style| CommandSuggestion::new((*style).to_string(), None))
+            .collect();
+        Ok(Some(suggestions))
     }
 }
 

@@ -13,7 +13,7 @@ use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::java::client::play::Metadata;
 
 use crate::entity::{
-    Entity, EntityBase, EntityBaseFuture, NBTStorage, NbtFuture,
+    Entity, EntityBase,
     ageable::{AgeableData, AgeableMob},
     ai::goal::{
         look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal, swim::SwimGoal,
@@ -145,29 +145,25 @@ impl Animal for FrogEntity {
     }
 }
 
-impl NBTStorage for FrogEntity {
-    fn write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
-        Box::pin(async move {
-            self.mob_entity.living_entity.write_nbt(nbt).await;
-            self.write_ageable_nbt(nbt);
-            self.write_animal_nbt(nbt);
-            nbt.put_string("variant", self.get_variant().as_str().to_string());
-        })
-    }
-
-    fn read_nbt_non_mut<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
-        Box::pin(async move {
-            self.mob_entity.living_entity.read_nbt_non_mut(nbt).await;
-            self.read_ageable_nbt(nbt);
-            self.read_animal_nbt(nbt);
-            if let Some(variant_str) = nbt.get_string("variant") {
-                self.set_variant(FrogVariant::from_name(variant_str));
-            }
-        })
-    }
-}
-
 impl Mob for FrogEntity {
+    fn as_ageable(&self) -> Option<&dyn AgeableMob> {
+        Some(self)
+    }
+
+    fn as_animal(&self) -> Option<&dyn Animal> {
+        Some(self)
+    }
+
+    fn mob_write_nbt(&self, nbt: &mut NbtCompound) {
+        nbt.put_string("variant", self.get_variant().as_str().to_string());
+    }
+
+    fn mob_read_nbt(&self, nbt: &NbtCompound) {
+        if let Some(variant_str) = nbt.get_string("variant") {
+            self.set_variant(FrogVariant::from_name(variant_str));
+        }
+    }
+
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
     }
@@ -176,43 +172,32 @@ impl Mob for FrogEntity {
         self.set_variant(FrogVariant::from_name(name));
     }
 
-    fn mob_tick<'a>(&'a self, _caller: &'a Arc<dyn EntityBase>) -> EntityBaseFuture<'a, ()> {
-        Box::pin(async move {
-            self.ageable_ai_step();
-        })
+    fn mob_tick(&self, _caller: &dyn EntityBase) {
+        self.ageable_ai_step();
     }
 
-    fn mob_init_data_tracker(&self) -> EntityBaseFuture<'_, ()> {
-        Box::pin(async move {
-            let entity = self.get_entity();
-            let is_baby = entity.age.load(Ordering::Relaxed) < 0;
-            if is_baby {
-                entity.send_meta_data(
-                    &[Metadata::new(
-                        pumpkin_data::tracked_data::frog::BABY_ID,
-                        true,
-                    )],
-                    None,
-                );
-            }
+    fn mob_init_data_tracker(&self) {
+        let entity = self.get_entity();
+        let is_baby = entity.age.load(Ordering::Relaxed) < 0;
+        if is_baby {
             entity.send_meta_data(
                 &[Metadata::new(
-                    pumpkin_data::tracked_data::frog::VARIANT,
-                    VarInt(self.get_variant().id()),
+                    pumpkin_data::tracked_data::frog::BABY_ID,
+                    true,
                 )],
                 None,
             );
-        })
+        }
+        entity.send_meta_data(
+            &[Metadata::new(
+                pumpkin_data::tracked_data::frog::VARIANT,
+                VarInt(self.get_variant().id()),
+            )],
+            None,
+        );
     }
 
-    fn mob_interact<'a>(
-        &'a self,
-        player: &'a Arc<Player>,
-        item_stack: &'a mut ItemStack,
-    ) -> EntityBaseFuture<'a, bool> {
-        Box::pin(async move {
-            self.animal_interact(player, item_stack, Sound::EntityFrogAmbient)
-                .await
-        })
+    fn mob_interact(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {
+        self.animal_interact(player, item_stack, Sound::EntityFrogAmbient)
     }
 }

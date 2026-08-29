@@ -3,10 +3,8 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicU8, Ordering};
 
 use crate::player::player_inventory::PlayerInventory;
-use crate::screen_handler::{
-    InventoryPlayer, ScreenHandler, ScreenHandlerBehaviour, ScreenHandlerFuture,
-};
-use crate::slot::{BoxFuture, NormalSlot, Slot};
+use crate::screen_handler::{InventoryPlayer, ScreenHandler, ScreenHandlerBehaviour};
+use crate::slot::{NormalSlot, Slot};
 
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
@@ -54,13 +52,11 @@ impl StonecutterScreenHandler {
         handler
     }
 
-    async fn update_output(&self) {
-        let input_lock = self.input_inventory.get_stack(0).await;
+    fn update_output(&self) {
+        let input_lock = self.input_inventory.get_stack(0);
 
         if input_lock.is_empty() {
-            self.output_inventory
-                .set_stack(0, ItemStack::EMPTY.clone())
-                .await;
+            self.output_inventory.set_stack(0, ItemStack::EMPTY.clone());
             self.selected_recipe.store(u8::MAX, Ordering::Relaxed);
             return;
         }
@@ -72,11 +68,9 @@ impl StonecutterScreenHandler {
             let recipe = available_recipes[recipe_index as usize];
             let item = Item::from_registry_key(recipe.result.id).unwrap_or(&Item::AIR);
             let result = ItemStack::new(recipe.result.count, item);
-            self.output_inventory.set_stack(0, result).await;
+            self.output_inventory.set_stack(0, result);
         } else {
-            self.output_inventory
-                .set_stack(0, ItemStack::EMPTY.clone())
-                .await;
+            self.output_inventory.set_stack(0, ItemStack::EMPTY.clone());
         }
     }
 
@@ -106,59 +100,49 @@ impl ScreenHandler for StonecutterScreenHandler {
         self
     }
 
-    fn on_slot_click<'a>(
-        &'a mut self,
+    fn on_slot_click(
+        &mut self,
         slot_index: i32,
         button: i32,
         action_type: SlotActionType,
-        player: &'a dyn InventoryPlayer,
-    ) -> ScreenHandlerFuture<'a, ()> {
-        Box::pin(async move {
-            self.internal_on_slot_click(slot_index, button, action_type, player)
-                .await;
-            if slot_index == 0 {
-                self.update_output().await;
-            }
-        })
+        player: &dyn InventoryPlayer,
+    ) {
+        self.internal_on_slot_click(slot_index, button, action_type, player);
+        if slot_index == 0 {
+            self.update_output();
+        }
     }
 
-    fn quick_move<'a>(
-        &'a mut self,
-        _player: &'a dyn InventoryPlayer,
-        slot_index: i32,
-    ) -> ScreenHandlerFuture<'a, ItemStack> {
-        Box::pin(async move {
-            let mut stack = ItemStack::EMPTY.clone();
-            let slot = self.get_behaviour().slots.get(slot_index as usize).cloned();
+    fn quick_move(&mut self, _player: &dyn InventoryPlayer, slot_index: i32) -> ItemStack {
+        let mut stack = ItemStack::EMPTY.clone();
+        let slot = self.get_behaviour().slots.get(slot_index as usize).cloned();
 
-            if let Some(slot) = slot {
-                let mut slot_stack = slot.get_cloned_stack().await;
-                if !slot_stack.is_empty() {
-                    stack = slot_stack.clone();
-                    if slot_index < 2 {
-                        // From Stonecutter to Player
-                        if !self.insert_item(&mut slot_stack, 2, 38, true).await {
-                            return ItemStack::EMPTY.clone();
-                        }
-                        slot.on_quick_move_crafted(slot_stack.clone(), stack.clone())
-                            .await;
-                    } else {
-                        // From Player to Stonecutter
-                        // Try input slot (0)
-                        if !self.insert_item(&mut slot_stack, 0, 1, false).await {
-                            return ItemStack::EMPTY.clone();
-                        }
+        if let Some(slot) = slot {
+            let mut slot_stack = slot.get_cloned_stack();
+            if !slot_stack.is_empty() {
+                stack = slot_stack.clone();
+                if slot_index < 2 {
+                    // From Stonecutter to Player
+                    if !self.insert_item(&mut slot_stack, 2, 38, true) {
+                        return ItemStack::EMPTY.clone();
                     }
-
-                    if slot_stack.is_empty() {
-                        slot.set_stack(ItemStack::EMPTY.clone()).await;
-                    } else {
-                        slot.set_stack(slot_stack).await;
+                    slot.on_quick_move_crafted(slot_stack.clone(), stack.clone());
+                } else {
+                    // From Player to Stonecutter
+                    // Try input slot (0)
+                    if !self.insert_item(&mut slot_stack, 0, 1, false) {
+                        return ItemStack::EMPTY.clone();
                     }
                 }
+
+                if slot_stack.is_empty() {
+                    slot.set_stack(ItemStack::EMPTY.clone());
+                } else {
+                    slot.set_stack(slot_stack);
+                }
             }
-            stack
-        })
+        }
+        stack
     }
 }
 
@@ -197,55 +181,41 @@ impl Slot for StonecutterOutputSlot {
         self.id.store(id as u8, Ordering::Relaxed);
     }
 
-    fn on_take_item<'a>(
-        &'a self,
-        player: &'a dyn InventoryPlayer,
-        stack: &'a ItemStack,
-    ) -> BoxFuture<'a, ()> {
-        Box::pin(async move {
-            player
-                .increment_stat(
-                    StatisticCategory::Crafted,
-                    stack.item.id as i32,
-                    stack.item_count as i32,
-                )
-                .await;
-            self.input_inventory.remove_stack_specific(0, 1).await;
-            self.mark_dirty().await;
-        })
+    fn on_take_item(&self, player: &dyn InventoryPlayer, stack: &ItemStack) {
+        player.increment_stat(
+            StatisticCategory::Crafted,
+            stack.item.id as i32,
+            stack.item_count as i32,
+        );
+        self.input_inventory.remove_stack_specific(0, 1);
+        self.mark_dirty();
     }
 
-    fn can_insert(&self, _stack: &ItemStack) -> BoxFuture<'_, bool> {
-        Box::pin(async move { false })
+    fn can_insert(&self, _stack: &ItemStack) -> bool {
+        false
     }
 
-    fn get_stack(&self) -> BoxFuture<'_, ItemStack> {
-        Box::pin(async move { self.inventory.get_stack(self.index).await })
+    fn get_stack(&self) -> ItemStack {
+        self.inventory.get_stack(self.index)
     }
 
-    fn get_cloned_stack(&self) -> BoxFuture<'_, ItemStack> {
-        Box::pin(async move { self.inventory.get_stack(self.index).await })
+    fn get_cloned_stack(&self) -> ItemStack {
+        self.inventory.get_stack(self.index)
     }
 
-    fn has_stack(&self) -> BoxFuture<'_, bool> {
-        Box::pin(async move { !self.inventory.get_stack(self.index).await.is_empty() })
+    fn has_stack(&self) -> bool {
+        !self.inventory.get_stack(self.index).is_empty()
     }
 
-    fn set_stack(&self, stack: ItemStack) -> BoxFuture<'_, ()> {
-        Box::pin(async move {
-            self.inventory.set_stack(self.index, stack).await;
-        })
+    fn set_stack(&self, stack: ItemStack) {
+        self.inventory.set_stack(self.index, stack);
     }
 
-    fn set_stack_prev(&self, _stack: ItemStack, _previous_stack: ItemStack) -> BoxFuture<'_, ()> {
-        Box::pin(async move {
-            // Do nothing
-        })
+    fn set_stack_prev(&self, _stack: ItemStack, _previous_stack: ItemStack) {
+        // Do nothing
     }
 
-    fn mark_dirty(&self) -> BoxFuture<'_, ()> {
-        Box::pin(async move {
-            self.inventory.mark_dirty();
-        })
+    fn mark_dirty(&self) {
+        self.inventory.mark_dirty();
     }
 }

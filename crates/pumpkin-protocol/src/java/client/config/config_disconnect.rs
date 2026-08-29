@@ -1,11 +1,11 @@
-use pumpkin_data::packet::clientbound::CONFIG_DISCONNECT;
+use pumpkin_data::packet::clientbound::config::DISCONNECT;
 use pumpkin_macros::java_packet;
 
 use crate::ClientPacket;
 use crate::ser::NetworkWriteExt;
 use pumpkin_util::version::JavaMinecraftVersion;
 
-#[java_packet(CONFIG_DISCONNECT)]
+#[java_packet(DISCONNECT)]
 pub struct CConfigDisconnect<'a> {
     pub reason: &'a str,
 }

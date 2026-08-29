@@ -35,7 +35,7 @@ use crate::{
             PluginHostState, ServerResource, TextComponentResource,
         },
         wit::v0_1::{
-            commands::executor::WasmCommandExecutor,
+            commands::executor::{WasmCommandExecutor, WasmCommandSuggestionProvider},
             pumpkin::{
                 self,
                 plugin::{
@@ -367,8 +367,7 @@ impl pumpkin::plugin::command::HostCommandSender for PluginHostState {
             .clone();
         self.get_sender_res(&sender)?
             .provider
-            .send_message(component)
-            .await;
+            .send_message(component);
         Ok(())
     }
 
@@ -384,8 +383,7 @@ impl pumpkin::plugin::command::HostCommandSender for PluginHostState {
             .clone();
         self.get_sender_res(&sender)?
             .provider
-            .send_message(component)
-            .await;
+            .send_message(component);
         Ok(())
     }
 
@@ -403,8 +401,7 @@ impl pumpkin::plugin::command::HostCommandSender for PluginHostState {
             .provider
             .send_message(component.color(pumpkin_util::text::color::Color::Named(
                 pumpkin_util::text::color::NamedColor::Red,
-            )))
-            .await;
+            )));
         Ok(())
     }
 
@@ -489,7 +486,7 @@ impl pumpkin::plugin::command::HostCommandSender for PluginHostState {
             .resource_table
             .get::<ServerResource>(&Resource::new_own(server.rep()))?
             .provider;
-        Ok(sender_provider.has_permission(server_provider, &node).await)
+        Ok(sender_provider.has_permission(server_provider, &node))
     }
 
     async fn position(
@@ -644,6 +641,32 @@ impl pumpkin::plugin::command::HostCommandNode for PluginHostState {
         let resource = self.get_node_mut(&node)?;
         let builder = std::mem::replace(&mut resource.provider, literal(""));
         resource.provider = builder.execute(executor);
+        Ok(())
+    }
+
+    async fn suggest_with_handler_id(
+        &mut self,
+        node: Resource<CommandNode>,
+        handler_id: u32,
+    ) -> wasmtime::Result<()> {
+        let plugin = self
+            .plugin
+            .as_ref()
+            .and_then(std::sync::Weak::upgrade)
+            .ok_or_else(|| wasmtime::Error::msg("Plugin dropped"))?;
+        let server = self
+            .server
+            .clone()
+            .ok_or_else(|| wasmtime::Error::msg("Server not initialized"))?;
+
+        let provider = WasmCommandSuggestionProvider {
+            handler_id,
+            plugin,
+            server,
+        };
+        let resource = self.get_node_mut(&node)?;
+        let builder = std::mem::replace(&mut resource.provider, literal(""));
+        resource.provider = builder.suggests(provider);
         Ok(())
     }
 

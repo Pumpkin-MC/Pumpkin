@@ -1,0 +1,27 @@
+{
+  "feature": "minecraft:fossil_diamonds",
+  "placement": [
+    {
+      "type": "minecraft:rarity_filter",
+      "chance": 64
+    },
+    {
+      "type": "minecraft:in_square"
+    },
+    {
+      "type": "minecraft:height_range",
+      "height": {
+        "type": "minecraft:uniform",
+        "max_inclusive": {
+          "absolute": -8
+        },
+        "min_inclusive": {
+          "above_bottom": 0
+        }
+      }
+    },
+    {
+      "type": "minecraft:biome"
+    }
+  ]
+}

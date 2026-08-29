@@ -1,0 +1,25 @@
+{
+  "parent": "minecraft:adventure/root",
+  "criteria": {
+    "avoid_vibration": {
+      "trigger": "minecraft:avoid_vibration"
+    }
+  },
+  "display": {
+    "description": {
+      "translate": "advancements.adventure.avoid_vibration.description"
+    },
+    "icon": {
+      "id": "minecraft:sculk_sensor"
+    },
+    "title": {
+      "translate": "advancements.adventure.avoid_vibration.title"
+    }
+  },
+  "requirements": [
+    [
+      "avoid_vibration"
+    ]
+  ],
+  "sends_telemetry_event": true
+}

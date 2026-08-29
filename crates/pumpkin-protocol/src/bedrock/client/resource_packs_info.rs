@@ -1,49 +1,44 @@
+// Last verified for v2169
+
 use crate::serial::PacketWrite;
 use pumpkin_macros::packet;
-use std::io::{Error, Write};
 
 #[derive(PacketWrite)]
-pub struct ResourcePackEntry {
-    pub uuid: uuid::Uuid,
-    pub version: String,
-    pub size: u64,
+pub struct PackInfoData {
+    pub pack_id_version: PackIdVersion,
+    pub pack_size: u64,
     pub content_key: String,
-    pub sub_pack_name: String,
-    pub content_id: String,
+    pub subpack_name: String,
+    pub content_identity: String,
     pub has_scripts: bool,
-    pub addon_pack: bool,
-    pub rtx_enabled: bool,
-    pub download_url: String,
+    pub is_addon_pack: bool,
+    pub is_ray_tracing_capable: bool,
+    pub cdn_url: String,
 }
 
+#[derive(PacketWrite)]
 #[packet(6)]
 pub struct CResourcePacksInfo {
     pub resource_pack_required: bool,
     pub has_addon_packs: bool,
     pub has_scripts: bool,
-    pub is_vibrant_visuals_force_disabled: bool,
-    pub world_template_id: uuid::Uuid,
-    pub world_template_version: String,
-    pub resource_packs: Vec<ResourcePackEntry>,
+    pub force_disable_vibrant_visuals: bool,
+    pub world_template_id_and_version: PackIdVersion,
+    pub resource_packs: Vec<PackInfoData>,
 }
 
-impl PacketWrite for CResourcePacksInfo {
-    fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
-        self.resource_pack_required.write(writer)?;
-        self.has_addon_packs.write(writer)?;
-        self.has_scripts.write(writer)?;
-        self.is_vibrant_visuals_force_disabled.write(writer)?;
+#[derive(PacketWrite)]
+pub struct PackIdVersion {
+    pub pack_uuid: uuid::Uuid,
+    pub pack_version: String,
+}
 
-        self.world_template_id.write(writer)?;
-
-        self.world_template_version.write(writer)?;
-
-        crate::codec::var_uint::VarUInt(self.resource_packs.len() as u32).write(writer)?;
-
-        for entry in &self.resource_packs {
-            entry.write(writer)?;
+impl PackIdVersion {
+    #[must_use]
+    pub const fn new(pack_uuid: uuid::Uuid, pack_version: String) -> Self {
+        Self {
+            pack_uuid,
+            pack_version,
         }
-
-        Ok(())
     }
 }

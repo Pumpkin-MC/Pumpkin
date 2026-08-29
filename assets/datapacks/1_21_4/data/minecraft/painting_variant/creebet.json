@@ -1,0 +1,13 @@
+{
+  "asset_id": "minecraft:creebet",
+  "title": {
+    "translate": "painting.minecraft.creebet.title",
+    "color": "yellow"
+  },
+  "author": {
+    "translate": "painting.minecraft.creebet.author",
+    "color": "gray"
+  },
+  "width": 2,
+  "height": 1
+}

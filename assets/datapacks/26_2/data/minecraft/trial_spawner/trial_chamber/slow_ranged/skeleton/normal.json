@@ -1,0 +1,15 @@
+{
+  "simultaneous_mobs": 4.0,
+  "simultaneous_mobs_added_per_player": 2.0,
+  "spawn_potentials": [
+    {
+      "data": {
+        "entity": {
+          "id": "minecraft:skeleton"
+        }
+      },
+      "weight": 1
+    }
+  ],
+  "ticks_between_spawn": 160
+}

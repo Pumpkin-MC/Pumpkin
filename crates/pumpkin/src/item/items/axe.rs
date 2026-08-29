@@ -1,10 +1,10 @@
-use std::pin::Pin;
-
 use crate::entity::player::Player;
 use crate::item::{ItemBehaviour, ItemMetadata};
 use crate::server::Server;
 use pumpkin_data::block_properties::BlockProperties;
-use pumpkin_data::block_properties::{OakDoorLikeProperties, PaleOakWoodLikeProperties};
+use pumpkin_data::block_properties::{
+    DoubleBlockHalf, OakDoorLikeProperties, PaleOakWoodLikeProperties,
+};
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::tag::Taggable;
 use pumpkin_data::{Block, tag};
@@ -23,74 +23,85 @@ impl ItemMetadata for AxeItem {
 }
 
 impl ItemBehaviour for AxeItem {
-    fn use_on_block<'a>(
-        &'a self,
-        item: &'a mut ItemStack,
-        player: &'a Player,
+    fn use_on_block(
+        &self,
+        item: &mut ItemStack,
+        player: &Player,
         location: BlockPos,
         _face: BlockDirection,
         _cursor_pos: Vector3<f32>,
-        block: &'a Block,
-        _server: &'a Server,
-    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
-        Box::pin(async move {
-            // I tried to follow mojang order of doing things.
-            let world = player.world();
-            let replacement_block = try_use_axe(block.id);
-            // First we try to strip the block. by getting his equivalent and applying it the axis.
+        block: &Block,
+        _server: &Server,
+    ) {
+        // I tried to follow mojang order of doing things.
+        let world = player.world();
+        let replacement_block = try_use_axe(block.id);
+        // First we try to strip the block. by getting his equivalent and applying it the axis.
 
-            // If there is a strip equivalent.
-            let changed = if let Some(replacement) = replacement_block {
-                let new_block = replacement.to_block();
-                // Bamboo blocks are pillars too, but they are not part of the logs tag.
-                let new_state_id = if block.has_tag(&tag::Block::MINECRAFT_LOGS)
-                    || block == &Block::BAMBOO_BLOCK
-                {
-                    let log_information = world.get_block_state_id(&location);
-                    let log_props =
-                        PaleOakWoodLikeProperties::from_state_id(log_information, block);
-                    // create new properties for the new log.
-                    let mut new_log_properties = PaleOakWoodLikeProperties::default(new_block);
-                    new_log_properties.axis = log_props.axis;
+        // If there is a strip equivalent.
+        let changed = replacement_block.is_some_and(|replacement| {
+            let new_block = replacement.to_block();
+            // Bamboo blocks are pillars too, but they are not part of the logs tag.
+            let new_state_id = if block.has_tag(&tag::Block::MINECRAFT_LOGS)
+                || block == &Block::BAMBOO_BLOCK
+            {
+                let log_information = world.get_block_state_id(&location);
+                let log_props = PaleOakWoodLikeProperties::from_state_id(log_information, block);
+                // create new properties for the new log.
+                let mut new_log_properties = PaleOakWoodLikeProperties::default(new_block);
+                new_log_properties.axis = log_props.axis;
 
-                    // create new properties for the new log.
+                // create new properties for the new log.
 
-                    // Set old axis to the new log.
-                    new_log_properties.axis = log_props.axis;
-                    new_log_properties.to_state_id(new_block)
-                }
-                // Let's check if It's a door
-                else if block.has_tag(&tag::Block::MINECRAFT_DOORS) {
-                    // get block state of the old log.
-                    let door_information = world.get_block_state_id(&location);
-                    // get the log properties
-                    let door_props = OakDoorLikeProperties::from_state_id(door_information, block);
-                    // create new properties for the new log.
-                    let mut new_door_properties = OakDoorLikeProperties::default(new_block);
-                    // Set old axis to the new log.
-                    new_door_properties.facing = door_props.facing;
-                    new_door_properties.open = door_props.open;
-                    new_door_properties.half = door_props.half;
-                    new_door_properties.hinge = door_props.hinge;
-                    new_door_properties.powered = door_props.powered;
-                    new_door_properties.to_state_id(new_block)
-                } else {
-                    new_block.default_state.id
-                };
-                // TODO Implements trapdoors when It's implemented
-                world
-                    .set_block_state(&location, new_state_id, BlockFlags::NOTIFY_ALL)
-                    .await;
-                true
-            } else {
-                false
-            };
-
-            if changed && player.gamemode.load() != GameMode::Creative {
-                // TODO: Handle DamageResult::Broken to broadcast item break and update player slot.
-                let _ = item.damage_item(1);
+                // Set old axis to the new log.
+                new_log_properties.axis = log_props.axis;
+                new_log_properties.to_state_id(new_block)
             }
-        })
+            // Let's check if It's a door
+            else if block.has_tag(&tag::Block::MINECRAFT_DOORS) {
+                // get block state of the old log.
+                // get block state of the old log.
+                let door_information = world.get_block_state_id(&location);
+                // get the door properties
+                let door_props = OakDoorLikeProperties::from_state_id(door_information, block);
+                let other_half_pos = match door_props.half {
+                    DoubleBlockHalf::Lower => location.up(),
+                    DoubleBlockHalf::Upper => location.down(),
+                };
+                let (other_block, other_state_id) = world.get_block_and_state_id(&other_half_pos);
+                if other_block == block {
+                    let other_new_state_id =
+                        crate::block::blocks::weathering_copper::with_properties_of(
+                            other_block,
+                            other_state_id,
+                            new_block,
+                        );
+                    world.set_block_state(
+                        &other_half_pos,
+                        other_new_state_id,
+                        BlockFlags::NOTIFY_ALL,
+                    );
+                }
+                crate::block::blocks::weathering_copper::with_properties_of(
+                    block,
+                    door_information,
+                    new_block,
+                )
+            } else {
+                crate::block::blocks::weathering_copper::with_properties_of(
+                    block,
+                    world.get_block_state_id(&location),
+                    new_block,
+                )
+            };
+            world.set_block_state(&location, new_state_id, BlockFlags::NOTIFY_ALL);
+            true
+        });
+
+        if changed && player.gamemode.load() != GameMode::Creative {
+            // TODO: Handle DamageResult::Broken to broadcast item break and update player slot.
+            let _ = item.damage_item(1);
+        }
     }
 
     fn as_any(&self) -> &dyn std::any::Any {
@@ -168,6 +179,21 @@ const fn get_deoxidized_equivalent(id: BlockId) -> Option<BlockId> {
         BlockId::OXIDIZED_COPPER_TRAPDOOR => Some(BlockId::WEATHERED_COPPER_TRAPDOOR),
         BlockId::WEATHERED_COPPER_TRAPDOOR => Some(BlockId::EXPOSED_COPPER_TRAPDOOR),
         BlockId::EXPOSED_COPPER_TRAPDOOR => Some(BlockId::COPPER_TRAPDOOR),
+        BlockId::OXIDIZED_COPPER_LANTERN => Some(BlockId::WEATHERED_COPPER_LANTERN),
+        BlockId::WEATHERED_COPPER_LANTERN => Some(BlockId::EXPOSED_COPPER_LANTERN),
+        BlockId::EXPOSED_COPPER_LANTERN => Some(BlockId::COPPER_LANTERN),
+        BlockId::OXIDIZED_COPPER_CHEST => Some(BlockId::WEATHERED_COPPER_CHEST),
+        BlockId::WEATHERED_COPPER_CHEST => Some(BlockId::EXPOSED_COPPER_CHEST),
+        BlockId::EXPOSED_COPPER_CHEST => Some(BlockId::COPPER_CHEST),
+        BlockId::OXIDIZED_COPPER_GOLEM_STATUE => Some(BlockId::WEATHERED_COPPER_GOLEM_STATUE),
+        BlockId::WEATHERED_COPPER_GOLEM_STATUE => Some(BlockId::EXPOSED_COPPER_GOLEM_STATUE),
+        BlockId::EXPOSED_COPPER_GOLEM_STATUE => Some(BlockId::COPPER_GOLEM_STATUE),
+        BlockId::OXIDIZED_COPPER_BARS => Some(BlockId::WEATHERED_COPPER_BARS),
+        BlockId::WEATHERED_COPPER_BARS => Some(BlockId::EXPOSED_COPPER_BARS),
+        BlockId::EXPOSED_COPPER_BARS => Some(BlockId::COPPER_BARS),
+        BlockId::OXIDIZED_COPPER_CHAIN => Some(BlockId::WEATHERED_COPPER_CHAIN),
+        BlockId::WEATHERED_COPPER_CHAIN => Some(BlockId::EXPOSED_COPPER_CHAIN),
+        BlockId::EXPOSED_COPPER_CHAIN => Some(BlockId::COPPER_CHAIN),
         _ => None,
     }
 }

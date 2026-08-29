@@ -3,8 +3,7 @@ use pumpkin_data::item_stack::ItemStack;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
 use pumpkin_util::math::position::BlockPos;
-use std::pin::Pin;
-use tokio::sync::Mutex;
+use std::sync::Mutex;
 
 pub struct DecoratedPotBlockEntity {
     pub position: BlockPos,
@@ -36,20 +35,19 @@ impl BlockEntity for DecoratedPotBlockEntity {
         }
     }
 
-    fn write_nbt<'a>(
-        &'a self,
-        nbt: &'a mut NbtCompound,
-    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
-        Box::pin(async move {
-            if let Some(sh) = self.sherds.lock().await.as_ref() {
-                nbt.put_list("sherds", sh.clone());
-            }
-            if let Some(it) = self.item.lock().await.as_ref() {
-                let mut it_nbt = NbtCompound::new();
-                it.write_item_stack(&mut it_nbt);
-                nbt.put_compound("item", it_nbt);
-            }
-        })
+    fn write_nbt(&self, nbt: &mut NbtCompound) {
+        if let Ok(sherds) = self.sherds.lock()
+            && let Some(sh) = sherds.as_ref()
+        {
+            nbt.put_list("sherds", sh.clone());
+        }
+        if let Ok(item) = self.item.lock()
+            && let Some(it) = item.as_ref()
+        {
+            let mut it_nbt = NbtCompound::new();
+            it.write_item_stack(&mut it_nbt);
+            nbt.put_compound("item", it_nbt);
+        }
     }
 
     fn chunk_data_nbt(&self) -> Option<NbtCompound> {
@@ -81,21 +79,30 @@ impl DecoratedPotBlockEntity {
     pub const fn new(position: BlockPos) -> Self {
         Self {
             position,
-            sherds: Mutex::const_new(None),
-            item: Mutex::const_new(None),
+            sherds: Mutex::new(None),
+            item: Mutex::new(None),
         }
     }
 
-    pub async fn get_item(&self) -> Option<ItemStack> {
-        self.item.lock().await.clone()
+    pub fn get_item(&self) -> Option<ItemStack> {
+        self.item
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone()
     }
 
-    pub async fn take_item(&self) -> Option<ItemStack> {
-        self.item.lock().await.take()
+    pub fn take_item(&self) -> Option<ItemStack> {
+        self.item
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .take()
     }
 
-    pub async fn try_insert_item(&self, stack: &mut ItemStack, count: u8) -> bool {
-        let mut item_guard = self.item.lock().await;
+    pub fn try_insert_item(&self, stack: &mut ItemStack, count: u8) -> bool {
+        let mut item_guard = self
+            .item
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         if let Some(existing) = item_guard.as_mut() {
             if existing.item.id == stack.item.id {
                 let add = count.min(64 - existing.item_count);
@@ -116,14 +123,18 @@ impl DecoratedPotBlockEntity {
         }
     }
 
-    pub async fn get_comparator_output(&self) -> u8 {
-        self.item.lock().await.as_ref().map_or(0, |item| {
-            if item.item_count == 0 {
-                0
-            } else {
-                let max_count = 64f32;
-                1 + ((item.item_count as f32 / max_count) * 14.0).floor() as u8
-            }
-        })
+    pub fn get_comparator_output(&self) -> u8 {
+        self.item
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .as_ref()
+            .map_or(0, |item| {
+                if item.item_count == 0 {
+                    0
+                } else {
+                    let max_count = 64f32;
+                    1 + ((item.item_count as f32 / max_count) * 14.0).floor() as u8
+                }
+            })
     }
 }

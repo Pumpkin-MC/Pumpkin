@@ -1,4 +1,4 @@
-use std::{error, pin::Pin};
+use std::error;
 
 use bytes::Bytes;
 use pumpkin_util::math::vector2::Vector2;
@@ -38,8 +38,6 @@ pub trait Dirtiable {
     fn mark_dirty(&self, flag: bool);
 }
 
-type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
-
 /// Trait to handle the IO of chunks
 /// for loading and saving chunks data
 /// can be implemented for different types of IO
@@ -59,34 +57,34 @@ where
         folder: &'a LevelFolder,
         chunk_coords: &'a [Vector2<i32>],
         stream: tokio::sync::mpsc::Sender<LoadedData<Self::Data, ChunkReadingError>>,
-    ) -> BoxFuture<'a, ()>; // Returns BoxFuture<()>
+    ) -> impl Future<Output = ()> + Send + 'a;
 
     /// Persist the chunks data
     fn save_chunks<'a>(
         &'a self,
         folder: &'a LevelFolder,
         chunks_data: Vec<(Vector2<i32>, Self::Data)>,
-    ) -> BoxFuture<'a, Result<(), ChunkWritingError>>; // Returns BoxFuture<Result>
+    ) -> impl Future<Output = Result<(), ChunkWritingError>> + Send + 'a;
 
     /// Tells the `ChunkIO` that these chunks are currently loaded in memory
     fn watch_chunks<'a>(
         &'a self,
         folder: &'a LevelFolder,
         chunks: &'a [Vector2<i32>],
-    ) -> BoxFuture<'a, ()>;
+    ) -> impl Future<Output = ()> + Send + 'a;
 
     /// Tells the `ChunkIO` that these chunks are no longer loaded in memory
     fn unwatch_chunks<'a>(
         &'a self,
         folder: &'a LevelFolder,
         chunks: &'a [Vector2<i32>],
-    ) -> BoxFuture<'a, ()>;
+    ) -> impl Future<Output = ()> + Send + 'a;
 
     /// Tells the `ChunkIO` that no more chunks are loaded in memory
-    fn clear_watched_chunks(&self) -> BoxFuture<'_, ()>;
+    fn clear_watched_chunks(&self) -> impl Future<Output = ()> + Send + '_;
 
     /// Ensure that all ongoing operations are finished
-    fn block_and_await_ongoing_tasks(&self) -> BoxFuture<'_, ()>;
+    fn block_and_await_ongoing_tasks(&self) -> impl Future<Output = ()> + Send + '_;
 }
 
 /// Trait to serialize and deserialize the chunk data to and from bytes.

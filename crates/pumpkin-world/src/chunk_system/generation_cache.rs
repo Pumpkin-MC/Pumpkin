@@ -444,9 +444,12 @@ impl Cache {
                         .get_proto_chunk_mut()
                         .set_structure_starts(noise_gen);
                 }
-                generator::WorldGenerator::Flat(_) => {}
+                generator::WorldGenerator::Flat(_) => {
+                    self.chunks[mid].get_proto_chunk_mut().stage = StagedChunkEnum::StructureStart;
+                }
                 generator::WorldGenerator::Custom(custom_gen) => {
                     custom_gen.set_structure_starts(self.chunks[mid].get_proto_chunk_mut());
+                    self.chunks[mid].get_proto_chunk_mut().stage = StagedChunkEnum::StructureStart;
                 }
             },
             StagedChunkEnum::StructureReferences => match generator {
@@ -455,9 +458,14 @@ impl Cache {
                         .get_proto_chunk_mut()
                         .set_structure_references(noise_gen);
                 }
-                generator::WorldGenerator::Flat(_) => {}
+                generator::WorldGenerator::Flat(_) => {
+                    self.chunks[mid].get_proto_chunk_mut().stage =
+                        StagedChunkEnum::StructureReferences;
+                }
                 generator::WorldGenerator::Custom(custom_gen) => {
                     custom_gen.set_structure_references(self.chunks[mid].get_proto_chunk_mut());
+                    self.chunks[mid].get_proto_chunk_mut().stage =
+                        StagedChunkEnum::StructureReferences;
                 }
             },
             StagedChunkEnum::Biomes => match generator {

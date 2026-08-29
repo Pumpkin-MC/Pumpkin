@@ -1,0 +1,13 @@
+{
+  "asset_id": "minecraft:passage",
+  "author": {
+    "color": "gray",
+    "translate": "painting.minecraft.passage.author"
+  },
+  "height": 2,
+  "title": {
+    "color": "yellow",
+    "translate": "painting.minecraft.passage.title"
+  },
+  "width": 4
+}

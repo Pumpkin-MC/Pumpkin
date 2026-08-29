@@ -1,0 +1,7 @@
+{
+  "type": "minecraft:stonecutting",
+  "ingredient": "minecraft:mud_bricks",
+  "result": {
+    "id": "minecraft:mud_brick_stairs"
+  }
+}

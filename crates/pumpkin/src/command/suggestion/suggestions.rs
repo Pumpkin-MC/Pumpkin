@@ -181,7 +181,7 @@ impl SuggestionsBuilder {
     fn matches_substr(pattern: &str, input: &str) -> bool {
         let mut current_str = input;
         while !current_str.starts_with(pattern) {
-            match current_str.find(['.', '_', '/']) {
+            match current_str.find(['.', '_', '/', ':']) {
                 Some(pos) => current_str = &current_str[(pos + 1)..],
                 None => return false,
             }
@@ -412,27 +412,25 @@ impl Suggestions {
 
             match side {
                 PushSide::Text => {
-                    let text = text_iter.next().expect(
-                        "text_iter should have a next value because side is PushSide::Text",
-                    );
-                    suggestions.push(Suggestion {
-                        text: SuggestionText::Text(text.0),
-                        tooltip: text.1,
-                        range: text.2,
-                    });
+                    if let Some(text) = text_iter.next() {
+                        suggestions.push(Suggestion {
+                            text: SuggestionText::Text(text.0),
+                            tooltip: text.1,
+                            range: text.2,
+                        });
+                    }
                 }
                 PushSide::Integer => {
-                    let text = integer_iter.next().expect(
-                        "integer_iter should have a next value because side is PushSide::Integer",
-                    );
-                    suggestions.push(Suggestion {
-                        text: SuggestionText::Integer {
-                            cached_text: text.0,
-                            value: text.1,
-                        },
-                        tooltip: text.2,
-                        range: text.3,
-                    });
+                    if let Some(text) = integer_iter.next() {
+                        suggestions.push(Suggestion {
+                            text: SuggestionText::Integer {
+                                cached_text: text.0,
+                                value: text.1,
+                            },
+                            tooltip: text.2,
+                            range: text.3,
+                        });
+                    }
                 }
                 PushSide::Break => break,
             }

@@ -1,11 +1,11 @@
-use pumpkin_data::packet::clientbound::CONFIG_RESOURCE_PACK_POP;
+use pumpkin_data::packet::clientbound::config::RESOURCE_PACK_POP;
 use pumpkin_macros::java_packet;
 
 use crate::ClientPacket;
 use crate::ser::NetworkWriteExt;
 use pumpkin_util::version::JavaMinecraftVersion;
 
-#[java_packet(CONFIG_RESOURCE_PACK_POP)]
+#[java_packet(RESOURCE_PACK_POP)]
 pub struct CConfigRemoveResourcePack<'a> {
     pub uuid: Option<&'a uuid::Uuid>,
 }

@@ -1,0 +1,46 @@
+{
+  "type": "minecraft:gift",
+  "pools": [
+    {
+      "entries": [
+        {
+          "type": "minecraft:item",
+          "name": "minecraft:rabbit_hide",
+          "weight": 10
+        },
+        {
+          "type": "minecraft:item",
+          "name": "minecraft:rabbit_foot",
+          "weight": 10
+        },
+        {
+          "type": "minecraft:item",
+          "name": "minecraft:chicken",
+          "weight": 10
+        },
+        {
+          "type": "minecraft:item",
+          "name": "minecraft:feather",
+          "weight": 10
+        },
+        {
+          "type": "minecraft:item",
+          "name": "minecraft:rotten_flesh",
+          "weight": 10
+        },
+        {
+          "type": "minecraft:item",
+          "name": "minecraft:string",
+          "weight": 10
+        },
+        {
+          "type": "minecraft:item",
+          "name": "minecraft:phantom_membrane",
+          "weight": 2
+        }
+      ],
+      "rolls": 1.0
+    }
+  ],
+  "random_sequence": "minecraft:gameplay/cat_morning_gift"
+}

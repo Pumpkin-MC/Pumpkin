@@ -1,5 +1,4 @@
 use pumpkin_data::translation;
-use pumpkin_protocol::java::client::play::CommandSuggestion;
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::click::ClickEvent;
 use pumpkin_util::text::color::NamedColor;
@@ -15,8 +14,12 @@ use crate::command::dispatcher::CommandError::{
     CommandFailed, InvalidConsumption, InvalidRequirement, PermissionDenied, SyntaxError,
 };
 use crate::command::tree::{Command, CommandTree, NodeType, RawArg, RawArgs};
+use crate::command::{
+    context::string_range::StringRange,
+    suggestion::{Suggestion, suggestions::Suggestions},
+};
 use crate::server::Server;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 #[derive(Debug)]
 pub enum CommandError {
@@ -236,24 +239,17 @@ pub struct CommandDispatcher {
 
 /// Stores registered [`CommandTree`]s and dispatches commands to them.
 impl CommandDispatcher {
-    pub async fn handle_command<'a>(
-        &'a self,
-        sender: &CommandSender,
-        server: &'a Server,
-        cmd: &'a str,
-    ) {
-        let result = self.dispatch(sender, server, cmd).await;
+    pub fn handle_command(&self, sender: &CommandSender, server: &Server, cmd: &str) {
+        let result = self.dispatch(sender, server, cmd);
         sender.set_success_count(u32::from(result.is_ok()));
 
         if let Err(e) = result {
             for text in e.into_messages(cmd) {
-                sender
-                    .send_message(
-                        TextComponent::text("")
-                            .add_child(text)
-                            .color_named(pumpkin_util::text::color::NamedColor::Red),
-                    )
-                    .await;
+                sender.send_message(
+                    TextComponent::text("")
+                        .add_child(text)
+                        .color_named(pumpkin_util::text::color::NamedColor::Red),
+                );
             }
         }
     }
@@ -263,15 +259,15 @@ impl CommandDispatcher {
     /// # todo
     /// - make this less ugly
     /// - do not query suggestions for the same consumer multiple times just because they are on different paths through the tree
-    pub(crate) async fn find_suggestions<'a>(
+    pub(crate) fn find_suggestions<'a>(
         &'a self,
         src: &'a CommandSender,
         server: &'a Server,
         cmd: &'a str,
-    ) -> Vec<CommandSuggestion> {
+    ) -> Suggestions {
         let mut parts = cmd.split_whitespace();
         let Some(key) = parts.next() else {
-            return Vec::new();
+            return Suggestions::empty();
         };
         let mut raw_args: RawArgs<'a> = parts
             .rev()
@@ -284,7 +280,7 @@ impl CommandDispatcher {
             .collect();
 
         let Ok(tree) = self.get_tree(key) else {
-            return Vec::new();
+            return Suggestions::empty();
         };
 
         // Gate suggestions on command permissions, mirroring `dispatch`. Many
@@ -293,46 +289,44 @@ impl CommandDispatcher {
         // consumers would leak privileged data (e.g. banned/op/whitelisted
         // player names) to unprivileged players via tab-complete.
         let Some(permission) = self.permissions.get(key) else {
-            return Vec::new();
+            return Suggestions::empty();
         };
 
-        if !src.has_permission(server, permission.as_str()).await {
-            return Vec::new();
+        if !src.has_permission(server, permission.as_str()) {
+            return Suggestions::empty();
         }
 
-        let mut suggestions = HashSet::new();
+        let mut suggestions = Vec::new();
 
         // try paths and collect the nodes that fail
         // todo: make this more fine-grained
         for path in tree.iter_paths() {
-            match Self::try_find_suggestions_on_path(src, server, &path, tree, &mut raw_args, cmd)
-                .await
-            {
+            match Self::try_find_suggestions_on_path(src, server, &path, tree, &mut raw_args, cmd) {
                 Err(InvalidConsumption(s)) => {
                     debug!(
                         "Error while parsing command \"{cmd}\": {s:?} was consumed, but couldn't be parsed"
                     );
-                    return Vec::new();
+                    return Suggestions::empty();
                 }
                 Err(InvalidRequirement) => {
                     debug!(
                         "Error while parsing command \"{cmd}\": a requirement that was expected was not met."
                     );
-                    return Vec::new();
+                    return Suggestions::empty();
                 }
                 Err(PermissionDenied) => {
                     debug!("Permission denied for command \"{cmd}\"");
-                    return Vec::new();
+                    return Suggestions::empty();
                 }
                 Err(CommandFailed(_)) => {
                     debug!("Command failed");
-                    return Vec::new();
+                    return Suggestions::empty();
                 }
                 Err(SyntaxError(_)) => {
-                    return Vec::new();
+                    return Suggestions::empty();
                 }
                 Ok(Some(new_suggestions)) => {
-                    suggestions.extend(new_suggestions);
+                    suggestions.push(new_suggestions);
                 }
                 Ok(None) => {
                     debug!("Command none");
@@ -340,9 +334,7 @@ impl CommandDispatcher {
             }
         }
 
-        let mut suggestions = Vec::from_iter(suggestions);
-        suggestions.sort_by(|a, b| a.suggestion.cmp(&b.suggestion));
-        suggestions
+        Suggestions::merge(cmd, suggestions)
     }
 
     #[allow(clippy::too_many_lines)]
@@ -441,7 +433,7 @@ impl CommandDispatcher {
     }
 
     /// Execute a command using its corresponding [`CommandTree`].
-    pub(crate) async fn dispatch<'a>(
+    pub(crate) fn dispatch<'a>(
         &'a self,
         src: &CommandSender,
         server: &'a Server,
@@ -459,7 +451,7 @@ impl CommandDispatcher {
             )));
         };
 
-        if !src.has_permission(server, permission.as_str()).await {
+        if !src.has_permission(server, permission.as_str()) {
             return Err(PermissionDenied);
         }
 
@@ -467,9 +459,7 @@ impl CommandDispatcher {
 
         // try paths until fitting path is found
         for path in tree.iter_paths() {
-            match Self::try_is_fitting_path(src, server, &path, tree, &mut raw_args.clone(), cmd)
-                .await
-            {
+            match Self::try_is_fitting_path(src, server, &path, tree, &mut raw_args.clone(), cmd) {
                 Ok(PathResult::Matched) => return Ok(()),
                 Ok(PathResult::Failed(failure)) => path_failures.push(failure),
                 Err(error) => return Err(error),
@@ -502,7 +492,7 @@ impl CommandDispatcher {
     }
 
     #[allow(clippy::too_many_lines)]
-    async fn try_is_fitting_path<'a>(
+    fn try_is_fitting_path<'a>(
         src: &'a CommandSender,
         server: &'a Server,
         path: &[usize],
@@ -519,7 +509,7 @@ impl CommandDispatcher {
             match &node.node_type {
                 NodeType::ExecuteLeaf { executor } => {
                     return if raw_args.is_empty() {
-                        executor.execute(src, server, &parsed_args).await?;
+                        executor.execute(src, server, &parsed_args)?;
                         Ok(PathResult::Matched)
                     } else {
                         debug!(
@@ -558,7 +548,7 @@ impl CommandDispatcher {
                     matched_any_node = true;
                 }
                 NodeType::Argument { consumer, name, .. } => {
-                    match consumer.consume_with_syntax(src, server, raw_args).await {
+                    match consumer.consume_with_syntax(src, server, raw_args) {
                         Ok(Some(consumed)) => {
                             parsed_args.insert(name, consumed);
                             matched_any_node = true;
@@ -614,14 +604,14 @@ impl CommandDispatcher {
         )))
     }
 
-    async fn try_find_suggestions_on_path<'a>(
+    fn try_find_suggestions_on_path<'a>(
         src: &'a CommandSender,
         server: &'a Server,
         path: &[usize],
         tree: &'a CommandTree,
         raw_args: &mut RawArgs<'a>,
         input: &'a str,
-    ) -> Result<Option<Vec<CommandSuggestion>>, CommandError> {
+    ) -> Result<Option<Suggestions>, CommandError> {
         //let mut parsed_args: ConsumedArgs = HashMap::new();
 
         for node in path.iter().map(|&i| &tree.nodes[i]) {
@@ -634,15 +624,52 @@ impl CommandDispatcher {
                         return Ok(None);
                     }
                 }
-                NodeType::Argument { consumer, name: _ } => {
-                    match consumer.consume_with_syntax(src, server, raw_args).await {
+                NodeType::Argument {
+                    consumer,
+                    suggestion_provider,
+                    name: _,
+                } => {
+                    match consumer.consume_with_syntax(src, server, raw_args) {
                         Ok(Some(_consumed)) => {
                             //parsed_args.insert(name, consumed);
                         }
                         Ok(None) => {
                             return if raw_args.is_empty() {
-                                let suggestions = consumer.suggest(src, server, input).await?;
-                                Ok(suggestions)
+                                let start = input
+                                    .char_indices()
+                                    .rfind(|(_, c)| c.is_whitespace())
+                                    .map_or(0, |(index, c)| index + c.len_utf8());
+                                if let Some(provider) = suggestion_provider {
+                                    Ok(Some(provider.suggest(
+                                        src,
+                                        server,
+                                        input,
+                                        start,
+                                        input.len(),
+                                    )))
+                                } else {
+                                    let suggestions = consumer.suggest(src, server, input)?;
+                                    let range = StringRange::between(start, input.len());
+                                    Ok(suggestions.map(|suggestions| {
+                                        Suggestions::new(
+                                            range,
+                                            suggestions
+                                                .into_iter()
+                                                .map(|suggestion| match suggestion.tooltip {
+                                                    Some(tooltip) => Suggestion::with_tooltip(
+                                                        range,
+                                                        suggestion.suggestion,
+                                                        tooltip,
+                                                    ),
+                                                    None => Suggestion::without_tooltip(
+                                                        range,
+                                                        suggestion.suggestion,
+                                                    ),
+                                                })
+                                                .collect(),
+                                        )
+                                    }))
+                                }
                             } else {
                                 Ok(None)
                             };
@@ -766,7 +793,6 @@ impl CommandDispatcher {
 
 #[cfg(test)]
 mod test {
-    use pumpkin_config::BasicConfiguration;
     use pumpkin_data::translation;
     use pumpkin_util::permission::PermissionManager;
     use pumpkin_util::text::TextContent;
@@ -790,22 +816,18 @@ mod test {
 
     #[test]
     fn dynamic_command() {
-        let config = BasicConfiguration::default();
         let commands_config = pumpkin_config::CommandsConfig::default();
         let manager = PermissionManager::new();
-        let mut dispatcher =
-            default_dispatcher(&manager, &config, &commands_config).fallback_dispatcher;
+        let mut dispatcher = default_dispatcher(&manager, &commands_config).fallback_dispatcher;
         let tree = CommandTree::new(["test"], "test_desc");
         dispatcher.register(tree, "minecraft:test");
     }
 
     #[test]
     fn pumpkin_command_aliases() {
-        let config = BasicConfiguration::default();
         let commands_config = pumpkin_config::CommandsConfig::default();
         let manager = PermissionManager::new();
-        let dispatcher =
-            default_dispatcher(&manager, &config, &commands_config).fallback_dispatcher;
+        let dispatcher = default_dispatcher(&manager, &commands_config).fallback_dispatcher;
 
         let pumpkin_tree = dispatcher.get_tree("pumpkin").unwrap();
         let version_tree = dispatcher.get_tree("version").unwrap();

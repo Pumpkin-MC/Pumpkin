@@ -1,4 +1,4 @@
-use pumpkin_data::packet::clientbound::PLAY_MERCHANT_OFFERS;
+use pumpkin_data::packet::clientbound::play::MERCHANT_OFFERS;
 use pumpkin_macros::java_packet;
 
 use crate::ClientPacket;
@@ -40,18 +40,28 @@ impl MerchantOffer {
         self.uses = 0;
     }
 
-    fn write(
+    pub fn write(
         &self,
         mut write: impl std::io::Write,
-        version: JavaMinecraftVersion,
+        version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
-        self.base_cost_a
-            .write_item_cost_with_version(&mut write, &version)?;
-        self.output.write_with_version(&mut write, &version)?;
-        write.write_option(&self.cost_b, |w, cost_b| {
-            cost_b.write_item_cost_with_version(w, &version)
-        })?;
-        write.write_bool(self.is_out_of_stock())?;
+        if *version >= JavaMinecraftVersion::V_1_20_5 {
+            self.base_cost_a
+                .write_item_cost_with_version(&mut write, version)?;
+            self.output.write_with_version(&mut write, version)?;
+            write.write_option(&self.cost_b, |w, cost_b| {
+                cost_b.write_item_cost_with_version(w, version)
+            })?;
+        } else {
+            self.base_cost_a.write_with_version(&mut write, version)?;
+            self.output.write_with_version(&mut write, version)?;
+            if let Some(cost_b) = &self.cost_b {
+                cost_b.write_with_version(&mut write, version)?;
+            } else {
+                write.write_bool(false)?;
+            }
+        }
+        write.write_bool(self.reward_exp)?;
         write.write_i32_be(self.uses)?;
         write.write_i32_be(self.max_uses)?;
         write.write_i32_be(self.xp)?;
@@ -62,7 +72,7 @@ impl MerchantOffer {
     }
 }
 
-#[java_packet(PLAY_MERCHANT_OFFERS)]
+#[java_packet(MERCHANT_OFFERS)]
 pub struct CMerchantOffers {
     pub window_id: VarInt,
     pub offers: Vec<MerchantOffer>,
@@ -100,15 +110,114 @@ impl ClientPacket for CMerchantOffers {
         version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         write.write_var_int(&self.window_id)?;
-        write.write_var_int(&VarInt(self.offers.len() as i32))?;
+        if *version >= JavaMinecraftVersion::V_1_19 {
+            write.write_var_int(&VarInt(self.offers.len() as i32))?;
+        } else {
+            write.write_u8(self.offers.len() as u8)?;
+        }
         for offer in &self.offers {
-            offer.write(&mut write, *version)?;
+            offer.write(&mut write, version)?;
         }
         write.write_var_int(&self.villager_level)?;
         write.write_var_int(&self.experience)?;
         write.write_bool(self.is_regular_villager)?;
         write.write_bool(self.can_restock)?;
         Ok(())
+    }
+}
+
+impl<'a> crate::ServerPacket<'a> for CMerchantOffers {
+    fn read(
+        bytebuf: &mut &'a [u8],
+        version: &JavaMinecraftVersion,
+    ) -> Result<Self, crate::ser::ReadingError> {
+        use crate::ser::NetworkReadExt;
+        let window_id = bytebuf.get_var_int()?;
+        let offers_count = if *version >= JavaMinecraftVersion::V_1_19 {
+            bytebuf.get_var_int()?.0 as usize
+        } else {
+            bytebuf.get_u8()? as usize
+        };
+
+        let mut offers = Vec::with_capacity(offers_count);
+        for _ in 0..offers_count {
+            let (base_cost_a, output, cost_b) = if *version >= JavaMinecraftVersion::V_1_20_5 {
+                let item_id = bytebuf.get_var_int()?.0 as u16;
+                let count = bytebuf.get_var_int()?.0 as u8;
+                let comp_count = bytebuf.get_var_int()?.0 as usize;
+                for _ in 0..comp_count {
+                    let _comp_id = bytebuf.get_var_int()?;
+                }
+                let item = pumpkin_data::item::Item::from_id(item_id)
+                    .unwrap_or(&pumpkin_data::item::Item::AIR);
+                let base_cost_a = ItemStackSerializer(std::borrow::Cow::Owned(
+                    pumpkin_data::item_stack::ItemStack::new(count, item),
+                ));
+                let output = ItemStackSerializer::read_with_version(bytebuf, version)?;
+                let has_cost_b = bytebuf.get_bool()?;
+                let cost_b = if has_cost_b {
+                    let item_id_b = bytebuf.get_var_int()?.0 as u16;
+                    let count_b = bytebuf.get_var_int()?.0 as u8;
+                    let comp_count_b = bytebuf.get_var_int()?.0 as usize;
+                    for _ in 0..comp_count_b {
+                        let _comp_id = bytebuf.get_var_int()?;
+                    }
+                    let item_b = pumpkin_data::item::Item::from_id(item_id_b)
+                        .unwrap_or(&pumpkin_data::item::Item::AIR);
+                    Some(ItemStackSerializer(std::borrow::Cow::Owned(
+                        pumpkin_data::item_stack::ItemStack::new(count_b, item_b),
+                    )))
+                } else {
+                    None
+                };
+                (base_cost_a, output, cost_b)
+            } else {
+                let base_cost_a = ItemStackSerializer::read_with_version(bytebuf, version)?;
+                let output = ItemStackSerializer::read_with_version(bytebuf, version)?;
+                let cost_b_stack = ItemStackSerializer::read_with_version(bytebuf, version)?;
+                let cost_b = if cost_b_stack.0.is_empty() {
+                    None
+                } else {
+                    Some(cost_b_stack)
+                };
+                (base_cost_a, output, cost_b)
+            };
+
+            let reward_exp = bytebuf.get_bool()?;
+            let uses = bytebuf.get_i32_be()?;
+            let max_uses = bytebuf.get_i32_be()?;
+            let xp = bytebuf.get_i32_be()?;
+            let special_price = bytebuf.get_i32_be()?;
+            let price_multiplier = bytebuf.get_f32_be()?;
+            let demand = bytebuf.get_i32_be()?;
+
+            offers.push(MerchantOffer {
+                base_cost_a,
+                output,
+                cost_b,
+                reward_exp,
+                uses,
+                max_uses,
+                xp,
+                special_price,
+                price_multiplier,
+                demand,
+            });
+        }
+
+        let villager_level = bytebuf.get_var_int()?;
+        let experience = bytebuf.get_var_int()?;
+        let is_regular_villager = bytebuf.get_bool()?;
+        let can_restock = bytebuf.get_bool()?;
+
+        Ok(Self {
+            window_id,
+            offers,
+            villager_level,
+            experience,
+            is_regular_villager,
+            can_restock,
+        })
     }
 }
 

@@ -26,77 +26,75 @@ const fn item_count_consumer() -> BoundedNumArgumentConsumer<i32> {
 struct Executor;
 
 impl CommandExecutor for Executor {
-    fn execute<'a>(
-        &'a self,
-        sender: &'a CommandSender,
-        _server: &'a crate::server::Server,
-        args: &'a ConsumedArgs<'a>,
-    ) -> CommandResult<'a> {
-        Box::pin(async move {
-            let targets = PlayersArgumentConsumer.find_arg_default_name(args)?;
+    fn execute(
+        &self,
+        sender: &CommandSender,
+        _server: &crate::server::Server,
+        args: &ConsumedArgs,
+    ) -> CommandResult {
+        let targets = PlayersArgumentConsumer.find_arg_default_name(args)?;
 
-            let (item_name, parsed_stack) = ItemArgumentConsumer::find_arg(args, ARG_ITEM)?;
-            let item = parsed_stack.item;
+        let (item_name, parsed_stack) = ItemArgumentConsumer::find_arg(args, ARG_ITEM)?;
+        let item = parsed_stack.item;
 
-            let item_count = match item_count_consumer().find_arg_default_name(args) {
-                Err(_) => 1,
-                Ok(Ok(count)) => count,
-                Ok(Err(err)) => return Err(err.into()),
-            };
+        let item_count = match item_count_consumer().find_arg_default_name(args) {
+            Err(_) => 1,
+            Ok(Ok(count)) => count,
+            Ok(Err(err)) => return Err(err.into()),
+        };
 
-            for target in targets {
-                let max_stack = i32::from(parsed_stack.get_max_stack_size());
-                let mut remaining = item_count;
+        for target in targets {
+            let max_stack = i32::from(parsed_stack.get_max_stack_size());
+            let mut remaining = item_count;
 
-                while remaining > 0 {
-                    let take = remaining.min(max_stack);
-                    let mut stack = parsed_stack.clone();
-                    stack.item_count = take as u8;
-                    target.inventory().insert_stack_anywhere(&mut stack).await;
-                    if !stack.is_empty() {
-                        target.drop_item(stack).await;
-                    }
-                    remaining -= take;
+            while remaining > 0 {
+                let take = remaining.min(max_stack);
+                let mut stack = parsed_stack.clone();
+                stack.item_count = take as u8;
+                target.inventory().insert_stack_anywhere(&mut stack);
+                if !stack.is_empty() {
+                    target.drop_item(stack);
                 }
+                remaining -= take;
             }
+        }
 
-            let msg = if targets.len() == 1 {
-                TextComponent::translate_cross(
-                    pumpkin_data::translation::java::COMMANDS_GIVE_SUCCESS_SINGLE,
-                    pumpkin_data::translation::bedrock::COMMANDS_GIVE_SUCCESS,
-                    [
-                        TextComponent::text(item_count.to_string()),
-                        TextComponent::text("[")
-                            .add_child(item.translated_name())
-                            .add_child(TextComponent::text("]"))
-                            .hover_event(HoverEvent::ShowItem {
-                                id: item_name.to_string().into(),
-                                count: Some(item_count.min(99)),
-                            }),
-                        targets[0].get_display_name().await,
-                    ],
-                )
-            } else {
-                TextComponent::translate_cross(
-                    pumpkin_data::translation::java::COMMANDS_GIVE_SUCCESS_MULTIPLE,
-                    pumpkin_data::translation::bedrock::COMMANDS_GIVE_SUCCESS,
-                    [
-                        TextComponent::text(item_count.to_string()),
-                        TextComponent::text("[")
-                            .add_child(item.translated_name())
-                            .add_child(TextComponent::text("]"))
-                            .hover_event(HoverEvent::ShowItem {
-                                id: item_name.to_string().into(),
-                                count: Some(item_count.min(99)),
-                            }),
-                        TextComponent::text(targets.len().to_string()),
-                    ],
-                )
-            };
-            sender.send_message(msg).await;
+        let msg = if targets.len() == 1 {
+            TextComponent::translate_cross(
+                pumpkin_data::translation::java::COMMANDS_GIVE_SUCCESS_SINGLE,
+                pumpkin_data::translation::bedrock::COMMANDS_GIVE_SUCCESS,
+                [
+                    TextComponent::text(item_count.to_string()),
+                    TextComponent::text("[")
+                        .add_child(item.translated_name())
+                        .add_child(TextComponent::text("]"))
+                        .hover_event(HoverEvent::ShowItem {
+                            id: item_name.to_string().into(),
+                            count: Some(item_count.min(99)),
+                        }),
+                    targets[0].get_display_name(),
+                ],
+            )
+        } else {
+            TextComponent::translate_cross(
+                pumpkin_data::translation::java::COMMANDS_GIVE_SUCCESS_MULTIPLE,
+                pumpkin_data::translation::bedrock::COMMANDS_GIVE_SUCCESS,
+                [
+                    TextComponent::text(item_count.to_string()),
+                    TextComponent::text("[")
+                        .add_child(item.translated_name())
+                        .add_child(TextComponent::text("]"))
+                        .hover_event(HoverEvent::ShowItem {
+                            id: item_name.to_string().into(),
+                            count: Some(item_count.min(99)),
+                        }),
+                    TextComponent::text(targets.len().to_string()),
+                ],
+            )
+        };
+        sender.send_message(msg);
 
-            Ok(targets.len() as i32)
-        })
+        Ok(targets.len() as i32)
     }
 }
 

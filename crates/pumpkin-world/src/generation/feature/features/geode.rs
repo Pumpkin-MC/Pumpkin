@@ -325,7 +325,7 @@ impl GeodeFeature {
 
                     // Only place if the target block is replaceable (air/water)
                     let is_air = place_state.is_air();
-                    let is_water = place_raw.to_block().name == "water";
+                    let is_water = place_raw.to_block_id() == BlockId::WATER;
 
                     if is_air || is_water {
                         let mut final_codec = base_codec.clone();

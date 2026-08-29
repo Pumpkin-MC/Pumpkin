@@ -2,12 +2,12 @@ use crate::{
     ServerPacket,
     ser::{NetworkReadSliceExt, ReadingError},
 };
-use pumpkin_data::packet::serverbound::PLAY_RENAME_ITEM;
+use pumpkin_data::packet::serverbound::play::RENAME_ITEM;
 use pumpkin_macros::java_packet;
 use pumpkin_util::version::JavaMinecraftVersion;
 
 #[derive(Debug)]
-#[java_packet(PLAY_RENAME_ITEM)]
+#[java_packet(RENAME_ITEM)]
 pub struct SRenameItem<'a> {
     pub item_name: &'a str,
 }

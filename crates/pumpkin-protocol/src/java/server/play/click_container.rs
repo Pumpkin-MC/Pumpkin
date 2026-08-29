@@ -4,13 +4,13 @@ use crate::{
     ServerPacket,
     ser::{NetworkReadExt, ReadingError},
 };
-use pumpkin_data::packet::serverbound::PLAY_CONTAINER_CLICK;
+use pumpkin_data::packet::serverbound::play::CONTAINER_CLICK;
 use pumpkin_macros::java_packet;
 use pumpkin_util::version::JavaMinecraftVersion;
 use std::io::Read;
 
 #[derive(Debug)]
-#[java_packet(PLAY_CONTAINER_CLICK)]
+#[java_packet(CONTAINER_CLICK)]
 pub struct SClickSlot {
     pub sync_id: VarInt,
     pub revision: VarInt,
@@ -22,12 +22,21 @@ pub struct SClickSlot {
     pub carried_item: OptionalItemStackHash,
 }
 
+impl SClickSlot {
+    pub const BUTTON_LEFT: i8 = 0;
+    pub const BUTTON_RIGHT: i8 = 1;
+    pub const BUTTON_MIDDLE: i8 = 2;
+    pub const BUTTON_DROP_SINGLE: i8 = 0;
+    pub const BUTTON_DROP_STACK: i8 = 1;
+    pub const BUTTON_OFFHAND_SWAP: i8 = 40;
+}
+
 impl<'a> ServerPacket<'a> for SClickSlot {
     fn read(
         mut bytebuf: &mut &'a [u8],
         version: &JavaMinecraftVersion,
     ) -> Result<Self, ReadingError> {
-        let sync_id = bytebuf.get_var_int()?;
+        let sync_id = bytebuf.get_container_id(version)?;
         let revision = if version >= &JavaMinecraftVersion::V_1_17_1 {
             bytebuf.get_var_int()?
         } else {
@@ -73,7 +82,7 @@ impl crate::ClientPacket for SClickSlot {
         version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         use crate::ser::NetworkWriteExt;
-        write.write_var_int(&self.sync_id)?;
+        write.write_container_id(&self.sync_id, version)?;
         if version >= &JavaMinecraftVersion::V_1_17_1 {
             write.write_var_int(&self.revision)?;
         } else {

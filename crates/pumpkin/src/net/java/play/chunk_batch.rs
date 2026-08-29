@@ -2,11 +2,11 @@
 use super::*;
 
 impl JavaClient {
-    pub async fn handle_chunk_batch(&self, player: &Player, packet: SChunkBatch) {
+    pub fn handle_chunk_batch(&self, player: &Player, packet: &SChunkBatch) {
         player
             .chunk_manager
             .lock()
-            .await
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
             .handle_acknowledge(packet.chunks_per_tick);
         trace!(
             "Client requested {} chunks per tick",

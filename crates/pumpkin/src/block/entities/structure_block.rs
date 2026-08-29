@@ -1,8 +1,7 @@
 use super::BlockEntity;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
-use std::pin::Pin;
-use tokio::sync::Mutex;
+use std::sync::Mutex;
 
 pub struct StructureBlockBlockEntity {
     pub position: BlockPos,
@@ -60,29 +59,58 @@ impl BlockEntity for StructureBlockBlockEntity {
         }
     }
 
-    fn write_nbt<'a>(
-        &'a self,
-        nbt: &'a mut NbtCompound,
-    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
-        Box::pin(async move {
-            nbt.put_string("name", self.name.lock().await.clone());
-            nbt.put_string("author", self.author.lock().await.clone());
-            nbt.put_string("metadata", self.metadata.lock().await.clone());
-            nbt.put_int("posX", *self.pos_x.lock().await);
-            nbt.put_int("posY", *self.pos_y.lock().await);
-            nbt.put_int("posZ", *self.pos_z.lock().await);
-            nbt.put_int("sizeX", *self.size_x.lock().await);
-            nbt.put_int("sizeY", *self.size_y.lock().await);
-            nbt.put_int("sizeZ", *self.size_z.lock().await);
-            nbt.put_string("rotation", self.rotation.lock().await.clone());
-            nbt.put_string("mirror", self.mirror.lock().await.clone());
-            nbt.put_string("mode", self.mode.lock().await.clone());
-            nbt.put_bool("ignoreEntities", *self.ignore_entities.lock().await);
-            nbt.put_bool("showAir", *self.show_air.lock().await);
-            nbt.put_bool("showBoundingBox", *self.show_bounding_box.lock().await);
-            nbt.put_float("integrity", *self.integrity.lock().await);
-            nbt.put_long("seed", *self.seed.lock().await);
-        })
+    fn write_nbt(&self, nbt: &mut NbtCompound) {
+        if let Ok(name) = self.name.lock() {
+            nbt.put_string("name", name.clone());
+        }
+        if let Ok(author) = self.author.lock() {
+            nbt.put_string("author", author.clone());
+        }
+        if let Ok(metadata) = self.metadata.lock() {
+            nbt.put_string("metadata", metadata.clone());
+        }
+        if let Ok(pos_x) = self.pos_x.lock() {
+            nbt.put_int("posX", *pos_x);
+        }
+        if let Ok(pos_y) = self.pos_y.lock() {
+            nbt.put_int("posY", *pos_y);
+        }
+        if let Ok(pos_z) = self.pos_z.lock() {
+            nbt.put_int("posZ", *pos_z);
+        }
+        if let Ok(size_x) = self.size_x.lock() {
+            nbt.put_int("sizeX", *size_x);
+        }
+        if let Ok(size_y) = self.size_y.lock() {
+            nbt.put_int("sizeY", *size_y);
+        }
+        if let Ok(size_z) = self.size_z.lock() {
+            nbt.put_int("sizeZ", *size_z);
+        }
+        if let Ok(rotation) = self.rotation.lock() {
+            nbt.put_string("rotation", rotation.clone());
+        }
+        if let Ok(mirror) = self.mirror.lock() {
+            nbt.put_string("mirror", mirror.clone());
+        }
+        if let Ok(mode) = self.mode.lock() {
+            nbt.put_string("mode", mode.clone());
+        }
+        if let Ok(ignore_entities) = self.ignore_entities.lock() {
+            nbt.put_bool("ignoreEntities", *ignore_entities);
+        }
+        if let Ok(show_air) = self.show_air.lock() {
+            nbt.put_bool("showAir", *show_air);
+        }
+        if let Ok(show_bounding_box) = self.show_bounding_box.lock() {
+            nbt.put_bool("showBoundingBox", *show_bounding_box);
+        }
+        if let Ok(integrity) = self.integrity.lock() {
+            nbt.put_float("integrity", *integrity);
+        }
+        if let Ok(seed) = self.seed.lock() {
+            nbt.put_long("seed", *seed);
+        }
     }
 
     fn chunk_data_nbt(&self) -> Option<NbtCompound> {

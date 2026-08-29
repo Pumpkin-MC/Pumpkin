@@ -177,8 +177,33 @@ impl DataComponentImpl for ItemModelImpl {
 }
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct LoreImpl;
+pub struct LoreImpl {
+    pub lines: Vec<TextComponent>,
+}
+impl LoreImpl {
+    pub fn read_data(data: &NbtTag) -> Option<Self> {
+        let NbtTag::List(lines) = data else {
+            return None;
+        };
+
+        Some(Self {
+            lines: lines
+                .iter()
+                .filter_map(NbtTag::extract_string)
+                .map(|line| TextComponent::text(line.to_owned()))
+                .collect(),
+        })
+    }
+}
 impl DataComponentImpl for LoreImpl {
+    fn write_data(&self) -> NbtTag {
+        NbtTag::List(
+            self.lines
+                .iter()
+                .map(|line| NbtTag::String(line.clone().get_text().into_boxed_str()))
+                .collect(),
+        )
+    }
     default_impl!(Lore);
 }
 

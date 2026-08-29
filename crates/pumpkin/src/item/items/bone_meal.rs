@@ -1,6 +1,4 @@
 use std::any::Any;
-use std::future::Future;
-use std::pin::Pin;
 
 use crate::entity::player::Player;
 use crate::item::{ItemBehaviour, ItemMetadata};
@@ -22,28 +20,25 @@ impl ItemMetadata for BoneMealItem {
 
 impl ItemBehaviour for BoneMealItem {
     #[allow(clippy::too_many_lines)]
-    fn use_on_block<'a>(
-        &'a self,
-        item: &'a mut ItemStack,
-        player: &'a Player,
+    fn use_on_block(
+        &self,
+        item: &mut ItemStack,
+        player: &Player,
         location: BlockPos,
         _face: BlockDirection,
         _cursor_pos: Vector3<f32>,
-        block: &'a Block,
-        server: &'a Server,
-    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
-        Box::pin(async move {
-            let world = player.world();
-            let state_id = world.get_block_state_id(&location);
-            if server
-                .block_registry
-                .bone_meal(block, &world, &location, state_id)
-                .await
-            {
-                world.sync_world_event(WorldEvent::ParticlesAndSoundPlantGrowth, location, 15);
-                item.decrement_unless_creative(player.gamemode.load(), 1);
-            }
-        })
+        block: &Block,
+        server: &Server,
+    ) {
+        let world = player.world();
+        let state_id = world.get_block_state_id(&location);
+        if server
+            .block_registry
+            .bone_meal(block, &world, &location, state_id)
+        {
+            world.sync_world_event(WorldEvent::ParticlesAndSoundPlantGrowth, location, 15);
+            item.decrement_unless_creative(player.gamemode.load(), 1);
+        }
     }
 
     fn as_any(&self) -> &dyn Any {

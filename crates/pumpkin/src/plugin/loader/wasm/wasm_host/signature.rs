@@ -90,7 +90,7 @@ pub fn strip_pumpkin_sections(wasm_bytes: &[u8]) -> Result<Vec<u8>, String> {
     for payload in parser.parse_all(wasm_bytes) {
         match payload {
             Ok(Payload::Version { ref range, .. }) => {
-                last_valid_end = range.end;
+                last_valid_end = range.end as usize;
             }
             Ok(Payload::CustomSection(cs)) => {
                 if cs.name() == PUMPKIN_METADATA_SECTION
@@ -98,12 +98,12 @@ pub fn strip_pumpkin_sections(wasm_bytes: &[u8]) -> Result<Vec<u8>, String> {
                     || cs.name() == "pumpkin.signature"
                 {
                 } else {
-                    last_valid_end = cs.range().end;
+                    last_valid_end = cs.range().end as usize;
                 }
             }
             Ok(p) => {
                 if let Some((_, range)) = p.as_section() {
-                    last_valid_end = range.end;
+                    last_valid_end = range.end as usize;
                 }
             }
             Err(_) => {

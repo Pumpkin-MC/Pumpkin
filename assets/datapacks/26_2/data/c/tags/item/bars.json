@@ -1,0 +1,13 @@
+{
+  "values": [
+    "iron_bars",
+    "copper_bars",
+    "exposed_copper_bars",
+    "weathered_copper_bars",
+    "oxidized_copper_bars",
+    "waxed_copper_bars",
+    "waxed_exposed_copper_bars",
+    "waxed_weathered_copper_bars",
+    "waxed_oxidized_copper_bars"
+  ]
+}

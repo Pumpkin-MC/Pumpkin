@@ -11,72 +11,64 @@ use pumpkin_world::{
 };
 
 use crate::block::{
-    BlockBehaviour, BlockFuture, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, OnPlaceArgs,
-    OnScheduledTickArgs,
+    BlockBehaviour, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, OnPlaceArgs, OnScheduledTickArgs,
 };
 
 #[pumpkin_block("minecraft:chorus_plant")]
 pub struct ChorusPlantBlock;
 
 impl BlockBehaviour for ChorusPlantBlock {
-    fn on_place<'a>(&'a self, args: OnPlaceArgs<'a>) -> BlockFuture<'a, BlockStateId> {
-        Box::pin(async move {
-            // Compute all 6 face connections immediately so the placed block visually connects to its neighbors.
-            get_state_with_connections(args.world, args.block, args.position)
-        })
+    fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
+        // Compute all 6 face connections immediately so the placed block visually connects to its neighbors.
+        get_state_with_connections(args.world, args.block, args.position)
     }
 
     fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
         can_survive(args.block_accessor, args.position)
     }
 
-    fn get_state_for_neighbor_update<'a>(
-        &'a self,
-        args: GetStateForNeighborUpdateArgs<'a>,
-    ) -> BlockFuture<'a, BlockStateId> {
-        Box::pin(async move {
-            if !can_survive(args.world, args.position) {
-                // Schedule delayed destruction so the whole plant cascades down.
-                args.world
-                    .schedule_block_tick(args.block, *args.position, 1, TickPriority::Normal);
-                return args.state_id;
-            }
+    fn get_state_for_neighbor_update(
+        &self,
+        args: GetStateForNeighborUpdateArgs<'_>,
+    ) -> BlockStateId {
+        if !can_survive(args.world, args.position) {
+            // Schedule delayed destruction so the whole plant cascades down.
+            args.world
+                .schedule_block_tick(args.block, *args.position, 1, TickPriority::Normal);
+            return args.state_id;
+        }
 
-            // Update the single face connection for the direction that changed.
-            let neighbor_block = args.world.get_block(args.neighbor_position);
-            let connect = neighbor_block == &Block::CHORUS_PLANT
-                || neighbor_block == &Block::CHORUS_FLOWER
-                || (args.direction == BlockDirection::Down
-                    && neighbor_block.has_tag(&tag::Block::MINECRAFT_SUPPORTS_CHORUS_PLANT));
+        // Update the single face connection for the direction that changed.
+        let neighbor_block = args.world.get_block(args.neighbor_position);
+        let connect = neighbor_block == &Block::CHORUS_PLANT
+            || neighbor_block == &Block::CHORUS_FLOWER
+            || (args.direction == BlockDirection::Down
+                && neighbor_block.has_tag(&tag::Block::MINECRAFT_SUPPORTS_CHORUS_PLANT));
 
-            let mut props =
-                BrownMushroomBlockLikeProperties::from_state_id(args.state_id, args.block);
-            match args.direction {
-                BlockDirection::Down => props.down = connect,
-                BlockDirection::Up => props.up = connect,
-                BlockDirection::North => props.north = connect,
-                BlockDirection::South => props.south = connect,
-                BlockDirection::East => props.east = connect,
-                BlockDirection::West => props.west = connect,
-            }
-            props.to_state_id(args.block)
-        })
+        let mut props = BrownMushroomBlockLikeProperties::from_state_id(args.state_id, args.block);
+        match args.direction {
+            BlockDirection::Down => props.down = connect,
+            BlockDirection::Up => props.up = connect,
+            BlockDirection::North => props.north = connect,
+            BlockDirection::South => props.south = connect,
+            BlockDirection::East => props.east = connect,
+            BlockDirection::West => props.west = connect,
+        }
+        props.to_state_id(args.block)
     }
 
-    fn on_scheduled_tick<'a>(&'a self, args: OnScheduledTickArgs<'a>) -> BlockFuture<'a, ()> {
-        Box::pin(async move {
-            // Destroy if unsupported; breaking propagates neighbor-update callbacks
-            // to connected chorus blocks, which schedule their own ticks.
-            if !can_survive(args.world.as_ref(), args.position) {
-                args.world
-                    .break_block(args.position, None, BlockFlags::empty())
-                    .await;
-            }
-        })
+    fn on_scheduled_tick(&self, args: OnScheduledTickArgs<'_>) {
+        // Destroy if unsupported; breaking propagates neighbor-update callbacks
+        // to connected chorus blocks, which schedule their own ticks.
+        if !can_survive(args.world.as_ref(), args.position) {
+            args.world
+                .break_block(args.position, None, BlockFlags::empty());
+        }
     }
 }
 
-fn get_state_with_connections(
+#[must_use]
+pub fn get_state_with_connections(
     block_accessor: &dyn BlockAccessor,
     block: &Block,
     pos: &BlockPos,
