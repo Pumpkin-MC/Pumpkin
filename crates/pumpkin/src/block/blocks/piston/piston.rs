@@ -89,18 +89,17 @@ impl PistonBlock {
         can_break: bool,
         piston_dir: BlockDirection,
     ) -> bool {
-        // Vanilla: height limit before the air check. An empty cell outside the world is
-        // unpushable, so a sticky line stops at the ceiling/floor instead of dropping the block.
-        if !world.is_in_height_limit(pos.0.y)
-            || (dir == BlockDirection::Down && pos.0.y == world.get_bottom_y())
-            || (dir == BlockDirection::Up && pos.0.y == world.get_top_y())
-        {
+        // Vanilla `PistonBaseBlock.isPushable`: outside the height range first (not the
+        // world-edge `dir` tests). Air at minY/maxY is pushable so a down/up piston can
+        // extend into the bottom/top layer; a non-air cell there is not.
+        if !world.is_in_height_limit(pos.0.y) {
             return false;
         }
         if state.is_air() {
             return true;
         }
-        // Vanilla hardcoded them aswell
+        // Vanilla hardcodes these four. `MOVING_PISTON` is not on that list; it fails
+        // `hasBlockEntity` below. Listed here because `newBlockEntity` is null.
         if block == &Block::OBSIDIAN
             || block == &Block::CRYING_OBSIDIAN
             || block == &Block::RESPAWN_ANCHOR
@@ -109,9 +108,13 @@ impl PistonBlock {
         {
             return false;
         }
+        if (dir == BlockDirection::Down && pos.0.y == world.get_bottom_y())
+            || (dir == BlockDirection::Up && pos.0.y == world.get_top_y())
+        {
+            return false;
+        }
         if Self::is_base(block) {
             let props = PistonProps::from_state_id(state.id, block);
-            // Extended pistons are immovable. Non-extended pistons are movable
             return !props.extended;
         }
         #[expect(clippy::float_cmp)]
@@ -119,13 +122,12 @@ impl PistonBlock {
             return false;
         }
         match state.piston_behavior {
-            pumpkin_data::block_state::PistonBehavior::Destroy => return can_break,
-            pumpkin_data::block_state::PistonBehavior::Block => return false,
-            pumpkin_data::block_state::PistonBehavior::PushOnly => return dir == piston_dir,
+            PistonBehavior::Destroy => return can_break,
+            PistonBehavior::Block => return false,
+            PistonBehavior::PushOnly => return dir == piston_dir,
             _ => {}
         }
-        // Vanilla `BlockState.hasBlockEntity()`. `moving_piston` has a BE type, so it
-        // is unpushable: a neighbour poke during `moveBlocks` must not queue another extend.
+        // Vanilla `BlockState.hasBlockEntity()`.
         state.block_entity_type == u16::MAX
     }
 }
@@ -148,10 +150,7 @@ impl BlockBehaviour for PistonBlock {
             let head_props =
                 PistonHeadProperties::from_state_id(block_to_check_state_id, block_to_check);
 
-            if (head_props.facing.to_block_direction() != props.facing.to_block_direction())
-                && &Block::PISTON_HEAD == block_to_check
-            {
-                //Then this is a head of some other piston.
+            if head_props.facing.to_block_direction() != props.facing.to_block_direction() {
                 return;
             }
 
@@ -201,12 +200,11 @@ impl PistonBlock {
             return false;
         }
 
-        // This may prevents when something happens in the one tick before this function got called
+        // Signal dropped in the tick between `checkIfExtend` and this event.
         if !should_extend && r#type == Self::TRIGGER_EXTEND {
             return false;
         }
 
-        // Extend Piston
         if r#type == Self::TRIGGER_EXTEND {
             let mut event =
                 crate::plugin::api::events::block::block_piston::BlockPistonExtendEvent::new(
@@ -241,7 +239,6 @@ impl PistonBlock {
             );
             return true;
         }
-        // Reduce Piston
 
         let mut event =
             crate::plugin::api::events::block::block_piston::BlockPistonRetractEvent::new(
@@ -283,9 +280,12 @@ impl PistonBlock {
             true,
         )));
 
-        // Vanilla `updateNeighborsAt` after the retracting body. The arm is already
-        // air from the head `finalTick`; `removeBlock` / `moveBlocks` below pull or drop.
+        // Vanilla `updateNeighborsAt` then `updateNeighbourShapes(..., 2)` after 276.
+        // `FORCE_STATE` skipped shape updates on the write.
         world.update_neighbors(pos, None);
+        world
+            .block_registry
+            .update_neighbors(world, pos, BlockFlags::NOTIFY_LISTENERS);
         if sticky {
             let pull_pos = pos.offset_dir(dir.to_offset(), 2);
             let (block, state) = world.get_block_and_state(&pull_pos);

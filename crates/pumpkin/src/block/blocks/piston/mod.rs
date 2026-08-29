@@ -61,12 +61,8 @@ impl<'a> PistonHandler<'a> {
             false,
             self.piston_direction,
         ) {
-            // Vanilla gates this on the direction (`if (this.extending && nextState
-            // .getPistonPushReaction() == PushReaction.DESTROY)`). The retract path cannot
-            // reach this branch: `PistonBlock::on_synced_block_event` already ran
-            // `is_movable(.., can_break: false, ..)` on the same cell, and a `Destroy` block
-            // answers `false` there, so the retract becomes a plain head removal.
-            if block_state.piston_behavior == PistonBehavior::Destroy {
+            // Vanilla `resolve`: destroy the start cell only while extending.
+            if self.extending && block_state.piston_behavior == PistonBehavior::Destroy {
                 self.broken_blocks.push(self.pos_to);
                 return true;
             }
@@ -105,14 +101,12 @@ impl<'a> PistonHandler<'a> {
         Self::is_block_sticky(state) || Self::is_block_sticky(adjacent_state)
     }
 
-    fn is_piston_head_or_base(&self, pos: BlockPos) -> bool {
+    /// Vanilla `PistonStructureResolver.pistonPos`.
+    fn is_piston_pos(&self, pos: BlockPos) -> bool {
         pos == self.pos_from
-            || (!self.extending && pos == self.pos_from.offset(self.piston_direction.to_offset()))
     }
 
-    // A line-for-line port of vanilla's `PistonStructureResolver.addBlockLine`; splitting it
-    // would only make the correspondence harder to check against the original.
-    #[expect(clippy::too_many_lines)]
+    // Vanilla `PistonStructureResolver.addBlockLine`.
     fn add_block_line(&mut self, pos: BlockPos, dir: BlockDirection) -> bool {
         let (mut block, block_state) = self.world.get_block_and_state(&pos);
         if block_state.is_air() {
@@ -129,7 +123,7 @@ impl<'a> PistonHandler<'a> {
         ) {
             return true;
         }
-        if self.is_piston_head_or_base(pos) {
+        if self.is_piston_pos(pos) {
             return true;
         }
         if self.moved_blocks.contains(&pos) {
@@ -154,7 +148,7 @@ impl<'a> PistonHandler<'a> {
                     false,
                     self.motion_direction.opposite(),
                 )
-                || self.is_piston_head_or_base(block_pos)
+                || self.is_piston_pos(block_pos)
             {
                 break;
             }
@@ -187,10 +181,7 @@ impl<'a> PistonHandler<'a> {
                 return true;
             }
             let (block, block_state) = self.world.get_block_and_state(&block_pos2);
-            if block_state.is_air()
-                || (!self.extending
-                    && block_pos2 == self.pos_from.offset(self.piston_direction.to_offset()))
-            {
+            if block_state.is_air() {
                 return true;
             }
             if !PistonBlock::is_movable(
@@ -201,7 +192,7 @@ impl<'a> PistonHandler<'a> {
                 self.motion_direction,
                 true,
                 self.motion_direction,
-            ) || self.is_piston_head_or_base(block_pos2)
+            ) || self.is_piston_pos(block_pos2)
             {
                 return false;
             }

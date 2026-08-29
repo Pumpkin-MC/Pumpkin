@@ -6,6 +6,7 @@ use pumpkin_data::{
     block_properties::{
         BlockProperties, ComparatorLikeProperties, HorizontalFacing, ModeComparator,
     },
+    sound::{Sound, SoundCategory},
 };
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::{boundingbox::BoundingBox, position::BlockPos};
@@ -221,7 +222,8 @@ impl RedstoneGateBlock<ComparatorLikeProperties> for ComparatorBlock {
     }
 
     fn get_update_delay_internal(&self, _state_id: BlockStateId, _block: &Block) -> u8 {
-        2 // Vanilla Delay
+        // Vanilla `ComparatorBlock.getDelay`.
+        2
     }
 }
 
@@ -242,9 +244,26 @@ impl ComparatorBlock {
             ModeComparator::Subtract => ModeComparator::Compare,
         };
 
-        let state_id = props.to_state_id(block);
-        world.set_block_state(&block_pos, state_id, BlockFlags::empty());
+        // Vanilla `ComparatorBlock.useWithoutItem`: click at 0.55 (SUBTRACT) / 0.5 (COMPARE),
+        // `setBlock(..., 2)`, then `refreshOutputState` if the cell is still this.
+        let pitch = if props.mode == ModeComparator::Subtract {
+            0.55
+        } else {
+            0.5
+        };
+        world.play_sound_fine(
+            Sound::BlockComparatorClick,
+            SoundCategory::Blocks,
+            &block_pos.to_centered_f64(),
+            0.3,
+            pitch,
+        );
 
+        let state_id = props.to_state_id(block);
+        world.set_block_state(&block_pos, state_id, BlockFlags::NOTIFY_LISTENERS);
+        if world.get_block(&block_pos) != block {
+            return;
+        }
         self.update(world, block_pos, BlockState::from_id(state_id), block);
     }
 

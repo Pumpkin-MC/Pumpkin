@@ -10,3 +10,5 @@ undescore = "undescore"
 replaceables = "replaceables"
 # Vanilla `PistonMovingBlockEntity.matchesStickyCritera` (Mojang spelling).
 Critera = "Critera"
+# Vanilla `*.isMergable` (Mojang spelling).
+Mergeable = "Mergable"

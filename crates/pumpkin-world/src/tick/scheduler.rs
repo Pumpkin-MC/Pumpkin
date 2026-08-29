@@ -52,9 +52,9 @@ impl<T: std::hash::Hash + Eq + Copy> ChunkTickSchedulerInner<T> {
 impl<'a, T: PartialEq> ChunkTickSchedulerInner<&'a T> {
     /// Stored keys are `&'a T`; callers pass `&T`. Compare pointees, not the reference lifetime.
     fn queued_entry(&self, pos: BlockPos, value: &T) -> Option<((BlockPos, &'a T), usize)> {
-        self.queued_ticks.iter().find_map(|(&(p, v), &index)| {
-            (p == pos && *v == *value).then_some(((p, v), index))
-        })
+        self.queued_ticks
+            .iter()
+            .find_map(|(&(p, v), &index)| (p == pos && *v == *value).then_some(((p, v), index)))
     }
 }
 

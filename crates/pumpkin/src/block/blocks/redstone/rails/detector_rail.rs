@@ -79,7 +79,8 @@ fn check_pressed(world: &Arc<World>, block: &Block, pos: &BlockPos) {
     }
     let mut rail_props = RailProperties::new(state_id, block);
     let was_powered = rail_props.is_powered();
-    let is_powered = find_minecart_at(world, pos).is_some();
+    let minecart = find_minecart_at(world, pos);
+    let is_powered = minecart.is_some();
 
     if is_powered != was_powered {
         rail_props.set_powered(is_powered);
@@ -89,14 +90,17 @@ fn check_pressed(world: &Arc<World>, block: &Block, pos: &BlockPos) {
         // the signal to a piston beside or beneath it).
         world.update_neighbors(pos, None);
         world.update_neighbors(&pos.down(), None);
+        // Vanilla `updateNeighbourForOutputSignal` on every `checkPressed`. `setBlock` does
+        // not run that tail (`TODO: updateComparators`).
+        world.update_neighbour_for_output_signal(pos, block);
     }
 
     if is_powered {
         world.schedule_block_tick(block, *pos, 20, TickPriority::Normal);
 
         // Vanilla pokes the comparator every 20 ticks (`AbstractMinecartContainer.setChanged`
-        // is a no-op). Skip when cargo did not change; a `POWERED` flip already swept neighbors.
-        let cargo_changed = find_minecart_at(world, pos).is_some_and(|entity| {
+        // is a no-op). Skip when cargo did not change; a `POWERED` flip already swept analog.
+        let cargo_changed = minecart.is_some_and(|entity| {
             entity
                 .cast_any()
                 .downcast_ref::<MinecartEntity>()
