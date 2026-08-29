@@ -2,7 +2,7 @@ pub mod advancement;
 pub mod statistics;
 
 use core::f32;
-use std::collections::{BinaryHeap, HashMap, HashSet, VecDeque};
+use std::collections::{HashMap, VecDeque};
 use std::f64::consts::TAU;
 use std::num::NonZero;
 use std::str::FromStr;
@@ -41,7 +41,7 @@ use pumpkin_protocol::bedrock::server::{
 use pumpkin_protocol::codec::item_stack_seralizer::ItemStackSerializer;
 use pumpkin_util::translation::Locale;
 use pumpkin_util::version::JavaMinecraftVersion;
-use pumpkin_world::chunk::{ChunkData, ChunkEntityData};
+use pumpkin_world::chunk::ChunkData;
 use pumpkin_world::inventory::Inventory;
 use tokio::task::JoinHandle;
 use tracing::{debug, warn};
@@ -284,7 +284,6 @@ use pumpkin_util::text::hover::HoverEvent;
 use pumpkin_util::{GameMode, Hand};
 use pumpkin_world::biome;
 use pumpkin_world::cylindrical_chunk_iterator::Cylindrical;
-use pumpkin_world::level::{Level, SyncChunk, SyncEntityChunk};
 
 use crate::block;
 use crate::block::blocks::bed::BedBlock;
@@ -312,7 +311,6 @@ use super::item::ItemEntity;
 use super::living::LivingEntity;
 use super::{Entity, EntityBase, NBTStorage, NBTStorageInit};
 use pumpkin_data::potion::Effect;
-use pumpkin_world::chunk_system::ChunkLoading;
 const MAX_CACHED_SIGNATURES: u8 = 128; // Vanilla: 128
 const MAX_PREVIOUS_MESSAGES: u8 = 20; // Vanilla: 20
 
@@ -370,324 +368,6 @@ const fn bedrock_inventory_slot(player_screen_slot: i16) -> Option<u32> {
         9..=35 => Some(player_screen_slot as u32),
         36..=44 => Some((player_screen_slot - 36) as u32),
         _ => None,
-    }
-}
-
-struct HeapNode(i32, Vector2<i32>, Weak<ChunkData>);
-
-impl Eq for HeapNode {}
-
-impl PartialEq<Self> for HeapNode {
-    fn eq(&self, other: &Self) -> bool {
-        self.0 == other.0
-    }
-}
-
-impl PartialOrd<Self> for HeapNode {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl Ord for HeapNode {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.0.cmp(&other.0).reverse()
-    }
-}
-
-pub struct ChunkManager {
-    chunks_per_tick: usize,
-    center: Vector2<i32>,
-    view_distance: u8,
-    chunk_listener: Receiver<(Vector2<i32>, Weak<ChunkData>)>,
-    chunk_sent: HashMap<Vector2<i32>, Weak<ChunkData>>,
-    chunk_queue: BinaryHeap<HeapNode>,
-    entity_chunk_queue: VecDeque<(Vector2<i32>, Weak<ChunkEntityData>)>,
-    batches_sent_since_ack: u8,
-    last_chunk_batch_sent_at: Instant,
-    /// The (view, simulation) chunk loading ticket levels currently held at `center`.
-    held_tickets: Option<(i8, i8)>,
-    /// The current world for chunk loading. Updated on dimension change.
-    world: Arc<World>,
-}
-
-impl ChunkManager {
-    pub const NOTCHIAN_BATCHES_WITHOUT_ACK_UNTIL_PAUSE: u8 = 16;
-    const ACK_STALL_FALLBACK_DELAY: Duration = Duration::from_millis(100);
-
-    #[must_use]
-    pub fn new(
-        chunks_per_tick: usize,
-        chunk_listener: Receiver<(Vector2<i32>, Weak<ChunkData>)>,
-        world: Arc<World>,
-    ) -> Self {
-        Self {
-            chunks_per_tick,
-            center: Vector2::<i32>::new(0, 0),
-            view_distance: 0,
-            chunk_listener,
-            chunk_sent: HashMap::new(),
-            chunk_queue: BinaryHeap::new(),
-            entity_chunk_queue: VecDeque::new(),
-            batches_sent_since_ack: 0,
-            last_chunk_batch_sent_at: Instant::now(),
-            held_tickets: None,
-            world,
-        }
-    }
-
-    /// Gets the current world for chunk loading.
-    #[must_use]
-    pub const fn world(&self) -> &Arc<World> {
-        &self.world
-    }
-
-    #[must_use]
-    pub fn sent_chunks_count(&self) -> usize {
-        self.chunk_sent.len()
-    }
-
-    pub fn reset_sent_chunks(&mut self) {
-        self.chunk_sent.clear();
-    }
-
-    pub const fn set_view_distance(&mut self, view_distance: u8) {
-        self.view_distance = view_distance;
-    }
-
-    pub fn clean(&mut self) {
-        let (_rx, tx) = crossbeam::channel::unbounded();
-        // drop old channel
-        self.chunk_listener = tx;
-
-        // Drop any held chunk references to allow chunks to be unloaded.
-        self.chunk_sent.clear();
-        self.chunk_queue.clear();
-        self.entity_chunk_queue.clear();
-    }
-
-    fn should_enqueue_chunk(&mut self, position: Vector2<i32>, chunk: &SyncChunk) -> bool {
-        self.chunk_sent
-            .insert(position, Arc::downgrade(chunk))
-            .and_then(|old_chunk| old_chunk.upgrade())
-            .is_none_or(|old_chunk| !Arc::ptr_eq(&old_chunk, chunk))
-    }
-
-    #[must_use]
-    const fn ack_window_open(&self) -> bool {
-        self.batches_sent_since_ack < Self::NOTCHIAN_BATCHES_WITHOUT_ACK_UNTIL_PAUSE
-    }
-
-    #[must_use]
-    fn ack_fallback_ready(&self) -> bool {
-        !self.ack_window_open()
-            && self.last_chunk_batch_sent_at.elapsed() >= Self::ACK_STALL_FALLBACK_DELAY
-    }
-
-    pub fn pull_new_chunks(&mut self) {
-        while let Ok((pos, chunk_weak)) = self.chunk_listener.try_recv() {
-            let dst = Self::chebyshev(pos, self.center);
-            if dst > i32::from(self.view_distance) {
-                continue;
-            }
-            if let Some(chunk) = chunk_weak.upgrade()
-                && self.should_enqueue_chunk(pos, &chunk)
-            {
-                self.chunk_queue.push(HeapNode(dst, pos, chunk_weak));
-            }
-        }
-    }
-
-    fn chebyshev(a: Vector2<i32>, b: Vector2<i32>) -> i32 {
-        (a.x - b.x).abs().max((a.y - b.y).abs())
-    }
-
-    pub fn update_center_and_view_distance(
-        &mut self,
-        center: Vector2<i32>,
-        mut view_distance: u8,
-        level: &Arc<Level>,
-        loading_chunks: &[Vector2<i32>],
-        unloading_chunks: &[Vector2<i32>],
-    ) {
-        view_distance += 1; // Margin for loading
-        let old_center = self.center;
-
-        {
-            let mut lock = level
-                .chunk_loading
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            let new_level = ChunkLoading::get_level_from_view_distance(view_distance);
-            lock.add_ticket(center, new_level);
-
-            let sim_dist = self.world.server.upgrade().map_or(10, |s| {
-                s.advanced_config.networking.java.simulation_distance.get()
-            });
-            let sim_level = ChunkLoading::get_level_from_simulation_distance(sim_dist);
-            lock.add_ticket(center, sim_level);
-
-            // Drop exactly the pair we last added rather than recomputing it. The
-            // simulation level is derived from live config and the view level from the
-            // previous view distance, so recomputing them can release a ticket we never
-            // took and strand the one we did.
-            if let Some((held_view, held_sim)) = self.held_tickets.replace((new_level, sim_level)) {
-                lock.remove_ticket(old_center, held_view);
-                lock.remove_ticket(old_center, held_sim);
-            }
-            lock.send_change();
-        };
-
-        self.center = center;
-        self.view_distance = view_distance;
-        let view_distance_i32 = i32::from(view_distance);
-        let unloading_chunks: HashSet<Vector2<i32>> = unloading_chunks.iter().copied().collect();
-
-        self.chunk_sent.retain(|pos, _| {
-            (pos.x - center.x).abs().max((pos.y - center.y).abs()) <= view_distance_i32
-                && !unloading_chunks.contains(pos)
-        });
-
-        self.entity_chunk_queue.retain(|(pos, _)| {
-            (pos.x - center.x).abs().max((pos.y - center.y).abs()) <= view_distance_i32
-                && !unloading_chunks.contains(pos)
-        });
-
-        let mut tasks: Vec<_> = self
-            .chunk_queue
-            .drain()
-            .filter_map(|node| {
-                let dst = Self::chebyshev(node.1, center);
-                (dst <= view_distance_i32 && !unloading_chunks.contains(&node.1))
-                    .then(|| HeapNode(dst, node.1, node.2))
-            })
-            .collect();
-
-        for pos in loading_chunks {
-            if !self.chunk_sent.contains_key(pos)
-                && let Some(chunk) = level.loaded_chunks.get(pos)
-            {
-                let chunk = chunk.value().clone();
-                if self.should_enqueue_chunk(*pos, &chunk) {
-                    let dst = (pos.x - center.x).abs().max((pos.y - center.y).abs());
-                    tasks.push(HeapNode(dst, *pos, Arc::downgrade(&chunk)));
-                }
-            }
-        }
-        self.chunk_queue = BinaryHeap::from(tasks);
-    }
-
-    pub fn clean_up(&mut self, level: &Arc<Level>) {
-        let mut lock = level
-            .chunk_loading
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if let Some((view_level, sim_level)) = self.held_tickets.take() {
-            lock.remove_ticket(self.center, view_level);
-            lock.remove_ticket(self.center, sim_level);
-        }
-        lock.send_change();
-        level.should_unload.store(true, Ordering::Relaxed);
-        level.level_channel.notify();
-        let (_rx, tx) = crossbeam::channel::unbounded();
-        // drop old channel
-        self.chunk_listener = tx;
-
-        // Drop any held chunk references to allow chunks to be unloaded.
-        self.chunk_sent.clear();
-        self.chunk_queue.clear();
-        self.entity_chunk_queue.clear();
-        self.batches_sent_since_ack = 0;
-        self.last_chunk_batch_sent_at = Instant::now();
-        self.view_distance = 0;
-    }
-
-    pub fn change_world(&mut self, old_level: &Arc<Level>, new_world: Arc<World>) {
-        let mut lock = old_level
-            .chunk_loading
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if let Some((view_level, sim_level)) = self.held_tickets.take() {
-            lock.remove_ticket(self.center, view_level);
-            lock.remove_ticket(self.center, sim_level);
-        }
-        lock.send_change();
-        old_level.should_unload.store(true, Ordering::Relaxed);
-        old_level.level_channel.notify();
-        drop(lock);
-        self.chunk_listener = new_world.level.chunk_listener.add_global_chunk_listener();
-        self.chunk_sent.clear();
-        self.chunk_queue.clear();
-        self.entity_chunk_queue.clear();
-        self.view_distance = 0;
-        self.world = new_world;
-        // Reset batch state so chunks can be sent immediately in the new dimension
-        self.batches_sent_since_ack = 0;
-        self.last_chunk_batch_sent_at = Instant::now();
-    }
-
-    pub const fn handle_acknowledge(&mut self, chunks_per_tick: f32) {
-        self.batches_sent_since_ack = 0;
-        self.chunks_per_tick = chunks_per_tick.ceil() as usize;
-    }
-
-    pub fn push_chunk(&mut self, position: Vector2<i32>, chunk: &SyncChunk) {
-        if self.should_enqueue_chunk(position, chunk) {
-            let dst = (position.x - self.center.x)
-                .abs()
-                .max((position.y - self.center.y).abs());
-            self.chunk_queue
-                .push(HeapNode(dst, position, Arc::downgrade(chunk)));
-        }
-    }
-
-    pub fn push_entity(&mut self, position: Vector2<i32>, chunk: &SyncEntityChunk) {
-        self.entity_chunk_queue
-            .push_back((position, Arc::downgrade(chunk)));
-    }
-
-    #[must_use]
-    pub fn can_send_chunk(&self) -> bool {
-        let state_available = self.ack_window_open() || self.ack_fallback_ready();
-
-        state_available && !self.chunk_queue.is_empty()
-    }
-
-    pub fn next_chunk(&mut self) -> Box<[SyncChunk]> {
-        let take = self.chunk_queue.len().min(self.chunks_per_tick.max(1));
-        let mut chunks = Vec::with_capacity(take);
-        while chunks.len() < take
-            && let Some(node) = self.chunk_queue.pop()
-        {
-            if let Some(chunk) = node.2.upgrade() {
-                chunks.push(chunk);
-            }
-        }
-        self.batches_sent_since_ack = self.batches_sent_since_ack.saturating_add(1);
-        self.last_chunk_batch_sent_at = Instant::now();
-
-        chunks.into_boxed_slice()
-    }
-
-    pub fn next_entity(&mut self) -> Box<[SyncEntityChunk]> {
-        let chunk_size = self
-            .entity_chunk_queue
-            .len()
-            .min(self.chunks_per_tick.max(1));
-
-        let mut chunks = Vec::with_capacity(chunk_size);
-        while chunks.len() < chunk_size
-            && let Some((_, weak_chunk)) = self.entity_chunk_queue.pop_front()
-        {
-            if let Some(chunk) = weak_chunk.upgrade() {
-                chunks.push(chunk);
-            }
-        }
-
-        self.batches_sent_since_ack = self.batches_sent_since_ack.saturating_add(1);
-        self.last_chunk_batch_sent_at = Instant::now();
-
-        chunks.into_boxed_slice()
     }
 }
 
@@ -798,7 +478,10 @@ pub struct Player {
     pub experience_points: AtomicI32,
     pub item_cooldowns: std::sync::Mutex<HashMap<String, ItemCooldown>>,
     pub experience_pick_up_delay: Mutex<u32>,
-    pub chunk_manager: Mutex<ChunkManager>,
+    pub chunk_sender: Mutex<crate::net::ChunkSender>,
+    pub chunk_listener: Mutex<Receiver<(Vector2<i32>, Weak<ChunkData>)>>,
+    pub held_chunk_tickets: Mutex<Option<(i8, i8)>>,
+    pub chunk_send_epoch: AtomicU32,
     pub has_played_before: AtomicBool,
     root_vehicle_uuid: AtomicCell<Option<Uuid>>,
     pub chat_session: Arc<Mutex<ChatSession>>,
@@ -836,7 +519,6 @@ pub struct Player {
 use base64::prelude::*;
 use pumpkin_protocol::Property;
 use serde::Deserialize;
-use std::io::Read;
 
 // Bit masks for the Java skin pixels that Bedrock requires to be opaque.
 // Adapted from Geyser's SkinProvider under the MIT License.
@@ -883,10 +565,20 @@ impl Player {
             .and_then(|m| m.model.as_deref())
             .is_some_and(|model| model == "slim");
 
-        let resp = ureq::get(&url).call().ok()?;
-        let mut buf = Vec::new();
-        resp.into_body().into_reader().read_to_end(&mut buf).ok()?;
-        let img = image::load_from_memory(&buf).ok()?;
+        let bytes = if let Ok(handle) = tokio::runtime::Handle::try_current() {
+            tokio::task::block_in_place(|| {
+                handle.block_on(async {
+                    let client = reqwest::Client::new();
+                    client.get(&url).send().await.ok()?.bytes().await.ok()
+                })
+            })?
+        } else {
+            tokio::runtime::Runtime::new().ok()?.block_on(async {
+                let client = reqwest::Client::new();
+                client.get(&url).send().await.ok()?.bytes().await.ok()
+            })?
+        };
+        let img = image::load_from_memory(&bytes).ok()?;
 
         let width = img.width();
         let height = img.height();
@@ -1081,12 +773,10 @@ impl Player {
             experience_progress: AtomicCell::new(0.0),
             experience_points: AtomicI32::new(0),
             item_cooldowns: std::sync::Mutex::new(HashMap::new()),
-            // Default to sending 16 chunks per tick.
-            chunk_manager: Mutex::new(ChunkManager::new(
-                16,
-                world.level.chunk_listener.add_global_chunk_listener(),
-                world.clone(),
-            )),
+            chunk_sender: Mutex::new(crate::net::ChunkSender::new()),
+            chunk_listener: Mutex::new(world.level.chunk_listener.add_global_chunk_listener()),
+            held_chunk_tickets: Mutex::new(None),
+            chunk_send_epoch: AtomicU32::new(0),
             last_sent_xp: AtomicI32::new(-1),
             last_sent_health: AtomicI32::new(-1),
             last_sent_food: AtomicU8::new(0),
@@ -1341,10 +1031,10 @@ impl Player {
         world.remove_player(self, true).await;
 
         let cylindrical = self.watched_section.load();
-        self.chunk_manager
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .clean_up(&world.level);
+        self.clean_up_chunk_tickets(&world.level);
+        if let Ok(mut sender) = self.chunk_sender.lock() {
+            sender.reset();
+        }
 
         // Radial chunks are all of the chunks the player is theoretically viewing.
         // Given enough time, all of these chunks will be in memory.
@@ -1394,6 +1084,41 @@ impl Player {
         vehicle
             .get_entity()
             .add_passenger(vehicle.clone(), self.clone());
+    }
+
+    pub fn clean_up_chunk_tickets(&self, level: &Arc<pumpkin_world::level::Level>) {
+        let mut lock = level
+            .chunk_loading
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let held = self
+            .held_chunk_tickets
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .take();
+        if let Some((view_level, sim_level)) = held {
+            let center = self.get_entity().chunk_pos.load();
+            lock.remove_ticket(center, view_level);
+            lock.remove_ticket(center, sim_level);
+        }
+        lock.send_change();
+        level.should_unload.store(true, Ordering::Relaxed);
+        level.level_channel.notify();
+    }
+
+    pub fn change_world_chunks(
+        &self,
+        old_level: &Arc<pumpkin_world::level::Level>,
+        new_world: &Arc<crate::world::World>,
+    ) {
+        self.clean_up_chunk_tickets(old_level);
+        if let Ok(mut listener) = self.chunk_listener.lock() {
+            *listener = new_world.level.chunk_listener.add_global_chunk_listener();
+        }
+        self.chunk_send_epoch.fetch_add(1, Ordering::Relaxed);
+        if let Ok(mut sender) = self.chunk_sender.lock() {
+            sender.reset();
+        }
     }
 
     #[expect(clippy::too_many_lines)]
@@ -2602,48 +2327,72 @@ impl Player {
         {
             *xp -= 1;
         }
-        let (chunk_of_chunks, total_sent_chunks) = self.chunk_manager.try_lock().map_or_else(
-            |_| (None, 0),
-            |mut chunk_manager| {
-                chunk_manager.pull_new_chunks();
-                let chunks = if let ClientPlatform::Java(java_client) = self.client.as_ref() {
-                    if java_client.version.load() >= JavaMinecraftVersion::V_1_20_2 {
-                        // Java clients (1.20.2+) use the chunk batching protocol.
-                        // If we have sent too many chunks without receiving an ack, we stop sending chunks.
-                        chunk_manager
-                            .can_send_chunk()
-                            .then(|| chunk_manager.next_chunk())
-                    } else {
-                        // Java clients < 1.20.2 do not have chunk batching/ack packets.
-                        // Send chunks every tick directly based on chunks_per_tick.
-                        (!chunk_manager.chunk_queue.is_empty()).then(|| chunk_manager.next_chunk())
-                    }
-                } else {
-                    (!chunk_manager.chunk_queue.is_empty()).then(|| chunk_manager.next_chunk())
-                };
-                (chunks, chunk_manager.sent_chunks_count())
-            },
-        );
-        if let Some(chunk_of_chunks) = chunk_of_chunks
-            && !chunk_of_chunks.is_empty()
+        if let Ok(listener) = self.chunk_listener.try_lock()
+            && let Ok(mut sender) = self.chunk_sender.try_lock()
         {
-            let client = self.client.clone();
-            self.spawn_task(async move {
-                client.send_chunks(&chunk_of_chunks).await;
-            });
-            if let ClientPlatform::Bedrock(bedrock_client) = self.client.as_ref()
-                && !self.bedrock_spawned.load(Ordering::Relaxed)
-                && total_sent_chunks > 4
-            {
-                if let Ok(data) = bedrock_client.serialize_packet(&CPlayStatus::PlayerSpawn) {
-                    bedrock_client.try_enqueue_packet(data);
+            let center = self.get_entity().chunk_pos.load();
+            let view_dist =
+                std::num::NonZeroI32::from(self.watched_section.load().view_distance).get();
+            while let Ok((pos, _)) = listener.try_recv() {
+                if (pos.x - center.x).abs().max((pos.y - center.y).abs()) <= view_dist {
+                    sender.enqueue_chunk(pos);
                 }
-                self.bedrock_spawned.store(true, Ordering::Relaxed);
-                self.set_client_loaded(true);
-                self.send_health();
-                if self.living_entity.health.load() <= 0.0 {
-                    self.send_bedrock_respawn_state(RespawnState::SearchingForSpawn);
+            }
+        }
+
+        let world = self.world();
+        let player_chunk = self.get_entity().chunk_pos.load();
+        let epoch = self.chunk_send_epoch.load(Ordering::Relaxed);
+        let version = match self.client.as_ref() {
+            ClientPlatform::Java(java_client) => java_client.version.load(),
+            ClientPlatform::Bedrock(_) => JavaMinecraftVersion::V_1_20_2,
+        };
+
+        let prepared_batch = self.chunk_sender.try_lock().ok().and_then(|mut sender| {
+            sender.prepare_batch(&world.level, player_chunk, epoch, version)
+        });
+
+        let total_sent_chunks = if let Some(batch) = prepared_batch {
+            match self.client.as_ref() {
+                ClientPlatform::Java(_) => {
+                    let mut per_player_cache = rustc_hash::FxHashMap::default();
+                    let encoded =
+                        crate::net::ChunkSender::encode_batch(&batch, &mut per_player_cache);
+                    let current_epoch = self.chunk_send_epoch.load(Ordering::Relaxed);
+                    self.chunk_sender.try_lock().map_or(0, |mut sender| {
+                        sender.commit_batch(&batch, &encoded, &self.client, current_epoch);
+                        sender.sent_chunks_count()
+                    })
                 }
+                ClientPlatform::Bedrock(_) => {
+                    let chunks: Vec<_> = batch.chunks.into_iter().map(|c| c.chunk).collect();
+                    let client = self.client.clone();
+                    self.spawn_task(async move {
+                        client.send_chunks(&chunks).await;
+                    });
+                    self.chunk_sender
+                        .try_lock()
+                        .map_or(0, |s| s.sent_chunks_count())
+                }
+            }
+        } else {
+            self.chunk_sender
+                .try_lock()
+                .map_or(0, |s| s.sent_chunks_count())
+        };
+
+        if let ClientPlatform::Bedrock(bedrock_client) = self.client.as_ref()
+            && !self.bedrock_spawned.load(Ordering::Relaxed)
+            && total_sent_chunks > 4
+        {
+            if let Ok(data) = bedrock_client.serialize_packet(&CPlayStatus::PlayerSpawn) {
+                bedrock_client.try_enqueue_packet(data);
+            }
+            self.bedrock_spawned.store(true, Ordering::Relaxed);
+            self.set_client_loaded(true);
+            self.send_health();
+            if self.living_entity.health.load() <= 0.0 {
+                self.send_bedrock_respawn_state(RespawnState::SearchingForSpawn);
             }
         }
         self.tick_counter.fetch_add(1, Ordering::Relaxed);
@@ -3656,10 +3405,7 @@ impl Player {
                 });
                 self.unload_watched_chunks(&current_world).await;
 
-                self.chunk_manager
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .change_world(&current_world.level, new_world.clone());
+                self.change_world_chunks(&current_world.level, &new_world);
                 self.living_entity.entity.set_world(new_world.clone());
 
                 if new_world.dimension == pumpkin_data::dimension::Dimension::THE_NETHER {
@@ -3779,6 +3525,7 @@ impl Player {
         }
 
         let i = self.teleport_id_count.fetch_add(1, Ordering::Relaxed);
+        self.chunk_send_epoch.fetch_add(1, Ordering::Relaxed);
         let teleport_id = i + 1;
         self.living_entity.entity.set_pos(position);
         let entity = &self.living_entity.entity;

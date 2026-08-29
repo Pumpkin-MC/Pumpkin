@@ -207,7 +207,7 @@ time = { version = "0.3", default-features = false, features = ["std"] }
 arc-swap = { version = "1.9", default-features = false }
 tokio-util = { version = "0.7.19", default-features = false }
 toml = { version = "1.1", default-features = false, features = ["parse", "display", "serde"] }
-ureq = { version = "3.4.0", default-features = false, features = ["rustls"] }
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json", "http2"] }
 notify = { version = "8.2.0", default-features = false, features = ["macos_fsevent"] }
 
 sysinfo = { version = "0.39", default-features = false, features = ["system"] }

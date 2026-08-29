@@ -3,7 +3,7 @@ use std::{num::NonZero, sync::Arc};
 
 use pumpkin_protocol::{
     bedrock::client::network_chunk_publisher_update::CNetworkChunkPublisherUpdate,
-    java::client::play::{CCenterChunk, CUnloadChunk},
+    java::client::play::CCenterChunk,
 };
 use pumpkin_world::cylindrical_chunk_iterator::Cylindrical;
 
@@ -78,30 +78,51 @@ pub fn update_position(player: &Arc<Player>) {
     let loading_chunks: Vec<_> = loading_iter.collect();
     let unloading_chunks: Vec<_> = unloading_iter.collect();
 
-    // Use the chunk_manager's world reference, which is updated on dimension change.
-    // This ensures we load chunks from the correct world after portal teleportation.
-    let world = {
-        let mut chunk_manager = player
-            .chunk_manager
+    let world = player.world();
+    let level = &world.level;
+    let mut held_tickets = player
+        .held_chunk_tickets
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+
+    {
+        let mut lock = level
+            .chunk_loading
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let world = chunk_manager.world().clone();
-        chunk_manager.update_center_and_view_distance(
-            new_chunk_center,
-            view_distance.into(),
-            &world.level,
-            &loading_chunks,
-            &unloading_chunks,
+        let new_level = pumpkin_world::chunk_system::ChunkLoading::get_level_from_view_distance(
+            u8::from(view_distance) + 1,
         );
-        world
-    };
-    player.watched_section.store(new_cylindrical);
+        lock.add_ticket(new_chunk_center, new_level);
 
-    if let ClientPlatform::Java(client) = player.client.as_ref() {
-        for chunk in &unloading_chunks {
-            client.try_send_packet(&CUnloadChunk::new(chunk.x, chunk.y));
+        let sim_dist = world.server.upgrade().map_or(10, |s| {
+            s.advanced_config.networking.java.simulation_distance.get()
+        });
+        let sim_level =
+            pumpkin_world::chunk_system::ChunkLoading::get_level_from_simulation_distance(sim_dist);
+        lock.add_ticket(new_chunk_center, sim_level);
+
+        if let Some((held_view, held_sim)) = held_tickets.replace((new_level, sim_level)) {
+            lock.remove_ticket(old_cylindrical.center, held_view);
+            lock.remove_ticket(old_cylindrical.center, held_sim);
+        }
+        lock.send_change();
+    };
+    drop(held_tickets);
+
+    {
+        let mut sender = player
+            .chunk_sender
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        for pos in &unloading_chunks {
+            sender.unload_chunk(&player.client, *pos);
+        }
+        for pos in &loading_chunks {
+            sender.enqueue_chunk(*pos);
         }
     }
+    player.watched_section.store(new_cylindrical);
 
     // Make sure the watched section and the chunk watcher updates are async atomic. We want to
     // ensure what we unload when the player disconnects is correct.
@@ -133,4 +154,5 @@ pub fn update_position(player: &Arc<Player>) {
     if !loading_chunks.is_empty() {
         world.spawn_world_entity_chunks(player.clone(), loading_chunks, new_chunk_center);
     }
+    world.entity_tracker.update_player_position(player, &world);
 }

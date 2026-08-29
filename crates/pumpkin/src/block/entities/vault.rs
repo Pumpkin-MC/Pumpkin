@@ -1,7 +1,7 @@
 use super::BlockEntity;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
-use std::collections::HashSet;
+use rustc_hash::FxHashSet;
 use std::sync::Mutex;
 use uuid::Uuid;
 
@@ -9,7 +9,7 @@ pub struct VaultBlockEntity {
     pub position: BlockPos,
     pub config: Mutex<Option<NbtCompound>>,
     pub server_data: Mutex<Option<NbtCompound>>,
-    pub rewarded_players: Mutex<HashSet<Uuid>>,
+    pub rewarded_players: Mutex<FxHashSet<Uuid>>,
 }
 
 impl BlockEntity for VaultBlockEntity {
@@ -29,7 +29,7 @@ impl BlockEntity for VaultBlockEntity {
             position,
             config: Mutex::new(nbt.get_compound("config").cloned()),
             server_data: Mutex::new(nbt.get_compound("server_data").cloned()),
-            rewarded_players: Mutex::new(HashSet::new()),
+            rewarded_players: Mutex::new(FxHashSet::default()),
         }
     }
 
@@ -75,7 +75,7 @@ impl VaultBlockEntity {
             position,
             config: Mutex::new(None),
             server_data: Mutex::new(None),
-            rewarded_players: Mutex::new(HashSet::new()),
+            rewarded_players: Mutex::new(FxHashSet::default()),
         }
     }
 

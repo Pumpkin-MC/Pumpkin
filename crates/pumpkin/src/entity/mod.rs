@@ -2989,20 +2989,33 @@ impl Entity {
         bedrock_meta: Option<&SyncedActorDataList>,
     ) {
         let world = self.world.load();
-        let chunk_pos = self.chunk_pos.load();
         let players = world.players.load();
 
         let mut java_recipients = Vec::new();
         let mut bedrock_recipients = Vec::new();
 
-        for player in players.iter() {
-            let center = player.get_entity().chunk_pos.load();
-            let view_distance = crate::world::chunker::get_view_distance(player).get() as i32;
+        if let Some(tracked) = world.entity_tracker.get_tracked_entity(self.entity_id) {
+            for player in players.iter() {
+                if tracked.seen_by.contains(&player.gameprofile.id)
+                    || player.entity_id() == self.entity_id
+                {
+                    match player.client.as_ref() {
+                        ClientPlatform::Java(_) => java_recipients.push(player),
+                        ClientPlatform::Bedrock(client) => bedrock_recipients.push(client),
+                    }
+                }
+            }
+        } else {
+            let chunk_pos = self.chunk_pos.load();
+            for player in players.iter() {
+                let center = player.get_entity().chunk_pos.load();
+                let view_distance = crate::world::chunker::get_view_distance(player).get() as i32;
 
-            if is_within_view_distance(chunk_pos, center, view_distance) {
-                match player.client.as_ref() {
-                    ClientPlatform::Java(_) => java_recipients.push(player),
-                    ClientPlatform::Bedrock(client) => bedrock_recipients.push(client),
+                if is_within_view_distance(chunk_pos, center, view_distance) {
+                    match player.client.as_ref() {
+                        ClientPlatform::Java(_) => java_recipients.push(player),
+                        ClientPlatform::Bedrock(client) => bedrock_recipients.push(client),
+                    }
                 }
             }
         }
