@@ -5987,6 +5987,14 @@ impl World {
         self.level.is_fluid_tick_scheduled(block_pos, fluid)
     }
 
+    pub fn cancel_block_tick(&self, block_pos: &BlockPos, block: &Block) -> bool {
+        self.level.cancel_block_tick(block_pos, block)
+    }
+
+    pub fn cancel_fluid_tick(&self, block_pos: &BlockPos, fluid: &Fluid) -> bool {
+        self.level.cancel_fluid_tick(block_pos, fluid)
+    }
+
     /// Close container screens for all players who have a container open at the given block position.
     pub fn close_container_screens_at(&self, position: &BlockPos) {
         let players = self.players.load();

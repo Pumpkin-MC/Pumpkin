@@ -586,8 +586,7 @@ impl Level {
                 ticks.block_ticks.append(&mut chunk.block_ticks.step_tick());
                 ticks.fluid_ticks.append(&mut chunk.fluid_ticks.step_tick());
 
-                // Remove from set if it no longer has ticks
-                if !chunk.block_ticks.has_ticks() && !chunk.fluid_ticks.has_ticks() {
+                if !chunk.has_scheduled_ticks() {
                     self.chunks_with_scheduled_ticks.remove(&pos);
                 }
             } else {
@@ -1001,6 +1000,30 @@ impl Level {
     pub fn is_fluid_tick_scheduled(&self, block_pos: &BlockPos, fluid: &Fluid) -> bool {
         self.read_chunk_sync(&block_pos.chunk_position(), |chunk| {
             chunk.fluid_ticks.is_scheduled(*block_pos, fluid)
+        })
+        .unwrap_or(false)
+    }
+
+    pub fn cancel_block_tick(&self, block_pos: &BlockPos, block: &Block) -> bool {
+        let chunk_pos = block_pos.chunk_position();
+        self.read_chunk_sync(&chunk_pos, |chunk| {
+            let cancelled = chunk.block_ticks.cancel_tick(*block_pos, block);
+            if cancelled && !chunk.has_scheduled_ticks() {
+                self.chunks_with_scheduled_ticks.remove(&chunk_pos);
+            }
+            cancelled
+        })
+        .unwrap_or(false)
+    }
+
+    pub fn cancel_fluid_tick(&self, block_pos: &BlockPos, fluid: &Fluid) -> bool {
+        let chunk_pos = block_pos.chunk_position();
+        self.read_chunk_sync(&chunk_pos, |chunk| {
+            let cancelled = chunk.fluid_ticks.cancel_tick(*block_pos, fluid);
+            if cancelled && !chunk.has_scheduled_ticks() {
+                self.chunks_with_scheduled_ticks.remove(&chunk_pos);
+            }
+            cancelled
         })
         .unwrap_or(false)
     }
