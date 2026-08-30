@@ -41,7 +41,12 @@ impl JavaClient {
 
         send_cancellable! {{
             server;
-            PlayerChatEvent::new(player.clone(), chat_message.message.to_string(), vec![]);
+            PlayerChatEvent::new(
+                player.clone(),
+                chat_message.message.to_string(),
+                vec![],
+                chat_message.signature.map(<[u8]>::to_vec),
+            );
 
             'after: {
                 info!("<chat> {}: {}", gameprofile.name, event.message);

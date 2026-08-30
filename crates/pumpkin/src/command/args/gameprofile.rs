@@ -14,7 +14,7 @@ use crate::{
         dispatcher::CommandError,
         tree::{RawArg, RawArgs},
     },
-    net::authentication::lookup_profile_by_name,
+    net::authentication::lookup_profile_by_name_blocking,
     net::{GameProfile, offline_uuid},
     server::Server,
 };
@@ -254,7 +254,7 @@ fn resolve_profiles_from_token(
     }
 
     if server.advanced_config.networking.java.online_mode {
-        match lookup_profile_by_name(
+        match lookup_profile_by_name_blocking(
             raw_arg.value,
             &server.advanced_config.networking.java.authentication,
         ) {

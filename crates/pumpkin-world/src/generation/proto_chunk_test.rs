@@ -1,10 +1,106 @@
 #[cfg(test)]
 mod test {
     #![allow(clippy::print_stdout, clippy::needless_pass_by_value)]
-    use crate::chunk_system::chunk_state::StagedChunkEnum;
-    use crate::generation::{generator::WorldGenerator, get_world_gen, proto_chunk::ProtoChunk};
+    use crate::chunk_system::{
+        Chunk, chunk_state::StagedChunkEnum, generation_cache::SurfaceBiomeNeighborhood,
+    };
+    use crate::generation::{
+        biome_coords, generator::WorldGenerator, get_world_gen, proto_chunk::ProtoChunk,
+    };
     use pumpkin_data::dimension::Dimension;
     use pumpkin_util::world_seed::Seed;
+
+    fn surface_biomes(
+        world_gen: &WorldGenerator,
+        center_x: i32,
+        center_z: i32,
+    ) -> crate::chunk_system::generation_cache::SurfaceBiomeNeighborhood {
+        let WorldGenerator::Noise(generator) = world_gen else {
+            unreachable!()
+        };
+        let mut neighborhood = SurfaceBiomeNeighborhood::new(center_x, center_z);
+        for chunk_x in center_x - 1..=center_x + 1 {
+            for chunk_z in center_z - 1..=center_z + 1 {
+                let mut chunk = ProtoChunk::new(chunk_x, chunk_z, world_gen);
+                chunk.step_to_biomes(generator);
+                assert!(neighborhood.push_chunk(&Chunk::Proto(Box::new(chunk))));
+            }
+        }
+        assert!(neighborhood.is_complete());
+        neighborhood
+    }
+
+    #[test]
+    fn terrain_biome_lookup_crosses_chunk_boundary() {
+        use pumpkin_data::chunk::Biome;
+
+        let seed = Seed(1_786_192_857_164_469_025);
+        let world_gen = get_world_gen(seed, Dimension::OVERWORLD, false, Vec::new(), String::new());
+        let WorldGenerator::Noise(generator) = &*world_gen else {
+            unreachable!()
+        };
+
+        let mut north = ProtoChunk::new(84, 599, &world_gen);
+        let mut south = ProtoChunk::new(84, 600, &world_gen);
+        north.step_to_biomes(generator);
+        south.step_to_biomes(generator);
+
+        // Biome zoom selects absolute quart (338, 17, 2399) on both sides of z=9600.
+        // Vanilla resolves that quart through the owning chunk. It must not wrap the quart
+        // coordinate into the chunk whose surface is currently being generated.
+        let expected = north.get_biome_id(338, 17, 2399);
+        assert_eq!(expected, Biome::SAVANNA.id);
+        assert_eq!(north.get_terrain_gen_biome_id(1354, 68, 9599), expected);
+
+        let mut surface_biomes = SurfaceBiomeNeighborhood::new(south.x, south.z);
+        for chunk_x in south.x - 1..=south.x + 1 {
+            for chunk_z in south.z - 1..=south.z + 1 {
+                let mut chunk = ProtoChunk::new(chunk_x, chunk_z, &world_gen);
+                chunk.step_to_biomes(generator);
+                if (chunk_x, chunk_z) == (north.x, north.z) {
+                    // Make stored authority observably differ from a fresh biome-source sample.
+                    let index = chunk.local_biome_pos_to_biome_index(
+                        338i32.rem_euclid(4),
+                        17 - biome_coords::from_block(chunk.bottom_y() as i32),
+                        2399i32.rem_euclid(4),
+                    );
+                    chunk.flat_biome_map[index] = Biome::DESERT.id;
+                }
+                assert!(surface_biomes.push_chunk(&Chunk::Proto(Box::new(chunk))));
+            }
+        }
+        assert_eq!(
+            south.get_terrain_gen_biome_id_from_neighborhood(&surface_biomes, 1354, 68, 9600),
+            Some(Biome::DESERT.id)
+        );
+    }
+
+    #[test]
+    fn generation_cache_resolves_blended_biome_through_owning_chunk() {
+        use crate::chunk_system::{Chunk, generation_cache::Cache};
+        use crate::generation::proto_chunk::GenerationCache;
+        use pumpkin_data::chunk::Biome;
+
+        let seed = Seed(1_786_192_857_164_469_025);
+        let world_gen = get_world_gen(seed, Dimension::OVERWORLD, false, Vec::new(), String::new());
+        let WorldGenerator::Noise(generator) = &*world_gen else {
+            unreachable!()
+        };
+
+        let mut cache = Cache::new(83, 599, 3);
+        for chunk_x in 83..=85 {
+            for chunk_z in 599..=601 {
+                let mut chunk = ProtoChunk::new(chunk_x, chunk_z, &world_gen);
+                chunk.step_to_biomes(generator);
+                cache.chunks.push(Chunk::Proto(Box::new(chunk)));
+            }
+        }
+
+        assert_eq!(
+            cache.get_biome_for_terrain_gen(1354, 68, 9600).id,
+            Biome::SAVANNA.id
+        );
+    }
 
     #[test]
     fn structure_references_are_rebuilt_when_resuming_generation() {
@@ -89,14 +185,15 @@ mod test {
             "heightmap corrupted by save/load roundtrip (transposed or lost)"
         );
 
-        resumed.step_to_surface(generator);
+        let surface_biomes = surface_biomes(&world_gen, cx, cz);
+        resumed.step_to_surface(generator, &surface_biomes);
 
         let mut fresh = ProtoChunk::new(cx, cz, &world_gen);
         fresh.step_to_biomes(generator);
         fresh.set_structure_starts(generator);
         fresh.set_structure_references(generator);
         fresh.step_to_noise(generator);
-        fresh.step_to_surface(generator);
+        fresh.step_to_surface(generator, &surface_biomes);
 
         let bottom = fresh.bottom_y() as i32;
         let top = bottom + fresh.height() as i32;
@@ -226,7 +323,8 @@ mod test {
         chunk.step_to_biomes(generator);
         chunk.stage = StagedChunkEnum::StructureReferences;
         chunk.step_to_noise(generator);
-        chunk.step_to_surface(generator);
+        let surface_biomes = surface_biomes(&world_gen, chunk_x, chunk_z);
+        chunk.step_to_surface(generator, &surface_biomes);
 
         let mismatches = count_dump_mismatches(&chunk, expected_data, test_name);
         assert_air_above_dumped_window(&chunk, expected_data, test_name);

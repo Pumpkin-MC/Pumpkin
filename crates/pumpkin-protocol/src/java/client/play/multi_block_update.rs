@@ -1,122 +1,113 @@
 use pumpkin_data::packet::clientbound::play::SECTION_BLOCKS_UPDATE;
 use pumpkin_data::{BlockStateId, block_state_remap::remap_block_state_for_version};
-use pumpkin_util::math::{
-    position::{BlockPos, chunk_section_from_pos, pack_local_chunk_section},
-    vector3::{self},
-};
-use pumpkin_util::version::JavaMinecraftVersion;
-
 use pumpkin_macros::java_packet;
+use pumpkin_util::math::position::{BlockPos, chunk_section_from_pos, pack_local_chunk_section};
+use pumpkin_util::math::vector3::{self, Vector3};
+use pumpkin_util::version::JavaMinecraftVersion;
 use std::io::Write;
 
 use crate::{
-    ClientPacket,
+    ClientPacket, ServerPacket,
     codec::{var_int::VarInt, var_long::VarLong},
-    ser::{NetworkWriteExt, WritingError},
+    ser::{NetworkReadExt, NetworkWriteExt, ReadingError, WritingError},
 };
 
-/// Updates multiple blocks within a single 16x16x16 chunk section.
+/// Updates multiple blocks within a single chunk section (or chunk in older versions).
 ///
 /// This packet is much more efficient than sending multiple individual
 /// `CBlockUpdate` packets when many changes occur in the same area
 /// (e.g., explosions, structure generation, or large-scale terraforming).
 #[java_packet(SECTION_BLOCKS_UPDATE)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CMultiBlockUpdate {
-    /// Chunk section position (x << 42 | z << 20 | y)
-    pub chunk_section: i64,
-    /// Array of `VarLongs`: (Block State ID << 12 | Relative Position)
-    pub updates: Vec<VarLong>,
+    /// Chunk section position (x, y, z)
+    pub chunk_section: Vector3<i32>,
+    /// Suppress light updates (used in 1.16..=1.19.4)
+    pub suppress_light_updates: bool,
+    /// Array of block updates: (`BlockPos`, `BlockStateId`)
+    pub updates: Vec<(BlockPos, BlockStateId)>,
 }
 
 impl CMultiBlockUpdate {
     #[must_use]
     pub fn new(updates: &[(BlockPos, BlockStateId)]) -> Self {
-        let first_pos = updates[0].0;
-
-        let chunk_section_vec = chunk_section_from_pos(&first_pos);
-        let chunk_section = vector3::packed_chunk_pos(&chunk_section_vec);
-
-        let packed_updates = updates
-            .iter()
-            .map(|(pos, state_id)| {
-                let local_pos = pack_local_chunk_section(pos) as u64;
-                let packed = (u64::from(state_id.as_u16()) << 12) | (local_pos & 0xFFF);
-                VarLong(packed as i64)
-            })
-            .collect();
+        let chunk_section = updates
+            .first()
+            .map_or_else(Vector3::default, |(pos, _)| chunk_section_from_pos(pos));
 
         Self {
             chunk_section,
-            updates: packed_updates,
+            suppress_light_updates: false,
+            updates: updates.to_vec(),
+        }
+    }
+
+    #[must_use]
+    pub const fn new_with_section(
+        chunk_section: Vector3<i32>,
+        suppress_light_updates: bool,
+        updates: Vec<(BlockPos, BlockStateId)>,
+    ) -> Self {
+        Self {
+            chunk_section,
+            suppress_light_updates,
+            updates,
         }
     }
 }
+
 impl ClientPacket for CMultiBlockUpdate {
     fn write_packet_data(
         &self,
-        write: impl Write,
+        mut write: impl Write,
         version: &JavaMinecraftVersion,
     ) -> Result<(), WritingError> {
-        let mut write = write;
+        if *version >= JavaMinecraftVersion::V_1_16 {
+            let chunk_section = vector3::packed_chunk_pos(&self.chunk_section);
+            write.write_i64_be(chunk_section)?;
 
-        if *version >= JavaMinecraftVersion::V_1_13 {
-            // 1.13+ packs the chunk section position into a single i64 and each
-            // record into a VarLong: (block state id << 12) | local position.
-            write.write_i64_be(self.chunk_section)?;
+            if *version <= JavaMinecraftVersion::V_1_19_4 {
+                write.write_bool(self.suppress_light_updates)?;
+            }
+
             write.write_var_int(&VarInt(self.updates.len() as i32))?;
 
-            for update in &self.updates {
-                let (state_id, local_pos) = unpack_update(*update);
-                let remapped_state_id = remap_block_state_for_version(state_id, *version);
-                let remapped_packed = (u64::from(remapped_state_id) << 12) | local_pos;
-                write.write_var_long(&VarLong(remapped_packed as i64))?;
+            for (pos, state_id) in &self.updates {
+                let local_pos = pack_local_chunk_section(pos) as u64;
+                let remapped_state_id = remap_block_state_for_version(state_id.as_u16(), *version);
+                let packed = (u64::from(remapped_state_id) << 12) | (local_pos & 0xFFF);
+                write.write_var_long(&VarLong(packed as i64))?;
+            }
+        } else if *version <= JavaMinecraftVersion::V_1_7_6 {
+            write.write_i32_be(self.chunk_section.x)?;
+            write.write_i32_be(self.chunk_section.z)?;
+            write.write_i16_be(self.updates.len() as i16)?;
+            write.write_i32_be((self.updates.len() * 4) as i32)?;
+
+            for (pos, state_id) in &self.updates {
+                let rel_x = (pos.0.x & 0xF) as u16;
+                let rel_z = (pos.0.z & 0xF) as u16;
+                let rel_y = (pos.0.y & 0xFF) as u16;
+                let packed_pos = (rel_x << 12) | (rel_z << 8) | rel_y;
+                write.write_i16_be(packed_pos as i16)?;
+
+                let remapped_state_id = remap_block_state_for_version(state_id.as_u16(), *version);
+                write.write_i16_be(remapped_state_id as i16)?;
             }
         } else {
-            // Pre-1.13 the chunk position is sent as two separate i32s.
-            let chunk_x = (self.chunk_section >> 42) & 0x3F_FFFF;
-            let chunk_z = (self.chunk_section >> 20) & 0x3F_FFFF;
-            write.write_i32_be(((chunk_x << 42) >> 42) as i32)?;
-            write.write_i32_be(((chunk_z << 42) >> 42) as i32)?;
+            write.write_i32_be(self.chunk_section.x)?;
+            write.write_i32_be(self.chunk_section.z)?;
+            write.write_var_int(&VarInt(self.updates.len() as i32))?;
 
-            if *version >= JavaMinecraftVersion::V_1_9 {
-                // 1.9 - 1.12: each record is a u16 packed position followed by
-                // a VarInt block state id.
-                write.write_var_int(&VarInt(self.updates.len() as i32))?;
-                for update in &self.updates {
-                    let (state_id, local_pos) = unpack_update(*update);
-                    let remapped_state_id = remap_block_state_for_version(state_id, *version);
-                    let (x, z, y) = local_coords(local_pos);
-                    let packed_pos = ((x & 0xF) << 12) | ((z & 0xF) << 8) | (y & 0xF);
-                    write.write_u16_be(packed_pos as u16)?;
-                    write.write_var_int(&VarInt(remapped_state_id as i32))?;
-                }
-            } else if *version >= JavaMinecraftVersion::V_1_8 {
-                // 1.8: each record is horizontal position, y and a block state id.
-                write.write_var_int(&VarInt(self.updates.len() as i32))?;
-                for update in &self.updates {
-                    let (state_id, local_pos) = unpack_update(*update);
-                    let remapped_state_id = remap_block_state_for_version(state_id, *version);
-                    let (x, z, y) = local_coords(local_pos);
-                    write.write_u8(((x & 0xF) << 4 | (z & 0xF)) as u8)?;
-                    write.write_u8(y as u8)?;
-                    write.write_var_int(&VarInt(remapped_state_id as i32))?;
-                }
-            } else {
-                // 1.7.x: a short record count, then an i32 byte length, then
-                // each record is a packed position short followed by a packed
-                // block-state short ((block id << 4) | metadata).
-                let count = i16::try_from(self.updates.len())
-                    .map_err(|_| WritingError::Message("Too many block updates".into()))?;
-                write.write_i16_be(count)?;
-                write.write_i32_be(i32::from(count) * 4)?;
-                for update in &self.updates {
-                    let (state_id, local_pos) = unpack_update(*update);
-                    let remapped_state_id = remap_block_state_for_version(state_id, *version);
-                    let (x, z, y) = local_coords(local_pos);
-                    let packed_pos = ((x & 0xF) << 12) | ((z & 0xF) << 8) | (y & 0xF);
-                    write.write_u16_be(packed_pos as u16)?;
-                    write.write_u16_be(remapped_state_id)?;
-                }
+            for (pos, state_id) in &self.updates {
+                let rel_x = (pos.0.x & 0xF) as u16;
+                let rel_z = (pos.0.z & 0xF) as u16;
+                let rel_y = (pos.0.y & 0xFF) as u16;
+                let packed_pos = (rel_x << 12) | (rel_z << 8) | rel_y;
+                write.write_i16_be(packed_pos as i16)?;
+
+                let remapped_state_id = remap_block_state_for_version(state_id.as_u16(), *version);
+                write.write_var_int(&VarInt(i32::from(remapped_state_id)))?;
             }
         }
 
@@ -124,98 +115,189 @@ impl ClientPacket for CMultiBlockUpdate {
     }
 }
 
-/// Splits a stored packed update into its block state id and 12-bit local position.
-const fn unpack_update(update: VarLong) -> (u16, u64) {
-    let packed = update.0 as u64;
-    ((packed >> 12) as u16, packed & 0xFFF)
-}
+impl<'a> ServerPacket<'a> for CMultiBlockUpdate {
+    fn read(bytebuf: &mut &'a [u8], version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+        if *version >= JavaMinecraftVersion::V_1_16 {
+            let encoded_pos = bytebuf.get_i64_be()?;
+            let chunk_section = vector3::unpacked_chunk_pos(encoded_pos);
 
-/// Decodes the `(x, z, y)` coordinates from a 12-bit packed local position.
-const fn local_coords(local_pos: u64) -> (u64, u64, u64) {
-    (
-        (local_pos >> 8) & 0xF,
-        (local_pos >> 4) & 0xF,
-        local_pos & 0xF,
-    )
+            let suppress_light_updates = if *version <= JavaMinecraftVersion::V_1_19_4 {
+                bytebuf.get_bool()?
+            } else {
+                false
+            };
+
+            let count = bytebuf.get_var_int()?.0 as usize;
+            let mut updates = Vec::with_capacity(count);
+            for _ in 0..count {
+                let val = bytebuf.get_var_long()?.0 as u64;
+                let local_pos = (val & 0xFFF) as i32;
+                let state_id = (val >> 12) as u16;
+
+                let rel_x = (local_pos >> 8) & 0xF;
+                let rel_z = (local_pos >> 4) & 0xF;
+                let rel_y = local_pos & 0xF;
+
+                let block_pos = BlockPos::new(
+                    (chunk_section.x << 4) + rel_x,
+                    (chunk_section.y << 4) + rel_y,
+                    (chunk_section.z << 4) + rel_z,
+                );
+                updates.push((block_pos, BlockStateId::new_or_air(state_id)));
+            }
+
+            Ok(Self {
+                chunk_section,
+                suppress_light_updates,
+                updates,
+            })
+        } else if *version <= JavaMinecraftVersion::V_1_7_6 {
+            let chunk_x = bytebuf.get_i32_be()?;
+            let chunk_z = bytebuf.get_i32_be()?;
+            let count = bytebuf.get_i16_be()? as usize;
+            let _data_size = bytebuf.get_i32_be()?;
+
+            let mut updates = Vec::with_capacity(count);
+            for _ in 0..count {
+                let pos = bytebuf.get_i16_be()? as u16;
+                let rel_x = ((pos >> 12) & 0xF) as i32;
+                let rel_z = ((pos >> 8) & 0xF) as i32;
+                let y = (pos & 0xFF) as i32;
+                let x = (chunk_x << 4) + rel_x;
+                let z = (chunk_z << 4) + rel_z;
+
+                let block_state_id = bytebuf.get_i16_be()? as u16;
+                updates.push((
+                    BlockPos::new(x, y, z),
+                    BlockStateId::new_or_air(block_state_id),
+                ));
+            }
+
+            let chunk_section = updates.first().map_or_else(
+                || Vector3::new(chunk_x, 0, chunk_z),
+                |(pos, _)| chunk_section_from_pos(pos),
+            );
+
+            Ok(Self {
+                chunk_section,
+                suppress_light_updates: false,
+                updates,
+            })
+        } else {
+            let chunk_x = bytebuf.get_i32_be()?;
+            let chunk_z = bytebuf.get_i32_be()?;
+            let count = bytebuf.get_var_int()?.0 as usize;
+
+            let mut updates = Vec::with_capacity(count);
+            for _ in 0..count {
+                let pos = bytebuf.get_i16_be()? as u16;
+                let rel_x = ((pos >> 12) & 0xF) as i32;
+                let rel_z = ((pos >> 8) & 0xF) as i32;
+                let y = (pos & 0xFF) as i32;
+                let x = (chunk_x << 4) + rel_x;
+                let z = (chunk_z << 4) + rel_z;
+
+                let block_state_id = bytebuf.get_var_int()?.0 as u16;
+                updates.push((
+                    BlockPos::new(x, y, z),
+                    BlockStateId::new_or_air(block_state_id),
+                ));
+            }
+
+            let chunk_section = updates.first().map_or_else(
+                || Vector3::new(chunk_x, 0, chunk_z),
+                |(pos, _)| chunk_section_from_pos(pos),
+            );
+
+            Ok(Self {
+                chunk_section,
+                suppress_light_updates: false,
+                updates,
+            })
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::CMultiBlockUpdate;
-    use crate::ClientPacket;
-    use crate::codec::var_long::VarLong;
+    use crate::{ClientPacket, ServerPacket};
+    use pumpkin_data::BlockStateId;
+    use pumpkin_util::math::position::BlockPos;
     use pumpkin_util::math::vector3::{self, Vector3};
     use pumpkin_util::version::JavaMinecraftVersion;
 
     fn sample() -> CMultiBlockUpdate {
-        // state id 5 at local position (x=1, z=2, y=3), section (x=1, y=2, z=3)
-        let local_pos = (1u64 << 8) | (2u64 << 4) | 3u64;
-        CMultiBlockUpdate {
-            chunk_section: vector3::packed_chunk_pos(&Vector3::new(1, 2, 3)),
-            updates: vec![VarLong(((5u64 << 12) | local_pos) as i64)],
+        CMultiBlockUpdate::new_with_section(
+            Vector3::new(1, 2, 3),
+            false,
+            vec![(BlockPos::new(17, 35, 50), BlockStateId::AIR)],
+        )
+    }
+
+    fn encode(version: JavaMinecraftVersion) -> Vec<u8> {
+        let mut out = Vec::new();
+        sample().write_packet_data(&mut out, &version).unwrap();
+        out
+    }
+
+    #[test]
+    fn v1_7_uses_short_count_and_four_byte_records() {
+        let out = encode(JavaMinecraftVersion::V_1_7_6);
+
+        assert_eq!(&out[0..4], &1i32.to_be_bytes());
+        assert_eq!(&out[4..8], &3i32.to_be_bytes());
+        assert_eq!(&out[8..10], &1i16.to_be_bytes());
+        assert_eq!(&out[10..14], &4i32.to_be_bytes());
+        assert_eq!(&out[14..16], &0x1223u16.to_be_bytes());
+        assert_eq!(out.len(), 18);
+    }
+
+    #[test]
+    fn v1_8_through_v1_15_use_chunk_coordinates_and_short_positions() {
+        for version in [JavaMinecraftVersion::V_1_8, JavaMinecraftVersion::V_1_13] {
+            let out = encode(version);
+
+            assert_eq!(&out[0..4], &1i32.to_be_bytes());
+            assert_eq!(&out[4..8], &3i32.to_be_bytes());
+            assert_eq!(out[8], 1);
+            assert_eq!(&out[9..11], &0x1223u16.to_be_bytes());
         }
     }
 
     #[test]
-    fn pre_1_9_uses_horizontal_and_y_record() {
-        let packet = sample();
-        let mut out = Vec::new();
-        packet
-            .write_packet_data(&mut out, &JavaMinecraftVersion::V_1_8)
-            .unwrap();
+    fn v1_16_introduces_packed_sections_and_temporary_light_flag() {
+        let expected_section = vector3::packed_chunk_pos(&Vector3::new(1, 2, 3)).to_be_bytes();
 
-        assert_eq!(&out[0..4], &1i32.to_be_bytes());
-        assert_eq!(&out[4..8], &3i32.to_be_bytes());
-        assert_eq!(out[8], 1, "record count should be a 1-byte VarInt");
-        assert_eq!(out[9], 0x12, "horizontal position packs x << 4 | z");
-        assert_eq!(out[10], 3, "y coordinate");
-        assert!(out.len() >= 12);
+        for version in [JavaMinecraftVersion::V_1_16, JavaMinecraftVersion::V_1_19_4] {
+            let out = encode(version);
+            assert_eq!(&out[0..8], &expected_section);
+            assert_eq!(out[8], 0, "suppress-light-updates flag");
+            assert_eq!(out[9], 1, "record count");
+        }
+
+        let out = encode(JavaMinecraftVersion::V_1_20);
+        assert_eq!(&out[0..8], &expected_section);
+        assert_eq!(out[8], 1, "record count follows the section directly");
     }
 
     #[test]
-    fn v1_7_uses_short_count_and_packed_records() {
-        let packet = sample();
-        let mut out = Vec::new();
-        packet
-            .write_packet_data(&mut out, &JavaMinecraftVersion::V_1_7_6)
-            .unwrap();
+    fn representative_versions_round_trip() {
+        for version in [
+            JavaMinecraftVersion::V_1_7_6,
+            JavaMinecraftVersion::V_1_8,
+            JavaMinecraftVersion::V_1_13,
+            JavaMinecraftVersion::V_1_16,
+            JavaMinecraftVersion::V_1_19_4,
+            JavaMinecraftVersion::V_1_20,
+            JavaMinecraftVersion::V_26_2,
+        ] {
+            let encoded = encode(version);
+            let mut input = encoded.as_slice();
+            let decoded = CMultiBlockUpdate::read(&mut input, &version).unwrap();
 
-        assert_eq!(&out[0..4], &1i32.to_be_bytes());
-        assert_eq!(&out[4..8], &3i32.to_be_bytes());
-        assert_eq!(&out[8..10], &1i16.to_be_bytes(), "count is a short in 1.7");
-        assert_eq!(&out[10..14], &4i32.to_be_bytes(), "data length = count * 4");
-        // one record: packed position short + packed block-state short
-        assert_eq!(&out[14..16], &4611u16.to_be_bytes());
-        assert_eq!(out.len(), 4 + 4 + 2 + 4 + 4);
-    }
-
-    #[test]
-    fn pre_1_13_uses_chunk_x_z_and_short_record() {
-        let packet = sample();
-        let mut out = Vec::new();
-        packet
-            .write_packet_data(&mut out, &JavaMinecraftVersion::V_1_9)
-            .unwrap();
-
-        assert_eq!(&out[0..4], &1i32.to_be_bytes());
-        assert_eq!(&out[4..8], &3i32.to_be_bytes());
-        assert_eq!(out[8], 1, "record count should be a 1-byte VarInt");
-        // local position packed for 1.9-1.12: (x << 12) | (z << 8) | y
-        assert_eq!(&out[9..11], &4611u16.to_be_bytes());
-        // the block state id VarInt follows (at least one byte, no extra data)
-        assert!(out.len() >= 12);
-    }
-
-    #[test]
-    fn post_1_13_uses_section_and_var_long_record() {
-        let packet = sample();
-        let mut out = Vec::new();
-        packet
-            .write_packet_data(&mut out, &JavaMinecraftVersion::V_1_13)
-            .unwrap();
-
-        assert_eq!(&out[0..8], &packet.chunk_section.to_be_bytes());
-        assert_eq!(out[8], 1, "record count should be a 1-byte VarInt");
-        assert!(out.len() >= 10);
+            assert_eq!(decoded, sample());
+            assert!(input.is_empty());
+        }
     }
 }

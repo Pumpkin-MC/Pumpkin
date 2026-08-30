@@ -30,7 +30,7 @@ ecdsa.workspace = true
 rsa.workspace = true
 sha2.workspace = true
 crypto-bigint.workspace = true
-ureq.workspace = true
+reqwest.workspace = true
 
 [dev-dependencies]
 criterion = { workspace = true, features = ["html_reports"] }
