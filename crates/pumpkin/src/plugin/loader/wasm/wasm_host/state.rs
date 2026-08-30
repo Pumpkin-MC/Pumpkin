@@ -8,11 +8,7 @@ use tokio::sync::Mutex;
 use wasmtime::component::ResourceTable;
 use wasmtime_wasi::{WasiCtx, WasiCtxBuilder, WasiCtxView, WasiView};
 use wasmtime_wasi_http::{
-    WasiHttpCtx,
-    p2::{
-        HttpError, HttpResult, WasiHttpCtxView, WasiHttpHooks, WasiHttpView,
-        bindings::http::types::ErrorCode, default_send_request,
-    },
+    RequestOptions, WasiBody, WasiHttpCtx, WasiHttpCtxView, WasiHttpHooks, WasiHttpView,
 };
 
 use crate::{
@@ -579,18 +575,24 @@ impl Default for PluginHttpHooks {
 impl WasiHttpHooks for PluginHttpHooks {
     fn send_request(
         &mut self,
-        request: hyper::Request<wasmtime_wasi_http::p2::body::HyperOutgoingBody>,
-        config: wasmtime_wasi_http::p2::types::OutgoingRequestConfig,
-    ) -> HttpResult<wasmtime_wasi_http::p2::types::HostFutureIncomingResponse> {
+        request: hyper::Request<WasiBody>,
+        options: Option<RequestOptions>,
+        fut: Box<dyn Future<Output = wasmtime_wasi_http::Result<()>> + Send>,
+    ) -> Box<
+        dyn Future<
+                Output = wasmtime_wasi_http::Result<(
+                    hyper::Response<WasiBody>,
+                    Box<dyn Future<Output = wasmtime_wasi_http::Result<()>> + Send>,
+                )>,
+            > + Send,
+    > {
         if !self.allow_outbound {
-            return Err(HttpError::from(ErrorCode::HttpRequestDenied));
+            return Box::new(async { Err(wasmtime_wasi_http::Error::HttpRequestDenied) });
         }
 
-        Ok(default_send_request(request, config))
+        wasmtime_wasi_http::default_hooks().send_request(request, options, fut)
     }
 }
-
-impl wasmtime_wasi_http::p3::WasiHttpHooks for PluginHttpHooks {}
 
 impl WasiView for PluginHostState {
     fn ctx(&mut self) -> WasiCtxView<'_> {
@@ -604,16 +606,6 @@ impl WasiView for PluginHostState {
 impl WasiHttpView for PluginHostState {
     fn http(&mut self) -> WasiHttpCtxView<'_> {
         WasiHttpCtxView {
-            ctx: &mut self.wasi_http_ctx,
-            table: &mut self.resource_table,
-            hooks: &mut self.wasi_http_hooks,
-        }
-    }
-}
-
-impl wasmtime_wasi_http::p3::WasiHttpView for PluginHostState {
-    fn http(&mut self) -> wasmtime_wasi_http::p3::WasiHttpCtxView<'_> {
-        wasmtime_wasi_http::p3::WasiHttpCtxView {
             ctx: &mut self.wasi_http_ctx,
             table: &mut self.resource_table,
             hooks: &mut self.wasi_http_hooks,
