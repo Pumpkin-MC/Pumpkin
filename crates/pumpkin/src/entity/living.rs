@@ -495,6 +495,29 @@ impl LivingEntity {
         }
     }
 
+    /// Returns the registry base value for `attribute` on `entity_type`, falling back
+    /// to the attribute's default (with a warning) when the type declares no base value
+    /// for it. This keeps effect/attribute code from panicking on entity types that
+    /// don't list a given attribute.
+    fn registry_base_value(entity_type: &EntityType, attribute: &Attributes) -> f64 {
+        entity_type
+            .attributes
+            .iter()
+            .find(|a| a.0.id == attribute.id)
+            .map_or_else(
+                || {
+                    tracing::warn!(
+                        "Entity type {} has no base value for attribute {}; falling back to default {}",
+                        entity_type.resource_name,
+                        attribute.name,
+                        attribute.default_value,
+                    );
+                    attribute.default_value
+                },
+                |a| a.1,
+            )
+    }
+
     /// Convenience helper to mutate an attribute instance. Automatically inserts
     /// a new instance populated from the registry base if needed.
     pub fn update_attribute<F: FnOnce(&mut AttributeInstance)>(
@@ -508,25 +531,10 @@ impl LivingEntity {
             .unwrap_or_else(std::sync::PoisonError::into_inner);
 
         let inst = map.entry(attribute.id).or_insert_with(|| {
-            let base = self
-                .entity
-                .entity_type
-                .attributes
-                .iter()
-                .find(|a| a.0.id == attribute.id)
-                .map_or_else(
-                    || {
-                        tracing::warn!(
-                            "Entity type {:?} has no base value for attribute {:?}; falling back to default {}",
-                            self.entity.entity_type,
-                            attribute.id,
-                            attribute.default_value,
-                        );
-                        attribute.default_value
-                    },
-                    |a| a.1,
-                );
-            AttributeInstance::new(base)
+            AttributeInstance::new(Self::registry_base_value(
+                self.entity.entity_type,
+                attribute,
+            ))
         });
 
         f(inst);
@@ -556,12 +564,7 @@ impl LivingEntity {
         }
 
         // Fall back to registry base value if no local instance exists
-        self.entity
-            .entity_type
-            .attributes
-            .iter()
-            .find(|a| a.0.id == attribute.id)
-            .map_or(attribute.default_value, |a| a.1)
+        Self::registry_base_value(self.entity.entity_type, attribute)
     }
 
     /// Update or insert the base value for an attribute on this entity.
@@ -3261,5 +3264,29 @@ mod tests {
             .unwrap();
 
         assert_eq!(bytes, [10, 17, 1, 28, 0xff, 0xcd, 0x5c, 0xab]);
+    }
+
+    /// An entity type that declares no base value for the attribute must fall back
+    /// to the attribute default instead of panicking. Regression test for #1985
+    /// (`/effect` crashed the server via an unwrap on the missing base value).
+    #[test]
+    fn registry_base_value_falls_back_to_default_when_missing() {
+        // EntityType::ITEM declares no attributes at all.
+        assert_eq!(
+            LivingEntity::registry_base_value(&EntityType::ITEM, &Attributes::MAX_HEALTH),
+            Attributes::MAX_HEALTH.default_value
+        );
+    }
+
+    /// When the type does declare the attribute, its registry value is returned and
+    /// not the attribute default. Zombies walk at 0.23, while the default movement
+    /// speed is 0.7, so the two cases can't be confused.
+    #[test]
+    fn registry_base_value_returns_registry_value_when_present() {
+        assert_eq!(
+            LivingEntity::registry_base_value(&EntityType::ZOMBIE, &Attributes::MOVEMENT_SPEED),
+            0.2300000041723251
+        );
+        assert_eq!(Attributes::MOVEMENT_SPEED.default_value, 0.7);
     }
 }
