@@ -3870,20 +3870,34 @@ impl Player {
         {
             return false;
         }
-        self.living_entity
-            .damage_with_context(caller, amount, damage_type, position, source, cause)
+        let damaged = self.living_entity.damage_with_context(
+            caller,
+            amount,
+            damage_type,
+            position,
+            source,
+            cause,
+        );
+        if damaged && self.living_entity.health.load() <= 0.0 {
+            let death_message = LivingEntity::get_death_message(self, damage_type, source, cause);
+            if let Some(player) = self.world().get_player_by_uuid(self.gameprofile.id) {
+                self.spawn_task(async move {
+                    player.handle_killed(death_message).await;
+                });
+            }
+        }
+        damaged
     }
 
     pub fn damage_generic(&self, amount: f32) -> bool {
         use pumpkin_data::damage::DamageType;
-        self.living_entity.damage(self, amount, DamageType::GENERIC)
+        self.damage(self, amount, DamageType::GENERIC)
     }
 
     pub fn kill(&self) {
         use pumpkin_data::damage::DamageType;
         let health = self.living_entity.health.load();
-        self.living_entity
-            .damage(self, health + 10.0, DamageType::OUT_OF_WORLD);
+        self.damage(self, health + 10.0, DamageType::OUT_OF_WORLD);
     }
 
     pub fn send_health(&self) {
@@ -4271,7 +4285,6 @@ impl Player {
         }
     }
 
-    #[allow(dead_code)]
     async fn handle_killed(&self, death_msg: TextComponent) {
         self.trigger_advancement(
             crate::entity::player::advancement::trigger::AdvancementTrigger::PlayerKilled,

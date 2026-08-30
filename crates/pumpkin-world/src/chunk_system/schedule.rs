@@ -602,6 +602,7 @@ impl GenerationSchedule {
                             for dz in -radius..=radius {
                                 let new_pos = pos.add_raw(dx, dz);
                                 let req_stage = dependency[dx.abs().max(dz.abs()) as usize];
+                                self.unload_chunks.remove(&new_pos);
                                 if new_pos == pos {
                                     let newly_created = Self::ensure_dependency_chain(
                                         &mut self.graph,
@@ -841,7 +842,12 @@ impl GenerationSchedule {
             let Some(mut holder) = self.chunk_map.remove(&pos) else {
                 continue;
             };
-            debug_assert_eq!(holder.target_stage, StagedChunkEnum::None);
+            if holder.target_stage != StagedChunkEnum::None
+                || holder.dependency_stage != StagedChunkEnum::None
+            {
+                self.chunk_map.insert(pos, holder);
+                continue;
+            }
             if !holder.occupied.is_null() {
                 self.chunk_map.insert(pos, holder);
                 self.unload_chunks.insert(pos);
