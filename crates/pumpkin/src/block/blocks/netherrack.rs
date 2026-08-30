@@ -1,5 +1,4 @@
 use crate::block::BlockBehaviour;
-use crate::block::BlockFuture;
 use pumpkin_data::block_state::BlockStateId;
 use pumpkin_data::tag::Taggable;
 use pumpkin_data::{Block, tag};
@@ -34,47 +33,44 @@ impl BlockBehaviour for NetherrackBlock {
         false
     }
 
-    fn perform_bonemeal<'a>(&'a self, args: crate::block::BonemealArgs<'a>) -> BlockFuture<'a, ()> {
-        Box::pin(async move {
-            let mut warped = false;
-            let mut crimson = false;
+    fn perform_bonemeal(&self, args: crate::block::BonemealArgs<'_>) {
+        let mut warped = false;
+        let mut crimson = false;
 
-            for block_pos in BlockPos::iterate_outwards_ref(args.position, 1, 1, 1) {
-                let block = args.world.get_block(&block_pos);
+        for block_pos in BlockPos::iterate_outwards_ref(args.position, 1, 1, 1) {
+            let block = args.world.get_block(&block_pos);
 
-                if block.id == Block::WARPED_NYLIUM.id {
-                    warped = true;
-                }
-
-                if block.id == Block::CRIMSON_NYLIUM.id {
-                    crimson = true;
-                }
-
-                if warped && crimson {
-                    break;
-                }
+            if block.id == Block::WARPED_NYLIUM.id {
+                warped = true;
             }
 
-            if !warped && !crimson {
-                return;
+            if block.id == Block::CRIMSON_NYLIUM.id {
+                crimson = true;
             }
 
-            let end_block: BlockStateId = match (warped, crimson) {
-                (true, true) => {
-                    if random::<bool>() {
-                        Block::WARPED_NYLIUM.default_state.id
-                    } else {
-                        Block::CRIMSON_NYLIUM.default_state.id
-                    }
-                }
-                (true, false) => Block::WARPED_NYLIUM.default_state.id,
-                (false, true) => Block::CRIMSON_NYLIUM.default_state.id,
-                (false, false) => Block::NETHERRACK.default_state.id,
-            };
+            if warped && crimson {
+                break;
+            }
+        }
 
-            args.world
-                .set_block_state(args.position, end_block, BlockFlags::NOTIFY_ALL)
-                .await;
-        })
+        if !warped && !crimson {
+            return;
+        }
+
+        let end_block: BlockStateId = match (warped, crimson) {
+            (true, true) => {
+                if random::<bool>() {
+                    Block::WARPED_NYLIUM.default_state.id
+                } else {
+                    Block::CRIMSON_NYLIUM.default_state.id
+                }
+            }
+            (true, false) => Block::WARPED_NYLIUM.default_state.id,
+            (false, true) => Block::CRIMSON_NYLIUM.default_state.id,
+            (false, false) => Block::NETHERRACK.default_state.id,
+        };
+
+        args.world
+            .set_block_state(args.position, end_block, BlockFlags::NOTIFY_ALL);
     }
 }
