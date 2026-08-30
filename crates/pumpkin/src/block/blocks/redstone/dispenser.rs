@@ -4,8 +4,10 @@ use std::sync::Mutex;
 use std::sync::atomic::AtomicBool;
 use uuid::Uuid;
 
+use crate::block::blocks::carved_pumpkin::find_golem_pattern;
 use crate::block::blocks::redstone::block_receives_redstone_power;
 use crate::block::blocks::tnt::TNTBlock;
+use crate::block::blocks::wither_skull::find_wither_pattern;
 use crate::block::registry::BlockActionResult;
 use crate::block::{
     BlockBehaviour, GetComparatorOutputArgs, NormalUseArgs, OnNeighborUpdateArgs, OnPlaceArgs,
@@ -13,6 +15,7 @@ use crate::block::{
 };
 use crate::entity::decoration::armor_stand::ArmorStandEntity;
 use crate::entity::item::ItemEntity;
+use crate::entity::passive::sheep::SheepEntity;
 use crate::entity::projectile::ThrownItemEntity;
 use crate::entity::projectile::arrow::{ArrowEntity, ArrowPickup};
 use crate::entity::projectile::egg::EggEntity;
@@ -25,6 +28,7 @@ use crate::entity::projectile::wind_charge::{WIND_CHARGE_GRAVITY, WindChargeEnti
 use crate::entity::tnt::TNTEntity;
 use crate::entity::r#type::from_type;
 use crate::entity::vehicle::boat::BoatEntity;
+use crate::entity::vehicle::minecart::MinecartEntity;
 use crate::entity::{Entity, EntityBase};
 use crate::item::ItemMetadata;
 use crate::item::items::boat::BoatItem;
@@ -34,16 +38,26 @@ use crate::item::items::bucket::{
 };
 use crate::item::items::honeycomb::try_wax_block;
 use crate::item::items::ignite::ignition::Ignition;
+use crate::item::items::minecart::MinecartItem;
 use crate::item::items::spawn_egg::apply_entity_variant;
 use crate::world::World;
 
 use crate::block::entities::dispenser::DispenserBlockEntity;
-use pumpkin_data::block_properties::{BlockProperties, Facing};
+use pumpkin_data::block_properties::{
+    BeeNestLikeProperties, BlockProperties, EndRodLikeProperties, Facing,
+    PoweredRailLikeProperties, RailLikeProperties, RespawnAnchorLikeProperties,
+    SkeletonSkullLikeProperties,
+};
+use pumpkin_data::data_component::DataComponent;
+use pumpkin_data::data_component_impl::{EquippableImpl, IDSet, PotionContentsImpl};
 use pumpkin_data::entity::{EntityType, entity_from_egg};
 use pumpkin_data::fluid::Fluid;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
+use pumpkin_data::particle::Particle;
+use pumpkin_data::potion::Potion;
 use pumpkin_data::sound::{Sound, SoundCategory};
+use pumpkin_data::tag::{self, Taggable};
 use pumpkin_data::translation;
 use pumpkin_data::world::WorldEvent;
 use pumpkin_data::{Block, BlockStateId, FacingExt};
@@ -120,6 +134,71 @@ const fn to_data3d(facing: Facing) -> i32 {
         Facing::Up => 1,
         Facing::Down => 0,
     }
+}
+
+const fn to_rotation16(facing: Facing) -> u8 {
+    match facing {
+        Facing::South | Facing::Up | Facing::Down => 0,
+        Facing::West => 4,
+        Facing::North => 8,
+        Facing::East => 12,
+    }
+}
+
+fn is_allowed_entity(
+    allowed: Option<&IDSet<EntityType>>,
+    entity_type: &'static EntityType,
+) -> bool {
+    match allowed {
+        None => true,
+        Some(IDSet::Tag(tag)) => entity_type.is_tagged_with(tag).unwrap_or(false),
+        Some(IDSet::IDs(types)) => types.contains(&entity_type),
+    }
+}
+
+const fn wool_of_color(color: u8) -> &'static Item {
+    match color {
+        1 => &Item::ORANGE_WOOL,
+        2 => &Item::MAGENTA_WOOL,
+        3 => &Item::LIGHT_BLUE_WOOL,
+        4 => &Item::YELLOW_WOOL,
+        5 => &Item::LIME_WOOL,
+        6 => &Item::PINK_WOOL,
+        7 => &Item::GRAY_WOOL,
+        8 => &Item::LIGHT_GRAY_WOOL,
+        9 => &Item::CYAN_WOOL,
+        10 => &Item::PURPLE_WOOL,
+        11 => &Item::BLUE_WOOL,
+        12 => &Item::BROWN_WOOL,
+        13 => &Item::GREEN_WOOL,
+        14 => &Item::RED_WOOL,
+        15 => &Item::BLACK_WOOL,
+        _ => &Item::WHITE_WOOL,
+    }
+}
+
+fn water_bottle() -> ItemStack {
+    ItemStack::new_with_component(
+        1,
+        &Item::POTION,
+        vec![(
+            DataComponent::PotionContents,
+            Some(Box::new(PotionContentsImpl {
+                potion_id: Some(i32::from(Potion::WATER.id)),
+                custom_color: None,
+                custom_effects: Vec::new(),
+                custom_name: None,
+            }) as Box<_>),
+        )],
+    )
+}
+
+fn is_water_bottle(stack: &ItemStack) -> bool {
+    stack.item.id == Item::POTION.id
+        && stack
+            .get_data_component::<PotionContentsImpl>()
+            .and_then(|contents| contents.potion_id)
+            == Some(i32::from(Potion::WATER.id))
 }
 
 impl BlockBehaviour for DispenserBlock {
@@ -253,6 +332,11 @@ impl DispenserBlock {
             if !Self::dispense_boat(ctx, item) {
                 Self::drop_item(ctx, item);
             }
+        } else if MinecartItem::ids().contains(&item.item.id) {
+            // Minecarts
+            if !Self::dispense_minecart(ctx, item) {
+                Self::drop_item(ctx, item);
+            }
         } else if item.item.id == Item::ARMOR_STAND.id {
             // Armor stands
             if !Self::dispense_armor_stand(ctx, item) {
@@ -290,7 +374,43 @@ impl DispenserBlock {
         } else if entity_from_egg(item.item.id).is_some() {
             // Spawn eggs
             Self::dispense_spawn_egg(ctx, item);
+        } else if item.item.id == Item::SHEARS.id {
+            // Shears harvest full beehives and shear sheep
+            Self::dispense_shears(ctx, item);
+        } else if item.item.id == Item::GLASS_BOTTLE.id {
+            // Glass bottles fill from water and full beehives
+            if !Self::dispense_glass_bottle(ctx, dispenser, item) {
+                Self::drop_item_with_sound(ctx, item, WorldEvent::SoundDispenserFail);
+            }
+        } else if is_water_bottle(item) {
+            // Water bottles convert dirt-likes into mud
+            if !Self::dispense_water_bottle(ctx, item) {
+                Self::drop_item(ctx, item);
+            }
+        } else if item.item.id == Item::GLOWSTONE.id {
+            match Self::dispense_glowstone(ctx, item) {
+                Some(true) => Self::play_dispense_effects(ctx, WorldEvent::SoundDispenserDispense),
+                Some(false) => Self::play_dispense_effects(ctx, WorldEvent::SoundDispenserFail),
+                None => Self::drop_item(ctx, item),
+            }
+        } else if item.item.id == Item::WITHER_SKELETON_SKULL.id {
+            // Placed only when it completes a wither, otherwise worn as a helmet
+            Self::dispense_mob_head(ctx, item, &Block::WITHER_SKELETON_SKULL);
+        } else if item.item.id == Item::CARVED_PUMPKIN.id {
+            // Placed only when it completes a golem, otherwise worn as a helmet
+            Self::dispense_mob_head(ctx, item, &Block::CARVED_PUMPKIN);
+        } else if Block::from_item_id(item.item.id)
+            .is_some_and(|block| block.has_tag(&tag::Block::MINECRAFT_SHULKER_BOXES))
+        {
+            // Shulker boxes place themselves
+            if !Self::dispense_shulker_box(ctx, item) {
+                Self::play_dispense_effects(ctx, WorldEvent::SoundDispenserFail);
+            }
+        } else if Self::dispense_equipment(ctx, item) {
+            // Armor, elytra, heads, saddles, horse/wolf armor and llama carpets
+            Self::play_dispense_effects(ctx, WorldEvent::SoundDispenserDispense);
         } else {
+            // TODO: Bone meal, bottles o' enchanting, chests onto llamas, brushes onto armadillos
             // Default / Drop
             Self::drop_item(ctx, item);
         }
@@ -660,14 +780,7 @@ impl DispenserBlock {
             return;
         };
 
-        item.decrement(1);
-        let filled_stack = ItemStack::new(1, filled);
-        if item.is_empty() {
-            *item = filled_stack;
-        } else if let Some(rest) = Self::add_to_first_free_slot(dispenser, filled_stack) {
-            Self::eject_item(ctx, rest);
-        }
-
+        Self::consume_with_remainder(ctx, dispenser, item, ItemStack::new(1, filled));
         Self::play_dispense_effects(ctx, WorldEvent::SoundDispenserDispense);
     }
 
@@ -756,10 +869,365 @@ impl DispenserBlock {
         }
     }
 
+    fn dispense_minecart(ctx: &DispenseContext<'_>, item: &mut ItemStack) -> bool {
+        fn rail_is_ascending(world: &Arc<World>, pos: &BlockPos) -> Option<bool> {
+            let (block, state_id) = world.get_block_and_state_id(pos);
+            if !block.has_tag(&tag::Block::MINECRAFT_RAILS) {
+                return None;
+            }
+            Some(if PoweredRailLikeProperties::handles_block_id(block.id) {
+                PoweredRailLikeProperties::from_state_id(state_id, block)
+                    .shape
+                    .is_ascending()
+            } else {
+                RailLikeProperties::from_state_id(state_id, block)
+                    .shape
+                    .is_ascending()
+            })
+        }
+
+        let target = Self::target_position(ctx);
+        let height = if let Some(ascending) = rail_is_ascending(ctx.world, &target) {
+            if ascending { 0.6 } else { 0.1 }
+        } else if ctx.world.get_block_state(&target).is_air()
+            && let Some(ascending) = rail_is_ascending(ctx.world, &target.down())
+        {
+            if ascending && ctx.facing != Facing::Down {
+                -0.4
+            } else {
+                -0.9
+            }
+        } else {
+            return false;
+        };
+
+        let entity_type = MinecartItem::item_to_entity(item.item);
+        let _ = item.split(1);
+
+        let normal = to_normal(ctx.facing);
+        let center = ctx.position.to_centered_f64();
+        let spawn_pos = Vector3::new(
+            normal.x.mul_add(1.125, center.x),
+            f64::from(ctx.position.0.y) + normal.y + height,
+            normal.z.mul_add(1.125, center.z),
+        );
+
+        let entity = Entity::new(ctx.world.clone(), spawn_pos, entity_type);
+        ctx.world
+            .spawn_entity(Arc::new(MinecartEntity::new(entity)));
+
+        ctx.world
+            .sync_world_event(WorldEvent::SoundDispenserDispense, *ctx.position, 0);
+        true
+    }
+
+    fn dispense_shears(ctx: &DispenseContext<'_>, item: &mut ItemStack) {
+        if Self::shear_beehive(ctx) || Self::shear_entity_in_front(ctx) {
+            // `damage_item` already consumes the tool from the stack when it breaks.
+            let _ = item.damage_item(1);
+            Self::play_dispense_effects(ctx, WorldEvent::SoundDispenserDispense);
+        } else {
+            Self::play_dispense_effects(ctx, WorldEvent::SoundDispenserFail);
+        }
+    }
+
+    fn shear_beehive(ctx: &DispenseContext<'_>) -> bool {
+        const FULL_HONEY_LEVEL: u8 = 5;
+        const HARVESTED_HONEYCOMBS: u8 = 3;
+
+        let target = Self::target_position(ctx);
+        let (block, state_id) = ctx.world.get_block_and_state_id(&target);
+        if !block.has_tag(&tag::Block::MINECRAFT_BEEHIVES) {
+            return false;
+        }
+
+        let mut props = BeeNestLikeProperties::from_state_id(state_id, block);
+        if props.honey_level < FULL_HONEY_LEVEL {
+            return false;
+        }
+
+        ctx.world
+            .play_block_sound(Sound::BlockBeehiveShear, SoundCategory::Blocks, target);
+        Self::drop_at(
+            ctx.world,
+            target.to_centered_f64(),
+            ItemStack::new(HARVESTED_HONEYCOMBS, &Item::HONEYCOMB),
+        );
+
+        props.honey_level = 0;
+        ctx.world
+            .set_block_state(&target, props.to_state_id(block), BlockFlags::NOTIFY_ALL);
+
+        true
+    }
+
+    fn shear_entity_in_front(ctx: &DispenseContext<'_>) -> bool {
+        let target_box = BoundingBox::from_block(&Self::target_position(ctx));
+
+        for entity in ctx.world.get_entities_at_box(&target_box) {
+            let Some(sheep) = entity.cast_any().downcast_ref::<SheepEntity>() else {
+                continue;
+            };
+            if sheep.is_sheared() || !entity.get_entity().is_alive() {
+                continue;
+            }
+
+            let position = entity.get_entity().pos.load();
+            sheep.set_sheared(true);
+            ctx.world
+                .play_sound(Sound::EntitySheepShear, SoundCategory::Blocks, &position);
+
+            let count = rng().random_range(1..=3);
+            Self::drop_at(
+                ctx.world,
+                position,
+                ItemStack::new(count, wool_of_color(sheep.get_color())),
+            );
+
+            return true;
+        }
+
+        false
+    }
+
+    fn dispense_glass_bottle(
+        ctx: &DispenseContext<'_>,
+        dispenser: &DispenserBlockEntity,
+        item: &mut ItemStack,
+    ) -> bool {
+        const FULL_HONEY_LEVEL: u8 = 5;
+
+        let target = Self::target_position(ctx);
+        let (block, state_id) = ctx.world.get_block_and_state_id(&target);
+
+        if block.has_tag(&tag::Block::MINECRAFT_BEEHIVES) {
+            let mut props = BeeNestLikeProperties::from_state_id(state_id, block);
+            if props.honey_level < FULL_HONEY_LEVEL {
+                return false;
+            }
+
+            props.honey_level = 0;
+            ctx.world
+                .set_block_state(&target, props.to_state_id(block), BlockFlags::NOTIFY_ALL);
+            Self::consume_with_remainder(
+                ctx,
+                dispenser,
+                item,
+                ItemStack::new(1, &Item::HONEY_BOTTLE),
+            );
+            Self::play_dispense_effects(ctx, WorldEvent::SoundDispenserDispense);
+            return true;
+        }
+
+        let fluid = ctx.world.get_fluid(&target);
+        if fluid.id == Fluid::WATER.id || fluid.id == Fluid::FLOWING_WATER.id {
+            Self::consume_with_remainder(ctx, dispenser, item, water_bottle());
+            Self::play_dispense_effects(ctx, WorldEvent::SoundDispenserDispense);
+            return true;
+        }
+
+        false
+    }
+
+    fn dispense_water_bottle(ctx: &DispenseContext<'_>, item: &mut ItemStack) -> bool {
+        let target = Self::target_position(ctx);
+        if !ctx
+            .world
+            .get_block(&target)
+            .has_tag(&tag::Block::MINECRAFT_CONVERTABLE_TO_MUD)
+        {
+            return false;
+        }
+
+        ctx.world.spawn_particle(
+            target.to_centered_f64(),
+            Vector3::new(0.5, 0.5, 0.5),
+            1.0,
+            5,
+            Particle::Splash,
+        );
+        ctx.world
+            .play_block_sound(Sound::ItemBottleEmpty, SoundCategory::Blocks, target);
+        ctx.world
+            .set_block_state(&target, Block::MUD.default_state.id, BlockFlags::NOTIFY_ALL);
+
+        *item = ItemStack::new(1, &Item::GLASS_BOTTLE);
+        Self::play_dispense_effects(ctx, WorldEvent::SoundDispenserDispense);
+        true
+    }
+
+    fn dispense_glowstone(ctx: &DispenseContext<'_>, item: &mut ItemStack) -> Option<bool> {
+        const MAX_CHARGES: u8 = 4;
+
+        let target = Self::target_position(ctx);
+        let (block, state_id) = ctx.world.get_block_and_state_id(&target);
+        if block != &Block::RESPAWN_ANCHOR {
+            return None;
+        }
+
+        let mut props = RespawnAnchorLikeProperties::from_state_id(state_id, block);
+        if props.charges >= MAX_CHARGES {
+            return Some(false);
+        }
+
+        props.charges += 1;
+        let _ = item.split(1);
+        ctx.world
+            .set_block_state(&target, props.to_state_id(block), BlockFlags::NOTIFY_ALL);
+        ctx.world.play_block_sound(
+            Sound::BlockRespawnAnchorCharge,
+            SoundCategory::Blocks,
+            target,
+        );
+
+        Some(true)
+    }
+
+    fn dispense_mob_head(ctx: &DispenseContext<'_>, item: &mut ItemStack, block: &'static Block) {
+        let target = Self::target_position(ctx);
+
+        let summons_mob = ctx.world.get_block_state(&target).is_air()
+            && if block == &Block::WITHER_SKELETON_SKULL {
+                find_wither_pattern(ctx.world, &target).is_some()
+            } else {
+                find_golem_pattern(ctx.world, &target).is_some()
+            };
+
+        if summons_mob {
+            let state_id = if block == &Block::WITHER_SKELETON_SKULL {
+                let mut props = SkeletonSkullLikeProperties::default(block);
+                props.rotation = to_rotation16(ctx.facing);
+                props.to_state_id(block)
+            } else {
+                block.default_state.id
+            };
+
+            let _ = item.split(1);
+            ctx.world
+                .set_block_state(&target, state_id, BlockFlags::NOTIFY_ALL);
+            Self::play_dispense_effects(ctx, WorldEvent::SoundDispenserDispense);
+        } else if Self::dispense_equipment(ctx, item) {
+            Self::play_dispense_effects(ctx, WorldEvent::SoundDispenserDispense);
+        } else {
+            Self::play_dispense_effects(ctx, WorldEvent::SoundDispenserFail);
+        }
+    }
+
+    fn dispense_shulker_box(ctx: &DispenseContext<'_>, item: &mut ItemStack) -> bool {
+        let Some(block) = Block::from_item_id(item.item.id) else {
+            return false;
+        };
+
+        let target = Self::target_position(ctx);
+        if !ctx.world.get_block_state(&target).replaceable() {
+            return false;
+        }
+
+        let mut props = EndRodLikeProperties::default(block);
+        props.facing = if ctx.world.get_block_state(&target.down()).is_air() {
+            ctx.facing
+        } else {
+            Facing::Up
+        };
+
+        // TODO: Carry over the contents of the box
+        let _ = item.split(1);
+        ctx.world
+            .set_block_state(&target, props.to_state_id(block), BlockFlags::NOTIFY_ALL);
+        Self::play_dispense_effects(ctx, WorldEvent::SoundDispenserDispense);
+
+        true
+    }
+
+    fn dispense_equipment(ctx: &DispenseContext<'_>, item: &mut ItemStack) -> bool {
+        let (slot, allowed_entities, equip_sound) = {
+            let Some(equippable) = item.get_data_component::<EquippableImpl>() else {
+                return false;
+            };
+            if !equippable.dispensable {
+                return false;
+            }
+            (
+                equippable.slot,
+                equippable.allowed_entities.clone(),
+                equippable.equip_sound.clone(),
+            )
+        };
+
+        let target_box = BoundingBox::from_block(&Self::target_position(ctx));
+        let players = ctx
+            .world
+            .get_players_at_box(&target_box)
+            .into_iter()
+            .map(|player| player as Arc<dyn EntityBase>);
+
+        for entity in ctx
+            .world
+            .get_entities_at_box(&target_box)
+            .into_iter()
+            .chain(players)
+        {
+            let Some(living) = entity.get_living_entity() else {
+                continue;
+            };
+            if !living.is_part_of_game()
+                || !is_allowed_entity(allowed_entities.as_ref(), entity.get_entity().entity_type)
+            {
+                continue;
+            }
+
+            let mut equipment = living
+                .entity_equipment
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            if !equipment.get(slot).is_empty() {
+                continue;
+            }
+
+            let stack = item.split(1);
+            equipment.put(slot, stack.clone());
+            drop(equipment);
+
+            living.send_equipment_changes(&[(slot.clone(), stack)]);
+            ctx.world.play_sound_event(
+                &equip_sound,
+                SoundCategory::Blocks,
+                &entity.get_entity().pos.load(),
+            );
+
+            return true;
+        }
+
+        false
+    }
+
+    fn consume_with_remainder(
+        ctx: &DispenseContext<'_>,
+        dispenser: &DispenserBlockEntity,
+        item: &mut ItemStack,
+        remainder: ItemStack,
+    ) {
+        item.decrement(1);
+        if item.is_empty() {
+            *item = remainder;
+        } else if let Some(rest) = Self::add_to_first_free_slot(dispenser, remainder) {
+            Self::eject_item(ctx, rest);
+        }
+    }
+
+    fn drop_at(world: &Arc<World>, position: Vector3<f64>, stack: ItemStack) {
+        let entity = Entity::new(world.clone(), position, &EntityType::ITEM);
+        world.spawn_entity(Arc::new(ItemEntity::new(entity, stack)));
+    }
+
     fn drop_item(ctx: &DispenseContext<'_>, item: &mut ItemStack) {
+        Self::drop_item_with_sound(ctx, item, WorldEvent::SoundDispenserDispense);
+    }
+
+    fn drop_item_with_sound(ctx: &DispenseContext<'_>, item: &mut ItemStack, sound: WorldEvent) {
         let drop_item = item.split(1);
         Self::eject_item(ctx, drop_item);
-        Self::play_dispense_effects(ctx, WorldEvent::SoundDispenserDispense);
+        Self::play_dispense_effects(ctx, sound);
     }
 
     fn eject_item(ctx: &DispenseContext<'_>, stack: ItemStack) {
