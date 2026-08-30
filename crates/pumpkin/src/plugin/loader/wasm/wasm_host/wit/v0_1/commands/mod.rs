@@ -575,6 +575,7 @@ impl pumpkin::plugin::command::HostCommandNode for PluginHostState {
                 StringType::SingleWord | StringType::Quotable => argument(name, SimpleArgConsumer),
                 StringType::Greedy => argument(name, MsgArgConsumer),
             },
+            ArgumentType::Message => argument(name, MsgArgConsumer),
             ArgumentType::Entities => argument(name, EntitiesArgumentConsumer),
             ArgumentType::Entity => argument(name, EntityArgumentConsumer),
             ArgumentType::Players | ArgumentType::GameProfile => {
