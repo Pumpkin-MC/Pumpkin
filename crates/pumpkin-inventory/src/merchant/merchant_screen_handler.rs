@@ -633,6 +633,30 @@ mod tests {
     }
 
     #[test]
+    fn numeric_hotbar_key_swaps_occupied_stacks() {
+        let (player_inventory, merchant_inventory) = inventories();
+        player_inventory.set_stack(0, ItemStack::new(1, &Item::WOODEN_PICKAXE));
+        player_inventory.set_stack(1, ItemStack::new(1, &Item::WOODEN_SWORD));
+        let player = TestPlayer::new(player_inventory.clone());
+        let mut handler =
+            MerchantScreenHandler::new(1, &player_inventory, merchant_inventory, Vec::new());
+
+        // Merchant screen slots 30-38 map to hotbar slots 0-8. First move the
+        // sword from hotbar slot 1 to the empty hotbar slot 2.
+        handler.on_slot_click(31, 2, SlotActionType::Swap, &player);
+        assert!(player_inventory.get_stack(1).is_empty());
+        assert_eq!(player_inventory.get_stack(2).item.id, Item::WOODEN_SWORD.id);
+
+        // Then reproduce #3059 by swapping that sword with the occupied slot 0.
+        handler.on_slot_click(32, 0, SlotActionType::Swap, &player);
+        assert_eq!(player_inventory.get_stack(0).item.id, Item::WOODEN_SWORD.id);
+        assert_eq!(
+            player_inventory.get_stack(2).item.id,
+            Item::WOODEN_PICKAXE.id
+        );
+    }
+
+    #[test]
     fn selecting_bookshelf_trade_moves_payment_and_creates_result() {
         let (player_inventory, merchant_inventory) = inventories();
         player_inventory.set_stack(0, ItemStack::new(12, &Item::EMERALD));
