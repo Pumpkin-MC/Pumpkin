@@ -24,6 +24,19 @@ impl CKeepAlive {
     pub const fn new(keep_alive_id: i64) -> Self {
         Self { keep_alive_id }
     }
+
+    /// Converts a generated keep-alive ID to the exact value representable by
+    /// the target protocol. Versions before 1.12.2 echo a signed 32-bit value,
+    /// so the server must store the truncated value it actually sent rather
+    /// than comparing the response against the original 64-bit timestamp.
+    #[must_use]
+    pub const fn normalize_id(keep_alive_id: i64, version: JavaMinecraftVersion) -> i64 {
+        if version.protocol_version() >= JavaMinecraftVersion::V_1_12_2.protocol_version() {
+            keep_alive_id
+        } else {
+            keep_alive_id as i32 as i64
+        }
+    }
 }
 
 impl ClientPacket for CKeepAlive {
@@ -99,5 +112,23 @@ mod tests {
         let mut slice = buf.as_slice();
         let read_packet = CKeepAlive::read(&mut slice, &version).unwrap();
         assert_eq!(read_packet.keep_alive_id, 12345);
+    }
+
+    #[test]
+    fn generated_id_is_normalized_at_legacy_boundary() {
+        let generated = 1_778_000_000_123_i64;
+        let legacy = CKeepAlive::normalize_id(generated, JavaMinecraftVersion::V_1_12_1);
+        assert_eq!(legacy, generated as i32 as i64);
+
+        let modern = CKeepAlive::normalize_id(generated, JavaMinecraftVersion::V_1_12_2);
+        assert_eq!(modern, generated);
+
+        let mut bytes = Vec::new();
+        CKeepAlive::new(legacy)
+            .write_packet_data(&mut bytes, &JavaMinecraftVersion::V_1_7_2)
+            .unwrap();
+        let mut slice = bytes.as_slice();
+        let echoed = CKeepAlive::read(&mut slice, &JavaMinecraftVersion::V_1_7_2).unwrap();
+        assert_eq!(echoed.keep_alive_id, legacy);
     }
 }
