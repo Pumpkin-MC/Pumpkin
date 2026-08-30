@@ -433,7 +433,7 @@ impl Mob for EndermanEntity {
     }
 
     // TODO: sunlight avoidance, carried block drop on death, angerable system, ambient sound override
-    fn mob_tick<'a>(&'a self, caller: &'a Arc<dyn EntityBase>) {
+    fn mob_tick(&self, caller: &dyn EntityBase) {
         let entity = &self.mob_entity.living_entity.entity;
         if !entity.is_alive() {
             return;
@@ -443,7 +443,7 @@ impl Mob for EndermanEntity {
         let raining_at_feet = world.is_raining_at(&entity.block_pos.load());
         let raining_at_head = world.is_raining_at(&entity.bounding_box.load().max_block_pos());
         if entity.touching_water.load(Ordering::SeqCst) || raining_at_feet || raining_at_head {
-            caller.damage(caller.as_ref(), 1.0, DamageType::DROWN);
+            caller.damage(caller, 1.0, DamageType::DROWN);
         }
     }
 

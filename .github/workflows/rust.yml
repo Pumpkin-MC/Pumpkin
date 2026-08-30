@@ -97,6 +97,40 @@ jobs:
         run: cargo nextest run --verbose
       - name: Cargo doctest
         run: cargo test --doc --verbose
+  test_android:
+    name: Test on Android AArch64
+    runs-on: ubuntu-latest
+    needs: [format, machete, clippy_debug, clippy_release]
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android
+      - uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r27c
+      - run: cargo install cargo-ndk
+      - uses: taiki-e/install-action@nextest
+      - uses: Swatinem/rust-cache@v2
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Start Android emulator and Test
+        uses: reactivecircus/android-emulator-runner@v2
+        env:
+          CARGO_NDK_PLATFORM: 24
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_5
+          force-avd-creation: false
+          emulator-options: -no-snapshot-load -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -camera-front none
+          script: cargo ndk-test -t arm64-v8a
   build_release:
     name: Build project in release
     runs-on: ${{ matrix.os }}
@@ -162,10 +196,42 @@ jobs:
           name: pumpkin-${{ runner.arch }}-${{ runner.os }}
           compression-level: 9
           path: dist/pumpkin-*
+  build_android_release:
+    name: Build project in release for Android (AArch64)
+    runs-on: ubuntu-latest
+    needs: [test_android]
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android
+      - uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r27c
+      - name: Install cargo-ndk
+        run: cargo install cargo-ndk
+      - uses: Swatinem/rust-cache@v2
+      - name: Build Release with cargo ndk
+        env:
+          CARGO_NDK_PLATFORM: 24
+        run: cargo ndk -t arm64-v8a build --release --locked
+      - name: Prepare artifacts
+        shell: bash
+        run: |
+          mkdir -p dist
+          cp "target/aarch64-linux-android/release/pumpkin" "dist/pumpkin-aarch64-android"
+      - name: Export executable
+        uses: actions/upload-artifact@v7
+        with:
+          name: pumpkin-aarch64-android
+          compression-level: 9
+          path: dist/pumpkin-aarch64-android
   draft_release:
     permissions:
       contents: write
-    needs: [build_release]
+    needs: [build_release, build_android_release]
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && github.ref == 'refs/heads/master'
     steps:

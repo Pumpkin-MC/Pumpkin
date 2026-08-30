@@ -1,7 +1,7 @@
 use crate::entity::item::ItemEntity;
 use crate::entity::living::LivingEntity;
 use crate::entity::player::Player;
-use crate::{entity::EntityBaseFuture, server::Server};
+use crate::server::Server;
 use core::f64;
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::entity::EntityType;
@@ -122,7 +122,7 @@ fn lerp(t: f64, start: f64, end: f64) -> f64 {
 }
 
 impl EntityBase for EyeOfEnder {
-    fn tick<'a>(&'a self, caller: &'a Arc<dyn EntityBase>, server: &'a Server) {
+    fn tick(&self, caller: &dyn EntityBase, server: &Server) {
         let entity = &self.entity;
         entity.tick(caller, server);
 
@@ -212,46 +212,37 @@ impl EntityBase for EyeOfEnder {
         None
     }
 
-    fn get_item_entity(self: Arc<Self>) -> Option<Arc<ItemEntity>> {
-        None
-    }
-
     fn cast_any(&self) -> &dyn std::any::Any {
         self
     }
 
-    fn send_java_spawn_packet<'a>(
-        &'a self,
-        client: &'a crate::net::java::JavaClient,
-    ) -> EntityBaseFuture<'a, ()> {
-        Box::pin(async move {
-            let spawn_packet = self.entity.create_spawn_packet();
-            if let Ok(data) = client.serialize_packet(&spawn_packet) {
-                client.enqueue_packet(data).await;
-            }
+    fn send_java_spawn_packet(&self, client: &crate::net::java::JavaClient) {
+        let spawn_packet = self.entity.create_spawn_packet();
+        if let Ok(data) = client.serialize_packet(&spawn_packet) {
+            client.try_enqueue_packet(data);
+        }
 
-            if client.version.load() >= pumpkin_data::packet::CURRENT_MC_VERSION {
-                let metadata = Metadata::new(
-                    pumpkin_data::tracked_data::eye_of_ender::ITEM_STACK,
-                    ItemStackSerializer::from(
-                        self.item_stack
-                            .lock()
-                            .unwrap_or_else(std::sync::PoisonError::into_inner)
-                            .clone(),
-                    ),
+        if client.version.load() >= pumpkin_util::version::JavaMinecraftVersion::V_1_21 {
+            let metadata = Metadata::new(
+                pumpkin_data::tracked_data::eye_of_ender::ITEM_STACK,
+                ItemStackSerializer::from(
+                    self.item_stack
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner)
+                        .clone(),
+                ),
+            );
+            let mut data = Vec::new();
+            if metadata.write(&mut data, &client.version.load()).is_ok() {
+                data.push(255);
+                let meta_packet = pumpkin_protocol::java::client::play::CSetEntityMetadata::new(
+                    self.entity.entity_id.into(),
+                    data.into(),
                 );
-                let mut data = Vec::new();
-                if metadata.write(&mut data, &client.version.load()).is_ok() {
-                    data.push(255);
-                    let meta_packet = pumpkin_protocol::java::client::play::CSetEntityMetadata::new(
-                        self.entity.entity_id.into(),
-                        data.into(),
-                    );
-                    if let Ok(meta_data) = client.serialize_packet(&meta_packet) {
-                        client.enqueue_packet(meta_data).await;
-                    }
+                if let Ok(meta_data) = client.serialize_packet(&meta_packet) {
+                    client.try_enqueue_packet(meta_data);
                 }
             }
-        })
+        }
     }
 }

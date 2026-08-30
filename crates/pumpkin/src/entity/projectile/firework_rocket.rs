@@ -10,11 +10,7 @@ use pumpkin_util::{
     math::vector3::Vector3,
     random::{RandomGenerator, RandomImpl, get_seed, xoroshiro128::Xoroshiro},
 };
-use std::sync::atomic::AtomicBool;
-use std::sync::{
-    Arc,
-    atomic::{AtomicU32, Ordering},
-};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 
 const GRAVITY: f64 = 0.0;
 
@@ -95,8 +91,8 @@ impl FireworkRocketEntity {
 }
 
 impl EntityBase for FireworkRocketEntity {
-    fn tick<'a>(&'a self, caller: &'a Arc<dyn EntityBase>, server: &'a Server) {
-        self.entity.process_tick(caller, server);
+    fn tick(&self, caller: &dyn EntityBase, _server: &Server) {
+        self.entity.process_tick(caller);
 
         let entity = self.get_entity();
         let world = entity.world.load();

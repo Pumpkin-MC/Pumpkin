@@ -2,7 +2,7 @@
 use super::*;
 
 impl JavaClient {
-    pub async fn handle_set_creative_slot(
+    pub fn handle_set_creative_slot(
         &self,
         player: &Arc<Player>,
         packet: SSetCreativeSlot,
@@ -25,8 +25,7 @@ impl JavaClient {
         if let Some(server) = player.world().server.upgrade() {
             server
                 .plugin_manager
-                .fire(&server, &mut creative_event)
-                .await;
+                .fire_blocking(&server, &mut creative_event);
         }
         if creative_event.cancelled {
             return Ok(());

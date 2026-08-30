@@ -12,7 +12,6 @@ use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::{Block, BlockDirection, BlockStateId};
-use pumpkin_util::GameMode;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::world::BlockFlags;
@@ -47,10 +46,6 @@ const fn get_wool_item_for_color(color: u8) -> &'static Item {
 }
 
 impl ItemBehaviour for ShearsItem {
-    fn can_mine(&self, player: &Player) -> bool {
-        player.gamemode.load() != GameMode::Creative
-    }
-
     fn use_on_block(
         &self,
         _item: &mut ItemStack,
@@ -76,7 +71,9 @@ impl ItemBehaviour for ShearsItem {
     }
 
     fn use_on_entity(&self, _item: &mut ItemStack, player: &Player, entity: Arc<dyn EntityBase>) {
-        if let Some(sheep) = entity.get_mob().and_then(|m| m.get_sheep())
+        if let Some(sheep) = entity
+            .cast_any()
+            .downcast_ref::<crate::entity::passive::sheep::SheepEntity>()
             && !sheep.is_sheared()
         {
             sheep.set_sheared(true);

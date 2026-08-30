@@ -1,11 +1,10 @@
 use crate::entity::player::statistics::StatisticCategory;
-use crate::{entity::EntityBaseFuture, server::Server};
+use crate::server::Server;
 use core::f32;
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::data_component_impl::DamageResistantImpl;
 use pumpkin_data::data_component_impl::DamageResistantType;
 use pumpkin_data::item_stack::ItemStack;
-use pumpkin_data::packet::CURRENT_MC_VERSION;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::bedrock::client::CAddItemActor;
 use pumpkin_protocol::bedrock::network_item::ItemStackWrapper;
@@ -15,6 +14,7 @@ use pumpkin_protocol::codec::var_ulong::VarULong;
 use pumpkin_protocol::java::client::play::{CSetEntityMetadata, Metadata};
 use pumpkin_util::math::atomic_f32::AtomicF32;
 use pumpkin_util::math::vector3::Vector3;
+use pumpkin_util::version::JavaMinecraftVersion;
 use std::sync::atomic::Ordering::{AcqRel, Relaxed};
 
 use std::sync::{
@@ -142,10 +142,10 @@ impl ItemEntity {
 
         let world = self.entity.world.load();
         let entities = world.entities.load();
-        let items: Vec<Arc<Self>> = entities
+        let items: Vec<&Self> = entities
             .iter()
             .filter_map(|entity: &Arc<dyn EntityBase>| {
-                entity.clone().get_item_entity().filter(|item| {
+                entity.get_item_entity().filter(|item| {
                     item.entity.entity_id != self.entity.entity_id
                         && !item.never_despawn.load(Ordering::Relaxed)
                         && item.entity.bounding_box.load().intersects(&bounding_box)
@@ -158,7 +158,7 @@ impl ItemEntity {
                 if let Some(this_base) = world.get_entity_by_id(self.entity.entity_id)
                     && let Some(this_item) = this_base.get_item_entity()
                 {
-                    this_item.try_merge_with(&item);
+                    this_item.try_merge_with(item);
                 }
 
                 if self.entity.removed.load(Ordering::SeqCst) {
@@ -341,16 +341,11 @@ impl ItemEntity {
         Some(tick_move)
     }
 
-    fn move_and_apply_friction(
-        &self,
-        caller: &Arc<dyn EntityBase>,
-        server: &Server,
-        move_velo: Vector3<f64>,
-    ) {
+    fn move_and_apply_friction(&self, caller: &dyn EntityBase, move_velo: Vector3<f64>) {
         let entity = &self.entity;
 
         entity.move_entity(caller, move_velo);
-        entity.tick_block_collisions(caller, server);
+        entity.tick_block_collisions(caller);
 
         let mut friction = 0.98;
         let on_ground = entity.on_ground.load(Ordering::SeqCst);
@@ -415,7 +410,7 @@ impl ItemEntity {
         true
     }
 
-    fn sync_motion_if_dirty(&self, caller: &Arc<dyn EntityBase>, original_velo: Vector3<f64>) {
+    fn sync_motion_if_dirty(&self, caller: &dyn EntityBase, original_velo: Vector3<f64>) {
         let entity = &self.entity;
 
         entity.update_fluid_state(caller);
@@ -443,7 +438,7 @@ impl ItemEntity {
 }
 
 impl EntityBase for ItemEntity {
-    fn tick(&self, caller: &Arc<dyn EntityBase>, server: &Server) {
+    fn tick(&self, caller: &dyn EntityBase, _server: &Server) {
         let entity = &self.entity;
         self.decrement_pickup_delay();
 
@@ -461,7 +456,7 @@ impl EntityBase for ItemEntity {
         };
 
         if tick_move {
-            self.move_and_apply_friction(caller, server, move_velo);
+            self.move_and_apply_friction(caller, move_velo);
         }
 
         if self.process_age_and_merge() {
@@ -591,7 +586,7 @@ impl EntityBase for ItemEntity {
         None
     }
 
-    fn get_item_entity(self: Arc<Self>) -> Option<Arc<ItemEntity>> {
+    fn get_item_entity(&self) -> Option<&ItemEntity> {
         Some(self)
     }
 
@@ -646,65 +641,55 @@ impl EntityBase for ItemEntity {
         self
     }
 
-    fn send_bedrock_spawn_packet<'a>(
-        &'a self,
-        client: &'a crate::net::bedrock::BedrockClient,
-    ) -> EntityBaseFuture<'a, ()> {
-        Box::pin(async move {
-            let entity = &self.entity;
-            let runtime_id = entity.entity_id as u64;
-            let data = {
-                let item_stack = self
-                    .item_stack
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner);
-                let packet = CAddItemActor {
-                    target_actor_id: VarLong(runtime_id as i64),
-                    target_runtime_id: VarULong(runtime_id),
-                    item: ItemStackWrapper::from(&*item_stack),
-                    position: entity.pos.load().to_f32_lossy(),
-                    velocity: entity.velocity.load().to_f32_lossy(),
-                    entity_data: entity.bedrock_metadata(),
-                    is_from_fishing: false,
-                };
-                client.serialize_packet(&packet).ok()
+    fn send_bedrock_spawn_packet(&self, client: &crate::net::bedrock::BedrockClient) {
+        let entity = &self.entity;
+        let runtime_id = entity.entity_id as u64;
+        let data = {
+            let item_stack = self
+                .item_stack
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let packet = CAddItemActor {
+                target_actor_id: VarLong(runtime_id as i64),
+                target_runtime_id: VarULong(runtime_id),
+                item: ItemStackWrapper::from(&*item_stack),
+                position: entity.pos.load().to_f32_lossy(),
+                velocity: entity.velocity.load().to_f32_lossy(),
+                entity_data: entity.bedrock_metadata(),
+                is_from_fishing: false,
             };
-            if let Some(data) = data {
-                client.send_game_packet(data).await;
-            }
-        })
+            client.serialize_packet(&packet).ok()
+        };
+        if let Some(data) = data {
+            client.try_enqueue_packet(data);
+        }
     }
 
-    fn send_java_spawn_packet<'a>(
-        &'a self,
-        client: &'a crate::net::java::JavaClient,
-    ) -> EntityBaseFuture<'a, ()> {
-        Box::pin(async move {
-            let spawn_packet = self.entity.create_spawn_packet();
-            if let Ok(data) = client.serialize_packet(&spawn_packet) {
-                client.enqueue_packet(data).await;
-            }
+    fn send_java_spawn_packet(&self, client: &crate::net::java::JavaClient) {
+        let spawn_packet = self.entity.create_spawn_packet();
+        if let Ok(data) = client.serialize_packet(&spawn_packet) {
+            client.try_enqueue_packet(data);
+        }
 
-            if client.version.load() >= CURRENT_MC_VERSION {
-                let metadata = Metadata::new(
-                    pumpkin_data::tracked_data::item::ITEM,
-                    ItemStackSerializer::from(
-                        self.item_stack
-                            .lock()
-                            .unwrap_or_else(std::sync::PoisonError::into_inner)
-                            .clone(),
-                    ),
-                );
-                let mut data = Vec::new();
-                if metadata.write(&mut data, &client.version.load()).is_ok() {
-                    data.push(255);
-                    let meta_packet =
-                        CSetEntityMetadata::new(self.entity.entity_id.into(), data.into());
-                    if let Ok(meta_data) = client.serialize_packet(&meta_packet) {
-                        client.enqueue_packet(meta_data).await;
-                    }
+        if client.version.load() >= JavaMinecraftVersion::V_1_21 {
+            let metadata = Metadata::new(
+                pumpkin_data::tracked_data::item::ITEM,
+                ItemStackSerializer::from(
+                    self.item_stack
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner)
+                        .clone(),
+                ),
+            );
+            let mut data = Vec::new();
+            if metadata.write(&mut data, &client.version.load()).is_ok() {
+                data.push(255);
+                let meta_packet =
+                    CSetEntityMetadata::new(self.entity.entity_id.into(), data.into());
+                if let Ok(meta_data) = client.serialize_packet(&meta_packet) {
+                    client.try_enqueue_packet(meta_data);
                 }
             }
-        })
+        }
     }
 }

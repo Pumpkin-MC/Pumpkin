@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use rustc_hash::FxHashSet;
 use std::sync::{
     Arc, Mutex,
     atomic::{AtomicBool, AtomicI32, AtomicI64, Ordering},
@@ -27,7 +27,7 @@ pub struct LightningBoltEntity {
     flashes: AtomicI32,
     visual_only: AtomicBool,
     cause: Mutex<Option<Arc<Player>>>,
-    hit_entities: Mutex<HashSet<i32>>,
+    hit_entities: Mutex<FxHashSet<i32>>,
     blocks_set_on_fire: AtomicI32,
 }
 
@@ -43,7 +43,7 @@ impl LightningBoltEntity {
             flashes: AtomicI32::new(flashes),
             visual_only: AtomicBool::new(false),
             cause: Mutex::new(None),
-            hit_entities: Mutex::new(HashSet::new()),
+            hit_entities: Mutex::new(FxHashSet::default()),
             blocks_set_on_fire: AtomicI32::new(0),
         }
     }
@@ -192,7 +192,7 @@ impl LightningBoltEntity {
 }
 
 impl EntityBase for LightningBoltEntity {
-    fn tick(&self, _caller: &Arc<dyn EntityBase>, _server: &Server) {
+    fn tick(&self, _caller: &dyn EntityBase, _server: &Server) {
         let entity = &self.entity;
         let life = self.life.load(Ordering::Relaxed);
 

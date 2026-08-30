@@ -1,4 +1,3 @@
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 
 use crate::entity::projectile::{ProjectileHit, is_projectile};
@@ -92,7 +91,7 @@ impl FishingBobberEntity {
     }
 
     #[expect(clippy::too_many_lines)]
-    pub fn process_tick<'a>(&'a self, caller: &'a Arc<dyn EntityBase>, _server: &'a Server) {
+    pub fn process_tick(&self, caller: &dyn EntityBase) {
         let entity = self.get_entity();
         let world = entity.world.load();
 
@@ -180,7 +179,7 @@ impl FishingBobberEntity {
         .expand(0.3, 0.3, 0.3);
 
         // Basic block collision to stop bobber
-        let (block_cols, _) = world.get_block_collisions(search_box, caller.as_ref());
+        let (block_cols, _) = world.get_block_collisions(search_box, caller);
         if !block_cols.is_empty() {
             self.in_ground.store(true, Ordering::Relaxed);
             entity.velocity.store(Vector3::new(0.0, 0.0, 0.0));
@@ -234,7 +233,7 @@ impl EntityBase for FishingBobberEntity {
         self.has_hit.store(true, Ordering::Relaxed);
     }
 
-    fn tick<'a>(&'a self, caller: &'a Arc<dyn EntityBase>, server: &'a Server) {
-        self.process_tick(caller, server);
+    fn tick(&self, caller: &dyn EntityBase, _server: &Server) {
+        self.process_tick(caller);
     }
 }

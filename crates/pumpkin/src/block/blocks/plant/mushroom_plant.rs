@@ -52,12 +52,7 @@ impl MushroomPlantBlock {
         is_dark_enough && Self::may_place_on(block_accessor.get_block_state(&below_pos))
     }
 
-    pub fn grow_mushroom(
-        world: &Arc<World>,
-        pos: &BlockPos,
-        block: &Block,
-        _state_id: BlockStateId,
-    ) -> bool {
+    pub fn grow_mushroom(world: &Arc<World>, pos: &BlockPos, block: &Block) -> bool {
         let species = if block == &Block::BROWN_MUSHROOM {
             TreeType::BrownMushroom
         } else if block == &Block::RED_MUSHROOM {
@@ -291,7 +286,7 @@ impl BlockBehaviour for MushroomPlantBlock {
     }
 
     fn perform_bonemeal(&self, args: BonemealArgs<'_>) {
-        Self::grow_mushroom(args.world, args.position, args.block, args.state_id);
+        Self::grow_mushroom(args.world, args.position, args.block);
     }
 }
 

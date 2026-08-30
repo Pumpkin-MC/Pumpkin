@@ -2,11 +2,11 @@
 use super::*;
 
 impl BedrockClient {
-    pub async fn handle_mob_equipment(
+    pub fn handle_mob_equipment(
         &self,
-        _server: &Arc<Server>,
+        server: &Arc<Server>,
         player: &Arc<Player>,
-        packet: SMobEquipment,
+        packet: &SMobEquipment,
     ) {
         player.update_last_action_time();
         let slot = packet.selected_slot;
@@ -14,23 +14,15 @@ impl BedrockClient {
             return;
         }
         let previous_slot = player.inventory.get_selected_slot();
-        let server = player.world().server.upgrade();
-        if let Some(server) = server {
-            let mut event = PlayerItemHeldEvent::new(player.clone(), previous_slot, slot);
-            server.plugin_manager.fire(&server, &mut event).await;
-            let is_cancelled = {
-                use crate::plugin::Cancellable;
-                event.cancelled()
-            };
-            if is_cancelled {
-                self.enqueue_client_packet(&CPlayerHotbar {
-                    selected_slot: VarUInt(previous_slot as u32),
-                    container_id: 0,
-                    should_select_slot: true,
-                })
-                .await;
-                return;
-            }
+        let mut event = PlayerItemHeldEvent::new(player.clone(), previous_slot, slot);
+        server.plugin_manager.fire_blocking(server, &mut event);
+        if event.cancelled {
+            self.try_enqueue_client_packet(&CPlayerHotbar {
+                selected_slot: VarUInt(previous_slot as u32),
+                container_id: 0,
+                should_select_slot: true,
+            });
+            return;
         }
 
         let inv = player.inventory();

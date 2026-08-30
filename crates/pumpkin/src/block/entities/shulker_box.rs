@@ -3,8 +3,6 @@ use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
 use std::any::Any;
-use std::future::Future;
-use std::pin::Pin;
 use std::sync::RwLock;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::{array::from_fn, sync::Arc};
@@ -63,17 +61,8 @@ impl BlockEntity for ShulkerBoxBlockEntity {
             .update_viewer_count::<Self>(self, world, &self.position);
     }
 
-    fn on_block_replaced<'a>(
-        self: Arc<Self>,
-        _world: Arc<World>,
-        _position: BlockPos,
-    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>>
-    where
-        Self: 'a,
-    {
-        Box::pin(async move {
-            // Do nothing
-        })
+    fn on_block_replaced(self: Arc<Self>, _world: &Arc<World>, _position: &BlockPos) {
+        // Shulker boxes retain items when broken
     }
 
     fn get_inventory(self: Arc<Self>) -> Option<Arc<dyn Inventory>> {

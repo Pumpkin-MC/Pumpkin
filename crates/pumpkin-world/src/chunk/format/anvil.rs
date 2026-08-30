@@ -8,7 +8,6 @@ use std::{
     io::{Read, SeekFrom, Write},
     marker::PhantomData,
     path::{Path, PathBuf},
-    pin::Pin,
     time::{SystemTime, UNIX_EPOCH},
 };
 use tokio::{
@@ -308,7 +307,7 @@ impl AnvilChunkData {
         }
     }
 
-    async fn from_chunk<S>(
+    fn from_chunk<S>(
         chunk: &S,
         compression: Option<Compression>,
         chunk_config: &AnvilChunkConfig,
@@ -318,7 +317,6 @@ impl AnvilChunkData {
     {
         let raw_bytes = chunk
             .to_bytes()
-            .await
             .map_err(|err| ChunkWritingError::ChunkSerializingError(err.to_string()))?;
 
         let compression = compression.unwrap_or_else(|| chunk_config.compression.algorithm.into());
@@ -498,9 +496,7 @@ impl<S: SingleChunkDataSerializer> Default for AnvilChunkFile<S> {
 }
 
 pub trait SingleChunkDataSerializer: Send + Sync + Sized + Dirtiable + 'static {
-    fn to_bytes(
-        &self,
-    ) -> Pin<Box<dyn Future<Output = Result<Bytes, ChunkSerializingError>> + Send + '_>>;
+    fn to_bytes(&self) -> Result<Bytes, ChunkSerializingError>;
     fn from_bytes(bytes: &Bytes, pos: Vector2<i32>) -> Result<Self, ChunkReadingError>;
     fn position(&self) -> (i32, i32);
 }
@@ -620,8 +616,7 @@ impl<S: SingleChunkDataSerializer + 'static> ChunkSerializer for AnvilChunkFile<
         let compression_type = self.chunks_data[index]
             .as_ref()
             .and_then(|chunk_data| chunk_data.serialized_data.compression);
-        let new_chunk_data =
-            AnvilChunkData::from_chunk(chunk, compression_type, chunk_config).await?;
+        let new_chunk_data = AnvilChunkData::from_chunk(chunk, compression_type, chunk_config)?;
 
         let mut write_action = self.write_action.lock().await;
         if !chunk_config.write_in_place {
@@ -782,24 +777,37 @@ impl<S: SingleChunkDataSerializer + 'static> ChunkSerializer for AnvilChunkFile<
         chunks: Vec<Vector2<i32>>,
         stream: tokio::sync::mpsc::Sender<LoadedData<Self::Data, ChunkReadingError>>,
     ) {
-        // Don't par iter here so we can prevent backpressure with the await in the async
-        // runtime
-        for chunk in chunks {
-            let index = Self::get_chunk_index(chunk.x, chunk.y);
-            let is_ok = match &self.chunks_data[index] {
-                None => stream.send(LoadedData::Missing(chunk)).await.is_ok(),
-                Some(chunk_metadata) => {
-                    let result = match chunk_metadata.serialized_data.to_chunk(chunk) {
-                        Ok(chunk_res) => LoadedData::Loaded(chunk_res),
-                        Err(err) => LoadedData::Error((chunk, err)),
-                    };
+        let chunk_items: Vec<(Vector2<i32>, Option<AnvilChunkData>)> = chunks
+            .into_iter()
+            .map(|chunk| {
+                let index = Self::get_chunk_index(chunk.x, chunk.y);
+                let data = self.chunks_data[index]
+                    .as_ref()
+                    .map(|chunk_metadata| chunk_metadata.serialized_data.clone());
+                (chunk, data)
+            })
+            .collect();
 
-                    stream.send(result).await.is_ok()
-                }
-            };
+        let (tx, mut rx) = tokio::sync::mpsc::channel(chunk_items.len().max(1));
 
-            if !is_ok {
-                // Stream is closed. Stop unneeded work and IO
+        rayon::spawn(move || {
+            use rayon::prelude::*;
+            chunk_items
+                .into_par_iter()
+                .for_each(|(chunk, serialized_data)| {
+                    let result = serialized_data.map_or_else(
+                        || LoadedData::Missing(chunk),
+                        |data| match data.to_chunk(chunk) {
+                            Ok(chunk_res) => LoadedData::Loaded(chunk_res),
+                            Err(err) => LoadedData::Error((chunk, err)),
+                        },
+                    );
+                    let _ = tx.blocking_send(result);
+                });
+        });
+
+        while let Some(item) = rx.recv().await {
+            if stream.send(item).await.is_err() {
                 return;
             }
         }

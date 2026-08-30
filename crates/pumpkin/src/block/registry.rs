@@ -30,6 +30,7 @@ use crate::block::blocks::decorated_pot::DecoratedPotBlock;
 use crate::block::blocks::dirt_path::DirtPathBlock;
 use crate::block::blocks::doors::DoorBlock;
 use crate::block::blocks::dripstone::DripstoneBlock;
+use crate::block::blocks::end_gateway::EndGatewayBlock;
 use crate::block::blocks::end_portal::EndPortalBlock;
 use crate::block::blocks::end_portal_frame::EndPortalFrameBlock;
 use crate::block::blocks::falling::FallingBlock;
@@ -50,7 +51,7 @@ use crate::block::blocks::ice::{FrostedIceBlock, IceBlock};
 use crate::block::blocks::infested::InfestedBlock;
 use crate::block::blocks::iron_bars::IronBarsBlock;
 use crate::block::blocks::jigsaw::JigsawBlock;
-use crate::block::blocks::leaves::LeavesBlock;
+// use crate::block::blocks::leaves::LeavesBlock;
 use crate::block::blocks::logs::LogBlock;
 use crate::block::blocks::loom::LoomBlock;
 use crate::block::blocks::magma::MagmaBlock;
@@ -261,7 +262,8 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(InfestedBlock);
     manager.register(JukeboxBlock);
     manager.register(LogBlock);
-    manager.register(LeavesBlock);
+    // FIX despawn
+    // manager.register(LeavesBlock);
     manager.register(BambooBlock);
     manager.register(BambooSaplingBlock);
     manager.register(BannerBlock);
@@ -330,6 +332,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(BeehiveBlock);
     manager.register(PressurePlateBlock);
     manager.register(WeightedPressurePlateBlock);
+    manager.register(EndGatewayBlock);
     manager.register(EndPortalBlock);
     manager.register(SpawnerBlock);
     manager.register(EndPortalFrameBlock);
@@ -540,7 +543,7 @@ impl BlockRegistry {
     }
 
     #[expect(clippy::too_many_lines)]
-    pub async fn place_block(
+    pub fn place_block(
         &self,
         player: &Arc<Player>,
         placed_block: &'static Block,
@@ -696,11 +699,7 @@ impl BlockRegistry {
         };
         server
             .plugin_manager
-            .fire::<crate::plugin::block::block_can_build::BlockCanBuildEvent>(
-                server,
-                &mut can_build_event,
-            )
-            .await;
+            .fire_blocking(server, &mut can_build_event);
         if can_build_event.cancelled || !can_build_event.buildable {
             return Ok(None);
         }
@@ -712,10 +711,7 @@ impl BlockRegistry {
             final_block_pos,
             true,
         );
-        server
-            .plugin_manager
-            .fire::<crate::plugin::block::block_place::BlockPlaceEvent>(server, &mut event)
-            .await;
+        server.plugin_manager.fire_blocking(server, &mut event);
         if event.cancelled {
             return Ok(None);
         }
@@ -1203,13 +1199,7 @@ impl BlockRegistry {
         state_id
     }
 
-    pub fn update_neighbors(
-        &self,
-        world: &Arc<World>,
-        position: &BlockPos,
-        _block: &Block,
-        flags: BlockFlags,
-    ) {
+    pub fn update_neighbors(&self, world: &Arc<World>, position: &BlockPos, flags: BlockFlags) {
         for direction in BlockDirection::abstract_block_update_order() {
             let pos = position.offset(direction.to_offset());
 

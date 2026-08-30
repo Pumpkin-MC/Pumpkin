@@ -25,7 +25,6 @@ use pumpkin_util::random::xoroshiro128::Xoroshiro;
 use pumpkin_util::random::{RandomGenerator, get_seed};
 use pumpkin_util::version::JavaMinecraftVersion;
 use rand::RngExt;
-use std::pin::Pin;
 use std::sync::Arc;
 use std::sync::atomic::Ordering::Relaxed;
 use std::sync::atomic::{AtomicI32, AtomicU8, Ordering};
@@ -634,7 +633,7 @@ pub trait Mob: EntityBase + Send + Sync {
     fn set_saddled(&self, _saddled: bool) {}
 
     /// Per-mob tick hook called each tick before AI runs. Override for mob-specific logic.
-    fn mob_tick<'a>(&'a self, _caller: &'a Arc<dyn EntityBase>) {}
+    fn mob_tick(&self, _caller: &dyn EntityBase) {}
 
     fn post_tick(&self) {}
 
@@ -957,10 +956,6 @@ pub trait Mob: EntityBase + Send + Sync {
 
     fn mob_set_variant_name(&self, _name: &str) {}
 
-    fn get_sheep(&self) -> Option<&crate::entity::passive::sheep::SheepEntity> {
-        None
-    }
-
     fn mob_on_lightning_strike(
         &self,
         caller: &dyn EntityBase,
@@ -1012,7 +1007,7 @@ impl<T: Mob + Send + 'static> EntityBase for T {
     }
 
     #[allow(clippy::too_many_lines)]
-    fn tick(&self, caller: &Arc<dyn EntityBase>, server: &Server) {
+    fn tick(&self, caller: &dyn EntityBase, server: &Server) {
         let mob_entity = self.get_mob_entity();
         mob_entity.living_entity.entity.tick_leash();
         mob_entity.tick_sun_burn();
@@ -1309,15 +1304,13 @@ pub trait PathAwareEntity: Mob + Send + Sync {
         ) >= 0.0
     }
 
-    fn is_navigation<'a>(&'a self) -> Pin<Box<dyn Future<Output = bool> + Send + 'a>> {
-        Box::pin(async {
-            let navigator = self
-                .get_mob_entity()
-                .navigator
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            !navigator.is_idle()
-        })
+    fn is_navigation(&self) -> bool {
+        let navigator = self
+            .get_mob_entity()
+            .navigator
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        !navigator.is_idle()
     }
 
     // TODO: implement

@@ -1,10 +1,10 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
-use std::{fs, path::Path, sync::Arc};
+use std::{fs, net::SocketAddr, path::Path, sync::Arc};
 use thiserror::Error;
 use tokio::sync::Mutex;
 use wasmtime::{Cache, CacheConfig, Engine, Store, component::Component, component::Linker};
-use wasmtime_wasi::{DirPerms, FilePerms, WasiCtxBuilder, sockets::SocketAddrUse};
+use wasmtime_wasi::{FsPerms, WasiCtxBuilder, sockets::SocketAddrUse};
 
 use crate::plugin::{
     Context, PluginMetadata, cache::calculate_hash_for_bytes,
@@ -43,6 +43,69 @@ pub enum PluginInitError {
     PathResolutionFailed(std::io::Error),
     #[error("Failed to create cache: {0}")]
     CacheCreationFailed(wasmtime::Error),
+}
+
+#[derive(Clone, Copy, Default)]
+struct SocketPolicy {
+    tcp_connect: bool,
+    tcp_bind: bool,
+    udp_send: bool,
+    udp_receive: bool,
+    udp_bind: bool,
+    loopback_only: bool,
+}
+
+impl SocketPolicy {
+    const fn allows(self, addr: SocketAddr, reason: SocketAddrUse) -> bool {
+        // Wasmtime performs a wildcard bind before an outbound connect/send.
+        // Permit only that precursor here; the later destination check still
+        // enforces the actual protocol and loopback policy.
+        let implicit_outbound_bind = addr.ip().is_unspecified()
+            && addr.port() == 0
+            && match reason {
+                SocketAddrUse::TcpBind => self.tcp_connect,
+                SocketAddrUse::UdpBind => self.udp_send,
+                _ => false,
+            };
+
+        let operation_allowed = match reason {
+            SocketAddrUse::TcpConnect => self.tcp_connect,
+            SocketAddrUse::TcpBind => self.tcp_bind || implicit_outbound_bind,
+            SocketAddrUse::TcpListen | SocketAddrUse::TcpAccept => self.tcp_bind,
+            SocketAddrUse::UdpBind => self.udp_bind || implicit_outbound_bind,
+            SocketAddrUse::UdpSend => self.udp_send,
+            SocketAddrUse::UdpReceive => self.udp_receive,
+        };
+
+        operation_allowed
+            && (!self.loopback_only || addr.ip().is_loopback() || implicit_outbound_bind)
+    }
+}
+
+fn socket_policy_for_permissions(
+    has_permission: impl Fn(&str) -> bool,
+    loopback_only: bool,
+) -> SocketPolicy {
+    let network_outbound = has_permission(permissions::NETWORK_OUTBOUND);
+    let tcp_allowed = has_permission(permissions::NETWORK_TCP);
+    let udp_allowed = has_permission(permissions::NETWORK_UDP);
+    let tcp_connect =
+        tcp_allowed || network_outbound || has_permission(permissions::NETWORK_TCP_CONNECT);
+    let tcp_bind = tcp_allowed || has_permission(permissions::NETWORK_TCP_BIND);
+    let udp_connected =
+        udp_allowed || network_outbound || has_permission(permissions::NETWORK_UDP_CONNECT);
+    let udp_bind = udp_allowed || has_permission(permissions::NETWORK_UDP_BIND);
+    let udp_send = udp_connected || has_permission(permissions::NETWORK_UDP_OUTGOING_DATAGRAM);
+    let udp_receive = udp_connected || udp_bind;
+
+    SocketPolicy {
+        tcp_connect,
+        tcp_bind,
+        udp_send,
+        udp_receive,
+        udp_bind,
+        loopback_only,
+    }
 }
 
 pub struct PluginRuntime {
@@ -238,43 +301,27 @@ impl WasmPlugin {
             builder.allow_ip_name_lookup(true);
         }
 
-        let tcp_allowed = has_permission(permissions::NETWORK_TCP);
-        let udp_allowed = has_permission(permissions::NETWORK_UDP);
-        let tcp_connect = tcp_allowed || has_permission(permissions::NETWORK_TCP_CONNECT);
-        let tcp_bind = tcp_allowed || has_permission(permissions::NETWORK_TCP_BIND);
-        let udp_connect = udp_allowed || has_permission(permissions::NETWORK_UDP_CONNECT);
-        let udp_bind = udp_allowed || has_permission(permissions::NETWORK_UDP_BIND);
-        let udp_outgoing_datagram =
-            udp_allowed || has_permission(permissions::NETWORK_UDP_OUTGOING_DATAGRAM);
-
         let loopback_only = plugin_override
             .and_then(|o| o.loopback_only)
             .unwrap_or(plugin_config.loopback_only)
             || has_permission(permissions::NETWORK_LOOPBACK);
 
-        builder.allow_tcp(tcp_connect || tcp_bind);
-        builder.allow_udp(udp_connect || udp_bind);
+        let socket_policy = socket_policy_for_permissions(has_permission, loopback_only);
 
+        builder.allow_tcp(socket_policy.tcp_connect || socket_policy.tcp_bind);
+        builder.allow_udp(
+            socket_policy.udp_send || socket_policy.udp_receive || socket_policy.udp_bind,
+        );
         builder.socket_addr_check(move |addr, reason| {
-            Box::pin(async move {
-                let ok = match reason {
-                    SocketAddrUse::TcpConnect => tcp_connect,
-                    SocketAddrUse::TcpBind => tcp_bind,
-                    SocketAddrUse::UdpConnect => udp_connect,
-                    SocketAddrUse::UdpBind => udp_bind,
-                    SocketAddrUse::UdpOutgoingDatagram => udp_outgoing_datagram,
-                };
-
-                if loopback_only {
-                    ok && addr.ip().is_loopback()
-                } else {
-                    ok
-                }
-            })
+            Box::pin(async move { socket_policy.allows(addr, reason) })
         });
 
         if has_permission(permissions::NETWORK_OUTBOUND) {
             builder.inherit_network();
+        }
+
+        if has_permission(permissions::HTTP_OUTBOUND) {
+            store.data_mut().wasi_http_hooks.allow_outbound = true;
         }
 
         // --- System Permissions & Environment Variables ---
@@ -298,30 +345,20 @@ impl WasmPlugin {
             }
         }
 
-        builder.preopened_dir(
-            context.get_data_folder(),
-            "data",
-            if has_permission(permissions::FS_READ_DATA)
-                || has_permission(permissions::FS_WRITE_DATA)
-            {
-                DirPerms::READ
-            } else {
-                DirPerms::empty()
-            } | if has_permission(permissions::FS_WRITE_DATA) {
-                DirPerms::MUTATE
-            } else {
-                DirPerms::empty()
-            },
-            if has_permission(permissions::FS_READ_DATA) {
-                FilePerms::READ
-            } else {
-                FilePerms::empty()
-            } | if has_permission(permissions::FS_WRITE_DATA) {
-                FilePerms::WRITE
-            } else {
-                FilePerms::empty()
-            },
-        )?;
+        let may_write_data = has_permission(permissions::FS_WRITE_DATA);
+        let may_read_data = has_permission(permissions::FS_READ_DATA);
+
+        if may_read_data || may_write_data {
+            builder.preopened_dir(
+                context.get_data_folder(),
+                "data",
+                if may_write_data {
+                    FsPerms::ReadWrite
+                } else {
+                    FsPerms::ReadOnly
+                },
+            )?;
+        }
 
         let max_memory_mb = plugin_override
             .and_then(|o| o.max_memory_mb)

@@ -46,7 +46,7 @@ impl FallingEntity {
 }
 
 impl EntityBase for FallingEntity {
-    fn tick(&self, caller: &Arc<dyn EntityBase>, server: &Server) {
+    fn tick(&self, caller: &dyn EntityBase, _server: &Server) {
         let entity = &self.entity;
         let mut velo = entity.velocity.load();
         velo.y -= self.get_gravity();
@@ -54,7 +54,7 @@ impl EntityBase for FallingEntity {
         entity.velocity.store(velo);
 
         entity.move_entity(caller, velo);
-        entity.tick_block_collisions(caller, server);
+        entity.tick_block_collisions(caller);
         if entity.on_ground.load(Ordering::Relaxed) {
             entity.velocity.store(velo.multiply(0.7, -0.5, 0.7));
             entity.world.load().set_block_state(

@@ -51,7 +51,14 @@ fn fetch_all_contributors_cached() -> Vec<Contributor> {
         return cache.data.clone();
     }
 
-    let contributors = fetch_all_contributors();
+    let contributors = tokio::runtime::Handle::try_current().map_or_else(
+        |_| {
+            tokio::runtime::Runtime::new()
+                .map_or_else(|_| Vec::new(), |rt| rt.block_on(fetch_all_contributors()))
+        },
+        |handle| tokio::task::block_in_place(|| handle.block_on(fetch_all_contributors())),
+    );
+
     if !contributors.is_empty() {
         if let Ok(mut guard) = CONTRIBUTORS_CACHE.lock() {
             *guard = Some(ContributorCache {
@@ -68,25 +75,35 @@ fn fetch_all_contributors_cached() -> Vec<Contributor> {
     contributors
 }
 
-fn fetch_all_contributors() -> Vec<Contributor> {
+async fn fetch_all_contributors() -> Vec<Contributor> {
+    let client = reqwest::Client::builder()
+        .user_agent("Pumpkin-MC")
+        .build()
+        .unwrap_or_default();
+
     let mut all_contributors = Vec::new();
     let mut next_url = Some(
         "https://api.github.com/repos/Pumpkin-MC/Pumpkin/contributors?per_page=100".to_string(),
     );
 
     while let Some(url) = next_url {
-        let response = ureq::get(&url).header("User-Agent", "Pumpkin-MC").call();
+        let response = client.get(&url).send().await;
 
         match response {
-            Ok(mut res) => {
-                if let Ok(contributors) = res.body_mut().read_json::<Vec<Contributor>>() {
+            Ok(res) => {
+                let link_header = res
+                    .headers()
+                    .get("link")
+                    .and_then(|s| s.to_str().ok())
+                    .map(String::from);
+
+                if let Ok(contributors) = res.json::<Vec<Contributor>>().await {
                     all_contributors.extend(contributors);
                 } else {
                     break;
                 }
-                let link_header = res.headers().get("link").map(|s| s.to_str().unwrap_or(""));
 
-                next_url = link_header.and_then(extract_next_url);
+                next_url = link_header.as_deref().and_then(extract_next_url);
             }
             Err(_) => break,
         }
@@ -172,14 +189,18 @@ fn tier_color(tier_slug: &str, tier_name: &str) -> NamedColor {
     }
 }
 
-fn fetch_donators_hover() -> TextComponent {
+async fn fetch_donators_hover() -> TextComponent {
     let url = "https://market.pumpkinmc.org/api/v1/rest/donators";
-    let response = ureq::get(url).header("User-Agent", "Pumpkin-MC").call();
+    let client = reqwest::Client::builder()
+        .user_agent("Pumpkin-MC")
+        .build()
+        .unwrap_or_default();
+    let response = client.get(url).send().await;
 
     let mut donators_text = TextComponent::text("Click to open Donate\n\nDonators:\n");
 
-    if let Ok(mut res) = response
-        && let Ok(data) = res.body_mut().read_json::<DonatorResponse>()
+    if let Ok(res) = response
+        && let Ok(data) = res.json::<DonatorResponse>().await
     {
         let mut current = data.current;
         current.sort_by(|a, b| {
@@ -225,7 +246,16 @@ fn fetch_donators_hover_cached() -> TextComponent {
         return cache.data.clone();
     }
 
-    let donators = fetch_donators_hover();
+    let donators = tokio::runtime::Handle::try_current().map_or_else(
+        |_| {
+            tokio::runtime::Runtime::new().map_or_else(
+                |_| TextComponent::text("Unable to load donators"),
+                |rt| rt.block_on(fetch_donators_hover()),
+            )
+        },
+        |handle| tokio::task::block_in_place(|| handle.block_on(fetch_donators_hover())),
+    );
+
     if let Ok(mut guard) = DONATORS_CACHE.lock() {
         *guard = Some(DonatorCache {
             fetched_at: Instant::now(),

@@ -28,7 +28,7 @@ impl CommandExecutor for PluginsExecutor {
             )));
         };
 
-        let plugins = futures::executor::block_on(server_arc.plugin_manager.active_plugins());
+        let plugins = server_arc.plugin_manager.active_plugins();
 
         let message_text = if plugins.is_empty() {
             TextComponent::text("No plugins are loaded on the server.").color_named(NamedColor::Red)

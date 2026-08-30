@@ -78,8 +78,7 @@ impl MangrovePropaguleBlock {
 
 impl BlockBehaviour for MangrovePropaguleBlock {
     fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
-        let state_id = args.block_accessor.get_block_state_id(args.position);
-        let props = MangrovePropaguleLikeProperties::from_state_id(state_id, args.block);
+        let props = MangrovePropaguleLikeProperties::from_state_id(args.state.id, args.block);
         Self::can_survive(args.block_accessor, args.position, &props)
     }
 

@@ -1,5 +1,5 @@
+use std::sync::RwLock;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::{Arc, RwLock};
 
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
@@ -13,7 +13,6 @@ use crate::{
     entity::{
         Entity, EntityBase,
         projectile::{ProjectileHit, ThrownItemEntity},
-        projectile_deflection::ProjectileDeflectionType,
     },
     server::Server,
 };
@@ -145,7 +144,7 @@ impl FireballEntity {
         self.explosion_power.store(power, Ordering::Relaxed);
     }
 
-    pub fn on_deflection(&self, _deflection: &ProjectileDeflectionType, by_attack: bool) {
+    pub fn on_deflection(&self, by_attack: bool) {
         if by_attack {
             self.set_acceleration_power(INITIAL_ACCELERATION_POWER);
         } else {
@@ -206,7 +205,7 @@ impl EntityBase for FireballEntity {
         );
     }
 
-    fn tick<'a>(&'a self, caller: &'a Arc<dyn EntityBase>, server: &'a Server) {
+    fn tick(&self, caller: &dyn EntityBase, _server: &Server) {
         let entity = self.get_entity();
         let mut velocity = entity.velocity.load();
 
@@ -227,7 +226,7 @@ impl EntityBase for FireballEntity {
             entity.velocity.store(velocity);
         }
 
-        self.thrown.process_tick(caller, server);
+        self.thrown.process_tick(caller);
     }
 
     fn get_entity(&self) -> &Entity {
