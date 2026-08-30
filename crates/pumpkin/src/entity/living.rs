@@ -242,6 +242,9 @@ impl LivingEntity {
 
         let mut sent_editioned = false;
         for (slot, stack) in equipment {
+            if *slot == EquipmentSlot::MAIN_HAND {
+                self.update_weapon_attributes(stack);
+            }
             if *slot == EquipmentSlot::MAIN_HAND || *slot == EquipmentSlot::OFF_HAND {
                 let window_id = if *slot == EquipmentSlot::OFF_HAND {
                     120
@@ -272,6 +275,64 @@ impl LivingEntity {
                 .world
                 .load()
                 .broadcast_packet_except(&[self.entity.entity_uuid], &je_packet);
+        }
+    }
+
+    /// Applies the held item's attack attribute modifiers to this entity's
+    /// attribute map and sends the changed attributes to clients. Without this
+    /// the client never sees the reduced attack speed and does not show the
+    /// crosshair attack indicator.
+    fn update_weapon_attributes(&self, stack: &ItemStack) {
+        let component = stack.get_data_component::<AttributeModifiersImpl>();
+
+        // Single pass over the item's modifiers, split by attribute.
+        let mut speed_modifiers: Vec<Modifier> = Vec::new();
+        let mut damage_modifiers: Vec<Modifier> = Vec::new();
+        for modifier in component
+            .into_iter()
+            .flat_map(|c| c.attribute_modifiers.iter())
+        {
+            let target = if modifier.r#type == &Attributes::ATTACK_SPEED {
+                &mut speed_modifiers
+            } else if modifier.r#type == &Attributes::ATTACK_DAMAGE {
+                &mut damage_modifiers
+            } else {
+                continue;
+            };
+            target.push(Modifier {
+                id: modifier.id.to_string(),
+                amount: modifier.amount,
+                operation: match modifier.operation {
+                    Operation::AddValue => ModifierOperation::Add,
+                    Operation::AddMultipliedBase => ModifierOperation::MultiplyBase,
+                    Operation::AddMultipliedTotal => ModifierOperation::MultiplyTotal,
+                },
+            });
+        }
+
+        let mut changed: Vec<Attributes> = Vec::new();
+        {
+            let mut attributes = self
+                .attributes
+                .write()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            for (attribute, modifiers) in [
+                (Attributes::ATTACK_SPEED, speed_modifiers),
+                (Attributes::ATTACK_DAMAGE, damage_modifiers),
+            ] {
+                let instance = attributes
+                    .entry(attribute.id)
+                    .or_insert_with(|| AttributeInstance::new(attribute.default_value));
+                if instance.modifiers == modifiers {
+                    continue;
+                }
+                instance.modifiers = modifiers;
+                instance.dirty.store(true, Ordering::Relaxed);
+                changed.push(attribute);
+            }
+        }
+        if !changed.is_empty() {
+            crate::entity::attributes::send_attribute_updates_for_living(self, changed);
         }
     }
 

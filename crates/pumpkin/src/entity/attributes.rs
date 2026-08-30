@@ -13,7 +13,7 @@ pub enum ModifierOperation {
     MultiplyTotal = 2, // multiply total (applied last)
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Modifier {
     pub id: String,
     pub amount: f64,
@@ -138,6 +138,7 @@ pub fn send_attribute_updates_for_living(
             id if id == Attributes::MAX_HEALTH.id => "minecraft:health".to_string(),
             id if id == Attributes::MAX_ABSORPTION.id => "minecraft:absorption".to_string(),
             id if id == Attributes::ATTACK_DAMAGE.id => "minecraft:attack_damage".to_string(),
+            id if id == Attributes::ATTACK_SPEED.id => "minecraft:attack_speed".to_string(),
             id if id == Attributes::ARMOR.id => "minecraft:armor".to_string(),
             id if id == Attributes::KNOCKBACK_RESISTANCE.id => {
                 "minecraft:knockback_resistance".to_string()
