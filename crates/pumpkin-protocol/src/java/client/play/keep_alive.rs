@@ -116,7 +116,7 @@ mod tests {
 
     #[test]
     fn generated_id_is_normalized_at_legacy_boundary() {
-        let generated = 1_778_000_000_123_i64;
+        let generated = 1_778_000_000_123i64;
         let legacy = CKeepAlive::normalize_id(generated, JavaMinecraftVersion::V_1_12_1);
         assert_eq!(legacy, generated as i32 as i64);
 

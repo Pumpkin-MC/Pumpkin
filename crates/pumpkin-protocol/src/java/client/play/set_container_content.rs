@@ -57,12 +57,12 @@ impl ClientPacket for CSetContainerContent<'_> {
 
         if *version >= JavaMinecraftVersion::V_1_17_1 {
             let slot_count = i32::try_from(slot_count).map_err(|_| {
-                WritingError::Message(format!("{} slot entries do not fit in VarInt", slot_count))
+                WritingError::Message(format!("{slot_count} slot entries do not fit in VarInt"))
             })?;
             write.write_var_int(&VarInt(slot_count))?;
         } else {
             let slot_count = i16::try_from(slot_count).map_err(|_| {
-                WritingError::Message(format!("{} slot entries do not fit in Short", slot_count))
+                WritingError::Message(format!("{slot_count} slot entries do not fit in Short"))
             })?;
             write.write_i16_be(slot_count)?;
         }
