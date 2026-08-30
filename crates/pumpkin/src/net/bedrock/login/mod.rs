@@ -60,27 +60,40 @@ struct AuthPayload {
     token: String,
 }
 
-/// Verifies OIDC tokens for Bedrock 1.26.10+ clients.
-fn verify_oidc_token_path(
+/// Verifies OIDC tokens for Bedrock 1.26.10+ clients on Rayon thread pool.
+async fn verify_oidc_token_path(
     server: &Server,
     token: &str,
     self_signed: bool,
 ) -> Result<pumpkin_util::jwt::PlayerClaims, LoginError> {
+    let token = token.to_string();
+    let (tx, rx) = tokio::sync::oneshot::channel();
     if self_signed {
-        pumpkin_util::jwt::verify_oidc_token_self_signed(token)
-            .map_err(LoginError::ChainValidationFailed)
+        rayon::spawn(move || {
+            let res = pumpkin_util::jwt::verify_oidc_token_self_signed(&token)
+                .map_err(LoginError::ChainValidationFailed);
+            let _ = tx.send(res);
+        });
     } else {
         let (issuer, jwks) =
             server
                 .bedrock_oidc_keys
                 .get()
+                .cloned()
                 .ok_or(LoginError::ChainValidationFailed(
                     AuthError::PublicKeyBuild("OIDC keys not initialized".into()),
                 ))?;
 
-        pumpkin_util::jwt::verify_oidc_token(token, issuer, jwks)
-            .map_err(LoginError::ChainValidationFailed)
+        rayon::spawn(move || {
+            let res = pumpkin_util::jwt::verify_oidc_token(&token, &issuer, &jwks)
+                .map_err(LoginError::ChainValidationFailed);
+            let _ = tx.send(res);
+        });
     }
+
+    rx.await.map_err(|_| {
+        LoginError::ChainValidationFailed(AuthError::PublicKeyBuild("Task cancelled".into()))
+    })?
 }
 
 #[allow(clippy::module_inception)]

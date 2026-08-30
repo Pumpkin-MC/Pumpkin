@@ -19,6 +19,7 @@ use crate::plugin::{
         wit::v0_1::pumpkin::{
             self,
             plugin::{
+                datapack::DatapackManager as WitDatapackManager,
                 player::{BanIpOptions, BanPlayerOptions, Player},
                 server::{
                     BanManager as WitBanManager, BannedIpEntry, BannedPlayerEntry, Difficulty,
@@ -236,7 +237,7 @@ impl pumpkin::plugin::server::HostServer for PluginHostState {
             Dimension::End => pumpkin_data::dimension::Dimension::THE_END,
         };
 
-        let world = server.create_world(name, internal_dim).await;
+        let world = server.create_world(name, internal_dim);
         self.add_world(world)
             .map_err(|_| wasmtime::Error::msg("failed to add world resource"))
     }
@@ -300,6 +301,34 @@ impl pumpkin::plugin::server::HostServer for PluginHostState {
             None,
         );
 
+        Ok(())
+    }
+
+    async fn delete_message_by_signature(
+        &mut self,
+        _rep: Resource<Server>,
+        signature: Vec<u8>,
+    ) -> wasmtime::Result<()> {
+        let server = self
+            .server
+            .as_ref()
+            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+        let packet = pumpkin_protocol::java::client::play::CDeleteChat::from_signature(&signature);
+        server.broadcast_packet_all(&packet);
+        Ok(())
+    }
+
+    async fn delete_message_by_id(
+        &mut self,
+        _rep: Resource<Server>,
+        signature_id: i32,
+    ) -> wasmtime::Result<()> {
+        let server = self
+            .server
+            .as_ref()
+            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+        let packet = pumpkin_protocol::java::client::play::CDeleteChat::from_cache_id(signature_id);
+        server.broadcast_packet_all(&packet);
         Ok(())
     }
 
@@ -604,6 +633,38 @@ impl pumpkin::plugin::server::HostServer for PluginHostState {
             ids.push(enc.name.to_string());
         }
         Ok(ids)
+    }
+
+    async fn get_datapack_manager(
+        &mut self,
+        _rep: Resource<Server>,
+    ) -> wasmtime::Result<Resource<WitDatapackManager>> {
+        let server = self
+            .server
+            .as_ref()
+            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+        self.add_datapack_manager(server.clone())
+    }
+
+    async fn set_server_links(
+        &mut self,
+        _rep: Resource<Server>,
+        links: Vec<pumpkin::plugin::player::ServerLink>,
+    ) -> wasmtime::Result<()> {
+        let server = self
+            .server
+            .clone()
+            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+        let mut converted = Vec::new();
+        for link in links {
+            converted.push(super::player::from_wit_server_link(self, link)?);
+        }
+        let protocol_links: Vec<pumpkin_protocol::Link<'_>> = converted
+            .iter()
+            .map(|(label, url)| pumpkin_protocol::Link::new(label.clone(), url))
+            .collect();
+        server.broadcast_server_links(&protocol_links);
+        Ok(())
     }
 
     async fn drop(&mut self, rep: Resource<Server>) -> wasmtime::Result<()> {

@@ -105,7 +105,6 @@ impl WindChargeEntity {
         &mut self,
         deflection: &ProjectileDeflectionType,
         deflector: Option<&dyn EntityBase>,
-        _from_attack: bool,
     ) -> bool {
         if let Some(cooldown) = self.deflect_cooldown()
             && cooldown.load(Ordering::Relaxed) > 0
@@ -126,8 +125,8 @@ impl WindChargeEntity {
 }
 
 impl EntityBase for WindChargeEntity {
-    fn tick<'a>(&'a self, caller: &'a Arc<dyn EntityBase>, server: &'a Server) {
-        self.thrown_item_entity.process_tick(caller, server);
+    fn tick(&self, caller: &dyn EntityBase, _server: &Server) {
+        self.thrown_item_entity.process_tick(caller);
 
         if let Some(cooldown) = self.deflect_cooldown() {
             let cooldown_ticks = cooldown.load(Ordering::Relaxed);

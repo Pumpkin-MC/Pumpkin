@@ -99,13 +99,7 @@ impl PendingConnection {
         } else if self.version.load() >= JavaMinecraftVersion::V_1_20_5 {
             self.send_known_packs().await;
         } else {
-            self.handle_known_packs(
-                SKnownPacks {
-                    known_packs: Vec::new(),
-                },
-                server,
-            )
-            .await;
+            self.handle_known_packs().await;
         }
         debug!("login acknowledged");
         None

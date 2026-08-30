@@ -1,4 +1,3 @@
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use pumpkin_data::damage::DamageType;
@@ -57,12 +56,12 @@ impl LlamaSpitEntity {
 }
 
 impl EntityBase for LlamaSpitEntity {
-    fn tick<'a>(&'a self, caller: &'a Arc<dyn EntityBase>, server: &'a Server) {
+    fn tick(&self, caller: &dyn EntityBase, _server: &Server) {
         if self.get_entity().touching_water.load(Ordering::Relaxed) {
             self.get_entity().remove();
             return;
         }
-        self.thrown.process_tick(caller, server);
+        self.thrown.process_tick(caller);
     }
 
     fn get_entity(&self) -> &Entity {

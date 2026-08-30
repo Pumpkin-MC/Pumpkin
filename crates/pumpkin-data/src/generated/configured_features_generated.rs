@@ -1541,13 +1541,21 @@ fn build_configured_features()
     map.insert(
         pumpkin_data::configured_feature::ConfiguredFeature::EndGatewayDelayed,
         ConfiguredFeature::EndGateway(
-            crate::generation::feature::features::end_gateway::EndGatewayFeature {},
+            crate::generation::feature::features::end_gateway::EndGatewayFeature {
+                exit: None,
+                exact: false,
+            },
         ),
     );
     map.insert(
         pumpkin_data::configured_feature::ConfiguredFeature::EndGatewayReturn,
         ConfiguredFeature::EndGateway(
-            crate::generation::feature::features::end_gateway::EndGatewayFeature {},
+            crate::generation::feature::features::end_gateway::EndGatewayFeature {
+                exit: Some(pumpkin_util::math::position::BlockPos::new(
+                    100i32, 50i32, 0i32,
+                )),
+                exact: true,
+            },
         ),
     );
     map.insert(

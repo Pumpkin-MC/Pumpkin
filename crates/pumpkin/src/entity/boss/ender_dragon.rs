@@ -434,7 +434,6 @@ impl EnderDragonEntity {
         target: Vector3<f64>,
         fly_speed: f32,
         turn_speed: f32,
-        _y_scale: f64,
     ) {
         let xdd = target.x - pos.x;
         let mut ydd = target.y - pos.y;
@@ -764,6 +763,9 @@ impl EnderDragonEntity {
     }
 
     pub fn ai_step(&self) {
+        if self.mob_entity.living_entity.entity.is_removed() {
+            return;
+        }
         self.mob_entity.living_entity.entity.update_last_pos();
         self.ensure_nodes_initialized();
         self.update_flap_time();
@@ -785,7 +787,14 @@ impl EnderDragonEntity {
             if let Some(ref fight_mutex) = world.dragon_fight {
                 let living = &self.mob_entity.living_entity;
                 if let Ok(mut fight) = fight_mutex.lock() {
-                    fight.update_dragon(&world, living.health.load(), living.get_max_health());
+                    let custom_name = living.entity.custom_name.load();
+                    fight.update_dragon(
+                        &world,
+                        living.entity.entity_uuid,
+                        living.health.load(),
+                        living.get_max_health(),
+                        custom_name.as_ref().as_ref(),
+                    );
                 }
             }
         }
@@ -808,23 +817,19 @@ impl EnderDragonEntity {
 
         phase.tick(self);
 
-        if phase_type == EnderDragonPhase::Dying {
+        if self.mob_entity.living_entity.entity.is_removed() {
             return;
         }
 
-        let target_location = *self
-            .target_location
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if let Some(target) = target_location {
-            let pos = self.mob_entity.living_entity.entity.pos.load();
-            self.steer_toward(
-                pos,
-                target,
-                phase.get_fly_speed(),
-                phase.get_turn_speed(),
-                0.5,
-            );
+        if phase_type != EnderDragonPhase::Dying {
+            let target_location = *self
+                .target_location
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            if let Some(target) = target_location {
+                let pos = self.mob_entity.living_entity.entity.pos.load();
+                self.steer_toward(pos, target, phase.get_fly_speed(), phase.get_turn_speed());
+            }
         }
 
         self.mob_entity.living_entity.entity.send_pos_rot();
@@ -850,7 +855,7 @@ impl Mob for EnderDragonEntity {
         &self.mob_entity
     }
 
-    fn mob_tick<'a>(&'a self, _caller: &'a Arc<dyn EntityBase>) {
+    fn mob_tick(&self, _caller: &dyn EntityBase) {
         self.ai_step();
     }
 

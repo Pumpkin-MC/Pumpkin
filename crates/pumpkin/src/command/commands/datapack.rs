@@ -50,84 +50,16 @@ static ERROR_CREATE_IO_FAILURE: CommandErrorType<1> = CommandErrorType::new(
     translation::java::COMMANDS_DATAPACK_CREATE_IO_FAILURE,
 );
 
-fn get_all_known_packs(server: &Server) -> Vec<String> {
-    let mut packs = Vec::new();
-    packs.push("vanilla".to_string());
-
-    // Bundled feature packs
-    for bundled in [
-        "trade_rebalance",
-        "minecart_improvements",
-        "redstone_experiments",
-    ] {
-        if !packs.iter().any(|p| p == bundled) {
-            packs.push(bundled.to_string());
-        }
-    }
-
-    // World datapacks directory
-    let datapacks_dir = server.basic_config.get_world_path().join("datapacks");
-    if let Ok(entries) = fs::read_dir(datapacks_dir) {
-        for entry in entries.flatten() {
-            let path = entry.path();
-            let file_name = entry.file_name().to_string_lossy().to_string();
-            if file_name.starts_with('.') {
-                continue;
-            }
-            if path.is_dir()
-                || path
-                    .extension()
-                    .is_some_and(|ext| ext.eq_ignore_ascii_case("zip"))
-            {
-                let pack_name = format!("file/{file_name}");
-                if !packs.iter().any(|p| p == &pack_name) {
-                    packs.push(pack_name);
-                }
-            }
-        }
-    }
-
-    let level_info = server.level_info.load();
-    for pack in &level_info.data_packs.enabled {
-        if !packs.iter().any(|p| p == pack) {
-            packs.push(pack.clone());
-        }
-    }
-    for pack in &level_info.data_packs.disabled {
-        if !packs.iter().any(|p| p == pack) {
-            packs.push(pack.clone());
-        }
-    }
-
-    packs
-}
-
 fn get_enabled_packs(server: &Server) -> Vec<String> {
-    server.level_info.load().data_packs.enabled.clone()
+    crate::data::datapack::DatapackManager::get_enabled_packs(server)
 }
 
 fn get_available_packs(server: &Server) -> Vec<String> {
-    let enabled = get_enabled_packs(server);
-    let all = get_all_known_packs(server);
-    all.into_iter().filter(|p| !enabled.contains(p)).collect()
+    crate::data::datapack::DatapackManager::get_available_packs(server)
 }
 
 fn find_pack_name(server: &Server, input: &str) -> Option<String> {
-    let known = get_all_known_packs(server);
-    if let Some(p) = known.iter().find(|p| *p == input) {
-        return Some(p.clone());
-    }
-    let file_input = format!("file/{input}");
-    if let Some(p) = known.iter().find(|p| **p == file_input) {
-        return Some(p.clone());
-    }
-    if let Some(p) = known
-        .iter()
-        .find(|p| p.strip_prefix("file/") == Some(input))
-    {
-        return Some(p.clone());
-    }
-    None
+    crate::data::datapack::DatapackManager::find_pack_name(server, input)
 }
 
 fn format_pack(name: &str) -> TextComponent {

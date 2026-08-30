@@ -57,6 +57,12 @@ impl ItemBehaviour for EndCrystalItem {
         world.spawn_entity(end_crystal.clone());
         end_crystal.set_show_bottom(false);
         item.decrement_unless_creative(player.gamemode.load(), 1);
+
+        if let Some(ref fight_mutex) = world.dragon_fight
+            && let Ok(mut fight) = fight_mutex.lock()
+        {
+            fight.try_respawn(&world);
+        }
     }
 
     fn as_any(&self) -> &dyn std::any::Any {

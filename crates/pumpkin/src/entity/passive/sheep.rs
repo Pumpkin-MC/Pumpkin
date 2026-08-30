@@ -156,10 +156,6 @@ impl Mob for SheepEntity {
         self.set_sheared(false);
     }
 
-    fn get_sheep(&self) -> Option<&SheepEntity> {
-        Some(self)
-    }
-
     fn mob_interact(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {
         use super::animal::Animal;
         self.animal_interact(player, item_stack, Sound::EntitySheepAmbient)

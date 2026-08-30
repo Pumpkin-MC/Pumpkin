@@ -47,7 +47,7 @@ impl TrackTargetGoal {
         self
     }
 
-    fn can_navigate_to_entity(&self, mob: &dyn Mob, _target: &LivingEntity) -> bool {
+    fn can_navigate_to_entity(&self, mob: &dyn Mob) -> bool {
         let cooldown = to_goal_ticks(10 + mob.get_random().random_range(0..5));
         self.check_can_navigate_cooldown
             .store(cooldown, Ordering::Relaxed);
@@ -95,7 +95,7 @@ impl TrackTargetGoal {
             }
 
             if self.can_navigate_flag.load(Ordering::Relaxed) == UNSET {
-                let can_reach = self.can_navigate_to_entity(mob, target);
+                let can_reach = self.can_navigate_to_entity(mob);
                 self.can_navigate_flag.store(
                     if can_reach { CAN_TRACK } else { CANNOT_TRACK },
                     Ordering::Relaxed,

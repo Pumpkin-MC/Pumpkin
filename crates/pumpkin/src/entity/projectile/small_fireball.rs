@@ -1,4 +1,3 @@
-use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 
 use crate::{
@@ -37,8 +36,8 @@ impl SmallFireballEntity {
 }
 
 impl EntityBase for SmallFireballEntity {
-    fn tick<'a>(&'a self, caller: &'a Arc<dyn EntityBase>, server: &'a Server) {
-        self.thrown.process_tick(caller, server);
+    fn tick(&self, caller: &dyn EntityBase, _server: &Server) {
+        self.thrown.process_tick(caller);
     }
 
     fn get_entity(&self) -> &Entity {

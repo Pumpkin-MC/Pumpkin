@@ -66,7 +66,7 @@ impl ExperienceOrbEntity {
 }
 
 impl EntityBase for ExperienceOrbEntity {
-    fn tick(&self, caller: &Arc<dyn EntityBase>, server: &Server) {
+    fn tick(&self, caller: &dyn EntityBase, server: &Server) {
         let entity = &self.entity;
         entity.tick(caller, server);
         let bounding_box = entity.bounding_box.load();
@@ -90,7 +90,7 @@ impl EntityBase for ExperienceOrbEntity {
 
         entity.move_entity(caller, velo);
 
-        entity.tick_block_collisions(caller, server);
+        entity.tick_block_collisions(caller);
 
         let age = self.orb_age.fetch_add(1, Ordering::Relaxed);
         if age >= 6000 {

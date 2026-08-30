@@ -161,7 +161,7 @@ mod entity_pose;
 #[cfg(feature = "entity_status")]
 #[rustfmt::skip]
 #[path = "generated/entity_status.rs"]
-mod entity_status;
+pub mod entity_status;
 
 #[cfg(feature = "entity_type")]
 #[rustfmt::skip]

@@ -214,7 +214,6 @@ impl boss_bar::HostBossBar for PluginHostState {
                         &pbb.bossbar.uuid,
                         pbb.bossbar.color,
                         pbb.bossbar.division,
-                        pbb.bossbar.flags,
                     );
                 }
             }
@@ -241,7 +240,6 @@ impl boss_bar::HostBossBar for PluginHostState {
                         &pbb.bossbar.uuid,
                         pbb.bossbar.color,
                         pbb.bossbar.division,
-                        pbb.bossbar.flags,
                     );
                 }
             }

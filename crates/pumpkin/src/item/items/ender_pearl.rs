@@ -41,7 +41,7 @@ impl ItemBehaviour for EnderPearlItem {
         let (yaw, pitch) = player.rotation();
         pearl
             .thrown
-            .set_velocity_from(player.get_entity(), pitch, yaw, ROLL, POWER, DIVERGENCE);
+            .set_velocity_from(pitch, yaw, ROLL, POWER, DIVERGENCE);
         world.spawn_entity(Arc::new(pearl));
 
         // Consume item

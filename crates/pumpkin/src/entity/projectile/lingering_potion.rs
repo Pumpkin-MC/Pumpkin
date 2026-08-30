@@ -1,5 +1,5 @@
+use std::sync::RwLock;
 use std::sync::atomic::AtomicBool;
-use std::sync::{Arc, RwLock};
 
 use crate::entity::projectile::splash_potion::extinguish_fire_if_water_potion;
 use crate::{
@@ -83,8 +83,8 @@ impl EntityBase for LingeringPotionEntity {
         );
     }
 
-    fn tick<'a>(&'a self, caller: &'a Arc<dyn EntityBase>, server: &'a Server) {
-        self.thrown.process_tick(caller, server);
+    fn tick(&self, caller: &dyn EntityBase, _server: &Server) {
+        self.thrown.process_tick(caller);
     }
 
     fn get_entity(&self) -> &Entity {

@@ -132,7 +132,7 @@ impl EntityBase for MinecartEntity {
     }
 
     #[allow(clippy::too_many_lines)]
-    fn tick<'a>(&'a self, caller: &'a Arc<dyn EntityBase>, _server: &'a Server) {
+    fn tick(&self, caller: &dyn EntityBase, _server: &Server) {
         self.vehicle.tick();
         if let MinecartKind::Furnace(minecart) = &self.kind {
             minecart.tick(&self.vehicle.entity);
@@ -222,13 +222,11 @@ impl EntityBase for MinecartEntity {
                                 if !p_ids.is_empty() {
                                     let world = self.vehicle.entity.world.load();
                                     let vid = self.vehicle.entity.entity_id;
-                                    tokio::spawn(async move {
-                                        if let Some(v) = world.get_entity_by_id(vid) {
-                                            for pid in p_ids {
-                                                v.get_entity().remove_passenger(pid).await;
-                                            }
+                                    if let Some(v) = world.get_entity_by_id(vid) {
+                                        for pid in p_ids {
+                                            v.get_entity().remove_passenger_sync(pid);
                                         }
-                                    });
+                                    }
                                 }
                             }
                             if self.vehicle.get_hurt_time() == 0 {
@@ -503,7 +501,7 @@ impl EntityBase for MinecartEntity {
     }
 
     #[allow(clippy::too_many_lines)]
-    fn push(&self, entity: &Arc<dyn EntityBase>) {
+    fn push(&self, entity: &dyn EntityBase) {
         let self_entity = self.get_entity();
         let other_entity = entity.get_entity();
 
@@ -800,7 +798,7 @@ impl EntityBase for MinecartEntity {
         }
     }
 
-    fn move_entity(&self, caller: &Arc<dyn EntityBase>, motion: Vector3<f64>) {
+    fn move_entity(&self, caller: &dyn EntityBase, motion: Vector3<f64>) {
         let to_position = self.vehicle.entity.pos.load().add(&motion);
         self.vehicle.entity.move_entity(caller, motion);
         let entity_id = self.vehicle.entity.entity_id;

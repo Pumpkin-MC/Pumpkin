@@ -60,7 +60,7 @@ impl CommandExecutor for StartExecutor {
                 } else {
                     1
                 };
-                let raid_id = raids.create_or_extend_raid(&player, pos, &world);
+                let raid_id = raids.create_or_extend_raid(pos, &world);
                 if let Some(id) = raid_id
                     && let Some(raid) = raids.get_mut(id)
                 {

@@ -177,14 +177,15 @@ impl PendingConnection {
         shared_secret: &[u8],
         username: &str,
     ) -> Result<GameProfile, AuthError> {
-        let hash = server.digest_secret(shared_secret).await;
+        let hash = server.digest_secret(shared_secret);
         let ip = self.address.ip();
         let profile = authentication::authenticate(
             username,
             &hash,
             &ip,
             &server.advanced_config.networking.java.authentication,
-        )?;
+        )
+        .await?;
 
         if let Some(actions) = &profile.profile_actions {
             if server

@@ -2,11 +2,7 @@
 use super::*;
 
 impl JavaClient {
-    pub async fn handle_known_packs(
-        &self,
-        _config_acknowledged: SKnownPacks<'_>,
-        server: &Server,
-    ) -> Option<PacketHandlerResult> {
+    pub async fn handle_known_packs(&self, server: &Server) -> Option<PacketHandlerResult> {
         debug!("Handling known packs");
         // let mut tags_to_send = Vec::new();
         let version = self.version.load();
@@ -14,13 +10,16 @@ impl JavaClient {
             self.send_packet(&CFeatureFlags::new(&["minecraft:vanilla".to_string()]))
                 .await;
             let registry = Registry::get_synced(version);
+            let mut packets = Vec::new();
             let mut sent_dimension_type = false;
             for reg in &registry {
                 if reg.registry_id == "minecraft:dimension_type" {
                     sent_dimension_type = true;
                 }
-                self.send_packet(&CRegistryData::new(&reg.registry_id, &reg.registry_entries))
-                    .await;
+                let packet = CRegistryData::new(&reg.registry_id, &reg.registry_entries);
+                if let Ok(data) = Self::serialize_packet_for_version(&packet, version) {
+                    packets.push(data);
+                }
             }
             if !sent_dimension_type {
                 let dims = [
@@ -36,22 +35,29 @@ impl JavaClient {
                         data: Some(build_dimension_nbt(dim).into_boxed_slice()),
                     })
                     .collect();
-                self.send_packet(&CRegistryData::new(
-                    &"minecraft:dimension_type".to_string(),
-                    &dim_entries,
-                ))
-                .await;
+                let dim_type = "minecraft:dimension_type".to_string();
+                let packet = CRegistryData::new(&dim_type, &dim_entries);
+                if let Ok(data) = Self::serialize_packet_for_version(&packet, version) {
+                    packets.push(data);
+                }
+            }
+            let mut tags = Vec::new();
+            for &key in pumpkin_data::tag::RegistryKey::NETWORK_KEYS {
+                if pumpkin_data::tag::get_registry_key_tags(version, key)
+                    .is_some_and(|map| !map.is_empty())
+                {
+                    tags.push(key);
+                }
+            }
+            let packet = CUpdateTags::new(&tags);
+            if let Ok(data) = Self::serialize_packet_for_version(&packet, version) {
+                packets.push(data);
+            }
+
+            for packet_data in packets {
+                self.send_packet_now(packet_data).await;
             }
         }
-        let mut tags = Vec::new();
-        for &key in pumpkin_data::tag::RegistryKey::NETWORK_KEYS {
-            if pumpkin_data::tag::get_registry_key_tags(version, key)
-                .is_some_and(|map| !map.is_empty())
-            {
-                tags.push(key);
-            }
-        }
-        self.send_packet(&CUpdateTags::new(&tags)).await;
 
         // We are done with configuring
         self.send_packet(&CFinishConfig).await;
