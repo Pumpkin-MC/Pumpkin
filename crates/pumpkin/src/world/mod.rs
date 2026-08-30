@@ -6424,11 +6424,16 @@ impl World {
 
         let mut block = BlockPos::floored(from.x, from.y, from.z);
 
-        let (collision, direction) = self.ray_outline_check(&block, from, to);
-        if let Some(dir) = direction
-            && collision
-        {
-            return Some((block, dir));
+        // `hit_check` applies to the start cell too. Empty outline (air) is
+        // otherwise treated as a full cube, so a ray that begins in air always
+        // "hits" that cell and `ServerExplosion.getSeenPercent` stays 0.
+        if hit_check(&block, self) {
+            let (collision, direction) = self.ray_outline_check(&block, from, to);
+            if let Some(dir) = direction
+                && collision
+            {
+                return Some((block, dir));
+            }
         }
 
         let difference = to.sub(&from);
