@@ -14,6 +14,10 @@ use std::{
     },
 };
 
+/// Vanilla `EntityTypes.TNT`'s `updateInterval(10)`: how often the entity tracker resyncs the
+/// client's own simulation of this entity. See [`Entity::send_tracked_position`].
+const UPDATE_INTERVAL: i32 = 10;
+
 /// Vanilla `PrimedTnt.explosionPower`'s default, and the value `readAdditionalSaveData` falls
 /// back to. Only a deviating power is written, matching vanilla.
 const DEFAULT_EXPLOSION_POWER: f32 = 4.0;
@@ -94,14 +98,12 @@ impl EntityBase for TNTEntity {
         };
         entity.velocity.store(velo);
 
-        if entity.velocity_dirty.swap(false, Ordering::SeqCst) {
-            entity.send_pos_rot();
-            entity.send_velocity();
-        }
-
-        // Vanilla decrements the fuse unconditionally and explodes once it reaches 0.
-        // `saturating_sub` keeps this from underflowing if `tick` is ever called with fuse
-        // already at 0.
+        // Vanilla's `PrimedTnt.tick()` calls `setFuse()` unconditionally every tick, which
+        // marks its `SynchedEntityData` dirty every tick, and `ServerEntity.sendChanges`
+        // ORs that dirty flag into the same gate that guards position/velocity resync. TNT
+        // therefore tracks almost every tick via the fuse, not on the 10-tick interval.
+        // Push the metadata first so `entity_data_dirty` is set before the resync check
+        // below observes it. `saturating_sub` keeps the fuse from underflowing at 0.
         let fuse = self.fuse.load(Relaxed).saturating_sub(1);
         entity.send_meta_data(
             &[Metadata::new(
@@ -110,6 +112,13 @@ impl EntityBase for TNTEntity {
             )],
             None,
         );
+
+        if entity.velocity_dirty.swap(false, Ordering::SeqCst) {
+            entity.send_pos_rot();
+            entity.send_velocity();
+        } else {
+            entity.send_tracked_position(UPDATE_INTERVAL);
+        }
 
         if fuse == 0 {
             // TNT explodes now

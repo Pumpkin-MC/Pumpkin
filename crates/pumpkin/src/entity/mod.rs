@@ -862,6 +862,12 @@ pub struct Entity {
     pub movement_multiplier: AtomicCell<Vector3<f64>>,
     /// Determines whether the entity's velocity needs to be sent
     pub velocity_dirty: AtomicBool,
+    /// Set whenever [`Entity::send_meta_data`] pushes a tracked-data change, mirroring vanilla's
+    /// `SynchedEntityData.isDirty()`. `ServerEntity.sendChanges` ORs this into its periodic
+    /// resync gate, so an entity whose tracked data changes every tick (`PrimedTnt`'s fuse)
+    /// gets position and velocity re-verified every tick too, not just on the `updateInterval`
+    /// cadence. See [`Entity::send_tracked_position`].
+    pub entity_data_dirty: AtomicBool,
     /// Set when an Entity is to be removed but could still be referenced
     pub removed: AtomicBool,
     /// The last sent yaw value (encoded as u8) for change detection
@@ -995,6 +1001,7 @@ impl Entity {
             no_physics: AtomicBool::new(false),
             movement_multiplier: AtomicCell::new(Vector3::default()),
             velocity_dirty: AtomicBool::new(true),
+            entity_data_dirty: AtomicBool::new(false),
             removed: AtomicBool::new(false),
             last_sent_yaw: AtomicU8::new(0),
             last_sent_pitch: AtomicU8::new(0),
@@ -1374,6 +1381,13 @@ impl Entity {
 
         let mut adjusted_movement = movement;
 
+        // The box each axis sweeps from, matching vanilla `Entity.collideWithShapes`'
+        // `boundingBox.move(resolvedMovement)`: it accumulates only the FULL, already-resolved
+        // offset of axes processed so far. The axis currently being solved is swept forward
+        // from here by `calculate_collision_time`; the other two axes must stay fixed at this
+        // box's position for that sweep, not drift with the sweep's own time fraction.
+        let mut resolved_box = bounding_box;
+
         // Y-Axis adjustment
         if movement.get_axis(Axis::Y) != 0.0 {
             let mut max_time = 1.0;
@@ -1390,9 +1404,9 @@ impl Entity {
                         position = next_pos;
                     }
 
-                    if let Some(collision_time) = bounding_box.calculate_collision_time(
+                    if let Some(collision_time) = resolved_box.calculate_collision_time(
                         inert_box,
-                        adjusted_movement,
+                        adjusted_movement.get_axis(Axis::Y),
                         Axis::Y,
                         max_time,
                     ) {
@@ -1416,9 +1430,24 @@ impl Entity {
             }
         }
 
+        let mut y_only = Vector3::default();
+        y_only.set_axis(Axis::Y, adjusted_movement.get_axis(Axis::Y));
+        resolved_box = resolved_box.shift(y_only);
+
         let mut horizontal_collision = false;
 
-        for axis in Axis::horizontal() {
+        // Vanilla `Direction.axisStepOrder`: the horizontal axis with the LARGER movement
+        // magnitude is resolved first (right after Y), the smaller one last. A fixed X-then-Z
+        // order (as opposed to this magnitude-dependent order) lets a corner clip incorrectly
+        // when movement is dominated by one axis, since the resolution order determines which
+        // shape "wins" the corner.
+        let horizontal_order = if movement.x.abs() < movement.z.abs() {
+            [Axis::Z, Axis::X]
+        } else {
+            [Axis::X, Axis::Z]
+        };
+
+        for axis in horizontal_order {
             if movement.get_axis(axis) == 0.0 {
                 continue;
             }
@@ -1426,9 +1455,9 @@ impl Entity {
             let mut max_time = 1.0;
 
             for inert_box in &collisions {
-                if let Some(collision_time) = bounding_box.calculate_collision_time(
+                if let Some(collision_time) = resolved_box.calculate_collision_time(
                     inert_box,
-                    adjusted_movement,
+                    adjusted_movement.get_axis(axis),
                     axis,
                     max_time,
                 ) {
@@ -1441,6 +1470,10 @@ impl Entity {
                 adjusted_movement.set_axis(axis, changed_component);
                 horizontal_collision = true;
             }
+
+            let mut axis_only = Vector3::default();
+            axis_only.set_axis(axis, adjusted_movement.get_axis(axis));
+            resolved_box = resolved_box.shift(axis_only);
         }
 
         self.horizontal_collision
@@ -1655,6 +1688,30 @@ impl Entity {
         }
 
         suffocating
+    }
+
+    /// Periodic leg of vanilla's `ServerEntity.sendChanges`: every `update_interval` ticks the
+    /// tracker resends where the entity is and how fast it is moving.
+    ///
+    /// A correction channel. The client simulates TNT, falling blocks and items itself, so an
+    /// entity only broadcast when its velocity is explicitly changed has nothing to correct
+    /// against. Gravity and drag update velocity every tick, so vanilla resends both
+    /// `getDeltaMovement()` and position from the same gated block. See
+    /// [`Entity::send_velocity`] for the unchanged-velocity guard.
+    ///
+    /// `update_interval` is vanilla's per-type `EntityType.Builder.updateInterval` (10 for TNT,
+    /// 20 for items and falling blocks), keyed off the entity's own age like vanilla's per
+    /// tracker `tickCount`. `sendChanges` also fires on `entityData.isDirty()`, so an entity
+    /// whose tracked data changes every tick (TNT fuse) rides that instead of waiting for its
+    /// interval. See [`Entity::entity_data_dirty`].
+    pub fn send_tracked_position(&self, update_interval: i32) {
+        let on_interval = update_interval > 0
+            && self.age.load(Ordering::Relaxed).rem_euclid(update_interval) == 0;
+        let data_dirty = self.entity_data_dirty.swap(false, Ordering::Relaxed);
+        if on_interval || data_dirty {
+            self.send_pos_rot();
+            self.send_velocity();
+        }
     }
 
     #[expect(clippy::too_many_lines)]
@@ -3011,6 +3068,8 @@ impl Entity {
         meta: &[Metadata<T>],
         bedrock_meta: Option<&SyncedActorDataList>,
     ) {
+        self.entity_data_dirty.store(true, Ordering::Relaxed);
+
         let world = self.world.load();
         let players = world.players.load();
 
