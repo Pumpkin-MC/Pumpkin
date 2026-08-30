@@ -121,6 +121,8 @@ inherits = "release"
 debug = true
 strip = false
 
+[profile.dev]
+debug = false
 
 [workspace.dependencies]
 tokio = { version = "1.53", default-features = false }
@@ -215,9 +217,9 @@ rustc_version_runtime = { version = "0.3", default-features = false }
 ordered-float = { version = "5.4", default-features = false, features = ["std"] }
 xxhash-rust = { version = "0.8", default-features = false, features = ["xxh64"] }
 
-wasmtime = { version = "47.0", default-features = false, features = ["runtime", "component-model", "async", "cache", "cranelift", "gc", "gc-drc", "threads", "std"] }
-wasmtime-wasi = { version = "47.0", default-features = false, features = ["p2", "p3"] }
-wasmtime-wasi-http = { version = "47.0", default-features = false, features = ["p2", "p3", "default-send-request"] }
+wasmtime = { version = "48.0", default-features = false, features = ["runtime", "component-model", "async", "cache", "cranelift", "gc", "gc-drc", "threads", "std"] }
+wasmtime-wasi = { version = "48.0", default-features = false, features = ["p2", "p3"] }
+wasmtime-wasi-http = { version = "48.0", default-features = false, features = ["p2", "p3", "default-send-request"] }
 # needed for interacting with wasmtime-wasi-http - keep in sync
 hyper = { version = "^1.11", default-features = false }
 axum = { version = "0.8.9", default-features = false, features = ["http1", "tokio"] }
@@ -227,4 +229,4 @@ wit-bindgen = { version = "0.61", default-features = false, features = ["macros"
 
 postcard = { version = "1.1", default-features = false, features = ["alloc"] }
 tracing-serde-structured = { version = "0.4", default-features = false }
-wasmparser = { version = "0.257", default-features = false }
+wasmparser = { version = "0.258", default-features = false }
