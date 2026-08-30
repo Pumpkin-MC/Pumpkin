@@ -1918,7 +1918,7 @@ impl World {
         ));
 
         // 5. Parallel Chunk Spawners via Rayon
-        if !spawn_list.is_empty() && self.level_info.load().game_rules.spawn_mobs {
+        if !spawn_list.is_empty() {
             let mut spawning_chunks = Vec::new();
             for pos in active_chunks.iter() {
                 if let Some(chunk) = self.level.read_chunk_sync(pos, std::clone::Clone::clone) {
