@@ -2768,12 +2768,7 @@ impl Entity {
 
     #[must_use]
     pub fn is_submerged_in_water(&self) -> bool {
-        let pos = self.pos.load();
-        let eye_height = self.get_eye_height();
-        let eye_pos = BlockPos::floored(pos.x, pos.y + eye_height - 0.111_111_11, pos.z);
-        let world = self.world.load();
-        let (fluid, _) = world.get_fluid_and_fluid_state(&eye_pos);
-        fluid.id == Fluid::WATER.id || fluid.id == Fluid::FLOWING_WATER.id
+        self.water_height.load() >= self.get_eye_height()
     }
 
     #[must_use]
@@ -2941,18 +2936,6 @@ impl Entity {
 
     pub fn is_sprinting(&self) -> bool {
         self.sprinting.load(Ordering::Relaxed)
-    }
-
-    pub fn is_swimming(&self) -> bool {
-        self.swimming.load(Ordering::Relaxed)
-    }
-
-    pub fn is_in_water(&self) -> bool {
-        self.touching_water.load(Relaxed)
-    }
-
-    pub fn is_under_water(&self) -> bool {
-        self.water_height.load() >= f64::from(self.entity_dimension.load().eye_height)
     }
 
     pub fn check_fall_flying(&self) -> bool {
