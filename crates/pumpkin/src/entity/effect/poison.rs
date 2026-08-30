@@ -1,6 +1,6 @@
 use pumpkin_data::damage::DamageType;
 
-use crate::entity::effect::{EffectFuture, MobEffect};
+use crate::entity::effect::MobEffect;
 use crate::entity::living::LivingEntity;
 
 pub struct PoisonMobEffect;
@@ -18,27 +18,19 @@ impl MobEffect for PoisonMobEffect {
         }
     }
 
-    fn apply_effect_tick<'a>(
-        &'a self,
-        living: &'a LivingEntity,
-        _amplifier: u8,
-    ) -> EffectFuture<'a, ()> {
-        Box::pin(async move {
-            let current_health = living.health.load();
-            if current_health > 1.0
-                && let Some(dyn_self) = living
-                    .entity
-                    .world
-                    .load()
-                    .get_entity_by_id(living.entity.entity_id)
-            {
-                let damage_amount = (current_health - 1.0).min(1.0);
-                if damage_amount > 0.0 {
-                    dyn_self
-                        .damage(&*dyn_self, damage_amount, DamageType::MAGIC)
-                        .await;
-                }
+    fn apply_effect_tick(&self, living: &LivingEntity, _amplifier: u8) {
+        let current_health = living.health.load();
+        if current_health > 1.0
+            && let Some(dyn_self) = living
+                .entity
+                .world
+                .load()
+                .get_entity_by_id(living.entity.entity_id)
+        {
+            let damage_amount = (current_health - 1.0).min(1.0);
+            if damage_amount > 0.0 {
+                dyn_self.damage(&*dyn_self, damage_amount, DamageType::MAGIC);
             }
-        })
+        }
     }
 }

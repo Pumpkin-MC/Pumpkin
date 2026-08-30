@@ -76,7 +76,7 @@ wasmparser.workspace = true
 wasm-encoder = "0.257"
 
 # authentication
-ureq = { workspace = true, features = ["json"] }
+reqwest = { workspace = true, features = ["json"] }
 
 sha1.workspace = true
 

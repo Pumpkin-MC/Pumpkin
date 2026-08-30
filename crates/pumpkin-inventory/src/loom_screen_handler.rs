@@ -2,9 +2,7 @@ use std::any::Any;
 use std::sync::Arc;
 
 use crate::player::player_inventory::PlayerInventory;
-use crate::screen_handler::{
-    InventoryPlayer, ScreenHandler, ScreenHandlerBehaviour, ScreenHandlerFuture,
-};
+use crate::screen_handler::{InventoryPlayer, ScreenHandler, ScreenHandlerBehaviour};
 use crate::slot::NormalSlot;
 
 use pumpkin_data::item_stack::ItemStack;
@@ -66,48 +64,39 @@ impl ScreenHandler for LoomScreenHandler {
         self
     }
 
-    fn on_slot_click<'a>(
-        &'a mut self,
+    fn on_slot_click(
+        &mut self,
         slot_index: i32,
         button: i32,
         action_type: SlotActionType,
-        player: &'a dyn InventoryPlayer,
-    ) -> ScreenHandlerFuture<'a, ()> {
-        Box::pin(async move {
-            self.internal_on_slot_click(slot_index, button, action_type, player)
-                .await;
-        })
+        player: &dyn InventoryPlayer,
+    ) {
+        self.internal_on_slot_click(slot_index, button, action_type, player);
     }
 
-    fn quick_move<'a>(
-        &'a mut self,
-        _player: &'a dyn InventoryPlayer,
-        slot_index: i32,
-    ) -> ScreenHandlerFuture<'a, ItemStack> {
-        Box::pin(async move {
-            let mut stack = ItemStack::EMPTY.clone();
-            let slot = self.get_behaviour().slots.get(slot_index as usize).cloned();
+    fn quick_move(&mut self, _player: &dyn InventoryPlayer, slot_index: i32) -> ItemStack {
+        let mut stack = ItemStack::EMPTY.clone();
+        let slot = self.get_behaviour().slots.get(slot_index as usize).cloned();
 
-            if let Some(slot) = slot {
-                let mut slot_stack = slot.get_cloned_stack().await;
-                if !slot_stack.is_empty() {
-                    stack = slot_stack.clone();
-                    if slot_index < 4 {
-                        if !self.insert_item(&mut slot_stack, 4, 40, true).await {
-                            return ItemStack::EMPTY.clone();
-                        }
-                    } else if !self.insert_item(&mut slot_stack, 0, 3, false).await {
+        if let Some(slot) = slot {
+            let mut slot_stack = slot.get_cloned_stack();
+            if !slot_stack.is_empty() {
+                stack = slot_stack.clone();
+                if slot_index < 4 {
+                    if !self.insert_item(&mut slot_stack, 4, 40, true) {
                         return ItemStack::EMPTY.clone();
                     }
+                } else if !self.insert_item(&mut slot_stack, 0, 3, false) {
+                    return ItemStack::EMPTY.clone();
+                }
 
-                    if slot_stack.is_empty() {
-                        slot.set_stack(ItemStack::EMPTY.clone()).await;
-                    } else {
-                        slot.set_stack(slot_stack).await;
-                    }
+                if slot_stack.is_empty() {
+                    slot.set_stack(ItemStack::EMPTY.clone());
+                } else {
+                    slot.set_stack(slot_stack);
                 }
             }
-            stack
-        })
+        }
+        stack
     }
 }

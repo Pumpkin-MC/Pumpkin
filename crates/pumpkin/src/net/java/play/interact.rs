@@ -3,10 +3,10 @@ use super::*;
 
 impl JavaClient {
     #[expect(clippy::too_many_lines)]
-    pub async fn handle_interact(
+    pub fn handle_interact(
         &self,
         player: &Arc<Player>,
-        interact: SInteract,
+        interact: &SInteract,
         server: &Arc<Server>,
     ) {
         if !player.has_client_loaded() {
@@ -18,10 +18,10 @@ impl JavaClient {
         let sneaking = interact.sneaking;
         let player_entity = &player.get_entity();
         if player_entity.is_sneaking() != sneaking {
-            player_entity.set_sneaking(sneaking).await;
+            player_entity.set_sneaking(sneaking);
         }
         let Ok(action) = ActionType::try_from(interact.r#type.0) else {
-            self.kick(TextComponent::text("Invalid action type")).await;
+            self.try_kick(&TextComponent::text("Invalid action type"));
             return;
         };
 
@@ -36,10 +36,10 @@ impl JavaClient {
         if let Some(target) = target {
             if player.gamemode.load() == GameMode::Spectator {
                 player.camera_target_id.store(Some(entity_id.0));
-                player.send_client_packet(&CSetCamera::new(entity_id)).await;
+                player.try_send_client_packet(&CSetCamera::new(entity_id));
                 return;
             }
-            send_cancellable! {{
+            send_cancellable_blocking! {{
                 server;
                 PlayerInteractEntityEvent::new(
                     player,
@@ -58,8 +58,7 @@ impl JavaClient {
                             }
 
                             if entity_id.0 == player.entity_id() {
-                                self.kick(TextComponent::translate_cross(translation::java::MULTIPLAYER_DISCONNECT_INVALID_ENTITY_ATTACKED, translation::java::MULTIPLAYER_DISCONNECT_INVALID_ENTITY_ATTACKED, [],))
-                                .await;
+                                self.try_kick(&TextComponent::translate_cross(translation::java::MULTIPLAYER_DISCONNECT_INVALID_ENTITY_ATTACKED, translation::java::MULTIPLAYER_DISCONNECT_INVALID_ENTITY_ATTACKED, []));
                                 return;
                             }
 
@@ -80,7 +79,7 @@ impl JavaClient {
                                     return;
                                 }
                             }
-                            player.attack(event.target).await;
+                            player.attack(&event.target);
                         }
                         ActionType::Interact | ActionType::InteractAt => {
                             if event.action == ActionType::InteractAt
@@ -94,34 +93,33 @@ impl JavaClient {
                                     pos.z,
                                     u8::from(interact.hand.map_or(0, |h| h.0) != 0),
                                 );
-                                server.plugin_manager.fire(server, &mut at_event).await;
+                                server.plugin_manager.fire_blocking(server, &mut at_event);
                                 if at_event.cancelled {
                                     return;
                                 }
                             }
-                            let mut stack = player.inventory().held_item().await;
+                            let mut stack = player.inventory().held_item();
                             let target_entity = event.target.get_entity();
                             if target_entity.entity_type.resource_name == "zombie_villager"
                                 && stack.item.registry_key == "golden_apple"
                             {
-                                player.trigger_advancement(crate::entity::player::advancement::trigger::AdvancementTrigger::CuredZombieVillager).await;
+                                player.trigger_advancement(crate::entity::player::advancement::trigger::AdvancementTrigger::CuredZombieVillager);
                             }
 
-                            let interacted = event.target.interact(player, &mut stack).await;
+                            let interacted = event.target.interact(player, &mut stack);
                             if !interacted {
                                 server
                                     .item_registry
-                                    .use_on_entity(&mut stack, player, event.target)
-                                    .await;
+                                    .use_on_entity(&mut stack, player, event.target);
                             }
-                            player.inventory().set_held_item(stack).await;
+                            player.inventory().set_held_item(stack);
                         }
                     }
                 }
             }}
         } else {
             // Entity not found
-            send_cancellable! {{
+            send_cancellable_blocking! {{
                 server;
                 PlayerInteractUnknownEntityEvent::new(player, entity_id.0, action);
 
@@ -132,8 +130,7 @@ impl JavaClient {
                             player.entity_id(),
                             event.entity_id
                         );
-                        self.kick(TextComponent::translate_cross(translation::java::MULTIPLAYER_DISCONNECT_INVALID_ENTITY_ATTACKED, translation::java::MULTIPLAYER_DISCONNECT_INVALID_ENTITY_ATTACKED, [],))
-                        .await;
+                        self.try_kick(&TextComponent::translate_cross(translation::java::MULTIPLAYER_DISCONNECT_INVALID_ENTITY_ATTACKED, translation::java::MULTIPLAYER_DISCONNECT_INVALID_ENTITY_ATTACKED, []));
                     }
                 }
             }}

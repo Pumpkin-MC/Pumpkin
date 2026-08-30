@@ -24,8 +24,8 @@ pumpkin-util.workspace = true
 
 rand.workspace = true
 tracing.workspace = true
-tokio.workspace = true
 thiserror.workspace = true
+rustc-hash.workspace = true
 
 [lints]
 workspace = true

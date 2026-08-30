@@ -367,8 +367,7 @@ impl pumpkin::plugin::command::HostCommandSender for PluginHostState {
             .clone();
         self.get_sender_res(&sender)?
             .provider
-            .send_message(component)
-            .await;
+            .send_message(component);
         Ok(())
     }
 
@@ -384,8 +383,7 @@ impl pumpkin::plugin::command::HostCommandSender for PluginHostState {
             .clone();
         self.get_sender_res(&sender)?
             .provider
-            .send_message(component)
-            .await;
+            .send_message(component);
         Ok(())
     }
 
@@ -403,8 +401,7 @@ impl pumpkin::plugin::command::HostCommandSender for PluginHostState {
             .provider
             .send_message(component.color(pumpkin_util::text::color::Color::Named(
                 pumpkin_util::text::color::NamedColor::Red,
-            )))
-            .await;
+            )));
         Ok(())
     }
 
@@ -489,7 +486,7 @@ impl pumpkin::plugin::command::HostCommandSender for PluginHostState {
             .resource_table
             .get::<ServerResource>(&Resource::new_own(server.rep()))?
             .provider;
-        Ok(sender_provider.has_permission(server_provider, &node).await)
+        Ok(sender_provider.has_permission(server_provider, &node))
     }
 
     async fn position(

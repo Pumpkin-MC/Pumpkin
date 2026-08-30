@@ -141,9 +141,11 @@ impl NbtTag {
                 }
 
                 w.write_i32(len as i32)?;
-                for int in byte_array {
-                    w.write_i8(int)?;
-                }
+                // SAFETY: `i8` and `u8` have identical layouts, and the slice is only read.
+                let bytes = unsafe {
+                    std::slice::from_raw_parts(byte_array.as_ptr().cast::<u8>(), byte_array.len())
+                };
+                w.write_slice(bytes)?;
             }
             Self::String(string) => {
                 w.write_string(&string)?;
@@ -350,12 +352,7 @@ impl NbtTag {
                 if len > crate::MAX_ARRAY_LENGTH {
                     return Err(Error::LargeLength(len));
                 }
-                let mut byte_array = Vec::with_capacity(len.min(4096));
-                for _ in 0..len {
-                    let byte = reader.get_i8()?;
-                    byte_array.push(byte);
-                }
-                Ok(Self::ByteArray(byte_array.into()))
+                Ok(Self::ByteArray(reader.get_byte_array(len)?.into()))
             }
             STRING_ID => Ok(Self::String(reader.get_string()?.into_owned().into())),
             LIST_ID => {

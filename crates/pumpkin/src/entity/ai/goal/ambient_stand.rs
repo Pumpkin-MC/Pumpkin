@@ -1,5 +1,5 @@
-use super::{Controls, Goal};
-use crate::entity::{ai::goal::GoalFuture, mob::Mob};
+use crate::entity::ai::goal::{Controls, Goal};
+use crate::entity::mob::Mob;
 use rand::RngExt;
 
 pub struct AmbientStandGoal {
@@ -16,15 +16,13 @@ impl AmbientStandGoal {
 }
 
 impl Goal for AmbientStandGoal {
-    fn can_start<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
-        Box::pin(async {
-            self.cooldown += 1;
-            if self.cooldown > 0 && mob.get_random().random_range(0..1000) < self.cooldown {
-                self.reset_cooldown();
-            }
+    fn can_start(&mut self, mob: &dyn Mob) -> bool {
+        self.cooldown += 1;
+        if self.cooldown > 0 && mob.get_random().random_range(0..1000) < self.cooldown {
+            self.reset_cooldown();
+        }
 
-            false
-        })
+        false
     }
 
     fn controls(&self) -> Controls {

@@ -2,9 +2,7 @@ use std::sync::Arc;
 
 use crate::block::blocks::plant::PlantBlockBase;
 use crate::block::blocks::plant::big_dripleaf::can_plant_dripleaf_on_top;
-use crate::block::{
-    BlockBehaviour, BlockFuture, BrokenArgs, CanPlaceAtArgs, GetStateForNeighborUpdateArgs,
-};
+use crate::block::{BlockBehaviour, BrokenArgs, CanPlaceAtArgs, GetStateForNeighborUpdateArgs};
 use crate::world::World;
 use pumpkin_data::Block;
 use pumpkin_data::BlockStateId;
@@ -25,22 +23,19 @@ impl BlockBehaviour for BigDripleafStemBlock {
         <Self as PlantBlockBase>::can_place_at(self, args.block_accessor, args.position)
     }
 
-    fn get_state_for_neighbor_update<'a>(
-        &'a self,
-        args: GetStateForNeighborUpdateArgs<'a>,
-    ) -> BlockFuture<'a, BlockStateId> {
-        Box::pin(async move {
-            <Self as PlantBlockBase>::get_state_for_neighbor_update(
-                self,
-                args.world,
-                args.position,
-                args.state_id,
-            )
-            .await
-        })
+    fn get_state_for_neighbor_update(
+        &self,
+        args: GetStateForNeighborUpdateArgs<'_>,
+    ) -> BlockStateId {
+        <Self as PlantBlockBase>::get_state_for_neighbor_update(
+            self,
+            args.world,
+            args.position,
+            args.state_id,
+        )
     }
-    fn broken<'a>(&'a self, args: BrokenArgs<'a>) -> BlockFuture<'a, ()> {
-        Box::pin(async move { handle_big_dripleaf_breaking(args.world, args.position).await })
+    fn broken(&self, args: BrokenArgs<'_>) {
+        handle_big_dripleaf_breaking(args.world, args.position);
     }
 }
 impl PlantBlockBase for BigDripleafStemBlock {
@@ -49,8 +44,7 @@ impl PlantBlockBase for BigDripleafStemBlock {
         can_plant_dripleaf_on_top(support_block)
     }
 
-    #[allow(clippy::unused_async_trait_impl)]
-    async fn get_state_for_neighbor_update(
+    fn get_state_for_neighbor_update(
         &self,
         block_accessor: &dyn BlockAccessor,
         block_pos: &BlockPos,
@@ -69,7 +63,7 @@ impl PlantBlockBase for BigDripleafStemBlock {
         block_state
     }
 }
-pub async fn handle_big_dripleaf_breaking(world: &Arc<World>, position: &BlockPos) {
+pub fn handle_big_dripleaf_breaking(world: &Arc<World>, position: &BlockPos) {
     let support_pos = position.down();
     let (support_block, support_state_id) = world.get_block_and_state_id(&support_pos);
     if support_block == &Block::BIG_DRIPLEAF_STEM {
@@ -79,12 +73,10 @@ pub async fn handle_big_dripleaf_breaking(world: &Arc<World>, position: &BlockPo
         let mut dripleaf_props = BigDripleafLikeProperties::default(&Block::BIG_DRIPLEAF);
         dripleaf_props.facing = dripleaf_stem_props.facing;
         dripleaf_props.waterlogged = dripleaf_stem_props.waterlogged;
-        world
-            .set_block_state(
-                &support_pos,
-                dripleaf_props.to_state_id(&Block::BIG_DRIPLEAF),
-                BlockFlags::empty(),
-            )
-            .await;
+        world.set_block_state(
+            &support_pos,
+            dripleaf_props.to_state_id(&Block::BIG_DRIPLEAF),
+            BlockFlags::empty(),
+        );
     }
 }

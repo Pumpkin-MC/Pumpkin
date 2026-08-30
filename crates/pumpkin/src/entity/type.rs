@@ -261,7 +261,7 @@ pub fn from_type(
         }
         id if id == EntityType::EXPERIENCE_ORB.id => Arc::new(ExperienceOrbEntity::new(entity, 1)),
         id if id == EntityType::TNT.id => Arc::new(TNTEntity::new(entity, 4.0, 80)),
-        id if id == EntityType::ITEM.id => Arc::new(ItemEntity::new_for_restore(entity)),
+        id if id == EntityType::ITEM.id => Arc::new(ItemEntity::new_empty(entity)),
         id if id == EntityType::ARROW.id => Arc::new(ArrowEntity::new(entity, None)),
         id if id == EntityType::SPECTRAL_ARROW.id => Arc::new(ArrowEntity::new(entity, None)),
         id if id == EntityType::TRIDENT.id => Arc::new(TridentEntity::new(entity, None)),

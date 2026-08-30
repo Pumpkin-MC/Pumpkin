@@ -21,7 +21,7 @@ impl BedrockClient {
         let player_data = if server.advanced_config.networking.bedrock.online_mode {
             match auth_payload.authentication_type {
                 AuthenticationType::Full => {
-                    verify_oidc_token_path(server, &auth_payload.token, false)?
+                    verify_oidc_token_path(server, &auth_payload.token, false).await?
                 }
                 AuthenticationType::SelfSigned => {
                     if server
@@ -34,7 +34,7 @@ impl BedrockClient {
                         return Err(LoginError::SelfSignedNotAllowed);
                     }
 
-                    verify_oidc_token_path(server, &auth_payload.token, true)?
+                    verify_oidc_token_path(server, &auth_payload.token, true).await?
                 }
                 AuthenticationType::Guest => {
                     return Err(LoginError::GuestUnimplemented);

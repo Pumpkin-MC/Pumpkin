@@ -868,7 +868,7 @@ fn select_vanilla_armor(difficulty: &RegionalDifficulty) -> Vec<(EquipmentSlot, 
         first = false;
         pieces.push((
             slot.clone(),
-            create_equipment_item(tier[i], difficulty),
+            create_equipment_item(tier[i]),
             DEFAULT_EQUIPMENT_DROP_CHANCE,
         ));
     }
@@ -878,7 +878,7 @@ fn select_vanilla_armor(difficulty: &RegionalDifficulty) -> Vec<(EquipmentSlot, 
 /// Creates a fresh, full-durability `ItemStack` for mob equipment.
 /// Vanilla mobs always spawn with equipment at full durability.
 #[must_use]
-fn create_equipment_item(item: &'static Item, _difficulty: &RegionalDifficulty) -> ItemStack {
+fn create_equipment_item(item: &'static Item) -> ItemStack {
     ItemStack::new(1, item)
 }
 
@@ -897,7 +897,7 @@ fn equip_mob_from_def(
     // ── Weapon ──
     match def.weapon {
         WeaponConfig::Always(item) => {
-            let mut stack = create_equipment_item(item, difficulty);
+            let mut stack = create_equipment_item(item);
             if def.enchanted && difficulty.should_happen(WEAPON_ENCHANT_CHANCE) {
                 apply_vanilla_enchantments(
                     &mut stack,
@@ -913,7 +913,7 @@ fn equip_mob_from_def(
         }
         WeaponConfig::AlwaysWeighted(items) => {
             let item = weighted_select_item(items);
-            let mut stack = create_equipment_item(item, difficulty);
+            let mut stack = create_equipment_item(item);
             if def.enchanted && difficulty.should_happen(WEAPON_ENCHANT_CHANCE) {
                 apply_vanilla_enchantments(
                     &mut stack,
@@ -939,7 +939,7 @@ fn equip_mob_from_def(
             };
             if rand::random::<f32>() < chance {
                 let item = weighted_select_item(items);
-                let mut stack = create_equipment_item(item, difficulty);
+                let mut stack = create_equipment_item(item);
                 if def.enchanted && difficulty.should_happen(WEAPON_ENCHANT_CHANCE) {
                     apply_vanilla_enchantments(
                         &mut stack,
@@ -977,7 +977,7 @@ fn equip_mob_from_def(
         ArmorConfig::CustomPerSlot(entries) => {
             for entry in entries {
                 if rand::random::<f32>() < entry.chance {
-                    let mut stack = create_equipment_item(entry.item, difficulty);
+                    let mut stack = create_equipment_item(entry.item);
                     if def.enchanted && difficulty.should_happen(ARMOR_ENCHANT_CHANCE) {
                         apply_vanilla_enchantments(
                             &mut stack,
@@ -1008,7 +1008,7 @@ fn equip_mob_from_def(
 /// and broadcasts the changes to nearby players.
 ///
 /// Mobs not listed in the registry silently receive no equipment.
-pub async fn equip_mob_on_spawn(mob: &dyn EntityBase, world: &Arc<crate::world::World>) {
+pub fn equip_mob_on_spawn(mob: &dyn EntityBase, world: &Arc<crate::world::World>) {
     let entity_type = mob.get_entity().entity_type;
     let pos = mob.get_entity().pos.load();
     let difficulty = RegionalDifficulty::at(world, pos);
@@ -1023,8 +1023,14 @@ pub async fn equip_mob_on_spawn(mob: &dyn EntityBase, world: &Arc<crate::world::
         return;
     };
 
-    let mut equipment = living.entity_equipment.lock().await;
-    let mut drop_chances = living.equipment_drop_chances.lock().await;
+    let mut equipment = living
+        .entity_equipment
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let mut drop_chances = living
+        .equipment_drop_chances
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     let changes_with_drops = equip_mob_from_def(def, &difficulty);
 
     let mut equipment_changes: Vec<(EquipmentSlot, ItemStack)> = Vec::new();

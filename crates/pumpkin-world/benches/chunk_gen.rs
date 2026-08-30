@@ -102,15 +102,12 @@ fn setup_cache(
 }
 
 fn bench_full_chunk_generation(c: &mut Criterion) {
-    let dimension = Dimension::OVERWORLD;
     let world_gen = make_world_gen();
     let block_registry = Arc::new(BlockRegistry);
 
     c.bench_function("full_chunk_generation", |b| {
         b.iter(|| {
             black_box(generate_single_chunk(
-                &dimension,
-                0,
                 &world_gen,
                 block_registry.as_ref(),
                 black_box(0),

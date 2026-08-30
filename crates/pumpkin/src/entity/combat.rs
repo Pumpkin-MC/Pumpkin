@@ -26,13 +26,13 @@ pub enum AttackType {
 }
 
 impl AttackType {
-    pub async fn new(player: &Player, attack_cooldown_progress: f32) -> Self {
+    pub fn new(player: &Player, attack_cooldown_progress: f32) -> Self {
         let entity = &player.get_entity();
 
         let sprinting = entity.is_sprinting();
         let on_ground = entity.on_ground.load(Ordering::Relaxed);
         let fall_distance = player.living_entity.fall_distance.load();
-        let held_item = player.inventory().held_item().await;
+        let held_item = player.inventory().held_item();
         let is_mace = held_item.item.id == pumpkin_data::item::Item::MACE.id;
 
         if is_mace && !on_ground && fall_distance > 1.5 {
@@ -102,7 +102,7 @@ pub fn spawn_sweep_particle(attacker_entity: &Entity, world: &World, pos: &Vecto
     );
 }
 
-pub async fn player_attack_sound(pos: &Vector3<f64>, world: &World, attack_type: AttackType) {
+pub fn player_attack_sound(pos: &Vector3<f64>, world: &World, attack_type: AttackType) {
     match attack_type {
         AttackType::Knockback => {
             world.play_sound(

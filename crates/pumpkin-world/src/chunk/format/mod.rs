@@ -1,6 +1,5 @@
 use std::{
     path::PathBuf,
-    pin::Pin,
     str::FromStr,
     sync::{
         RwLock,
@@ -13,7 +12,6 @@ use pumpkin_data::{Block, BlockStateId, chunk::ChunkStatus, fluid::Fluid};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::resource_location::{FromResourceLocation, ResourceLocation, ToResourceLocation};
 use rustc_hash::FxHashMap;
-use tokio::sync::Mutex;
 
 use crate::{
     chunk::{
@@ -43,10 +41,8 @@ impl SingleChunkDataSerializer for ChunkData {
     }
 
     #[inline]
-    fn to_bytes(
-        &self,
-    ) -> Pin<Box<dyn Future<Output = Result<Bytes, ChunkSerializingError>> + Send + '_>> {
-        Box::pin(async move { Ok(self.internal_to_bytes()) })
+    fn to_bytes(&self) -> Result<Bytes, ChunkSerializingError> {
+        Ok(self.internal_to_bytes())
     }
 
     #[inline]
@@ -707,10 +703,8 @@ impl SingleChunkDataSerializer for ChunkEntityData {
     }
 
     #[inline]
-    fn to_bytes(
-        &self,
-    ) -> Pin<Box<dyn Future<Output = Result<Bytes, ChunkSerializingError>> + Send + '_>> {
-        Box::pin(async move { self.internal_to_bytes().await })
+    fn to_bytes(&self) -> Result<Bytes, ChunkSerializingError> {
+        Ok(self.internal_to_bytes())
     }
 
     #[inline]
@@ -775,12 +769,12 @@ impl ChunkEntityData {
         Ok(Self {
             x: position.x,
             z: position.y,
-            data: Mutex::new(entities),
+            data: std::sync::Mutex::new(entities),
             dirty: AtomicBool::new(false),
         })
     }
 
-    async fn internal_to_bytes(&self) -> Result<Bytes, ChunkSerializingError> {
+    fn internal_to_bytes(&self) -> Bytes {
         let mut root = NbtCompound::new();
         root.put_int("DataVersion", WORLD_DATA_VERSION);
         root.put(
@@ -790,14 +784,14 @@ impl ChunkEntityData {
         let entities_tag: Vec<pumpkin_nbt::tag::NbtTag> = self
             .data
             .lock()
-            .await
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
             .iter()
             .map(|c| pumpkin_nbt::tag::NbtTag::Compound(c.clone()))
             .collect();
         root.put_list("Entities", entities_tag);
 
         let nbt = pumpkin_nbt::Nbt::from(root);
-        Ok(nbt.write())
+        nbt.write()
     }
 }
 
@@ -851,28 +845,31 @@ impl LightContainer {
         matches!(self, Self::Empty(_))
     }
 
+    #[inline]
     const fn index(x: usize, y: usize, z: usize) -> usize {
         y * 16 * 16 + z * 16 + x
     }
 
+    #[inline]
     #[must_use]
     pub fn get(&self, x: usize, y: usize, z: usize) -> u8 {
         match self {
             Self::Full(data) => {
                 let index = Self::index(x, y, z);
-                data[index >> 1] >> (4 * (index & 1)) & 0x0F
+                (data[index >> 1] >> (4 * (index & 1))) & 0x0F
             }
             Self::Empty(default) => *default,
         }
     }
 
+    #[inline]
     pub fn set(&mut self, x: usize, y: usize, z: usize, value: u8) {
         match self {
             Self::Full(data) => {
                 let index = Self::index(x, y, z);
-                let mask = 0x0F << (4 * (index & 1));
-                data[index >> 1] &= !mask;
-                data[index >> 1] |= value << (4 * (index & 1));
+                let shift = 4 * (index & 1);
+                let mask = 0x0F << shift;
+                data[index >> 1] = (data[index >> 1] & !mask) | (value << shift);
             }
             Self::Empty(default) => {
                 if value != *default {
@@ -883,6 +880,39 @@ impl LightContainer {
         }
     }
 
+    #[inline]
+    pub fn set_column_y_range(
+        &mut self,
+        x: usize,
+        z: usize,
+        y_start: usize,
+        y_end: usize,
+        value: u8,
+    ) {
+        if y_start >= y_end {
+            return;
+        }
+        match self {
+            Self::Full(data) => {
+                let shift = 4 * (x & 1);
+                let mask = 0x0F << shift;
+                let val = (value & 0x0F) << shift;
+                let mut byte_idx = (y_start * 256 + z * 16 + x) >> 1;
+                for _ in y_start..y_end {
+                    data[byte_idx] = (data[byte_idx] & !mask) | val;
+                    byte_idx += 128;
+                }
+            }
+            Self::Empty(default) => {
+                if value != *default {
+                    *self = Self::new_filled(*default);
+                    self.set_column_y_range(x, z, y_start, y_end, value);
+                }
+            }
+        }
+    }
+
+    #[inline]
     pub fn fill(&mut self, value: u8) {
         *self = Self::new_filled(value);
     }

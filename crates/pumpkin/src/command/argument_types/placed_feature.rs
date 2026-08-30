@@ -1,5 +1,3 @@
-use std::pin::Pin;
-
 use pumpkin_protocol::java::client::play::SuggestionProviders;
 use pumpkin_util::identifier::Identifier;
 
@@ -19,17 +17,15 @@ impl ArgumentType for PlacedFeatureNameArgumentType {
         Identifier::from_reader(reader)
     }
 
-    fn list_suggestions<'a>(
-        &'a self,
-        _context: &'a CommandContext,
+    fn list_suggestions(
+        &self,
+        _context: &CommandContext,
         builder: SuggestionsBuilder,
-    ) -> Pin<Box<dyn Future<Output = Suggestions> + Send + 'a>> {
+    ) -> Suggestions {
         let names = pumpkin_world::generation::feature::placed_features::all_placed_feature_names();
-        Box::pin(async move {
-            builder
-                .filter_and_suggest_iter(names.iter().copied())
-                .build()
-        })
+        builder
+            .filter_and_suggest_iter(names.iter().copied())
+            .build()
     }
 
     fn client_side_parser(&'_ self) -> JavaClientArgumentType {

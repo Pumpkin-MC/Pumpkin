@@ -1,16 +1,15 @@
 use super::BlockEntity;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
-use std::collections::HashSet;
-use std::pin::Pin;
-use tokio::sync::Mutex;
+use rustc_hash::FxHashSet;
+use std::sync::Mutex;
 use uuid::Uuid;
 
 pub struct VaultBlockEntity {
     pub position: BlockPos,
     pub config: Mutex<Option<NbtCompound>>,
     pub server_data: Mutex<Option<NbtCompound>>,
-    pub rewarded_players: Mutex<HashSet<Uuid>>,
+    pub rewarded_players: Mutex<FxHashSet<Uuid>>,
 }
 
 impl BlockEntity for VaultBlockEntity {
@@ -30,22 +29,21 @@ impl BlockEntity for VaultBlockEntity {
             position,
             config: Mutex::new(nbt.get_compound("config").cloned()),
             server_data: Mutex::new(nbt.get_compound("server_data").cloned()),
-            rewarded_players: Mutex::new(HashSet::new()),
+            rewarded_players: Mutex::new(FxHashSet::default()),
         }
     }
 
-    fn write_nbt<'a>(
-        &'a self,
-        nbt: &'a mut NbtCompound,
-    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
-        Box::pin(async move {
-            if let Some(cfg) = self.config.lock().await.as_ref() {
-                nbt.put_compound("config", cfg.clone());
-            }
-            if let Some(data) = self.server_data.lock().await.as_ref() {
-                nbt.put_compound("server_data", data.clone());
-            }
-        })
+    fn write_nbt(&self, nbt: &mut NbtCompound) {
+        if let Ok(cfg) = self.config.lock()
+            && let Some(cfg) = cfg.as_ref()
+        {
+            nbt.put_compound("config", cfg.clone());
+        }
+        if let Ok(data) = self.server_data.lock()
+            && let Some(data) = data.as_ref()
+        {
+            nbt.put_compound("server_data", data.clone());
+        }
     }
 
     fn chunk_data_nbt(&self) -> Option<NbtCompound> {
@@ -77,15 +75,21 @@ impl VaultBlockEntity {
             position,
             config: Mutex::new(None),
             server_data: Mutex::new(None),
-            rewarded_players: Mutex::new(HashSet::new()),
+            rewarded_players: Mutex::new(FxHashSet::default()),
         }
     }
 
-    pub async fn has_rewarded(&self, player_id: &Uuid) -> bool {
-        self.rewarded_players.lock().await.contains(player_id)
+    pub fn has_rewarded(&self, player_id: &Uuid) -> bool {
+        self.rewarded_players
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .contains(player_id)
     }
 
-    pub async fn mark_rewarded(&self, player_id: Uuid) {
-        self.rewarded_players.lock().await.insert(player_id);
+    pub fn mark_rewarded(&self, player_id: Uuid) {
+        self.rewarded_players
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .insert(player_id);
     }
 }

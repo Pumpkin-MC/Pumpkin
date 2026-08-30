@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use crate::entity::mob::zombie::ZombieEntityBase;
 use crate::entity::{
-    Entity, NbtFuture,
+    Entity,
     mob::{Mob, MobEntity},
 };
 use pumpkin_nbt::compound::NbtCompound;
@@ -31,15 +31,11 @@ impl Mob for HuskEntity {
         &self.entity.mob_entity
     }
 
-    fn mob_write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
-        Box::pin(async move {
-            self.entity.mob_write_nbt(nbt).await;
-        })
+    fn mob_write_nbt(&self, nbt: &mut NbtCompound) {
+        self.entity.mob_write_nbt(nbt);
     }
 
-    fn mob_read_nbt<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
-        Box::pin(async move {
-            self.entity.mob_read_nbt(nbt).await;
-        })
+    fn mob_read_nbt(&self, nbt: &NbtCompound) {
+        self.entity.mob_read_nbt(nbt);
     }
 }

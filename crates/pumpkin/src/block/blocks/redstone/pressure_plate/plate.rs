@@ -8,7 +8,7 @@ use pumpkin_world::world::BlockFlags;
 
 use crate::{
     block::{
-        BlockBehaviour, BlockFuture, BlockMetadata, CanPlaceAtArgs, EmitsRedstonePowerArgs,
+        BlockBehaviour, BlockMetadata, CanPlaceAtArgs, EmitsRedstonePowerArgs,
         GetRedstonePowerArgs, OnEntityCollisionArgs, OnNeighborUpdateArgs, OnScheduledTickArgs,
         OnStateReplacedArgs,
     },
@@ -32,58 +32,43 @@ impl BlockMetadata for PressurePlateBlock {
 }
 
 impl BlockBehaviour for PressurePlateBlock {
-    fn on_entity_collision<'a>(&'a self, args: OnEntityCollisionArgs<'a>) -> BlockFuture<'a, ()> {
-        Box::pin(async move {
-            self.on_entity_collision_pp(args).await;
-        })
+    fn on_entity_collision(&self, args: OnEntityCollisionArgs<'_>) {
+        self.on_entity_collision_pp(args);
     }
 
-    fn on_scheduled_tick<'a>(&'a self, args: OnScheduledTickArgs<'a>) -> BlockFuture<'a, ()> {
-        Box::pin(async move {
-            self.on_scheduled_tick_pp(args).await;
-        })
+    fn on_scheduled_tick(&self, args: OnScheduledTickArgs<'_>) {
+        let state = args.world.get_block_state(args.position);
+        let output = self.get_redstone_output(args.block, state.id);
+        if output > 0 {
+            let (block, state) = args.world.get_block_and_state(args.position);
+            Self.update_plate_state(args.world, args.position, block, state, output);
+        }
     }
 
-    fn on_state_replaced<'a>(&'a self, args: OnStateReplacedArgs<'a>) -> BlockFuture<'a, ()> {
-        Box::pin(async move {
-            self.on_state_replaced_pp(args).await;
-        })
+    fn on_state_replaced(&self, args: OnStateReplacedArgs<'_>) {
+        self.on_state_replaced_pp(args);
     }
 
-    fn get_weak_redstone_power<'a>(
-        &'a self,
-        args: GetRedstonePowerArgs<'a>,
-    ) -> BlockFuture<'a, u8> {
-        Box::pin(async move { self.get_redstone_output(args.block, args.state.id) })
+    fn get_weak_redstone_power(&self, args: GetRedstonePowerArgs<'_>) -> u8 {
+        self.get_redstone_output(args.block, args.state.id)
     }
 
-    fn get_strong_redstone_power<'a>(
-        &'a self,
-        args: GetRedstonePowerArgs<'a>,
-    ) -> BlockFuture<'a, u8> {
-        Box::pin(async move {
-            if args.direction == BlockDirection::Up {
-                return self.get_redstone_output(args.block, args.state.id);
-            }
-            0
-        })
+    fn get_strong_redstone_power(&self, args: GetRedstonePowerArgs<'_>) -> u8 {
+        if args.direction == BlockDirection::Up {
+            return self.get_redstone_output(args.block, args.state.id);
+        }
+        0
     }
 
-    fn emits_redstone_power<'a>(
-        &'a self,
-        _args: EmitsRedstonePowerArgs<'a>,
-    ) -> BlockFuture<'a, bool> {
-        Box::pin(async move { true })
+    fn emits_redstone_power(&self, _args: EmitsRedstonePowerArgs<'_>) -> bool {
+        true
     }
 
-    fn on_neighbor_update<'a>(&'a self, args: OnNeighborUpdateArgs<'a>) -> BlockFuture<'a, ()> {
-        Box::pin(async move {
-            if !Self::can_pressure_plate_place_at(args.world, args.position) {
-                args.world
-                    .break_block(args.position, None, BlockFlags::NOTIFY_ALL)
-                    .await;
-            }
-        })
+    fn on_neighbor_update(&self, args: OnNeighborUpdateArgs<'_>) {
+        if !Self::can_pressure_plate_place_at(args.world, args.position) {
+            args.world
+                .break_block(args.position, None, BlockFlags::NOTIFY_ALL);
+        }
     }
 
     fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
@@ -98,8 +83,7 @@ impl PressurePlate for PressurePlateBlock {
         if props.powered { 15 } else { 0 }
     }
 
-    #[allow(clippy::unused_async_trait_impl)]
-    async fn calculate_redstone_output(&self, world: &World, _block: &Block, pos: &BlockPos) -> u8 {
+    fn calculate_redstone_output(&self, world: &World, _block: &Block, pos: &BlockPos) -> u8 {
         let aabb = detection_box_at(pos);
         if !world.get_entities_at_box(&aabb).is_empty()
             || !world.get_players_at_box(&aabb).is_empty()

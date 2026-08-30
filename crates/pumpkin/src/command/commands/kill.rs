@@ -17,58 +17,51 @@ const ARG_TARGETS: &str = "targets";
 struct TargetsExecutor;
 
 impl CommandExecutor for TargetsExecutor {
-    fn execute<'a>(&'a self, context: &'a CommandContext) -> CommandExecutorResult<'a> {
-        Box::pin(async move {
-            let targets = EntityArgumentType::get_entities(context, ARG_TARGETS).await?;
+    fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
+        let targets = EntityArgumentType::get_entities(context, ARG_TARGETS)?;
 
-            let target_count = targets.len();
-            for target in &targets {
-                target.kill(target.as_ref()).await;
-            }
+        let target_count = targets.len();
+        for target in &targets {
+            target.kill(target.as_ref());
+        }
 
-            let msg = if target_count == 1 {
-                TextComponent::translate_cross(
-                    translation::java::COMMANDS_KILL_SUCCESS_SINGLE,
-                    translation::bedrock::COMMANDS_KILL_SUCCESSFUL,
-                    [targets[0].get_display_name().await],
-                )
-            } else {
-                TextComponent::translate_cross(
-                    translation::java::COMMANDS_KILL_SUCCESS_MULTIPLE,
-                    translation::bedrock::COMMANDS_KILL_SUCCESSFUL,
-                    [TextComponent::text(target_count.to_string())],
-                )
-            };
+        let msg = if target_count == 1 {
+            TextComponent::translate_cross(
+                translation::java::COMMANDS_KILL_SUCCESS_SINGLE,
+                translation::bedrock::COMMANDS_KILL_SUCCESSFUL,
+                [targets[0].get_display_name()],
+            )
+        } else {
+            TextComponent::translate_cross(
+                translation::java::COMMANDS_KILL_SUCCESS_MULTIPLE,
+                translation::bedrock::COMMANDS_KILL_SUCCESSFUL,
+                [TextComponent::text(target_count.to_string())],
+            )
+        };
 
-            context.source.send_feedback(msg, true).await;
+        context.source.send_feedback(msg, true);
 
-            Ok(target_count as i32)
-        })
+        Ok(target_count as i32)
     }
 }
 
 struct SelfExecutor;
 
 impl CommandExecutor for SelfExecutor {
-    fn execute<'a>(&'a self, context: &'a CommandContext) -> CommandExecutorResult<'a> {
-        Box::pin(async move {
-            let target = context.source.entity_or_err()?;
-            target.kill(&*target).await;
+    fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
+        let target = context.source.entity_or_err()?;
+        target.kill(&*target);
 
-            context
-                .source
-                .send_feedback(
-                    TextComponent::translate_cross(
-                        translation::java::COMMANDS_KILL_SUCCESS_SINGLE,
-                        translation::bedrock::COMMANDS_KILL_SUCCESSFUL,
-                        [target.get_display_name().await],
-                    ),
-                    true,
-                )
-                .await;
+        context.source.send_feedback(
+            TextComponent::translate_cross(
+                translation::java::COMMANDS_KILL_SUCCESS_SINGLE,
+                translation::bedrock::COMMANDS_KILL_SUCCESSFUL,
+                [target.get_display_name()],
+            ),
+            true,
+        );
 
-            Ok(1)
-        })
+        Ok(1)
     }
 }
 

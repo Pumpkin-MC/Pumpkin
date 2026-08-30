@@ -14,12 +14,12 @@ impl EndPortal {
     const FRAME_BLOCK: Block = Block::END_PORTAL_FRAME;
     const FRAME_BLOCK_ID: BlockId = Self::FRAME_BLOCK.id;
 
-    pub async fn get_new_portal(world: &Arc<World>, pos: BlockPos) {
+    pub fn get_new_portal(world: &Arc<World>, pos: BlockPos) {
         let mid_pos = Self::get_mid_pos(world, pos);
         if let Some(mid_pos) = mid_pos
             && Self::is_valid_portal(world, mid_pos)
         {
-            Self::create_portal(world, mid_pos).await;
+            Self::create_portal(world, mid_pos);
         }
     }
 
@@ -88,16 +88,14 @@ impl EndPortal {
         true
     }
 
-    async fn create_portal(world: &Arc<World>, pos: BlockPos) {
+    fn create_portal(world: &Arc<World>, pos: BlockPos) {
         for x in -1..=1 {
             for z in -1..=1 {
-                world
-                    .set_block_state(
-                        &pos.offset(Vector3::new(x, 0, z)),
-                        Block::END_PORTAL.default_state.id,
-                        BlockFlags::NOTIFY_LISTENERS,
-                    )
-                    .await;
+                world.set_block_state(
+                    &pos.offset(Vector3::new(x, 0, z)),
+                    Block::END_PORTAL.default_state.id,
+                    BlockFlags::NOTIFY_LISTENERS,
+                );
             }
         }
     }

@@ -1,7 +1,7 @@
 use crate::block::blocks::plant::PlantBlockBase;
 use crate::block::{
-    BlockBehaviour, BlockFuture, BlockMetadata, BrokenArgs, CanPlaceAtArgs,
-    GetStateForNeighborUpdateArgs, PlacedArgs,
+    BlockBehaviour, BlockMetadata, BrokenArgs, CanPlaceAtArgs, GetStateForNeighborUpdateArgs,
+    PlacedArgs,
 };
 use pumpkin_data::BlockStateId;
 use pumpkin_data::block_properties::{BlockProperties, WaterLikeProperties};
@@ -21,56 +21,47 @@ impl BlockBehaviour for KelpBlock {
     fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
         <Self as PlantBlockBase>::can_place_at(self, args.block_accessor, args.position)
     }
-    fn get_state_for_neighbor_update<'a>(
-        &'a self,
-        args: GetStateForNeighborUpdateArgs<'a>,
-    ) -> BlockFuture<'a, BlockStateId> {
-        Box::pin(async move {
-            <Self as PlantBlockBase>::get_state_for_neighbor_update(
-                self,
-                args.world,
-                args.position,
-                args.state_id,
-            )
-            .await
-        })
+    fn get_state_for_neighbor_update(
+        &self,
+        args: GetStateForNeighborUpdateArgs<'_>,
+    ) -> BlockStateId {
+        <Self as PlantBlockBase>::get_state_for_neighbor_update(
+            self,
+            args.world,
+            args.position,
+            args.state_id,
+        )
     }
-    fn placed<'a>(&'a self, args: PlacedArgs<'a>) -> BlockFuture<'a, ()> {
-        Box::pin(async move {
+    fn placed(&self, args: PlacedArgs<'_>) {
+        {
             let support_pos = args.position.down();
             let support_block = args.world.get_block(&support_pos);
             if support_block == &Block::KELP {
-                args.world
-                    .set_block_state(
-                        &support_pos,
-                        Block::KELP_PLANT.default_state.id,
-                        BlockFlags::empty(),
-                    )
-                    .await;
+                args.world.set_block_state(
+                    &support_pos,
+                    Block::KELP_PLANT.default_state.id,
+                    BlockFlags::empty(),
+                );
             }
-        })
+        }
     }
-    fn broken<'a>(&'a self, args: BrokenArgs<'a>) -> BlockFuture<'a, ()> {
-        Box::pin(async move {
+    fn broken(&self, args: BrokenArgs<'_>) {
+        {
             let support_pos = args.position.down();
             let support_block = args.world.get_block(&support_pos);
             if support_block == &Block::KELP_PLANT {
-                args.world
-                    .set_block_state(
-                        &support_pos,
-                        Block::KELP.default_state.id,
-                        BlockFlags::empty(),
-                    )
-                    .await;
-                args.world
-                    .set_block_state(
-                        args.position,
-                        Block::WATER.default_state.id,
-                        BlockFlags::empty(),
-                    )
-                    .await;
+                args.world.set_block_state(
+                    &support_pos,
+                    Block::KELP.default_state.id,
+                    BlockFlags::empty(),
+                );
+                args.world.set_block_state(
+                    args.position,
+                    Block::WATER.default_state.id,
+                    BlockFlags::empty(),
+                );
             }
-        })
+        }
     }
 }
 
@@ -113,8 +104,7 @@ impl PlantBlockBase for KelpBlock {
         }
         false
     }
-    #[allow(clippy::unused_async_trait_impl)]
-    async fn get_state_for_neighbor_update(
+    fn get_state_for_neighbor_update(
         &self,
         block_accessor: &dyn BlockAccessor,
         block_pos: &BlockPos,
