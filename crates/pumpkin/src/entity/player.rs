@@ -1941,8 +1941,11 @@ impl Player {
         self.sleeping_since.load().is_some()
     }
 
-    fn is_swimming(&self) -> bool {
-        self.get_entity().swimming.load(Ordering::Relaxed) && !self.is_flying()
+    #[must_use]
+    pub fn is_swimming(&self) -> bool {
+        !self.is_flying()
+            && self.gamemode.load() != GameMode::Spectator
+            && self.get_entity().is_swimming()
     }
 
     const fn is_auto_spin_attack() -> bool {
