@@ -15,8 +15,17 @@ use pumpkin_data::BlockState;
 use pumpkin_nbt::tag::NbtTag;
 use std::sync::atomic::Ordering;
 
-/// Ab wie vielen Blöcken wird ein Quadrant unoptimiert.
-pub const QUADRANT_DIVERGENCE_THRESHOLD: i32 = 30;
+/// Breite des unsicheren Tier-3-Bands, waehlbar pro Chunk über die 2 Reserve-Bits.
+///
+/// Das Band liegt genau auf der Oberflaeche, wo gebaut und abgebaut wird, und ist der
+/// einzige Bereich der noch den teuren Spaltenscan hat.
+/// 
+/// Theorie: Flaches Terrain kommt mit 4 Blöcken aus, nur echtes Bergterrain braucht 32.
+/// Ein fester Wert  könnte jedem Chunk das Band aufzwingen.
+pub const SPREAD_SCALES: [i32; 4] = [4, 8, 16, 32];
+
+/// Groesstes Band das ein Quadrant fürs nutzen
+pub const QUADRANT_DIVERGENCE_THRESHOLD: i32 = SPREAD_SCALES[3];
 
 const DECODE_SAFETY_MARGIN: i32 = 1;
 
@@ -56,6 +65,21 @@ impl SkyLightHeight {
     const FLAG_QUADRANT_NE: u32 = 1 << Self::QUADRANT_NE_SHIFT;
     const FLAG_QUADRANT_SW: u32 = 1 << Self::QUADRANT_SW_SHIFT;
     const FLAG_QUADRANT_SE: u32 = 1 << Self::QUADRANT_SE_SHIFT;
+
+    /// Bits 22-23: Index in [`SPREAD_SCALES`], die Breite des Tier-3-Bands.
+    const SPREAD_SHIFT: u32 = 22;
+    const SPREAD_MASK: u32 = 0b11 << Self::SPREAD_SHIFT;
+
+    /// Breite des unsicheren Bands ueber dem Cut fuer diesen Chunk.
+    #[must_use]
+    pub const fn spread(self) -> i32 {
+        SPREAD_SCALES[((self.0 & Self::SPREAD_MASK) >> Self::SPREAD_SHIFT) as usize]
+    }
+
+    #[must_use]
+    const fn with_spread_index(self, index: usize) -> Self {
+        Self((self.0 & !Self::SPREAD_MASK) | ((index as u32) << Self::SPREAD_SHIFT))
+    }
 
     /// Wraps a raw encoded value from NBT or `AtomicCache`
     #[must_use]
@@ -128,7 +152,7 @@ impl SkyLightHeight {
 
     /// Whether the quadrant containing chunk-local `(local_x, local_z)` may safely use
     /// the chunk-wide cut height for trivial rejection (`true`), or has diverged from it
-    /// by more than [`QUADRANT_DIVERGENCE_THRESHOLD`] and needs a real check (`false`).
+    /// by more than [`SkyLightHeight::spread`] and needs a real check (`false`).
     #[must_use]
     pub const fn quadrant_uses_limit(self, local_x: i32, local_z: i32) -> bool {
         (self.0 & Self::quadrant_flag(local_x, local_z)) == 0
@@ -159,7 +183,7 @@ impl SkyLightHeight {
         let cut = self.decode(chunk_min_y, chunk_height);
         if y < cut - DECODE_SAFETY_MARGIN {
             SkyLightTier::NoOpenSky
-        } else if y > cut + QUADRANT_DIVERGENCE_THRESHOLD + DECODE_SAFETY_MARGIN {
+        } else if y > cut + self.spread() + DECODE_SAFETY_MARGIN {
             SkyLightTier::OpenSky
         } else {
             SkyLightTier::Unknown
@@ -208,7 +232,7 @@ impl SkyLightHeight {
     /// Derives the cut height and the 4 quadrant divergence flags from this chunk.
     ///
     /// A quadrant may use the chunk cut only if all of its ceilings fit into
-    /// `[cut, cut + QUADRANT_DIVERGENCE_THRESHOLD]`, i.e. the cut must lie in
+    /// `[cut, cut + spread]`, i.e. the cut must lie in
     /// `[q_max - THRESHOLD, q_min]`. The cut is picked as the point covered by the most
     /// of those 4 intervals (ties resolved upwards, for the largest Tier 1 region)
     #[must_use]
@@ -243,26 +267,39 @@ impl SkyLightHeight {
             }
         }
 
-        // Der Beste Cut ist der, der die meisten Quadranten abdeckt
+        // Ein Quadrant kann das Band nur nutzen, wenn alle seine Decken in
+        // [cut, cut + spread] liegen, der Cut also in [q_max - spread, q_min].
         let mut best_cut = q_min[0];
         let mut best_covered = 0u32;
-        for i in 0..4 {
-            if q_max[i] - q_min[i] > QUADRANT_DIVERGENCE_THRESHOLD {
-                continue; // Interval empty: this quadrant can never use the cut.
-            }
-            let candidate = q_max[i] - QUADRANT_DIVERGENCE_THRESHOLD;
-            let covered = (0..4)
-                .filter(|&j| candidate >= q_max[j] - QUADRANT_DIVERGENCE_THRESHOLD && candidate <= q_min[j])
-                .count() as u32;
-            if covered > best_covered || (covered == best_covered && candidate > best_cut) {
-                best_covered = covered;
-                best_cut = candidate;
+        let mut best_spread_index = SPREAD_SCALES.len() - 1;
+
+        for (spread_index, &spread) in SPREAD_SCALES.iter().enumerate() {
+            for i in 0..4 {
+                if q_max[i] - q_min[i] > spread {
+                    continue; // Quadrant passt nicht in Band
+                }
+                let candidate = q_max[i] - spread;
+                let covered = (0..4)
+                    .filter(|&j| candidate >= q_max[j] - spread && candidate <= q_min[j])
+                    .count() as u32;
+                // Mehr Quadranten > schmalere Band > high Cut (large Tier-1)
+                let better = covered > best_covered
+                    || (covered == best_covered
+                        && (spread_index < best_spread_index
+                            || (spread_index == best_spread_index && candidate > best_cut)));
+                if better {
+                    best_covered = covered;
+                    best_cut = candidate;
+                    best_spread_index = spread_index;
+                }
             }
         }
 
-        let mut encoded = Self::encode(best_cut, min_y, Self::chunk_height(chunk));
+        let spread = SPREAD_SCALES[best_spread_index];
+        let mut encoded = Self::encode(best_cut, min_y, Self::chunk_height(chunk))
+            .with_spread_index(best_spread_index);
         for i in 0..4 {
-            let usable = best_cut >= q_max[i] - QUADRANT_DIVERGENCE_THRESHOLD && best_cut <= q_min[i];
+            let usable = best_cut >= q_max[i] - spread && best_cut <= q_min[i];
             if !usable {
                 encoded = Self(encoded.0 | Self::quadrant_flag_by_index(i));
             }
@@ -491,6 +528,53 @@ mod tests {
         assert_eq!(tier_at(&chunk, height, 20, 8, 8), SkyLightTier::NoOpenSky);
         assert_eq!(tier_at(&chunk, height, 60, 8, 8), SkyLightTier::Unknown);
         assert_eq!(tier_at(&chunk, height, 200, 8, 8), SkyLightTier::OpenSky);
+    }
+
+    /// Flaches Terrain hat keine Streuung, also muss das teure Tier-3-Band auf die
+    /// kleinste Stufe schrumpfen
+    #[test]
+    fn flat_terrain_picks_the_tightest_band() {
+        let chunk = ChunkData::empty(0, 0);
+        fill_terrain(&chunk, 60);
+        let height = SkyLightHeight::compute_from_chunk(&chunk);
+
+        assert_eq!(height.spread(), SPREAD_SCALES[0]);
+        // Knapp ueber der Oberflaeche ist bereits Tier 2, nicht mehr das Band.
+        assert_eq!(tier_at(&chunk, height, 67, 8, 8), SkyLightTier::OpenSky);
+    }
+
+    /// schweizer-Käse Terrain braucht ein breiteres Band, sonst wuerden die Quadranten
+    /// alle als abweichend markiert
+    #[test]
+    fn rough_terrain_widens_the_band_instead_of_diverging() {
+        let chunk = ChunkData::empty(0, 0);
+        fill_terrain(&chunk, 60);
+        // Saeulen bis y=72: Streuung 12, passt in keine der beiden kleinsten Stufen.
+        for local_z in (0..16usize).step_by(4) {
+            for local_x in (0..16usize).step_by(4) {
+                for y in 61..=72 {
+                    chunk.set_block_absolute_y(local_x, y, local_z, Block::STONE.default_state.id);
+                }
+            }
+        }
+
+        let height = SkyLightHeight::compute_from_chunk(&chunk);
+        assert!(height.spread() >= 12, "band {} too narrow", height.spread());
+        assert!(
+            height.quadrant_uses_limit(2, 2),
+            "widening the band must keep the quadrants usable"
+        );
+    }
+
+    #[test]
+    fn spread_survives_a_round_trip_through_nbt() {
+        let chunk = ChunkData::empty(0, 0);
+        fill_terrain(&chunk, 60);
+        let height = SkyLightHeightMigration::get(&chunk);
+        let spread = height.spread();
+
+        chunk.sky_light_height_cache.store(0, Ordering::Relaxed);
+        assert_eq!(SkyLightHeightMigration::get(&chunk).spread(), spread);
     }
 
     /// The cut must follow the highest light-blocking block, not the `WorldSurface`

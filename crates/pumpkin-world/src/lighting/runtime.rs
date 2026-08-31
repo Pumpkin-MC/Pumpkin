@@ -3,7 +3,7 @@ use crate::chunk::io::Dirtiable;
 use crate::chunk::palette::BlockPalette;
 use crate::level::Level;
 use crate::lighting::sky_light_height::{
-    QUADRANT_DIVERGENCE_THRESHOLD, SkyLightHeight, SkyLightHeightMigration, SkyLightTier,
+    SkyLightHeight, SkyLightHeightMigration, SkyLightTier,
 };
 use crossbeam::queue::SegQueue;
 use pumpkin_config::lighting::LightingEngineConfig;
@@ -270,13 +270,10 @@ impl DynamicLightEngine {
     /// Keeps the cached cut height honest after a block change.
     ///
     /// A non-diverged quadrant promises every column ceiling sits in
-    /// `[cut, cut + QUADRANT_DIVERGENCE_THRESHOLD]`. Only a change at or above the cut can
+    /// `[cut, cut + spread]`. Only a change at or above the cut can
     /// break that: digging below the cut leaves the occluders above it untouched, and
     /// placing below the cut cannot raise a ceiling that is already at or above it. So we
     /// re-derive this one column and flag the quadrant if it left the band.
-    ///
-    /// Differs from the plan, which invalidates on changes *below* the cut: that describes
-    /// an already-stale cut, which cannot arise while this runs on every block change.
     fn refresh_sky_cut_after_change(level: &Arc<Level>, pos: &BlockPos) {
         let (chunk_pos, relative) = pos.chunk_and_chunk_relative_position();
         level.read_chunk_sync(&chunk_pos, |chunk| {
@@ -294,7 +291,7 @@ impl DynamicLightEngine {
             }
 
             let ceiling = SkyLightHeight::column_ceiling_at(chunk, relative.x, relative.z);
-            if ceiling < cut || ceiling > cut + QUADRANT_DIVERGENCE_THRESHOLD {
+            if ceiling < cut || ceiling > cut + height.spread() {
                 SkyLightHeightMigration::mark_quadrant_diverged(chunk, relative.x, relative.z);
             }
         });
