@@ -9373,10 +9373,9 @@ impl BiomeTree {
         best_dist: &mut i64,
         best_node: &mut &'static BiomeTree,
     ) {
-        let dist = self.get_squared_distance(point);
-        if dist >= *best_dist {
+        let Some(dist) = self.get_squared_distance_below(point, *best_dist) else {
             return;
-        }
+        };
         match self {
             Self::Leaf { .. } => {
                 *best_dist = dist;
@@ -9391,18 +9390,24 @@ impl BiomeTree {
     }
     #[inline(always)]
     fn get_squared_distance(&self, p: &[i64; 7]) -> i64 {
+        self.get_squared_distance_below(p, i64::MAX)
+            .unwrap_or(i64::MAX)
+    }
+    #[inline(always)]
+    fn get_squared_distance_below(&self, p: &[i64; 7], upper_bound: i64) -> Option<i64> {
         let params = match self {
             Self::Leaf { parameters, .. } => parameters,
             Self::Branch { parameters, .. } => parameters,
         };
-        let d0 = params[0].calc_distance(p[0]);
-        let d1 = params[1].calc_distance(p[1]);
-        let d2 = params[2].calc_distance(p[2]);
-        let d3 = params[3].calc_distance(p[3]);
-        let d4 = params[4].calc_distance(p[4]);
-        let d5 = params[5].calc_distance(p[5]);
-        let d6 = params[6].calc_distance(p[6]);
-        d0 * d0 + d1 * d1 + d2 * d2 + d3 * d3 + d4 * d4 + d5 * d5 + d6 * d6
+        let mut squared_distance = 0;
+        for (parameter, value) in params.iter().zip(p) {
+            let distance = parameter.calc_distance(*value);
+            squared_distance += distance * distance;
+            if squared_distance >= upper_bound {
+                return None;
+            }
+        }
+        Some(squared_distance)
     }
 }
 pub const OVERWORLD_BIOME_SOURCE: BiomeTree = BiomeTree::Branch {
