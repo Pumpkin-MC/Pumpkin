@@ -8,6 +8,167 @@ use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::color::NamedColor;
 use std::hash::{Hash, Hasher};
 use std::slice::Iter;
+#[derive(Clone, Debug, PartialEq)]
+pub enum LevelBasedValue {
+    Constant(f32),
+    Linear {
+        base: f32,
+        per_level_above_first: f32,
+    },
+    Clamped {
+        value: &'static Self,
+        min: f32,
+        max: f32,
+    },
+    Fraction {
+        numerator: &'static Self,
+        denominator: &'static Self,
+    },
+    LevelsSquared {
+        added: f32,
+    },
+    Lookup {
+        values: &'static [f32],
+        fallback: &'static Self,
+    },
+}
+impl LevelBasedValue {
+    #[must_use]
+    pub fn calculate(&self, level: i32) -> f32 {
+        match self {
+            Self::Constant(val) => *val,
+            Self::Linear {
+                base,
+                per_level_above_first,
+            } => base + (level.max(1) - 1) as f32 * per_level_above_first,
+            Self::Clamped { value, min, max } => value.calculate(level).clamp(*min, *max),
+            Self::Fraction {
+                numerator,
+                denominator,
+            } => {
+                let denom = denominator.calculate(level);
+                if denom == 0.0 {
+                    0.0
+                } else {
+                    numerator.calculate(level) / denom
+                }
+            }
+            Self::LevelsSquared { added } => ((level * level) as f32) + added,
+            Self::Lookup { values, fallback } => {
+                let idx = (level - 1) as usize;
+                values
+                    .get(idx)
+                    .copied()
+                    .unwrap_or_else(|| fallback.calculate(level))
+            }
+        }
+    }
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum EnchantmentTarget {
+    Attacker,
+    DamagingEntity,
+    Victim,
+}
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct TargetedConditionalEffect<T> {
+    pub enchanted: Option<EnchantmentTarget>,
+    pub affected: Option<EnchantmentTarget>,
+    pub effect: T,
+}
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ConditionalEffect<T> {
+    pub effect: T,
+}
+#[derive(Clone, Debug, PartialEq)]
+pub enum EnchantmentEntityEffect {
+    Ignite {
+        duration: LevelBasedValue,
+    },
+    DamageEntity {
+        damage: LevelBasedValue,
+    },
+    PlaySound {
+        sound: &'static str,
+    },
+    ReplaceBlock {
+        offset_x: i32,
+        offset_y: i32,
+        offset_z: i32,
+        trigger_game_event: Option<crate::game_event::GameEvent>,
+    },
+    Explode {
+        attribute_to_user: bool,
+        damage_type: Option<&'static crate::damage::DamageType>,
+        knockback_multiplier: Option<LevelBasedValue>,
+        immune_blocks: Option<&'static str>,
+        offset_x: f64,
+        offset_y: f64,
+        offset_z: f64,
+        radius: LevelBasedValue,
+        create_fire: bool,
+        block_interaction: &'static str,
+        small_particle: Option<crate::particle::Particle>,
+        large_particle: Option<crate::particle::Particle>,
+        sound: Option<crate::sound::Sound>,
+    },
+    AllOf(&'static [EnchantmentEntityEffect]),
+    Other,
+}
+#[derive(Clone, Debug, PartialEq)]
+pub enum EnchantmentValueEffect {
+    Add(LevelBasedValue),
+    Multiply(LevelBasedValue),
+    Set(LevelBasedValue),
+    RemoveBinomial(LevelBasedValue),
+    Other,
+}
+impl EnchantmentValueEffect {
+    #[must_use]
+    pub fn process(&self, level: i32, current_value: f32) -> f32 {
+        match self {
+            Self::Add(val) => current_value + val.calculate(level),
+            Self::Multiply(val) => current_value * val.calculate(level),
+            Self::Set(val) => val.calculate(level),
+            Self::RemoveBinomial(val) => {
+                let prob = val.calculate(level);
+                if rand::random::<f32>() < prob {
+                    0.0
+                } else {
+                    current_value
+                }
+            }
+            Self::Other => current_value,
+        }
+    }
+}
+#[derive(Clone, Debug)]
+pub struct EnchantmentEffects {
+    pub projectile_spawned: &'static [ConditionalEffect<EnchantmentEntityEffect>],
+    pub post_attack: &'static [TargetedConditionalEffect<EnchantmentEntityEffect>],
+    pub projectile_count: &'static [ConditionalEffect<EnchantmentValueEffect>],
+    pub projectile_spread: &'static [ConditionalEffect<EnchantmentValueEffect>],
+    pub projectile_piercing: &'static [ConditionalEffect<EnchantmentValueEffect>],
+    pub ammo_use: &'static [ConditionalEffect<EnchantmentValueEffect>],
+    pub damage: &'static [ConditionalEffect<EnchantmentValueEffect>],
+    pub knockback: &'static [ConditionalEffect<EnchantmentValueEffect>],
+    pub armor_effectiveness: &'static [ConditionalEffect<EnchantmentValueEffect>],
+    pub damage_protection: &'static [ConditionalEffect<EnchantmentValueEffect>],
+    pub hit_block: &'static [ConditionalEffect<EnchantmentEntityEffect>],
+    pub item_damage: &'static [ConditionalEffect<EnchantmentValueEffect>],
+    pub equipment_drops: &'static [TargetedConditionalEffect<EnchantmentValueEffect>],
+    pub fishing_time_reduction: &'static [ConditionalEffect<EnchantmentValueEffect>],
+    pub fishing_luck_bonus: &'static [ConditionalEffect<EnchantmentValueEffect>],
+    pub block_experience: &'static [ConditionalEffect<EnchantmentValueEffect>],
+    pub mob_experience: &'static [ConditionalEffect<EnchantmentValueEffect>],
+    pub repair_with_xp: &'static [ConditionalEffect<EnchantmentValueEffect>],
+    pub smash_damage_per_fallen_block: &'static [ConditionalEffect<EnchantmentValueEffect>],
+    pub trident_return_acceleration: &'static [ConditionalEffect<EnchantmentValueEffect>],
+    pub trident_spin_attack_strength: Option<EnchantmentValueEffect>,
+    pub crossbow_charge_time: Option<EnchantmentValueEffect>,
+    pub prevent_armor_change: bool,
+    pub prevent_equipment_drop: bool,
+}
 pub struct Enchantment {
     pub id: u8,
     pub name: &'static str,
@@ -21,6 +182,7 @@ pub struct Enchantment {
     pub weight: i32,
     pub min_cost: Cost,
     pub max_cost: Cost,
+    pub effects: EnchantmentEffects,
 }
 #[derive(Clone, Copy, Debug)]
 pub struct Cost {
@@ -139,6 +301,32 @@ impl Enchantment {
             base: 41i32,
             per_level_above_first: 0i32,
         },
+        effects: EnchantmentEffects {
+            projectile_spawned: &[],
+            post_attack: &[],
+            projectile_count: &[],
+            projectile_spread: &[],
+            projectile_piercing: &[],
+            ammo_use: &[],
+            damage: &[],
+            knockback: &[],
+            armor_effectiveness: &[],
+            damage_protection: &[],
+            hit_block: &[],
+            item_damage: &[],
+            equipment_drops: &[],
+            fishing_time_reduction: &[],
+            fishing_luck_bonus: &[],
+            block_experience: &[],
+            mob_experience: &[],
+            repair_with_xp: &[],
+            smash_damage_per_fallen_block: &[],
+            trident_return_acceleration: &[],
+            trident_spin_attack_strength: None,
+            crossbow_charge_time: None,
+            prevent_armor_change: false,
+            prevent_equipment_drop: false,
+        },
     };
     pub const BANE_OF_ARTHROPODS: Self = Self {
         id: 1u8,
@@ -158,6 +346,41 @@ impl Enchantment {
         max_cost: Cost {
             base: 25i32,
             per_level_above_first: 8i32,
+        },
+        effects: EnchantmentEffects {
+            projectile_spawned: &[],
+            post_attack: &[TargetedConditionalEffect {
+                enchanted: Some(EnchantmentTarget::Attacker),
+                affected: Some(EnchantmentTarget::Victim),
+                effect: EnchantmentEntityEffect::Other,
+            }],
+            projectile_count: &[],
+            projectile_spread: &[],
+            projectile_piercing: &[],
+            ammo_use: &[],
+            damage: &[ConditionalEffect {
+                effect: EnchantmentValueEffect::Add(LevelBasedValue::Linear {
+                    base: 2.5f32,
+                    per_level_above_first: 2.5f32,
+                }),
+            }],
+            knockback: &[],
+            armor_effectiveness: &[],
+            damage_protection: &[],
+            hit_block: &[],
+            item_damage: &[],
+            equipment_drops: &[],
+            fishing_time_reduction: &[],
+            fishing_luck_bonus: &[],
+            block_experience: &[],
+            mob_experience: &[],
+            repair_with_xp: &[],
+            smash_damage_per_fallen_block: &[],
+            trident_return_acceleration: &[],
+            trident_spin_attack_strength: None,
+            crossbow_charge_time: None,
+            prevent_armor_change: false,
+            prevent_equipment_drop: false,
         },
     };
     pub const BINDING_CURSE: Self = Self {
@@ -179,6 +402,32 @@ impl Enchantment {
             base: 50i32,
             per_level_above_first: 0i32,
         },
+        effects: EnchantmentEffects {
+            projectile_spawned: &[],
+            post_attack: &[],
+            projectile_count: &[],
+            projectile_spread: &[],
+            projectile_piercing: &[],
+            ammo_use: &[],
+            damage: &[],
+            knockback: &[],
+            armor_effectiveness: &[],
+            damage_protection: &[],
+            hit_block: &[],
+            item_damage: &[],
+            equipment_drops: &[],
+            fishing_time_reduction: &[],
+            fishing_luck_bonus: &[],
+            block_experience: &[],
+            mob_experience: &[],
+            repair_with_xp: &[],
+            smash_damage_per_fallen_block: &[],
+            trident_return_acceleration: &[],
+            trident_spin_attack_strength: None,
+            crossbow_charge_time: None,
+            prevent_armor_change: true,
+            prevent_equipment_drop: false,
+        },
     };
     pub const BLAST_PROTECTION: Self = Self {
         id: 3u8,
@@ -198,6 +447,37 @@ impl Enchantment {
         max_cost: Cost {
             base: 13i32,
             per_level_above_first: 8i32,
+        },
+        effects: EnchantmentEffects {
+            projectile_spawned: &[],
+            post_attack: &[],
+            projectile_count: &[],
+            projectile_spread: &[],
+            projectile_piercing: &[],
+            ammo_use: &[],
+            damage: &[],
+            knockback: &[],
+            armor_effectiveness: &[],
+            damage_protection: &[ConditionalEffect {
+                effect: EnchantmentValueEffect::Add(LevelBasedValue::Linear {
+                    base: 2f32,
+                    per_level_above_first: 2f32,
+                }),
+            }],
+            hit_block: &[],
+            item_damage: &[],
+            equipment_drops: &[],
+            fishing_time_reduction: &[],
+            fishing_luck_bonus: &[],
+            block_experience: &[],
+            mob_experience: &[],
+            repair_with_xp: &[],
+            smash_damage_per_fallen_block: &[],
+            trident_return_acceleration: &[],
+            trident_spin_attack_strength: None,
+            crossbow_charge_time: None,
+            prevent_armor_change: false,
+            prevent_equipment_drop: false,
         },
     };
     pub const BREACH: Self = Self {
@@ -219,6 +499,37 @@ impl Enchantment {
             base: 65i32,
             per_level_above_first: 9i32,
         },
+        effects: EnchantmentEffects {
+            projectile_spawned: &[],
+            post_attack: &[],
+            projectile_count: &[],
+            projectile_spread: &[],
+            projectile_piercing: &[],
+            ammo_use: &[],
+            damage: &[],
+            knockback: &[],
+            armor_effectiveness: &[ConditionalEffect {
+                effect: EnchantmentValueEffect::Add(LevelBasedValue::Linear {
+                    base: -0.15f32,
+                    per_level_above_first: -0.15f32,
+                }),
+            }],
+            damage_protection: &[],
+            hit_block: &[],
+            item_damage: &[],
+            equipment_drops: &[],
+            fishing_time_reduction: &[],
+            fishing_luck_bonus: &[],
+            block_experience: &[],
+            mob_experience: &[],
+            repair_with_xp: &[],
+            smash_damage_per_fallen_block: &[],
+            trident_return_acceleration: &[],
+            trident_spin_attack_strength: None,
+            crossbow_charge_time: None,
+            prevent_armor_change: false,
+            prevent_equipment_drop: false,
+        },
     };
     pub const CHANNELING: Self = Self {
         id: 5u8,
@@ -238,6 +549,48 @@ impl Enchantment {
         max_cost: Cost {
             base: 50i32,
             per_level_above_first: 0i32,
+        },
+        effects: EnchantmentEffects {
+            projectile_spawned: &[],
+            post_attack: &[TargetedConditionalEffect {
+                enchanted: Some(EnchantmentTarget::Attacker),
+                affected: Some(EnchantmentTarget::Victim),
+                effect: EnchantmentEntityEffect::AllOf(&[
+                    EnchantmentEntityEffect::Other,
+                    EnchantmentEntityEffect::PlaySound {
+                        sound: "minecraft:item.trident.thunder",
+                    },
+                ]),
+            }],
+            projectile_count: &[],
+            projectile_spread: &[],
+            projectile_piercing: &[],
+            ammo_use: &[],
+            damage: &[],
+            knockback: &[],
+            armor_effectiveness: &[],
+            damage_protection: &[],
+            hit_block: &[ConditionalEffect {
+                effect: EnchantmentEntityEffect::AllOf(&[
+                    EnchantmentEntityEffect::Other,
+                    EnchantmentEntityEffect::PlaySound {
+                        sound: "minecraft:item.trident.thunder",
+                    },
+                ]),
+            }],
+            item_damage: &[],
+            equipment_drops: &[],
+            fishing_time_reduction: &[],
+            fishing_luck_bonus: &[],
+            block_experience: &[],
+            mob_experience: &[],
+            repair_with_xp: &[],
+            smash_damage_per_fallen_block: &[],
+            trident_return_acceleration: &[],
+            trident_spin_attack_strength: None,
+            crossbow_charge_time: None,
+            prevent_armor_change: false,
+            prevent_equipment_drop: false,
         },
     };
     pub const DENSITY: Self = Self {
@@ -259,6 +612,37 @@ impl Enchantment {
             base: 25i32,
             per_level_above_first: 8i32,
         },
+        effects: EnchantmentEffects {
+            projectile_spawned: &[],
+            post_attack: &[],
+            projectile_count: &[],
+            projectile_spread: &[],
+            projectile_piercing: &[],
+            ammo_use: &[],
+            damage: &[],
+            knockback: &[],
+            armor_effectiveness: &[],
+            damage_protection: &[],
+            hit_block: &[],
+            item_damage: &[],
+            equipment_drops: &[],
+            fishing_time_reduction: &[],
+            fishing_luck_bonus: &[],
+            block_experience: &[],
+            mob_experience: &[],
+            repair_with_xp: &[],
+            smash_damage_per_fallen_block: &[ConditionalEffect {
+                effect: EnchantmentValueEffect::Add(LevelBasedValue::Linear {
+                    base: 0.5f32,
+                    per_level_above_first: 0.5f32,
+                }),
+            }],
+            trident_return_acceleration: &[],
+            trident_spin_attack_strength: None,
+            crossbow_charge_time: None,
+            prevent_armor_change: false,
+            prevent_equipment_drop: false,
+        },
     };
     pub const DEPTH_STRIDER: Self = Self {
         id: 7u8,
@@ -278,6 +662,32 @@ impl Enchantment {
         max_cost: Cost {
             base: 25i32,
             per_level_above_first: 10i32,
+        },
+        effects: EnchantmentEffects {
+            projectile_spawned: &[],
+            post_attack: &[],
+            projectile_count: &[],
+            projectile_spread: &[],
+            projectile_piercing: &[],
+            ammo_use: &[],
+            damage: &[],
+            knockback: &[],
+            armor_effectiveness: &[],
+            damage_protection: &[],
+            hit_block: &[],
+            item_damage: &[],
+            equipment_drops: &[],
+            fishing_time_reduction: &[],
+            fishing_luck_bonus: &[],
+            block_experience: &[],
+            mob_experience: &[],
+            repair_with_xp: &[],
+            smash_damage_per_fallen_block: &[],
+            trident_return_acceleration: &[],
+            trident_spin_attack_strength: None,
+            crossbow_charge_time: None,
+            prevent_armor_change: false,
+            prevent_equipment_drop: false,
         },
     };
     pub const EFFICIENCY: Self = Self {
@@ -299,6 +709,32 @@ impl Enchantment {
             base: 51i32,
             per_level_above_first: 10i32,
         },
+        effects: EnchantmentEffects {
+            projectile_spawned: &[],
+            post_attack: &[],
+            projectile_count: &[],
+            projectile_spread: &[],
+            projectile_piercing: &[],
+            ammo_use: &[],
+            damage: &[],
+            knockback: &[],
+            armor_effectiveness: &[],
+            damage_protection: &[],
+            hit_block: &[],
+            item_damage: &[],
+            equipment_drops: &[],
+            fishing_time_reduction: &[],
+            fishing_luck_bonus: &[],
+            block_experience: &[],
+            mob_experience: &[],
+            repair_with_xp: &[],
+            smash_damage_per_fallen_block: &[],
+            trident_return_acceleration: &[],
+            trident_spin_attack_strength: None,
+            crossbow_charge_time: None,
+            prevent_armor_change: false,
+            prevent_equipment_drop: false,
+        },
     };
     pub const FEATHER_FALLING: Self = Self {
         id: 9u8,
@@ -318,6 +754,37 @@ impl Enchantment {
         max_cost: Cost {
             base: 11i32,
             per_level_above_first: 6i32,
+        },
+        effects: EnchantmentEffects {
+            projectile_spawned: &[],
+            post_attack: &[],
+            projectile_count: &[],
+            projectile_spread: &[],
+            projectile_piercing: &[],
+            ammo_use: &[],
+            damage: &[],
+            knockback: &[],
+            armor_effectiveness: &[],
+            damage_protection: &[ConditionalEffect {
+                effect: EnchantmentValueEffect::Add(LevelBasedValue::Linear {
+                    base: 3f32,
+                    per_level_above_first: 3f32,
+                }),
+            }],
+            hit_block: &[],
+            item_damage: &[],
+            equipment_drops: &[],
+            fishing_time_reduction: &[],
+            fishing_luck_bonus: &[],
+            block_experience: &[],
+            mob_experience: &[],
+            repair_with_xp: &[],
+            smash_damage_per_fallen_block: &[],
+            trident_return_acceleration: &[],
+            trident_spin_attack_strength: None,
+            crossbow_charge_time: None,
+            prevent_armor_change: false,
+            prevent_equipment_drop: false,
         },
     };
     pub const FIRE_ASPECT: Self = Self {
@@ -339,6 +806,41 @@ impl Enchantment {
             base: 60i32,
             per_level_above_first: 20i32,
         },
+        effects: EnchantmentEffects {
+            projectile_spawned: &[],
+            post_attack: &[TargetedConditionalEffect {
+                enchanted: Some(EnchantmentTarget::Attacker),
+                affected: Some(EnchantmentTarget::Victim),
+                effect: EnchantmentEntityEffect::Ignite {
+                    duration: LevelBasedValue::Linear {
+                        base: 4f32,
+                        per_level_above_first: 4f32,
+                    },
+                },
+            }],
+            projectile_count: &[],
+            projectile_spread: &[],
+            projectile_piercing: &[],
+            ammo_use: &[],
+            damage: &[],
+            knockback: &[],
+            armor_effectiveness: &[],
+            damage_protection: &[],
+            hit_block: &[],
+            item_damage: &[],
+            equipment_drops: &[],
+            fishing_time_reduction: &[],
+            fishing_luck_bonus: &[],
+            block_experience: &[],
+            mob_experience: &[],
+            repair_with_xp: &[],
+            smash_damage_per_fallen_block: &[],
+            trident_return_acceleration: &[],
+            trident_spin_attack_strength: None,
+            crossbow_charge_time: None,
+            prevent_armor_change: false,
+            prevent_equipment_drop: false,
+        },
     };
     pub const FIRE_PROTECTION: Self = Self {
         id: 11u8,
@@ -358,6 +860,37 @@ impl Enchantment {
         max_cost: Cost {
             base: 18i32,
             per_level_above_first: 8i32,
+        },
+        effects: EnchantmentEffects {
+            projectile_spawned: &[],
+            post_attack: &[],
+            projectile_count: &[],
+            projectile_spread: &[],
+            projectile_piercing: &[],
+            ammo_use: &[],
+            damage: &[],
+            knockback: &[],
+            armor_effectiveness: &[],
+            damage_protection: &[ConditionalEffect {
+                effect: EnchantmentValueEffect::Add(LevelBasedValue::Linear {
+                    base: 2f32,
+                    per_level_above_first: 2f32,
+                }),
+            }],
+            hit_block: &[],
+            item_damage: &[],
+            equipment_drops: &[],
+            fishing_time_reduction: &[],
+            fishing_luck_bonus: &[],
+            block_experience: &[],
+            mob_experience: &[],
+            repair_with_xp: &[],
+            smash_damage_per_fallen_block: &[],
+            trident_return_acceleration: &[],
+            trident_spin_attack_strength: None,
+            crossbow_charge_time: None,
+            prevent_armor_change: false,
+            prevent_equipment_drop: false,
         },
     };
     pub const FLAME: Self = Self {
@@ -379,6 +912,36 @@ impl Enchantment {
             base: 50i32,
             per_level_above_first: 0i32,
         },
+        effects: EnchantmentEffects {
+            projectile_spawned: &[ConditionalEffect {
+                effect: EnchantmentEntityEffect::Ignite {
+                    duration: LevelBasedValue::Constant(100f32),
+                },
+            }],
+            post_attack: &[],
+            projectile_count: &[],
+            projectile_spread: &[],
+            projectile_piercing: &[],
+            ammo_use: &[],
+            damage: &[],
+            knockback: &[],
+            armor_effectiveness: &[],
+            damage_protection: &[],
+            hit_block: &[],
+            item_damage: &[],
+            equipment_drops: &[],
+            fishing_time_reduction: &[],
+            fishing_luck_bonus: &[],
+            block_experience: &[],
+            mob_experience: &[],
+            repair_with_xp: &[],
+            smash_damage_per_fallen_block: &[],
+            trident_return_acceleration: &[],
+            trident_spin_attack_strength: None,
+            crossbow_charge_time: None,
+            prevent_armor_change: false,
+            prevent_equipment_drop: false,
+        },
     };
     pub const FORTUNE: Self = Self {
         id: 13u8,
@@ -398,6 +961,32 @@ impl Enchantment {
         max_cost: Cost {
             base: 65i32,
             per_level_above_first: 9i32,
+        },
+        effects: EnchantmentEffects {
+            projectile_spawned: &[],
+            post_attack: &[],
+            projectile_count: &[],
+            projectile_spread: &[],
+            projectile_piercing: &[],
+            ammo_use: &[],
+            damage: &[],
+            knockback: &[],
+            armor_effectiveness: &[],
+            damage_protection: &[],
+            hit_block: &[],
+            item_damage: &[],
+            equipment_drops: &[],
+            fishing_time_reduction: &[],
+            fishing_luck_bonus: &[],
+            block_experience: &[],
+            mob_experience: &[],
+            repair_with_xp: &[],
+            smash_damage_per_fallen_block: &[],
+            trident_return_acceleration: &[],
+            trident_spin_attack_strength: None,
+            crossbow_charge_time: None,
+            prevent_armor_change: false,
+            prevent_equipment_drop: false,
         },
     };
     pub const FROST_WALKER: Self = Self {
@@ -419,6 +1008,32 @@ impl Enchantment {
             base: 25i32,
             per_level_above_first: 10i32,
         },
+        effects: EnchantmentEffects {
+            projectile_spawned: &[],
+            post_attack: &[],
+            projectile_count: &[],
+            projectile_spread: &[],
+            projectile_piercing: &[],
+            ammo_use: &[],
+            damage: &[],
+            knockback: &[],
+            armor_effectiveness: &[],
+            damage_protection: &[],
+            hit_block: &[],
+            item_damage: &[],
+            equipment_drops: &[],
+            fishing_time_reduction: &[],
+            fishing_luck_bonus: &[],
+            block_experience: &[],
+            mob_experience: &[],
+            repair_with_xp: &[],
+            smash_damage_per_fallen_block: &[],
+            trident_return_acceleration: &[],
+            trident_spin_attack_strength: None,
+            crossbow_charge_time: None,
+            prevent_armor_change: false,
+            prevent_equipment_drop: false,
+        },
     };
     pub const IMPALING: Self = Self {
         id: 15u8,
@@ -438,6 +1053,37 @@ impl Enchantment {
         max_cost: Cost {
             base: 21i32,
             per_level_above_first: 8i32,
+        },
+        effects: EnchantmentEffects {
+            projectile_spawned: &[],
+            post_attack: &[],
+            projectile_count: &[],
+            projectile_spread: &[],
+            projectile_piercing: &[],
+            ammo_use: &[],
+            damage: &[ConditionalEffect {
+                effect: EnchantmentValueEffect::Add(LevelBasedValue::Linear {
+                    base: 2.5f32,
+                    per_level_above_first: 2.5f32,
+                }),
+            }],
+            knockback: &[],
+            armor_effectiveness: &[],
+            damage_protection: &[],
+            hit_block: &[],
+            item_damage: &[],
+            equipment_drops: &[],
+            fishing_time_reduction: &[],
+            fishing_luck_bonus: &[],
+            block_experience: &[],
+            mob_experience: &[],
+            repair_with_xp: &[],
+            smash_damage_per_fallen_block: &[],
+            trident_return_acceleration: &[],
+            trident_spin_attack_strength: None,
+            crossbow_charge_time: None,
+            prevent_armor_change: false,
+            prevent_equipment_drop: false,
         },
     };
     pub const INFINITY: Self = Self {
@@ -459,6 +1105,34 @@ impl Enchantment {
             base: 50i32,
             per_level_above_first: 0i32,
         },
+        effects: EnchantmentEffects {
+            projectile_spawned: &[],
+            post_attack: &[],
+            projectile_count: &[],
+            projectile_spread: &[],
+            projectile_piercing: &[],
+            ammo_use: &[ConditionalEffect {
+                effect: EnchantmentValueEffect::Set(LevelBasedValue::Constant(0f32)),
+            }],
+            damage: &[],
+            knockback: &[],
+            armor_effectiveness: &[],
+            damage_protection: &[],
+            hit_block: &[],
+            item_damage: &[],
+            equipment_drops: &[],
+            fishing_time_reduction: &[],
+            fishing_luck_bonus: &[],
+            block_experience: &[],
+            mob_experience: &[],
+            repair_with_xp: &[],
+            smash_damage_per_fallen_block: &[],
+            trident_return_acceleration: &[],
+            trident_spin_attack_strength: None,
+            crossbow_charge_time: None,
+            prevent_armor_change: false,
+            prevent_equipment_drop: false,
+        },
     };
     pub const KNOCKBACK: Self = Self {
         id: 17u8,
@@ -478,6 +1152,37 @@ impl Enchantment {
         max_cost: Cost {
             base: 55i32,
             per_level_above_first: 20i32,
+        },
+        effects: EnchantmentEffects {
+            projectile_spawned: &[],
+            post_attack: &[],
+            projectile_count: &[],
+            projectile_spread: &[],
+            projectile_piercing: &[],
+            ammo_use: &[],
+            damage: &[],
+            knockback: &[ConditionalEffect {
+                effect: EnchantmentValueEffect::Add(LevelBasedValue::Linear {
+                    base: 1f32,
+                    per_level_above_first: 1f32,
+                }),
+            }],
+            armor_effectiveness: &[],
+            damage_protection: &[],
+            hit_block: &[],
+            item_damage: &[],
+            equipment_drops: &[],
+            fishing_time_reduction: &[],
+            fishing_luck_bonus: &[],
+            block_experience: &[],
+            mob_experience: &[],
+            repair_with_xp: &[],
+            smash_damage_per_fallen_block: &[],
+            trident_return_acceleration: &[],
+            trident_spin_attack_strength: None,
+            crossbow_charge_time: None,
+            prevent_armor_change: false,
+            prevent_equipment_drop: false,
         },
     };
     pub const LOOTING: Self = Self {
@@ -499,6 +1204,39 @@ impl Enchantment {
             base: 65i32,
             per_level_above_first: 9i32,
         },
+        effects: EnchantmentEffects {
+            projectile_spawned: &[],
+            post_attack: &[],
+            projectile_count: &[],
+            projectile_spread: &[],
+            projectile_piercing: &[],
+            ammo_use: &[],
+            damage: &[],
+            knockback: &[],
+            armor_effectiveness: &[],
+            damage_protection: &[],
+            hit_block: &[],
+            item_damage: &[],
+            equipment_drops: &[TargetedConditionalEffect {
+                enchanted: Some(EnchantmentTarget::Attacker),
+                affected: None,
+                effect: EnchantmentValueEffect::Add(LevelBasedValue::Linear {
+                    base: 0.01f32,
+                    per_level_above_first: 0.01f32,
+                }),
+            }],
+            fishing_time_reduction: &[],
+            fishing_luck_bonus: &[],
+            block_experience: &[],
+            mob_experience: &[],
+            repair_with_xp: &[],
+            smash_damage_per_fallen_block: &[],
+            trident_return_acceleration: &[],
+            trident_spin_attack_strength: None,
+            crossbow_charge_time: None,
+            prevent_armor_change: false,
+            prevent_equipment_drop: false,
+        },
     };
     pub const LOYALTY: Self = Self {
         id: 19u8,
@@ -518,6 +1256,37 @@ impl Enchantment {
         max_cost: Cost {
             base: 50i32,
             per_level_above_first: 0i32,
+        },
+        effects: EnchantmentEffects {
+            projectile_spawned: &[],
+            post_attack: &[],
+            projectile_count: &[],
+            projectile_spread: &[],
+            projectile_piercing: &[],
+            ammo_use: &[],
+            damage: &[],
+            knockback: &[],
+            armor_effectiveness: &[],
+            damage_protection: &[],
+            hit_block: &[],
+            item_damage: &[],
+            equipment_drops: &[],
+            fishing_time_reduction: &[],
+            fishing_luck_bonus: &[],
+            block_experience: &[],
+            mob_experience: &[],
+            repair_with_xp: &[],
+            smash_damage_per_fallen_block: &[],
+            trident_return_acceleration: &[ConditionalEffect {
+                effect: EnchantmentValueEffect::Add(LevelBasedValue::Linear {
+                    base: 1f32,
+                    per_level_above_first: 1f32,
+                }),
+            }],
+            trident_spin_attack_strength: None,
+            crossbow_charge_time: None,
+            prevent_armor_change: false,
+            prevent_equipment_drop: false,
         },
     };
     pub const LUCK_OF_THE_SEA: Self = Self {
@@ -539,6 +1308,37 @@ impl Enchantment {
             base: 65i32,
             per_level_above_first: 9i32,
         },
+        effects: EnchantmentEffects {
+            projectile_spawned: &[],
+            post_attack: &[],
+            projectile_count: &[],
+            projectile_spread: &[],
+            projectile_piercing: &[],
+            ammo_use: &[],
+            damage: &[],
+            knockback: &[],
+            armor_effectiveness: &[],
+            damage_protection: &[],
+            hit_block: &[],
+            item_damage: &[],
+            equipment_drops: &[],
+            fishing_time_reduction: &[],
+            fishing_luck_bonus: &[ConditionalEffect {
+                effect: EnchantmentValueEffect::Add(LevelBasedValue::Linear {
+                    base: 1f32,
+                    per_level_above_first: 1f32,
+                }),
+            }],
+            block_experience: &[],
+            mob_experience: &[],
+            repair_with_xp: &[],
+            smash_damage_per_fallen_block: &[],
+            trident_return_acceleration: &[],
+            trident_spin_attack_strength: None,
+            crossbow_charge_time: None,
+            prevent_armor_change: false,
+            prevent_equipment_drop: false,
+        },
     };
     pub const LUNGE: Self = Self {
         id: 21u8,
@@ -558,6 +1358,32 @@ impl Enchantment {
         max_cost: Cost {
             base: 25i32,
             per_level_above_first: 8i32,
+        },
+        effects: EnchantmentEffects {
+            projectile_spawned: &[],
+            post_attack: &[],
+            projectile_count: &[],
+            projectile_spread: &[],
+            projectile_piercing: &[],
+            ammo_use: &[],
+            damage: &[],
+            knockback: &[],
+            armor_effectiveness: &[],
+            damage_protection: &[],
+            hit_block: &[],
+            item_damage: &[],
+            equipment_drops: &[],
+            fishing_time_reduction: &[],
+            fishing_luck_bonus: &[],
+            block_experience: &[],
+            mob_experience: &[],
+            repair_with_xp: &[],
+            smash_damage_per_fallen_block: &[],
+            trident_return_acceleration: &[],
+            trident_spin_attack_strength: None,
+            crossbow_charge_time: None,
+            prevent_armor_change: false,
+            prevent_equipment_drop: false,
         },
     };
     pub const LURE: Self = Self {
@@ -579,6 +1405,37 @@ impl Enchantment {
             base: 65i32,
             per_level_above_first: 9i32,
         },
+        effects: EnchantmentEffects {
+            projectile_spawned: &[],
+            post_attack: &[],
+            projectile_count: &[],
+            projectile_spread: &[],
+            projectile_piercing: &[],
+            ammo_use: &[],
+            damage: &[],
+            knockback: &[],
+            armor_effectiveness: &[],
+            damage_protection: &[],
+            hit_block: &[],
+            item_damage: &[],
+            equipment_drops: &[],
+            fishing_time_reduction: &[ConditionalEffect {
+                effect: EnchantmentValueEffect::Add(LevelBasedValue::Linear {
+                    base: 5f32,
+                    per_level_above_first: 5f32,
+                }),
+            }],
+            fishing_luck_bonus: &[],
+            block_experience: &[],
+            mob_experience: &[],
+            repair_with_xp: &[],
+            smash_damage_per_fallen_block: &[],
+            trident_return_acceleration: &[],
+            trident_spin_attack_strength: None,
+            crossbow_charge_time: None,
+            prevent_armor_change: false,
+            prevent_equipment_drop: false,
+        },
     };
     pub const MENDING: Self = Self {
         id: 23u8,
@@ -598,6 +1455,34 @@ impl Enchantment {
         max_cost: Cost {
             base: 75i32,
             per_level_above_first: 25i32,
+        },
+        effects: EnchantmentEffects {
+            projectile_spawned: &[],
+            post_attack: &[],
+            projectile_count: &[],
+            projectile_spread: &[],
+            projectile_piercing: &[],
+            ammo_use: &[],
+            damage: &[],
+            knockback: &[],
+            armor_effectiveness: &[],
+            damage_protection: &[],
+            hit_block: &[],
+            item_damage: &[],
+            equipment_drops: &[],
+            fishing_time_reduction: &[],
+            fishing_luck_bonus: &[],
+            block_experience: &[],
+            mob_experience: &[],
+            repair_with_xp: &[ConditionalEffect {
+                effect: EnchantmentValueEffect::Multiply(LevelBasedValue::Constant(2f32)),
+            }],
+            smash_damage_per_fallen_block: &[],
+            trident_return_acceleration: &[],
+            trident_spin_attack_strength: None,
+            crossbow_charge_time: None,
+            prevent_armor_change: false,
+            prevent_equipment_drop: false,
         },
     };
     pub const MULTISHOT: Self = Self {
@@ -619,6 +1504,42 @@ impl Enchantment {
             base: 50i32,
             per_level_above_first: 0i32,
         },
+        effects: EnchantmentEffects {
+            projectile_spawned: &[],
+            post_attack: &[],
+            projectile_count: &[ConditionalEffect {
+                effect: EnchantmentValueEffect::Add(LevelBasedValue::Linear {
+                    base: 2f32,
+                    per_level_above_first: 2f32,
+                }),
+            }],
+            projectile_spread: &[ConditionalEffect {
+                effect: EnchantmentValueEffect::Add(LevelBasedValue::Linear {
+                    base: 10f32,
+                    per_level_above_first: 10f32,
+                }),
+            }],
+            projectile_piercing: &[],
+            ammo_use: &[],
+            damage: &[],
+            knockback: &[],
+            armor_effectiveness: &[],
+            damage_protection: &[],
+            hit_block: &[],
+            item_damage: &[],
+            equipment_drops: &[],
+            fishing_time_reduction: &[],
+            fishing_luck_bonus: &[],
+            block_experience: &[],
+            mob_experience: &[],
+            repair_with_xp: &[],
+            smash_damage_per_fallen_block: &[],
+            trident_return_acceleration: &[],
+            trident_spin_attack_strength: None,
+            crossbow_charge_time: None,
+            prevent_armor_change: false,
+            prevent_equipment_drop: false,
+        },
     };
     pub const PIERCING: Self = Self {
         id: 25u8,
@@ -638,6 +1559,37 @@ impl Enchantment {
         max_cost: Cost {
             base: 50i32,
             per_level_above_first: 0i32,
+        },
+        effects: EnchantmentEffects {
+            projectile_spawned: &[],
+            post_attack: &[],
+            projectile_count: &[],
+            projectile_spread: &[],
+            projectile_piercing: &[ConditionalEffect {
+                effect: EnchantmentValueEffect::Add(LevelBasedValue::Linear {
+                    base: 1f32,
+                    per_level_above_first: 1f32,
+                }),
+            }],
+            ammo_use: &[],
+            damage: &[],
+            knockback: &[],
+            armor_effectiveness: &[],
+            damage_protection: &[],
+            hit_block: &[],
+            item_damage: &[],
+            equipment_drops: &[],
+            fishing_time_reduction: &[],
+            fishing_luck_bonus: &[],
+            block_experience: &[],
+            mob_experience: &[],
+            repair_with_xp: &[],
+            smash_damage_per_fallen_block: &[],
+            trident_return_acceleration: &[],
+            trident_spin_attack_strength: None,
+            crossbow_charge_time: None,
+            prevent_armor_change: false,
+            prevent_equipment_drop: false,
         },
     };
     pub const POWER: Self = Self {
@@ -659,6 +1611,37 @@ impl Enchantment {
             base: 16i32,
             per_level_above_first: 10i32,
         },
+        effects: EnchantmentEffects {
+            projectile_spawned: &[],
+            post_attack: &[],
+            projectile_count: &[],
+            projectile_spread: &[],
+            projectile_piercing: &[],
+            ammo_use: &[],
+            damage: &[ConditionalEffect {
+                effect: EnchantmentValueEffect::Add(LevelBasedValue::Linear {
+                    base: 1f32,
+                    per_level_above_first: 0.5f32,
+                }),
+            }],
+            knockback: &[],
+            armor_effectiveness: &[],
+            damage_protection: &[],
+            hit_block: &[],
+            item_damage: &[],
+            equipment_drops: &[],
+            fishing_time_reduction: &[],
+            fishing_luck_bonus: &[],
+            block_experience: &[],
+            mob_experience: &[],
+            repair_with_xp: &[],
+            smash_damage_per_fallen_block: &[],
+            trident_return_acceleration: &[],
+            trident_spin_attack_strength: None,
+            crossbow_charge_time: None,
+            prevent_armor_change: false,
+            prevent_equipment_drop: false,
+        },
     };
     pub const PROJECTILE_PROTECTION: Self = Self {
         id: 27u8,
@@ -678,6 +1661,37 @@ impl Enchantment {
         max_cost: Cost {
             base: 9i32,
             per_level_above_first: 6i32,
+        },
+        effects: EnchantmentEffects {
+            projectile_spawned: &[],
+            post_attack: &[],
+            projectile_count: &[],
+            projectile_spread: &[],
+            projectile_piercing: &[],
+            ammo_use: &[],
+            damage: &[],
+            knockback: &[],
+            armor_effectiveness: &[],
+            damage_protection: &[ConditionalEffect {
+                effect: EnchantmentValueEffect::Add(LevelBasedValue::Linear {
+                    base: 2f32,
+                    per_level_above_first: 2f32,
+                }),
+            }],
+            hit_block: &[],
+            item_damage: &[],
+            equipment_drops: &[],
+            fishing_time_reduction: &[],
+            fishing_luck_bonus: &[],
+            block_experience: &[],
+            mob_experience: &[],
+            repair_with_xp: &[],
+            smash_damage_per_fallen_block: &[],
+            trident_return_acceleration: &[],
+            trident_spin_attack_strength: None,
+            crossbow_charge_time: None,
+            prevent_armor_change: false,
+            prevent_equipment_drop: false,
         },
     };
     pub const PROTECTION: Self = Self {
@@ -699,6 +1713,37 @@ impl Enchantment {
             base: 12i32,
             per_level_above_first: 11i32,
         },
+        effects: EnchantmentEffects {
+            projectile_spawned: &[],
+            post_attack: &[],
+            projectile_count: &[],
+            projectile_spread: &[],
+            projectile_piercing: &[],
+            ammo_use: &[],
+            damage: &[],
+            knockback: &[],
+            armor_effectiveness: &[],
+            damage_protection: &[ConditionalEffect {
+                effect: EnchantmentValueEffect::Add(LevelBasedValue::Linear {
+                    base: 1f32,
+                    per_level_above_first: 1f32,
+                }),
+            }],
+            hit_block: &[],
+            item_damage: &[],
+            equipment_drops: &[],
+            fishing_time_reduction: &[],
+            fishing_luck_bonus: &[],
+            block_experience: &[],
+            mob_experience: &[],
+            repair_with_xp: &[],
+            smash_damage_per_fallen_block: &[],
+            trident_return_acceleration: &[],
+            trident_spin_attack_strength: None,
+            crossbow_charge_time: None,
+            prevent_armor_change: false,
+            prevent_equipment_drop: false,
+        },
     };
     pub const PUNCH: Self = Self {
         id: 29u8,
@@ -718,6 +1763,37 @@ impl Enchantment {
         max_cost: Cost {
             base: 37i32,
             per_level_above_first: 20i32,
+        },
+        effects: EnchantmentEffects {
+            projectile_spawned: &[],
+            post_attack: &[],
+            projectile_count: &[],
+            projectile_spread: &[],
+            projectile_piercing: &[],
+            ammo_use: &[],
+            damage: &[],
+            knockback: &[ConditionalEffect {
+                effect: EnchantmentValueEffect::Add(LevelBasedValue::Linear {
+                    base: 1f32,
+                    per_level_above_first: 1f32,
+                }),
+            }],
+            armor_effectiveness: &[],
+            damage_protection: &[],
+            hit_block: &[],
+            item_damage: &[],
+            equipment_drops: &[],
+            fishing_time_reduction: &[],
+            fishing_luck_bonus: &[],
+            block_experience: &[],
+            mob_experience: &[],
+            repair_with_xp: &[],
+            smash_damage_per_fallen_block: &[],
+            trident_return_acceleration: &[],
+            trident_spin_attack_strength: None,
+            crossbow_charge_time: None,
+            prevent_armor_change: false,
+            prevent_equipment_drop: false,
         },
     };
     pub const QUICK_CHARGE: Self = Self {
@@ -742,6 +1818,35 @@ impl Enchantment {
             base: 50i32,
             per_level_above_first: 0i32,
         },
+        effects: EnchantmentEffects {
+            projectile_spawned: &[],
+            post_attack: &[],
+            projectile_count: &[],
+            projectile_spread: &[],
+            projectile_piercing: &[],
+            ammo_use: &[],
+            damage: &[],
+            knockback: &[],
+            armor_effectiveness: &[],
+            damage_protection: &[],
+            hit_block: &[],
+            item_damage: &[],
+            equipment_drops: &[],
+            fishing_time_reduction: &[],
+            fishing_luck_bonus: &[],
+            block_experience: &[],
+            mob_experience: &[],
+            repair_with_xp: &[],
+            smash_damage_per_fallen_block: &[],
+            trident_return_acceleration: &[],
+            trident_spin_attack_strength: None,
+            crossbow_charge_time: Some(EnchantmentValueEffect::Add(LevelBasedValue::Linear {
+                base: -0.25f32,
+                per_level_above_first: -0.25f32,
+            })),
+            prevent_armor_change: false,
+            prevent_equipment_drop: false,
+        },
     };
     pub const RESPIRATION: Self = Self {
         id: 31u8,
@@ -761,6 +1866,32 @@ impl Enchantment {
         max_cost: Cost {
             base: 40i32,
             per_level_above_first: 10i32,
+        },
+        effects: EnchantmentEffects {
+            projectile_spawned: &[],
+            post_attack: &[],
+            projectile_count: &[],
+            projectile_spread: &[],
+            projectile_piercing: &[],
+            ammo_use: &[],
+            damage: &[],
+            knockback: &[],
+            armor_effectiveness: &[],
+            damage_protection: &[],
+            hit_block: &[],
+            item_damage: &[],
+            equipment_drops: &[],
+            fishing_time_reduction: &[],
+            fishing_luck_bonus: &[],
+            block_experience: &[],
+            mob_experience: &[],
+            repair_with_xp: &[],
+            smash_damage_per_fallen_block: &[],
+            trident_return_acceleration: &[],
+            trident_spin_attack_strength: None,
+            crossbow_charge_time: None,
+            prevent_armor_change: false,
+            prevent_equipment_drop: false,
         },
     };
     pub const RIPTIDE: Self = Self {
@@ -782,6 +1913,37 @@ impl Enchantment {
             base: 50i32,
             per_level_above_first: 0i32,
         },
+        effects: EnchantmentEffects {
+            projectile_spawned: &[],
+            post_attack: &[],
+            projectile_count: &[],
+            projectile_spread: &[],
+            projectile_piercing: &[],
+            ammo_use: &[],
+            damage: &[],
+            knockback: &[],
+            armor_effectiveness: &[],
+            damage_protection: &[],
+            hit_block: &[],
+            item_damage: &[],
+            equipment_drops: &[],
+            fishing_time_reduction: &[],
+            fishing_luck_bonus: &[],
+            block_experience: &[],
+            mob_experience: &[],
+            repair_with_xp: &[],
+            smash_damage_per_fallen_block: &[],
+            trident_return_acceleration: &[],
+            trident_spin_attack_strength: Some(EnchantmentValueEffect::Add(
+                LevelBasedValue::Linear {
+                    base: 1.5f32,
+                    per_level_above_first: 0.75f32,
+                },
+            )),
+            crossbow_charge_time: None,
+            prevent_armor_change: false,
+            prevent_equipment_drop: false,
+        },
     };
     pub const SHARPNESS: Self = Self {
         id: 33u8,
@@ -801,6 +1963,37 @@ impl Enchantment {
         max_cost: Cost {
             base: 21i32,
             per_level_above_first: 11i32,
+        },
+        effects: EnchantmentEffects {
+            projectile_spawned: &[],
+            post_attack: &[],
+            projectile_count: &[],
+            projectile_spread: &[],
+            projectile_piercing: &[],
+            ammo_use: &[],
+            damage: &[ConditionalEffect {
+                effect: EnchantmentValueEffect::Add(LevelBasedValue::Linear {
+                    base: 1f32,
+                    per_level_above_first: 0.5f32,
+                }),
+            }],
+            knockback: &[],
+            armor_effectiveness: &[],
+            damage_protection: &[],
+            hit_block: &[],
+            item_damage: &[],
+            equipment_drops: &[],
+            fishing_time_reduction: &[],
+            fishing_luck_bonus: &[],
+            block_experience: &[],
+            mob_experience: &[],
+            repair_with_xp: &[],
+            smash_damage_per_fallen_block: &[],
+            trident_return_acceleration: &[],
+            trident_spin_attack_strength: None,
+            crossbow_charge_time: None,
+            prevent_armor_change: false,
+            prevent_equipment_drop: false,
         },
     };
     pub const SILK_TOUCH: Self = Self {
@@ -822,6 +2015,34 @@ impl Enchantment {
             base: 65i32,
             per_level_above_first: 0i32,
         },
+        effects: EnchantmentEffects {
+            projectile_spawned: &[],
+            post_attack: &[],
+            projectile_count: &[],
+            projectile_spread: &[],
+            projectile_piercing: &[],
+            ammo_use: &[],
+            damage: &[],
+            knockback: &[],
+            armor_effectiveness: &[],
+            damage_protection: &[],
+            hit_block: &[],
+            item_damage: &[],
+            equipment_drops: &[],
+            fishing_time_reduction: &[],
+            fishing_luck_bonus: &[],
+            block_experience: &[ConditionalEffect {
+                effect: EnchantmentValueEffect::Set(LevelBasedValue::Constant(0f32)),
+            }],
+            mob_experience: &[],
+            repair_with_xp: &[],
+            smash_damage_per_fallen_block: &[],
+            trident_return_acceleration: &[],
+            trident_spin_attack_strength: None,
+            crossbow_charge_time: None,
+            prevent_armor_change: false,
+            prevent_equipment_drop: false,
+        },
     };
     pub const SMITE: Self = Self {
         id: 35u8,
@@ -841,6 +2062,37 @@ impl Enchantment {
         max_cost: Cost {
             base: 25i32,
             per_level_above_first: 8i32,
+        },
+        effects: EnchantmentEffects {
+            projectile_spawned: &[],
+            post_attack: &[],
+            projectile_count: &[],
+            projectile_spread: &[],
+            projectile_piercing: &[],
+            ammo_use: &[],
+            damage: &[ConditionalEffect {
+                effect: EnchantmentValueEffect::Add(LevelBasedValue::Linear {
+                    base: 2.5f32,
+                    per_level_above_first: 2.5f32,
+                }),
+            }],
+            knockback: &[],
+            armor_effectiveness: &[],
+            damage_protection: &[],
+            hit_block: &[],
+            item_damage: &[],
+            equipment_drops: &[],
+            fishing_time_reduction: &[],
+            fishing_luck_bonus: &[],
+            block_experience: &[],
+            mob_experience: &[],
+            repair_with_xp: &[],
+            smash_damage_per_fallen_block: &[],
+            trident_return_acceleration: &[],
+            trident_spin_attack_strength: None,
+            crossbow_charge_time: None,
+            prevent_armor_change: false,
+            prevent_equipment_drop: false,
         },
     };
     pub const SOUL_SPEED: Self = Self {
@@ -862,6 +2114,32 @@ impl Enchantment {
             base: 25i32,
             per_level_above_first: 10i32,
         },
+        effects: EnchantmentEffects {
+            projectile_spawned: &[],
+            post_attack: &[],
+            projectile_count: &[],
+            projectile_spread: &[],
+            projectile_piercing: &[],
+            ammo_use: &[],
+            damage: &[],
+            knockback: &[],
+            armor_effectiveness: &[],
+            damage_protection: &[],
+            hit_block: &[],
+            item_damage: &[],
+            equipment_drops: &[],
+            fishing_time_reduction: &[],
+            fishing_luck_bonus: &[],
+            block_experience: &[],
+            mob_experience: &[],
+            repair_with_xp: &[],
+            smash_damage_per_fallen_block: &[],
+            trident_return_acceleration: &[],
+            trident_spin_attack_strength: None,
+            crossbow_charge_time: None,
+            prevent_armor_change: false,
+            prevent_equipment_drop: false,
+        },
     };
     pub const SWEEPING_EDGE: Self = Self {
         id: 37u8,
@@ -881,6 +2159,32 @@ impl Enchantment {
         max_cost: Cost {
             base: 20i32,
             per_level_above_first: 9i32,
+        },
+        effects: EnchantmentEffects {
+            projectile_spawned: &[],
+            post_attack: &[],
+            projectile_count: &[],
+            projectile_spread: &[],
+            projectile_piercing: &[],
+            ammo_use: &[],
+            damage: &[],
+            knockback: &[],
+            armor_effectiveness: &[],
+            damage_protection: &[],
+            hit_block: &[],
+            item_damage: &[],
+            equipment_drops: &[],
+            fishing_time_reduction: &[],
+            fishing_luck_bonus: &[],
+            block_experience: &[],
+            mob_experience: &[],
+            repair_with_xp: &[],
+            smash_damage_per_fallen_block: &[],
+            trident_return_acceleration: &[],
+            trident_spin_attack_strength: None,
+            crossbow_charge_time: None,
+            prevent_armor_change: false,
+            prevent_equipment_drop: false,
         },
     };
     pub const SWIFT_SNEAK: Self = Self {
@@ -902,6 +2206,32 @@ impl Enchantment {
             base: 75i32,
             per_level_above_first: 25i32,
         },
+        effects: EnchantmentEffects {
+            projectile_spawned: &[],
+            post_attack: &[],
+            projectile_count: &[],
+            projectile_spread: &[],
+            projectile_piercing: &[],
+            ammo_use: &[],
+            damage: &[],
+            knockback: &[],
+            armor_effectiveness: &[],
+            damage_protection: &[],
+            hit_block: &[],
+            item_damage: &[],
+            equipment_drops: &[],
+            fishing_time_reduction: &[],
+            fishing_luck_bonus: &[],
+            block_experience: &[],
+            mob_experience: &[],
+            repair_with_xp: &[],
+            smash_damage_per_fallen_block: &[],
+            trident_return_acceleration: &[],
+            trident_spin_attack_strength: None,
+            crossbow_charge_time: None,
+            prevent_armor_change: false,
+            prevent_equipment_drop: false,
+        },
     };
     pub const THORNS: Self = Self {
         id: 39u8,
@@ -921,6 +2251,41 @@ impl Enchantment {
         max_cost: Cost {
             base: 60i32,
             per_level_above_first: 20i32,
+        },
+        effects: EnchantmentEffects {
+            projectile_spawned: &[],
+            post_attack: &[TargetedConditionalEffect {
+                enchanted: Some(EnchantmentTarget::Victim),
+                affected: Some(EnchantmentTarget::Attacker),
+                effect: EnchantmentEntityEffect::AllOf(&[
+                    EnchantmentEntityEffect::DamageEntity {
+                        damage: LevelBasedValue::Constant(1f32),
+                    },
+                    EnchantmentEntityEffect::Other,
+                ]),
+            }],
+            projectile_count: &[],
+            projectile_spread: &[],
+            projectile_piercing: &[],
+            ammo_use: &[],
+            damage: &[],
+            knockback: &[],
+            armor_effectiveness: &[],
+            damage_protection: &[],
+            hit_block: &[],
+            item_damage: &[],
+            equipment_drops: &[],
+            fishing_time_reduction: &[],
+            fishing_luck_bonus: &[],
+            block_experience: &[],
+            mob_experience: &[],
+            repair_with_xp: &[],
+            smash_damage_per_fallen_block: &[],
+            trident_return_acceleration: &[],
+            trident_spin_attack_strength: None,
+            crossbow_charge_time: None,
+            prevent_armor_change: false,
+            prevent_equipment_drop: false,
         },
     };
     pub const UNBREAKING: Self = Self {
@@ -942,6 +2307,57 @@ impl Enchantment {
             base: 55i32,
             per_level_above_first: 8i32,
         },
+        effects: EnchantmentEffects {
+            projectile_spawned: &[],
+            post_attack: &[],
+            projectile_count: &[],
+            projectile_spread: &[],
+            projectile_piercing: &[],
+            ammo_use: &[],
+            damage: &[],
+            knockback: &[],
+            armor_effectiveness: &[],
+            damage_protection: &[],
+            hit_block: &[],
+            item_damage: &[
+                ConditionalEffect {
+                    effect: EnchantmentValueEffect::RemoveBinomial(LevelBasedValue::Fraction {
+                        numerator: &LevelBasedValue::Linear {
+                            base: 2f32,
+                            per_level_above_first: 2f32,
+                        },
+                        denominator: &LevelBasedValue::Linear {
+                            base: 10f32,
+                            per_level_above_first: 5f32,
+                        },
+                    }),
+                },
+                ConditionalEffect {
+                    effect: EnchantmentValueEffect::RemoveBinomial(LevelBasedValue::Fraction {
+                        numerator: &LevelBasedValue::Linear {
+                            base: 1f32,
+                            per_level_above_first: 1f32,
+                        },
+                        denominator: &LevelBasedValue::Linear {
+                            base: 2f32,
+                            per_level_above_first: 1f32,
+                        },
+                    }),
+                },
+            ],
+            equipment_drops: &[],
+            fishing_time_reduction: &[],
+            fishing_luck_bonus: &[],
+            block_experience: &[],
+            mob_experience: &[],
+            repair_with_xp: &[],
+            smash_damage_per_fallen_block: &[],
+            trident_return_acceleration: &[],
+            trident_spin_attack_strength: None,
+            crossbow_charge_time: None,
+            prevent_armor_change: false,
+            prevent_equipment_drop: false,
+        },
     };
     pub const VANISHING_CURSE: Self = Self {
         id: 41u8,
@@ -962,6 +2378,32 @@ impl Enchantment {
             base: 50i32,
             per_level_above_first: 0i32,
         },
+        effects: EnchantmentEffects {
+            projectile_spawned: &[],
+            post_attack: &[],
+            projectile_count: &[],
+            projectile_spread: &[],
+            projectile_piercing: &[],
+            ammo_use: &[],
+            damage: &[],
+            knockback: &[],
+            armor_effectiveness: &[],
+            damage_protection: &[],
+            hit_block: &[],
+            item_damage: &[],
+            equipment_drops: &[],
+            fishing_time_reduction: &[],
+            fishing_luck_bonus: &[],
+            block_experience: &[],
+            mob_experience: &[],
+            repair_with_xp: &[],
+            smash_damage_per_fallen_block: &[],
+            trident_return_acceleration: &[],
+            trident_spin_attack_strength: None,
+            crossbow_charge_time: None,
+            prevent_armor_change: false,
+            prevent_equipment_drop: true,
+        },
     };
     pub const WIND_BURST: Self = Self {
         id: 42u8,
@@ -981,6 +2423,56 @@ impl Enchantment {
         max_cost: Cost {
             base: 65i32,
             per_level_above_first: 9i32,
+        },
+        effects: EnchantmentEffects {
+            projectile_spawned: &[],
+            post_attack: &[TargetedConditionalEffect {
+                enchanted: Some(EnchantmentTarget::Attacker),
+                affected: Some(EnchantmentTarget::Attacker),
+                effect: EnchantmentEntityEffect::Explode {
+                    attribute_to_user: false,
+                    damage_type: None,
+                    knockback_multiplier: Some(LevelBasedValue::Lookup {
+                        values: &[1.2f32, 1.75f32, 2.2f32],
+                        fallback: &LevelBasedValue::Linear {
+                            base: 1.5f32,
+                            per_level_above_first: 0.35f32,
+                        },
+                    }),
+                    immune_blocks: Some("#minecraft:blocks_wind_charge_explosions"),
+                    offset_x: 0f64,
+                    offset_y: 0f64,
+                    offset_z: 0f64,
+                    radius: LevelBasedValue::Constant(3.5f32),
+                    create_fire: false,
+                    block_interaction: "trigger",
+                    small_particle: Some(crate::particle::Particle::GustEmitterSmall),
+                    large_particle: Some(crate::particle::Particle::GustEmitterLarge),
+                    sound: Some(crate::sound::Sound::EntityWindChargeWindBurst),
+                },
+            }],
+            projectile_count: &[],
+            projectile_spread: &[],
+            projectile_piercing: &[],
+            ammo_use: &[],
+            damage: &[],
+            knockback: &[],
+            armor_effectiveness: &[],
+            damage_protection: &[],
+            hit_block: &[],
+            item_damage: &[],
+            equipment_drops: &[],
+            fishing_time_reduction: &[],
+            fishing_luck_bonus: &[],
+            block_experience: &[],
+            mob_experience: &[],
+            repair_with_xp: &[],
+            smash_damage_per_fallen_block: &[],
+            trident_return_acceleration: &[],
+            trident_spin_attack_strength: None,
+            crossbow_charge_time: None,
+            prevent_armor_change: false,
+            prevent_equipment_drop: false,
         },
     };
     pub fn from_name(name: &str) -> Option<&'static Self> {
@@ -1126,5 +2618,100 @@ impl Enchantment {
             ));
         }
         ret
+    }
+    pub fn modify_damage_protection(&self, level: i32, protection: &mut f32) {
+        for effect in self.effects.damage_protection {
+            *protection = effect.effect.process(level, *protection);
+        }
+    }
+    pub fn modify_damage(&self, level: i32, amount: &mut f64) {
+        for effect in self.effects.damage {
+            *amount = f64::from(effect.effect.process(level, *amount as f32));
+        }
+    }
+    pub fn modify_fall_based_damage(&self, level: i32, amount: &mut f64) {
+        for effect in self.effects.smash_damage_per_fallen_block {
+            *amount = f64::from(effect.effect.process(level, *amount as f32));
+        }
+    }
+    pub fn modify_knockback(&self, level: i32, amount: &mut f32) {
+        for effect in self.effects.knockback {
+            *amount = effect.effect.process(level, *amount);
+        }
+    }
+    pub fn modify_armor_effectiveness(&self, level: i32, amount: &mut f32) {
+        for effect in self.effects.armor_effectiveness {
+            *amount = effect.effect.process(level, *amount);
+        }
+    }
+    pub fn modify_durability_change(&self, level: i32, change: &mut f32) {
+        for effect in self.effects.item_damage {
+            *change = effect.effect.process(level, *change);
+        }
+    }
+    pub fn modify_ammo_count(&self, level: i32, change: &mut f32) {
+        for effect in self.effects.ammo_use {
+            *change = effect.effect.process(level, *change);
+        }
+    }
+    pub fn modify_piercing_count(&self, level: i32, count: &mut f32) {
+        for effect in self.effects.projectile_piercing {
+            *count = effect.effect.process(level, *count);
+        }
+    }
+    pub fn modify_block_experience(&self, level: i32, count: &mut f32) {
+        for effect in self.effects.block_experience {
+            *count = effect.effect.process(level, *count);
+        }
+    }
+    pub fn modify_mob_experience(&self, level: i32, experience: &mut f32) {
+        for effect in self.effects.mob_experience {
+            *experience = effect.effect.process(level, *experience);
+        }
+    }
+    pub fn modify_durability_to_repair_from_xp(&self, level: i32, change: &mut f32) {
+        for effect in self.effects.repair_with_xp {
+            *change = effect.effect.process(level, *change);
+        }
+    }
+    pub fn modify_trident_return_to_owner_acceleration(&self, level: i32, count: &mut f32) {
+        for effect in self.effects.trident_return_acceleration {
+            *count = effect.effect.process(level, *count);
+        }
+    }
+    pub fn modify_trident_spin_attack_strength(&self, level: i32, strength: &mut f32) {
+        if let Some(effect) = &self.effects.trident_spin_attack_strength {
+            *strength = effect.process(level, *strength);
+        }
+    }
+    pub fn modify_fishing_time_reduction(&self, level: i32, time_reduction: &mut f32) {
+        for effect in self.effects.fishing_time_reduction {
+            *time_reduction = effect.effect.process(level, *time_reduction);
+        }
+    }
+    pub fn modify_fishing_luck_bonus(&self, level: i32, luck: &mut f32) {
+        for effect in self.effects.fishing_luck_bonus {
+            *luck = effect.effect.process(level, *luck);
+        }
+    }
+    pub fn modify_projectile_count(&self, level: i32, count: &mut f32) {
+        for effect in self.effects.projectile_count {
+            *count = effect.effect.process(level, *count);
+        }
+    }
+    pub fn modify_projectile_spread(&self, level: i32, angle: &mut f32) {
+        for effect in self.effects.projectile_spread {
+            *angle = effect.effect.process(level, *angle);
+        }
+    }
+    pub fn modify_crossbow_charge_time(&self, level: i32, time: &mut f32) {
+        if let Some(effect) = &self.effects.crossbow_charge_time {
+            *time = effect.process(level, *time);
+        }
+    }
+    pub fn get_projectile_spawned_effects(
+        &self,
+    ) -> &'static [ConditionalEffect<EnchantmentEntityEffect>] {
+        self.effects.projectile_spawned
     }
 }

@@ -1,33 +1,22 @@
+use pumpkin_util::PermissionLvl;
+use pumpkin_util::permission::{Permission, PermissionDefault, PermissionRegistry};
+use pumpkin_util::text::TextComponent;
+use pumpkin_util::text::color::NamedColor;
 use pumpkin_util::text::hover::HoverEvent;
-use pumpkin_util::text::{TextComponent, color::NamedColor};
 
-use crate::command::args::ConsumedArgs;
-use crate::command::dispatcher::CommandError;
-use crate::command::tree::CommandTree;
-use crate::command::{CommandExecutor, CommandResult, CommandSender};
-
-const NAMES: [&str; 1] = ["plugins"];
+use crate::command::argument_builder::{ArgumentBuilder, command};
+use crate::command::context::command_context::CommandContext;
+use crate::command::node::dispatcher::CommandDispatcher;
+use crate::command::node::{CommandExecutor, CommandExecutorResult};
 
 const DESCRIPTION: &str = "Lists all plugins loaded on the server.";
+const PERMISSION: &str = "pumpkin:command.plugins";
 
 struct PluginsExecutor;
 
 impl CommandExecutor for PluginsExecutor {
-    fn execute(
-        &self,
-        sender: &CommandSender,
-        server: &crate::server::Server,
-        _args: &ConsumedArgs,
-    ) -> CommandResult {
-        let Some(server_arc) = sender
-            .world_or_first(server)
-            .and_then(|w| w.server.upgrade())
-        else {
-            return Err(CommandError::CommandFailed(TextComponent::text(
-                "Failed to get server instance",
-            )));
-        };
-
+    fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
+        let server_arc = context.server();
         let plugins = server_arc.plugin_manager.active_plugins();
 
         let message_text = if plugins.is_empty() {
@@ -63,12 +52,22 @@ impl CommandExecutor for PluginsExecutor {
             base_message
         };
 
-        sender.send_message(message_text);
+        context.source.send_feedback(message_text, false);
 
         Ok(1)
     }
 }
 
-pub fn init_command_tree() -> CommandTree {
-    CommandTree::new(NAMES, DESCRIPTION).execute(PluginsExecutor)
+pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistry) {
+    registry.register_permission_or_panic(Permission::new(
+        PERMISSION,
+        DESCRIPTION,
+        PermissionDefault::Op(PermissionLvl::Three),
+    ));
+
+    dispatcher.register(
+        command("plugins", DESCRIPTION)
+            .requires(PERMISSION)
+            .executes(PluginsExecutor),
+    );
 }

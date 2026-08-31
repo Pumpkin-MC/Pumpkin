@@ -1170,6 +1170,14 @@ impl PluginManager {
         });
     }
 
+    #[must_use]
+    pub fn has_handlers<E: Payload + 'static>(&self) -> bool {
+        self.handlers
+            .load()
+            .get(E::get_name_static())
+            .is_some_and(|handlers| !handlers.is_empty())
+    }
+
     /// Fire an event to all registered handlers
     pub async fn fire<E: Payload + Send + Sync + 'static>(
         &self,

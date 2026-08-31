@@ -14,7 +14,6 @@ use crate::command::node::detached::CommandDetachedNode;
 use crate::command::node::tree::{NodeIdClassification, ROOT_NODE_ID, Tree};
 use crate::command::string_reader::StringReader;
 use crate::command::suggestion::suggestions::{Suggestions, SuggestionsBuilder};
-use crate::command::tree::Command;
 use pumpkin_data::translation::java::COMMAND_CONTEXT_HERE;
 use pumpkin_protocol::java::client::play::CommandSuggestion;
 use pumpkin_util::text::TextComponent;
@@ -23,7 +22,6 @@ use pumpkin_util::text::color::{Color, NamedColor};
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::collections::BTreeMap;
 use std::sync::{Arc, LazyLock};
-use tracing::warn;
 
 pub const ARG_SEPARATOR: &str = " ";
 pub const ARG_SEPARATOR_CHAR: char = ' ';
@@ -82,11 +80,6 @@ pub struct CommandDispatcher {
     pub tree: Tree,
     pub consumer: Arc<dyn ResultConsumer>,
 
-    // Temporary setup:
-    // We add this because we have a lot of commands
-    // still dependent on this dispatcher.
-    pub fallback_dispatcher: crate::command::dispatcher::CommandDispatcher,
-
     /// Primary names of commands that have been turned off through the server
     /// configuration. A disabled command behaves as if it does not exist: it
     /// cannot be executed and is left out of listings and suggestions.
@@ -111,7 +104,6 @@ impl CommandDispatcher {
         Self {
             tree,
             consumer: RESULT_DEFERRER.clone(),
-            fallback_dispatcher: crate::command::dispatcher::CommandDispatcher::default(),
             disabled: FxHashSet::default(),
         }
     }
@@ -144,10 +136,10 @@ impl CommandDispatcher {
     }
 
     /// Returns `true` if a command (or alias) with the given name is registered
-    /// on either the node-based tree or the legacy dispatcher.
+    /// on the node-based tree.
     #[must_use]
     pub fn has_command(&self, name: &str) -> bool {
-        self.tree.get(name).is_some() || self.fallback_dispatcher.commands.contains_key(name)
+        self.tree.get(name).is_some()
     }
 
     /// Collects the names of every root-level alias that redirects to the command
@@ -177,6 +169,21 @@ impl CommandDispatcher {
             }
         }
         names
+    }
+
+    /// Resolves the primary name of a command from either an alias or a primary name.
+    #[must_use]
+    pub fn primary_command_name(&self, name: &str) -> String {
+        if let Some(node_id) = self.tree.get(name) {
+            let node = &self.tree[NodeId::from(node_id)];
+            if let Some(redirect) = node.redirect()
+                && let Some(resolved) = self.tree.resolve(redirect)
+            {
+                return self.tree[resolved].name().to_ascii_lowercase();
+            }
+            return node.name().to_ascii_lowercase();
+        }
+        name.to_string()
     }
 
     /// Extracts the command name (the first whitespace-separated token) from a
@@ -511,21 +518,7 @@ impl CommandDispatcher {
         let output = self.execute_input(input, source);
 
         if let Err(error) = output {
-            // We check if the error came because a command could not be found.
-            // Note: 'Permission denied' also falls under this error as
-            //       no executable node could be found.
-            if error.is(&DISPATCHER_UNKNOWN_COMMAND) {
-                // Run the fallback dispatcher instead.
-                // It might have the command we're looking for.
-                self.fallback_dispatcher.handle_command(
-                    &source.output,
-                    source.server().as_ref(),
-                    input,
-                );
-            } else {
-                // Print the error to the output.
-                Self::send_error_to_source(source, error, input);
-            }
+            Self::send_error_to_source(source, error, input);
         }
     }
 
@@ -679,12 +672,7 @@ impl CommandDispatcher {
         }
 
         let parsed = self.parse_input(input, source);
-        let s1 = self.get_completion_suggestions_at_end(parsed);
-        let s2 = self
-            .fallback_dispatcher
-            .find_suggestions(&source.output, source.server(), input);
-
-        Suggestions::merge(input, vec![s1, s2])
+        self.get_completion_suggestions_at_end(parsed)
     }
 
     /// Gets all the commands usable in this dispatcher, sorted.
@@ -700,17 +688,6 @@ impl CommandDispatcher {
                 continue;
             }
             commands.insert(&meta.literal_lowercase, &meta.description);
-        }
-
-        for fallback_command in self.fallback_dispatcher.commands.values() {
-            if let Command::Tree(command_tree) = fallback_command {
-                if self.is_disabled(&command_tree.names[0]) {
-                    continue;
-                }
-                for name in &command_tree.names {
-                    commands.insert(name, &command_tree.description);
-                }
-            }
         }
 
         commands
@@ -731,29 +708,6 @@ impl CommandDispatcher {
                     continue;
                 }
                 commands.insert(&meta.literal_lowercase, &meta.description);
-            }
-        }
-
-        for fallback_command in self.fallback_dispatcher.commands.values() {
-            if let Command::Tree(command_tree) = fallback_command {
-                if self.is_disabled(&command_tree.names[0]) {
-                    continue;
-                }
-                if let Some(permission) = self
-                    .fallback_dispatcher
-                    .permissions
-                    .get(&command_tree.names[0])
-                    && source.has_permission(permission)
-                {
-                    for name in &command_tree.names {
-                        commands.insert(name, &command_tree.description);
-                    }
-                } else {
-                    warn!(
-                        "Command /{} does not have a permission set up",
-                        &command_tree.names[0]
-                    );
-                }
             }
         }
 
@@ -781,28 +735,6 @@ impl CommandDispatcher {
             commands.insert(command_name, (command_description, usage.into_boxed_str()));
         }
 
-        for fallback_command in self.fallback_dispatcher.commands.values() {
-            if let Command::Tree(command_tree) = fallback_command
-                && !self.is_disabled(&command_tree.names[0])
-                && let Some(permission) = self
-                    .fallback_dispatcher
-                    .permissions
-                    .get(&command_tree.names[0])
-                && source.has_permission(permission)
-            {
-                let usage = command_tree.to_string();
-                for name in &command_tree.names {
-                    commands.insert(
-                        name,
-                        (
-                            command_tree.description.as_ref(),
-                            usage.clone().into_boxed_str(),
-                        ),
-                    );
-                }
-            }
-        }
-
         commands
     }
 
@@ -816,26 +748,17 @@ impl CommandDispatcher {
     ) -> BTreeMap<&str, (&str, Box<str>)> {
         let mut commands: BTreeMap<&str, (&str, Box<str>)> = BTreeMap::new();
 
-        for fallback_command in self.fallback_dispatcher.commands.values() {
-            if let Command::Tree(command_tree) = fallback_command
-                && let Some(source_name) = &command_tree.source
-                && source_name == plugin_name
-                && let Some(permission) = self
-                    .fallback_dispatcher
-                    .permissions
-                    .get(&command_tree.names[0])
-                && source.has_permission(permission)
+        for (command_node_id, usage) in self.get_usage_of_commands(source) {
+            let meta = &self.tree[command_node_id].meta;
+            if self.is_disabled(&meta.literal_lowercase) {
+                continue;
+            }
+            if let Some(src) = &meta.source
+                && src == plugin_name
             {
-                let usage = command_tree.to_string();
-                for name in &command_tree.names {
-                    commands.insert(
-                        name,
-                        (
-                            command_tree.description.as_ref(),
-                            usage.clone().into_boxed_str(),
-                        ),
-                    );
-                }
+                let command_name = meta.literal.as_ref();
+                let command_description = meta.description.as_ref();
+                commands.insert(command_name, (command_description, usage.into_boxed_str()));
             }
         }
 
@@ -849,25 +772,6 @@ impl CommandDispatcher {
     /// and the value is a tuple of `(description, usage)`.
     #[must_use]
     pub fn get_permitted_command_usage(
-        &self,
-        source: &CommandSource,
-        command: &str,
-    ) -> Option<(&str, Box<str>)> {
-        if let Some(output) = self.get_permitted_command_usage_non_fallback(source, command) {
-            Some(output)
-        } else {
-            let tree = self.fallback_dispatcher.get_tree(command).ok()?;
-            if let Some(permission) = self.fallback_dispatcher.permissions.get(&tree.names[0])
-                && source.has_permission(permission)
-            {
-                Some((tree.description.as_ref(), tree.to_string().into_boxed_str()))
-            } else {
-                None
-            }
-        }
-    }
-
-    fn get_permitted_command_usage_non_fallback(
         &self,
         source: &CommandSource,
         command: &str,
