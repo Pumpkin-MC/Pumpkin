@@ -362,7 +362,13 @@ impl DynamicLightEngine {
             }
 
             let ceiling = SkyLightHeight::column_ceiling_at(chunk, relative.x, relative.z);
-            if ceiling < cut || ceiling > cut + height.spread() {
+            // Bandpruefung liegt in `SkyLightHeight`, damit sie dieselbe Rundungstoleranz
+            // benutzt wie `tier()`.
+            if !height.ceiling_within_band(
+                ceiling,
+                chunk.section.min_y,
+                SkyLightHeight::chunk_height(chunk),
+            ) {
                 SkyLightHeightMigration::mark_quadrant_diverged(chunk, relative.x, relative.z);
             }
         });

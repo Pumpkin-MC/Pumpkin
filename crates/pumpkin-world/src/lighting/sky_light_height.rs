@@ -209,6 +209,16 @@ impl SkyLightHeight {
         }
     }
 
+    /// Ob eine Spaltendecke noch in das Band dieses Chunks passt -> die Umkehrung von
+    /// [`Self::tier`] und die einzige Stelle, an der über divigierende Quadrant entschieden
+    /// wird.
+    #[must_use]
+    pub fn ceiling_within_band(self, ceiling: i32, chunk_min_y: i32, chunk_height: i32) -> bool {
+        let cut = self.decode(chunk_min_y, chunk_height);
+        ceiling >= cut - DECODE_SAFETY_MARGIN
+            && ceiling <= cut + self.spread() + DECODE_SAFETY_MARGIN
+    }
+
     const fn quadrant_index(local_x: usize, local_z: usize) -> usize {
         match (local_x < 8, local_z < 8) {
             (true, true) => 0,
@@ -1011,6 +1021,80 @@ mod tests {
             "frisch geladen ist der RAM-Cache leer; der Wert kommt erst beim ersten Zugriff"
         );
         assert_eq!(SkyLightHeightMigration::get(&reloaded), height);
+    }
+
+    // ---- Regression: spurious quadrant divergence -------------------------------
+
+    /// Eine Spalte, an der sich **nichts geaendert hat**, darf nie als "Band verlassen"
+    /// gelten — sonst degradiert ihr Quadrant dauerhaft auf Tier 3.
+    ///
+    /// Der Sweep ueber viele Terrainhoehen ist der eigentliche Test: `decode` rundet ab und
+    /// trifft bei manchen Hoehen (z.B. genau 60) zufaellig exakt, bei den meisten nicht. Ein
+    /// Test mit einer einzigen Hoehe ist deshalb ein Muenzwurf und war gruen, waehrend der
+    /// Bug live war.
+    #[test]
+    fn unchanged_columns_never_leave_the_band() {
+        let mut spurious = Vec::new();
+
+        for top in 0..120i32 {
+            let chunk = ChunkData::empty(0, 0);
+            fill_terrain(&chunk, top);
+            let height = SkyLightHeightMigration::get(&chunk);
+            let min_y = chunk.section.min_y;
+            let chunk_height = SkyLightHeight::chunk_height(&chunk);
+
+            for (x, z) in [(2, 2), (12, 2), (2, 12), (12, 12)] {
+                let ceiling = SkyLightHeight::column_ceiling_at(&chunk, x, z);
+                if !height.ceiling_within_band(ceiling, min_y, chunk_height) {
+                    let cut = height.decode(min_y, chunk_height);
+                    spurious.push(format!(
+                        "top={top} ({x},{z}): Decke {ceiling} ausserhalb [{}, {}]",
+                        cut,
+                        cut + height.spread()
+                    ));
+                }
+            }
+        }
+
+        assert!(
+            spurious.is_empty(),
+            "unveraenderte Spalten wurden als divergiert gewertet ({} Faelle):\n{}",
+            spurious.len(),
+            spurious.join("\n")
+        );
+    }
+
+    /// Die aufgeweitete Bandprüfung darf die Tier-Zusage nicht untergraben
+    #[test]
+    fn band_tolerance_never_contradicts_the_tier_promise() {
+        let (min_y, chunk_height) = (-64, 384);
+
+        for cut_y in (min_y + 1)..(min_y + chunk_height - 40) {
+            for spread_index in 0..SPREAD_SCALES.len() {
+                let height =
+                    SkyLightHeight::encode(cut_y, min_y, chunk_height).with_spread_index(spread_index);
+                let cut = height.decode(min_y, chunk_height);
+
+                for ceiling in (cut - 2)..=(cut + height.spread() + 2) {
+                    if !height.ceiling_within_band(ceiling, min_y, chunk_height) {
+                        continue;
+                    }
+                    for y in (cut - 4)..=(cut + height.spread() + 4) {
+                        match height.tier(y, 0, 0, min_y, chunk_height) {
+                            SkyLightTier::NoOpenSky => assert!(
+                                y <= ceiling,
+                                "Tier 1 bei y={y}, aber die Decke liegt bei {ceiling} darunter"
+                            ),
+                            SkyLightTier::OpenSky => assert!(
+                                y > ceiling,
+                                "Tier 2 bei y={y}, aber die Decke {ceiling} verdeckt es"
+                            ),
+                            SkyLightTier::Unknown => {}
+                        }
+                    }
+                }
+            }
+        }
     }
 
     ///`ProtoChunk` ohne  Generierung.
