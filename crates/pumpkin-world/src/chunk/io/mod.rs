@@ -8,16 +8,12 @@ use crate::level::LevelFolder;
 
 pub mod file_manager;
 
-pub(crate) async fn run_on_rayon<T, F>(task: F) -> Result<T, tokio::sync::oneshot::error::RecvError>
+pub(crate) async fn run_blocking<T, F>(task: F) -> Result<T, tokio::task::JoinError>
 where
     T: Send + 'static,
     F: FnOnce() -> T + Send + 'static,
 {
-    let (send, recv) = tokio::sync::oneshot::channel();
-    rayon::spawn(move || {
-        let _ = send.send(task());
-    });
-    recv.await
+    tokio::task::spawn_blocking(task).await
 }
 
 /// The result of loading a chunk data.

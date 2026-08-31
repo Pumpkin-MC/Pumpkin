@@ -20,7 +20,7 @@ use tracing::{debug, trace};
 use crate::chunk::{
     ChunkParsingError, ChunkReadingError, ChunkSerializingError, ChunkWritingError,
     CompressionError,
-    io::{ChunkSerializer, Dirtiable, LoadedData, run_on_rayon},
+    io::{ChunkSerializer, Dirtiable, LoadedData, run_blocking},
 };
 
 /// The side size of a region in chunks (one region is 32x32 chunks)
@@ -618,7 +618,7 @@ impl<S: SingleChunkDataSerializer + 'static> ChunkSerializer for AnvilChunkFile<
             .as_ref()
             .and_then(|chunk_data| chunk_data.serialized_data.compression);
         let chunk_config_snapshot = chunk_config.clone();
-        let new_chunk_data = run_on_rayon(move || {
+        let new_chunk_data = run_blocking(move || {
             AnvilChunkData::from_chunk(&*chunk, compression_type, &chunk_config_snapshot)
         })
         .await

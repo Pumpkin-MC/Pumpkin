@@ -17,7 +17,7 @@ use crate::{
     level::LevelFolder,
 };
 
-use super::{ChunkSerializer, FileIO, LoadedData, run_on_rayon};
+use super::{ChunkSerializer, FileIO, LoadedData, run_blocking};
 
 /// A simple implementation of the `ChunkSerializer` trait that loads and saves data
 /// to disk using parallelism and a lazy-loading cache keyed by file path.
@@ -105,7 +105,7 @@ impl<S: ChunkSerializer<WriteBackend = PathBuf> + 'static> ChunkSerializerLazyLo
                     );
                     return Ok(S::default());
                 }
-                let value = run_on_rayon(move || S::read(bytes.into()))
+                let value = run_blocking(move || S::read(bytes.into()))
                     .await
                     .map_err(|_| {
                         ChunkReadingError::IoError(std::io::Error::other(

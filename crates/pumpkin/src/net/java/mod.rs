@@ -154,7 +154,6 @@ fn take_frame_batch(packets: &mut VecDeque<OutgoingPacket>) -> Vec<OutgoingPacke
     batch
 }
 
-/// Frames a byte-bounded packet batch into one buffer. Takes the encoder by value so this can run on another thread.
 fn frame_packet_batch(
     mut writer: TCPNetworkEncoder<BufWriter<OwnedWriteHalf>>,
     batch: &[OutgoingPacket],
@@ -174,7 +173,6 @@ fn frame_packet_batch(
     (writer, frame, frame_err)
 }
 
-/// Compression is the expensive part of framing, so batches that compress get framed on the blocking pool. Everything else is framed inline.
 async fn frame_batch_maybe_offload(
     writer: TCPNetworkEncoder<BufWriter<OwnedWriteHalf>>,
     packet_batch: Vec<OutgoingPacket>,

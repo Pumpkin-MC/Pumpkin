@@ -90,7 +90,6 @@ pub struct TCPNetworkEncoder<W: AsyncWrite + Unpin> {
     compressor: Option<(CompressionLevel, Compress)>,
     // Reused compression buffer to avoid allocating a new Vec for each packet.
     compression_scratch: Vec<u8>,
-    // Reused framing buffer for single-packet writes.
     frame_scratch: Vec<u8>,
 }
 
@@ -219,9 +218,6 @@ impl<W: AsyncWrite + Unpin> TCPNetworkEncoder<W> {
         result
     }
 
-    /// Writes bytes framed by [`Self::frame_packet`] to the writer.
-    ///
-    /// NOTE: This method does not flush. Call [`Self::flush`] to flush buffered data.
     pub async fn write_frame(&mut self, frame: &[u8]) -> Result<(), PacketEncodeError> {
         let writer = self
             .writer
@@ -233,15 +229,12 @@ impl<W: AsyncWrite + Unpin> TCPNetworkEncoder<W> {
             .map_err(|err| PacketEncodeError::Message(err.to_string()))
     }
 
-    /// True if this packet is big enough to get zlib compressed.
     #[must_use]
     pub fn is_compressing_packet(&self, packet_data: &Bytes) -> bool {
         self.compression
             .is_some_and(|(threshold, _)| packet_data.len() >= threshold)
     }
 
-    /// Builds the full wire frame (length prefixes + compression when needed)
-    /// into `out`. Does no IO, send the result with [`Self::write_frame`].
     #[allow(clippy::too_many_lines)]
     pub fn frame_packet(
         &mut self,

@@ -6,7 +6,7 @@ use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::chunk::format::anvil::{AnvilChunkFile, SingleChunkDataSerializer};
-use crate::chunk::io::{ChunkSerializer, LoadedData, run_on_rayon};
+use crate::chunk::io::{ChunkSerializer, LoadedData, run_blocking};
 use crate::chunk::{ChunkReadingError, ChunkWritingError};
 use bytes::{Buf, BufMut, Bytes};
 use pumpkin_util::math::vector2::Vector2;
@@ -395,7 +395,7 @@ impl<S: SingleChunkDataSerializer + 'static> ChunkSerializer for LinearV2File<S>
         let timestamps = self.timestamps;
         let region_x = self.region_x;
         let region_z = self.region_z;
-        let (header, compressed_buckets) = Box::pin(run_on_rayon(move || {
+        let (header, compressed_buckets) = Box::pin(run_blocking(move || {
             let bucket_count = Self::bucket_count(grid_size);
             let mut compressed_buckets: Vec<Box<[u8]>> = Vec::with_capacity(bucket_count);
             let mut bucket_entries: Vec<BucketSizeEntry> = Vec::with_capacity(bucket_count);
@@ -566,7 +566,7 @@ impl<S: SingleChunkDataSerializer + 'static> ChunkSerializer for LinearV2File<S>
         _chunk_config: &Self::ChunkConfig,
     ) -> Result<(), ChunkWritingError> {
         let index = Self::get_chunk_index(chunk.position().0, chunk.position().1);
-        let chunk_raw = run_on_rayon(move || {
+        let chunk_raw = run_blocking(move || {
             chunk
                 .to_bytes()
                 .map_err(|err| ChunkWritingError::ChunkSerializingError(err.to_string()))
