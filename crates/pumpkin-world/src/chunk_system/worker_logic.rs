@@ -141,10 +141,13 @@ pub async fn io_read_work(
             match data {
                 Loaded(chunk) => {
                     let pos = ChunkPos::new(chunk.x, chunk.z);
-                    let processed = process_loaded_chunk(chunk, &level);
-                    if send.send((pos, RecvChunk::IO(processed))).is_err() {
-                        break;
-                    }
+                    // The light scan/relight can be heavy, do it on rayon
+                    let level = level.clone();
+                    let send = send.clone();
+                    rayon::spawn(move || {
+                        let processed = process_loaded_chunk(chunk, &level);
+                        let _ = send.send((pos, RecvChunk::IO(processed)));
+                    });
                 }
                 LoadedData::Missing(pos) | LoadedData::Error((pos, _)) => {
                     if send
@@ -177,31 +180,46 @@ pub async fn io_write_work(
         // Don't check cancel_token here (keep saving chunks)
         let Some(data) = recv.recv().await else { break };
         // debug!("io write thread receive chunks size {}", data.len());
-        let mut vec = Vec::with_capacity(data.len());
-        let mut positions = Vec::with_capacity(data.len());
-        for (pos, chunk) in data {
-            positions.push(pos);
-
-            match chunk {
-                Chunk::Level(chunk) => vec.push((pos, chunk)),
-                Chunk::Proto(chunk) => {
-                    let mut temp = Chunk::Proto(chunk);
-                    temp.upgrade_to_level_chunk(
-                        level.world_gen.load().dimension(),
-                        &level.lighting_config,
-                    );
-                    let Chunk::Level(chunk) = temp else { panic!() };
-                    vec.push((pos, chunk));
+        // Upgrading proto chunks runs the lighting engine, so do it on rayon
+        // and wait for the result
+        let positions = data.iter().map(|(pos, _)| *pos).collect::<Vec<_>>();
+        let level_for_upgrade = level.clone();
+        let (upgrade_send, upgrade_recv) = tokio::sync::oneshot::channel();
+        rayon::spawn(move || {
+            let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                let mut vec = Vec::with_capacity(data.len());
+                for (pos, chunk) in data {
+                    match chunk {
+                        Chunk::Level(chunk) => vec.push((pos, chunk)),
+                        Chunk::Proto(chunk) => {
+                            let mut temp = Chunk::Proto(chunk);
+                            temp.upgrade_to_level_chunk(
+                                level_for_upgrade.world_gen.load().dimension(),
+                                &level_for_upgrade.lighting_config,
+                            );
+                            let Chunk::Level(chunk) = temp else { panic!() };
+                            vec.push((pos, chunk));
+                        }
+                    }
                 }
+                vec
+            }))
+            .ok();
+            let _ = upgrade_send.send(result);
+        });
+        let upgrade_failed = match upgrade_recv.await {
+            Ok(Some(vec)) => {
+                if let Err(e) = level
+                    .chunk_saver
+                    .save_chunks(&level.level_folder, vec)
+                    .await
+                {
+                    error!("Failed to save chunks: {:?}", e);
+                }
+                false
             }
-        }
-        if let Err(e) = level
-            .chunk_saver
-            .save_chunks(&level.level_folder, vec)
-            .await
-        {
-            error!("Failed to save chunks: {:?}", e);
-        }
+            Ok(None) | Err(_) => true,
+        };
 
         {
             let mut data = lock
@@ -228,6 +246,11 @@ pub async fn io_write_work(
             }
         }
         lock.1.notify_waiters();
+
+        if upgrade_failed {
+            error!("Failed to upgrade chunks for saving");
+            break;
+        }
     }
 }
 
