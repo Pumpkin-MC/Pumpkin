@@ -932,7 +932,7 @@ mod tests {
         chunk.set_custom_data(
             "pumpkin:optimization",
             "sky_light_height_v0",
-            NbtTag::Int(0x0BAD_F00D_u32 as i32),
+            NbtTag::Int(0x0BAD_F00Du32 as i32),
         );
 
         assert_eq!(

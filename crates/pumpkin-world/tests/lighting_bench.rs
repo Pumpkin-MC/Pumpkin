@@ -1,7 +1,7 @@
-//! Quick sanity-check timing comparison for the DynamicLightEngine runtime overhaul.
+//! Quick sanity-check timing comparison for the `DynamicLightEngine` runtime overhaul.
 //!
-//! cargo test --release -p pumpkin-world --test lighting_bench -- --nocapture --ignored
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+//! `cargo test --release -p pumpkin-world --test lighting_bench -- --nocapture --ignored`
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::print_stdout)]
 
 use pumpkin_config::world::LevelConfig;
 use pumpkin_data::dimension::Dimension;
@@ -33,21 +33,21 @@ fn make_level() -> Arc<Level> {
 /// zero-length, which isn't representative of a real loaded chunk).
 fn insert_test_chunk(level: &Arc<Level>) {
     let chunk = ChunkData::empty(0, 0);
-    {
-        let mut light = chunk
-            .light_engine
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        // Start fully dark so the workload below actually has propagation work to
-        // do (a chunk that is already fully sky-lit makes every check a no-op,
-        // which would make the two integration patterns look identical).
-        light.sky_light = (0..SECTION_COUNT)
-            .map(|_| LightContainer::new_empty(0))
-            .collect();
-        light.block_light = (0..SECTION_COUNT)
-            .map(|_| LightContainer::new_empty(0))
-            .collect();
-    }
+    let mut light = chunk
+        .light_engine
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    // Start fully dark so the workload below actually has propagation work to
+    // do (a chunk that is already fully sky-lit makes every check a no-op,
+    // which would make the two integration patterns look identical).
+    light.sky_light = (0..SECTION_COUNT)
+        .map(|_| LightContainer::new_empty(0))
+        .collect();
+    light.block_light = (0..SECTION_COUNT)
+        .map(|_| LightContainer::new_empty(0))
+        .collect();
+    drop(light);
+
     level
         .loaded_chunks
         .insert(Vector2::new(0, 0), Arc::new(chunk));
