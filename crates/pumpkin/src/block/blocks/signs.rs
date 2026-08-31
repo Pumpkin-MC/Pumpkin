@@ -58,8 +58,20 @@ struct SignPlacement {
 
 impl SignBlock {
     /// Checks if a block can provide support for a sign.
-    fn is_valid_support(world: &World, pos: &BlockPos, direction: BlockDirection) -> bool {
+    fn is_valid_support(
+        world: &World,
+        pos: &BlockPos,
+        direction: BlockDirection,
+        is_hanging: bool,
+    ) -> bool {
         let (block, state) = world.get_block_and_state(pos);
+
+        // Plain signs test the legacy-solid flag, mirroring `isSolid` in
+        // `StandingSignBlock::canSurvive` / `WallSignBlock::canSurvive`.
+        if !is_hanging {
+            return state.is_solid();
+        }
+
         let is_permissive = block.has_tag(&pumpkin_data::tag::Block::MINECRAFT_LEAVES)
             || block.has_tag(&pumpkin_data::tag::Block::MINECRAFT_SIGNS);
 
@@ -71,7 +83,7 @@ impl SignBlock {
     }
 
     /// Detects available support points around a position.
-    fn detect_support(world: &World, position: &BlockPos) -> SupportInfo {
+    fn detect_support(world: &World, position: &BlockPos, is_hanging: bool) -> SupportInfo {
         let (block_above, state_above) = world.get_block_and_state(&position.up());
         let above_is_valid = state_above.is_side_solid(BlockDirection::Down)
             || block_above.has_tag(&pumpkin_data::tag::Block::MINECRAFT_SIGNS)
@@ -80,7 +92,12 @@ impl SignBlock {
         let mut side_direction = None;
         for direction in BlockDirection::horizontal() {
             let pos = position.offset(direction.to_offset());
-            if Self::is_valid_support(world, &pos, direction.opposite().to_block_direction()) {
+            if Self::is_valid_support(
+                world,
+                &pos,
+                direction.opposite().to_block_direction(),
+                is_hanging,
+            ) {
                 side_direction = Some(direction);
                 break;
             }
@@ -297,7 +314,8 @@ impl SignBlock {
 
 impl BlockBehaviour for SignBlock {
     fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
-        let support = Self::detect_support(args.world, args.position);
+        let is_hanging = args.block.name.contains("hanging");
+        let support = Self::detect_support(args.world, args.position, is_hanging);
 
         let Some(placement) = Self::determine_placement(&args, &support) else {
             return BlockStateId::AIR; // Invalid placement
@@ -366,13 +384,21 @@ impl BlockBehaviour for SignBlock {
             || block.has_tag(&pumpkin_data::tag::Block::MINECRAFT_SIGNS);
 
         match clicked_face {
-            BlockDirection::Up => {
-                !is_hanging && (state.is_center_solid(BlockDirection::Up) || is_permissive)
-            }
+            // Standing signs need a legacy-solid block below,
+            // mirroring `isSolid` in `StandingSignBlock::canSurvive`.
+            BlockDirection::Up => !is_hanging && state.is_solid(),
             BlockDirection::Down => {
                 is_hanging && (state.is_side_solid(BlockDirection::Down) || is_permissive)
             }
-            _ => state.is_side_solid(clicked_face.opposite()) || is_permissive,
+            _ => {
+                if is_hanging {
+                    state.is_side_solid(clicked_face.opposite()) || is_permissive
+                } else {
+                    // Wall signs need a legacy-solid block behind them,
+                    // mirroring `isSolid` in `WallSignBlock::canSurvive`.
+                    state.is_solid()
+                }
+            }
         }
     }
 
@@ -417,10 +443,18 @@ impl BlockBehaviour for SignBlock {
                 BlockDirection::Up => {
                     support_state.is_center_solid(BlockDirection::Down) || is_leaf || is_sign
                 }
-                BlockDirection::Down => {
-                    support_state.is_center_solid(BlockDirection::Up) || is_leaf || is_sign
+                // Standing signs survive on a legacy-solid block,
+                // mirroring `isSolid` in `StandingSignBlock::canSurvive`.
+                BlockDirection::Down => support_state.is_solid(),
+                _ => {
+                    if is_hanging {
+                        support_state.is_side_solid(dir.opposite()) || is_leaf || is_sign
+                    } else {
+                        // Wall signs survive on a legacy-solid block,
+                        // mirroring `isSolid` in `WallSignBlock::canSurvive`.
+                        support_state.is_solid()
+                    }
                 }
-                _ => support_state.is_side_solid(dir.opposite()) || is_leaf || is_sign,
             };
 
             if !is_valid {
