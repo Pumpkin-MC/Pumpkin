@@ -1,9 +1,10 @@
 use std::collections::BTreeMap;
 use std::marker::PhantomData;
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use crate::chunk::format::anvil::SingleChunkDataSerializer;
-use crate::chunk::io::{ChunkSerializer, LoadedData};
+use crate::chunk::io::{ChunkSerializer, LoadedData, run_on_rayon};
 use crate::chunk::{ChunkReadingError, ChunkWritingError};
 use bytes::Bytes;
 use pumpkin_util::math::vector2::Vector2;
@@ -16,7 +17,7 @@ pub struct PumpFile<D> {
     _phantom: PhantomData<D>,
 }
 
-#[derive(Serialize, Deserialize, Default)]
+#[derive(Serialize, Deserialize, Default, Clone)]
 pub struct PumpData {
     pub x: i32,
     pub z: i32,
@@ -51,17 +52,21 @@ where
     }
 
     async fn write(&self, backend: &Self::WriteBackend) -> Result<(), std::io::Error> {
-        let mut root = pumpkin_nbt::compound::NbtCompound::new();
-        root.put_int("x", self.data.x);
-        root.put_int("z", self.data.z);
-        let mut chunks_comp = pumpkin_nbt::compound::NbtCompound::new();
-        for (k, v) in &self.data.chunks {
-            let i8_vec: Vec<i8> = v.iter().map(|&b| b as i8).collect();
-            chunks_comp.put(k, pumpkin_nbt::tag::NbtTag::ByteArray(i8_vec.into()));
-        }
-        root.put_compound("chunks", chunks_comp);
-
-        let bytes = pumpkin_nbt::Nbt::from(root).write_unnamed();
+        let data = self.data.clone();
+        let bytes = run_on_rayon(move || {
+            let mut root = pumpkin_nbt::compound::NbtCompound::new();
+            root.put_int("x", data.x);
+            root.put_int("z", data.z);
+            let mut chunks_comp = pumpkin_nbt::compound::NbtCompound::new();
+            for (k, v) in data.chunks {
+                let i8_vec: Vec<i8> = v.into_iter().map(|b| b as i8).collect();
+                chunks_comp.put(&k, pumpkin_nbt::tag::NbtTag::ByteArray(i8_vec.into()));
+            }
+            root.put_compound("chunks", chunks_comp);
+            pumpkin_nbt::Nbt::from(root).write_unnamed()
+        })
+        .await
+        .map_err(|_| std::io::Error::other("pump serialization task failed"))?;
         tokio::fs::write(backend, bytes).await
     }
 
@@ -96,7 +101,7 @@ where
 
     async fn update_chunk(
         &mut self,
-        chunk_data: &Self::Data,
+        chunk_data: Arc<Self::Data>,
         _chunk_config: &Self::ChunkConfig,
     ) -> Result<(), ChunkWritingError> {
         let (x, z) = chunk_data.position();
@@ -106,11 +111,16 @@ where
         let rel_z = z.rem_euclid(32);
         let index = (rel_x + rel_z * 32) as usize;
 
-        let bytes = chunk_data
-            .to_bytes()
-            .map_err(|e| ChunkWritingError::ChunkSerializingError(e.to_string()))?;
-
-        let compressed = compress_to_vec(&bytes[..], CompressionLevel::Fastest);
+        let compressed = run_on_rayon(move || {
+            let bytes = chunk_data
+                .to_bytes()
+                .map_err(|e| ChunkWritingError::ChunkSerializingError(e.to_string()))?;
+            Ok::<_, ChunkWritingError>(compress_to_vec(&bytes[..], CompressionLevel::Fastest))
+        })
+        .await
+        .map_err(|_| {
+            ChunkWritingError::IoError(std::io::Error::other("chunk serialization task failed"))
+        })??;
 
         self.data.chunks.insert(index.to_string(), compressed);
 
@@ -245,7 +255,7 @@ mod tests {
             data: vec![1, 2, 3],
         };
 
-        pump_file.update_chunk(&chunk, &()).await.unwrap();
+        pump_file.update_chunk(Arc::new(chunk), &()).await.unwrap();
         pump_file.write(&file_path).await.unwrap();
 
         let bytes = tokio::fs::read(&file_path).await.unwrap();

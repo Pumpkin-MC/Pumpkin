@@ -1,4 +1,4 @@
-use std::error;
+use std::{error, sync::Arc};
 
 use bytes::Bytes;
 use pumpkin_util::math::vector2::Vector2;
@@ -7,6 +7,18 @@ use super::{ChunkReadingError, ChunkWritingError};
 use crate::level::LevelFolder;
 
 pub mod file_manager;
+
+pub(crate) async fn run_on_rayon<T, F>(task: F) -> Result<T, tokio::sync::oneshot::error::RecvError>
+where
+    T: Send + 'static,
+    F: FnOnce() -> T + Send + 'static,
+{
+    let (send, recv) = tokio::sync::oneshot::channel();
+    rayon::spawn(move || {
+        let _ = send.send(task());
+    });
+    recv.await
+}
 
 /// The result of loading a chunk data.
 ///
@@ -114,7 +126,7 @@ pub trait ChunkSerializer: Send + Sync + Default + 'static {
     /// Add the chunk data to the serializer
     fn update_chunk(
         &mut self,
-        chunk_data: &Self::Data,
+        chunk_data: Arc<Self::Data>,
         chunk_config: &Self::ChunkConfig,
     ) -> impl Future<Output = Result<(), ChunkWritingError>> + Send;
 
