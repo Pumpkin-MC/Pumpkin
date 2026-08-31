@@ -4,7 +4,6 @@ use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
 
-// Exact scope imports to fix the E0433 compilation errors
 use crate::block::registry::{Block, BlockActionResult, NormalUseArgs};
 use crate::world::{BlockFlags, World};
 
@@ -57,7 +56,7 @@ impl DaylightDetectorBlockEntity {
     #[must_use]
     pub fn daylight_detector_power_from_time(world_time: i64) -> u8 {
         use std::f32::consts::{PI, TAU};
-        
+
         let day_fraction = world_time.rem_euclid(24_000) as f32 / 24_000.0;
 
         // Vanilla's smoothed celestial-angle calculation, expressed in radians.
@@ -111,7 +110,7 @@ impl Block for DaylightDetectorBlockEntity {
             .player
             .abilities
             .lock()
-            .unwrap_or_else(|e| e.into_inner()); 
+            .unwrap_or_else(|e| e.into_inner());
 
         if !abilities.allow_modify_world {
             return BlockActionResult::Pass;
