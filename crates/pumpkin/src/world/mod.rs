@@ -5326,17 +5326,7 @@ impl World {
             crate::block::drop_loot(self, broken_block, position, true, params);
         }
 
-        let new_state_id = if broken_block
-            .properties(broken_block_state.id)
-            .and_then(|properties| {
-                properties
-                    .to_props()
-                    .into_iter()
-                    .find(|p| p.0 == "waterlogged")
-                    .map(|(_, value)| value == "true")
-            })
-            .unwrap_or(false)
-        {
+        let new_state_id = if broken_block.is_waterlogged(broken_block_state.id) {
             Block::WATER.default_state.id
         } else {
             Block::AIR.default_state.id
@@ -5626,29 +5616,20 @@ impl World {
         self.get_block_state_id_if_loaded(position).is_some()
     }
 
-    pub fn get_fluid(&self, position: &BlockPos) -> &'static pumpkin_data::fluid::Fluid {
-        let id = self.get_block_state_id(position);
-        let fluid = Fluid::from_state_id(id).ok_or(&Fluid::EMPTY);
-        if let Ok(fluid) = fluid {
+    fn get_fluid_from_state_id(id: BlockStateId) -> &'static pumpkin_data::fluid::Fluid {
+        if let Some(fluid) = Fluid::from_state_id(id) {
             return fluid.to_flowing();
         }
-        let block = Block::from_state_id(id);
-        block
-            .properties(id)
-            .and_then(|props| {
-                props
-                    .to_props()
-                    .into_iter()
-                    .find(|p| p.0 == "waterlogged")
-                    .map(|(_, value)| {
-                        if value == "true" {
-                            &Fluid::FLOWING_WATER
-                        } else {
-                            &Fluid::EMPTY
-                        }
-                    })
-            })
-            .unwrap_or(&Fluid::EMPTY)
+        if id.is_waterlogged() {
+            &Fluid::FLOWING_WATER
+        } else {
+            &Fluid::EMPTY
+        }
+    }
+
+    pub fn get_fluid(&self, position: &BlockPos) -> &'static pumpkin_data::fluid::Fluid {
+        let id = self.get_block_state_id(position);
+        Self::get_fluid_from_state_id(id)
     }
 
     pub fn get_block_and_fluid(
@@ -5659,30 +5640,7 @@ impl World {
         &'static pumpkin_data::fluid::Fluid,
     ) {
         let id = self.get_block_state_id(position);
-        let block = Block::from_state_id(id);
-
-        let fluid = Fluid::from_state_id(id)
-            .map(Fluid::to_flowing)
-            .ok_or(&Fluid::EMPTY)
-            .unwrap_or_else(|_| {
-                block
-                    .properties(id)
-                    .and_then(|props| {
-                        props
-                            .to_props()
-                            .into_iter()
-                            .find(|p| p.0 == "waterlogged")
-                            .map(|(_, value)| {
-                                if value == "true" {
-                                    &Fluid::FLOWING_WATER
-                                } else {
-                                    &Fluid::EMPTY
-                                }
-                            })
-                    })
-                    .unwrap_or(&Fluid::EMPTY)
-            });
-        (block, fluid)
+        (id.to_block(), Self::get_fluid_from_state_id(id))
     }
 
     pub fn get_fluid_and_fluid_state(
@@ -5690,30 +5648,8 @@ impl World {
         position: &BlockPos,
     ) -> (&'static Fluid, &'static FluidState) {
         let id = self.get_block_state_id(position);
-
-        let Some(raw_fluid) = Fluid::from_state_id(id) else {
-            let block = Block::from_state_id(id);
-            if let Some(properties) = block.properties(id) {
-                for (name, value) in properties.to_props() {
-                    if name == "waterlogged" {
-                        if value == "true" {
-                            let state = &Fluid::FLOWING_WATER.states[0];
-                            return (&Fluid::FLOWING_WATER, state);
-                        }
-
-                        break;
-                    }
-                }
-            }
-
-            let state = &Fluid::EMPTY.states[0];
-            return (&Fluid::EMPTY, state);
-        };
-
-        let fluid = raw_fluid.to_flowing();
-        let state = &fluid.states[0];
-
-        (fluid, state)
+        let fluid = Self::get_fluid_from_state_id(id);
+        (fluid, &fluid.states[0])
     }
 
     pub fn get_block_state_id(&self, position: &BlockPos) -> BlockStateId {
