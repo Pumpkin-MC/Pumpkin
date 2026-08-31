@@ -7,14 +7,17 @@ use pumpkin_util::text::{
 
 use crate::{
     command::{
-        CommandExecutor,
-        context::string_range::StringRange,
-        dispatcher::CommandError,
-        suggestion::{Suggestion, suggestions::Suggestions},
-        tree::{CommandSuggestionProvider, CommandSuggestionResult},
+        context::command_context::CommandContext,
+        errors::error_types::DISPATCHER_PARSE_EXCEPTION,
+        node::{CommandExecutor, CommandExecutorResult},
+        suggestion::{
+            provider::SuggestionProvider,
+            suggestions::{Suggestions, SuggestionsBuilder},
+        },
     },
     plugin::loader::wasm::wasm_host::{
         DowncastResourceExt, PluginInstance, WasmPlugin,
+        args::build_consumed_args_from_context,
         wit::v0_1::pumpkin::plugin::command::{CommandError as CommandErrorWit, SuggestionRequest},
     },
     server::Server,
@@ -27,28 +30,36 @@ pub struct WasmCommandExecutor {
 }
 
 impl CommandExecutor for WasmCommandExecutor {
-    fn execute(
-        &self,
-        sender: &crate::command::CommandSender,
-        _server: &crate::server::Server,
-        args: &crate::command::args::ConsumedArgs,
-    ) -> crate::command::CommandResult {
+    fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
         tokio::task::block_in_place(|| {
             tokio::runtime::Handle::current().block_on(async {
                 let mut store = self.plugin.store.lock().await;
 
                 let sender_resource = store
                     .data_mut()
-                    .add_command_sender(sender.clone())
-                    .expect("valid command sender");
+                    .add_command_sender(context.source.output.clone())
+                    .map_err(|e| {
+                        DISPATCHER_PARSE_EXCEPTION.create_without_context(TextComponent::text(
+                            format!("Failed to create sender: {e}"),
+                        ))
+                    })?;
                 let server_resource = store
                     .data_mut()
                     .add_server(self.server.clone())
-                    .expect("valid server");
+                    .map_err(|e| {
+                        DISPATCHER_PARSE_EXCEPTION.create_without_context(TextComponent::text(
+                            format!("Failed to create server: {e}"),
+                        ))
+                    })?;
+                let consumed_args = build_consumed_args_from_context(context);
                 let args_resource = store
                     .data_mut()
-                    .add_consumed_args(args)
-                    .expect("valid consumed args");
+                    .add_consumed_args(consumed_args)
+                    .map_err(|e| {
+                        DISPATCHER_PARSE_EXCEPTION.create_without_context(TextComponent::text(
+                            format!("Failed to create args: {e}"),
+                        ))
+                    })?;
 
                 let sender_rep = sender_resource.rep();
                 let server_rep = server_resource.rep();
@@ -76,8 +87,8 @@ impl CommandExecutor for WasmCommandExecutor {
                             .data_mut()
                             .resource_table
                             .delete::<crate::plugin::loader::wasm::wasm_host::state::ServerResource>(
-                            wasmtime::component::Resource::new_own(server_rep),
-                        );
+                                wasmtime::component::Resource::new_own(server_rep),
+                            );
                         let _ = store
                             .data_mut()
                             .resource_table
@@ -86,7 +97,7 @@ impl CommandExecutor for WasmCommandExecutor {
                             );
 
                         let result = result.map_err(|e| {
-                            CommandError::CommandFailed(
+                            DISPATCHER_PARSE_EXCEPTION.create_without_context(
                                 TextComponent::text(format!(
                                     "Wasm command failed with following error: {e}"
                                 ))
@@ -98,16 +109,22 @@ impl CommandExecutor for WasmCommandExecutor {
                             Ok(value) => Ok(value),
                             Err(err) => match err {
                                 CommandErrorWit::InvalidConsumption(value) => {
-                                    Err(CommandError::InvalidConsumption(value))
+                                    Err(DISPATCHER_PARSE_EXCEPTION.create_without_context(
+                                        TextComponent::text(format!(
+                                            "Invalid consumption: {value:?}"
+                                        )),
+                                    ))
                                 }
                                 CommandErrorWit::InvalidRequirement => {
-                                    Err(CommandError::InvalidRequirement)
+                                    Err(DISPATCHER_PARSE_EXCEPTION
+                                        .create_without_context(TextComponent::text("Invalid requirement")))
                                 }
                                 CommandErrorWit::PermissionDenied => {
-                                    Err(CommandError::PermissionDenied)
+                                    Err(DISPATCHER_PARSE_EXCEPTION
+                                        .create_without_context(TextComponent::text("Permission denied")))
                                 }
                                 CommandErrorWit::CommandFailed(resource) => {
-                                    Err(CommandError::CommandFailed(
+                                    Err(DISPATCHER_PARSE_EXCEPTION.create_without_context(
                                         resource.consume(store.data_mut()).provider,
                                     ))
                                 }
@@ -126,26 +143,22 @@ pub struct WasmCommandSuggestionProvider {
     pub server: Arc<Server>,
 }
 
-impl CommandSuggestionProvider for WasmCommandSuggestionProvider {
-    fn suggest(
-        &self,
-        src: &crate::command::CommandSender,
-        _server: &Server,
-        input: &str,
-        start: usize,
-        end: usize,
-    ) -> CommandSuggestionResult {
+impl SuggestionProvider for WasmCommandSuggestionProvider {
+    fn suggest(&self, context: &CommandContext, builder: SuggestionsBuilder) -> Suggestions {
         tokio::task::block_in_place(|| {
             tokio::runtime::Handle::current().block_on(async {
                 let mut store = self.plugin.store.lock().await;
 
-                let sender_resource = match store.data_mut().add_command_sender(src.clone()) {
+                let sender_resource = match store
+                    .data_mut()
+                    .add_command_sender(context.source.output.clone())
+                {
                     Ok(resource) => resource,
                     Err(error) => {
                         tracing::error!(
                             "Failed to create command sender resource for suggestions: {error}"
                         );
-                        return Suggestions::empty();
+                        return builder.build();
                     }
                 };
                 let server_resource = match store.data_mut().add_server(self.server.clone()) {
@@ -154,15 +167,16 @@ impl CommandSuggestionProvider for WasmCommandSuggestionProvider {
                         tracing::error!(
                             "Failed to create server resource for suggestions: {error}"
                         );
-                        return Suggestions::empty();
+                        return builder.build();
                     }
                 };
 
+                let input = &context.input;
                 let request = SuggestionRequest {
-                    input: input.to_string(),
+                    input: input.clone(),
                     cursor: input.len().try_into().unwrap_or(u32::MAX),
-                    start: start.try_into().unwrap_or(u32::MAX),
-                    remaining: input[start.min(input.len())..end.min(input.len())].to_string(),
+                    start: builder.start.try_into().unwrap_or(u32::MAX),
+                    remaining: builder.remaining().to_string(),
                 };
 
                 let response = match self.plugin.plugin_instance {
@@ -183,30 +197,22 @@ impl CommandSuggestionProvider for WasmCommandSuggestionProvider {
                     Ok(response) => response,
                     Err(error) => {
                         tracing::error!("Wasm command suggestion failed: {error}");
-                        return Suggestions::empty();
+                        return builder.build();
                     }
                 };
 
-                let start = response.start as usize;
-                let end = start.saturating_add(response.length as usize);
-                let range = StringRange::between(start, end.min(input.len()));
-                let suggestions = response
-                    .values
-                    .into_iter()
-                    .map(|suggestion| {
-                        if let Some(tooltip) = suggestion.tooltip {
-                            Suggestion::with_tooltip(
-                                range,
-                                suggestion.value,
-                                tooltip.consume(store.data_mut()).provider,
-                            )
-                        } else {
-                            Suggestion::without_tooltip(range, suggestion.value)
-                        }
-                    })
-                    .collect();
+                let mut result_builder = builder;
+                for suggestion in response.values {
+                    if let Some(tooltip) = suggestion.tooltip {
+                        let text = tooltip.consume(store.data_mut()).provider;
+                        result_builder =
+                            result_builder.suggest_with_tooltip(suggestion.value, text);
+                    } else {
+                        result_builder = result_builder.suggest(suggestion.value);
+                    }
+                }
 
-                Suggestions::new(range, suggestions)
+                result_builder.build()
             })
         })
     }

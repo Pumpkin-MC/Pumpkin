@@ -1,9 +1,7 @@
 use std::sync::Arc;
-use std::sync::atomic::Ordering;
 
 use crate::block::UseWithItemArgs;
 use crate::block::entities::BlockEntity;
-use crate::block::entities::sign::SignBlockEntity;
 use crate::block::registry::BlockActionResult;
 use crate::entity::player::Player;
 use crate::item::{ItemBehaviour, ItemMetadata};
@@ -83,9 +81,12 @@ impl HoneyCombItem {
         &self,
         args: &UseWithItemArgs<'_>,
         block_entity: &Arc<dyn BlockEntity>,
-        sign_entity: &SignBlockEntity,
+        sign_entity: &crate::block::entities::sign::SignEntityRef<'_>,
     ) -> BlockActionResult {
-        sign_entity.is_waxed.store(true, Ordering::Relaxed);
+        if sign_entity.is_waxed() {
+            return BlockActionResult::PassToDefaultBlockAction;
+        }
+        sign_entity.set_waxed(true);
 
         args.world.update_block_entity(block_entity);
         args.world

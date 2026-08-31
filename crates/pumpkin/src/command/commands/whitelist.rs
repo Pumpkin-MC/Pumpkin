@@ -2,30 +2,42 @@ use std::sync::atomic::Ordering;
 
 use pumpkin_config::whitelist::WhitelistEntry;
 use pumpkin_data::translation;
+use pumpkin_util::PermissionLvl;
+use pumpkin_util::permission::{Permission, PermissionDefault, PermissionRegistry};
 use pumpkin_util::text::TextComponent;
 
-use crate::command::CommandResult;
-use crate::{
-    command::{
-        CommandExecutor, CommandSender,
-        args::{
-            Arg, ConsumedArgs,
-            gameprofile::{GameProfileSuggestionMode, GameProfilesArgumentConsumer},
-        },
-        dispatcher::CommandError,
-        tree::{
-            CommandTree,
-            builder::{argument, literal},
-        },
-    },
-    data::{LoadJSONConfiguration, SaveJSONConfiguration, whitelist::WhitelistConfig},
-    net::DisconnectReason,
-    server::Server,
-};
+use crate::command::argument_builder::{ArgumentBuilder, argument, command, literal};
+use crate::command::argument_types::game_profile::GameProfileArgumentType;
+use crate::command::context::command_context::CommandContext;
+use crate::command::errors::error_types::CommandErrorType;
+use crate::command::node::dispatcher::CommandDispatcher;
+use crate::command::node::{CommandExecutor, CommandExecutorResult};
+use crate::data::{LoadJSONConfiguration, SaveJSONConfiguration, whitelist::WhitelistConfig};
+use crate::net::DisconnectReason;
+use crate::server::Server;
 
-const NAMES: [&str; 1] = ["whitelist"];
 const DESCRIPTION: &str = "Manage server whitelists.";
-const ARG_TARGETS: &str = "targets";
+const PERMISSION: &str = "minecraft:command.whitelist";
+
+const ERROR_ALREADY_ON: CommandErrorType<0> = CommandErrorType::new(
+    translation::java::COMMANDS_WHITELIST_ALREADYON,
+    translation::bedrock::COMMANDS_ALLOWLIST_ENABLED,
+);
+
+const ERROR_ALREADY_OFF: CommandErrorType<0> = CommandErrorType::new(
+    translation::java::COMMANDS_WHITELIST_ALREADYOFF,
+    translation::bedrock::COMMANDS_ALLOWLIST_DISABLED,
+);
+
+const ERROR_ADD_FAILED: CommandErrorType<0> = CommandErrorType::new(
+    translation::java::COMMANDS_WHITELIST_ADD_FAILED,
+    translation::bedrock::COMMANDS_ALLOWLIST_ADD_FAILED,
+);
+
+const ERROR_REMOVE_FAILED: CommandErrorType<0> = CommandErrorType::new(
+    translation::java::COMMANDS_WHITELIST_REMOVE_FAILED,
+    translation::bedrock::COMMANDS_ALLOWLIST_REMOVE_FAILED,
+);
 
 fn kick_non_whitelisted_players(server: &Server) {
     let whitelist = server.data.whitelist_config.read().unwrap();
@@ -48,26 +60,20 @@ fn kick_non_whitelisted_players(server: &Server) {
 struct OnExecutor;
 
 impl CommandExecutor for OnExecutor {
-    fn execute(
-        &self,
-        sender: &CommandSender,
-        server: &crate::server::Server,
-        _args: &ConsumedArgs,
-    ) -> CommandResult {
+    fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
+        let server = context.source.server();
         let previous = server.white_list.swap(true, Ordering::Relaxed);
         if previous {
-            Err(CommandError::CommandFailed(
-                pumpkin_macros::translate_cross!(
-                    translation::java::COMMANDS_WHITELIST_ALREADYON,
-                    translation::bedrock::COMMANDS_ALLOWLIST_ENABLED
-                ),
-            ))
+            Err(ERROR_ALREADY_ON.create_without_context())
         } else {
             kick_non_whitelisted_players(server);
-            sender.send_message(pumpkin_macros::translate_cross!(
-                translation::java::COMMANDS_WHITELIST_ENABLED,
-                translation::bedrock::COMMANDS_ALLOWLIST_ENABLED
-            ));
+            context.source.send_feedback(
+                pumpkin_macros::translate_cross!(
+                    translation::java::COMMANDS_WHITELIST_ENABLED,
+                    translation::bedrock::COMMANDS_ALLOWLIST_ENABLED
+                ),
+                true,
+            );
             Ok(1)
         }
     }
@@ -76,26 +82,20 @@ impl CommandExecutor for OnExecutor {
 struct OffExecutor;
 
 impl CommandExecutor for OffExecutor {
-    fn execute(
-        &self,
-        sender: &CommandSender,
-        server: &crate::server::Server,
-        _args: &ConsumedArgs,
-    ) -> CommandResult {
+    fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
+        let server = context.source.server();
         let previous = server.white_list.swap(false, Ordering::Relaxed);
         if previous {
-            sender.send_message(pumpkin_macros::translate_cross!(
-                translation::java::COMMANDS_WHITELIST_DISABLED,
-                translation::bedrock::COMMANDS_ALLOWLIST_DISABLED
-            ));
-            Ok(1)
-        } else {
-            Err(CommandError::CommandFailed(
+            context.source.send_feedback(
                 pumpkin_macros::translate_cross!(
-                    translation::java::COMMANDS_WHITELIST_ALREADYOFF,
+                    translation::java::COMMANDS_WHITELIST_DISABLED,
                     translation::bedrock::COMMANDS_ALLOWLIST_DISABLED
                 ),
-            ))
+                true,
+            );
+            Ok(1)
+        } else {
+            Err(ERROR_ALREADY_OFF.create_without_context())
         }
     }
 }
@@ -103,19 +103,18 @@ impl CommandExecutor for OffExecutor {
 struct ListExecutor;
 
 impl CommandExecutor for ListExecutor {
-    fn execute(
-        &self,
-        sender: &CommandSender,
-        server: &crate::server::Server,
-        _args: &ConsumedArgs,
-    ) -> CommandResult {
+    fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
+        let server = context.source.server();
         let whitelist_guard = server.data.whitelist_config.read().unwrap();
         let whitelist = &whitelist_guard.whitelist;
         if whitelist.is_empty() {
-            sender.send_message(pumpkin_macros::translate_cross!(
-                translation::java::COMMANDS_WHITELIST_NONE,
-                translation::bedrock::COMMANDS_ALLOWLIST_LIST
-            ));
+            context.source.send_feedback(
+                pumpkin_macros::translate_cross!(
+                    translation::java::COMMANDS_WHITELIST_NONE,
+                    translation::bedrock::COMMANDS_ALLOWLIST_LIST
+                ),
+                false,
+            );
             return Ok(0);
         }
 
@@ -127,12 +126,15 @@ impl CommandExecutor for ListExecutor {
 
         let names_len = names.len() as i32;
 
-        sender.send_message(pumpkin_macros::translate_cross!(
-            translation::java::COMMANDS_WHITELIST_LIST,
-            translation::bedrock::COMMANDS_ALLOWLIST_LIST,
-            TextComponent::text(whitelist.len().to_string()),
-            TextComponent::text(names)
-        ));
+        context.source.send_feedback(
+            pumpkin_macros::translate_cross!(
+                translation::java::COMMANDS_WHITELIST_LIST,
+                translation::bedrock::COMMANDS_ALLOWLIST_LIST,
+                TextComponent::text(whitelist.len().to_string()),
+                TextComponent::text(names)
+            ),
+            false,
+        );
 
         Ok(names_len)
     }
@@ -141,38 +143,30 @@ impl CommandExecutor for ListExecutor {
 struct ReloadExecutor;
 
 impl CommandExecutor for ReloadExecutor {
-    fn execute(
-        &self,
-        sender: &CommandSender,
-        server: &crate::server::Server,
-        _args: &ConsumedArgs,
-    ) -> CommandResult {
+    fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
+        let server = context.source.server();
         *server.data.whitelist_config.write().unwrap() = WhitelistConfig::load();
         kick_non_whitelisted_players(server);
-        sender.send_message(pumpkin_macros::translate_cross!(
-            translation::java::COMMANDS_WHITELIST_RELOADED,
-            translation::bedrock::COMMANDS_ALLOWLIST_RELOADED
-        ));
+        context.source.send_feedback(
+            pumpkin_macros::translate_cross!(
+                translation::java::COMMANDS_WHITELIST_RELOADED,
+                translation::bedrock::COMMANDS_ALLOWLIST_RELOADED
+            ),
+            true,
+        );
         Ok(1)
     }
 }
 
-pub struct AddExecutor;
+struct AddExecutor;
 
 impl CommandExecutor for AddExecutor {
-    fn execute(
-        &self,
-        sender: &CommandSender,
-        server: &crate::server::Server,
-        args: &ConsumedArgs,
-    ) -> CommandResult {
-        let Some(Arg::GameProfiles(targets)) = args.get(ARG_TARGETS) else {
-            return Err(CommandError::InvalidConsumption(Some(ARG_TARGETS.into())));
-        };
-
+    fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
+        let targets = GameProfileArgumentType::get(context, "targets")?;
+        let server = context.source.server();
         let mut whitelist = server.data.whitelist_config.write().unwrap();
         let mut successes: i32 = 0;
-        for profile in targets {
+        for profile in &targets {
             if let Some(existing_entry) = whitelist
                 .whitelist
                 .iter_mut()
@@ -186,45 +180,36 @@ impl CommandExecutor for AddExecutor {
             whitelist
                 .whitelist
                 .push(WhitelistEntry::new(profile.id, profile.name.clone()));
-            sender.send_message(pumpkin_macros::translate_cross!(
-                translation::java::COMMANDS_WHITELIST_ADD_SUCCESS,
-                translation::bedrock::COMMANDS_ALLOWLIST_ADD_SUCCESS,
-                TextComponent::text(profile.name.clone())
-            ));
+            context.source.send_feedback(
+                pumpkin_macros::translate_cross!(
+                    translation::java::COMMANDS_WHITELIST_ADD_SUCCESS,
+                    translation::bedrock::COMMANDS_ALLOWLIST_ADD_SUCCESS,
+                    TextComponent::text(profile.name.clone())
+                ),
+                true,
+            );
             successes += 1;
         }
 
         whitelist.save();
 
         if successes == 0 {
-            Err(CommandError::CommandFailed(
-                pumpkin_macros::translate_cross!(
-                    translation::java::COMMANDS_WHITELIST_ADD_FAILED,
-                    translation::bedrock::COMMANDS_ALLOWLIST_ADD_FAILED
-                ),
-            ))
+            Err(ERROR_ADD_FAILED.create_without_context())
         } else {
             Ok(successes)
         }
     }
 }
 
-pub struct RemoveExecutor;
+struct RemoveExecutor;
 
 impl CommandExecutor for RemoveExecutor {
-    fn execute(
-        &self,
-        sender: &CommandSender,
-        server: &crate::server::Server,
-        args: &ConsumedArgs,
-    ) -> CommandResult {
-        let Some(Arg::GameProfiles(targets)) = args.get(ARG_TARGETS) else {
-            return Err(CommandError::InvalidConsumption(Some(ARG_TARGETS.into())));
-        };
-
+    fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
+        let targets = GameProfileArgumentType::get(context, "targets")?;
+        let server = context.source.server();
         let mut whitelist = server.data.whitelist_config.write().unwrap();
         let mut successes: i32 = 0;
-        for player in targets {
+        for player in &targets {
             let i = whitelist
                 .whitelist
                 .iter()
@@ -232,11 +217,14 @@ impl CommandExecutor for RemoveExecutor {
 
             if let Some(i) = i {
                 whitelist.whitelist.remove(i);
-                sender.send_message(pumpkin_macros::translate_cross!(
-                    translation::java::COMMANDS_WHITELIST_REMOVE_SUCCESS,
-                    translation::bedrock::COMMANDS_ALLOWLIST_REMOVE_SUCCESS,
-                    TextComponent::text(player.name.clone())
-                ));
+                context.source.send_feedback(
+                    pumpkin_macros::translate_cross!(
+                        translation::java::COMMANDS_WHITELIST_REMOVE_SUCCESS,
+                        translation::bedrock::COMMANDS_ALLOWLIST_REMOVE_SUCCESS,
+                        TextComponent::text(player.name.clone())
+                    ),
+                    true,
+                );
                 successes += 1;
             }
         }
@@ -247,46 +235,34 @@ impl CommandExecutor for RemoveExecutor {
         kick_non_whitelisted_players(server);
 
         if successes == 0 {
-            Err(CommandError::CommandFailed(
-                pumpkin_macros::translate_cross!(
-                    translation::java::COMMANDS_WHITELIST_REMOVE_FAILED,
-                    translation::bedrock::COMMANDS_ALLOWLIST_REMOVE_FAILED
-                ),
-            ))
+            Err(ERROR_REMOVE_FAILED.create_without_context())
         } else {
             Ok(successes)
         }
     }
 }
 
-pub fn init_command_tree() -> CommandTree {
-    CommandTree::new(NAMES, DESCRIPTION)
-        .then(literal("on").execute(OnExecutor))
-        .then(literal("off").execute(OffExecutor))
-        .then(literal("list").execute(ListExecutor))
-        .then(literal("reload").execute(ReloadExecutor))
-        .then(
-            literal("add").then(
-                argument(
-                    ARG_TARGETS,
-                    GameProfilesArgumentConsumer::new(
-                        GameProfileSuggestionMode::NonWhitelistedOnlinePlayers,
-                        false,
-                    ),
-                )
-                .execute(AddExecutor),
+pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistry) {
+    registry.register_permission_or_panic(Permission::new(
+        PERMISSION,
+        DESCRIPTION,
+        PermissionDefault::Op(PermissionLvl::Three),
+    ));
+
+    dispatcher.register(
+        command("whitelist", DESCRIPTION)
+            .requires(PERMISSION)
+            .then(literal("on").executes(OnExecutor))
+            .then(literal("off").executes(OffExecutor))
+            .then(literal("list").executes(ListExecutor))
+            .then(literal("reload").executes(ReloadExecutor))
+            .then(
+                literal("add")
+                    .then(argument("targets", GameProfileArgumentType).executes(AddExecutor)),
+            )
+            .then(
+                literal("remove")
+                    .then(argument("targets", GameProfileArgumentType).executes(RemoveExecutor)),
             ),
-        )
-        .then(
-            literal("remove").then(
-                argument(
-                    ARG_TARGETS,
-                    GameProfilesArgumentConsumer::new(
-                        GameProfileSuggestionMode::WhitelistedNames,
-                        false,
-                    ),
-                )
-                .execute(RemoveExecutor),
-            ),
-        )
+    );
 }
