@@ -405,6 +405,7 @@ impl ChunkData {
             blending_data: None,
             inhabited_time: AtomicU64::new(root_tag.get_long("InhabitedTime").unwrap_or(0) as u64),
             custom_data: std::sync::Mutex::new(custom_data),
+            sky_light_height_cache: std::sync::atomic::AtomicU32::new(0),
         })
     }
 

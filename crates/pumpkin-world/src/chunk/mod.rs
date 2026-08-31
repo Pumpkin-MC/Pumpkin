@@ -82,6 +82,7 @@ pub struct ChunkData {
     pub dirty: AtomicBool,
     pub inhabited_time: AtomicU64,
     pub custom_data: std::sync::Mutex<NbtCompound>,
+    pub sky_light_height_cache: std::sync::atomic::AtomicU32,
 }
 
 pub struct ChunkEntityData {
@@ -615,6 +616,7 @@ impl ChunkData {
             dirty: std::sync::atomic::AtomicBool::new(false),
             inhabited_time: std::sync::atomic::AtomicU64::new(0),
             custom_data: std::sync::Mutex::new(NbtCompound::new()),
+            sky_light_height_cache: std::sync::atomic::AtomicU32::new(0),
         }
     }
 
