@@ -289,7 +289,7 @@ pub fn update_power_strength(world: &Arc<World>, pos: &BlockPos) {
         wire.power = target_strength;
         let new_state_id = wire.to_state_id(&Block::REDSTONE_WIRE);
 
-        world.set_block_state(pos, new_state_id, BlockFlags::empty());
+        world.set_block_state(pos, new_state_id, BlockFlags::NOTIFY_LISTENERS);
 
         let mut to_update = Vec::with_capacity(7);
         to_update.push(*pos);

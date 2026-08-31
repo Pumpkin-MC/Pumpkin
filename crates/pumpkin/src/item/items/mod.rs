@@ -32,6 +32,7 @@ pub mod minecart;
 pub mod name_tag;
 pub mod on_a_stick;
 pub mod potions;
+pub mod projectile_weapon;
 pub mod saddle;
 pub mod shears;
 pub mod shovel;

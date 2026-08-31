@@ -139,19 +139,19 @@ pub struct ItemComponents {
     #[serde(rename = "minecraft:provides_trim_material")]
     pub provides_trim_material: Option<serde_json::Value>,
     #[serde(rename = "minecraft:rarity")]
-    pub rarity: Option<serde_json::Value>,
+    pub rarity: Option<String>,
     #[serde(rename = "minecraft:recipes")]
     pub recipes: Option<serde_json::Value>,
     #[serde(rename = "minecraft:repair_cost")]
-    pub repair_cost: Option<serde_json::Value>,
+    pub repair_cost: Option<i32>,
     #[serde(rename = "minecraft:repairable")]
-    pub repairable: Option<serde_json::Value>,
+    pub repairable: Option<RepairableComponent>,
     #[serde(rename = "minecraft:stored_enchantments")]
     pub stored_enchantments: Option<serde_json::Value>,
     #[serde(rename = "minecraft:suspicious_stew_effects")]
     pub suspicious_stew_effects: Option<serde_json::Value>,
     #[serde(rename = "minecraft:swing_animation")]
-    pub swing_animation: Option<serde_json::Value>,
+    pub swing_animation: Option<SwingAnimationComponent>,
     #[serde(rename = "minecraft:tooltip_display")]
     pub tooltip_display: Option<serde_json::Value>,
     #[serde(rename = "minecraft:use_effects")]
@@ -160,6 +160,22 @@ pub struct ItemComponents {
     pub use_remainder: Option<serde_json::Value>,
     #[serde(rename = "minecraft:writable_book_content")]
     pub writable_book_content: Option<serde_json::Value>,
+}
+
+fn default_swing_animation_type() -> String {
+    "whack".to_string()
+}
+
+const fn default_swing_animation_duration() -> i32 {
+    6
+}
+
+#[derive(Deserialize, Clone)]
+pub struct SwingAnimationComponent {
+    #[serde(default = "default_swing_animation_type")]
+    pub r#type: String,
+    #[serde(default = "default_swing_animation_duration")]
+    pub duration: i32,
 }
 
 #[derive(Deserialize)]
@@ -845,17 +861,50 @@ impl ToTokens for ItemComponents {
         if self.provides_trim_material.is_some() {
             tokens.extend(quote! { (ProvidesTrimMaterial, &ProvidesTrimMaterialImpl), });
         }
-        if self.rarity.is_some() {
-            tokens.extend(quote! { (Rarity, &RarityImpl), });
+        if let Some(rarity_str) = &self.rarity {
+            let rarity_variant = match rarity_str.as_str() {
+                "uncommon" => quote! { crate::data_component_impl::Rarity::Uncommon },
+                "rare" => quote! { crate::data_component_impl::Rarity::Rare },
+                "epic" => quote! { crate::data_component_impl::Rarity::Epic },
+                _ => quote! { crate::data_component_impl::Rarity::Common },
+            };
+            tokens.extend(quote! { (Rarity, &RarityImpl { rarity: #rarity_variant }), });
         }
         if self.recipes.is_some() {
             tokens.extend(quote! { (Recipes, &RecipesImpl), });
         }
-        if self.repair_cost.is_some() {
-            tokens.extend(quote! { (RepairCost, &RepairCostImpl), });
+        if let Some(cost) = self.repair_cost {
+            tokens.extend(quote! { (RepairCost, &RepairCostImpl { cost: #cost }), });
         }
-        if self.repairable.is_some() {
-            tokens.extend(quote! { (Repairable, &RepairableImpl), });
+        if let Some(repairable) = &self.repairable {
+            let mut items_tokens = TokenStream::new();
+            match &repairable.items {
+                StringOrList::String(str) => {
+                    if let Some(formatted) = str.strip_prefix('#') {
+                        items_tokens.extend(quote! {
+                            IDSet::Tag(Cow::Borrowed(#formatted))
+                        });
+                    } else {
+                        let item_name = str.strip_prefix("minecraft:").unwrap_or(str);
+                        let ident = format_ident!("{}", item_name.to_shouty_snake_case());
+                        items_tokens.extend(quote! {
+                            IDSet::IDs(Cow::Borrowed(&[&Self::#ident]))
+                        });
+                    }
+                }
+                StringOrList::List(items) => {
+                    let mut ids = TokenStream::new();
+                    for x in items {
+                        let item_name = x.strip_prefix("minecraft:").unwrap_or(x);
+                        let ident = format_ident!("{}", item_name.to_shouty_snake_case());
+                        ids.extend(quote! { &Self::#ident, });
+                    }
+                    items_tokens.extend(quote! {
+                        IDSet::IDs(Cow::Borrowed(&[#ids]))
+                    });
+                }
+            }
+            tokens.extend(quote! { (Repairable, &RepairableImpl { items: #items_tokens }), });
         }
         if self.stored_enchantments.is_some() {
             tokens.extend(quote! { (StoredEnchantments, &StoredEnchantmentsImpl { enchantment: Cow::Borrowed(&[]) }), });
@@ -863,8 +912,23 @@ impl ToTokens for ItemComponents {
         if self.suspicious_stew_effects.is_some() {
             tokens.extend(quote! { (SuspiciousStewEffects, &SuspiciousStewEffectsImpl::EMPTY), });
         }
-        if self.swing_animation.is_some() {
-            tokens.extend(quote! { (SwingAnimation, &SwingAnimationImpl), });
+        if let Some(swing) = &self.swing_animation {
+            let anim_type = match swing.r#type.as_str() {
+                "whack" => quote! { SwingAnimationType::Whack },
+                "stab" => quote! { SwingAnimationType::Stab },
+                "none" => quote! { SwingAnimationType::None },
+                _ => quote! { SwingAnimationType::Whack },
+            };
+            let duration = swing.duration;
+            tokens.extend(quote! {
+                (
+                    SwingAnimation,
+                    &SwingAnimationImpl {
+                        animation_type: #anim_type,
+                        duration: #duration,
+                    },
+                ),
+            });
         }
         if self.tooltip_display.is_some() {
             tokens.extend(quote! { (TooltipDisplay, &TooltipDisplayImpl), });
@@ -1032,6 +1096,11 @@ pub struct DamageResistantComponent {
 pub enum StringOrList {
     String(String),
     List(Vec<String>),
+}
+
+#[derive(Deserialize, Clone)]
+pub struct RepairableComponent {
+    pub items: StringOrList,
 }
 
 /// Deserialized equippable component describing how an item is worn or equipped.
@@ -1547,6 +1616,15 @@ pub fn build() -> TokenStream {
         impl PartialEq for Item {
             fn eq(&self, other: &Self) -> bool {
                 self.id == other.id
+            }
+        }
+
+        impl std::fmt::Debug for Item {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                f.debug_struct("Item")
+                    .field("id", &self.id)
+                    .field("registry_key", &self.registry_key)
+                    .finish()
             }
         }
 

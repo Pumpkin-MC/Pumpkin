@@ -5158,7 +5158,7 @@ impl Player {
             .as_any_mut()
             .downcast_mut::<pumpkin_inventory::anvil::AnvilScreenHandler>()
         {
-            anvil_handler.update_item_name(packet.item_name.to_string());
+            anvil_handler.set_item_name(packet.item_name, self.has_infinite_materials());
         }
     }
 
@@ -7362,6 +7362,47 @@ impl InventoryPlayer for Player {
 
     fn close_screen_handler(&self) {
         self.close_handled_screen();
+    }
+
+    fn use_anvil(&self) {
+        if let Some(pos) = self.open_container_pos.load() {
+            let world = self.world();
+            let state = world.get_block_state(&pos);
+            let block = pumpkin_data::Block::from_state_id(state.id);
+            if block.has_tag(&pumpkin_data::tag::Block::MINECRAFT_ANVIL) {
+                if !self.has_infinite_materials() && rand::random::<f32>() < 0.12 {
+                    if let Some(new_state) =
+                        crate::block::blocks::anvil::AnvilBlock::damage(state.id)
+                    {
+                        world.set_block_state(
+                            &pos,
+                            new_state,
+                            pumpkin_world::world::BlockFlags::NOTIFY_ALL,
+                        );
+                        world.sync_world_event(
+                            pumpkin_data::world::WorldEvent::SoundAnvilUsed,
+                            pos,
+                            0,
+                        );
+                    } else {
+                        world.set_block_state(
+                            &pos,
+                            pumpkin_data::BlockStateId::AIR,
+                            pumpkin_world::world::BlockFlags::NOTIFY_ALL,
+                        );
+                        world.sync_world_event(
+                            pumpkin_data::world::WorldEvent::SoundAnvilBroken,
+                            pos,
+                            0,
+                        );
+                    }
+                } else {
+                    world.sync_world_event(pumpkin_data::world::WorldEvent::SoundAnvilUsed, pos, 0);
+                }
+            } else {
+                world.sync_world_event(pumpkin_data::world::WorldEvent::SoundAnvilUsed, pos, 0);
+            }
+        }
     }
 }
 
