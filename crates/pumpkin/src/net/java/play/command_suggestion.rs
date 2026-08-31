@@ -2,10 +2,10 @@
 use super::*;
 
 impl JavaClient {
-    pub async fn handle_command_suggestion(
+    pub fn handle_command_suggestion(
         &self,
         player: &Arc<Player>,
-        packet: SCommandSuggestion<'_>,
+        packet: &SCommandSuggestion<'_>,
         server: &Arc<Server>,
     ) {
         let Some(cmd) = &packet.command.get(1..) else {
@@ -19,10 +19,8 @@ impl JavaClient {
 
         let suggestions = server
             .command_dispatcher
-            .read()
-            .await
-            .suggest(cmd, &player.get_command_source(server).await)
-            .await;
+            .load()
+            .suggest(cmd, &player.get_command_source(server));
 
         let response = CCommandSuggestions::new(
             packet.id,
@@ -31,6 +29,6 @@ impl JavaClient {
             suggestions.into(),
         );
 
-        self.enqueue_packet(&response).await;
+        player.try_send_client_packet(&response);
     }
 }

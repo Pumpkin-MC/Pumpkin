@@ -26,18 +26,16 @@ impl ArgumentType for NbtTagArgumentType {
         JavaClientArgumentType::NbtTag
     }
 
-    fn list_suggestions<'a>(
-        &'a self,
-        _context: &'a CommandContext,
+    fn list_suggestions(
+        &self,
+        _context: &CommandContext,
         builder: SuggestionsBuilder,
-    ) -> std::pin::Pin<Box<dyn Future<Output = Suggestions> + Send + 'a>> {
-        Box::pin(async move { SnbtParser::parse_for_suggestions(builder) })
+    ) -> Suggestions {
+        SnbtParser::parse_for_suggestions(builder)
     }
 
     fn examples(&self) -> Vec<String> {
-        examples!(
-            "5", "7b", "1.6", "\"hi\"", "'bye'", "[2, 3]", "[L; 4]", "{x: 3}"
-        )
+        examples!("0", "0b", "0l", "0.0", "\"foo\"", "{foo=bar}", "[0]")
     }
 }
 
@@ -90,3 +88,5 @@ impl NbtCompoundArgumentType {
         context.get_argument(name)
     }
 }
+
+pub use super::nbt_path::{NbtPath, NbtPathArgumentType, NbtPathNode};

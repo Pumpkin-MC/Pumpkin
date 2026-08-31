@@ -1,4 +1,4 @@
-use pumpkin_data::packet::clientbound::PLAY_SET_TIME;
+use pumpkin_data::packet::clientbound::play::SET_TIME;
 use pumpkin_macros::java_packet;
 use pumpkin_util::version::JavaMinecraftVersion;
 
@@ -8,7 +8,7 @@ use crate::{
     ser::{NetworkWriteExt, WritingError},
 };
 
-#[java_packet(PLAY_SET_TIME)]
+#[java_packet(SET_TIME)]
 pub struct CUpdateTime {
     pub game_time: i64,
     /// (`clock_registry_id`, `total_ticks`, `partial_tick`, rate)
@@ -59,11 +59,25 @@ impl ClientPacket for CUpdateTime {
                 write.write_f32_be(rate)?;
             }
         } else {
-            // not super efficient ig
             let (day_time, rate) = self
                 .clock_updates
                 .first()
-                .map_or((0, 1.0), |&(_, total_ticks, _, rate)| (total_ticks, rate)); // Fallback defaults
+                .map_or((0, 1.0), |&(_, total_ticks, _, rate)| (total_ticks, rate));
+
+            let is_paused = rate == 0.0;
+            let day_time = if version < &JavaMinecraftVersion::V_1_21_2 {
+                if is_paused {
+                    match day_time.cmp(&0) {
+                        std::cmp::Ordering::Greater => -day_time,
+                        std::cmp::Ordering::Equal => -1,
+                        std::cmp::Ordering::Less => day_time,
+                    }
+                } else {
+                    day_time.abs()
+                }
+            } else {
+                day_time
+            };
 
             write.write_i64_be(day_time)?;
 

@@ -10,13 +10,9 @@ use super::CoralFeature;
 pub struct CoralClawFeature;
 
 impl CoralClawFeature {
-    #[allow(clippy::too_many_arguments)]
     pub fn generate<T: GenerationCache>(
         chunk: &mut T,
         block_registry: &dyn WorldPortalExt,
-        _min_y: i8,
-        _height: u16,
-        _feature: pumpkin_data::placed_feature::PlacedFeature, // This placed feature
         random: &mut RandomGenerator,
         pos: BlockPos,
     ) -> bool {
@@ -25,11 +21,14 @@ impl CoralClawFeature {
         if !CoralFeature::generate_coral_piece(chunk, block_registry, random, block, pos) {
             return false;
         }
+        let direction = BlockDirection::random_horizontal(random);
         let i = random.next_bounded_i32(2) + 2;
-        let direction = BlockDirection::horizontal()
-            [random.next_bounded_i32(BlockDirection::horizontal().len() as i32 - 1) as usize];
-        // TODO: Shuffle
-        let directions = BlockDirection::horizontal().into_iter().take(i as usize);
+        // TODO: vanilla iterates the first `i` of Util.toShuffledList([direction,
+        // direction.getClockWise(), direction.getCounterClockWise()], random) — the
+        // shuffle consumes RNG draws and the opposite of `direction` is never visited.
+        let directions = BlockDirection::horizontal_worldgen()
+            .into_iter()
+            .take(i as usize);
         'block0: for direction2 in directions {
             let mut pos = pos;
             let j = random.next_bounded_i32(2) + 1;

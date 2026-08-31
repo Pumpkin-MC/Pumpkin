@@ -1,7 +1,3 @@
-use std::pin::Pin;
-use std::sync::Arc;
-
-use crate::block::registry::BlockActionResult;
 use pumpkin_data::BlockDirection;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
@@ -11,7 +7,9 @@ use pumpkin_data::{Block, BlockStateId};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::world::BlockFlags;
+use std::sync::Arc;
 
+use crate::block::registry::BlockActionResult;
 use crate::entity::player::Player;
 use crate::item::items::ignite::ignition::Ignition;
 use crate::item::{ItemBehaviour, ItemMetadata};
@@ -27,39 +25,34 @@ impl ItemMetadata for FireChargeItem {
 }
 
 impl ItemBehaviour for FireChargeItem {
-    fn use_on_block<'a>(
-        &'a self,
-        _item: &'a mut ItemStack,
-        player: &'a Player,
+    fn use_on_block(
+        &self,
+        _item: &mut ItemStack,
+        player: &Player,
         location: BlockPos,
         face: BlockDirection,
         _cursor_pos: Vector3<f32>,
-        block: &'a Block,
-        _server: &'a Server,
-    ) -> Pin<Box<dyn Future<Output = BlockActionResult> + Send + 'a>> {
-        Box::pin(async move {
-            let world = player.world();
-            let ignited = Ignition::ignite_block(
-                |world: Arc<World>, pos: BlockPos, new_state_id: BlockStateId| async move {
-                    world
-                        .set_block_state(&pos, new_state_id, BlockFlags::NOTIFY_ALL)
-                        .await;
+        block: &Block,
+        _server: &Server,
+    ) -> BlockActionResult {
+        let world = player.world();
+        let ignited = Ignition::ignite_block(
+            |world: Arc<World>, pos: BlockPos, new_state_id: BlockStateId| {
+                world.set_block_state(&pos, new_state_id, BlockFlags::NOTIFY_ALL);
 
-                    world.play_block_sound(Sound::ItemFirechargeUse, SoundCategory::Blocks, pos);
-                },
-                &world,
-                location,
-                location.offset(face.to_offset()),
-                block,
-            )
-            .await;
+                world.play_block_sound(Sound::ItemFirechargeUse, SoundCategory::Blocks, pos);
+            },
+            &world,
+            location,
+            location.offset(face.to_offset()),
+            block,
+        );
 
-            if ignited {
-                BlockActionResult::Success
-            } else {
-                BlockActionResult::Fail
-            }
-        })
+        if ignited {
+            BlockActionResult::Success
+        } else {
+            BlockActionResult::Fail
+        }
     }
 
     fn as_any(&self) -> &dyn std::any::Any {

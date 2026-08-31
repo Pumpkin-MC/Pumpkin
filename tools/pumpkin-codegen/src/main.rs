@@ -42,6 +42,7 @@ mod configured_feature;
 mod damage_type;
 mod data_component;
 mod dimension;
+mod dye_color;
 mod effect;
 mod enchantments;
 mod entity_pose;
@@ -55,6 +56,8 @@ mod game_rules;
 mod item;
 mod jukebox_song;
 pub mod loot;
+mod map_color;
+mod map_decoration;
 mod message_type;
 mod meta_data_type;
 mod noise_parameter;
@@ -70,6 +73,7 @@ mod registry;
 mod remap;
 mod scoreboard_slot;
 mod screen;
+mod sdk;
 mod sound;
 mod sound_category;
 mod spawn_egg;
@@ -160,6 +164,9 @@ pub fn main() {
         ),
         (carver::build, "carver.rs"),
         (chest_loot::build, "chest_loot.rs"),
+        (map_color::build, "map_color.rs"),
+        (map_decoration::build, "map_decoration.rs"),
+        (dye_color::build, "dye_color.rs"),
     ];
     build_functions.extend(remap::build());
 
@@ -168,6 +175,7 @@ pub fn main() {
     let filters: Vec<String> = std::env::args().skip(1).collect();
     let build_functions: Vec<_> = if filters.is_empty() {
         wit::main();
+        sdk::main();
         build_functions
     } else {
         build_functions
@@ -233,6 +241,7 @@ pub fn write_generated_file(new_code: &str, out_file: &str) {
 }
 
 /// Error returned when `rustfmt` is unavailable or fails to format code.
+#[derive(Debug)]
 pub struct RustFmtError;
 
 /// Formats a Rust source string by piping it through `rustfmt`.

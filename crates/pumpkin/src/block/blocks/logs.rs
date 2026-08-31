@@ -2,8 +2,8 @@ use pumpkin_data::BlockStateId;
 use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_macros::pumpkin_block_from_tag;
 
+use crate::block::BlockBehaviour;
 use crate::block::OnPlaceArgs;
-use crate::block::{BlockBehaviour, BlockFuture};
 
 type LogProperties = pumpkin_data::block_properties::PaleOakWoodLikeProperties;
 
@@ -11,12 +11,10 @@ type LogProperties = pumpkin_data::block_properties::PaleOakWoodLikeProperties;
 pub struct LogBlock;
 
 impl BlockBehaviour for LogBlock {
-    fn on_place<'a>(&'a self, args: OnPlaceArgs<'a>) -> BlockFuture<'a, BlockStateId> {
-        Box::pin(async move {
-            let mut log_props = LogProperties::default(args.block);
-            log_props.axis = args.direction.to_axis();
+    fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
+        let mut log_props = LogProperties::default(args.block);
+        log_props.axis = args.direction.to_axis();
 
-            log_props.to_state_id(args.block)
-        })
+        log_props.to_state_id(args.block)
     }
 }

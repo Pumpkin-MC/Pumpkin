@@ -2,7 +2,6 @@ use std::sync::Arc;
 
 use pumpkin_data::BlockStateId;
 use pumpkin_data::block_properties::{BambooLeaves, BambooLikeProperties, BlockProperties};
-use pumpkin_data::item::Item;
 use pumpkin_data::tag::Block::MINECRAFT_SUPPORTS_BAMBOO;
 use pumpkin_data::tag::Taggable;
 use pumpkin_data::tag::{self};
@@ -13,11 +12,9 @@ use pumpkin_world::tick::TickPriority;
 use pumpkin_world::world::{BlockAccessor, BlockFlags};
 use rand::RngExt;
 
-use crate::block::registry::BlockActionResult;
-use crate::block::{BlockBehaviour, BlockFuture, CanPlaceAtArgs, blocks::plant::PlantBlockBase};
+use crate::block::{BlockBehaviour, CanPlaceAtArgs, blocks::plant::PlantBlockBase};
 use crate::block::{
     GetStateForNeighborUpdateArgs, OnPlaceArgs, OnScheduledTickArgs, RandomTickArgs,
-    UseWithItemArgs,
 };
 use crate::world::World;
 
@@ -25,113 +22,104 @@ use crate::world::World;
 pub struct BambooBlock;
 
 impl BlockBehaviour for BambooBlock {
-    fn on_place<'a>(&'a self, args: OnPlaceArgs<'a>) -> BlockFuture<'a, BlockStateId> {
-        Box::pin(async move {
-            let (block_below, state_id_below) =
-                args.world.get_block_and_state_id(&args.position.down());
-
-            if block_below.has_tag(&MINECRAFT_SUPPORTS_BAMBOO) {
-                let mut props = BambooLikeProperties::from_state_id(
-                    Block::BAMBOO.default_state.id,
-                    &Block::BAMBOO,
-                );
-                if block_below == &Block::BAMBOO_SAPLING {
-                    return Block::BAMBOO.default_state.id;
-                } else if block_below == &Block::BAMBOO {
-                    let props_below =
-                        BambooLikeProperties::from_state_id(state_id_below, block_below);
-                    if props_below.age > 0 {
-                        props.age = 1;
-                    }
-                } else {
-                    let (block_above, state_id_above) =
-                        args.world.get_block_and_state_id(&args.position.up());
-                    if block_above == &Block::BAMBOO {
-                        let props_above =
-                            BambooLikeProperties::from_state_id(state_id_above, block_above);
-                        props.age = props_above.age;
-                    } else {
-                        return Block::BAMBOO_SAPLING.default_state.id;
-                    }
-                }
-                return props.to_state_id(&Block::BAMBOO);
-            }
-            Block::AIR.default_state.id
-        })
+    fn is_valid_bonemeal_target(&self, args: crate::block::BonemealArgs<'_>) -> bool {
+        let above = count_bamboo_above(args.world, args.position);
+        let below = count_bamboo_below(args.world, args.position);
+        let top = args.position.up_height(above as i32);
+        let props = BambooLikeProperties::from_state_id(
+            args.world.get_block_state_id(&top),
+            &Block::BAMBOO,
+        );
+        above + below + 1 < 16
+            && props.stage == 0
+            && args.world.is_in_height_limit(top.up().0.y)
+            && args.world.is_loaded(&top.up())
+            && args.world.get_block_state(&top.up()).is_air()
     }
 
-    fn use_with_item<'a>(
-        &'a self,
-        args: UseWithItemArgs<'a>,
-    ) -> BlockFuture<'a, BlockActionResult> {
-        Box::pin(async move {
-            let lock = &args.item_stack;
-            if lock.get_item() == &Item::BONE_MEAL {
-                bone_meal(Arc::clone(args.world), args.position).await;
-                return BlockActionResult::Success;
+    fn perform_bonemeal(&self, args: crate::block::BonemealArgs<'_>) {
+        bone_meal(args.world, args.position);
+    }
+
+    fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
+        let (block_below, state_id_below) =
+            args.world.get_block_and_state_id(&args.position.down());
+
+        if block_below.has_tag(&MINECRAFT_SUPPORTS_BAMBOO) {
+            let mut props =
+                BambooLikeProperties::from_state_id(Block::BAMBOO.default_state.id, &Block::BAMBOO);
+            if block_below == &Block::BAMBOO_SAPLING {
+                return Block::BAMBOO.default_state.id;
+            } else if block_below == &Block::BAMBOO {
+                let props_below = BambooLikeProperties::from_state_id(state_id_below, block_below);
+                if props_below.age > 0 {
+                    props.age = 1;
+                }
+            } else {
+                let (block_above, state_id_above) =
+                    args.world.get_block_and_state_id(&args.position.up());
+                if block_above == &Block::BAMBOO {
+                    let props_above =
+                        BambooLikeProperties::from_state_id(state_id_above, block_above);
+                    props.age = props_above.age;
+                } else {
+                    return Block::BAMBOO_SAPLING.default_state.id;
+                }
             }
-            BlockActionResult::Pass
-        })
+            return props.to_state_id(&Block::BAMBOO);
+        }
+        Block::AIR.default_state.id
     }
 
     fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
         <Self as PlantBlockBase>::can_place_at(self, args.block_accessor, args.position)
     }
 
-    fn on_scheduled_tick<'a>(&'a self, args: OnScheduledTickArgs<'a>) -> BlockFuture<'a, ()> {
-        Box::pin(async move {
-            if !<Self as PlantBlockBase>::can_place_at(self, args.world.as_ref(), args.position) {
-                args.world
-                    .break_block(args.position, None, BlockFlags::empty())
-                    .await;
-            } else if args.world.get_block(&args.position.down()) == &Block::BAMBOO_SAPLING {
-                args.world
-                    .set_block_state(
-                        &args.position.down(),
-                        Block::BAMBOO.default_state.id,
-                        BlockFlags::empty(),
-                    )
-                    .await;
-            }
-        })
+    fn on_scheduled_tick(&self, args: OnScheduledTickArgs<'_>) {
+        if !<Self as PlantBlockBase>::can_place_at(self, args.world.as_ref(), args.position) {
+            args.world
+                .break_block(args.position, None, BlockFlags::empty());
+        } else if args.world.get_block(&args.position.down()) == &Block::BAMBOO_SAPLING {
+            args.world.set_block_state(
+                &args.position.down(),
+                Block::BAMBOO.default_state.id,
+                BlockFlags::empty(),
+            );
+        }
     }
 
-    fn get_state_for_neighbor_update<'a>(
-        &'a self,
-        args: GetStateForNeighborUpdateArgs<'a>,
-    ) -> BlockFuture<'a, BlockStateId> {
-        Box::pin(async move {
-            if !<Self as PlantBlockBase>::can_place_at(self, args.world, args.position) {
-                args.world
-                    .schedule_block_tick(args.block, *args.position, 1, TickPriority::Normal);
+    fn get_state_for_neighbor_update(
+        &self,
+        args: GetStateForNeighborUpdateArgs<'_>,
+    ) -> BlockStateId {
+        if !<Self as PlantBlockBase>::can_place_at(self, args.world, args.position) {
+            args.world
+                .schedule_block_tick(args.block, *args.position, 1, TickPriority::Normal);
+        }
+        let neighbor_block = args.world.get_block(args.neighbor_position);
+        if args.direction == BlockDirection::Up && neighbor_block == &Block::BAMBOO {
+            let neighbor_props =
+                BambooLikeProperties::from_state_id(args.neighbor_state_id, neighbor_block);
+            let mut props = BambooLikeProperties::from_state_id(args.state_id, args.block);
+            if neighbor_props.age > props.age {
+                props.age = match props.age {
+                    0 => 1,
+                    _ => 0,
+                };
+                return props.to_state_id(args.block);
             }
-            let neighbor_block = args.world.get_block(args.neighbor_position);
-            if args.direction == BlockDirection::Up && neighbor_block == &Block::BAMBOO {
-                let neighbor_props =
-                    BambooLikeProperties::from_state_id(args.neighbor_state_id, neighbor_block);
-                let mut props = BambooLikeProperties::from_state_id(args.state_id, args.block);
-                if neighbor_props.age > props.age {
-                    props.age = match props.age {
-                        0 => 1,
-                        _ => 0,
-                    };
-                    return props.to_state_id(args.block);
-                }
-            }
-            args.state_id
-        })
+        }
+        args.state_id
     }
 
-    fn random_tick<'a>(&'a self, args: RandomTickArgs<'a>) -> BlockFuture<'a, ()> {
-        Box::pin(async move {
-            if rand::rng().random_range(0..=3) == 0 {
-                update_leaves_and_grow(args.world.clone(), args.position).await;
-            }
-        })
+    fn random_tick(&self, args: RandomTickArgs<'_>) {
+        if rand::rng().random_range(0..=3) == 0 {
+            update_leaves_and_grow(args.world, args.position);
+        }
     }
 }
 
-async fn update_leaves_and_grow(world: Arc<World>, position: &BlockPos) {
+fn update_leaves_and_grow(world: &Arc<World>, position: &BlockPos) {
     let above_pos = position.up();
     let below_pos = position.down();
     let two_below_pos = position.down_height(2);
@@ -148,7 +136,7 @@ async fn update_leaves_and_grow(world: Arc<World>, position: &BlockPos) {
         return;
     }
 
-    let bamboo_count = count_bamboo_below(&world, position);
+    let bamboo_count = count_bamboo_below(world, position);
     if bamboo_count >= 16 {
         return;
     }
@@ -174,20 +162,16 @@ async fn update_leaves_and_grow(world: Arc<World>, position: &BlockPos) {
                 BambooLikeProperties::from_state_id(state_id_two_below, block_two_below);
             props_two_below.leaves = BambooLeaves::None;
 
-            world
-                .set_block_state(
-                    &below_pos,
-                    props_below.to_state_id(block_below),
-                    BlockFlags::NOTIFY_ALL,
-                )
-                .await;
-            world
-                .set_block_state(
-                    &two_below_pos,
-                    props_two_below.to_state_id(block_two_below),
-                    BlockFlags::NOTIFY_ALL,
-                )
-                .await;
+            world.set_block_state(
+                &below_pos,
+                props_below.to_state_id(block_below),
+                BlockFlags::NOTIFY_ALL,
+            );
+            world.set_block_state(
+                &two_below_pos,
+                props_two_below.to_state_id(block_two_below),
+                BlockFlags::NOTIFY_ALL,
+            );
         }
     }
 
@@ -197,9 +181,7 @@ async fn update_leaves_and_grow(world: Arc<World>, position: &BlockPos) {
         !((bamboo_count < 11 || rand::rng().random::<f32>() >= 0.25) && bamboo_count != 15),
     );
 
-    world
-        .set_block_state(&above_pos, props.to_state_id(block), BlockFlags::NOTIFY_ALL)
-        .await;
+    world.set_block_state(&above_pos, props.to_state_id(block), BlockFlags::NOTIFY_ALL);
 }
 
 fn count_bamboo_below(world: &World, pos: &BlockPos) -> usize {
@@ -232,12 +214,12 @@ fn count_bamboo_above(world: &World, pos: &BlockPos) -> usize {
     bamboo_count
 }
 
-async fn bone_meal(world: Arc<World>, position: &BlockPos) {
-    let bamboo_below = count_bamboo_below(&world, position);
+fn bone_meal(world: &Arc<World>, position: &BlockPos) {
+    let bamboo_below = count_bamboo_below(world, position);
 
     let growth_amount = rand::rng().random_range(1..=2);
 
-    for (bamboo_above, _) in (count_bamboo_above(&world, position)..).zip(0..growth_amount) {
+    for (bamboo_above, _) in (count_bamboo_above(world, position)..).zip(0..growth_amount) {
         let current_total_height = bamboo_above + bamboo_below + 1;
 
         // `next_pos` is the topmost bamboo of the stalk, so the free space we grow into is the
@@ -245,7 +227,10 @@ async fn bone_meal(world: Arc<World>, position: &BlockPos) {
         let next_pos = position.up_height(bamboo_above as i32);
         let next_state = world.get_block_state(&next_pos);
 
-        if current_total_height >= 16 || !world.get_block_state(&next_pos.up()).is_air() {
+        if current_total_height >= 16
+            || !world.is_in_height_limit(next_pos.up().0.y)
+            || !world.get_block_state(&next_pos.up()).is_air()
+        {
             return;
         }
 
@@ -254,7 +239,7 @@ async fn bone_meal(world: Arc<World>, position: &BlockPos) {
             return;
         }
 
-        update_leaves_and_grow(Arc::clone(&world), &next_pos).await;
+        update_leaves_and_grow(world, &next_pos);
     }
 }
 

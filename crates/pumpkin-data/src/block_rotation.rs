@@ -3,6 +3,8 @@
 //! These transformations are used to rotate and mirror blocks
 //! when placing them in the world, matching vanilla Minecraft behavior.
 
+use crate::BlockDirection;
+use crate::block_properties::HorizontalFacing;
 use pumpkin_util::math::vector3::Vector3;
 use serde::Deserialize;
 
@@ -195,6 +197,31 @@ impl Rotation {
             Self::Clockwise90 | Self::CounterClockwise90 => pumpkin_util::math::vector3::Axis::X,
         }
     }
+
+    /// Rotates a 3D block direction according to this rotation around the Y axis.
+    #[must_use]
+    pub const fn rotate(&self, direction: BlockDirection) -> BlockDirection {
+        if matches!(direction, BlockDirection::Down | BlockDirection::Up) {
+            return direction;
+        }
+        match self {
+            Self::None => direction,
+            Self::Clockwise90 => direction.rotate_clockwise(),
+            Self::Rotate180 => direction.opposite(),
+            Self::CounterClockwise90 => direction.rotate_counter_clockwise(),
+        }
+    }
+
+    /// Rotates a horizontal facing direction according to this rotation.
+    #[must_use]
+    pub const fn rotate_horizontal(&self, facing: HorizontalFacing) -> HorizontalFacing {
+        match self {
+            Self::None => facing,
+            Self::Clockwise90 => facing.rotate_clockwise(),
+            Self::Rotate180 => facing.opposite(),
+            Self::CounterClockwise90 => facing.rotate_counter_clockwise(),
+        }
+    }
 }
 
 /// Mirror transformation for structure templates.
@@ -282,6 +309,76 @@ impl Mirror {
                 Rotation::Rotate180 => Rotation::None,
                 Rotation::CounterClockwise90 => Rotation::CounterClockwise90,
             },
+        }
+    }
+
+    /// Mirrors a 3D block direction according to this mirror plane.
+    #[must_use]
+    pub const fn mirror(&self, direction: BlockDirection) -> BlockDirection {
+        match self {
+            Self::None => direction,
+            Self::LeftRight => match direction {
+                BlockDirection::North => BlockDirection::South,
+                BlockDirection::South => BlockDirection::North,
+                _ => direction,
+            },
+            Self::FrontBack => match direction {
+                BlockDirection::East => BlockDirection::West,
+                BlockDirection::West => BlockDirection::East,
+                _ => direction,
+            },
+        }
+    }
+
+    /// Mirrors a horizontal facing direction according to this mirror plane.
+    #[must_use]
+    pub const fn mirror_horizontal(&self, facing: HorizontalFacing) -> HorizontalFacing {
+        match self {
+            Self::None => facing,
+            Self::LeftRight => match facing {
+                HorizontalFacing::North => HorizontalFacing::South,
+                HorizontalFacing::South => HorizontalFacing::North,
+                _ => facing,
+            },
+            Self::FrontBack => match facing {
+                HorizontalFacing::East => HorizontalFacing::West,
+                HorizontalFacing::West => HorizontalFacing::East,
+                _ => facing,
+            },
+        }
+    }
+
+    /// Returns the rotation required for mirroring a direction with this mirror.
+    #[must_use]
+    pub const fn get_rotation_for_direction(&self, direction: BlockDirection) -> Rotation {
+        match self {
+            Self::LeftRight
+                if matches!(direction, BlockDirection::North | BlockDirection::South) =>
+            {
+                Rotation::Rotate180
+            }
+            Self::FrontBack if matches!(direction, BlockDirection::East | BlockDirection::West) => {
+                Rotation::Rotate180
+            }
+            _ => Rotation::None,
+        }
+    }
+
+    /// Returns the rotation required for mirroring a horizontal facing with this mirror.
+    #[must_use]
+    pub const fn get_rotation_for_horizontal(&self, facing: HorizontalFacing) -> Rotation {
+        match self {
+            Self::LeftRight
+                if matches!(facing, HorizontalFacing::North | HorizontalFacing::South) =>
+            {
+                Rotation::Rotate180
+            }
+            Self::FrontBack
+                if matches!(facing, HorizontalFacing::East | HorizontalFacing::West) =>
+            {
+                Rotation::Rotate180
+            }
+            _ => Rotation::None,
         }
     }
 }

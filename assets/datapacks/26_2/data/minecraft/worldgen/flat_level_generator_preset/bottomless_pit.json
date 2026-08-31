@@ -1,0 +1,23 @@
+{
+  "display": "minecraft:feather",
+  "settings": {
+    "biome": "minecraft:plains",
+    "features": false,
+    "lakes": false,
+    "layers": [
+      {
+        "block": "minecraft:cobblestone",
+        "height": 2
+      },
+      {
+        "block": "minecraft:dirt",
+        "height": 3
+      },
+      {
+        "block": "minecraft:grass_block",
+        "height": 1
+      }
+    ],
+    "structure_overrides": "minecraft:villages"
+  }
+}

@@ -1,4 +1,4 @@
-use pumpkin_data::packet::clientbound::PLAY_SET_SCORE;
+use pumpkin_data::packet::clientbound::play::SET_SCORE;
 use pumpkin_util::text::TextComponent;
 
 use pumpkin_macros::java_packet;
@@ -12,7 +12,7 @@ use crate::{
 ///
 /// This packet is the primary way to manage scoreboard data. In the latest protocol,
 /// it also supports optional custom formatting for how the numeric score is displayed.
-#[java_packet(PLAY_SET_SCORE)]
+#[java_packet(SET_SCORE)]
 pub struct CUpdateScore {
     /// The name of the entity whose score is being updated (e.g., a player's username
     /// or a non-player entry like "Kills").
@@ -63,12 +63,12 @@ impl ClientPacket for CUpdateScore {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        _version: &pumpkin_util::version::JavaMinecraftVersion,
+        version: &pumpkin_util::version::JavaMinecraftVersion,
     ) -> Result<(), WritingError> {
         write.write_string(&self.entity_name)?;
         write.write_string(&self.objective_name)?;
         write.write_var_int(&self.value)?;
-        write.write_option(&self.display_name, |w, t| w.write_slice(&t.encode()))?;
+        write.write_option(&self.display_name, |w, t| w.write_component(t, version))?;
         write.write_option(&self.number_format, |w, n| n.write(w))
     }
 }

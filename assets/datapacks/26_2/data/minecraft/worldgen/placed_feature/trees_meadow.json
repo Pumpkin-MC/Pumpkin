@@ -1,0 +1,23 @@
+{
+  "feature": "minecraft:meadow_trees",
+  "placement": [
+    {
+      "type": "minecraft:rarity_filter",
+      "chance": 100
+    },
+    {
+      "type": "minecraft:in_square"
+    },
+    {
+      "type": "minecraft:surface_water_depth_filter",
+      "max_water_depth": 0
+    },
+    {
+      "type": "minecraft:heightmap",
+      "heightmap": "OCEAN_FLOOR"
+    },
+    {
+      "type": "minecraft:biome"
+    }
+  ]
+}

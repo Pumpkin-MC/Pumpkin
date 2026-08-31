@@ -1,6 +1,8 @@
 use decorator::TreeDecorator;
 use foliage::FoliagePlacer;
 use pumpkin_data::BlockState;
+use pumpkin_data::block_properties::{BlockProperties, OakLeavesLikeProperties};
+use pumpkin_data::tag::Taggable;
 use pumpkin_data::{BlockId, tag};
 use pumpkin_util::{math::position::BlockPos, random::RandomGenerator};
 use root::RootPlacer;
@@ -35,26 +37,19 @@ pub struct TreeNode {
 }
 
 impl TreeFeature {
-    #[expect(clippy::too_many_arguments)]
     pub fn generate<T: GenerationCache>(
         &self,
         block_registry: &dyn WorldPortalExt,
         chunk: &mut T,
-        min_y: i8,
-        height: u16,
-        feature_name: pumpkin_data::placed_feature::PlacedFeature, // This placed feature
         random: &mut RandomGenerator,
         pos: BlockPos,
     ) -> bool {
-        let (log_positions, root_positions, foliage_positions) = self.generate_main(
-            block_registry,
-            chunk,
-            min_y,
-            height,
-            feature_name,
-            random,
-            pos,
-        );
+        let (log_positions, root_positions, foliage_positions) =
+            self.generate_main(block_registry, chunk, random, pos);
+
+        if log_positions.is_empty() && foliage_positions.is_empty() {
+            return false;
+        }
 
         for decorator in &self.decorators {
             decorator.generate(
@@ -66,29 +61,146 @@ impl TreeFeature {
                 &foliage_positions,
             );
         }
+
+        Self::update_leaves(chunk, &log_positions, &root_positions, &foliage_positions);
+
         true
     }
 
+    pub fn update_leaves<T: GenerationCache>(
+        chunk: &mut T,
+        logs: &[BlockPos],
+        roots: &[BlockPos],
+        foliage: &[BlockPos],
+    ) {
+        if logs.is_empty() && foliage.is_empty() {
+            return;
+        }
+
+        let mut min_x = i32::MAX;
+        let mut min_y = i32::MAX;
+        let mut min_z = i32::MAX;
+        let mut max_x = i32::MIN;
+        let mut max_y = i32::MIN;
+        let mut max_z = i32::MIN;
+
+        for pos in logs.iter().chain(roots.iter()).chain(foliage.iter()) {
+            min_x = min_x.min(pos.0.x);
+            min_y = min_y.min(pos.0.y);
+            min_z = min_z.min(pos.0.z);
+            max_x = max_x.max(pos.0.x);
+            max_y = max_y.max(pos.0.y);
+            max_z = max_z.max(pos.0.z);
+        }
+
+        let x_span = (max_x - min_x + 1) as usize;
+        let y_span = (max_y - min_y + 1) as usize;
+        let z_span = (max_z - min_z + 1) as usize;
+
+        let total_size = x_span * y_span * z_span;
+        let mut visited = vec![false; total_size];
+
+        let get_index = |x: i32, y: i32, z: i32| -> Option<usize> {
+            if x < min_x || x > max_x || y < min_y || y > max_y || z < min_z || z > max_z {
+                None
+            } else {
+                let x_idx = (x - min_x) as usize;
+                let y_idx = (y - min_y) as usize;
+                let z_idx = (z - min_z) as usize;
+                Some((x_idx * y_span + y_idx) * z_span + z_idx)
+            }
+        };
+
+        for pos in roots {
+            if let Some(idx) = get_index(pos.0.x, pos.0.y, pos.0.z) {
+                visited[idx] = true;
+            }
+        }
+
+        let mut to_check: [std::collections::HashSet<BlockPos>; 7] = Default::default();
+        for pos in logs {
+            to_check[0].insert(*pos);
+        }
+
+        let mut smallest_distance = 0;
+
+        while smallest_distance < 7 {
+            while smallest_distance < 7 && !to_check[smallest_distance].is_empty() {
+                let Some(pos) = to_check[smallest_distance].iter().next().copied() else {
+                    break;
+                };
+                to_check[smallest_distance].remove(&pos);
+
+                let Some(idx) = get_index(pos.0.x, pos.0.y, pos.0.z) else {
+                    continue;
+                };
+
+                if smallest_distance != 0 {
+                    let (block, state) = chunk.get_block_and_state(&pos);
+                    if OakLeavesLikeProperties::handles_block_id(block.id) {
+                        let mut props = OakLeavesLikeProperties::from_state_id(state.id, block);
+                        props.distance = smallest_distance as u8;
+                        let new_state = &block.states[props.to_index() as usize];
+                        chunk.set_block_state(&pos.0, new_state);
+                    }
+                }
+
+                visited[idx] = true;
+
+                for direction in pumpkin_data::BlockDirection::all() {
+                    let offset = direction.to_offset();
+                    let neighbor_pos = pos.offset(offset);
+                    if let Some(n_idx) =
+                        get_index(neighbor_pos.0.x, neighbor_pos.0.y, neighbor_pos.0.z)
+                        && !visited[n_idx]
+                    {
+                        let (n_block, n_state) = chunk.get_block_and_state(&neighbor_pos);
+                        let distance =
+                            if n_block.has_tag(&tag::Block::MINECRAFT_PREVENTS_NEARBY_LEAF_DECAY) {
+                                Some(0)
+                            } else if OakLeavesLikeProperties::handles_block_id(n_block.id) {
+                                Some(
+                                    OakLeavesLikeProperties::from_state_id(n_state.id, n_block)
+                                        .distance as usize,
+                                )
+                            } else {
+                                None
+                            };
+
+                        if let Some(dist) = distance {
+                            let new_distance = dist.min(smallest_distance + 1);
+                            if new_distance < 7 {
+                                to_check[new_distance].insert(neighbor_pos);
+                                smallest_distance = smallest_distance.min(new_distance);
+                            }
+                        }
+                    }
+                }
+            }
+
+            smallest_distance += 1;
+        }
+    }
+
+    #[must_use]
     pub fn can_replace_or_log(state: &BlockState, id: BlockId) -> bool {
         Self::can_replace(state, id) || id.has_tag(tag::Block::MINECRAFT_LOGS)
     }
 
+    #[must_use]
     pub fn is_air_or_leaves(state: &BlockState, id: BlockId) -> bool {
         state.is_air() || id.has_tag(tag::Block::MINECRAFT_LEAVES)
     }
 
+    #[must_use]
     pub fn can_replace(state: &BlockState, id: BlockId) -> bool {
         state.is_air() || id.has_tag(tag::Block::MINECRAFT_REPLACEABLE_BY_TREES)
     }
 
-    #[expect(clippy::too_many_arguments)]
     fn generate_main<T: GenerationCache>(
         &self,
         block_registry: &dyn WorldPortalExt,
         chunk: &mut T,
-        _min_y: i8,
-        _height: u16,
-        _feature_name: pumpkin_data::placed_feature::PlacedFeature, // This placed feature
         random: &mut RandomGenerator,
         pos: BlockPos,
     ) -> (Vec<BlockPos>, Vec<BlockPos>, Vec<BlockPos>) {

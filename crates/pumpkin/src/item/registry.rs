@@ -31,32 +31,30 @@ impl ItemRegistry {
         }
     }
 
-    pub async fn on_use(&self, stack: &ItemStack, player: &Player) {
+    pub fn on_use(&self, stack: &ItemStack, player: &Player) {
         let item = stack.item;
         let cooldown = stack.get_use_cooldown();
         let cooldown_group = cooldown
             .and_then(|c| c.cooldown_group.clone())
             .unwrap_or_else(|| item.registry_key.to_string());
 
-        if player.is_on_cooldown(&cooldown_group).await {
+        if player.is_on_cooldown(&cooldown_group) {
             return;
         }
 
         let pumpkin_item = self.get_pumpkin_item(item.id);
         if let Some(pumpkin_item) = pumpkin_item {
-            pumpkin_item.normal_use(item, player).await;
+            pumpkin_item.normal_use(item, player);
         }
 
         if let Some(cooldown) = cooldown {
-            player
-                .start_cooldown(cooldown_group, (cooldown.seconds * 20.0) as i32)
-                .await;
+            player.start_cooldown(cooldown_group, (cooldown.seconds * 20.0) as i32);
         }
     }
 
-    pub async fn on_stopped_using(&self, stack: &ItemStack, player: &Player) {
+    pub fn on_stopped_using(&self, stack: &ItemStack, player: &Player) {
         if let Some(behaviour) = self.get_pumpkin_item(stack.item.id) {
-            behaviour.on_stopped_using(stack, player).await;
+            behaviour.on_stopped_using(stack, player);
         }
     }
 
@@ -70,7 +68,7 @@ impl ItemRegistry {
     }
 
     #[expect(clippy::too_many_arguments)]
-    pub async fn use_on_block(
+    pub fn use_on_block(
         &self,
         stack: &mut ItemStack,
         player: &Player,
@@ -86,29 +84,23 @@ impl ItemRegistry {
             .and_then(|c| c.cooldown_group.clone())
             .unwrap_or_else(|| stack.item.registry_key.to_string());
 
-        if player.is_on_cooldown(&cooldown_group).await {
+        if player.is_on_cooldown(&cooldown_group) {
             return BlockActionResult::Pass;
         }
 
         let pumpkin_item = self.get_pumpkin_item(stack.item.id);
-        let result = if let Some(pumpkin_item) = pumpkin_item {
-            pumpkin_item
-                .use_on_block(stack, player, location, face, cursor_pos, block, server)
-                .await
-        } else {
-            BlockActionResult::Pass
-        };
+        let result = pumpkin_item.map_or(BlockActionResult::Pass, |pumpkin_item| {
+            pumpkin_item.use_on_block(stack, player, location, face, cursor_pos, block, server)
+        });
 
         if let Some(cooldown) = cooldown {
-            player
-                .start_cooldown(cooldown_group, (cooldown.seconds * 20.0) as i32)
-                .await;
+            player.start_cooldown(cooldown_group, (cooldown.seconds * 20.0) as i32);
         }
 
         result
     }
 
-    pub async fn use_on_entity(
+    pub fn use_on_entity(
         &self,
         stack: &mut ItemStack,
         player: &Player,
@@ -120,19 +112,17 @@ impl ItemRegistry {
             .and_then(|c| c.cooldown_group.clone())
             .unwrap_or_else(|| stack.item.registry_key.to_string());
 
-        if player.is_on_cooldown(&cooldown_group).await {
+        if player.is_on_cooldown(&cooldown_group) {
             return;
         }
 
         let pumpkin_item = self.get_pumpkin_item(stack.item.id);
         if let Some(pumpkin_item) = pumpkin_item {
-            pumpkin_item.use_on_entity(stack, player, entity).await;
+            pumpkin_item.use_on_entity(stack, player, entity);
         }
 
         if let Some(cooldown) = cooldown {
-            player
-                .start_cooldown(cooldown_group, (cooldown.seconds * 20.0) as i32)
-                .await;
+            player.start_cooldown(cooldown_group, (cooldown.seconds * 20.0) as i32);
         }
     }
 

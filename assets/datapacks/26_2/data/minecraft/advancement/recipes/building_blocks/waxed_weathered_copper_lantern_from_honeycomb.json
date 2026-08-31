@@ -1,0 +1,32 @@
+{
+  "parent": "minecraft:recipes/root",
+  "criteria": {
+    "has_the_recipe": {
+      "conditions": {
+        "recipe": "minecraft:waxed_weathered_copper_lantern_from_honeycomb"
+      },
+      "trigger": "minecraft:recipe_unlocked"
+    },
+    "has_weathered_copper_lantern": {
+      "conditions": {
+        "items": [
+          {
+            "items": "minecraft:weathered_copper_lantern"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    }
+  },
+  "requirements": [
+    [
+      "has_the_recipe",
+      "has_weathered_copper_lantern"
+    ]
+  ],
+  "rewards": {
+    "recipes": [
+      "minecraft:waxed_weathered_copper_lantern_from_honeycomb"
+    ]
+  }
+}

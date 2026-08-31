@@ -1,0 +1,32 @@
+{
+  "parent": "minecraft:recipes/root",
+  "criteria": {
+    "has_the_recipe": {
+      "conditions": {
+        "recipe": "minecraft:black_dye_from_wither_rose"
+      },
+      "trigger": "minecraft:recipe_unlocked"
+    },
+    "has_wither_rose": {
+      "conditions": {
+        "items": [
+          {
+            "items": "minecraft:wither_rose"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    }
+  },
+  "requirements": [
+    [
+      "has_the_recipe",
+      "has_wither_rose"
+    ]
+  ],
+  "rewards": {
+    "recipes": [
+      "minecraft:black_dye_from_wither_rose"
+    ]
+  }
+}

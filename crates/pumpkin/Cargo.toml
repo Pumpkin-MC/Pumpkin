@@ -72,11 +72,11 @@ rsa.workspace = true
 # verification & WASM parsing
 ed25519-dalek.workspace = true
 hex.workspace = true
-wasmparser = "0.255"
-wasm-encoder = "0.255"
+wasmparser.workspace = true
+wasm-encoder = "0.257"
 
 # authentication
-ureq = { workspace = true, features = ["json"] }
+reqwest = { workspace = true, features = ["json"] }
 
 sha1.workspace = true
 

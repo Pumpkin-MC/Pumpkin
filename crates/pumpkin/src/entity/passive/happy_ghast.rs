@@ -6,15 +6,13 @@ use std::sync::{
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
-use pumpkin_data::meta_data_type::MetaDataType;
 use pumpkin_data::sound::Sound;
 use pumpkin_data::tag::{self, Taggable};
-use pumpkin_data::tracked_data::TrackedData;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::java::client::play::Metadata;
 
 use crate::entity::{
-    Entity, EntityBase, EntityBaseFuture, NBTStorage, NbtFuture,
+    Entity, EntityBase,
     ageable::{AgeableData, AgeableMob},
     ai::goal::{
         look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal, swim::SwimGoal,
@@ -93,8 +91,7 @@ impl HappyGhastEntity {
         let entity = self.get_entity();
         entity.send_meta_data(
             &[Metadata::new(
-                TrackedData::IS_LEASH_HOLDER,
-                MetaDataType::BOOLEAN,
+                pumpkin_data::tracked_data::happy_ghast::IS_LEASH_HOLDER,
                 is_leash_holder,
             )],
             None,
@@ -107,8 +104,7 @@ impl HappyGhastEntity {
         let entity = self.get_entity();
         entity.send_meta_data(
             &[Metadata::new(
-                TrackedData::STAYS_STILL,
-                MetaDataType::BOOLEAN,
+                pumpkin_data::tracked_data::happy_ghast::STAYS_STILL,
                 stays_still,
             )],
             None,
@@ -122,31 +118,6 @@ impl AgeableMob for HappyGhastEntity {
     }
 }
 
-impl NBTStorage for HappyGhastEntity {
-    fn write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
-        Box::pin(async move {
-            self.mob_entity.living_entity.write_nbt(nbt).await;
-            self.write_ageable_nbt(nbt);
-            self.write_animal_nbt(nbt);
-            nbt.put_int(
-                "still_timeout",
-                self.server_still_timeout.load(Ordering::Relaxed),
-            );
-        })
-    }
-
-    fn read_nbt_non_mut<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
-        Box::pin(async move {
-            self.mob_entity.living_entity.read_nbt_non_mut(nbt).await;
-            self.read_ageable_nbt(nbt);
-            self.read_animal_nbt(nbt);
-            if let Some(timeout) = nbt.get_int("still_timeout") {
-                self.set_server_still_timeout(timeout);
-            }
-        })
-    }
-}
-
 impl Animal for HappyGhastEntity {
     fn is_food(&self, item_stack: &ItemStack) -> bool {
         item_stack
@@ -157,93 +128,98 @@ impl Animal for HappyGhastEntity {
 }
 
 impl Mob for HappyGhastEntity {
+    fn as_ageable(&self) -> Option<&dyn AgeableMob> {
+        Some(self)
+    }
+
+    fn as_animal(&self) -> Option<&dyn Animal> {
+        Some(self)
+    }
+
+    fn mob_write_nbt(&self, nbt: &mut NbtCompound) {
+        nbt.put_int(
+            "still_timeout",
+            self.server_still_timeout.load(Ordering::Relaxed),
+        );
+    }
+
+    fn mob_read_nbt(&self, nbt: &NbtCompound) {
+        if let Some(timeout) = nbt.get_int("still_timeout") {
+            self.set_server_still_timeout(timeout);
+        }
+    }
+
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
     }
 
-    fn mob_tick<'a>(&'a self, _caller: &'a Arc<dyn EntityBase>) -> EntityBaseFuture<'a, ()> {
-        Box::pin(async move {
-            self.ageable_ai_step();
+    fn mob_tick(&self, _caller: &dyn EntityBase) {
+        self.ageable_ai_step();
 
-            let leash_time = self.leash_holder_time.load(Ordering::Relaxed);
-            if leash_time > 0 {
-                self.leash_holder_time.fetch_sub(1, Ordering::Relaxed);
-            }
-            self.set_leash_holder(leash_time > 0);
+        let leash_time = self.leash_holder_time.load(Ordering::Relaxed);
+        if leash_time > 0 {
+            self.leash_holder_time.fetch_sub(1, Ordering::Relaxed);
+        }
+        self.set_leash_holder(leash_time > 0);
 
-            let still_timeout = self.server_still_timeout.load(Ordering::Relaxed);
-            if still_timeout > 0 {
-                let entity = self.get_entity();
-                if entity.age.load(Ordering::Relaxed) > 60 {
-                    self.server_still_timeout.fetch_sub(1, Ordering::Relaxed);
-                }
-                self.sync_stay_still_flag();
-            }
-
-            // Continuous healing
+        let still_timeout = self.server_still_timeout.load(Ordering::Relaxed);
+        if still_timeout > 0 {
             let entity = self.get_entity();
-            if entity.is_alive() {
-                let living = &self.mob_entity.living_entity;
-                let current_health = living.health.load();
-                let max_health = living.get_max_health();
-                if current_health < max_health {
-                    let world = entity.world.load();
-                    let ticks = world.level_time.lock().await.world_age;
-                    let heal_interval = 600;
-                    if ticks % heal_interval == 0 {
-                        living.set_health(current_health + 1.0);
-                    }
+            if entity.age.load(Ordering::Relaxed) > 60 {
+                self.server_still_timeout.fetch_sub(1, Ordering::Relaxed);
+            }
+            self.sync_stay_still_flag();
+        }
+
+        // Continuous healing
+        let entity = self.get_entity();
+        if entity.is_alive() {
+            let living = &self.mob_entity.living_entity;
+            let current_health = living.health.load();
+            let max_health = living.get_max_health();
+            if current_health < max_health {
+                let world = entity.world.load();
+                let ticks = world.get_world_age();
+                let heal_interval = 600;
+                if ticks % heal_interval == 0 {
+                    living.set_health(current_health + 1.0);
                 }
             }
-        })
+        }
     }
 
-    fn mob_init_data_tracker(&self) -> EntityBaseFuture<'_, ()> {
-        Box::pin(async move {
-            let entity = self.get_entity();
-            let is_baby = entity.age.load(Ordering::Relaxed) < 0;
-            if is_baby {
-                entity.send_meta_data(
-                    &[Metadata::new(
-                        TrackedData::BABY_ID,
-                        MetaDataType::BOOLEAN,
-                        true,
-                    )],
-                    None,
-                );
-            }
+    fn mob_init_data_tracker(&self) {
+        let entity = self.get_entity();
+        let is_baby = entity.age.load(Ordering::Relaxed) < 0;
+        if is_baby {
             entity.send_meta_data(
-                &[
-                    Metadata::new(
-                        TrackedData::IS_LEASH_HOLDER,
-                        MetaDataType::BOOLEAN,
-                        self.is_leash_holder.load(Ordering::Relaxed),
-                    ),
-                    Metadata::new(
-                        TrackedData::STAYS_STILL,
-                        MetaDataType::BOOLEAN,
-                        self.stays_still.load(Ordering::Relaxed),
-                    ),
-                ],
+                &[Metadata::new(
+                    pumpkin_data::tracked_data::happy_ghast::BABY_ID,
+                    true,
+                )],
                 None,
             );
-        })
+        }
+        entity.send_meta_data(
+            &[
+                Metadata::new(
+                    pumpkin_data::tracked_data::happy_ghast::IS_LEASH_HOLDER,
+                    self.is_leash_holder.load(Ordering::Relaxed),
+                ),
+                Metadata::new(
+                    pumpkin_data::tracked_data::happy_ghast::STAYS_STILL,
+                    self.stays_still.load(Ordering::Relaxed),
+                ),
+            ],
+            None,
+        );
     }
 
-    fn mob_interact<'a>(
-        &'a self,
-        player: &'a Arc<Player>,
-        item_stack: &'a mut ItemStack,
-    ) -> EntityBaseFuture<'a, bool> {
-        Box::pin(async move {
-            if self.is_baby() {
-                return self
-                    .animal_interact(player, item_stack, Sound::EntityGhastlingAmbient)
-                    .await;
-            }
+    fn mob_interact(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {
+        if self.is_baby() {
+            return self.animal_interact(player, item_stack, Sound::EntityGhastlingAmbient);
+        }
 
-            self.animal_interact(player, item_stack, Sound::EntityHappyGhastAmbient)
-                .await
-        })
+        self.animal_interact(player, item_stack, Sound::EntityHappyGhastAmbient)
     }
 }

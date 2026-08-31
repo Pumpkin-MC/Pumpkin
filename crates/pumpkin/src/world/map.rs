@@ -2,8 +2,7 @@ use crate::entity::player::Player;
 use dashmap::DashMap;
 use pumpkin_data::dimension::Dimension;
 use pumpkin_util::math::{position::BlockPos, vector2::Vector2};
-use std::sync::Arc;
-use tokio::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 pub struct MapManager {
     pub maps: DashMap<i32, Arc<Mutex<MapData>>>,
@@ -50,6 +49,7 @@ pub struct MapData {
     pub center_x: i32,
     pub center_z: i32,
     pub colors: Box<[u8; 128 * 128]>,
+    pub decorations: Vec<MapDecoration>,
     pub dirty: bool,
     pub fully_updated: bool,
 }
@@ -64,6 +64,7 @@ impl MapData {
             center_x: x,
             center_z: z,
             colors: Box::new([0; 128 * 128]),
+            decorations: Vec::new(),
             dirty: true,
             fully_updated: false,
         }
@@ -129,4 +130,12 @@ impl MapData {
             }
         }
     }
+}
+
+pub struct MapDecoration {
+    pub icon_type: i32,
+    pub x: i8,
+    pub z: i8,
+    pub direction: i8,
+    pub display_name: Option<String>,
 }

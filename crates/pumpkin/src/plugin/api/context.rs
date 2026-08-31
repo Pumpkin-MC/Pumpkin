@@ -8,11 +8,11 @@ use crate::{
     LoggerOption, command::client_suggestions, net::ClientPlatform, plugin::PluginMetadata,
     plugin_log,
 };
+use arc_swap::ArcSwap;
 use pumpkin_util::{
     PermissionLvl,
     permission::{Permission, PermissionManager},
 };
-use tokio::sync::RwLock;
 use tracing::Level;
 
 use crate::{
@@ -31,13 +31,13 @@ use super::{EventPriority, Payload};
 /// # Fields
 /// - `metadata`: Metadata of the plugin.
 /// - `server`: A reference to the server on which the plugin operates.
-/// - `handlers`: A map of event handlers, protected by a read-write lock for safe access across threads.
+/// - `handlers`: A map of event handlers, wrapped in `ArcSwap` for lock-free read access across threads.
 pub struct Context {
     metadata: PluginMetadata,
     pub server: Arc<Server>,
-    pub handlers: Arc<RwLock<HandlerMap>>,
+    pub handlers: Arc<ArcSwap<HandlerMap>>,
     pub plugin_manager: Arc<PluginManager>,
-    pub permission_manager: Arc<RwLock<PermissionManager>>,
+    pub permission_manager: Arc<PermissionManager>,
     pub logger: Arc<OnceLock<LoggerOption>>,
 }
 impl Context {
@@ -54,7 +54,7 @@ impl Context {
     pub fn new(
         metadata: PluginMetadata,
         server: Arc<Server>,
-        handlers: Arc<RwLock<HandlerMap>>,
+        handlers: Arc<ArcSwap<HandlerMap>>,
         plugin_manager: Arc<PluginManager>,
         logger: Arc<OnceLock<LoggerOption>>,
     ) -> Self {
@@ -154,20 +154,17 @@ impl Context {
         <dyn Payload>::downcast_arc::<T>(service)
     }
 
-    /// Asynchronously registers a command with the server.
+    /// Registers a new command to the server with a specified permission level.
     ///
     /// # Arguments
-    /// - `tree`: The command tree to register.
+    /// - `node`: The command node to register.
     /// - `permission`: The permission level required to execute the command.
-    pub async fn register_command<P: Into<String>>(
+    pub fn register_command<P: Into<String>>(
         &self,
-        tree: crate::command::tree::CommandTree,
+        node: impl Into<crate::command::node::detached::CommandDetachedNode>,
         permission: P,
     ) {
         let permission = permission.into();
-
-        let mut tree = tree.clone();
-        tree.source = Some(self.metadata.name.clone());
 
         let full_permission_node = if permission.contains(':') {
             permission
@@ -175,59 +172,99 @@ impl Context {
             format!("{}:{permission}", self.metadata.name)
         };
 
-        {
-            let mut dispatcher_lock = self.server.command_dispatcher.write().await;
-            dispatcher_lock
-                .fallback_dispatcher
-                .register(tree, full_permission_node);
-        };
+        let mut node = node.into();
+        node.meta.source = Some(self.metadata.name.clone());
+        node.owned
+            .requirements
+            .0
+            .push(crate::command::node::Requirement(Arc::new(move |source| {
+                source.has_permission(&full_permission_node)
+            })));
 
-        self.reload_commands_for_everyone().await;
+        self.server.command_dispatcher.rcu(|dispatcher| {
+            let mut new_dispatcher = (**dispatcher).clone();
+            new_dispatcher.register(node.clone());
+            Arc::new(new_dispatcher)
+        });
+
+        self.reload_commands_for_everyone();
     }
 
-    /// Asynchronously unregisters a command from the server.
+    /// Registers a new command with aliases to the server with a specified permission level.
+    pub fn register_command_with_aliases<P: Into<String>>(
+        &self,
+        node: impl Into<crate::command::node::detached::CommandDetachedNode>,
+        aliases: &[String],
+        permission: P,
+    ) {
+        let permission = permission.into();
+
+        let full_permission_node = if permission.contains(':') {
+            permission
+        } else {
+            format!("{}:{permission}", self.metadata.name)
+        };
+
+        let mut node = node.into();
+        node.meta.source = Some(self.metadata.name.clone());
+        node.owned
+            .requirements
+            .0
+            .push(crate::command::node::Requirement(Arc::new(move |source| {
+                source.has_permission(&full_permission_node)
+            })));
+
+        self.server.command_dispatcher.rcu(|dispatcher| {
+            let mut new_dispatcher = (**dispatcher).clone();
+            new_dispatcher.register_with_aliases(node.clone(), aliases);
+            Arc::new(new_dispatcher)
+        });
+
+        self.reload_commands_for_everyone();
+    }
+
+    /// Unregisters a command from the server.
     ///
     /// # Arguments
     /// - `name`: The name of the command to unregister.
-    pub async fn unregister_command(&self, name: &str) {
-        {
-            let mut dispatcher_lock = self.server.command_dispatcher.write().await;
-            dispatcher_lock.fallback_dispatcher.unregister(name);
-        };
+    pub fn unregister_command(&self, name: &str) {
+        self.server.command_dispatcher.rcu(|dispatcher| {
+            let mut new_dispatcher = (**dispatcher).clone();
+            new_dispatcher.disable_command(name.to_string());
+            Arc::new(new_dispatcher)
+        });
 
-        self.reload_commands_for_everyone().await;
+        self.reload_commands_for_everyone();
     }
 
-    /// Asynchronously reloads (resends) all commands for all currently online players.
-    pub async fn reload_commands_for_everyone(&self) {
+    /// Reloads (resends) all commands for all currently online players.
+    pub fn reload_commands_for_everyone(&self) {
         for world in self.server.worlds.load().iter() {
             for player in world.players.load().iter() {
-                self.reload_commands_for(player).await;
+                self.reload_commands_for(player);
             }
         }
     }
 
-    /// Asynchronously reloads (resends) all commands for a particular player on the server.
+    /// Reloads (resends) all commands for a particular player on the server.
     ///
     /// # Arguments
     /// - `player`: The player for which the commands will be reloaded.
-    pub async fn reload_commands_for(&self, player: &Arc<Player>) {
-        let command_dispatcher = self.server.command_dispatcher.read().await;
+    pub fn reload_commands_for(&self, player: &Arc<Player>) {
+        let command_dispatcher = self.server.command_dispatcher.load();
         if let ClientPlatform::Bedrock(_) = player.client.as_ref() {
             client_suggestions::send_bedrock_commands_packet(
                 player,
                 &self.server,
                 &command_dispatcher,
-            )
-            .await;
+            );
         } else {
-            client_suggestions::send_c_commands_packet(player, &self.server, &command_dispatcher)
-                .await;
+            client_suggestions::send_c_commands_packet(player, &self.server, &command_dispatcher);
         }
     }
 
     /// Register a permission for this plugin
-    pub async fn register_permission(&self, permission: Permission) -> Result<(), String> {
+    pub fn register_permission(&self, permission: Permission) -> Result<(), String> {
         // Ensure the permission has the correct namespace
         if !permission
             .node
@@ -239,26 +276,23 @@ impl Context {
             ));
         }
 
-        let registry = &self.permission_manager.read().await.registry;
-        registry.write().await.register_permission(permission)
+        self.permission_manager.register_permission(permission)
     }
 
     /// Check if a player has a permission
-    pub async fn player_has_permission(&self, player_uuid: &uuid::Uuid, permission: &str) -> bool {
-        let permission_manager = self.permission_manager.read().await;
-
+    #[must_use]
+    pub fn player_has_permission(&self, player_uuid: &uuid::Uuid, permission: &str) -> bool {
         // If the player isn't online, we need to find their op level
         let player_op_level = self
             .server
             .get_player_by_uuid(*player_uuid)
             .map_or(PermissionLvl::Zero, |player| player.permission_lvl.load());
 
-        permission_manager
+        self.permission_manager
             .has_permission(player_uuid, permission, player_op_level)
-            .await
     }
 
-    /// Asynchronously registers an event handler for a specific event type.
+    /// Registers an event handler for a specific event type.
     ///
     /// # Type Parameters
     /// - `E`: The event type that the handler will respond to.
@@ -271,7 +305,7 @@ impl Context {
     ///
     /// # Constraints
     /// The handler must implement the `EventHandler<E>` trait.
-    pub async fn register_event<E: Payload + 'static, H>(
+    pub fn register_event<E: Payload + 'static, H>(
         &self,
         handler: Arc<H>,
         priority: EventPriority,
@@ -279,19 +313,21 @@ impl Context {
     ) where
         H: EventHandler<E> + 'static,
     {
-        let mut handlers = self.handlers.write().await;
-
-        let handlers_vec = handlers
-            .entry(E::get_name_static())
-            .or_insert_with(Vec::new);
-
-        let typed_handler = TypedEventHandler {
+        let typed_handler = Arc::new(TypedEventHandler {
             handler,
             priority,
             blocking,
             _phantom: std::marker::PhantomData,
-        };
-        handlers_vec.push(Box::new(typed_handler));
+        });
+
+        self.handlers.rcu(|handlers| {
+            let mut new_handlers = (**handlers).clone();
+            new_handlers
+                .entry(E::get_name_static())
+                .or_default()
+                .push(typed_handler.clone());
+            Arc::new(new_handlers)
+        });
     }
 
     /// Registers a custom plugin loader that can load additional plugin types.
@@ -318,9 +354,9 @@ impl Context {
         &self,
         loader: Arc<dyn crate::plugin::loader::PluginLoader>,
     ) -> bool {
-        let before_count = self.plugin_manager.loaded_plugins().await.len();
+        let before_count = self.plugin_manager.loaded_plugins().len();
         self.plugin_manager.add_loader(&self.server, loader).await;
-        let after_count = self.plugin_manager.loaded_plugins().await.len();
+        let after_count = self.plugin_manager.loaded_plugins().len();
 
         // Return true if any new plugins were loaded
         after_count > before_count

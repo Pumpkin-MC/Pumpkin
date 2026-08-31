@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use crate::entity::{
-    Entity, NBTStorage,
+    Entity,
     mob::{Mob, MobEntity, spider::SpiderEntity},
 };
 
@@ -15,8 +15,6 @@ impl CaveSpiderEntity {
         Arc::new(Self { spider })
     }
 }
-
-impl NBTStorage for CaveSpiderEntity {}
 
 impl Mob for CaveSpiderEntity {
     fn get_mob_entity(&self) -> &MobEntity {

@@ -123,6 +123,16 @@ impl FromResourceLocation for &'static Block {
 }
 
 impl Block {
+    #[must_use]
+    pub const fn get_speed_factor(&self) -> f32 {
+        self.velocity_multiplier
+    }
+
+    #[must_use]
+    pub const fn get_jump_velocity_multiplier(&self) -> f32 {
+        self.jump_velocity_multiplier
+    }
+
     pub(crate) fn shape_offset_delta(&self, pos: &BlockPos) -> Vector3<f64> {
         let Some(shape_offset) = self.shape_offset() else {
             return Vector3::new(0.0, 0.0, 0.0);
@@ -251,6 +261,9 @@ impl ShapeOffsetType {
 impl BlockId {
     // depends on generated impl:
     // pub(crate) const BLOCK_COUNT: u16;
+
+    /// The total count of all registered blocks.
+    pub const COUNT: u16 = Self::BLOCK_COUNT;
 
     // SAFETY: There must never be a BlockId where self.0 >= BlockId::BLOCK_COUNT
 

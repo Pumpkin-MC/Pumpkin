@@ -1,17 +1,12 @@
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 
 use crate::entity::projectile::{ProjectileHit, is_projectile};
 use crate::{
-    entity::{
-        Entity, EntityBase, EntityBaseFuture, NBTStorage, living::LivingEntity, player::Player,
-    },
+    entity::{Entity, EntityBase, living::LivingEntity, player::Player},
     server::Server,
 };
 use pumpkin_data::item_stack::ItemStack;
-use pumpkin_data::meta_data_type::MetaDataType;
 use pumpkin_data::sound::{Sound, SoundCategory};
-use pumpkin_data::tracked_data::TrackedData;
 use pumpkin_protocol::java::client::play::Metadata;
 use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::vector3::Vector3;
@@ -47,7 +42,7 @@ impl FishingBobberEntity {
         }
     }
 
-    pub async fn reel_in(&self, player: &Player) -> i32 {
+    pub fn reel_in(&self, player: &Player) -> i32 {
         use pumpkin_data::item::Item;
         let world = self.entity.world.load();
         let hooked_id = self.hooked_entity_id.load(Ordering::Relaxed);
@@ -68,25 +63,21 @@ impl FishingBobberEntity {
 
         if self.bite_countdown.load(Ordering::Relaxed) > 0 {
             // Caught something!
-            player
-                .increment_stat(
-                    pumpkin_data::statistic::StatisticCategory::Custom,
-                    pumpkin_data::statistic::CustomStatistic::FishCaught as i32,
-                    1,
-                )
-                .await;
+            player.increment_stat(
+                pumpkin_data::statistic::StatisticCategory::Custom,
+                pumpkin_data::statistic::CustomStatistic::FishCaught as i32,
+                1,
+            );
 
             // TODO: Use actual loot tables. For now, just give a raw cod.
             let item_stack = ItemStack::new(1, &Item::COD);
             // player.inventory().add_item(item_stack).await; // Need public add_item
 
-            player
-                .trigger_advancement(
-                    crate::entity::player::advancement::trigger::AdvancementTrigger::FishedItem {
-                        item_id: format!("minecraft:{}", item_stack.item.registry_key),
-                    },
-                )
-                .await;
+            player.trigger_advancement(
+                crate::entity::player::advancement::trigger::AdvancementTrigger::FishedItem {
+                    item_id: format!("minecraft:{}", item_stack.item.registry_key),
+                },
+            );
 
             world.play_sound(
                 Sound::EntityExperienceOrbPickup,
@@ -100,7 +91,7 @@ impl FishingBobberEntity {
     }
 
     #[expect(clippy::too_many_lines)]
-    pub async fn process_tick<'a>(&'a self, caller: &'a Arc<dyn EntityBase>, _server: &'a Server) {
+    pub fn process_tick(&self, caller: &dyn EntityBase) {
         let entity = self.get_entity();
         let world = entity.world.load();
 
@@ -188,9 +179,7 @@ impl FishingBobberEntity {
         .expand(0.3, 0.3, 0.3);
 
         // Basic block collision to stop bobber
-        let (block_cols, _) = world
-            .get_block_collisions(search_box, caller.as_ref())
-            .await;
+        let (block_cols, _) = world.get_block_collisions(search_box, caller);
         if !block_cols.is_empty() {
             self.in_ground.store(true, Ordering::Relaxed);
             entity.velocity.store(Vector3::new(0.0, 0.0, 0.0));
@@ -217,8 +206,7 @@ impl FishingBobberEntity {
                     .store(cand.get_entity().entity_id, Ordering::Relaxed);
                 entity.send_meta_data(
                     &[Metadata::new(
-                        TrackedData::HOOKED_ENTITY,
-                        MetaDataType::INT,
+                        pumpkin_data::tracked_data::fishing_bobber::HOOKED_ENTITY,
                         cand.get_entity().entity_id + 1,
                     )],
                     None,
@@ -228,8 +216,6 @@ impl FishingBobberEntity {
         }
     }
 }
-
-impl NBTStorage for FishingBobberEntity {}
 
 impl EntityBase for FishingBobberEntity {
     fn get_entity(&self) -> &Entity {
@@ -243,24 +229,11 @@ impl EntityBase for FishingBobberEntity {
     fn cast_any(&self) -> &dyn std::any::Any {
         self
     }
-
-    fn as_nbt_storage(&self) -> &dyn NBTStorage {
-        self
+    fn on_hit(&self, _hit: ProjectileHit) {
+        self.has_hit.store(true, Ordering::Relaxed);
     }
 
-    fn on_hit(&self, _hit: ProjectileHit) -> EntityBaseFuture<'_, ()> {
-        Box::pin(async move {
-            self.has_hit.store(true, Ordering::Relaxed);
-        })
-    }
-
-    fn tick<'a>(
-        &'a self,
-        caller: &'a Arc<dyn EntityBase>,
-        server: &'a Server,
-    ) -> EntityBaseFuture<'a, ()> {
-        Box::pin(async move {
-            self.process_tick(caller, server).await;
-        })
+    fn tick(&self, caller: &dyn EntityBase, _server: &Server) {
+        self.process_tick(caller);
     }
 }

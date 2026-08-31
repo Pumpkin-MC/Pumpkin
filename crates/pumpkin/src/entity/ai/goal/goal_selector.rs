@@ -22,33 +22,41 @@ impl GoalSelector {
             .push(PrioritizedGoal::new(TypeId::of::<G>(), priority, goal));
     }
 
-    pub async fn remove_goal<G: Goal + 'static>(&mut self, mob: &dyn Mob) {
-        let mut goals_to_remove = Vec::with_capacity(2);
-        for (i, prioritized_goal) in &mut self.goals.iter_mut().enumerate() {
-            if TypeId::of::<G>() == prioritized_goal.type_id {
-                if prioritized_goal.running {
-                    prioritized_goal.stop(mob).await;
+    pub fn remove_goal<G: Goal + 'static>(&mut self, mob: &dyn Mob) {
+        let mut stopped = self.remove_goal_by_type_id(TypeId::of::<G>());
+        for goal in &mut stopped {
+            goal.stop(mob);
+        }
+    }
+
+    pub fn remove_goals<G: Goal + 'static>(&mut self) -> Vec<PrioritizedGoal> {
+        self.remove_goal_by_type_id(TypeId::of::<G>())
+    }
+
+    pub fn remove_goal_by_type_id(&mut self, type_id: TypeId) -> Vec<PrioritizedGoal> {
+        let mut stopped = Vec::new();
+        let mut i = 0;
+        while i < self.goals.len() {
+            if self.goals[i].type_id == type_id {
+                let goal = self.goals.swap_remove(i);
+                for slot in &mut self.goals_by_control {
+                    if *slot == usize::MAX {
+                        continue;
+                    }
+                    if *slot == i {
+                        *slot = usize::MAX;
+                    } else if *slot == self.goals.len() {
+                        *slot = i;
+                    }
                 }
-                goals_to_remove.push(i);
+                if goal.running {
+                    stopped.push(goal);
+                }
+            } else {
+                i += 1;
             }
         }
-
-        for goal_idx in goals_to_remove {
-            self.goals.swap_remove(goal_idx);
-
-            // This is very fast because arrays are on the stack and the compiler knows the size
-            for slot in &mut self.goals_by_control {
-                if *slot == usize::MAX {
-                    continue;
-                }
-                // Update the idx
-                if *slot == goal_idx {
-                    *slot = usize::MAX;
-                } else if *slot > goal_idx {
-                    *slot -= 1;
-                }
-            }
-        }
+        stopped
     }
 
     pub fn clear(&mut self) -> Vec<PrioritizedGoal> {
@@ -87,13 +95,13 @@ impl GoalSelector {
         true
     }
 
-    pub async fn tick(&mut self, mob: &dyn Mob) {
+    pub fn tick(&mut self, mob: &dyn Mob) {
         for prioritized_goal in &mut self.goals {
             if prioritized_goal.running
                 && (Self::uses_any(prioritized_goal, self.disabled_controls)
-                    || !prioritized_goal.should_continue(mob).await)
+                    || !prioritized_goal.should_continue(mob))
             {
-                prioritized_goal.stop(mob).await;
+                prioritized_goal.stop(mob);
             }
         }
 
@@ -107,28 +115,28 @@ impl GoalSelector {
             if !self.goals[i].running
                 && !Self::uses_any(&self.goals[i], self.disabled_controls)
                 && self.can_replace_all(&self.goals[i])
-                && self.goals[i].can_start(mob).await
+                && self.goals[i].can_start(mob)
             {
                 let controls = self.goals[i].controls();
                 for control in Controls::ITER {
                     if controls.get(control) {
                         if let Some(goal) = self.get_goal_by_control(control) {
-                            goal.stop(mob).await;
+                            goal.stop(mob);
                         }
                         self.goals_by_control[control.idx()] = i;
                     }
                 }
-                self.goals[i].start(mob).await;
+                self.goals[i].start(mob);
             }
         }
 
-        self.tick_goals(mob, true).await;
+        self.tick_goals(mob, true);
     }
 
-    pub async fn tick_goals(&mut self, mob: &dyn Mob, tick_all: bool) {
+    pub fn tick_goals(&mut self, mob: &dyn Mob, tick_all: bool) {
         for prioritized_goal in &mut self.goals {
             if prioritized_goal.running && (tick_all || prioritized_goal.should_run_every_tick()) {
-                prioritized_goal.tick(mob).await;
+                prioritized_goal.tick(mob);
             }
         }
     }

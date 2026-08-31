@@ -1,0 +1,8 @@
+{
+  "asset_name": "quartz",
+  "ingredient": "minecraft:quartz",
+  "description": {
+    "translate": "trim_material.minecraft.quartz",
+    "color": "#E3D4C4"
+  }
+}

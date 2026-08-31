@@ -5,7 +5,7 @@ use std::{
     array::from_fn,
     collections::HashMap,
     sync::{
-        Arc, Mutex as StdMutex,
+        Arc, Mutex as StdMutex, RwLock,
         atomic::{AtomicBool, AtomicU16, Ordering},
     },
 };
@@ -29,7 +29,7 @@ pub struct SmokerBlockEntity {
     pub lit_time_remaining: AtomicU16,
     pub lit_total_time: AtomicU16,
 
-    pub items: tokio::sync::RwLock<[ItemStack; Self::INVENTORY_SIZE]>,
+    pub items: RwLock<[ItemStack; Self::INVENTORY_SIZE]>,
 
     /// Tracks recipes used for XP calculation (vanilla `RecipesUsed` NBT format)
     /// Maps result item ID -> craft count
@@ -45,7 +45,7 @@ impl SmokerBlockEntity {
         Self {
             position,
             dirty: AtomicBool::new(false),
-            items: tokio::sync::RwLock::new(from_fn(|_| ItemStack::EMPTY.clone())),
+            items: RwLock::new(from_fn(|_| ItemStack::EMPTY.clone())),
             cooking_total_time: AtomicU16::new(0),
             cooking_time_spent: AtomicU16::new(0),
             lit_total_time: AtomicU16::new(0),

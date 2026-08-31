@@ -1,0 +1,31 @@
+{
+  "values": [
+    "minecraft:nether_wart_block",
+    "minecraft:warped_wart_block",
+    "minecraft:hay_block",
+    "minecraft:dried_kelp_block",
+    "minecraft:target",
+    "minecraft:shroomlight",
+    "minecraft:sponge",
+    "minecraft:wet_sponge",
+    "minecraft:jungle_leaves",
+    "minecraft:oak_leaves",
+    "minecraft:spruce_leaves",
+    "minecraft:dark_oak_leaves",
+    "minecraft:acacia_leaves",
+    "minecraft:birch_leaves",
+    "minecraft:azalea_leaves",
+    "minecraft:flowering_azalea_leaves",
+    "minecraft:mangrove_leaves",
+    "minecraft:sculk_sensor",
+    "minecraft:calibrated_sculk_sensor",
+    "minecraft:moss_block",
+    "minecraft:moss_carpet",
+    "minecraft:sculk",
+    "minecraft:sculk_catalyst",
+    "minecraft:sculk_vein",
+    "minecraft:sculk_shrieker",
+    "minecraft:pink_petals",
+    "minecraft:cherry_leaves"
+  ]
+}

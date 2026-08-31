@@ -4,18 +4,17 @@ use crate::item::registry::should_try_block_placement;
 
 impl BedrockClient {
     #[allow(clippy::too_many_lines, clippy::collapsible_if, clippy::unreachable)]
-    pub async fn handle_inventory_action(
-        &self,
-        player: &Arc<Player>,
-        packet: SInventoryTransaction,
-    ) {
+    pub fn handle_inventory_action(&self, player: &Arc<Player>, packet: SInventoryTransaction) {
         tracing::debug!("handle_inventory_action: packet={:?}", packet);
         let mut inventory_updated = false;
         let mut updates = Vec::new();
         let result = 0u8;
 
         if packet.actions.is_empty() && packet.legacy_request_id.0 != 0 {
-            let mut player_screen_handler = player.player_screen_handler.lock().await;
+            let mut player_screen_handler = player
+                .player_screen_handler
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
             for legacy_slot in &packet.legacy_set_item_slots {
                 let mapped_window_id = match legacy_slot.container_id {
                     28 | 29 => 0,    // HotBar or Inventory
@@ -29,15 +28,13 @@ impl BedrockClient {
                     {
                         let current_stack = player_screen_handler
                             .get_slot(screen_slot)
-                            .get_cloned_stack()
-                            .await;
+                            .get_cloned_stack();
                         if !current_stack.is_empty() {
-                            player.drop_item(current_stack.clone()).await;
+                            player.drop_item(current_stack.clone());
 
                             player_screen_handler
                                 .get_slot(screen_slot)
-                                .set_stack(ItemStack::EMPTY.clone())
-                                .await;
+                                .set_stack(ItemStack::EMPTY.clone());
                             player_screen_handler
                                 .set_received_stack(screen_slot, ItemStack::EMPTY.clone());
 
@@ -58,7 +55,8 @@ impl BedrockClient {
                     }
                 }
             }
-            player_screen_handler.send_content_updates().await;
+            player_screen_handler.send_content_updates();
+            drop(player_screen_handler);
         }
 
         for action in &packet.actions {
@@ -68,7 +66,7 @@ impl BedrockClient {
                 let old_stack = descriptor_to_stack(&action.old_item);
                 let new_stack = descriptor_to_stack(&action.new_item);
                 if old_stack.is_empty() && !new_stack.is_empty() {
-                    player.drop_item(new_stack).await;
+                    player.drop_item(new_stack);
                 }
             } else if let Some(window_id) = action.window_id {
                 if let Some(screen_slot) =
@@ -76,28 +74,28 @@ impl BedrockClient {
                 {
                     let item_stack = descriptor_to_stack(&action.new_item);
 
-                    let mut player_screen_handler = player.player_screen_handler.lock().await;
+                    let mut player_screen_handler = player
+                        .player_screen_handler
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner);
 
                     let is_armor_equipped = player_screen_handler
                         .get_slot(screen_slot)
                         .get_stack()
-                        .await
                         .are_equal(&item_stack);
 
                     if !is_armor_equipped {
                         if (5..9).contains(&screen_slot) {
-                            player
-                                .enqueue_equipment_change(
-                                    &match screen_slot {
-                                        5 => EquipmentSlot::HEAD,
-                                        6 => EquipmentSlot::CHEST,
-                                        7 => EquipmentSlot::LEGS,
-                                        8 => EquipmentSlot::FEET,
-                                        _ => unreachable!(),
-                                    },
-                                    &item_stack,
-                                )
-                                .await;
+                            player.enqueue_equipment_change(
+                                &match screen_slot {
+                                    5 => EquipmentSlot::HEAD,
+                                    6 => EquipmentSlot::CHEST,
+                                    7 => EquipmentSlot::LEGS,
+                                    8 => EquipmentSlot::FEET,
+                                    _ => unreachable!(),
+                                },
+                                &item_stack,
+                            );
                         } else if (36..45).contains(&screen_slot) {
                             let hotbar_slot = screen_slot - 36;
                             if player.inventory().get_selected_slot() == hotbar_slot as u8 {
@@ -109,10 +107,10 @@ impl BedrockClient {
 
                     player_screen_handler
                         .get_slot(screen_slot)
-                        .set_stack(item_stack.clone())
-                        .await;
+                        .set_stack(item_stack.clone());
                     player_screen_handler.set_received_stack(screen_slot, item_stack);
-                    player_screen_handler.send_content_updates().await;
+                    player_screen_handler.send_content_updates();
+                    drop(player_screen_handler);
 
                     inventory_updated = true;
                 }
@@ -120,23 +118,23 @@ impl BedrockClient {
         }
 
         if inventory_updated {
-            self.enqueue_packet(&CInventoryContent {
+            let slots = player
+                .inventory()
+                .main_inventory
+                .read()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .iter()
+                .map(NetworkItemStackDescriptor::from)
+                .collect();
+            self.try_enqueue_client_packet(&CInventoryContent {
                 container_id: VarUInt(0),
-                slots: player
-                    .inventory()
-                    .main_inventory
-                    .read()
-                    .await
-                    .iter()
-                    .map(NetworkItemStackDescriptor::from)
-                    .collect(),
+                slots,
                 full_container_name: FullContainerName {
                     container_name: ContainerName::Inventory,
                     dynamic_id: None,
                 },
                 storage_item: NetworkItemStackDescriptor::default(),
-            })
-            .await;
+            });
         }
 
         match packet.transaction_data {
@@ -170,16 +168,33 @@ impl BedrockClient {
                     // Click block
                     let client_stack = descriptor_to_stack(&data.item_in_hand);
 
-                    let mut held_item = player.inventory().held_item().await;
-                    if !client_stack.is_empty() {
-                        if held_item.is_empty() || held_item.item.id != client_stack.item.id {
-                            held_item = client_stack.clone();
-                        }
+                    let mut held_item = player.inventory().held_item();
+                    if !client_stack.is_empty()
+                        && (held_item.is_empty() || held_item.item.id != client_stack.item.id)
+                    {
+                        held_item = client_stack;
                     }
 
-                    let result = server
-                        .block_registry
-                        .use_with_item(
+                    let result = server.block_registry.use_with_item(
+                        block,
+                        player,
+                        &data.block_position,
+                        &BlockHitResult {
+                            face: &face,
+                            cursor_pos: &data.click_position,
+                        },
+                        &mut held_item,
+                        &EquipmentSlot::MAIN_HAND,
+                        &server,
+                        &world,
+                    );
+
+                    if result.consumes_action() {
+                        return;
+                    }
+
+                    if matches!(result, BlockActionResult::PassToDefaultBlockAction) {
+                        let result = server.block_registry.on_use(
                             block,
                             player,
                             &data.block_position,
@@ -187,32 +202,9 @@ impl BedrockClient {
                                 face: &face,
                                 cursor_pos: &data.click_position,
                             },
-                            &mut held_item,
-                            &EquipmentSlot::MAIN_HAND,
                             &server,
                             &world,
-                        )
-                        .await;
-
-                    if result.consumes_action() {
-                        return;
-                    }
-
-                    if matches!(result, BlockActionResult::PassToDefaultBlockAction) {
-                        let result = server
-                            .block_registry
-                            .on_use(
-                                block,
-                                player,
-                                &data.block_position,
-                                &BlockHitResult {
-                                    face: &face,
-                                    cursor_pos: &data.click_position,
-                                },
-                                &server,
-                                &world,
-                            )
-                            .await;
+                        );
 
                         if result.consumes_action() {
                             return;
@@ -221,18 +213,15 @@ impl BedrockClient {
 
                     let mut stack = held_item;
                     if !stack.is_empty() {
-                        let item_result = server
-                            .item_registry
-                            .use_on_block(
-                                &mut stack,
-                                player,
-                                data.block_position,
-                                face,
-                                data.click_position,
-                                block,
-                                &server,
-                            )
-                            .await;
+                        let item_result = server.item_registry.use_on_block(
+                            &mut stack,
+                            player,
+                            data.block_position,
+                            face,
+                            data.click_position,
+                            block,
+                            &server,
+                        );
 
                         if should_try_block_placement(&item_result) {
                             let item_id = stack.item.id;
@@ -241,42 +230,38 @@ impl BedrockClient {
                                     pumpkin_protocol::java::server::play::SUseItemOn {
                                         hand: VarInt(0),
                                         position: data.block_position,
-                                        face: VarInt(data.block_face),
+                                        face: VarInt(i32::from(data.block_face)),
                                         cursor_pos: data.click_position,
                                         inside_block: false,
                                         is_against_world_border: false,
                                         sequence: VarInt(0),
                                     };
 
-                                if let Ok(Some(_)) = server
-                                    .block_registry
-                                    .place_block(
-                                        player,
-                                        placed_block,
-                                        &server,
-                                        &dummy_use_item_on,
-                                        data.block_position,
-                                        face,
-                                    )
-                                    .await
-                                    && player.gamemode.load() != GameMode::Creative
+                                if let Ok(Some(_)) = server.block_registry.place_block(
+                                    player,
+                                    placed_block,
+                                    &server,
+                                    &dummy_use_item_on,
+                                    data.block_position,
+                                    face,
+                                ) && player.gamemode.load() != GameMode::Creative
                                 {
                                     stack.decrement(1);
                                 }
                             }
                         }
-                        player.inventory().set_held_item(stack).await;
+                        player.inventory().set_held_item(stack);
                     }
                 } else if data.action_type.0 == 1 {
                     // Click air / Use item
                     let client_stack = descriptor_to_stack(&data.item_in_hand);
 
-                    let mut held = player.inventory.held_item().await;
+                    let mut held = player.inventory.held_item();
                     if !client_stack.is_empty()
                         && (held.is_empty() || held.item.id != client_stack.item.id)
                     {
-                        held = client_stack.clone();
-                        player.inventory.set_held_item(held.clone()).await;
+                        held = client_stack;
+                        player.inventory.set_held_item(held.clone());
                     }
 
                     let event = PlayerInteractEvent::new(
@@ -295,7 +280,7 @@ impl BedrockClient {
                                 .cooldown_group
                                 .clone()
                                 .unwrap_or_else(|| held.item.registry_key.to_string());
-                            if player.is_on_cooldown(&group).await {
+                            if player.is_on_cooldown(&group) {
                                 cooldown_active = true;
                             }
                         }
@@ -305,39 +290,46 @@ impl BedrockClient {
                                 || held.get_data_component::<BlocksAttacksImpl>().is_some()
                             {
                                 if let Some(food) = held.get_data_component::<FoodImpl>() {
-                                    if player.abilities.lock().await.invulnerable
+                                    if player
+                                        .abilities
+                                        .lock()
+                                        .unwrap_or_else(std::sync::PoisonError::into_inner)
+                                        .invulnerable
                                         || food.can_always_eat
                                         || player.hunger_manager.level.load() < 20
                                     {
-                                        player
-                                            .living_entity
-                                            .set_active_hand(
-                                                Hand::Left,
-                                                held.clone(),
-                                                held.get_max_use_time(),
-                                            )
-                                            .await;
-                                    }
-                                } else {
-                                    player
-                                        .living_entity
-                                        .set_active_hand(
+                                        player.living_entity.set_active_hand(
                                             Hand::Left,
                                             held.clone(),
                                             held.get_max_use_time(),
-                                        )
-                                        .await;
+                                        );
+                                    }
+                                } else {
+                                    player.living_entity.set_active_hand(
+                                        Hand::Left,
+                                        held.clone(),
+                                        held.get_max_use_time(),
+                                    );
                                 }
                             }
                             if let Some(equippable) = held.get_data_component::<EquippableImpl>() {
-                                let inventory = player.inventory();
-                                let mut equipment_guard = inventory.entity_equipment.lock().await;
-                                let current_equipped = equipment_guard.get(equippable.slot);
-                                if !current_equipped.are_items_and_components_equal(&held) {
-                                    player
-                                        .enqueue_equipment_change(equippable.slot, &held)
-                                        .await;
+                                let should_change = {
+                                    let inventory = player.inventory();
+                                    let equipment_guard = inventory
+                                        .entity_equipment
+                                        .lock()
+                                        .unwrap_or_else(std::sync::PoisonError::into_inner);
+                                    let current_equipped = equipment_guard.get(equippable.slot);
+                                    !current_equipped.are_items_and_components_equal(&held)
+                                };
+                                if should_change {
+                                    player.enqueue_equipment_change(equippable.slot, &held);
 
+                                    let inventory = player.inventory();
+                                    let mut equipment_guard = inventory
+                                        .entity_equipment
+                                        .lock()
+                                        .unwrap_or_else(std::sync::PoisonError::into_inner);
                                     let equip_item = equipment_guard
                                         .equipment
                                         .entry(equippable.slot.clone())
@@ -350,17 +342,18 @@ impl BedrockClient {
                                         held = equip_item.clone();
                                         *equip_item = old_held;
                                     }
-                                    player.inventory().set_held_item(held.clone()).await;
+                                    drop(equipment_guard);
+                                    player.inventory().set_held_item(held.clone());
                                 }
                             }
                         }
                     }
 
-                    send_cancellable! {{
+                    send_cancellable_blocking! {{
                         &server;
                         event;
                         'after: {
-                            server.item_registry.on_use(&stack_for_use, player).await;
+                            server.item_registry.on_use(&stack_for_use, player);
                         }
                     }}
                 }
@@ -373,16 +366,15 @@ impl BedrockClient {
                     0 | 2 => {
                         let world = player.world();
                         if let Some(target) = world.get_entity_by_id(target_runtime_id) {
-                            let mut stack = player.inventory().held_item().await;
-                            if !target.interact(player, &mut stack).await {
+                            let mut stack = player.inventory().held_item();
+                            if !target.interact(player, &mut stack) {
                                 let Some(server) = world.server.upgrade() else {
                                     return;
                                 };
                                 server
                                     .item_registry
-                                    .use_on_entity(&mut stack, player, target)
-                                    .await;
-                                player.inventory().set_held_item(stack).await;
+                                    .use_on_entity(&mut stack, player, target);
+                                player.inventory().set_held_item(stack);
                             }
                         }
                     }
@@ -390,7 +382,7 @@ impl BedrockClient {
                     1 => {
                         let world = player.world();
                         if let Some(target) = world.get_entity_by_id(target_runtime_id) {
-                            player.attack(target).await;
+                            player.attack(&target);
                         }
                     }
                     _ => {
@@ -403,20 +395,25 @@ impl BedrockClient {
                 }
             }
             TransactionData::ReleaseItem(_data) => {
-                let item_in_use = player.living_entity.item_in_use.lock().await.clone();
+                let item_in_use = player
+                    .living_entity
+                    .item_in_use
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .clone();
                 if let Some(stack) = item_in_use {
                     let Some(server) = player.world().server.upgrade() else {
                         return;
                     };
-                    server.item_registry.on_stopped_using(&stack, player).await;
+                    server.item_registry.on_stopped_using(&stack, player);
                 }
-                player.living_entity.clear_active_hand().await;
+                player.living_entity.clear_active_hand();
             }
         }
 
         if packet.legacy_request_id.0 != 0 {
             use pumpkin_protocol::bedrock::client::item_stack_response::{
-                CItemStackResponse, ItemStackResponse, ItemStackResponseContainerInfo,
+                CItemStackResponse, ItemStackResponseContainerInfo, ItemStackResponseInfo,
                 ItemStackResponseSlotInfo,
             };
 
@@ -425,15 +422,15 @@ impl BedrockClient {
                 for update in updates {
                     let container_info = container_infos.iter_mut().find(
                         |info: &&mut ItemStackResponseContainerInfo| {
-                            info.container_name == update.container_name
+                            info.full_container_name == update.container_name
                         },
                     );
 
                     let slot_info = ItemStackResponseSlotInfo {
+                        requested_slot: update.slot_id,
                         slot: update.slot_id,
-                        hotbar_slot: update.slot_id,
-                        count: update.count,
-                        item_stack_id: update.stack_id,
+                        amount: update.count,
+                        item_stack_net_id: update.stack_id,
                         custom_name: String::new(),
                         filtered_custom_name: String::new(),
                         durability_correction: VarInt(0),
@@ -443,21 +440,20 @@ impl BedrockClient {
                         info.slots.push(slot_info);
                     } else {
                         container_infos.push(ItemStackResponseContainerInfo {
-                            container_name: update.container_name.clone(),
+                            full_container_name: update.container_name.clone(),
                             slots: vec![slot_info],
                         });
                     }
                 }
             }
 
-            self.enqueue_packet(&CItemStackResponse {
-                responses: vec![ItemStackResponse {
+            self.try_enqueue_client_packet(&CItemStackResponse {
+                responses: vec![ItemStackResponseInfo {
                     result,
-                    request_id: packet.legacy_request_id,
-                    container_infos,
+                    client_request_id: packet.legacy_request_id,
+                    containers: container_infos,
                 }],
-            })
-            .await;
+            });
         }
     }
 }

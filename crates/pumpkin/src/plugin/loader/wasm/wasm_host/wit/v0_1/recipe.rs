@@ -1,8 +1,9 @@
 use crate::plugin::loader::wasm::wasm_host::state::PluginHostState;
 use crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::recipe::{
     CookingRecipe as WitCookingRecipe, CookingType as WitCookingType, Host as RecipeHost,
-    HostRecipeManager, Ingredient as WitIngredient, RecipeManager as WitRecipeManager,
-    ShapedRecipe as WitShapedRecipe, ShapelessRecipe as WitShapelessRecipe,
+    HostRecipeManager, Ingredient as WitIngredient, RecipeCategory as WitRecipeCategory,
+    RecipeManager as WitRecipeManager, ShapedRecipe as WitShapedRecipe,
+    ShapelessRecipe as WitShapelessRecipe,
 };
 use pumpkin_data::recipes::RecipeCategoryTypes;
 use pumpkin_protocol::codec::recipe::{
@@ -17,16 +18,21 @@ impl HostRecipeManager for PluginHostState {
     async fn register_shaped(
         &mut self,
         _res: Resource<WitRecipeManager>,
-        _id: String,
+        id: String,
         recipe: WitShapedRecipe,
     ) -> wasmtime::Result<()> {
         let result_stack = self.get_item_stack(&recipe.output)?;
         let result_stack = result_stack.lock().await;
 
+        let category = recipe
+            .category
+            .map_or(RecipeCategoryTypes::Misc, to_data_category);
+
         let owned_recipe = OwnedCraftingRecipe::Shaped {
-            category: RecipeCategoryTypes::Misc, // TODO: Allow specifying category
+            recipe_id: Some(id),
+            category,
             group: recipe.group,
-            show_notification: true,
+            show_notification: recipe.show_notification.unwrap_or(true),
             key: recipe
                 .key
                 .into_iter()
@@ -45,22 +51,26 @@ impl HostRecipeManager for PluginHostState {
             .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
         server
             .recipe_manager
-            .add_recipe(DynamicRecipe::Crafting(owned_recipe))
-            .await;
+            .add_recipe(DynamicRecipe::Crafting(owned_recipe));
         Ok(())
     }
 
     async fn register_shapeless(
         &mut self,
         _res: Resource<WitRecipeManager>,
-        _id: String,
+        id: String,
         recipe: WitShapelessRecipe,
     ) -> wasmtime::Result<()> {
         let result_stack = self.get_item_stack(&recipe.output)?;
         let result_stack = result_stack.lock().await;
 
+        let category = recipe
+            .category
+            .map_or(RecipeCategoryTypes::Misc, to_data_category);
+
         let owned_recipe = OwnedCraftingRecipe::Shapeless {
-            category: RecipeCategoryTypes::Misc,
+            recipe_id: Some(id),
+            category,
             group: recipe.group,
             ingredients: recipe
                 .ingredients
@@ -79,8 +89,7 @@ impl HostRecipeManager for PluginHostState {
             .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
         server
             .recipe_manager
-            .add_recipe(DynamicRecipe::Crafting(owned_recipe))
-            .await;
+            .add_recipe(DynamicRecipe::Crafting(owned_recipe));
         Ok(())
     }
 
@@ -94,9 +103,13 @@ impl HostRecipeManager for PluginHostState {
         let result_stack = self.get_item_stack(&recipe.output)?;
         let result_stack = result_stack.lock().await;
 
+        let category = recipe
+            .category
+            .map_or(RecipeCategoryTypes::Misc, to_data_category);
+
         let owned_cooking = OwnedCookingRecipe {
             recipe_id: id,
-            category: RecipeCategoryTypes::Misc,
+            category,
             group: recipe.group,
             ingredient: to_owned_ingredient(recipe.ingredient),
             cooking_time: recipe.cooking_time as i32,
@@ -126,7 +139,7 @@ impl HostRecipeManager for PluginHostState {
             .server
             .as_ref()
             .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
-        server.recipe_manager.add_recipe(dynamic_recipe).await;
+        server.recipe_manager.add_recipe(dynamic_recipe);
         Ok(())
     }
 
@@ -135,9 +148,21 @@ impl HostRecipeManager for PluginHostState {
     }
 }
 
+const fn to_data_category(cat: WitRecipeCategory) -> RecipeCategoryTypes {
+    match cat {
+        WitRecipeCategory::Building => RecipeCategoryTypes::Building,
+        WitRecipeCategory::Redstone => RecipeCategoryTypes::Restone,
+        WitRecipeCategory::Equipment => RecipeCategoryTypes::Equipment,
+        WitRecipeCategory::Misc => RecipeCategoryTypes::Misc,
+        WitRecipeCategory::Food => RecipeCategoryTypes::Food,
+        WitRecipeCategory::Blocks => RecipeCategoryTypes::Blocks,
+    }
+}
+
 fn to_owned_ingredient(ing: WitIngredient) -> OwnedRecipeIngredient {
     match ing {
         WitIngredient::Item(id) => OwnedRecipeIngredient::Simple(id),
         WitIngredient::Tag(tag) => OwnedRecipeIngredient::Tagged(tag),
+        WitIngredient::OneOf(items) => OwnedRecipeIngredient::OneOf(items),
     }
 }

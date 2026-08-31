@@ -119,6 +119,12 @@ impl Navigator {
         self.path_start_pos = None;
     }
 
+    fn finish_navigation(&mut self, entity: &LivingEntity) {
+        self.stop();
+        entity.movement_input.store(Vector3::new(0.0, 0.0, 0.0));
+        entity.jumping.store(false, Ordering::Relaxed);
+    }
+
     pub fn set_pathfinding_malus(&mut self, path_type: PathType, malus: f32) {
         self.path_type_overrides.insert(path_type, malus);
     }
@@ -136,12 +142,18 @@ impl Navigator {
         self.mob_height = height;
     }
 
-    #[allow(clippy::too_many_lines)]
-    async fn compute_path(
+    pub fn can_reach_within(
         &mut self,
         entity: &LivingEntity,
         destination: Vector3<f64>,
-    ) -> Option<Path> {
+        distance: f32,
+    ) -> bool {
+        self.compute_path(entity, destination)
+            .is_some_and(|path| path.can_reach() || path.get_dist_to_target() <= distance)
+    }
+
+    #[allow(clippy::too_many_lines)]
+    fn compute_path(&mut self, entity: &LivingEntity, destination: Vector3<f64>) -> Option<Path> {
         let start_pos_f = entity.entity.pos.load();
         let start_block_vec = start_pos_f.to_i32();
         let mob_position = Vector3::new(start_block_vec.x, start_block_vec.y, start_block_vec.z);
@@ -162,7 +174,7 @@ impl Navigator {
 
         self.evaluator.prepare(context, mob_data);
 
-        let mut start_node = self.evaluator.get_start().await?;
+        let mut start_node = self.evaluator.get_start()?;
 
         let mut target = self.evaluator.get_target(destination.to_block_pos());
 
@@ -219,8 +231,7 @@ impl Navigator {
 
             self.neighbors_buf.clear();
             self.evaluator
-                .get_neighbors(&current, &mut self.neighbors_buf)
-                .await;
+                .get_neighbors(&current, &mut self.neighbors_buf);
 
             for mut neighbor in self.neighbors_buf.drain(..) {
                 let step_cost = current.distance(&neighbor);
@@ -310,7 +321,7 @@ impl Navigator {
     }
 
     #[allow(clippy::too_many_lines)]
-    pub async fn tick(&mut self, entity: &LivingEntity) {
+    pub fn tick(&mut self, entity: &LivingEntity) {
         let Some(goal) = self.current_goal.take() else {
             // Idle: stop the mob
             self.is_idle.store(true, Ordering::Relaxed);
@@ -319,9 +330,7 @@ impl Navigator {
         };
 
         if goal.current_progress == goal.destination {
-            self.is_idle.store(true, Ordering::Relaxed);
-            self.current_path = None;
-            entity.movement_input.store(Vector3::new(0.0, 0.0, 0.0));
+            self.finish_navigation(entity);
             return;
         }
 
@@ -331,7 +340,7 @@ impl Navigator {
         }
 
         if self.needs_new_path(&goal) {
-            self.current_path = self.compute_path(entity, goal.destination).await;
+            self.current_path = self.compute_path(entity, goal.destination);
             self.ticks_on_current_node = 0;
             self.last_node_index = 0;
             self.path_start_pos = Some(entity.entity.pos.load());
@@ -339,15 +348,13 @@ impl Navigator {
         }
 
         if self.current_path.is_none() {
-            entity.movement_input.store(Vector3::new(0.0, 0.0, 0.0));
-            self.current_goal = Some(goal);
+            self.finish_navigation(entity);
             return;
         }
 
         if let Some(path) = &mut self.current_path {
             if path.is_done() || !path.is_valid() {
-                entity.movement_input.store(Vector3::new(0.0, 0.0, 0.0));
-                self.current_goal = Some(goal);
+                self.finish_navigation(entity);
                 return;
             }
 
@@ -360,10 +367,7 @@ impl Navigator {
             }
 
             if self.ticks_on_current_node > 100 {
-                self.current_path = None;
-                self.ticks_on_current_node = 0;
-                entity.movement_input.store(Vector3::new(0.0, 0.0, 0.0));
-                self.current_goal = Some(goal);
+                self.finish_navigation(entity);
                 return;
             }
 
@@ -375,10 +379,7 @@ impl Navigator {
                     let dz = current_pos.z - start_pos.z;
                     let dist_sq = dx * dx + dy * dy + dz * dz;
                     if dist_sq < 2.0 * 2.0 {
-                        self.current_path = None;
-                        self.ticks_on_current_node = 0;
-                        entity.movement_input.store(Vector3::new(0.0, 0.0, 0.0));
-                        self.current_goal = Some(goal);
+                        self.finish_navigation(entity);
                         return;
                     }
                 }
@@ -449,9 +450,8 @@ impl Navigator {
                         .store(false, std::sync::atomic::Ordering::SeqCst);
                 }
             } else {
-                self.is_idle.store(true, Ordering::Relaxed);
-                self.current_path = None;
-                entity.movement_input.store(Vector3::new(0.0, 0.0, 0.0));
+                self.finish_navigation(entity);
+                return;
             }
         }
 
@@ -461,5 +461,15 @@ impl Navigator {
     #[must_use]
     pub fn is_idle(&self) -> bool {
         self.is_idle.load(Ordering::Relaxed)
+    }
+
+    #[must_use]
+    pub const fn get_path(&self) -> Option<&Path> {
+        self.current_path.as_ref()
+    }
+
+    #[must_use]
+    pub const fn get_path_mut(&mut self) -> Option<&mut Path> {
+        self.current_path.as_mut()
     }
 }

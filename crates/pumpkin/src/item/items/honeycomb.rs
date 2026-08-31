@@ -1,10 +1,7 @@
-use std::pin::Pin;
 use std::sync::Arc;
-use std::sync::atomic::Ordering;
 
 use crate::block::UseWithItemArgs;
 use crate::block::entities::BlockEntity;
-use crate::block::entities::sign::SignBlockEntity;
 use crate::block::registry::BlockActionResult;
 use crate::entity::player::Player;
 use crate::item::{ItemBehaviour, ItemMetadata};
@@ -31,24 +28,22 @@ impl ItemMetadata for HoneyCombItem {
 }
 
 impl ItemBehaviour for HoneyCombItem {
-    fn use_on_block<'a>(
-        &'a self,
-        _item: &'a mut ItemStack,
-        player: &'a Player,
+    fn use_on_block(
+        &self,
+        _item: &mut ItemStack,
+        player: &Player,
         location: BlockPos,
         _face: BlockDirection,
         _cursor_pos: Vector3<f32>,
-        block: &'a Block,
-        _server: &'a Server,
-    ) -> Pin<Box<dyn Future<Output = BlockActionResult> + Send + 'a>> {
-        Box::pin(async move {
-            let world = player.world();
-            if try_wax_block(&world, location, block).await {
-                BlockActionResult::Success
-            } else {
-                BlockActionResult::Pass
-            }
-        })
+        block: &Block,
+        _server: &Server,
+    ) -> BlockActionResult {
+        let world = player.world();
+        if try_wax_block(&world, location, block) {
+            BlockActionResult::Success
+        } else {
+            BlockActionResult::Pass
+        }
     }
 
     fn as_any(&self) -> &dyn std::any::Any {
@@ -58,7 +53,7 @@ impl ItemBehaviour for HoneyCombItem {
 
 /// Waxes the block at `location` if it has a waxed equivalent, emitting the wax
 /// particles and sound on success.
-pub(crate) async fn try_wax_block(world: &Arc<World>, location: BlockPos, block: &Block) -> bool {
+pub(crate) fn try_wax_block(world: &Arc<World>, location: BlockPos, block: &Block) -> bool {
     let Some(replacement) = get_waxed_equivalent(block.id) else {
         return false;
     };
@@ -80,9 +75,7 @@ pub(crate) async fn try_wax_block(world: &Arc<World>, location: BlockPos, block:
         new_block.default_state.id
     };
 
-    world
-        .set_block_state(&location, new_state_id, BlockFlags::NOTIFY_ALL)
-        .await;
+    world.set_block_state(&location, new_state_id, BlockFlags::NOTIFY_ALL);
     world.sync_world_event(WorldEvent::ParticlesAndSoundWaxOn, location, 0);
     true
 }
@@ -92,9 +85,12 @@ impl HoneyCombItem {
         &self,
         args: &UseWithItemArgs<'_>,
         block_entity: &Arc<dyn BlockEntity>,
-        sign_entity: &SignBlockEntity,
+        sign_entity: &crate::block::entities::sign::SignEntityRef<'_>,
     ) -> BlockActionResult {
-        sign_entity.is_waxed.store(true, Ordering::Relaxed);
+        if sign_entity.is_waxed() {
+            return BlockActionResult::PassToDefaultBlockAction;
+        }
+        sign_entity.set_waxed(true);
 
         args.world.update_block_entity(block_entity);
         args.world

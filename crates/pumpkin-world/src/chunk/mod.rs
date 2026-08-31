@@ -14,7 +14,6 @@ use std::sync::RwLock;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::AtomicU64;
 use thiserror::Error;
-use tokio::sync::Mutex;
 
 pub mod format;
 pub mod io;
@@ -82,6 +81,7 @@ pub struct ChunkData {
     pub blending_data: Option<crate::generation::blender::blending_data::BlendingData>,
     pub dirty: AtomicBool,
     pub inhabited_time: AtomicU64,
+    pub custom_data: std::sync::Mutex<NbtCompound>,
 }
 
 pub struct ChunkEntityData {
@@ -89,7 +89,7 @@ pub struct ChunkEntityData {
     pub x: i32,
     /// Chunk Z
     pub z: i32,
-    pub data: Mutex<Vec<NbtCompound>>,
+    pub data: std::sync::Mutex<Vec<NbtCompound>>,
 
     pub dirty: AtomicBool,
 }
@@ -614,6 +614,7 @@ impl ChunkData {
             blending_data: None,
             dirty: std::sync::atomic::AtomicBool::new(false),
             inhabited_time: std::sync::atomic::AtomicU64::new(0),
+            custom_data: std::sync::Mutex::new(NbtCompound::new()),
         }
     }
 
@@ -914,5 +915,35 @@ mod tests {
         assert!(ChunkHeightmapType::MotionBlockingNoLeaves.is_opaque(stone));
         assert!(!ChunkHeightmapType::MotionBlockingNoLeaves.is_opaque(leaves)); // Excludes leaves
         assert!(ChunkHeightmapType::MotionBlockingNoLeaves.is_opaque(water)); // Water is liquid
+    }
+
+    #[test]
+    fn chunk_custom_data() {
+        use pumpkin_nbt::tag::NbtTag;
+
+        let chunk = super::ChunkData::empty(0, 0);
+        assert!(!chunk.has_custom_data("my_plugin", "test_key"));
+        assert_eq!(chunk.get_custom_data("my_plugin", "test_key"), None);
+
+        chunk.set_custom_data(
+            "my_plugin",
+            "test_key",
+            NbtTag::String("hello_pumpkin".into()),
+        );
+        assert!(chunk.has_custom_data("my_plugin", "test_key"));
+        assert_eq!(
+            chunk.get_custom_data("my_plugin", "test_key"),
+            Some(NbtTag::String("hello_pumpkin".into()))
+        );
+
+        chunk.set_custom_data("my_plugin", "number_key", NbtTag::Int(42));
+        assert_eq!(
+            chunk.get_custom_data("my_plugin", "number_key"),
+            Some(NbtTag::Int(42))
+        );
+
+        chunk.remove_custom_data("my_plugin", "test_key");
+        assert!(!chunk.has_custom_data("my_plugin", "test_key"));
+        assert!(chunk.has_custom_data("my_plugin", "number_key"));
     }
 }

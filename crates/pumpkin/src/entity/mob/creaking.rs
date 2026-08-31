@@ -9,10 +9,8 @@ use pumpkin_data::damage::DamageType;
 use pumpkin_data::data_component_impl::EquipmentSlot;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
-use pumpkin_data::meta_data_type::MetaDataType;
 use pumpkin_data::particle::Particle;
 use pumpkin_data::sound::{Sound, SoundCategory};
-use pumpkin_data::tracked_data::TrackedData;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::java::client::play::{CEntityStatus, Metadata};
 use pumpkin_util::math::position::BlockPos;
@@ -20,7 +18,7 @@ use pumpkin_util::math::vector3::Vector3;
 
 use crate::block::entities::creaking_heart::CreakingHeartBlockEntity;
 use crate::entity::{
-    Entity, EntityBase, EntityBaseFuture, NBTStorage, NbtFuture,
+    Entity, EntityBase,
     ai::goal::{
         active_target::ActiveTargetGoal, look_around::RandomLookAroundGoal,
         look_at_entity::LookAtEntityGoal, melee_attack::MeleeAttackGoal, swim::SwimGoal,
@@ -159,8 +157,7 @@ impl CreakingEntity {
         self.can_move.store(can_move, Ordering::Relaxed);
         self.mob_entity.living_entity.entity.send_meta_data(
             &[Metadata::new(
-                TrackedData::CAN_MOVE,
-                MetaDataType::BOOLEAN,
+                pumpkin_data::tracked_data::creaking::CAN_MOVE,
                 can_move,
             )],
             None,
@@ -175,8 +172,7 @@ impl CreakingEntity {
         self.is_active.store(active, Ordering::Relaxed);
         self.mob_entity.living_entity.entity.send_meta_data(
             &[Metadata::new(
-                TrackedData::IS_ACTIVE,
-                MetaDataType::BOOLEAN,
+                pumpkin_data::tracked_data::creaking::IS_ACTIVE,
                 active,
             )],
             None,
@@ -191,8 +187,7 @@ impl CreakingEntity {
         self.is_tearing_down.store(true, Ordering::Relaxed);
         self.mob_entity.living_entity.entity.send_meta_data(
             &[Metadata::new(
-                TrackedData::IS_TEARING_DOWN,
-                MetaDataType::BOOLEAN,
+                pumpkin_data::tracked_data::creaking::IS_TEARING_DOWN,
                 true,
             )],
             None,
@@ -217,8 +212,7 @@ impl CreakingEntity {
         }
         self.mob_entity.living_entity.entity.send_meta_data(
             &[Metadata::new(
-                TrackedData::HOME_POS,
-                MetaDataType::OPTIONAL_BLOCK_POS,
+                pumpkin_data::tracked_data::creaking::HOME_POS,
                 pos,
             )],
             None,
@@ -233,14 +227,14 @@ impl CreakingEntity {
         }
     }
 
-    pub async fn activate(&self, player: &Arc<Player>) {
-        *self.mob_entity.target.lock().await = Some(player.clone());
+    pub fn activate(&self, player: &Arc<Player>) {
+        self.mob_entity.set_target(Some(player.clone()));
         self.play_sound(Sound::EntityCreakingActivate);
         self.set_is_active(true);
     }
 
-    pub async fn deactivate(&self) {
-        *self.mob_entity.target.lock().await = None;
+    pub fn deactivate(&self) {
+        self.mob_entity.set_target(None);
         self.play_sound(Sound::EntityCreakingDeactivate);
         self.set_is_active(false);
     }
@@ -330,7 +324,7 @@ impl CreakingEntity {
         false
     }
 
-    pub async fn check_can_move(&self) -> bool {
+    pub fn check_can_move(&self) -> bool {
         let entity = &self.mob_entity.living_entity.entity;
         let world = entity.world.load();
         let pos = entity.pos.load();
@@ -339,7 +333,7 @@ impl CreakingEntity {
         let players = world.get_nearby_players(pos, 32.0);
         if players.is_empty() {
             if active {
-                self.deactivate().await;
+                self.deactivate();
             }
             return true;
         }
@@ -359,7 +353,7 @@ impl CreakingEntity {
                     let target_pos = player.get_entity().pos.load();
                     let dist_sq = pos.squared_distance_to(target_pos.x, target_pos.y, target_pos.z);
                     if dist_sq < ACTIVATION_RANGE_SQ {
-                        self.activate(&player).await;
+                        self.activate(&player);
                         return false;
                     }
                 }
@@ -367,13 +361,13 @@ impl CreakingEntity {
         }
 
         if !has_potential_target && active {
-            self.deactivate().await;
+            self.deactivate();
         }
 
         true
     }
 
-    pub async fn tear_down(&self) {
+    pub fn tear_down(&self) {
         let entity = &self.mob_entity.living_entity.entity;
         let world = entity.world.load();
         let pos = entity.pos.load();
@@ -387,7 +381,7 @@ impl CreakingEntity {
         );
 
         self.play_sound(Sound::EntityCreakingDeath);
-        entity.remove().await;
+        entity.remove();
     }
 
     pub fn creaking_death_effects(&self) {
@@ -402,151 +396,134 @@ impl CreakingEntity {
     }
 }
 
-impl NBTStorage for CreakingEntity {
-    fn write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
-        Box::pin(async move {
-            self.mob_entity.living_entity.write_nbt(nbt).await;
-            if let Some(pos) = self.get_home_pos() {
-                let mut sub = NbtCompound::new();
-                sub.put_int("x", pos.0.x);
-                sub.put_int("y", pos.0.y);
-                sub.put_int("z", pos.0.z);
-                nbt.put_compound("home_pos", sub);
-            }
-        })
-    }
-
-    fn read_nbt_non_mut<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
-        Box::pin(async move {
-            self.mob_entity.living_entity.read_nbt_non_mut(nbt).await;
-            if let Some(sub) = nbt.get_compound("home_pos")
-                && let (Some(x), Some(y), Some(z)) =
-                    (sub.get_int("x"), sub.get_int("y"), sub.get_int("z"))
-            {
-                let pos = BlockPos::new(x, y, z);
-                self.set_transient(pos);
-            }
-        })
-    }
-}
-
 impl Mob for CreakingEntity {
+    fn mob_write_nbt(&self, nbt: &mut NbtCompound) {
+        if let Some(pos) = self.get_home_pos() {
+            let mut sub = NbtCompound::new();
+            sub.put_int("x", pos.0.x);
+            sub.put_int("y", pos.0.y);
+            sub.put_int("z", pos.0.z);
+            nbt.put_compound("home_pos", sub);
+        }
+    }
+
+    fn mob_read_nbt(&self, nbt: &NbtCompound) {
+        if let Some(sub) = nbt.get_compound("home_pos")
+            && let (Some(x), Some(y), Some(z)) =
+                (sub.get_int("x"), sub.get_int("y"), sub.get_int("z"))
+        {
+            let pos = BlockPos::new(x, y, z);
+            self.set_transient(pos);
+        }
+    }
+
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
     }
 
-    fn mob_tick<'a>(&'a self, _caller: &'a Arc<dyn EntityBase>) -> EntityBaseFuture<'a, ()> {
-        Box::pin(async move {
-            let entity = &self.mob_entity.living_entity.entity;
-            if !entity.is_alive() {
-                return;
-            }
+    fn mob_tick(&self, _caller: &dyn EntityBase) {
+        let entity = &self.mob_entity.living_entity.entity;
+        if !entity.is_alive() {
+            return;
+        }
 
+        if self
+            .invulnerability_animation_remaining_ticks
+            .load(Ordering::Relaxed)
+            > 0
+        {
+            self.invulnerability_animation_remaining_ticks
+                .fetch_sub(1, Ordering::Relaxed);
+        }
+        if self
+            .attack_animation_remaining_ticks
+            .load(Ordering::Relaxed)
+            > 0
+        {
+            self.attack_animation_remaining_ticks
+                .fetch_sub(1, Ordering::Relaxed);
+        }
+
+        let can_move = self.can_move();
+        let now_can_move = self.check_can_move();
+
+        if now_can_move != can_move {
+            let world = entity.world.load();
+            if now_can_move {
+                world.play_sound_fine(
+                    Sound::EntityCreakingUnfreeze,
+                    SoundCategory::Hostile,
+                    &entity.pos.load(),
+                    1.0,
+                    1.0,
+                );
+            } else {
+                self.stop_in_place();
+                world.play_sound_fine(
+                    Sound::EntityCreakingFreeze,
+                    SoundCategory::Hostile,
+                    &entity.pos.load(),
+                    1.0,
+                    1.0,
+                );
+            }
+            self.set_can_move(now_can_move);
+        }
+
+        // Home Creaking Heart check
+        if let Some(home_pos) = self.get_home_pos() {
+            let world = entity.world.load();
+            let has_protection = world.get_block_entity(&home_pos).is_some_and(|be| {
+                be.as_any()
+                    .downcast_ref::<CreakingHeartBlockEntity>()
+                    .is_some_and(|heart_be| heart_be.is_protector(entity.entity_uuid))
+            });
+
+            if !has_protection {
+                self.mob_entity.living_entity.health.store(0.0);
+            }
+        }
+
+        // Teardown / death tick
+        if self.is_heart_bound() && self.is_tearing_down() {
+            let death_time = self.death_time.fetch_add(1, Ordering::Relaxed) + 1;
+            if death_time > TWITCH_DEATH_DURATION && !entity.is_removed() {
+                self.tear_down();
+            }
+        }
+    }
+
+    fn pre_damage(&self, damage_type: DamageType, _source: Option<&dyn EntityBase>) -> bool {
+        let entity = &self.mob_entity.living_entity.entity;
+
+        if self.is_heart_bound() && damage_type != DamageType::OUT_OF_WORLD {
             if self
                 .invulnerability_animation_remaining_ticks
                 .load(Ordering::Relaxed)
-                > 0
+                <= 0
+                && entity.is_alive()
             {
                 self.invulnerability_animation_remaining_ticks
-                    .fetch_sub(1, Ordering::Relaxed);
-            }
-            if self
-                .attack_animation_remaining_ticks
-                .load(Ordering::Relaxed)
-                > 0
-            {
-                self.attack_animation_remaining_ticks
-                    .fetch_sub(1, Ordering::Relaxed);
-            }
+                    .store(8, Ordering::Relaxed);
 
-            let can_move = self.can_move();
-            let now_can_move = self.check_can_move().await;
-
-            if now_can_move != can_move {
                 let world = entity.world.load();
-                if now_can_move {
-                    world.play_sound_fine(
-                        Sound::EntityCreakingUnfreeze,
-                        SoundCategory::Hostile,
-                        &entity.pos.load(),
-                        1.0,
-                        1.0,
-                    );
-                } else {
-                    self.stop_in_place();
-                    world.play_sound_fine(
-                        Sound::EntityCreakingFreeze,
-                        SoundCategory::Hostile,
-                        &entity.pos.load(),
-                        1.0,
-                        1.0,
-                    );
-                }
-                self.set_can_move(now_can_move);
-            }
+                world.broadcast_to_chunk(
+                    entity.chunk_pos.load(),
+                    &CEntityStatus::new(entity.entity_id, 66),
+                );
 
-            // Home Creaking Heart check
-            if let Some(home_pos) = self.get_home_pos() {
-                let world = entity.world.load();
-                let has_protection = world.get_block_entity(&home_pos).is_some_and(|be| {
-                    be.as_any()
-                        .downcast_ref::<CreakingHeartBlockEntity>()
-                        .is_some_and(|heart_be| heart_be.is_protector(entity.entity_uuid))
-                });
-
-                if !has_protection {
-                    self.mob_entity.living_entity.health.store(0.0);
-                }
-            }
-
-            // Teardown / death tick
-            if self.is_heart_bound() && self.is_tearing_down() {
-                let death_time = self.death_time.fetch_add(1, Ordering::Relaxed) + 1;
-                if death_time > TWITCH_DEATH_DURATION && !entity.is_removed() {
-                    self.tear_down().await;
-                }
-            }
-        })
-    }
-
-    fn pre_damage<'a>(
-        &'a self,
-        damage_type: DamageType,
-        _source: Option<&'a dyn EntityBase>,
-    ) -> EntityBaseFuture<'a, bool> {
-        Box::pin(async move {
-            let entity = &self.mob_entity.living_entity.entity;
-
-            if self.is_heart_bound() && damage_type != DamageType::OUT_OF_WORLD {
-                if self
-                    .invulnerability_animation_remaining_ticks
-                    .load(Ordering::Relaxed)
-                    <= 0
-                    && entity.is_alive()
+                if let Some(home_pos) = self.get_home_pos()
+                    && let Some(be) = world.get_block_entity(&home_pos)
+                    && let Some(heart_be) = be.as_any().downcast_ref::<CreakingHeartBlockEntity>()
+                    && heart_be.is_protector(entity.entity_uuid)
                 {
-                    self.invulnerability_animation_remaining_ticks
-                        .store(8, Ordering::Relaxed);
-
-                    let world = entity.world.load();
-                    world.broadcast_to_chunk(
-                        entity.chunk_pos.load(),
-                        &CEntityStatus::new(entity.entity_id, 66),
-                    );
-
-                    if let Some(home_pos) = self.get_home_pos()
-                        && let Some(be) = world.get_block_entity(&home_pos)
-                        && let Some(heart_be) =
-                            be.as_any().downcast_ref::<CreakingHeartBlockEntity>()
-                        && heart_be.is_protector(entity.entity_uuid)
-                    {
-                        heart_be.creaking_hurt(&world);
-                        self.play_sound(Sound::EntityCreakingSway);
-                    }
+                    heart_be.creaking_hurt(&world);
+                    self.play_sound(Sound::EntityCreakingSway);
                 }
-                // Return false so heart-bound Creaking does not lose health from normal damage
-                return false;
             }
-            true
-        })
+            // Return false so heart-bound Creaking does not lose health from normal damage
+            return false;
+        }
+        true
     }
 }

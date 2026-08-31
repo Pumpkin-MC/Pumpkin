@@ -55,7 +55,7 @@ impl CoralFeature {
                 chunk.set_block_state(&pos.0, block_state);
             }
         }
-        for dir in BlockDirection::horizontal() {
+        for dir in BlockDirection::horizontal_worldgen() {
             let dir_pos = pos.offset(dir.to_offset());
             if random.next_f32() >= 0.2
                 || GenerationCache::get_block_state(chunk, &dir_pos.0).to_block_id() != Block::WATER

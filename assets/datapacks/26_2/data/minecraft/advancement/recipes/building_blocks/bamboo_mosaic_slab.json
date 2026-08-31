@@ -1,0 +1,32 @@
+{
+  "parent": "minecraft:recipes/root",
+  "criteria": {
+    "has_bamboo_mosaic": {
+      "conditions": {
+        "items": [
+          {
+            "items": "minecraft:bamboo_mosaic"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    },
+    "has_the_recipe": {
+      "conditions": {
+        "recipe": "minecraft:bamboo_mosaic_slab"
+      },
+      "trigger": "minecraft:recipe_unlocked"
+    }
+  },
+  "requirements": [
+    [
+      "has_the_recipe",
+      "has_bamboo_mosaic"
+    ]
+  ],
+  "rewards": {
+    "recipes": [
+      "minecraft:bamboo_mosaic_slab"
+    ]
+  }
+}

@@ -1,4 +1,3 @@
-use std::pin::Pin;
 use std::{any::Any, sync::Arc};
 
 use pumpkin_data::{Block, block_properties::BLOCK_ENTITY_TYPES};
@@ -30,6 +29,7 @@ pub mod hopper;
 pub mod jigsaw_block;
 pub mod jukebox;
 pub mod lectern;
+pub mod map;
 pub mod mob_spawner;
 pub mod piston;
 pub mod shulker_box;
@@ -68,16 +68,11 @@ pub use pumpkin_world::block::entities::PropertyDelegate;
 
 //TODO: We need a mark_dirty for chests
 pub trait BlockEntity: Any + Send + Sync {
-    fn write_nbt<'a>(
-        &'a self,
-        nbt: &'a mut NbtCompound,
-    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>>;
+    fn write_nbt(&self, nbt: &mut NbtCompound);
     fn from_nbt(nbt: &NbtCompound, position: BlockPos) -> Self
     where
         Self: Sized;
-    fn tick<'a>(&'a self, _world: &'a Arc<World>) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
-        Box::pin(async {})
-    }
+    fn tick(&self, _world: &Arc<World>) {}
     fn resource_location(&self) -> &'static str;
     fn get_position(&self) -> BlockPos;
 
@@ -96,18 +91,13 @@ pub trait BlockEntity: Any + Send + Sync {
         false
     }
 
-    fn write_internal<'a>(
-        &'a self,
-        nbt: &'a mut NbtCompound,
-    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
-        Box::pin(async move {
-            nbt.put_string("id", self.resource_location().to_string());
-            let position = self.get_position();
-            nbt.put_int("x", position.0.x);
-            nbt.put_int("y", position.0.y);
-            nbt.put_int("z", position.0.z);
-            self.write_nbt(nbt).await;
-        })
+    fn write_internal(&self, nbt: &mut NbtCompound) {
+        nbt.put_string("id", self.resource_location().to_string());
+        let position = self.get_position();
+        nbt.put_int("x", position.0.x);
+        nbt.put_int("y", position.0.y);
+        nbt.put_int("z", position.0.z);
+        self.write_nbt(nbt);
     }
     fn get_id(&self) -> u32 {
         let name = self
@@ -135,20 +125,10 @@ pub trait BlockEntity: Any + Send + Sync {
         None
     }
     fn set_block_state(&mut self, _block_state: BlockStateId) {}
-    fn on_block_replaced<'a>(
-        self: Arc<Self>,
-        world: Arc<World>,
-        position: BlockPos,
-    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>>
-    where
-        Self: 'a,
-    {
-        Box::pin(async move {
-            if let Some(inventory) = self.get_inventory() {
-                // Assuming scatter_inventory is an async method on World
-                world.scatter_inventory(&position, &inventory).await;
-            }
-        })
+    fn on_block_replaced(self: Arc<Self>, world: &Arc<World>, position: &BlockPos) {
+        if let Some(inventory) = self.get_inventory() {
+            world.scatter_inventory(position, &inventory);
+        }
     }
     fn is_dirty(&self) -> bool {
         false
@@ -277,6 +257,7 @@ pub fn block_entity_from_nbt(nbt: &NbtCompound) -> Option<Arc<dyn BlockEntity>> 
         conduit::ConduitBlockEntity::ID => {
             Some(Arc::new(conduit::ConduitBlockEntity::from_nbt(nbt, pos)))
         }
+        map::MAP_BLOCK_ENTITY_ID => Some(Arc::new(map::MapBlockEntity::from_nbt(nbt, pos))),
         campfire::CampfireBlockEntity::ID => {
             Some(Arc::new(campfire::CampfireBlockEntity::from_nbt(nbt, pos)))
         }
@@ -439,6 +420,7 @@ pub fn create_block_entity(
         "potent_sulfur" => Some(Arc::new(potent_sulfur::PotentSulfurBlockEntity::new(
             position,
         ))),
+        "map" => Some(Arc::new(map::MapBlockEntity::new(position, 0))),
         _ => None,
     }
 }
@@ -459,12 +441,10 @@ mod test {
     async fn furnace_contents_survive_a_chunk_round_trip() {
         let position = BlockPos::new(0, 100, 0);
         let furnace = Arc::new(FurnaceBlockEntity::new(position));
-        furnace
-            .set_stack(0, ItemStack::new(5, &Item::DIAMOND))
-            .await;
+        furnace.set_stack(0, ItemStack::new(5, &Item::DIAMOND));
 
         let mut nbt = NbtCompound::new();
-        furnace.write_internal(&mut nbt).await;
+        furnace.write_internal(&mut nbt);
 
         let inventory = block_entity_from_nbt(&nbt).and_then(BlockEntity::get_inventory);
         assert!(
@@ -473,7 +453,7 @@ mod test {
         );
 
         if let Some(inventory) = inventory {
-            let stack = inventory.get_stack(0).await;
+            let stack = inventory.get_stack(0);
             assert_eq!(stack.get_item().id, Item::DIAMOND.id);
             assert_eq!(stack.item_count, 5);
         }

@@ -1,22 +1,18 @@
 use std::sync::{
     Arc, Weak,
-    atomic::{AtomicBool, AtomicU8, Ordering},
+    atomic::{AtomicU8, Ordering},
 };
 
-use crossbeam::atomic::AtomicCell;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
-use pumpkin_data::meta_data_type::MetaDataType;
 use pumpkin_data::tag::{self, Taggable};
-use pumpkin_data::tracked_data::TrackedData;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::java::client::play::Metadata;
-use uuid::Uuid;
 
 use crate::entity::{
-    Entity, EntityBase, EntityBaseFuture, NBTStorage, NbtFuture,
+    Entity, EntityBase,
     ageable::AgeableMob,
     ai::goal::{
         active_target::ActiveTargetGoal, avoid_entity::AvoidEntityGoal, beg::BegGoal,
@@ -27,16 +23,17 @@ use crate::entity::{
         revenge::RevengeGoal, swim::SwimGoal, wander_around::WanderAroundGoal,
     },
     mob::{Mob, MobEntity},
-    passive::animal::Animal,
+    passive::{
+        animal::Animal,
+        tamable::{TamableAnimal, TamableData},
+    },
 };
 
 pub struct WolfEntity {
     pub mob_entity: MobEntity,
     pub variant: AtomicU8,
     pub collar_color: AtomicU8,
-    pub is_tame: AtomicBool,
-    pub is_sitting: AtomicBool,
-    pub owner: AtomicCell<Option<Uuid>>,
+    pub tamable_data: TamableData,
     pub ageable_data: crate::entity::ageable::AgeableData,
 }
 
@@ -47,9 +44,7 @@ impl WolfEntity {
             mob_entity,
             variant: AtomicU8::new(3),       // Default to pale
             collar_color: AtomicU8::new(14), // Default to red
-            is_tame: AtomicBool::new(false),
-            is_sitting: AtomicBool::new(false),
-            owner: AtomicCell::new(None),
+            tamable_data: TamableData::default(),
             ageable_data: crate::entity::ageable::AgeableData::default(),
         };
         let mob_arc = Arc::new(wolf);
@@ -138,10 +133,10 @@ impl WolfEntity {
 
     pub fn get_tame_flags(&self) -> u8 {
         let mut flags = 0u8;
-        if self.is_sitting.load(Ordering::Relaxed) {
+        if self.is_in_sitting_pose() {
             flags |= 0x01;
         }
-        if self.is_tame.load(Ordering::Relaxed) {
+        if self.is_tame() {
             flags |= 0x04;
         }
         flags
@@ -161,87 +156,119 @@ impl Animal for WolfEntity {
     }
 }
 
-impl NBTStorage for WolfEntity {
-    fn write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
-        Box::pin(async {
-            self.mob_entity.living_entity.write_nbt(nbt).await;
-            self.write_ageable_nbt(nbt);
-            self.write_animal_nbt(nbt);
-            let variant_str = match self.variant.load(Ordering::Relaxed) {
-                0 => "minecraft:ashen",
-                1 => "minecraft:black",
-                2 => "minecraft:chestnut",
-                4 => "minecraft:rusty",
-                5 => "minecraft:snowy",
-                6 => "minecraft:spotted",
-                7 => "minecraft:striped",
-                8 => "minecraft:woods",
-                _ => "minecraft:pale",
-            };
-            nbt.put_string("variant", variant_str.to_string());
-            nbt.put_byte(
-                "CollarColor",
-                self.collar_color.load(Ordering::Relaxed) as i8,
-            );
-            nbt.put_bool("IsTame", self.is_tame.load(Ordering::Relaxed));
-            nbt.put_bool("Sitting", self.is_sitting.load(Ordering::Relaxed));
-            if let Some(owner) = self.owner.load() {
-                nbt.put_uuid("Owner", owner);
-            }
-        })
-    }
-
-    fn read_nbt_non_mut<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
-        Box::pin(async {
-            self.mob_entity.living_entity.read_nbt_non_mut(nbt).await;
-            self.read_ageable_nbt(nbt);
-            self.read_animal_nbt(nbt);
-            if let Some(variant_str) = nbt.get_string("variant") {
-                let variant = match variant_str
-                    .strip_prefix("minecraft:")
-                    .unwrap_or(variant_str)
-                {
-                    "ashen" => 0,
-                    "black" => 1,
-                    "chestnut" => 2,
-                    "rusty" => 4,
-                    "snowy" => 5,
-                    "spotted" => 6,
-                    "striped" => 7,
-                    "woods" => 8,
-                    _ => 3,
-                };
-                self.variant.store(variant, Ordering::Relaxed);
-            }
-            if let Some(collar) = nbt.get_byte("CollarColor") {
-                self.collar_color.store(collar as u8, Ordering::Relaxed);
-            } else if let Some(collar_int) = nbt.get_int("CollarColor") {
-                self.collar_color.store(collar_int as u8, Ordering::Relaxed);
-            }
-            if let Some(sitting) = nbt.get_bool("Sitting") {
-                self.is_sitting.store(sitting, Ordering::Relaxed);
-            }
-            if let Some(owner) = nbt.get_uuid("Owner") {
-                self.owner.store(Some(owner));
-                self.is_tame.store(true, Ordering::Relaxed);
-            } else if let Some(is_tame) = nbt.get_bool("IsTame") {
-                self.is_tame.store(is_tame, Ordering::Relaxed);
-            }
-        })
+impl TamableAnimal for WolfEntity {
+    fn get_tamable_data(&self) -> &TamableData {
+        &self.tamable_data
     }
 }
 
 impl Mob for WolfEntity {
+    fn as_ageable(&self) -> Option<&dyn AgeableMob> {
+        Some(self)
+    }
+
+    fn as_animal(&self) -> Option<&dyn Animal> {
+        Some(self)
+    }
+
+    fn as_tamable(&self) -> Option<&dyn TamableAnimal> {
+        Some(self)
+    }
+
+    fn can_attack_with_owner(&self, target: &dyn EntityBase, owner: &dyn EntityBase) -> bool {
+        let target_entity = target.get_entity();
+        let target_type = target_entity.entity_type;
+        if *target_type == EntityType::CREEPER
+            || *target_type == EntityType::GHAST
+            || *target_type == EntityType::ARMOR_STAND
+        {
+            return false;
+        }
+
+        if *target_type == EntityType::WOLF {
+            if let Some(target_mob) = target.get_mob()
+                && let Some(tamable) = target_mob.as_tamable()
+                && tamable.is_tame()
+                && let Some(target_owner) = tamable.get_owner()
+                && let Some(owner_player) = owner.get_player()
+                && target_owner == owner_player.gameprofile.id
+            {
+                return false;
+            }
+            return true;
+        }
+
+        if *target_type == EntityType::PLAYER {
+            if let Some(owner_player) = owner.get_player()
+                && let Some(target_player) = target.get_player()
+            {
+                if owner_player.gameprofile.id == target_player.gameprofile.id {
+                    return false;
+                }
+                let world = target_player.world();
+                if !world.level_info.load().game_rules.pvp {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        if let Some(target_mob) = target.get_mob()
+            && let Some(tamable) = target_mob.as_tamable()
+            && tamable.is_tame()
+        {
+            return false;
+        }
+
+        true
+    }
+
+    fn mob_write_nbt(&self, nbt: &mut NbtCompound) {
+        let variant_str = match self.variant.load(Ordering::Relaxed) {
+            0 => "minecraft:ashen",
+            1 => "minecraft:black",
+            2 => "minecraft:chestnut",
+            4 => "minecraft:rusty",
+            5 => "minecraft:snowy",
+            6 => "minecraft:spotted",
+            7 => "minecraft:striped",
+            8 => "minecraft:woods",
+            _ => "minecraft:pale",
+        };
+        nbt.put_string("variant", variant_str.to_string());
+        nbt.put_byte(
+            "CollarColor",
+            self.collar_color.load(Ordering::Relaxed) as i8,
+        );
+    }
+
+    fn mob_read_nbt(&self, nbt: &NbtCompound) {
+        if let Some(variant_str) = nbt.get_string("variant") {
+            let variant = match variant_str
+                .strip_prefix("minecraft:")
+                .unwrap_or(variant_str)
+            {
+                "ashen" => 0,
+                "black" => 1,
+                "chestnut" => 2,
+                "rusty" => 4,
+                "snowy" => 5,
+                "spotted" => 6,
+                "striped" => 7,
+                "woods" => 8,
+                _ => 3,
+            };
+            self.variant.store(variant, Ordering::Relaxed);
+        }
+        if let Some(collar) = nbt.get_byte("CollarColor") {
+            self.collar_color.store(collar as u8, Ordering::Relaxed);
+        } else if let Some(collar_int) = nbt.get_int("CollarColor") {
+            self.collar_color.store(collar_int as u8, Ordering::Relaxed);
+        }
+    }
+
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
-    }
-
-    fn get_owner_uuid(&self) -> Option<Uuid> {
-        self.owner.load()
-    }
-
-    fn is_sitting(&self) -> bool {
-        self.is_sitting.load(Ordering::Relaxed)
     }
 
     fn mob_set_variant_name(&self, name: &str) {
@@ -259,52 +286,63 @@ impl Mob for WolfEntity {
         self.variant.store(variant, Ordering::Relaxed);
     }
 
-    fn mob_init_data_tracker(&self) -> EntityBaseFuture<'_, ()> {
-        Box::pin(async move {
-            let entity = self.get_entity();
-            let is_baby = entity.age.load(Ordering::Relaxed) < 0;
-            if is_baby {
-                entity.send_meta_data(
-                    &[Metadata::new(
-                        TrackedData::BABY_ID,
-                        MetaDataType::BOOLEAN,
-                        true,
-                    )],
-                    None,
-                );
-            }
+    fn mob_init_data_tracker(&self) {
+        let entity = self.get_entity();
+        let is_baby = entity.age.load(Ordering::Relaxed) < 0;
+        if is_baby {
             entity.send_meta_data(
                 &[Metadata::new(
-                    TrackedData::TAMEABLE_FLAGS,
-                    MetaDataType::BYTE,
-                    self.get_tame_flags(),
+                    pumpkin_data::tracked_data::wolf::BABY_ID,
+                    true,
                 )],
                 None,
             );
-            entity.send_meta_data(
-                &[Metadata::new(
-                    TrackedData::COLLAR_COLOR,
-                    MetaDataType::INT,
-                    VarInt(self.collar_color.load(Ordering::Relaxed) as i32),
-                )],
-                None,
-            );
-            entity.send_meta_data(
-                &[Metadata::new(
-                    TrackedData::WOLF_VARIANT_ID,
-                    MetaDataType::WOLF_VARIANT,
-                    VarInt(self.variant.load(Ordering::Relaxed) as i32),
-                )],
-                None,
-            );
-            entity.send_meta_data(
-                &[Metadata::new(
-                    TrackedData::OWNER_UUID,
-                    MetaDataType::OPTIONAL_UUID,
-                    self.owner.load(),
-                )],
-                None,
-            );
-        })
+        }
+        entity.send_meta_data(
+            &[Metadata::new(
+                pumpkin_data::tracked_data::wolf::TAMEABLE_FLAGS,
+                self.get_tame_flags(),
+            )],
+            None,
+        );
+        entity.send_meta_data(
+            &[Metadata::new(
+                pumpkin_data::tracked_data::wolf::COLLAR_COLOR,
+                VarInt(self.collar_color.load(Ordering::Relaxed) as i32),
+            )],
+            None,
+        );
+        entity.send_meta_data(
+            &[Metadata::new(
+                pumpkin_data::tracked_data::wolf::WOLF_VARIANT_ID,
+                VarInt(self.variant.load(Ordering::Relaxed) as i32),
+            )],
+            None,
+        );
+        entity.send_meta_data(
+            &[Metadata::new(
+                pumpkin_data::tracked_data::wolf::OWNER_UUID,
+                self.get_owner(),
+            )],
+            None,
+        );
+    }
+}
+
+impl WolfEntity {
+    pub fn get_collar_color(&self) -> u8 {
+        self.collar_color.load(Ordering::Relaxed)
+    }
+
+    pub fn set_collar_color(&self, color: u8) {
+        self.collar_color.store(color, Ordering::Relaxed);
+        let entity = self.get_entity();
+        entity.send_meta_data(
+            &[Metadata::new(
+                pumpkin_data::tracked_data::wolf::COLLAR_COLOR,
+                VarInt(color as i32),
+            )],
+            None,
+        );
     }
 }

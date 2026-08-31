@@ -2,8 +2,18 @@
 use super::*;
 
 impl PendingConnection {
-    pub async fn handle_login_acknowledged(&mut self, server: &Server) {
+    pub async fn handle_login_acknowledged(
+        &mut self,
+        server: &Server,
+    ) -> Option<PacketHandlerResult> {
         debug!("Handling login acknowledgement");
+        if !self.version.load().supports_configuration_state() {
+            self.kick(TextComponent::text(
+                "Configuration state not supported for this version",
+            ))
+            .await;
+            return Some(PacketHandlerResult::Stop);
+        }
         self.connection_state.store(ConnectionState::Config);
         self.send_packet_now(&server.get_branding()).await;
 
@@ -89,15 +99,10 @@ impl PendingConnection {
         } else if self.version.load() >= JavaMinecraftVersion::V_1_20_5 {
             self.send_known_packs().await;
         } else {
-            self.handle_known_packs(
-                SKnownPacks {
-                    known_packs: Vec::new(),
-                },
-                server,
-            )
-            .await;
+            self.handle_known_packs().await;
         }
         debug!("login acknowledged");
+        None
     }
 
     pub async fn send_known_packs(&mut self) {

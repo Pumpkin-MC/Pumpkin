@@ -6,8 +6,6 @@ use pumpkin_protocol::java::client::play::Metadata;
 
 use crate::entity::EntityBase;
 use crate::world::loot::{LootContextParameters, LootTableExt};
-use pumpkin_data::meta_data_type::MetaDataType;
-use pumpkin_data::tracked_data::TrackedData;
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_util::GameMode;
 
@@ -37,6 +35,78 @@ impl VehicleEntity {
         let current_damage = self.damage.load();
         if current_damage > 0.0 {
             self.damage.store(current_damage - 1.0);
+        }
+
+        let mut update_event =
+            crate::plugin::api::events::vehicle::vehicle_update::VehicleUpdateEvent::new(
+                self.entity.entity_id,
+            );
+        if let Some(server) = self.entity.world.load().server.upgrade() {
+            server
+                .plugin_manager
+                .fire_blocking(&server, &mut update_event);
+        }
+    }
+
+    pub async fn create(&self) {
+        let mut create_event =
+            crate::plugin::api::events::vehicle::vehicle_create::VehicleCreateEvent::new(
+                self.entity.entity_id,
+            );
+        if let Some(server) = self.entity.world.load().server.upgrade() {
+            server.plugin_manager.fire(&server, &mut create_event).await;
+        }
+    }
+
+    pub async fn move_vehicle(
+        &self,
+        from: pumpkin_util::math::vector3::Vector3<f64>,
+        to: pumpkin_util::math::vector3::Vector3<f64>,
+    ) {
+        let mut move_event =
+            crate::plugin::api::events::vehicle::vehicle_move::VehicleMoveEvent::new(
+                self.entity.entity_id,
+                from,
+                to,
+            );
+        if let Some(server) = self.entity.world.load().server.upgrade() {
+            server.plugin_manager.fire(&server, &mut move_event).await;
+        }
+    }
+
+    pub async fn collide_entity(&self, collided_entity_id: i32) {
+        let mut base_event =
+            crate::plugin::api::events::vehicle::vehicle_collision::VehicleCollisionEvent::new(
+                self.entity.entity_id,
+            );
+        let mut collide_event = crate::plugin::api::events::vehicle::vehicle_entity_collision::VehicleEntityCollisionEvent::new(
+            self.entity.entity_id,
+            collided_entity_id,
+        );
+        if let Some(server) = self.entity.world.load().server.upgrade() {
+            server.plugin_manager.fire(&server, &mut base_event).await;
+            server
+                .plugin_manager
+                .fire(&server, &mut collide_event)
+                .await;
+        }
+    }
+
+    pub async fn collide_block(&self, block_pos: pumpkin_util::math::position::BlockPos) {
+        let mut base_event =
+            crate::plugin::api::events::vehicle::vehicle_collision::VehicleCollisionEvent::new(
+                self.entity.entity_id,
+            );
+        let mut collide_event = crate::plugin::api::events::vehicle::vehicle_block_collision::VehicleBlockCollisionEvent::new(
+            self.entity.entity_id,
+            block_pos,
+        );
+        if let Some(server) = self.entity.world.load().server.upgrade() {
+            server.plugin_manager.fire(&server, &mut base_event).await;
+            server
+                .plugin_manager
+                .fire(&server, &mut collide_event)
+                .await;
         }
     }
 
@@ -68,53 +138,33 @@ impl VehicleEntity {
         self.entity.send_meta_data(
             &[
                 Metadata::new(
-                    TrackedData::DAMAGE_WOBBLE_TICKS,
-                    MetaDataType::INTEGER,
+                    pumpkin_data::tracked_data::boat::ID_HURT,
                     VarInt(self.get_hurt_time()),
                 ),
                 Metadata::new(
-                    TrackedData::DAMAGE_WOBBLE_SIDE,
-                    MetaDataType::INTEGER,
-                    VarInt(self.get_hurt_dir()),
-                ),
-                Metadata::new(
-                    TrackedData::ID_HURT,
-                    MetaDataType::INT,
-                    VarInt(self.get_hurt_time()),
-                ),
-                Metadata::new(
-                    TrackedData::ID_HURTDIR,
-                    MetaDataType::INT,
+                    pumpkin_data::tracked_data::boat::ID_HURTDIR,
                     VarInt(self.get_hurt_dir()),
                 ),
             ],
             None,
         );
         self.entity.send_meta_data(
-            &[
-                Metadata::new(
-                    TrackedData::DAMAGE_WOBBLE_STRENGTH,
-                    MetaDataType::FLOAT,
-                    self.get_damage(),
-                ),
-                Metadata::new(
-                    TrackedData::ID_DAMAGE,
-                    MetaDataType::FLOAT,
-                    self.get_damage(),
-                ),
-            ],
+            &[Metadata::new(
+                pumpkin_data::tracked_data::boat::ID_DAMAGE,
+                self.get_damage(),
+            )],
             None,
         );
     }
 
-    pub async fn kill_and_drop_self(&self) {
+    pub fn kill_and_drop_self(&self) {
         let world = self.entity.world.load();
         let entity_drops = world.level_info.load().game_rules.entity_drops;
 
         if entity_drops && let Some(loot_table) = &self.entity.entity_type.loot_table {
             let pos = self.entity.block_pos.load();
-            let is_raining = world.is_raining().await;
-            let is_thundering = world.is_thundering().await;
+            let is_raining = world.is_raining();
+            let is_thundering = world.is_thundering();
             let params = LootContextParameters {
                 is_raining: Some(is_raining),
                 is_thundering: Some(is_thundering),
@@ -122,16 +172,32 @@ impl VehicleEntity {
                 ..Default::default()
             };
             for stack in loot_table.get_loot(params) {
-                world.drop_stack(&pos, stack).await;
+                world.drop_stack(&pos, stack);
             }
         }
 
-        self.entity.remove().await;
+        self.entity.remove();
     }
 
-    pub async fn damage_with_context(&self, amount: f32, source: Option<&dyn EntityBase>) -> bool {
+    pub fn damage_with_context(&self, amount: f32, source: Option<&dyn EntityBase>) -> bool {
         if !self.entity.is_alive() {
             return true;
+        }
+
+        let attacker_id = source.map(|s| s.get_entity().entity_id);
+        let mut damage_event =
+            crate::plugin::api::events::vehicle::vehicle_damage::VehicleDamageEvent::new(
+                self.entity.entity_id,
+                amount,
+                attacker_id,
+            );
+        if let Some(server) = self.entity.world.load().server.upgrade() {
+            server
+                .plugin_manager
+                .fire_blocking(&server, &mut damage_event);
+        }
+        if damage_event.cancelled {
+            return false;
         }
 
         let new_strength = self.apply_damage_wobble(amount);
@@ -141,10 +207,24 @@ impl VehicleEntity {
             .is_some_and(|p| p.gamemode.load() == GameMode::Creative);
 
         if is_creative || new_strength > 40.0 {
+            let mut destroy_event =
+                crate::plugin::api::events::vehicle::vehicle_destroy::VehicleDestroyEvent::new(
+                    self.entity.entity_id,
+                    attacker_id,
+                );
+            if let Some(server) = self.entity.world.load().server.upgrade() {
+                server
+                    .plugin_manager
+                    .fire_blocking(&server, &mut destroy_event);
+            }
+            if destroy_event.cancelled {
+                return false;
+            }
+
             if is_creative {
-                self.entity.remove().await;
+                self.entity.remove();
             } else {
-                self.kill_and_drop_self().await;
+                self.kill_and_drop_self();
             }
         }
 
@@ -170,8 +250,6 @@ impl VehicleEntity {
 
 #[cfg(test)]
 mod tests {
-    use pumpkin_data::meta_data_type::MetaDataType;
-    use pumpkin_data::tracked_data::TrackedData;
     use pumpkin_protocol::codec::var_int::VarInt;
     use pumpkin_protocol::java::client::play::Metadata;
     use pumpkin_util::version::JavaMinecraftVersion;
@@ -179,18 +257,8 @@ mod tests {
     fn wobble_integer_metadata(version: JavaMinecraftVersion) -> Vec<u8> {
         let mut bytes = Vec::new();
         for metadata in [
-            Metadata::new(
-                TrackedData::DAMAGE_WOBBLE_TICKS,
-                MetaDataType::INTEGER,
-                VarInt(10),
-            ),
-            Metadata::new(
-                TrackedData::DAMAGE_WOBBLE_SIDE,
-                MetaDataType::INTEGER,
-                VarInt(-1),
-            ),
-            Metadata::new(TrackedData::ID_HURT, MetaDataType::INT, VarInt(10)),
-            Metadata::new(TrackedData::ID_HURTDIR, MetaDataType::INT, VarInt(-1)),
+            Metadata::new(pumpkin_data::tracked_data::boat::ID_HURT, VarInt(10)),
+            Metadata::new(pumpkin_data::tracked_data::boat::ID_HURTDIR, VarInt(-1)),
         ] {
             metadata.write(&mut bytes, &version).unwrap();
         }

@@ -1,63 +1,73 @@
-use pumpkin_util::text::{TextComponent, color::NamedColor, hover::HoverEvent};
+use pumpkin_util::PermissionLvl;
+use pumpkin_util::permission::{Permission, PermissionDefault, PermissionRegistry};
+use pumpkin_util::text::TextComponent;
+use pumpkin_util::text::color::NamedColor;
+use pumpkin_util::text::hover::HoverEvent;
 
-use crate::command::{
-    CommandExecutor, CommandResult, CommandSender, args::ConsumedArgs, tree::CommandTree,
-};
+use crate::command::argument_builder::{ArgumentBuilder, command};
+use crate::command::context::command_context::CommandContext;
+use crate::command::node::dispatcher::CommandDispatcher;
+use crate::command::node::{CommandExecutor, CommandExecutorResult};
 
-const NAMES: [&str; 2] = ["pl", "plugins"];
+const DESCRIPTION: &str = "Lists all plugins loaded on the server.";
+const PERMISSION: &str = "pumpkin:command.plugins";
 
-const DESCRIPTION: &str = "List all available plugins.";
+struct PluginsExecutor;
 
-struct Executor;
+impl CommandExecutor for PluginsExecutor {
+    fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
+        let server_arc = context.server();
+        let plugins = server_arc.plugin_manager.active_plugins();
 
-impl CommandExecutor for Executor {
-    fn execute<'a>(
-        &'a self,
-        sender: &'a CommandSender,
-        server: &'a crate::server::Server,
-        _args: &'a ConsumedArgs<'a>,
-    ) -> CommandResult<'a> {
-        Box::pin(async move {
-            let plugins = server.plugin_manager.active_plugins().await;
+        let message_text = if plugins.is_empty() {
+            TextComponent::text("No plugins are loaded on the server.").color_named(NamedColor::Red)
+        } else {
+            let mut base_message = TextComponent::text(format!("Plugins ({}): ", plugins.len()))
+                .color_named(NamedColor::White);
 
-            let message_text = if plugins.is_empty() {
-                "There are no loaded plugins.".to_string()
-            } else if plugins.len() == 1 {
-                "There is 1 plugin loaded:\n".to_string()
-            } else {
-                format!("There are {} plugins loaded:\n", plugins.len())
-            };
-            let mut message = TextComponent::text(message_text);
+            for (i, plugin) in plugins.iter().enumerate() {
+                let name = &plugin.name;
+                let version = plugin.version.strip_prefix('v').unwrap_or(&plugin.version);
+                let author_text = plugin.authors.join(", ");
+                let description = &plugin.description;
 
-            for (i, metadata) in plugins.iter().enumerate() {
-                let version = metadata
-                    .version
-                    .strip_prefix('v')
-                    .unwrap_or(&metadata.version);
-                let line = if i == plugins.len() - 1 {
-                    format!("- {} (v{version})", metadata.name)
-                } else {
-                    format!("- {} (v{version})\n", metadata.name)
-                };
                 let hover_text = format!(
-                    "Version: {}\nAuthors: {}\nDescription: {}",
-                    metadata.version,
-                    metadata.authors.join(", "),
-                    metadata.description
+                    "Version: {version}\nAuthors: {author_text}\nDescription: {description}"
                 );
-                let component = TextComponent::text(line)
+
+                let plugin_component = TextComponent::text(name.clone())
                     .color_named(NamedColor::Green)
                     .hover_event(HoverEvent::show_text(TextComponent::text(hover_text)));
-                message = message.add_child(component);
+
+                if i > 0 {
+                    base_message = base_message
+                        .add_child(TextComponent::text(", ").color_named(NamedColor::White));
+                } else {
+                    base_message = base_message
+                        .add_child(TextComponent::text(" ").color_named(NamedColor::White));
+                }
+                base_message = base_message.add_child(plugin_component);
             }
 
-            sender.send_message(message).await;
+            base_message
+        };
 
-            Ok(plugins.len() as i32)
-        })
+        context.source.send_feedback(message_text, false);
+
+        Ok(1)
     }
 }
 
-pub fn init_command_tree() -> CommandTree {
-    CommandTree::new(NAMES, DESCRIPTION).execute(Executor)
+pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistry) {
+    registry.register_permission_or_panic(Permission::new(
+        PERMISSION,
+        DESCRIPTION,
+        PermissionDefault::Op(PermissionLvl::Three),
+    ));
+
+    dispatcher.register(
+        command("plugins", DESCRIPTION)
+            .requires(PERMISSION)
+            .executes(PluginsExecutor),
+    );
 }

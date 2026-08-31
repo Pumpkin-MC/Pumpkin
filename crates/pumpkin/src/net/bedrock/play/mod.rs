@@ -1,11 +1,12 @@
 use std::{
-    num::{NonZero, NonZeroI32},
+    num::NonZero,
     sync::{Arc, atomic::Ordering},
 };
 
 use pumpkin_data::{
     data_component_impl::{
-        BlocksAttacksImpl, ConsumableImpl, EquipmentSlot, EquippableImpl, FoodImpl,
+        BlocksAttacksImpl, ConsumableImpl, ConsumeAnimation, EquipmentSlot, EquippableImpl,
+        FoodImpl,
     },
     item_stack::ItemStack,
 };
@@ -13,30 +14,28 @@ use pumpkin_inventory::{
     player::player_inventory::PlayerInventory,
     screen_handler::{InventoryPlayer, ScreenHandler},
 };
-use pumpkin_protocol::bedrock::{
-    client::{inventory_content::CInventoryContent, respawn::CRespawn},
-    network_item::{
-        ContainerName, FullContainerName, NetworkItemDescriptor, NetworkItemStackDescriptor,
-    },
-    respawn::RespawnState,
-};
 use pumpkin_protocol::{
     bedrock::{
         client::{
-            chunk_radius_update::CChunkRadiusUpdate, container_open::CContainerOpen,
-            player_hotbar::CPlayerHotbar, update_block::CUpdateBlock,
+            chunk_radius_updated::CChunkRadiusUpdated, container_open::CContainerOpen,
+            inventory_content::CInventoryContent, player_hotbar::CPlayerHotbar,
+            update_block::CUpdateBlock,
+        },
+        network_item::{
+            ContainerName, FullContainerName, NetworkItemDescriptor, NetworkItemStackDescriptor,
         },
         server::{
+            actor_event::{ActorEventID, SActorEvent},
             animate::{AnimateAction, SAnimate},
             block_pick_request::SBlockPickRequest,
             command_request::SCommandRequest,
             container_close::SContainerClose,
             emote::SEmote,
             emote_list::SEmoteList,
-            interaction::{Action, SInteraction},
+            interact::{Action, SInteract},
             inventory_transaction::{SInventoryTransaction, TransactionData},
             mob_equipment::SMobEquipment,
-            player_action::{Action as PlayerAction, SPlayerAction},
+            player_action::{PlayerActionType as PlayerAction, SPlayerAction},
             player_auth_input::{InputData, SPlayerAuthInput},
             request_chunk_radius::SRequestChunkRadius,
             respawn::SRespawn,
@@ -132,6 +131,7 @@ const fn map_bedrock_slot_to_screen_handler(window_id: i32, slot: u32) -> Option
     }
 }
 
+pub mod actor_event;
 pub mod animate;
 pub mod block_pick_request;
 pub mod chat_command;

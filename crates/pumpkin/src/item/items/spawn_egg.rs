@@ -1,5 +1,3 @@
-use std::pin::Pin;
-
 use crate::block::entities::mob_spawner::MobSpawnerBlockEntity;
 use crate::block::registry::BlockActionResult;
 use crate::entity::EntityBase;
@@ -63,20 +61,17 @@ pub(crate) fn apply_entity_variant(item: &ItemStack, mob: &dyn EntityBase) {
 }
 
 impl ItemBehaviour for SpawnEggItem {
-    fn use_on_block<'a>(
-        &'a self,
-        item: &'a mut ItemStack,
-        player: &'a Player,
+    fn use_on_block(
+        &self,
+        item: &mut ItemStack,
+        player: &Player,
         location: BlockPos,
         face: BlockDirection,
         _cursor_pos: Vector3<f32>,
-        _block: &'a Block,
-        _server: &'a Server,
-    ) -> Pin<Box<dyn Future<Output = BlockActionResult> + Send + 'a>> {
-        Box::pin(async move {
-            let Some(entity_type) = entity_from_egg(item.item.id) else {
-                return BlockActionResult::Pass;
-            };
+        _block: &Block,
+        _server: &Server,
+    ) -> BlockActionResult {
+        if let Some(entity_type) = entity_from_egg(item.item.id) {
             let world = player.world();
 
             if let Some(block_entity) = player.world().get_block_entity(&location)
@@ -106,10 +101,12 @@ impl ItemBehaviour for SpawnEggItem {
             apply_entity_variant(item, mob.as_ref());
 
             // Broadcast the new mob to all players
-            world.spawn_entity(mob).await;
+            world.spawn_entity(mob);
             item.decrement_unless_creative(player.gamemode.load(), 1);
             BlockActionResult::Success
-        })
+        } else {
+            BlockActionResult::Pass
+        }
     }
 
     fn as_any(&self) -> &dyn std::any::Any {

@@ -1,8 +1,14 @@
-use std::io::{Error, Read, Write};
+// Last verified for v2169
+
+use std::{
+    io::{Error, Read, Write},
+    str::FromStr,
+};
 
 use pumpkin_macros::packet;
 
 use crate::{
+    bedrock::enum_as_str::EnumAsStr,
     codec::var_ulong::VarULong,
     serial::{PacketRead, PacketWrite},
 };
@@ -39,21 +45,22 @@ impl PacketWrite for AnimateAction {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
-pub enum AnimateSwingSource {
-    None = 1,
-    Build = 2,
-    Mine = 3,
-    Interact = 4,
-    Attack = 5,
-    UseItem = 6,
-    ThrowItem = 7,
-    DropItem = 8,
-    Event = 9,
+pub enum ActorSwingSource {
+    None,
+    Build,
+    Mine,
+    Interact,
+    Attack,
+    UseItem,
+    ThrowItem,
+    DropItem,
+    Event,
 }
 
-impl PacketRead for AnimateSwingSource {
-    fn read<R: Read>(reader: &mut R) -> Result<Self, Error> {
-        match String::read(reader)?.as_str() {
+impl FromStr for ActorSwingSource {
+    type Err = Error;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
             "none" => Ok(Self::None),
             "build" => Ok(Self::Build),
             "mine" => Ok(Self::Mine),
@@ -68,8 +75,9 @@ impl PacketRead for AnimateSwingSource {
     }
 }
 
-impl PacketWrite for AnimateSwingSource {
-    fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
+#[allow(clippy::to_string_trait_impl)]
+impl ToString for ActorSwingSource {
+    fn to_string(&self) -> String {
         match self {
             Self::None => "none",
             Self::Build => "build",
@@ -81,7 +89,7 @@ impl PacketWrite for AnimateSwingSource {
             Self::DropItem => "dropitem",
             Self::Event => "event",
         }
-        .write(writer)
+        .into()
     }
 }
 
@@ -89,9 +97,9 @@ impl PacketWrite for AnimateSwingSource {
 #[packet(44)]
 pub struct SAnimate {
     pub action: AnimateAction,
-    pub runtime_entity_id: VarULong,
+    pub target_actor_runtime_id: VarULong,
     pub data: f32,
-    pub swing_source: Option<AnimateSwingSource>,
+    pub swing_source: Option<EnumAsStr<ActorSwingSource>>,
 }
 
 #[cfg(test)]
@@ -102,9 +110,9 @@ mod tests {
     fn animate_uses_cereal_swing_source_encoding() {
         let packet = SAnimate {
             action: AnimateAction::SwingArm,
-            runtime_entity_id: VarULong(42),
+            target_actor_runtime_id: VarULong(42),
             data: 0.0,
-            swing_source: Some(AnimateSwingSource::Attack),
+            swing_source: Some(ActorSwingSource::Attack.into()),
         };
         let mut encoded = Vec::new();
         packet.write(&mut encoded).unwrap();
@@ -113,16 +121,16 @@ mod tests {
 
         let decoded = SAnimate::read(&mut encoded.as_slice()).unwrap();
         assert_eq!(decoded.action, AnimateAction::SwingArm);
-        assert_eq!(decoded.runtime_entity_id, VarULong(42));
+        assert_eq!(decoded.target_actor_runtime_id, VarULong(42));
         assert_eq!(decoded.data, 0.0);
-        assert_eq!(decoded.swing_source, Some(AnimateSwingSource::Attack));
+        assert_eq!(decoded.swing_source, Some(ActorSwingSource::Attack.into()));
     }
 
     #[test]
     fn animate_omits_absent_swing_source_value() {
         let packet = SAnimate {
             action: AnimateAction::NoAction,
-            runtime_entity_id: VarULong(1),
+            target_actor_runtime_id: VarULong(1),
             data: 0.0,
             swing_source: None,
         };

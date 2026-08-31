@@ -1,0 +1,9 @@
+{
+  "type": "minecraft:smelting",
+  "category": "blocks",
+  "experience": 0.1,
+  "ingredient": "minecraft:cobblestone",
+  "result": {
+    "id": "minecraft:stone"
+  }
+}

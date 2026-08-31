@@ -8,19 +8,11 @@ use tokio::sync::Mutex;
 use wasmtime::component::ResourceTable;
 use wasmtime_wasi::{WasiCtx, WasiCtxBuilder, WasiCtxView, WasiView};
 use wasmtime_wasi_http::{
-    WasiHttpCtx,
-    p2::{
-        HttpError, HttpResult, WasiHttpCtxView, WasiHttpHooks, WasiHttpView,
-        bindings::http::types::ErrorCode, default_send_request,
-    },
+    RequestOptions, WasiBody, WasiHttpCtx, WasiHttpCtxView, WasiHttpHooks, WasiHttpView,
 };
 
 use crate::{
-    command::{
-        CommandSender,
-        args::ConsumedArgs,
-        tree::{CommandTree, builder::NonLeafNodeBuilder},
-    },
+    command::CommandSender,
     entity::EntityBase,
     entity::player::Player,
     plugin::{
@@ -31,6 +23,82 @@ use crate::{
     server::{RecipeManager, Server},
     world::World,
 };
+
+pub struct WasmCommand {
+    pub names: Vec<String>,
+    pub builder: crate::command::argument_builder::CommandArgumentBuilder,
+}
+
+impl WasmCommand {
+    #[must_use]
+    pub fn new(names: Vec<String>, description: String) -> Self {
+        let primary = names.first().cloned().unwrap_or_default();
+        let builder = crate::command::argument_builder::command(primary, description);
+        Self { names, builder }
+    }
+
+    #[must_use]
+    pub fn then(mut self, child: WasmCommandNode) -> Self {
+        use crate::command::argument_builder::ArgumentBuilder;
+        self.builder = self.builder.then(child.into_detached_node());
+        self
+    }
+
+    #[must_use]
+    pub fn executes(
+        mut self,
+        executor: impl crate::command::node::CommandExecutor + 'static,
+    ) -> Self {
+        use crate::command::argument_builder::ArgumentBuilder;
+        self.builder = self.builder.executes(executor);
+        self
+    }
+}
+
+pub enum WasmCommandNode {
+    Literal(crate::command::argument_builder::LiteralArgumentBuilder),
+    Argument(crate::command::argument_builder::RequiredArgumentBuilder),
+}
+
+impl WasmCommandNode {
+    #[must_use]
+    pub fn then(self, child: Self) -> Self {
+        use crate::command::argument_builder::ArgumentBuilder;
+        match self {
+            Self::Literal(b) => Self::Literal(b.then(child.into_detached_node())),
+            Self::Argument(b) => Self::Argument(b.then(child.into_detached_node())),
+        }
+    }
+
+    #[must_use]
+    pub fn executes(self, executor: impl crate::command::node::CommandExecutor + 'static) -> Self {
+        use crate::command::argument_builder::ArgumentBuilder;
+        match self {
+            Self::Literal(b) => Self::Literal(b.executes(executor)),
+            Self::Argument(b) => Self::Argument(b.executes(executor)),
+        }
+    }
+
+    #[must_use]
+    pub fn suggests(
+        self,
+        provider: impl crate::command::suggestion::provider::SuggestionProvider + 'static,
+    ) -> Self {
+        match self {
+            Self::Literal(b) => Self::Literal(b),
+            Self::Argument(b) => Self::Argument(b.suggests(provider)),
+        }
+    }
+
+    #[must_use]
+    pub fn into_detached_node(self) -> crate::command::node::detached::DetachedNode {
+        use crate::command::argument_builder::ArgumentBuilder;
+        match self {
+            Self::Literal(b) => crate::command::node::detached::DetachedNode::Literal(b.build()),
+            Self::Argument(b) => crate::command::node::detached::DetachedNode::Argument(b.build()),
+        }
+    }
+}
 
 pub struct WasmResource<T> {
     pub provider: T,
@@ -59,13 +127,62 @@ pub type BossBarResource = WasmResource<
     Arc<Mutex<crate::plugin::loader::wasm::wasm_host::wit::v0_1::boss_bar::PluginBossBar>>,
 >;
 pub type TextComponentResource = WasmResource<TextComponent>;
-pub type CommandResource = WasmResource<CommandTree>;
+pub type CommandResource = WasmResource<WasmCommand>;
 pub type CommandSenderResource = WasmResource<CommandSender>;
-pub type ConsumedArgsResource = WasmResource<OwnedConsumedArgs>;
-pub type CommandNodeResource = WasmResource<NonLeafNodeBuilder>;
+pub type ConsumedArgsResource = WasmResource<HashMap<String, OwnedArg>>;
+pub type CommandNodeResource = WasmResource<WasmCommandNode>;
 pub type ItemStackResource = WasmResource<Arc<Mutex<pumpkin_data::item_stack::ItemStack>>>;
 pub type RecipeManagerResource = WasmResource<Arc<RecipeManager>>;
+pub type EnchantmentManagerResource =
+    WasmResource<Arc<crate::server::enchantment::EnchantmentManager>>;
+pub type OpManagerResource = WasmResource<Arc<Server>>;
+pub type BanManagerResource = WasmResource<Arc<Server>>;
+pub type WhitelistManagerResource = WasmResource<Arc<Server>>;
+pub type DatapackManagerResource = WasmResource<Arc<Server>>;
 pub type BlockEntityResource = WasmResource<Arc<dyn crate::block::entities::BlockEntity>>;
+
+#[derive(Clone)]
+pub enum InventoryProvider {
+    Generic(Arc<dyn pumpkin_world::inventory::Inventory>),
+    PlayerMain(Arc<Player>),
+    PlayerEnderChest(Arc<Player>),
+}
+
+pub type InventoryResource = WasmResource<InventoryProvider>;
+pub type PlayerInventoryResource = WasmResource<Arc<Player>>;
+
+pub type LivingEntityResource = WasmResource<Arc<dyn EntityBase>>;
+pub type MobResource = WasmResource<Arc<dyn EntityBase>>;
+
+#[derive(Clone)]
+pub struct ContainerBlockEntity {
+    pub provider: Arc<dyn crate::block::entities::BlockEntity>,
+    pub inventory: Arc<dyn pumpkin_world::inventory::Inventory>,
+}
+
+pub type ContainerBlockEntityResource = WasmResource<ContainerBlockEntity>;
+
+pub type DisplayEntityResource = WasmResource<Arc<dyn EntityBase>>;
+pub type BlockDisplayEntityResource = WasmResource<Arc<dyn EntityBase>>;
+pub type ItemDisplayEntityResource = WasmResource<Arc<dyn EntityBase>>;
+pub type TextDisplayEntityResource = WasmResource<Arc<dyn EntityBase>>;
+pub type InteractionEntityResource = WasmResource<Arc<dyn EntityBase>>;
+
+#[derive(Clone, Copy)]
+pub struct ChunkBuffer {
+    pub x: i32,
+    pub z: i32,
+    pub min_y: i32,
+    pub height: u32,
+    pub proto_chunk: *mut pumpkin_world::ProtoChunk,
+}
+
+// SAFETY: `ChunkBuffer` encapsulates a raw pointer to a proto chunk that is uniquely accessed during custom world generation phases.
+unsafe impl Send for ChunkBuffer {}
+// SAFETY: `ChunkBuffer` encapsulates a raw pointer to a proto chunk that is uniquely accessed during custom world generation phases.
+unsafe impl Sync for ChunkBuffer {}
+
+pub type ChunkBufferResource = WasmResource<ChunkBuffer>;
 
 pub type OwnedConsumedArgs = HashMap<String, OwnedArg>;
 
@@ -74,10 +191,13 @@ pub struct PluginHostState {
     pub wasi_http_ctx: WasiHttpCtx,
     pub wasi_http_hooks: PluginHttpHooks,
     pub resource_table: ResourceTable,
+    pub limits: wasmtime::StoreLimits,
     pub plugin: Option<Weak<WasmPlugin>>,
     pub server: Option<Arc<Server>>,
     pub permissions: Vec<String>,
     pub name: Option<String>,
+    pub marketplace_metadata:
+        Option<crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::context::MarketplaceMetadata>,
 }
 
 impl Default for PluginHostState {
@@ -98,10 +218,12 @@ impl PluginHostState {
             wasi_http_ctx: WasiHttpCtx::new(),
             wasi_http_hooks: PluginHttpHooks::new(),
             resource_table,
+            limits: wasmtime::StoreLimitsBuilder::new().build(),
             plugin: None,
             server: None,
             permissions: Vec::new(),
             name: None,
+            marketplace_metadata: None,
         }
     }
 
@@ -152,6 +274,24 @@ impl PluginHostState {
         provider: Arc<dyn EntityBase>,
     ) -> wasmtime::Result<wasmtime::component::Resource<T>> {
         let resource = self.resource_table.push(EntityResource { provider })?;
+        Ok(wasmtime::component::Resource::new_own(resource.rep()))
+    }
+
+    pub fn add_living_entity<T>(
+        &mut self,
+        provider: Arc<dyn EntityBase>,
+    ) -> wasmtime::Result<wasmtime::component::Resource<T>> {
+        let resource = self
+            .resource_table
+            .push(LivingEntityResource { provider })?;
+        Ok(wasmtime::component::Resource::new_own(resource.rep()))
+    }
+
+    pub fn add_mob<T>(
+        &mut self,
+        provider: Arc<dyn EntityBase>,
+    ) -> wasmtime::Result<wasmtime::component::Resource<T>> {
+        let resource = self.resource_table.push(MobResource { provider })?;
         Ok(wasmtime::component::Resource::new_own(resource.rep()))
     }
 
@@ -230,7 +370,7 @@ impl PluginHostState {
 
     pub fn add_command<T>(
         &mut self,
-        provider: CommandTree,
+        provider: WasmCommand,
     ) -> wasmtime::Result<wasmtime::component::Resource<T>> {
         let resource = self.resource_table.push(CommandResource { provider })?;
         Ok(wasmtime::component::Resource::new_own(resource.rep()))
@@ -248,21 +388,17 @@ impl PluginHostState {
 
     pub fn add_consumed_args<T>(
         &mut self,
-        provider: &ConsumedArgs<'_>,
+        provider: HashMap<String, OwnedArg>,
     ) -> wasmtime::Result<wasmtime::component::Resource<T>> {
-        let owned: HashMap<String, OwnedArg> = provider
-            .iter()
-            .map(|(k, v)| (k.to_string(), OwnedArg::from_arg(v)))
-            .collect();
         let resource = self
             .resource_table
-            .push(ConsumedArgsResource { provider: owned })?;
+            .push(ConsumedArgsResource { provider })?;
         Ok(wasmtime::component::Resource::new_own(resource.rep()))
     }
 
     pub fn add_command_node<T>(
         &mut self,
-        provider: NonLeafNodeBuilder,
+        provider: WasmCommandNode,
     ) -> wasmtime::Result<wasmtime::component::Resource<T>> {
         let resource = self.resource_table.push(CommandNodeResource { provider })?;
         Ok(wasmtime::component::Resource::new_own(resource.rep()))
@@ -286,12 +422,202 @@ impl PluginHostState {
         Ok(wasmtime::component::Resource::new_own(resource.rep()))
     }
 
+    pub fn add_enchantment_manager<T>(
+        &mut self,
+        provider: Arc<crate::server::enchantment::EnchantmentManager>,
+    ) -> wasmtime::Result<wasmtime::component::Resource<T>> {
+        let resource = self
+            .resource_table
+            .push(EnchantmentManagerResource { provider })?;
+        Ok(wasmtime::component::Resource::new_own(resource.rep()))
+    }
+
+    pub fn add_op_manager<T>(
+        &mut self,
+        provider: Arc<Server>,
+    ) -> wasmtime::Result<wasmtime::component::Resource<T>> {
+        let resource = self.resource_table.push(OpManagerResource { provider })?;
+        Ok(wasmtime::component::Resource::new_own(resource.rep()))
+    }
+
+    pub fn add_ban_manager<T>(
+        &mut self,
+        provider: Arc<Server>,
+    ) -> wasmtime::Result<wasmtime::component::Resource<T>> {
+        let resource = self.resource_table.push(BanManagerResource { provider })?;
+        Ok(wasmtime::component::Resource::new_own(resource.rep()))
+    }
+
+    pub fn add_whitelist_manager<T>(
+        &mut self,
+        provider: Arc<Server>,
+    ) -> wasmtime::Result<wasmtime::component::Resource<T>> {
+        let resource = self
+            .resource_table
+            .push(WhitelistManagerResource { provider })?;
+        Ok(wasmtime::component::Resource::new_own(resource.rep()))
+    }
+
+    pub fn add_datapack_manager<T>(
+        &mut self,
+        provider: Arc<Server>,
+    ) -> wasmtime::Result<wasmtime::component::Resource<T>> {
+        let resource = self
+            .resource_table
+            .push(DatapackManagerResource { provider })?;
+        Ok(wasmtime::component::Resource::new_own(resource.rep()))
+    }
+
+    pub fn add_inventory<T>(
+        &mut self,
+        provider: InventoryProvider,
+    ) -> wasmtime::Result<wasmtime::component::Resource<T>> {
+        let resource = self.resource_table.push(InventoryResource { provider })?;
+        Ok(wasmtime::component::Resource::new_own(resource.rep()))
+    }
+
+    pub fn add_player_inventory<T>(
+        &mut self,
+        provider: Arc<Player>,
+    ) -> wasmtime::Result<wasmtime::component::Resource<T>> {
+        let resource = self
+            .resource_table
+            .push(PlayerInventoryResource { provider })?;
+        Ok(wasmtime::component::Resource::new_own(resource.rep()))
+    }
+
     pub fn add_block_entity<T>(
         &mut self,
         provider: Arc<dyn crate::block::entities::BlockEntity>,
     ) -> wasmtime::Result<wasmtime::component::Resource<T>> {
         let resource = self.resource_table.push(BlockEntityResource { provider })?;
         Ok(wasmtime::component::Resource::new_own(resource.rep()))
+    }
+
+    pub fn add_container_block_entity<T>(
+        &mut self,
+        provider: Arc<dyn crate::block::entities::BlockEntity>,
+        inventory: Arc<dyn pumpkin_world::inventory::Inventory>,
+    ) -> wasmtime::Result<wasmtime::component::Resource<T>> {
+        let resource = self.resource_table.push(ContainerBlockEntityResource {
+            provider: ContainerBlockEntity {
+                provider,
+                inventory,
+            },
+        })?;
+        Ok(wasmtime::component::Resource::new_own(resource.rep()))
+    }
+
+    pub fn add_display_entity<T>(
+        &mut self,
+        provider: Arc<dyn EntityBase>,
+    ) -> wasmtime::Result<wasmtime::component::Resource<T>> {
+        let resource = self
+            .resource_table
+            .push(DisplayEntityResource { provider })?;
+        Ok(wasmtime::component::Resource::new_own(resource.rep()))
+    }
+
+    pub fn get_display_entity_res<T>(
+        &self,
+        resource: &wasmtime::component::Resource<T>,
+    ) -> wasmtime::Result<&DisplayEntityResource> {
+        Ok(self
+            .resource_table
+            .get(&wasmtime::component::Resource::new_borrow(resource.rep()))?)
+    }
+
+    pub fn add_block_display_entity<T>(
+        &mut self,
+        provider: Arc<dyn EntityBase>,
+    ) -> wasmtime::Result<wasmtime::component::Resource<T>> {
+        let resource = self
+            .resource_table
+            .push(BlockDisplayEntityResource { provider })?;
+        Ok(wasmtime::component::Resource::new_own(resource.rep()))
+    }
+
+    pub fn get_block_display_entity_res<T>(
+        &self,
+        resource: &wasmtime::component::Resource<T>,
+    ) -> wasmtime::Result<&BlockDisplayEntityResource> {
+        Ok(self
+            .resource_table
+            .get(&wasmtime::component::Resource::new_borrow(resource.rep()))?)
+    }
+
+    pub fn add_item_display_entity<T>(
+        &mut self,
+        provider: Arc<dyn EntityBase>,
+    ) -> wasmtime::Result<wasmtime::component::Resource<T>> {
+        let resource = self
+            .resource_table
+            .push(ItemDisplayEntityResource { provider })?;
+        Ok(wasmtime::component::Resource::new_own(resource.rep()))
+    }
+
+    pub fn get_item_display_entity_res<T>(
+        &self,
+        resource: &wasmtime::component::Resource<T>,
+    ) -> wasmtime::Result<&ItemDisplayEntityResource> {
+        Ok(self
+            .resource_table
+            .get(&wasmtime::component::Resource::new_borrow(resource.rep()))?)
+    }
+
+    pub fn add_text_display_entity<T>(
+        &mut self,
+        provider: Arc<dyn EntityBase>,
+    ) -> wasmtime::Result<wasmtime::component::Resource<T>> {
+        let resource = self
+            .resource_table
+            .push(TextDisplayEntityResource { provider })?;
+        Ok(wasmtime::component::Resource::new_own(resource.rep()))
+    }
+
+    pub fn get_text_display_entity_res<T>(
+        &self,
+        resource: &wasmtime::component::Resource<T>,
+    ) -> wasmtime::Result<&TextDisplayEntityResource> {
+        Ok(self
+            .resource_table
+            .get(&wasmtime::component::Resource::new_borrow(resource.rep()))?)
+    }
+
+    pub fn add_interaction_entity<T>(
+        &mut self,
+        provider: Arc<dyn EntityBase>,
+    ) -> wasmtime::Result<wasmtime::component::Resource<T>> {
+        let resource = self
+            .resource_table
+            .push(InteractionEntityResource { provider })?;
+        Ok(wasmtime::component::Resource::new_own(resource.rep()))
+    }
+
+    pub fn get_interaction_entity_res<T>(
+        &self,
+        resource: &wasmtime::component::Resource<T>,
+    ) -> wasmtime::Result<&InteractionEntityResource> {
+        Ok(self
+            .resource_table
+            .get(&wasmtime::component::Resource::new_borrow(resource.rep()))?)
+    }
+
+    pub fn add_chunk_buffer<T>(
+        &mut self,
+        provider: ChunkBuffer,
+    ) -> wasmtime::Result<wasmtime::component::Resource<T>> {
+        let resource = self.resource_table.push(ChunkBufferResource { provider })?;
+        Ok(wasmtime::component::Resource::new_own(resource.rep()))
+    }
+
+    pub fn get_chunk_buffer_res<T>(
+        &self,
+        resource: &wasmtime::component::Resource<T>,
+    ) -> wasmtime::Result<&ChunkBufferResource> {
+        Ok(self
+            .resource_table
+            .get(&wasmtime::component::Resource::new_borrow(resource.rep()))?)
     }
 }
 
@@ -317,14 +643,22 @@ impl Default for PluginHttpHooks {
 impl WasiHttpHooks for PluginHttpHooks {
     fn send_request(
         &mut self,
-        request: hyper::Request<wasmtime_wasi_http::p2::body::HyperOutgoingBody>,
-        config: wasmtime_wasi_http::p2::types::OutgoingRequestConfig,
-    ) -> HttpResult<wasmtime_wasi_http::p2::types::HostFutureIncomingResponse> {
+        request: hyper::Request<WasiBody>,
+        options: Option<RequestOptions>,
+        fut: Box<dyn Future<Output = wasmtime_wasi_http::Result<()>> + Send>,
+    ) -> Box<
+        dyn Future<
+                Output = wasmtime_wasi_http::Result<(
+                    hyper::Response<WasiBody>,
+                    Box<dyn Future<Output = wasmtime_wasi_http::Result<()>> + Send>,
+                )>,
+            > + Send,
+    > {
         if !self.allow_outbound {
-            return Err(HttpError::from(ErrorCode::HttpRequestDenied));
+            return Box::new(async { Err(wasmtime_wasi_http::Error::HttpRequestDenied) });
         }
 
-        Ok(default_send_request(request, config))
+        wasmtime_wasi_http::default_hooks().send_request(request, options, fut)
     }
 }
 
