@@ -743,6 +743,8 @@ impl LightEngine {
         }
     }
 
+    /// Worldgen pass (`ProtoChunk`), not `ThreadedLevelLightEngine`. Runtime
+    /// [`crate::lighting::DynamicLightEngine`] can restitch after the chunk goes live.
     pub fn initialize_light(&mut self, cache: &mut Cache, config: &LightingEngineConfig) {
         if *config != LightingEngineConfig::Default {
             return;

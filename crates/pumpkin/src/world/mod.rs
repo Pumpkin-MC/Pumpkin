@@ -1392,6 +1392,9 @@ impl World {
         let t_chunks = std::time::Instant::now();
         self.tick_chunks(server);
         let chunk_elapsed = t_chunks.elapsed();
+        // Vanilla `ThreadedLevelLightEngine` drains on the light thread. One tick-thread
+        // slice here; leftover lighting can lag a few ticks behind the blocks.
+        let light_stats = self.level.light_engine.drain_queued(&self.level);
 
         let handle = server.runtime.clone();
 
@@ -1507,9 +1510,10 @@ impl World {
         let total_elapsed = start.elapsed();
         if total_elapsed.as_millis() > 50 {
             debug!(
-                "Slow Tick [{}ms]: Chunks: {:?} | Players({}): {:?} | Entities({}): {:?} | Block Entities({}): {:?}",
+                "Slow Tick [{}ms]: Chunks: {:?} | Light: {} | Players({}): {:?} | Entities({}): {:?} | Block Entities({}): {:?}",
                 total_elapsed.as_millis(),
                 chunk_elapsed,
+                light_stats,
                 player_count,
                 player_elapsed,
                 entity_count,
