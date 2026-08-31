@@ -64,6 +64,8 @@ pub mod world;
 pub struct LoggingConfig {
     pub color: bool,
     pub threads: bool,
+    pub thread_ids: bool,
+    pub target: bool,
     pub timestamp: bool,
 }
 
@@ -80,6 +82,7 @@ pub fn init_logger(advanced_config: &AdvancedConfiguration) {
         let level = std::env::var("RUST_LOG")
             .ok()
             .as_deref()
+            .or(Some(advanced_config.logging.level.as_str()))
             .map(LevelFilter::from_str)
             .and_then(Result::ok)
             .unwrap_or(LevelFilter::INFO);
@@ -143,17 +146,25 @@ pub fn init_logger(advanced_config: &AdvancedConfiguration) {
             .with_writer(std::sync::Mutex::new(logger))
             .with_ansi(advanced_config.logging.color)
             .with_ansi_sanitization(false)
-            .with_target(true)
+            .with_target(advanced_config.logging.target)
             .with_thread_names(advanced_config.logging.threads)
-            .with_thread_ids(advanced_config.logging.threads);
+            .with_thread_ids(advanced_config.logging.thread_ids);
 
         if advanced_config.logging.timestamp {
             let local_offset =
                 time::UtcOffset::current_local_offset().unwrap_or(time::UtcOffset::UTC);
-            let fmt_layer = fmt_layer.with_timer(fmt::time::OffsetTime::new(
-                local_offset,
-                time::macros::format_description!("[year]-[month]-[day] [hour]:[minute]:[second]"),
-            ));
+            let format_str: &'static str = Box::leak(
+                advanced_config
+                    .logging
+                    .timestamp_format
+                    .clone()
+                    .into_boxed_str(),
+            );
+            let timer_format = time::format_description::parse(format_str).unwrap_or_else(|_| {
+                time::macros::format_description!("[hour]:[minute]:[second]").to_vec()
+            });
+            let fmt_layer =
+                fmt_layer.with_timer(fmt::time::OffsetTime::new(local_offset, timer_format));
             let registry = tracing_subscriber::registry()
                 .with(env_filter)
                 .with(fmt_layer);
@@ -177,6 +188,8 @@ pub fn init_logger(advanced_config: &AdvancedConfiguration) {
         let logging_config = LoggingConfig {
             color: advanced_config.logging.color,
             threads: advanced_config.logging.threads,
+            thread_ids: advanced_config.logging.thread_ids,
+            target: advanced_config.logging.target,
             timestamp: advanced_config.logging.timestamp,
         };
 

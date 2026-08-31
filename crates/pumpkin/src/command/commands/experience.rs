@@ -1,30 +1,28 @@
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 
+use pumpkin_util::PermissionLvl;
 use pumpkin_util::math::experience;
+use pumpkin_util::permission::{Permission, PermissionDefault, PermissionRegistry};
 use pumpkin_util::text::TextComponent;
 
-use crate::command::args::bounded_num::BoundedNumArgumentConsumer;
-use crate::command::args::players::PlayersArgumentConsumer;
-use crate::command::args::{ConsumedArgs, FindArg};
-use crate::command::dispatcher::CommandError;
-use crate::command::tree::CommandTree;
-use crate::command::tree::builder::{argument, literal};
-use crate::command::{CommandExecutor, CommandResult, CommandSender};
+use crate::command::argument_builder::{ArgumentBuilder, argument, command, literal};
+use crate::command::argument_types::core::integer::IntegerArgumentType;
+use crate::command::argument_types::entity::EntityArgumentType;
+use crate::command::context::command_context::CommandContext;
+use crate::command::errors::error_types::CommandErrorType;
+use crate::command::node::dispatcher::CommandDispatcher;
+use crate::command::node::{CommandExecutor, CommandExecutorResult};
 use crate::entity::EntityBase;
 use crate::entity::player::Player;
 
-const NAMES: [&str; 2] = ["experience", "xp"];
 const DESCRIPTION: &str = "Add, set or query player experience.";
-const ARG_TARGETS: &str = "targets";
-const ARG_AMOUNT: &str = "amount";
+const PERMISSION: &str = "minecraft:command.experience";
 
-const fn xp_amount() -> BoundedNumArgumentConsumer<i32> {
-    BoundedNumArgumentConsumer::new()
-        .name(ARG_AMOUNT)
-        .min(0)
-        .max(i32::MAX)
-}
+const ERROR_SET_POINTS_INVALID: CommandErrorType<0> = CommandErrorType::new(
+    "commands.experience.set.points.invalid",
+    "commands.experience.set.points.invalid",
+);
 
 #[derive(Clone, Copy, PartialEq)]
 enum Mode {
@@ -39,13 +37,13 @@ enum ExpType {
     Levels,
 }
 
-struct Executor {
+struct ExperienceExecutor {
     mode: Mode,
     exp_type: ExpType,
 }
 
-impl Executor {
-    fn handle_query(&self, sender: &CommandSender, target: &Player) -> i32 {
+impl ExperienceExecutor {
+    fn handle_query(&self, context: &CommandContext, target: &Player) -> i32 {
         let (val, translation_key) = match self.exp_type {
             ExpType::Levels => (
                 target.experience_level.load(Ordering::Relaxed),
@@ -57,14 +55,17 @@ impl Executor {
             ),
         };
 
-        sender.send_message(TextComponent::translate_cross(
-            translation_key,
-            translation_key,
-            [
-                target.get_display_name(),
-                TextComponent::text(val.to_string()),
-            ],
-        ));
+        context.source.send_feedback(
+            TextComponent::translate_cross(
+                translation_key,
+                translation_key,
+                [
+                    target.get_display_name(),
+                    TextComponent::text(val.to_string()),
+                ],
+            ),
+            false,
+        );
 
         val
     }
@@ -119,7 +120,6 @@ impl Executor {
         }
     }
 
-    /// Returns `true` if successful. Otherwise, there was a problem setting the points of a player.
     fn handle_modify(&self, target: &Arc<Player>, amount: i32) -> bool {
         match self.exp_type {
             ExpType::Levels => {
@@ -145,112 +145,96 @@ impl Executor {
     }
 }
 
-impl CommandExecutor for Executor {
-    fn execute(
-        &self,
-        sender: &CommandSender,
-        _server: &crate::server::Server,
-        args: &ConsumedArgs,
-    ) -> CommandResult {
-        let targets = PlayersArgumentConsumer::find_arg(args, ARG_TARGETS)?;
+impl CommandExecutor for ExperienceExecutor {
+    fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
+        let targets = EntityArgumentType::get_players(context, "targets")?;
 
         if self.mode == Mode::Query {
-            let target = targets.first().ok_or_else(|| {
-                CommandError::CommandFailed(TextComponent::translate_cross(
-                    "argument.player.unknown",
-                    "argument.player.unknown",
-                    [],
-                ))
-            })?;
-
-            if targets.len() > 1 {
-                return Err(CommandError::CommandFailed(TextComponent::translate_cross(
-                    "argument.player.toomany",
-                    "argument.player.toomany",
-                    [],
-                )));
-            }
-            return Ok(self.handle_query(sender, target));
+            let target = targets[0].clone();
+            return Ok(self.handle_query(context, &target));
         }
 
-        // Handle Add/Set
-        let amount = BoundedNumArgumentConsumer::<i32>::find_arg(args, ARG_AMOUNT)??;
+        let amount = IntegerArgumentType::get(context, "amount")?;
 
         let mut successes = 0;
-        for target in targets {
+        for target in &targets {
             if self.handle_modify(target, amount) {
                 successes += 1;
             }
         }
 
         if successes == 0 {
-            return Err(CommandError::CommandFailed(TextComponent::translate_cross(
-                "commands.experience.set.points.invalid",
-                "commands.experience.set.points.invalid",
-                [],
-            )));
+            return Err(ERROR_SET_POINTS_INVALID.create_without_context());
         }
 
-        // Safe to access first() because successes > 0
-        let first_name = targets[0].get_display_name();
-        let msg = self.get_success_message(amount, targets, first_name);
-        sender.send_message(msg);
+        let first_name = targets[0].as_ref().get_display_name();
+        let msg = self.get_success_message(amount, &targets, first_name);
+        context.source.send_feedback(msg, true);
 
         Ok(successes)
     }
 }
 
-pub fn init_command_tree() -> CommandTree {
-    CommandTree::new(NAMES, DESCRIPTION)
-        .then(
-            literal("add").then(
-                argument(ARG_TARGETS, PlayersArgumentConsumer).then(
-                    argument(ARG_AMOUNT, xp_amount())
-                        .then(literal("levels").execute(Executor {
-                            mode: Mode::Add,
-                            exp_type: ExpType::Levels,
-                        }))
-                        .then(literal("points").execute(Executor {
-                            mode: Mode::Add,
-                            exp_type: ExpType::Points,
-                        }))
-                        .execute(Executor {
-                            mode: Mode::Add,
-                            exp_type: ExpType::Points,
-                        }),
-                ),
-            ),
-        )
-        .then(
-            literal("set").then(
-                argument(ARG_TARGETS, PlayersArgumentConsumer).then(
-                    argument(ARG_AMOUNT, xp_amount())
-                        .then(literal("levels").execute(Executor {
-                            mode: Mode::Set,
-                            exp_type: ExpType::Levels,
-                        }))
-                        .then(literal("points").execute(Executor {
-                            mode: Mode::Set,
-                            exp_type: ExpType::Points,
-                        }))
-                        .execute(Executor {
-                            mode: Mode::Set,
-                            exp_type: ExpType::Points,
-                        }),
-                ),
-            ),
-        )
-        .then(
-            literal("query").then(
-                argument(ARG_TARGETS, PlayersArgumentConsumer)
-                    .then(literal("levels").execute(Executor {
-                        mode: Mode::Query,
-                        exp_type: ExpType::Levels,
-                    }))
-                    .then(literal("points").execute(Executor {
-                        mode: Mode::Query,
-                        exp_type: ExpType::Points,
-                    })),
-            ),
-        )
+pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistry) {
+    registry.register_permission_or_panic(Permission::new(
+        PERMISSION,
+        DESCRIPTION,
+        PermissionDefault::Op(PermissionLvl::Two),
+    ));
+
+    let add_node = literal("add").then(
+        argument("targets", EntityArgumentType::Players).then(
+            argument("amount", IntegerArgumentType::with_min(0))
+                .executes(ExperienceExecutor {
+                    mode: Mode::Add,
+                    exp_type: ExpType::Points,
+                })
+                .then(literal("levels").executes(ExperienceExecutor {
+                    mode: Mode::Add,
+                    exp_type: ExpType::Levels,
+                }))
+                .then(literal("points").executes(ExperienceExecutor {
+                    mode: Mode::Add,
+                    exp_type: ExpType::Points,
+                })),
+        ),
+    );
+
+    let set_node = literal("set").then(
+        argument("targets", EntityArgumentType::Players).then(
+            argument("amount", IntegerArgumentType::with_min(0))
+                .executes(ExperienceExecutor {
+                    mode: Mode::Set,
+                    exp_type: ExpType::Points,
+                })
+                .then(literal("levels").executes(ExperienceExecutor {
+                    mode: Mode::Set,
+                    exp_type: ExpType::Levels,
+                }))
+                .then(literal("points").executes(ExperienceExecutor {
+                    mode: Mode::Set,
+                    exp_type: ExpType::Points,
+                })),
+        ),
+    );
+
+    let query_node = literal("query").then(
+        argument("targets", EntityArgumentType::Player)
+            .then(literal("levels").executes(ExperienceExecutor {
+                mode: Mode::Query,
+                exp_type: ExpType::Levels,
+            }))
+            .then(literal("points").executes(ExperienceExecutor {
+                mode: Mode::Query,
+                exp_type: ExpType::Points,
+            })),
+    );
+
+    let cmd = command("experience", DESCRIPTION)
+        .requires(PERMISSION)
+        .then(add_node)
+        .then(set_node)
+        .then(query_node);
+
+    dispatcher.register_with_aliases(cmd, &["xp"]);
 }
