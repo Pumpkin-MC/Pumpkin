@@ -604,6 +604,11 @@ impl ChunkData {
             self.inhabited_time.load(Ordering::Relaxed) as i64,
         );
 
+        // Letzte Gelegenheit, einen nur im RAM stehenden Cut-Height mitzunehmen. Jeder
+        // Schreibpfad persistiert zwar schon selbst, aber der Cache ist die eine Stelle, an
+        // der ein Wert entstehen kann.
+        crate::lighting::SkyLightHeightMigration::ensure_persisted(self);
+
         let custom_data = self
             .custom_data
             .lock()
@@ -617,6 +622,27 @@ impl ChunkData {
     }
 
     pub fn set_custom_data(&self, namespace: &str, key: &str, value: pumpkin_nbt::tag::NbtTag) {
+        self.write_custom_data(namespace, key, value);
+        self.dirty.store(true, Ordering::Relaxed);
+    }
+
+    /// Stores custom data **without** marking the chunk dirty.
+    ///
+    /// Only for values that are purely derived from the chunk and can be recomputed for
+    /// free if they are lost — a cache written back, not user state. Marking the chunk
+    /// dirty here would force a full rewrite of every chunk merely because something read
+    /// it, which is exactly the load-time overhead such caches exist to avoid. The value
+    /// still rides along whenever the chunk is saved for some other reason.
+    pub fn set_derived_custom_data(
+        &self,
+        namespace: &str,
+        key: &str,
+        value: pumpkin_nbt::tag::NbtTag,
+    ) {
+        self.write_custom_data(namespace, key, value);
+    }
+
+    fn write_custom_data(&self, namespace: &str, key: &str, value: pumpkin_nbt::tag::NbtTag) {
         let mut custom_data = self
             .custom_data
             .lock()
@@ -636,7 +662,6 @@ impl ChunkData {
             namespace.into(),
             pumpkin_nbt::tag::NbtTag::Compound(namespace_data),
         );
-        self.dirty.store(true, Ordering::Relaxed);
     }
 
     pub fn get_custom_data(&self, namespace: &str, key: &str) -> Option<pumpkin_nbt::tag::NbtTag> {

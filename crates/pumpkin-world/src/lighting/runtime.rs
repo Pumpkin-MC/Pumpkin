@@ -2,9 +2,7 @@ use crate::chunk::ChunkData;
 use crate::chunk::io::Dirtiable;
 use crate::chunk::palette::BlockPalette;
 use crate::level::Level;
-use crate::lighting::sky_light_height::{
-    SkyLightHeight, SkyLightHeightMigration, SkyLightTier,
-};
+use crate::lighting::sky_light_height::{SkyLightHeight, SkyLightHeightMigration, SkyLightTier};
 use crossbeam::queue::SegQueue;
 use pumpkin_config::lighting::LightingEngineConfig;
 use pumpkin_data::BlockDirection;
@@ -291,10 +289,30 @@ impl DynamicLightEngine {
         height: SkyLightHeight,
     ) -> bool {
         let neighbors = [
-            (local_x == 0, Vector2::new(chunk_pos.x - 1, chunk_pos.y), 15, local_z),
-            (local_x == 15, Vector2::new(chunk_pos.x + 1, chunk_pos.y), 0, local_z),
-            (local_z == 0, Vector2::new(chunk_pos.x, chunk_pos.y - 1), local_x, 15),
-            (local_z == 15, Vector2::new(chunk_pos.x, chunk_pos.y + 1), local_x, 0),
+            (
+                local_x == 0,
+                Vector2::new(chunk_pos.x - 1, chunk_pos.y),
+                15,
+                local_z,
+            ),
+            (
+                local_x == 15,
+                Vector2::new(chunk_pos.x + 1, chunk_pos.y),
+                0,
+                local_z,
+            ),
+            (
+                local_z == 0,
+                Vector2::new(chunk_pos.x, chunk_pos.y - 1),
+                local_x,
+                15,
+            ),
+            (
+                local_z == 15,
+                Vector2::new(chunk_pos.x, chunk_pos.y + 1),
+                local_x,
+                0,
+            ),
         ];
 
         for (on_edge, neighbor_pos, neighbor_x, neighbor_z) in neighbors {

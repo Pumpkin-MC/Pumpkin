@@ -1,9 +1,9 @@
-//! Sky Light Cut Height caching 
+//! Sky Light Cut Height caching
 //!
 //! Speichert pro Chunk den niedrigsten Y-Wert, unterhalb dessen kein offener Himmel
 //! existiert, sodass Aktualisierungen des Skylights unterhalb dieser Höhe zur Laufzeit
 //! verworfen werden, anstatt berechnet zu werden.
-//! 
+//!
 //! Ein einzelner, chunkweiter Wert würde durch einen
 //! einzigen 1x1 Loch oder eine Schlucht heruntergezogen werden,
 //! daher wird der Wert mit 4 Quadranten (NW, NE, SW, SE) gepaart, die jeweils eine eigene Flag haben.
@@ -20,7 +20,7 @@ use std::sync::atomic::Ordering;
 ///
 /// Das Band liegt genau auf der Oberflaeche, wo gebaut und abgebaut wird, und ist der
 /// einzige Bereich der noch den teuren Spaltenscan hat.
-/// 
+///
 /// Theorie: Flaches Terrain kommt mit 4 Blöcken aus, nur echtes Bergterrain braucht 32.
 /// Ein fester Wert  könnte jedem Chunk das Band aufzwingen.
 pub const SPREAD_SCALES: [i32; 4] = [4, 8, 16, 32];
@@ -124,7 +124,8 @@ impl SkyLightHeight {
     /// 65536 Möglickeiten mit half -> genug für spätere Anpassungen die das Bauen über dem Highlimit erlauben.
     #[must_use]
     pub const fn with_hex_approx_bumped(self, delta: u32) -> Self {
-        let hex_approx = (self.0 & Self::HEX_APPROX_MASK).wrapping_add(delta) & Self::HEX_APPROX_MASK;
+        let hex_approx =
+            (self.0 & Self::HEX_APPROX_MASK).wrapping_add(delta) & Self::HEX_APPROX_MASK;
         Self((self.0 & !Self::HEX_APPROX_MASK) | hex_approx)
     }
 
@@ -232,7 +233,12 @@ impl SkyLightHeight {
     /// heightmap value alone is not usable:
     /// not air -> light needs "opacity > 0"
     /// glass and leaves sit above their real ceiling and would make the cut too high
-    fn column_opaque_ceiling(chunk: &ChunkData, local_x: usize, local_z: usize, from_y: i32) -> i32 {
+    fn column_opaque_ceiling(
+        chunk: &ChunkData,
+        local_x: usize,
+        local_z: usize,
+        from_y: i32,
+    ) -> i32 {
         let min_y = chunk.section.min_y;
         let mut y = from_y;
         while y >= min_y {
@@ -264,8 +270,9 @@ impl SkyLightHeight {
                 .heightmap
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
-            let top_y =
-                min_y + (chunk.section.count as i32) * crate::chunk::palette::BlockPalette::SIZE as i32 - 1;
+            let top_y = min_y
+                + (chunk.section.count as i32) * crate::chunk::palette::BlockPalette::SIZE as i32
+                - 1;
 
             for local_z in 0..16usize {
                 for local_x in 0..16usize {
@@ -420,13 +427,68 @@ pub struct SkyLightHeightMigration;
 
 impl SkyLightHeightMigration {
     const NAMESPACE: &'static str = "pumpkin:optimization";
+
+    /// Formatversion, steht im Keynamen. Andere Versionen werden beim nächsten Chunk-Update überschrieben.
+    pub const VERSION: u8 = 1;
     const KEY: &'static str = "sky_light_height_v1";
+
+    /// Schluessel frueherer Versionen, die es zu entsorgen gilt.
+    ///
+    /// Es wird immer nur [`Self::KEY`] gelesen -> kein Fallback.
+    ///
+    /// Bei v2 hier `"sky_light_height_v1"` eintragen.
+    const LEGACY_KEYS: [&'static str; 0] = [];
+
+    /// Nur die unteren 24 Bit sind der Wert; Bits 24-31 des persistierten `Int` tragen
+    /// den Geometrie-Tag.
+    const VALUE_MASK: u32 = 0x00FF_FFFF;
+    const GEOMETRY_SHIFT: u32 = 24;
+
+    /// Packt die Chunk-Geometrie, unter der ein Wert berechnet wurde, in 8 Bit.
+    ///
+    /// Der Cut ist relativ zu `min_y` und der Chunk-Höhe kodiert (half + Bruchteil).
+    ///
+    /// `None` = Geometrie nicht darstellbar
+    fn geometry_tag(min_y: i32, chunk_height: i32) -> Option<u8> {
+        if min_y % 16 != 0 || chunk_height % 16 != 0 {
+            return None;
+        }
+        let sections = chunk_height / 16;
+        let base = min_y / 16;
+        if !(1..=31).contains(&sections) || !(-4..=3).contains(&base) {
+            return None;
+        }
+        Some((sections as u8) | (((base + 4) as u8) << 5))
+    }
+
+    fn chunk_geometry_tag(chunk: &ChunkData) -> Option<u8> {
+        Self::geometry_tag(chunk.section.min_y, SkyLightHeight::chunk_height(chunk))
+    }
 
     /// Fast flag check on chunk load (0.01ms)
     /// Gibt es gepsiecherten Wert? RAM nicht berührt.
     #[must_use]
     pub fn fast_load_flag(chunk: &ChunkData) -> bool {
         chunk.has_custom_data(Self::NAMESPACE, Self::KEY)
+    }
+
+    /// Liest den persistierten Wert, sofern einer da und fuer diesen Chunk gueltig ist.
+    ///
+    /// None oder andere Versionen werden ignoriert/überschrieben beim nächsten chunk update
+    pub fn load_persisted(chunk: &ChunkData) -> Option<SkyLightHeight> {
+        let expected = Self::chunk_geometry_tag(chunk)?;
+        let Some(NbtTag::Int(v)) = chunk.get_custom_data(Self::NAMESPACE, Self::KEY) else {
+            return None;
+        };
+        let stored = v as u32;
+        if (stored >> Self::GEOMETRY_SHIFT) as u8 != expected {
+            return None; // Andere Welthoehe: Wert ist nicht mehr interpretierbar.
+        }
+        let value = stored & Self::VALUE_MASK;
+        if value == 0 {
+            return None;
+        }
+        Some(SkyLightHeight::from_raw(value))
     }
 
     /// Returns the cached/loaded/computed sky light cut height for this chunk,
@@ -440,8 +502,7 @@ impl SkyLightHeightMigration {
             return SkyLightHeight::from_raw(cached);
         }
 
-        if let Some(NbtTag::Int(v)) = chunk.get_custom_data(Self::NAMESPACE, Self::KEY) {
-            let height = SkyLightHeight::from_raw(v as u32);
+        if let Some(height) = Self::load_persisted(chunk) {
             chunk
                 .sky_light_height_cache
                 .store(height.raw(), Ordering::Relaxed);
@@ -462,9 +523,23 @@ impl SkyLightHeightMigration {
         height
     }
 
-    /// Persists the given cut height to `PumpkinCustomData`.
+    /// Persists the given cut height to `PumpkinCustomData`, mit Geometrie-Tag in Bits 24-31.
+    ///
+    /// Schreibt ohne den Chunk dirty zu markieren -> ableitbar
+    /// dem Chunk ableitbar.
     pub fn persist(chunk: &ChunkData, height: SkyLightHeight) {
-        chunk.set_custom_data(Self::NAMESPACE, Self::KEY, NbtTag::Int(height.raw() as i32));
+        let Some(tag) = Self::chunk_geometry_tag(chunk) else {
+            return; // Nicht validierbare Geometrie: lieber nichts persistieren.
+        };
+        let stored = (height.raw() & Self::VALUE_MASK) | (u32::from(tag) << Self::GEOMETRY_SHIFT);
+        chunk.set_derived_custom_data(Self::NAMESPACE, Self::KEY, NbtTag::Int(stored as i32));
+
+        // Reste aelterer Formatversionen entsorgen, statt sie ewig mitzuschleppen.
+        for legacy in Self::LEGACY_KEYS {
+            if chunk.has_custom_data(Self::NAMESPACE, legacy) {
+                chunk.remove_custom_data(Self::NAMESPACE, legacy);
+            }
+        }
     }
 
     /// Lazy runtime: computes from the chunk itself on first access.
@@ -710,10 +785,7 @@ mod tests {
         let diverged = flat.with_quadrant_diverged(15, 8);
 
         // Ostkante von uns (x=15) trifft die Westkante des Nachbarn (x=0).
-        assert!(
-            flat.border_uses_limit(flat, 15, 8, 0, 8),
-            "schneller Pfad"
-        );
+        assert!(flat.border_uses_limit(flat, 15, 8, 0, 8), "schneller Pfad");
         assert!(
             !flat.border_uses_limit(diverged.with_quadrant_diverged(0, 8), 15, 8, 0, 8),
             "Nachbar -> echter Check"
@@ -742,7 +814,8 @@ mod tests {
 
         SkyLightHeightMigration::mark_quadrant_diverged(&chunk, 2, 2);
 
-        let updated = SkyLightHeight::from_raw(chunk.sky_light_height_cache.load(Ordering::Relaxed));
+        let updated =
+            SkyLightHeight::from_raw(chunk.sky_light_height_cache.load(Ordering::Relaxed));
         assert!(!updated.quadrant_uses_limit(2, 2));
         assert!(updated.quadrant_uses_limit(12, 12));
 
@@ -750,6 +823,194 @@ mod tests {
         chunk.sky_light_height_cache.store(0, Ordering::Relaxed);
         let reloaded = SkyLightHeightMigration::get(&chunk);
         assert!(!reloaded.quadrant_uses_limit(2, 2));
+    }
+
+    // ---- Phase 4: Persistenz ---------------------------------------------------
+
+    /// Der persistierte `Int` traegt Wert (Bits 0-23) und Geometrie-Tag (Bits 24-31);
+    /// zurueckgelesen wird wieder der reine 24-Bit-Wert.
+    #[test]
+    fn persisted_value_carries_the_geometry_tag_out_of_band() {
+        let chunk = ChunkData::empty(0, 0);
+        let height = SkyLightHeight::encode(60, -64, 384).with_spread_index(2);
+        SkyLightHeightMigration::persist(&chunk, height);
+
+        let Some(NbtTag::Int(stored)) =
+            chunk.get_custom_data("pumpkin:optimization", "sky_light_height_v1")
+        else {
+            panic!("nothing persisted");
+        };
+        let stored = stored as u32;
+        assert_ne!(stored >> 24, 0, "Geometrie-Tag fehlt");
+        assert_eq!(stored & 0x00FF_FFFF, height.raw(), "Wert veraendert");
+        assert_eq!(
+            SkyLightHeightMigration::load_persisted(&chunk),
+            Some(height)
+        );
+    }
+
+    /// Der Kern von Phase 4: der Cut ist relativ zu `min_y`/Chunk-Hoehe kodiert. Nach einer
+    /// Welthoehen-Aenderung dekodiert derselbe Rohwert zu einem anderen Y — ein zu niedriger
+    /// Cut wuerde Bloecke unter Fels als "offener Himmel" behandeln. Der Tag muss das
+    /// abfangen, statt die alte Zahl weiterzuverwenden.
+    #[test]
+    fn a_changed_world_height_invalidates_the_persisted_value() {
+        let chunk = ChunkData::empty(0, 0);
+        let height = SkyLightHeight::encode(60, -64, 384);
+        SkyLightHeightMigration::persist(&chunk, height);
+        assert!(SkyLightHeightMigration::load_persisted(&chunk).is_some());
+
+        // Derselbe Rohwert, aber unter einer anderen Geometrie geschrieben.
+        let foreign = SkyLightHeightMigration::geometry_tag(0, 256).expect("darstellbar");
+        let current = SkyLightHeightMigration::geometry_tag(-64, 384).expect("darstellbar");
+        assert_ne!(
+            foreign, current,
+            "die beiden Geometrien muessen sich unterscheiden"
+        );
+        chunk.set_custom_data(
+            "pumpkin:optimization",
+            "sky_light_height_v1",
+            NbtTag::Int((height.raw() | (u32::from(foreign) << 24)) as i32),
+        );
+
+        assert_eq!(
+            SkyLightHeightMigration::load_persisted(&chunk),
+            None,
+            "fremde Geometrie muss verworfen werden"
+        );
+
+        // ensure_lazy faellt sauber auf Neuberechnung zurueck statt den Muell zu uebernehmen.
+        fill_terrain(&chunk, 60);
+        let fresh = SkyLightHeightMigration::get(&chunk);
+        assert_eq!(SkyLightHeightMigration::load_persisted(&chunk), Some(fresh));
+    }
+
+    /// Nicht darstellbare Geometrie: lieber gar nicht persistieren als einen Wert
+    /// hinterlassen, dessen Gueltigkeit spaeter niemand pruefen kann.
+    #[test]
+    fn unrepresentable_geometry_is_not_persisted() {
+        assert!(SkyLightHeightMigration::geometry_tag(-64, 384).is_some());
+        assert!(SkyLightHeightMigration::geometry_tag(0, 256).is_some());
+        assert!(
+            SkyLightHeightMigration::geometry_tag(-64, 100).is_none(),
+            "Hoehe kein Vielfaches von 16"
+        );
+        assert!(
+            SkyLightHeightMigration::geometry_tag(-1024, 384).is_none(),
+            "min_y ausserhalb des darstellbaren Bereichs"
+        );
+    }
+
+    /// Genau eine unterstuetzte Version: der Keyname muss zu [`SkyLightHeightMigration::VERSION`]
+    /// passen, sonst laufen Schreiber und Leser auseinander.
+    #[test]
+    fn the_key_name_matches_the_version_constant() {
+        assert_eq!(
+            SkyLightHeightMigration::KEY,
+            format!("sky_light_height_v{}", SkyLightHeightMigration::VERSION)
+        );
+    }
+
+    /// Ein Key einer anderen (alten) Version wird nicht interpretiert: neu berechnen und
+    /// die aktuelle Version schreiben.
+    #[test]
+    fn an_older_version_key_is_ignored_and_overwritten() {
+        let chunk = ChunkData::empty(0, 0);
+        fill_terrain(&chunk, 60);
+
+        // So koennte ein Vorgaengerformat aussehen — anderer Key, beliebiger Inhalt.
+        chunk.set_custom_data(
+            "pumpkin:optimization",
+            "sky_light_height_v0",
+            NbtTag::Int(0x0BAD_F00D_u32 as i32),
+        );
+
+        assert_eq!(
+            SkyLightHeightMigration::load_persisted(&chunk),
+            None,
+            "ein fremder/alter Key darf nicht als Wert durchgehen"
+        );
+
+        let height = SkyLightHeightMigration::get(&chunk);
+        assert_eq!(height, SkyLightHeight::compute_from_chunk(&chunk));
+        assert_eq!(
+            SkyLightHeightMigration::load_persisted(&chunk),
+            Some(height)
+        );
+        assert!(SkyLightHeightMigration::fast_load_flag(&chunk));
+    }
+
+    /// Kaputtes/fremdes NBT darf keinen eigenen Reparaturpfad brauchen.
+    #[test]
+    fn corrupt_nbt_falls_back_to_recompute() {
+        let chunk = ChunkData::empty(0, 0);
+        chunk.set_custom_data(
+            "pumpkin:optimization",
+            "sky_light_height_v1",
+            NbtTag::String("nonsense".into()),
+        );
+        assert_eq!(SkyLightHeightMigration::load_persisted(&chunk), None);
+
+        fill_terrain(&chunk, 60);
+        let height = SkyLightHeightMigration::get(&chunk);
+        assert_ne!(height.raw(), 0);
+        assert_eq!(
+            SkyLightHeightMigration::load_persisted(&chunk),
+            Some(height)
+        );
+    }
+
+    /// Ein reiner Lesezugriff darf den Chunk nicht dirty machen — sonst schreibt das blosse
+    /// Durchlaufen einer Welt jeden angefassten Chunk komplett neu.
+    #[test]
+    fn lazily_computing_the_cut_does_not_dirty_the_chunk() {
+        let chunk = ChunkData::empty(0, 0);
+        fill_terrain(&chunk, 60);
+        chunk.dirty.store(false, Ordering::Relaxed);
+
+        let _ = SkyLightHeightMigration::get(&chunk);
+
+        assert!(
+            !chunk.dirty.load(Ordering::Relaxed),
+            "abgeleiteter Cache darf keinen Save erzwingen"
+        );
+        assert!(
+            SkyLightHeightMigration::fast_load_flag(&chunk),
+            "trotzdem muss der Wert im custom_data stehen und beim naechsten Save mitfahren"
+        );
+    }
+
+    /// Save-Pfad: ein nur im RAM-Cache stehender Wert muss beim Serialisieren mitgenommen
+    /// werden und einen kompletten Disk-Round-Trip ueberleben.
+    #[test]
+    fn cached_value_survives_a_full_serialization_round_trip() {
+        use crate::chunk::format::anvil::SingleChunkDataSerializer;
+        use pumpkin_util::math::vector2::Vector2;
+
+        let chunk = ChunkData::empty(0, 0);
+        fill_terrain(&chunk, 60);
+        let height = SkyLightHeight::compute_from_chunk(&chunk);
+
+        // Nur den Cache setzen, `persist` bewusst nicht aufrufen.
+        chunk
+            .sky_light_height_cache
+            .store(height.raw(), Ordering::Relaxed);
+        assert!(!SkyLightHeightMigration::fast_load_flag(&chunk));
+
+        let bytes = chunk.to_bytes().expect("serialize");
+        let reloaded = ChunkData::from_bytes(&bytes, Vector2::new(0, 0)).expect("deserialize");
+
+        assert_eq!(
+            SkyLightHeightMigration::load_persisted(&reloaded),
+            Some(height),
+            "der Save-Pfad muss den gecachten Wert mitschreiben"
+        );
+        assert_eq!(
+            reloaded.sky_light_height_cache.load(Ordering::Relaxed),
+            0,
+            "frisch geladen ist der RAM-Cache leer; der Wert kommt erst beim ersten Zugriff"
+        );
+        assert_eq!(SkyLightHeightMigration::get(&reloaded), height);
     }
 
     ///`ProtoChunk` ohne  Generierung.
