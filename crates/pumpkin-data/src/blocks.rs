@@ -179,9 +179,9 @@ impl Block {
     }
 
     /// Returns a new [`BlockStateId`] for the given [`BlockStateId`] with the
-    /// `waterlogged` property forced to `value` if the block supports that
-    /// property. If the state is already waterlogged or the block does not
-    /// expose a `waterlogged` property then `None` is returned.
+    /// `waterlogged` property forced to `value`. If the state already has
+    /// waterlogged set to `value` or the  block does not expose a `waterlogged`
+    /// property then `None` is returned.
     #[must_use]
     pub fn set_waterlogged(&self, id: BlockStateId, value: bool) -> Option<BlockStateId> {
         self.properties(id).and_then(|props| {

@@ -157,7 +157,7 @@ impl BlockState {
 
     /// Produce a new state identical to `self` except the waterlogged property
     /// is set to `value`. If the block type does not support waterlogging or
-    /// the state was already waterlogged, `None` is returned.
+    /// the state already had waterlogged set to `value`, `None` is returned.
     #[must_use]
     pub fn set_waterlogged(&self, value: bool) -> Option<&'static BlockState> {
         self.id
