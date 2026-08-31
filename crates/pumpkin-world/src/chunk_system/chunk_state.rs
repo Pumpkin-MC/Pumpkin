@@ -335,8 +335,16 @@ impl Chunk {
             blending_data: proto_chunk.blending_data,
             inhabited_time: AtomicU64::new(0),
             custom_data: Mutex::new(NbtCompound::new()),
-            sky_light_height_cache: std::sync::atomic::AtomicU32::new(0),
+            sky_light_height_cache: std::sync::atomic::AtomicU32::new(
+                proto_chunk.sky_light_height,
+            ),
         };
+
+        // Worldgen hat den Cut berechnet -> direkt persistieren, damit der
+        // Level-Chunk ihn nicht beim ersten Sky-Light Zugriff neu ableiten muss.
+        if proto_chunk.sky_light_height != 0 {
+            crate::lighting::SkyLightHeightMigration::ensure_persisted(&chunk);
+        }
 
         *self = Self::Level(Arc::new(chunk));
     }

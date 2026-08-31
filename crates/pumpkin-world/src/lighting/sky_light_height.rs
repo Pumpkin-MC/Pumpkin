@@ -10,8 +10,9 @@
 //! Ein Flag bedeutet, dass der Quadrant stärker
 //! als der Schwellenwert vom Chunk abweicht und auf eine tatsächliche Überprüfung zurückfällt.
 
+use crate::ProtoChunk;
 use crate::chunk::{ChunkData, ChunkHeightmapType};
-use pumpkin_data::BlockState;
+use pumpkin_data::{BlockState, BlockStateId};
 use pumpkin_nbt::tag::NbtTag;
 use std::sync::atomic::Ordering;
 
@@ -284,8 +285,16 @@ impl SkyLightHeight {
             }
         }
 
-        // Ein Quadrant kann das Band nur nutzen, wenn alle seine Decken in
-        // [cut, cut + spread] liegen, der Cut also in [q_max - spread, q_min].
+        Self::solve(&q_min, &q_max, min_y, Self::chunk_height(chunk))
+    }
+
+    /// Waehlt aus den 4 Quadranten-Deckenintervallen den Cut, das Band und die
+    /// Divergenz-Flags. Gemeinsamer Kern von Worldgen und Laufzeit
+    ///
+    /// Ein Quadrant kann das Band nur nutzen, wenn alle seine Decken in
+    /// `[cut, cut + spread]` liegen, der Cut also in `[q_max - spread, q_min]`.
+    #[must_use]
+    fn solve(q_min: &[i32; 4], q_max: &[i32; 4], min_y: i32, chunk_height: i32) -> Self {
         let mut best_cut = q_min[0];
         let mut best_covered = 0u32;
         let mut best_spread_index = SPREAD_SCALES.len() - 1;
@@ -313,8 +322,8 @@ impl SkyLightHeight {
         }
 
         let spread = SPREAD_SCALES[best_spread_index];
-        let mut encoded = Self::encode(best_cut, min_y, Self::chunk_height(chunk))
-            .with_spread_index(best_spread_index);
+        let mut encoded =
+            Self::encode(best_cut, min_y, chunk_height).with_spread_index(best_spread_index);
         for i in 0..4 {
             let usable = best_cut >= q_max[i] - spread && best_cut <= q_min[i];
             if !usable {
@@ -323,6 +332,57 @@ impl SkyLightHeight {
         }
 
         encoded
+    }
+
+    /// Wie [`Self::column_opaque_ceiling`], aber auf einem noch nicht fertigen
+    /// `ProtoChunk`
+    fn proto_column_opaque_ceiling(
+        proto: &ProtoChunk,
+        local_x: i32,
+        local_z: i32,
+        from_y: i32,
+    ) -> i32 {
+        let min_y = i32::from(proto.bottom_y());
+        let mut y = from_y.min(min_y + i32::from(proto.height()) - 1);
+        while y >= min_y {
+            let id = proto.get_block_state_raw(local_x, y - min_y, local_z);
+            if id != BlockStateId::AIR && BlockState::from_id(id).opacity > 0 {
+                return y;
+            }
+            y -= 1;
+        }
+        min_y - 1
+    }
+
+    /// Worldgen-Variante von [`Self::compute_from_chunk`].
+    ///
+    /// muss nach Carvern und Features (Stage `Lighting`), damit Löcher und
+    /// Schluchten die bereits im Terrain sind auch in den Quadranten-Flags landen.
+    /// Quelle ist `WorldSurface`-Heightmap des `ProtoChunk`
+    #[must_use]
+    pub fn compute_from_proto(proto: &ProtoChunk) -> Self {
+        let min_y = i32::from(proto.bottom_y());
+        let mut q_min = [i32::MAX; 4];
+        let mut q_max = [i32::MIN; 4];
+
+        for local_z in 0..16i32 {
+            for local_x in 0..16i32 {
+                // `top_block_height_exclusive` ist exklusiv, der oberste Block liegt eins darunter.
+                let surface = proto.top_block_height_exclusive(local_x, local_z) - 1;
+                let ceiling = Self::proto_column_opaque_ceiling(proto, local_x, local_z, surface);
+                let quadrant = Self::quadrant_index(local_x as usize, local_z as usize);
+                q_min[quadrant] = q_min[quadrant].min(ceiling);
+                q_max[quadrant] = q_max[quadrant].max(ceiling);
+            }
+        }
+
+        let computed = Self::solve(&q_min, &q_max, min_y, i32::from(proto.height()));
+        // raw() == 0 ist der "nicht gecached"-Sentinel und darf nie persistiert werden.
+        if computed.raw() == 0 {
+            computed.with_hex_approx_bumped(1)
+        } else {
+            computed
+        }
     }
 
     /// Highest light-blocking block in one chunk-local column, starting from its
@@ -690,5 +750,137 @@ mod tests {
         chunk.sky_light_height_cache.store(0, Ordering::Relaxed);
         let reloaded = SkyLightHeightMigration::get(&chunk);
         assert!(!reloaded.quadrant_uses_limit(2, 2));
+    }
+
+    ///`ProtoChunk` ohne  Generierung.
+    fn proto_chunk() -> ProtoChunk {
+        use crate::generation::generator::{GeneratorInit, VanillaGenerator, WorldGenerator};
+        use pumpkin_data::dimension::Dimension;
+        use pumpkin_util::world_seed::Seed;
+
+        let world_gen = WorldGenerator::Noise(Box::new(VanillaGenerator::new(
+            Seed(42),
+            Dimension::OVERWORLD,
+        )));
+        ProtoChunk::new(0, 0, &world_gen)
+    }
+
+    /// Fuellt jede Spalte bis `top` mit Stein und zieht die `WorldSurface`-Heightmap nach.
+    fn fill_proto_terrain(proto: &mut ProtoChunk, top: i32) {
+        let min_y = i32::from(proto.bottom_y());
+        for local_z in 0..16 {
+            for local_x in 0..16 {
+                for y in min_y..=top {
+                    proto.set_block_state(local_x, y, local_z, Block::STONE.default_state);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn worldgen_flat_terrain_is_usable_in_all_quadrants() {
+        let mut proto = proto_chunk();
+        fill_proto_terrain(&mut proto, 60);
+
+        let height = SkyLightHeight::compute_from_proto(&proto);
+        let min_y = i32::from(proto.bottom_y());
+        let cut = height.decode(min_y, i32::from(proto.height()));
+
+        // Der Cut ist die *Unterkante* des Bands, nicht die Deckenhoehe selbst: alle
+        // Decken (hier 60) muessen in [cut, cut + spread] liegen.
+        assert!(
+            cut - DECODE_SAFETY_MARGIN <= 60 && 60 <= cut + height.spread(),
+            "Decke 60 liegt nicht im Band [{cut}, {}]",
+            cut + height.spread()
+        );
+        for (x, z) in [(2, 2), (12, 2), (2, 12), (12, 12)] {
+            assert!(
+                height.quadrant_uses_limit(x, z),
+                "flaches Terrain: Quadrant ({x},{z}) muss den schnellen Pfad behalten"
+            );
+        }
+        // Flach heisst schmalstes Band.
+        assert_eq!(height.spread(), SPREAD_SCALES[0]);
+        assert_ne!(height.raw(), 0, "Sentinel darf nie entstehen");
+    }
+
+    /// Ein Schacht (Carver/Ravine-Fall) darf nur sein eigenes 8x8-Quadrant degradieren.
+    #[test]
+    fn worldgen_shaft_only_degrades_its_own_quadrant() {
+        let mut proto = proto_chunk();
+        fill_proto_terrain(&mut proto, 60);
+
+        // Spalte (2,2) bis weit unter den Cut ausgraeumt.
+        let min_y = i32::from(proto.bottom_y());
+        for y in min_y..=60 {
+            proto.set_block_state(2, y, 2, Block::AIR.default_state);
+        }
+
+        let height = SkyLightHeight::compute_from_proto(&proto);
+        assert!(
+            !height.quadrant_uses_limit(2, 2),
+            "das Quadrant des Schachts muss den schnellen Pfad verlieren"
+        );
+        for (x, z) in [(12, 2), (2, 12), (12, 12)] {
+            assert!(
+                height.quadrant_uses_limit(x, z),
+                "Quadrant ({x},{z}) muss den schnellen Pfad behalten"
+            );
+        }
+    }
+
+    /// Glas ist nicht Luft, aber lichtdurchlaessig: `WorldSurface` steht hoch, der Cut
+    /// darf trotzdem nicht mitwandern, sonst gilt eine belichtete Spalte als "kein Himmel".
+    #[test]
+    fn worldgen_glass_does_not_raise_the_cut() {
+        let mut proto = proto_chunk();
+        fill_proto_terrain(&mut proto, 60);
+        for local_z in 0..16 {
+            for local_x in 0..16 {
+                proto.set_block_state(local_x, 80, local_z, Block::GLASS.default_state);
+            }
+        }
+
+        let height = SkyLightHeight::compute_from_proto(&proto);
+        let cut = height.decode(i32::from(proto.bottom_y()), i32::from(proto.height()));
+        assert!(
+            cut + height.spread() < 80,
+            "Band [{cut}, {}] folgt dem Glas auf 80 statt dem Stein auf 60",
+            cut + height.spread()
+        );
+        assert!(
+            cut - DECODE_SAFETY_MARGIN <= 60 && 60 <= cut + height.spread(),
+            "der Stein auf 60 muss weiterhin die Decke sein"
+        );
+    }
+
+    /// Upgrade zum Level-Chunk ueberleben -> im Cache und in NBT, ohne Neuberechnung.
+    #[test]
+    fn worldgen_value_survives_upgrade_to_level_chunk() {
+        use crate::chunk_system::chunk_state::Chunk;
+        use pumpkin_config::lighting::LightingEngineConfig;
+        use pumpkin_data::dimension::Dimension;
+
+        let mut proto = proto_chunk();
+        fill_proto_terrain(&mut proto, 60);
+        let computed = SkyLightHeight::compute_from_proto(&proto);
+        proto.sky_light_height = computed.raw();
+
+        let mut chunk = Chunk::Proto(Box::new(proto));
+        chunk.upgrade_to_level_chunk(&Dimension::OVERWORLD, &LightingEngineConfig::Default);
+        let Chunk::Level(level) = chunk else {
+            panic!("upgrade did not produce a level chunk");
+        };
+
+        assert_eq!(
+            level.sky_light_height_cache.load(Ordering::Relaxed),
+            computed.raw(),
+            "der Worldgen-Wert muss im Cache ankommen"
+        );
+        assert!(
+            SkyLightHeightMigration::fast_load_flag(&level),
+            "und direkt persistiert sein, ohne ersten Lazy-Zugriff"
+        );
+        assert_eq!(SkyLightHeightMigration::get(&level), computed);
     }
 }

@@ -154,6 +154,7 @@ pub struct ProtoChunk {
     pub pending_block_entities: Vec<NbtCompound>,
     pending_structure_entities: Vec<NbtCompound>,
     pub fluid_ticks: Vec<ScheduledTick<&'static Fluid>>,
+    pub sky_light_height: u32,
 }
 
 pub struct TerrainCache {
@@ -262,6 +263,7 @@ impl ProtoChunk {
             pending_block_entities: Vec::new(),
             pending_structure_entities: Vec::new(),
             fluid_ticks: Vec::new(),
+            sky_light_height: 0,
         }
     }
 

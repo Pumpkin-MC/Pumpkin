@@ -763,6 +763,13 @@ impl LightEngine {
 
         self.block_light.clear();
         self.sky_light.clear();
+
+        // Cut Height + Quadranten-Flags now here, after Carvern und Features
+        //
+        // Ein pauschaler 0x00-Fill unter dem Cut ist nicht noetig -> bereits unbeschrieben
+        // 'LightContainer::Empty(0)`, und `set(.., 0)` auf `Empty(0)`
+        let center = cache.get_center_chunk_mut();
+        center.sky_light_height = crate::lighting::SkyLightHeight::compute_from_proto(center).raw();
     }
 
     pub fn update_block_light(
