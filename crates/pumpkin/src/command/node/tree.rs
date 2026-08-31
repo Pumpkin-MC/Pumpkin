@@ -111,6 +111,18 @@ impl Tree {
         }
     }
 
+    /// Returns the number of nodes in this tree.
+    #[must_use]
+    pub const fn len(&self) -> usize {
+        self.nodes.len()
+    }
+
+    /// Returns `true` if the tree has no nodes.
+    #[must_use]
+    pub const fn is_empty(&self) -> bool {
+        self.nodes.is_empty()
+    }
+
     /// Allocates a new [`NodeId`] by creating a new unique one.
     const fn alloc(&self) -> NodeId {
         NodeId(NonZero::new(self.nodes.len() + 1).expect("expected a non-zero id"))

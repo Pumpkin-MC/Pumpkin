@@ -1,167 +1,67 @@
-use pumpkin_data::{Enchantment, translation};
-use pumpkin_util::text::TextComponent;
 use std::sync::Arc;
 
-use crate::command::args::bounded_num::{BoundedNumArgumentConsumer, NotInBounds};
-use crate::command::args::entities::EntitiesArgumentConsumer;
-use crate::command::args::resource::enchantment::EnchantmentArgumentConsumer;
-use crate::command::args::{ConsumedArgs, FindArgDefaultName};
-use crate::command::tree::CommandTree;
-use crate::command::tree::builder::argument_default_name;
-use crate::command::{CommandError, CommandExecutor, CommandResult, CommandSender};
-use crate::entity::EntityBase;
 use pumpkin_data::data_component_impl::EnchantmentsImpl;
+use pumpkin_data::{Enchantment, translation};
+use pumpkin_util::PermissionLvl;
+use pumpkin_util::permission::{Permission, PermissionDefault, PermissionRegistry};
+use pumpkin_util::text::TextComponent;
 
-const NAMES: [&str; 1] = ["enchant"];
+use crate::command::argument_builder::{ArgumentBuilder, argument, command};
+use crate::command::argument_types::core::integer::IntegerArgumentType;
+use crate::command::argument_types::entity::EntityArgumentType;
+use crate::command::argument_types::resource::{ENCHANTMENT_ARGUMENT, ResourceArgument};
+use crate::command::context::command_context::CommandContext;
+use crate::command::errors::error_types::CommandErrorType;
+use crate::command::node::dispatcher::CommandDispatcher;
+use crate::command::node::{CommandExecutor, CommandExecutorResult};
+use crate::entity::EntityBase;
+
 const DESCRIPTION: &str = "Adds an enchantment to a player's selected item, subject to the same restrictions as an anvil. Also works on any mob or entity holding a weapon/tool/armor in its main hand.";
+const PERMISSION: &str = "minecraft:command.enchant";
 
-struct Executor;
+const ERROR_FAILED: CommandErrorType<0> = CommandErrorType::new(
+    translation::java::COMMANDS_ENCHANT_FAILED,
+    translation::java::COMMANDS_ENCHANT_FAILED,
+);
 
-impl CommandExecutor for Executor {
-    fn execute(
-        &self,
-        sender: &CommandSender,
-        _server: &crate::server::Server,
-        args: &ConsumedArgs,
-    ) -> CommandResult {
-        let targets = EntitiesArgumentConsumer.find_arg_default_name(args)?;
-        let enchantment = EnchantmentArgumentConsumer.find_arg_default_name(args)?;
-        let level = match enchantment_level_consumer().find_arg_default_name(args) {
-            Err(_) => 1,
-            Ok(Ok(level)) => level,
-            Ok(Err(err)) => {
-                let err_msg = match err {
-                    NotInBounds::LowerBound(val, min) => TextComponent::translate_cross(
-                        "argument.integer.low",
-                        "argument.integer.low",
-                        &[
-                            TextComponent::text(min.to_string()),
-                            TextComponent::text(val.to_string()),
-                        ],
-                    ),
-                    NotInBounds::UpperBound(val, max) => TextComponent::translate_cross(
-                        "argument.integer.big",
-                        "argument.integer.big",
-                        &[
-                            TextComponent::text(max.to_string()),
-                            TextComponent::text(val.to_string()),
-                        ],
-                    ),
-                };
+const ERROR_FAILED_LEVEL: CommandErrorType<2> = CommandErrorType::new(
+    translation::java::COMMANDS_ENCHANT_FAILED_LEVEL,
+    translation::java::COMMANDS_ENCHANT_FAILED_LEVEL,
+);
 
-                return Err(CommandError::CommandFailed(err_msg));
-            }
-        };
+const ERROR_FAILED_ITEMLESS: CommandErrorType<1> = CommandErrorType::new(
+    translation::java::COMMANDS_ENCHANT_FAILED_ITEMLESS,
+    translation::java::COMMANDS_ENCHANT_FAILED_ITEMLESS,
+);
 
-        if level > enchantment.max_level {
-            let msg = TextComponent::translate_cross(
-                translation::java::COMMANDS_ENCHANT_FAILED_LEVEL,
-                translation::bedrock::COMMANDS_ENCHANT_INVALIDLEVEL,
-                [
-                    TextComponent::text(level.to_string()),
-                    TextComponent::text(enchantment.max_level.to_string()),
-                ],
-            );
-            return Err(CommandError::CommandFailed(msg));
-        }
-
-        let mut successful_targets = 0;
-
-        if targets.len() == 1 {
-            return match enchant_target(&targets[0], enchantment, level) {
-                Ok(()) => {
-                    let msg = TextComponent::translate_cross(
-                        translation::java::COMMANDS_ENCHANT_SUCCESS_SINGLE,
-                        translation::bedrock::COMMANDS_ENCHANT_SUCCESS,
-                        [
-                            enchantment.get_fullname(level),
-                            targets[0].get_display_name(),
-                        ],
-                    );
-                    sender.send_message(msg);
-                    Ok(1)
-                }
-                Err(e) => Err(e),
-            };
-        }
-
-        for target in targets {
-            if enchant_target(target, enchantment, level).is_ok() {
-                successful_targets += 1;
-            }
-        }
-
-        if successful_targets == 0 {
-            return Err(commands_enchant_failed());
-        }
-
-        let msg = TextComponent::translate_cross(
-            translation::java::COMMANDS_ENCHANT_SUCCESS_MULTIPLE,
-            translation::bedrock::COMMANDS_ENCHANT_SUCCESS,
-            [
-                enchantment.get_fullname(level),
-                TextComponent::text(targets.len().to_string()),
-            ],
-        );
-        sender.send_message(msg);
-        Ok(successful_targets)
-    }
-}
-
-const fn enchantment_level_consumer() -> BoundedNumArgumentConsumer<i32> {
-    BoundedNumArgumentConsumer::new()
-        .name("level")
-        .min(0)
-        .max(i32::MAX)
-}
-
-fn commands_enchant_failed() -> CommandError {
-    let msg = TextComponent::translate_cross(
-        translation::java::COMMANDS_ENCHANT_FAILED,
-        translation::bedrock::COMMANDS_ENCHANT_CANTENCHANT,
-        [TextComponent::text("")],
-    );
-    CommandError::CommandFailed(msg)
-}
+const ERROR_FAILED_INCOMPATIBLE: CommandErrorType<1> = CommandErrorType::new(
+    translation::java::COMMANDS_ENCHANT_FAILED_INCOMPATIBLE,
+    translation::java::COMMANDS_ENCHANT_FAILED_INCOMPATIBLE,
+);
 
 fn enchant_target(
     target: &Arc<dyn EntityBase>,
     enchantment: &'static Enchantment,
     level: i32,
-) -> Result<(), CommandError> {
+) -> Result<(), crate::command::errors::command_syntax_error::CommandSyntaxError> {
     let Some(player) = target.get_player() else {
-        return Err(commands_enchant_failed());
+        return Err(ERROR_FAILED.create_without_context());
     };
 
     let mut item = player.inventory().held_item();
 
     if item.is_empty() {
-        let msg = TextComponent::translate_cross(
-            translation::java::COMMANDS_ENCHANT_FAILED_ITEMLESS,
-            translation::bedrock::COMMANDS_ENCHANT_NOITEM,
-            [target.get_display_name()],
-        );
-        return Err(CommandError::CommandFailed(msg));
+        return Err(ERROR_FAILED_ITEMLESS.create_without_context(target.get_display_name()));
     }
 
     if !enchantment.can_enchant(item.item) {
-        let msg = TextComponent::translate_cross(
-            translation::java::COMMANDS_ENCHANT_FAILED_INCOMPATIBLE,
-            translation::bedrock::COMMANDS_ENCHANT_CANTENCHANT,
-            [item.item.translated_name()],
-        );
-        return Err(CommandError::CommandFailed(msg));
+        return Err(ERROR_FAILED_INCOMPATIBLE.create_without_context(item.item.translated_name()));
     }
 
     if let Some(data) = item.get_data_component::<EnchantmentsImpl>()
         && !enchantment.is_enchantment_compatible(data)
     {
-        let msg = TextComponent::translate_cross(
-            translation::java::COMMANDS_ENCHANT_FAILED_INCOMPATIBLE,
-            translation::bedrock::COMMANDS_ENCHANT_CANTENCHANT,
-            [item.item.translated_name()],
-        );
-        return Err(CommandError::CommandFailed(msg));
+        return Err(ERROR_FAILED_INCOMPATIBLE.create_without_context(item.item.translated_name()));
     }
 
     item.enchant(enchantment, level);
@@ -173,12 +73,84 @@ fn enchant_target(
     Ok(())
 }
 
-pub fn init_command_tree() -> CommandTree {
-    CommandTree::new(NAMES, DESCRIPTION).then(
-        argument_default_name(EntitiesArgumentConsumer).then(
-            argument_default_name(EnchantmentArgumentConsumer)
-                .then(argument_default_name(enchantment_level_consumer()).execute(Executor))
-                .execute(Executor),
+struct EnchantExecutor {
+    has_level: bool,
+}
+
+impl CommandExecutor for EnchantExecutor {
+    fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
+        let targets = EntityArgumentType::get_entities(context, "targets")?;
+        let enchantment = ResourceArgument::get_enchantment(context, "enchantment")?;
+        let level = if self.has_level {
+            IntegerArgumentType::get(context, "level")?
+        } else {
+            1
+        };
+
+        if level > enchantment.max_level {
+            return Err(ERROR_FAILED_LEVEL.create_without_context(
+                TextComponent::text(level.to_string()),
+                TextComponent::text(enchantment.max_level.to_string()),
+            ));
+        }
+
+        let mut successful_targets = 0;
+
+        if targets.len() == 1 {
+            enchant_target(&targets[0], enchantment, level)?;
+            let msg = TextComponent::translate_cross(
+                translation::java::COMMANDS_ENCHANT_SUCCESS_SINGLE,
+                translation::bedrock::COMMANDS_ENCHANT_SUCCESS,
+                [
+                    enchantment.get_fullname(level),
+                    targets[0].as_ref().get_display_name(),
+                ],
+            );
+            context.source.send_feedback(msg, true);
+            return Ok(1);
+        }
+
+        for target in &targets {
+            if enchant_target(target, enchantment, level).is_ok() {
+                successful_targets += 1;
+            }
+        }
+
+        if successful_targets == 0 {
+            return Err(ERROR_FAILED.create_without_context());
+        }
+
+        let msg = TextComponent::translate_cross(
+            translation::java::COMMANDS_ENCHANT_SUCCESS_MULTIPLE,
+            translation::bedrock::COMMANDS_ENCHANT_SUCCESS,
+            [
+                enchantment.get_fullname(level),
+                TextComponent::text(targets.len().to_string()),
+            ],
+        );
+        context.source.send_feedback(msg, true);
+
+        Ok(successful_targets)
+    }
+}
+
+pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistry) {
+    registry.register_permission_or_panic(Permission::new(
+        PERMISSION,
+        DESCRIPTION,
+        PermissionDefault::Op(PermissionLvl::Two),
+    ));
+
+    dispatcher.register(
+        command("enchant", DESCRIPTION).requires(PERMISSION).then(
+            argument("targets", EntityArgumentType::Entities).then(
+                argument("enchantment", ENCHANTMENT_ARGUMENT.clone())
+                    .executes(EnchantExecutor { has_level: false })
+                    .then(
+                        argument("level", IntegerArgumentType::with_min(0))
+                            .executes(EnchantExecutor { has_level: true }),
+                    ),
+            ),
         ),
-    )
+    );
 }

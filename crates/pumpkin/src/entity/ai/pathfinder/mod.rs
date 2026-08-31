@@ -119,6 +119,12 @@ impl Navigator {
         self.path_start_pos = None;
     }
 
+    fn finish_navigation(&mut self, entity: &LivingEntity) {
+        self.stop();
+        entity.movement_input.store(Vector3::new(0.0, 0.0, 0.0));
+        entity.jumping.store(false, Ordering::Relaxed);
+    }
+
     pub fn set_pathfinding_malus(&mut self, path_type: PathType, malus: f32) {
         self.path_type_overrides.insert(path_type, malus);
     }
@@ -324,9 +330,7 @@ impl Navigator {
         };
 
         if goal.current_progress == goal.destination {
-            self.is_idle.store(true, Ordering::Relaxed);
-            self.current_path = None;
-            entity.movement_input.store(Vector3::new(0.0, 0.0, 0.0));
+            self.finish_navigation(entity);
             return;
         }
 
@@ -344,15 +348,13 @@ impl Navigator {
         }
 
         if self.current_path.is_none() {
-            entity.movement_input.store(Vector3::new(0.0, 0.0, 0.0));
-            self.current_goal = Some(goal);
+            self.finish_navigation(entity);
             return;
         }
 
         if let Some(path) = &mut self.current_path {
             if path.is_done() || !path.is_valid() {
-                entity.movement_input.store(Vector3::new(0.0, 0.0, 0.0));
-                self.current_goal = Some(goal);
+                self.finish_navigation(entity);
                 return;
             }
 
@@ -365,10 +367,7 @@ impl Navigator {
             }
 
             if self.ticks_on_current_node > 100 {
-                self.current_path = None;
-                self.ticks_on_current_node = 0;
-                entity.movement_input.store(Vector3::new(0.0, 0.0, 0.0));
-                self.current_goal = Some(goal);
+                self.finish_navigation(entity);
                 return;
             }
 
@@ -380,10 +379,7 @@ impl Navigator {
                     let dz = current_pos.z - start_pos.z;
                     let dist_sq = dx * dx + dy * dy + dz * dz;
                     if dist_sq < 2.0 * 2.0 {
-                        self.current_path = None;
-                        self.ticks_on_current_node = 0;
-                        entity.movement_input.store(Vector3::new(0.0, 0.0, 0.0));
-                        self.current_goal = Some(goal);
+                        self.finish_navigation(entity);
                         return;
                     }
                 }
@@ -454,9 +450,8 @@ impl Navigator {
                         .store(false, std::sync::atomic::Ordering::SeqCst);
                 }
             } else {
-                self.is_idle.store(true, Ordering::Relaxed);
-                self.current_path = None;
-                entity.movement_input.store(Vector3::new(0.0, 0.0, 0.0));
+                self.finish_navigation(entity);
+                return;
             }
         }
 

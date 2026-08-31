@@ -2,7 +2,26 @@ use std::{collections::HashMap, sync::Arc};
 
 use pumpkin_util::text::TextComponent;
 
-use crate::{command::tree::CommandTree, entity::player::Player};
+use crate::{
+    command::{
+        argument_types::entity_anchor::EntityAnchor, context::command_context::CommandContext,
+    },
+    entity::player::Player,
+};
+
+#[derive(Clone, Copy, Debug)]
+pub enum Number {
+    F64(f64),
+    F32(f32),
+    I32(i32),
+    I64(i64),
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum NotInBounds {
+    LowerBound(Number, Number),
+    UpperBound(Number, Number),
+}
 
 #[derive(Clone)]
 pub enum OwnedArg {
@@ -16,7 +35,6 @@ pub enum OwnedArg {
     Rotation(f32, bool, f32, bool),
     GameMode(pumpkin_util::GameMode),
     Difficulty(pumpkin_util::Difficulty),
-    CommandTree(CommandTree),
     Item(String),
     ItemPredicate(String),
     ResourceLocation(String),
@@ -28,64 +46,59 @@ pub enum OwnedArg {
     Msg(String),
     TextComponent(TextComponent),
     Time(i32),
-    Num(
-        Result<
-            crate::command::args::bounded_num::Number,
-            crate::command::args::bounded_num::NotInBounds,
-        >,
-    ),
+    Num(Result<Number, NotInBounds>),
     Bool(bool),
     Simple(String),
     SoundCategory(pumpkin_data::sound::SoundCategory),
     DamageType(pumpkin_data::damage::DamageType),
     Effect(&'static pumpkin_data::effect::StatusEffect),
     Enchantment(&'static pumpkin_data::Enchantment),
-    EntityAnchor(crate::command::args::EntityAnchor),
+    EntityAnchor(EntityAnchor),
     Advancement(&'static pumpkin_data::Advancement),
 }
 
-impl OwnedArg {
-    #[must_use]
-    #[expect(clippy::unreachable)]
-    pub fn from_arg(arg: &crate::command::args::Arg<'_>) -> Self {
-        use crate::command::args::Arg;
-        match arg {
-            Arg::Entities(v) => Self::Entities(v.clone()),
-            Arg::Entity(e) => Self::Entity(e.clone()),
-            Arg::Players(v) => Self::Players(v.clone()),
-            Arg::GameProfiles(v) => Self::GameProfiles(v.clone()),
-            Arg::BlockPos(p) => Self::BlockPos(*p),
-            Arg::Pos3D(v) => Self::Pos3D(*v),
-            Arg::Pos2D(v) => Self::Pos2D(*v),
-            Arg::Rotation(a, b, c, d) => Self::Rotation(*a, *b, *c, *d),
-            Arg::GameMode(g) => Self::GameMode(*g),
-            Arg::Difficulty(d) => Self::Difficulty(*d),
-            Arg::CommandTree(t) => Self::CommandTree(t.clone()),
-            Arg::Item(s) => Self::Item(s.to_string()),
-            Arg::ItemPredicate(s) => Self::ItemPredicate(s.to_string()),
-            Arg::ResourceLocation(s) => Self::ResourceLocation(s.to_string()),
-            Arg::Block(s) => Self::Block(s.to_string()),
-            Arg::BlockPredicate(s) => Self::BlockPredicate(s.to_string()),
-            Arg::BossbarColor(c) => Self::BossbarColor(*c),
-            Arg::BossbarStyle(s) => Self::BossbarStyle(*s),
-            Arg::Particle(p) => Self::Particle(*p),
-            Arg::Msg(m) => Self::Msg(m.clone()),
-            Arg::TextComponent(t) => Self::TextComponent(t.clone()),
-            Arg::Time(t) => Self::Time(*t),
-            Arg::Num(n) => Self::Num(*n),
-            Arg::Bool(b) => Self::Bool(*b),
-            Arg::Simple(s) => Self::Simple(s.to_string()),
-            Arg::SoundCategory(s) => Self::SoundCategory(*s),
-            Arg::DamageType(d) => Self::DamageType(*d),
-            Arg::Effect(e) => Self::Effect(e),
-            Arg::Enchantment(e) => Self::Enchantment(e),
-            Arg::EntityAnchor(a) => Self::EntityAnchor(*a),
-            Arg::Advancement(a) => Self::Advancement(a),
-            Arg::Slot(_, _) | Arg::Slots(_, _) | Arg::TeamColor(_) | Arg::HexColor(_) => {
-                unreachable!()
+#[must_use]
+pub fn build_consumed_args_from_context(context: &CommandContext) -> HashMap<String, OwnedArg> {
+    let mut map = HashMap::new();
+    for (name, parsed) in &context.arguments {
+        let res = &parsed.result;
+        if let Some(&b) = res.downcast_ref::<bool>() {
+            map.insert(name.clone(), OwnedArg::Bool(b));
+        } else if let Some(&i) = res.downcast_ref::<i32>() {
+            map.insert(name.clone(), OwnedArg::Num(Ok(Number::I32(i))));
+        } else if let Some(&i) = res.downcast_ref::<i64>() {
+            map.insert(name.clone(), OwnedArg::Num(Ok(Number::I64(i))));
+        } else if let Some(&f) = res.downcast_ref::<f32>() {
+            map.insert(name.clone(), OwnedArg::Num(Ok(Number::F32(f))));
+        } else if let Some(&f) = res.downcast_ref::<f64>() {
+            map.insert(name.clone(), OwnedArg::Num(Ok(Number::F64(f))));
+        } else if let Some(s) = res.downcast_ref::<String>() {
+            map.insert(name.clone(), OwnedArg::Simple(s.clone()));
+        } else if let Some(&pos) = res.downcast_ref::<pumpkin_util::math::position::BlockPos>() {
+            map.insert(name.clone(), OwnedArg::BlockPos(pos));
+        } else if let Some(&v) = res.downcast_ref::<pumpkin_util::math::vector3::Vector3<f64>>() {
+            map.insert(name.clone(), OwnedArg::Pos3D(v));
+        } else if let Some(&v) = res.downcast_ref::<pumpkin_util::math::vector2::Vector2<f64>>() {
+            map.insert(name.clone(), OwnedArg::Pos2D(v));
+        } else if let Some(&mode) = res.downcast_ref::<pumpkin_util::GameMode>() {
+            map.insert(name.clone(), OwnedArg::GameMode(mode));
+        } else if let Some(&diff) = res.downcast_ref::<pumpkin_util::Difficulty>() {
+            map.insert(name.clone(), OwnedArg::Difficulty(diff));
+        } else if let Some(t) = res.downcast_ref::<TextComponent>() {
+            map.insert(name.clone(), OwnedArg::TextComponent(t.clone()));
+        } else if let Some(&anchor) = res.downcast_ref::<EntityAnchor>() {
+            map.insert(name.clone(), OwnedArg::EntityAnchor(anchor));
+        } else if let Some(selector) =
+            res.downcast_ref::<crate::command::argument_types::entity_selector::EntitySelector>()
+        {
+            if let Ok(players) = selector.find_players(&context.source) {
+                map.insert(name.clone(), OwnedArg::Players(players));
+            } else if let Ok(entities) = selector.find_entities(&context.source) {
+                map.insert(name.clone(), OwnedArg::Entities(entities));
             }
         }
     }
+    map
 }
 
 pub struct ConsumedArgsResource {
