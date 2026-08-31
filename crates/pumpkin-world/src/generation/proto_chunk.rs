@@ -155,6 +155,10 @@ pub struct ProtoChunk {
     pending_structure_entities: Vec<NbtCompound>,
     pub fluid_ticks: Vec<ScheduledTick<&'static Fluid>>,
     pub sky_light_height: u32,
+    /// `PumpkinCustomData` carried through generation so a chunk that is loaded, demoted
+    /// to a proto chunk and rebuilt does not silently lose it. Plugins own most of what
+    /// lives in here; dropping it is data loss, not a recomputable cache miss.
+    pub custom_data: NbtCompound,
 }
 
 pub struct TerrainCache {
@@ -264,6 +268,7 @@ impl ProtoChunk {
             pending_structure_entities: Vec::new(),
             fluid_ticks: Vec::new(),
             sky_light_height: 0,
+            custom_data: NbtCompound::new(),
         }
     }
 
@@ -282,6 +287,11 @@ impl ProtoChunk {
         proto_chunk
             .blending_data
             .clone_from(&chunk_data.blending_data);
+        proto_chunk.custom_data = chunk_data
+            .custom_data
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone();
 
         let section_data = &chunk_data.section;
         let heightmap_data = chunk_data

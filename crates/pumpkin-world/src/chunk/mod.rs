@@ -1030,6 +1030,42 @@ mod tests {
         assert!(ChunkHeightmapType::MotionBlockingNoLeaves.is_opaque(water)); // Water is liquid
     }
 
+    /// `ChunkData::update_heightmap` must hand `ChunkHeightmaps::update` its arguments in
+    /// `(local_x, local_y, local_z)` order.
+    ///
+    /// It used to pass `(x, z, y)`. Every runtime heightmap update then wrote the wrong
+    /// height into the wrong column — a 60 block tall stone pillar reported
+    /// `WorldSurface = 15`. Nothing crashed, so it went unnoticed; heightmaps feed mob
+    /// spawning and block placement, not just lighting.
+    ///
+    /// The coordinates below are deliberately all different: equal values would let a
+    /// transposition pass unnoticed.
+    #[test]
+    fn update_heightmap_does_not_transpose_its_coordinates() {
+        use crate::chunk::{ChunkData, ChunkHeightmapType};
+
+        let chunk = ChunkData::empty(0, 0);
+        let (x, y, z) = (3usize, 60i32, 5usize);
+        chunk.set_block_absolute_y(x, y, z, Block::STONE.default_state.id);
+
+        let min_y = chunk.section.min_y;
+        let heightmap = chunk
+            .heightmap
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+
+        assert_eq!(
+            heightmap.get(ChunkHeightmapType::WorldSurface, x as i32, z as i32, min_y),
+            y,
+            "the block's own column must report its height"
+        );
+        assert_eq!(
+            heightmap.get(ChunkHeightmapType::WorldSurface, z as i32, x as i32, min_y),
+            min_y - 1,
+            "the transposed column (z,x) must stay empty"
+        );
+    }
+
     #[test]
     fn chunk_custom_data() {
         use pumpkin_nbt::tag::NbtTag;

@@ -334,7 +334,10 @@ impl Chunk {
             status: proto_chunk.stage.into(),
             blending_data: proto_chunk.blending_data,
             inhabited_time: AtomicU64::new(0),
-            custom_data: Mutex::new(NbtCompound::new()),
+            // Carried over, not dropped. A full chunk with uniform lighting is demoted to a
+            // proto chunk and rebuilt through here; starting from an empty compound would
+            // erase every plugin's stored data on that round trip.
+            custom_data: Mutex::new(proto_chunk.custom_data),
             sky_light_height_cache: std::sync::atomic::AtomicU32::new(proto_chunk.sky_light_height),
         };
 
@@ -350,7 +353,77 @@ impl Chunk {
 
 #[cfg(test)]
 mod tests {
-    use super::StagedChunkEnum;
+    use super::{Chunk, StagedChunkEnum};
+    use crate::ProtoChunk;
+    use pumpkin_config::lighting::LightingEngineConfig;
+    use pumpkin_data::dimension::Dimension;
+    use pumpkin_nbt::tag::NbtTag;
+
+    fn proto_chunk() -> ProtoChunk {
+        use crate::generation::generator::{GeneratorInit, VanillaGenerator, WorldGenerator};
+        use pumpkin_util::world_seed::Seed;
+
+        let world_gen = WorldGenerator::Noise(Box::new(VanillaGenerator::new(
+            Seed(42),
+            Dimension::OVERWORLD,
+        )));
+        ProtoChunk::new(0, 0, &world_gen)
+    }
+
+    /// Custom data must survive the proto -> level upgrade.
+    ///
+    /// A full chunk whose lighting looks uniform is demoted to a proto chunk and rebuilt
+    /// through `upgrade_to_level_chunk`. That path used to start from an empty compound,
+    /// so every plugin's stored data was erased on the round trip. Unlike the sky light
+    /// cut height, this is not a recomputable cache — it is the only copy.
+    #[test]
+    fn upgrading_to_a_level_chunk_keeps_custom_data() {
+        let mut proto = proto_chunk();
+        proto.custom_data.put("my_plugin", {
+            let mut namespace = pumpkin_nbt::compound::NbtCompound::new();
+            namespace.put("counter", NbtTag::Int(7));
+            NbtTag::Compound(namespace)
+        });
+
+        let mut chunk = Chunk::Proto(Box::new(proto));
+        chunk.upgrade_to_level_chunk(&Dimension::OVERWORLD, &LightingEngineConfig::Default);
+        let Chunk::Level(level) = chunk else {
+            panic!("upgrade did not produce a level chunk");
+        };
+
+        assert_eq!(
+            level.get_custom_data("my_plugin", "counter"),
+            Some(NbtTag::Int(7)),
+            "plugin data was dropped during the upgrade"
+        );
+    }
+
+    /// The sky light cut height is written alongside, not on top of, existing custom data.
+    #[test]
+    fn the_cut_height_does_not_displace_other_custom_data() {
+        let mut proto = proto_chunk();
+        proto.custom_data.put("my_plugin", {
+            let mut namespace = pumpkin_nbt::compound::NbtCompound::new();
+            namespace.put("counter", NbtTag::Int(7));
+            NbtTag::Compound(namespace)
+        });
+        proto.sky_light_height = crate::lighting::SkyLightHeight::encode(60, -64, 384).raw();
+
+        let mut chunk = Chunk::Proto(Box::new(proto));
+        chunk.upgrade_to_level_chunk(&Dimension::OVERWORLD, &LightingEngineConfig::Default);
+        let Chunk::Level(level) = chunk else {
+            panic!("upgrade did not produce a level chunk");
+        };
+
+        assert_eq!(
+            level.get_custom_data("my_plugin", "counter"),
+            Some(NbtTag::Int(7))
+        );
+        assert!(
+            crate::lighting::SkyLightHeightMigration::fast_load_flag(&level),
+            "the worldgen cut height must still be persisted"
+        );
+    }
 
     #[test]
     fn surface_reads_neighbor_biomes_without_owning_neighbors() {
