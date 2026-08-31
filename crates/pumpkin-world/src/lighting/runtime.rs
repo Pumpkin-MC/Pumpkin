@@ -724,11 +724,12 @@ impl DynamicLightEngine {
                 let new_light = light_level.saturating_sub(opacity);
 
                 // Only propagate if new light is brighter than current light
-                if new_light > neighbor_light && new_light > 1 && {
+                if new_light > neighbor_light {
                     counters.bump(LightCounters::SET_BLOCK_LIGHT);
-                    ChunkCursor::write_light(chunk, &neighbor_pos, new_light, true)
-                } {
-                    self.queue_block_light_increase(neighbor_pos, new_light);
+                    let written = ChunkCursor::write_light(chunk, &neighbor_pos, new_light, true);
+                    if written && new_light > 1 {
+                        self.queue_block_light_increase(neighbor_pos, new_light);
+                    }
                 }
             }
         }
@@ -944,11 +945,12 @@ impl DynamicLightEngine {
 
             // Only propagate if new light is brighter than current light.
             // `set` fails outside the chunk height; do not re-queue those.
-            if new_light > neighbor_light && new_light > 0 && {
+            if new_light > neighbor_light {
                 counters.bump(LightCounters::SET_SKY);
-                ChunkCursor::write_light(chunk, &neighbor_pos, new_light, false)
-            } {
-                self.queue_sky_light_increase(neighbor_pos, new_light);
+                let written = ChunkCursor::write_light(chunk, &neighbor_pos, new_light, false);
+                if written && new_light > 0 {
+                    self.queue_sky_light_increase(neighbor_pos, new_light);
+                }
             }
         }
     }
