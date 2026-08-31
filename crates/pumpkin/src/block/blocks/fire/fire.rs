@@ -163,13 +163,9 @@ impl FireBlock {
                 let mut fire_props = FireProperties::from_state_id(state_id, &Block::FIRE);
                 fire_props.age = new_age;
                 let new_state_id = fire_props.to_state_id(&Block::FIRE);
-                world.set_block_state(pos, new_state_id, BlockFlags::NOTIFY_NEIGHBORS);
+                world.set_block_state(pos, new_state_id, BlockFlags::NOTIFY_ALL);
             } else {
-                world.set_block_state(
-                    pos,
-                    Block::AIR.default_state.id,
-                    BlockFlags::NOTIFY_NEIGHBORS,
-                );
+                world.set_block_state(pos, Block::AIR.default_state.id, BlockFlags::NOTIFY_ALL);
             }
 
             if old_block == &Block::TNT {
@@ -308,7 +304,7 @@ impl BlockBehaviour for FireBlock {
         if new_age != age {
             fire_props.age = new_age;
             let new_state_id = fire_props.to_state_id(&Block::FIRE);
-            world.set_block_state(pos, new_state_id, BlockFlags::NOTIFY_NEIGHBORS);
+            world.set_block_state(pos, new_state_id, BlockFlags::NOTIFY_ALL);
         }
 
         if !infiniburn {
@@ -316,11 +312,7 @@ impl BlockBehaviour for FireBlock {
             if !Self::are_blocks_around_flammable(world.as_ref(), pos) {
                 let block_below_state = world.get_block_state(&pos.down());
                 if !block_below_state.is_side_solid(BlockDirection::Up) || new_age > 3 {
-                    world.set_block_state(
-                        pos,
-                        Block::AIR.default_state.id,
-                        BlockFlags::NOTIFY_NEIGHBORS,
-                    );
+                    world.set_block_state(pos, Block::AIR.default_state.id, BlockFlags::NOTIFY_ALL);
                     return;
                 }
             }
@@ -330,11 +322,7 @@ impl BlockBehaviour for FireBlock {
                 && rand::rng().random_range(0..4) == 0
                 && !Self::is_flammable(world.get_block_state(&pos.down()))
             {
-                world.set_block_state(
-                    pos,
-                    Block::AIR.default_state.id,
-                    BlockFlags::NOTIFY_NEIGHBORS,
-                );
+                world.set_block_state(pos, Block::AIR.default_state.id, BlockFlags::NOTIFY_ALL);
                 return;
             }
         }

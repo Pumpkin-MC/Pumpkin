@@ -383,6 +383,12 @@ impl CommandSource {
         self.entity.as_ref().and_then(|entity| entity.get_player())
     }
 
+    /// Gets the player as an `Arc<Player>` from the underlying output sender.
+    #[must_use]
+    pub fn as_player(&self) -> Option<Arc<Player>> {
+        self.output.as_player()
+    }
+
     /// Gets the player as a result:
     ///
     /// - If this source actually contains a player, it returns that wrapped in an [`Ok`].

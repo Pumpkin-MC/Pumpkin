@@ -1,33 +1,26 @@
+use std::sync::Arc;
+
 use pumpkin_data::game_rules::{GameRule, GameRuleRegistry, GameRuleValue};
+use pumpkin_util::PermissionLvl;
+use pumpkin_util::permission::{Permission, PermissionDefault, PermissionRegistry};
+use pumpkin_util::text::TextComponent;
 
-use crate::command::args::FindArg;
-use crate::command::args::bool::BoolArgConsumer;
-use crate::command::args::bounded_num::BoundedNumArgumentConsumer;
-
-use crate::TextComponent;
-
-use crate::command::args::ConsumedArgs;
-use crate::command::tree::CommandTree;
-use crate::command::tree::builder::{argument, literal};
-use crate::command::{CommandExecutor, CommandResult, CommandSender};
-
-const NAMES: [&str; 1] = ["gamerule"];
+use crate::command::argument_builder::{ArgumentBuilder, argument, command, literal};
+use crate::command::argument_types::core::bool::BoolArgumentType;
+use crate::command::argument_types::core::integer::IntegerArgumentType;
+use crate::command::context::command_context::CommandContext;
+use crate::command::node::dispatcher::CommandDispatcher;
+use crate::command::node::{CommandExecutor, CommandExecutorResult};
 
 const DESCRIPTION: &str = "Sets or queries a game rule value.";
-
-const ARG_NAME: &str = "value";
+const PERMISSION: &str = "minecraft:command.gamerule";
 
 struct QueryExecutor(GameRule);
 
 impl CommandExecutor for QueryExecutor {
-    fn execute(
-        &self,
-        sender: &CommandSender,
-        server: &crate::server::Server,
-        _args: &ConsumedArgs,
-    ) -> CommandResult {
+    fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
         let key = TextComponent::text(self.0.to_string());
-        let level_info = server.level_info.load();
+        let level_info = context.server().level_info.load();
         let game_rule = level_info.game_rules.get(&self.0);
         let game_rule_i32_value = match game_rule {
             GameRuleValue::Int(value) => (*value).clamp(i32::MIN as i64, i32::MAX as i64) as i32,
@@ -36,79 +29,101 @@ impl CommandExecutor for QueryExecutor {
         let value = TextComponent::text(game_rule.to_string());
         drop(level_info);
 
-        sender.send_message(TextComponent::translate_cross(
-            "commands.gamerule.query",
-            "commands.gamerule.query",
-            [key, value],
-        ));
+        context.source.send_feedback(
+            TextComponent::translate_cross(
+                "commands.gamerule.query",
+                "commands.gamerule.query",
+                [key, value],
+            ),
+            false,
+        );
 
         Ok(game_rule_i32_value)
     }
 }
 
-struct SetExecutor(GameRule);
+struct SetIntExecutor(GameRule);
 
-impl CommandExecutor for SetExecutor {
-    #[expect(unused)]
-    fn execute(
-        &self,
-        sender: &CommandSender,
-        server: &crate::server::Server,
-        args: &ConsumedArgs,
-    ) -> CommandResult {
+impl CommandExecutor for SetIntExecutor {
+    fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
         let key = TextComponent::text(self.0.to_string());
-        let current_info = server.level_info.load();
+        let arg_value = IntegerArgumentType::get(context, "value")? as i64;
 
+        let current_info = context.server().level_info.load();
         let mut new_info = (**current_info).clone();
 
-        let mut output_value = String::new();
-        let mut result_i32: i32;
-
-        let raw_value = new_info.game_rules.get_mut(&self.0);
-
-        match raw_value {
-            GameRuleValue::Int(value) => {
-                let arg_value = BoundedNumArgumentConsumer::<i64>::find_arg(args, ARG_NAME)??;
-                *value = arg_value;
-                output_value = arg_value.to_string();
-                // TODO: Should integer gamerule values be kept as a `i64` or should it be changed to an `i32`?
-                // For now, we can cast it
-                result_i32 = arg_value.clamp(i32::MIN as i64, i32::MAX as i64) as i32;
-            }
-            GameRuleValue::Bool(value) => {
-                let arg_value = BoolArgConsumer::find_arg(args, ARG_NAME)?;
-                *value = arg_value;
-                output_value = arg_value.to_string();
-                result_i32 = *value as i32;
-            }
+        if let GameRuleValue::Int(raw_value) = new_info.game_rules.get_mut(&self.0) {
+            *raw_value = arg_value;
         }
 
-        server.level_info.store(std::sync::Arc::new(new_info));
+        context.server().level_info.store(Arc::new(new_info));
 
-        let value_component = TextComponent::text(output_value);
-        sender.send_message(TextComponent::translate_cross(
-            "commands.gamerule.set",
-            "commands.gamerule.set",
-            [key, value_component],
-        ));
+        let value_component = TextComponent::text(arg_value.to_string());
+        context.source.send_feedback(
+            TextComponent::translate_cross(
+                "commands.gamerule.set",
+                "commands.gamerule.set",
+                [key, value_component],
+            ),
+            true,
+        );
 
-        Ok(result_i32)
+        Ok(arg_value.clamp(i32::MIN as i64, i32::MAX as i64) as i32)
     }
 }
 
-pub fn init_command_tree() -> CommandTree {
-    let mut command_tree = CommandTree::new(NAMES, DESCRIPTION);
-    let rule_registry = GameRuleRegistry::default();
-    for rule in GameRule::all() {
-        let arg = match rule_registry.get(rule) {
-            GameRuleValue::Int(_) => argument(ARG_NAME, BoundedNumArgumentConsumer::<i64>::new()),
-            GameRuleValue::Bool(_) => argument(ARG_NAME, BoolArgConsumer),
-        };
-        command_tree = command_tree.then(
-            literal(rule.to_string())
-                .execute(QueryExecutor(rule.clone()))
-                .then(arg.execute(SetExecutor(rule.clone()))),
+struct SetBoolExecutor(GameRule);
+
+impl CommandExecutor for SetBoolExecutor {
+    fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
+        let key = TextComponent::text(self.0.to_string());
+        let arg_value = BoolArgumentType::get(context, "value")?;
+
+        let current_info = context.server().level_info.load();
+        let mut new_info = (**current_info).clone();
+
+        if let GameRuleValue::Bool(raw_value) = new_info.game_rules.get_mut(&self.0) {
+            *raw_value = arg_value;
+        }
+
+        context.server().level_info.store(Arc::new(new_info));
+
+        let value_component = TextComponent::text(arg_value.to_string());
+        context.source.send_feedback(
+            TextComponent::translate_cross(
+                "commands.gamerule.set",
+                "commands.gamerule.set",
+                [key, value_component],
+            ),
+            true,
         );
+
+        Ok(arg_value as i32)
     }
-    command_tree
+}
+
+pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistry) {
+    registry.register_permission_or_panic(Permission::new(
+        PERMISSION,
+        DESCRIPTION,
+        PermissionDefault::Op(PermissionLvl::Two),
+    ));
+
+    let mut cmd = command("gamerule", DESCRIPTION).requires(PERMISSION);
+    let rule_registry = GameRuleRegistry::default();
+
+    for rule in GameRule::all() {
+        let rule_literal = literal(rule.to_string()).executes(QueryExecutor(rule.clone()));
+        let branch = match rule_registry.get(rule) {
+            GameRuleValue::Int(_) => rule_literal.then(
+                argument("value", IntegerArgumentType::any())
+                    .executes(SetIntExecutor(rule.clone())),
+            ),
+            GameRuleValue::Bool(_) => rule_literal
+                .then(argument("value", BoolArgumentType).executes(SetBoolExecutor(rule.clone()))),
+        };
+        cmd = cmd.then(branch);
+    }
+
+    dispatcher.register(cmd);
 }

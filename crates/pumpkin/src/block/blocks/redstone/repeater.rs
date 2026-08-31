@@ -219,7 +219,7 @@ impl RepeaterBlock {
         let mut props = props;
         props.delay = if props.delay == 4 { 1 } else { props.delay + 1 };
         let state = props.to_state_id(block);
-        world.set_block_state(&block_pos, state, BlockFlags::empty());
+        world.set_block_state(&block_pos, state, BlockFlags::NOTIFY_ALL);
     }
 
     fn is_locked(

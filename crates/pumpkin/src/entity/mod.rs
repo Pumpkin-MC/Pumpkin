@@ -348,6 +348,26 @@ pub trait EntityBase: Send + Sync + std::any::Any {
         }
     }
 
+    fn java_spawn_metadata(&self, version: JavaMinecraftVersion) -> Option<Box<[u8]>> {
+        self.get_mob().map_or_else(
+            || {
+                let entity = self.get_entity();
+                let shared_flags = entity.flags.load(Ordering::Relaxed);
+                (shared_flags != 0).then(|| {
+                    let mut buf = Vec::new();
+                    let _ = Metadata::new(
+                        pumpkin_data::tracked_data::entity::DATA_SHARED_FLAGS_ID,
+                        shared_flags,
+                    )
+                    .write(&mut buf, &version);
+                    buf.put_u8(255);
+                    buf.into_boxed_slice()
+                })
+            },
+            |mob| mob.mob_java_spawn_metadata(version),
+        )
+    }
+
     fn send_bedrock_spawn_packet(&self, client: &BedrockClient) {
         let entity = self.get_entity();
         let runtime_id = entity.entity_id as u64;
@@ -387,10 +407,8 @@ pub trait EntityBase: Send + Sync + std::any::Any {
         let entity = self.get_entity();
         let version = client.version.load();
         let is_mob = entity.entity_type.mob || self.get_mob().is_some();
+        let metadata = self.java_spawn_metadata(version);
         if version < JavaMinecraftVersion::V_1_19 && is_mob {
-            let metadata = self
-                .get_mob()
-                .and_then(|mob| mob.mob_java_spawn_metadata(version));
             let spawn_packet = entity.create_spawn_living_packet(metadata.clone());
             if let Ok(data) = client.serialize_packet(&spawn_packet) {
                 client.try_enqueue_packet(data);
@@ -408,10 +426,8 @@ pub trait EntityBase: Send + Sync + std::any::Any {
             if let Ok(data) = client.serialize_packet(&spawn_packet) {
                 client.try_enqueue_packet(data);
             }
-            if let Some(mob) = self.get_mob()
-                && let Some(metadata) = mob.mob_java_spawn_metadata(version)
-            {
-                let meta_packet = CSetEntityMetadata::new(entity.entity_id.into(), metadata);
+            if let Some(meta) = metadata {
+                let meta_packet = CSetEntityMetadata::new(entity.entity_id.into(), meta);
                 if let Ok(meta_data) = client.serialize_packet(&meta_packet) {
                     client.try_enqueue_packet(meta_data);
                 }
@@ -2866,6 +2882,11 @@ impl Entity {
         }
     }
 
+    #[must_use]
+    pub fn is_on_fire(&self) -> bool {
+        self.fire_ticks.load(Ordering::Relaxed) > 0 || self.has_visual_fire.load(Ordering::Relaxed)
+    }
+
     pub fn get_horizontal_facing(&self) -> HorizontalFacing {
         let yaw = self.yaw.load();
         // Use vanilla's formula: floor(angle / 90.0 + 0.5) & 3
@@ -3306,7 +3327,7 @@ impl Entity {
             &CEntityPositionSync::new(
                 self.entity_id.into(),
                 position,
-                Vector3::new(0.0, 0.0, 0.0),
+                self.velocity.load(),
                 yaw.unwrap_or(self.yaw.load()),
                 pitch.unwrap_or(self.pitch.load()),
                 self.on_ground.load(Ordering::SeqCst),

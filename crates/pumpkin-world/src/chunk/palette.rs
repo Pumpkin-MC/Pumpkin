@@ -526,7 +526,8 @@ impl BiomePalette {
                 if raw_bits_per_entry > BIOME_NETWORK_MAX_MAP_BITS {
                     let bits_per_entry = BIOME_NETWORK_MAX_BITS;
                     let values_per_i64 = 64 / bits_per_entry;
-                    let mut packed_data = Vec::new();
+                    let mut packed_data =
+                        Vec::with_capacity(Self::VOLUME.div_ceil(values_per_i64 as usize));
                     let mut current_idx = 0;
                     while current_idx < Self::VOLUME {
                         let mut acc = 0u64;
@@ -735,7 +736,8 @@ impl BlockPalette {
                 if raw_bits_per_entry > BLOCK_NETWORK_MAX_MAP_BITS {
                     let bits_per_entry = BLOCK_NETWORK_MAX_BITS;
                     let values_per_i64 = 64 / bits_per_entry;
-                    let mut packed_data = Vec::new();
+                    let mut packed_data =
+                        Vec::with_capacity(Self::VOLUME.div_ceil(values_per_i64 as usize));
                     let mut current_idx = 0;
                     while current_idx < Self::VOLUME {
                         let mut acc = 0u64;
