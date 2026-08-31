@@ -145,6 +145,7 @@ impl BlockEntity for MobSpawnerBlockEntity {
 
             let spawn_range = self.spawn_range;
             let mut spawned_any = false;
+            let mut cancelled_any = false;
             for _ in 0..self.spawn_count {
                 let pos = self.position.0;
 
@@ -182,6 +183,10 @@ impl BlockEntity for MobSpawnerBlockEntity {
                     server.plugin_manager.fire_blocking(&server, &mut event);
                 }
                 if event.cancelled {
+                    // Count a cancelled spawn as a completed attempt so the
+                    // spawner goes on its normal cooldown instead of retrying
+                    // every tick for as long as a plugin keeps cancelling.
+                    cancelled_any = true;
                     continue;
                 }
 
@@ -189,7 +194,7 @@ impl BlockEntity for MobSpawnerBlockEntity {
                 world.sync_world_event(WorldEvent::ParticlesMobblockSpawn, self.position, 0);
                 spawned_any = true;
             }
-            if spawned_any {
+            if spawned_any || cancelled_any {
                 self.update_spawns(world);
             }
         }
