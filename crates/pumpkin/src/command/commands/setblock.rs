@@ -1,19 +1,24 @@
+use pumpkin_data::translation;
+use pumpkin_util::PermissionLvl;
+use pumpkin_util::permission::{Permission, PermissionDefault, PermissionRegistry};
 use pumpkin_util::text::TextComponent;
 use pumpkin_world::world::BlockFlags;
 
-use crate::command::args::block::BlockArgumentConsumer;
-use crate::command::args::position_block::BlockPosArgumentConsumer;
-use crate::command::args::{ConsumedArgs, FindArg};
-use crate::command::tree::CommandTree;
-use crate::command::tree::builder::{argument, literal};
-use crate::command::{CommandError, CommandExecutor, CommandResult, CommandSender};
-
-const NAMES: [&str; 1] = ["setblock"];
+use crate::command::argument_builder::{ArgumentBuilder, argument, command, literal};
+use crate::command::argument_types::block::BlockArgumentType;
+use crate::command::argument_types::coordinates::block_pos::BlockPosArgumentType;
+use crate::command::context::command_context::CommandContext;
+use crate::command::errors::error_types::CommandErrorType;
+use crate::command::node::dispatcher::CommandDispatcher;
+use crate::command::node::{CommandExecutor, CommandExecutorResult};
 
 const DESCRIPTION: &str = "Place a block.";
+const PERMISSION: &str = "minecraft:command.setblock";
 
-const ARG_BLOCK: &str = "block";
-const ARG_BLOCK_POS: &str = "pos";
+const ERROR_FAILED: CommandErrorType<0> = CommandErrorType::new(
+    translation::java::COMMANDS_SETBLOCK_FAILED,
+    translation::java::COMMANDS_SETBLOCK_FAILED,
+);
 
 #[derive(Clone, Copy)]
 enum Mode {
@@ -30,30 +35,27 @@ enum Mode {
     Strict,
 }
 
-struct Executor(Mode);
+struct SetBlockExecutor(Mode);
 
-impl CommandExecutor for Executor {
-    fn execute(
-        &self,
-        sender: &CommandSender,
-        server: &crate::server::Server,
-        args: &ConsumedArgs,
-    ) -> CommandResult {
-        let block = BlockArgumentConsumer::find_arg(args, ARG_BLOCK)?;
+impl CommandExecutor for SetBlockExecutor {
+    fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
+        let block = BlockArgumentType::get(context, "block")?;
         let block_state_id = block.default_state.id;
         let mode = self.0;
-        let world = sender
-            .world_or_first(server)
-            .ok_or(CommandError::InvalidRequirement)?;
-        let pos = BlockPosArgumentConsumer::find_loaded_arg(args, ARG_BLOCK_POS, &world)?;
+        let world = context.source.world();
+        let pos = BlockPosArgumentType::get_loaded_block_pos(context, "pos")?;
 
         let success = match mode {
             Mode::Destroy => {
-                world.break_block(&pos, None, BlockFlags::SKIP_DROPS | BlockFlags::FORCE_STATE);
+                world.break_block(
+                    &pos,
+                    None,
+                    BlockFlags::SKIP_DROPS | BlockFlags::NOTIFY_ALL | BlockFlags::FORCE_STATE,
+                );
                 world.set_block_state(
                     &pos,
                     block_state_id,
-                    BlockFlags::FORCE_STATE | BlockFlags::NOTIFY_NEIGHBORS,
+                    BlockFlags::NOTIFY_ALL | BlockFlags::FORCE_STATE,
                 );
                 true
             }
@@ -61,7 +63,7 @@ impl CommandExecutor for Executor {
                 world.set_block_state(
                     &pos,
                     block_state_id,
-                    BlockFlags::FORCE_STATE | BlockFlags::NOTIFY_NEIGHBORS,
+                    BlockFlags::NOTIFY_ALL | BlockFlags::FORCE_STATE,
                 );
                 true
             }
@@ -71,7 +73,7 @@ impl CommandExecutor for Executor {
                     world.set_block_state(
                         &pos,
                         block_state_id,
-                        BlockFlags::FORCE_STATE | BlockFlags::NOTIFY_NEIGHBORS,
+                        BlockFlags::NOTIFY_ALL | BlockFlags::FORCE_STATE,
                     );
                     true
                 } else {
@@ -79,41 +81,55 @@ impl CommandExecutor for Executor {
                 }
             }
             Mode::Strict => {
-                world.set_block_state(&pos, block_state_id, BlockFlags::SKIP_BLOCK_ADDED_CALLBACK);
+                world.set_block_state(
+                    &pos,
+                    block_state_id,
+                    BlockFlags::NOTIFY_LISTENERS
+                        | BlockFlags::SKIP_BLOCK_ADDED_CALLBACK
+                        | BlockFlags::FORCE_STATE,
+                );
                 true
             }
         };
 
         if success {
-            sender.send_message(TextComponent::translate_cross(
-                pumpkin_data::translation::java::COMMANDS_SETBLOCK_SUCCESS,
-                pumpkin_data::translation::bedrock::COMMANDS_SETBLOCK_SUCCESS,
-                [
-                    TextComponent::text(pos.0.x.to_string()),
-                    TextComponent::text(pos.0.y.to_string()),
-                    TextComponent::text(pos.0.z.to_string()),
-                ],
-            ));
+            world.flush_block_updates();
+            context.source.send_feedback(
+                TextComponent::translate_cross(
+                    pumpkin_data::translation::java::COMMANDS_SETBLOCK_SUCCESS,
+                    pumpkin_data::translation::bedrock::COMMANDS_SETBLOCK_SUCCESS,
+                    [
+                        TextComponent::text(pos.0.x.to_string()),
+                        TextComponent::text(pos.0.y.to_string()),
+                        TextComponent::text(pos.0.z.to_string()),
+                    ],
+                ),
+                true,
+            );
             Ok(1)
         } else {
-            Err(CommandError::CommandFailed(TextComponent::translate_cross(
-                pumpkin_data::translation::java::COMMANDS_SETBLOCK_FAILED,
-                pumpkin_data::translation::bedrock::COMMANDS_SETBLOCK_FAILED,
-                [],
-            )))
+            Err(ERROR_FAILED.create_without_context())
         }
     }
 }
 
-pub fn init_command_tree() -> CommandTree {
-    CommandTree::new(NAMES, DESCRIPTION).then(
-        argument(ARG_BLOCK_POS, BlockPosArgumentConsumer).then(
-            argument(ARG_BLOCK, BlockArgumentConsumer)
-                .then(literal("replace").execute(Executor(Mode::Replace)))
-                .then(literal("destroy").execute(Executor(Mode::Destroy)))
-                .then(literal("keep").execute(Executor(Mode::Keep)))
-                .then(literal("strict").execute(Executor(Mode::Strict)))
-                .execute(Executor(Mode::Replace)),
+pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistry) {
+    registry.register_permission_or_panic(Permission::new(
+        PERMISSION,
+        DESCRIPTION,
+        PermissionDefault::Op(PermissionLvl::Two),
+    ));
+
+    dispatcher.register(
+        command("setblock", DESCRIPTION).requires(PERMISSION).then(
+            argument("pos", BlockPosArgumentType).then(
+                argument("block", BlockArgumentType)
+                    .executes(SetBlockExecutor(Mode::Replace))
+                    .then(literal("destroy").executes(SetBlockExecutor(Mode::Destroy)))
+                    .then(literal("keep").executes(SetBlockExecutor(Mode::Keep)))
+                    .then(literal("replace").executes(SetBlockExecutor(Mode::Replace)))
+                    .then(literal("strict").executes(SetBlockExecutor(Mode::Strict))),
+            ),
         ),
-    )
+    );
 }

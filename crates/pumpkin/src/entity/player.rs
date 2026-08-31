@@ -3743,6 +3743,11 @@ impl Player {
         }) < d * d
     }
 
+    #[must_use]
+    pub fn may_build(&self) -> bool {
+        self.abilities.lock().is_ok_and(|a| a.allow_modify_world)
+    }
+
     pub fn kick(&self, reason: DisconnectReason, message: &TextComponent) {
         if let Some(server) = self.world().server.upgrade()
             && let Some(player_arc) = self.world().get_player_by_uuid(self.gameprofile.id)
@@ -4594,6 +4599,22 @@ impl Player {
         // todo this.player.stopUsingItem();
     }
 
+    #[must_use]
+    pub fn is_text_filtering_enabled(&self) -> bool {
+        self.config.load().text_filtering
+    }
+
+    pub fn send_chat_message(
+        self: &Arc<Self>,
+        tracked: &crate::net::chat::OutgoingChatMessage,
+        filtered: bool,
+        chat_type: pumpkin_protocol::codec::var_int::VarInt,
+        sender_name: &TextComponent,
+        target_name: Option<&TextComponent>,
+    ) {
+        tracked.send_to_player(self, filtered, chat_type, sender_name, target_name);
+    }
+
     pub fn send_system_message(&self, text: &TextComponent) {
         self.send_system_message_raw(text, false);
     }
@@ -5135,7 +5156,7 @@ impl Player {
             .as_any_mut()
             .downcast_mut::<pumpkin_inventory::anvil::AnvilScreenHandler>()
         {
-            anvil_handler.update_item_name(packet.item_name.to_string());
+            anvil_handler.set_item_name(packet.item_name, self.has_infinite_materials());
         }
     }
 
@@ -6647,18 +6668,28 @@ impl Abilities {
                 self.allow_flying = true;
                 self.creative = true;
                 self.invulnerable = true;
+                self.allow_modify_world = true;
             }
             GameMode::Spectator => {
                 self.flying = true;
                 self.allow_flying = true;
                 self.creative = false;
                 self.invulnerable = true;
+                self.allow_modify_world = false;
             }
-            _ => {
+            GameMode::Adventure => {
                 self.flying = false;
                 self.allow_flying = false;
                 self.creative = false;
                 self.invulnerable = false;
+                self.allow_modify_world = false;
+            }
+            GameMode::Survival => {
+                self.flying = false;
+                self.allow_flying = false;
+                self.creative = false;
+                self.invulnerable = false;
+                self.allow_modify_world = true;
             }
         }
     }
@@ -7329,6 +7360,47 @@ impl InventoryPlayer for Player {
 
     fn close_screen_handler(&self) {
         self.close_handled_screen();
+    }
+
+    fn use_anvil(&self) {
+        if let Some(pos) = self.open_container_pos.load() {
+            let world = self.world();
+            let state = world.get_block_state(&pos);
+            let block = pumpkin_data::Block::from_state_id(state.id);
+            if block.has_tag(&pumpkin_data::tag::Block::MINECRAFT_ANVIL) {
+                if !self.has_infinite_materials() && rand::random::<f32>() < 0.12 {
+                    if let Some(new_state) =
+                        crate::block::blocks::anvil::AnvilBlock::damage(state.id)
+                    {
+                        world.set_block_state(
+                            &pos,
+                            new_state,
+                            pumpkin_world::world::BlockFlags::NOTIFY_ALL,
+                        );
+                        world.sync_world_event(
+                            pumpkin_data::world::WorldEvent::SoundAnvilUsed,
+                            pos,
+                            0,
+                        );
+                    } else {
+                        world.set_block_state(
+                            &pos,
+                            pumpkin_data::BlockStateId::AIR,
+                            pumpkin_world::world::BlockFlags::NOTIFY_ALL,
+                        );
+                        world.sync_world_event(
+                            pumpkin_data::world::WorldEvent::SoundAnvilBroken,
+                            pos,
+                            0,
+                        );
+                    }
+                } else {
+                    world.sync_world_event(pumpkin_data::world::WorldEvent::SoundAnvilUsed, pos, 0);
+                }
+            } else {
+                world.sync_world_event(pumpkin_data::world::WorldEvent::SoundAnvilUsed, pos, 0);
+            }
+        }
     }
 }
 

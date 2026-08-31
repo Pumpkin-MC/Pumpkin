@@ -157,16 +157,14 @@ impl Context {
     /// Registers a new command to the server with a specified permission level.
     ///
     /// # Arguments
-    /// - `tree`: The command tree to register.
+    /// - `node`: The command node to register.
     /// - `permission`: The permission level required to execute the command.
     pub fn register_command<P: Into<String>>(
         &self,
-        mut tree: crate::command::tree::CommandTree,
+        node: impl Into<crate::command::node::detached::CommandDetachedNode>,
         permission: P,
     ) {
         let permission = permission.into();
-
-        tree.source = Some(self.metadata.name.clone());
 
         let full_permission_node = if permission.contains(':') {
             permission
@@ -174,11 +172,51 @@ impl Context {
             format!("{}:{permission}", self.metadata.name)
         };
 
+        let mut node = node.into();
+        node.meta.source = Some(self.metadata.name.clone());
+        node.owned
+            .requirements
+            .0
+            .push(crate::command::node::Requirement(Arc::new(move |source| {
+                source.has_permission(&full_permission_node)
+            })));
+
         self.server.command_dispatcher.rcu(|dispatcher| {
             let mut new_dispatcher = (**dispatcher).clone();
-            new_dispatcher
-                .fallback_dispatcher
-                .register(tree.clone(), full_permission_node.clone());
+            new_dispatcher.register(node.clone());
+            Arc::new(new_dispatcher)
+        });
+
+        self.reload_commands_for_everyone();
+    }
+
+    /// Registers a new command with aliases to the server with a specified permission level.
+    pub fn register_command_with_aliases<P: Into<String>>(
+        &self,
+        node: impl Into<crate::command::node::detached::CommandDetachedNode>,
+        aliases: &[String],
+        permission: P,
+    ) {
+        let permission = permission.into();
+
+        let full_permission_node = if permission.contains(':') {
+            permission
+        } else {
+            format!("{}:{permission}", self.metadata.name)
+        };
+
+        let mut node = node.into();
+        node.meta.source = Some(self.metadata.name.clone());
+        node.owned
+            .requirements
+            .0
+            .push(crate::command::node::Requirement(Arc::new(move |source| {
+                source.has_permission(&full_permission_node)
+            })));
+
+        self.server.command_dispatcher.rcu(|dispatcher| {
+            let mut new_dispatcher = (**dispatcher).clone();
+            new_dispatcher.register_with_aliases(node.clone(), aliases);
             Arc::new(new_dispatcher)
         });
 
@@ -192,7 +230,7 @@ impl Context {
     pub fn unregister_command(&self, name: &str) {
         self.server.command_dispatcher.rcu(|dispatcher| {
             let mut new_dispatcher = (**dispatcher).clone();
-            new_dispatcher.fallback_dispatcher.unregister(name);
+            new_dispatcher.disable_command(name.to_string());
             Arc::new(new_dispatcher)
         });
 
