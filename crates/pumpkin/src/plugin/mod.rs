@@ -825,26 +825,32 @@ impl PluginManager {
             }
         }
 
-        let mut bootstrap = BootstrapManager::new();
-        for loaded_plugin in &*self
-            .plugins
-            .read()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-        {
-            let Some(providers) = &loaded_plugin.registry_providers else {
-                continue;
-            };
+        Ok(total_wait_time)
+    }
 
-            bootstrap.add_providers(providers);
+    pub fn initialize_registry_bootstrap(&self, with_providers: bool) {
+        let mut bootstrap = BootstrapManager::new();
+
+        if with_providers {
+            for loaded_plugin in &*self
+                .plugins
+                .read()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+            {
+                let Some(providers) = &loaded_plugin.registry_providers else {
+                    continue;
+                };
+
+                bootstrap.add_providers(providers);
+            }
         }
 
         if pumpkin_registry::BOOTSTRAP.set(bootstrap).is_err() {
             warn!("Bootstrap manager was already loaded!");
+            return;
         }
 
         info!("Registry bootstrap has been initialized!");
-
-        Ok(total_wait_time)
     }
 
     async fn check_permissions_cached(

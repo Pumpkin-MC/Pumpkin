@@ -406,6 +406,9 @@ impl PumpkinServer {
     pub async fn init_plugins(&self) -> std::time::Duration {
         if !self.server.advanced_config.plugins.enabled {
             info!("Plugin system is disabled in configuration.");
+            self.server
+                .plugin_manager
+                .initialize_registry_bootstrap(false);
             return std::time::Duration::ZERO;
         }
 
@@ -416,6 +419,10 @@ impl PumpkinServer {
                 std::time::Duration::ZERO
             }
         };
+
+        self.server
+            .plugin_manager
+            .initialize_registry_bootstrap(true);
 
         if self.server.advanced_config.plugins.hot_reload {
             if let Err(err) = self.server.plugin_manager.start_watcher(&self.server).await {
