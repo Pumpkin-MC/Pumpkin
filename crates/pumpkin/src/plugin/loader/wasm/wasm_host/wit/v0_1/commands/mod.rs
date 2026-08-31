@@ -347,11 +347,23 @@ impl pumpkin::plugin::command::HostCommand for PluginHostState {
 impl pumpkin::plugin::command::HostCommandSender for PluginHostState {
     async fn get_command_sender_type(
         &mut self,
-        _res: Resource<CommandSender>,
+        res: Resource<CommandSender>,
     ) -> wasmtime::Result<CommandSenderType> {
-        Err(wasmtime::Error::msg(
-            "get_command_sender_type not implemented",
-        ))
+        let sender = self.get_sender_res(&res)?.provider.clone();
+        match sender {
+            crate::command::CommandSender::Rcon(_) => Ok(CommandSenderType::Rcon),
+            crate::command::CommandSender::Console => Ok(CommandSenderType::Console),
+            crate::command::CommandSender::Player(player) => {
+                Ok(CommandSenderType::Player(self.add_player(player)?))
+            }
+            crate::command::CommandSender::CommandBlock(block_entity, world) => {
+                Ok(CommandSenderType::CommandBlock((
+                    self.add_block_entity(block_entity)?,
+                    self.add_world(world)?,
+                )))
+            }
+            crate::command::CommandSender::Dummy => Ok(CommandSenderType::Dummy),
+        }
     }
 
     async fn get_name(&mut self, sender: Resource<CommandSender>) -> wasmtime::Result<String> {
