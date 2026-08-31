@@ -49,12 +49,13 @@ use pumpkin_protocol::{
             entity_data_key,
         },
     },
+    codec::item_stack_seralizer::ItemStackSerializer,
     codec::var_int::VarInt,
     codec::var_ulong::VarULong,
     java::client::play::{
         CEntityPositionSync, CEntityVelocity, CHeadRot, CPlayerPosition, CSetEntityMetadata,
-        CSetPassengers, CSpawnEntity, CSpawnLivingEntity, CUpdateEntityRot, Metadata,
-        MetadataSerializer,
+        CSetEquipment, CSetPassengers, CSpawnEntity, CSpawnLivingEntity, CUpdateEntityRot,
+        Metadata, MetadataSerializer,
     },
 };
 use pumpkin_util::math::vector3::Axis;
@@ -301,6 +302,52 @@ pub trait EntityBase: Send + Sync + std::any::Any {
         None
     }
 
+    /// Equipment to send after a Java spawn packet (`SET_EQUIPMENT`).
+    ///
+    /// Empty slots are omitted; clients default to empty. Player main-hand is
+    /// taken from inventory because it is not stored in `entity_equipment`.
+    fn java_equipment_spawn_packet(&self) -> Option<CSetEquipment> {
+        let living = self.get_living_entity()?;
+        let mut equipment = Vec::new();
+        let player = self.get_player();
+
+        if let Some(player) = player {
+            let held = player.inventory.held_item();
+            if !held.is_empty() {
+                equipment.push((
+                    EquipmentSlot::MAIN_HAND.discriminant(),
+                    ItemStackSerializer::from(held),
+                ));
+            }
+        }
+
+        let guard = living
+            .entity_equipment
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        for (slot, stack) in &guard.equipment {
+            if stack.is_empty() {
+                continue;
+            }
+            if player.is_some() && *slot == EquipmentSlot::MAIN_HAND {
+                continue;
+            }
+            equipment.push((
+                slot.discriminant(),
+                ItemStackSerializer::from(stack.clone()),
+            ));
+        }
+
+        if equipment.is_empty() {
+            None
+        } else {
+            Some(CSetEquipment::new(
+                living.entity.entity_id.into(),
+                equipment,
+            ))
+        }
+    }
+
     fn java_spawn_metadata(&self, version: JavaMinecraftVersion) -> Option<Box<[u8]>> {
         self.get_mob().map_or_else(
             || {
@@ -385,6 +432,14 @@ pub trait EntityBase: Send + Sync + std::any::Any {
                     client.try_enqueue_packet(meta_data);
                 }
             }
+        }
+
+        // Vanilla sends ClientboundSetEquipmentPacket after add-entity so armour,
+        // held items, saddles, and animal body slots render for 1.21.x / 26.x.
+        if let Some(equipment) = self.java_equipment_spawn_packet()
+            && let Ok(data) = client.serialize_packet(&equipment)
+        {
+            client.try_enqueue_packet(data);
         }
     }
 
@@ -2612,13 +2667,16 @@ impl Entity {
             let mut bedrock_meta = SyncedActorDataList::new();
             bedrock_meta.set(
                 entity_data_key::FREEZING_EFFECT_STRENGTH,
-                MetadataValue::Float(new_frozen_ticks as f32),
+                MetadataValue::Float(new_frozen_ticks as f32 / Self::MAX_FROZEN_TICKS as f32),
             );
             self.send_meta_data(
-                &[Metadata::new(
-                    tracked_data::entity::DATA_TICKS_FROZEN,
-                    VarInt(new_frozen_ticks),
-                )],
+                &[
+                    Metadata::new(
+                        tracked_data::entity::DATA_TICKS_FROZEN,
+                        VarInt(new_frozen_ticks),
+                    ),
+                    Metadata::new(tracked_data::entity::FROZEN_TICKS, VarInt(new_frozen_ticks)),
+                ],
                 Some(&bedrock_meta),
             );
         }

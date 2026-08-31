@@ -81,6 +81,9 @@
         "protocol_id": 3
       },
       "minecraft:chat_command": {
+        "protocol_id": 4
+      },
+      "minecraft:chat_command_signed": {
         "protocol_id": 5
       },
       "minecraft:chat": {

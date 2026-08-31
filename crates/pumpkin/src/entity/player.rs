@@ -1301,6 +1301,18 @@ impl Player {
 
         player_attack_sound(&pos, &world, attack_type);
 
+        if matches!(attack_type, AttackType::Critical) {
+            let je_packet =
+                CEntityAnimation::new(victim_entity.entity_id.into(), Animation::CriticalEffect);
+            let be_packet = pumpkin_protocol::bedrock::server::animate::SAnimate {
+                action: pumpkin_protocol::bedrock::server::animate::AnimateAction::CriticalHit,
+                target_actor_runtime_id: VarULong(victim_entity.entity_id as u64),
+                data: 0.0,
+                swing_source: None,
+            };
+            world.broadcast_editioned(&je_packet, &be_packet);
+        }
+
         self.living_entity.last_attacking_id.store(
             victim_entity.entity_id,
             std::sync::atomic::Ordering::Relaxed,
@@ -1396,6 +1408,33 @@ impl Player {
             .map_or(0, |w| w.item_damage_per_attack as i32)
     }
 
+    /// Pushes current inventory contents to the client via `CONTAINER_SET_SLOT`.
+    ///
+    /// `minecraft:set_player_inventory` is missing on 1.21.0/1.21.1 and is not
+    /// applied to the local hotbar on later 1.21.x clients. Screen-handler slot
+    /// updates are the vanilla path and (should) work on every supported version.
+    pub fn sync_inventory_to_client(&self) {
+        if let Ok(mut handler) = self.player_screen_handler.try_lock() {
+            handler.send_content_updates();
+        }
+
+        let Ok(current_guard) = self.current_screen_handler.try_lock() else {
+            return;
+        };
+        let current = current_guard.clone();
+        drop(current_guard);
+
+        let player_screen_ptr = Arc::as_ptr(&self.player_screen_handler).cast::<()>();
+        let current_ptr = Arc::as_ptr(&current).cast::<()>();
+        if player_screen_ptr == current_ptr {
+            return;
+        }
+
+        if let Ok(mut handler) = current.try_lock() {
+            handler.send_content_updates();
+        }
+    }
+
     pub fn try_send_slot_set_packet(&self, packet: &CSetPlayerInventory) {
         match self.client.as_ref() {
             ClientPlatform::Java(java) => {
@@ -1434,6 +1473,7 @@ impl Player {
             (slot_index as i32).into(),
             &ItemStackSerializer::from(stack.clone()),
         ));
+        self.sync_inventory_to_client();
 
         if slot_index == self.inventory.get_selected_slot() as usize {
             self.living_entity
@@ -1512,6 +1552,7 @@ impl Player {
                 (slot_index as i32).into(),
                 &ItemStackSerializer::from(updated_stack.clone()),
             ));
+            self.sync_inventory_to_client();
 
             self.living_entity
                 .send_equipment_changes(&[(slot.clone(), updated_stack)]);
@@ -5016,6 +5057,7 @@ impl Player {
             (slot_index as i32).into(),
             &ItemStackSerializer::from(updated_stack.clone()),
         ));
+        self.sync_inventory_to_client();
 
         self.living_entity
             .send_equipment_changes(&[(equipment_slot, updated_stack)]);
@@ -6415,6 +6457,8 @@ impl EntityBase for Player {
     fn read_custom_nbt(&self, nbt: &NbtCompound) {
         self.inventory.read_nbt_non_mut(nbt);
         self.ender_chest_inventory.read_nbt_non_mut(nbt);
+        self.living_entity
+            .apply_current_equipment_attribute_modifiers();
 
         let xp_p = nbt.get_float("XpP").unwrap_or(0.0);
         let xp_level = nbt.get_int("XpLevel");
@@ -7224,41 +7268,8 @@ impl InventoryPlayer for Player {
     }
 
     fn enqueue_slot_set_packet(&self, packet: &CSetPlayerInventory) {
-        match self.client.as_ref() {
-            ClientPlatform::Java(java) => {
-                if let Ok(data) = java.serialize_packet(packet) {
-                    java.try_enqueue_packet(data);
-                }
-            }
-            ClientPlatform::Bedrock(bedrock) => {
-                use pumpkin_protocol::bedrock::{
-                    client::inventory_slot::CInventorySlot,
-                    network_item::{ContainerName, FullContainerName, NetworkItemStackDescriptor},
-                };
-                use pumpkin_protocol::codec::var_uint::VarUInt;
-
-                tracing::info!(
-                    "enqueue_slot_set_packet: slot={}, sending CInventorySlot to Bedrock client",
-                    packet.slot.0
-                );
-
-                let item_stack = &*packet.item.0;
-                let item_desc = NetworkItemStackDescriptor::from(item_stack);
-                let bedrock_packet = CInventorySlot {
-                    container_id: VarUInt(0),
-                    slot: VarUInt(packet.slot.0 as u32),
-                    full_container_name: Some(FullContainerName {
-                        container_name: ContainerName::Inventory,
-                        dynamic_id: None,
-                    }),
-                    storage_item: None,
-                    item: item_desc,
-                };
-                if let Ok(data) = bedrock.serialize_packet(&bedrock_packet) {
-                    bedrock.try_enqueue_packet(data);
-                }
-            }
-        }
+        self.try_send_slot_set_packet(packet);
+        self.sync_inventory_to_client();
     }
 
     fn enqueue_set_held_item_packet(&self, packet: &CSetSelectedSlot) {

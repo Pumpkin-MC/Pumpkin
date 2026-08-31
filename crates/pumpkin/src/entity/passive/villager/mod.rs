@@ -434,10 +434,10 @@ impl VillagerEntity {
         // Send initial metadata
         let bedrock_metadata = Self::bedrock_metadata(villager_data, 0);
         mob_arc.get_entity().send_meta_data(
-            &[Metadata::new(
-                tracked_data::villager::VILLAGER_DATA,
-                villager_data,
-            )],
+            &[
+                Metadata::new(tracked_data::villager::VILLAGER_DATA, villager_data),
+                Metadata::new(tracked_data::villager::DATA_VILLAGER_DATA, villager_data),
+            ],
             Some(&bedrock_metadata),
         );
 
@@ -509,7 +509,10 @@ impl VillagerEntity {
         };
         let bedrock_metadata = Self::bedrock_metadata(data, self.xp.load(Ordering::Relaxed));
         self.get_entity().send_meta_data(
-            &[Metadata::new(tracked_data::villager::VILLAGER_DATA, data)],
+            &[
+                Metadata::new(tracked_data::villager::VILLAGER_DATA, data),
+                Metadata::new(tracked_data::villager::DATA_VILLAGER_DATA, data),
+            ],
             Some(&bedrock_metadata),
         );
 
@@ -832,10 +835,10 @@ impl VillagerEntity {
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         let bedrock_metadata = Self::bedrock_metadata(villager_data, current_xp);
         self.get_entity().send_meta_data(
-            &[Metadata::new(
-                tracked_data::villager::VILLAGER_DATA,
-                villager_data,
-            )],
+            &[
+                Metadata::new(tracked_data::villager::VILLAGER_DATA, villager_data),
+                Metadata::new(tracked_data::villager::DATA_VILLAGER_DATA, villager_data),
+            ],
             Some(&bedrock_metadata),
         );
 
@@ -1281,10 +1284,10 @@ impl VillagerEntity {
         let entity = self.get_entity();
         self.unhappy_counter.store(40, Ordering::Relaxed);
         entity.send_meta_data(
-            &[Metadata::new(
-                tracked_data::villager::UNHAPPY_COUNTER,
-                VarInt(40),
-            )],
+            &[
+                Metadata::new(tracked_data::villager::UNHAPPY_COUNTER, VarInt(40)),
+                Metadata::new(tracked_data::villager::HEAD_ROLLING_TIME_LEFT, VarInt(40)),
+            ],
             None,
         );
         entity.world.load().send_entity_status(
@@ -1551,10 +1554,16 @@ impl VillagerEntity {
             self.unhappy_counter
                 .store(unhappy_counter, Ordering::Relaxed);
             self.get_entity().send_meta_data(
-                &[Metadata::new(
-                    tracked_data::villager::UNHAPPY_COUNTER,
-                    VarInt(unhappy_counter),
-                )],
+                &[
+                    Metadata::new(
+                        tracked_data::villager::UNHAPPY_COUNTER,
+                        VarInt(unhappy_counter),
+                    ),
+                    Metadata::new(
+                        tracked_data::villager::HEAD_ROLLING_TIME_LEFT,
+                        VarInt(unhappy_counter),
+                    ),
+                ],
                 None,
             );
         }
@@ -1653,10 +1662,16 @@ impl VillagerEntity {
                     // Wake up if bed was broken
                     self.get_entity().set_pose(EntityPose::Standing);
                     self.get_entity().send_meta_data(
-                        &[Metadata::new(
-                            pumpkin_data::tracked_data::villager::SLEEPING_POS_ID,
-                            None::<BlockPos>,
-                        )],
+                        &[
+                            Metadata::new(
+                                pumpkin_data::tracked_data::villager::SLEEPING_POS_ID,
+                                None::<BlockPos>,
+                            ),
+                            Metadata::new(
+                                pumpkin_data::tracked_data::villager::SLEEPING_POSITION,
+                                None::<BlockPos>,
+                            ),
+                        ],
                         None,
                     );
                 }
@@ -1752,10 +1767,16 @@ impl VillagerEntity {
 
                                 self.get_entity().set_pose(EntityPose::Sleeping);
                                 self.get_entity().send_meta_data(
-                                    &[Metadata::new(
-                                        pumpkin_data::tracked_data::villager::SLEEPING_POS_ID,
-                                        Some(home_pos),
-                                    )],
+                                    &[
+                                        Metadata::new(
+                                            pumpkin_data::tracked_data::villager::SLEEPING_POS_ID,
+                                            Some(home_pos),
+                                        ),
+                                        Metadata::new(
+                                            pumpkin_data::tracked_data::villager::SLEEPING_POSITION,
+                                            Some(home_pos),
+                                        ),
+                                    ],
                                     None,
                                 );
                             }
@@ -1774,10 +1795,16 @@ impl VillagerEntity {
 
                 self.get_entity().set_pose(EntityPose::Standing);
                 self.get_entity().send_meta_data(
-                    &[Metadata::new(
-                        pumpkin_data::tracked_data::villager::SLEEPING_POS_ID,
-                        None::<BlockPos>,
-                    )],
+                    &[
+                        Metadata::new(
+                            pumpkin_data::tracked_data::villager::SLEEPING_POS_ID,
+                            None::<BlockPos>,
+                        ),
+                        Metadata::new(
+                            pumpkin_data::tracked_data::villager::SLEEPING_POSITION,
+                            None::<BlockPos>,
+                        ),
+                    ],
                     None,
                 );
             }
@@ -1785,10 +1812,16 @@ impl VillagerEntity {
             // Wake up during the day
             self.get_entity().set_pose(EntityPose::Standing);
             self.get_entity().send_meta_data(
-                &[Metadata::new(
-                    pumpkin_data::tracked_data::villager::SLEEPING_POS_ID,
-                    None::<BlockPos>,
-                )],
+                &[
+                    Metadata::new(
+                        pumpkin_data::tracked_data::villager::SLEEPING_POS_ID,
+                        None::<BlockPos>,
+                    ),
+                    Metadata::new(
+                        pumpkin_data::tracked_data::villager::SLEEPING_POSITION,
+                        None::<BlockPos>,
+                    ),
+                ],
                 None,
             );
         }
@@ -2171,15 +2204,16 @@ impl Mob for VillagerEntity {
 
     fn mob_java_spawn_metadata(&self, version: JavaMinecraftVersion) -> Option<Box<[u8]>> {
         let mut metadata = Vec::new();
-        Metadata::new(
-            tracked_data::villager::VILLAGER_DATA,
-            *self
-                .villager_data
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner),
-        )
-        .write(&mut metadata, &version)
-        .ok()?;
+        let data = *self
+            .villager_data
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        for entry in [
+            Metadata::new(tracked_data::villager::VILLAGER_DATA, data),
+            Metadata::new(tracked_data::villager::DATA_VILLAGER_DATA, data),
+        ] {
+            entry.write(&mut metadata, &version).ok()?;
+        }
         metadata.push(255);
         Some(metadata.into_boxed_slice())
     }
@@ -2252,12 +2286,18 @@ impl Mob for VillagerEntity {
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         let bedrock_metadata = Self::bedrock_metadata(data, self.xp.load(Ordering::Relaxed));
         entity.send_meta_data(
-            &[Metadata::new(tracked_data::villager::VILLAGER_DATA, data)],
+            &[
+                Metadata::new(tracked_data::villager::VILLAGER_DATA, data),
+                Metadata::new(tracked_data::villager::DATA_VILLAGER_DATA, data),
+            ],
             Some(&bedrock_metadata),
         );
         if entity.age.load(Ordering::Relaxed) < 0 {
             entity.send_meta_data(
-                &[Metadata::new(tracked_data::villager::BABY_ID, true)],
+                &[
+                    Metadata::new(tracked_data::villager::BABY_ID, true),
+                    Metadata::new(tracked_data::villager::CHILD, true),
+                ],
                 None,
             );
         }
@@ -2364,12 +2404,15 @@ mod tests {
     #[test]
     fn villager_data_metadata_uses_the_villager_tracker_slot() {
         let data = VillagerData::new(VillagerType::Plains, VillagerProfession::Librarian, 1);
-        let metadata = Metadata::new(tracked_data::villager::VILLAGER_DATA, data);
         let mut bytes = Vec::new();
-
-        metadata
-            .write(&mut bytes, &JavaMinecraftVersion::V_26_2)
-            .unwrap();
+        for metadata in [
+            Metadata::new(tracked_data::villager::VILLAGER_DATA, data),
+            Metadata::new(tracked_data::villager::DATA_VILLAGER_DATA, data),
+        ] {
+            metadata
+                .write(&mut bytes, &JavaMinecraftVersion::V_26_2)
+                .unwrap();
+        }
 
         assert_eq!(bytes, [19, 18, 2, 9, 1]);
     }
@@ -2405,12 +2448,15 @@ mod tests {
 
     #[test]
     fn unhappy_counter_metadata_uses_the_abstract_villager_tracker_slot() {
-        let metadata = Metadata::new(tracked_data::villager::UNHAPPY_COUNTER, VarInt(40));
         let mut bytes = Vec::new();
-
-        metadata
-            .write(&mut bytes, &JavaMinecraftVersion::V_26_2)
-            .unwrap();
+        for metadata in [
+            Metadata::new(tracked_data::villager::UNHAPPY_COUNTER, VarInt(40)),
+            Metadata::new(tracked_data::villager::HEAD_ROLLING_TIME_LEFT, VarInt(40)),
+        ] {
+            metadata
+                .write(&mut bytes, &JavaMinecraftVersion::V_26_2)
+                .unwrap();
+        }
 
         assert_eq!(bytes, [18, 1, 40]);
     }

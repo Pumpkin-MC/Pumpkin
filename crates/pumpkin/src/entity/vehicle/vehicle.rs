@@ -145,14 +145,28 @@ impl VehicleEntity {
                     pumpkin_data::tracked_data::boat::ID_HURTDIR,
                     VarInt(self.get_hurt_dir()),
                 ),
+                Metadata::new(
+                    pumpkin_data::tracked_data::boat_entity::DAMAGE_WOBBLE_TICKS,
+                    VarInt(self.get_hurt_time()),
+                ),
+                Metadata::new(
+                    pumpkin_data::tracked_data::boat_entity::DAMAGE_WOBBLE_SIDE,
+                    VarInt(self.get_hurt_dir()),
+                ),
             ],
             None,
         );
         self.entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::boat::ID_DAMAGE,
-                self.get_damage(),
-            )],
+            &[
+                Metadata::new(
+                    pumpkin_data::tracked_data::boat::ID_DAMAGE,
+                    self.get_damage(),
+                ),
+                Metadata::new(
+                    pumpkin_data::tracked_data::boat_entity::DAMAGE_WOBBLE_STRENGTH,
+                    self.get_damage(),
+                ),
+            ],
             None,
         );
     }
@@ -259,6 +273,14 @@ mod tests {
         for metadata in [
             Metadata::new(pumpkin_data::tracked_data::boat::ID_HURT, VarInt(10)),
             Metadata::new(pumpkin_data::tracked_data::boat::ID_HURTDIR, VarInt(-1)),
+            Metadata::new(
+                pumpkin_data::tracked_data::boat_entity::DAMAGE_WOBBLE_TICKS,
+                VarInt(10),
+            ),
+            Metadata::new(
+                pumpkin_data::tracked_data::boat_entity::DAMAGE_WOBBLE_SIDE,
+                VarInt(-1),
+            ),
         ] {
             metadata.write(&mut bytes, &version).unwrap();
         }
