@@ -764,10 +764,10 @@ impl LightEngine {
         self.block_light.clear();
         self.sky_light.clear();
 
-        // Cut Height + Quadranten-Flags now here, after Carvern und Features
+        // Cut height + quadrant flags now here, after carvers and features
         //
-        // Ein pauschaler 0x00-Fill unter dem Cut ist nicht noetig -> bereits unbeschrieben
-        // 'LightContainer::Empty(0)`, und `set(.., 0)` auf `Empty(0)`
+        // A blanket 0x00 fill below the cut is not needed -> untouched sections stay
+        // `LightContainer::Empty(0)`, and `set(.., 0)` on `Empty(0)` is a no-op
         let center = cache.get_center_chunk_mut();
         center.sky_light_height = crate::lighting::SkyLightHeight::compute_from_proto(center).raw();
     }

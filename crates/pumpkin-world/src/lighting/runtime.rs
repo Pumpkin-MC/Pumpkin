@@ -189,18 +189,18 @@ const fn vertical_in_chunk(chunk: &ChunkData, pos: &BlockPos) -> VerticalInChunk
     }
 }
 
-/// Memoisiertes Chunk-Handle fuer eine Lighting-Operation.
+/// Memoized chunk handle for one lighting operation.
 ///
-/// Jedes `level.read_chunk_sync` ist ein `DashMap`-Lookup: Hash, Shard-RwLock, Table-Probe,
-/// `Arc`-Deref -> mehrere potenzielle Cache Misses und ein Atomic. Ein einzelner
-/// Sky-Propagationsschritt fasst 6 Nachbarn an, je mit "geladen?", Lesen, Opacity und
-/// Schreiben, also bis zu 24 solcher Lookups -> und mindestens zwei Drittel davon landen im
-/// selben Chunk wie die Ausgangsposition. Der Cursor macht daraus einen Vergleich plus
-/// Pointer-Deref.
+/// Every `level.read_chunk_sync` is a `DashMap` lookup: hash, shard `RwLock`, table probe,
+/// `Arc` deref -> several potential cache misses and an atomic. A single
+/// sky propagation step touches 6 neighbours, each with "loaded?", read, opacity and
+/// write, so up to 24 such lookups -> and at least two thirds of them land in the
+/// same chunk as the origin position. The cursor turns those into a compare plus
+/// a pointer deref.
 ///
-/// Haltet bewusst den `Arc<ChunkData>` und nicht den `DashMap`-Guard: einen Shard-Read-Guard
-/// über weitere Lookups am Leben zu lassen, kann gegen einen wartenden Writer auf demselben
-/// Shard verklemmen (`parking_lot` laesst `read()` blockieren, sobald ein Writer ansteht).
+/// Deliberately holds the `Arc<ChunkData>` and not the `DashMap` guard: keeping a shard read
+/// guard alive across further lookups can deadlock against a waiting writer on the same
+/// shard (`parking_lot` lets `read()` block as soon as a writer is queued).
 struct ChunkCursor<'a> {
     level: &'a Level,
     counters: &'a LightCounters,
@@ -304,8 +304,8 @@ impl<'a> ChunkCursor<'a> {
             .map(|section| section.get(local_x, y_in_section, local_z))
     }
 
-    /// `false`, wenn der Schreibvorgang nicht landen kann (Chunk nicht geladen, Y ausserhalb
-    /// der Chunk-Hoehe). Callers duerfen solche Positionen nicht erneut einreihen.
+    /// `false` if the write cannot land (chunk not loaded, Y outside the
+    /// chunk height). Callers must not re-queue such positions.
     fn set_sky_light(&mut self, pos: &BlockPos, light_level: u8) -> bool {
         self.counters.bump(LightCounters::SET_SKY);
         Self::write_light(self.chunk_for(pos), pos, light_level, false)
@@ -392,8 +392,8 @@ impl DynamicLightEngine {
     /// Bounded by this chunk's height (`VOID_AIR` opacity 0 would walk forever past `max_y`).
     fn has_open_sky_above(&self, cursor: &mut ChunkCursor, pos: &BlockPos) -> bool {
         self.counters.bump(LightCounters::SKY_COLUMN_SCAN);
-        // Die ganze Spalte liegt per Definition im selben Chunk: ein Lookup fuer `max_y`,
-        // danach traegt der Cursor den Chunk durch alle Scan-Schritte.
+        // The whole column is in the same chunk by definition: one lookup for `max_y`,
+        // after that the cursor carries the chunk through every scan step.
         let Some(max_y) = cursor.chunk_for(pos).map(|chunk| {
             chunk.section.min_y + (chunk.section.count as i32) * BlockPalette::SIZE as i32 - 1
         }) else {
@@ -437,9 +437,9 @@ impl DynamicLightEngine {
         if tier == SkyLightTier::Unknown {
             return tier; // Falls schon ohne Grenze unklar, spart das den Nachbar-Lookup.
         }
-        // Bewusst nicht ueber den Cursor: der Nachbar-Chunk wuerde dessen Memo verdraengen,
-        // obwohl der Aufrufer gleich wieder im eigenen Chunk weiterarbeitet. Nur die
-        // Aussenspalte zahlt das, und dort sind es 1-2 Lookups.
+        // Deliberately not via the cursor: the neighbour chunk would evict its memo,
+        // even though the caller carries on in its own chunk right after. Only the
+        // edge column pays this, and there it is 1-2 lookups.
         if Self::border_sides_agree(cursor.level, chunk_pos, relative.x, relative.z, height) {
             tier
         } else {
@@ -447,11 +447,11 @@ impl DynamicLightEngine {
         }
     }
 
-    /// Chunk-Border-Sync: an der Chunk-Grenze muss der grenznahe Quadrant des Nachbarn den
-    /// schnellen Pfad mittragen (AND). Traegt er ihn nicht, oder ist der Nachbar nicht
-    /// geladen, faellt die Position auf den echten Check zurueck (NAND).
+    /// Chunk border sync: at a chunk border the neighbour's near-border quadrant has to
+    /// carry the fast path too (AND). If it does not, or the neighbour is not
+    /// loaded, the position falls back to the real check (NAND).
     ///
-    /// Zahlt nur die Aussenspalte (`local == 0 || local == 15`), in der Ecke zwei Seiten.
+    /// Only the edge column pays (`local == 0 || local == 15`), a corner pays two sides.
     fn border_sides_agree(
         level: &Level,
         chunk_pos: Vector2<i32>,
@@ -527,14 +527,17 @@ impl DynamicLightEngine {
             if !height.quadrant_uses_limit(relative.x, relative.z) {
                 return; // Already diverged, nothing left to invalidate.
             }
-            let cut = height.decode(chunk.section.min_y, SkyLightHeight::chunk_height(chunk));
-            if pos.0.y < cut {
+            if !height.may_move_a_ceiling(
+                pos.0.y,
+                chunk.section.min_y,
+                SkyLightHeight::chunk_height(chunk),
+            ) {
                 return;
             }
 
             let ceiling = SkyLightHeight::column_ceiling_at(chunk, relative.x, relative.z);
-            // Bandpruefung liegt in `SkyLightHeight`, damit sie dieselbe Rundungstoleranz
-            // benutzt wie `tier()`.
+            // Both bounds live in `SkyLightHeight` so they share one rounding tolerance
+            // with `tier()`; a local copy of either is how the band drifts apart.
             if !height.ceiling_within_band(
                 ceiling,
                 chunk.section.min_y,
@@ -578,8 +581,8 @@ impl DynamicLightEngine {
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
             let mut budget = LIGHT_UPDATES_PER_PASS;
-            // Ein Cursor fuer den ganzen Pass: aufeinanderfolgende Queue-Eintraege liegen
-            // fast immer im selben Chunk, die Trefferquote steigt damit ueber die
+            // One cursor for the whole pass: consecutive queue entries almost always
+            // sit in the same chunk, so the hit rate climbs beyond what a single
             // Einzeloperation hinaus.
             let mut cursor = ChunkCursor::new(level, &self.counters);
             updates += self.perform_block_light_updates(&mut cursor, &mut budget);
@@ -1065,8 +1068,8 @@ impl DynamicLightEngine {
         ChunkCursor::new(level, &self.counters).sky_light(position)
     }
 
-    /// `Err` wenn der Schreibvorgang nicht landen kann (Chunk nicht geladen oder Y ausserhalb
-    /// der Chunk-Hoehe).
+    /// `Err` if the write cannot land (chunk not loaded or Y outside the
+    /// chunk height).
     pub fn set_block_light_level(
         &self,
         level: &Arc<Level>,

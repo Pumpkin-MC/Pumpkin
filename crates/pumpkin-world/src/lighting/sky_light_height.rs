@@ -1,14 +1,14 @@
 //! Sky Light Cut Height caching
 //!
-//! Speichert pro Chunk den niedrigsten Y-Wert, unterhalb dessen kein offener Himmel
-//! existiert, sodass Aktualisierungen des Skylights unterhalb dieser Höhe zur Laufzeit
-//! verworfen werden, anstatt berechnet zu werden.
+//! Stores per chunk the lowest Y below which no open sky exists, so that sky light
+//! updates below that height can be answered at runtime instead of being computed
+//! from a full column scan.
 //!
-//! Ein einzelner, chunkweiter Wert würde durch einen
-//! einzigen 1x1 Loch oder eine Schlucht heruntergezogen werden,
-//! daher wird der Wert mit 4 Quadranten (NW, NE, SW, SE) gepaart, die jeweils eine eigene Flag haben.
-//! Ein Flag bedeutet, dass der Quadrant stärker
-//! als der Schwellenwert vom Chunk abweicht und auf eine tatsächliche Überprüfung zurückfällt.
+//! A single chunk-wide value would be dragged down by one
+//! 1x1 hole or a single ravine cutting through it,
+//! so the value is paired with 4 quadrants (NW, NE, SW, SE), each carrying its own flag.
+//! A set flag means that quadrant deviates further
+//! than the threshold from the chunk value and falls back to a real check.
 
 use crate::ProtoChunk;
 use crate::chunk::{ChunkData, ChunkHeightmapType};
@@ -16,21 +16,21 @@ use pumpkin_data::{BlockState, BlockStateId};
 use pumpkin_nbt::tag::NbtTag;
 use std::sync::atomic::Ordering;
 
-/// Breite des unsicheren Tier-3-Bands, waehlbar pro Chunk über die 2 Reserve-Bits.
+/// Width of the uncertain tier 3 band, chosen per chunk through the 2 reserve bits.
 ///
-/// Das Band liegt genau auf der Oberflaeche, wo gebaut und abgebaut wird, und ist der
-/// einzige Bereich der noch den teuren Spaltenscan hat.
+/// The band sits exactly on the surface, where players build and mine, and is the
+/// only region that still pays for the expensive column scan.
 ///
-/// Theorie: Flaches Terrain kommt mit 4 Blöcken aus, nur echtes Bergterrain braucht 32.
-/// Ein fester Wert  könnte jedem Chunk das Band aufzwingen.
+/// Theory: flat terrain gets by with 4 blocks, only real mountains need 32.
+/// A fixed value would force the worst case onto every chunk.
 pub const SPREAD_SCALES: [i32; 4] = [4, 8, 16, 32];
 
-/// Groesstes Band das ein Quadrant fürs nutzen
+/// Largest band a quadrant can still use
 pub const QUADRANT_DIVERGENCE_THRESHOLD: i32 = SPREAD_SCALES[3];
 
 const DECODE_SAFETY_MARGIN: i32 = 1;
 
-/// Informationen vom Chunk Cache, die für Skylight
+/// Answer from the chunk cache for the open-sky question
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SkyLightTier {
     /// Tier 1: below the cut
@@ -43,8 +43,8 @@ pub enum SkyLightTier {
 
 /// 24-bit Sky Light Cut Height
 ///
-/// Bytes 0-1 (bits 0-15) -> hexadecimal grob und fein Wert
-/// Byte 2 (bits 16-23) -> Flags half, `has_surface_water`, 4x quadrant divergence, 2 reserviert
+/// Bytes 0-1 (bits 0-15) -> hexadecimal coarse and fine value
+/// Byte 2 (bits 16-23) -> flags half, `has_surface_water`, 4x quadrant divergence, 2 reserved
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct SkyLightHeight(u32);
 
@@ -67,11 +67,11 @@ impl SkyLightHeight {
     const FLAG_QUADRANT_SW: u32 = 1 << Self::QUADRANT_SW_SHIFT;
     const FLAG_QUADRANT_SE: u32 = 1 << Self::QUADRANT_SE_SHIFT;
 
-    /// Bits 22-23: Index in [`SPREAD_SCALES`], die Breite des Tier-3-Bands.
+    /// Bits 22-23: index into [`SPREAD_SCALES`], the width of the tier 3 band.
     const SPREAD_SHIFT: u32 = 22;
     const SPREAD_MASK: u32 = 0b11 << Self::SPREAD_SHIFT;
 
-    /// Breite des unsicheren Bands ueber dem Cut fuer diesen Chunk.
+    /// Width of the uncertain band above the cut for this chunk.
     #[must_use]
     pub const fn spread(self) -> i32 {
         SPREAD_SCALES[((self.0 & Self::SPREAD_MASK) >> Self::SPREAD_SHIFT) as usize]
@@ -120,8 +120,8 @@ impl SkyLightHeight {
         base_y + y_in_half
     }
 
-    /// Bumps the hex approximation by `delta` steps (kein `raw() == 0`)
-    /// 65536 Möglickeiten mit half -> genug für spätere Anpassungen die das Bauen über dem Highlimit erlauben.
+    /// Bumps the hex approximation by `delta` steps (keeps `raw() == 0` impossible)
+    /// 65536 slots per half -> enough headroom for later changes that allow building above the height limit.
     #[must_use]
     pub const fn with_hex_approx_bumped(self, delta: u32) -> Self {
         let hex_approx =
@@ -167,10 +167,10 @@ impl SkyLightHeight {
         Self(self.0 | Self::quadrant_flag(local_x, local_z))
     }
 
-    /// AND-Gatter ueber eine Chunk-Grenze.
+    /// AND gate across a chunk border.
     ///
-    /// An der Grenze traegt der hot Pfad nur, wenn beide angrenzende Quadranten ihn
-    /// tragen. NAND fällt auf den echten Check zurück.
+    /// At the border the fast path holds only if both adjoining quadrants carry
+    /// it. NAND falls back to the real check.
     #[must_use]
     pub const fn border_uses_limit(
         self,
@@ -209,14 +209,25 @@ impl SkyLightHeight {
         }
     }
 
-    /// Ob eine Spaltendecke noch in das Band dieses Chunks passt -> die Umkehrung von
-    /// [`Self::tier`] und die einzige Stelle, an der über divigierende Quadrant entschieden
-    /// wird.
+    /// Whether a column ceiling still fits this chunk's band -> the inverse of
+    /// [`Self::tier`] and the only place where quadrant divergence is decided
+    /// at all.
     #[must_use]
     pub fn ceiling_within_band(self, ceiling: i32, chunk_min_y: i32, chunk_height: i32) -> bool {
         let cut = self.decode(chunk_min_y, chunk_height);
         ceiling >= cut - DECODE_SAFETY_MARGIN
             && ceiling <= cut + self.spread() + DECODE_SAFETY_MARGIN
+    }
+
+    /// Whether a block change at `y` can still move a column ceiling of this chunk.
+    ///
+    /// The lower edge of the band, and it must be the same edge
+    /// [`Self::ceiling_within_band`] accepts. Skipping deeper changes is what makes the
+    /// invalidation cheap: below the lowest possible ceiling, digging only removes blocks
+    /// that were never the ceiling, and placing cannot raise one that already sits higher.
+    #[must_use]
+    pub fn may_move_a_ceiling(self, y: i32, chunk_min_y: i32, chunk_height: i32) -> bool {
+        y >= self.decode(chunk_min_y, chunk_height) - DECODE_SAFETY_MARGIN
     }
 
     const fn quadrant_index(local_x: usize, local_z: usize) -> usize {
@@ -305,11 +316,11 @@ impl SkyLightHeight {
         Self::solve(&q_min, &q_max, min_y, Self::chunk_height(chunk))
     }
 
-    /// Waehlt aus den 4 Quadranten-Deckenintervallen den Cut, das Band und die
-    /// Divergenz-Flags. Gemeinsamer Kern von Worldgen und Laufzeit
+    /// Picks the cut, the band and the divergence flags from the 4 quadrant ceiling
+    /// intervals. Shared core of worldgen and runtime
     ///
-    /// Ein Quadrant kann das Band nur nutzen, wenn alle seine Decken in
-    /// `[cut, cut + spread]` liegen, der Cut also in `[q_max - spread, q_min]`.
+    /// A quadrant can only use the band if all of its ceilings lie in
+    /// `[cut, cut + spread]`, so the cut must lie in `[q_max - spread, q_min]`.
     #[must_use]
     fn solve(q_min: &[i32; 4], q_max: &[i32; 4], min_y: i32, chunk_height: i32) -> Self {
         let mut best_cut = q_min[0];
@@ -325,7 +336,7 @@ impl SkyLightHeight {
                 let covered = (0..4)
                     .filter(|&j| candidate >= q_max[j] - spread && candidate <= q_min[j])
                     .count() as u32;
-                // Mehr Quadranten > schmalere Band > high Cut (large Tier-1)
+                // More quadrants > narrower band > high cut (large tier 1)
                 let better = covered > best_covered
                     || (covered == best_covered
                         && (spread_index < best_spread_index
@@ -351,7 +362,7 @@ impl SkyLightHeight {
         encoded
     }
 
-    /// Wie [`Self::column_opaque_ceiling`], aber auf einem noch nicht fertigen
+    /// Like [`Self::column_opaque_ceiling`], but on a not yet finished
     /// `ProtoChunk`
     fn proto_column_opaque_ceiling(
         proto: &ProtoChunk,
@@ -371,11 +382,11 @@ impl SkyLightHeight {
         min_y - 1
     }
 
-    /// Worldgen-Variante von [`Self::compute_from_chunk`].
+    /// Worldgen variant of [`Self::compute_from_chunk`].
     ///
-    /// muss nach Carvern und Features (Stage `Lighting`), damit Löcher und
-    /// Schluchten die bereits im Terrain sind auch in den Quadranten-Flags landen.
-    /// Quelle ist `WorldSurface`-Heightmap des `ProtoChunk`
+    /// Must run after carvers and features (stage `Lighting`), so that holes and
+    /// ravines already carved into the terrain also land in the quadrant flags.
+    /// Source is the `WorldSurface` heightmap of the `ProtoChunk`
     #[must_use]
     pub fn compute_from_proto(proto: &ProtoChunk) -> Self {
         let min_y = i32::from(proto.bottom_y());
@@ -384,7 +395,7 @@ impl SkyLightHeight {
 
         for local_z in 0..16i32 {
             for local_x in 0..16i32 {
-                // `top_block_height_exclusive` ist exklusiv, der oberste Block liegt eins darunter.
+                // `top_block_height_exclusive` is exclusive, the top block sits one below it.
                 let surface = proto.top_block_height_exclusive(local_x, local_z) - 1;
                 let ceiling = Self::proto_column_opaque_ceiling(proto, local_x, local_z, surface);
                 let quadrant = Self::quadrant_index(local_x as usize, local_z as usize);
@@ -394,7 +405,7 @@ impl SkyLightHeight {
         }
 
         let computed = Self::solve(&q_min, &q_max, min_y, i32::from(proto.height()));
-        // raw() == 0 ist der "nicht gecached"-Sentinel und darf nie persistiert werden.
+        // raw() == 0 is the "not cached" sentinel and must never be persisted.
         if computed.raw() == 0 {
             computed.with_hex_approx_bumped(1)
         } else {
@@ -429,36 +440,36 @@ impl SkyLightHeight {
 
 /// Lazy migration for the sky light cut height.
 ///
-/// Beim ersten Zugriff einmalig berechnet, anschließend im RAM zwischengespeichert und in
-/// `PumpkinCustomData` dauerhaft gespeichert.
-/// NBT selbst zeigt an, dass die Funktionalität bereits einmal beim Chunk geladen wurde.
-/// kein neuer flag.
+/// Computed once on first access, then cached in RAM and stored persistently in
+/// `PumpkinCustomData`.
+/// The NBT value itself shows that the feature has already run once for this chunk.
+/// No extra flag.
 pub struct SkyLightHeightMigration;
 
 impl SkyLightHeightMigration {
     const NAMESPACE: &'static str = "pumpkin:optimization";
 
-    /// Formatversion, steht im Keynamen. Andere Versionen werden beim nächsten Chunk-Update überschrieben.
+    /// Format version, lives in the key name. Other versions are overwritten on the next chunk update.
     pub const VERSION: u8 = 1;
     const KEY: &'static str = "sky_light_height_v1";
 
-    /// Schluessel frueherer Versionen, die es zu entsorgen gilt.
+    /// Keys of earlier versions that need to be discarded.
     ///
-    /// Es wird immer nur [`Self::KEY`] gelesen -> kein Fallback.
+    /// Only [`Self::KEY`] is ever read -> no fallback chain.
     ///
-    /// Bei v2 hier `"sky_light_height_v1"` eintragen.
+    /// On a v2, add `"sky_light_height_v1"` here.
     const LEGACY_KEYS: [&'static str; 0] = [];
 
-    /// Nur die unteren 24 Bit sind der Wert; Bits 24-31 des persistierten `Int` tragen
-    /// den Geometrie-Tag.
+    /// Only the low 24 bits are the value; bits 24-31 of the persisted `Int` carry
+    /// the geometry tag.
     const VALUE_MASK: u32 = 0x00FF_FFFF;
     const GEOMETRY_SHIFT: u32 = 24;
 
-    /// Packt die Chunk-Geometrie, unter der ein Wert berechnet wurde, in 8 Bit.
+    /// Packs the chunk geometry a value was computed under into 8 bits.
     ///
-    /// Der Cut ist relativ zu `min_y` und der Chunk-Höhe kodiert (half + Bruchteil).
+    /// The cut is encoded relative to `min_y` and the chunk height (half + fraction).
     ///
-    /// `None` = Geometrie nicht darstellbar
+    /// `None` = geometry not representable
     fn geometry_tag(min_y: i32, chunk_height: i32) -> Option<u8> {
         if min_y % 16 != 0 || chunk_height % 16 != 0 {
             return None;
@@ -476,15 +487,15 @@ impl SkyLightHeightMigration {
     }
 
     /// Fast flag check on chunk load (0.01ms)
-    /// Gibt es gepsiecherten Wert? RAM nicht berührt.
+    /// Is there a stored value? Does not touch RAM state.
     #[must_use]
     pub fn fast_load_flag(chunk: &ChunkData) -> bool {
         chunk.has_custom_data(Self::NAMESPACE, Self::KEY)
     }
 
-    /// Liest den persistierten Wert, sofern einer da und fuer diesen Chunk gueltig ist.
+    /// Reads the persisted value, if one is there and valid for this chunk.
     ///
-    /// None oder andere Versionen werden ignoriert/überschrieben beim nächsten chunk update
+    /// None or other versions are ignored and overwritten on the next chunk update
     pub fn load_persisted(chunk: &ChunkData) -> Option<SkyLightHeight> {
         let expected = Self::chunk_geometry_tag(chunk)?;
         let Some(NbtTag::Int(v)) = chunk.get_custom_data(Self::NAMESPACE, Self::KEY) else {
@@ -533,10 +544,10 @@ impl SkyLightHeightMigration {
         height
     }
 
-    /// Persists the given cut height to `PumpkinCustomData`, mit Geometrie-Tag in Bits 24-31.
+    /// Persists the given cut height to `PumpkinCustomData`, with geometry tag in bits 24-31.
     ///
-    /// Schreibt ohne den Chunk dirty zu markieren -> ableitbar
-    /// dem Chunk ableitbar.
+    /// Writes without marking the chunk dirty -> the value is fully
+    /// derivable from the chunk.
     pub fn persist(chunk: &ChunkData, height: SkyLightHeight) {
         let Some(tag) = Self::chunk_geometry_tag(chunk) else {
             return; // Nicht validierbare Geometrie: lieber nichts persistieren.
@@ -544,7 +555,7 @@ impl SkyLightHeightMigration {
         let stored = (height.raw() & Self::VALUE_MASK) | (u32::from(tag) << Self::GEOMETRY_SHIFT);
         chunk.set_derived_custom_data(Self::NAMESPACE, Self::KEY, NbtTag::Int(stored as i32));
 
-        // Reste aelterer Formatversionen entsorgen, statt sie ewig mitzuschleppen.
+        // Discard leftovers of older format versions instead of carrying them forever.
         for legacy in Self::LEGACY_KEYS {
             if chunk.has_custom_data(Self::NAMESPACE, legacy) {
                 chunk.remove_custom_data(Self::NAMESPACE, legacy);
@@ -559,7 +570,7 @@ impl SkyLightHeightMigration {
 
     /// Marks a quadrant as diverged and writes it through to cache and NBT. No-op while
     /// nothing is cached
-    /// nächste Berechnung sieht die Divergenz eh
+    /// the next computation sees the divergence anyway
     pub fn mark_quadrant_diverged(chunk: &ChunkData, local_x: i32, local_z: i32) {
         let cached = chunk.sky_light_height_cache.load(Ordering::Relaxed);
         if cached == 0 {
@@ -575,7 +586,7 @@ impl SkyLightHeightMigration {
         Self::persist(chunk, height);
     }
 
-    /// Persistäns Wert speichern wenn etwas berechnet wurde.
+    /// Persist the value if something has been computed.
     pub fn ensure_persisted(chunk: &ChunkData) {
         let cached = chunk.sky_light_height_cache.load(Ordering::Relaxed);
         if cached == 0 {
@@ -692,8 +703,8 @@ mod tests {
         assert_eq!(tier_at(&chunk, height, 200, 8, 8), SkyLightTier::OpenSky);
     }
 
-    /// Flaches Terrain hat keine Streuung, also muss das teure Tier-3-Band auf die
-    /// kleinste Stufe schrumpfen
+    /// Flat terrain has no spread, so the expensive tier 3 band must shrink to the
+    /// smallest step
     #[test]
     fn flat_terrain_picks_the_tightest_band() {
         let chunk = ChunkData::empty(0, 0);
@@ -701,17 +712,17 @@ mod tests {
         let height = SkyLightHeight::compute_from_chunk(&chunk);
 
         assert_eq!(height.spread(), SPREAD_SCALES[0]);
-        // Knapp ueber der Oberflaeche ist bereits Tier 2, nicht mehr das Band.
+        // Just above the surface is already tier 2, no longer the band.
         assert_eq!(tier_at(&chunk, height, 67, 8, 8), SkyLightTier::OpenSky);
     }
 
-    /// schweizer-Käse Terrain braucht ein breiteres Band, sonst wuerden die Quadranten
-    /// alle als abweichend markiert
+    /// Swiss-cheese terrain needs a wider band, otherwise the quadrants would
+    /// all be marked as diverged
     #[test]
     fn rough_terrain_widens_the_band_instead_of_diverging() {
         let chunk = ChunkData::empty(0, 0);
         fill_terrain(&chunk, 60);
-        // Saeulen bis y=72: Streuung 12, passt in keine der beiden kleinsten Stufen.
+        // Pillars up to y=72: spread 12, fits into neither of the two smallest steps.
         for local_z in (0..16usize).step_by(4) {
             for local_x in (0..16usize).step_by(4) {
                 for y in 61..=72 {
@@ -787,14 +798,14 @@ mod tests {
         assert_eq!(tier_at(&chunk, height, 10, 12, 12), SkyLightTier::NoOpenSky);
     }
 
-    /// AND-Gatter: der schnelle Pfad an Grenze nur, wenn beide
-    /// Quadranten ihn tragen. NAND (einer weicht ab) -> echter Check.
+    /// AND gate: the fast path holds at a border only if both
+    /// quadrants carry it. NAND (one diverges) -> real check.
     #[test]
     fn border_gate_needs_both_sides() {
         let flat = SkyLightHeight::encode(56, -64, 384);
         let diverged = flat.with_quadrant_diverged(15, 8);
 
-        // Ostkante von uns (x=15) trifft die Westkante des Nachbarn (x=0).
+        // Our east edge (x=15) meets the neighbour's west edge (x=0).
         assert!(flat.border_uses_limit(flat, 15, 8, 0, 8), "schneller Pfad");
         assert!(
             !flat.border_uses_limit(diverged.with_quadrant_diverged(0, 8), 15, 8, 0, 8),
@@ -807,8 +818,8 @@ mod tests {
             "master -> echter Check"
         );
 
-        // Nur der grenznahe Quadrant des Nachbarn zaehlt: eine Abweichung auf dessen
-        // gegenueberliegender Seite (x=15) darf uns nicht ausbremsen.
+        // Only the neighbour's near-border quadrant counts: a divergence on its
+        // opposite side (x=15) must not slow us down.
         assert!(
             flat.border_uses_limit(flat.with_quadrant_diverged(15, 8), 15, 8, 0, 8),
             "Abweichung auf der fernen Seite des Nachbarn ist irrelevant"
@@ -835,10 +846,10 @@ mod tests {
         assert!(!reloaded.quadrant_uses_limit(2, 2));
     }
 
-    // ---- Phase 4: Persistenz ---------------------------------------------------
+    // ---- Phase 4: persistence --------------------------------------------------
 
-    /// Der persistierte `Int` traegt Wert (Bits 0-23) und Geometrie-Tag (Bits 24-31);
-    /// zurueckgelesen wird wieder der reine 24-Bit-Wert.
+    /// The persisted `Int` carries value (bits 0-23) and geometry tag (bits 24-31);
+    /// what is read back is the plain 24-bit value again.
     #[test]
     fn persisted_value_carries_the_geometry_tag_out_of_band() {
         let chunk = ChunkData::empty(0, 0);
@@ -859,10 +870,10 @@ mod tests {
         );
     }
 
-    /// Der Kern von Phase 4: der Cut ist relativ zu `min_y`/Chunk-Hoehe kodiert. Nach einer
-    /// Welthoehen-Aenderung dekodiert derselbe Rohwert zu einem anderen Y — ein zu niedriger
-    /// Cut wuerde Bloecke unter Fels als "offener Himmel" behandeln. Der Tag muss das
-    /// abfangen, statt die alte Zahl weiterzuverwenden.
+    /// The core of phase 4: the cut is encoded relative to `min_y`/chunk height. After a
+    /// world height change the same raw value decodes to a different Y — a cut that is too
+    /// low would treat blocks under solid rock as "open sky". The tag has to catch that
+    /// instead of reusing the old number.
     #[test]
     fn a_changed_world_height_invalidates_the_persisted_value() {
         let chunk = ChunkData::empty(0, 0);
@@ -870,7 +881,7 @@ mod tests {
         SkyLightHeightMigration::persist(&chunk, height);
         assert!(SkyLightHeightMigration::load_persisted(&chunk).is_some());
 
-        // Derselbe Rohwert, aber unter einer anderen Geometrie geschrieben.
+        // The same raw value, but written under a different geometry.
         let foreign = SkyLightHeightMigration::geometry_tag(0, 256).expect("darstellbar");
         let current = SkyLightHeightMigration::geometry_tag(-64, 384).expect("darstellbar");
         assert_ne!(
@@ -889,14 +900,14 @@ mod tests {
             "fremde Geometrie muss verworfen werden"
         );
 
-        // ensure_lazy faellt sauber auf Neuberechnung zurueck statt den Muell zu uebernehmen.
+        // ensure_lazy falls back cleanly to recomputation instead of adopting the garbage.
         fill_terrain(&chunk, 60);
         let fresh = SkyLightHeightMigration::get(&chunk);
         assert_eq!(SkyLightHeightMigration::load_persisted(&chunk), Some(fresh));
     }
 
-    /// Nicht darstellbare Geometrie: lieber gar nicht persistieren als einen Wert
-    /// hinterlassen, dessen Gueltigkeit spaeter niemand pruefen kann.
+    /// Unrepresentable geometry: better to persist nothing at all than to leave a value
+    /// whose validity nobody can check later on.
     #[test]
     fn unrepresentable_geometry_is_not_persisted() {
         assert!(SkyLightHeightMigration::geometry_tag(-64, 384).is_some());
@@ -911,8 +922,8 @@ mod tests {
         );
     }
 
-    /// Genau eine unterstuetzte Version: der Keyname muss zu [`SkyLightHeightMigration::VERSION`]
-    /// passen, sonst laufen Schreiber und Leser auseinander.
+    /// Exactly one supported version: the key name must match [`SkyLightHeightMigration::VERSION`]
+    /// or writer and reader drift apart.
     #[test]
     fn the_key_name_matches_the_version_constant() {
         assert_eq!(
@@ -921,14 +932,14 @@ mod tests {
         );
     }
 
-    /// Ein Key einer anderen (alten) Version wird nicht interpretiert: neu berechnen und
-    /// die aktuelle Version schreiben.
+    /// A key from another (older) version is not interpreted: recompute and
+    /// write the current version.
     #[test]
     fn an_older_version_key_is_ignored_and_overwritten() {
         let chunk = ChunkData::empty(0, 0);
         fill_terrain(&chunk, 60);
 
-        // So koennte ein Vorgaengerformat aussehen — anderer Key, beliebiger Inhalt.
+        // This is what a predecessor format might look like — other key, arbitrary content.
         chunk.set_custom_data(
             "pumpkin:optimization",
             "sky_light_height_v0",
@@ -950,7 +961,7 @@ mod tests {
         assert!(SkyLightHeightMigration::fast_load_flag(&chunk));
     }
 
-    /// Kaputtes/fremdes NBT darf keinen eigenen Reparaturpfad brauchen.
+    /// Broken or foreign NBT must not require its own repair path.
     #[test]
     fn corrupt_nbt_falls_back_to_recompute() {
         let chunk = ChunkData::empty(0, 0);
@@ -970,8 +981,8 @@ mod tests {
         );
     }
 
-    /// Ein reiner Lesezugriff darf den Chunk nicht dirty machen — sonst schreibt das blosse
-    /// Durchlaufen einer Welt jeden angefassten Chunk komplett neu.
+    /// A pure read access must not dirty the chunk — otherwise merely walking through a
+    /// world rewrites every chunk it touches in full.
     #[test]
     fn lazily_computing_the_cut_does_not_dirty_the_chunk() {
         let chunk = ChunkData::empty(0, 0);
@@ -990,8 +1001,8 @@ mod tests {
         );
     }
 
-    /// Save-Pfad: ein nur im RAM-Cache stehender Wert muss beim Serialisieren mitgenommen
-    /// werden und einen kompletten Disk-Round-Trip ueberleben.
+    /// Save path: a value sitting only in the RAM cache must be picked up on serialization
+    /// and survive a full disk round trip.
     #[test]
     fn cached_value_survives_a_full_serialization_round_trip() {
         use crate::chunk::format::anvil::SingleChunkDataSerializer;
@@ -1001,7 +1012,7 @@ mod tests {
         fill_terrain(&chunk, 60);
         let height = SkyLightHeight::compute_from_chunk(&chunk);
 
-        // Nur den Cache setzen, `persist` bewusst nicht aufrufen.
+        // Only set the cache, deliberately do not call `persist`.
         chunk
             .sky_light_height_cache
             .store(height.raw(), Ordering::Relaxed);
@@ -1023,15 +1034,8 @@ mod tests {
         assert_eq!(SkyLightHeightMigration::get(&reloaded), height);
     }
 
-    // ---- Regression: spurious quadrant divergence -------------------------------
-
-    /// Eine Spalte, an der sich **nichts geaendert hat**, darf nie als "Band verlassen"
-    /// gelten — sonst degradiert ihr Quadrant dauerhaft auf Tier 3.
-    ///
-    /// Der Sweep ueber viele Terrainhoehen ist der eigentliche Test: `decode` rundet ab und
-    /// trifft bei manchen Hoehen (z.B. genau 60) zufaellig exakt, bei den meisten nicht. Ein
-    /// Test mit einer einzigen Hoehe ist deshalb ein Muenzwurf und war gruen, waehrend der
-    /// Bug live war.
+    /// A column where nothing has changed must never count as "left the band"
+    /// -> or its quadrant degrades to tier 3 permanently.
     #[test]
     fn unchanged_columns_never_leave_the_band() {
         let mut spurious = Vec::new();
@@ -1064,7 +1068,7 @@ mod tests {
         );
     }
 
-    /// Die aufgeweitete Bandprüfung darf die Tier-Zusage nicht untergraben
+    /// The widened band check must not undermine the tier promise
     #[test]
     fn band_tolerance_never_contradicts_the_tier_promise() {
         let (min_y, chunk_height) = (-64, 384);
@@ -1097,7 +1101,7 @@ mod tests {
         }
     }
 
-    ///`ProtoChunk` ohne  Generierung.
+    ///`ProtoChunk` without any generation run.
     fn proto_chunk() -> ProtoChunk {
         use crate::generation::generator::{GeneratorInit, VanillaGenerator, WorldGenerator};
         use pumpkin_data::dimension::Dimension;
@@ -1110,7 +1114,7 @@ mod tests {
         ProtoChunk::new(0, 0, &world_gen)
     }
 
-    /// Fuellt jede Spalte bis `top` mit Stein und zieht die `WorldSurface`-Heightmap nach.
+    /// Fills every column up to `top` with stone and updates the `WorldSurface` heightmap.
     fn fill_proto_terrain(proto: &mut ProtoChunk, top: i32) {
         let min_y = i32::from(proto.bottom_y());
         for local_z in 0..16 {
@@ -1131,8 +1135,8 @@ mod tests {
         let min_y = i32::from(proto.bottom_y());
         let cut = height.decode(min_y, i32::from(proto.height()));
 
-        // Der Cut ist die *Unterkante* des Bands, nicht die Deckenhoehe selbst: alle
-        // Decken (hier 60) muessen in [cut, cut + spread] liegen.
+        // The cut is the lower edge of the band, not the ceiling height itself: all
+        // ceilings (here 60) must lie in [cut, cut + spread].
         assert!(
             cut - DECODE_SAFETY_MARGIN <= 60 && 60 <= cut + height.spread(),
             "Decke 60 liegt nicht im Band [{cut}, {}]",
@@ -1144,18 +1148,18 @@ mod tests {
                 "flaches Terrain: Quadrant ({x},{z}) muss den schnellen Pfad behalten"
             );
         }
-        // Flach heisst schmalstes Band.
+        // Flat means the narrowest band.
         assert_eq!(height.spread(), SPREAD_SCALES[0]);
         assert_ne!(height.raw(), 0, "Sentinel darf nie entstehen");
     }
 
-    /// Ein Schacht (Carver/Ravine-Fall) darf nur sein eigenes 8x8-Quadrant degradieren.
+    /// A shaft (carver/ravine case) may only degrade its own 8x8 quadrant.
     #[test]
     fn worldgen_shaft_only_degrades_its_own_quadrant() {
         let mut proto = proto_chunk();
         fill_proto_terrain(&mut proto, 60);
 
-        // Spalte (2,2) bis weit unter den Cut ausgraeumt.
+        // Column (2,2) cleared out to well below the cut.
         let min_y = i32::from(proto.bottom_y());
         for y in min_y..=60 {
             proto.set_block_state(2, y, 2, Block::AIR.default_state);
@@ -1174,8 +1178,8 @@ mod tests {
         }
     }
 
-    /// Glas ist nicht Luft, aber lichtdurchlaessig: `WorldSurface` steht hoch, der Cut
-    /// darf trotzdem nicht mitwandern, sonst gilt eine belichtete Spalte als "kein Himmel".
+    /// Glass is not air but transmits light: `WorldSurface` sits high, yet the cut
+    /// must not follow, or a lit column would count as "no sky".
     #[test]
     fn worldgen_glass_does_not_raise_the_cut() {
         let mut proto = proto_chunk();
@@ -1199,7 +1203,7 @@ mod tests {
         );
     }
 
-    /// Upgrade zum Level-Chunk ueberleben -> im Cache und in NBT, ohne Neuberechnung.
+    /// survive the upgrade to a level chunk -> in cache and NBT, without recomputation.
     #[test]
     fn worldgen_value_survives_upgrade_to_level_chunk() {
         use crate::chunk_system::chunk_state::Chunk;

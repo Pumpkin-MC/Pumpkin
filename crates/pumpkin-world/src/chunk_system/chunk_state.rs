@@ -338,8 +338,8 @@ impl Chunk {
             sky_light_height_cache: std::sync::atomic::AtomicU32::new(proto_chunk.sky_light_height),
         };
 
-        // Worldgen hat den Cut berechnet -> direkt persistieren, damit der
-        // Level-Chunk ihn nicht beim ersten Sky-Light Zugriff neu ableiten muss.
+        // Worldgen already computed the cut -> persist it right away so the
+        // level chunk need not re-derive it on the first sky light access.
         if proto_chunk.sky_light_height != 0 {
             crate::lighting::SkyLightHeightMigration::ensure_persisted(&chunk);
         }

@@ -604,9 +604,8 @@ impl ChunkData {
             self.inhabited_time.load(Ordering::Relaxed) as i64,
         );
 
-        // Letzte Gelegenheit, einen nur im RAM stehenden Cut-Height mitzunehmen. Jeder
-        // Schreibpfad persistiert zwar schon selbst, aber der Cache ist die eine Stelle, an
-        // der ein Wert entstehen kann.
+        // Last chance to pick up a cut height that only exists in RAM. Every
+        // write path persists on its own already.
         crate::lighting::SkyLightHeightMigration::ensure_persisted(self);
 
         let custom_data = self
