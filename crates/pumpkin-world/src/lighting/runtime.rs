@@ -9,6 +9,7 @@ use crossbeam::queue::SegQueue;
 use pumpkin_config::lighting::LightingEngineConfig;
 use pumpkin_data::BlockDirection;
 use pumpkin_util::math::position::BlockPos;
+use pumpkin_util::math::vector2::Vector2;
 use std::fmt;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
@@ -253,18 +254,70 @@ impl DynamicLightEngine {
     /// Only Tier 3 pays for [`Self::has_open_sky_above`]; the other two answer from 24 bits.
     fn sky_tier(level: &Arc<Level>, pos: &BlockPos) -> SkyLightTier {
         let (chunk_pos, relative) = pos.chunk_and_chunk_relative_position();
-        level
-            .read_chunk_sync(&chunk_pos, |chunk| {
-                let height = SkyLightHeightMigration::get(chunk);
-                height.tier(
-                    pos.0.y,
-                    relative.x,
-                    relative.z,
-                    chunk.section.min_y,
-                    SkyLightHeight::chunk_height(chunk),
-                )
-            })
-            .unwrap_or(SkyLightTier::Unknown)
+        let Some((tier, height)) = level.read_chunk_sync(&chunk_pos, |chunk| {
+            let height = SkyLightHeightMigration::get(chunk);
+            let tier = height.tier(
+                pos.0.y,
+                relative.x,
+                relative.z,
+                chunk.section.min_y,
+                SkyLightHeight::chunk_height(chunk),
+            );
+            (tier, height)
+        }) else {
+            return SkyLightTier::Unknown;
+        };
+
+        if tier == SkyLightTier::Unknown {
+            return tier; // Falls schon ohne Grenze unklar, spart das den Nachbar-Lookup.
+        }
+        if Self::border_sides_agree(level, chunk_pos, relative.x, relative.z, height) {
+            tier
+        } else {
+            SkyLightTier::Unknown
+        }
+    }
+
+    /// Chunk-Border-Sync: an der Chunk-Grenze muss der grenznahe Quadrant des Nachbarn den
+    /// schnellen Pfad mittragen (AND). Traegt er ihn nicht, oder ist der Nachbar nicht
+    /// geladen, faellt die Position auf den echten Check zurueck (NAND).
+    ///
+    /// Zahlt nur die Aussenspalte (`local == 0 || local == 15`), in der Ecke zwei Seiten.
+    fn border_sides_agree(
+        level: &Arc<Level>,
+        chunk_pos: Vector2<i32>,
+        local_x: i32,
+        local_z: i32,
+        height: SkyLightHeight,
+    ) -> bool {
+        let neighbors = [
+            (local_x == 0, Vector2::new(chunk_pos.x - 1, chunk_pos.y), 15, local_z),
+            (local_x == 15, Vector2::new(chunk_pos.x + 1, chunk_pos.y), 0, local_z),
+            (local_z == 0, Vector2::new(chunk_pos.x, chunk_pos.y - 1), local_x, 15),
+            (local_z == 15, Vector2::new(chunk_pos.x, chunk_pos.y + 1), local_x, 0),
+        ];
+
+        for (on_edge, neighbor_pos, neighbor_x, neighbor_z) in neighbors {
+            if !on_edge {
+                continue;
+            }
+            let agrees = level
+                .read_chunk_sync(&neighbor_pos, |neighbor| {
+                    let neighbor_height = SkyLightHeightMigration::get(neighbor);
+                    height.border_uses_limit(
+                        neighbor_height,
+                        local_x,
+                        local_z,
+                        neighbor_x,
+                        neighbor_z,
+                    )
+                })
+                .unwrap_or(false);
+            if !agrees {
+                return false;
+            }
+        }
+        true
     }
 
     /// Keeps the cached cut height honest after a block change.

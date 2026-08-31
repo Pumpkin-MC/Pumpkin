@@ -165,6 +165,23 @@ impl SkyLightHeight {
         Self(self.0 | Self::quadrant_flag(local_x, local_z))
     }
 
+    /// AND-Gatter ueber eine Chunk-Grenze.
+    ///
+    /// An der Grenze traegt der hot Pfad nur, wenn beide angrenzende Quadranten ihn
+    /// tragen. NAND fällt auf den echten Check zurück.
+    #[must_use]
+    pub const fn border_uses_limit(
+        self,
+        neighbor: Self,
+        local_x: i32,
+        local_z: i32,
+        neighbor_local_x: i32,
+        neighbor_local_z: i32,
+    ) -> bool {
+        self.quadrant_uses_limit(local_x, local_z)
+            & neighbor.quadrant_uses_limit(neighbor_local_x, neighbor_local_z)
+    }
+
     /// 3-Tier culling lookup. A non-diverged quadrant guarantees every one of its column
     /// ceilings lies in, below the cut nothing sees sky and above cut+spread everything does.
     /// In between -> Unknown.
@@ -623,6 +640,37 @@ mod tests {
         // The shaft column must never be trivially rejected; the untouched ones still are.
         assert_eq!(tier_at(&chunk, height, 10, 2, 2), SkyLightTier::Unknown);
         assert_eq!(tier_at(&chunk, height, 10, 12, 12), SkyLightTier::NoOpenSky);
+    }
+
+    /// AND-Gatter: der schnelle Pfad an Grenze nur, wenn beide
+    /// Quadranten ihn tragen. NAND (einer weicht ab) -> echter Check.
+    #[test]
+    fn border_gate_needs_both_sides() {
+        let flat = SkyLightHeight::encode(56, -64, 384);
+        let diverged = flat.with_quadrant_diverged(15, 8);
+
+        // Ostkante von uns (x=15) trifft die Westkante des Nachbarn (x=0).
+        assert!(
+            flat.border_uses_limit(flat, 15, 8, 0, 8),
+            "schneller Pfad"
+        );
+        assert!(
+            !flat.border_uses_limit(diverged.with_quadrant_diverged(0, 8), 15, 8, 0, 8),
+            "Nachbar -> echter Check"
+        );
+        assert!(
+            !flat
+                .with_quadrant_diverged(15, 8)
+                .border_uses_limit(flat, 15, 8, 0, 8),
+            "master -> echter Check"
+        );
+
+        // Nur der grenznahe Quadrant des Nachbarn zaehlt: eine Abweichung auf dessen
+        // gegenueberliegender Seite (x=15) darf uns nicht ausbremsen.
+        assert!(
+            flat.border_uses_limit(flat.with_quadrant_diverged(15, 8), 15, 8, 0, 8),
+            "Abweichung auf der fernen Seite des Nachbarn ist irrelevant"
+        );
     }
 
     #[test]
