@@ -1,96 +1,29 @@
-use crate::{
-    command::{
-        CommandError, CommandExecutor, CommandResult, CommandSender,
-        args::{
-            Arg, ConsumedArgs,
-            gameprofile::{GameProfileSuggestionMode, GameProfilesArgumentConsumer},
-            message::MsgArgConsumer,
-        },
-        tree::{CommandTree, builder::argument},
-    },
-    data::{SaveJSONConfiguration, banlist_serializer::BannedPlayerEntry},
-    net::{DisconnectReason, GameProfile},
-};
-use CommandError::InvalidConsumption;
 use pumpkin_data::translation;
+use pumpkin_util::PermissionLvl;
+use pumpkin_util::permission::{Permission, PermissionDefault, PermissionRegistry};
 use pumpkin_util::text::TextComponent;
 
-const NAMES: [&str; 1] = ["ban"];
+use crate::command::argument_builder::{ArgumentBuilder, argument, command};
+use crate::command::argument_types::core::string::StringArgumentType;
+use crate::command::argument_types::game_profile::GameProfileArgumentType;
+use crate::command::context::command_context::CommandContext;
+use crate::command::errors::error_types::CommandErrorType;
+use crate::command::node::dispatcher::CommandDispatcher;
+use crate::command::node::{CommandExecutor, CommandExecutorResult};
+use crate::data::SaveJSONConfiguration;
+use crate::data::banlist_serializer::BannedPlayerEntry;
+use crate::net::{DisconnectReason, GameProfile};
+
 const DESCRIPTION: &str = "bans a player";
+const PERMISSION: &str = "minecraft:command.ban";
 
-const ARG_TARGET: &str = "player";
-const ARG_REASON: &str = "reason";
+const ERROR_BAN_FAILED: CommandErrorType<0> = CommandErrorType::new(
+    translation::java::COMMANDS_BAN_FAILED,
+    translation::bedrock::COMMANDS_BAN_FAILED,
+);
 
-struct NoReasonExecutor;
-
-impl CommandExecutor for NoReasonExecutor {
-    fn execute(
-        &self,
-        sender: &CommandSender,
-        server: &crate::server::Server,
-        args: &ConsumedArgs,
-    ) -> CommandResult {
-        let Some(Arg::GameProfiles(targets)) = args.get(&ARG_TARGET) else {
-            return Err(InvalidConsumption(Some(ARG_TARGET.into())));
-        };
-
-        ban_players(sender, server, targets.as_slice(), None)
-    }
-}
-
-struct ReasonExecutor;
-
-impl CommandExecutor for ReasonExecutor {
-    fn execute(
-        &self,
-        sender: &CommandSender,
-        server: &crate::server::Server,
-        args: &ConsumedArgs,
-    ) -> CommandResult {
-        let Some(Arg::GameProfiles(targets)) = args.get(&ARG_TARGET) else {
-            return Err(InvalidConsumption(Some(ARG_TARGET.into())));
-        };
-
-        let Some(Arg::Msg(reason)) = args.get(ARG_REASON) else {
-            return Err(InvalidConsumption(Some(ARG_REASON.into())));
-        };
-
-        ban_players(sender, server, targets.as_slice(), Some(reason))
-    }
-}
-
-/// Returns the number of players successfully banned.
-fn ban_players(
-    sender: &CommandSender,
-    server: &crate::server::Server,
-    targets: &[GameProfile],
-    reason: Option<&String>,
-) -> Result<i32, CommandError> {
-    let mut count: usize = 0;
-    for target in targets {
-        if ban_profile(sender, server, target, reason.cloned()) {
-            count += 1;
-        }
-    }
-
-    if count == 0 {
-        Err(CommandError::CommandFailed(TextComponent::translate_cross(
-            translation::java::COMMANDS_BAN_FAILED,
-            translation::bedrock::COMMANDS_BAN_FAILED,
-            [],
-        )))
-    } else {
-        Ok(count as i32)
-    }
-}
-
-/// Returns `true` if the player was successfully banned.
-fn ban_profile(
-    sender: &CommandSender,
-    server: &crate::server::Server,
-    profile: &GameProfile,
-    reason: Option<String>,
-) -> bool {
+fn ban_profile(context: &CommandContext, profile: &GameProfile, reason: Option<String>) -> bool {
+    let server = context.source.server();
     let mut banned_players = server.data.banned_player_list.write().unwrap();
 
     let reason = reason.unwrap_or_else(|| "Banned by an operator.".to_string());
@@ -109,7 +42,7 @@ fn ban_profile(
 
     banned_players.banned_players.push(BannedPlayerEntry::new(
         profile,
-        sender.to_string(),
+        context.source.name.clone(),
         None,
         reason.clone(),
     ));
@@ -117,15 +50,17 @@ fn ban_profile(
     banned_players.save();
     drop(banned_players);
 
-    // Send messages
-    sender.send_message(TextComponent::translate_cross(
-        translation::java::COMMANDS_BAN_SUCCESS,
-        translation::bedrock::COMMANDS_BAN_SUCCESS,
-        [
-            TextComponent::text(profile.name.clone()),
-            TextComponent::text(reason),
-        ],
-    ));
+    context.source.send_feedback(
+        TextComponent::translate_cross(
+            translation::java::COMMANDS_BAN_SUCCESS,
+            translation::bedrock::COMMANDS_BAN_SUCCESS,
+            [
+                TextComponent::text(profile.name.clone()),
+                TextComponent::text(reason),
+            ],
+        ),
+        true,
+    );
 
     if let Some(player) = server.get_player_by_uuid(profile.id) {
         let kick_msg = TextComponent::translate_cross(
@@ -139,13 +74,49 @@ fn ban_profile(
     true
 }
 
-pub fn init_command_tree() -> CommandTree {
-    CommandTree::new(NAMES, DESCRIPTION).then(
-        argument(
-            ARG_TARGET,
-            GameProfilesArgumentConsumer::new(GameProfileSuggestionMode::OnlinePlayers, true),
-        )
-        .execute(NoReasonExecutor)
-        .then(argument(ARG_REASON, MsgArgConsumer).execute(ReasonExecutor)),
-    )
+struct BanExecutor {
+    has_reason: bool,
+}
+
+impl CommandExecutor for BanExecutor {
+    fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
+        let targets = GameProfileArgumentType::get(context, "player")?;
+        let reason = if self.has_reason {
+            Some(StringArgumentType::get(context, "reason")?.to_string())
+        } else {
+            None
+        };
+
+        let mut count: usize = 0;
+        for target in &targets {
+            if ban_profile(context, target, reason.clone()) {
+                count += 1;
+            }
+        }
+
+        if count == 0 {
+            Err(ERROR_BAN_FAILED.create_without_context())
+        } else {
+            Ok(count as i32)
+        }
+    }
+}
+
+pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistry) {
+    registry.register_permission_or_panic(Permission::new(
+        PERMISSION,
+        DESCRIPTION,
+        PermissionDefault::Op(PermissionLvl::Three),
+    ));
+
+    dispatcher.register(
+        command("ban", DESCRIPTION).requires(PERMISSION).then(
+            argument("player", GameProfileArgumentType)
+                .executes(BanExecutor { has_reason: false })
+                .then(
+                    argument("reason", StringArgumentType::GreedyPhrase)
+                        .executes(BanExecutor { has_reason: true }),
+                ),
+        ),
+    );
 }

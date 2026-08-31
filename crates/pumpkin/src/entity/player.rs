@@ -3745,6 +3745,11 @@ impl Player {
         }) < d * d
     }
 
+    #[must_use]
+    pub fn may_build(&self) -> bool {
+        self.abilities.lock().is_ok_and(|a| a.allow_modify_world)
+    }
+
     pub fn kick(&self, reason: DisconnectReason, message: &TextComponent) {
         if let Some(server) = self.world().server.upgrade()
             && let Some(player_arc) = self.world().get_player_by_uuid(self.gameprofile.id)
@@ -4594,6 +4599,22 @@ impl Player {
         ];
         self.living_entity.send_equipment_changes(equipment);
         // todo this.player.stopUsingItem();
+    }
+
+    #[must_use]
+    pub fn is_text_filtering_enabled(&self) -> bool {
+        self.config.load().text_filtering
+    }
+
+    pub fn send_chat_message(
+        self: &Arc<Self>,
+        tracked: &crate::net::chat::OutgoingChatMessage,
+        filtered: bool,
+        chat_type: pumpkin_protocol::codec::var_int::VarInt,
+        sender_name: &TextComponent,
+        target_name: Option<&TextComponent>,
+    ) {
+        tracked.send_to_player(self, filtered, chat_type, sender_name, target_name);
     }
 
     pub fn send_system_message(&self, text: &TextComponent) {
@@ -6649,18 +6670,28 @@ impl Abilities {
                 self.allow_flying = true;
                 self.creative = true;
                 self.invulnerable = true;
+                self.allow_modify_world = true;
             }
             GameMode::Spectator => {
                 self.flying = true;
                 self.allow_flying = true;
                 self.creative = false;
                 self.invulnerable = true;
+                self.allow_modify_world = false;
             }
-            _ => {
+            GameMode::Adventure => {
                 self.flying = false;
                 self.allow_flying = false;
                 self.creative = false;
                 self.invulnerable = false;
+                self.allow_modify_world = false;
+            }
+            GameMode::Survival => {
+                self.flying = false;
+                self.allow_flying = false;
+                self.creative = false;
+                self.invulnerable = false;
+                self.allow_modify_world = true;
             }
         }
     }

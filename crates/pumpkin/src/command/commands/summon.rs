@@ -1,87 +1,66 @@
-use crate::entity::EntityBase;
-use crate::{
-    command::{
-        CommandError, CommandExecutor, CommandResult, CommandSender,
-        args::{
-            ConsumedArgs, FindArg, position_3d::Position3DArgumentConsumer,
-            summonable_entities::SummonableEntitiesArgumentConsumer,
-        },
-        tree::{CommandTree, builder::argument},
-    },
-    entity::r#type::from_type,
-};
 use pumpkin_data::translation;
-use pumpkin_util::{math::vector3::Vector3, text::TextComponent};
+use pumpkin_util::PermissionLvl;
+use pumpkin_util::permission::{Permission, PermissionDefault, PermissionRegistry};
+use pumpkin_util::text::TextComponent;
 use uuid::Uuid;
 
-use crate::block::entities::BlockEntity;
+use crate::command::argument_builder::{ArgumentBuilder, argument, command};
+use crate::command::argument_types::coordinates::vec3::Vec3ArgumentType;
+use crate::command::argument_types::resource::{ENTITY_TYPE_ARGUMENT, ResourceArgument};
+use crate::command::context::command_context::CommandContext;
+use crate::command::node::dispatcher::CommandDispatcher;
+use crate::command::node::{CommandExecutor, CommandExecutorResult};
+use crate::entity::r#type::from_type;
 
-const NAMES: [&str; 1] = ["summon"];
+const DESCRIPTION: &str = "Spawns an entity at position.";
+const PERMISSION: &str = "minecraft:command.summon";
 
-const DESCRIPTION: &str = "Spawns a Entity at position.";
+struct SummonExecutor {
+    has_pos: bool,
+}
 
-const ARG_ENTITY: &str = "entity";
-
-const ARG_POS: &str = "pos";
-
-struct Executor;
-
-impl CommandExecutor for Executor {
-    fn execute(
-        &self,
-        sender: &CommandSender,
-        server: &crate::server::Server,
-        args: &ConsumedArgs,
-    ) -> CommandResult {
-        let entity_type = SummonableEntitiesArgumentConsumer::find_arg(args, ARG_ENTITY)?;
-        let pos = Position3DArgumentConsumer::find_arg(args, ARG_POS);
-        let (world, pos) = match sender {
-            CommandSender::Console | CommandSender::Rcon(_) | CommandSender::Dummy => {
-                let guard = server.worlds.load();
-                let world = guard
-                    .first()
-                    .cloned()
-                    .ok_or(CommandError::InvalidRequirement)?;
-                let pos = {
-                    let info = &world.level_info.load();
-                    // default position for spawning a player, in this case for mob
-                    pos.unwrap_or(Vector3::new(
-                        f64::from(info.spawn_x) + 0.5,
-                        f64::from(info.spawn_y) + 1.0,
-                        f64::from(info.spawn_z) + 0.5,
-                    ))
-                };
-
-                (world, pos)
-            }
-            CommandSender::Player(player) => {
-                let pos = pos.unwrap_or(player.get_entity().pos.load());
-
-                (player.world(), pos)
-            }
-            CommandSender::CommandBlock(c, w) => {
-                let pos = pos.unwrap_or(c.get_position().to_centered_f64());
-                (w.clone(), pos)
-            }
+impl CommandExecutor for SummonExecutor {
+    fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
+        let entity_type = ResourceArgument::get_summonable_entity_type(context, "entity")?;
+        let pos = if self.has_pos {
+            Vec3ArgumentType::get_coordinates(context, "pos")?.resolve(&context.source)
+        } else {
+            context.source.position
         };
-        let entity = from_type(entity_type, pos, &world, Uuid::new_v4());
+
+        let world = context.source.world();
+        let entity = from_type(entity_type, pos, world, Uuid::new_v4());
         let name = entity.get_display_name();
         world.spawn_entity(entity);
-        sender.send_message(TextComponent::translate_cross(
-            translation::java::COMMANDS_SUMMON_SUCCESS,
-            translation::bedrock::COMMANDS_SUMMON_SUCCESS,
-            [name],
-        ));
+
+        context.source.send_feedback(
+            TextComponent::translate_cross(
+                translation::java::COMMANDS_SUMMON_SUCCESS,
+                translation::bedrock::COMMANDS_SUMMON_SUCCESS,
+                [name],
+            ),
+            true,
+        );
 
         Ok(1)
     }
 }
 
-pub fn init_command_tree() -> CommandTree {
-    CommandTree::new(NAMES, DESCRIPTION).then(
-        argument(ARG_ENTITY, SummonableEntitiesArgumentConsumer)
-            .execute(Executor)
-            .then(argument(ARG_POS, Position3DArgumentConsumer).execute(Executor)),
-        // TODO: Add NBT
-    )
+pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistry) {
+    registry.register_permission_or_panic(Permission::new(
+        PERMISSION,
+        DESCRIPTION,
+        PermissionDefault::Op(PermissionLvl::Two),
+    ));
+
+    dispatcher.register(
+        command("summon", DESCRIPTION).requires(PERMISSION).then(
+            argument("entity", ENTITY_TYPE_ARGUMENT.clone())
+                .executes(SummonExecutor { has_pos: false })
+                .then(
+                    argument("pos", Vec3ArgumentType::Default)
+                        .executes(SummonExecutor { has_pos: true }),
+                ),
+        ),
+    );
 }
