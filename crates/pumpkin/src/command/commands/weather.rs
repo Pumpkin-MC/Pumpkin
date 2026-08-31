@@ -1,45 +1,38 @@
 use pumpkin_data::translation;
+use pumpkin_util::PermissionLvl;
+use pumpkin_util::permission::{Permission, PermissionDefault, PermissionRegistry};
 use pumpkin_util::text::TextComponent;
 
-use crate::command::{
-    CommandError, CommandExecutor, CommandResult, CommandSender,
-    args::{ConsumedArgs, FindArg, time::TimeArgumentConsumer},
-    tree::{
-        CommandTree,
-        builder::{argument, literal},
-    },
-};
+use crate::command::argument_builder::{ArgumentBuilder, argument, command, literal};
+use crate::command::argument_types::time::TimeArgumentType;
+use crate::command::context::command_context::CommandContext;
+use crate::command::node::dispatcher::CommandDispatcher;
+use crate::command::node::{CommandExecutor, CommandExecutorResult};
 
-const NAMES: [&str; 1] = ["weather"];
 const DESCRIPTION: &str = "Changes the weather.";
-const ARG_DURATION: &str = "duration";
+const PERMISSION: &str = "minecraft:command.weather";
 
-struct Executor {
-    mode: WeatherMode,
-}
-
+#[derive(Clone, Copy)]
 enum WeatherMode {
     Clear,
     Rain,
     Thunder,
 }
 
-impl CommandExecutor for Executor {
-    fn execute(
-        &self,
-        sender: &CommandSender,
-        server: &crate::server::Server,
-        args: &ConsumedArgs,
-    ) -> CommandResult {
-        let duration = TimeArgumentConsumer::find_arg(args, ARG_DURATION).ok();
-        let world = {
-            let guard = server.worlds.load();
+struct WeatherExecutor {
+    mode: WeatherMode,
+    has_duration: bool,
+}
 
-            guard
-                .first()
-                .cloned()
-                .ok_or(CommandError::InvalidRequirement)?
+impl CommandExecutor for WeatherExecutor {
+    fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
+        let duration = if self.has_duration {
+            Some(TimeArgumentType::get(context, "duration")?)
+        } else {
+            None
         };
+
+        let world = context.source.world();
         let message = {
             let mut weather = world
                 .weather
@@ -51,7 +44,7 @@ impl CommandExecutor for Executor {
                     let processed_duration =
                         duration.unwrap_or_else(|| rand::random_range(12_000..=180_000));
 
-                    weather.set_weather_parameters(&world, processed_duration, 0, false, false);
+                    weather.set_weather_parameters(world, processed_duration, 0, false, false);
                     TextComponent::translate_cross(
                         translation::java::COMMANDS_WEATHER_SET_CLEAR,
                         translation::bedrock::COMMANDS_WEATHER_CLEAR,
@@ -62,7 +55,7 @@ impl CommandExecutor for Executor {
                     let processed_duration =
                         duration.unwrap_or_else(|| rand::random_range(12_000..=24_000));
 
-                    weather.set_weather_parameters(&world, 0, processed_duration, true, false);
+                    weather.set_weather_parameters(world, 0, processed_duration, true, false);
                     TextComponent::translate_cross(
                         translation::java::COMMANDS_WEATHER_SET_RAIN,
                         translation::bedrock::COMMANDS_WEATHER_RAIN,
@@ -71,9 +64,9 @@ impl CommandExecutor for Executor {
                 }
                 WeatherMode::Thunder => {
                     let processed_duration =
-                        duration.unwrap_or_else(|| rand::random_range(3_600..=15_600));
+                        duration.unwrap_or_else(|| rand::random_range(3600..=15_600));
 
-                    weather.set_weather_parameters(&world, 0, processed_duration, true, true);
+                    weather.set_weather_parameters(world, 0, processed_duration, true, true);
                     TextComponent::translate_cross(
                         translation::java::COMMANDS_WEATHER_SET_THUNDER,
                         translation::bedrock::COMMANDS_WEATHER_THUNDER,
@@ -83,46 +76,60 @@ impl CommandExecutor for Executor {
             }
         };
 
-        sender.send_message(message);
+        context.source.send_feedback(message, true);
 
-        // Vanilla returns -1 when duration is not specified
-        Ok(duration.unwrap_or(-1))
+        Ok(1)
     }
 }
 
-pub fn init_command_tree() -> CommandTree {
-    CommandTree::new(NAMES, DESCRIPTION)
-        .then(
-            literal("clear")
-                .then(
-                    argument(ARG_DURATION, TimeArgumentConsumer::new()).execute(Executor {
+pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistry) {
+    registry.register_permission_or_panic(Permission::new(
+        PERMISSION,
+        DESCRIPTION,
+        PermissionDefault::Op(PermissionLvl::Two),
+    ));
+
+    dispatcher.register(
+        command("weather", DESCRIPTION)
+            .requires(PERMISSION)
+            .then(
+                literal("clear")
+                    .executes(WeatherExecutor {
                         mode: WeatherMode::Clear,
-                    }),
-                )
-                .execute(Executor {
-                    mode: WeatherMode::Clear,
-                }),
-        )
-        .then(
-            literal("rain")
-                .then(
-                    argument(ARG_DURATION, TimeArgumentConsumer::new()).execute(Executor {
+                        has_duration: false,
+                    })
+                    .then(argument("duration", TimeArgumentType::any()).executes(
+                        WeatherExecutor {
+                            mode: WeatherMode::Clear,
+                            has_duration: true,
+                        },
+                    )),
+            )
+            .then(
+                literal("rain")
+                    .executes(WeatherExecutor {
                         mode: WeatherMode::Rain,
-                    }),
-                )
-                .execute(Executor {
-                    mode: WeatherMode::Rain,
-                }),
-        )
-        .then(
-            literal("thunder")
-                .then(
-                    argument(ARG_DURATION, TimeArgumentConsumer::new()).execute(Executor {
+                        has_duration: false,
+                    })
+                    .then(argument("duration", TimeArgumentType::any()).executes(
+                        WeatherExecutor {
+                            mode: WeatherMode::Rain,
+                            has_duration: true,
+                        },
+                    )),
+            )
+            .then(
+                literal("thunder")
+                    .executes(WeatherExecutor {
                         mode: WeatherMode::Thunder,
-                    }),
-                )
-                .execute(Executor {
-                    mode: WeatherMode::Thunder,
-                }),
-        )
+                        has_duration: false,
+                    })
+                    .then(argument("duration", TimeArgumentType::any()).executes(
+                        WeatherExecutor {
+                            mode: WeatherMode::Thunder,
+                            has_duration: true,
+                        },
+                    )),
+            ),
+    );
 }
