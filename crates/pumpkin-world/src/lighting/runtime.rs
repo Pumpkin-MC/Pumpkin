@@ -2,6 +2,9 @@ use crate::chunk::ChunkData;
 use crate::chunk::io::Dirtiable;
 use crate::chunk::palette::BlockPalette;
 use crate::level::Level;
+use crate::lighting::sky_light_height::{
+    QUADRANT_DIVERGENCE_THRESHOLD, SkyLightHeight, SkyLightHeightMigration, SkyLightTier,
+};
 use crossbeam::queue::SegQueue;
 use pumpkin_config::lighting::LightingEngineConfig;
 use pumpkin_data::BlockDirection;
@@ -17,7 +20,7 @@ use tracing::debug;
 /// Leftover is visible as delayed shadows after mining, placing, or a chunk-border sky refill.
 const LIGHT_UPDATES_PER_PASS: i32 = 16_384;
 
-const LIGHT_COUNTER_NAMES: [&str; 14] = [
+const LIGHT_COUNTER_NAMES: [&str; 17] = [
     "check_block",
     "check_sky",
     "sky_column_scan",
@@ -32,12 +35,15 @@ const LIGHT_COUNTER_NAMES: [&str; 14] = [
     "set_block_light",
     "block_state",
     "chunk_loaded",
+    "sky_tier1_no_open_sky",
+    "sky_tier2_open_sky",
+    "sky_tier3_scan",
 ];
 
 /// Per-tick counts for the lighting hot path. `sky_column_read` is O(height)
 /// per `checkBlock`; `get_sky`/`block_state`/`chunk_loaded` are 6x per
 /// propagated cell. Logged sorted by count from [`LightPassStats`].
-struct LightCounters([AtomicU64; 14]);
+struct LightCounters([AtomicU64; 17]);
 
 impl LightCounters {
     const CHECK_BLOCK: usize = 0;
@@ -54,9 +60,15 @@ impl LightCounters {
     const SET_BLOCK_LIGHT: usize = 11;
     const BLOCK_STATE: usize = 12;
     const CHUNK_LOADED: usize = 13;
+    const SKY_TIER1: usize = 14;
+    const SKY_TIER2: usize = 15;
+    const SKY_TIER3: usize = 16;
 
     const fn new() -> Self {
         Self([
+            AtomicU64::new(0),
+            AtomicU64::new(0),
+            AtomicU64::new(0),
             AtomicU64::new(0),
             AtomicU64::new(0),
             AtomicU64::new(0),
@@ -84,8 +96,8 @@ impl LightCounters {
         }
     }
 
-    fn snapshot_and_reset(&self) -> [u64; 14] {
-        let mut out = [0u64; 14];
+    fn snapshot_and_reset(&self) -> [u64; 17] {
+        let mut out = [0u64; 17];
         for (i, slot) in self.0.iter().enumerate() {
             out[i] = slot.swap(0, Ordering::Relaxed);
         }
@@ -99,7 +111,7 @@ pub struct LightPassStats {
     pub elapsed: Duration,
     pub updates: i32,
     pub leftover: bool,
-    counts: [u64; 14],
+    counts: [u64; 17],
 }
 
 impl LightPassStats {
@@ -237,6 +249,57 @@ impl DynamicLightEngine {
         true
     }
 
+    /// 3-Tier culling for the open-sky question, backed by the cached per-chunk cut height.
+    /// Only Tier 3 pays for [`Self::has_open_sky_above`]; the other two answer from 24 bits.
+    fn sky_tier(level: &Arc<Level>, pos: &BlockPos) -> SkyLightTier {
+        let (chunk_pos, relative) = pos.chunk_and_chunk_relative_position();
+        level
+            .read_chunk_sync(&chunk_pos, |chunk| {
+                let height = SkyLightHeightMigration::get(chunk);
+                height.tier(
+                    pos.0.y,
+                    relative.x,
+                    relative.z,
+                    chunk.section.min_y,
+                    SkyLightHeight::chunk_height(chunk),
+                )
+            })
+            .unwrap_or(SkyLightTier::Unknown)
+    }
+
+    /// Keeps the cached cut height honest after a block change.
+    ///
+    /// A non-diverged quadrant promises every column ceiling sits in
+    /// `[cut, cut + QUADRANT_DIVERGENCE_THRESHOLD]`. Only a change at or above the cut can
+    /// break that: digging below the cut leaves the occluders above it untouched, and
+    /// placing below the cut cannot raise a ceiling that is already at or above it. So we
+    /// re-derive this one column and flag the quadrant if it left the band.
+    ///
+    /// Differs from the plan, which invalidates on changes *below* the cut: that describes
+    /// an already-stale cut, which cannot arise while this runs on every block change.
+    fn refresh_sky_cut_after_change(level: &Arc<Level>, pos: &BlockPos) {
+        let (chunk_pos, relative) = pos.chunk_and_chunk_relative_position();
+        level.read_chunk_sync(&chunk_pos, |chunk| {
+            let cached = chunk.sky_light_height_cache.load(Ordering::Relaxed);
+            if cached == 0 {
+                return; // Never computed: the first compute will see this change anyway.
+            }
+            let height = SkyLightHeight::from_raw(cached);
+            if !height.quadrant_uses_limit(relative.x, relative.z) {
+                return; // Already diverged, nothing left to invalidate.
+            }
+            let cut = height.decode(chunk.section.min_y, SkyLightHeight::chunk_height(chunk));
+            if pos.0.y < cut {
+                return;
+            }
+
+            let ceiling = SkyLightHeight::column_ceiling_at(chunk, relative.x, relative.z);
+            if ceiling < cut || ceiling > cut + QUADRANT_DIVERGENCE_THRESHOLD {
+                SkyLightHeightMigration::mark_quadrant_diverged(chunk, relative.x, relative.z);
+            }
+        });
+    }
+
     fn queues_empty(&self) -> bool {
         self.block_decrease.is_empty()
             && self.block_increase.is_empty()
@@ -266,6 +329,8 @@ impl DynamicLightEngine {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         self.check_block_light_updates(level, pos);
+        // Must run before the sky pass: the pass reads the cut height this may invalidate.
+        Self::refresh_sky_cut_after_change(level, &pos);
         self.check_sky_light_updates(level, pos);
     }
 
@@ -630,8 +695,21 @@ impl DynamicLightEngine {
             // Fully opaque block = no light
             0
         } else {
-            // Check if there's open sky above
-            let has_sky = self.has_open_sky_above(level, &pos);
+            // Check if there's open sky above, cheaply where the cut height can decide it
+            let has_sky = match Self::sky_tier(level, &pos) {
+                SkyLightTier::NoOpenSky => {
+                    self.counters.bump(LightCounters::SKY_TIER1);
+                    false
+                }
+                SkyLightTier::OpenSky => {
+                    self.counters.bump(LightCounters::SKY_TIER2);
+                    true
+                }
+                SkyLightTier::Unknown => {
+                    self.counters.bump(LightCounters::SKY_TIER3);
+                    self.has_open_sky_above(level, &pos)
+                }
+            };
 
             if has_sky {
                 // Direct sunlight, reduced by opacity

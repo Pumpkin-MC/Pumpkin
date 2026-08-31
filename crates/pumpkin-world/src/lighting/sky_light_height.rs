@@ -10,12 +10,26 @@
 //! Ein Flag bedeutet, dass der Quadrant stärker
 //! als der Schwellenwert vom Chunk abweicht und auf eine tatsächliche Überprüfung zurückfällt.
 
-use crate::chunk::ChunkData;
+use crate::chunk::{ChunkData, ChunkHeightmapType};
+use pumpkin_data::BlockState;
 use pumpkin_nbt::tag::NbtTag;
 use std::sync::atomic::Ordering;
 
 /// Ab wie vielen Blöcken wird ein Quadrant unoptimiert.
 pub const QUADRANT_DIVERGENCE_THRESHOLD: i32 = 30;
+
+const DECODE_SAFETY_MARGIN: i32 = 1;
+
+/// Informationen vom Chunk Cache, die für Skylight
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SkyLightTier {
+    /// Tier 1: below the cut
+    NoOpenSky,
+    /// Tier 2: above the cut plus spread
+    OpenSky,
+    /// Tier 3: inside the uncertain band, or the quadrant diverged. real check.
+    Unknown,
+}
 
 /// 24-bit Sky Light Cut Height
 ///
@@ -43,13 +57,13 @@ impl SkyLightHeight {
     const FLAG_QUADRANT_SW: u32 = 1 << Self::QUADRANT_SW_SHIFT;
     const FLAG_QUADRANT_SE: u32 = 1 << Self::QUADRANT_SE_SHIFT;
 
-    /// Wraps a raw encoded value from NBT or AtomicCache
+    /// Wraps a raw encoded value from NBT or `AtomicCache`
     #[must_use]
     pub const fn from_raw(raw: u32) -> Self {
         Self(raw)
     }
 
-    /// The raw encoded value as stored in the AtomicCache and persisted to NBT
+    /// The raw encoded value as stored in the `AtomicCache` and persisted to NBT
     #[must_use]
     pub const fn raw(self) -> u32 {
         self.0
@@ -81,7 +95,7 @@ impl SkyLightHeight {
         base_y + y_in_half
     }
 
-    /// Bumps the hex approximation by `delta` steps (kein "raw() == 0")
+    /// Bumps the hex approximation by `delta` steps (kein `raw() == 0`)
     /// 65536 Möglickeiten mit half -> genug für spätere Anpassungen die das Bauen über dem Highlimit erlauben.
     #[must_use]
     pub const fn with_hex_approx_bumped(self, delta: u32) -> Self {
@@ -125,6 +139,160 @@ impl SkyLightHeight {
     #[must_use]
     pub const fn with_quadrant_diverged(self, local_x: i32, local_z: i32) -> Self {
         Self(self.0 | Self::quadrant_flag(local_x, local_z))
+    }
+
+    /// 3-Tier culling lookup. A non-diverged quadrant guarantees every one of its column
+    /// ceilings lies in, below the cut nothing sees sky and above cut+spread everything does.
+    /// In between -> Unknown.
+    #[must_use]
+    pub fn tier(
+        self,
+        y: i32,
+        local_x: i32,
+        local_z: i32,
+        chunk_min_y: i32,
+        chunk_height: i32,
+    ) -> SkyLightTier {
+        if !self.quadrant_uses_limit(local_x, local_z) {
+            return SkyLightTier::Unknown;
+        }
+        let cut = self.decode(chunk_min_y, chunk_height);
+        if y < cut - DECODE_SAFETY_MARGIN {
+            SkyLightTier::NoOpenSky
+        } else if y > cut + QUADRANT_DIVERGENCE_THRESHOLD + DECODE_SAFETY_MARGIN {
+            SkyLightTier::OpenSky
+        } else {
+            SkyLightTier::Unknown
+        }
+    }
+
+    const fn quadrant_index(local_x: usize, local_z: usize) -> usize {
+        match (local_x < 8, local_z < 8) {
+            (true, true) => 0,
+            (false, true) => 1,
+            (true, false) => 2,
+            (false, false) => 3,
+        }
+    }
+
+    const fn quadrant_flag_by_index(index: usize) -> u32 {
+        match index {
+            0 => Self::FLAG_QUADRANT_NW,
+            1 => Self::FLAG_QUADRANT_NE,
+            2 => Self::FLAG_QUADRANT_SW,
+            _ => Self::FLAG_QUADRANT_SE,
+        }
+    }
+
+    /// Highest light-blocking block in a column, or `min_y - 1` if the column has none.
+    ///
+    /// Starts from the already-maintained `WorldSurface` heightmap and walks down. The
+    /// heightmap value alone is not usable:
+    /// not air -> light needs "opacity > 0"
+    /// glass and leaves sit above their real ceiling and would make the cut too high
+    fn column_opaque_ceiling(chunk: &ChunkData, local_x: usize, local_z: usize, from_y: i32) -> i32 {
+        let min_y = chunk.section.min_y;
+        let mut y = from_y;
+        while y >= min_y {
+            let id = chunk.section.get_block_absolute_y(local_x, y, local_z);
+            if let Some(id) = id
+                && BlockState::from_id(id).opacity > 0
+            {
+                return y;
+            }
+            y -= 1;
+        }
+        min_y - 1
+    }
+
+    /// Derives the cut height and the 4 quadrant divergence flags from this chunk.
+    ///
+    /// A quadrant may use the chunk cut only if all of its ceilings fit into
+    /// `[cut, cut + QUADRANT_DIVERGENCE_THRESHOLD]`, i.e. the cut must lie in
+    /// `[q_max - THRESHOLD, q_min]`. The cut is picked as the point covered by the most
+    /// of those 4 intervals (ties resolved upwards, for the largest Tier 1 region)
+    #[must_use]
+    pub fn compute_from_chunk(chunk: &ChunkData) -> Self {
+        let min_y = chunk.section.min_y;
+        let mut q_min = [i32::MAX; 4];
+        let mut q_max = [i32::MIN; 4];
+
+        {
+            let heightmap = chunk
+                .heightmap
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let top_y =
+                min_y + (chunk.section.count as i32) * crate::chunk::palette::BlockPalette::SIZE as i32 - 1;
+
+            for local_z in 0..16usize {
+                for local_x in 0..16usize {
+                    let surface = heightmap
+                        .get(
+                            ChunkHeightmapType::WorldSurface,
+                            local_x as i32,
+                            local_z as i32,
+                            min_y,
+                        )
+                        .min(top_y);
+                    let ceiling = Self::column_opaque_ceiling(chunk, local_x, local_z, surface);
+                    let quadrant = Self::quadrant_index(local_x, local_z);
+                    q_min[quadrant] = q_min[quadrant].min(ceiling);
+                    q_max[quadrant] = q_max[quadrant].max(ceiling);
+                }
+            }
+        }
+
+        // Der Beste Cut ist der, der die meisten Quadranten abdeckt
+        let mut best_cut = q_min[0];
+        let mut best_covered = 0u32;
+        for i in 0..4 {
+            if q_max[i] - q_min[i] > QUADRANT_DIVERGENCE_THRESHOLD {
+                continue; // Interval empty: this quadrant can never use the cut.
+            }
+            let candidate = q_max[i] - QUADRANT_DIVERGENCE_THRESHOLD;
+            let covered = (0..4)
+                .filter(|&j| candidate >= q_max[j] - QUADRANT_DIVERGENCE_THRESHOLD && candidate <= q_min[j])
+                .count() as u32;
+            if covered > best_covered || (covered == best_covered && candidate > best_cut) {
+                best_covered = covered;
+                best_cut = candidate;
+            }
+        }
+
+        let mut encoded = Self::encode(best_cut, min_y, Self::chunk_height(chunk));
+        for i in 0..4 {
+            let usable = best_cut >= q_max[i] - QUADRANT_DIVERGENCE_THRESHOLD && best_cut <= q_min[i];
+            if !usable {
+                encoded = Self(encoded.0 | Self::quadrant_flag_by_index(i));
+            }
+        }
+
+        encoded
+    }
+
+    /// Highest light-blocking block in one chunk-local column, starting from its
+    /// `WorldSurface` heightmap entry. Used to re-check a single column after a block change.
+    #[must_use]
+    pub fn column_ceiling_at(chunk: &ChunkData, local_x: i32, local_z: i32) -> i32 {
+        let min_y = chunk.section.min_y;
+        let top_y = min_y + Self::chunk_height(chunk) - 1;
+        let surface = {
+            let heightmap = chunk
+                .heightmap
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            heightmap
+                .get(ChunkHeightmapType::WorldSurface, local_x, local_z, min_y)
+                .min(top_y)
+        };
+        Self::column_opaque_ceiling(chunk, local_x as usize, local_z as usize, surface)
+    }
+
+    /// Block height of the chunk's section stack
+    #[must_use]
+    pub const fn chunk_height(chunk: &ChunkData) -> i32 {
+        (chunk.section.count as i32) * crate::chunk::palette::BlockPalette::SIZE as i32
     }
 }
 
@@ -185,6 +353,29 @@ impl SkyLightHeightMigration {
         chunk.set_custom_data(Self::NAMESPACE, Self::KEY, NbtTag::Int(height.raw() as i32));
     }
 
+    /// Lazy runtime: computes from the chunk itself on first access.
+    pub fn get(chunk: &ChunkData) -> SkyLightHeight {
+        Self::ensure_lazy(chunk, || SkyLightHeight::compute_from_chunk(chunk))
+    }
+
+    /// Marks a quadrant as diverged and writes it through to cache and NBT. No-op while
+    /// nothing is cached
+    /// nächste Berechnung sieht die Divergenz eh
+    pub fn mark_quadrant_diverged(chunk: &ChunkData, local_x: i32, local_z: i32) {
+        let cached = chunk.sky_light_height_cache.load(Ordering::Relaxed);
+        if cached == 0 {
+            return;
+        }
+        let height = SkyLightHeight::from_raw(cached).with_quadrant_diverged(local_x, local_z);
+        if height.raw() == cached {
+            return; // Already diverged.
+        }
+        chunk
+            .sky_light_height_cache
+            .store(height.raw(), Ordering::Relaxed);
+        Self::persist(chunk, height);
+    }
+
     /// Persistäns Wert speichern wenn etwas berechnet wurde.
     pub fn ensure_persisted(chunk: &ChunkData) {
         let cached = chunk.sky_light_height_cache.load(Ordering::Relaxed);
@@ -198,6 +389,7 @@ impl SkyLightHeightMigration {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use pumpkin_data::Block;
 
     #[test]
     fn encode_decode_round_trip_lower_half() {
@@ -262,5 +454,109 @@ mod tests {
             panic!("should not recompute once persisted")
         });
         assert_eq!(reloaded, height);
+    }
+
+    /// Fills every column of the chunk with stone from `min_y` up to and including `top`.
+    fn fill_terrain(chunk: &ChunkData, top: i32) {
+        let min_y = chunk.section.min_y;
+        for local_z in 0..16usize {
+            for local_x in 0..16usize {
+                for y in min_y..=top {
+                    chunk.set_block_absolute_y(local_x, y, local_z, Block::STONE.default_state.id);
+                }
+            }
+        }
+    }
+
+    fn tier_at(chunk: &ChunkData, height: SkyLightHeight, y: i32, x: i32, z: i32) -> SkyLightTier {
+        height.tier(
+            y,
+            x,
+            z,
+            chunk.section.min_y,
+            SkyLightHeight::chunk_height(chunk),
+        )
+    }
+
+    #[test]
+    fn flat_terrain_splits_into_three_tiers() {
+        let chunk = ChunkData::empty(0, 0);
+        fill_terrain(&chunk, 60);
+        let height = SkyLightHeight::compute_from_chunk(&chunk);
+
+        // Flat: no quadrant diverges, everything can use the chunk cut.
+        assert!(height.quadrant_uses_limit(0, 0));
+        assert!(height.quadrant_uses_limit(15, 15));
+
+        assert_eq!(tier_at(&chunk, height, 20, 8, 8), SkyLightTier::NoOpenSky);
+        assert_eq!(tier_at(&chunk, height, 60, 8, 8), SkyLightTier::Unknown);
+        assert_eq!(tier_at(&chunk, height, 200, 8, 8), SkyLightTier::OpenSky);
+    }
+
+    /// The cut must follow the highest light-blocking block, not the `WorldSurface`
+    /// heightmap: glass is "not air" but transmits, so a surface-derived cut would
+    /// trivially reject positions under glass that really do see the sky.
+    #[test]
+    fn glass_does_not_raise_the_cut() {
+        let chunk = ChunkData::empty(0, 0);
+        fill_terrain(&chunk, 60);
+        for local_z in 0..16usize {
+            for local_x in 0..16usize {
+                chunk.set_block_absolute_y(local_x, 100, local_z, Block::GLASS.default_state.id);
+            }
+        }
+
+        let height = SkyLightHeight::compute_from_chunk(&chunk);
+        let cut = height.decode(chunk.section.min_y, SkyLightHeight::chunk_height(&chunk));
+        assert!(
+            cut <= 61,
+            "cut {cut} follows the glass at y=100 instead of the stone ceiling at y=60"
+        );
+        assert_ne!(tier_at(&chunk, height, 80, 8, 8), SkyLightTier::NoOpenSky);
+    }
+
+    #[test]
+    fn shaft_only_degrades_its_own_quadrant() {
+        let chunk = ChunkData::empty(0, 0);
+        fill_terrain(&chunk, 60);
+        // Dig a 1x1 shaft in the NW quadrant from the surface down to the bottom.
+        for y in chunk.section.min_y..=60 {
+            chunk.set_block_absolute_y(2, y, 2, Block::AIR.default_state.id);
+        }
+
+        let height = SkyLightHeight::compute_from_chunk(&chunk);
+        assert!(
+            !height.quadrant_uses_limit(2, 2),
+            "the shaft's own quadrant must lose its fast path"
+        );
+        for (x, z) in [(12, 2), (2, 12), (12, 12)] {
+            assert!(
+                height.quadrant_uses_limit(x, z),
+                "quadrant ({x},{z}) must keep the fast path"
+            );
+        }
+
+        // The shaft column must never be trivially rejected; the untouched ones still are.
+        assert_eq!(tier_at(&chunk, height, 10, 2, 2), SkyLightTier::Unknown);
+        assert_eq!(tier_at(&chunk, height, 10, 12, 12), SkyLightTier::NoOpenSky);
+    }
+
+    #[test]
+    fn marking_a_quadrant_diverged_writes_through_to_nbt() {
+        let chunk = ChunkData::empty(0, 0);
+        fill_terrain(&chunk, 60);
+        let height = SkyLightHeightMigration::get(&chunk);
+        assert!(height.quadrant_uses_limit(2, 2));
+
+        SkyLightHeightMigration::mark_quadrant_diverged(&chunk, 2, 2);
+
+        let updated = SkyLightHeight::from_raw(chunk.sky_light_height_cache.load(Ordering::Relaxed));
+        assert!(!updated.quadrant_uses_limit(2, 2));
+        assert!(updated.quadrant_uses_limit(12, 12));
+
+        // Drop the in-memory cache: the divergence must survive in NBT.
+        chunk.sky_light_height_cache.store(0, Ordering::Relaxed);
+        let reloaded = SkyLightHeightMigration::get(&chunk);
+        assert!(!reloaded.quadrant_uses_limit(2, 2));
     }
 }

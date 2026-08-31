@@ -785,7 +785,7 @@ impl ChunkData {
             ChunkHeightmapType::MotionBlocking,
             ChunkHeightmapType::MotionBlockingNoLeaves,
         ] {
-            heightmap.update(hm_type, x, z, y, block_state, min_y, |y_at| {
+            heightmap.update(hm_type, x, y, z, block_state, min_y, |y_at| {
                 let id = self
                     .section
                     .get_block_absolute_y(relative_x, y_at, relative_z)
