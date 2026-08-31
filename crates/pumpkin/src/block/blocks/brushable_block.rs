@@ -3,10 +3,16 @@ use std::sync::Arc;
 use pumpkin_data::block_properties::{BlockProperties, SuspiciousSandLikeProperties};
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::{Block, BlockId, BlockStateId};
+use pumpkin_world::tick::TickPriority;
 use pumpkin_world::world::BlockFlags;
 
+use crate::block::blocks::falling::FallingBlock;
 use crate::block::entities::brushable_block::BrushableBlockBlockEntity;
-use crate::block::{BlockBehaviour, BlockMetadata, BrokenArgs, OnPlaceArgs, PlacedArgs};
+use crate::block::{
+    BlockBehaviour, BlockMetadata, BrokenArgs, GetStateForNeighborUpdateArgs, OnPlaceArgs,
+    OnScheduledTickArgs, PlacedArgs,
+};
+use crate::entity::falling::FallingEntity;
 
 pub struct BrushableBlock;
 
@@ -86,6 +92,36 @@ impl BlockBehaviour for BrushableBlock {
     fn placed(&self, args: PlacedArgs<'_>) {
         let entity = BrushableBlockBlockEntity::new(*args.position);
         args.world.add_block_entity(Arc::new(entity));
+
+        // Suspicious sand/gravel fall like their plain counterparts (vanilla:
+        // https://minecraft.wiki/w/Suspicious_Sand, https://minecraft.wiki/w/Suspicious_Gravel).
+        // TODO: make delay configurable
+        args.world
+            .schedule_block_tick(args.block, *args.position, 2, TickPriority::Normal);
+    }
+
+    fn get_state_for_neighbor_update(
+        &self,
+        args: GetStateForNeighborUpdateArgs<'_>,
+    ) -> BlockStateId {
+        // TODO: make delay configurable
+        args.world
+            .schedule_block_tick(args.block, *args.position, 2, TickPriority::Normal);
+        args.state_id
+    }
+
+    fn on_scheduled_tick(&self, args: OnScheduledTickArgs<'_>) {
+        let (block, state) = args.world.get_block_and_state(&args.position.down());
+        if !FallingBlock::can_fall_through(state, block) || args.position.0.y < args.world.min_y {
+            return;
+        }
+        let state = args.world.get_block_state(args.position);
+        // A block entity carrying in-progress brush hits or a revealed loot item is not
+        // preserved across the fall (FallingEntity only carries the block state id) -- it
+        // lands with a fresh, empty block entity, the same as a freshly-placed suspicious
+        // block. That matches this codebase's existing falling-block behavior and is a
+        // narrower gap than the reported bug (the block not falling at all).
+        FallingEntity::replace_spawn(args.world, *args.position, state.id);
     }
 
     fn broken(&self, args: BrokenArgs<'_>) {
