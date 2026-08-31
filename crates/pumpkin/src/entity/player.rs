@@ -253,6 +253,7 @@ use pumpkin_macros::send_cancellable;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
 use pumpkin_protocol::IdOr;
+use pumpkin_protocol::PositionFlag;
 use pumpkin_protocol::SoundEvent;
 use pumpkin_protocol::bedrock::client::container_open::CContainerOpen;
 use pumpkin_protocol::bedrock::server::actor_event::{ActorEventID, SActorEvent};
@@ -3721,6 +3722,51 @@ impl Player {
                 if let Ok(data) = client.serialize_packet(&packet) {
                     client.try_enqueue_packet(data);
                 }
+            }
+        }
+    }
+
+    /// Nudges the player by a relative offset without touching their velocity or
+    /// camera, using fully relative teleport flags. Used for small physics
+    /// corrections like vanilla's `pushEntitiesUp` (e.g. farmland turning into
+    /// the taller dirt block under a player), where an absolute teleport would
+    /// reset the client's momentum and cause a visible rubber-band.
+    pub fn request_relative_teleport(&self, delta: Vector3<f64>) {
+        let entity = &self.living_entity.entity;
+        let position = entity.pos.load() + delta;
+        entity.set_pos(position);
+        match self.client.as_ref() {
+            ClientPlatform::Java(client) => {
+                let i = self.teleport_id_count.fetch_add(1, Ordering::Relaxed);
+                let teleport_id = i + 1;
+                *self
+                    .awaiting_teleport
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner) =
+                    Some((teleport_id.into(), position));
+                let packet = CPlayerPosition::new(
+                    teleport_id.into(),
+                    delta,
+                    Vector3::new(0.0, 0.0, 0.0),
+                    0.0,
+                    0.0,
+                    vec![
+                        PositionFlag::X,
+                        PositionFlag::Y,
+                        PositionFlag::Z,
+                        PositionFlag::YRot,
+                        PositionFlag::XRot,
+                        PositionFlag::DeltaX,
+                        PositionFlag::DeltaY,
+                        PositionFlag::DeltaZ,
+                    ],
+                );
+                if let Ok(data) = client.serialize_packet(&packet) {
+                    client.try_enqueue_packet(data);
+                }
+            }
+            ClientPlatform::Bedrock(_) => {
+                self.request_teleport(position, entity.yaw.load(), entity.pitch.load());
             }
         }
     }
