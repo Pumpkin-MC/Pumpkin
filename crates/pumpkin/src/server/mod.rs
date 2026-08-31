@@ -22,7 +22,6 @@ use connection_cache::{CachedBranding, CachedStatus};
 use key_store::KeyStore;
 use pumpkin_config::{AdvancedConfiguration, BasicConfiguration};
 use pumpkin_data::dimension::Dimension;
-use pumpkin_data::entity::EntityType;
 use pumpkin_registry::RegistryBuilder;
 use pumpkin_registry::error::RootInitError;
 use pumpkin_util::identifier::Identifier;

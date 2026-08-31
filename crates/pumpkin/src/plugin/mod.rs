@@ -593,7 +593,6 @@ impl PluginManager {
                     {
                         let registry_providers = instance.registry_providers();
 
-
                         let mut plugins = self_ref_clone
                             .plugins
                             .write()
@@ -827,7 +826,11 @@ impl PluginManager {
         }
 
         let mut bootstrap = BootstrapManager::new();
-        for loaded_plugin in &*self.plugins.read().await {
+        for loaded_plugin in &*self
+            .plugins
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+        {
             let Some(providers) = &loaded_plugin.registry_providers else {
                 continue;
             };
