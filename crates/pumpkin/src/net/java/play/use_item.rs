@@ -1,5 +1,6 @@
 #[allow(clippy::wildcard_imports)]
 use super::*;
+use pumpkin_util::version::JavaMinecraftVersion;
 
 impl JavaClient {
     pub fn handle_use_item(&self, player: &Arc<Player>, use_item: &SUseItem, server: &Arc<Server>) {
@@ -13,6 +14,12 @@ impl JavaClient {
             self.try_kick(&TextComponent::text("InvalidHand"));
             return;
         };
+        if self.version.load() >= JavaMinecraftVersion::V_1_21
+            && (!use_item.yaw.is_finite() || !use_item.pitch.is_finite())
+        {
+            self.try_kick(&TextComponent::text("Invalid item use rotation"));
+            return;
+        }
         self.update_sequence(use_item.sequence.0);
 
         let mut item_in_hand = inventory.get_stack_in_hand(hand);
@@ -55,6 +62,11 @@ impl JavaClient {
             PlayerInteractEvent::new(player, InteractAction::RightClickAir, &Block::AIR, None)
         };
         let (item_for_use, stack_for_use) = (item_in_hand.item, item_in_hand.clone());
+        let (use_yaw, use_pitch) = if self.version.load() >= JavaMinecraftVersion::V_1_21 {
+            (use_item.yaw, use_item.pitch)
+        } else {
+            player.rotation()
+        };
         Self::prepare_hand_item_for_use(player, hand, &mut item_in_hand);
 
         if !Self::should_continue_use_after_fish_event(server, player, hand, item_for_use) {
@@ -65,7 +77,9 @@ impl JavaClient {
             server;
             event;
             'after: {
-                server.item_registry.on_use(&stack_for_use, player);
+                server
+                    .item_registry
+                    .on_use_with_rotation(&stack_for_use, player, use_yaw, use_pitch);
             }
         }}
     }
