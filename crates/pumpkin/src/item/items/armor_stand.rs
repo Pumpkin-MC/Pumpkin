@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use crate::block::registry::BlockActionResult;
 use crate::entity::Entity;
 use crate::entity::decoration::armor_stand::ArmorStandEntity;
 use crate::entity::player::Player;
@@ -46,7 +47,7 @@ impl ItemBehaviour for ArmorStandItem {
         _cursor_pos: Vector3<f32>,
         _block: &Block,
         _server: &Server,
-    ) {
+    ) -> BlockActionResult {
         let world = player.world();
         let position = Self::calculate_placement_position(&location, face).to_f64();
 
@@ -88,6 +89,9 @@ impl ItemBehaviour for ArmorStandItem {
 
             world.spawn_entity(Arc::new(armor_stand));
             item.decrement_unless_creative(player.gamemode.load(), 1);
+            BlockActionResult::Success
+        } else {
+            BlockActionResult::Fail
         }
     }
 

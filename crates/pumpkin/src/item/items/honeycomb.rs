@@ -37,9 +37,13 @@ impl ItemBehaviour for HoneyCombItem {
         _cursor_pos: Vector3<f32>,
         block: &Block,
         _server: &Server,
-    ) {
+    ) -> BlockActionResult {
         let world = player.world();
-        try_wax_block(&world, location, block);
+        if try_wax_block(&world, location, block) {
+            BlockActionResult::Success
+        } else {
+            BlockActionResult::Pass
+        }
     }
 
     fn as_any(&self) -> &dyn std::any::Any {

@@ -1,3 +1,4 @@
+use crate::block::registry::BlockActionResult;
 use crate::entity::player::Player;
 use crate::item::ItemBehaviour;
 use crate::item::ItemMetadata;
@@ -34,7 +35,7 @@ impl ItemBehaviour for FlintAndSteelItem {
         _cursor_pos: Vector3<f32>,
         block: &Block,
         _server: &Server,
-    ) {
+    ) -> BlockActionResult {
         let world = player.world();
         let server_ref = world.server.upgrade();
         if let Some(server_ref) = server_ref {
@@ -52,7 +53,7 @@ impl ItemBehaviour for FlintAndSteelItem {
                 .plugin_manager
                 .fire_blocking(&server_ref, &mut portal_event);
             if event.cancelled || portal_event.cancelled {
-                return;
+                return BlockActionResult::Fail;
             }
         }
 
@@ -69,6 +70,12 @@ impl ItemBehaviour for FlintAndSteelItem {
         if ignited && player.gamemode.load() != pumpkin_util::GameMode::Creative {
             // TODO: Handle DamageResult::Broken to broadcast item break and update player slot.
             let _ = item.damage_item(1);
+        }
+
+        if ignited {
+            BlockActionResult::Success
+        } else {
+            BlockActionResult::Fail
         }
     }
 

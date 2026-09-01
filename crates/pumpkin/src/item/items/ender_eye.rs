@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use crate::block::registry::BlockActionResult;
 use crate::entity::Entity;
 use crate::entity::EntityBase;
 use crate::entity::projectile::eye_of_ender::EyeOfEnder;
@@ -39,9 +40,9 @@ impl ItemBehaviour for EnderEyeItem {
         _cursor_pos: Vector3<f32>,
         block: &Block,
         _server: &Server,
-    ) {
+    ) -> BlockActionResult {
         if block.id != Block::END_PORTAL_FRAME.id {
-            return;
+            return BlockActionResult::Pass;
         }
 
         let world = player.world();
@@ -50,11 +51,11 @@ impl ItemBehaviour for EnderEyeItem {
         let new_state_id = {
             // Skip if the frame already holds an eye.
             let Some(props) = block.properties(state_id) else {
-                return;
+                return BlockActionResult::Pass;
             };
             let props_raw = props.to_props();
             if props_raw.iter().any(|(k, v)| *k == "eye" && *v == "true") {
-                return;
+                return BlockActionResult::Pass;
             }
 
             // Build new state with eye=true.
@@ -73,6 +74,8 @@ impl ItemBehaviour for EnderEyeItem {
 
         // Try to complete the portal.
         EndPortal::get_new_portal(&world, location);
+
+        BlockActionResult::Success
     }
 
     fn normal_use(&self, _item: &Item, player: &Player) {

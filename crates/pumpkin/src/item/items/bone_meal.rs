@@ -1,5 +1,6 @@
 use std::any::Any;
 
+use crate::block::registry::BlockActionResult;
 use crate::entity::player::Player;
 use crate::item::{ItemBehaviour, ItemMetadata};
 use crate::server::Server;
@@ -29,7 +30,7 @@ impl ItemBehaviour for BoneMealItem {
         _cursor_pos: Vector3<f32>,
         block: &Block,
         server: &Server,
-    ) {
+    ) -> BlockActionResult {
         let world = player.world();
         let state_id = world.get_block_state_id(&location);
         if server
@@ -38,6 +39,9 @@ impl ItemBehaviour for BoneMealItem {
         {
             world.sync_world_event(WorldEvent::ParticlesAndSoundPlantGrowth, location, 15);
             item.decrement_unless_creative(player.gamemode.load(), 1);
+            BlockActionResult::Success
+        } else {
+            BlockActionResult::Pass
         }
     }
 

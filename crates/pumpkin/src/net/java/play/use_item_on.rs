@@ -1,5 +1,6 @@
 #[allow(clippy::wildcard_imports)]
 use super::*;
+use crate::item::registry::should_try_block_placement;
 
 impl JavaClient {
     #[allow(clippy::too_many_lines)]
@@ -117,15 +118,17 @@ impl JavaClient {
 
         let before = item.clone();
 
-        server
+        let item_result = server
             .item_registry
             .use_on_block(&mut item, player, position, face, cursor_pos, block, server);
 
-        // Check if the item is a block, because not every item can be placed :D
-        let item_id = item.item.id;
-        if let Some(block) = Block::from_item_id(item_id) {
-            should_try_decrement =
-                Self::run_is_block_place(player, block, server, use_item_on, position, face)?;
+        if should_try_block_placement(&item_result) {
+            // Check if the item is a block, because not every item can be placed :D
+            let item_id = item.item.id;
+            if let Some(block) = Block::from_item_id(item_id) {
+                should_try_decrement =
+                    Self::run_is_block_place(player, block, server, use_item_on, position, face)?;
+            }
         }
 
         if should_try_decrement {
@@ -137,6 +140,10 @@ impl JavaClient {
         }
 
         let after = item.clone();
+
+        if matches!(item_result, BlockActionResult::SuccessServer) {
+            player.swing_hand(hand, true);
+        }
 
         // Broadcast the break entity status before the slot sync; the client
         // needs the old item texture in the slot for break particles.

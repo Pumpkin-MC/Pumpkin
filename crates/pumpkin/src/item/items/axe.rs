@@ -1,3 +1,4 @@
+use crate::block::registry::BlockActionResult;
 use crate::entity::player::Player;
 use crate::item::{ItemBehaviour, ItemMetadata};
 use crate::server::Server;
@@ -32,7 +33,7 @@ impl ItemBehaviour for AxeItem {
         _cursor_pos: Vector3<f32>,
         block: &Block,
         _server: &Server,
-    ) {
+    ) -> BlockActionResult {
         // I tried to follow mojang order of doing things.
         let world = player.world();
         let replacement_block = try_use_axe(block.id);
@@ -101,6 +102,12 @@ impl ItemBehaviour for AxeItem {
         if changed && player.gamemode.load() != GameMode::Creative {
             // TODO: Handle DamageResult::Broken to broadcast item break and update player slot.
             let _ = item.damage_item(1);
+        }
+
+        if changed {
+            BlockActionResult::Success
+        } else {
+            BlockActionResult::Pass
         }
     }
 

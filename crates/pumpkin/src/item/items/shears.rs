@@ -1,6 +1,7 @@
 use std::any::Any;
 use std::sync::Arc;
 
+use crate::block::registry::BlockActionResult;
 use crate::entity::Entity;
 use crate::entity::EntityBase;
 use crate::entity::item::ItemEntity;
@@ -55,19 +56,23 @@ impl ItemBehaviour for ShearsItem {
         _cursor_pos: Vector3<f32>,
         block: &Block,
         _server: &Server,
-    ) {
+    ) -> BlockActionResult {
         let world = player.world();
         let state_id = world.get_block_state_id(&location);
 
         if handle_growing_plant(player, &location, block, state_id) {
-            return;
+            return BlockActionResult::Success;
         }
 
         if handle_beehive(player, &location, block, state_id) {
-            return;
+            return BlockActionResult::Success;
         }
 
-        handle_pumpkin(player, &location, block);
+        if handle_pumpkin(player, &location, block) {
+            BlockActionResult::Success
+        } else {
+            BlockActionResult::Pass
+        }
     }
 
     fn use_on_entity(&self, _item: &mut ItemStack, player: &Player, entity: Arc<dyn EntityBase>) {
@@ -200,7 +205,7 @@ fn handle_beehive(
     false
 }
 
-fn handle_pumpkin(player: &Player, location: &BlockPos, block: &Block) {
+fn handle_pumpkin(player: &Player, location: &BlockPos, block: &Block) -> bool {
     if block.id == Block::PUMPKIN.id {
         let world = player.world();
         let carved_state = Block::CARVED_PUMPKIN.default_state.id;
@@ -222,5 +227,8 @@ fn handle_pumpkin(player: &Player, location: &BlockPos, block: &Block) {
         ));
         world.spawn_entity(item_entity);
         player.damage_held_item(1);
+        true
+    } else {
+        false
     }
 }

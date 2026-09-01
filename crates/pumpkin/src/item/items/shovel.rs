@@ -1,3 +1,4 @@
+use crate::block::registry::BlockActionResult;
 use crate::entity::player::Player;
 use crate::item::{ItemBehaviour, ItemMetadata};
 use crate::server::Server;
@@ -30,7 +31,7 @@ impl ItemBehaviour for ShovelItem {
         _cursor_pos: Vector3<f32>,
         block: &Block,
         _server: &Server,
-    ) {
+    ) -> BlockActionResult {
         let world = player.world();
         // Yes, Minecraft does hardcode these
         let mut changed = if (block == &Block::GRASS_BLOCK
@@ -77,6 +78,12 @@ impl ItemBehaviour for ShovelItem {
         if changed && player.gamemode.load() != GameMode::Creative {
             // TODO: Handle DamageResult::Broken to broadcast item break and update player slot.
             let _ = item.damage_item(1);
+        }
+
+        if changed {
+            BlockActionResult::Success
+        } else {
+            BlockActionResult::Pass
         }
     }
 

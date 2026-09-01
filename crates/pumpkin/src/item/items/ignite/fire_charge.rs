@@ -10,6 +10,7 @@ use pumpkin_world::world::BlockFlags;
 use rand::{RngExt, rng};
 use std::sync::Arc;
 
+use crate::block::registry::BlockActionResult;
 use crate::entity::player::Player;
 use crate::item::items::ignite::ignition::Ignition;
 use crate::item::{ItemBehaviour, ItemMetadata};
@@ -35,7 +36,7 @@ impl ItemBehaviour for FireChargeItem {
         _cursor_pos: Vector3<f32>,
         block: &Block,
         _server: &Server,
-    ) {
+    ) -> BlockActionResult {
         let world = player.world();
         let server_ref = world.server.upgrade();
         if let Some(server_ref) = server_ref {
@@ -53,7 +54,7 @@ impl ItemBehaviour for FireChargeItem {
                 .plugin_manager
                 .fire_blocking(&server_ref, &mut portal_event);
             if event.cancelled || portal_event.cancelled {
-                return;
+                return BlockActionResult::Fail;
             }
         }
 
@@ -76,8 +77,13 @@ impl ItemBehaviour for FireChargeItem {
             block,
         );
 
-        if ignited && player.gamemode.load() != pumpkin_util::GameMode::Creative {
-            item.decrement(1);
+        if ignited {
+            if player.gamemode.load() != pumpkin_util::GameMode::Creative {
+                item.decrement(1);
+            }
+            BlockActionResult::Success
+        } else {
+            BlockActionResult::Fail
         }
     }
 

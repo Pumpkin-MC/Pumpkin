@@ -1,5 +1,6 @@
 #[allow(clippy::wildcard_imports)]
 use super::*;
+use crate::item::registry::should_try_block_placement;
 
 impl BedrockClient {
     #[allow(clippy::too_many_lines, clippy::collapsible_if, clippy::unreachable)]
@@ -193,7 +194,7 @@ impl BedrockClient {
                     }
 
                     if matches!(result, BlockActionResult::PassToDefaultBlockAction) {
-                        server.block_registry.on_use(
+                        let result = server.block_registry.on_use(
                             block,
                             player,
                             &data.block_position,
@@ -204,11 +205,15 @@ impl BedrockClient {
                             &server,
                             &world,
                         );
+
+                        if result.consumes_action() {
+                            return;
+                        }
                     }
 
                     let mut stack = held_item;
                     if !stack.is_empty() {
-                        server.item_registry.use_on_block(
+                        let item_result = server.item_registry.use_on_block(
                             &mut stack,
                             player,
                             data.block_position,
@@ -218,28 +223,29 @@ impl BedrockClient {
                             &server,
                         );
 
-                        let item_id = stack.item.id;
-                        if let Some(placed_block) = pumpkin_data::Block::from_item_id(item_id) {
-                            let dummy_use_item_on =
-                                pumpkin_protocol::java::server::play::SUseItemOn {
-                                    hand: VarInt(0),
-                                    position: data.block_position,
-                                    face: VarInt(i32::from(data.block_face)),
-                                    cursor_pos: data.click_position,
-                                    inside_block: false,
-                                    is_against_world_border: false,
-                                    sequence: VarInt(0),
-                                };
+                        if should_try_block_placement(&item_result) {
+                            let item_id = stack.item.id;
+                            if let Some(placed_block) = pumpkin_data::Block::from_item_id(item_id) {
+                                let dummy_use_item_on =
+                                    pumpkin_protocol::java::server::play::SUseItemOn {
+                                        hand: VarInt(0),
+                                        position: data.block_position,
+                                        face: VarInt(i32::from(data.block_face)),
+                                        cursor_pos: data.click_position,
+                                        inside_block: false,
+                                        is_against_world_border: false,
+                                        sequence: VarInt(0),
+                                    };
 
-                            if let Ok(Some(_)) = server.block_registry.place_block(
-                                player,
-                                placed_block,
-                                &server,
-                                &dummy_use_item_on,
-                                data.block_position,
-                                face,
-                            ) {
-                                if player.gamemode.load() != GameMode::Creative {
+                                if let Ok(Some(_)) = server.block_registry.place_block(
+                                    player,
+                                    placed_block,
+                                    &server,
+                                    &dummy_use_item_on,
+                                    data.block_position,
+                                    face,
+                                ) && player.gamemode.load() != GameMode::Creative
+                                {
                                     stack.decrement(1);
                                 }
                             }
