@@ -7,6 +7,7 @@ use crate::entity::player::Player;
 use crate::entity::{Entity, EntityBase};
 use crate::item::{ItemBehaviour, ItemMetadata};
 use crate::server::Server;
+use crate::world::World;
 use pumpkin_data::attributes::Attributes;
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::data_component_impl::{
@@ -20,6 +21,7 @@ use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::Taggable;
 use pumpkin_data::{Enchantment, tag};
 use pumpkin_util::math::boundingbox::BoundingBox;
+use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::{GameMode, Hand};
 
@@ -145,9 +147,10 @@ struct StabEffects {
 
 impl SpearItem {
     const USE_DURATION: i32 = 72_000;
-    const MIN_RANGE: f64 = 2.0;
-    const SURVIVAL_RANGE: f64 = 4.5;
-    const CREATIVE_RANGE: f64 = 6.5;
+    const MIN_REACH: f64 = 2.0;
+    const MAX_REACH: f64 = 4.5;
+    const MIN_CREATIVE_REACH: f64 = 2.0;
+    const MAX_CREATIVE_REACH: f64 = 6.5;
     const HITBOX_MARGIN: f64 = 0.125;
 
     fn stab_attack(
@@ -441,53 +444,147 @@ impl SpearItem {
     }
 
     fn targets_in_range(player: &Player, server: &Server) -> Vec<Arc<dyn EntityBase>> {
-        let start = player.eye_position();
-        let direction = Self::look_vector(player);
-        let max_range = if player.gamemode.load() == GameMode::Creative {
-            Self::CREATIVE_RANGE
-        } else {
-            Self::SURVIVAL_RANGE
-        };
-        let ray = direction * (max_range + Self::HITBOX_MARGIN);
-        let end = start.add(&ray);
-        let search_box = BoundingBox::new(
-            Vector3::new(start.x.min(end.x), start.y.min(end.y), start.z.min(end.z)),
-            Vector3::new(start.x.max(end.x), start.y.max(end.y), start.z.max(end.z)),
-        )
-        .expand_all(Self::HITBOX_MARGIN);
-
         let world = player.world();
-        let mut targets = Vec::new();
-        for target in world.get_all_at_box(&search_box) {
-            if !Self::can_hit(player, server, target.as_ref()) {
-                continue;
+        let look = Self::look_vector(player);
+        let eye = player.eye_position();
+        let (min_reach, max_reach) = if player.gamemode.load() == GameMode::Creative {
+            (Self::MIN_CREATIVE_REACH, Self::MAX_CREATIVE_REACH)
+        } else {
+            (Self::MIN_REACH, Self::MAX_REACH)
+        };
+        let from = eye.add(&(look * min_reach));
+        let forward = player.get_entity().movement.load().dot(&look).max(0.0);
+        let mut to = eye.add(&(look * (max_reach + forward)));
+        if let Some(block_hit) = Self::clip_blocks(&world, eye, to) {
+            if eye.squared_distance_to_vec(&block_hit) < eye.squared_distance_to_vec(&from) {
+                return Vec::new();
             }
-            let entity = target.get_entity();
-
-            let Some(intersection) = ray_intersection(
-                &start,
-                &ray,
-                &entity.bounding_box.load().expand_all(Self::HITBOX_MARGIN),
-            ) else {
-                continue;
-            };
-            if intersection * ray.length() < Self::MIN_RANGE - Self::HITBOX_MARGIN {
-                continue;
-            }
-
-            let hit_position = start.add(&(ray * intersection));
-            if world
-                .raycast(start, hit_position, |pos, ray_world| {
-                    !ray_world.get_block_state(pos).is_air()
-                })
-                .is_none()
-            {
-                targets.push((intersection, target));
-            }
+            to = block_hit;
         }
 
-        targets.sort_by(|a, b| a.0.total_cmp(&b.0));
-        targets.into_iter().map(|(_, target)| target).collect()
+        let half_margin = Vector3::new(
+            Self::HITBOX_MARGIN / 2.0,
+            Self::HITBOX_MARGIN / 2.0,
+            Self::HITBOX_MARGIN / 2.0,
+        );
+        let delta = to.sub(&from);
+        let search_box = BoundingBox::new(from.sub(&half_margin), from.add(&half_margin))
+            .expand_towards(delta.x, delta.y, delta.z)
+            .expand_all(1.0);
+
+        world
+            .get_all_at_box(&search_box)
+            .into_iter()
+            .filter(|target| {
+                Self::can_hit(player, server, target.as_ref())
+                    && Self::hits_entity(&world, &target.get_entity().bounding_box.load(), from, to)
+            })
+            .collect()
+    }
+
+    fn hits_entity(
+        world: &World,
+        bounding_box: &BoundingBox,
+        from: Vector3<f64>,
+        to: Vector3<f64>,
+    ) -> bool {
+        if contains(bounding_box, from) || clip(bounding_box, from, to).is_some() {
+            return true;
+        }
+        let Some(outside_hit) = clip(&bounding_box.expand_all(Self::HITBOX_MARGIN), from, to)
+        else {
+            return false;
+        };
+        let mut towards_target = bounding_box.min.add(&bounding_box.max) * 0.5;
+        if let Some(block_hit) = Self::clip_blocks(world, outside_hit, towards_target) {
+            towards_target = block_hit;
+        }
+        clip(bounding_box, outside_hit, towards_target).is_some()
+    }
+
+    fn clip_blocks(world: &World, from: Vector3<f64>, to: Vector3<f64>) -> Option<Vector3<f64>> {
+        if from == to {
+            return None;
+        }
+        let start = from.lerp(&to, -1.0e-7);
+        let end = to.lerp(&from, -1.0e-7);
+        let mut block = BlockPos::floored(start.x, start.y, start.z);
+        if let Some(hit) = Self::clip_block(world, &block, from, to) {
+            return Some(hit);
+        }
+
+        let difference = end.sub(&start);
+        let step = difference.sign();
+        let delta = Vector3::new(
+            if step.x == 0 {
+                f64::MAX
+            } else {
+                f64::from(step.x) / difference.x
+            },
+            if step.y == 0 {
+                f64::MAX
+            } else {
+                f64::from(step.y) / difference.y
+            },
+            if step.z == 0 {
+                f64::MAX
+            } else {
+                f64::from(step.z) / difference.z
+            },
+        );
+        let mut next = Vector3::new(
+            delta.x
+                * (if step.x > 0 {
+                    1.0 - (start.x - start.x.floor())
+                } else {
+                    start.x - start.x.floor()
+                }),
+            delta.y
+                * (if step.y > 0 {
+                    1.0 - (start.y - start.y.floor())
+                } else {
+                    start.y - start.y.floor()
+                }),
+            delta.z
+                * (if step.z > 0 {
+                    1.0 - (start.z - start.z.floor())
+                } else {
+                    start.z - start.z.floor()
+                }),
+        );
+
+        while next.x <= 1.0 || next.y <= 1.0 || next.z <= 1.0 {
+            if next.x < next.y && next.x < next.z {
+                block.0.x += step.x;
+                next.x += delta.x;
+            } else if next.y < next.z {
+                block.0.y += step.y;
+                next.y += delta.y;
+            } else {
+                block.0.z += step.z;
+                next.z += delta.z;
+            }
+            if let Some(hit) = Self::clip_block(world, &block, from, to) {
+                return Some(hit);
+            }
+        }
+        None
+    }
+
+    fn clip_block(
+        world: &World,
+        pos: &BlockPos,
+        from: Vector3<f64>,
+        to: Vector3<f64>,
+    ) -> Option<Vector3<f64>> {
+        world
+            .get_block_state(pos)
+            .get_block_collision_shapes_at(pos)
+            .filter_map(|shape| clip(&shape.shift(pos.0.to_f64()), from, to))
+            .min_by(|a, b| {
+                from.squared_distance_to_vec(a)
+                    .total_cmp(&from.squared_distance_to_vec(b))
+            })
     }
 
     fn can_hit(player: &Player, server: &Server, target: &dyn EntityBase) -> bool {
@@ -628,33 +725,53 @@ fn ticks(seconds: f32) -> i32 {
     (seconds * 20.0) as i32
 }
 
-fn ray_intersection(
-    start: &Vector3<f64>,
-    ray: &Vector3<f64>,
-    bounding_box: &BoundingBox,
-) -> Option<f64> {
-    let mut minimum = 0.0f64;
-    let mut maximum = 1.0f64;
-    let box_min = [bounding_box.min.x, bounding_box.min.y, bounding_box.min.z];
-    let box_max = [bounding_box.max.x, bounding_box.max.y, bounding_box.max.z];
-    let start = [start.x, start.y, start.z];
-    let ray = [ray.x, ray.y, ray.z];
+fn contains(bounding_box: &BoundingBox, point: Vector3<f64>) -> bool {
+    point.x >= bounding_box.min.x
+        && point.x < bounding_box.max.x
+        && point.y >= bounding_box.min.y
+        && point.y < bounding_box.max.y
+        && point.z >= bounding_box.min.z
+        && point.z < bounding_box.max.z
+}
 
+fn clip(bounding_box: &BoundingBox, from: Vector3<f64>, to: Vector3<f64>) -> Option<Vector3<f64>> {
+    let min = [bounding_box.min.x, bounding_box.min.y, bounding_box.min.z];
+    let max = [bounding_box.max.x, bounding_box.max.y, bounding_box.max.z];
+    let origin = [from.x, from.y, from.z];
+    let delta = [to.x - from.x, to.y - from.y, to.z - from.z];
+    let mut scale = 1.0;
+    let mut hit = false;
     for axis in 0..3 {
-        if ray[axis].abs() < f64::EPSILON {
-            if start[axis] < box_min[axis] || start[axis] > box_max[axis] {
-                return None;
-            }
-        } else {
-            let first = (box_min[axis] - start[axis]) / ray[axis];
-            let second = (box_max[axis] - start[axis]) / ray[axis];
-            minimum = minimum.max(first.min(second));
-            maximum = maximum.min(first.max(second));
-            if maximum < minimum {
-                return None;
-            }
+        if delta[axis] > 1.0e-7 {
+            hit |= clip_point(&mut scale, axis, min[axis], &origin, &delta, &min, &max);
+        } else if delta[axis] < -1.0e-7 {
+            hit |= clip_point(&mut scale, axis, max[axis], &origin, &delta, &min, &max);
         }
     }
+    hit.then(|| from.add(&(to.sub(&from) * scale)))
+}
 
-    (0.0..=1.0).contains(&minimum).then_some(minimum)
+fn clip_point(
+    scale: &mut f64,
+    axis: usize,
+    plane: f64,
+    origin: &[f64; 3],
+    delta: &[f64; 3],
+    min: &[f64; 3],
+    max: &[f64; 3],
+) -> bool {
+    let s = (plane - origin[axis]) / delta[axis];
+    if s <= 0.0 || s >= *scale {
+        return false;
+    }
+    let b = (axis + 1) % 3;
+    let c = (axis + 2) % 3;
+    let pb = origin[b] + s * delta[b];
+    let pc = origin[c] + s * delta[c];
+    if min[b] - 1.0e-7 < pb && pb < max[b] + 1.0e-7 && min[c] - 1.0e-7 < pc && pc < max[c] + 1.0e-7
+    {
+        *scale = s;
+        return true;
+    }
+    false
 }
