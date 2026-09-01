@@ -200,6 +200,6 @@ impl MangroveRootPlacer {
         if fluid != Fluid::WATER {
             return state;
         }
-        state.with_waterlogged().unwrap_or(state)
+        state.set_waterlogged(true).unwrap_or(state)
     }
 }

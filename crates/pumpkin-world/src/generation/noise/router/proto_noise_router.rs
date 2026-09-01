@@ -21,8 +21,11 @@ use super::{
         IndexToNoisePos, NoiseFunctionComponentRange, PassThrough,
         StaticIndependentChunkNoiseFunctionComponentImpl, Wrapper,
         beardifier::Beardifier,
-        math::{Binary, Clamp, Constant, Linear, Unary},
-        misc::{ClampedYGradient, EndIsland, IntervalSelect, RangeChoice},
+        math::{Binary, Clamp, Constant, Lerp, Linear, Rounding, Unary},
+        misc::{
+            ClampedYGradient, DistanceToPoint, EndIsland, Gradient, IntervalSelect, RangeChoice,
+            Slice,
+        },
         noise::{InterpolatedNoiseSampler, Noise, ShiftA, ShiftB, ShiftedNoise},
         spline::{Spline, SplineFunction, SplinePoint, SplineValue},
     },
@@ -40,11 +43,13 @@ pub enum IndependentProtoNoiseFunctionComponent {
     ShiftB(ShiftB),
     InterpolatedNoise(InterpolatedNoiseSampler),
     ClampedYGradient(ClampedYGradient),
+    Gradient(Gradient),
+    DistanceToPoint(DistanceToPoint),
 }
 
 impl NoiseFunctionComponentRange for IndependentProtoNoiseFunctionComponent {
     #[inline]
-    fn min(&self) -> f64 {
+    fn min(&self) -> f32 {
         match self {
             Self::Constant(c) => c.min(),
             Self::EndIsland(e) => e.min(),
@@ -53,11 +58,13 @@ impl NoiseFunctionComponentRange for IndependentProtoNoiseFunctionComponent {
             Self::ShiftB(s) => s.min(),
             Self::InterpolatedNoise(i) => i.min(),
             Self::ClampedYGradient(c) => c.min(),
+            Self::Gradient(g) => g.min(),
+            Self::DistanceToPoint(d) => d.min(),
         }
     }
 
     #[inline]
-    fn max(&self) -> f64 {
+    fn max(&self) -> f32 {
         match self {
             Self::Constant(c) => c.max(),
             Self::EndIsland(e) => e.max(),
@@ -66,13 +73,15 @@ impl NoiseFunctionComponentRange for IndependentProtoNoiseFunctionComponent {
             Self::ShiftB(s) => s.max(),
             Self::InterpolatedNoise(i) => i.max(),
             Self::ClampedYGradient(c) => c.max(),
+            Self::Gradient(g) => g.max(),
+            Self::DistanceToPoint(d) => d.max(),
         }
     }
 }
 
 impl StaticIndependentChunkNoiseFunctionComponentImpl for IndependentProtoNoiseFunctionComponent {
     #[inline]
-    fn sample(&self, pos: &Vector3<i32>) -> f64 {
+    fn sample(&self, pos: &Vector3<i32>) -> f32 {
         match self {
             Self::Constant(c) => c.sample(pos),
             Self::EndIsland(e) => e.sample(pos),
@@ -81,11 +90,13 @@ impl StaticIndependentChunkNoiseFunctionComponentImpl for IndependentProtoNoiseF
             Self::ShiftB(s) => s.sample(pos),
             Self::InterpolatedNoise(i) => i.sample(pos),
             Self::ClampedYGradient(c) => c.sample(pos),
+            Self::Gradient(g) => g.sample(pos),
+            Self::DistanceToPoint(d) => d.sample(pos),
         }
     }
 
     #[inline]
-    fn fill(&self, array: &mut [f64], mapper: &impl IndexToNoisePos) {
+    fn fill(&self, array: &mut [f32], mapper: &impl IndexToNoisePos) {
         match self {
             Self::Constant(c) => c.fill(array, mapper),
             Self::EndIsland(e) => e.fill(array, mapper),
@@ -94,6 +105,8 @@ impl StaticIndependentChunkNoiseFunctionComponentImpl for IndependentProtoNoiseF
             Self::ShiftB(s) => s.fill(array, mapper),
             Self::InterpolatedNoise(i) => i.fill(array, mapper),
             Self::ClampedYGradient(c) => c.fill(array, mapper),
+            Self::Gradient(g) => g.fill(array, mapper),
+            Self::DistanceToPoint(d) => d.fill(array, mapper),
         }
     }
 }
@@ -108,11 +121,14 @@ pub enum DependentProtoNoiseFunctionComponent {
     Clamp(Clamp),
     RangeChoice(RangeChoice),
     Spline(SplineFunction),
+    Lerp(Lerp),
+    Rounding(Rounding),
+    Slice(Slice),
 }
 
 impl NoiseFunctionComponentRange for DependentProtoNoiseFunctionComponent {
     #[inline]
-    fn min(&self) -> f64 {
+    fn min(&self) -> f32 {
         match self {
             Self::Linear(l) => l.min(),
             Self::Unary(u) => u.min(),
@@ -123,11 +139,14 @@ impl NoiseFunctionComponentRange for DependentProtoNoiseFunctionComponent {
             Self::Clamp(c) => c.min(),
             Self::RangeChoice(r) => r.min(),
             Self::Spline(s) => s.min(),
+            Self::Lerp(l) => l.min(),
+            Self::Rounding(r) => r.min(),
+            Self::Slice(s) => s.min(),
         }
     }
 
     #[inline]
-    fn max(&self) -> f64 {
+    fn max(&self) -> f32 {
         match self {
             Self::Linear(l) => l.max(),
             Self::Unary(u) => u.max(),
@@ -138,6 +157,9 @@ impl NoiseFunctionComponentRange for DependentProtoNoiseFunctionComponent {
             Self::Clamp(c) => c.max(),
             Self::RangeChoice(r) => r.max(),
             Self::Spline(s) => s.max(),
+            Self::Lerp(l) => l.max(),
+            Self::Rounding(r) => r.max(),
+            Self::Slice(s) => s.max(),
         }
     }
 }
@@ -149,7 +171,7 @@ impl StaticChunkNoiseFunctionComponentImpl for DependentProtoNoiseFunctionCompon
         component_stack: &mut [ChunkNoiseFunctionComponent],
         pos: &Vector3<i32>,
         sample_options: &ChunkNoiseFunctionSampleOptions,
-    ) -> f64 {
+    ) -> f32 {
         match self {
             Self::Linear(l) => l.sample(component_stack, pos, sample_options),
             Self::Unary(u) => u.sample(component_stack, pos, sample_options),
@@ -160,6 +182,9 @@ impl StaticChunkNoiseFunctionComponentImpl for DependentProtoNoiseFunctionCompon
             Self::Clamp(c) => c.sample(component_stack, pos, sample_options),
             Self::RangeChoice(r) => r.sample(component_stack, pos, sample_options),
             Self::Spline(s) => s.sample(component_stack, pos, sample_options),
+            Self::Lerp(l) => l.sample(component_stack, pos, sample_options),
+            Self::Rounding(r) => r.sample(component_stack, pos, sample_options),
+            Self::Slice(s) => s.sample(component_stack, pos, sample_options),
         }
     }
 
@@ -167,7 +192,7 @@ impl StaticChunkNoiseFunctionComponentImpl for DependentProtoNoiseFunctionCompon
     fn fill(
         &self,
         component_stack: &mut [ChunkNoiseFunctionComponent],
-        array: &mut [f64],
+        array: &mut [f32],
         mapper: &impl IndexToNoisePos,
         sample_options: &mut ChunkNoiseFunctionSampleOptions,
     ) {
@@ -181,6 +206,9 @@ impl StaticChunkNoiseFunctionComponentImpl for DependentProtoNoiseFunctionCompon
             Self::Clamp(c) => c.fill(component_stack, array, mapper, sample_options),
             Self::RangeChoice(r) => r.fill(component_stack, array, mapper, sample_options),
             Self::Spline(s) => s.fill(component_stack, array, mapper, sample_options),
+            Self::Lerp(l) => l.fill(component_stack, array, mapper, sample_options),
+            Self::Rounding(r) => r.fill(component_stack, array, mapper, sample_options),
+            Self::Slice(s) => s.fill(component_stack, array, mapper, sample_options),
         }
     }
 }
@@ -189,44 +217,31 @@ pub enum ProtoNoiseFunctionComponent {
     Independent(IndependentProtoNoiseFunctionComponent),
     Dependent(DependentProtoNoiseFunctionComponent),
     Wrapper(Wrapper),
-    PassThrough(PassThrough),
     Beardifier(Beardifier),
+    PassThrough(PassThrough),
 }
 
 impl NoiseFunctionComponentRange for ProtoNoiseFunctionComponent {
     #[inline]
-    fn min(&self) -> f64 {
+    fn min(&self) -> f32 {
         match self {
-            Self::Independent(i) => i.min(),
-            Self::Dependent(d) => d.min(),
-            Self::Wrapper(w) => w.min(),
-            Self::PassThrough(p) => p.min(),
-            Self::Beardifier(b) => b.min(),
+            Self::Independent(independent) => independent.min(),
+            Self::Dependent(dependent) => dependent.min(),
+            Self::Wrapper(wrapper) => wrapper.min(),
+            Self::Beardifier(beardifier) => beardifier.min(),
+            Self::PassThrough(pass_through) => pass_through.min(),
         }
     }
 
     #[inline]
-    fn max(&self) -> f64 {
+    fn max(&self) -> f32 {
         match self {
-            Self::Independent(i) => i.max(),
-            Self::Dependent(d) => d.max(),
-            Self::Wrapper(w) => w.max(),
-            Self::PassThrough(p) => p.max(),
-            Self::Beardifier(b) => b.max(),
+            Self::Independent(independent) => independent.max(),
+            Self::Dependent(dependent) => dependent.max(),
+            Self::Wrapper(wrapper) => wrapper.max(),
+            Self::Beardifier(beardifier) => beardifier.max(),
+            Self::PassThrough(pass_through) => pass_through.max(),
         }
-    }
-}
-
-pub struct DoublePerlinNoiseBuilder;
-
-impl DoublePerlinNoiseBuilder {
-    #[must_use]
-    pub fn get_noise_sampler_for_id(
-        base_random_deriver: &XoroshiroSplitter,
-        parameters: &DoublePerlinNoiseParameters,
-    ) -> DoublePerlinNoiseSampler {
-        let mut random = base_random_deriver.from_lo_and_hi(parameters.lo, parameters.hi);
-        DoublePerlinNoiseSampler::from_params(&mut random, parameters, false)
     }
 }
 
@@ -264,30 +279,41 @@ pub struct ProtoNoiseRouters {
     pub multi_noise: ProtoMultiNoiseRouter,
 }
 
-fn build_spline_recursive(spline_repr: &SplineRepr) -> SplineValue {
-    match spline_repr {
+pub struct DoublePerlinNoiseBuilder;
+
+impl DoublePerlinNoiseBuilder {
+    #[must_use]
+    pub fn get_noise_sampler_for_id(
+        base_random_deriver: &XoroshiroSplitter,
+        parameters: &DoublePerlinNoiseParameters,
+    ) -> DoublePerlinNoiseSampler {
+        let mut random = base_random_deriver.from_lo_and_hi(parameters.lo, parameters.hi);
+        DoublePerlinNoiseSampler::from_params(&mut random, parameters, false)
+    }
+}
+
+fn build_spline_recursive(spline: &SplineRepr) -> SplineValue {
+    match spline {
+        SplineRepr::Fixed { value } => SplineValue::Fixed(*value),
         SplineRepr::Standard {
             location_function_index,
             points,
         } => {
-            let points = points
-                .iter()
-                .map(|point| {
-                    let value = build_spline_recursive(point.value);
-                    SplinePoint::new(point.location, value, point.derivative)
-                })
-                .collect();
-            SplineValue::Spline(Spline::new(*location_function_index, points))
+            let mut points_vec = Vec::with_capacity(points.len());
+
+            for point in *points {
+                let value = build_spline_recursive(point.value);
+                points_vec.push(SplinePoint::new(point.location, value, point.derivative));
+            }
+
+            SplineValue::Spline(Spline::new(*location_function_index, points_vec.into()))
         }
-        // Top level splines always take a density function as input
-        SplineRepr::Fixed { value } => SplineValue::Fixed(*value),
     }
 }
 
 impl ProtoNoiseRouters {
     #[must_use]
-    #[expect(clippy::too_many_lines)]
-    #[expect(clippy::unreachable)]
+    #[expect(clippy::unreachable, clippy::too_many_lines)]
     pub fn generate_proto_stack(
         base_stack: &[BaseNoiseFunctionComponent],
         random_config: &GlobalRandomConfig,
@@ -302,7 +328,6 @@ impl ProtoNoiseRouters {
                 BaseNoiseFunctionComponent::Spline { spline } => {
                     let spline = match build_spline_recursive(spline) {
                         SplineValue::Spline(spline) => spline,
-                        // Top level splines always take in a density function
                         SplineValue::Fixed(_) => unreachable!(),
                     };
 
@@ -317,7 +342,7 @@ impl ProtoNoiseRouters {
                     upper_bound_index,
                     data,
                 } => {
-                    let min_value = data.lower_bound as f64;
+                    let min_value = data.lower_bound as f32;
                     let max_value = stack[*upper_bound_index].max().max(min_value);
 
                     ProtoNoiseFunctionComponent::Dependent(
@@ -363,7 +388,6 @@ impl ProtoNoiseRouters {
                     )
                 }
                 BaseNoiseFunctionComponent::BlendDensity { input_index } => {
-                    // TODO: Replace this when the blender is implemented
                     let min_value = stack[*input_index].min();
                     let max_value = stack[*input_index].max();
 
@@ -373,14 +397,10 @@ impl ProtoNoiseRouters {
                         max_value,
                     ))
                 }
-                BaseNoiseFunctionComponent::BlendAlpha => {
-                    // TODO: Replace this with the cache when the blender is implemented
-                    ProtoNoiseFunctionComponent::Independent(
-                        IndependentProtoNoiseFunctionComponent::Constant(Constant::new(1.0)),
-                    )
-                }
+                BaseNoiseFunctionComponent::BlendAlpha => ProtoNoiseFunctionComponent::Independent(
+                    IndependentProtoNoiseFunctionComponent::Constant(Constant::new(1.0)),
+                ),
                 BaseNoiseFunctionComponent::BlendOffset => {
-                    // TODO: Replace this with the cache when the blender is implemented
                     ProtoNoiseFunctionComponent::Independent(
                         IndependentProtoNoiseFunctionComponent::Constant(Constant::new(0.0)),
                     )
@@ -394,9 +414,6 @@ impl ProtoNoiseRouters {
                     shift_z_index,
                     data,
                 } => {
-                    // NETHER_TEMPERATURE and NETHER_VEGETATION always use NormalNoise.createLegacyNetherBiome with
-                    // LegacyRandomSource(seed + 0) and LegacyRandomSource(seed + 1)
-                    // respectively, regardless of useLegacyRandomSource.
                     let sampler = match data.noise_id.id {
                         id if id == DoublePerlinNoiseParameters::NETHER_TEMPERATURE.id => {
                             let mut legacy_rand =
@@ -489,6 +506,9 @@ impl ProtoNoiseRouters {
                         }
                         BinaryOperation::Min => (arg1_min.min(arg2_min), arg1_max.min(arg2_max)),
                         BinaryOperation::Max => (arg1_min.max(arg2_min), arg1_max.max(arg2_max)),
+                        BinaryOperation::Sub => (arg1_min - arg2_max, arg1_max - arg2_min),
+                        BinaryOperation::Div => (f32::NEG_INFINITY, f32::INFINITY),
+                        BinaryOperation::Pow => (0.0, f32::INFINITY),
                     };
 
                     ProtoNoiseFunctionComponent::Dependent(
@@ -506,6 +526,72 @@ impl ProtoNoiseRouters {
                         IndependentProtoNoiseFunctionComponent::ClampedYGradient(
                             ClampedYGradient::new(data),
                         ),
+                    )
+                }
+                BaseNoiseFunctionComponent::Gradient { data } => {
+                    ProtoNoiseFunctionComponent::Independent(
+                        IndependentProtoNoiseFunctionComponent::Gradient(Gradient::new(data)),
+                    )
+                }
+                BaseNoiseFunctionComponent::DistanceToPoint { data } => {
+                    ProtoNoiseFunctionComponent::Independent(
+                        IndependentProtoNoiseFunctionComponent::DistanceToPoint(
+                            DistanceToPoint::new(data),
+                        ),
+                    )
+                }
+                BaseNoiseFunctionComponent::Lerp {
+                    alpha_index,
+                    first_index,
+                    second_index,
+                } => {
+                    let min_value = stack[*first_index].min().min(stack[*second_index].min());
+                    let max_value = stack[*first_index].max().max(stack[*second_index].max());
+
+                    ProtoNoiseFunctionComponent::Dependent(
+                        DependentProtoNoiseFunctionComponent::Lerp(Lerp::new(
+                            *alpha_index,
+                            *first_index,
+                            *second_index,
+                            min_value,
+                            max_value,
+                        )),
+                    )
+                }
+                BaseNoiseFunctionComponent::Rounding {
+                    input_index,
+                    multiple_index,
+                    data,
+                } => {
+                    let min_value = stack[*input_index].min();
+                    let max_value = stack[*input_index].max();
+
+                    ProtoNoiseFunctionComponent::Dependent(
+                        DependentProtoNoiseFunctionComponent::Rounding(Rounding::new(
+                            *input_index,
+                            *multiple_index,
+                            min_value,
+                            max_value,
+                            data,
+                        )),
+                    )
+                }
+                BaseNoiseFunctionComponent::Slice {
+                    input_index,
+                    axis,
+                    coordinate,
+                } => {
+                    let min_value = stack[*input_index].min();
+                    let max_value = stack[*input_index].max();
+
+                    ProtoNoiseFunctionComponent::Dependent(
+                        DependentProtoNoiseFunctionComponent::Slice(Slice::new(
+                            *input_index,
+                            *axis,
+                            *coordinate,
+                            min_value,
+                            max_value,
+                        )),
                     )
                 }
                 BaseNoiseFunctionComponent::Constant { value } => {
@@ -578,7 +664,6 @@ impl ProtoNoiseRouters {
                     let applied_max_value = data.apply_density(arg1_max);
 
                     let (min_value, max_value) = match data.operation {
-                        // TODO: I'm pretty sure this can be more restrictive
                         UnaryOperation::Abs | UnaryOperation::Square => {
                             (arg1_min.max(0.0), applied_min_value.max(applied_max_value))
                         }
@@ -588,11 +673,15 @@ impl ProtoNoiseRouters {
                         | UnaryOperation::HalfNegative => (applied_min_value, applied_max_value),
                         UnaryOperation::Invert => {
                             if arg1_min < 0.0 && arg1_max > 0.0 {
-                                (f64::NEG_INFINITY, f64::INFINITY)
+                                (f32::NEG_INFINITY, f32::INFINITY)
                             } else {
                                 (applied_max_value, applied_min_value)
                             }
                         }
+                        UnaryOperation::Negate => (-arg1_max, -arg1_min),
+                        UnaryOperation::Sqrt => (0.0, applied_max_value.max(0.0)),
+                        UnaryOperation::Log => (f32::NEG_INFINITY, applied_max_value),
+                        UnaryOperation::Sign => (-1.0, 1.0),
                     };
 
                     ProtoNoiseFunctionComponent::Dependent(
@@ -609,8 +698,8 @@ impl ProtoNoiseRouters {
                     thresholds,
                     functions_indices,
                 } => {
-                    let mut min_value = f64::INFINITY;
-                    let mut max_value = f64::NEG_INFINITY;
+                    let mut min_value = f32::INFINITY;
+                    let mut max_value = f32::NEG_INFINITY;
                     for &idx in *functions_indices {
                         let min = stack[idx].min();
                         let max = stack[idx].max();
@@ -636,8 +725,6 @@ impl ProtoNoiseRouters {
                     ProtoNoiseFunctionComponent::Independent(
                         IndependentProtoNoiseFunctionComponent::InterpolatedNoise(
                             if random_config.legacy_random_source {
-                                // Use LegacyRandomSource(worldSeed + 0L) for
-                                // legacy dimensions (e.g. the Nether).
                                 let mut legacy_rand =
                                     LegacyRand::from_seed(random_config.seed.wrapping_add(0));
                                 InterpolatedNoiseSampler::new(data, &mut legacy_rand)

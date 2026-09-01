@@ -7,7 +7,7 @@ use pumpkin_util::random::{RandomGenerator, get_seed, xoroshiro128::Xoroshiro};
 use crate::entity::experience_orb::ExperienceOrbEntity;
 use crate::entity::player::Player;
 use crate::world::World;
-use crate::world::loot::{LootContextParameters, LootTableExt};
+use crate::world::loot::LootContextParameters;
 use std::sync::Arc;
 
 pub mod blocks;
@@ -418,10 +418,12 @@ pub fn drop_loot(
     block: &Block,
     pos: &BlockPos,
     experience: bool,
-    params: LootContextParameters,
+    params: &LootContextParameters,
 ) {
-    if let Some(loot_table) = &block.loot_table {
-        let items = loot_table.get_loot(params);
+    let key = format!("minecraft:blocks/{}", block.name);
+    if let Some(loot_table) = pumpkin_data::loot_table::get_loot_table(&key) {
+        let seed: i64 = rand::random();
+        let items = crate::world::loot::generate_loot_with_context(loot_table, seed, params);
         if !items.is_empty() {
             let mut event = crate::plugin::block::block_drop_item::BlockDropItemEvent {
                 block_pos: *pos,

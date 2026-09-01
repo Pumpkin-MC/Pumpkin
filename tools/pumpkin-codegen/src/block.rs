@@ -12,10 +12,7 @@ use std::{
 };
 use syn::{Ident, LitInt, LitStr};
 
-use crate::{
-    bitsets::{Bitset, gen_u16_bitset},
-    loot::LootTableStruct,
-};
+use crate::bitsets::{Bitset, gen_u16_bitset};
 
 /// Converts a sparse index-value list into a dense array, filling gaps with `None` tokens.
 ///
@@ -662,8 +659,6 @@ pub struct Block {
     pub item_id: u16,
     /// Flammability data, present only if the block can catch fire.
     pub flammable: Option<FlammableStruct>,
-    /// Loot table used when the block is broken, if any.
-    pub loot_table: Option<LootTableStruct>,
     /// Friction applied to entities walking on this block.
     pub slipperiness: f32,
     /// Horizontal velocity multiplier for entities inside this block.
@@ -703,12 +698,6 @@ impl ToTokens for Block {
         };
         // Generate state tokens
         let states = self.states.iter().map(BlockState::to_tokens);
-        let loot_table = if let Some(table) = &self.loot_table {
-            let table_tokens = table.to_token_stream();
-            quote! { Some(#table_tokens) }
-        } else {
-            quote! { None }
-        };
 
         let default_state_ref: &BlockState = self
             .states
@@ -738,7 +727,6 @@ impl ToTokens for Block {
                 default_state: &#default_state,
                 states: &[#(#states),*],
                 flammable: #flammable,
-                loot_table: #loot_table,
                 experience: #experience,
             }
         });
@@ -1148,7 +1136,6 @@ pub fn build() -> TokenStream {
         };
         use crate::block_state::PistonBehavior;
         use pumpkin_util::math::int_provider::{UniformIntProvider, IntProvider, NormalIntProvider};
-        use pumpkin_util::loot_table::*;
         use pumpkin_util::math::experience::Experience;
         use pumpkin_util::math::vector3::Vector3;
         use std::collections::BTreeMap;

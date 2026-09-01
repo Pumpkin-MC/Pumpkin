@@ -4,7 +4,7 @@ use pumpkin_data::block_properties::{BlockProperties, HorizontalAxis};
 use pumpkin_data::dimension::Dimension;
 use pumpkin_data::fluid::Fluid;
 use pumpkin_data::tag::{self, Taggable};
-use pumpkin_data::{Block, BlockDirection, BlockState};
+use pumpkin_data::{Block, BlockDirection};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
@@ -34,31 +34,21 @@ impl FireBlock {
         30 + rand::rng().random_range(0..10)
     }
 
-    fn is_flammable(block_state: &BlockState) -> bool {
-        if Block::from_state_id(block_state.id)
-            .properties(block_state.id)
-            .and_then(|props| {
-                props
-                    .to_props()
-                    .into_iter()
-                    .find(|p| p.0 == "waterlogged")
-                    .map(|(_, v)| v == "true")
-            })
-            .unwrap_or(false)
-        {
+    fn is_flammable(id: BlockStateId) -> bool {
+        let block = id.to_block();
+
+        if block.is_waterlogged(id) {
             return false;
         }
-        Block::from_state_id(block_state.id)
-            .flammable
-            .as_ref()
-            .is_some_and(|f| f.burn_chance > 0)
+
+        block.flammable.as_ref().is_some_and(|f| f.burn_chance > 0)
     }
 
     fn are_blocks_around_flammable(block_accessor: &dyn BlockAccessor, pos: &BlockPos) -> bool {
         for direction in BlockDirection::all() {
             let neighbor_pos = pos.offset(direction.to_offset());
-            let block_state = block_accessor.get_block_state(&neighbor_pos);
-            if Self::is_flammable(block_state) {
+            let state_id = block_accessor.get_block_state_id(&neighbor_pos);
+            if Self::is_flammable(state_id) {
                 return true;
             }
         }
@@ -73,14 +63,14 @@ impl FireBlock {
     ) -> BlockStateId {
         let down_pos = pos.down();
         let down_state = world.get_block_state(&down_pos);
-        if Self::is_flammable(down_state) || down_state.is_side_solid(BlockDirection::Up) {
+        if Self::is_flammable(down_state.id) || down_state.is_side_solid(BlockDirection::Up) {
             return block.default_state.id;
         }
         let mut fire_props = FireProperties::from_state_id(block.default_state.id, block);
         for direction in BlockDirection::all() {
             let neighbor_pos = pos.offset(direction.to_offset());
-            let neighbor_state = world.get_block_state(&neighbor_pos);
-            if Self::is_flammable(neighbor_state) {
+            let neighbor_state_id = world.get_block_state_id(&neighbor_pos);
+            if Self::is_flammable(neighbor_state_id) {
                 match direction {
                     BlockDirection::North => fire_props.north = true,
                     BlockDirection::South => fire_props.south = true,
@@ -320,7 +310,7 @@ impl BlockBehaviour for FireBlock {
             // At max age, fire has a chance to extinguish if not on flammable block
             if new_age == 15
                 && rand::rng().random_range(0..4) == 0
-                && !Self::is_flammable(world.get_block_state(&pos.down()))
+                && !Self::is_flammable(world.get_block_state_id(&pos.down()))
             {
                 world.set_block_state(pos, Block::AIR.default_state.id, BlockFlags::NOTIFY_ALL);
                 return;

@@ -1527,6 +1527,20 @@ impl Player {
         false
     }
 
+    /// Checks and triggers location-based enchantments (e.g. Frost Walker) on the player's equipped armor.
+    pub fn check_location_enchantments(&self, pos: Vector3<f64>, on_ground: bool) {
+        if on_ground {
+            let boots = self.inventory.get_slot(36);
+            if !boots.is_empty() {
+                crate::enchantment::EnchantmentHelper::on_location_changed(
+                    self.get_entity(),
+                    &boots,
+                    pos,
+                );
+            }
+        }
+    }
+
     /// Convenience wrapper – damages the currently held (main-hand) item.
     pub fn damage_held_item(&self, amount: i32) -> bool {
         self.damage_item_in_slot(&EquipmentSlot::MAIN_HAND, amount)
@@ -4145,6 +4159,12 @@ impl Player {
 
     pub async fn respawn(self: &Arc<Self>) {
         self.world().respawn_player(self, false).await;
+        // The client rebuilt its attribute state on respawn, so send the held
+        // weapon modifiers again.
+        crate::entity::attributes::send_attribute_updates_for_living(
+            &self.living_entity,
+            vec![Attributes::ATTACK_SPEED, Attributes::ATTACK_DAMAGE],
+        );
     }
 
     pub fn ban(&self, server: &Server, reason: Option<TextComponent>) {
@@ -7455,6 +7475,20 @@ impl InventoryPlayer for Player {
             } else {
                 world.sync_world_event(pumpkin_data::world::WorldEvent::SoundAnvilUsed, pos, 0);
             }
+        }
+    }
+
+    fn use_grindstone(&self, xp_amount: i32) {
+        if let Some(pos) = self.open_container_pos.load() {
+            let world = self.world();
+            if xp_amount > 0 {
+                crate::entity::experience_orb::ExperienceOrbEntity::spawn(
+                    &world,
+                    pos.to_centered_f64(),
+                    xp_amount as u32,
+                );
+            }
+            world.sync_world_event(pumpkin_data::world::WorldEvent::SoundGrindstoneUsed, pos, 0);
         }
     }
 }

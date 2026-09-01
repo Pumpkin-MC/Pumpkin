@@ -63,37 +63,37 @@ impl<'a> MultiNoiseSampler<'a> {
             &mut self.component_stack[..=self.temperature],
             &pos,
             &sample_options,
-        ) as f32;
+        );
 
         let humidity = ChunkNoiseFunctionComponent::sample_from_stack(
             &mut self.component_stack[..=self.humidity],
             &pos,
             &sample_options,
-        ) as f32;
+        );
 
         let continentalness = ChunkNoiseFunctionComponent::sample_from_stack(
             &mut self.component_stack[..=self.continentalness],
             &pos,
             &sample_options,
-        ) as f32;
+        );
 
         let erosion = ChunkNoiseFunctionComponent::sample_from_stack(
             &mut self.component_stack[..=self.erosion],
             &pos,
             &sample_options,
-        ) as f32;
+        );
 
         let depth = ChunkNoiseFunctionComponent::sample_from_stack(
             &mut self.component_stack[..=self.depth],
             &pos,
             &sample_options,
-        ) as f32;
+        );
 
         let weirdness = ChunkNoiseFunctionComponent::sample_from_stack(
             &mut self.component_stack[..=self.ridges],
             &pos,
             &sample_options,
-        ) as f32;
+        );
 
         NoiseValuePoint {
             temperature: to_long(temperature),
@@ -105,7 +105,7 @@ impl<'a> MultiNoiseSampler<'a> {
         }
     }
 
-    pub fn sample_erosion(&mut self, block_x: i32, block_y: i32, block_z: i32) -> f64 {
+    pub fn sample_erosion(&mut self, block_x: i32, block_y: i32, block_z: i32) -> f32 {
         let pos = Vector3::new(block_x, block_y, block_z);
         let sample_options =
             ChunkNoiseFunctionSampleOptions::new(false, SampleAction::SkipCellCaches, 0, 0, 0);

@@ -6,8 +6,8 @@ use pumpkin_data::BlockStateId;
 use pumpkin_data::block_properties::{
     BlockProperties, ChestLikeProperties, ChestType, HorizontalFacing,
 };
-use pumpkin_data::chest_loot_table::get_chest_loot_table;
 use pumpkin_data::entity::EntityPose;
+use pumpkin_data::loot_table::get_loot_table;
 use pumpkin_data::{Block, BlockDirection, translation};
 use pumpkin_inventory::double::DoubleInventory;
 use pumpkin_inventory::generic_container_screen_handler::{create_generic_9x3, create_generic_9x6};
@@ -191,7 +191,7 @@ fn normal_use_chest_impl(args: &NormalUseArgs<'_>) -> BlockActionResult {
     // Unpack deferred loot table on first open (non-spectator only).
     if let Some(ref entity) = first_chest
         && let Some((loot_key, seed)) = entity.take_loot_table()
-        && let Some(table) = get_chest_loot_table(&loot_key)
+        && let Some(table) = get_loot_table(&loot_key)
         && let Some(inv) = entity.clone().get_inventory()
     {
         fill_chest_inventory(&inv, table, seed);

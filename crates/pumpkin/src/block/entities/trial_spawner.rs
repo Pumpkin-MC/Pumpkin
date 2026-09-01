@@ -892,10 +892,10 @@ impl TrialSpawner {
     ) {
         let mut dropped_any = false;
         if let Some(key) = ejecting_loot_table
-            && let Some(loot_table) = pumpkin_data::chest_loot_table::get_chest_loot_table(key)
+            && let Some(loot_table) = pumpkin_data::loot_table::get_loot_table(key)
         {
             let seed = rand::random::<i64>();
-            let items = crate::world::loot::generate_chest_loot(loot_table, seed);
+            let items = crate::world::loot::generate_loot(loot_table, seed);
             for stack in items {
                 world.drop_stack(&spawner_pos, stack);
                 dropped_any = true;

@@ -1,6 +1,9 @@
 use std::sync::Arc;
 
-use pumpkin_data::noise_router::{ClampedYGradientData, RangeChoiceData};
+use pumpkin_data::noise_router::{
+    Axis, ClampedYGradientData, DistanceMetric, DistanceToPointData, GradientData, RangeChoiceData,
+    Tiling,
+};
 use pumpkin_util::{
     math::{clamped_map, vector3::Vector3},
     noise::simplex::SimplexNoiseSampler,
@@ -35,8 +38,7 @@ impl EndIsland {
         let k = x % 2;
         let l = z % 2;
 
-        let f = ((x * x + z * z) as f32).sqrt().mul_add(-8.0, 100.0);
-        let mut f = f.clamp(-100.0, 80.0);
+        let mut f = -100.0f32;
 
         for m in -12..=12 {
             for n in -12..=12 {
@@ -62,37 +64,37 @@ impl EndIsland {
 // These values are hardcoded from java
 impl NoiseFunctionComponentRange for EndIsland {
     #[inline]
-    fn min(&self) -> f64 {
+    fn min(&self) -> f32 {
         -0.84375
     }
 
     #[inline]
-    fn max(&self) -> f64 {
+    fn max(&self) -> f32 {
         0.5625
     }
 }
 
 impl StaticIndependentChunkNoiseFunctionComponentImpl for EndIsland {
-    fn sample(&self, pos: &Vector3<i32>) -> f64 {
-        (Self::sample_2d(&self.sampler, pos.x / 8, pos.z / 8) as f64 - 8.0) / 128.0
+    fn sample(&self, pos: &Vector3<i32>) -> f32 {
+        (Self::sample_2d(&self.sampler, pos.x / 8, pos.z / 8) - 8.0) / 128.0
     }
 }
 
 pub struct IntervalSelect {
     pub input_index: usize,
-    pub thresholds: &'static [f64],
+    pub thresholds: &'static [f32],
     pub functions_indices: &'static [usize],
-    min_value: f64,
-    max_value: f64,
+    min_value: f32,
+    max_value: f32,
 }
 
 impl IntervalSelect {
     pub const fn new(
         input_index: usize,
-        thresholds: &'static [f64],
+        thresholds: &'static [f32],
         functions_indices: &'static [usize],
-        min_value: f64,
-        max_value: f64,
+        min_value: f32,
+        max_value: f32,
     ) -> Self {
         Self {
             input_index,
@@ -110,7 +112,7 @@ impl StaticChunkNoiseFunctionComponentImpl for IntervalSelect {
         component_stack: &mut [ChunkNoiseFunctionComponent],
         pos: &Vector3<i32>,
         sample_options: &ChunkNoiseFunctionSampleOptions,
-    ) -> f64 {
+    ) -> f32 {
         let input_val = ChunkNoiseFunctionComponent::sample_from_stack(
             &mut component_stack[..=self.input_index],
             pos,
@@ -136,7 +138,7 @@ impl StaticChunkNoiseFunctionComponentImpl for IntervalSelect {
     fn fill(
         &self,
         component_stack: &mut [ChunkNoiseFunctionComponent],
-        array: &mut [f64],
+        array: &mut [f32],
         mapper: &impl IndexToNoisePos,
         sample_options: &mut ChunkNoiseFunctionSampleOptions,
     ) {
@@ -148,18 +150,16 @@ impl StaticChunkNoiseFunctionComponentImpl for IntervalSelect {
         );
 
         array.iter_mut().enumerate().for_each(|(index, value)| {
-            let pos = mapper.at(index, Some(sample_options));
-            let input_val = *value;
-
             let mut selected_index = self.thresholds.len();
             for (i, &threshold) in self.thresholds.iter().enumerate() {
-                if input_val < threshold {
+                if *value < threshold {
                     selected_index = i;
                     break;
                 }
             }
 
             let func_index = self.functions_indices[selected_index];
+            let pos = mapper.at(index, Some(sample_options));
             *value = ChunkNoiseFunctionComponent::sample_from_stack(
                 &mut component_stack[..=func_index],
                 &pos,
@@ -171,12 +171,12 @@ impl StaticChunkNoiseFunctionComponentImpl for IntervalSelect {
 
 impl NoiseFunctionComponentRange for IntervalSelect {
     #[inline]
-    fn min(&self) -> f64 {
+    fn min(&self) -> f32 {
         self.min_value
     }
 
     #[inline]
-    fn max(&self) -> f64 {
+    fn max(&self) -> f32 {
         self.max_value
     }
 }
@@ -193,20 +193,20 @@ impl ClampedYGradient {
 
 impl NoiseFunctionComponentRange for ClampedYGradient {
     #[inline]
-    fn min(&self) -> f64 {
+    fn min(&self) -> f32 {
         self.data.from_value.min(self.data.to_value)
     }
 
     #[inline]
-    fn max(&self) -> f64 {
+    fn max(&self) -> f32 {
         self.data.from_value.max(self.data.to_value)
     }
 }
 
 impl StaticIndependentChunkNoiseFunctionComponentImpl for ClampedYGradient {
-    fn sample(&self, pos: &Vector3<i32>) -> f64 {
+    fn sample(&self, pos: &Vector3<i32>) -> f32 {
         clamped_map(
-            pos.y as f64,
+            pos.y as f32,
             self.data.from_y,
             self.data.to_y,
             self.data.from_value,
@@ -214,11 +214,11 @@ impl StaticIndependentChunkNoiseFunctionComponentImpl for ClampedYGradient {
         )
     }
 
-    fn fill(&self, array: &mut [f64], mapper: &impl IndexToNoisePos) {
+    fn fill(&self, array: &mut [f32], mapper: &impl IndexToNoisePos) {
         array.iter_mut().enumerate().for_each(|(index, value)| {
             let pos = mapper.at(index, None);
             *value = clamped_map(
-                pos.y as f64,
+                pos.y as f32,
                 self.data.from_y,
                 self.data.to_y,
                 self.data.from_value,
@@ -228,13 +228,194 @@ impl StaticIndependentChunkNoiseFunctionComponentImpl for ClampedYGradient {
     }
 }
 
+pub struct Gradient {
+    data: &'static GradientData,
+}
+
+impl Gradient {
+    pub const fn new(data: &'static GradientData) -> Self {
+        Self { data }
+    }
+}
+
+impl NoiseFunctionComponentRange for Gradient {
+    #[inline]
+    fn min(&self) -> f32 {
+        self.data.from_value.min(self.data.to_value)
+    }
+
+    #[inline]
+    fn max(&self) -> f32 {
+        self.data.from_value.max(self.data.to_value)
+    }
+}
+
+impl StaticIndependentChunkNoiseFunctionComponentImpl for Gradient {
+    fn sample(&self, pos: &Vector3<i32>) -> f32 {
+        let coordinate = match self.data.axis {
+            Axis::X => pos.x,
+            Axis::Y => pos.y,
+            Axis::Z => pos.z,
+        };
+        let coordinate_range = self.data.to_coordinate - self.data.from_coordinate;
+        let coordinate_factor =
+            (self.data.to_value - self.data.from_value) / (coordinate_range as f32);
+        match self.data.tiling {
+            Tiling::ClampToEdge => {
+                let min_coordinate = self.data.from_coordinate.min(self.data.to_coordinate);
+                let max_coordinate = self.data.from_coordinate.max(self.data.to_coordinate);
+                let relative_coordinate =
+                    coordinate.clamp(min_coordinate, max_coordinate) - self.data.from_coordinate;
+                self.data.from_value + relative_coordinate as f32 * coordinate_factor
+            }
+            Tiling::Repeat => {
+                let relative_coordinate = coordinate - self.data.from_coordinate;
+                self.data.from_value
+                    + relative_coordinate.rem_euclid(coordinate_range) as f32 * coordinate_factor
+            }
+            Tiling::MirroredRepeat => {
+                let relative_coordinate = coordinate - self.data.from_coordinate;
+                let tile_index = relative_coordinate.div_euclid(coordinate_range);
+                let local_coordinate = relative_coordinate - tile_index * coordinate_range;
+                if (tile_index & 1) == 0 {
+                    self.data.from_value + local_coordinate as f32 * coordinate_factor
+                } else {
+                    self.data.from_value
+                        + (coordinate_range - local_coordinate) as f32 * coordinate_factor
+                }
+            }
+        }
+    }
+
+    fn fill(&self, array: &mut [f32], mapper: &impl IndexToNoisePos) {
+        array.iter_mut().enumerate().for_each(|(index, value)| {
+            let pos = mapper.at(index, None);
+            *value = self.sample(&pos);
+        });
+    }
+}
+
+pub struct DistanceToPoint {
+    data: &'static DistanceToPointData,
+}
+
+impl DistanceToPoint {
+    pub const fn new(data: &'static DistanceToPointData) -> Self {
+        Self { data }
+    }
+}
+
+impl NoiseFunctionComponentRange for DistanceToPoint {
+    #[inline]
+    fn min(&self) -> f32 {
+        0.0
+    }
+
+    #[inline]
+    fn max(&self) -> f32 {
+        f32::INFINITY
+    }
+}
+
+impl StaticIndependentChunkNoiseFunctionComponentImpl for DistanceToPoint {
+    fn sample(&self, pos: &Vector3<i32>) -> f32 {
+        let dx = (pos.x - self.data.point[0]) as f32;
+        let dy = (pos.y - self.data.point[1]) as f32;
+        let dz = (pos.z - self.data.point[2]) as f32;
+        match self.data.metric {
+            DistanceMetric::Euclidean => (dx * dx + dy * dy + dz * dz).sqrt(),
+            DistanceMetric::EuclideanSquared => dx * dx + dy * dy + dz * dz,
+            DistanceMetric::Manhattan => dx.abs() + dy.abs() + dz.abs(),
+            DistanceMetric::Chebyshev => dx.abs().max(dy.abs()).max(dz.abs()),
+        }
+    }
+
+    fn fill(&self, array: &mut [f32], mapper: &impl IndexToNoisePos) {
+        array.iter_mut().enumerate().for_each(|(index, value)| {
+            let pos = mapper.at(index, None);
+            *value = self.sample(&pos);
+        });
+    }
+}
+
+pub struct Slice {
+    pub(crate) input_index: usize,
+    pub(crate) axis: Axis,
+    pub(crate) coordinate: i32,
+    min_value: f32,
+    max_value: f32,
+}
+
+impl Slice {
+    pub const fn new(
+        input_index: usize,
+        axis: Axis,
+        coordinate: i32,
+        min_value: f32,
+        max_value: f32,
+    ) -> Self {
+        Self {
+            input_index,
+            axis,
+            coordinate,
+            min_value,
+            max_value,
+        }
+    }
+}
+
+impl NoiseFunctionComponentRange for Slice {
+    #[inline]
+    fn min(&self) -> f32 {
+        self.min_value
+    }
+
+    #[inline]
+    fn max(&self) -> f32 {
+        self.max_value
+    }
+}
+
+impl StaticChunkNoiseFunctionComponentImpl for Slice {
+    fn sample(
+        &self,
+        component_stack: &mut [ChunkNoiseFunctionComponent],
+        pos: &Vector3<i32>,
+        sample_options: &ChunkNoiseFunctionSampleOptions,
+    ) -> f32 {
+        let slice_pos = match self.axis {
+            Axis::X => Vector3::new(self.coordinate, pos.y, pos.z),
+            Axis::Y => Vector3::new(pos.x, self.coordinate, pos.z),
+            Axis::Z => Vector3::new(pos.x, pos.y, self.coordinate),
+        };
+        ChunkNoiseFunctionComponent::sample_from_stack(
+            &mut component_stack[..=self.input_index],
+            &slice_pos,
+            sample_options,
+        )
+    }
+
+    fn fill(
+        &self,
+        component_stack: &mut [ChunkNoiseFunctionComponent],
+        array: &mut [f32],
+        mapper: &impl IndexToNoisePos,
+        sample_options: &mut ChunkNoiseFunctionSampleOptions,
+    ) {
+        for (index, value) in array.iter_mut().enumerate() {
+            let pos = mapper.at(index, Some(sample_options));
+            *value = self.sample(component_stack, &pos, sample_options);
+        }
+    }
+}
+
 pub struct RangeChoice {
     pub(crate) input_index: usize,
     pub(crate) when_in_index: usize,
     pub(crate) when_out_index: usize,
     pub(crate) data: &'static RangeChoiceData,
-    min_value: f64,
-    max_value: f64,
+    min_value: f32,
+    max_value: f32,
 }
 
 impl RangeChoice {
@@ -242,8 +423,8 @@ impl RangeChoice {
         input_index: usize,
         when_in_index: usize,
         when_out_index: usize,
-        min_value: f64,
-        max_value: f64,
+        min_value: f32,
+        max_value: f32,
         data: &'static RangeChoiceData,
     ) -> Self {
         Self {
@@ -259,12 +440,12 @@ impl RangeChoice {
 
 impl NoiseFunctionComponentRange for RangeChoice {
     #[inline]
-    fn min(&self) -> f64 {
+    fn min(&self) -> f32 {
         self.min_value
     }
 
     #[inline]
-    fn max(&self) -> f64 {
+    fn max(&self) -> f32 {
         self.max_value
     }
 }
@@ -275,7 +456,7 @@ impl StaticChunkNoiseFunctionComponentImpl for RangeChoice {
         component_stack: &mut [ChunkNoiseFunctionComponent],
         pos: &Vector3<i32>,
         sample_options: &ChunkNoiseFunctionSampleOptions,
-    ) -> f64 {
+    ) -> f32 {
         let input_sample = ChunkNoiseFunctionComponent::sample_from_stack(
             &mut component_stack[..=self.input_index],
             pos,
@@ -300,7 +481,7 @@ impl StaticChunkNoiseFunctionComponentImpl for RangeChoice {
     fn fill(
         &self,
         component_stack: &mut [ChunkNoiseFunctionComponent],
-        array: &mut [f64],
+        array: &mut [f32],
         mapper: &impl IndexToNoisePos,
         sample_options: &mut ChunkNoiseFunctionSampleOptions,
     ) {
