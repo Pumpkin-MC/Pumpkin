@@ -40,6 +40,8 @@ pub trait ItemBehaviour: Send + Sync {
 
     fn on_stopped_using(&self, _stack: &ItemStack, _player: &Player) {}
 
+    fn on_spear_jab(&self, _stack: &ItemStack, _player: &Player) {}
+
     /// Returns the maximum number of ticks this item can be used for.
     /// Return 0 if the item does not have a behaviour-driven use duration.
     fn get_use_duration(&self) -> i32 {
