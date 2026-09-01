@@ -2697,6 +2697,9 @@ impl EntityBase for LivingEntity {
     fn tick(&self, caller: &dyn EntityBase, server: &Server) {
         self.entity.tick(caller, server);
 
+        // Must run before movement so the modifiers take effect this tick.
+        self.tick_soul_speed(caller);
+
         // Only tick movement if the entity is alive. This prevents a dead "corpse"
         // from continuing to be simulated (accumulating fall_distance/velocity).
         // We allow movement during death animation (20 ticks) so knockback is applied.
@@ -2927,6 +2930,7 @@ impl EntityBase for LivingEntity {
 }
 
 pub const SPEED_MODIFIER_SPRINTING_ID: &str = "minecraft:sprinting";
+pub const SOUL_SPEED_MODIFIER_ID: &str = "minecraft:enchantment.soul_speed";
 pub const SPEED_MODIFIER_SPRINTING_AMOUNT: f64 = 0.300_000_011_920_928_96;
 
 impl LivingEntity {
@@ -3095,6 +3099,101 @@ impl LivingEntity {
 
         None
     }
+
+    /// Applies the Soul Speed boots enchantment, mirroring the `minecraft:location_changed`
+    /// effects of `minecraft:soul_speed`: a flat movement speed bonus plus full movement
+    /// efficiency, which cancels the slowdown of the soul block underneath.
+    ///
+    /// The boost is kept while airborne (vanilla's `enchantment_active_check`) so jumping
+    /// does not drop it, and the boots wear down while actually walking on the block.
+    fn tick_soul_speed(&self, caller: &dyn EntityBase) {
+        let level = self
+            .entity_equipment
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .equipment
+            .get(&EquipmentSlot::FEET)
+            .map_or(0, |boots| {
+                boots.get_enchantment_level(&Enchantment::SOUL_SPEED)
+            });
+
+        let on_soul_speed_block = {
+            let world = self.entity.world.load();
+            let pos = self.entity.get_block_pos_below_that_affects_my_movement();
+            world
+                .get_block(&pos)
+                .has_tag(&tag::Block::MINECRAFT_SOUL_SPEED_BLOCKS)
+        };
+        let on_ground = self.entity.on_ground.load(Relaxed);
+
+        // Vanilla: 4% chance per level each tick to consume a point of boot durability.
+        if level > 0
+            && on_soul_speed_block
+            && on_ground
+            && rand::random::<f64>() < 0.04 * f64::from(level)
+            && let Some(player) = caller.get_player()
+        {
+            player.damage_item_in_slot(&EquipmentSlot::FEET, 1);
+        }
+
+        let active = self
+            .attributes
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .get(&Attributes::MOVEMENT_SPEED.id)
+            .and_then(|instance| {
+                instance
+                    .modifiers
+                    .iter()
+                    .find(|modifier| modifier.id == SOUL_SPEED_MODIFIER_ID)
+                    .map(|modifier| modifier.amount)
+            });
+
+        let applies = level > 0
+            && !self.entity.has_vehicle()
+            && !caller.get_player().is_some_and(|player| player.is_flying())
+            && (on_soul_speed_block || (active.is_some() && !on_ground));
+        let desired = applies.then(|| soul_speed_bonus(level));
+
+        // Nothing to sync unless the state or the enchantment level changed.
+        if active == desired {
+            return;
+        }
+
+        if let Some(amount) = desired {
+            self.update_attribute(&Attributes::MOVEMENT_SPEED, |speed| {
+                speed.add_or_replace_modifier(Modifier {
+                    id: SOUL_SPEED_MODIFIER_ID.to_string(),
+                    amount,
+                    operation: ModifierOperation::Add,
+                });
+            });
+            self.update_attribute(&Attributes::MOVEMENT_EFFICIENCY, |efficiency| {
+                efficiency.add_or_replace_modifier(Modifier {
+                    id: SOUL_SPEED_MODIFIER_ID.to_string(),
+                    amount: 1.0,
+                    operation: ModifierOperation::Add,
+                });
+            });
+        } else {
+            self.update_attribute(&Attributes::MOVEMENT_SPEED, |speed| {
+                speed.remove_modifier(SOUL_SPEED_MODIFIER_ID);
+            });
+            self.update_attribute(&Attributes::MOVEMENT_EFFICIENCY, |efficiency| {
+                efficiency.remove_modifier(SOUL_SPEED_MODIFIER_ID);
+            });
+        }
+
+        crate::entity::attributes::send_attribute_updates_for_living(
+            self,
+            vec![Attributes::MOVEMENT_SPEED, Attributes::MOVEMENT_EFFICIENCY],
+        );
+    }
+}
+
+/// Soul Speed movement speed bonus: 0.0405 base plus 0.0105 per level above the first.
+fn soul_speed_bonus(level: i32) -> f64 {
+    0.010_5f64.mul_add(f64::from(level - 1), 0.040_5)
 }
 
 fn random_teleport_coordinate(center: f64, diameter: f32, random: f64) -> f64 {
@@ -3179,6 +3278,16 @@ pub(crate) const fn bypasses_armor_durability(damage_type: &DamageType) -> bool 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // ── soul_speed_bonus ──────────────────────────────────────────────
+
+    /// Matches the `minecraft:soul_speed` linear value: base 0.0405, +0.0105 per extra level.
+    #[test]
+    fn soul_speed_bonus_matches_vanilla_levels() {
+        assert!((soul_speed_bonus(1) - 0.0405).abs() < 1e-9);
+        assert!((soul_speed_bonus(2) - 0.0510).abs() < 1e-9);
+        assert!((soul_speed_bonus(3) - 0.0615).abs() < 1e-9);
+    }
 
     // ── bypasses_armor_durability ─────────────────────────────────────
 
