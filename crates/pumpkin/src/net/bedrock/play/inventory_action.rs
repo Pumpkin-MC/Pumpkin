@@ -237,7 +237,6 @@ impl BedrockClient {
                                 &stack,
                                 &server,
                                 &dummy_use_item_on,
-                                data.block_position,
                                 face,
                             ) {
                                 if player.gamemode.load() != GameMode::Creative {

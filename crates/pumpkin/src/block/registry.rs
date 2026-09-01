@@ -622,10 +622,10 @@ impl BlockRegistry {
         item_stack: &ItemStack,
         server: &Arc<Server>,
         use_item_on: &SUseItemOn,
-        location: BlockPos,
         face: BlockDirection,
     ) -> Result<Option<(BlockPos, BlockStateId)>, BlockPlacingError> {
         let entity = &player.get_entity();
+        let location = use_item_on.position;
 
         match player.gamemode.load() {
             pumpkin_util::GameMode::Spectator | pumpkin_util::GameMode::Adventure => {

@@ -124,15 +124,8 @@ impl JavaClient {
         // Check if the item is a block, because not every item can be placed :D
         let item_id = item.item.id;
         if let Some(block) = Block::from_item_id(item_id) {
-            should_try_decrement = Self::run_is_block_place(
-                player,
-                block,
-                &item,
-                server,
-                use_item_on,
-                position,
-                face,
-            )?;
+            should_try_decrement =
+                Self::run_is_block_place(player, block, &item, server, use_item_on, face)?;
         }
 
         if should_try_decrement {
@@ -227,7 +220,6 @@ impl JavaClient {
         item_stack: &ItemStack,
         server: &Arc<Server>,
         use_item_on: &SUseItemOn,
-        location: BlockPos,
         face: BlockDirection,
     ) -> Result<bool, BlockPlacingError> {
         match server.block_registry.place_block(
@@ -236,7 +228,6 @@ impl JavaClient {
             item_stack,
             server,
             use_item_on,
-            location,
             face,
         ) {
             Ok(Some((final_block_pos, new_state))) => {
