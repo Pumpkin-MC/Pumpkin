@@ -40,6 +40,10 @@
 
             cargoLock = {
               lockFile = ./Cargo.lock;
+              outputHashes = {
+                "cranelift-assembler-x64-0.136.0-dev" =
+                  "sha256-nVeoFUefncbYqh8PvsZcApoLF/BHqJ0PL8yQHW8krXA=";
+              };
             };
 
             nativeBuildInputs = [
