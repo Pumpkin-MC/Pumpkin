@@ -234,6 +234,7 @@ impl BedrockClient {
                             if let Ok(Some(_)) = server.block_registry.place_block(
                                 player,
                                 placed_block,
+                                &stack,
                                 &server,
                                 &dummy_use_item_on,
                                 data.block_position,
