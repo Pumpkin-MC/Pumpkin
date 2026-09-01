@@ -6,7 +6,7 @@ use crate::block::{
 };
 use pumpkin_data::{
     Block, BlockDirection, BlockStateId, HorizontalFacingExt,
-    block_properties::{AttachFace, HorizontalFacing, LeverLikeProperties},
+    block_properties::{AttachFace, LeverLikeProperties},
 };
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
@@ -72,29 +72,9 @@ impl BlockBehaviour for LeverBlock {
     }
 
     fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
-        let mut props = LeverLikeProperties::default(&pumpkin_data::Block::LEVER);
-
-        props.face = match args.direction {
-            BlockDirection::Down => AttachFace::Ceiling,
-            BlockDirection::Up => AttachFace::Floor,
-            _ => AttachFace::Wall,
-        };
-
-        props.facing = match props.face {
-            AttachFace::Floor | AttachFace::Ceiling => {
-                let player_direction = args.player.living_entity.entity.get_horizontal_facing();
-                match player_direction {
-                    HorizontalFacing::North | HorizontalFacing::South => HorizontalFacing::South,
-                    HorizontalFacing::West | HorizontalFacing::East => HorizontalFacing::East,
-                }
-            }
-            AttachFace::Wall => match args.direction {
-                BlockDirection::South => HorizontalFacing::South,
-                BlockDirection::West => HorizontalFacing::West,
-                BlockDirection::East => HorizontalFacing::East,
-                _ => HorizontalFacing::North,
-            },
-        };
+        let mut props = LeverLikeProperties::default(args.block);
+        (props.face, props.facing) =
+            WallMountedBlock::get_placement_face(self, args.player, args.direction);
 
         props.to_state_id(args.block)
     }

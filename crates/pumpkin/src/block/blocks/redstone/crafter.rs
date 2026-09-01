@@ -245,7 +245,7 @@ impl BlockBehaviour for CrafterBlock {
 
     fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
         let mut props = CrafterLikeProperties::default(args.block);
-        let facing = args.direction;
+        let facing = args.direction.opposite();
         let horizontal = args.player.living_entity.entity.get_horizontal_facing();
         props.orientation = match facing {
             BlockDirection::Down => match horizontal {

@@ -216,8 +216,7 @@ impl BlockBehaviour for DoorBlock {
             .player
             .living_entity
             .entity
-            .get_horizontal_facing()
-            .opposite();
+            .get_horizontal_facing();
         door_props.facing = facing;
         door_props.half = DoubleBlockHalf::Lower;
         door_props.hinge = get_hinge(args.world, args.position, args.use_item_on, facing);
