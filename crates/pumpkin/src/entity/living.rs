@@ -3136,6 +3136,12 @@ impl LivingEntity {
             player.damage_item_in_slot(&EquipmentSlot::FEET, 1);
         }
 
+        let flying = caller
+            .get_player()
+            .is_some_and(super::player::Player::is_flying);
+
+        self.tick_soul_speed_effects(caller, level, on_soul_speed_block, on_ground, flying);
+
         let active = self
             .attributes
             .read()
@@ -3150,10 +3156,8 @@ impl LivingEntity {
             });
 
         let applies = level > 0
+            && !flying
             && !self.entity.has_vehicle()
-            && !caller
-                .get_player()
-                .is_some_and(super::player::Player::is_flying)
             && (on_soul_speed_block || (active.is_some() && !on_ground));
         let desired = applies.then(|| soul_speed_bonus(level));
 
@@ -3190,6 +3194,65 @@ impl LivingEntity {
             self,
             vec![Attributes::MOVEMENT_SPEED, Attributes::MOVEMENT_EFFICIENCY],
         );
+    }
+
+    /// The cosmetic `minecraft:tick` effects of `minecraft:soul_speed`: a trailing soul
+    /// particle every fifth tick while moving along the ground on a soul speed block, and
+    /// the soul escape sound on 35% of those ticks.
+    ///
+    /// Only players are covered; the periodic tick counter vanilla reads lives on `Player`.
+    fn tick_soul_speed_effects(
+        &self,
+        caller: &dyn EntityBase,
+        level: i32,
+        on_soul_speed_block: bool,
+        on_ground: bool,
+        flying: bool,
+    ) {
+        if level == 0 || !on_soul_speed_block || !on_ground || flying {
+            return;
+        }
+
+        let Some(player) = caller.get_player() else {
+            return;
+        };
+        if player.tick_counter.load(Relaxed) % 5 != 0 {
+            return;
+        }
+
+        let velocity = self.entity.velocity.load();
+        if velocity.horizontal_length() < 1.0e-5 {
+            return;
+        }
+
+        let pos = self.entity.pos.load();
+        let bounding_box = self.entity.bounding_box.load();
+        let mut rng = rand::rng();
+        let world = self.entity.world.load();
+
+        // Position: random point in the bounding box footprint, 0.1 above the feet.
+        // Velocity: a fifth of the entity's horizontal movement, reversed, drifting upward.
+        world.spawn_particle(
+            Vector3::new(
+                (rng.random::<f64>() - 0.5).mul_add(bounding_box.max.x - bounding_box.min.x, pos.x),
+                pos.y + 0.1,
+                (rng.random::<f64>() - 0.5).mul_add(bounding_box.max.z - bounding_box.min.z, pos.z),
+            ),
+            Vector3::new((velocity.x * -0.2) as f32, 0.1, (velocity.z * -0.2) as f32),
+            1.0,
+            0,
+            Particle::Soul,
+        );
+
+        if rng.random::<f32>() < 0.35 {
+            world.play_sound_raw(
+                Sound::ParticleSoulEscape as u16,
+                SoundCategory::Players,
+                &pos,
+                0.6,
+                rng.random_range(0.6f32..1.0),
+            );
+        }
     }
 }
 
