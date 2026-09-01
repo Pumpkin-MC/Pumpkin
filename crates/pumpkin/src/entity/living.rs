@@ -3117,8 +3117,24 @@ impl LivingEntity {
                 boots.get_enchantment_level(&Enchantment::SOUL_SPEED)
             });
 
-        // Skip the per-tick world lookup for every loaded entity without the enchantment.
-        if level == 0 {
+        let active = self
+            .attributes
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .get(&Attributes::MOVEMENT_SPEED.id)
+            .and_then(|instance| {
+                instance
+                    .modifiers
+                    .iter()
+                    .find(|modifier| modifier.id == SOUL_SPEED_MODIFIER_ID)
+                    .map(|modifier| modifier.amount)
+            });
+
+        // No enchantment and no leftover modifier: skip the per-tick world lookup that
+        // would otherwise run for every loaded entity. When the boots are removed while
+        // the boost is active, `level` is 0 but `active` is still set, so we fall through
+        // and clean up the modifier on the same tick.
+        if level == 0 && active.is_none() {
             return;
         }
 
@@ -3145,20 +3161,10 @@ impl LivingEntity {
             .get_player()
             .is_some_and(super::player::Player::is_flying);
 
-        self.tick_soul_speed_effects(caller, on_soul_speed_block, on_ground, flying);
-
-        let active = self
-            .attributes
-            .read()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .get(&Attributes::MOVEMENT_SPEED.id)
-            .and_then(|instance| {
-                instance
-                    .modifiers
-                    .iter()
-                    .find(|modifier| modifier.id == SOUL_SPEED_MODIFIER_ID)
-                    .map(|modifier| modifier.amount)
-            });
+        // Only a still-enchanted player emits the cosmetic particles/sound.
+        if level > 0 {
+            self.tick_soul_speed_effects(caller, on_soul_speed_block, on_ground, flying);
+        }
 
         let applies = level > 0
             && !flying
