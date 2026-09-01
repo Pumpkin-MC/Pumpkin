@@ -3100,12 +3100,23 @@ impl LivingEntity {
         None
     }
 
-    /// Applies the Soul Speed boots enchantment, mirroring the `minecraft:location_changed`
+/// Applies the Soul Speed boots enchantment, mirroring the `minecraft:location_changed`
     /// effects of `minecraft:soul_speed`: a flat movement speed bonus plus full movement
     /// efficiency, which cancels the slowdown of the soul block underneath.
     ///
     /// The boost is kept while airborne (vanilla's `enchantment_active_check`) so jumping
     /// does not drop it, and the boots wear down while actually walking on the block.
+    ///
+    /// The `level == 0` early-out / `active`-modifier bookkeeping pattern here is generic to
+    /// any "boot enchantment that reacts to a block/fluid under the entity" effect — Frost
+    /// Walker (`minecraft:frost_walker`, freezing water into frosted ice) could recycle this
+    /// same shape: read the boot level, gate the per-tick world lookup behind `level > 0`,
+    /// but still read the existing `active` state unconditionally so the effect gets torn
+    /// down cleanly when the boots come off. One extra optimization specific to Frost Walker:
+    /// it only ever interacts with water, which has no placeable source blocks in the Nether,
+    /// so a Frost Walker tick could skip its block/fluid lookup entirely whenever the entity's
+    /// world is a Nether dimension — saving that lookup for every Frost-Walker-booted entity
+    /// there, the same way `level > 0` already saves it here for entities without the enchant.
     fn tick_soul_speed(&self, caller: &dyn EntityBase) {
         let level = self
             .entity_equipment
@@ -3130,15 +3141,13 @@ impl LivingEntity {
                     .map(|modifier| modifier.amount)
             });
 
-        // No enchantment and no leftover modifier: skip the per-tick world lookup that
-        // would otherwise run for every loaded entity. When the boots are removed while
-        // the boost is active, `level` is 0 but `active` is still set, so we fall through
-        // and clean up the modifier on the same tick.
+        // Skip lookup for entities with no enchantment and no lingering
+        // modifier (e.g. boots were just taken off)
         if level == 0 && active.is_none() {
             return;
         }
 
-        let on_soul_speed_block = {
+        let on_soul_speed_block = level > 0 && {
             let world = self.entity.world.load();
             let pos = self.entity.get_block_pos_below_that_affects_my_movement();
             world
@@ -3161,10 +3170,7 @@ impl LivingEntity {
             .get_player()
             .is_some_and(super::player::Player::is_flying);
 
-        // Only a still-enchanted player emits the cosmetic particles/sound.
-        if level > 0 {
-            self.tick_soul_speed_effects(caller, on_soul_speed_block, on_ground, flying);
-        }
+        self.tick_soul_speed_effects(caller, on_soul_speed_block, on_ground, flying);
 
         let applies = level > 0
             && !flying
