@@ -5690,17 +5690,15 @@ impl World {
         position: &BlockPos,
     ) -> (&'static Fluid, &'static FluidState) {
         let id = self.get_block_state_id(position);
-
-        let Some(raw_fluid) = Fluid::from_state_id(id) else {
+        let Some(fluid) = Fluid::from_state_id(id) else {
             let block = Block::from_state_id(id);
             if let Some(properties) = block.properties(id) {
                 for (name, value) in properties.to_props() {
                     if name == "waterlogged" {
                         if value == "true" {
-                            let state = &Fluid::FLOWING_WATER.states[0];
+                            let state = &Fluid::WATER.states[0];
                             return (&Fluid::FLOWING_WATER, state);
                         }
-
                         break;
                     }
                 }
@@ -5710,9 +5708,7 @@ impl World {
             return (&Fluid::EMPTY, state);
         };
 
-        let fluid = raw_fluid.to_flowing();
-        let state = &fluid.states[0];
-
+        let state = FluidState::get_state_from_id(id).unwrap_or(&Fluid::EMPTY.states[0]);
         (fluid, state)
     }
 

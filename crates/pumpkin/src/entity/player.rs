@@ -1953,32 +1953,6 @@ impl Player {
             && self.get_entity().is_swimming()
     }
 
-    pub fn update_swimming(&self) {
-        if self.is_flying() {
-            self.get_entity().set_swimming(false);
-        } else {
-            let entity = self.get_entity();
-            let is_sprinting = entity.is_sprinting();
-            let in_water = entity.is_in_water();
-            let is_passenger = entity.has_vehicle();
-
-            if entity.is_swimming() {
-                entity.set_swimming(is_sprinting && in_water && !is_passenger);
-            } else {
-                let is_under_water = entity.is_under_water();
-                let block_pos = entity.block_pos.load();
-                let world = entity.world.load();
-                let (fluid, _) = world.get_fluid_and_fluid_state(&block_pos);
-                let is_water_block = fluid.id == pumpkin_data::fluid::Fluid::WATER.id
-                    || fluid.id == pumpkin_data::fluid::Fluid::FLOWING_WATER.id;
-
-                entity.set_swimming(
-                    is_sprinting && is_under_water && !is_passenger && is_water_block,
-                );
-            }
-        }
-    }
-
     const fn is_auto_spin_attack() -> bool {
         // TODO: Track active auto-spin/riptide state and return true while it is active.
         false
@@ -2018,7 +1992,6 @@ impl Player {
             return;
         }
 
-        self.update_swimming();
         let desired_pose = self.get_desired_pose();
         let actual_pose = if self.gamemode.load() == GameMode::Spectator
             || self.get_entity().has_vehicle()

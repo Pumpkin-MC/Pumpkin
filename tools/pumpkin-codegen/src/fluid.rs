@@ -398,6 +398,7 @@ pub fn build() -> TokenStream {
     let mut type_from_name = TokenStream::new();
     let mut type_from_raw_id_arms = TokenStream::new();
     let mut fluid_from_state_id = TokenStream::new();
+    let mut fluid_state_from_state_id = TokenStream::new();
 
     // Collect from_state_id arms to sort by range width (narrower first)
     struct StateIdArm {
@@ -495,6 +496,11 @@ pub fn build() -> TokenStream {
                     state_idx,
                 },
             ));
+
+            let block_state_id = state.block_state_id.0;
+            fluid_state_from_state_id.extend(quote! {
+                #block_state_id => Some(&Fluid::#const_ident.states[#idx]),
+            });
         }
         state_id_arms.push(StateIdArm {
             start: state_id_start,
@@ -510,7 +516,7 @@ pub fn build() -> TokenStream {
             #id_lit => Some(&Self::#const_ident),
         });
 
-        let fluid_states = fluid.states.iter().map(|state| {
+        let fluid_states = fluid.states.iter().enumerate().map(|(i, state)| {
             let height = state.height;
             let level = state.level;
             let is_empty = state.is_empty;
@@ -520,7 +526,6 @@ pub fn build() -> TokenStream {
             // Derive these values based on existing fields
             let is_source = is_still; // Level 0 and still means it's a source
             let falling = false; // Default to false - we'll handle falling in the fluid behavior code
-
             quote! {
                 FluidState {
                     height: #height,
@@ -688,6 +693,15 @@ pub fn build() -> TokenStream {
             pub is_still: bool,
             pub is_source: bool,
             pub falling: bool,
+        }
+
+        impl FluidState {
+            pub fn get_state_from_id(id:BlockStateId) -> Option<&'static Self>{
+                match id.as_u16() {
+                    #fluid_state_from_state_id
+                    _ => None
+                }
+            }
         }
 
         #[derive(Clone)]

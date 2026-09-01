@@ -21,7 +21,7 @@ impl SwimGoal {
         let living = &mob.get_mob_entity().living_entity;
         let entity = &living.entity;
         let in_water = entity.touching_water.load(Ordering::SeqCst)
-            && entity.water_height.load() > living.get_swim_height();
+            && entity.water_height.load() > living.get_jump_fluid_threshold();
         in_water || entity.touching_lava.load(Ordering::SeqCst)
     }
 }
