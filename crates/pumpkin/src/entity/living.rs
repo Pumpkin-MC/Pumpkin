@@ -3117,6 +3117,11 @@ impl LivingEntity {
                 boots.get_enchantment_level(&Enchantment::SOUL_SPEED)
             });
 
+        // Skip the per-tick world lookup for every loaded entity without the enchantment.
+        if level == 0 {
+            return;
+        }
+
         let on_soul_speed_block = {
             let world = self.entity.world.load();
             let pos = self.entity.get_block_pos_below_that_affects_my_movement();
@@ -3140,7 +3145,7 @@ impl LivingEntity {
             .get_player()
             .is_some_and(super::player::Player::is_flying);
 
-        self.tick_soul_speed_effects(caller, level, on_soul_speed_block, on_ground, flying);
+        self.tick_soul_speed_effects(caller, on_soul_speed_block, on_ground, flying);
 
         let active = self
             .attributes
@@ -3204,12 +3209,11 @@ impl LivingEntity {
     fn tick_soul_speed_effects(
         &self,
         caller: &dyn EntityBase,
-        level: i32,
         on_soul_speed_block: bool,
         on_ground: bool,
         flying: bool,
     ) {
-        if level == 0 || !on_soul_speed_block || !on_ground || flying {
+        if !on_soul_speed_block || !on_ground || flying {
             return;
         }
 
