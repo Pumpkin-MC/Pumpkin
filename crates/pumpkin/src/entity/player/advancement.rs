@@ -231,7 +231,6 @@ impl AdvancementAward {
         self.awarded
     }
 
-    #[must_use]
     pub(crate) const fn combine(self, other: Self) -> Self {
         Self {
             awarded: self.awarded || other.awarded,
