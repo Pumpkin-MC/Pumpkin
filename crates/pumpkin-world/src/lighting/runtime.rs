@@ -425,23 +425,34 @@ impl DynamicLightEngine {
         let Some(chunk) = cursor.chunk_for(pos) else {
             return false;
         };
-        let max_y =
-            chunk.section.min_y + (chunk.section.count as i32) * BlockPalette::SIZE as i32 - 1;
+        let min_y = chunk.section.min_y;
+        let max_y = min_y + (chunk.section.count as i32) * BlockPalette::SIZE as i32 - 1;
+        let (_, relative) = pos.chunk_and_chunk_relative_position();
+        let (local_x, local_z) = (relative.x as usize, relative.z as usize);
 
-        let mut y = pos.0.y;
-        let mut reads = 0u64;
-        while y < max_y {
-            y += 1;
-            reads += 1;
-            let opacity = ChunkCursor::opacity_in(chunk, &BlockPos::new(pos.0.x, y, pos.0.z));
-            if opacity > 0 {
-                self.counters.bump_n(LightCounters::SKY_COLUMN_READ, reads);
-                return false;
+        // The sections read guard is taken once for the whole column instead of once per
+        // block. It protects the same data either way; per-step locking is a few hundred
+        // uncontended round trips that buy nothing.
+        let (blocked, reads) = chunk.section.with_blocks(|sections| {
+            let mut reads = 0u64;
+            for y in (pos.0.y + 1)..=max_y {
+                reads += 1;
+                let rel_y = (y - min_y) as usize;
+                let opacity = sections
+                    .get(rel_y / BlockPalette::SIZE)
+                    .map(|section| {
+                        section.get(local_x, rel_y % BlockPalette::SIZE, local_z).to_state()
+                    })
+                    .map_or(0, |state| state.opacity);
+                if opacity > 0 {
+                    return (true, reads);
+                }
             }
-        }
+            (false, reads)
+        });
         self.counters.bump_n(LightCounters::SKY_COLUMN_READ, reads);
 
-        true
+        !blocked
     }
 
     /// 3-Tier culling for the open-sky question, backed by the cached per-chunk cut height.

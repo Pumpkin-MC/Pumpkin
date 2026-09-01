@@ -426,6 +426,20 @@ impl ChunkSections {
     }
 
     /// Gets the given block in the chunk
+    /// Runs `f` with the block sections read guard held once.
+    ///
+    /// `get_relative_block` takes and releases that guard per block. A caller walking a
+    /// whole column pays it per step for one and the same chunk, which for a full-height
+    /// scan is a few hundred lock round trips that all protect the same data. Taking the
+    /// guard once and indexing inside is the same work minus the lock traffic.
+    pub fn with_blocks<R>(&self, f: impl FnOnce(&[BlockPalette]) -> R) -> R {
+        let sections = self
+            .block_sections
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        f(&sections)
+    }
+
     fn get_relative_block(
         &self,
         relative_x: usize,
