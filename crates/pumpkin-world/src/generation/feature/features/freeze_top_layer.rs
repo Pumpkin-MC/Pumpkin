@@ -1,6 +1,7 @@
 use crate::generation::proto_chunk::GenerationCache;
-use pumpkin_data::tag::{self, Taggable};
-use pumpkin_data::{Block, BlockState};
+use pumpkin_data::block_properties::{BlockProperties, GrassBlockLikeProperties};
+use pumpkin_data::tag;
+use pumpkin_data::{Block, BlockId};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::random::RandomGenerator;
 
@@ -30,14 +31,13 @@ impl FreezeTopLayerFeature {
 
                 let top_vec = BlockPos::new(x, y, z).0;
                 let below_vec = BlockPos::new(x, below_y, z).0;
+                let below = GenerationCache::get_block_state(chunk, &below_vec);
+                let below_block = below.to_block_id();
 
                 let biome = chunk.get_biome_for_terrain_gen(x, y, z);
 
                 // Freeze check
-                if biome.weather.base_temperature() <= 0.15
-                    && GenerationCache::get_block_state(chunk, &below_vec).to_block_id()
-                        == Block::WATER
-                {
+                if biome.weather.base_temperature() <= 0.15 && below_block == BlockId::WATER {
                     chunk.set_block_state(&below_vec, Block::ICE.default_state);
                 }
 
@@ -49,31 +49,20 @@ impl FreezeTopLayerFeature {
                 if top_temp < 0.15 {
                     let top_raw = GenerationCache::get_block_state(chunk, &top_vec);
                     // Re-read below (may have been replaced by ice in the freeze step above)
-                    let below = GenerationCache::get_block_state(chunk, &below_vec);
 
                     // topPos must be air; belowPos must not be air (something to stand on)
                     if top_raw.to_state().is_air()
                         && !below.to_state().is_air()
-                        && !Block::from_state_id(below.to_state().id)
-                            .has_tag(&tag::Block::MINECRAFT_CANNOT_SUPPORT_SNOW_LAYER)
+                        && !below_block.has_tag(tag::Block::MINECRAFT_CANNOT_SUPPORT_SNOW_LAYER)
                     {
                         chunk.set_block_state(&top_vec, Block::SNOW.default_state);
 
                         // Update the `snowy` block-state property on the block below if it has one
-                        let below_block = below.to_block();
-                        if let Some(props) = below_block.properties(below) {
-                            let prop_list = props.to_props();
-                            if prop_list.iter().any(|(k, _)| *k == "snowy") {
-                                let new_props: Vec<(&str, &str)> = prop_list
-                                    .iter()
-                                    .map(|(k, v)| (*k, if *k == "snowy" { "true" } else { *v }))
-                                    .collect();
-                                let new_props_obj =
-                                    below_block.from_properties(new_props.as_slice());
-                                let new_state_id = new_props_obj.to_state_id(below_block);
-                                chunk
-                                    .set_block_state(&below_vec, BlockState::from_id(new_state_id));
-                            }
+                        if GrassBlockLikeProperties::handles_block_id(below_block) {
+                            let block = below_block.to_block();
+                            let mut props = GrassBlockLikeProperties::from_state_id(below, block);
+                            props.snowy = true;
+                            chunk.set_block_state(&below_vec, props.to_state_id(block).to_state());
                         }
                     }
                 }

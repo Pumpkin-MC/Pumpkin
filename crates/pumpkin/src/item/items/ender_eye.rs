@@ -7,6 +7,9 @@ use crate::item::{ItemBehaviour, ItemMetadata};
 use crate::server::Server;
 use crate::world::World;
 use crate::world::portal::end::EndPortal;
+use pumpkin_data::BlockId;
+use pumpkin_data::block_properties::BlockProperties;
+use pumpkin_data::block_properties::EndPortalFrameLikeProperties;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
@@ -40,31 +43,20 @@ impl ItemBehaviour for EnderEyeItem {
         block: &Block,
         _server: &Server,
     ) {
-        if block.id != Block::END_PORTAL_FRAME.id {
+        if block.id != BlockId::END_PORTAL_FRAME {
             return;
         }
 
         let world = player.world();
         let state_id = world.get_block_state_id(&location);
 
-        let new_state_id = {
-            // Skip if the frame already holds an eye.
-            let Some(props) = block.properties(state_id) else {
-                return;
-            };
-            let props_raw = props.to_props();
-            if props_raw.iter().any(|(k, v)| *k == "eye" && *v == "true") {
-                return;
-            }
-
-            // Build new state with eye=true.
-            let props: Vec<(&str, &str)> = props_raw
-                .iter()
-                .map(|(k, v)| if *k == "eye" { (*k, "true") } else { (*k, *v) })
-                .collect();
-
-            block.from_properties(&props).to_state_id(block)
-        };
+        // Skip if the frame already holds an eye.
+        let mut props = EndPortalFrameLikeProperties::from_state_id(state_id, block);
+        if props.eye {
+            return;
+        }
+        props.eye = true;
+        let new_state_id = props.to_state_id(block);
 
         world.set_block_state(&location, new_state_id, BlockFlags::NOTIFY_LISTENERS);
         // Consume one item.

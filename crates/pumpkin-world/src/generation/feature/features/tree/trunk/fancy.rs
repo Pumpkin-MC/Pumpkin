@@ -2,7 +2,7 @@ use core::f32;
 
 use pumpkin_data::{
     Block, BlockState,
-    block_properties::{Axis, EnumVariants},
+    block_properties::{Axis, BlockProperties, PaleOakWoodLikeProperties},
 };
 use pumpkin_util::{
     math::{position::BlockPos, vector3::Vector3},
@@ -157,24 +157,11 @@ impl FancyTrunkPlacer {
 
                 if TreeFeature::can_replace(block.to_state(), block.to_block_id()) {
                     let block = Block::from_state_id(trunk_provider.id);
-                    let Some(properties) = block.properties(trunk_provider.id) else {
-                        continue;
-                    };
-                    let original_props = &properties.to_props();
-                    let axis = axis.to_value();
-                    // Set the right Axis
-                    let props: Vec<(&'static str, &'static str)> = original_props
-                        .iter()
-                        .map(|(key, value)| {
-                            if *key == "axis" {
-                                (*key, axis)
-                            } else {
-                                (*key, *value)
-                            }
-                        })
-                        .collect();
-                    let state = block.from_properties(&props).to_state_id(block);
-                    chunk.set_block_state(&block_pos_2.0, BlockState::from_id(state));
+                    let mut props =
+                        PaleOakWoodLikeProperties::from_state_id(trunk_provider.id, block);
+                    props.axis = axis;
+                    let state = props.to_state_id(block).to_state();
+                    chunk.set_block_state(&block_pos_2.0, state);
                     logs.push(block_pos_2);
                     continue;
                 }
