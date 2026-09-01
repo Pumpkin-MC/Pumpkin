@@ -27,7 +27,7 @@ const SURFACE: i32 = 60;
 
 struct World {
     level: Arc<Level>,
-    chunk: Arc<ChunkData>,
+    chunks: Vec<(Vector2<i32>, Arc<ChunkData>)>,
     engine: DynamicLightEngine,
     _dir: TempDir,
 }
@@ -39,6 +39,17 @@ impl World {
     /// `carve` runs before the lighting is derived, so anything it opens is part of the
     /// terrain the cut height is computed from.
     fn new(carve: impl Fn(&mut Vec<(usize, i32, usize, BlockStateId)>)) -> Self {
+        Self::spanning(&[(0, 0)], |_, _, updates| carve(updates))
+    }
+
+    /// The same, over several loaded chunks. `carve` is called per chunk with its chunk
+    /// coordinates -> test can open a shaft in one and a tunnel in the next.
+    ///
+    /// Everything outside the given list stays unloaded
+    fn spanning(
+        positions: &[(i32, i32)],
+        carve: impl Fn(i32, i32, &mut Vec<(usize, i32, usize, BlockStateId)>),
+    ) -> Self {
         let dir = TempDir::new().unwrap();
         let level = Level::from_root_folder(
             &LevelConfig::default(),
@@ -47,7 +58,31 @@ impl World {
             Dimension::OVERWORLD,
         );
 
-        let chunk = ChunkData::empty(0, 0);
+        let chunks = positions
+            .iter()
+            .map(|&(cx, cz)| {
+                let chunk = Self::build_chunk(cx, cz, &carve);
+                level
+                    .loaded_chunks
+                    .insert(Vector2::new(cx, cz), chunk.clone());
+                (Vector2::new(cx, cz), chunk)
+            })
+            .collect();
+
+        Self {
+            level,
+            chunks,
+            engine: DynamicLightEngine::new(),
+            _dir: dir,
+        }
+    }
+
+    fn build_chunk(
+        cx: i32,
+        cz: i32,
+        carve: &impl Fn(i32, i32, &mut Vec<(usize, i32, usize, BlockStateId)>),
+    ) -> Arc<ChunkData> {
+        let chunk = ChunkData::empty(cx, cz);
         let mut updates = Vec::new();
         for x in 0..16usize {
             for z in 0..16usize {
@@ -56,7 +91,7 @@ impl World {
                 }
             }
         }
-        carve(&mut updates);
+        carve(cx, cz, &mut updates);
         chunk.set_blocks_batch(updates);
         *chunk
             .heightmap
@@ -92,22 +127,30 @@ impl World {
         }
         drop(light);
 
-        let chunk = Arc::new(chunk);
-        level
-            .loaded_chunks
-            .insert(Vector2::new(0, 0), chunk.clone());
+        Arc::new(chunk)
+    }
 
-        Self {
-            level,
-            chunk,
-            engine: DynamicLightEngine::new(),
-            _dir: dir,
-        }
+    fn chunk(&self) -> &Arc<ChunkData> {
+        &self.chunks[0].1
+    }
+
+    fn chunk_at(&self, cx: i32, cz: i32) -> &Arc<ChunkData> {
+        &self
+            .chunks
+            .iter()
+            .find(|(pos, _)| pos.x == cx && pos.y == cz)
+            .expect("that chunk was never loaded")
+            .1
     }
 
     fn set_block(&self, pos: BlockPos, id: BlockStateId) {
-        self.chunk
-            .set_block_absolute_y(pos.0.x as usize, pos.0.y, pos.0.z as usize, id);
+        let chunk = self.chunk_at(pos.0.x >> 4, pos.0.z >> 4);
+        chunk.set_block_absolute_y(
+            (pos.0.x & 15) as usize,
+            pos.0.y,
+            (pos.0.z & 15) as usize,
+            id,
+        );
         self.engine.update_lighting_at(&self.level, pos);
     }
 
@@ -122,7 +165,7 @@ impl World {
     }
 
     fn cut(&self) -> SkyLightHeight {
-        SkyLightHeightMigration::get(&self.chunk)
+        SkyLightHeightMigration::get(self.chunk())
     }
 }
 
@@ -331,5 +374,40 @@ async fn a_point_light_reaches_all_six_neighbours() {
             .expect("the pocket is inside the loaded chunk"),
         luminance - 2,
         "light did not carry on past the first ring"
+    );
+}
+
+/// Light crosses a chunk border, and the edge of the loaded area does not stop it.
+#[tokio::test]
+async fn light_crosses_a_chunk_border_and_the_edge_of_the_loaded_area() {
+    let world = World::spanning(&[(0, 0), (1, 0)], |cx, _cz, updates| {
+        if cx == 0 {
+            // A shaft down to the tunnel level, part of the terrain from the start.
+            for y in 19..=SURFACE {
+                updates.push((13, y, 0, air()));
+            }
+        }
+    });
+
+    assert_eq!(world.sky(13, 19, 0), 15, "the shaft is open to the sky");
+
+    for x in (14..=20).rev() {
+        world.set_block(BlockPos::new(x, 19, 0), air());
+    }
+    world.settle();
+
+    for x in 14..=20 {
+        assert_eq!(
+            world.sky(x, 19, 0),
+            (15 - (x - 13)) as u8,
+            "sky light did not reach x={x}; it has to flow one block per step, across the \
+             chunk border at x=16 and past the unloaded chunk to the north"
+        );
+    }
+
+    let neighbour = SkyLightHeightMigration::get(world.chunk_at(1, 0));
+    assert!(
+        neighbour.quadrant_uses_limit(0, 0),
+        "a tunnel under the intact ceilings of the next chunk invalidated its cut"
     );
 }

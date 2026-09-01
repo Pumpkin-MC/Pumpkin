@@ -805,3 +805,109 @@ impl DynamicLightEngine {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        ChunkCursor, ChunkData, DynamicLightEngine, SkyLightHeightMigration, SkyLightTier,
+    };
+    use crate::level::Level;
+    use pumpkin_config::world::LevelConfig;
+    use pumpkin_data::Block;
+    use pumpkin_data::dimension::Dimension;
+    use pumpkin_util::math::position::BlockPos;
+    use pumpkin_util::math::vector2::Vector2;
+    use std::sync::Arc;
+    use tempfile::TempDir;
+
+    const SURFACE: i32 = 60;
+
+    fn flat_chunk(cx: i32, cz: i32) -> Arc<ChunkData> {
+        let chunk = ChunkData::empty(cx, cz);
+        let mut updates = Vec::new();
+        for x in 0..16usize {
+            for z in 0..16usize {
+                for y in 0..=SURFACE {
+                    updates.push((x, y, z, Block::STONE.default_state.id));
+                }
+            }
+        }
+        chunk.set_blocks_batch(updates);
+        *chunk
+            .heightmap
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = chunk.calculate_heightmap();
+        Arc::new(chunk)
+    }
+
+    fn level_with(positions: &[(i32, i32)]) -> (Arc<Level>, TempDir) {
+        let dir = TempDir::new().expect("temp dir");
+        let level = Level::from_root_folder(
+            &LevelConfig::default(),
+            dir.path().to_path_buf(),
+            42,
+            Dimension::OVERWORLD,
+        );
+        for &(cx, cz) in positions {
+            level
+                .loaded_chunks
+                .insert(Vector2::new(cx, cz), flat_chunk(cx, cz));
+        }
+        (level, dir)
+    }
+
+    /// At a chunk border the fast tier answer holds only if the neighbour's near-border
+    /// quadrant carries it too, and a neighbour that is not loaded counts as diverged.
+    /// checked the wiring around AND: that [`DynamicLightEngine::sky_tier`] consults the
+    /// neighbour at all, that it picks the right one of the four sides, and that it leaves
+    /// inland columns alone -> don't pay for a border they are not on.
+    #[tokio::test]
+    async fn the_border_gate_downgrades_only_edge_columns() {
+        // Deep below the cut, where the chunk-local answer is a fast one.
+        let border = BlockPos::new(15, 20, 2);
+        let inland = BlockPos::new(8, 20, 2);
+        let engine = DynamicLightEngine::new();
+
+        let (level, _dir) = level_with(&[(0, 0), (1, 0)]);
+        let mut cursor = ChunkCursor::new(&level, &engine.counters);
+        assert_eq!(
+            DynamicLightEngine::sky_tier(&mut cursor, &border),
+            SkyLightTier::NoOpenSky,
+            "two untouched chunks: the border column keeps the fast path"
+        );
+
+        let neighbour = level
+            .loaded_chunks
+            .get(&Vector2::new(1, 0))
+            .expect("the neighbour was loaded")
+            .value()
+            .clone();
+        SkyLightHeightMigration::get(&neighbour);
+        SkyLightHeightMigration::mark_quadrant_diverged(&neighbour, 0, 2);
+
+        assert_eq!(
+            DynamicLightEngine::sky_tier(&mut cursor, &border),
+            SkyLightTier::Unknown,
+            "the adjoining quadrant across the border diverged, so the fast answer no \
+             longer holds for this column"
+        );
+        assert_eq!(
+            DynamicLightEngine::sky_tier(&mut cursor, &inland),
+            SkyLightTier::NoOpenSky,
+            "a column that is not on the border must not pay for the neighbour"
+        );
+
+        // The same column again, with nothing at all on the other side.
+        let (lonely, _lonely_dir) = level_with(&[(0, 0)]);
+        let mut cursor = ChunkCursor::new(&lonely, &engine.counters);
+        assert_eq!(
+            DynamicLightEngine::sky_tier(&mut cursor, &border),
+            SkyLightTier::Unknown,
+            "an unloaded neighbour has to count as diverged"
+        );
+        assert_eq!(
+            DynamicLightEngine::sky_tier(&mut cursor, &inland),
+            SkyLightTier::NoOpenSky
+        );
+    }
+}
