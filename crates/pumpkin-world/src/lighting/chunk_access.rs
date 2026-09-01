@@ -1,9 +1,10 @@
 //! Chunk resolution and per-block light access for the runtime light engine.
 //!
 //! Every `level.read_chunk_sync` is a `DashMap` lookup, and the propagation loops hit the
-//! same chunk many times in a row. [`ChunkCursor`] memoizes the last one; the `*_in`
-//! functions then operate on an already-resolved chunk so a caller can resolve once and
-//! reuse it.
+//! same chunk many times in a row. [`ChunkCursor`] memoizes the last one, and
+//! [`ChunkCursor::resolve`] hands out that chunk together with the in-chunk indices: one
+//! position is decoded once, and the light read, the opacity and the write of that step
+//! all reuse it.
 
 use super::stats::{Counter, LightCounters};
 use crate::chunk::ChunkData;
@@ -12,8 +13,15 @@ use crate::chunk::palette::BlockPalette;
 use crate::level::Level;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector2::Vector2;
+use pumpkin_util::math::vector3::Vector3;
 use std::sync::Arc;
 
+/// A position resolved against its chunk: where its Y sits, and for `Inside` the section
+/// and in-section indices every accessor below needs.
+///
+/// Small and `Copy` on purpose -> it is handed to three or four accessors per propagation
+/// step, and each of them used to derive it again from the raw [`BlockPos`].
+#[derive(Clone, Copy)]
 pub(super) enum VerticalInChunk {
     Below,
     Inside {
@@ -25,8 +33,8 @@ pub(super) enum VerticalInChunk {
     Above,
 }
 
-pub(super) const fn vertical_in_chunk(chunk: &ChunkData, pos: &BlockPos) -> VerticalInChunk {
-    let (_, relative) = pos.chunk_and_chunk_relative_position();
+/// Derives the cell from coordinates that are already chunk-relative.
+const fn vertical_in(chunk: &ChunkData, relative: &Vector3<i32>) -> VerticalInChunk {
     let rel_y = relative.y - chunk.section.min_y;
     if rel_y < 0 {
         return VerticalInChunk::Below;
@@ -87,65 +95,81 @@ impl<'a> ChunkCursor<'a> {
         self.chunk_at(chunk_pos)
     }
 
+    /// Resolves a position once: the chunk it lives in, plus its cell inside that chunk.
+    pub(super) fn resolve(&mut self, pos: &BlockPos) -> Option<(&Arc<ChunkData>, VerticalInChunk)> {
+        let (chunk_pos, relative) = pos.chunk_and_chunk_relative_position();
+        let chunk = self.chunk_at(chunk_pos)?;
+        let cell = vertical_in(chunk, &relative);
+        Some((chunk, cell))
+    }
+
     pub(super) fn sky_light(&mut self, pos: &BlockPos) -> u8 {
         self.counters.bump(Counter::GetSky);
-        let Some(chunk) = self.chunk_for(pos) else {
-            return 0;
-        };
-        Self::sky_light_in(chunk, pos)
+        self.resolve(pos)
+            .map_or(0, |(chunk, cell)| Self::sky_light_at(chunk, cell))
     }
 
     pub(super) fn block_light(&mut self, pos: &BlockPos) -> Option<u8> {
         self.counters.bump(Counter::GetBlockLight);
-        let chunk = self.chunk_for(pos)?;
-        Self::block_light_in(chunk, pos)
+        self.resolve(pos)
+            .and_then(|(chunk, cell)| Self::block_light_at(chunk, cell))
+    }
+
+    /// The block state at `pos`, or void air if the chunk is not loaded.
+    pub(super) fn block_state(&mut self, pos: &BlockPos) -> &'static pumpkin_data::BlockState {
+        self.counters.bump(Counter::BlockState);
+        self.resolve(pos).map_or_else(
+            || pumpkin_data::Block::VOID_AIR.default_state,
+            |(chunk, cell)| Self::block_state_at(chunk, cell),
+        )
     }
 
     /// `false` if the write cannot land (chunk not loaded, Y outside the
     /// chunk height). Callers must not re-queue such positions.
     pub(super) fn set_sky_light(&mut self, pos: &BlockPos, light_level: u8) -> bool {
         self.counters.bump(Counter::SetSky);
-        self.chunk_for(pos)
-            .is_some_and(|chunk| Self::write_light(chunk, pos, light_level, false))
+        self.resolve(pos)
+            .is_some_and(|(chunk, cell)| Self::write_light_at(chunk, cell, light_level, false))
     }
 
     pub(super) fn set_block_light(&mut self, pos: &BlockPos, light_level: u8) -> bool {
         self.counters.bump(Counter::SetBlockLight);
-        self.chunk_for(pos)
-            .is_some_and(|chunk| Self::write_light(chunk, pos, light_level, true))
+        self.resolve(pos)
+            .is_some_and(|(chunk, cell)| Self::write_light_at(chunk, cell, light_level, true))
     }
 
-    // Resolving a chunk costs a `chunk_and_chunk_relative_position` (shifts and masks) plus
-    // the memo compare, even on a hit. A caller that touches the same position several
-    // times in a row; every propagation step reads "loaded?", the level, the opacity and
-    // then writes, this would pay that four times over for one and the same chunk, whose
-    // address obviously never changes in between.
-    //
-    // These take the resolved `&ChunkData` instead, so the caller resolves once, keeps the
-    // pointer in a register across all four, and the repeat work disappears. It matters
-    // most in `has_open_sky_above`, where the whole column is one chunk by construction and
-    // the loop runs up to the world height.
+    // The accessors below take an already resolved chunk and cell. A propagation step asks
+    // "loaded?", reads the light level, reads the opacity and then writes.
     //
     // They deliberately do not bump counters: the caller already did that when it resolved.
 
-    pub(super) fn block_state_in(
+    pub(super) fn block_state_at(
         chunk: &ChunkData,
-        pos: &BlockPos,
+        cell: VerticalInChunk,
     ) -> &'static pumpkin_data::BlockState {
-        let (_, relative) = pos.chunk_and_chunk_relative_position();
-        chunk
-            .section
-            .get_block_absolute_y(relative.x as usize, relative.y, relative.z as usize)
-            .unwrap_or(pumpkin_data::Block::VOID_AIR.default_state.id)
-            .to_state()
+        let VerticalInChunk::Inside {
+            section_index,
+            y_in_section,
+            local_x,
+            local_z,
+        } = cell
+        else {
+            return pumpkin_data::Block::VOID_AIR.default_state;
+        };
+        chunk.section.with_blocks(|sections| {
+            sections.get(section_index).map_or_else(
+                || pumpkin_data::Block::VOID_AIR.default_state,
+                |section| section.get(local_x, y_in_section, local_z).to_state(),
+            )
+        })
     }
 
-    pub(super) fn opacity_in(chunk: &ChunkData, pos: &BlockPos) -> u8 {
-        Self::block_state_in(chunk, pos).opacity
+    pub(super) fn opacity_at(chunk: &ChunkData, cell: VerticalInChunk) -> u8 {
+        Self::block_state_at(chunk, cell).opacity
     }
 
-    pub(super) fn sky_light_in(chunk: &ChunkData, pos: &BlockPos) -> u8 {
-        match vertical_in_chunk(chunk, pos) {
+    pub(super) fn sky_light_at(chunk: &ChunkData, cell: VerticalInChunk) -> u8 {
+        match cell {
             // Vanilla: sky below the world is 0, above the world is 15.
             VerticalInChunk::Below => 0,
             VerticalInChunk::Above => 15,
@@ -164,13 +188,13 @@ impl<'a> ChunkCursor<'a> {
         }
     }
 
-    pub(super) fn block_light_in(chunk: &ChunkData, pos: &BlockPos) -> Option<u8> {
+    pub(super) fn block_light_at(chunk: &ChunkData, cell: VerticalInChunk) -> Option<u8> {
         let VerticalInChunk::Inside {
             section_index,
             y_in_section,
             local_x,
             local_z,
-        } = vertical_in_chunk(chunk, pos)
+        } = cell
         else {
             return None;
         };
@@ -183,9 +207,9 @@ impl<'a> ChunkCursor<'a> {
             .map(|section| section.get(local_x, y_in_section, local_z))
     }
 
-    pub(super) fn write_light(
+    pub(super) fn write_light_at(
         chunk: &ChunkData,
-        pos: &BlockPos,
+        cell: VerticalInChunk,
         light_level: u8,
         block_light: bool,
     ) -> bool {
@@ -194,7 +218,7 @@ impl<'a> ChunkCursor<'a> {
             y_in_section,
             local_x,
             local_z,
-        } = vertical_in_chunk(chunk, pos)
+        } = cell
         else {
             return false;
         };
