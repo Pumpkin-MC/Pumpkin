@@ -3100,7 +3100,7 @@ impl LivingEntity {
         None
     }
 
-/// Applies the Soul Speed boots enchantment, mirroring the `minecraft:location_changed`
+    /// Applies the Soul Speed boots enchantment, mirroring the `minecraft:location_changed`
     /// effects of `minecraft:soul_speed`: a flat movement speed bonus plus full movement
     /// efficiency, which cancels the slowdown of the soul block underneath.
     ///
