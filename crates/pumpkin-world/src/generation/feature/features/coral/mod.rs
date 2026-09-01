@@ -1,7 +1,7 @@
 use crate::{generation::proto_chunk::GenerationCache, world::WorldPortalExt};
 use pumpkin_data::{
     Block, BlockDirection, BlockId, BlockState,
-    block_properties::{BlockProperties, EnumVariants, SeaPickleLikeProperties},
+    block_properties::{EnumVariants, SeaPickleLikeProperties},
     tag,
 };
 use pumpkin_util::{

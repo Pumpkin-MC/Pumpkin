@@ -215,7 +215,7 @@ impl CommandSender {
                     return None;
                 }
 
-                let props = CommandBlockLikeProperties::from_state_id(state_id, block);
+                let props = CommandBlockLikeProperties::from_state_id(state_id);
                 Some((0.0, command_block_y_rot(props.facing)))
             }
         }
@@ -335,9 +335,8 @@ impl CommandSender {
             Self::CommandBlock(command_entity, world) => {
                 let pos = command_entity.position;
 
-                let (block, state_id) = world.get_block_and_state_id(&pos);
-                let command_block_props =
-                    CommandBlockLikeProperties::from_state_id(state_id, block);
+                let (_block, state_id) = world.get_block_and_state_id(&pos);
+                let command_block_props = CommandBlockLikeProperties::from_state_id(state_id);
                 let facing = command_block_props.facing;
 
                 let horizontal_direction = match facing {

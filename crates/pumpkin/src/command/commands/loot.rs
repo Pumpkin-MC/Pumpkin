@@ -6,7 +6,6 @@ use crate::command::context::command_context::CommandContext;
 use crate::command::errors::error_types::CommandErrorType;
 use crate::command::node::dispatcher::CommandDispatcher;
 use crate::command::node::{CommandExecutor, CommandExecutorResult};
-use crate::world::loot::LootTableExt;
 use pumpkin_data::translation;
 use pumpkin_util::PermissionLvl;
 use pumpkin_util::permission::{Permission, PermissionDefault, PermissionRegistry};
@@ -42,7 +41,10 @@ enum Target {
 enum Source {
     Loot,
     Kill,
-    Mine { has_tool: bool },
+    Mine {
+        #[allow(dead_code)]
+        has_tool: bool,
+    },
 }
 
 struct LootExecutor {
@@ -100,11 +102,10 @@ impl CommandExecutor for LootExecutor {
                     format!("minecraft:{loot_table_str}")
                 };
 
-                let chest_table =
-                    pumpkin_data::chest_loot_table::get_chest_loot_table(&formatted_key);
-                if let Some(table) = chest_table {
+                let loot_table = pumpkin_data::loot_table::get_loot_table(&formatted_key);
+                if let Some(table) = loot_table {
                     let seed: i64 = rand::random();
-                    stacks = crate::world::loot::generate_chest_loot(table, seed);
+                    stacks = crate::world::loot::generate_loot(table, seed);
                 } else {
                     return Err(ERROR_INVALID_LOOT_TABLE
                         .create_without_context(TextComponent::text(loot_table_str.to_string())));
@@ -114,13 +115,12 @@ impl CommandExecutor for LootExecutor {
                 let target_entities = EntityArgumentType::get_entities(context, "target_entity")?;
                 let mut has_loot = false;
                 for entity in target_entities {
-                    if let Some(loot_table) = &entity.get_entity().entity_type.loot_table {
+                    let resource_name = entity.get_entity().entity_type.resource_name;
+                    let key = format!("minecraft:entities/{resource_name}");
+                    if let Some(loot_table) = pumpkin_data::loot_table::get_loot_table(&key) {
                         has_loot = true;
-                        let params = crate::world::loot::LootContextParameters {
-                            world_time: context.world().level_info.load().day_time as u64,
-                            ..Default::default()
-                        };
-                        stacks.extend(loot_table.get_loot(params));
+                        let seed: i64 = rand::random();
+                        stacks.extend(crate::world::loot::generate_loot(loot_table, seed));
                     }
                 }
                 if !has_loot {
@@ -129,32 +129,16 @@ impl CommandExecutor for LootExecutor {
                         .create_without_context(TextComponent::text(entity_name)));
                 }
             }
-            Source::Mine { has_tool } => {
+            Source::Mine { has_tool: _ } => {
                 let pos = BlockPosArgumentType::get_block_pos(context, "mine_pos")
                     .or_else(|_| BlockPosArgumentType::get_block_pos(context, "pos"))?;
                 let world = context.world();
                 let block = world.get_block(&pos);
+                let key = format!("minecraft:blocks/{}", block.name);
 
-                if let Some(loot_table) = &block.loot_table {
-                    let tool_item = if has_tool {
-                        let tool_str = StringArgumentType::get(context, "tool")?;
-                        let key = tool_str.strip_prefix("minecraft:").unwrap_or(tool_str);
-                        pumpkin_data::item::Item::from_registry_key(key)
-                    } else {
-                        None
-                    };
-
-                    let tool_stack =
-                        tool_item.map(|item| pumpkin_data::item_stack::ItemStack::new(1, item));
-
-                    let params = crate::world::loot::LootContextParameters {
-                        block_state: Some(world.get_block_state(&pos)),
-                        tool: tool_stack,
-                        world_time: world.level_info.load().day_time as u64,
-                        ..Default::default()
-                    };
-
-                    stacks.extend(loot_table.get_loot(params));
+                if let Some(loot_table) = pumpkin_data::loot_table::get_loot_table(&key) {
+                    let seed: i64 = rand::random();
+                    stacks.extend(crate::world::loot::generate_loot(loot_table, seed));
                 }
             }
         }

@@ -1,0 +1,7 @@
+{
+  "type": "minecraft:stone_depth",
+  "add_surface_depth": false,
+  "offset": 0,
+  "secondary_depth_range": 0,
+  "surface_type": "floor"
+}

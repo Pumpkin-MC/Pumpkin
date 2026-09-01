@@ -87,9 +87,9 @@ impl<'a> NoiseHeightSampler<'a> {
             let sample_start_y = (minimum_cell_y + cell_y) * vertical;
             for local_y in (0..vertical).rev() {
                 let y = sample_start_y + local_y;
-                noise.interpolate_y(f64::from(local_y) / f64::from(vertical));
-                noise.interpolate_x(f64::from(local_x) / f64::from(horizontal));
-                noise.interpolate_z(f64::from(local_z) / f64::from(horizontal));
+                noise.interpolate_y(local_y as f32 / vertical as f32);
+                noise.interpolate_x(local_x as f32 / horizontal as f32);
+                noise.interpolate_z(local_z as f32 / horizontal as f32);
                 let state = noise
                     .sample_block_state(
                         &self.generator.random_config.ore_random_deriver,

@@ -1,4 +1,3 @@
-use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::tag::Taggable;
 use pumpkin_data::{Block, BlockStateId, block_properties::SnowLikeProperties, item::Item, tag};
 use pumpkin_macros::pumpkin_block;
@@ -45,7 +44,7 @@ impl BlockBehaviour for LayeredSnowBlock {
                     return BlockActionResult::Pass;
                 }
 
-                let mut props = SnowLikeProperties::from_state_id(state_id, &Block::SNOW);
+                let mut props = SnowLikeProperties::from_state_id(state_id);
                 if props.layers >= 8 {
                     args.world.set_block_state(
                         pos,
@@ -112,6 +111,5 @@ fn can_place_at(block_accessor: &dyn BlockAccessor, position: &BlockPos) -> bool
             && shape.max.x >= 1.0
             && shape.min.z <= 0.0
             && shape.max.z >= 1.0
-    }) || (below_block == &Block::SNOW
-        && SnowLikeProperties::from_state_id(state.id, below_block).layers == 8)
+    }) || (below_block == &Block::SNOW && SnowLikeProperties::from_state_id(state.id).layers == 8)
 }

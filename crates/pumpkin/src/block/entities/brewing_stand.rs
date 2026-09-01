@@ -6,7 +6,6 @@ use std::sync::{
 };
 
 use crate::block::entities::PropertyDelegate;
-use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::potion_brewing::{ITEM_RECIPES, POTION_RECIPES};
@@ -527,9 +526,7 @@ impl crate::block::entities::BlockEntity for BrewingStandBlockEntity {
             let (block, state) = world.get_block_and_state(&self.position);
             // Use generated block properties helper to produce a new state id with the bits set
             let mut props =
-                pumpkin_data::block_properties::BrewingStandLikeProperties::from_state_id(
-                    state.id, block,
-                );
+                pumpkin_data::block_properties::BrewingStandLikeProperties::from_state_id(state.id);
             // Generated field names use raw identifiers for clarity
             props.r#has_bottle_0 = current[0];
             props.r#has_bottle_1 = current[1];

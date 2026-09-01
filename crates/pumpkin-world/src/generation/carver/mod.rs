@@ -16,9 +16,9 @@ use crate::generation::surface::{MaterialRuleContext, steep_material_condition};
 use pumpkin_data::block_state::BlockState;
 use pumpkin_data::carver::{CANYON, CAVE, CAVE_EXTRA_UNDERGROUND, NETHER_CAVE};
 use pumpkin_data::carver::{CarverAdditionalConfig, CarverConfig};
-use pumpkin_data::chunk_gen_settings::MaterialRule;
 use pumpkin_data::dimension::Dimension;
 use pumpkin_data::fluid::Fluid;
+use pumpkin_data::material_rule::MaterialRule;
 use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::random::{RandomGenerator, RandomImpl};
@@ -166,7 +166,7 @@ pub fn carve(chunk: &mut ProtoChunk, generator: &VanillaGenerator) {
         secondary_noise: &generator.terrain_cache.secondary_noise,
         terrain_builder: &generator.terrain_cache.terrain_builder,
         sea_level: generator.settings.sea_level,
-        surface_rule: &generator.settings.surface_rule,
+        surface_rule: generator.surface_rule,
         surface_height_sampler,
         carver_aquifer,
     };
@@ -199,7 +199,7 @@ pub fn carve(chunk: &mut ProtoChunk, generator: &VanillaGenerator) {
 
                 if should_carve(config, &mut carver_random) {
                     match config.additional {
-                        CarverAdditionalConfig::Cave(_) | CarverAdditionalConfig::NetherCave(_) => {
+                        CarverAdditionalConfig::Cave(_) => {
                             cave_carver.carve(
                                 config,
                                 &mut run,
@@ -294,28 +294,20 @@ fn carve_top_material(
 
 fn overworld_carve_state(
     run: &mut CarveRun,
-    config: &CarverConfig,
     x: i32,
     y: i32,
     z: i32,
 ) -> Option<(&'static BlockState, bool)> {
-    let lava_y = config.lava_level.get_y(
-        run.chunk.generation_bottom_y() as i16,
-        run.chunk.generation_height(),
-    );
-
-    if y <= lava_y {
-        return Some((run.ids.lava, false));
+    if let Some(aquifer) = run.ctx.carver_aquifer.as_mut() {
+        let result = aquifer.compute(&Vector3::new(x, y, z), 0.0);
+        result
+            .state
+            .map(|state| (state, result.should_schedule_fluid_update))
+    } else if y < run.ctx.sea_level {
+        Some((run.ids.lava, false))
+    } else {
+        Some((run.ids.air, false))
     }
-
-    let Some(aquifer) = run.ctx.carver_aquifer.as_mut() else {
-        return Some((run.ids.air, false));
-    };
-
-    let result = aquifer.compute(&Vector3::new(x, y, z), 0.0);
-    result
-        .state
-        .map(|state| (state, result.should_schedule_fluid_update))
 }
 
 fn place_carved_block(
@@ -411,7 +403,7 @@ fn with_carve_run_options<F>(
         secondary_noise: &generator.terrain_cache.secondary_noise,
         terrain_builder: &generator.terrain_cache.terrain_builder,
         sea_level: generator.settings.sea_level,
-        surface_rule: surface_rule.unwrap_or(&generator.settings.surface_rule),
+        surface_rule: surface_rule.unwrap_or(generator.surface_rule),
         surface_height_sampler,
         carver_aquifer,
     };
@@ -428,7 +420,7 @@ fn with_carve_run_options<F>(
 mod tests {
     use super::*;
     use pumpkin_data::Block;
-    use pumpkin_data::chunk_gen_settings::{
+    use pumpkin_data::material_rule::{
         BlockMaterialRule, ConditionMaterialRule, MaterialCondition, SequenceMaterialRule,
         WaterMaterialCondition,
     };

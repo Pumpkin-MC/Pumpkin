@@ -10,7 +10,6 @@ use crate::world::World;
 use pumpkin_data::Block;
 use pumpkin_data::BlockDirection;
 use pumpkin_data::BlockStateId;
-use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::block_properties::FarmlandLikeProperties;
 use pumpkin_data::tag;
 use pumpkin_data::tag::Taggable;
@@ -70,7 +69,7 @@ impl BlockBehaviour for FarmlandBlock {
             );
         } else {
             let state_id = args.world.get_block_state_id(args.position);
-            let mut props = FarmlandProperties::from_state_id(state_id, args.block);
+            let mut props = FarmlandProperties::from_state_id(state_id);
             if props.moisture == 0 {
                 if !args
                     .world

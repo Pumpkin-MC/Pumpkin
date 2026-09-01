@@ -1,14 +1,12 @@
 use crate::entity::player::Player;
 use crate::item::{ItemBehaviour, ItemMetadata};
 use crate::server::Server;
-use pumpkin_data::block_properties::BlockProperties;
-use pumpkin_data::block_properties::{
-    DoubleBlockHalf, OakDoorLikeProperties, PaleOakWoodLikeProperties,
-};
+use pumpkin_data::block_properties::{DoubleBlockHalf, OakDoorLikeProperties};
+use pumpkin_data::block_transformer::AXE;
 use pumpkin_data::item_stack::ItemStack;
+use pumpkin_data::sound::SoundCategory;
 use pumpkin_data::tag::Taggable;
-use pumpkin_data::{Block, tag};
-use pumpkin_data::{BlockDirection, BlockId};
+use pumpkin_data::{Block, BlockDirection, tag};
 use pumpkin_util::GameMode;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
@@ -28,214 +26,64 @@ impl ItemBehaviour for AxeItem {
         item: &mut ItemStack,
         player: &Player,
         location: BlockPos,
-        _face: BlockDirection,
+        face: BlockDirection,
         _cursor_pos: Vector3<f32>,
         block: &Block,
         _server: &Server,
     ) {
-        // I tried to follow mojang order of doing things.
         let world = player.world();
-        let replacement_block = try_use_axe(block.id);
-        // First we try to strip the block. by getting his equivalent and applying it the axis.
+        let get_block = |dx: i8, dy: i8, dz: i8| {
+            let check_pos = BlockPos(location.0 + Vector3::new(dx as i32, dy as i32, dz as i32));
+            world.get_block(&check_pos)
+        };
 
-        // If there is a strip equivalent.
-        let changed = replacement_block.is_some_and(|replacement| {
-            let new_block = replacement.to_block();
-            // Bamboo blocks are pillars too, but they are not part of the logs tag.
-            let new_state_id = if block.has_tag(&tag::Block::MINECRAFT_LOGS)
-                || block == &Block::BAMBOO_BLOCK
-            {
-                let log_information = world.get_block_state_id(&location);
-                let log_props = PaleOakWoodLikeProperties::from_state_id(log_information, block);
-                // create new properties for the new log.
-                let mut new_log_properties = PaleOakWoodLikeProperties::default(new_block);
-                new_log_properties.axis = log_props.axis;
+        let current_state_id = world.get_block_state_id(&location);
 
-                // create new properties for the new log.
-
-                // Set old axis to the new log.
-                new_log_properties.axis = log_props.axis;
-                new_log_properties.to_state_id(new_block)
+        if let Some(result) = AXE.transform(block, current_state_id, face, &get_block) {
+            if let Some(sound) = result.entry.sound {
+                world.play_sound(sound, SoundCategory::Blocks, &location.to_f64());
             }
-            // Let's check if It's a door
-            else if block.has_tag(&tag::Block::MINECRAFT_DOORS) {
-                // get block state of the old log.
-                // get block state of the old log.
-                let door_information = world.get_block_state_id(&location);
-                // get the door properties
-                let door_props = OakDoorLikeProperties::from_state_id(door_information, block);
+            if let Some(particle) = result.entry.particle {
+                world.sync_world_event(particle, location, 0);
+            }
+
+            if block.has_tag(&tag::Block::MINECRAFT_DOORS) {
+                let door_props = OakDoorLikeProperties::from_state_id(current_state_id);
                 let other_half_pos = match door_props.half {
                     DoubleBlockHalf::Lower => location.up(),
                     DoubleBlockHalf::Upper => location.down(),
                 };
                 let (other_block, other_state_id) = world.get_block_and_state_id(&other_half_pos);
                 if other_block == block {
-                    let other_new_state_id =
-                        crate::block::blocks::weathering_copper::with_properties_of(
-                            other_block,
-                            other_state_id,
-                            new_block,
-                        );
+                    let other_new_state_id = if result.target_block.states.len() <= 1 {
+                        result.target_block.default_state.id
+                    } else if let Some(other_props) = other_block.properties(other_state_id) {
+                        let props = other_props.to_props();
+                        result
+                            .target_block
+                            .from_properties(&props)
+                            .to_state_id(result.target_block)
+                    } else {
+                        result.target_block.default_state.id
+                    };
                     world.set_block_state(
                         &other_half_pos,
                         other_new_state_id,
                         BlockFlags::NOTIFY_ALL,
                     );
                 }
-                crate::block::blocks::weathering_copper::with_properties_of(
-                    block,
-                    door_information,
-                    new_block,
-                )
-            } else {
-                crate::block::blocks::weathering_copper::with_properties_of(
-                    block,
-                    world.get_block_state_id(&location),
-                    new_block,
-                )
-            };
-            world.set_block_state(&location, new_state_id, BlockFlags::NOTIFY_ALL);
-            true
-        });
+            }
 
-        if changed && player.gamemode.load() != GameMode::Creative {
-            // TODO: Handle DamageResult::Broken to broadcast item break and update player slot.
-            let _ = item.damage_item(1);
+            world.set_block_state(&location, result.new_state_id, BlockFlags::NOTIFY_ALL);
+
+            if player.gamemode.load() != GameMode::Creative {
+                // TODO: Handle DamageResult::Broken to broadcast item break and update player slot.
+                let _ = item.damage_item(i32::from(result.entry.item_damage_per_use));
+            }
         }
     }
 
     fn as_any(&self) -> &dyn std::any::Any {
         self
-    }
-}
-const fn try_use_axe(id: BlockId) -> Option<BlockId> {
-    // Trying to get the strip equivalent
-    if let Some(block) = get_stripped_equivalent(id) {
-        return Some(block);
-    }
-    // Else decrease the level of oxidation
-    if let Some(block) = get_deoxidized_equivalent(id) {
-        return Some(block);
-    }
-    // Else unwax the block
-    get_unwaxed_equivalent(id)
-}
-
-const fn get_stripped_equivalent(id: BlockId) -> Option<BlockId> {
-    match id {
-        BlockId::OAK_LOG => Some(BlockId::STRIPPED_OAK_LOG),
-        BlockId::SPRUCE_LOG => Some(BlockId::STRIPPED_SPRUCE_LOG),
-        BlockId::BIRCH_LOG => Some(BlockId::STRIPPED_BIRCH_LOG),
-        BlockId::JUNGLE_LOG => Some(BlockId::STRIPPED_JUNGLE_LOG),
-        BlockId::ACACIA_LOG => Some(BlockId::STRIPPED_ACACIA_LOG),
-        BlockId::DARK_OAK_LOG => Some(BlockId::STRIPPED_DARK_OAK_LOG),
-        BlockId::MANGROVE_LOG => Some(BlockId::STRIPPED_MANGROVE_LOG),
-        BlockId::CHERRY_LOG => Some(BlockId::STRIPPED_CHERRY_LOG),
-        BlockId::PALE_OAK_LOG => Some(BlockId::STRIPPED_PALE_OAK_LOG),
-        BlockId::OAK_WOOD => Some(BlockId::STRIPPED_OAK_WOOD),
-        BlockId::SPRUCE_WOOD => Some(BlockId::STRIPPED_SPRUCE_WOOD),
-        BlockId::BIRCH_WOOD => Some(BlockId::STRIPPED_BIRCH_WOOD),
-        BlockId::JUNGLE_WOOD => Some(BlockId::STRIPPED_JUNGLE_WOOD),
-        BlockId::ACACIA_WOOD => Some(BlockId::STRIPPED_ACACIA_WOOD),
-        BlockId::DARK_OAK_WOOD => Some(BlockId::STRIPPED_DARK_OAK_WOOD),
-        BlockId::MANGROVE_WOOD => Some(BlockId::STRIPPED_MANGROVE_WOOD),
-        BlockId::CHERRY_WOOD => Some(BlockId::STRIPPED_CHERRY_WOOD),
-        BlockId::PALE_OAK_WOOD => Some(BlockId::STRIPPED_PALE_OAK_WOOD),
-        BlockId::CRIMSON_STEM => Some(BlockId::STRIPPED_CRIMSON_STEM),
-        BlockId::WARPED_STEM => Some(BlockId::STRIPPED_WARPED_STEM),
-        BlockId::CRIMSON_HYPHAE => Some(BlockId::STRIPPED_CRIMSON_HYPHAE),
-        BlockId::WARPED_HYPHAE => Some(BlockId::STRIPPED_WARPED_HYPHAE),
-        BlockId::BAMBOO_BLOCK => Some(BlockId::STRIPPED_BAMBOO_BLOCK),
-        _ => None,
-    }
-}
-
-const fn get_deoxidized_equivalent(id: BlockId) -> Option<BlockId> {
-    match id {
-        BlockId::OXIDIZED_COPPER => Some(BlockId::WEATHERED_COPPER),
-        BlockId::WEATHERED_COPPER => Some(BlockId::EXPOSED_COPPER),
-        BlockId::EXPOSED_COPPER => Some(BlockId::COPPER_BLOCK),
-        BlockId::OXIDIZED_CHISELED_COPPER => Some(BlockId::WEATHERED_CHISELED_COPPER),
-        BlockId::WEATHERED_CHISELED_COPPER => Some(BlockId::EXPOSED_CHISELED_COPPER),
-        BlockId::EXPOSED_CHISELED_COPPER => Some(BlockId::CHISELED_COPPER),
-        BlockId::OXIDIZED_COPPER_GRATE => Some(BlockId::WEATHERED_COPPER_GRATE),
-        BlockId::WEATHERED_COPPER_GRATE => Some(BlockId::EXPOSED_COPPER_GRATE),
-        BlockId::EXPOSED_COPPER_GRATE => Some(BlockId::COPPER_GRATE),
-        BlockId::OXIDIZED_CUT_COPPER => Some(BlockId::WEATHERED_CUT_COPPER),
-        BlockId::WEATHERED_CUT_COPPER => Some(BlockId::EXPOSED_CUT_COPPER),
-        BlockId::EXPOSED_CUT_COPPER => Some(BlockId::CUT_COPPER),
-        BlockId::OXIDIZED_CUT_COPPER_STAIRS => Some(BlockId::WEATHERED_CUT_COPPER_STAIRS),
-        BlockId::WEATHERED_CUT_COPPER_STAIRS => Some(BlockId::EXPOSED_CUT_COPPER_STAIRS),
-        BlockId::EXPOSED_CUT_COPPER_STAIRS => Some(BlockId::CUT_COPPER_STAIRS),
-        BlockId::OXIDIZED_CUT_COPPER_SLAB => Some(BlockId::WEATHERED_CUT_COPPER_SLAB),
-        BlockId::WEATHERED_CUT_COPPER_SLAB => Some(BlockId::EXPOSED_CUT_COPPER_SLAB),
-        BlockId::EXPOSED_CUT_COPPER_SLAB => Some(BlockId::CUT_COPPER_SLAB),
-        BlockId::OXIDIZED_COPPER_BULB => Some(BlockId::WEATHERED_COPPER_BULB),
-        BlockId::WEATHERED_COPPER_BULB => Some(BlockId::EXPOSED_COPPER_BULB),
-        BlockId::EXPOSED_COPPER_BULB => Some(BlockId::COPPER_BULB),
-        BlockId::OXIDIZED_COPPER_DOOR => Some(BlockId::WEATHERED_COPPER_DOOR),
-        BlockId::WEATHERED_COPPER_DOOR => Some(BlockId::EXPOSED_COPPER_DOOR),
-        BlockId::EXPOSED_COPPER_DOOR => Some(BlockId::COPPER_DOOR),
-        BlockId::OXIDIZED_COPPER_TRAPDOOR => Some(BlockId::WEATHERED_COPPER_TRAPDOOR),
-        BlockId::WEATHERED_COPPER_TRAPDOOR => Some(BlockId::EXPOSED_COPPER_TRAPDOOR),
-        BlockId::EXPOSED_COPPER_TRAPDOOR => Some(BlockId::COPPER_TRAPDOOR),
-        BlockId::OXIDIZED_COPPER_LANTERN => Some(BlockId::WEATHERED_COPPER_LANTERN),
-        BlockId::WEATHERED_COPPER_LANTERN => Some(BlockId::EXPOSED_COPPER_LANTERN),
-        BlockId::EXPOSED_COPPER_LANTERN => Some(BlockId::COPPER_LANTERN),
-        BlockId::OXIDIZED_COPPER_CHEST => Some(BlockId::WEATHERED_COPPER_CHEST),
-        BlockId::WEATHERED_COPPER_CHEST => Some(BlockId::EXPOSED_COPPER_CHEST),
-        BlockId::EXPOSED_COPPER_CHEST => Some(BlockId::COPPER_CHEST),
-        BlockId::OXIDIZED_COPPER_GOLEM_STATUE => Some(BlockId::WEATHERED_COPPER_GOLEM_STATUE),
-        BlockId::WEATHERED_COPPER_GOLEM_STATUE => Some(BlockId::EXPOSED_COPPER_GOLEM_STATUE),
-        BlockId::EXPOSED_COPPER_GOLEM_STATUE => Some(BlockId::COPPER_GOLEM_STATUE),
-        BlockId::OXIDIZED_COPPER_BARS => Some(BlockId::WEATHERED_COPPER_BARS),
-        BlockId::WEATHERED_COPPER_BARS => Some(BlockId::EXPOSED_COPPER_BARS),
-        BlockId::EXPOSED_COPPER_BARS => Some(BlockId::COPPER_BARS),
-        BlockId::OXIDIZED_COPPER_CHAIN => Some(BlockId::WEATHERED_COPPER_CHAIN),
-        BlockId::WEATHERED_COPPER_CHAIN => Some(BlockId::EXPOSED_COPPER_CHAIN),
-        BlockId::EXPOSED_COPPER_CHAIN => Some(BlockId::COPPER_CHAIN),
-        _ => None,
-    }
-}
-
-const fn get_unwaxed_equivalent(id: BlockId) -> Option<BlockId> {
-    match id {
-        BlockId::WAXED_OXIDIZED_COPPER => Some(BlockId::OXIDIZED_COPPER),
-        BlockId::WAXED_WEATHERED_COPPER => Some(BlockId::WEATHERED_COPPER),
-        BlockId::WAXED_EXPOSED_COPPER => Some(BlockId::EXPOSED_COPPER),
-        BlockId::WAXED_COPPER_BLOCK => Some(BlockId::COPPER_BLOCK),
-        BlockId::WAXED_OXIDIZED_CHISELED_COPPER => Some(BlockId::OXIDIZED_CHISELED_COPPER),
-        BlockId::WAXED_WEATHERED_CHISELED_COPPER => Some(BlockId::WEATHERED_CHISELED_COPPER),
-        BlockId::WAXED_EXPOSED_CHISELED_COPPER => Some(BlockId::EXPOSED_CHISELED_COPPER),
-        BlockId::WAXED_CHISELED_COPPER => Some(BlockId::CHISELED_COPPER),
-        BlockId::WAXED_COPPER_GRATE => Some(BlockId::COPPER_GRATE),
-        BlockId::WAXED_OXIDIZED_COPPER_GRATE => Some(BlockId::OXIDIZED_COPPER_GRATE),
-        BlockId::WAXED_WEATHERED_COPPER_GRATE => Some(BlockId::WEATHERED_COPPER_GRATE),
-        BlockId::WAXED_EXPOSED_COPPER_GRATE => Some(BlockId::EXPOSED_COPPER_GRATE),
-        BlockId::WAXED_OXIDIZED_CUT_COPPER => Some(BlockId::OXIDIZED_CUT_COPPER),
-        BlockId::WAXED_WEATHERED_CUT_COPPER => Some(BlockId::WEATHERED_CUT_COPPER),
-        BlockId::WAXED_EXPOSED_CUT_COPPER => Some(BlockId::EXPOSED_CUT_COPPER),
-        BlockId::WAXED_CUT_COPPER => Some(BlockId::CUT_COPPER),
-        BlockId::WAXED_OXIDIZED_CUT_COPPER_STAIRS => Some(BlockId::OXIDIZED_CUT_COPPER_STAIRS),
-        BlockId::WAXED_WEATHERED_CUT_COPPER_STAIRS => Some(BlockId::WEATHERED_CUT_COPPER_STAIRS),
-        BlockId::WAXED_EXPOSED_CUT_COPPER_STAIRS => Some(BlockId::EXPOSED_CUT_COPPER_STAIRS),
-        BlockId::WAXED_CUT_COPPER_STAIRS => Some(BlockId::CUT_COPPER_STAIRS),
-        BlockId::WAXED_OXIDIZED_CUT_COPPER_SLAB => Some(BlockId::OXIDIZED_CUT_COPPER_SLAB),
-        BlockId::WAXED_WEATHERED_CUT_COPPER_SLAB => Some(BlockId::WEATHERED_CUT_COPPER_SLAB),
-        BlockId::WAXED_EXPOSED_CUT_COPPER_SLAB => Some(BlockId::EXPOSED_CUT_COPPER_SLAB),
-        BlockId::WAXED_CUT_COPPER_SLAB => Some(BlockId::CUT_COPPER_SLAB),
-        BlockId::WAXED_OXIDIZED_COPPER_BULB => Some(BlockId::OXIDIZED_COPPER_BULB),
-        BlockId::WAXED_WEATHERED_COPPER_BULB => Some(BlockId::WEATHERED_COPPER_BULB),
-        BlockId::WAXED_EXPOSED_COPPER_BULB => Some(BlockId::EXPOSED_COPPER_BULB),
-        BlockId::WAXED_COPPER_BULB => Some(BlockId::COPPER_BULB),
-        BlockId::WAXED_OXIDIZED_COPPER_DOOR => Some(BlockId::OXIDIZED_COPPER_DOOR),
-        BlockId::WAXED_WEATHERED_COPPER_DOOR => Some(BlockId::WEATHERED_COPPER_DOOR),
-        BlockId::WAXED_EXPOSED_COPPER_DOOR => Some(BlockId::EXPOSED_COPPER_DOOR),
-        BlockId::WAXED_COPPER_DOOR => Some(BlockId::COPPER_DOOR),
-        BlockId::WAXED_OXIDIZED_COPPER_TRAPDOOR => Some(BlockId::OXIDIZED_COPPER_TRAPDOOR),
-        BlockId::WAXED_WEATHERED_COPPER_TRAPDOOR => Some(BlockId::WEATHERED_COPPER_TRAPDOOR),
-        BlockId::WAXED_EXPOSED_COPPER_TRAPDOOR => Some(BlockId::EXPOSED_COPPER_TRAPDOOR),
-        BlockId::WAXED_COPPER_TRAPDOOR => Some(BlockId::COPPER_TRAPDOOR),
-        _ => None,
     }
 }

@@ -1,0 +1,19 @@
+{
+  "type": "minecraft:sequence",
+  "sequence": [
+    {
+      "type": "minecraft:condition",
+      "if_true": {
+        "type": "minecraft:noise_threshold",
+        "max_threshold": 0.05,
+        "min_threshold": -0.05,
+        "noise": "minecraft:gravel"
+      },
+      "then_run": "minecraft:overworld/gravel_or_stone_if_ceiling"
+    },
+    {
+      "type": "minecraft:block",
+      "result_state": "minecraft:stone"
+    }
+  ]
+}

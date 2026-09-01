@@ -10,13 +10,13 @@ use pumpkin_util::math::{lerp, lerp2, lerp3, vector3::Vector3};
 use crate::generation::{biome_coords, positions::chunk_pos};
 
 thread_local! {
-    static F64_BUFFER_POOL: RefCell<Vec<Vec<f64>>> = const {
+    static F64_BUFFER_POOL: RefCell<Vec<Vec<f32>>> = const {
         RefCell::new(Vec::new())
     };
 }
 
 #[inline]
-fn get_buffer(len: usize) -> Box<[f64]> {
+fn get_buffer(len: usize) -> Box<[f32]> {
     F64_BUFFER_POOL.with(|pool| {
         let mut buffers = pool.borrow_mut();
         buffers.pop().map_or_else(
@@ -34,7 +34,7 @@ fn get_buffer(len: usize) -> Box<[f64]> {
 }
 
 #[inline]
-fn recycle_buffer(buf: Box<[f64]>) {
+fn recycle_buffer(buf: Box<[f32]>) {
     F64_BUFFER_POOL.with(|pool| {
         pool.borrow_mut().push(Vec::from(buf));
     });
@@ -50,9 +50,9 @@ pub struct WrapperData {
     horizontal_cell_block_count: usize,
     vertical_cell_block_count: usize,
 
-    x_delta: f64,
-    y_delta: f64,
-    z_delta: f64,
+    x_delta: f32,
+    y_delta: f32,
+    z_delta: f32,
 }
 
 impl WrapperData {
@@ -70,9 +70,9 @@ impl WrapperData {
             cell_z_block_position,
             horizontal_cell_block_count,
             vertical_cell_block_count,
-            x_delta: cell_x_block_position as f64 / horizontal_cell_block_count as f64,
-            y_delta: cell_y_block_position as f64 / vertical_cell_block_count as f64,
-            z_delta: cell_z_block_position as f64 / horizontal_cell_block_count as f64,
+            x_delta: cell_x_block_position as f32 / horizontal_cell_block_count as f32,
+            y_delta: cell_y_block_position as f32 / vertical_cell_block_count as f32,
+            z_delta: cell_z_block_position as f32 / horizontal_cell_block_count as f32,
         }
     }
 
@@ -84,17 +84,17 @@ impl WrapperData {
     ) {
         if cell_x_block_position != self.cell_x_block_position {
             self.cell_x_block_position = cell_x_block_position;
-            self.x_delta = cell_x_block_position as f64 / self.horizontal_cell_block_count as f64;
+            self.x_delta = cell_x_block_position as f32 / self.horizontal_cell_block_count as f32;
         }
 
         if cell_y_block_position != self.cell_y_block_position {
             self.cell_y_block_position = cell_y_block_position;
-            self.y_delta = cell_y_block_position as f64 / self.vertical_cell_block_count as f64;
+            self.y_delta = cell_y_block_position as f32 / self.vertical_cell_block_count as f32;
         }
 
         if cell_z_block_position != self.cell_z_block_position {
             self.cell_z_block_position = cell_z_block_position;
-            self.z_delta = cell_z_block_position as f64 / self.horizontal_cell_block_count as f64;
+            self.z_delta = cell_z_block_position as f32 / self.horizontal_cell_block_count as f32;
         }
     }
 }
@@ -198,27 +198,27 @@ pub struct DensityInterpolator {
 
     // y-z plane buffers to be interpolated together, each of these values is that of the cell, not
     // the block
-    pub(crate) start_buffer: Box<[f64]>,
-    pub(crate) end_buffer: Box<[f64]>,
+    pub(crate) start_buffer: Box<[f32]>,
+    pub(crate) end_buffer: Box<[f32]>,
 
-    first_pass: [f64; 8],
-    second_pass: [f64; 4],
-    third_pass: [f64; 2],
-    pub(crate) result: f64,
+    first_pass: [f32; 8],
+    second_pass: [f32; 4],
+    third_pass: [f32; 2],
+    pub(crate) result: f32,
 
     pub(crate) vertical_cell_count: usize,
-    min_value: f64,
-    max_value: f64,
+    min_value: f32,
+    max_value: f32,
 }
 
 impl NoiseFunctionComponentRange for DensityInterpolator {
     #[inline]
-    fn min(&self) -> f64 {
+    fn min(&self) -> f32 {
         self.min_value
     }
 
     #[inline]
-    fn max(&self) -> f64 {
+    fn max(&self) -> f32 {
         self.max_value
     }
 }
@@ -227,8 +227,8 @@ impl DensityInterpolator {
     #[must_use]
     pub fn new(
         input_index: usize,
-        min_value: f64,
-        max_value: f64,
+        min_value: f32,
+        max_value: f32,
         builder_options: &ChunkNoiseFunctionBuilderOptions,
     ) -> Self {
         // These are all dummy values to be populated when sampling values
@@ -284,7 +284,7 @@ impl DensityInterpolator {
             self.end_buffer[self.yz_to_buf_index(cell_y_position + 1, cell_z_position + 1)];
     }
 
-    pub(crate) fn interpolate_y(&mut self, delta: f64) {
+    pub(crate) fn interpolate_y(&mut self, delta: f32) {
         self.second_pass[0] = lerp(delta, self.first_pass[0], self.first_pass[2]);
         self.second_pass[2] = lerp(delta, self.first_pass[4], self.first_pass[6]);
         self.second_pass[1] = lerp(delta, self.first_pass[1], self.first_pass[3]);
@@ -292,13 +292,13 @@ impl DensityInterpolator {
     }
 
     #[inline]
-    pub(crate) fn interpolate_x(&mut self, delta: f64) {
+    pub(crate) fn interpolate_x(&mut self, delta: f32) {
         self.third_pass[0] = lerp(delta, self.second_pass[0], self.second_pass[2]);
         self.third_pass[1] = lerp(delta, self.second_pass[1], self.second_pass[3]);
     }
 
     #[inline]
-    pub(crate) fn interpolate_z(&mut self, delta: f64) {
+    pub(crate) fn interpolate_z(&mut self, delta: f32) {
         self.result = lerp(delta, self.third_pass[0], self.third_pass[1]);
     }
 
@@ -327,7 +327,7 @@ impl MutableChunkNoiseFunctionComponentImpl for DensityInterpolator {
         component_stack: &mut [ChunkNoiseFunctionComponent],
         pos: &Vector3<i32>,
         sample_options: &ChunkNoiseFunctionSampleOptions,
-    ) -> f64 {
+    ) -> f32 {
         match &sample_options.action {
             SampleAction::CellCaches(WrapperData {
                 x_delta,
@@ -364,12 +364,12 @@ impl MutableChunkNoiseFunctionComponentImpl for DensityInterpolator {
     fn fill(
         &mut self,
         component_stack: &mut [ChunkNoiseFunctionComponent],
-        array: &mut [f64],
+        array: &mut [f32],
         mapper: &impl IndexToNoisePos,
         sample_options: &mut ChunkNoiseFunctionSampleOptions,
     ) {
         if sample_options.populating_caches {
-            let mut cached_xy_delta: Option<(f64, f64)> = None;
+            let mut cached_xy_delta: Option<(f32, f32)> = None;
             let mut cached_a = 0.0;
             let mut cached_b = 0.0;
 
@@ -424,23 +424,23 @@ impl MutableChunkNoiseFunctionComponentImpl for DensityInterpolator {
 pub struct FlatCache {
     pub(crate) input_index: usize,
 
-    pub(crate) cache: Box<[f64]>,
+    pub(crate) cache: Box<[f32]>,
     start_biome_x: i32,
     start_biome_z: i32,
     horizontal_biome_end: usize,
 
-    min_value: f64,
-    max_value: f64,
+    min_value: f32,
+    max_value: f32,
 }
 
 impl NoiseFunctionComponentRange for FlatCache {
     #[inline]
-    fn min(&self) -> f64 {
+    fn min(&self) -> f32 {
         self.min_value
     }
 
     #[inline]
-    fn max(&self) -> f64 {
+    fn max(&self) -> f32 {
         self.max_value
     }
 }
@@ -451,7 +451,7 @@ impl MutableChunkNoiseFunctionComponentImpl for FlatCache {
         component_stack: &mut [ChunkNoiseFunctionComponent],
         pos: &Vector3<i32>,
         sample_options: &ChunkNoiseFunctionSampleOptions,
-    ) -> f64 {
+    ) -> f32 {
         let absolute_biome_x_position = biome_coords::from_block(pos.x);
         let absolute_biome_z_position = biome_coords::from_block(pos.z);
 
@@ -491,8 +491,8 @@ impl FlatCache {
     #[must_use]
     pub fn new(
         input_index: usize,
-        min_value: f64,
-        max_value: f64,
+        min_value: f32,
+        max_value: f32,
         start_biome_x: i32,
         start_biome_z: i32,
         horizontal_biome_end: usize,
@@ -522,20 +522,20 @@ impl FlatCache {
 pub struct Cache2D {
     pub(crate) input_index: usize,
     last_sample_column: u64,
-    last_sample_result: f64,
+    last_sample_result: f32,
 
-    min_value: f64,
-    max_value: f64,
+    min_value: f32,
+    max_value: f32,
 }
 
 impl NoiseFunctionComponentRange for Cache2D {
     #[inline]
-    fn min(&self) -> f64 {
+    fn min(&self) -> f32 {
         self.min_value
     }
 
     #[inline]
-    fn max(&self) -> f64 {
+    fn max(&self) -> f32 {
         self.max_value
     }
 }
@@ -546,7 +546,7 @@ impl MutableChunkNoiseFunctionComponentImpl for Cache2D {
         component_stack: &mut [ChunkNoiseFunctionComponent],
         pos: &Vector3<i32>,
         sample_options: &ChunkNoiseFunctionSampleOptions,
-    ) -> f64 {
+    ) -> f32 {
         let packed_column = chunk_pos::packed(pos.x as u64, pos.z as u64);
         if packed_column == self.last_sample_column {
             self.last_sample_result
@@ -566,7 +566,7 @@ impl MutableChunkNoiseFunctionComponentImpl for Cache2D {
 
 impl Cache2D {
     #[must_use]
-    pub fn new(input_index: usize, min_value: f64, max_value: f64) -> Self {
+    pub fn new(input_index: usize, min_value: f32, max_value: f32) -> Self {
         Self {
             input_index,
             // I know this is because there's is definitely world coords that are this marker, but this
@@ -583,22 +583,22 @@ pub struct CacheOnce {
     pub(crate) input_index: usize,
     cache_result_unique_id: u64,
     cache_fill_unique_id: u64,
-    last_sample_result: f64,
+    last_sample_result: f32,
 
-    cache: Box<[f64]>,
+    cache: Box<[f32]>,
 
-    min_value: f64,
-    max_value: f64,
+    min_value: f32,
+    max_value: f32,
 }
 
 impl NoiseFunctionComponentRange for CacheOnce {
     #[inline]
-    fn min(&self) -> f64 {
+    fn min(&self) -> f32 {
         self.min_value
     }
 
     #[inline]
-    fn max(&self) -> f64 {
+    fn max(&self) -> f32 {
         self.max_value
     }
 }
@@ -609,7 +609,7 @@ impl MutableChunkNoiseFunctionComponentImpl for CacheOnce {
         component_stack: &mut [ChunkNoiseFunctionComponent],
         pos: &Vector3<i32>,
         sample_options: &ChunkNoiseFunctionSampleOptions,
-    ) -> f64 {
+    ) -> f32 {
         match sample_options.action {
             SampleAction::CellCaches(_) => {
                 if self.cache_fill_unique_id == sample_options.cache_fill_unique_id
@@ -641,7 +641,7 @@ impl MutableChunkNoiseFunctionComponentImpl for CacheOnce {
     fn fill(
         &mut self,
         component_stack: &mut [ChunkNoiseFunctionComponent],
-        array: &mut [f64],
+        array: &mut [f32],
         mapper: &impl IndexToNoisePos,
         sample_options: &mut ChunkNoiseFunctionSampleOptions,
     ) {
@@ -671,7 +671,7 @@ impl MutableChunkNoiseFunctionComponentImpl for CacheOnce {
 
 impl CacheOnce {
     #[must_use]
-    pub fn new(input_index: usize, min_value: f64, max_value: f64) -> Self {
+    pub fn new(input_index: usize, min_value: f32, max_value: f32) -> Self {
         Self {
             input_index,
             // Make these max, just to be different from the overall default of 0
@@ -687,20 +687,20 @@ impl CacheOnce {
 
 pub struct CellCache {
     pub(crate) input_index: usize,
-    pub(crate) cache: Box<[f64]>,
+    pub(crate) cache: Box<[f32]>,
 
-    min_value: f64,
-    max_value: f64,
+    min_value: f32,
+    max_value: f32,
 }
 
 impl NoiseFunctionComponentRange for CellCache {
     #[inline]
-    fn min(&self) -> f64 {
+    fn min(&self) -> f32 {
         self.min_value
     }
 
     #[inline]
-    fn max(&self) -> f64 {
+    fn max(&self) -> f32 {
         self.max_value
     }
 }
@@ -711,7 +711,7 @@ impl MutableChunkNoiseFunctionComponentImpl for CellCache {
         component_stack: &mut [ChunkNoiseFunctionComponent],
         pos: &Vector3<i32>,
         sample_options: &ChunkNoiseFunctionSampleOptions,
-    ) -> f64 {
+    ) -> f32 {
         match &sample_options.action {
             SampleAction::CellCaches(WrapperData {
                 cell_x_block_position,
@@ -742,8 +742,8 @@ impl CellCache {
     #[must_use]
     pub fn new(
         input_index: usize,
-        min_value: f64,
-        max_value: f64,
+        min_value: f32,
+        max_value: f32,
         build_options: &ChunkNoiseFunctionBuilderOptions,
     ) -> Self {
         Self {
@@ -770,7 +770,7 @@ pub enum ChunkSpecificNoiseFunctionComponent {
 
 impl NoiseFunctionComponentRange for ChunkSpecificNoiseFunctionComponent {
     #[inline]
-    fn min(&self) -> f64 {
+    fn min(&self) -> f32 {
         match self {
             Self::DensityInterpolator(d) => d.min(),
             Self::FlatCache(f) => f.min(),
@@ -782,7 +782,7 @@ impl NoiseFunctionComponentRange for ChunkSpecificNoiseFunctionComponent {
     }
 
     #[inline]
-    fn max(&self) -> f64 {
+    fn max(&self) -> f32 {
         match self {
             Self::DensityInterpolator(d) => d.max(),
             Self::FlatCache(f) => f.max(),
@@ -801,7 +801,7 @@ impl MutableChunkNoiseFunctionComponentImpl for ChunkSpecificNoiseFunctionCompon
         component_stack: &mut [ChunkNoiseFunctionComponent],
         pos: &Vector3<i32>,
         sample_options: &ChunkNoiseFunctionSampleOptions,
-    ) -> f64 {
+    ) -> f32 {
         match self {
             Self::DensityInterpolator(d) => d.sample(component_stack, pos, sample_options),
             Self::FlatCache(f) => f.sample(component_stack, pos, sample_options),
@@ -816,7 +816,7 @@ impl MutableChunkNoiseFunctionComponentImpl for ChunkSpecificNoiseFunctionCompon
     fn fill(
         &mut self,
         component_stack: &mut [ChunkNoiseFunctionComponent],
-        array: &mut [f64],
+        array: &mut [f32],
         mapper: &impl IndexToNoisePos,
         sample_options: &mut ChunkNoiseFunctionSampleOptions,
     ) {

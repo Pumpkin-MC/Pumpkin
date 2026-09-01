@@ -95,10 +95,11 @@ impl ItemBehaviour for TridentItem {
         let trident = TridentEntity::new_shot(
             entity,
             player.get_entity(),
-            stack_guard,
+            stack_guard.clone(),
             ArrowPickup::Allowed,
         );
         trident.set_velocity_from_rotation(pitch, yaw, 0.0, 2.5, 1.0);
+        trident.apply_on_projectile_spawned(&stack_guard);
         world.spawn_entity(Arc::new(trident));
 
         world.play_sound(

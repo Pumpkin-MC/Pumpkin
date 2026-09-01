@@ -5,7 +5,7 @@ use crate::{
     item::{ItemBehaviour, ItemMetadata},
 };
 use pumpkin_data::{
-    Block, BlockDirection, BlockStateId,
+    Block, BlockDirection,
     dimension::Dimension,
     fluid::Fluid,
     item::Item,
@@ -69,39 +69,6 @@ fn get_start_and_end_pos(player: &Player) -> (Vector3<f64>, Vector3<f64>) {
     (start_pos, end_pos)
 }
 
-fn waterlogged_check(block: &Block, state: BlockStateId) -> Option<bool> {
-    block.properties(state).and_then(|properties| {
-        properties
-            .to_props()
-            .into_iter()
-            .find(|p| p.0 == "waterlogged")
-            .map(|(_, value)| value == "true")
-    })
-}
-
-fn is_waterlogged(block: &Block, state: BlockStateId) -> bool {
-    waterlogged_check(block, state).unwrap_or(false)
-}
-
-fn set_waterlogged(block: &Block, state: BlockStateId, waterlogged: bool) -> BlockStateId {
-    let Some(props) = block.properties(state) else {
-        return state;
-    };
-    let original_props = &props.to_props();
-    let waterlogged = waterlogged.to_string();
-    let props: Vec<(&str, &str)> = original_props
-        .iter()
-        .map(|(key, value)| {
-            if *key == "waterlogged" {
-                ("waterlogged", waterlogged.as_str())
-            } else {
-                (*key, *value)
-            }
-        })
-        .collect();
-    block.from_properties(&props).to_state_id(block)
-}
-
 fn give_player_bucket_item(player: &Player, item: &'static Item) {
     if player.gamemode.load() == GameMode::Creative {
         let has_item = {
@@ -154,19 +121,19 @@ pub(crate) fn try_pickup_fluid_at(
         return Some(&Item::POWDER_SNOW_BUCKET);
     }
 
-    if is_waterlogged(block, state) {
-        let state_id = set_waterlogged(block, state, false);
-        world.set_block_state(&block_pos, state_id, BlockFlags::NOTIFY_NEIGHBORS);
+    if block.is_waterlogged(state) {
+        let state_id = block.set_waterlogged(state, false).unwrap_or(state);
+        world.set_block_state(&block_pos, state_id, BlockFlags::NOTIFY_ALL);
         world.schedule_fluid_tick(&Fluid::WATER, block_pos, 5, TickPriority::Normal);
         return Some(&Item::WATER_BUCKET);
     }
 
     if state == Block::LAVA.default_state.id || state == Block::WATER.default_state.id {
-        world.break_block(&block_pos, None, BlockFlags::NOTIFY_NEIGHBORS);
+        world.break_block(&block_pos, None, BlockFlags::NOTIFY_ALL);
         world.set_block_state(
             &block_pos,
             Block::AIR.default_state.id,
-            BlockFlags::NOTIFY_NEIGHBORS,
+            BlockFlags::NOTIFY_ALL,
         );
         return Some(if state == Block::LAVA.default_state.id {
             &Item::LAVA_BUCKET
@@ -189,14 +156,12 @@ fn try_pickup_bucket_item(
 
     let target_pos = block_pos.offset(direction.to_offset());
     let (block, state) = world.get_block_and_state_id(&target_pos);
-    if waterlogged_check(block, state).is_some() {
-        let state_id = set_waterlogged(block, state, false);
-        world.set_block_state(&target_pos, state_id, BlockFlags::NOTIFY_NEIGHBORS);
-        world.schedule_fluid_tick(&Fluid::WATER, target_pos, 5, TickPriority::Normal);
-        return Some(&Item::WATER_BUCKET);
-    }
 
-    None
+    let unwaterlogged = block.set_waterlogged(state, false)?;
+
+    world.set_block_state(&target_pos, unwaterlogged, BlockFlags::NOTIFY_ALL);
+    world.schedule_fluid_tick(&Fluid::WATER, target_pos, 5, TickPriority::Normal);
+    Some(&Item::WATER_BUCKET)
 }
 
 pub(crate) fn should_evaporate_in_nether(item: &Item, world: &World) -> bool {
@@ -245,9 +210,9 @@ pub(crate) fn try_place_filled_bucket(
         return try_place_powder_snow(world, pos, direction);
     }
 
-    if is_waterlogged(block, state.id) && item.id == Item::WATER_BUCKET.id {
-        let state_id = set_waterlogged(block, state.id, true);
-        world.set_block_state(&pos, state_id, BlockFlags::NOTIFY_NEIGHBORS);
+    if item.id == Item::WATER_BUCKET.id && block.is_waterlogged(state.id) {
+        let state_id = block.set_waterlogged(state.id, true).unwrap_or(state.id);
+        world.set_block_state(&pos, state_id, BlockFlags::NOTIFY_ALL);
         world.schedule_fluid_tick(&Fluid::WATER, pos, 5, TickPriority::Normal);
         return true;
     }
@@ -255,12 +220,12 @@ pub(crate) fn try_place_filled_bucket(
     let target_pos = pos.offset(direction.to_offset());
     let (block, state) = world.get_block_and_state(&target_pos);
 
-    if waterlogged_check(block, state.id).is_some() {
+    if block.is_waterloggable() {
         if item.id == Item::LAVA_BUCKET.id {
             return false;
         }
-        let state_id = set_waterlogged(block, state.id, true);
-        world.set_block_state(&target_pos, state_id, BlockFlags::NOTIFY_NEIGHBORS);
+        let state_id = block.set_waterlogged(state.id, true).unwrap_or(state.id);
+        world.set_block_state(&target_pos, state_id, BlockFlags::NOTIFY_ALL);
         world.schedule_fluid_tick(&Fluid::WATER, target_pos, 5, TickPriority::Normal);
         return true;
     }
@@ -273,7 +238,7 @@ pub(crate) fn try_place_filled_bucket(
             } else {
                 Block::WATER.default_state.id
             },
-            BlockFlags::NOTIFY_NEIGHBORS,
+            BlockFlags::NOTIFY_ALL,
         );
         return true;
     }

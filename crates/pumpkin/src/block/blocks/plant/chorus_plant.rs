@@ -1,6 +1,6 @@
 use pumpkin_data::{
     Block, BlockDirection, BlockStateId,
-    block_properties::{BlockProperties, BrownMushroomBlockLikeProperties},
+    block_properties::BrownMushroomBlockLikeProperties,
     tag::{self, Taggable},
 };
 use pumpkin_macros::pumpkin_block;
@@ -45,7 +45,7 @@ impl BlockBehaviour for ChorusPlantBlock {
             || (args.direction == BlockDirection::Down
                 && neighbor_block.has_tag(&tag::Block::MINECRAFT_SUPPORTS_CHORUS_PLANT));
 
-        let mut props = BrownMushroomBlockLikeProperties::from_state_id(args.state_id, args.block);
+        let mut props = BrownMushroomBlockLikeProperties::from_state_id(args.state_id);
         match args.direction {
             BlockDirection::Down => props.down = connect,
             BlockDirection::Up => props.up = connect,

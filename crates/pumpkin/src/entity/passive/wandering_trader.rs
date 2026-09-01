@@ -1277,7 +1277,7 @@ mod tests {
     #[test]
     fn invisibility_potion_item_stack_creation() {
         let potion = create_invisibility_potion();
-        assert!(potion.item == &Item::POTION);
+        assert_eq!(potion.item, &Item::POTION);
         assert_eq!(potion.item_count, 1);
         assert!(!potion.patch.is_empty());
     }

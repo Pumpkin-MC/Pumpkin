@@ -25,12 +25,12 @@ pub trait StaticChunkNoiseFunctionComponentImpl {
         component_stack: &mut [ChunkNoiseFunctionComponent],
         pos: &Vector3<i32>,
         sample_options: &ChunkNoiseFunctionSampleOptions,
-    ) -> f64;
+    ) -> f32;
 
     fn fill(
         &self,
         component_stack: &mut [ChunkNoiseFunctionComponent],
-        array: &mut [f64],
+        array: &mut [f32],
         mapper: &impl IndexToNoisePos,
         sample_options: &mut ChunkNoiseFunctionSampleOptions,
     ) {
@@ -47,12 +47,12 @@ pub trait MutableChunkNoiseFunctionComponentImpl {
         component_stack: &mut [ChunkNoiseFunctionComponent],
         pos: &Vector3<i32>,
         sample_options: &ChunkNoiseFunctionSampleOptions,
-    ) -> f64;
+    ) -> f32;
 
     fn fill(
         &mut self,
         component_stack: &mut [ChunkNoiseFunctionComponent],
-        array: &mut [f64],
+        array: &mut [f32],
         mapper: &impl IndexToNoisePos,
         sample_options: &mut ChunkNoiseFunctionSampleOptions,
     ) {
@@ -72,7 +72,7 @@ pub enum ChunkNoiseFunctionComponent<'a> {
 
 impl NoiseFunctionComponentRange for ChunkNoiseFunctionComponent<'_> {
     #[inline]
-    fn min(&self) -> f64 {
+    fn min(&self) -> f32 {
         match self {
             Self::Independent(independent) => independent.min(),
             Self::Dependent(dependent) => dependent.min(),
@@ -82,7 +82,7 @@ impl NoiseFunctionComponentRange for ChunkNoiseFunctionComponent<'_> {
     }
 
     #[inline]
-    fn max(&self) -> f64 {
+    fn max(&self) -> f32 {
         match self {
             Self::Independent(independent) => independent.max(),
             Self::Dependent(dependent) => dependent.max(),
@@ -99,7 +99,7 @@ impl MutableChunkNoiseFunctionComponentImpl for ChunkNoiseFunctionComponent<'_> 
         component_stack: &mut [ChunkNoiseFunctionComponent],
         pos: &Vector3<i32>,
         sample_options: &ChunkNoiseFunctionSampleOptions,
-    ) -> f64 {
+    ) -> f32 {
         match self {
             Self::Independent(independent) => independent.sample(pos),
             Self::Dependent(dependent) => dependent.sample(component_stack, pos, sample_options),
@@ -116,7 +116,7 @@ impl MutableChunkNoiseFunctionComponentImpl for ChunkNoiseFunctionComponent<'_> 
     fn fill(
         &mut self,
         component_stack: &mut [ChunkNoiseFunctionComponent],
-        array: &mut [f64],
+        array: &mut [f32],
         mapper: &impl IndexToNoisePos,
         sample_options: &mut ChunkNoiseFunctionSampleOptions,
     ) {
@@ -142,7 +142,7 @@ impl ChunkNoiseFunctionComponent<'_> {
         component_stack: &mut [ChunkNoiseFunctionComponent],
         pos: &Vector3<i32>,
         sample_options: &ChunkNoiseFunctionSampleOptions,
-    ) -> f64 {
+    ) -> f32 {
         let Some((top_component, component_stack)) = component_stack.split_last_mut() else {
             return 0.0;
         };
@@ -158,7 +158,7 @@ impl ChunkNoiseFunctionComponent<'_> {
 
     pub fn fill_from_stack(
         component_stack: &mut [ChunkNoiseFunctionComponent],
-        array: &mut [f64],
+        array: &mut [f32],
         mapper: &impl IndexToNoisePos,
         sample_options: &mut ChunkNoiseFunctionSampleOptions,
     ) {
@@ -178,14 +178,14 @@ impl ChunkNoiseDensityFunction<'_> {
         &mut self,
         pos: &Vector3<i32>,
         sample_options: &ChunkNoiseFunctionSampleOptions,
-    ) -> f64 {
+    ) -> f32 {
         ChunkNoiseFunctionComponent::sample_from_stack(self.component_stack, pos, sample_options)
     }
 
     #[inline]
     fn fill(
         &mut self,
-        array: &mut [f64],
+        array: &mut [f32],
         mapper: &impl IndexToNoisePos,
         sample_options: &mut ChunkNoiseFunctionSampleOptions,
     ) {
@@ -205,7 +205,7 @@ macro_rules! sample_function {
             &mut self,
             pos: &Vector3<i32>,
             sample_options: &ChunkNoiseFunctionSampleOptions,
-        ) -> f64 {
+        ) -> f32 {
             ChunkNoiseFunctionComponent::sample_from_stack(
                 &mut self.component_stack[..=self.$name],
                 pos,
@@ -464,7 +464,7 @@ impl<'a> ChunkNoiseRouter<'a> {
         }
     }
 
-    pub fn interpolate_x(&mut self, delta: f64) {
+    pub fn interpolate_x(&mut self, delta: f32) {
         let indices = &self.interpolator_indices;
         let components = &mut self.component_stack;
         for interpolator_index in indices {
@@ -487,7 +487,7 @@ impl<'a> ChunkNoiseRouter<'a> {
         }
     }
 
-    pub fn interpolate_y(&mut self, delta: f64) {
+    pub fn interpolate_y(&mut self, delta: f32) {
         let indices = &self.interpolator_indices;
         let components = &mut self.component_stack;
         for interpolator_index in indices {
@@ -510,7 +510,7 @@ impl<'a> ChunkNoiseRouter<'a> {
         }
     }
 
-    pub fn interpolate_z(&mut self, delta: f64) {
+    pub fn interpolate_z(&mut self, delta: f32) {
         let indices = &self.interpolator_indices;
         let components = &mut self.component_stack;
         for interpolator_index in indices {

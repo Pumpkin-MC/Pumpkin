@@ -5,9 +5,9 @@ use crate::block::{
     PlacedArgs,
 };
 
-use pumpkin_data::BlockStateId;
-use pumpkin_data::block_properties::{BlockProperties, WallTorchLikeProperties};
+use pumpkin_data::block_properties::WallTorchLikeProperties;
 use pumpkin_data::translation;
+use pumpkin_data::{Block, BlockStateId};
 use pumpkin_inventory::anvil::AnvilScreenHandler;
 use pumpkin_inventory::player::player_inventory::PlayerInventory;
 use pumpkin_inventory::screen_handler::{
@@ -21,6 +21,22 @@ use std::sync::Mutex;
 
 #[pumpkin_block_from_tag("minecraft:anvil")]
 pub struct AnvilBlock;
+
+impl AnvilBlock {
+    #[must_use]
+    pub fn damage(state_id: BlockStateId) -> Option<BlockStateId> {
+        let block = Block::from_state_id(state_id);
+        let next_block = if block == &Block::ANVIL {
+            &Block::CHIPPED_ANVIL
+        } else if block == &Block::CHIPPED_ANVIL {
+            &Block::DAMAGED_ANVIL
+        } else {
+            return None;
+        };
+        let props = WallTorchLikeProperties::from_state_id(state_id);
+        Some(props.to_state_id(next_block))
+    }
+}
 
 impl BlockBehaviour for AnvilBlock {
     fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {

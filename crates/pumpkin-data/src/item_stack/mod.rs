@@ -2,9 +2,10 @@ use crate::data_component::DataComponent;
 use crate::data_component::DataComponent::Enchantments;
 use crate::data_component_impl::{
     BlocksAttacksImpl, ConsumableImpl, CustomDataImpl, DamageImpl, DataComponentImpl,
-    EnchantmentsImpl, IDSet, MaxDamageImpl, MaxStackSizeImpl, ToolImpl, UnbreakableImpl,
-    UseCooldownImpl, get, get_mut, read_data,
+    EnchantmentsImpl, IDSet, MaxDamageImpl, MaxStackSizeImpl, Rarity, RarityImpl,
+    SwingAnimationImpl, ToolImpl, UnbreakableImpl, UseCooldownImpl, get, get_mut, read_data,
 };
+
 use crate::item::Item;
 use crate::recipes::RecipeResultStruct;
 use crate::tag::Taggable;
@@ -185,6 +186,21 @@ impl ItemStack {
                 .map(|c| get_mut::<T>(c.as_mut()));
         }
         None
+    }
+
+    #[must_use]
+    pub fn has_data_component(&self, to_get_id: DataComponent) -> bool {
+        for (id, component) in &self.patch {
+            if *id == to_get_id {
+                return component.is_some();
+            }
+        }
+        for (id, _) in self.item.components {
+            if *id == to_get_id {
+                return true;
+            }
+        }
+        false
     }
 
     pub fn has_enchantments(&self) -> bool {
@@ -443,6 +459,81 @@ impl ItemStack {
             self.patch[pos].1 = component;
         } else {
             self.patch.push((DataComponent::CustomName, component));
+        }
+    }
+
+    #[must_use]
+    pub fn has_custom_name(&self) -> bool {
+        self.get_data_component::<crate::data_component_impl::CustomNameImpl>()
+            .is_some()
+    }
+
+    #[must_use]
+    pub fn get_custom_name(&self) -> Option<&pumpkin_util::text::TextComponent> {
+        self.get_data_component::<crate::data_component_impl::CustomNameImpl>()
+            .map(|c| &c.name)
+    }
+
+    pub fn remove_custom_name(&mut self) {
+        self.patch
+            .retain(|(id, _)| *id != DataComponent::CustomName);
+    }
+
+    #[must_use]
+    pub fn get_hover_name(&self) -> String {
+        if let Some(custom_name) =
+            self.get_data_component::<crate::data_component_impl::CustomNameImpl>()
+        {
+            return custom_name.name.clone().get_text();
+        }
+        if let Some(item_name) =
+            self.get_data_component::<crate::data_component_impl::ItemNameImpl>()
+        {
+            return item_name.name.to_string();
+        }
+        self.item.registry_key.to_string()
+    }
+
+    #[must_use]
+    pub fn get_repair_cost(&self) -> i32 {
+        self.get_data_component::<crate::data_component_impl::RepairCostImpl>()
+            .map_or(0, |value| value.cost)
+    }
+
+    pub fn set_repair_cost(&mut self, cost: i32) {
+        if cost <= 0 {
+            self.patch
+                .retain(|(id, _)| *id != DataComponent::RepairCost);
+            return;
+        }
+        self.set_data_component(crate::data_component_impl::RepairCostImpl { cost });
+    }
+
+    #[must_use]
+    pub fn is_valid_repair_item(&self, repair_item: &ItemStack) -> bool {
+        let repairable = self.get_data_component::<crate::data_component_impl::RepairableImpl>();
+        repairable.is_some_and(|r| r.is_valid_repair_item(repair_item))
+    }
+
+    #[must_use]
+    pub fn get_swing_animation(&self) -> SwingAnimationImpl {
+        self.get_data_component::<SwingAnimationImpl>()
+            .copied()
+            .unwrap_or(SwingAnimationImpl::DEFAULT)
+    }
+
+    #[must_use]
+    pub fn get_rarity(&self) -> Rarity {
+        let base = self
+            .get_data_component::<RarityImpl>()
+            .map_or(Rarity::Common, |r| r.rarity);
+        if !self.has_enchantments() {
+            return base;
+        }
+        match base {
+            Rarity::Common | Rarity::Uncommon => Rarity::Rare,
+            Rarity::Rare => Rarity::Epic,
+            Rarity::Epic => Rarity::Epic,
         }
     }
 

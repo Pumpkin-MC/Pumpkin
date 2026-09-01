@@ -10,6 +10,7 @@ use std::sync::atomic::{AtomicBool, AtomicI8, AtomicI32, AtomicU8, AtomicU32, Or
 use std::sync::{Arc, Mutex, Weak};
 use std::time::{Duration, Instant};
 
+use crate::entity::attributes::{Modifier, ModifierOperation};
 use crate::plugin::api::events::enchantment::{EnchantItemEvent, PrepareItemEnchantEvent};
 use crate::world::scoreboard::{BedrockScoreboard, Scoreboard};
 use advancement::PlayerAdvancement;
@@ -229,7 +230,7 @@ impl BedrockPlayer<'_> {
     }
 }
 use pumpkin_data::attributes::Attributes;
-use pumpkin_data::block_properties::{BlockProperties, HorizontalFacing};
+use pumpkin_data::block_properties::HorizontalFacing;
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::data_component_impl::{AttributeModifiersImpl, EnchantmentsImpl, Operation};
 use pumpkin_data::data_component_impl::{EquipmentSlot, EquippableImpl, ToolImpl, WeaponImpl};
@@ -434,6 +435,9 @@ pub struct Player {
     pub current_block_destroy_stage: AtomicI32,
     /// The per-tick block destruction progress last sent to Bedrock clients.
     pub current_block_breaking_speed: AtomicU32,
+    /// The held item's Efficiency level last synced to the client via the `mining_efficiency`
+    /// attribute. -1 means never synced
+    pub synced_mining_efficiency_level: AtomicI32,
     /// Indicates if the player is currently mining a block.
     pub mining: AtomicBool,
     pub start_mining_time: AtomicI32,
@@ -571,13 +575,13 @@ impl Player {
         let bytes = if let Ok(handle) = tokio::runtime::Handle::try_current() {
             tokio::task::block_in_place(|| {
                 handle.block_on(async {
-                    let client = reqwest::Client::new();
+                    let client = pumpkin_util::client();
                     client.get(&url).send().await.ok()?.bytes().await.ok()
                 })
             })?
         } else {
             tokio::runtime::Runtime::new().ok()?.block_on(async {
-                let client = reqwest::Client::new();
+                let client = pumpkin_util::client();
                 client.get(&url).send().await.ok()?.bytes().await.ok()
             })?
         };
@@ -719,6 +723,7 @@ impl Player {
             hunger_manager: HungerManager::default(),
             current_block_destroy_stage: AtomicI32::new(-1),
             current_block_breaking_speed: AtomicU32::new(0),
+            synced_mining_efficiency_level: AtomicI32::new(-1),
             enchantment_seed: AtomicI32::new(rand::random()),
             open_container: AtomicCell::new(None),
             open_container_pos: AtomicCell::new(None),
@@ -1522,6 +1527,20 @@ impl Player {
         false
     }
 
+    /// Checks and triggers location-based enchantments (e.g. Frost Walker) on the player's equipped armor.
+    pub fn check_location_enchantments(&self, pos: Vector3<f64>, on_ground: bool) {
+        if on_ground {
+            let boots = self.inventory.get_slot(36);
+            if !boots.is_empty() {
+                crate::enchantment::EnchantmentHelper::on_location_changed(
+                    self.get_entity(),
+                    &boots,
+                    pos,
+                );
+            }
+        }
+    }
+
     /// Convenience wrapper – damages the currently held (main-hand) item.
     pub fn damage_held_item(&self, amount: i32) -> bool {
         self.damage_item_in_slot(&EquipmentSlot::MAIN_HAND, amount)
@@ -1681,7 +1700,7 @@ impl Player {
 
         // Handle bed respawn
         if block.has_tag(&tag::Block::MINECRAFT_BEDS) {
-            let bed_props = BedProperties::from_state_id(state_id, block);
+            let bed_props = BedProperties::from_state_id(state_id);
             let facing = bed_props.facing;
 
             // Try positions around the bed based on facing direction
@@ -1699,7 +1718,7 @@ impl Player {
 
         // Handle respawn anchor (Nether)
         if block == &Block::RESPAWN_ANCHOR {
-            let anchor_props = AnchorProperties::from_state_id(state_id, block);
+            let anchor_props = AnchorProperties::from_state_id(state_id);
             let charges = anchor_props.charges;
 
             // Anchor needs at least 1 charge to work
@@ -2551,7 +2570,7 @@ impl Player {
                     state,
                     p.start_mining_time.load(Ordering::Relaxed),
                 );
-                if finished && matches!(p.client.as_ref(), ClientPlatform::Bedrock(_)) {
+                if finished {
                     p.stop_mining();
 
                     let block = Block::from_state_id(state.id);
@@ -2572,6 +2591,12 @@ impl Player {
                         if can_harvest {
                             p.add_exhaustion(MINE_BLOCK_EXHAUSTION);
                         }
+                    }
+
+                    // Java clients decide completion on their own local timer, if the block is
+                    // broken earlier the server must reset the state
+                    if matches!(p.client.as_ref(), ClientPlatform::Java(_)) {
+                        p.reset_block_change(pos);
                     }
                 }
             }
@@ -4134,6 +4159,12 @@ impl Player {
 
     pub async fn respawn(self: &Arc<Self>) {
         self.world().respawn_player(self, false).await;
+        // The client rebuilt its attribute state on respawn, so send the held
+        // weapon modifiers again.
+        crate::entity::attributes::send_attribute_updates_for_living(
+            &self.living_entity,
+            vec![Attributes::ATTACK_SPEED, Attributes::ATTACK_DAMAGE],
+        );
     }
 
     pub fn ban(&self, server: &Server, reason: Option<TextComponent>) {
@@ -4446,8 +4477,50 @@ impl Player {
         !state.tool_required() || self.inventory().held_item().is_correct_for_drops(block)
     }
 
+    /// The id under which Pumpkin will store it's `mining_efficiency` modifier value
+    const EFFICIENCY_ATTRIBUTE_MODIFIER_ID: &'static str = "minecraft:enchantment.efficiency";
+
+    fn sync_mining_efficiency(&self) {
+        let level = self
+            .inventory()
+            .held_item()
+            .get_enchantment_level(&Enchantment::EFFICIENCY);
+        if self
+            .synced_mining_efficiency_level
+            .swap(level, Ordering::Relaxed)
+            == level
+        {
+            return;
+        }
+        self.living_entity
+            .update_attribute(&Attributes::MINING_EFFICIENCY, |inst| {
+                if level > 0 {
+                    inst.add_or_replace_modifier(Modifier {
+                        id: Self::EFFICIENCY_ATTRIBUTE_MODIFIER_ID.to_string(),
+                        amount: f64::from(level * level + 1),
+                        operation: ModifierOperation::Add,
+                    });
+                } else {
+                    inst.remove_modifier(Self::EFFICIENCY_ATTRIBUTE_MODIFIER_ID);
+                }
+            });
+        crate::entity::attributes::send_attribute_updates_for_living(
+            &self.living_entity,
+            vec![Attributes::MINING_EFFICIENCY],
+        );
+    }
+
     pub fn get_mining_speed(&self, block: &'static Block) -> f32 {
-        let mut speed = self.inventory().held_item().get_speed(block);
+        self.sync_mining_efficiency();
+        let held_item = self.inventory.held_item();
+        let mut speed = held_item.get_speed(block);
+        // Effi only gets applied if tool's break speed for block is alreadyabove 1 (meaning it's
+        // the correct tool)
+        if speed > 1.0 {
+            speed += self
+                .living_entity
+                .get_attribute_value(&Attributes::MINING_EFFICIENCY) as f32;
+        }
         // Haste
         if self.living_entity.has_effect(&StatusEffect::HASTE)
             || self.living_entity.has_effect(&StatusEffect::CONDUIT_POWER)
@@ -5158,7 +5231,7 @@ impl Player {
             .as_any_mut()
             .downcast_mut::<pumpkin_inventory::anvil::AnvilScreenHandler>()
         {
-            anvil_handler.update_item_name(packet.item_name.to_string());
+            anvil_handler.set_item_name(packet.item_name, self.has_infinite_materials());
         }
     }
 
@@ -7362,6 +7435,61 @@ impl InventoryPlayer for Player {
 
     fn close_screen_handler(&self) {
         self.close_handled_screen();
+    }
+
+    fn use_anvil(&self) {
+        if let Some(pos) = self.open_container_pos.load() {
+            let world = self.world();
+            let state = world.get_block_state(&pos);
+            let block = pumpkin_data::Block::from_state_id(state.id);
+            if block.has_tag(&pumpkin_data::tag::Block::MINECRAFT_ANVIL) {
+                if !self.has_infinite_materials() && rand::random::<f32>() < 0.12 {
+                    if let Some(new_state) =
+                        crate::block::blocks::anvil::AnvilBlock::damage(state.id)
+                    {
+                        world.set_block_state(
+                            &pos,
+                            new_state,
+                            pumpkin_world::world::BlockFlags::NOTIFY_ALL,
+                        );
+                        world.sync_world_event(
+                            pumpkin_data::world::WorldEvent::SoundAnvilUsed,
+                            pos,
+                            0,
+                        );
+                    } else {
+                        world.set_block_state(
+                            &pos,
+                            pumpkin_data::BlockStateId::AIR,
+                            pumpkin_world::world::BlockFlags::NOTIFY_ALL,
+                        );
+                        world.sync_world_event(
+                            pumpkin_data::world::WorldEvent::SoundAnvilBroken,
+                            pos,
+                            0,
+                        );
+                    }
+                } else {
+                    world.sync_world_event(pumpkin_data::world::WorldEvent::SoundAnvilUsed, pos, 0);
+                }
+            } else {
+                world.sync_world_event(pumpkin_data::world::WorldEvent::SoundAnvilUsed, pos, 0);
+            }
+        }
+    }
+
+    fn use_grindstone(&self, xp_amount: i32) {
+        if let Some(pos) = self.open_container_pos.load() {
+            let world = self.world();
+            if xp_amount > 0 {
+                crate::entity::experience_orb::ExperienceOrbEntity::spawn(
+                    &world,
+                    pos.to_centered_f64(),
+                    xp_amount as u32,
+                );
+            }
+            world.sync_world_event(pumpkin_data::world::WorldEvent::SoundGrindstoneUsed, pos, 0);
+        }
     }
 }
 

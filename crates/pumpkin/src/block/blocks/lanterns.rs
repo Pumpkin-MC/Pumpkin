@@ -3,7 +3,6 @@ use crate::block::{
 };
 use crate::world::World;
 use pumpkin_data::BlockStateId;
-use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::tag::Taggable;
 use pumpkin_data::{BlockDirection, tag};
 use pumpkin_macros::pumpkin_block_from_tag;
@@ -60,7 +59,6 @@ fn can_place_at(world: &World, position: &BlockPos) -> bool {
         let fence_gate_props =
             pumpkin_data::block_properties::OakFenceGateLikeProperties::from_state_id(
                 world.get_block_state_id(&position.down()),
-                world.get_block(&position.down()),
             );
 
         if fence_gate_props.open {

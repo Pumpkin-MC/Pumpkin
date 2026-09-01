@@ -229,7 +229,7 @@ impl EndermanEntity {
             }
         }
 
-        entity.teleport(new_pos, None, None, world.clone());
+        entity.teleport(new_pos, None, None, &world);
 
         self.mob_entity
             .navigator
