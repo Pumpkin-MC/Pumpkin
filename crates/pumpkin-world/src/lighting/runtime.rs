@@ -1,17 +1,16 @@
-use crate::chunk::ChunkData;
-use crate::chunk::io::Dirtiable;
 use crate::chunk::palette::BlockPalette;
 use crate::level::Level;
+use crate::lighting::chunk_access::ChunkCursor;
 use crate::lighting::sky_light_height::{SkyLightHeight, SkyLightHeightMigration, SkyLightTier};
+use crate::lighting::stats::{LightCounters, LightPassStats};
 use crossbeam::queue::SegQueue;
 use pumpkin_config::lighting::LightingEngineConfig;
 use pumpkin_data::BlockDirection;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector2::Vector2;
-use std::fmt;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant};
+use std::sync::atomic::Ordering;
+use std::time::Instant;
 use tracing::debug;
 
 /// One `drain_queued` slice per `ServerLevel.tick`. Vanilla `LightEngine.runLightUpdates`
@@ -19,369 +18,6 @@ use tracing::debug;
 /// Leftover is visible as delayed shadows after mining, placing, or a chunk-border sky refill.
 const LIGHT_UPDATES_PER_PASS: i32 = 16_384;
 
-const LIGHT_COUNTER_NAMES: [&str; 17] = [
-    "check_block",
-    "check_sky",
-    "sky_column_scan",
-    "sky_column_read",
-    "sky_increase",
-    "sky_decrease",
-    "block_increase",
-    "block_decrease",
-    "get_sky",
-    "set_sky",
-    "get_block_light",
-    "set_block_light",
-    "block_state",
-    "chunk_loaded",
-    "sky_tier1_no_open_sky",
-    "sky_tier2_open_sky",
-    "sky_tier3_scan",
-];
-
-/// Per-tick counts for the lighting hot path. `sky_column_read` is O(height)
-/// per `checkBlock`; `get_sky`/`block_state`/`chunk_loaded` are 6x per
-/// propagated cell. Logged sorted by count from [`LightPassStats`].
-struct LightCounters([AtomicU64; 17]);
-
-impl LightCounters {
-    const CHECK_BLOCK: usize = 0;
-    const CHECK_SKY: usize = 1;
-    const SKY_COLUMN_SCAN: usize = 2;
-    const SKY_COLUMN_READ: usize = 3;
-    const SKY_INCREASE: usize = 4;
-    const SKY_DECREASE: usize = 5;
-    const BLOCK_INCREASE: usize = 6;
-    const BLOCK_DECREASE: usize = 7;
-    const GET_SKY: usize = 8;
-    const SET_SKY: usize = 9;
-    const GET_BLOCK_LIGHT: usize = 10;
-    const SET_BLOCK_LIGHT: usize = 11;
-    const BLOCK_STATE: usize = 12;
-    const CHUNK_LOADED: usize = 13;
-    const SKY_TIER1: usize = 14;
-    const SKY_TIER2: usize = 15;
-    const SKY_TIER3: usize = 16;
-
-    const fn new() -> Self {
-        Self([
-            AtomicU64::new(0),
-            AtomicU64::new(0),
-            AtomicU64::new(0),
-            AtomicU64::new(0),
-            AtomicU64::new(0),
-            AtomicU64::new(0),
-            AtomicU64::new(0),
-            AtomicU64::new(0),
-            AtomicU64::new(0),
-            AtomicU64::new(0),
-            AtomicU64::new(0),
-            AtomicU64::new(0),
-            AtomicU64::new(0),
-            AtomicU64::new(0),
-            AtomicU64::new(0),
-            AtomicU64::new(0),
-            AtomicU64::new(0),
-        ])
-    }
-
-    fn bump(&self, index: usize) {
-        self.0[index].fetch_add(1, Ordering::Relaxed);
-    }
-
-    fn bump_n(&self, index: usize, n: u64) {
-        if n > 0 {
-            self.0[index].fetch_add(n, Ordering::Relaxed);
-        }
-    }
-
-    fn snapshot_and_reset(&self) -> [u64; 17] {
-        let mut out = [0u64; 17];
-        for (i, slot) in self.0.iter().enumerate() {
-            out[i] = slot.swap(0, Ordering::Relaxed);
-        }
-        out
-    }
-}
-
-/// One `runUpdates` slice. `hot` is sorted most-used first.
-#[derive(Clone, Copy)]
-pub struct LightPassStats {
-    pub elapsed: Duration,
-    pub updates: i32,
-    pub leftover: bool,
-    counts: [u64; 17],
-}
-
-impl LightPassStats {
-    fn hot_pairs(&self) -> Vec<(&'static str, u64)> {
-        let mut items: Vec<(&'static str, u64)> = LIGHT_COUNTER_NAMES
-            .iter()
-            .zip(self.counts.iter())
-            .filter_map(|(name, count)| (*count > 0).then_some((*name, *count)))
-            .collect();
-        items.sort_unstable_by_key(|a| std::cmp::Reverse(a.1));
-        items
-    }
-
-    fn hot_list(&self) -> String {
-        self.hot_pairs()
-            .into_iter()
-            .map(|(name, count)| format!("{name}={count}"))
-            .collect::<Vec<_>>()
-            .join(" ")
-    }
-
-    #[must_use]
-    pub const fn should_log(&self) -> bool {
-        self.leftover
-            || self.updates > 0
-            || self.elapsed.as_millis() >= 1
-            || self.counts[LightCounters::SKY_COLUMN_READ] > 256
-    }
-}
-
-impl fmt::Display for LightPassStats {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let hot = self.hot_list();
-        if hot.is_empty() {
-            write!(
-                f,
-                "{:?} updates={} leftover={}",
-                self.elapsed, self.updates, self.leftover
-            )
-        } else {
-            write!(
-                f,
-                "{:?} updates={} leftover={} hot: {hot}",
-                self.elapsed, self.updates, self.leftover
-            )
-        }
-    }
-}
-
-enum VerticalInChunk {
-    Below,
-    Inside {
-        section_index: usize,
-        y_in_section: usize,
-        local_x: usize,
-        local_z: usize,
-    },
-    Above,
-}
-
-const fn vertical_in_chunk(chunk: &ChunkData, pos: &BlockPos) -> VerticalInChunk {
-    let (_, relative) = pos.chunk_and_chunk_relative_position();
-    let rel_y = relative.y - chunk.section.min_y;
-    if rel_y < 0 {
-        return VerticalInChunk::Below;
-    }
-    let section_index = (rel_y as usize) / BlockPalette::SIZE;
-    if section_index >= chunk.section.count {
-        return VerticalInChunk::Above;
-    }
-    VerticalInChunk::Inside {
-        section_index,
-        y_in_section: (rel_y as usize) % BlockPalette::SIZE,
-        local_x: relative.x as usize,
-        local_z: relative.z as usize,
-    }
-}
-
-/// Memoized chunk handle for one lighting operation.
-///
-/// Every `level.read_chunk_sync` is a `DashMap` lookup: hash, shard `RwLock`, table probe,
-/// `Arc` deref -> several potential cache misses and an atomic. A single
-/// sky propagation step touches 6 neighbours, each with "loaded?", read, opacity and
-/// write, so up to 24 such lookups -> and at least two thirds of them land in the
-/// same chunk as the origin position. The cursor turns those into a compare plus
-/// a pointer deref.
-///
-/// Deliberately holds the `Arc<ChunkData>` and not the `DashMap` guard: keeping a shard read
-/// guard alive across further lookups can deadlock against a waiting writer on the same
-/// shard (`parking_lot` lets `read()` block as soon as a writer is queued).
-struct ChunkCursor<'a> {
-    level: &'a Level,
-    counters: &'a LightCounters,
-    memo: Option<(Vector2<i32>, Option<Arc<ChunkData>>)>,
-}
-
-impl<'a> ChunkCursor<'a> {
-    const fn new(level: &'a Level, counters: &'a LightCounters) -> Self {
-        Self {
-            level,
-            counters,
-            memo: None,
-        }
-    }
-
-    fn chunk_at(&mut self, chunk_pos: Vector2<i32>) -> Option<&Arc<ChunkData>> {
-        if !matches!(&self.memo, Some((cached, _)) if *cached == chunk_pos) {
-            let chunk = self
-                .level
-                .loaded_chunks
-                .get(&chunk_pos)
-                .map(|entry| entry.value().clone());
-            self.memo = Some((chunk_pos, chunk));
-        }
-        self.memo.as_ref().and_then(|(_, chunk)| chunk.as_ref())
-    }
-
-    fn chunk_for(&mut self, pos: &BlockPos) -> Option<&Arc<ChunkData>> {
-        let (chunk_pos, _) = pos.chunk_and_chunk_relative_position();
-        self.chunk_at(chunk_pos)
-    }
-
-    /// Vanilla `getOpacity` is `max(1, getLightDampening())`. No
-    /// `useShapeForLightOcclusion` / face voxels: slabs, stairs, trapdoors, leaves
-    /// can leak or block unlike vanilla.
-    fn opacity(&mut self, pos: &BlockPos) -> u8 {
-        self.counters.bump(LightCounters::BLOCK_STATE);
-        let Some(chunk) = self.chunk_for(pos) else {
-            return pumpkin_data::Block::VOID_AIR.default_state.opacity;
-        };
-        Self::opacity_in(chunk, pos)
-    }
-
-    fn sky_light(&mut self, pos: &BlockPos) -> u8 {
-        self.counters.bump(LightCounters::GET_SKY);
-        let Some(chunk) = self.chunk_for(pos) else {
-            return 0;
-        };
-        Self::sky_light_in(chunk, pos)
-    }
-
-    fn block_light(&mut self, pos: &BlockPos) -> Option<u8> {
-        self.counters.bump(LightCounters::GET_BLOCK_LIGHT);
-        let chunk = self.chunk_for(pos)?;
-        Self::block_light_in(chunk, pos)
-    }
-
-    fn block_state(&mut self, pos: &BlockPos) -> &'static pumpkin_data::BlockState {
-        self.chunk_for(pos).map_or_else(
-            || pumpkin_data::Block::VOID_AIR.default_state,
-            |chunk| Self::block_state_in(chunk, pos),
-        )
-    }
-
-    /// `false` if the write cannot land (chunk not loaded, Y outside the
-    /// chunk height). Callers must not re-queue such positions.
-    fn set_sky_light(&mut self, pos: &BlockPos, light_level: u8) -> bool {
-        self.counters.bump(LightCounters::SET_SKY);
-        self.chunk_for(pos)
-            .is_some_and(|chunk| Self::write_light(chunk, pos, light_level, false))
-    }
-
-    fn set_block_light(&mut self, pos: &BlockPos, light_level: u8) -> bool {
-        self.counters.bump(LightCounters::SET_BLOCK_LIGHT);
-        self.chunk_for(pos)
-            .is_some_and(|chunk| Self::write_light(chunk, pos, light_level, true))
-    }
-
-    // --- Operations on an already-resolved chunk ---------------------------------
-    //
-    // Resolving a chunk costs a `chunk_and_chunk_relative_position` (shifts and masks) plus
-    // the memo compare, even on a hit. A caller that touches the same position several
-    // times in a row — every propagation step reads "loaded?", the level, the opacity and
-    // then writes — would pay that four times over for one and the same chunk, whose
-    // address obviously never changes in between.
-    //
-    // These take the resolved `&ChunkData` instead, so the caller resolves once, keeps the
-    // pointer in a register across all four, and the repeat work disappears. It matters
-    // most in `has_open_sky_above`, where the whole column is one chunk by construction and
-    // the loop runs up to the world height.
-    //
-    // They deliberately do not bump counters: the caller already did that when it resolved.
-
-    fn block_state_in(chunk: &ChunkData, pos: &BlockPos) -> &'static pumpkin_data::BlockState {
-        let (_, relative) = pos.chunk_and_chunk_relative_position();
-        chunk
-            .section
-            .get_block_absolute_y(relative.x as usize, relative.y, relative.z as usize)
-            .unwrap_or(pumpkin_data::Block::VOID_AIR.default_state.id)
-            .to_state()
-    }
-
-    fn opacity_in(chunk: &ChunkData, pos: &BlockPos) -> u8 {
-        Self::block_state_in(chunk, pos).opacity
-    }
-
-    fn sky_light_in(chunk: &ChunkData, pos: &BlockPos) -> u8 {
-        match vertical_in_chunk(chunk, pos) {
-            // Vanilla: sky below the world is 0, above the world is 15.
-            VerticalInChunk::Below => 0,
-            VerticalInChunk::Above => 15,
-            VerticalInChunk::Inside {
-                section_index,
-                y_in_section,
-                local_x,
-                local_z,
-            } => chunk
-                .light_engine
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .sky_light
-                .get(section_index)
-                .map_or(15, |s| s.get(local_x, y_in_section, local_z)),
-        }
-    }
-
-    fn block_light_in(chunk: &ChunkData, pos: &BlockPos) -> Option<u8> {
-        let VerticalInChunk::Inside {
-            section_index,
-            y_in_section,
-            local_x,
-            local_z,
-        } = vertical_in_chunk(chunk, pos)
-        else {
-            return None;
-        };
-        chunk
-            .light_engine
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .block_light
-            .get(section_index)
-            .map(|section| section.get(local_x, y_in_section, local_z))
-    }
-
-    fn write_light(
-        chunk: &ChunkData,
-        pos: &BlockPos,
-        light_level: u8,
-        block_light: bool,
-    ) -> bool {
-        let VerticalInChunk::Inside {
-            section_index,
-            y_in_section,
-            local_x,
-            local_z,
-        } = vertical_in_chunk(chunk, pos)
-        else {
-            return false;
-        };
-        let mut light_engine = chunk
-            .light_engine
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let sections = if block_light {
-            &mut light_engine.block_light
-        } else {
-            &mut light_engine.sky_light
-        };
-        let Some(section) = sections.get_mut(section_index) else {
-            return false;
-        };
-        section.set(local_x, y_in_section, local_z, light_level);
-        drop(light_engine);
-
-        if !chunk.is_dirty() {
-            chunk.mark_dirty(true);
-        }
-        true
-    }
-}
 
 pub struct DynamicLightEngine {
     block_decrease: SegQueue<(BlockPos, u8)>,
@@ -627,12 +263,12 @@ impl DynamicLightEngine {
             updates += self.perform_block_light_updates(&mut cursor, &mut budget);
             updates += self.perform_sky_light_updates(&mut cursor, &mut budget);
         }
-        let stats = LightPassStats {
-            elapsed: start.elapsed(),
+        let stats = LightPassStats::new(
+            start.elapsed(),
             updates,
-            leftover: !self.queues_empty(),
-            counts: self.counters.snapshot_and_reset(),
-        };
+            !self.queues_empty(),
+            self.counters.snapshot_and_reset(),
+        );
         if stats.should_log() {
             debug!("light {stats}");
         }
@@ -762,29 +398,34 @@ impl DynamicLightEngine {
             for dir in BlockDirection::all() {
                 let neighbor_pos = pos.offset(dir.to_offset());
 
-                if let Some(neighbor_light) = cursor.block_light(&neighbor_pos) {
+                let counters = cursor.counters;
+                counters.bump(LightCounters::GET_BLOCK_LIGHT);
+                let Some(chunk) = cursor.chunk_for(&neighbor_pos) else {
+                    continue;
+                };
+
+                if let Some(neighbor_light) = ChunkCursor::block_light_in(chunk, &neighbor_pos) {
                     if neighbor_light == 0 {
                         continue; // Skip if already 0
                     }
 
-                    let neighbor_state = {
-                        self.counters.bump(LightCounters::BLOCK_STATE);
-                        cursor.block_state(&neighbor_pos)
-                    };
+                    counters.bump(LightCounters::BLOCK_STATE);
+                    let neighbor_state = ChunkCursor::block_state_in(chunk, &neighbor_pos);
                     let opacity = neighbor_state.opacity.max(1);
 
                     let expected_from_removed_source = removed_light_level.saturating_sub(opacity);
 
                     if neighbor_light <= expected_from_removed_source {
                         let neighbor_luminance = neighbor_state.luminance;
+                        counters.bump(LightCounters::SET_BLOCK_LIGHT);
 
                         if neighbor_luminance == 0 {
                             // No self-emission, darken it completely and continue propagation
-                            cursor.set_block_light(&neighbor_pos, 0);
+                            ChunkCursor::write_light(chunk, &neighbor_pos, 0, true);
                             self.queue_block_light_decrease(neighbor_pos, neighbor_light);
                         } else {
                             // Has self-emission, set to its own light and re-propagate from it
-                            cursor.set_block_light(&neighbor_pos, neighbor_luminance);
+                            ChunkCursor::write_light(chunk, &neighbor_pos, neighbor_luminance, true);
                             self.queue_block_light_increase(neighbor_pos, neighbor_luminance);
                         }
                     } else {
@@ -816,11 +457,21 @@ impl DynamicLightEngine {
             LightingEngineConfig::Default => {}
         }
 
-        let current_light = cursor.block_light(&pos).unwrap_or(0);
-        let expected_light = {
-            self.counters.bump(LightCounters::BLOCK_STATE);
-            cursor.block_state(&pos).luminance
-        };
+        // Both reads of `pos` share one resolve. An unloaded chunk keeps the previous
+        // behaviour on purpose: it reads as void air, so nothing is written and the
+        // neighbour pass below still runs.
+        let counters = cursor.counters;
+        counters.bump(LightCounters::GET_BLOCK_LIGHT);
+        counters.bump(LightCounters::BLOCK_STATE);
+        let (current_light, expected_light) = cursor.chunk_for(&pos).map_or_else(
+            || (0, pumpkin_data::Block::VOID_AIR.default_state.luminance),
+            |chunk| {
+                (
+                    ChunkCursor::block_light_in(chunk, &pos).unwrap_or(0),
+                    ChunkCursor::block_state_in(chunk, &pos).luminance,
+                )
+            },
+        );
 
         // Handle light decrease (removing light source or placing opaque block)
         if expected_light < current_light {
@@ -1031,8 +682,20 @@ impl DynamicLightEngine {
             LightingEngineConfig::Default => {}
         }
 
-        let current_light = cursor.sky_light(&pos);
-        let opacity = cursor.opacity(&pos);
+        // Both reads of `pos` share one resolve. An unloaded chunk keeps the previous
+        // behaviour on purpose: dark, and void air for the opacity.
+        let counters = cursor.counters;
+        counters.bump(LightCounters::GET_SKY);
+        counters.bump(LightCounters::BLOCK_STATE);
+        let (current_light, opacity) = cursor.chunk_for(&pos).map_or_else(
+            || (0, pumpkin_data::Block::VOID_AIR.default_state.opacity),
+            |chunk| {
+                (
+                    ChunkCursor::sky_light_in(chunk, &pos),
+                    ChunkCursor::opacity_in(chunk, &pos),
+                )
+            },
+        );
 
         // Calculate expected sky light
         let expected_light = if opacity == 15 {
