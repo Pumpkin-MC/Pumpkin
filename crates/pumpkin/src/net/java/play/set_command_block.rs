@@ -44,7 +44,7 @@ impl JavaClient {
             player.world().set_block_state(
                 &command.pos,
                 new_state_id,
-                BlockFlags::SKIP_BLOCK_ADDED_CALLBACK,
+                BlockFlags::NOTIFY_ALL | BlockFlags::SKIP_BLOCK_ADDED_CALLBACK,
             );
 
             let mut cmd = command.command;

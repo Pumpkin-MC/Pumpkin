@@ -113,6 +113,7 @@ pub struct CommandArgumentBuilder {
     common: CommonArgumentBuilder,
     literal: Cow<'static, str>,
     description: Cow<'static, str>,
+    source: Option<String>,
 }
 
 /// A builder that builds an argument [`DetachedNode`].
@@ -344,7 +345,15 @@ impl CommandArgumentBuilder {
             common: CommonArgumentBuilder::new(),
             literal: literal.into(),
             description: description.into(),
+            source: None,
         }
+    }
+
+    /// Sets the source (e.g. plugin name) that registered this command.
+    #[must_use]
+    pub fn with_source(mut self, source: impl Into<String>) -> Self {
+        self.source = Some(source.into());
+        self
     }
 }
 
@@ -408,6 +417,7 @@ impl ArgumentBuilder<CommandDetachedNode> for CommandArgumentBuilder {
             self.common.modifier,
             self.common.forks,
         );
+        node.meta.source = self.source;
         node.children = self.common.arguments;
         node
     }

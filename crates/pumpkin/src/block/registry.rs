@@ -159,8 +159,8 @@ use crate::block::fluid::lava::FlowingLava;
 use crate::block::fluid::water::FlowingWater;
 use crate::block::{
     BlockBehaviour, BlockHitResult, BlockMetadata, BonemealArgs, FluidMetadata,
-    GetInsideCollisionShapeArgs, OnEntityCollisionArgs, OnLandedUponArgs,
-    UpdateEntityMovementAfterFallOnArgs, stop_vertical_movement_after_fall,
+    GetInsideCollisionShapeArgs, OnEntityCollisionArgs, OnEntityStepArgs, OnLandedUponArgs,
+    OnProjectileHitArgs, UpdateEntityMovementAfterFallOnArgs, stop_vertical_movement_after_fall,
 };
 use crate::entity::EntityBase;
 use crate::entity::player::Player;
@@ -176,6 +176,7 @@ use pumpkin_data::{Block, BlockDirection, BlockId, BlockState};
 use pumpkin_protocol::java::server::play::SUseItemOn;
 use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::position::BlockPos;
+use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::world::{BlockAccessor, BlockFlags};
 use rustc_hash::FxHashMap;
 use std::sync::Arc;
@@ -190,7 +191,6 @@ use super::{
     OnPlaceArgs, OnStateReplacedArgs, OnSyncedBlockEventArgs, PlacedArgs, PlayerPlacedArgs,
     PrepareArgs, UseWithItemArgs,
 };
-use crate::block::OnEntityStepArgs;
 use crate::block::blocks::blast_furnace::BlastFurnaceBlock;
 use crate::block::blocks::chain::ChainBlock;
 use crate::block::blocks::cobweb::CobwebBlock;
@@ -814,6 +814,30 @@ impl BlockRegistry {
                 position,
                 entity,
                 below_supporting_block,
+            });
+        }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn on_projectile_hit(
+        &self,
+        block: &Block,
+        world: &Arc<World>,
+        projectile: &dyn EntityBase,
+        position: &BlockPos,
+        state: &BlockState,
+        hit_pos: &Vector3<f64>,
+        server: &Server,
+    ) {
+        if let Some(pumpkin_block) = self.get_pumpkin_block(block.id) {
+            pumpkin_block.on_projectile_hit(OnProjectileHitArgs {
+                server,
+                world,
+                block,
+                state,
+                position,
+                projectile,
+                hit_pos,
             });
         }
     }

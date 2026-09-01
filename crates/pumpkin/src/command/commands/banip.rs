@@ -1,99 +1,59 @@
-use std::{net::IpAddr, str::FromStr};
+use std::net::IpAddr;
+use std::str::FromStr;
 
-use crate::{
-    command::{
-        CommandError, CommandExecutor, CommandResult, CommandSender,
-        args::{Arg, ConsumedArgs, message::MsgArgConsumer, simple::SimpleArgConsumer},
-        tree::{CommandTree, builder::argument},
-    },
-    data::{SaveJSONConfiguration, banlist_serializer::BannedIpEntry},
-    net::DisconnectReason,
-    server::Server,
-};
-use CommandError::InvalidConsumption;
 use pumpkin_data::translation;
+use pumpkin_util::PermissionLvl;
+use pumpkin_util::permission::{Permission, PermissionDefault, PermissionRegistry};
 use pumpkin_util::text::TextComponent;
 
-const NAMES: [&str; 1] = ["ban-ip"];
-const DESCRIPTION: &str = "bans a player-ip";
+use crate::command::argument_builder::{ArgumentBuilder, argument, command};
+use crate::command::argument_types::core::string::StringArgumentType;
+use crate::command::context::command_context::CommandContext;
+use crate::command::errors::error_types::CommandErrorType;
+use crate::command::node::dispatcher::CommandDispatcher;
+use crate::command::node::{CommandExecutor, CommandExecutorResult};
+use crate::data::SaveJSONConfiguration;
+use crate::data::banlist_serializer::BannedIpEntry;
+use crate::net::DisconnectReason;
+use crate::server::Server;
 
-const ARG_TARGET: &str = "ip";
-const ARG_REASON: &str = "reason";
+const DESCRIPTION: &str = "bans a player-ip";
+const PERMISSION: &str = "minecraft:command.banip";
+
+const ERROR_BANIP_INVALID: CommandErrorType<0> = CommandErrorType::new(
+    translation::java::COMMANDS_BANIP_INVALID,
+    translation::bedrock::COMMANDS_BANIP_INVALID,
+);
+
+const ERROR_BANIP_FAILED: CommandErrorType<0> = CommandErrorType::new(
+    translation::java::COMMANDS_BANIP_FAILED,
+    translation::java::COMMANDS_BANIP_FAILED,
+);
 
 fn parse_ip(target: &str, server: &Server) -> Option<IpAddr> {
-    Some(match IpAddr::from_str(target) {
-        Ok(ip) => ip,
-        Err(_) => server.get_player_by_name(target)?.client.address().ip(),
+    IpAddr::from_str(target).ok().or_else(|| {
+        server
+            .get_player_by_name(target)
+            .map(|p| p.client.address().ip())
     })
 }
 
-struct NoReasonExecutor;
-
-impl CommandExecutor for NoReasonExecutor {
-    fn execute(
-        &self,
-        sender: &CommandSender,
-        server: &crate::server::Server,
-        args: &ConsumedArgs,
-    ) -> CommandResult {
-        let Some(Arg::Simple(target)) = args.get(&ARG_TARGET) else {
-            return Err(InvalidConsumption(Some(ARG_TARGET.into())));
-        };
-
-        ban_ip(sender, server, target, None)
-    }
-}
-
-struct ReasonExecutor;
-
-impl CommandExecutor for ReasonExecutor {
-    fn execute(
-        &self,
-        sender: &CommandSender,
-        server: &crate::server::Server,
-        args: &ConsumedArgs,
-    ) -> CommandResult {
-        let Some(Arg::Simple(target)) = args.get(&ARG_TARGET) else {
-            return Err(InvalidConsumption(Some(ARG_TARGET.into())));
-        };
-
-        let Some(Arg::Msg(reason)) = args.get(ARG_REASON) else {
-            return Err(InvalidConsumption(Some(ARG_REASON.into())));
-        };
-
-        ban_ip(sender, server, target, Some(reason.clone()))
-    }
-}
-
-fn ban_ip(
-    sender: &CommandSender,
-    server: &Server,
-    target: &str,
-    reason: Option<String>,
-) -> Result<i32, CommandError> {
+fn ban_ip(context: &CommandContext, target: &str, reason: Option<String>) -> CommandExecutorResult {
+    let server = context.source.server();
     let reason = reason.unwrap_or_else(|| "Banned by an operator.".to_string());
 
-    let Some(target_ip) = parse_ip(target, server) else {
-        return Err(CommandError::CommandFailed(TextComponent::translate_cross(
-            translation::java::COMMANDS_BANIP_INVALID,
-            translation::bedrock::COMMANDS_BANIP_INVALID,
-            [],
-        )));
-    };
+    let target_ip =
+        parse_ip(target, server).ok_or_else(|| ERROR_BANIP_INVALID.create_without_context())?;
 
     let mut banned_ips = server.data.banned_ip_list.write().unwrap();
 
     if banned_ips.get_entry(&target_ip).is_some() {
-        return Err(CommandError::CommandFailed(TextComponent::translate_cross(
-            translation::java::COMMANDS_BANIP_FAILED,
-            translation::java::COMMANDS_BANIP_FAILED,
-            [],
-        )));
+        return Err(ERROR_BANIP_FAILED.create_without_context());
     }
 
     banned_ips.banned_ips.push(BannedIpEntry::new(
         target_ip,
-        sender.to_string(),
+        context.source.name.clone(),
         None,
         reason.clone(),
     ));
@@ -101,49 +61,69 @@ fn ban_ip(
     banned_ips.save();
     drop(banned_ips);
 
-    // Send messages
-    let affected = server.get_players_by_ip(target_ip);
-    let names = affected
+    context.source.send_feedback(
+        TextComponent::translate_cross(
+            translation::java::COMMANDS_BANIP_SUCCESS,
+            translation::bedrock::COMMANDS_BANIP_SUCCESS,
+            [
+                TextComponent::text(target_ip.to_string()),
+                TextComponent::text(reason),
+            ],
+        ),
+        true,
+    );
+
+    let players_to_kick: Vec<_> = server
+        .get_all_players()
         .iter()
-        .map(|p| p.gameprofile.name.clone())
-        .collect::<Vec<_>>()
-        .join(" ");
+        .filter(|player| player.client.address().ip() == target_ip)
+        .cloned()
+        .collect();
 
-    sender.send_message(TextComponent::translate_cross(
-        translation::java::COMMANDS_BANIP_SUCCESS,
-        translation::bedrock::COMMANDS_BANIP_SUCCESS,
-        [
-            TextComponent::text(target_ip.to_string()),
-            TextComponent::text(reason),
-        ],
-    ));
-
-    sender.send_message(TextComponent::translate_cross(
-        translation::java::COMMANDS_BANIP_INFO,
-        translation::java::COMMANDS_BANIP_INFO,
-        [
-            TextComponent::text(affected.len().to_string()),
-            TextComponent::text(names),
-        ],
-    ));
-
-    let count = affected.len();
-    for target in affected {
+    for player in players_to_kick {
         let kick_msg = TextComponent::translate_cross(
             translation::java::MULTIPLAYER_DISCONNECT_IP_BANNED,
-            translation::java::MULTIPLAYER_DISCONNECT_IP_BANNED,
+            translation::bedrock::DISCONNECTIONSCREEN_TITLE_BANNEDBYHOST,
             [],
         );
-        target.kick(DisconnectReason::Kicked, &kick_msg);
+        player.kick(DisconnectReason::Kicked, &kick_msg);
     }
 
-    Ok(count as i32)
+    Ok(1)
 }
 
-pub fn init_command_tree() -> CommandTree {
-    CommandTree::new(NAMES, DESCRIPTION).then(
-        argument(ARG_TARGET, SimpleArgConsumer)
-            .execute(NoReasonExecutor)
-            .then(argument(ARG_REASON, MsgArgConsumer).execute(ReasonExecutor)),
-    )
+struct BanIpExecutor {
+    has_reason: bool,
+}
+
+impl CommandExecutor for BanIpExecutor {
+    fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
+        let target = StringArgumentType::get(context, "ip")?;
+        let reason = if self.has_reason {
+            Some(StringArgumentType::get(context, "reason")?.to_string())
+        } else {
+            None
+        };
+
+        ban_ip(context, target, reason)
+    }
+}
+
+pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistry) {
+    registry.register_permission_or_panic(Permission::new(
+        PERMISSION,
+        DESCRIPTION,
+        PermissionDefault::Op(PermissionLvl::Three),
+    ));
+
+    let cmd = command("ban-ip", DESCRIPTION).requires(PERMISSION).then(
+        argument("ip", StringArgumentType::SingleWord)
+            .executes(BanIpExecutor { has_reason: false })
+            .then(
+                argument("reason", StringArgumentType::GreedyPhrase)
+                    .executes(BanIpExecutor { has_reason: true }),
+            ),
+    );
+
+    dispatcher.register_with_aliases(cmd, &["banip"]);
 }

@@ -2,37 +2,33 @@ use wasmtime::component::Resource;
 
 use crate::{
     command::{
-        args::{
-            GetClientSideArgParser,
-            block::{BlockArgumentConsumer, BlockPredicateArgumentConsumer},
-            bool::BoolArgConsumer,
-            bounded_num::{BoundedNumArgumentConsumer, ToFromNumber},
-            difficulty::DifficultyArgumentConsumer,
-            entities::EntitiesArgumentConsumer,
-            entity::EntityArgumentConsumer,
-            entity_anchor::EntityAnchorArgumentConsumer,
-            gamemode::GamemodeArgumentConsumer,
-            message::MsgArgConsumer,
-            players::PlayersArgumentConsumer,
-            position_2d::Position2DArgumentConsumer,
-            position_3d::Position3DArgumentConsumer,
-            position_block::BlockPosArgumentConsumer,
-            resource::item::{ItemArgumentConsumer, ItemPredicateArgumentConsumer},
-            resource_location::ResourceLocationArgumentConsumer,
-            rotation::RotationArgumentConsumer,
-            simple::SimpleArgConsumer,
-            textcomponent::TextComponentArgConsumer,
-            time::TimeArgumentConsumer,
-        },
-        tree::{
-            CommandTree,
-            builder::{NonLeafNodeBuilder, argument, literal},
+        argument_builder::{argument, literal},
+        argument_types::{
+            block::BlockArgumentType,
+            block_predicate::BlockPredicateArgumentType,
+            component::ComponentArgumentType,
+            coordinates::{
+                block_pos::BlockPosArgumentType, rotation::RotationArgumentType,
+                vec2::Vec2ArgumentType, vec3::Vec3ArgumentType,
+            },
+            core::{
+                bool::BoolArgumentType, double::DoubleArgumentType, float::FloatArgumentType,
+                integer::IntegerArgumentType, long::LongArgumentType, string::StringArgumentType,
+            },
+            entity::EntityArgumentType,
+            entity_anchor::EntityAnchorArgumentType,
+            game_profile::GameProfileArgumentType,
+            gamemode::GameModeArgumentType,
+            identifier::IdentifierArgumentType,
+            item::ItemStackArgumentType,
+            item_predicate::ItemPredicateArgumentType,
+            time::TimeArgumentType,
         },
     },
     plugin::loader::wasm::wasm_host::{
         state::{
             CommandNodeResource, CommandResource, CommandSenderResource, ConsumedArgsResource,
-            PluginHostState, ServerResource, TextComponentResource,
+            PluginHostState, ServerResource, TextComponentResource, WasmCommand, WasmCommandNode,
         },
         wit::v0_1::{
             commands::executor::{WasmCommandExecutor, WasmCommandSuggestionProvider},
@@ -127,7 +123,7 @@ impl pumpkin::plugin::command::HostConsumedArgs for PluginHostState {
             OwnedArg::BlockPredicate(s) => Arg::BlockPredicate(s),
             OwnedArg::Time(t) => Arg::Time(t),
             OwnedArg::Num(n) => {
-                use crate::command::args::bounded_num::{NotInBounds, Number};
+                use crate::plugin::loader::wasm::wasm_host::args::{NotInBounds, Number};
                 let convert_num = |n: Number| match n {
                     Number::F64(v) => pumpkin::plugin::command::Number::Float64(v),
                     Number::F32(v) => pumpkin::plugin::command::Number::Float32(v),
@@ -264,18 +260,17 @@ impl pumpkin::plugin::command::HostConsumedArgs for PluginHostState {
             OwnedArg::Enchantment(e) => Arg::Enchantment(e.name.to_string()),
             OwnedArg::Advancement(a) => Arg::Advancement(a.to_string()),
             OwnedArg::EntityAnchor(a) => Arg::EntityAnchor(match a {
-                crate::command::args::EntityAnchor::Eyes => {
+                crate::command::argument_types::entity_anchor::EntityAnchor::Eyes => {
                     pumpkin::plugin::command::EntityAnchor::Eyes
                 }
-                crate::command::args::EntityAnchor::Feet => {
+                crate::command::argument_types::entity_anchor::EntityAnchor::Feet => {
                     pumpkin::plugin::command::EntityAnchor::Feet
                 }
             }),
             // These types don't have direct WIT resource mappings yet
-            OwnedArg::Entities(_)
-            | OwnedArg::Entity(_)
-            | OwnedArg::GameProfiles(_)
-            | OwnedArg::CommandTree(_) => Arg::Simple(String::new()),
+            OwnedArg::Entities(_) | OwnedArg::Entity(_) | OwnedArg::GameProfiles(_) => {
+                Arg::Simple(String::new())
+            }
         })
     }
 
@@ -293,7 +288,7 @@ impl pumpkin::plugin::command::HostCommand for PluginHostState {
         names: Vec<String>,
         description: String,
     ) -> wasmtime::Result<Resource<Command>> {
-        self.add_command(CommandTree::new(names, description))
+        self.add_command(WasmCommand::new(names, description))
             .map_err(|_| wasmtime::Error::msg("Failed to add command resource"))
     }
 
@@ -304,7 +299,11 @@ impl pumpkin::plugin::command::HostCommand for PluginHostState {
     ) -> wasmtime::Result<()> {
         let node_data = self.take_node(&node)?;
         let command_res = self.get_command_mut(&command)?;
-        command_res.provider = command_res.provider.clone().then(node_data.provider);
+        let cmd = std::mem::replace(
+            &mut command_res.provider,
+            WasmCommand::new(Vec::new(), String::new()),
+        );
+        command_res.provider = cmd.then(node_data.provider);
         Ok(())
     }
 
@@ -329,7 +328,11 @@ impl pumpkin::plugin::command::HostCommand for PluginHostState {
             server,
         };
         let command_res = self.get_command_mut(&command)?;
-        command_res.provider = command_res.provider.clone().execute(executor);
+        let cmd = std::mem::replace(
+            &mut command_res.provider,
+            WasmCommand::new(Vec::new(), String::new()),
+        );
+        command_res.provider = cmd.executes(executor);
         Ok(())
     }
 
@@ -344,11 +347,23 @@ impl pumpkin::plugin::command::HostCommand for PluginHostState {
 impl pumpkin::plugin::command::HostCommandSender for PluginHostState {
     async fn get_command_sender_type(
         &mut self,
-        _res: Resource<CommandSender>,
+        res: Resource<CommandSender>,
     ) -> wasmtime::Result<CommandSenderType> {
-        Err(wasmtime::Error::msg(
-            "get_command_sender_type not implemented",
-        ))
+        let sender = self.get_sender_res(&res)?.provider.clone();
+        match sender {
+            crate::command::CommandSender::Rcon(_) => Ok(CommandSenderType::Rcon),
+            crate::command::CommandSender::Console => Ok(CommandSenderType::Console),
+            crate::command::CommandSender::Player(player) => {
+                Ok(CommandSenderType::Player(self.add_player(player)?))
+            }
+            crate::command::CommandSender::CommandBlock(block_entity, world) => {
+                Ok(CommandSenderType::CommandBlock((
+                    self.add_block_entity(block_entity)?,
+                    self.add_world(world)?,
+                )))
+            }
+            crate::command::CommandSender::Dummy => Ok(CommandSenderType::Dummy),
+        }
     }
 
     async fn get_name(&mut self, sender: Resource<CommandSender>) -> wasmtime::Result<String> {
@@ -556,7 +571,7 @@ impl pumpkin::plugin::command::HostCommandSender for PluginHostState {
 
 impl pumpkin::plugin::command::HostCommandNode for PluginHostState {
     async fn literal(&mut self, name: String) -> wasmtime::Result<Resource<CommandNode>> {
-        self.add_command_node(literal(name))
+        self.add_command_node(WasmCommandNode::Literal(literal(name)))
             .map_err(|_| wasmtime::Error::msg("Failed to add literal node"))
     }
 
@@ -566,36 +581,86 @@ impl pumpkin::plugin::command::HostCommandNode for PluginHostState {
         arg_type: ArgumentType,
     ) -> wasmtime::Result<Resource<CommandNode>> {
         let node = match arg_type {
-            ArgumentType::Bool => argument(name, BoolArgConsumer),
-            ArgumentType::Float((min, max)) => build_bounded_node::<f32>(name, min, max),
-            ArgumentType::Double((min, max)) => build_bounded_node::<f64>(name, min, max),
-            ArgumentType::Integer((min, max)) => build_bounded_node::<i32>(name, min, max),
-            ArgumentType::Long((min, max)) => build_bounded_node::<i64>(name, min, max),
+            ArgumentType::Bool => WasmCommandNode::Argument(argument(name, BoolArgumentType)),
+            ArgumentType::Float((min, max)) => WasmCommandNode::Argument(argument(
+                name,
+                FloatArgumentType::new(min.unwrap_or(f32::MIN), max.unwrap_or(f32::MAX)),
+            )),
+            ArgumentType::Double((min, max)) => WasmCommandNode::Argument(argument(
+                name,
+                DoubleArgumentType::new(min.unwrap_or(f64::MIN), max.unwrap_or(f64::MAX)),
+            )),
+            ArgumentType::Integer((min, max)) => WasmCommandNode::Argument(argument(
+                name,
+                IntegerArgumentType::new(min.unwrap_or(i32::MIN), max.unwrap_or(i32::MAX)),
+            )),
+            ArgumentType::Long((min, max)) => WasmCommandNode::Argument(argument(
+                name,
+                LongArgumentType::new(min.unwrap_or(i64::MIN), max.unwrap_or(i64::MAX)),
+            )),
             ArgumentType::String(st) => match st {
-                StringType::SingleWord | StringType::Quotable => argument(name, SimpleArgConsumer),
-                StringType::Greedy => argument(name, MsgArgConsumer),
+                StringType::SingleWord => {
+                    WasmCommandNode::Argument(argument(name, StringArgumentType::SingleWord))
+                }
+                StringType::Quotable => {
+                    WasmCommandNode::Argument(argument(name, StringArgumentType::QuotablePhrase))
+                }
+                StringType::Greedy => {
+                    WasmCommandNode::Argument(argument(name, StringArgumentType::GreedyPhrase))
+                }
             },
-            ArgumentType::Entities => argument(name, EntitiesArgumentConsumer),
-            ArgumentType::Entity => argument(name, EntityArgumentConsumer),
-            ArgumentType::Players | ArgumentType::GameProfile => {
-                argument(name, PlayersArgumentConsumer)
+            ArgumentType::Entities => {
+                WasmCommandNode::Argument(argument(name, EntityArgumentType::Entities))
             }
-            ArgumentType::BlockPos => argument(name, BlockPosArgumentConsumer),
-            ArgumentType::Position3d => argument(name, Position3DArgumentConsumer),
-            ArgumentType::Position2d => argument(name, Position2DArgumentConsumer),
-            ArgumentType::BlockState => argument(name, BlockArgumentConsumer),
-            ArgumentType::BlockPredicate => argument(name, BlockPredicateArgumentConsumer),
-            ArgumentType::Item => argument(name, ItemArgumentConsumer),
-            ArgumentType::ItemPredicate => argument(name, ItemPredicateArgumentConsumer),
-            ArgumentType::Component => argument(name, TextComponentArgConsumer),
-            ArgumentType::Rotation => argument(name, RotationArgumentConsumer),
+            ArgumentType::Entity => {
+                WasmCommandNode::Argument(argument(name, EntityArgumentType::Entity))
+            }
+            ArgumentType::Players => {
+                WasmCommandNode::Argument(argument(name, EntityArgumentType::Players))
+            }
+            ArgumentType::GameProfile => {
+                WasmCommandNode::Argument(argument(name, GameProfileArgumentType))
+            }
+            ArgumentType::BlockPos => {
+                WasmCommandNode::Argument(argument(name, BlockPosArgumentType))
+            }
+            ArgumentType::Position3d => {
+                WasmCommandNode::Argument(argument(name, Vec3ArgumentType::Default))
+            }
+            ArgumentType::Position2d => {
+                WasmCommandNode::Argument(argument(name, Vec2ArgumentType::Default))
+            }
+            ArgumentType::BlockState => {
+                WasmCommandNode::Argument(argument(name, BlockArgumentType))
+            }
+            ArgumentType::BlockPredicate => {
+                WasmCommandNode::Argument(argument(name, BlockPredicateArgumentType))
+            }
+            ArgumentType::Item => WasmCommandNode::Argument(argument(name, ItemStackArgumentType)),
+            ArgumentType::ItemPredicate => {
+                WasmCommandNode::Argument(argument(name, ItemPredicateArgumentType))
+            }
+            ArgumentType::Component => {
+                WasmCommandNode::Argument(argument(name, ComponentArgumentType))
+            }
+            ArgumentType::Rotation => {
+                WasmCommandNode::Argument(argument(name, RotationArgumentType))
+            }
             ArgumentType::ResourceLocation | ArgumentType::Resource(_) => {
-                argument(name, ResourceLocationArgumentConsumer)
+                WasmCommandNode::Argument(argument(name, IdentifierArgumentType))
             }
-            ArgumentType::EntityAnchor => argument(name, EntityAnchorArgumentConsumer),
-            ArgumentType::Gamemode => argument(name, GamemodeArgumentConsumer),
-            ArgumentType::Difficulty => argument(name, DifficultyArgumentConsumer),
-            ArgumentType::Time(min) => argument(name, TimeArgumentConsumer::min(min.unwrap_or(0))),
+            ArgumentType::EntityAnchor => {
+                WasmCommandNode::Argument(argument(name, EntityAnchorArgumentType))
+            }
+            ArgumentType::Gamemode => {
+                WasmCommandNode::Argument(argument(name, GameModeArgumentType))
+            }
+            ArgumentType::Difficulty => {
+                WasmCommandNode::Argument(argument(name, StringArgumentType::SingleWord))
+            }
+            ArgumentType::Time(min) => {
+                WasmCommandNode::Argument(argument(name, TimeArgumentType::new(min.unwrap_or(0))))
+            }
             _ => {
                 return Err(wasmtime::Error::msg(format!(
                     "Unimplemented argument type: {arg_type:?}"
@@ -613,7 +678,8 @@ impl pumpkin::plugin::command::HostCommandNode for PluginHostState {
     ) -> wasmtime::Result<()> {
         let child = self.take_node(&node)?;
         let parent = self.get_node_mut(&self_node)?;
-        let builder = std::mem::replace(&mut parent.provider, literal(""));
+        let builder =
+            std::mem::replace(&mut parent.provider, WasmCommandNode::Literal(literal("")));
         parent.provider = builder.then(child.provider);
         Ok(())
     }
@@ -639,8 +705,11 @@ impl pumpkin::plugin::command::HostCommandNode for PluginHostState {
             server,
         };
         let resource = self.get_node_mut(&node)?;
-        let builder = std::mem::replace(&mut resource.provider, literal(""));
-        resource.provider = builder.execute(executor);
+        let builder = std::mem::replace(
+            &mut resource.provider,
+            WasmCommandNode::Literal(literal("")),
+        );
+        resource.provider = builder.executes(executor);
         Ok(())
     }
 
@@ -665,7 +734,10 @@ impl pumpkin::plugin::command::HostCommandNode for PluginHostState {
             server,
         };
         let resource = self.get_node_mut(&node)?;
-        let builder = std::mem::replace(&mut resource.provider, literal(""));
+        let builder = std::mem::replace(
+            &mut resource.provider,
+            WasmCommandNode::Literal(literal("")),
+        );
         resource.provider = builder.suggests(provider);
         Ok(())
     }
@@ -686,25 +758,6 @@ impl pumpkin::plugin::command::HostCommandNode for PluginHostState {
             .map_err(wasmtime::Error::from)?;
         Ok(())
     }
-}
-
-fn build_bounded_node<T: ToFromNumber + 'static>(
-    name: String,
-    min: Option<T>,
-    max: Option<T>,
-) -> NonLeafNodeBuilder
-where
-    BoundedNumArgumentConsumer<T>: GetClientSideArgParser,
-{
-    let mut consumer = BoundedNumArgumentConsumer::<T>::new();
-    if let Some(m) = min {
-        consumer = consumer.min(m);
-    }
-    if let Some(m) = max {
-        consumer = consumer.max(m);
-    }
-
-    argument(name, consumer)
 }
 
 #[expect(clippy::too_many_lines)]

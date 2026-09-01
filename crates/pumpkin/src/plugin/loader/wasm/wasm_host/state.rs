@@ -12,11 +12,7 @@ use wasmtime_wasi_http::{
 };
 
 use crate::{
-    command::{
-        CommandSender,
-        args::ConsumedArgs,
-        tree::{CommandTree, builder::NonLeafNodeBuilder},
-    },
+    command::CommandSender,
     entity::EntityBase,
     entity::player::Player,
     plugin::{
@@ -27,6 +23,82 @@ use crate::{
     server::{RecipeManager, Server},
     world::World,
 };
+
+pub struct WasmCommand {
+    pub names: Vec<String>,
+    pub builder: crate::command::argument_builder::CommandArgumentBuilder,
+}
+
+impl WasmCommand {
+    #[must_use]
+    pub fn new(names: Vec<String>, description: String) -> Self {
+        let primary = names.first().cloned().unwrap_or_default();
+        let builder = crate::command::argument_builder::command(primary, description);
+        Self { names, builder }
+    }
+
+    #[must_use]
+    pub fn then(mut self, child: WasmCommandNode) -> Self {
+        use crate::command::argument_builder::ArgumentBuilder;
+        self.builder = self.builder.then(child.into_detached_node());
+        self
+    }
+
+    #[must_use]
+    pub fn executes(
+        mut self,
+        executor: impl crate::command::node::CommandExecutor + 'static,
+    ) -> Self {
+        use crate::command::argument_builder::ArgumentBuilder;
+        self.builder = self.builder.executes(executor);
+        self
+    }
+}
+
+pub enum WasmCommandNode {
+    Literal(crate::command::argument_builder::LiteralArgumentBuilder),
+    Argument(crate::command::argument_builder::RequiredArgumentBuilder),
+}
+
+impl WasmCommandNode {
+    #[must_use]
+    pub fn then(self, child: Self) -> Self {
+        use crate::command::argument_builder::ArgumentBuilder;
+        match self {
+            Self::Literal(b) => Self::Literal(b.then(child.into_detached_node())),
+            Self::Argument(b) => Self::Argument(b.then(child.into_detached_node())),
+        }
+    }
+
+    #[must_use]
+    pub fn executes(self, executor: impl crate::command::node::CommandExecutor + 'static) -> Self {
+        use crate::command::argument_builder::ArgumentBuilder;
+        match self {
+            Self::Literal(b) => Self::Literal(b.executes(executor)),
+            Self::Argument(b) => Self::Argument(b.executes(executor)),
+        }
+    }
+
+    #[must_use]
+    pub fn suggests(
+        self,
+        provider: impl crate::command::suggestion::provider::SuggestionProvider + 'static,
+    ) -> Self {
+        match self {
+            Self::Literal(b) => Self::Literal(b),
+            Self::Argument(b) => Self::Argument(b.suggests(provider)),
+        }
+    }
+
+    #[must_use]
+    pub fn into_detached_node(self) -> crate::command::node::detached::DetachedNode {
+        use crate::command::argument_builder::ArgumentBuilder;
+        match self {
+            Self::Literal(b) => crate::command::node::detached::DetachedNode::Literal(b.build()),
+            Self::Argument(b) => crate::command::node::detached::DetachedNode::Argument(b.build()),
+        }
+    }
+}
 
 pub struct WasmResource<T> {
     pub provider: T,
@@ -55,10 +127,10 @@ pub type BossBarResource = WasmResource<
     Arc<Mutex<crate::plugin::loader::wasm::wasm_host::wit::v0_1::boss_bar::PluginBossBar>>,
 >;
 pub type TextComponentResource = WasmResource<TextComponent>;
-pub type CommandResource = WasmResource<CommandTree>;
+pub type CommandResource = WasmResource<WasmCommand>;
 pub type CommandSenderResource = WasmResource<CommandSender>;
-pub type ConsumedArgsResource = WasmResource<OwnedConsumedArgs>;
-pub type CommandNodeResource = WasmResource<NonLeafNodeBuilder>;
+pub type ConsumedArgsResource = WasmResource<HashMap<String, OwnedArg>>;
+pub type CommandNodeResource = WasmResource<WasmCommandNode>;
 pub type ItemStackResource = WasmResource<Arc<Mutex<pumpkin_data::item_stack::ItemStack>>>;
 pub type RecipeManagerResource = WasmResource<Arc<RecipeManager>>;
 pub type EnchantmentManagerResource =
@@ -298,7 +370,7 @@ impl PluginHostState {
 
     pub fn add_command<T>(
         &mut self,
-        provider: CommandTree,
+        provider: WasmCommand,
     ) -> wasmtime::Result<wasmtime::component::Resource<T>> {
         let resource = self.resource_table.push(CommandResource { provider })?;
         Ok(wasmtime::component::Resource::new_own(resource.rep()))
@@ -316,21 +388,17 @@ impl PluginHostState {
 
     pub fn add_consumed_args<T>(
         &mut self,
-        provider: &ConsumedArgs<'_>,
+        provider: HashMap<String, OwnedArg>,
     ) -> wasmtime::Result<wasmtime::component::Resource<T>> {
-        let owned: HashMap<String, OwnedArg> = provider
-            .iter()
-            .map(|(k, v)| (k.to_string(), OwnedArg::from_arg(v)))
-            .collect();
         let resource = self
             .resource_table
-            .push(ConsumedArgsResource { provider: owned })?;
+            .push(ConsumedArgsResource { provider })?;
         Ok(wasmtime::component::Resource::new_own(resource.rep()))
     }
 
     pub fn add_command_node<T>(
         &mut self,
-        provider: NonLeafNodeBuilder,
+        provider: WasmCommandNode,
     ) -> wasmtime::Result<wasmtime::component::Resource<T>> {
         let resource = self.resource_table.push(CommandNodeResource { provider })?;
         Ok(wasmtime::component::Resource::new_own(resource.rep()))

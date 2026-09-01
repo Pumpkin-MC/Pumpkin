@@ -2444,8 +2444,8 @@ mod tests {
             .iter()
             .find(|trade| trade.modifier == VillagerTradeModifier::EnchantRandomly)
             .unwrap();
-        assert!(enchanted_book.wants.item == &Item::EMERALD);
-        assert!(enchanted_book.wants_b.unwrap().item == &Item::BOOK);
+        assert_eq!(enchanted_book.wants.item, &Item::EMERALD);
+        assert_eq!(enchanted_book.wants_b.unwrap().item, &Item::BOOK);
         assert_eq!(enchanted_book.price_multiplier, 0.2);
 
         let cartographer = VillagerProfession::Cartographer.trade_set(2).unwrap();

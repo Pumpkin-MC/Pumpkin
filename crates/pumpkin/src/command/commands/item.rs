@@ -3,103 +3,82 @@ use pumpkin_data::translation;
 use pumpkin_inventory::screen_handler::InventoryPlayer;
 use pumpkin_protocol::codec::item_stack_seralizer::ItemStackSerializer;
 use pumpkin_protocol::java::client::play::CSetContainerSlot;
+use pumpkin_util::PermissionLvl;
+use pumpkin_util::permission::{Permission, PermissionDefault, PermissionRegistry};
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::hover::HoverEvent;
 use pumpkin_world::inventory::Inventory;
 
-use crate::command::args::bounded_num::BoundedNumArgumentConsumer;
-use crate::command::args::entities::EntitiesArgumentConsumer;
-use crate::command::args::position_block::BlockPosArgumentConsumer;
-use crate::command::args::resource::item::ItemArgumentConsumer;
-use crate::command::args::slot::SlotArgumentConsumer;
-use crate::command::args::{ConsumedArgs, FindArg, FindArgDefaultName};
-use crate::command::dispatcher::CommandError;
-use crate::command::tree::CommandTree;
-use crate::command::tree::builder::{argument, argument_default_name, literal};
-use crate::command::{CommandExecutor, CommandResult, CommandSender};
+use crate::command::argument_builder::{
+    ArgumentBuilder, RequiredArgumentBuilder, argument, command, literal,
+};
+use crate::command::argument_types::coordinates::block_pos::BlockPosArgumentType;
+use crate::command::argument_types::core::integer::IntegerArgumentType;
+use crate::command::argument_types::entity::EntityArgumentType;
+use crate::command::argument_types::item::ItemStackArgumentType;
+use crate::command::argument_types::slot::SlotArgumentType;
+use crate::command::context::command_context::CommandContext;
+use crate::command::errors::error_types::CommandErrorType;
+use crate::command::node::dispatcher::CommandDispatcher;
+use crate::command::node::{CommandExecutor, CommandExecutorResult};
 
-const NAMES: [&str; 1] = ["item"];
 const DESCRIPTION: &str = "Modifies items in block or entity inventories.";
+const PERMISSION: &str = "minecraft:command.item";
 
-const ARG_POS: &str = "pos";
-const ARG_SLOT: &str = "slot";
-const ARG_ITEM: &str = "item";
-const ARG_TARGETS: &str = "targets";
+const ERROR_NOT_CONTAINER: CommandErrorType<3> = CommandErrorType::new(
+    translation::java::COMMANDS_ITEM_TARGET_NOT_A_CONTAINER,
+    translation::java::COMMANDS_ITEM_TARGET_NOT_A_CONTAINER,
+);
 
-const fn count_consumer() -> BoundedNumArgumentConsumer<i32> {
-    BoundedNumArgumentConsumer::new()
-        .name("count")
-        .min(1)
-        .max(99)
+const ERROR_NO_SUCH_SLOT: CommandErrorType<1> = CommandErrorType::new(
+    translation::java::COMMANDS_ITEM_TARGET_NO_SUCH_SLOT,
+    translation::java::COMMANDS_ITEM_TARGET_NO_SUCH_SLOT,
+);
+
+struct BlockReplaceExecutor {
+    has_count: bool,
 }
 
-struct BlockReplaceExecutor;
-
 impl CommandExecutor for BlockReplaceExecutor {
-    fn execute(
-        &self,
-        sender: &CommandSender,
-        server: &crate::server::Server,
-        args: &ConsumedArgs,
-    ) -> CommandResult {
-        let world = match sender {
-            CommandSender::Console | CommandSender::Rcon(_) | CommandSender::Dummy => {
-                let guard = server.worlds.load();
-                guard
-                    .first()
-                    .cloned()
-                    .ok_or(CommandError::InvalidRequirement)?
-            }
-            CommandSender::Player(player) => player.world(),
-            CommandSender::CommandBlock(_, w) => w.clone(),
-        };
-
-        let pos = BlockPosArgumentConsumer::find_loaded_arg(args, ARG_POS, &world)?;
-        let (slot, slot_name) = SlotArgumentConsumer::find_arg(args, ARG_SLOT)?;
-        let (item_name, parsed_stack) = ItemArgumentConsumer::find_arg(args, ARG_ITEM)?;
+    fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
+        let world = context.source.world();
+        let pos = BlockPosArgumentType::get_loaded_block_pos(context, "pos")?;
+        let slot = SlotArgumentType::get(context, "slot")?;
+        let parsed_stack = ItemStackArgumentType::get(context, "item")?;
         let item = parsed_stack.item;
-        let count = match count_consumer().find_arg_default_name(args) {
-            Ok(Ok(c)) => c,
-            Err(_) | Ok(Err(_)) => 1,
+        let count = if self.has_count {
+            IntegerArgumentType::get(context, "count")?
+        } else {
+            1
         };
 
         let block_entity = world.get_block_entity(&pos).ok_or_else(|| {
-            CommandError::CommandFailed(TextComponent::translate_cross(
-                translation::java::COMMANDS_ITEM_TARGET_NOT_A_CONTAINER,
-                translation::java::COMMANDS_ITEM_TARGET_NOT_A_CONTAINER,
-                [
-                    TextComponent::text(pos.0.x.to_string()),
-                    TextComponent::text(pos.0.y.to_string()),
-                    TextComponent::text(pos.0.z.to_string()),
-                ],
-            ))
+            ERROR_NOT_CONTAINER.create_without_context(
+                TextComponent::text(pos.0.x.to_string()),
+                TextComponent::text(pos.0.y.to_string()),
+                TextComponent::text(pos.0.z.to_string()),
+            )
         })?;
 
         let inventory = block_entity.get_inventory().ok_or_else(|| {
-            CommandError::CommandFailed(TextComponent::translate_cross(
-                translation::java::COMMANDS_ITEM_TARGET_NOT_A_CONTAINER,
-                translation::java::COMMANDS_ITEM_TARGET_NOT_A_CONTAINER,
-                [
-                    TextComponent::text(pos.0.x.to_string()),
-                    TextComponent::text(pos.0.y.to_string()),
-                    TextComponent::text(pos.0.z.to_string()),
-                ],
-            ))
+            ERROR_NOT_CONTAINER.create_without_context(
+                TextComponent::text(pos.0.x.to_string()),
+                TextComponent::text(pos.0.y.to_string()),
+                TextComponent::text(pos.0.z.to_string()),
+            )
         })?;
 
         if slot >= inventory.size() {
-            return Err(CommandError::CommandFailed(TextComponent::translate_cross(
-                translation::java::COMMANDS_ITEM_TARGET_NO_SUCH_SLOT,
-                translation::java::COMMANDS_ITEM_TARGET_NO_SUCH_SLOT,
-                [TextComponent::text(slot_name)],
-            )));
+            return Err(
+                ERROR_NO_SUCH_SLOT.create_without_context(TextComponent::text(slot.to_string()))
+            );
         }
 
         let mut item_stack = parsed_stack.clone();
         item_stack.item_count = count as u8;
-
         inventory.set_stack(slot, item_stack);
 
+        let item_name = item.registry_key;
         let msg = TextComponent::translate_cross(
             translation::java::COMMANDS_ITEM_BLOCK_SET_SUCCESS,
             translation::java::COMMANDS_ITEM_BLOCK_SET_SUCCESS,
@@ -116,36 +95,34 @@ impl CommandExecutor for BlockReplaceExecutor {
                     }),
             ],
         );
-        sender.send_message(msg);
+        context.source.send_feedback(msg, true);
 
         Ok(1)
     }
 }
 
-struct EntityReplaceExecutor;
+struct EntityReplaceExecutor {
+    has_count: bool,
+}
 
 impl CommandExecutor for EntityReplaceExecutor {
     #[expect(clippy::too_many_lines)]
-    fn execute(
-        &self,
-        sender: &CommandSender,
-        _server: &crate::server::Server,
-        args: &ConsumedArgs,
-    ) -> CommandResult {
-        let targets = EntitiesArgumentConsumer.find_arg_default_name(args)?;
-        let (mojang_slot, slot_name) = SlotArgumentConsumer::find_arg(args, ARG_SLOT)?;
-        let (item_name, parsed_stack) = ItemArgumentConsumer::find_arg(args, ARG_ITEM)?;
+    fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
+        let targets = EntityArgumentType::get_entities(context, "targets")?;
+        let mojang_slot = SlotArgumentType::get(context, "slot")?;
+        let parsed_stack = ItemStackArgumentType::get(context, "item")?;
         let item = parsed_stack.item;
-        let count = match count_consumer().find_arg_default_name(args) {
-            Ok(Ok(c)) => c,
-            Err(_) | Ok(Err(_)) => 1,
+        let count = if self.has_count {
+            IntegerArgumentType::get(context, "count")?
+        } else {
+            1
         };
 
         let mut modified_count = 0;
         let mut item_stack = parsed_stack.clone();
         item_stack.item_count = count as u8;
 
-        for target in targets {
+        for target in &targets {
             if let Some(player) = target.get_player() {
                 if let Some(player_arc) = player.world().get_player_by_uuid(player.gameprofile.id) {
                     if (200..=226).contains(&mojang_slot) {
@@ -246,19 +223,17 @@ impl CommandExecutor for EntityReplaceExecutor {
         }
 
         if modified_count == 0 {
-            return Err(CommandError::CommandFailed(TextComponent::translate_cross(
-                translation::java::COMMANDS_ITEM_TARGET_NO_SUCH_SLOT,
-                translation::java::COMMANDS_ITEM_TARGET_NO_SUCH_SLOT,
-                [TextComponent::text(slot_name)],
-            )));
+            return Err(ERROR_NO_SUCH_SLOT
+                .create_without_context(TextComponent::text(mojang_slot.to_string())));
         }
 
+        let item_name = item.registry_key;
         let msg = if targets.len() == 1 {
             TextComponent::translate_cross(
                 translation::java::COMMANDS_ITEM_ENTITY_SET_SUCCESS_SINGLE,
                 translation::java::COMMANDS_ITEM_ENTITY_SET_SUCCESS_SINGLE,
                 [
-                    targets[0].get_display_name(),
+                    targets[0].as_ref().get_display_name(),
                     TextComponent::text("[")
                         .add_child(item.translated_name())
                         .add_child(TextComponent::text("]"))
@@ -284,64 +259,56 @@ impl CommandExecutor for EntityReplaceExecutor {
                 ],
             )
         };
-        sender.send_message(msg);
+        context.source.send_feedback(msg, true);
 
         Ok(modified_count)
     }
 }
 
-pub fn init_command_tree() -> CommandTree {
-    CommandTree::new(NAMES, DESCRIPTION).then(
-        literal("replace")
-            .then(
-                literal("block").then(
-                    argument(ARG_POS, BlockPosArgumentConsumer).then(
-                        argument(ARG_SLOT, SlotArgumentConsumer)
-                            .then(
-                                argument(ARG_ITEM, ItemArgumentConsumer)
-                                    .execute(BlockReplaceExecutor)
-                                    .then(
-                                        argument_default_name(count_consumer())
-                                            .execute(BlockReplaceExecutor),
-                                    ),
-                            )
-                            .then(
-                                literal("with").then(
-                                    argument(ARG_ITEM, ItemArgumentConsumer)
-                                        .execute(BlockReplaceExecutor)
-                                        .then(
-                                            argument_default_name(count_consumer())
-                                                .execute(BlockReplaceExecutor),
-                                        ),
-                                ),
-                            ),
-                    ),
-                ),
-            )
-            .then(
-                literal("entity").then(
-                    argument(ARG_TARGETS, EntitiesArgumentConsumer).then(
-                        argument(ARG_SLOT, SlotArgumentConsumer)
-                            .then(
-                                argument(ARG_ITEM, ItemArgumentConsumer)
-                                    .execute(EntityReplaceExecutor)
-                                    .then(
-                                        argument_default_name(count_consumer())
-                                            .execute(EntityReplaceExecutor),
-                                    ),
-                            )
-                            .then(
-                                literal("with").then(
-                                    argument(ARG_ITEM, ItemArgumentConsumer)
-                                        .execute(EntityReplaceExecutor)
-                                        .then(
-                                            argument_default_name(count_consumer())
-                                                .execute(EntityReplaceExecutor),
-                                        ),
-                                ),
-                            ),
-                    ),
-                ),
-            ),
-    )
+fn block_item_node() -> RequiredArgumentBuilder {
+    argument("item", ItemStackArgumentType)
+        .executes(BlockReplaceExecutor { has_count: false })
+        .then(
+            argument("count", IntegerArgumentType::new(1, 99))
+                .executes(BlockReplaceExecutor { has_count: true }),
+        )
+}
+
+fn entity_item_node() -> RequiredArgumentBuilder {
+    argument("item", ItemStackArgumentType)
+        .executes(EntityReplaceExecutor { has_count: false })
+        .then(
+            argument("count", IntegerArgumentType::new(1, 99))
+                .executes(EntityReplaceExecutor { has_count: true }),
+        )
+}
+
+pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistry) {
+    registry.register_permission_or_panic(Permission::new(
+        PERMISSION,
+        DESCRIPTION,
+        PermissionDefault::Op(PermissionLvl::Two),
+    ));
+
+    let block_node = literal("block").then(
+        argument("pos", BlockPosArgumentType).then(
+            argument("slot", SlotArgumentType)
+                .then(block_item_node())
+                .then(literal("with").then(block_item_node())),
+        ),
+    );
+
+    let entity_node = literal("entity").then(
+        argument("targets", EntityArgumentType::Entities).then(
+            argument("slot", SlotArgumentType)
+                .then(entity_item_node())
+                .then(literal("with").then(entity_item_node())),
+        ),
+    );
+
+    dispatcher.register(
+        command("item", DESCRIPTION)
+            .requires(PERMISSION)
+            .then(literal("replace").then(block_node).then(entity_node)),
+    );
 }

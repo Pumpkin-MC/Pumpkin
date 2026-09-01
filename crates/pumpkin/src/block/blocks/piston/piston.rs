@@ -221,7 +221,7 @@ impl PistonBlock {
         world.set_block_state(
             pos,
             props.to_state_id(&Block::MOVING_PISTON),
-            BlockFlags::FORCE_STATE,
+            BlockFlags::NOTIFY_ALL | BlockFlags::FORCE_STATE,
         );
 
         let mut props = PistonProps::default(block);
@@ -242,7 +242,7 @@ impl PistonBlock {
         world.set_block_state(
             &extended_pos,
             Block::AIR.default_state.id,
-            BlockFlags::FORCE_STATE,
+            BlockFlags::NOTIFY_ALL | BlockFlags::FORCE_STATE,
         );
 
         world.update_neighbors(pos, None);
@@ -415,7 +415,11 @@ fn move_piston(
         props.facing = dir.to_facing();
         let state = props.to_state_id(&Block::MOVING_PISTON);
 
-        world.set_block_state(&target_pos, state, BlockFlags::MOVED);
+        world.set_block_state(
+            &target_pos,
+            state,
+            BlockFlags::NOTIFY_ALL | BlockFlags::MOVED,
+        );
 
         if let Some(moved_state) = moved_block_states.get(moved_blocks.len() - 1 - index) {
             world.add_block_entity(Arc::new(PistonBlockEntity {
@@ -444,7 +448,7 @@ fn move_piston(
         world.set_block_state(
             &extended_pos,
             props.to_state_id(&Block::MOVING_PISTON),
-            BlockFlags::MOVED,
+            BlockFlags::NOTIFY_ALL | BlockFlags::MOVED,
         );
         let mut props = PistonHeadLikeProperties::default(&Block::PISTON_HEAD);
         props.facing = dir.to_facing();

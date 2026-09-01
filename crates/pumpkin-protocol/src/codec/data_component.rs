@@ -13,12 +13,14 @@ use pumpkin_data::data_component_impl::{
     HorseVariantImpl, IDSet, IDSetContent, IdOr, ItemModelImpl, ItemNameImpl, LlamaVariantImpl,
     LoreImpl, MapIdImpl, MaxStackSizeImpl, MooshroomVariantImpl, PaintingVariantImpl,
     ParrotVariantImpl, PigSoundVariantImpl, PigVariantImpl, PotionContentsImpl, RabbitVariantImpl,
-    SalmonSizeImpl, SheepColorImpl, ShulkerColorImpl, SoundEvent, StatusEffectInstance,
-    StoredEnchantmentsImpl, SuspiciousStewEffect, SuspiciousStewEffectsImpl,
+    Rarity, RarityImpl, RepairCostImpl, RepairableImpl, SalmonSizeImpl, SheepColorImpl,
+    ShulkerColorImpl, SoundEvent, StatusEffectInstance, StoredEnchantmentsImpl,
+    SuspiciousStewEffect, SuspiciousStewEffectsImpl, SwingAnimationImpl, SwingAnimationType,
     TropicalFishBaseColorImpl, TropicalFishPatternColorImpl, TropicalFishPatternImpl,
     UnbreakableImpl, UseCooldownImpl, VillagerVariantImpl, WolfCollarImpl, WolfSoundVariantImpl,
     WolfVariantImpl, ZombieNautilusVariantImpl, get,
 };
+
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::sound::Sound;
@@ -259,6 +261,16 @@ impl DataComponentCodec<Self> for DamageImpl {
     fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
         let damage = seq.get_var_int()?.0;
         Ok(Self { damage })
+    }
+}
+
+impl DataComponentCodec<Self> for RepairCostImpl {
+    fn serialize(&self, seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
+        seq.write_var_int(&VarInt::from(self.cost))
+    }
+    fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
+        let cost = seq.get_var_int()?.0;
+        Ok(Self { cost })
     }
 }
 
@@ -860,6 +872,50 @@ impl DataComponentCodec<Self> for StoredEnchantmentsImpl {
     }
 }
 
+impl DataComponentCodec<Self> for RepairableImpl {
+    fn serialize(&self, seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
+        serialize_idset(&self.items, seq)
+    }
+
+    fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
+        Ok(Self {
+            items: deserialize_idset(seq)?,
+        })
+    }
+}
+
+impl DataComponentCodec<Self> for SwingAnimationImpl {
+    fn serialize(&self, seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
+        seq.write_var_int(&VarInt::from(self.animation_type.to_id()))?;
+        seq.write_var_int(&VarInt::from(self.duration))
+    }
+
+    fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
+        let type_id = seq.get_var_int()?.0;
+        let animation_type = SwingAnimationType::from_id(type_id).ok_or_else(|| {
+            ReadingError::Message(format!("Invalid SwingAnimationType id {type_id}"))
+        })?;
+        let duration = seq.get_var_int()?.0;
+        Ok(Self {
+            animation_type,
+            duration,
+        })
+    }
+}
+
+impl DataComponentCodec<Self> for RarityImpl {
+    fn serialize(&self, seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
+        seq.write_var_int(&VarInt::from(self.rarity.to_id()))
+    }
+
+    fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
+        let id = seq.get_var_int()?.0;
+        let rarity = Rarity::from_id(id)
+            .ok_or_else(|| ReadingError::Message(format!("Invalid Rarity id {id}")))?;
+        Ok(Self { rarity })
+    }
+}
+
 pub fn deserialize(
     id: DataComponent,
     seq: &mut impl NetworkReadExt,
@@ -885,6 +941,10 @@ pub fn deserialize(
         DataComponent::Consumable => Ok(ConsumableImpl::deserialize(seq)?.to_dyn()),
         DataComponent::Equippable => Ok(EquippableImpl::deserialize(seq)?.to_dyn()),
         DataComponent::StoredEnchantments => Ok(StoredEnchantmentsImpl::deserialize(seq)?.to_dyn()),
+        DataComponent::RepairCost => Ok(RepairCostImpl::deserialize(seq)?.to_dyn()),
+        DataComponent::Repairable => Ok(RepairableImpl::deserialize(seq)?.to_dyn()),
+        DataComponent::SwingAnimation => Ok(SwingAnimationImpl::deserialize(seq)?.to_dyn()),
+        DataComponent::Rarity => Ok(RarityImpl::deserialize(seq)?.to_dyn()),
         DataComponent::UseCooldown => Ok(UseCooldownImpl::deserialize(seq)?.to_dyn()),
         DataComponent::MapId => Ok(MapIdImpl::deserialize(seq)?.to_dyn()),
         DataComponent::BundleContents => Ok(BundleContentsImpl::deserialize(seq)?.to_dyn()),
@@ -916,6 +976,10 @@ pub fn serialize(
         DataComponent::Consumable => get::<ConsumableImpl>(value).serialize(seq),
         DataComponent::Equippable => get::<EquippableImpl>(value).serialize(seq),
         DataComponent::StoredEnchantments => get::<StoredEnchantmentsImpl>(value).serialize(seq),
+        DataComponent::RepairCost => get::<RepairCostImpl>(value).serialize(seq),
+        DataComponent::Repairable => get::<RepairableImpl>(value).serialize(seq),
+        DataComponent::SwingAnimation => get::<SwingAnimationImpl>(value).serialize(seq),
+        DataComponent::Rarity => get::<RarityImpl>(value).serialize(seq),
         DataComponent::UseCooldown => get::<UseCooldownImpl>(value).serialize(seq),
         DataComponent::MapId => get::<MapIdImpl>(value).serialize(seq),
         DataComponent::BundleContents => get::<BundleContentsImpl>(value).serialize(seq),
