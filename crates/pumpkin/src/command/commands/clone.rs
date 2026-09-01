@@ -238,6 +238,8 @@ impl CommandExecutor for CloneExecutor {
             }
         }
 
+        world.flush_block_updates();
+
         context.source.send_feedback(
             TextComponent::translate_cross(
                 translation::java::COMMANDS_CLONE_SUCCESS,

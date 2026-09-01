@@ -1262,12 +1262,16 @@ impl pumpkin::plugin::world::HostWorld for PluginHostState {
         let Some(plugin) = plugin_weak.upgrade() else {
             return Ok(());
         };
+        let Some(server) = self.server.clone() else {
+            return Ok(());
+        };
 
         let wasm_gen = Arc::new(WasmChunkGenerator {
             generator_id,
             plugin,
             dimension: world_ref.dimension.clone(),
             seed: world_ref.level.seed.0,
+            server,
         });
 
         world_ref.level.set_world_gen(Arc::new(
@@ -2205,6 +2209,7 @@ pub struct WasmChunkGenerator {
     pub plugin: Arc<crate::plugin::loader::wasm::wasm_host::WasmPlugin>,
     pub dimension: pumpkin_data::dimension::Dimension,
     pub seed: u64,
+    pub server: Arc<crate::server::Server>,
 }
 
 impl WasmChunkGenerator {
@@ -2249,10 +2254,13 @@ impl WasmChunkGenerator {
             }
         };
 
-        if let Ok(handle) = tokio::runtime::Handle::try_current() {
+        // Tokio runtime probably won't be available since chunk gen happens on rayon
+        if tokio::runtime::Handle::try_current().is_ok() {
             tokio::task::block_in_place(|| {
-                handle.block_on(run);
+                self.server.runtime.block_on(run);
             });
+        } else {
+            self.server.runtime.block_on(run);
         }
     }
 }

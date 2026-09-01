@@ -207,9 +207,77 @@ impl DataComponentImpl for LoreImpl {
     default_impl!(Lore);
 }
 
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct RarityImpl;
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Default)]
+pub enum Rarity {
+    #[default]
+    Common = 0,
+    Uncommon = 1,
+    Rare = 2,
+    Epic = 3,
+}
+
+impl Rarity {
+    #[must_use]
+    pub fn from_id(id: i32) -> Option<Self> {
+        match id {
+            0 => Some(Self::Common),
+            1 => Some(Self::Uncommon),
+            2 => Some(Self::Rare),
+            3 => Some(Self::Epic),
+            _ => None,
+        }
+    }
+
+    #[must_use]
+    pub fn to_id(self) -> i32 {
+        self as i32
+    }
+
+    #[must_use]
+    pub fn from_name(name: &str) -> Option<Self> {
+        match name {
+            "common" => Some(Self::Common),
+            "uncommon" => Some(Self::Uncommon),
+            "rare" => Some(Self::Rare),
+            "epic" => Some(Self::Epic),
+            _ => None,
+        }
+    }
+
+    #[must_use]
+    pub fn to_name(self) -> &'static str {
+        match self {
+            Self::Common => "common",
+            Self::Uncommon => "uncommon",
+            Self::Rare => "rare",
+            Self::Epic => "epic",
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
+pub struct RarityImpl {
+    pub rarity: Rarity,
+}
+
+impl RarityImpl {
+    pub fn read_data(data: &NbtTag) -> Option<Self> {
+        let name = data.extract_string()?;
+        Some(Self {
+            rarity: Rarity::from_name(name)?,
+        })
+    }
+}
+
 impl DataComponentImpl for RarityImpl {
+    fn write_data(&self) -> NbtTag {
+        NbtTag::String(self.rarity.to_name().into())
+    }
+
+    fn get_hash(&self) -> i32 {
+        crate::data_component_impl::get_i32_hash(self.rarity.to_id()) as i32
+    }
+
     default_impl!(Rarity);
 }
 

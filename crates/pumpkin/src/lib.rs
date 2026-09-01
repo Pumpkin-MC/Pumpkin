@@ -52,6 +52,7 @@ pub mod block;
 pub mod command;
 pub mod crash;
 pub mod data;
+pub mod enchantment;
 pub mod entity;
 pub mod error;
 pub mod item;

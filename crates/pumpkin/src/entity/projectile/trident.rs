@@ -78,6 +78,11 @@ impl TridentEntity {
         }
     }
 
+    /// Applies projectile-spawned enchantment effects matching vanilla `Projectile::applyOnProjectileSpawned`.
+    pub fn apply_on_projectile_spawned(&self, pickup_item_stack: &ItemStack) {
+        super::apply_on_projectile_spawned(self.get_entity(), pickup_item_stack, None, None);
+    }
+
     pub fn set_velocity_from_rotation(
         &self,
         pitch: f32,
@@ -303,6 +308,14 @@ impl EntityBase for TridentEntity {
                     .last_block_pos
                     .write()
                     .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(pos);
+
+                let block = world.get_block(&pos);
+                let state = world.get_block_state(&pos);
+                if let Some(server) = world.server.upgrade() {
+                    world
+                        .block_registry
+                        .on_projectile_hit(block, &world, self, &pos, state, &hit_pos, &server);
+                }
 
                 // Stop the trident
                 entity.velocity.store(Vector3::new(0.0, 0.0, 0.0));

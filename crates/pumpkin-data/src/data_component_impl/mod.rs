@@ -221,6 +221,25 @@ impl IDSetContent for Block {
     }
 }
 
+impl IDSetContent for crate::item::Item {
+    fn registry_id(&self) -> u16 {
+        self.id
+    }
+
+    fn from_id(id: u16) -> Option<&'static Self> {
+        crate::item::Item::from_id(id)
+    }
+
+    fn from_str(name: &str) -> Option<&'static Self> {
+        let name = name.strip_prefix("minecraft:").unwrap_or(name);
+        crate::item::Item::from_registry_key(name)
+    }
+
+    fn to_string(&self) -> String {
+        self.registry_key.to_string()
+    }
+}
+
 #[derive(Clone, Hash, PartialEq, Debug)]
 pub enum IDSet<T: IDSetContent + 'static> {
     Tag(Cow<'static, str>),
@@ -548,6 +567,8 @@ pub fn read_data(id: DataComponent, data: &NbtTag) -> Option<Box<dyn DataCompone
             Some(StoredEnchantmentsImpl::read_data(data)?.to_dyn())
         }
         DataComponent::UseCooldown => Some(UseCooldownImpl::read_data(data)?.to_dyn()),
+        DataComponent::RepairCost => Some(RepairCostImpl::read_data(data)?.to_dyn()),
+        DataComponent::Repairable => Some(RepairableImpl::read_data(data)?.to_dyn()),
         DataComponent::MapId => Some(MapIdImpl::read_data(data)?.to_dyn()),
         DataComponent::ChargedProjectiles => {
             Some(ChargedProjectilesImpl::read_data(data)?.to_dyn())
@@ -620,6 +641,8 @@ pub fn read_data(id: DataComponent, data: &NbtTag) -> Option<Box<dyn DataCompone
         DataComponent::Trim => Some(TrimImpl::read_data(data)?.to_dyn()),
         DataComponent::CanPlaceOn => Some(CanPlaceOnImpl::read_data(data)?.to_dyn()),
         DataComponent::CanBreak => Some(CanBreakImpl::read_data(data)?.to_dyn()),
+        DataComponent::SwingAnimation => Some(SwingAnimationImpl::read_data(data)?.to_dyn()),
+        DataComponent::Rarity => Some(RarityImpl::read_data(data)?.to_dyn()),
         _ => None,
     }
 }
@@ -844,5 +867,17 @@ mod tests {
         assert_eq!(enc2.enchantment.len(), 1);
         assert!(enc2.enchantment[0].0 == &crate::Enchantment::SHARPNESS);
         assert_eq!(enc2.enchantment[0].1, 2);
+    }
+
+    #[test]
+    fn swing_animation_round_trip() {
+        assert_round_trip(
+            SwingAnimationImpl {
+                animation_type: SwingAnimationType::Stab,
+                duration: 19,
+            },
+            SwingAnimationImpl::read_data,
+        );
+        assert_round_trip(SwingAnimationImpl::DEFAULT, SwingAnimationImpl::read_data);
     }
 }

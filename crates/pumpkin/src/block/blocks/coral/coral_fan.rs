@@ -126,7 +126,7 @@ impl BlockBehaviour for CoralFanBlock {
             };
 
             args.world
-                .set_block_state(args.position, dead_block_state_id, BlockFlags::empty());
+                .set_block_state(args.position, dead_block_state_id, BlockFlags::NOTIFY_ALL);
         }
     }
 
