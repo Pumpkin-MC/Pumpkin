@@ -212,11 +212,7 @@ impl DoorBlock {
 impl BlockBehaviour for DoorBlock {
     fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
         let mut door_props = DoorProperties::default(args.block);
-        let facing = args
-            .player
-            .living_entity
-            .entity
-            .get_horizontal_facing();
+        let facing = args.player.living_entity.entity.get_horizontal_facing();
         door_props.facing = facing;
         door_props.half = DoubleBlockHalf::Lower;
         door_props.hinge = get_hinge(args.world, args.position, args.use_item_on, facing);
