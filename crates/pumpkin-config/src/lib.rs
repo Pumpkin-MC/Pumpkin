@@ -369,7 +369,19 @@ pub trait LoadConfiguration {
 
         let (merged_value, changed) = Self::merge_toml_values(default_toml_value, parsed_toml);
 
-        let config = merged_value.try_into().unwrap_or_else(|_| Self::default());
+        let config = match merged_value.try_into() {
+            Ok(config) => config,
+            Err(err) => {
+                error!(
+                    "Couldn't apply the values in {}. Reason: {err}. Using default config.",
+                    Self::get_path().display()
+                );
+                // Report nothing as changed. `load` writes the merged config
+                // back when something did, which here would replace the file
+                // we just failed to make sense of with plain defaults.
+                return (Self::default(), false);
+            }
+        };
 
         (config, changed)
     }
@@ -413,4 +425,54 @@ pub trait LoadConfiguration {
 
     /// Validates the configuration after loading or merging.
     fn validate(&self);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{LoadConfiguration, PumpkinConfig, fs};
+
+    /// Parses as TOML, but `tps` is an `f32` and this gives it a string.
+    const BAD_FIELD_TYPE: &str = r#"
+default_level_name = "my-precious-world"
+hardcore = true
+allow_nether = false
+tps = "sixty"
+"#;
+
+    /// Valid, but leaves nearly every key for the defaults to fill in.
+    const MISSING_VALUES: &str = r#"
+default_level_name = "my-precious-world"
+"#;
+
+    #[test]
+    fn a_field_of_the_wrong_type_does_not_overwrite_the_file() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let path = dir.path().join(PumpkinConfig::get_path());
+        fs::write(&path, BAD_FIELD_TYPE).expect("write config");
+
+        let config = PumpkinConfig::load(dir.path());
+
+        // Nothing in the file can be trusted, so the server runs on defaults,
+        assert_eq!(config.basic.default_level_name, "world");
+        // but the file itself is still the one the user wrote.
+        assert_eq!(
+            fs::read_to_string(&path).expect("read config back"),
+            BAD_FIELD_TYPE
+        );
+    }
+
+    #[test]
+    fn missing_values_are_still_filled_in() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let path = dir.path().join(PumpkinConfig::get_path());
+        fs::write(&path, MISSING_VALUES).expect("write config");
+
+        let config = PumpkinConfig::load(dir.path());
+
+        assert_eq!(config.basic.default_level_name, "my-precious-world");
+
+        let on_disk = fs::read_to_string(&path).expect("read config back");
+        assert!(on_disk.contains("my-precious-world"), "{on_disk}");
+        assert!(on_disk.contains("allow_nether"), "{on_disk}");
+    }
 }
