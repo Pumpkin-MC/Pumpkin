@@ -20,7 +20,7 @@ use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::recipe_remainder::get_recipe_remainder_id;
 use pumpkin_data::translation;
 use pumpkin_data::world::WorldEvent;
-use pumpkin_data::{Block, BlockDirection, BlockStateId};
+use pumpkin_data::{Block, BlockDirection, BlockStateId, FacingExt};
 use pumpkin_inventory::crafting::crafting_screen_handler::match_crafting_recipe;
 use pumpkin_inventory::generic_container_screen_handler::create_crafter_3x3;
 use pumpkin_inventory::player::player_inventory::PlayerInventory;
@@ -245,7 +245,13 @@ impl BlockBehaviour for CrafterBlock {
 
     fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
         let mut props = CrafterLikeProperties::default(args.block);
-        let facing = args.direction.opposite();
+        let facing = args
+            .player
+            .living_entity
+            .entity
+            .get_facing()
+            .opposite()
+            .to_block_direction();
         let horizontal = args.player.living_entity.entity.get_horizontal_facing();
         props.orientation = match facing {
             BlockDirection::Down => match horizontal {
