@@ -562,8 +562,6 @@ struct SkinMetadata {
 }
 
 impl Player {
-    const EMPTY_HAND_ATTACK_SPEED_MODIFIER: f64 = -2.4;
-
     #[must_use]
     pub fn fetch_skin(properties: &[Property]) -> Option<pumpkin_protocol::bedrock::client::Skin> {
         let textures_prop = properties.iter().find(|p| &*p.name == "textures")?;
@@ -1140,6 +1138,8 @@ impl Player {
 
     #[expect(clippy::too_many_lines)]
     pub fn attack(&self, victim: &Arc<dyn EntityBase>) {
+        self.update_equipment_attributes(false);
+
         let world = self.world();
         let Some(server) = world.server.upgrade() else {
             return;
@@ -1417,8 +1417,33 @@ impl Player {
         }
     }
 
-    fn equipment_has_changed(previous: Option<&ItemStack>, current: &ItemStack) -> bool {
-        previous.is_none_or(|previous| !previous.are_equal(current) || !current.are_equal(previous))
+    fn applicable_attribute_modifiers<'a>(
+        stack: &'a ItemStack,
+        slot: &EquipmentSlot,
+    ) -> Vec<&'a pumpkin_data::data_component_impl::Modifier> {
+        stack
+            .get_data_component::<AttributeModifiersImpl>()
+            .map(|modifiers| {
+                modifiers
+                    .attribute_modifiers
+                    .iter()
+                    .filter(|modifier| {
+                        Self::attribute_modifier_applies_to_slot(&modifier.slot, slot)
+                    })
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    fn equipment_attributes_changed(
+        previous: Option<&ItemStack>,
+        current: &ItemStack,
+        slot: &EquipmentSlot,
+    ) -> bool {
+        let previous = previous
+            .map(|stack| Self::applicable_attribute_modifiers(stack, slot))
+            .unwrap_or_default();
+        previous != Self::applicable_attribute_modifiers(current, slot)
     }
 
     fn touch_attribute(touched_attributes: &mut Vec<Attributes>, attribute: &Attributes) {
@@ -1431,7 +1456,7 @@ impl Player {
     }
 
     /// Applies attribute modifiers from changed equipment and synchronizes them to clients.
-    fn update_equipment_attributes(&self) {
+    fn update_equipment_attributes(&self, force_sync: bool) {
         let mut current_items = HashMap::new();
         current_items.insert(EquipmentSlot::MAIN_HAND, self.inventory.held_item());
 
@@ -1454,7 +1479,12 @@ impl Player {
 
             for (slot, current) in current_items {
                 let previous = last_items.get(&slot).cloned();
-                if Self::equipment_has_changed(previous.as_ref(), &current) {
+                let attributes_changed =
+                    Self::equipment_attributes_changed(previous.as_ref(), &current, &slot);
+                if attributes_changed
+                    || (force_sync
+                        && !Self::applicable_attribute_modifiers(&current, &slot).is_empty())
+                {
                     changes.push((
                         slot.clone(),
                         previous.unwrap_or_else(|| ItemStack::EMPTY.clone()),
@@ -1469,13 +1499,6 @@ impl Player {
 
         let mut touched_attributes = Vec::new();
         for (slot, previous, _) in &changes {
-            if matches!(slot, EquipmentSlot::MainHand(_)) && previous.is_empty() {
-                self.living_entity
-                    .update_attribute(&Attributes::ATTACK_SPEED, |instance| {
-                        instance.remove_modifier("minecraft:base_attack_speed");
-                    });
-                Self::touch_attribute(&mut touched_attributes, &Attributes::ATTACK_SPEED);
-            }
             if let Some(modifiers) = previous.get_data_component::<AttributeModifiersImpl>() {
                 for modifier in modifiers.attribute_modifiers.iter() {
                     if Self::attribute_modifier_applies_to_slot(&modifier.slot, slot) {
@@ -1490,17 +1513,6 @@ impl Player {
         }
 
         for (slot, _, current) in &changes {
-            if matches!(slot, EquipmentSlot::MainHand(_)) && current.is_empty() {
-                self.living_entity
-                    .update_attribute(&Attributes::ATTACK_SPEED, |instance| {
-                        instance.add_or_replace_modifier(AttributeModifier {
-                            id: "minecraft:base_attack_speed".to_string(),
-                            amount: Self::EMPTY_HAND_ATTACK_SPEED_MODIFIER,
-                            operation: ModifierOperation::Add,
-                        });
-                    });
-                Self::touch_attribute(&mut touched_attributes, &Attributes::ATTACK_SPEED);
-            }
             if let Some(modifiers) = current.get_data_component::<AttributeModifiersImpl>() {
                 for modifier in modifiers.attribute_modifiers.iter() {
                     if Self::attribute_modifier_applies_to_slot(&modifier.slot, slot) {
@@ -1529,6 +1541,10 @@ impl Player {
                 touched_attributes,
             );
         }
+    }
+
+    pub(crate) fn resync_equipment_attributes(&self) {
+        self.update_equipment_attributes(true);
     }
 
     pub fn try_send_slot_set_packet(&self, packet: &CSetPlayerInventory) {
@@ -2530,8 +2546,9 @@ impl Player {
 
     #[expect(clippy::too_many_lines)]
     pub fn tick<'a>(&'a self, server: &'a Server) {
-        self.update_equipment_attributes();
+        self.update_equipment_attributes(false);
         self.process_inbound_packets();
+        self.update_equipment_attributes(false);
 
         if self.is_spectator() {
             self.living_entity
@@ -7700,17 +7717,34 @@ mod tests {
     }
 
     #[test]
-    fn equipment_changes_detect_new_components() {
+    fn durability_changes_do_not_resync_attributes() {
         let previous = ItemStack::new(1, &Item::WOODEN_SWORD);
         let mut current = previous.clone();
         current.set_damage(1);
 
-        assert!(Player::equipment_has_changed(Some(&previous), &current));
+        assert!(!Player::equipment_attributes_changed(
+            Some(&previous),
+            &current,
+            &EquipmentSlot::MAIN_HAND,
+        ));
     }
 
     #[test]
-    fn initial_empty_equipment_is_applied() {
-        assert!(Player::equipment_has_changed(None, ItemStack::EMPTY));
+    fn initial_empty_equipment_does_not_change_attributes() {
+        assert!(!Player::equipment_attributes_changed(
+            None,
+            ItemStack::EMPTY,
+            &EquipmentSlot::MAIN_HAND,
+        ));
+    }
+
+    #[test]
+    fn changing_held_item_modifiers_is_detected() {
+        assert!(Player::equipment_attributes_changed(
+            Some(ItemStack::EMPTY),
+            &ItemStack::new(1, &Item::WOODEN_SWORD),
+            &EquipmentSlot::MAIN_HAND,
+        ));
     }
 
     #[test]
