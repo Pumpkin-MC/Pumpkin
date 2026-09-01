@@ -9,6 +9,7 @@ use crate::plugin::{
     Context, PluginMetadata, cache::calculate_hash_for_bytes,
     loader::wasm::wasm_host::state::PluginHostState, permissions,
 };
+use pumpkin_plugin_runtime::RuntimeSpawner;
 
 pub mod args;
 pub mod concurrent_store;
@@ -113,6 +114,7 @@ pub struct PluginRuntime {
     cache_dir: std::path::PathBuf,
     linker: wasmtime::component::Linker<PluginHostState>,
     legacy_sync_reentry: concurrent_store::LegacySyncReentry,
+    store_spawner: Arc<dyn RuntimeSpawner>,
 }
 
 pub enum PluginInstance {
@@ -202,6 +204,7 @@ impl PluginRuntime {
     pub fn new<P: AsRef<Path>>(
         path: P,
         legacy_sync_reentry: concurrent_store::LegacySyncReentry,
+        store_spawner: Arc<dyn RuntimeSpawner>,
     ) -> Result<Self, PluginInitError> {
         let mut config = wasmtime::Config::new();
         config.wasm_component_model(true);
@@ -230,6 +233,7 @@ impl PluginRuntime {
             cache_dir: path,
             linker,
             legacy_sync_reentry,
+            store_spawner,
         })
     }
 
@@ -283,12 +287,16 @@ impl PluginRuntime {
             wit::v0_1::init_plugin(&self.engine, plugin_pre, &self.legacy_sync_reentry).await?
         };
 
+        let store = concurrent_store::start_legacy_store(
+            store,
+            self.legacy_sync_reentry.clone(),
+            Arc::clone(&self.store_spawner),
+        )
+        .await
+        .map_err(PluginInitError::InstantiationFailed)?;
         let wasm_plugin = Arc::new(WasmPlugin {
             plugin_instance: Arc::new(plugin_instance),
-            store: concurrent_store::LegacyStore::with_policy(
-                store,
-                self.legacy_sync_reentry.clone(),
-            ),
+            store,
         });
         let weak_plugin = Arc::downgrade(&wasm_plugin);
         wasm_plugin
