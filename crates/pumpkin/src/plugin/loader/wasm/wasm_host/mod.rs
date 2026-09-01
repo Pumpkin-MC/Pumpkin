@@ -112,6 +112,7 @@ pub struct PluginRuntime {
     engine: Engine,
     cache_dir: std::path::PathBuf,
     linker: wasmtime::component::Linker<PluginHostState>,
+    legacy_sync_reentry: concurrent_store::LegacySyncReentry,
 }
 
 pub enum PluginInstance {
@@ -120,7 +121,7 @@ pub enum PluginInstance {
 
 pub struct WasmPlugin {
     pub plugin_instance: Arc<PluginInstance>,
-    pub store: concurrent_store::ConcurrentStore,
+    pub store: concurrent_store::LegacyStore,
 }
 
 const fn data_fs_perms(can_read: bool, can_write: bool) -> Result<Option<FsPerms>, &'static str> {
@@ -198,7 +199,10 @@ fn socket_policy_for_permissions(
 }
 
 impl PluginRuntime {
-    pub fn new<P: AsRef<Path>>(path: P) -> Result<Self, PluginInitError> {
+    pub fn new<P: AsRef<Path>>(
+        path: P,
+        legacy_sync_reentry: concurrent_store::LegacySyncReentry,
+    ) -> Result<Self, PluginInitError> {
         let mut config = wasmtime::Config::new();
         config.wasm_component_model(true);
         config.wasm_component_model_async(true);
@@ -225,6 +229,7 @@ impl PluginRuntime {
             engine,
             cache_dir: path,
             linker,
+            legacy_sync_reentry,
         })
     }
 
@@ -275,12 +280,15 @@ impl PluginRuntime {
             let plugin_pre = wit::v0_1::prepare_plugin(&instance_pre)
                 .map_err(PluginInitError::ApiVersionMismatch)?;
 
-            wit::v0_1::init_plugin(&self.engine, plugin_pre).await?
+            wit::v0_1::init_plugin(&self.engine, plugin_pre, &self.legacy_sync_reentry).await?
         };
 
         let wasm_plugin = Arc::new(WasmPlugin {
             plugin_instance: Arc::new(plugin_instance),
-            store: concurrent_store::ConcurrentStore::new(store),
+            store: concurrent_store::LegacyStore::with_policy(
+                store,
+                self.legacy_sync_reentry.clone(),
+            ),
         });
         let weak_plugin = Arc::downgrade(&wasm_plugin);
         wasm_plugin
@@ -296,6 +304,13 @@ impl PluginRuntime {
             })
             .await
             .map_err(PluginInitError::InstantiationFailed)?;
+
+        tracing::debug!(
+            wasm_plugin_api = "0.1",
+            wasm_plugin_policy = concurrent_store::LegacySyncReentry::NAME,
+            "Loaded Wasm plugin with synchronous compatibility policy"
+        );
+
         Ok((wasm_plugin, metadata))
     }
 }

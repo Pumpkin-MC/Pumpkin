@@ -1,6 +1,9 @@
 use crate::plugin::{
     PluginMetadata,
-    loader::wasm::wasm_host::{PluginInitError, PluginInstance, state::PluginHostState},
+    loader::wasm::wasm_host::{
+        PluginInitError, PluginInstance, concurrent_store::LegacySyncReentry,
+        state::PluginHostState,
+    },
 };
 use wasmtime::component::{HasSelf, InstancePre, Linker, bindgen};
 use wasmtime::{Engine, Store};
@@ -162,25 +165,29 @@ pub fn prepare_plugin(
 pub async fn init_plugin(
     engine: &Engine,
     plugin_pre: PluginPre<PluginHostState>,
+    legacy_sync_reentry: &LegacySyncReentry,
 ) -> Result<(PluginInstance, Store<PluginHostState>, PluginMetadata), PluginInitError> {
     let mut store = Store::new(engine, PluginHostState::new());
     store.limiter(|state| &mut state.limits);
-    let plugin = plugin_pre
-        .instantiate_async(&mut store)
+    let plugin = legacy_sync_reentry
+        .scope_bootstrap(plugin_pre.instantiate_async(&mut store))
         .await
         .map_err(PluginInitError::InstantiationFailed)?;
 
     store
-        .run_concurrent(async |accessor| plugin.call_init_plugin(accessor).await)
+        .run_concurrent(async |accessor| {
+            legacy_sync_reentry
+                .scope_bootstrap(plugin.call_init_plugin(accessor))
+                .await
+        })
         .await
         .map_err(PluginInitError::CallInitPluginFailed)?
         .map_err(PluginInitError::CallInitPluginFailed)?;
 
     let metadata = store
         .run_concurrent(async |accessor| {
-            plugin
-                .pumpkin_plugin_metadata()
-                .call_get_metadata(accessor)
+            legacy_sync_reentry
+                .scope_bootstrap(plugin.pumpkin_plugin_metadata().call_get_metadata(accessor))
                 .await
         })
         .await

@@ -21,22 +21,106 @@ const STORE_QUEUE_CAPACITY: usize = 64;
 const REENTRY_QUEUE_CAPACITY: usize = 64;
 const MAX_SYNC_REENTRY_DEPTH: usize = 64;
 
-static NEXT_REENTRY_CHAIN_ID: AtomicU64 = AtomicU64::new(1);
+static NEXT_ROOT_ADMISSION_ID: AtomicU64 = AtomicU64::new(1);
+
+/// Shared authority for assigning causal-chain identities to top-level plugin
+/// calls. It is independent of a Store, Tokio task, or OS thread so every
+/// Store in the plugin graph can use the same identity namespace.
+#[derive(Clone, Debug)]
+pub(crate) struct RootAdmission {
+    state: Arc<RootAdmissionState>,
+}
+
+#[derive(Debug)]
+struct RootAdmissionState {
+    id: u64,
+    next_chain_id: AtomicU64,
+}
+
+impl RootAdmission {
+    #[must_use]
+    pub(crate) fn new() -> Self {
+        Self {
+            state: Arc::new(RootAdmissionState {
+                id: NEXT_ROOT_ADMISSION_ID.fetch_add(1, Ordering::Relaxed),
+                next_chain_id: AtomicU64::new(1),
+            }),
+        }
+    }
+
+    fn root_context(&self) -> ReentryContext {
+        ReentryContext {
+            admission_id: self.state.id,
+            chain_id: self.state.next_chain_id.fetch_add(1, Ordering::Relaxed),
+            depth: 0,
+        }
+    }
+
+    fn admits(&self, context: ReentryContext) -> bool {
+        context.admission_id == self.state.id
+    }
+}
+
+mod sealed {
+    pub trait StorePolicy {}
+}
+
+#[doc(hidden)]
+pub trait StorePolicy: sealed::StorePolicy + Clone + Send + Sync + 'static {
+    const NAME: &'static str;
+}
+
+/// Execution policy for synchronous WIT guest calls.
+///
+/// Only stores carrying this sealed policy can use the manual Store-context
+/// reentry pump. Stores using another execution policy do not expose that path.
+#[derive(Clone, Debug)]
+pub struct LegacySyncReentry {
+    root_admission: RootAdmission,
+}
+
+impl LegacySyncReentry {
+    pub(crate) const NAME: &'static str = "LegacySyncReentry";
+
+    #[must_use]
+    pub(crate) const fn new(root_admission: RootAdmission) -> Self {
+        Self { root_admission }
+    }
+
+    fn root_context(&self) -> ReentryContext {
+        self.root_admission.root_context()
+    }
+
+    fn inherited_context(&self) -> Option<ReentryContext> {
+        ReentryContext::current().filter(|context| self.root_admission.admits(*context))
+    }
+
+    /// Marks a pre-driver bootstrap call as a synchronous causal root.
+    pub(crate) async fn scope_bootstrap<T>(&self, future: impl Future<Output = T>) -> T {
+        REENTRY_CONTEXT.scope(self.root_context(), future).await
+    }
+
+    #[cfg(test)]
+    fn testing() -> Self {
+        static ROOT_ADMISSION: std::sync::OnceLock<RootAdmission> = std::sync::OnceLock::new();
+        Self::new(ROOT_ADMISSION.get_or_init(RootAdmission::new).clone())
+    }
+}
+
+impl sealed::StorePolicy for LegacySyncReentry {}
+
+impl StorePolicy for LegacySyncReentry {
+    const NAME: &'static str = Self::NAME;
+}
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 struct ReentryContext {
+    admission_id: u64,
     chain_id: u64,
     depth: usize,
 }
 
 impl ReentryContext {
-    fn root() -> Self {
-        Self {
-            chain_id: NEXT_REENTRY_CHAIN_ID.fetch_add(1, Ordering::Relaxed),
-            depth: 0,
-        }
-    }
-
     fn current() -> Option<Self> {
         REENTRY_CONTEXT.try_with(|context| *context).ok()
     }
@@ -49,6 +133,7 @@ impl ReentryContext {
         }
 
         Ok(Self {
+            admission_id: self.admission_id,
             chain_id: self.chain_id,
             depth: self.depth + 1,
         })
@@ -78,6 +163,7 @@ trait GuestStoreJob: Send {
 struct StoreCall<F, R> {
     call: F,
     result: oneshot::Sender<wasmtime::Result<R>>,
+    context: Option<ReentryContext>,
 }
 
 impl<F, R> StoreJob for StoreCall<F, R>
@@ -86,10 +172,19 @@ where
     R: Send + 'static,
 {
     fn run(self: Box<Self>, accessor: &Accessor<PluginHostState>) -> StoreFuture<'_, ()> {
-        let Self { call, result } = *self;
+        let Self {
+            call,
+            result,
+            context,
+        } = *self;
         let future = call(accessor);
         Box::pin(async move {
-            let _ = result.send(future.await);
+            let output = if let Some(context) = context {
+                REENTRY_CONTEXT.scope(context, future).await
+            } else {
+                future.await
+            };
+            let _ = result.send(output);
             Ok(())
         })
     }
@@ -214,7 +309,7 @@ struct ReentryScope {
 
 struct ReentryState {
     next_scope_id: AtomicU64,
-    scopes: StdMutex<HashMap<u64, Vec<ReentryScope>>>,
+    scopes: StdMutex<HashMap<(u64, u64), Vec<ReentryScope>>>,
     active_contexts: StdMutex<Vec<(u64, ReentryContext)>>,
 }
 
@@ -274,7 +369,7 @@ impl ReentryState {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         scopes
-            .entry(context.chain_id)
+            .entry((context.admission_id, context.chain_id))
             .or_default()
             .push(ReentryScope {
                 id: scope_id,
@@ -283,6 +378,7 @@ impl ReentryState {
         (
             ReentryRegistration {
                 state: Arc::clone(self),
+                admission_id: context.admission_id,
                 chain_id: context.chain_id,
                 scope_id,
                 active: true,
@@ -291,30 +387,31 @@ impl ReentryState {
         )
     }
 
-    fn sender_for(&self, chain_id: u64) -> Option<ReentrySender> {
+    fn sender_for(&self, context: ReentryContext) -> Option<ReentrySender> {
         let scopes = self
             .scopes
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         scopes
-            .get(&chain_id)
+            .get(&(context.admission_id, context.chain_id))
             .and_then(|scopes| scopes.last())
             .map(|scope| scope.sender.clone())
     }
 
-    fn remove(&self, chain_id: u64, scope_id: u64) {
+    fn remove(&self, admission_id: u64, chain_id: u64, scope_id: u64) {
         let mut scopes = self
             .scopes
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let remove_chain = scopes.get_mut(&chain_id).is_some_and(|chain_scopes| {
+        let chain = (admission_id, chain_id);
+        let remove_chain = scopes.get_mut(&chain).is_some_and(|chain_scopes| {
             if let Some(index) = chain_scopes.iter().rposition(|scope| scope.id == scope_id) {
                 chain_scopes.remove(index);
             }
             chain_scopes.is_empty()
         });
         if remove_chain {
-            scopes.remove(&chain_id);
+            scopes.remove(&chain);
         }
     }
 }
@@ -332,6 +429,7 @@ impl Drop for ActiveContextRegistration {
 
 struct ReentryRegistration {
     state: Arc<ReentryState>,
+    admission_id: u64,
     chain_id: u64,
     scope_id: u64,
     active: bool,
@@ -340,7 +438,8 @@ struct ReentryRegistration {
 impl ReentryRegistration {
     fn close(&mut self) {
         if self.active {
-            self.state.remove(self.chain_id, self.scope_id);
+            self.state
+                .remove(self.admission_id, self.chain_id, self.scope_id);
             self.active = false;
         }
     }
@@ -361,21 +460,33 @@ impl Drop for ReentryRegistration {
 /// call-scoped reentry pump below to service only calls from the same chain on
 /// the active store context.
 #[derive(Clone)]
-pub struct ConcurrentStore {
+pub struct ConcurrentStore<P> {
     sender: mpsc::Sender<StoreMessage>,
     accepting: Arc<AtomicBool>,
     send_gate: Arc<Mutex<()>>,
     stopped: watch::Receiver<bool>,
     reentry: Arc<ReentryState>,
+    policy: P,
 }
 
-impl ConcurrentStore {
+/// Store driver for synchronous guest calls with manual same-chain reentry.
+pub type LegacyStore = ConcurrentStore<LegacySyncReentry>;
+
+impl<P> ConcurrentStore<P>
+where
+    P: StorePolicy,
+{
     #[must_use]
-    pub fn new(mut store: Store<PluginHostState>) -> Self {
+    pub(crate) fn with_policy(mut store: Store<PluginHostState>, policy: P) -> Self {
         let (sender, mut receiver) = mpsc::channel::<StoreMessage>(STORE_QUEUE_CAPACITY);
         let accepting = Arc::new(AtomicBool::new(true));
         let send_gate = Arc::new(Mutex::new(()));
         let (stopped_sender, stopped) = watch::channel(false);
+
+        tracing::debug!(
+            wasm_plugin_policy = P::NAME,
+            "Starting Wasm plugin store driver"
+        );
 
         tokio::spawn(async move {
             let result = store
@@ -423,7 +534,11 @@ impl ConcurrentStore {
             match result {
                 Ok(Ok(())) => {}
                 Ok(Err(error)) | Err(error) => {
-                    tracing::error!(%error, "Wasm plugin store driver stopped");
+                    tracing::error!(
+                        %error,
+                        wasm_plugin_policy = P::NAME,
+                        "Wasm plugin store driver stopped"
+                    );
                 }
             }
         });
@@ -434,6 +549,7 @@ impl ConcurrentStore {
             send_gate,
             stopped,
             reentry: Arc::new(ReentryState::new()),
+            policy,
         }
     }
 
@@ -456,15 +572,27 @@ impl ConcurrentStore {
             .reserve()
             .await
             .map_err(|_| wasmtime::Error::msg("Wasm plugin store driver is not running"))?;
-        permit.send(StoreMessage::Call(Box::new(StoreCall { call, result })));
+        permit.send(StoreMessage::Call(Box::new(StoreCall {
+            call,
+            result,
+            context: None,
+        })));
         drop(send_guard);
 
         receiver
             .await
             .map_err(|_| wasmtime::Error::msg("Wasm plugin store call was cancelled"))?
     }
+}
 
-    /// Queues a guest call, or routes it through the currently active host
+impl ConcurrentStore<LegacySyncReentry> {
+    #[cfg(test)]
+    #[must_use]
+    pub(crate) fn new(store: Store<PluginHostState>) -> Self {
+        Self::with_policy(store, LegacySyncReentry::testing())
+    }
+
+    /// Queues a synchronous guest call, or routes it through the active host
     /// frame when this store appears earlier in a synchronous plugin cycle.
     pub(crate) async fn call_guest<R, F>(&self, call: F) -> wasmtime::Result<R>
     where
@@ -472,8 +600,8 @@ impl ConcurrentStore {
         R: Send + 'static,
     {
         let (result, receiver) = oneshot::channel();
-        let inherited_context = ReentryContext::current();
-        let context = inherited_context.unwrap_or_else(ReentryContext::root);
+        let inherited_context = self.policy.inherited_context();
+        let context = inherited_context.unwrap_or_else(|| self.policy.root_context());
         let mut job: Box<dyn GuestStoreJob> = Box::new(GuestStoreCall {
             call,
             result,
@@ -482,7 +610,7 @@ impl ConcurrentStore {
         });
 
         if let Some(context) = inherited_context
-            && let Some(sender) = self.reentry.sender_for(context.chain_id)
+            && let Some(sender) = self.reentry.sender_for(context)
         {
             match sender.send(job).await {
                 Ok(()) => {
@@ -530,8 +658,8 @@ impl ConcurrentStore {
     fn next_reentry_context(&self) -> wasmtime::Result<ReentryContext> {
         self.reentry
             .current_context()
-            .or_else(ReentryContext::current)
-            .unwrap_or_else(ReentryContext::root)
+            .or_else(|| self.policy.inherited_context())
+            .unwrap_or_else(|| self.policy.root_context())
             .child()
     }
 
@@ -602,6 +730,7 @@ impl ConcurrentStore {
         R: Send + 'static,
     {
         let (result, receiver) = oneshot::channel();
+        let context = self.policy.root_context();
         let send_guard = self.send_gate.lock().await;
         if !self.accepting.load(Ordering::Acquire) {
             return Err(wasmtime::Error::msg(
@@ -614,7 +743,11 @@ impl ConcurrentStore {
             .await
             .map_err(|_| wasmtime::Error::msg("Wasm plugin store driver is not running"))?;
         self.accepting.store(false, Ordering::Release);
-        permit.send(StoreMessage::Shutdown(Box::new(StoreCall { call, result })));
+        permit.send(StoreMessage::Shutdown(Box::new(StoreCall {
+            call,
+            result,
+            context: Some(context),
+        })));
         drop(send_guard);
 
         let result = receiver.await;
@@ -650,8 +783,8 @@ mod tests {
     };
 
     use super::{
-        ConcurrentStore, MAX_SYNC_REENTRY_DEPTH, PluginHostState, ReentryContext, StoreFuture,
-        StoreJob, StoreMessage,
+        LegacyStore as ConcurrentStore, LegacySyncReentry, MAX_SYNC_REENTRY_DEPTH, PluginHostState,
+        RootAdmission, StoreFuture, StoreJob, StoreMessage,
     };
 
     struct NoopJob;
@@ -692,7 +825,7 @@ mod tests {
 
     #[test]
     fn synchronous_reentry_depth_is_bounded_and_recovers() {
-        let root = ReentryContext::root();
+        let root = LegacySyncReentry::testing().root_context();
         let mut context = root;
         for _ in 0..MAX_SYNC_REENTRY_DEPTH {
             context = context.child().expect("create child reentry context");
@@ -707,17 +840,38 @@ mod tests {
     }
 
     #[test]
+    fn legacy_policies_share_graph_wide_root_admission() {
+        let admission = RootAdmission::new();
+        let plugin_a = LegacySyncReentry::new(admission.clone());
+        let plugin_b = LegacySyncReentry::new(admission);
+        let foreign_plugin = LegacySyncReentry::new(RootAdmission::new());
+
+        assert!(Arc::ptr_eq(
+            &plugin_a.root_admission.state,
+            &plugin_b.root_admission.state
+        ));
+        let plugin_a_root = plugin_a.root_context();
+        let plugin_b_root = plugin_b.root_context();
+        let foreign_root = foreign_plugin.root_context();
+        assert_ne!(plugin_a_root, plugin_b_root);
+        assert_ne!(plugin_a_root, foreign_root);
+        assert!(plugin_b.root_admission.admits(plugin_a_root));
+        assert!(!foreign_plugin.root_admission.admits(plugin_a_root));
+    }
+
+    #[test]
     fn reentry_scopes_only_match_their_causal_chain() {
         let state = Arc::new(super::ReentryState::new());
-        let active_context = ReentryContext::root();
-        let unrelated_context = ReentryContext::root();
+        let policy = LegacySyncReentry::testing();
+        let active_context = policy.root_context();
+        let unrelated_context = policy.root_context();
         let (registration, _receiver) = state.register(active_context);
 
-        assert!(state.sender_for(active_context.chain_id).is_some());
-        assert!(state.sender_for(unrelated_context.chain_id).is_none());
+        assert!(state.sender_for(active_context).is_some());
+        assert!(state.sender_for(unrelated_context).is_none());
 
         drop(registration);
-        assert!(state.sender_for(active_context.chain_id).is_none());
+        assert!(state.sender_for(active_context).is_none());
     }
 
     fn sync_reentry_component() -> Vec<u8> {
@@ -874,6 +1028,7 @@ mod tests {
             send_gate: Arc::new(tokio::sync::Mutex::new(())),
             stopped,
             reentry: Arc::new(super::ReentryState::new()),
+            policy: LegacySyncReentry::testing(),
         };
 
         let shutdown_store = store.clone();

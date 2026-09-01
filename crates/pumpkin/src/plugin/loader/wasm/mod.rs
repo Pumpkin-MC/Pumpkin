@@ -1,6 +1,9 @@
 use std::{any::Any, path::Path, sync::Arc};
 
-use wasm_host::{PluginRuntime, WasmPlugin};
+use wasm_host::{
+    PluginRuntime, WasmPlugin,
+    concurrent_store::{LegacySyncReentry, RootAdmission},
+};
 
 use crate::plugin::{
     Context, Plugin, PluginFuture,
@@ -48,12 +51,16 @@ impl Plugin for WasmPlugin {
 
 pub struct WasmPluginLoader {
     verify_signatures: bool,
+    root_admission: RootAdmission,
 }
 
 impl WasmPluginLoader {
     #[must_use]
-    pub const fn new(verify_signatures: bool) -> Self {
-        Self { verify_signatures }
+    pub fn new(verify_signatures: bool) -> Self {
+        Self {
+            verify_signatures,
+            root_admission: RootAdmission::new(),
+        }
     }
 }
 
@@ -62,7 +69,8 @@ impl PluginLoader for WasmPluginLoader {
         Box::pin(async {
             let path = path.to_owned();
 
-            let runtime = PluginRuntime::new(&path)?;
+            let policy = LegacySyncReentry::new(self.root_admission.clone());
+            let runtime = PluginRuntime::new(&path, policy)?;
             let (plugin, metadata) = runtime.init_plugin(&path, self.verify_signatures).await?;
 
             Ok((
