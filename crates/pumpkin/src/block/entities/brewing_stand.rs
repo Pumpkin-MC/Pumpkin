@@ -227,6 +227,49 @@ impl BrewingStandBlockEntity {
         // Mark dirty to trigger update
         self.mark_dirty();
     }
+
+    fn try_refill_fuel(&self, world: &Arc<crate::world::World>) -> bool {
+        let expected_fuel = if self.fuel.load(Ordering::Relaxed) <= 0
+            && let Ok(items) = self.items.try_write()
+            && !items[4].is_empty()
+            && items[4]
+                .get_item()
+                .has_tag(&tag::Item::MINECRAFT_BREWING_FUEL)
+        {
+            Some(items[4].clone())
+        } else {
+            None
+        };
+        let Some(expected_fuel) = expected_fuel else {
+            return false;
+        };
+
+        if let Some(server) = world.server.upgrade() {
+            let mut fuel_event = crate::plugin::api::events::inventory::brewing_stand_fuel::BrewingStandFuelEvent::new(
+                self.position,
+                20,
+            );
+            server
+                .plugin_manager
+                .fire_blocking(&server, &mut fuel_event);
+        }
+
+        if self.fuel.load(Ordering::Relaxed) <= 0
+            && let Ok(mut items) = self.items.try_write()
+            && !items[4].is_empty()
+            && items[4].uid == expected_fuel.uid
+            && items[4].are_equal(&expected_fuel)
+            && items[4]
+                .get_item()
+                .has_tag(&tag::Item::MINECRAFT_BREWING_FUEL)
+        {
+            self.fuel.store(20, Ordering::Relaxed);
+            items[4].decrement(1);
+            true
+        } else {
+            false
+        }
+    }
 }
 
 impl pumpkin_world::inventory::Inventory for BrewingStandBlockEntity {
@@ -435,28 +478,7 @@ impl crate::block::entities::BlockEntity for BrewingStandBlockEntity {
 
     fn tick(&self, world: &Arc<crate::world::World>) {
         // Refill fuel counter from fuel item if needed
-        let fuel_refilled = self.fuel.load(Ordering::Relaxed) <= 0
-            && if let Ok(mut items) = self.items.try_write()
-                && !items[4].is_empty()
-                && items[4]
-                    .get_item()
-                    .has_tag(&tag::Item::MINECRAFT_BREWING_FUEL)
-            {
-                if let Some(server) = world.server.upgrade() {
-                    let mut fuel_event = crate::plugin::api::events::inventory::brewing_stand_fuel::BrewingStandFuelEvent::new(
-                            self.position,
-                            20,
-                        );
-                    server
-                        .plugin_manager
-                        .fire_blocking(&server, &mut fuel_event);
-                }
-                self.fuel.store(20, Ordering::Relaxed);
-                items[4].decrement(1);
-                true
-            } else {
-                false
-            };
+        let fuel_refilled = self.try_refill_fuel(world);
 
         // Get current ingredient and check brewing state
         let Ok(items) = self.items.try_read() else {

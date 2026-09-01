@@ -6,10 +6,11 @@ use std::{
         Arc, Mutex as StdMutex,
         atomic::{AtomicBool, AtomicU64, Ordering},
     },
+    time::Instant,
 };
 
 use futures::{StreamExt, stream::FuturesUnordered};
-use tokio::sync::{Mutex, mpsc, oneshot, watch};
+use tokio::sync::{Mutex, OwnedSemaphorePermit, Semaphore, mpsc, oneshot, watch};
 use wasmtime::{
     AsContextMut, Store, StoreContextMut,
     component::{Accessor, AccessorTask, ComponentNamedList, Lift, Lower, TypedFunc},
@@ -35,6 +36,13 @@ pub(crate) struct RootAdmission {
 struct RootAdmissionState {
     id: u64,
     next_chain_id: AtomicU64,
+    gate: Arc<Semaphore>,
+}
+
+struct RootAdmissionGuard {
+    context: ReentryContext,
+    acquired_at: Instant,
+    permit: Option<OwnedSemaphorePermit>,
 }
 
 impl RootAdmission {
@@ -44,6 +52,7 @@ impl RootAdmission {
             state: Arc::new(RootAdmissionState {
                 id: NEXT_ROOT_ADMISSION_ID.fetch_add(1, Ordering::Relaxed),
                 next_chain_id: AtomicU64::new(1),
+                gate: Arc::new(Semaphore::new(1)),
             }),
         }
     }
@@ -58,6 +67,53 @@ impl RootAdmission {
 
     fn admits(&self, context: ReentryContext) -> bool {
         context.admission_id == self.state.id
+    }
+
+    async fn acquire_root(&self) -> wasmtime::Result<RootAdmissionGuard> {
+        let context = self.root_context();
+        let waiting_since = Instant::now();
+        tracing::trace!(
+            wasm_plugin_admission_id = context.admission_id,
+            wasm_plugin_chain_id = context.chain_id,
+            "Waiting for legacy Wasm plugin root admission"
+        );
+
+        let permit = Arc::clone(&self.state.gate)
+            .acquire_owned()
+            .await
+            .map_err(|_| wasmtime::Error::msg("Wasm plugin root admission is closed"))?;
+        let acquired_at = Instant::now();
+        tracing::trace!(
+            wasm_plugin_admission_id = context.admission_id,
+            wasm_plugin_chain_id = context.chain_id,
+            wasm_plugin_admission_wait_micros =
+                acquired_at.duration_since(waiting_since).as_micros(),
+            "Acquired legacy Wasm plugin root admission"
+        );
+
+        Ok(RootAdmissionGuard {
+            context,
+            acquired_at,
+            permit: Some(permit),
+        })
+    }
+}
+
+impl RootAdmissionGuard {
+    const fn context(&self) -> ReentryContext {
+        self.context
+    }
+}
+
+impl Drop for RootAdmissionGuard {
+    fn drop(&mut self) {
+        tracing::trace!(
+            wasm_plugin_admission_id = self.context.admission_id,
+            wasm_plugin_chain_id = self.context.chain_id,
+            wasm_plugin_admission_held_micros = self.acquired_at.elapsed().as_micros(),
+            "Releasing legacy Wasm plugin root admission"
+        );
+        drop(self.permit.take());
     }
 }
 
@@ -74,6 +130,9 @@ pub trait StorePolicy: sealed::StorePolicy + Clone + Send + Sync + 'static {
 ///
 /// Only stores carrying this sealed policy can use the manual Store-context
 /// reentry pump. Stores using another execution policy do not expose that path.
+/// Top-level chains sharing one authority enter in FIFO order, while nested
+/// calls inherit the active chain's admission. A caller without a context from
+/// that authority acquires a new root before entering the graph.
 #[derive(Clone, Debug)]
 pub struct LegacySyncReentry {
     root_admission: RootAdmission,
@@ -87,23 +146,44 @@ impl LegacySyncReentry {
         Self { root_admission }
     }
 
-    fn root_context(&self) -> ReentryContext {
-        self.root_admission.root_context()
-    }
-
     fn inherited_context(&self) -> Option<ReentryContext> {
         ReentryContext::current().filter(|context| self.root_admission.admits(*context))
     }
 
-    /// Marks a pre-driver bootstrap call as a synchronous causal root.
-    pub(crate) async fn scope_bootstrap<T>(&self, future: impl Future<Output = T>) -> T {
-        REENTRY_CONTEXT.scope(self.root_context(), future).await
+    async fn acquire_root(&self) -> wasmtime::Result<RootAdmissionGuard> {
+        self.root_admission.acquire_root().await
+    }
+
+    #[cfg(test)]
+    fn root_context(&self) -> ReentryContext {
+        self.root_admission.root_context()
+    }
+
+    /// Runs a pre-driver bootstrap operation as an admitted causal root.
+    pub(crate) async fn scope_bootstrap<T>(
+        &self,
+        future: impl Future<Output = wasmtime::Result<T>>,
+    ) -> wasmtime::Result<T> {
+        if let Some(context) = self.inherited_context() {
+            tracing::trace!(
+                wasm_plugin_admission_id = context.admission_id,
+                wasm_plugin_chain_id = context.chain_id,
+                wasm_plugin_reentry_depth = context.depth,
+                "Inherited legacy Wasm plugin root admission"
+            );
+            return REENTRY_CONTEXT.scope(context, future).await;
+        }
+
+        let admission = self.acquire_root().await?;
+        let context = admission.context();
+        let output = REENTRY_CONTEXT.scope(context, future).await;
+        drop(admission);
+        output
     }
 
     #[cfg(test)]
     fn testing() -> Self {
-        static ROOT_ADMISSION: std::sync::OnceLock<RootAdmission> = std::sync::OnceLock::new();
-        Self::new(ROOT_ADMISSION.get_or_init(RootAdmission::new).clone())
+        Self::new(RootAdmission::new())
     }
 }
 
@@ -195,6 +275,7 @@ struct GuestStoreCall<F, R> {
     result: oneshot::Sender<wasmtime::Result<R>>,
     context: ReentryContext,
     reentry: Arc<ReentryState>,
+    root_admission: Option<RootAdmissionGuard>,
 }
 
 impl<F, R> GuestStoreJob for GuestStoreCall<F, R>
@@ -211,13 +292,19 @@ where
             result,
             context,
             reentry,
+            root_admission,
         } = *self;
-        Box::pin(REENTRY_CONTEXT.scope(context, async move {
-            let _active_context = reentry.enter_active_context(context);
-            let output = call(GuestCallContext::Concurrent(accessor)).await;
+        Box::pin(async move {
+            let output = REENTRY_CONTEXT
+                .scope(context, async move {
+                    let _active_context = reentry.enter_active_context(context);
+                    call(GuestCallContext::Concurrent(accessor)).await
+                })
+                .await;
+            drop(root_admission);
             let _ = result.send(output);
             Ok(())
-        }))
+        })
     }
 
     fn run_reentrant(
@@ -229,13 +316,19 @@ where
             result,
             context,
             reentry,
+            root_admission,
         } = *self;
-        Box::pin(REENTRY_CONTEXT.scope(context, async move {
-            let _active_context = reentry.enter_active_context(context);
-            let output = call(GuestCallContext::Reentrant(store)).await;
+        Box::pin(async move {
+            let output = REENTRY_CONTEXT
+                .scope(context, async move {
+                    let _active_context = reentry.enter_active_context(context);
+                    call(GuestCallContext::Reentrant(store)).await
+                })
+                .await;
+            drop(root_admission);
             let _ = result.send(output);
             Ok(())
-        }))
+        })
     }
 }
 
@@ -297,7 +390,10 @@ impl AccessorTask<PluginHostState> for ConcurrentTask {
 enum StoreMessage {
     Call(Box<dyn StoreJob>),
     GuestCall(Box<dyn GuestStoreJob>),
-    Shutdown(Box<dyn StoreJob>),
+    Shutdown {
+        job: Box<dyn StoreJob>,
+        root_admission: Option<RootAdmissionGuard>,
+    },
 }
 
 type ReentrySender = mpsc::Sender<Box<dyn GuestStoreJob>>;
@@ -343,6 +439,16 @@ impl ReentryState {
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .last()
             .map(|(_, context)| *context)
+    }
+
+    fn has_active_context(&self, context: ReentryContext) -> bool {
+        self.active_contexts
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .iter()
+            .any(|(_, active)| {
+                active.admission_id == context.admission_id && active.chain_id == context.chain_id
+            })
     }
 
     fn remove_active_context(&self, id: u64) {
@@ -517,11 +623,15 @@ where
                                 // queue through `pump_reentry`; unrelated work waits here.
                                 job.run_concurrent(accessor).await?;
                             }
-                            StoreMessage::Shutdown(job) => {
+                            StoreMessage::Shutdown {
+                                job,
+                                root_admission,
+                            } => {
                                 receiver.close();
                                 while active_calls.next().await.is_some() {}
                                 let result = job.run(accessor).await;
                                 poll_fn(|cx| accessor.poll_no_interesting_tasks(cx)).await;
+                                drop(root_admission);
                                 return result;
                             }
                         }
@@ -601,12 +711,27 @@ impl ConcurrentStore<LegacySyncReentry> {
     {
         let (result, receiver) = oneshot::channel();
         let inherited_context = self.policy.inherited_context();
-        let context = inherited_context.unwrap_or_else(|| self.policy.root_context());
+        let (context, root_admission) = if let Some(context) = inherited_context {
+            tracing::trace!(
+                wasm_plugin_admission_id = context.admission_id,
+                wasm_plugin_chain_id = context.chain_id,
+                wasm_plugin_reentry_depth = context.depth,
+                "Inherited legacy Wasm plugin root admission"
+            );
+            (context, None)
+        } else {
+            if !self.accepting.load(Ordering::Acquire) {
+                return Err(wasmtime::Error::msg("Wasm plugin store is shutting down"));
+            }
+            let admission = self.policy.acquire_root().await?;
+            (admission.context(), Some(admission))
+        };
         let mut job: Box<dyn GuestStoreJob> = Box::new(GuestStoreCall {
             call,
             result,
             context,
             reentry: Arc::clone(&self.reentry),
+            root_admission,
         });
 
         if let Some(context) = inherited_context
@@ -659,7 +784,9 @@ impl ConcurrentStore<LegacySyncReentry> {
         self.reentry
             .current_context()
             .or_else(|| self.policy.inherited_context())
-            .unwrap_or_else(|| self.policy.root_context())
+            .ok_or_else(|| {
+                wasmtime::Error::msg("Wasm plugin reentry requires an active admitted causal chain")
+            })?
             .child()
     }
 
@@ -730,7 +857,29 @@ impl ConcurrentStore<LegacySyncReentry> {
         R: Send + 'static,
     {
         let (result, receiver) = oneshot::channel();
-        let context = self.policy.root_context();
+        if !self.accepting.load(Ordering::Acquire) {
+            return Err(wasmtime::Error::msg(
+                "Wasm plugin store is already shutting down",
+            ));
+        }
+        let inherited_context = self.policy.inherited_context();
+        let (context, root_admission) = if let Some(context) = inherited_context {
+            if self.reentry.has_active_context(context) {
+                return Err(wasmtime::Error::msg(
+                    "Cannot shut down a Wasm plugin store while it is active in the current causal chain",
+                ));
+            }
+            tracing::trace!(
+                wasm_plugin_admission_id = context.admission_id,
+                wasm_plugin_chain_id = context.chain_id,
+                wasm_plugin_reentry_depth = context.depth,
+                "Inherited legacy Wasm plugin root admission"
+            );
+            (context, None)
+        } else {
+            let admission = self.policy.acquire_root().await?;
+            (admission.context(), Some(admission))
+        };
         let send_guard = self.send_gate.lock().await;
         if !self.accepting.load(Ordering::Acquire) {
             return Err(wasmtime::Error::msg(
@@ -743,11 +892,14 @@ impl ConcurrentStore<LegacySyncReentry> {
             .await
             .map_err(|_| wasmtime::Error::msg("Wasm plugin store driver is not running"))?;
         self.accepting.store(false, Ordering::Release);
-        permit.send(StoreMessage::Shutdown(Box::new(StoreCall {
-            call,
-            result,
-            context: Some(context),
-        })));
+        permit.send(StoreMessage::Shutdown {
+            job: Box::new(StoreCall {
+                call,
+                result,
+                context: Some(context),
+            }),
+            root_admission,
+        });
         drop(send_guard);
 
         let result = receiver.await;
@@ -765,7 +917,7 @@ impl ConcurrentStore<LegacySyncReentry> {
 mod tests {
     use std::sync::{
         Arc, Mutex, OnceLock,
-        atomic::{AtomicUsize, Ordering},
+        atomic::{AtomicBool, AtomicUsize, Ordering},
     };
 
     use tokio::{
@@ -823,6 +975,10 @@ mod tests {
         Store::new(&engine, PluginHostState::new())
     }
 
+    fn legacy_store(store: Store<PluginHostState>, admission: &RootAdmission) -> ConcurrentStore {
+        ConcurrentStore::with_policy(store, LegacySyncReentry::new(admission.clone()))
+    }
+
     #[test]
     fn synchronous_reentry_depth_is_bounded_and_recovers() {
         let root = LegacySyncReentry::testing().root_context();
@@ -872,6 +1028,126 @@ mod tests {
 
         drop(registration);
         assert!(state.sender_for(active_context).is_none());
+    }
+
+    #[allow(clippy::too_many_lines)]
+    async fn root_admission_lifecycle_scenario() {
+        let admission = RootAdmission::new();
+        let holding_store = legacy_store(test_store(), &admission);
+        let first_store = legacy_store(test_store(), &admission);
+        let second_store = legacy_store(test_store(), &admission);
+        let third_store = legacy_store(test_store(), &admission);
+        let holding_started = Arc::new(Notify::new());
+        let release_holding = Arc::new(Notify::new());
+        let holding_completed = Arc::new(Notify::new());
+        let third_attempted = Arc::new(Notify::new());
+        let third_started = Arc::new(Notify::new());
+        let order = Arc::new(Mutex::new(Vec::new()));
+
+        let holding_driver = holding_store.clone();
+        let started = Arc::clone(&holding_started);
+        let release = Arc::clone(&release_holding);
+        let completed = Arc::clone(&holding_completed);
+        let holding = tokio::spawn(async move {
+            holding_driver
+                .call_guest(move |_| {
+                    Box::pin(async move {
+                        started.notify_one();
+                        release.notified().await;
+                        completed.notify_one();
+                        Ok(())
+                    })
+                })
+                .await
+        });
+        holding_started.notified().await;
+        holding.abort();
+        assert!(
+            holding
+                .await
+                .expect_err("holding root waiter should be cancelled")
+                .is_cancelled()
+        );
+
+        let first_order = Arc::clone(&order);
+        let first = first_store.call_guest(move |_| {
+            Box::pin(async move {
+                first_order.lock().expect("order lock").push(1);
+                Ok(1)
+            })
+        });
+        tokio::pin!(first);
+        assert!(futures::poll!(&mut first).is_pending());
+
+        let second_order = Arc::clone(&order);
+        let second = second_store.call_guest(move |_| {
+            Box::pin(async move {
+                second_order.lock().expect("order lock").push(2);
+                Ok(2)
+            })
+        });
+        tokio::pin!(second);
+        assert!(futures::poll!(&mut second).is_pending());
+
+        let runtime = tokio::runtime::Handle::current();
+        let third_driver = third_store.clone();
+        let attempted = Arc::clone(&third_attempted);
+        let entered = Arc::clone(&third_started);
+        let third_order = Arc::clone(&order);
+        let third = tokio::task::spawn_blocking(move || {
+            attempted.notify_one();
+            runtime.block_on(third_driver.call_guest(move |_| {
+                Box::pin(async move {
+                    entered.notify_one();
+                    third_order.lock().expect("order lock").push(3);
+                    Ok(3)
+                })
+            }))
+        });
+        third_attempted.notified().await;
+        assert!(
+            timeout(Duration::from_millis(100), third_started.notified())
+                .await
+                .is_err(),
+            "a root from another execution domain entered before the accepted job finished"
+        );
+
+        release_holding.notify_one();
+        holding_completed.notified().await;
+        assert_eq!(first.await.expect("first root"), 1);
+        assert_eq!(second.await.expect("second root"), 2);
+        assert_eq!(
+            third
+                .await
+                .expect("third root task")
+                .expect("third root result"),
+            3
+        );
+        assert_eq!(*order.lock().expect("order lock"), [1, 2, 3]);
+
+        holding_store
+            .shutdown(|_| Box::pin(async move { Ok(()) }))
+            .await
+            .expect("shut down holding store");
+        first_store
+            .shutdown(|_| Box::pin(async move { Ok(()) }))
+            .await
+            .expect("shut down first store");
+        second_store
+            .shutdown(|_| Box::pin(async move { Ok(()) }))
+            .await
+            .expect("shut down second store");
+        third_store
+            .shutdown(|_| Box::pin(async move { Ok(()) }))
+            .await
+            .expect("shut down third store");
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn legacy_root_admission_is_fifo_and_cancellation_safe_across_domains() {
+        timeout(Duration::from_secs(10), root_admission_lifecycle_scenario())
+            .await
+            .expect("root admission lifecycle scenario timed out");
     }
 
     fn sync_reentry_component() -> Vec<u8> {
@@ -1355,8 +1631,8 @@ mod tests {
             .expect("shut down test store");
     }
 
-    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn shutdown_allows_a_callback_needed_by_an_accepted_call() {
+    #[allow(clippy::too_many_lines)]
+    async fn shutdown_reentry_scenario() {
         let mut config = Config::new();
         config.wasm_component_model(true);
         config.wasm_component_model_async(true);
@@ -1370,6 +1646,7 @@ mod tests {
         let start_callback = Arc::new(Notify::new());
         let callback_completed = Arc::new(Notify::new());
         let host_calls = Arc::new(AtomicUsize::new(0));
+        let waiting_root_ran = Arc::new(AtomicBool::new(false));
 
         let mut linker = Linker::<PluginHostState>::new(&engine);
         let run_for_host = Arc::clone(&run_slot);
@@ -1432,30 +1709,44 @@ mod tests {
         entered.notified().await;
 
         let shutdown_driver = driver.clone();
-        let shutdown = tokio::spawn(async move {
-            shutdown_driver
-                .shutdown(|_| Box::pin(async move { Ok(()) }))
-                .await
+        let shutdown = shutdown_driver.shutdown(|_| Box::pin(async move { Ok(()) }));
+        tokio::pin!(shutdown);
+        assert!(futures::poll!(&mut shutdown).is_pending());
+        assert!(driver.accepting.load(Ordering::Acquire));
+
+        let root_ran = Arc::clone(&waiting_root_ran);
+        let waiting_root = driver.call_guest(move |_| {
+            Box::pin(async move {
+                root_ran.store(true, Ordering::Release);
+                Ok(())
+            })
         });
-        while driver.accepting.load(Ordering::Acquire) {
-            tokio::task::yield_now().await;
-        }
+        tokio::pin!(waiting_root);
+        assert!(futures::poll!(&mut waiting_root).is_pending());
 
         start_callback.notify_one();
         timeout(Duration::from_secs(2), callback_completed.notified())
             .await
             .expect("callback was rejected during shutdown");
         outer.await.expect("outer task").expect("outer guest call");
-        shutdown
+        shutdown.await.expect("shutdown store");
+        let error = waiting_root
             .await
-            .expect("shutdown task")
-            .expect("shutdown store");
+            .expect_err("root queued behind shutdown should be rejected");
+        assert!(error.to_string().contains("shutting down"));
+        assert!(!waiting_root_ran.load(Ordering::Acquire));
         assert_eq!(host_calls.load(Ordering::SeqCst), 2);
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn shutdown_allows_a_callback_needed_by_an_accepted_call() {
+        timeout(Duration::from_secs(10), shutdown_reentry_scenario())
+            .await
+            .expect("shutdown reentry scenario timed out");
+    }
+
     #[allow(clippy::too_many_lines)]
-    async fn sync_lifted_cross_plugin_reentry_completes() {
+    async fn opposing_plugin_roots_scenario() {
         let mut config = Config::new();
         config.wasm_component_model(true);
         config.wasm_component_model_async(true);
@@ -1470,6 +1761,9 @@ mod tests {
         let a_calls = Arc::new(AtomicUsize::new(0));
         let b_calls = Arc::new(AtomicUsize::new(0));
         let trace = Arc::new(Mutex::new(Vec::new()));
+        let first_root_entered = Arc::new(Notify::new());
+        let release_first_root = Arc::new(Notify::new());
+        let second_root_started = Arc::new(Notify::new());
 
         let mut a_linker = Linker::<PluginHostState>::new(&engine);
         let a_driver_for_a = Arc::clone(&a_driver_slot);
@@ -1477,6 +1771,8 @@ mod tests {
         let b_run_for_a = Arc::clone(&b_run_slot);
         let a_calls_for_host = Arc::clone(&a_calls);
         let trace_for_a = Arc::clone(&trace);
+        let entered_for_a = Arc::clone(&first_root_entered);
+        let release_for_a = Arc::clone(&release_first_root);
         a_linker
             .root()
             .func_wrap_async("host", move |mut store, ()| {
@@ -1491,10 +1787,16 @@ mod tests {
                 let b_run = *b_run_for_a.get().expect("B run initialized");
                 let calls = Arc::clone(&a_calls_for_host);
                 let trace = Arc::clone(&trace_for_a);
+                let entered = Arc::clone(&entered_for_a);
+                let release = Arc::clone(&release_for_a);
                 Box::new(async move {
                     match calls.fetch_add(1, Ordering::SeqCst) {
                         0 => {
-                            trace.lock().expect("trace lock").push("a:outer");
+                            trace.lock().expect("trace lock").push("a:first-outer");
+                            entered.notify_one();
+                            a_driver
+                                .pump_reentry(&mut store, release.notified())
+                                .await?;
                             let outbound = b_driver.call_guest(move |mut context| {
                                 assert!(
                                     !context.is_reentrant(),
@@ -1503,9 +1805,19 @@ mod tests {
                                 Box::pin(async move { context.call(b_run, ()).await })
                             });
                             a_driver.pump_reentry(&mut store, outbound).await??;
-                            trace.lock().expect("trace lock").push("a:resumed");
                         }
-                        1 => trace.lock().expect("trace lock").push("a:inner"),
+                        1 => trace.lock().expect("trace lock").push("a:first-inner"),
+                        2 => {
+                            trace.lock().expect("trace lock").push("a:second-middle");
+                            let outbound = b_driver.call_guest(move |mut context| {
+                                assert!(
+                                    context.is_reentrant(),
+                                    "A to B callback must use B's active store frame"
+                                );
+                                Box::pin(async move { context.call(b_run, ()).await })
+                            });
+                            a_driver.pump_reentry(&mut store, outbound).await??;
+                        }
                         _ => return Err(wasmtime::Error::msg("unexpected extra call into A")),
                     }
                     Ok(())
@@ -1534,19 +1846,41 @@ mod tests {
                 let calls = Arc::clone(&b_calls_for_host);
                 let trace = Arc::clone(&trace_for_b);
                 Box::new(async move {
-                    if calls.fetch_add(1, Ordering::SeqCst) != 0 {
-                        return Err(wasmtime::Error::msg("unexpected extra call into B"));
+                    match calls.fetch_add(1, Ordering::SeqCst) {
+                        0 => {
+                            trace
+                                .lock()
+                                .expect("trace lock")
+                                .push("b:first-middle");
+                            let outbound = a_driver.call_guest(move |mut context| {
+                                assert!(
+                                    context.is_reentrant(),
+                                    "B to A callback must use A's active store frame"
+                                );
+                                Box::pin(async move { context.call(a_run, ()).await })
+                            });
+                            b_driver.pump_reentry(&mut store, outbound).await??;
+                        }
+                        1 => {
+                            trace
+                                .lock()
+                                .expect("trace lock")
+                                .push("b:second-outer");
+                            let outbound = a_driver.call_guest(move |mut context| {
+                                assert!(
+                                    !context.is_reentrant(),
+                                    "first call into A from the second root must use its concurrent store path"
+                                );
+                                Box::pin(async move { context.call(a_run, ()).await })
+                            });
+                            b_driver.pump_reentry(&mut store, outbound).await??;
+                        }
+                        2 => trace
+                            .lock()
+                            .expect("trace lock")
+                            .push("b:second-inner"),
+                        _ => return Err(wasmtime::Error::msg("unexpected extra call into B")),
                     }
-                    trace.lock().expect("trace lock").push("b:middle");
-                    let outbound = a_driver.call_guest(move |mut context| {
-                        assert!(
-                            context.is_reentrant(),
-                            "B to A callback must use A's active store frame"
-                        );
-                        Box::pin(async move { context.call(a_run, ()).await })
-                    });
-                    b_driver.pump_reentry(&mut store, outbound).await??;
-                    trace.lock().expect("trace lock").push("b:resumed");
                     Ok(())
                 })
             })
@@ -1572,30 +1906,69 @@ mod tests {
             .expect("get B run export");
         assert!(b_run_slot.set(b_run).is_ok());
 
-        let a_driver = ConcurrentStore::new(a_store);
-        let b_driver = ConcurrentStore::new(b_store);
+        let admission = RootAdmission::new();
+        let a_driver = legacy_store(a_store, &admission);
+        let b_driver = legacy_store(b_store, &admission);
         assert!(a_driver_slot.set(a_driver.clone()).is_ok());
         assert!(b_driver_slot.set(b_driver.clone()).is_ok());
 
-        timeout(
-            Duration::from_secs(2),
-            a_driver.call_guest(move |mut context| {
+        let first_driver = a_driver.clone();
+        let first_root = tokio::spawn(async move {
+            first_driver
+                .call_guest(move |mut context| {
+                    assert!(
+                        !context.is_reentrant(),
+                        "top-level call into A must use its concurrent store path"
+                    );
+                    Box::pin(async move { context.call(a_run, ()).await })
+                })
+                .await
+        });
+        first_root_entered.notified().await;
+
+        let started = Arc::clone(&second_root_started);
+        let second_root = b_driver.call_guest(move |mut context| {
+            Box::pin(async move {
+                started.notify_one();
                 assert!(
                     !context.is_reentrant(),
-                    "top-level call into A must use its concurrent store path"
+                    "top-level call into B must use its concurrent store path"
                 );
-                Box::pin(async move { context.call(a_run, ()).await })
-            }),
-        )
-        .await
-        .expect("cross-plugin sync reentry timed out")
-        .expect("cross-plugin sync reentry failed");
+                context.call(b_run, ()).await
+            })
+        });
+        tokio::pin!(second_root);
+        assert!(futures::poll!(&mut second_root).is_pending());
+        assert!(
+            timeout(Duration::from_millis(100), second_root_started.notified())
+                .await
+                .is_err(),
+            "the opposing root entered B while the first root still held admission"
+        );
 
-        assert_eq!(a_calls.load(Ordering::SeqCst), 2);
-        assert_eq!(b_calls.load(Ordering::SeqCst), 1);
+        release_first_root.notify_one();
+        timeout(Duration::from_secs(2), async {
+            first_root
+                .await
+                .expect("first root task")
+                .expect("first root result");
+            second_root.await.expect("second root result");
+        })
+        .await
+        .expect("opposing synchronous roots timed out");
+
+        assert_eq!(a_calls.load(Ordering::SeqCst), 3);
+        assert_eq!(b_calls.load(Ordering::SeqCst), 3);
         assert_eq!(
             *trace.lock().expect("trace lock"),
-            ["a:outer", "b:middle", "a:inner", "b:resumed", "a:resumed"]
+            [
+                "a:first-outer",
+                "b:first-middle",
+                "a:first-inner",
+                "b:second-outer",
+                "a:second-middle",
+                "b:second-inner"
+            ]
         );
         assert!(
             a_driver
@@ -1638,5 +2011,12 @@ mod tests {
             .shutdown(|_| Box::pin(async move { Ok(()) }))
             .await
             .expect("shut down B store");
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn opposing_plugin_roots_complete() {
+        timeout(Duration::from_secs(10), opposing_plugin_roots_scenario())
+            .await
+            .expect("opposing root reentry scenario timed out");
     }
 }

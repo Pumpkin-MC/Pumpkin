@@ -704,9 +704,9 @@ impl PluginManager {
             }
 
             // Find a loader that can handle this file
-            let loaders = self.loaders.read().await;
+            let loaders = self.loaders.read().await.clone();
             let mut loader_found = false;
-            for loader in loaders.iter() {
+            for loader in &loaders {
                 if loader.can_load(&path) {
                     match loader.load(&path).await {
                         Ok((instance, metadata, loader_data)) => {
@@ -919,7 +919,8 @@ impl PluginManager {
             )));
         }
 
-        for loader in self.loaders.read().await.iter() {
+        let loaders = self.loaders.read().await.clone();
+        for loader in &loaders {
             if loader.can_load(path) {
                 let (instance, metadata, loader_data) = loader.load(path).await?;
 
