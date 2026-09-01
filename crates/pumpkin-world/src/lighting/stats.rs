@@ -1,93 +1,77 @@
 //! Per-pass instrumentation for the lighting hot path.
 //!
 //! Split out of `runtime` so the engine file holds propagation logic only. The counters
-//! are plain indices into one array rather than named fields: the hot path bumps them by
-//! index, and the array is snapshotted and reset in one sweep per pass.
+//! live in one flat array: the hot path bumps them by index, and the array is snapshotted
+//! and reset in a single sweep per pass.
 
 use std::fmt;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
-const LIGHT_COUNTER_NAMES: [&str; 17] = [
-    "check_block",
-    "check_sky",
-    "sky_column_scan",
-    "sky_column_read",
-    "sky_increase",
-    "sky_decrease",
-    "block_increase",
-    "block_decrease",
-    "get_sky",
-    "set_sky",
-    "get_block_light",
-    "set_block_light",
-    "block_state",
-    "chunk_loaded",
-    "sky_tier1_no_open_sky",
-    "sky_tier2_open_sky",
-    "sky_tier3_scan",
-];
+/// Declares the counters once and derives everything else from that one list.
+///
+/// The variants number themselves from zero upwards in declaration order
+macro_rules! light_counters {
+    ($($variant:ident => $name:literal,)+) => {
+        /// One counter per measured operation on the lighting hot path.
+        #[derive(Clone, Copy)]
+        #[repr(usize)]
+        pub(super) enum Counter {
+            $($variant,)+
+        }
+
+        impl Counter {
+            const NAMES: &'static [&'static str] = &[$($name,)+];
+        }
+    };
+}
+
+light_counters! {
+    CheckBlock => "check_block",
+    CheckSky => "check_sky",
+    SkyColumnScan => "sky_column_scan",
+    SkyColumnRead => "sky_column_read",
+    SkyIncrease => "sky_increase",
+    SkyDecrease => "sky_decrease",
+    BlockIncrease => "block_increase",
+    BlockDecrease => "block_decrease",
+    GetSky => "get_sky",
+    SetSky => "set_sky",
+    GetBlockLight => "get_block_light",
+    SetBlockLight => "set_block_light",
+    BlockState => "block_state",
+    ChunkLoaded => "chunk_loaded",
+    SkyTier1 => "sky_tier1_no_open_sky",
+    SkyTier2 => "sky_tier2_open_sky",
+    SkyTier3 => "sky_tier3_scan",
+}
+
+const COUNTER_COUNT: usize = Counter::NAMES.len();
 
 /// Per-tick counts for the lighting hot path. `sky_column_read` is O(height)
 /// per `checkBlock`; `get_sky`/`block_state`/`chunk_loaded` are 6x per
 /// propagated cell. Logged sorted by count from [`LightPassStats`].
-pub(super) struct LightCounters([AtomicU64; 17]);
+pub(super) struct LightCounters([AtomicU64; COUNTER_COUNT]);
 
 impl LightCounters {
-    pub(super) const CHECK_BLOCK: usize = 0;
-    pub(super) const CHECK_SKY: usize = 1;
-    pub(super) const SKY_COLUMN_SCAN: usize = 2;
-    pub(super) const SKY_COLUMN_READ: usize = 3;
-    pub(super) const SKY_INCREASE: usize = 4;
-    pub(super) const SKY_DECREASE: usize = 5;
-    pub(super) const BLOCK_INCREASE: usize = 6;
-    pub(super) const BLOCK_DECREASE: usize = 7;
-    pub(super) const GET_SKY: usize = 8;
-    pub(super) const SET_SKY: usize = 9;
-    pub(super) const GET_BLOCK_LIGHT: usize = 10;
-    pub(super) const SET_BLOCK_LIGHT: usize = 11;
-    pub(super) const BLOCK_STATE: usize = 12;
-    pub(super) const CHUNK_LOADED: usize = 13;
-    pub(super) const SKY_TIER1: usize = 14;
-    pub(super) const SKY_TIER2: usize = 15;
-    pub(super) const SKY_TIER3: usize = 16;
-
     pub(super) const fn new() -> Self {
-        Self([
-            AtomicU64::new(0),
-            AtomicU64::new(0),
-            AtomicU64::new(0),
-            AtomicU64::new(0),
-            AtomicU64::new(0),
-            AtomicU64::new(0),
-            AtomicU64::new(0),
-            AtomicU64::new(0),
-            AtomicU64::new(0),
-            AtomicU64::new(0),
-            AtomicU64::new(0),
-            AtomicU64::new(0),
-            AtomicU64::new(0),
-            AtomicU64::new(0),
-            AtomicU64::new(0),
-            AtomicU64::new(0),
-            AtomicU64::new(0),
-        ])
+        Self([const { AtomicU64::new(0) }; COUNTER_COUNT])
     }
 
-    pub(super) fn bump(&self, index: usize) {
-        self.0[index].fetch_add(1, Ordering::Relaxed);
+    pub(super) fn bump(&self, counter: Counter) {
+        self.0[counter as usize].fetch_add(1, Ordering::Relaxed);
     }
 
-    pub(super) fn bump_n(&self, index: usize, n: u64) {
+    pub(super) fn bump_n(&self, counter: Counter, n: u64) {
         if n > 0 {
-            self.0[index].fetch_add(n, Ordering::Relaxed);
+            self.0[counter as usize].fetch_add(n, Ordering::Relaxed);
         }
     }
 
-    pub(super) fn snapshot_and_reset(&self) -> [u64; 17] {
-        let mut out = [0u64; 17];
-        for (i, slot) in self.0.iter().enumerate() {
-            out[i] = slot.swap(0, Ordering::Relaxed);
+    pub(super) fn snapshot_and_reset(&self) -> [u64; COUNTER_COUNT] {
+        let mut out = [0u64; COUNTER_COUNT];
+        for (slot, out) in self.0.iter().zip(out.iter_mut()) {
+            *out = slot.swap(0, Ordering::Relaxed);
         }
         out
     }
@@ -99,7 +83,7 @@ pub struct LightPassStats {
     pub elapsed: Duration,
     pub updates: i32,
     pub leftover: bool,
-    counts: [u64; 17],
+    counts: [u64; COUNTER_COUNT],
 }
 
 impl LightPassStats {
@@ -109,7 +93,7 @@ impl LightPassStats {
         elapsed: Duration,
         updates: i32,
         leftover: bool,
-        counts: [u64; 17],
+        counts: [u64; COUNTER_COUNT],
     ) -> Self {
         Self {
             elapsed,
@@ -120,7 +104,7 @@ impl LightPassStats {
     }
 
     fn hot_pairs(&self) -> Vec<(&'static str, u64)> {
-        let mut items: Vec<(&'static str, u64)> = LIGHT_COUNTER_NAMES
+        let mut items: Vec<(&'static str, u64)> = Counter::NAMES
             .iter()
             .zip(self.counts.iter())
             .filter_map(|(name, count)| (*count > 0).then_some((*name, *count)))
@@ -142,7 +126,7 @@ impl LightPassStats {
         self.leftover
             || self.updates > 0
             || self.elapsed.as_millis() >= 1
-            || self.counts[LightCounters::SKY_COLUMN_READ] > 256
+            || self.counts[Counter::SkyColumnRead as usize] > 256
     }
 }
 

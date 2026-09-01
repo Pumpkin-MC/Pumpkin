@@ -5,7 +5,7 @@
 //! functions then operate on an already-resolved chunk so a caller can resolve once and
 //! reuse it.
 
-use super::stats::LightCounters;
+use super::stats::{Counter, LightCounters};
 use crate::chunk::ChunkData;
 use crate::chunk::io::Dirtiable;
 use crate::chunk::palette::BlockPalette;
@@ -88,7 +88,7 @@ impl<'a> ChunkCursor<'a> {
     }
 
     pub(super) fn sky_light(&mut self, pos: &BlockPos) -> u8 {
-        self.counters.bump(LightCounters::GET_SKY);
+        self.counters.bump(Counter::GetSky);
         let Some(chunk) = self.chunk_for(pos) else {
             return 0;
         };
@@ -96,7 +96,7 @@ impl<'a> ChunkCursor<'a> {
     }
 
     pub(super) fn block_light(&mut self, pos: &BlockPos) -> Option<u8> {
-        self.counters.bump(LightCounters::GET_BLOCK_LIGHT);
+        self.counters.bump(Counter::GetBlockLight);
         let chunk = self.chunk_for(pos)?;
         Self::block_light_in(chunk, pos)
     }
@@ -104,13 +104,13 @@ impl<'a> ChunkCursor<'a> {
     /// `false` if the write cannot land (chunk not loaded, Y outside the
     /// chunk height). Callers must not re-queue such positions.
     pub(super) fn set_sky_light(&mut self, pos: &BlockPos, light_level: u8) -> bool {
-        self.counters.bump(LightCounters::SET_SKY);
+        self.counters.bump(Counter::SetSky);
         self.chunk_for(pos)
             .is_some_and(|chunk| Self::write_light(chunk, pos, light_level, false))
     }
 
     pub(super) fn set_block_light(&mut self, pos: &BlockPos, light_level: u8) -> bool {
-        self.counters.bump(LightCounters::SET_BLOCK_LIGHT);
+        self.counters.bump(Counter::SetBlockLight);
         self.chunk_for(pos)
             .is_some_and(|chunk| Self::write_light(chunk, pos, light_level, true))
     }
