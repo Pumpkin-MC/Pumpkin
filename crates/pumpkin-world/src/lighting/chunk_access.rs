@@ -128,7 +128,10 @@ impl<'a> ChunkCursor<'a> {
     //
     // They deliberately do not bump counters: the caller already did that when it resolved.
 
-    pub(super) fn block_state_in(chunk: &ChunkData, pos: &BlockPos) -> &'static pumpkin_data::BlockState {
+    pub(super) fn block_state_in(
+        chunk: &ChunkData,
+        pos: &BlockPos,
+    ) -> &'static pumpkin_data::BlockState {
         let (_, relative) = pos.chunk_and_chunk_relative_position();
         chunk
             .section

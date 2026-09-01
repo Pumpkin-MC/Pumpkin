@@ -8,8 +8,8 @@ use pumpkin_config::lighting::LightingEngineConfig;
 use pumpkin_data::BlockDirection;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector2::Vector2;
-use std::sync::{Arc, Mutex};
 use std::sync::atomic::Ordering;
+use std::sync::{Arc, Mutex};
 use std::time::Instant;
 use tracing::debug;
 
@@ -17,7 +17,6 @@ use tracing::debug;
 /// empties the queues; `ThreadedLevelLightEngine` does that on the light thread.
 /// Leftover is visible as delayed shadows after mining, placing, or a chunk-border sky refill.
 const LIGHT_UPDATES_PER_PASS: i32 = 16_384;
-
 
 pub struct DynamicLightEngine {
     block_decrease: SegQueue<(BlockPos, u8)>,
@@ -77,7 +76,9 @@ impl DynamicLightEngine {
                 let opacity = sections
                     .get(rel_y / BlockPalette::SIZE)
                     .map(|section| {
-                        section.get(local_x, rel_y % BlockPalette::SIZE, local_z).to_state()
+                        section
+                            .get(local_x, rel_y % BlockPalette::SIZE, local_z)
+                            .to_state()
                     })
                     .map_or(0, |state| state.opacity);
                 if opacity > 0 {
@@ -110,7 +111,7 @@ impl DynamicLightEngine {
         };
 
         if tier == SkyLightTier::Unknown {
-            return tier; // Falls schon ohne Grenze unklar, spart das den Nachbar-Lookup.
+            return tier; // Unclear even without a border: saves the neighbour lookup.
         }
         // Deliberately not via the cursor: the neighbour chunk would evict its memo,
         // even though the caller carries on in its own chunk right after. Only the
@@ -237,12 +238,12 @@ impl DynamicLightEngine {
             .propagate_lock
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        // Alle drei Schritte arbeiten am selben Chunk; ein Cursor spart deren Lookups.
+        // All three steps work on the same chunk; one cursor saves their lookups.
         let mut cursor = ChunkCursor::new(level, &self.counters);
-        self.check_block_light_updates_with(&mut cursor, pos);
+        self.check_block_light_updates_with_cursor(&mut cursor, pos);
         // Must run before the sky pass: the pass reads the cut height this may invalidate.
         Self::refresh_sky_cut_after_change(&mut cursor, &pos);
-        self.check_sky_light_updates_with(&mut cursor, pos);
+        self.check_sky_light_updates_with_cursor(&mut cursor, pos);
     }
 
     /// Vanilla `LightEngine.runLightUpdates`. One budgeted slice per tick so a sky
@@ -257,8 +258,8 @@ impl DynamicLightEngine {
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
             let mut budget = LIGHT_UPDATES_PER_PASS;
             // One cursor for the whole pass: consecutive queue entries almost always
-            // sit in the same chunk, so the hit rate climbs beyond what a single
-            // Einzeloperation hinaus.
+            // sit in the same chunk, so the hit rate climbs well beyond what a single
+            // operation on its own could reach.
             let mut cursor = ChunkCursor::new(level, &self.counters);
             updates += self.perform_block_light_updates(&mut cursor, &mut budget);
             updates += self.perform_sky_light_updates(&mut cursor, &mut budget);
@@ -425,7 +426,12 @@ impl DynamicLightEngine {
                             self.queue_block_light_decrease(neighbor_pos, neighbor_light);
                         } else {
                             // Has self-emission, set to its own light and re-propagate from it
-                            ChunkCursor::write_light(chunk, &neighbor_pos, neighbor_luminance, true);
+                            ChunkCursor::write_light(
+                                chunk,
+                                &neighbor_pos,
+                                neighbor_luminance,
+                                true,
+                            );
                             self.queue_block_light_increase(neighbor_pos, neighbor_luminance);
                         }
                     } else {
@@ -439,10 +445,10 @@ impl DynamicLightEngine {
 
     pub fn check_block_light_updates(&self, level: &Arc<Level>, pos: BlockPos) {
         let mut cursor = ChunkCursor::new(level, &self.counters);
-        self.check_block_light_updates_with(&mut cursor, pos);
+        self.check_block_light_updates_with_cursor(&mut cursor, pos);
     }
 
-    fn check_block_light_updates_with(&self, cursor: &mut ChunkCursor, pos: BlockPos) {
+    fn check_block_light_updates_with_cursor(&self, cursor: &mut ChunkCursor, pos: BlockPos) {
         self.counters.bump(Counter::CheckBlock);
         match cursor.level.lighting_config {
             // Pumpkin config, not vanilla: whole world fullbright / pitch black.
@@ -487,7 +493,7 @@ impl DynamicLightEngine {
         // Only check neighbors if we didn't trigger a decrease
         // Decrease propagation handles re-validating neighbors
         if expected_light >= current_light {
-            self.check_neighbors_light_updates_with(cursor, pos, expected_light);
+            self.check_neighbors_light_updates_with_cursor(cursor, pos, expected_light);
         }
     }
 
@@ -498,10 +504,10 @@ impl DynamicLightEngine {
         current_light: u8,
     ) {
         let mut cursor = ChunkCursor::new(level, &self.counters);
-        self.check_neighbors_light_updates_with(&mut cursor, pos, current_light);
+        self.check_neighbors_light_updates_with_cursor(&mut cursor, pos, current_light);
     }
 
-    fn check_neighbors_light_updates_with(
+    fn check_neighbors_light_updates_with_cursor(
         &self,
         cursor: &mut ChunkCursor,
         pos: BlockPos,
@@ -665,10 +671,10 @@ impl DynamicLightEngine {
 
     pub fn check_sky_light_updates(&self, level: &Arc<Level>, pos: BlockPos) {
         let mut cursor = ChunkCursor::new(level, &self.counters);
-        self.check_sky_light_updates_with(&mut cursor, pos);
+        self.check_sky_light_updates_with_cursor(&mut cursor, pos);
     }
 
-    fn check_sky_light_updates_with(&self, cursor: &mut ChunkCursor, pos: BlockPos) {
+    fn check_sky_light_updates_with_cursor(&self, cursor: &mut ChunkCursor, pos: BlockPos) {
         self.counters.bump(Counter::CheckSky);
         match cursor.level.lighting_config {
             LightingEngineConfig::Full => {
@@ -757,14 +763,14 @@ impl DynamicLightEngine {
             self.queue_sky_light_increase(pos, expected_light);
         }
 
-        // Notify neighbors if light increased or stayed same
+        // Keep spreading if light increased or stayed the same
         if expected_light >= current_light {
-            self.check_neighbors_sky_light_updates(pos, expected_light);
+            self.queue_sky_light_spread(pos, expected_light);
         }
     }
 
-    pub fn check_neighbors_sky_light_updates(&self, pos: BlockPos, current_light: u8) {
-        // When we update a position, propagate to neighbors
+    /// Re-queues `pos` so the flood continues outward from it.
+    pub fn queue_sky_light_spread(&self, pos: BlockPos, current_light: u8) {
         if current_light > 0 {
             self.queue_sky_light_increase(pos, current_light);
         }

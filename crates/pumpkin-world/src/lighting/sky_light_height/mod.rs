@@ -13,11 +13,11 @@
 mod migration;
 mod value;
 
-pub use migration::SkyLightHeightMigration;
-pub use value::SkyLightHeight;
-
 #[cfg(test)]
 mod tests;
+
+pub use migration::SkyLightHeightMigration;
+pub use value::SkyLightHeight;
 
 /// Width of the uncertain tier 3 band, chosen per chunk through the 2 reserve bits.
 ///
@@ -27,9 +27,6 @@ mod tests;
 /// Theory: flat terrain gets by with 4 blocks, only real mountains need 32.
 /// A fixed value would force the worst case onto every chunk.
 pub const SPREAD_SCALES: [i32; 4] = [4, 8, 16, 32];
-
-/// Largest band a quadrant can still use
-pub const QUADRANT_DIVERGENCE_THRESHOLD: i32 = SPREAD_SCALES[3];
 
 const DECODE_SAFETY_MARGIN: i32 = 1;
 

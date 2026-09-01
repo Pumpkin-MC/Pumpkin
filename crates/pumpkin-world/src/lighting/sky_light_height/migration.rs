@@ -9,7 +9,6 @@ use crate::chunk::ChunkData;
 use pumpkin_nbt::tag::NbtTag;
 use std::sync::atomic::Ordering;
 
-
 /// Lazy migration for the sky light cut height.
 ///
 /// Computed once on first access, then cached in RAM and stored persistently in
@@ -75,7 +74,7 @@ impl SkyLightHeightMigration {
         };
         let stored = v as u32;
         if (stored >> Self::GEOMETRY_SHIFT) as u8 != expected {
-            return None; // Andere Welthoehe: Wert ist nicht mehr interpretierbar.
+            return None; // Different world height: the value is no longer readable.
         }
         let value = stored & Self::VALUE_MASK;
         if value == 0 {
@@ -122,7 +121,7 @@ impl SkyLightHeightMigration {
     /// derivable from the chunk.
     pub fn persist(chunk: &ChunkData, height: SkyLightHeight) {
         let Some(tag) = Self::chunk_geometry_tag(chunk) else {
-            return; // Nicht validierbare Geometrie: lieber nichts persistieren.
+            return; // Unverifiable geometry: better to persist nothing at all.
         };
         let stored = (height.raw() & Self::VALUE_MASK) | (u32::from(tag) << Self::GEOMETRY_SHIFT);
         chunk.set_derived_custom_data(Self::NAMESPACE, Self::KEY, NbtTag::Int(stored as i32));

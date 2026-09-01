@@ -122,4 +122,3 @@ async fn lighting_bulk_update_old_vs_new_integration_pattern() {
         "lighting bulk update ({N} positions): old-style(check+drain per call)={old_elapsed:?} new-style(enqueue all, drain once)={new_elapsed:?}"
     );
 }
-

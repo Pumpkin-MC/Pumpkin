@@ -9,7 +9,6 @@ use crate::ProtoChunk;
 use crate::chunk::{ChunkData, ChunkHeightmapType};
 use pumpkin_data::{BlockState, BlockStateId};
 
-
 /// 24-bit Sky Light Cut Height
 ///
 /// Bytes 0-1 (bits 0-15) -> hexadecimal coarse and fine value
@@ -299,7 +298,7 @@ impl SkyLightHeight {
         for (spread_index, &spread) in SPREAD_SCALES.iter().enumerate() {
             for i in 0..4 {
                 if q_max[i] - q_min[i] > spread {
-                    continue; // Quadrant passt nicht in Band
+                    continue; // quadrant does not fit the band
                 }
                 let candidate = q_max[i] - spread;
                 let covered = (0..4)
