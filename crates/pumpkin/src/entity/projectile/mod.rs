@@ -319,7 +319,7 @@ fn calculate_ray_intersection(
         }
     }
 
-    (0.0..=1.0).contains(&t_min).then_some(t_min)
+    (t_min <= t_max && (0.0..=1.0).contains(&t_min)).then_some(t_min)
 }
 
 /// Get the face of the block that was hit

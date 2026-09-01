@@ -20,7 +20,7 @@ use pumpkin_util::math::vector3::Vector3;
 pub struct MinecartItem;
 
 impl MinecartItem {
-    fn item_to_entity(item: &Item) -> &'static EntityType {
+    pub(crate) fn item_to_entity(item: &Item) -> &'static EntityType {
         match item.id {
             val if val == Item::MINECART.id => &EntityType::MINECART,
             val if val == Item::TNT_MINECART.id => &EntityType::TNT_MINECART,
