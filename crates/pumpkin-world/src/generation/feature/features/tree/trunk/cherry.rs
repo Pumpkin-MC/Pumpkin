@@ -1,4 +1,4 @@
-use pumpkin_data::{Block, BlockState};
+use pumpkin_data::{BlockState, BlockStateId};
 use pumpkin_util::math::int_provider::{IntProvider, UniformIntProvider};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::random::{RandomGenerator, RandomImpl};
@@ -8,7 +8,7 @@ use crate::generation::block_state_provider::BlockStateProvider;
 use crate::generation::feature::features::tree::TreeNode;
 use crate::generation::proto_chunk::GenerationCache;
 use crate::world::WorldPortalExt;
-use pumpkin_data::block_properties::Axis;
+use pumpkin_data::block_properties::{Axis, BlockProperties, PaleOakWoodLikeProperties};
 
 pub struct CherryTrunkPlacer {
     pub count: IntProvider,
@@ -160,7 +160,7 @@ impl CherryTrunkPlacer {
         } else {
             Axis::Z
         };
-        let sideways_state = Self::get_sideways_state(trunk_state, axis);
+        let sideways_state = Self::get_sideways_state(trunk_state.id, axis).to_state();
 
         for _ in 0..steps_horizontally {
             log_pos = log_pos.add(branch_direction.0.x, 0, branch_direction.0.z);
@@ -207,25 +207,10 @@ impl CherryTrunkPlacer {
         }
     }
 
-    fn get_sideways_state(trunk_state: &BlockState, axis: Axis) -> &'static BlockState {
-        let block = Block::from_state_id(trunk_state.id);
-        if let Some(props_source) = block.properties(trunk_state.id) {
-            let mut props = props_source.to_props();
-            let axis_str = match axis {
-                Axis::X => "x",
-                Axis::Y => "y",
-                Axis::Z => "z",
-            };
-
-            if let Some(idx) = props.iter().position(|(k, _)| *k == "axis") {
-                props[idx] = ("axis", axis_str);
-            } else {
-                props.push(("axis", axis_str));
-            }
-
-            let new_state_id = block.from_properties(&props).to_state_id(block);
-            return BlockState::from_id(new_state_id);
-        }
-        BlockState::from_id(trunk_state.id)
+    fn get_sideways_state(id: BlockStateId, axis: Axis) -> BlockStateId {
+        let block = id.to_block();
+        let mut props = PaleOakWoodLikeProperties::from_state_id(id, block);
+        props.axis = axis;
+        props.to_state_id(block)
     }
 }

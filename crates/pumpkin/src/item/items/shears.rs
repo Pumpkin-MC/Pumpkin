@@ -7,6 +7,11 @@ use crate::entity::item::ItemEntity;
 use crate::entity::player::Player;
 use crate::item::{ItemBehaviour, ItemMetadata};
 use crate::server::Server;
+use pumpkin_data::BlockId;
+use pumpkin_data::block_properties::BeeNestLikeProperties;
+use pumpkin_data::block_properties::BlockProperties;
+use pumpkin_data::block_properties::CaveVinesLikeProperties;
+use pumpkin_data::block_properties::KelpLikeProperties;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
@@ -103,45 +108,33 @@ fn handle_growing_plant(
     block: &Block,
     state_id: BlockStateId,
 ) -> bool {
-    let is_growing_plant = block.id == Block::KELP.id
-        || block.id == Block::CAVE_VINES.id
-        || block.id == Block::CAVE_VINES_PLANT.id
-        || block.id == Block::TWISTING_VINES.id
-        || block.id == Block::WEEPING_VINES.id;
-
-    if !is_growing_plant {
+    let new_state_id = if KelpLikeProperties::handles_block_id(block.id) {
+        let mut props = KelpLikeProperties::from_state_id(state_id, block);
+        if props.age >= 25 {
+            return false;
+        }
+        props.age = 25;
+        props.to_state_id(block)
+    } else if CaveVinesLikeProperties::handles_block_id(block.id) {
+        let mut props = CaveVinesLikeProperties::from_state_id(state_id, block);
+        if props.age >= 25 {
+            return false;
+        }
+        props.age = 25;
+        props.to_state_id(block)
+    } else {
         return false;
-    }
+    };
 
     let world = player.world();
-    let action = block.properties(state_id).and_then(|props| {
-        let prop_map = props.to_props();
-        prop_map
-            .iter()
-            .find(|(k, _)| *k == "age")
-            .and_then(|(_, age_str)| age_str.parse::<u8>().ok())
-            .filter(|&age| age < 25)
-            .map(|_| {
-                let new_props: Vec<(&str, &str)> = prop_map
-                    .iter()
-                    .map(|(k, v)| if *k == "age" { (*k, "25") } else { (*k, *v) })
-                    .collect();
-                block.from_properties(&new_props).to_state_id(block)
-            })
-    });
-
-    if let Some(new_state_id) = action {
-        world.set_block_state(location, new_state_id, BlockFlags::NOTIFY_ALL);
-        world.play_sound(
-            Sound::BlockGrowingPlantCrop,
-            SoundCategory::Blocks,
-            &location.to_f64(),
-        );
-        player.damage_held_item(1);
-        return true;
-    }
-
-    false
+    world.set_block_state(location, new_state_id, BlockFlags::NOTIFY_ALL);
+    world.play_sound(
+        Sound::BlockGrowingPlantCrop,
+        SoundCategory::Blocks,
+        &location.to_f64(),
+    );
+    player.damage_held_item(1);
+    true
 }
 
 fn handle_beehive(
@@ -150,58 +143,39 @@ fn handle_beehive(
     block: &Block,
     state_id: BlockStateId,
 ) -> bool {
-    if block.id != Block::BEEHIVE.id && block.id != Block::BEE_NEST.id {
+    if !BeeNestLikeProperties::handles_block_id(block.id) {
         return false;
     }
 
-    let world = player.world();
-    let action = block.properties(state_id).and_then(|props| {
-        let prop_map = props.to_props();
-        prop_map
-            .iter()
-            .find(|(k, v)| *k == "honey_level" && *v == "5")
-            .map(|_| {
-                let new_props: Vec<(&str, &str)> = prop_map
-                    .iter()
-                    .map(|(k, v)| {
-                        if *k == "honey_level" {
-                            (*k, "0")
-                        } else {
-                            (*k, *v)
-                        }
-                    })
-                    .collect();
-                block.from_properties(&new_props).to_state_id(block)
-            })
-    });
+    let mut props = BeeNestLikeProperties::from_state_id(state_id, block);
 
-    if let Some(new_state_id) = action {
-        world.set_block_state(location, new_state_id, BlockFlags::NOTIFY_ALL);
-        world.play_sound(
-            Sound::BlockBeehiveShear,
-            SoundCategory::Blocks,
-            &location.to_f64(),
-        );
-
-        let drop_pos = Vector3::new(
-            f64::from(location.0.x) + 0.5,
-            f64::from(location.0.y) + 0.5,
-            f64::from(location.0.z) + 0.5,
-        );
-        let item_entity = Arc::new(ItemEntity::new(
-            Entity::new(world.clone(), drop_pos, &EntityType::ITEM),
-            ItemStack::new(3, &Item::HONEYCOMB),
-        ));
-        world.spawn_entity(item_entity);
-        player.damage_held_item(1);
-        return true;
+    if props.honey_level != 5 {
+        return false;
     }
 
-    false
+    props.honey_level = 0;
+    let new_state_id = props.to_state_id(block);
+
+    let world = player.world();
+    world.set_block_state(location, new_state_id, BlockFlags::NOTIFY_ALL);
+    world.play_sound(
+        Sound::BlockBeehiveShear,
+        SoundCategory::Blocks,
+        &location.to_f64(),
+    );
+
+    let drop_pos = location.to_centered_f64();
+    let item_entity = Arc::new(ItemEntity::new(
+        Entity::new(world.clone(), drop_pos, &EntityType::ITEM),
+        ItemStack::new(3, &Item::HONEYCOMB),
+    ));
+    world.spawn_entity(item_entity);
+    player.damage_held_item(1);
+    true
 }
 
 fn handle_pumpkin(player: &Player, location: &BlockPos, block: &Block) {
-    if block.id == Block::PUMPKIN.id {
+    if block.id == BlockId::PUMPKIN {
         let world = player.world();
         let carved_state = Block::CARVED_PUMPKIN.default_state.id;
         world.set_block_state(location, carved_state, BlockFlags::NOTIFY_ALL);
@@ -211,11 +185,7 @@ fn handle_pumpkin(player: &Player, location: &BlockPos, block: &Block) {
             &location.to_f64(),
         );
 
-        let drop_pos = Vector3::new(
-            f64::from(location.0.x) + 0.5,
-            f64::from(location.0.y) + 0.5,
-            f64::from(location.0.z) + 0.5,
-        );
+        let drop_pos = location.to_centered_f64();
         let item_entity = Arc::new(ItemEntity::new(
             Entity::new(world.clone(), drop_pos, &EntityType::ITEM),
             ItemStack::new(4, &Item::PUMPKIN_SEEDS),
