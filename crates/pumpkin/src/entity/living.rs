@@ -3220,8 +3220,10 @@ impl LivingEntity {
             return;
         }
 
-        let velocity = self.entity.velocity.load();
-        if velocity.horizontal_length() < 1.0e-5 {
+        // Vanilla reads `getKnownMovement()` here, not the velocity field: a player's
+        // movement is client driven, so `Entity::velocity` stays zero for them.
+        let movement = self.get_movement();
+        if movement.horizontal_length() < 1.0e-5 {
             return;
         }
 
@@ -3238,7 +3240,7 @@ impl LivingEntity {
                 pos.y + 0.1,
                 (rng.random::<f64>() - 0.5).mul_add(bounding_box.max.z - bounding_box.min.z, pos.z),
             ),
-            Vector3::new((velocity.x * -0.2) as f32, 0.1, (velocity.z * -0.2) as f32),
+            Vector3::new((movement.x * -0.2) as f32, 0.1, (movement.z * -0.2) as f32),
             1.0,
             0,
             Particle::Soul,
