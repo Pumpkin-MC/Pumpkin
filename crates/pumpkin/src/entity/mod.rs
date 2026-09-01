@@ -504,7 +504,7 @@ pub trait EntityBase: Send + Sync + std::any::Any {
                 vel.x -= dx;
                 vel.z -= dz;
                 self_entity.velocity.store(vel);
-                self_entity.send_velocity();
+                self_entity.velocity_dirty.store(true, Ordering::SeqCst);
             }
 
             if !other_entity.has_passengers() && entity.is_pushable() {
@@ -512,7 +512,7 @@ pub trait EntityBase: Send + Sync + std::any::Any {
                 vel.x += dx;
                 vel.z += dz;
                 other_entity.velocity.store(vel);
-                other_entity.send_velocity();
+                other_entity.velocity_dirty.store(true, Ordering::SeqCst);
             }
         }
     }
