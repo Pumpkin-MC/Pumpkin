@@ -16,7 +16,10 @@ use pumpkin_util::random::{RandomImpl, get_carver_seed};
 use pumpkin_util::{
     HeightMap,
     math::{block_box::BlockBox, position::BlockPos, vector3::Vector3},
-    random::{RandomGenerator, get_decorator_seed, xoroshiro128::Xoroshiro},
+    random::{
+        RandomGenerator, get_decorator_seed, worldgen_random::WorldgenRandom,
+        xoroshiro128::Xoroshiro,
+    },
 };
 use rustc_hash::FxHashMap;
 
@@ -24,6 +27,7 @@ use super::{
     GlobalRandomConfig, biome_coords,
     blender::{Blender, BlenderImpl},
     feature::placed_features::PLACED_FEATURES,
+    feature_order::select_features,
     noise::router::{
         multi_noise_sampler::MultiNoiseSampler, proto_noise_router::DoublePerlinNoiseBuilder,
         surface_height_sampler::SurfaceHeightEstimateSampler,
@@ -35,7 +39,7 @@ use super::{
 use crate::biome::{BiomeSupplier, MultiNoiseBiomeSupplier, end::TheEndBiomeSupplier};
 use crate::chunk::format::LightContainer;
 use crate::chunk::{ChunkData, ChunkHeightmapType, ChunkLight};
-use crate::chunk_system::StagedChunkEnum;
+use crate::chunk_system::{StagedChunkEnum, generation_cache::SurfaceBiomeNeighborhood};
 use crate::generation::height_limit::HeightLimitView;
 use crate::generation::noise::aquifer_sampler::{FluidLevel, FluidLevelSamplerImpl};
 use crate::generation::noise::perlin::DoublePerlinNoiseSampler;
@@ -773,7 +777,11 @@ impl ProtoChunk {
         self.stage = StagedChunkEnum::Noise;
     }
 
-    pub fn step_to_surface(&mut self, generator: &super::generator::VanillaGenerator) {
+    pub(crate) fn step_to_surface(
+        &mut self,
+        generator: &super::generator::VanillaGenerator,
+        surface_biomes: &SurfaceBiomeNeighborhood,
+    ) {
         debug_assert_eq!(self.stage, StagedChunkEnum::Noise);
         let start_x = start_block_x(self.x);
         let start_z = start_block_z(self.z);
@@ -796,7 +804,11 @@ impl ProtoChunk {
             &surface_config,
         );
 
-        self.build_surface(generator, &mut surface_height_estimate_sampler);
+        self.build_surface(
+            generator,
+            surface_biomes,
+            &mut surface_height_estimate_sampler,
+        );
         self.stage = StagedChunkEnum::Surface;
     }
 
@@ -956,16 +968,37 @@ impl ProtoChunk {
 
     #[must_use]
     pub fn get_terrain_gen_biome_id(&self, x: i32, y: i32, z: i32) -> u8 {
-        let seed_biome_pos = biome::get_biome_blend(
+        let biome_pos = self.get_terrain_gen_biome_pos(x, y, z);
+
+        self.get_biome_id(biome_pos.x, biome_pos.y, biome_pos.z)
+    }
+
+    #[must_use]
+    pub(crate) fn get_terrain_gen_biome_pos(&self, x: i32, y: i32, z: i32) -> Vector3<i32> {
+        biome::get_biome_blend(
             self.bottom_y(),
             self.height(),
             self.biome_mixer_seed,
             x,
             y,
             z,
-        );
+        )
+    }
 
-        self.get_biome_id(seed_biome_pos.x, seed_biome_pos.y, seed_biome_pos.z)
+    pub(crate) fn get_terrain_gen_biome_id_from_neighborhood(
+        &self,
+        surface_biomes: &SurfaceBiomeNeighborhood,
+        x: i32,
+        y: i32,
+        z: i32,
+    ) -> Option<u8> {
+        let biome_pos = self.get_terrain_gen_biome_pos(x, y, z);
+
+        if biome_pos.x >> 2 == self.x && biome_pos.z >> 2 == self.z {
+            return Some(self.get_biome_id(biome_pos.x, biome_pos.y, biome_pos.z));
+        }
+
+        surface_biomes.get_biome_id(biome_pos.x, biome_pos.y, biome_pos.z)
     }
 
     #[must_use]
@@ -974,9 +1007,14 @@ impl ProtoChunk {
     }
 
     #[expect(clippy::too_many_lines)]
-    pub fn build_surface(
+    #[expect(
+        clippy::panic,
+        reason = "surface scheduling guarantees a complete 3x3 biome neighborhood"
+    )]
+    pub(crate) fn build_surface(
         &mut self,
         generator: &super::generator::VanillaGenerator,
+        surface_biomes: &SurfaceBiomeNeighborhood,
         surface_height_estimate_sampler: &mut SurfaceHeightEstimateSampler,
     ) {
         let start_x = chunk_pos::start_block_x(self.x);
@@ -1010,7 +1048,11 @@ impl ProtoChunk {
                     top_block
                 };
 
-                let this_biome = self.get_terrain_gen_biome_id(x, biome_y, z);
+                let Some(this_biome) =
+                    self.get_terrain_gen_biome_id_from_neighborhood(surface_biomes, x, biome_y, z)
+                else {
+                    panic!("surface biome neighborhood must cover fuzzy biome lookup");
+                };
                 if this_biome == Biome::ERODED_BADLANDS {
                     terrain_cache
                         .terrain_builder
@@ -1067,11 +1109,15 @@ impl ProtoChunk {
                     context.init_vertical(stone_depth_above, stone_depth_below, y, fluid_height);
 
                     if state.id == self.default_block.id {
-                        context.biome = self.get_terrain_gen_biome(
+                        let Some(biome_id) = self.get_terrain_gen_biome_id_from_neighborhood(
+                            surface_biomes,
                             context.block_pos_x,
                             context.block_pos_y,
                             context.block_pos_z,
-                        );
+                        ) else {
+                            panic!("surface biome neighborhood must cover fuzzy biome lookup");
+                        };
+                        context.biome = Biome::from_id(biome_id).unwrap_or(&Biome::PLAINS);
                         let new_state = try_apply_material_rule(
                             &settings.surface_rule,
                             self,
@@ -1108,30 +1154,38 @@ impl ProtoChunk {
         block_registry: &dyn WorldPortalExt,
         random_config: &GlobalRandomConfig,
     ) {
-        let (center_x, center_z, min_y, generation_min_y, generation_height, biomes_in_chunk) = {
+        let (center_x, center_z, min_y, generation_min_y, generation_height) = {
             let chunk = cache.get_center_chunk();
-            let mut unique_biomes = Vec::with_capacity(4);
-            for &biome_id in &chunk.flat_biome_map {
-                if !unique_biomes.contains(&biome_id) {
-                    unique_biomes.push(biome_id);
-                }
-            }
             (
                 chunk.x,
                 chunk.z,
                 chunk.bottom_y() as i32,
                 chunk.generation_bottom_y(),
                 chunk.generation_height(),
-                unique_biomes,
             )
         };
+
+        // Vanilla gathers every biome stored in the 3x3 chunk neighborhood before selecting the
+        // globally ordered feature set.
+        let mut possible_biomes = Vec::new();
+        for chunk_x in center_x - 1..=center_x + 1 {
+            for chunk_z in center_z - 1..=center_z + 1 {
+                if let Some(chunk) = cache.get_chunk(chunk_x, chunk_z) {
+                    for &biome_id in &chunk.flat_biome_map {
+                        if !possible_biomes.contains(&biome_id) {
+                            possible_biomes.push(biome_id);
+                        }
+                    }
+                }
+            }
+        }
 
         let start_block_x = chunk_pos::start_block_x(center_x);
         let start_block_z = chunk_pos::start_block_z(center_z);
         let origin_pos = BlockPos::new(start_block_x, min_y, start_block_z);
 
         let population_seed =
-            Xoroshiro::get_population_seed(random_config.seed, start_block_x, start_block_z);
+            WorldgenRandom::get_population_seed(random_config.seed, start_block_x, start_block_z);
 
         for step in 0..11 {
             Self::generate_structure_step(
@@ -1142,25 +1196,12 @@ impl ProtoChunk {
                 random_config.seed as i64,
             );
 
-            let mut features_to_run = Vec::new();
-            for biome_id in &biomes_in_chunk {
-                if let Some(biome) = Biome::from_id(*biome_id)
-                    && let Some(features_at_step) = biome.features.get(step)
-                {
-                    for &feature_id in *features_at_step {
-                        features_to_run.push(feature_id);
-                    }
-                }
-            }
-
-            features_to_run.sort_unstable();
-            features_to_run.dedup();
-
-            for (p, feature_enum) in features_to_run.into_iter().enumerate() {
+            for (global_index, feature_enum) in select_features(&possible_biomes, step) {
                 if let Some(feature) = PLACED_FEATURES.get(&feature_enum) {
-                    let decorator_seed = get_decorator_seed(population_seed, p as u64, step as u64);
+                    let decorator_seed =
+                        get_decorator_seed(population_seed, global_index as u64, step as u64);
                     let mut random =
-                        RandomGenerator::Xoroshiro(Xoroshiro::from_seed(decorator_seed));
+                        RandomGenerator::Worldgen(WorldgenRandom::from_seed(decorator_seed));
 
                     feature.generate(
                         cache,
@@ -1256,7 +1297,7 @@ impl ProtoChunk {
         }
 
         let decorator_seed = get_decorator_seed(population_seed, 0, step as u64);
-        let mut random = RandomGenerator::Xoroshiro(Xoroshiro::from_seed(decorator_seed));
+        let mut random = RandomGenerator::Worldgen(WorldgenRandom::from_seed(decorator_seed));
 
         let chunk = cache.get_center_chunk_mut();
         for collector_arc in tasks {

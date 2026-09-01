@@ -7,7 +7,10 @@ use crate::data_component_impl::{
     get_idset_hash, get_str_hash, put_idor,
 };
 use crate::entity_type::EntityType;
+use crate::item::Item;
+use crate::item_stack::ItemStack;
 use crate::sound::Sound;
+use crate::tag::Taggable;
 use crc_fast::CrcAlgorithm::Crc32Iscsi;
 use crc_fast::Digest;
 use pumpkin_nbt::compound::NbtCompound;
@@ -134,9 +137,23 @@ impl DataComponentImpl for CanBreakImpl {
     default_impl!(CanBreak);
 }
 
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct RepairCostImpl;
+#[derive(Clone, Debug, Hash, PartialEq, Eq, Default)]
+pub struct RepairCostImpl {
+    pub cost: i32,
+}
+impl RepairCostImpl {
+    pub const DEFAULT: Self = Self { cost: 0 };
+
+    pub fn read_data(data: &NbtTag) -> Option<Self> {
+        Some(Self {
+            cost: data.extract_int()?,
+        })
+    }
+}
 impl DataComponentImpl for RepairCostImpl {
+    fn write_data(&self) -> NbtTag {
+        NbtTag::Int(self.cost)
+    }
     default_impl!(RepairCost);
 }
 
@@ -608,9 +625,49 @@ impl DataComponentImpl for EquippableImpl {
     default_impl!(Equippable);
 }
 
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct RepairableImpl;
+#[derive(Clone, Debug, PartialEq)]
+pub struct RepairableImpl {
+    pub items: IDSet<Item>,
+}
+
+impl Hash for RepairableImpl {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        get_idset_hash(&self.items).hash(state);
+    }
+}
+
+impl RepairableImpl {
+    #[must_use]
+    pub fn is_valid_repair_item(&self, repair_item: &ItemStack) -> bool {
+        if repair_item.is_empty() {
+            return false;
+        }
+        match &self.items {
+            IDSet::Tag(tag) => repair_item.item.is_tagged_with(tag).unwrap_or(false),
+            IDSet::IDs(items) => items.iter().any(|item| item.id == repair_item.item.id),
+        }
+    }
+
+    pub fn read_data(data: &NbtTag) -> Option<Self> {
+        if let NbtTag::Compound(c) = data {
+            let items_tag = c.get("items")?;
+            let items = IDSet::read(items_tag)?;
+            Some(Self { items })
+        } else if let Some(items) = IDSet::read(data) {
+            Some(Self { items })
+        } else {
+            None
+        }
+    }
+}
+
 impl DataComponentImpl for RepairableImpl {
+    fn write_data(&self) -> NbtTag {
+        let mut compound = NbtCompound::new();
+        self.items.write(&mut compound, "items");
+        NbtTag::Compound(compound)
+    }
+
     default_impl!(Repairable);
 }
 
@@ -652,9 +709,102 @@ impl DataComponentImpl for KineticWeaponImpl {
     default_impl!(KineticWeapon);
 }
 
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct SwingAnimationImpl;
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Default)]
+pub enum SwingAnimationType {
+    #[default]
+    Whack = 0,
+    Stab = 1,
+    None = 2,
+}
+
+impl SwingAnimationType {
+    #[must_use]
+    pub fn from_id(id: i32) -> Option<Self> {
+        match id {
+            0 => Some(Self::Whack),
+            1 => Some(Self::Stab),
+            2 => Some(Self::None),
+            _ => None,
+        }
+    }
+
+    #[must_use]
+    pub fn to_id(&self) -> i32 {
+        *self as i32
+    }
+
+    #[must_use]
+    pub fn to_name(&self) -> &'static str {
+        match self {
+            Self::Whack => "whack",
+            Self::Stab => "stab",
+            Self::None => "none",
+        }
+    }
+
+    #[must_use]
+    pub fn from_name(name: &str) -> Option<Self> {
+        match name {
+            "whack" => Some(Self::Whack),
+            "stab" => Some(Self::Stab),
+            "none" => Some(Self::None),
+            _ => None,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
+pub struct SwingAnimationImpl {
+    pub animation_type: SwingAnimationType,
+    pub duration: i32,
+}
+
+impl Default for SwingAnimationImpl {
+    fn default() -> Self {
+        Self::DEFAULT
+    }
+}
+
+impl SwingAnimationImpl {
+    pub const DEFAULT: Self = Self {
+        animation_type: SwingAnimationType::Whack,
+        duration: 6,
+    };
+
+    pub fn read_data(data: &NbtTag) -> Option<Self> {
+        match data {
+            NbtTag::Compound(compound) => {
+                let animation_type = compound
+                    .get("type")
+                    .and_then(|tag| match tag {
+                        NbtTag::String(name) => SwingAnimationType::from_name(name),
+                        NbtTag::Int(id) => SwingAnimationType::from_id(*id),
+                        NbtTag::Byte(id) => SwingAnimationType::from_id(*id as i32),
+                        _ => None,
+                    })
+                    .unwrap_or(Self::DEFAULT.animation_type);
+                let duration = compound
+                    .get("duration")
+                    .and_then(|tag| tag.extract_int())
+                    .unwrap_or(Self::DEFAULT.duration);
+                Some(Self {
+                    animation_type,
+                    duration,
+                })
+            }
+            _ => Some(Self::DEFAULT),
+        }
+    }
+}
+
 impl DataComponentImpl for SwingAnimationImpl {
+    fn write_data(&self) -> NbtTag {
+        let mut compound = NbtCompound::new();
+        compound.put_string("type", self.animation_type.to_name().to_string());
+        compound.put_int("duration", self.duration);
+        NbtTag::Compound(compound)
+    }
+
     default_impl!(SwingAnimation);
 }
 

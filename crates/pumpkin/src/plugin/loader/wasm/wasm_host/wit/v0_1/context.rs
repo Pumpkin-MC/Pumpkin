@@ -1764,14 +1764,22 @@ impl pumpkin::plugin::context::HostContext for PluginHostState {
         command: Resource<Command>,
         permission: String,
     ) -> wasmtime::Result<()> {
-        // Updated return type
-        // Use your helpers to safely take/get resources
+        use crate::command::argument_builder::ArgumentBuilder;
+
         let command_res = self.take_command(&command)?;
         let context_res = self.get_context(&context)?;
 
+        let wasm_command = command_res.provider;
+        let aliases = if wasm_command.names.len() > 1 {
+            wasm_command.names[1..].to_vec()
+        } else {
+            Vec::new()
+        };
+
+        let node = wasm_command.builder.build();
         context_res
             .provider
-            .register_command(command_res.provider, permission);
+            .register_command_with_aliases(node, &aliases, permission);
         Ok(())
     }
 

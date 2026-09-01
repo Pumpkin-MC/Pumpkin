@@ -74,6 +74,8 @@ use crate::{
     text::TextComponent,
 };
 
+/// Block definitions and block type helpers.
+pub mod block;
 /// Plugin command registration and handling utilities.
 pub mod commands;
 /// Datapack management and query utilities.
@@ -87,8 +89,11 @@ pub mod events;
 mod ext;
 /// Bedrock UI form builders.
 pub mod forms;
+pub(crate) mod generated;
 /// Unified inventory and container management utilities.
 pub mod inventory;
+/// Typed item definitions and `ItemStack` construction helpers.
+pub mod item;
 /// Specialized mob entity wrappers and helpers.
 pub mod mobs;
 /// Constants for plugin permissions.
@@ -118,15 +123,18 @@ pub use wit::pumpkin::plugin::{
     context::{self, Context, MarketplaceMetadata, Server},
     damage_types as damage_types_wit, data_components, datapack as datapack_wit,
     display as display_wit, enchantments as enchantments_wit, entity,
+    entity_statuses as entity_statuses_wit,
     entity_types::EntityType,
     event::{self as events_wit, EventType},
-    gui, i18n, inventory as inventory_wit, ipc, item_stack, java_dialogs, java_packets, particles,
-    permission, player, recipe as recipe_wit, scoreboard, screens as screens_wit, server,
-    statistics as statistics_wit, text, uuid, world,
+    game_events as game_events_wit, gui, i18n, inventory as inventory_wit, ipc, item_stack,
+    java_dialogs, java_packets, particles, permission, player, potions as potions_wit,
+    recipe as recipe_wit, scoreboard, screens as screens_wit, server, statistics as statistics_wit,
+    text, uuid, world,
 };
 
 // Convenience re-exports of commonly-used plugin types so plugin authors can
 // name them directly (e.g. build an `ItemStack` for a GUI or `/give`).
+pub use block::{BlockStateTypeExt, BlockType, BlockTypeExt, IntoBlockKey};
 pub use damage_types_wit::DamageType;
 pub use datapack::{DatapackInfo, DatapackManager, EnablePosition};
 pub use display::{
@@ -139,15 +147,19 @@ pub use enchantment::{
     AttributeModifierSlot, CustomEnchantment, CustomEnchantmentValue, Enchantment,
     EnchantmentBuilder, EnchantmentError, EnchantmentManager, RegistrableEnchantment,
 };
+pub use entity_statuses_wit::EntityStatus;
 pub use events::{EventHandler, FromIntoEvent};
-pub use ext::player::PlayerEnderChestExt;
+pub use ext::player::{PlayerCooldownExt, PlayerEnderChestExt};
+pub use game_events_wit::GameEvent;
 pub use inventory::{Inventory, PlayerInventory};
+pub use item::{IntoItemKey, Item, ItemStackExt};
 pub use mobs::{
     Ageable, AgeableData, Cat, CatData, Creeper, CreeperData, DyeColor, Enderman, EndermanData,
     EntityCastExt, Fox, FoxData, IronGolem, IronGolemData, MobCast, MobData, Sheep, SheepData,
     Shulker, ShulkerData, Slime, SlimeData, Villager, VillagerData, VillagerProfession, Wolf,
     WolfData, Zombie, ZombieData,
 };
+pub use potions_wit::PotionType;
 pub use recipe::{
     CookingRecipeBuilder, Ingredient, RecipeCategory, RecipeError, RecipeManager,
     RegistrableRecipe, ShapedRecipeBuilder, ShapelessRecipeBuilder,
@@ -155,7 +167,8 @@ pub use recipe::{
 pub use screens_wit::Screen;
 pub use statistics_wit::{CustomStatistic, StatisticCategory};
 pub use team::{PlayerTeamExt, ScoreboardTeamExt, Team, TeamSettingsBuilder};
-pub use wit::pumpkin::plugin::item_stack::ItemStack;
+pub use wit::pumpkin::plugin::attributes::{Attribute, AttributeModifier, ModifierOperation};
+pub use wit::pumpkin::plugin::item_stack::{ItemAttributeModifier, ItemStack};
 pub use wit::pumpkin::plugin::player::Player;
 pub use wit::pumpkin::plugin::scoreboard::{CollisionRule, NametagVisibility, TeamSettings};
 pub use wit::pumpkin::plugin::server::Dimension;

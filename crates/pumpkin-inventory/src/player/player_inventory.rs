@@ -16,8 +16,8 @@ use pumpkin_data::item_stack::ItemStack;
 use pumpkin_protocol::java::client::play::CSetPlayerInventory;
 use pumpkin_util::Hand;
 use pumpkin_world::inventory::{Clearable, Inventory};
+use rustc_hash::FxHashMap;
 use std::any::Any;
-use std::collections::HashMap;
 use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::{Arc, Mutex, RwLock};
 
@@ -35,7 +35,7 @@ pub struct PlayerInventory {
     /// Mapping of slot indices to equipment slot types.
     ///
     /// Used to identify which slots correspond to armor and off-hand equipment.
-    pub equipment_slots: Arc<HashMap<usize, EquipmentSlot>>,
+    pub equipment_slots: Arc<FxHashMap<usize, EquipmentSlot>>,
     /// The currently selected hotbar slot index (0-8).
     pub selected_slot: AtomicU8,
     /// The entity equipment storage for armor and off-hand items.
@@ -60,7 +60,7 @@ impl PlayerInventory {
     // TODO: Add inventory load from nbt
     pub fn new(
         entity_equipment: Arc<Mutex<EntityEquipment>>,
-        equipment_slots: Arc<HashMap<usize, EquipmentSlot>>,
+        equipment_slots: Arc<FxHashMap<usize, EquipmentSlot>>,
     ) -> Self {
         Self {
             main_inventory: RwLock::new(std::array::from_fn(|_| ItemStack::EMPTY.clone())),

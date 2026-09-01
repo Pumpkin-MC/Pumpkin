@@ -23,6 +23,7 @@ pub mod loot;
 pub mod map;
 pub mod portal;
 pub mod raid;
+pub mod stopwatches;
 pub mod time;
 pub mod villager_poi;
 
@@ -116,17 +117,18 @@ use pumpkin_protocol::{
     java::{
         self,
         client::play::{
-            CBlockEntityData, CEntityStatus, CGameEvent, CLogin, CMultiBlockUpdate,
-            CPlayerChatMessage, CPlayerInfoUpdate, CRemoveEntities, CRemovePlayerInfo,
-            CSetSelectedSlot, CSoundEffect, CSpawnEntity, FilterType, GameEvent, InitChat,
-            PlayerAction, PlayerInfoFlags,
+            CBlockEntityData, CDamageEvent, CEntityStatus, CGameEvent, CLogin, CMultiBlockUpdate,
+            CPlayerInfoUpdate, CRemoveEntities, CRemovePlayerInfo, CSetSelectedSlot, CSoundEffect,
+            CSpawnEntity, GameEvent, InitChat, PlayerAction, PlayerInfoFlags,
         },
         server::play::SChatMessage,
     },
 };
 use pumpkin_protocol::{
     codec::item_stack_seralizer::ItemStackSerializer,
-    java::client::play::{CBlockEvent, CRemoveMobEffect, CSetEquipment, CUpdateMobEffect},
+    java::client::play::{
+        CBlockEvent, CParticle, CRemoveMobEffect, CSetEquipment, CUpdateMobEffect,
+    },
 };
 use pumpkin_util::resource_location::ResourceLocation;
 use pumpkin_util::text::{TextComponent, color::NamedColor};
@@ -160,6 +162,7 @@ pub mod bossbar;
 pub mod custom_bossbar;
 pub mod dragon_fight;
 pub mod end_podium;
+pub mod entity_tracker;
 pub mod natural_spawner;
 pub mod scoreboard;
 pub mod weather;
@@ -280,6 +283,8 @@ pub struct World {
     pub custom_data: std::sync::Mutex<NbtCompound>,
     /// Persistent custom data for block entities at specific positions
     pub custom_block_entity_data: DashMap<BlockPos, NbtCompound>,
+    /// Entity tracker responsible for tracking entity visibility and sending delta/status packets to watchers.
+    pub entity_tracker: entity_tracker::EntityTracker,
 }
 
 #[derive(Clone, Copy)]
@@ -403,6 +408,7 @@ impl World {
             block_entities: DashMap::new(),
             custom_data: std::sync::Mutex::new(custom_data),
             custom_block_entity_data: DashMap::new(),
+            entity_tracker: entity_tracker::EntityTracker::new(),
         }
     }
 
@@ -546,14 +552,15 @@ impl World {
         }
     }
 
-    /// Sends an entity status update to all players tracking the specified entity.
-    pub fn send_entity_status(
+    /// Broadcasts an entity status update / event to all players tracking the specified entity,
+    /// and to the entity itself if it is a player.
+    /// Matching Vanilla's `ServerLevel.broadcastEntityEvent(entity, event)`.
+    pub fn broadcast_entity_event(
         &self,
         entity: &Entity,
         java_status: EntityStatus,
         bedrock_status: Option<ActorEventID>,
     ) {
-        let chunk_pos = entity.chunk_pos.load();
         let je_packet = CEntityStatus::new(entity.entity_id, java_status as i8);
         if let Some(be_event) = bedrock_status {
             let be_packet = SActorEvent {
@@ -562,14 +569,44 @@ impl World {
                 data: VarInt(0),
                 fire_at_position: None,
             };
-            self.broadcast_to_chunk_editioned(chunk_pos, &je_packet, &be_packet);
+            self.send_to_tracking_players_and_self_editioned(entity, &je_packet, &be_packet);
         } else {
-            self.broadcast_to_chunk(chunk_pos, &je_packet);
+            self.send_to_tracking_players_and_self(entity, &je_packet);
         }
     }
 
+    /// Broadcasts a damage event to all players tracking the specified entity,
+    /// and to the entity itself if it is a player.
+    /// Matching Vanilla's `ServerLevel.broadcastDamageEvent(entity, source)`.
+    pub fn broadcast_damage_event(
+        &self,
+        entity: &Entity,
+        damage_type_id: i32,
+        source_entity_id: Option<i32>,
+        cause_entity_id: Option<i32>,
+        position: Option<Vector3<f64>>,
+    ) {
+        let je_packet = CDamageEvent::new(
+            entity.entity_id.into(),
+            damage_type_id.into(),
+            source_entity_id.map(Into::into),
+            cause_entity_id.map(Into::into),
+            position,
+        );
+        self.send_to_tracking_players_and_self(entity, &je_packet);
+    }
+
+    /// Sends an entity status update to all players tracking the specified entity.
+    pub fn send_entity_status(
+        &self,
+        entity: &Entity,
+        java_status: EntityStatus,
+        bedrock_status: Option<ActorEventID>,
+    ) {
+        self.broadcast_entity_event(entity, java_status, bedrock_status);
+    }
+
     pub fn send_remove_mob_effect(&self, entity: &Entity, effect_type: &'static StatusEffect) {
-        let chunk_pos = entity.chunk_pos.load();
         let je_packet =
             CRemoveMobEffect::new(entity.entity_id.into(), VarInt(i32::from(effect_type.id)));
 
@@ -583,11 +620,10 @@ impl World {
             tick: VarULong(0),
             ambient: false,
         };
-        self.broadcast_to_chunk_editioned(chunk_pos, &je_packet, &be_packet);
+        self.send_to_tracking_players_and_self_editioned(entity, &je_packet, &be_packet);
     }
 
     pub fn send_add_mob_effect(&self, entity: &Entity, effect: &pumpkin_data::potion::Effect) {
-        let chunk_pos = entity.chunk_pos.load();
         let mut flags: i8 = 0;
         if effect.ambient {
             flags |= 0x01;
@@ -618,7 +654,91 @@ impl World {
             ambient: effect.ambient,
         };
 
-        self.broadcast_to_chunk_editioned(chunk_pos, &je_packet, &be_packet);
+        self.send_to_tracking_players_and_self_editioned(entity, &je_packet, &be_packet);
+    }
+
+    pub fn send_to_tracking_players<P: ClientPacket + Sync>(&self, entity: &Entity, packet: &P) {
+        if let Some(tracked) = self.entity_tracker.get_tracked_entity(entity.entity_id) {
+            tracked.send_to_tracking_players(packet, self);
+        }
+    }
+
+    pub fn send_to_tracking_players_bedrock<P: BClientPacket + Sync>(
+        &self,
+        entity: &Entity,
+        packet: &P,
+    ) {
+        if let Some(tracked) = self.entity_tracker.get_tracked_entity(entity.entity_id) {
+            tracked.send_to_tracking_players_bedrock(packet, self);
+        }
+    }
+
+    pub fn send_to_tracking_players_editioned<J: ClientPacket + Sync, B: BClientPacket + Sync>(
+        &self,
+        entity: &Entity,
+        je_packet: &J,
+        be_packet: &B,
+    ) {
+        if let Some(tracked) = self.entity_tracker.get_tracked_entity(entity.entity_id) {
+            tracked.send_to_tracking_players_editioned(je_packet, be_packet, self);
+        }
+    }
+
+    pub fn send_to_tracking_players_and_self<P: ClientPacket + Sync>(
+        &self,
+        entity: &Entity,
+        packet: &P,
+    ) {
+        if let Some(tracked) = self.entity_tracker.get_tracked_entity(entity.entity_id) {
+            tracked.send_to_tracking_players_and_self(packet, self);
+        }
+    }
+
+    pub fn send_to_tracking_players_and_self_editioned<
+        J: ClientPacket + Sync,
+        B: BClientPacket + Sync,
+    >(
+        &self,
+        entity: &Entity,
+        je_packet: &J,
+        be_packet: &B,
+    ) {
+        if let Some(tracked) = self.entity_tracker.get_tracked_entity(entity.entity_id) {
+            tracked.send_to_tracking_players_and_self_editioned(je_packet, be_packet, self);
+        }
+    }
+
+    pub fn send_to_tracking_players_filtered<P: ClientPacket + Sync, F: Fn(&Player) -> bool>(
+        &self,
+        entity: &Entity,
+        packet: &P,
+        filter: F,
+    ) {
+        if let Some(tracked) = self.entity_tracker.get_tracked_entity(entity.entity_id) {
+            tracked.send_to_tracking_players_filtered(packet, self, filter);
+        }
+    }
+
+    pub fn send_to_tracking_players_filtered_editioned<
+        J: ClientPacket + Sync,
+        B: BClientPacket + Sync,
+        F: Fn(&Player) -> bool,
+    >(
+        &self,
+        entity: &Entity,
+        je_packet: &J,
+        be_packet: &B,
+        filter: F,
+    ) {
+        if let Some(tracked) = self.entity_tracker.get_tracked_entity(entity.entity_id) {
+            tracked.send_to_tracking_players_filtered_editioned(je_packet, be_packet, self, filter);
+        }
+    }
+
+    #[must_use]
+    pub fn is_tracked_by_any_player(&self, entity: &Entity) -> bool {
+        self.entity_tracker
+            .is_tracked_by_any_player(entity.entity_id)
     }
 
     pub fn set_difficulty(&self, difficulty: Difficulty) {
@@ -848,7 +968,35 @@ impl World {
         );
     }
 
-    pub async fn broadcast_secure_player_chat(
+    pub fn broadcast_chat_message(
+        &self,
+        message: &crate::net::chat::PlayerChatMessage,
+        is_filtered: impl Fn(&Player) -> bool,
+        sender_player: Option<&Arc<Player>>,
+        chat_type: VarInt,
+        sender_name: &TextComponent,
+        target_name: Option<&TextComponent>,
+    ) {
+        let tracked = crate::net::chat::OutgoingChatMessage::create(message.clone());
+        let mut was_fully_filtered = false;
+
+        let players = self.players.load();
+        for player in players.iter() {
+            let filtered = is_filtered(player);
+            tracked.send_to_player(player, filtered, chat_type, sender_name, target_name);
+            was_fully_filtered |= filtered && message.is_fully_filtered();
+        }
+
+        if was_fully_filtered && let Some(sender) = sender_player {
+            let filter_notice =
+                TextComponent::translate(pumpkin_data::translation::java::CHAT_FILTERED_FULL, [])
+                    .color_named(pumpkin_util::text::color::NamedColor::Red)
+                    .italic();
+            sender.send_system_message(&filter_notice);
+        }
+    }
+
+    pub fn broadcast_secure_player_chat(
         &self,
         sender: &Arc<Player>,
         chat_message: &SChatMessage<'_>,
@@ -864,79 +1012,36 @@ impl World {
                 .signature_cache
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
-            cache.last_seen.clone()
+            cache.last_seen.as_ref().to_vec()
         };
 
-        for recipient in self.players.load().iter() {
-            let messages_received: i32 = recipient
-                .chat_session
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .messages_received;
-            let packet = &CPlayerChatMessage::new(
-                VarInt(messages_received),
-                sender.gameprofile.id,
-                VarInt(messages_sent),
-                chat_message.signature.map(std::convert::Into::into),
-                chat_message.message.into(),
-                chat_message.timestamp,
-                chat_message.salt,
-                sender_last_seen.indexed_for(recipient),
-                Some(decorated_message.clone()),
-                FilterType::PassThrough,
-                (RAW + 1).into(), // Custom registry chat_type with no sender name
-                TextComponent::empty(), // Not needed since we're injecting the name in the message for custom formatting
-                None,
-            );
-            let packet_data = recipient.client.java().map_or_else(
-                || {
-                    JavaClient::serialize_packet_for_version(
-                        packet,
-                        recipient.client.java_version(),
-                    )
-                },
-                |j| j.serialize_packet(packet),
-            );
-            if let Ok(data) = packet_data {
-                recipient.client.enqueue_packet(data).await;
-            }
+        let link = crate::net::chat::SignedMessageLink::new(
+            messages_sent,
+            sender.gameprofile.id,
+            Uuid::nil(),
+        );
+        let signed_body = crate::net::chat::SignedMessageBody::new(
+            chat_message.message.to_string(),
+            chat_message.timestamp,
+            chat_message.salt,
+            sender_last_seen,
+        );
+        let player_chat_msg = crate::net::chat::PlayerChatMessage::new(
+            link,
+            chat_message.signature.map(std::convert::Into::into),
+            signed_body,
+            Some(decorated_message.clone()),
+            crate::net::chat::FilterMask::PassThrough,
+        );
 
-            if let Some(signature) = chat_message.signature {
-                let mut cache = recipient
-                    .signature_cache
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner);
-                cache.add_seen_signature(signature);
-                cache.last_seen_validator.add_pending(signature);
-                let tracked_count = cache.last_seen_validator.tracked_messages_count();
-                drop(cache);
-
-                if tracked_count > 4096 {
-                    recipient.kick(
-                        crate::net::DisconnectReason::Kicked,
-                        &TextComponent::translate_cross(
-                            pumpkin_data::translation::java::MULTIPLAYER_DISCONNECT_TOO_MANY_PENDING_CHATS,
-                            pumpkin_data::translation::java::MULTIPLAYER_DISCONNECT_TOO_MANY_PENDING_CHATS,
-                            [],
-                        ),
-                    );
-                }
-            }
-
-            if recipient.gameprofile.id != sender.gameprofile.id {
-                // Sender may update recipient on signatures recipient hasn't seen
-                recipient
-                    .signature_cache
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .cache_signatures(sender_last_seen.as_ref());
-            }
-            recipient
-                .chat_session
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .messages_received += 1;
-        }
+        self.broadcast_chat_message(
+            &player_chat_msg,
+            Player::is_text_filtering_enabled,
+            Some(sender),
+            (RAW + 1).into(),
+            &TextComponent::empty(),
+            None,
+        );
 
         sender
             .chat_session
@@ -1087,6 +1192,52 @@ impl World {
         pitch: f32,
     ) {
         self.play_sound_raw(sound as u16, category, position, volume, pitch);
+    }
+
+    /// Plays a custom sound event by identifier for all players in range.
+    pub fn play_custom_sound(
+        &self,
+        sound_name: &str,
+        category: SoundCategory,
+        position: &Vector3<f64>,
+        volume: f32,
+        pitch: f32,
+    ) {
+        let seed = rand::random::<f64>();
+        let packet = CSoundEffect::new(
+            pumpkin_protocol::IdOr::Value(pumpkin_protocol::SoundEvent {
+                sound_name: sound_name.into(),
+                range: None,
+            }),
+            category,
+            position,
+            volume,
+            pitch,
+            seed,
+        );
+        self.broadcast_packet_all(&packet);
+    }
+
+    /// Spawns a cluster of particles in the world for all players in range.
+    pub fn spawn_particles(
+        &self,
+        particle: pumpkin_data::particle::Particle,
+        pos: Vector3<f64>,
+        count: u32,
+        offset: Vector3<f32>,
+        max_speed: f32,
+    ) {
+        let packet = CParticle::new(
+            false,
+            false,
+            pos,
+            offset,
+            max_speed,
+            count as i32,
+            (particle.to_id() as i32).into(),
+            &[],
+        );
+        self.broadcast_packet_all(&packet);
     }
 
     /// Plays a Bedrock level sound for players close enough to hear it.
@@ -1322,6 +1473,8 @@ impl World {
                 }
             });
         let entity_elapsed = t_entities.elapsed();
+
+        self.entity_tracker.update_all(self);
 
         let mut block_entities: Vec<Arc<dyn BlockEntity>> = Vec::new();
         for chunk_pos in active_chunks.iter() {
@@ -1640,9 +1793,10 @@ impl World {
     #[expect(clippy::too_many_lines)]
     pub fn tick_chunks(self: &Arc<Self>, server: &Arc<Server>) {
         const BATCH_SIZE: usize = 32;
+        let random_tick_speed = self.level_info.load().game_rules.random_tick_speed;
 
         let active_chunks = self.active_chunks.load();
-        let tick_data = self.level.get_tick_data(&active_chunks);
+        let tick_data = self.level.get_tick_data(&active_chunks, random_tick_speed);
         let handle = server.runtime.clone();
 
         // 1. Parallel Block Ticks via Rayon
@@ -1800,6 +1954,28 @@ impl World {
                         if height >= bounding_box.min.y {
                             return true;
                         }
+                    }
+                }
+            }
+        }
+
+        false
+    }
+
+    pub fn contains_any_liquid(&self, bounding_box: BoundingBox) -> bool {
+        let min_x = bounding_box.min.x.floor() as i32;
+        let max_x = bounding_box.max.x.ceil() as i32;
+        let min_y = bounding_box.min.y.floor() as i32;
+        let max_y = bounding_box.max.y.ceil() as i32;
+        let min_z = bounding_box.min.z.floor() as i32;
+        let max_z = bounding_box.max.z.ceil() as i32;
+
+        for x in min_x..max_x {
+            for y in min_y..max_y {
+                for z in min_z..max_z {
+                    let pos = BlockPos::new(x, y, z);
+                    if self.get_fluid_and_fluid_state(&pos).0.id != Fluid::EMPTY.id {
+                        return true;
                     }
                 }
             }
@@ -3787,13 +3963,7 @@ impl World {
             container_id: 0,
         };
 
-        let chunk_pos = from.get_entity().chunk_pos.load();
-        self.broadcast_to_chunk_except_editioned(
-            chunk_pos,
-            &[from.get_entity().entity_uuid],
-            &je_packet,
-            &be_mob_equipment,
-        );
+        self.send_to_tracking_players_editioned(from.get_entity(), &je_packet, &be_mob_equipment);
     }
 
     pub fn send_world_info(
@@ -4094,11 +4264,7 @@ impl World {
                         // observer sees the player in a world whose chunk manager doesn't match.
                         self.remove_player(player, false).await;
                         player.unload_watched_chunks(self).await;
-                        player
-                            .chunk_manager
-                            .lock()
-                            .unwrap_or_else(std::sync::PoisonError::into_inner)
-                            .change_world(&self.level, destination.clone());
+                        player.change_world_chunks(&self.level, &destination);
                         player.living_entity.entity.set_world(destination.clone());
                         destination.players.rcu(|current_list| {
                             let mut new_list = (**current_list).clone();
@@ -4709,6 +4875,8 @@ impl World {
             new_list.push(player.clone());
             new_list
         });
+        self.entity_tracker
+            .add_entity(&(player.clone() as Arc<dyn EntityBase>), self);
         Ok(())
     }
 
@@ -4750,6 +4918,8 @@ impl World {
             new_list
         });
         if let Some(ref player) = removed_player {
+            self.entity_tracker
+                .remove_entity(player.as_ref() as &dyn EntityBase, self);
             let uuid = player.gameprofile.id;
             let entity_id = player.entity_id();
 
@@ -4804,7 +4974,7 @@ impl World {
     #[expect(clippy::needless_pass_by_value)]
     pub fn spawn_entity_non_save(&self, entity: Arc<dyn EntityBase>) {
         let _base_entity = entity.get_entity();
-        self.broadcast_entity_spawn(&entity);
+        self.entity_tracker.add_entity(&entity, self);
         self.spawn_state.load().add_entity(self, entity.as_ref());
 
         self.entities.rcu(|current_entities| {
@@ -4828,7 +4998,6 @@ impl World {
             return;
         }
 
-        self.broadcast_entity_spawn(&entity);
         entity.init_data_tracker();
         self.add_entity_silent(entity);
     }
@@ -4868,6 +5037,7 @@ impl World {
         // unload (see `save_entity`), never at spawn, so it can't be both live and
         // serialized at once (which would double it on the next reload).
         self.spawn_state.load().add_entity(self, entity.as_ref());
+        self.entity_tracker.add_entity(&entity, self);
 
         self.entities.rcu(|current_entities| {
             let mut new_entities = (**current_entities).clone();
@@ -4888,18 +5058,12 @@ impl World {
         base_entity.removed.store(true, Ordering::Release);
 
         self.spawn_state.load().remove_entity(self, entity);
+        self.entity_tracker.remove_entity(entity, self);
         self.entities.rcu(|current_entities| {
             let mut new_entities = (**current_entities).clone();
             new_entities.retain(|e| e.get_entity().entity_uuid != base_entity.entity_uuid);
             new_entities
         });
-
-        let chunk_pos = base_entity.chunk_pos.load();
-        self.broadcast_to_chunk_editioned(
-            chunk_pos,
-            &CRemoveEntities::new(&[base_entity.entity_id.into()]),
-            &CRemoveActor::new(VarLong(base_entity.entity_id as i64)),
-        );
     }
 
     pub async fn remove_entities_in_chunks(
@@ -4928,6 +5092,7 @@ impl World {
         });
 
         for entity in entities_to_remove {
+            self.entity_tracker.remove_entity(entity.as_ref(), self);
             self.save_entity(&entity).await;
             self.spawn_state.load().remove_entity(self, entity.as_ref());
         }

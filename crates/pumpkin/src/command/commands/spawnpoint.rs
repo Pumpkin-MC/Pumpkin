@@ -1,151 +1,111 @@
-use std::sync::Arc;
-
 use pumpkin_data::translation;
-use pumpkin_util::math::position::BlockPos;
+use pumpkin_util::PermissionLvl;
+use pumpkin_util::permission::{Permission, PermissionDefault, PermissionRegistry};
 use pumpkin_util::text::TextComponent;
 
-use crate::command::args::players::PlayersArgumentConsumer;
-use crate::command::args::position_block::BlockPosArgumentConsumer;
-use crate::command::args::rotation::RotationArgumentConsumer;
-use crate::command::args::{Arg, ConsumedArgs, FindArgDefaultName};
-use crate::command::dispatcher::CommandError;
-use crate::command::tree::CommandTree;
-use crate::command::tree::builder::argument;
-use crate::command::{CommandExecutor, CommandResult, CommandSender};
-use crate::entity::EntityBase;
-use crate::entity::player::Player;
-
-const NAMES: [&str; 1] = ["spawnpoint"];
+use crate::command::argument_builder::{ArgumentBuilder, argument, command};
+use crate::command::argument_types::coordinates::angle::AngleArgumentType;
+use crate::command::argument_types::coordinates::block_pos::BlockPosArgumentType;
+use crate::command::argument_types::entity::EntityArgumentType;
+use crate::command::context::command_context::CommandContext;
+use crate::command::errors::error_types::CommandErrorType;
+use crate::command::node::dispatcher::CommandDispatcher;
+use crate::command::node::{CommandExecutor, CommandExecutorResult};
 
 const DESCRIPTION: &str = "Sets the spawn point for a player.";
+const PERMISSION: &str = "minecraft:command.spawnpoint";
 
-const ARG_TARGETS: &str = "targets";
-const ARG_POS: &str = "pos";
-const ARG_ANGLE: &str = "angle";
+const ERROR_NOT_PLAYER: CommandErrorType<0> = CommandErrorType::new(
+    translation::java::PERMISSIONS_REQUIRES_PLAYER,
+    translation::java::PERMISSIONS_REQUIRES_PLAYER,
+);
 
-/// `/spawnpoint` - set self at current position
-struct SelfExecutor;
-
-impl CommandExecutor for SelfExecutor {
-    fn execute(
-        &self,
-        sender: &CommandSender,
-        _server: &crate::server::Server,
-        _args: &ConsumedArgs,
-    ) -> CommandResult {
-        let Some(player) = sender.as_player() else {
-            return Err(CommandError::InvalidRequirement);
-        };
-        let pos = player.position().to_block_pos();
-        let yaw = player.get_entity().yaw.load();
-        set_spawnpoint(sender, &player, pos, yaw);
-
-        Ok(1)
-    }
+enum SpawnpointMode {
+    SelfDefault,
+    TargetsDefault,
+    TargetsPos,
+    TargetsPosAngle,
 }
 
-/// `/spawnpoint <targets>` - set targets at their current positions
-struct TargetsExecutor;
+struct SpawnpointExecutor(SpawnpointMode);
 
-impl CommandExecutor for TargetsExecutor {
-    fn execute(
-        &self,
-        sender: &CommandSender,
-        _server: &crate::server::Server,
-        args: &ConsumedArgs,
-    ) -> CommandResult {
-        let targets = PlayersArgumentConsumer.find_arg_default_name(args)?;
-
-        for target in targets {
-            let pos = target.position().to_block_pos();
-            let yaw = target.living_entity.entity.yaw.load();
-            set_spawnpoint(sender, target, pos, yaw);
-        }
-
-        Ok(targets.len() as i32)
-    }
-}
-
-/// `/spawnpoint <targets> <pos>` - set targets at specified position
-struct TargetsPosExecutor;
-
-impl CommandExecutor for TargetsPosExecutor {
-    fn execute(
-        &self,
-        sender: &CommandSender,
-        _server: &crate::server::Server,
-        args: &ConsumedArgs,
-    ) -> CommandResult {
-        let targets = PlayersArgumentConsumer.find_arg_default_name(args)?;
-        let Some(Arg::BlockPos(pos)) = args.get(ARG_POS) else {
-            return Err(CommandError::InvalidConsumption(Some(ARG_POS.into())));
+impl CommandExecutor for SpawnpointExecutor {
+    fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
+        let targets = match self.0 {
+            SpawnpointMode::SelfDefault => {
+                let player = context
+                    .source
+                    .output
+                    .as_player()
+                    .ok_or_else(|| ERROR_NOT_PLAYER.create_without_context())?;
+                vec![player]
+            }
+            _ => EntityArgumentType::get_players(context, "targets")?,
         };
 
-        for target in targets {
-            let yaw = target.living_entity.entity.yaw.load();
-            set_spawnpoint(sender, target, *pos, yaw);
-        }
+        for target in &targets {
+            let (pos, yaw) = match self.0 {
+                SpawnpointMode::SelfDefault | SpawnpointMode::TargetsDefault => {
+                    let block_pos = target.position().to_block_pos();
+                    let yaw = target.living_entity.entity.yaw.load();
+                    (block_pos, yaw)
+                }
+                SpawnpointMode::TargetsPos => {
+                    let block_pos = BlockPosArgumentType::get_block_pos(context, "pos")?;
+                    let yaw = target.living_entity.entity.yaw.load();
+                    (block_pos, yaw)
+                }
+                SpawnpointMode::TargetsPosAngle => {
+                    let block_pos = BlockPosArgumentType::get_block_pos(context, "pos")?;
+                    let yaw = AngleArgumentType::get(context, "angle")?.get_angle(&context.source);
+                    (block_pos, yaw)
+                }
+            };
 
-        Ok(targets.len() as i32)
-    }
-}
+            let dimension = target.world().dimension.clone();
+            target.set_respawn_point(dimension, pos, yaw, 0.0, true);
 
-/// `/spawnpoint <targets> <pos> <angle>` - set targets at position with angle
-struct TargetsPosAngleExecutor;
-
-impl CommandExecutor for TargetsPosAngleExecutor {
-    fn execute(
-        &self,
-        sender: &CommandSender,
-        _server: &crate::server::Server,
-        args: &ConsumedArgs,
-    ) -> CommandResult {
-        let targets = PlayersArgumentConsumer.find_arg_default_name(args)?;
-        let Some(Arg::BlockPos(pos)) = args.get(ARG_POS) else {
-            return Err(CommandError::InvalidConsumption(Some(ARG_POS.into())));
-        };
-        let Some(Arg::Rotation(yaw, _, _, _)) = args.get(ARG_ANGLE) else {
-            return Err(CommandError::InvalidConsumption(Some(ARG_ANGLE.into())));
-        };
-
-        for target in targets {
-            set_spawnpoint(sender, target, *pos, *yaw);
-        }
-
-        Ok(targets.len() as i32)
-    }
-}
-
-fn set_spawnpoint(sender: &CommandSender, target: &Arc<Player>, pos: BlockPos, yaw: f32) {
-    let dimension = target.world().dimension.clone();
-    target.set_respawn_point(dimension, pos, yaw, 0.0, true);
-
-    sender.send_message(TextComponent::translate_cross(
-        translation::java::COMMANDS_SPAWNPOINT_SUCCESS_SINGLE,
-        translation::bedrock::COMMANDS_SPAWNPOINT_SUCCESS_SINGLE,
-        [
-            TextComponent::text(target.gameprofile.name.clone()),
-            TextComponent::text(pos.0.x.to_string()),
-            TextComponent::text(pos.0.y.to_string()),
-            TextComponent::text(pos.0.z.to_string()),
-        ],
-    ));
-}
-
-#[must_use]
-pub fn init_command_tree() -> CommandTree {
-    CommandTree::new(NAMES, DESCRIPTION)
-        .execute(SelfExecutor)
-        .then(
-            argument(ARG_TARGETS, PlayersArgumentConsumer)
-                .execute(TargetsExecutor)
-                .then(
-                    argument(ARG_POS, BlockPosArgumentConsumer)
-                        .execute(TargetsPosExecutor)
-                        .then(
-                            argument(ARG_ANGLE, RotationArgumentConsumer)
-                                .execute(TargetsPosAngleExecutor),
-                        ),
+            context.source.send_feedback(
+                TextComponent::translate_cross(
+                    translation::java::COMMANDS_SPAWNPOINT_SUCCESS_SINGLE,
+                    translation::bedrock::COMMANDS_SPAWNPOINT_SUCCESS_SINGLE,
+                    [
+                        TextComponent::text(target.gameprofile.name.clone()),
+                        TextComponent::text(pos.0.x.to_string()),
+                        TextComponent::text(pos.0.y.to_string()),
+                        TextComponent::text(pos.0.z.to_string()),
+                    ],
                 ),
-        )
+                true,
+            );
+        }
+
+        Ok(targets.len() as i32)
+    }
+}
+
+pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistry) {
+    registry.register_permission_or_panic(Permission::new(
+        PERMISSION,
+        DESCRIPTION,
+        PermissionDefault::Op(PermissionLvl::Two),
+    ));
+
+    dispatcher.register(
+        command("spawnpoint", DESCRIPTION)
+            .requires(PERMISSION)
+            .executes(SpawnpointExecutor(SpawnpointMode::SelfDefault))
+            .then(
+                argument("targets", EntityArgumentType::Players)
+                    .executes(SpawnpointExecutor(SpawnpointMode::TargetsDefault))
+                    .then(
+                        argument("pos", BlockPosArgumentType)
+                            .executes(SpawnpointExecutor(SpawnpointMode::TargetsPos))
+                            .then(
+                                argument("angle", AngleArgumentType)
+                                    .executes(SpawnpointExecutor(SpawnpointMode::TargetsPosAngle)),
+                            ),
+                    ),
+            ),
+    );
 }

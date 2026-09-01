@@ -1,6 +1,6 @@
 use pumpkin_data::enchantment::AttributeModifierSlot;
 use pumpkin_util::text::TextComponent;
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 use tokio::sync::RwLock;
 
 #[derive(Clone, Debug)]
@@ -16,7 +16,7 @@ pub struct CustomEnchantmentEntry {
 }
 
 pub struct EnchantmentManager {
-    custom_enchantments: RwLock<HashMap<String, CustomEnchantmentEntry>>,
+    custom_enchantments: RwLock<FxHashMap<String, CustomEnchantmentEntry>>,
 }
 
 impl Default for EnchantmentManager {
@@ -29,7 +29,7 @@ impl EnchantmentManager {
     #[must_use]
     pub fn new() -> Self {
         Self {
-            custom_enchantments: RwLock::new(HashMap::new()),
+            custom_enchantments: RwLock::new(FxHashMap::default()),
         }
     }
 

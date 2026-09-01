@@ -301,6 +301,26 @@ pub trait EntityBase: Send + Sync + std::any::Any {
         None
     }
 
+    fn java_spawn_metadata(&self, version: JavaMinecraftVersion) -> Option<Box<[u8]>> {
+        self.get_mob().map_or_else(
+            || {
+                let entity = self.get_entity();
+                let shared_flags = entity.flags.load(Ordering::Relaxed);
+                (shared_flags != 0).then(|| {
+                    let mut buf = Vec::new();
+                    let _ = Metadata::new(
+                        pumpkin_data::tracked_data::entity::DATA_SHARED_FLAGS_ID,
+                        shared_flags,
+                    )
+                    .write(&mut buf, &version);
+                    buf.put_u8(255);
+                    buf.into_boxed_slice()
+                })
+            },
+            |mob| mob.mob_java_spawn_metadata(version),
+        )
+    }
+
     fn send_bedrock_spawn_packet(&self, client: &BedrockClient) {
         let entity = self.get_entity();
         let runtime_id = entity.entity_id as u64;
@@ -340,10 +360,8 @@ pub trait EntityBase: Send + Sync + std::any::Any {
         let entity = self.get_entity();
         let version = client.version.load();
         let is_mob = entity.entity_type.mob || self.get_mob().is_some();
+        let metadata = self.java_spawn_metadata(version);
         if version < JavaMinecraftVersion::V_1_19 && is_mob {
-            let metadata = self
-                .get_mob()
-                .and_then(|mob| mob.mob_java_spawn_metadata(version));
             let spawn_packet = entity.create_spawn_living_packet(metadata.clone());
             if let Ok(data) = client.serialize_packet(&spawn_packet) {
                 client.try_enqueue_packet(data);
@@ -361,10 +379,8 @@ pub trait EntityBase: Send + Sync + std::any::Any {
             if let Ok(data) = client.serialize_packet(&spawn_packet) {
                 client.try_enqueue_packet(data);
             }
-            if let Some(mob) = self.get_mob()
-                && let Some(metadata) = mob.mob_java_spawn_metadata(version)
-            {
-                let meta_packet = CSetEntityMetadata::new(entity.entity_id.into(), metadata);
+            if let Some(meta) = metadata {
+                let meta_packet = CSetEntityMetadata::new(entity.entity_id.into(), meta);
                 if let Ok(meta_data) = client.serialize_packet(&meta_packet) {
                     client.try_enqueue_packet(meta_data);
                 }
@@ -1592,7 +1608,14 @@ impl Entity {
         let max = aabb.max_block_pos();
 
         let eye_height = self.get_eye_height();
+        let eye_width = f64::from(self.width()) * 0.8;
         let mut eye_level_box = aabb;
+        let shrink_x = (aabb.max.x - aabb.min.x - eye_width) / 2.0;
+        let shrink_z = (aabb.max.z - aabb.min.z - eye_width) / 2.0;
+        eye_level_box.min.x += shrink_x;
+        eye_level_box.max.x -= shrink_x;
+        eye_level_box.min.z += shrink_z;
+        eye_level_box.max.z -= shrink_z;
         eye_level_box.min.y += eye_height;
         eye_level_box.max.y = eye_level_box.min.y;
 
@@ -2612,6 +2635,29 @@ impl Entity {
         }
     }
 
+    /// Sets the number of ticks the entity has been frozen.
+    pub fn set_frozen_ticks(&self, ticks: i32) {
+        let new_frozen_ticks = ticks.clamp(0, Self::MAX_FROZEN_TICKS);
+        self.frozen_ticks.store(new_frozen_ticks, Ordering::Relaxed);
+        let mut bedrock_meta = SyncedActorDataList::new();
+        bedrock_meta.set(
+            entity_data_key::FREEZING_EFFECT_STRENGTH,
+            MetadataValue::Float(new_frozen_ticks as f32),
+        );
+        self.send_meta_data(
+            &[Metadata::new(
+                tracked_data::entity::DATA_TICKS_FROZEN,
+                VarInt(new_frozen_ticks),
+            )],
+            Some(&bedrock_meta),
+        );
+    }
+
+    /// Returns the number of ticks the entity has been frozen.
+    pub fn get_frozen_ticks(&self) -> i32 {
+        self.frozen_ticks.load(Ordering::Relaxed)
+    }
+
     /// Sets the `Entity` yaw & pitch rotation
     pub fn set_rotation(&self, yaw: f32, pitch: f32) {
         // TODO
@@ -2776,6 +2822,11 @@ impl Entity {
             self.has_visual_fire.store(on_fire, Ordering::Relaxed);
             self.set_flag(Flag::OnFire, on_fire);
         }
+    }
+
+    #[must_use]
+    pub fn is_on_fire(&self) -> bool {
+        self.fire_ticks.load(Ordering::Relaxed) > 0 || self.has_visual_fire.load(Ordering::Relaxed)
     }
 
     pub fn get_horizontal_facing(&self) -> HorizontalFacing {
@@ -2982,20 +3033,33 @@ impl Entity {
         bedrock_meta: Option<&SyncedActorDataList>,
     ) {
         let world = self.world.load();
-        let chunk_pos = self.chunk_pos.load();
         let players = world.players.load();
 
         let mut java_recipients = Vec::new();
         let mut bedrock_recipients = Vec::new();
 
-        for player in players.iter() {
-            let center = player.get_entity().chunk_pos.load();
-            let view_distance = crate::world::chunker::get_view_distance(player).get() as i32;
+        if let Some(tracked) = world.entity_tracker.get_tracked_entity(self.entity_id) {
+            for player in players.iter() {
+                if tracked.seen_by.contains(&player.gameprofile.id)
+                    || player.entity_id() == self.entity_id
+                {
+                    match player.client.as_ref() {
+                        ClientPlatform::Java(_) => java_recipients.push(player),
+                        ClientPlatform::Bedrock(client) => bedrock_recipients.push(client),
+                    }
+                }
+            }
+        } else {
+            let chunk_pos = self.chunk_pos.load();
+            for player in players.iter() {
+                let center = player.get_entity().chunk_pos.load();
+                let view_distance = crate::world::chunker::get_view_distance(player).get() as i32;
 
-            if is_within_view_distance(chunk_pos, center, view_distance) {
-                match player.client.as_ref() {
-                    ClientPlatform::Java(_) => java_recipients.push(player),
-                    ClientPlatform::Bedrock(client) => bedrock_recipients.push(client),
+                if is_within_view_distance(chunk_pos, center, view_distance) {
+                    match player.client.as_ref() {
+                        ClientPlatform::Java(_) => java_recipients.push(player),
+                        ClientPlatform::Bedrock(client) => bedrock_recipients.push(client),
+                    }
                 }
             }
         }
@@ -3205,7 +3269,7 @@ impl Entity {
             &CEntityPositionSync::new(
                 self.entity_id.into(),
                 position,
-                Vector3::new(0.0, 0.0, 0.0),
+                self.velocity.load(),
                 yaw.unwrap_or(self.yaw.load()),
                 pitch.unwrap_or(self.pitch.load()),
                 self.on_ground.load(Ordering::SeqCst),

@@ -82,6 +82,8 @@ pub trait BlockBehaviour: Send + Sync {
 
     fn on_entity_collision(&self, _args: OnEntityCollisionArgs<'_>) {}
 
+    fn on_projectile_hit(&self, _args: OnProjectileHitArgs<'_>) {}
+
     /// Called when an entity is standing on / walking over the top face of this block.
     fn on_entity_step(&self, _args: OnEntityStepArgs<'_>) {}
 
@@ -225,6 +227,16 @@ pub struct OnEntityCollisionArgs<'a> {
     pub state: &'a BlockState,
     pub position: &'a BlockPos,
     pub entity: &'a dyn EntityBase,
+}
+
+pub struct OnProjectileHitArgs<'a> {
+    pub server: &'a Server,
+    pub world: &'a Arc<World>,
+    pub block: &'a Block,
+    pub state: &'a BlockState,
+    pub position: &'a BlockPos,
+    pub projectile: &'a dyn EntityBase,
+    pub hit_pos: &'a Vector3<f64>,
 }
 
 pub struct OnEntityStepArgs<'a> {
