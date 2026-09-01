@@ -3151,7 +3151,9 @@ impl LivingEntity {
 
         let applies = level > 0
             && !self.entity.has_vehicle()
-            && !caller.get_player().is_some_and(|player| player.is_flying())
+            && !caller
+                .get_player()
+                .is_some_and(super::player::Player::is_flying)
             && (on_soul_speed_block || (active.is_some() && !on_ground));
         let desired = applies.then(|| soul_speed_bonus(level));
 
