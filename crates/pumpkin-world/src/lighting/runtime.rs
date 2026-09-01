@@ -3,7 +3,7 @@ use crate::chunk::palette::BlockPalette;
 use crate::level::Level;
 use crate::lighting::chunk_access::{ChunkCursor, VerticalInChunk};
 use crate::lighting::sky_light_height::{SkyLightHeight, SkyLightHeightMigration, SkyLightTier};
-use crate::lighting::stats::{Counter, LightCounters, LightPassStats};
+use crate::lighting::stats::{Counter, LightCounters, LightPassStats, LocalCounters};
 use crossbeam::queue::SegQueue;
 use pumpkin_config::lighting::LightingEngineConfig;
 use pumpkin_data::BlockDirection;
@@ -53,8 +53,8 @@ impl DynamicLightEngine {
     /// Open sky above `pos` in this column. Vanilla `SkyLightEngine` uses sky-section
     /// sources, not a per-`checkBlock` scan; overhangs can disagree until the flood catches up.
     /// Bounded by this chunk's height (`VOID_AIR` opacity 0 would walk forever past `max_y`).
-    fn has_open_sky_above(&self, cursor: &mut ChunkCursor, pos: &BlockPos) -> bool {
-        self.counters.bump(Counter::SkyColumnScan);
+    fn has_open_sky_above(cursor: &mut ChunkCursor, pos: &BlockPos) -> bool {
+        cursor.counters.bump(Counter::SkyColumnScan);
         // The whole column is in the same chunk by definition, so it is resolved once and
         // the pointer then stays in a register for every step. Re-resolving per step would
         // repeat the position split and the memo compare up to ~250 times for one chunk.
@@ -88,7 +88,7 @@ impl DynamicLightEngine {
             }
             (false, reads)
         });
-        self.counters.bump_n(Counter::SkyColumnRead, reads);
+        cursor.counters.bump_n(Counter::SkyColumnRead, reads);
 
         !blocked
     }
@@ -239,8 +239,10 @@ impl DynamicLightEngine {
             .propagate_lock
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        // All three steps work on the same chunk; one cursor saves their lookups.
-        let mut cursor = ChunkCursor::new(level, &self.counters);
+        // All three steps work on the same chunk; one cursor saves their lookups, and one
+        // tally keeps their counting off the shared atomics until the end.
+        let tally = LocalCounters::new(&self.counters);
+        let mut cursor = ChunkCursor::new(level, &tally);
         // block light needs its luminance, sky light
         // its opacity, and nothing in between changes the block. Fullbright and dark never
         // look at it -> return before they would.
@@ -268,7 +270,10 @@ impl DynamicLightEngine {
             // One cursor for the whole pass: consecutive queue entries almost always
             // sit in the same chunk, so the hit rate climbs well beyond what a single
             // operation on its own could reach.
-            let mut cursor = ChunkCursor::new(level, &self.counters);
+            // Dropped at the end of this block, so the tally has folded itself into the
+            // shared counters before they are snapshotted below.
+            let tally = LocalCounters::new(&self.counters);
+            let mut cursor = ChunkCursor::new(level, &tally);
             updates += self.perform_block_light_updates(&mut cursor, &mut budget);
             updates += self.perform_sky_light_updates(&mut cursor, &mut budget);
         }
@@ -344,7 +349,7 @@ impl DynamicLightEngine {
                 break;
             };
             *budget -= 1;
-            self.counters.bump(counter);
+            cursor.counters.bump(counter);
             propagate(self, cursor, &pos, expected_light);
             updates += 1;
         }
@@ -383,6 +388,9 @@ impl DynamicLightEngine {
         pos: &BlockPos,
         light_level: u8,
     ) {
+        // A shared reference, so copying it out keeps no borrow of the cursor that the
+        // walk below needs mutably.
+        let counters = cursor.counters;
         Self::for_each_neighbor(
             cursor,
             pos,
@@ -391,13 +399,13 @@ impl DynamicLightEngine {
                 let Some(neighbor_light) = ChunkCursor::block_light_at(chunk, cell) else {
                     return;
                 };
-                self.counters.bump(Counter::BlockState);
+                counters.bump(Counter::BlockState);
                 let opacity = ChunkCursor::opacity_at(chunk, cell).max(1);
                 let new_light = light_level.saturating_sub(opacity);
 
                 // Only propagate if new light is brighter than current light
                 if new_light > neighbor_light {
-                    self.counters.bump(Counter::SetBlockLight);
+                    counters.bump(Counter::SetBlockLight);
                     let written = ChunkCursor::write_light_at(chunk, cell, new_light, true);
                     if written && new_light > 1 {
                         self.queue_block_light_increase(neighbor_pos, new_light);
@@ -420,6 +428,7 @@ impl DynamicLightEngine {
         // This prevents positions that were intentionally set to 0 from propagating light
         if current_level == 0 && removed_light_level > 0 {
             // This position was already darkened, so propagate the darkness to neighbors
+            let counters = cursor.counters;
             Self::for_each_neighbor(
                 cursor,
                 pos,
@@ -432,7 +441,7 @@ impl DynamicLightEngine {
                         return; // Skip if already 0
                     }
 
-                    self.counters.bump(Counter::BlockState);
+                    counters.bump(Counter::BlockState);
                     let neighbor_state = ChunkCursor::block_state_at(chunk, cell);
                     let opacity = neighbor_state.opacity.max(1);
 
@@ -440,7 +449,7 @@ impl DynamicLightEngine {
 
                     if neighbor_light <= expected_from_removed_source {
                         let neighbor_luminance = neighbor_state.luminance;
-                        self.counters.bump(Counter::SetBlockLight);
+                        counters.bump(Counter::SetBlockLight);
 
                         if neighbor_luminance == 0 {
                             // No self-emission, darken it completely and continue propagation
@@ -461,7 +470,8 @@ impl DynamicLightEngine {
     }
 
     pub fn check_block_light_updates(&self, level: &Arc<Level>, pos: BlockPos) {
-        let mut cursor = ChunkCursor::new(level, &self.counters);
+        let tally = LocalCounters::new(&self.counters);
+        let mut cursor = ChunkCursor::new(level, &tally);
         let state = cursor.block_state(&pos);
         self.check_block_light_updates_with_cursor(&mut cursor, pos, state);
     }
@@ -474,7 +484,7 @@ impl DynamicLightEngine {
         pos: BlockPos,
         state: &'static pumpkin_data::BlockState,
     ) {
-        self.counters.bump(Counter::CheckBlock);
+        cursor.counters.bump(Counter::CheckBlock);
         match cursor.level.lighting_config {
             // Pumpkin config, not vanilla: whole world fullbright / pitch black.
             LightingEngineConfig::Full => {
@@ -521,7 +531,8 @@ impl DynamicLightEngine {
         pos: BlockPos,
         current_light: u8,
     ) {
-        let mut cursor = ChunkCursor::new(level, &self.counters);
+        let tally = LocalCounters::new(&self.counters);
+        let mut cursor = ChunkCursor::new(level, &tally);
         self.check_neighbors_light_updates_with_cursor(&mut cursor, pos, current_light);
     }
 
@@ -573,14 +584,15 @@ impl DynamicLightEngine {
         pos: &BlockPos,
         light_level: u8,
     ) {
+        let counters = cursor.counters;
         Self::for_each_neighbor(
             cursor,
             pos,
             Counter::ChunkLoaded,
             |chunk, cell, neighbor_pos, dir| {
-                self.counters.bump(Counter::GetSky);
+                counters.bump(Counter::GetSky);
                 let neighbor_light = ChunkCursor::sky_light_at(chunk, cell);
-                self.counters.bump(Counter::BlockState);
+                counters.bump(Counter::BlockState);
                 let opacity = ChunkCursor::opacity_at(chunk, cell);
 
                 // Calculate new light level for neighbor
@@ -596,7 +608,7 @@ impl DynamicLightEngine {
                 // Only propagate if new light is brighter than current light.
                 // `set` fails outside the chunk height; do not re-queue those.
                 if new_light > neighbor_light {
-                    self.counters.bump(Counter::SetSky);
+                    counters.bump(Counter::SetSky);
                     let written = ChunkCursor::write_light_at(chunk, cell, new_light, false);
                     if written && new_light > 0 {
                         self.queue_sky_light_increase(neighbor_pos, new_light);
@@ -612,18 +624,19 @@ impl DynamicLightEngine {
         pos: &BlockPos,
         removed_light: u8,
     ) {
+        let counters = cursor.counters;
         Self::for_each_neighbor(
             cursor,
             pos,
             Counter::ChunkLoaded,
             |chunk, cell, neighbor_pos, dir| {
-                self.counters.bump(Counter::GetSky);
+                counters.bump(Counter::GetSky);
                 let neighbor_light = ChunkCursor::sky_light_at(chunk, cell);
                 if neighbor_light == 0 {
                     return; // Already dark
                 }
 
-                self.counters.bump(Counter::BlockState);
+                counters.bump(Counter::BlockState);
                 let opacity = ChunkCursor::opacity_at(chunk, cell);
 
                 // Calculate what would be given this neighbor
@@ -637,7 +650,7 @@ impl DynamicLightEngine {
                 if neighbor_light == expected || neighbor_light < removed_light {
                     // This neighbor was lit, darken it. Skip if the write
                     // cannot land (below `min_y` used to stay at sky=15 and loop).
-                    self.counters.bump(Counter::SetSky);
+                    counters.bump(Counter::SetSky);
                     if ChunkCursor::write_light_at(chunk, cell, 0, false) {
                         self.queue_sky_light_decrease(neighbor_pos, neighbor_light);
                     }
@@ -651,7 +664,8 @@ impl DynamicLightEngine {
     }
 
     pub fn check_sky_light_updates(&self, level: &Arc<Level>, pos: BlockPos) {
-        let mut cursor = ChunkCursor::new(level, &self.counters);
+        let tally = LocalCounters::new(&self.counters);
+        let mut cursor = ChunkCursor::new(level, &tally);
         let state = cursor.block_state(&pos);
         self.check_sky_light_updates_with_cursor(&mut cursor, pos, state);
     }
@@ -664,7 +678,7 @@ impl DynamicLightEngine {
         pos: BlockPos,
         state: &'static pumpkin_data::BlockState,
     ) {
-        self.counters.bump(Counter::CheckSky);
+        cursor.counters.bump(Counter::CheckSky);
         match cursor.level.lighting_config {
             LightingEngineConfig::Full => {
                 cursor.set_sky_light(&pos, 15);
@@ -693,16 +707,16 @@ impl DynamicLightEngine {
             // Check if there's open sky above, cheaply where the cut height can decide it
             let has_sky = match Self::sky_tier(cursor, &pos) {
                 SkyLightTier::NoOpenSky => {
-                    self.counters.bump(Counter::SkyTier1);
+                    cursor.counters.bump(Counter::SkyTier1);
                     false
                 }
                 SkyLightTier::OpenSky => {
-                    self.counters.bump(Counter::SkyTier2);
+                    cursor.counters.bump(Counter::SkyTier2);
                     true
                 }
                 SkyLightTier::Unknown => {
-                    self.counters.bump(Counter::SkyTier3);
-                    self.has_open_sky_above(cursor, &pos)
+                    cursor.counters.bump(Counter::SkyTier3);
+                    Self::has_open_sky_above(cursor, &pos)
                 }
             };
 
@@ -762,19 +776,19 @@ impl DynamicLightEngine {
     // chunk is not loaded.
 
     pub fn get_block_light_level_sync(&self, level: &Level, position: &BlockPos) -> Option<u8> {
-        ChunkCursor::new(level, &self.counters).block_light(position)
+        ChunkCursor::new(level, &LocalCounters::new(&self.counters)).block_light(position)
     }
 
     pub fn get_sky_light_level_sync(&self, level: &Level, position: &BlockPos) -> u8 {
-        ChunkCursor::new(level, &self.counters).sky_light(position)
+        ChunkCursor::new(level, &LocalCounters::new(&self.counters)).sky_light(position)
     }
 
     pub fn get_block_light_level(&self, level: &Arc<Level>, position: &BlockPos) -> Option<u8> {
-        ChunkCursor::new(level, &self.counters).block_light(position)
+        ChunkCursor::new(level, &LocalCounters::new(&self.counters)).block_light(position)
     }
 
     pub fn get_sky_light_level(&self, level: &Arc<Level>, position: &BlockPos) -> u8 {
-        ChunkCursor::new(level, &self.counters).sky_light(position)
+        ChunkCursor::new(level, &LocalCounters::new(&self.counters)).sky_light(position)
     }
 
     /// `Err` if the write cannot land (chunk not loaded or Y outside the
@@ -785,7 +799,9 @@ impl DynamicLightEngine {
         position: &BlockPos,
         light_level: u8,
     ) -> Result<(), String> {
-        if ChunkCursor::new(level, &self.counters).set_block_light(position, light_level) {
+        if ChunkCursor::new(level, &LocalCounters::new(&self.counters))
+            .set_block_light(position, light_level)
+        {
             Ok(())
         } else {
             Err("chunk not loaded or Y outside chunk height".to_string())
@@ -798,7 +814,9 @@ impl DynamicLightEngine {
         position: &BlockPos,
         light_level: u8,
     ) -> Result<(), String> {
-        if ChunkCursor::new(level, &self.counters).set_sky_light(position, light_level) {
+        if ChunkCursor::new(level, &LocalCounters::new(&self.counters))
+            .set_sky_light(position, light_level)
+        {
             Ok(())
         } else {
             Err("chunk not loaded or Y outside chunk height".to_string())
@@ -809,7 +827,8 @@ impl DynamicLightEngine {
 #[cfg(test)]
 mod tests {
     use super::{
-        ChunkCursor, ChunkData, Counter, DynamicLightEngine, SkyLightHeightMigration, SkyLightTier,
+        ChunkCursor, ChunkData, Counter, DynamicLightEngine, LocalCounters,
+        SkyLightHeightMigration, SkyLightTier,
     };
     use crate::chunk::format::LightContainer;
     use crate::level::Level;
@@ -885,7 +904,8 @@ mod tests {
         let engine = DynamicLightEngine::new();
 
         let (level, _dir) = level_with(&[(0, 0), (1, 0)]);
-        let mut cursor = ChunkCursor::new(&level, &engine.counters);
+        let tally = LocalCounters::new(&engine.counters);
+        let mut cursor = ChunkCursor::new(&level, &tally);
         assert_eq!(
             DynamicLightEngine::sky_tier(&mut cursor, &border),
             SkyLightTier::NoOpenSky,
@@ -915,7 +935,8 @@ mod tests {
 
         // The same column again, with nothing at all on the other side.
         let (lonely, _lonely_dir) = level_with(&[(0, 0)]);
-        let mut cursor = ChunkCursor::new(&lonely, &engine.counters);
+        let lonely_tally = LocalCounters::new(&engine.counters);
+        let mut cursor = ChunkCursor::new(&lonely, &lonely_tally);
         assert_eq!(
             DynamicLightEngine::sky_tier(&mut cursor, &border),
             SkyLightTier::Unknown,

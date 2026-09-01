@@ -4,6 +4,7 @@
 //! live in one flat array: the hot path bumps them by index, and the array is snapshotted
 //! and reset in a single sweep per pass.
 
+use std::cell::Cell;
 use std::fmt;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
@@ -58,22 +59,59 @@ impl LightCounters {
         Self([const { AtomicU64::new(0) }; COUNTER_COUNT])
     }
 
-    pub(super) fn bump(&self, counter: Counter) {
-        self.0[counter as usize].fetch_add(1, Ordering::Relaxed);
-    }
-
-    pub(super) fn bump_n(&self, counter: Counter, n: u64) {
-        if n > 0 {
-            self.0[counter as usize].fetch_add(n, Ordering::Relaxed);
-        }
-    }
-
     pub(super) fn snapshot_and_reset(&self) -> [u64; COUNTER_COUNT] {
         let mut out = [0u64; COUNTER_COUNT];
         for (slot, out) in self.0.iter().zip(out.iter_mut()) {
             *out = slot.swap(0, Ordering::Relaxed);
         }
         out
+    }
+}
+
+/// Per-operation tally that adds itself to [`LightCounters`] when it goes out of scope.
+///
+/// One propagation step bumps around two dozen counters, and every one of them used to be
+/// a `lock xadd` on a line no other thread was interested in.
+///
+/// `Cell` rather than a plain array so a shared `&LocalCounters` can still count.
+pub(super) struct LocalCounters<'a> {
+    local: [Cell<u64>; COUNTER_COUNT],
+    shared: &'a LightCounters,
+}
+
+impl<'a> LocalCounters<'a> {
+    pub(super) const fn new(shared: &'a LightCounters) -> Self {
+        Self {
+            local: [const { Cell::new(0) }; COUNTER_COUNT],
+            shared,
+        }
+    }
+
+    pub(super) fn bump(&self, counter: Counter) {
+        let slot = &self.local[counter as usize];
+        slot.set(slot.get() + 1);
+    }
+
+    pub(super) fn bump_n(&self, counter: Counter, n: u64) {
+        if n > 0 {
+            let slot = &self.local[counter as usize];
+            slot.set(slot.get() + n);
+        }
+    }
+}
+
+impl Drop for LocalCounters<'_> {
+    /// Folds the tally into the shared counters. Untouched counters are skipped, so a
+    /// one-shot light query pays a handful of compares instead of an atomic.
+    ///
+    /// Must happen before [`LightCounters::snapshot_and_reset`] reads them.
+    fn drop(&mut self) {
+        for (slot, shared) in self.local.iter().zip(self.shared.0.iter()) {
+            let value = slot.get();
+            if value != 0 {
+                shared.fetch_add(value, Ordering::Relaxed);
+            }
+        }
     }
 }
 

@@ -6,7 +6,7 @@
 //! position is decoded once, and the light read, the opacity and the write of that step
 //! all reuse it.
 
-use super::stats::{Counter, LightCounters};
+use super::stats::{Counter, LocalCounters};
 use crate::chunk::ChunkData;
 use crate::chunk::io::Dirtiable;
 use crate::chunk::palette::BlockPalette;
@@ -65,12 +65,14 @@ const fn vertical_in(chunk: &ChunkData, relative: &Vector3<i32>) -> VerticalInCh
 /// shard (`parking_lot` lets `read()` block as soon as a writer is queued).
 pub(super) struct ChunkCursor<'a> {
     pub(super) level: &'a Level,
-    pub(super) counters: &'a LightCounters,
+    /// A shared reference for cursor, so it can be
+    /// copied out and handed to a closure while the cursor itself is borrowed mutably.
+    pub(super) counters: &'a LocalCounters<'a>,
     memo: Option<(Vector2<i32>, Option<Arc<ChunkData>>)>,
 }
 
 impl<'a> ChunkCursor<'a> {
-    pub(super) const fn new(level: &'a Level, counters: &'a LightCounters) -> Self {
+    pub(super) const fn new(level: &'a Level, counters: &'a LocalCounters<'a>) -> Self {
         Self {
             level,
             counters,
