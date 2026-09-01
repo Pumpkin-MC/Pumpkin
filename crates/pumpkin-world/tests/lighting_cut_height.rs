@@ -143,6 +143,18 @@ impl World {
             .1
     }
 
+    /// Changes the block without telling the engine, as the caller does when
+    /// [`DynamicLightEngine::block_change_affects_light`] says no.
+    fn set_block_unannounced(&self, pos: BlockPos, id: BlockStateId) {
+        let chunk = self.chunk_at(pos.0.x >> 4, pos.0.z >> 4);
+        chunk.set_block_absolute_y(
+            (pos.0.x & 15) as usize,
+            pos.0.y,
+            (pos.0.z & 15) as usize,
+            id,
+        );
+    }
+
     fn set_block(&self, pos: BlockPos, id: BlockStateId) {
         let chunk = self.chunk_at(pos.0.x >> 4, pos.0.z >> 4);
         chunk.set_block_absolute_y(
@@ -410,4 +422,133 @@ async fn light_crosses_a_chunk_border_and_the_edge_of_the_loaded_area() {
         neighbour.quadrant_uses_limit(0, 0),
         "a tunnel under the intact ceilings of the next chunk invalidated its cut"
     );
+}
+
+/// The same block changes, by one thread or by four, have to reach the same fixpoint.
+///
+/// What keeps the lock-free check honest is not exclusion but the queue: every write is
+/// followed by a queue entry, and the still-serialised flood re-derives from there. Each
+/// thread owns whole chunks, so only the engine is shared.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn concurrent_block_changes_converge_to_the_same_light() {
+    const CHUNKS: i32 = 4;
+
+    fn tunnel(cx: i32) -> Vec<BlockPos> {
+        (3..=10)
+            .rev()
+            .map(|x| BlockPos::new(cx * 16 + x, 19, 0))
+            .collect()
+    }
+
+    fn build() -> World {
+        let positions: Vec<(i32, i32)> = (0..CHUNKS).map(|cx| (cx, 0)).collect();
+        World::spanning(&positions, |_cx, _cz, updates| {
+            for y in 19..=SURFACE {
+                updates.push((2, y, 0, air()));
+            }
+        })
+    }
+
+    fn readings(world: &World) -> Vec<u8> {
+        (0..CHUNKS)
+            .flat_map(|cx| {
+                (2..=10)
+                    .map(|x| world.sky(cx * 16 + x, 19, 0))
+                    .collect::<Vec<_>>()
+            })
+            .collect()
+    }
+
+    let sequential = {
+        let world = build();
+        for cx in 0..CHUNKS {
+            for pos in tunnel(cx) {
+                world.set_block(pos, air());
+            }
+        }
+        world.settle();
+        readings(&world)
+    };
+
+    let concurrent = {
+        let world = build();
+        std::thread::scope(|scope| {
+            for cx in 0..CHUNKS {
+                let world = &world;
+                scope.spawn(move || {
+                    for pos in tunnel(cx) {
+                        world.set_block(pos, air());
+                    }
+                });
+            }
+        });
+        world.settle();
+        readings(&world)
+    };
+
+    assert_eq!(
+        concurrent, sequential,
+        "eight threads reached a different fixpoint than one"
+    );
+    assert!(
+        sequential.iter().any(|&light| light > 0),
+        "the workload lit nothing, so the comparison proves nothing"
+    );
+}
+
+#[tokio::test]
+async fn skipping_a_light_neutral_change_leaves_the_same_light() {
+    // Under the floor of a lit tunnel: another opaque block changes nothing, air lets
+    // the light drop in.
+    const WALL: BlockPos = BlockPos::new(5, 18, 0);
+
+    fn lit_world() -> World {
+        let world = World::spanning(&[(0, 0)], |_, _, updates| {
+            for y in 19..=SURFACE {
+                updates.push((2, y, 0, air()));
+            }
+        });
+        for x in (3..=10).rev() {
+            world.set_block(BlockPos::new(x, 19, 0), air());
+        }
+        world.settle();
+        world
+    }
+
+    fn readings(world: &World) -> Vec<u8> {
+        (2..=10)
+            .flat_map(|x| [world.sky(x, 19, 0), world.sky(x, 18, 0)])
+            .collect()
+    }
+
+    for (name, replacement, must_match) in [
+        ("stone -> dirt", Block::DIRT.default_state.id, true),
+        ("stone -> air", air(), false),
+    ] {
+        let announced = {
+            let world = lit_world();
+            world.set_block(WALL, replacement);
+            world.settle();
+            readings(&world)
+        };
+        let skipped = {
+            let world = lit_world();
+            world.set_block_unannounced(WALL, replacement);
+            world.settle();
+            readings(&world)
+        };
+
+        if must_match {
+            assert_eq!(
+                skipped, announced,
+                "{name} is light neutral, so skipping the engine must change nothing"
+            );
+        } else {
+            assert_ne!(
+                skipped, announced,
+                "{name} does move light, so the two worlds have to differ -- otherwise \
+                 this comparison could not tell the neutral case apart either"
+            );
+        }
+    }
 }

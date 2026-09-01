@@ -17,14 +17,8 @@ const SECTIONS: usize = 24;
 const MIN_Y: i32 = -64;
 const HEIGHT: i32 = SECTIONS as i32 * 16;
 
-// ---------------------------------------------------------------------------
-// terrain shapes, built identically for a finished chunk and for worldgen
-// ---------------------------------------------------------------------------
-
 /// One test terrain, described once and built twice: as a `ChunkData` for the runtime path
-/// and as a `ProtoChunk` for the worldgen path. Sharing the description is what lets
-/// [`worldgen_and_runtime_derive_the_same_value`] compare the two derivations instead of
-/// duplicating every scenario for both.
+/// and as a `ProtoChunk` for the worldgen path.
 struct Shape {
     name: &'static str,
     /// Top of the solid crust per column, or `None` for a chunk with no blocks at all.
@@ -630,6 +624,36 @@ fn divergence_reaches_cache_and_nbt_and_only_accumulates() {
         Some(cached),
         "the divergence would be lost on the next load"
     );
+}
+
+/// Divergences discovered at the same moment must all survive: a dropped flag is a
+/// quadrant that goes on promising a fast answer it can no longer honour.
+#[test]
+fn divergences_discovered_at_the_same_moment_all_survive() {
+    const QUADRANTS: [(i32, i32); 4] = [(2, 2), (12, 2), (2, 12), (12, 12)];
+
+    for round in 0..200 {
+        let chunk = shape("flat");
+        SkyLightHeightMigration::ensure_lazy(&chunk, || SkyLightHeight::compute_from_chunk(&chunk));
+
+        std::thread::scope(|scope| {
+            for (x, z) in QUADRANTS {
+                let chunk = &chunk;
+                scope.spawn(move || {
+                    SkyLightHeightMigration::mark_quadrant_diverged(chunk, x, z);
+                });
+            }
+        });
+
+        let cached = SkyLightHeight::from_raw(chunk.sky_light_height_cache.load(Ordering::Relaxed));
+        for (x, z) in QUADRANTS {
+            assert!(
+                !cached.quadrant_uses_limit(x, z),
+                "round {round}: the flag for the quadrant at ({x}, {z}) was lost to a \
+                 concurrent one"
+            );
+        }
+    }
 }
 
 /// A value that only ever lived in the RAM cache must still reach the disk when the chunk

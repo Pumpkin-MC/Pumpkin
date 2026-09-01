@@ -24,9 +24,8 @@ pub struct DynamicLightEngine {
     block_increase: SegQueue<(BlockPos, u8)>,
     sky_decrease: SegQueue<(BlockPos, u8)>,
     sky_increase: SegQueue<(BlockPos, u8)>,
-    /// `ServerLevel` lighting is single-threaded. Rayon random ticks and the
-    /// net thread only `checkBlock`; two `perform_*` loops ping-pong and
-    /// never empty.
+    /// Serialises the flood, and only the flood: two concurrent [`Self::drain_queued`]
+    /// would ping-pong between the decrease and the increase loop and never settle.
     propagate_lock: Mutex<()>,
     counters: LightCounters,
 }
@@ -232,13 +231,20 @@ impl DynamicLightEngine {
             && self.sky_increase.is_empty()
     }
 
-    /// Vanilla `Level.setBlock` -> `LightEngine.checkBlock`: enqueue only.
-    /// Flood is [`Self::drain_queued`]. Sync on the tick thread (not the light thread).
+    /// Whether a block change can move any light at all.
+    ///
+    /// Sky light reads `opacity`, block light `luminance` and `opacity`
+    #[must_use]
+    pub const fn block_change_affects_light(
+        old: &pumpkin_data::BlockState,
+        new: &pumpkin_data::BlockState,
+    ) -> bool {
+        old.opacity != new.opacity || old.luminance != new.luminance
+    }
+
+    /// Vanilla `Level.setBlock` -> `LightEngine.checkBlock`: enqueue only, lock-free
+    /// (see [`Self::propagate_lock`]). Flood is [`Self::drain_queued`].
     pub fn update_lighting_at(&self, level: &Arc<Level>, pos: BlockPos) {
-        let _guard = self
-            .propagate_lock
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
         // All three steps work on the same chunk; one cursor saves their lookups, and one
         // tally keeps their counting off the shared atomics until the end.
         let tally = LocalCounters::new(&self.counters);
@@ -945,6 +951,35 @@ mod tests {
         assert_eq!(
             DynamicLightEngine::sky_tier(&mut cursor, &inland),
             SkyLightTier::NoOpenSky
+        );
+    }
+
+    /// Only `opacity` and `luminance` may decide whether the engine runs. The premises
+    /// are asserted
+    #[test]
+    fn a_change_is_light_neutral_exactly_when_both_properties_match() {
+        let stone = Block::STONE.default_state;
+        let dirt = Block::DIRT.default_state;
+        let air = Block::AIR.default_state;
+        let glowstone = Block::GLOWSTONE.default_state;
+
+        assert_eq!(stone.opacity, dirt.opacity, "premise: both fully opaque");
+        assert_eq!(stone.luminance, dirt.luminance, "premise: neither glows");
+        assert!(
+            !DynamicLightEngine::block_change_affects_light(stone, dirt),
+            "swapping one opaque block for another cannot move any light"
+        );
+
+        assert_ne!(stone.opacity, air.opacity, "premise: opacity differs");
+        assert!(
+            DynamicLightEngine::block_change_affects_light(stone, air),
+            "opening a solid block up has to reach the engine"
+        );
+
+        assert_ne!(stone.luminance, glowstone.luminance, "premise: one glows");
+        assert!(
+            DynamicLightEngine::block_change_affects_light(stone, glowstone),
+            "a block that starts glowing has to reach the engine"
         );
     }
 

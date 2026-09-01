@@ -142,6 +142,7 @@ use pumpkin_util::{
     random::{RandomImpl, get_seed, xoroshiro128::Xoroshiro},
 };
 use pumpkin_world::inventory::Clearable;
+use pumpkin_world::lighting::DynamicLightEngine;
 use pumpkin_world::world::{GetBlockError, WorldPortalExt};
 use pumpkin_world::{
     CURRENT_BEDROCK_MC_VERSION, biome,
@@ -5297,9 +5298,16 @@ impl World {
             }
         }
 
-        self.level
-            .light_engine
-            .update_lighting_at(&self.level, *position);
+        // Redstone re-routing, fences connecting, leaves updating their distance: most
+        // block changes leave both light properties alone and never reach the engine.
+        if DynamicLightEngine::block_change_affects_light(
+            BlockState::from_id(replaced_block_state_id),
+            BlockState::from_id(block_state_id),
+        ) {
+            self.level
+                .light_engine
+                .update_lighting_at(&self.level, *position);
+        }
 
         replaced_block_state_id
     }

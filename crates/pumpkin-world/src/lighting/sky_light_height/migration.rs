@@ -95,10 +95,7 @@ impl SkyLightHeightMigration {
         }
 
         if let Some(height) = Self::load_persisted(chunk) {
-            chunk
-                .sky_light_height_cache
-                .store(height.raw(), Ordering::Relaxed);
-            return height;
+            return Self::install(chunk, height);
         }
 
         let mut height = compute();
@@ -107,12 +104,27 @@ impl SkyLightHeightMigration {
             height = height.with_hex_approx_bumped(1);
         }
 
-        chunk
-            .sky_light_height_cache
-            .store(height.raw(), Ordering::Relaxed);
-        Self::persist(chunk, height);
+        let installed = Self::install(chunk, height);
+        if installed == height {
+            Self::persist(chunk, height);
+        }
 
-        height
+        installed
+    }
+
+    /// Publishes a derived value unless another worker got there first. A plain store
+    /// would let a thread that began computing before a divergence was found overwrite
+    /// that flag; both views are equally right, so first one wins.
+    fn install(chunk: &ChunkData, height: SkyLightHeight) -> SkyLightHeight {
+        match chunk.sky_light_height_cache.compare_exchange(
+            0,
+            height.raw(),
+            Ordering::Relaxed,
+            Ordering::Relaxed,
+        ) {
+            Ok(_) => height,
+            Err(existing) => SkyLightHeight::from_raw(existing),
+        }
     }
 
     /// Persists the given cut height to `PumpkinCustomData`, with geometry tag in bits 24-31.
@@ -143,18 +155,26 @@ impl SkyLightHeightMigration {
     /// nothing is cached
     /// the next computation sees the divergence anyway
     pub fn mark_quadrant_diverged(chunk: &ChunkData, local_x: i32, local_z: i32) {
-        let cached = chunk.sky_light_height_cache.load(Ordering::Relaxed);
-        if cached == 0 {
-            return;
+        // Read-modify-write on one word: load and store would keep only one of two
+        // quadrants discovered in the same moment.
+        let previous = chunk.sky_light_height_cache.fetch_update(
+            Ordering::Relaxed,
+            Ordering::Relaxed,
+            |cached| {
+                if cached == 0 {
+                    return None; // Nothing cached; the first computation sees it.
+                }
+                let marked =
+                    SkyLightHeight::from_raw(cached).with_quadrant_diverged(local_x, local_z);
+                (marked.raw() != cached).then_some(marked.raw())
+            },
+        );
+
+        if let Ok(previous) = previous {
+            let marked =
+                SkyLightHeight::from_raw(previous).with_quadrant_diverged(local_x, local_z);
+            Self::persist(chunk, marked);
         }
-        let height = SkyLightHeight::from_raw(cached).with_quadrant_diverged(local_x, local_z);
-        if height.raw() == cached {
-            return; // Already diverged.
-        }
-        chunk
-            .sky_light_height_cache
-            .store(height.raw(), Ordering::Relaxed);
-        Self::persist(chunk, height);
     }
 
     /// Persist the value if something has been computed.
