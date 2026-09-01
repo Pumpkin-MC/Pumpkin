@@ -809,8 +809,9 @@ impl DynamicLightEngine {
 #[cfg(test)]
 mod tests {
     use super::{
-        ChunkCursor, ChunkData, DynamicLightEngine, SkyLightHeightMigration, SkyLightTier,
+        ChunkCursor, ChunkData, Counter, DynamicLightEngine, SkyLightHeightMigration, SkyLightTier,
     };
+    use crate::chunk::format::LightContainer;
     use crate::level::Level;
     use pumpkin_config::world::LevelConfig;
     use pumpkin_data::Block;
@@ -837,6 +838,21 @@ mod tests {
             .heightmap
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner) = chunk.calculate_heightmap();
+
+        // `ChunkData::empty` starts with zero-length light storage, where every sky read
+        // answers 15. A loaded chunk has one container per section.
+        let mut light = chunk
+            .light_engine
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        light.sky_light = (0..chunk.section.count)
+            .map(|_| LightContainer::new_empty(0))
+            .collect();
+        light.block_light = (0..chunk.section.count)
+            .map(|_| LightContainer::new_empty(0))
+            .collect();
+        drop(light);
+
         Arc::new(chunk)
     }
 
@@ -909,5 +925,72 @@ mod tests {
             DynamicLightEngine::sky_tier(&mut cursor, &inland),
             SkyLightTier::NoOpenSky
         );
+    }
+
+    /// The hot path counters
+    ///
+    /// `stats.rs` reads them as "six per propagated cell", and every judgement made from a
+    /// light log rests on that.
+    ///
+    /// One propagation step in solid rock, which cannot cascade: the neighbours swallow the
+    /// light, so exactly one queue entry is processed and exactly six neighbours are seen.
+    #[tokio::test]
+    async fn one_propagation_step_counts_six_neighbours() {
+        let (level, _dir) = level_with(&[(0, 0)]);
+        let engine = DynamicLightEngine::new();
+        let buried = BlockPos::new(8, 20, 8);
+
+        engine.queue_sky_light_increase(buried, 5);
+        let sky = engine.drain_queued(&level);
+        assert_eq!(sky.count(Counter::SkyIncrease), 1, "one queue entry");
+        assert_eq!(
+            sky.count(Counter::ChunkLoaded),
+            6,
+            "one chunk resolve per neighbour"
+        );
+        assert_eq!(
+            sky.count(Counter::GetSky),
+            6,
+            "one light read per neighbour"
+        );
+        assert_eq!(
+            sky.count(Counter::BlockState),
+            6,
+            "one opacity lookup per neighbour"
+        );
+        assert_eq!(
+            sky.count(Counter::SetSky),
+            0,
+            "stone swallows the light, so nothing is written"
+        );
+
+        engine.queue_block_light_increase(buried, 5);
+        let block = engine.drain_queued(&level);
+        assert_eq!(block.count(Counter::BlockIncrease), 1);
+        assert_eq!(
+            block.count(Counter::GetBlockLight),
+            6,
+            "the block light loop walks the same six neighbours"
+        );
+        assert_eq!(block.count(Counter::BlockState), 6);
+        assert_eq!(block.count(Counter::SetBlockLight), 0);
+
+        // At the edge of the loaded area the two numbers part company: the resolve is
+        // attempted for all six, and only the five that land are read. Counting after the
+        // resolve instead would hide exactly the neighbours that cost a failed lookup.
+        let at_edge = BlockPos::new(0, 20, 8);
+        engine.queue_sky_light_increase(at_edge, 5);
+        let edge = engine.drain_queued(&level);
+        assert_eq!(
+            edge.count(Counter::ChunkLoaded),
+            6,
+            "every neighbour is looked up, loaded or not"
+        );
+        assert_eq!(
+            edge.count(Counter::GetSky),
+            5,
+            "the neighbour in the unloaded chunk is never read"
+        );
+        assert_eq!(edge.count(Counter::BlockState), 5);
     }
 }

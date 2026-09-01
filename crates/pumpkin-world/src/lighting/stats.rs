@@ -103,6 +103,12 @@ impl LightPassStats {
         }
     }
 
+    /// Reads one counter out of the snapshot. -> only for tests
+    #[cfg(test)]
+    pub(super) const fn count(&self, counter: Counter) -> u64 {
+        self.counts[counter as usize]
+    }
+
     fn hot_pairs(&self) -> Vec<(&'static str, u64)> {
         let mut items: Vec<(&'static str, u64)> = Counter::NAMES
             .iter()
