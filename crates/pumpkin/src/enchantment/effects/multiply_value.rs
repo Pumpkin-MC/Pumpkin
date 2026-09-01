@@ -1,6 +1,5 @@
 use pumpkin_data::enchantment::LevelBasedValue;
 
-/// Matches vanilla `net.minecraft.world.item.enchantment.effects.MultiplyValue`.
 #[derive(Clone, Debug, PartialEq)]
 pub struct MultiplyValue {
     pub factor: LevelBasedValue,

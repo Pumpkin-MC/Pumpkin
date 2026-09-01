@@ -10,7 +10,6 @@ use crate::entity::player::Player;
 use crate::world::World;
 use pumpkin_data::Block;
 use pumpkin_data::BlockStateId;
-use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag;
 use pumpkin_data::tag::Taggable;
@@ -44,7 +43,7 @@ pub fn toggle_fence_gate(
 ) -> BlockStateId {
     let (block, state) = world.get_block_and_state_id(block_pos);
 
-    let mut fence_gate_props = FenceGateProperties::from_state_id(state, block);
+    let mut fence_gate_props = FenceGateProperties::from_state_id(state);
     if fence_gate_props.open {
         fence_gate_props.open = false;
     } else {
@@ -109,8 +108,7 @@ impl BlockBehaviour for FenceGateBlock {
     fn on_neighbor_update(&self, args: OnNeighborUpdateArgs<'_>) {
         {
             let block_state = args.world.get_block_state(args.position);
-            let mut fence_gate_props =
-                FenceGateProperties::from_state_id(block_state.id, args.block);
+            let mut fence_gate_props = FenceGateProperties::from_state_id(block_state.id);
             let powered = block_receives_redstone_power(args.world, args.position);
 
             if powered == fence_gate_props.powered {
@@ -139,7 +137,7 @@ impl BlockBehaviour for FenceGateBlock {
 }
 
 fn is_in_wall(args: &GetStateForNeighborUpdateArgs<'_>) -> FenceGateProperties {
-    let mut fence_props = FenceGateProperties::from_state_id(args.state_id, args.block);
+    let mut fence_props = FenceGateProperties::from_state_id(args.state_id);
 
     let side_offset_left = args
         .position

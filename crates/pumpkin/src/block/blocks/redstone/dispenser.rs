@@ -38,7 +38,7 @@ use crate::item::items::spawn_egg::apply_entity_variant;
 use crate::world::World;
 
 use crate::block::entities::dispenser::DispenserBlockEntity;
-use pumpkin_data::block_properties::{BlockProperties, Facing};
+use pumpkin_data::block_properties::Facing;
 use pumpkin_data::entity::{EntityType, entity_from_egg};
 use pumpkin_data::fluid::Fluid;
 use pumpkin_data::item::Item;
@@ -149,10 +149,8 @@ impl BlockBehaviour for DispenserBlock {
         let powered = block_receives_redstone_power(args.world, args.position)
             || block_receives_redstone_power(args.world, &args.position.up());
 
-        let mut props = DispenserLikeProperties::from_state_id(
-            args.world.get_block_state(args.position).id,
-            args.block,
-        );
+        let mut props =
+            DispenserLikeProperties::from_state_id(args.world.get_block_state(args.position).id);
 
         if powered && !props.triggered {
             args.world
@@ -174,7 +172,7 @@ impl BlockBehaviour for DispenserBlock {
     }
 
     fn on_scheduled_tick(&self, args: OnScheduledTickArgs<'_>) {
-        let (block, state) = args.world.get_block_and_state(args.position);
+        let (_block, state) = args.world.get_block_and_state(args.position);
         if let Some(block_entity) = args.world.get_block_entity(args.position) {
             let Some(dispenser) = block_entity.as_any().downcast_ref::<DispenserBlockEntity>()
             else {
@@ -182,7 +180,7 @@ impl BlockBehaviour for DispenserBlock {
             };
 
             if let Some((slot_index, mut item)) = dispenser.get_random_slot() {
-                let props = DispenserLikeProperties::from_state_id(state.id, block);
+                let props = DispenserLikeProperties::from_state_id(state.id);
                 let ctx = DispenseContext {
                     world: args.world,
                     position: args.position,

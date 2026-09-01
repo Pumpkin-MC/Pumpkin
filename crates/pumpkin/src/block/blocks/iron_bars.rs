@@ -3,7 +3,6 @@ use crate::block::OnPlaceArgs;
 use pumpkin_data::BlockDirection;
 use pumpkin_data::BlockStateId;
 use pumpkin_data::HorizontalFacingExt;
-use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::block_properties::HorizontalFacing;
 use pumpkin_data::tag::Taggable;
 use pumpkin_data::{Block, tag};
@@ -30,7 +29,7 @@ impl BlockBehaviour for IronBarsBlock {
         &self,
         args: GetStateForNeighborUpdateArgs<'_>,
     ) -> BlockStateId {
-        let bars_props = IronBarsProperties::from_state_id(args.state_id, args.block);
+        let bars_props = IronBarsProperties::from_state_id(args.state_id);
         compute_bars_state(bars_props, args.world, args.block, args.position)
     }
 }

@@ -211,6 +211,9 @@ pub trait InventoryPlayer: Send + Sync {
 
     /// Performs anvil block damage and plays anvil sound events.
     fn use_anvil(&self) {}
+
+    /// Performs grindstone experience drop and plays grindstone sound events.
+    fn use_grindstone(&self, _xp_amount: i32) {}
 }
 
 /// Gives a stack to the player or drops it if inventory is full.

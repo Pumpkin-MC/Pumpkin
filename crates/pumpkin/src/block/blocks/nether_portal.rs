@@ -2,7 +2,7 @@ use std::sync::{Arc, atomic::Ordering};
 
 use pumpkin_data::{
     Block, BlockDirection, BlockState, BlockStateId, Rotation,
-    block_properties::{Axis, BlockProperties, HorizontalAxis, NetherPortalLikeProperties},
+    block_properties::{Axis, HorizontalAxis, NetherPortalLikeProperties},
     dimension::Dimension,
     entity::EntityType,
 };
@@ -49,8 +49,7 @@ impl BlockBehaviour for NetherPortalBlock {
         args: GetStateForNeighborUpdateArgs<'_>,
     ) -> BlockStateId {
         let direction_axis = args.direction.to_axis();
-        let state_axis =
-            NetherPortalLikeProperties::from_state_id(args.state_id, &Block::NETHER_PORTAL).axis;
+        let state_axis = NetherPortalLikeProperties::from_state_id(args.state_id).axis;
         // Convert HorizontalAxis to Axis for comparison
         let state_axis_full: Axis = match state_axis {
             HorizontalAxis::X => Axis::X,
@@ -162,7 +161,7 @@ impl BlockBehaviour for NetherPortalBlock {
     ) -> &'static BlockState {
         match rotation {
             Rotation::Clockwise90 | Rotation::CounterClockwise90 => {
-                let mut props = NetherPortalLikeProperties::from_state_id(state_id, block);
+                let mut props = NetherPortalLikeProperties::from_state_id(state_id);
                 props.axis = match props.axis {
                     HorizontalAxis::X => HorizontalAxis::Z,
                     HorizontalAxis::Z => HorizontalAxis::X,

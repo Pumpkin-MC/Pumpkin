@@ -1,7 +1,6 @@
 use crate::block::entities::conduit::ConduitBlockEntity;
 use crate::block::{BlockBehaviour, OnPlaceArgs, PlacedArgs};
 use pumpkin_data::BlockStateId;
-use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_macros::pumpkin_block;
 use std::sync::Arc;
 

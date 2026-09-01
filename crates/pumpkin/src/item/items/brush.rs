@@ -54,35 +54,34 @@ fn set_dusted_stage(block: &Block, state_id: BlockStateId, stage: u8) -> BlockSt
     block.from_properties(&updated_props).to_state_id(block)
 }
 
-fn get_random_archaeology_loot() -> &'static Item {
-    let loot_table = [
-        &Item::SNORT_POTTERY_SHERD,
-        &Item::FLOW_POTTERY_SHERD,
-        &Item::GUSTER_POTTERY_SHERD,
-        &Item::SCRAPE_POTTERY_SHERD,
-        &Item::ANGLER_POTTERY_SHERD,
-        &Item::ARCHER_POTTERY_SHERD,
-        &Item::ARMS_UP_POTTERY_SHERD,
-        &Item::BLADE_POTTERY_SHERD,
-        &Item::BREWER_POTTERY_SHERD,
-        &Item::BURN_POTTERY_SHERD,
-        &Item::DANGER_POTTERY_SHERD,
-        &Item::EXPLORER_POTTERY_SHERD,
-        &Item::FRIEND_POTTERY_SHERD,
-        &Item::HEART_POTTERY_SHERD,
-        &Item::HEARTBREAK_POTTERY_SHERD,
-        &Item::HOWL_POTTERY_SHERD,
-        &Item::MINER_POTTERY_SHERD,
-        &Item::MOURNER_POTTERY_SHERD,
-        &Item::PLENTY_POTTERY_SHERD,
-        &Item::PRIZE_POTTERY_SHERD,
-        &Item::SHEAF_POTTERY_SHERD,
-        &Item::SHELTER_POTTERY_SHERD,
-        &Item::SKULL_POTTERY_SHERD,
-    ];
+use crate::block::entities::brushable_block::BrushableBlockBlockEntity;
+use crate::world::World;
 
-    let idx = (rand::random::<u32>() as usize) % loot_table.len();
-    loot_table[idx]
+fn get_archaeology_loot(is_sand: bool, location: BlockPos, world: &World) -> ItemStack {
+    if let Some(block_entity) = world.get_block_entity(&location)
+        && let Some(brushable) = block_entity
+            .as_any()
+            .downcast_ref::<BrushableBlockBlockEntity>()
+        && let Ok(mut item_guard) = brushable.item.lock()
+        && let Some(item) = item_guard.take()
+    {
+        return item;
+    }
+
+    let loot_key = if is_sand {
+        "minecraft:archaeology/desert_pyramid"
+    } else {
+        "minecraft:archaeology/trail_ruins_common"
+    };
+
+    if let Some(table) = pumpkin_data::loot_table::get_loot_table(loot_key) {
+        let items = crate::world::loot::generate_loot(table, rand::random());
+        if let Some(first) = items.into_iter().next() {
+            return first;
+        }
+    }
+
+    ItemStack::new(1, &Item::SNORT_POTTERY_SHERD)
 }
 
 impl ItemBehaviour for BrushItem {
@@ -153,7 +152,7 @@ impl ItemBehaviour for BrushItem {
                     &block_center,
                 );
 
-                let loot_item = get_random_archaeology_loot();
+                let loot_stack = get_archaeology_loot(is_sand, location, &world);
                 let spawn_pos = Vector3::new(
                     f64::from(location.0.x) + 0.5,
                     f64::from(location.0.y) + 1.0,
@@ -161,7 +160,7 @@ impl ItemBehaviour for BrushItem {
                 );
                 let item_entity = Arc::new(ItemEntity::new(
                     Entity::new(world.clone(), spawn_pos, &EntityType::ITEM),
-                    ItemStack::new(1, loot_item),
+                    loot_stack,
                 ));
                 world.spawn_entity(item_entity);
             }

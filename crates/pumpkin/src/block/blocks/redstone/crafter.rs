@@ -8,9 +8,7 @@ use crate::block::{
     BlockBehaviour, GetComparatorOutputArgs, NormalUseArgs, OnNeighborUpdateArgs, OnPlaceArgs,
     OnScheduledTickArgs, PlacedArgs,
 };
-use pumpkin_data::block_properties::{
-    BlockProperties, CrafterLikeProperties, HorizontalFacing, Orientation,
-};
+use pumpkin_data::block_properties::{CrafterLikeProperties, HorizontalFacing, Orientation};
 use pumpkin_data::translation;
 use pumpkin_data::world::WorldEvent;
 use pumpkin_data::{BlockDirection, BlockStateId};
@@ -94,10 +92,8 @@ impl BlockBehaviour for CrafterBlock {
 
     fn on_neighbor_update(&self, args: OnNeighborUpdateArgs<'_>) {
         let powered = block_receives_redstone_power(args.world, args.position);
-        let mut props = CrafterLikeProperties::from_state_id(
-            args.world.get_block_state(args.position).id,
-            args.block,
-        );
+        let mut props =
+            CrafterLikeProperties::from_state_id(args.world.get_block_state(args.position).id);
 
         if powered && !props.triggered {
             props.triggered = true;
@@ -119,10 +115,8 @@ impl BlockBehaviour for CrafterBlock {
     }
 
     fn on_scheduled_tick(&self, args: OnScheduledTickArgs<'_>) {
-        let mut props = CrafterLikeProperties::from_state_id(
-            args.world.get_block_state(args.position).id,
-            args.block,
-        );
+        let mut props =
+            CrafterLikeProperties::from_state_id(args.world.get_block_state(args.position).id);
 
         // Set to crafting state
         props.crafting = true;

@@ -4,7 +4,7 @@ use crate::block::registry::BlockActionResult;
 use crate::block::{BlockBehaviour, BlockMetadata, GetComparatorOutputArgs, UseWithItemArgs};
 use pumpkin_data::Block;
 use pumpkin_data::BlockId;
-use pumpkin_data::block_properties::{BlockProperties, WaterCauldronLikeProperties};
+use pumpkin_data::block_properties::WaterCauldronLikeProperties;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::{Sound, SoundCategory};
@@ -141,7 +141,7 @@ impl BlockBehaviour for CauldronBlock {
         if item_id == Item::BUCKET.id {
             let state_id = args.world.get_block_state_id(args.position);
             let (filled_item, sound) = if block_id == BlockId::WATER_CAULDRON {
-                let props = WaterCauldronLikeProperties::from_state_id(state_id, args.block);
+                let props = WaterCauldronLikeProperties::from_state_id(state_id);
                 if props.level == 3 {
                     (Some(&Item::WATER_BUCKET), Sound::ItemBucketFill)
                 } else {
@@ -150,7 +150,7 @@ impl BlockBehaviour for CauldronBlock {
             } else if block_id == BlockId::LAVA_CAULDRON {
                 (Some(&Item::LAVA_BUCKET), Sound::ItemBucketFillLava)
             } else if block_id == BlockId::POWDER_SNOW_CAULDRON {
-                let props = WaterCauldronLikeProperties::from_state_id(state_id, args.block);
+                let props = WaterCauldronLikeProperties::from_state_id(state_id);
                 if props.level == 3 {
                     (
                         Some(&Item::POWDER_SNOW_BUCKET),
@@ -180,7 +180,7 @@ impl BlockBehaviour for CauldronBlock {
         // Adding water bottle to non-full water cauldron
         if block_id == BlockId::WATER_CAULDRON && item_id == Item::POTION.id {
             let state_id = args.world.get_block_state_id(args.position);
-            let props = WaterCauldronLikeProperties::from_state_id(state_id, args.block);
+            let props = WaterCauldronLikeProperties::from_state_id(state_id);
             if props.level < 3 {
                 let next_level_str = match props.level {
                     1 => "2",
@@ -209,7 +209,7 @@ impl BlockBehaviour for CauldronBlock {
         match args.block.id {
             BlockId::WATER_CAULDRON | BlockId::POWDER_SNOW_CAULDRON => {
                 let state_id = args.world.get_block_state_id(args.position);
-                let props = WaterCauldronLikeProperties::from_state_id(state_id, args.block);
+                let props = WaterCauldronLikeProperties::from_state_id(state_id);
                 Some(props.level)
             }
             BlockId::LAVA_CAULDRON => Some(3),

@@ -5,7 +5,7 @@ use crate::block::{
     PlacedArgs,
 };
 
-use pumpkin_data::block_properties::{BlockProperties, WallTorchLikeProperties};
+use pumpkin_data::block_properties::WallTorchLikeProperties;
 use pumpkin_data::translation;
 use pumpkin_data::{Block, BlockStateId};
 use pumpkin_inventory::anvil::AnvilScreenHandler;
@@ -33,7 +33,7 @@ impl AnvilBlock {
         } else {
             return None;
         };
-        let props = WallTorchLikeProperties::from_state_id(state_id, block);
+        let props = WallTorchLikeProperties::from_state_id(state_id);
         Some(props.to_state_id(next_block))
     }
 }

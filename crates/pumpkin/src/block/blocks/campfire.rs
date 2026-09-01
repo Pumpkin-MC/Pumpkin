@@ -1,10 +1,6 @@
 use pumpkin_data::{
-    Block, BlockDirection, BlockStateId, Enchantment,
-    block_properties::{BlockProperties, CampfireLikeProperties},
-    damage::DamageType,
-    data_component_impl::EquipmentSlot,
-    effect::StatusEffect,
-    fluid::Fluid,
+    Block, BlockDirection, BlockStateId, Enchantment, block_properties::CampfireLikeProperties,
+    damage::DamageType, data_component_impl::EquipmentSlot, effect::StatusEffect, fluid::Fluid,
 };
 use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_world::tick::TickPriority;
@@ -33,7 +29,7 @@ impl BlockBehaviour for CampfireBlock {
     // TODO: cooking food on campfire (CampfireBlockEntity)
     fn on_entity_collision(&self, args: OnEntityCollisionArgs<'_>) {
         {
-            if CampfireLikeProperties::from_state_id(args.state.id, args.block).lit
+            if CampfireLikeProperties::from_state_id(args.state.id).lit
                 && let Some(living_entity) = args.entity.get_living_entity()
             {
                 let has_frost_walker_enchantment = {
@@ -68,8 +64,7 @@ impl BlockBehaviour for CampfireBlock {
 
     fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
         let is_replacing_water = matches!(args.replacing, BlockIsReplacing::Water(_));
-        let mut props =
-            CampfireLikeProperties::from_state_id(args.block.default_state.id, args.block);
+        let mut props = CampfireLikeProperties::from_state_id(args.block.default_state.id);
         props.waterlogged = is_replacing_water;
         props.signal_fire = is_signal_fire_base_block(args.world.get_block(&args.position.down()));
         props.lit = !is_replacing_water;
@@ -81,7 +76,7 @@ impl BlockBehaviour for CampfireBlock {
         &self,
         args: GetStateForNeighborUpdateArgs<'_>,
     ) -> BlockStateId {
-        let mut props = CampfireLikeProperties::from_state_id(args.state_id, args.block);
+        let mut props = CampfireLikeProperties::from_state_id(args.state_id);
         if props.waterlogged {
             props.lit = false;
             args.world.schedule_fluid_tick(

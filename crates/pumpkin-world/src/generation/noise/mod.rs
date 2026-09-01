@@ -3,7 +3,7 @@ pub mod ore_sampler;
 pub mod perlin;
 pub mod router;
 
-use pumpkin_data::{Block, BlockState, chunk_gen_settings::GenerationShapeConfig};
+use pumpkin_data::{Block, BlockState, noise_settings::GenerationShapeConfig};
 use pumpkin_util::{math::vector3::Vector3, random::xoroshiro128::XoroshiroSplitter};
 
 use crate::generation::{
@@ -326,17 +326,17 @@ impl<'a> ChunkNoiseGenerator<'a> {
     }
 
     #[inline]
-    pub fn interpolate_x(&mut self, delta: f64) {
+    pub fn interpolate_x(&mut self, delta: f32) {
         self.router.interpolate_x(delta);
     }
 
     #[inline]
-    pub fn interpolate_y(&mut self, delta: f64) {
+    pub fn interpolate_y(&mut self, delta: f32) {
         self.router.interpolate_y(delta);
     }
 
     #[inline]
-    pub fn interpolate_z(&mut self, delta: f64) {
+    pub fn interpolate_z(&mut self, delta: f32) {
         self.cache_result_unique_id += 1;
         self.router.interpolate_z(delta);
     }

@@ -10,12 +10,8 @@ use crate::{
     world::World,
 };
 use pumpkin_data::{
-    Block, BlockStateId,
-    block_properties::{BlockProperties, NetherWartLikeProperties},
-    damage::DamageType,
-    entity::EntityType,
-    item::Item,
-    item_stack::ItemStack,
+    Block, BlockStateId, block_properties::NetherWartLikeProperties, damage::DamageType,
+    entity::EntityType, item::Item, item_stack::ItemStack,
 };
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
@@ -37,7 +33,7 @@ impl BlockBehaviour for SweetBerryBushBlock {
 
     fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
         let state_id = args.world.get_block_state_id(args.position);
-        let mut props = NetherWartLikeProperties::from_state_id(state_id, args.block);
+        let mut props = NetherWartLikeProperties::from_state_id(state_id);
         match props.age {
             2 | 3 => {
                 let index = props.age;
@@ -62,7 +58,7 @@ impl BlockBehaviour for SweetBerryBushBlock {
 
     fn use_with_item(&self, args: UseWithItemArgs<'_>) -> BlockActionResult {
         let state_id = args.world.get_block_state_id(args.position);
-        let props = NetherWartLikeProperties::from_state_id(state_id, &Block::SWEET_BERRY_BUSH);
+        let props = NetherWartLikeProperties::from_state_id(state_id);
         if props.age != 3 && args.item_stack.get_item() == &Item::BONE_MEAL {
             BlockActionResult::Pass
         } else {
@@ -104,7 +100,7 @@ impl BlockBehaviour for SweetBerryBushBlock {
         };
 
         let state_id = args.world.get_block_state_id(args.position);
-        let props = NetherWartLikeProperties::from_state_id(state_id, args.block);
+        let props = NetherWartLikeProperties::from_state_id(state_id);
         if props.age == 0 {
             return;
         }
@@ -155,13 +151,13 @@ impl CropBlockBase for SweetBerryBushBlock {
         3
     }
 
-    fn get_age(&self, state: BlockStateId, block: &Block) -> i32 {
-        let props = NetherWartLikeProperties::from_state_id(state, block);
+    fn get_age(&self, state: BlockStateId, _block: &Block) -> i32 {
+        let props = NetherWartLikeProperties::from_state_id(state);
         i32::from(props.age)
     }
 
     fn state_with_age(&self, block: &Block, state: BlockStateId, age: i32) -> BlockStateId {
-        let mut props = NetherWartLikeProperties::from_state_id(state, block);
+        let mut props = NetherWartLikeProperties::from_state_id(state);
         props.age = age as u8;
         props.to_state_id(block)
     }

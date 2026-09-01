@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use crate::block::entities::daylight_detector::DaylightDetectorBlockEntity;
-use pumpkin_data::{Block, block_properties::BlockProperties};
+use pumpkin_data::Block;
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::world::BlockFlags;
@@ -38,7 +38,7 @@ impl BlockBehaviour for DaylightDetectorBlock {
         }
 
         let state = args.world.get_block_state(args.position);
-        let props = DaylightDetectorProperties::from_state_id(state.id, args.block);
+        let props = DaylightDetectorProperties::from_state_id(state.id);
 
         Self::update_inverted(props, args.world, args.position, args.block);
 
@@ -48,7 +48,7 @@ impl BlockBehaviour for DaylightDetectorBlock {
     }
 
     fn get_weak_redstone_power(&self, args: GetRedstonePowerArgs<'_>) -> u8 {
-        let props = DaylightDetectorProperties::from_state_id(args.state.id, args.block);
+        let props = DaylightDetectorProperties::from_state_id(args.state.id);
         props.power
     }
 

@@ -185,7 +185,7 @@ pub fn fetch_market_public_key() -> Result<String, String> {
     let body = if let Ok(handle) = tokio::runtime::Handle::try_current() {
         tokio::task::block_in_place(|| {
             handle.block_on(async {
-                let client = reqwest::Client::builder()
+                let client = pumpkin_util::client_builder()
                     .user_agent("Pumpkin-MC")
                     .build()
                     .map_err(|e| format!("Failed to build HTTP client: {e}"))?;
@@ -204,7 +204,7 @@ pub fn fetch_market_public_key() -> Result<String, String> {
         tokio::runtime::Runtime::new()
             .map_err(|e| format!("Failed to create runtime: {e}"))?
             .block_on(async {
-                let client = reqwest::Client::builder()
+                let client = pumpkin_util::client_builder()
                     .user_agent("Pumpkin-MC")
                     .build()
                     .map_err(|e| format!("Failed to build HTTP client: {e}"))?;

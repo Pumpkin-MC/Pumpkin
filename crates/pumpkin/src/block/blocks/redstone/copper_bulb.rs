@@ -8,7 +8,6 @@ use crate::block::{
 };
 use pumpkin_data::BlockId;
 use pumpkin_data::BlockStateId;
-use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_world::world::BlockFlags;
 
@@ -75,7 +74,7 @@ impl BlockBehaviour for CopperBulbBlock {
     fn on_neighbor_update(&self, args: OnNeighborUpdateArgs<'_>) {
         {
             let state = args.world.get_block_state(args.position);
-            let mut props = CopperBulbLikeProperties::from_state_id(state.id, args.block);
+            let mut props = CopperBulbLikeProperties::from_state_id(state.id);
             let is_receiving_power = block_receives_redstone_power(args.world, args.position);
             if props.powered != is_receiving_power {
                 if !props.powered {

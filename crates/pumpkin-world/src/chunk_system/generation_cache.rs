@@ -233,24 +233,13 @@ impl GenerationCache for Cache {
         let id = GenerationCache::get_block_state(self, pos);
 
         let Some(fluid) = Fluid::from_state_id(id) else {
-            let block = Block::from_state_id(id);
-            if let Some(properties) = block.properties(id) {
-                for (name, value) in properties.to_props() {
-                    if name == "waterlogged" {
-                        if value == "true" {
-                            let fluid = Fluid::FLOWING_WATER;
-                            let state = fluid.states[0].clone();
-                            return (fluid, state);
-                        }
+            let fluid = if id.is_waterlogged() {
+                Fluid::FLOWING_WATER
+            } else {
+                Fluid::EMPTY
+            };
 
-                        break;
-                    }
-                }
-            }
-
-            let fluid = Fluid::EMPTY;
             let state = fluid.states[0].clone();
-
             return (fluid, state);
         };
 

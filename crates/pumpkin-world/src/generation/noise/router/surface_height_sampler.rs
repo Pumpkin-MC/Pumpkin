@@ -97,7 +97,7 @@ impl<'a> SurfaceHeightEstimateSampler<'a> {
 
             // First find the coarse cell that contains the surface
             let cell_height = fts.cell_height();
-            let mut y = (upper / cell_height as f64).floor() as i32 * cell_height;
+            let mut y = (upper / cell_height as f32).floor() as i32 * cell_height;
             while y >= self.minimum_y {
                 let density = ChunkNoiseFunctionComponent::sample_from_stack(
                     &mut self.component_stack[..=fts.density_index()],

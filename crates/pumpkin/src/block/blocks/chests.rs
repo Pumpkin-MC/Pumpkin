@@ -3,11 +3,9 @@ use std::sync::Arc;
 use crate::block::entities::BlockEntity;
 use crate::block::entities::chest::ChestBlockEntity;
 use pumpkin_data::BlockStateId;
-use pumpkin_data::block_properties::{
-    BlockProperties, ChestLikeProperties, ChestType, HorizontalFacing,
-};
-use pumpkin_data::chest_loot_table::get_chest_loot_table;
+use pumpkin_data::block_properties::{ChestLikeProperties, ChestType, HorizontalFacing};
 use pumpkin_data::entity::EntityPose;
+use pumpkin_data::loot_table::get_loot_table;
 use pumpkin_data::{Block, BlockDirection, translation};
 use pumpkin_inventory::double::DoubleInventory;
 use pumpkin_inventory::generic_container_screen_handler::{create_generic_9x3, create_generic_9x6};
@@ -98,7 +96,7 @@ fn placed_chest_impl<E: BlockEntity + 'static>(
     let chest = create_entity(*args.position);
     args.world.add_block_entity(Arc::new(chest));
 
-    let chest_props = ChestLikeProperties::from_state_id(args.state_id, args.block);
+    let chest_props = ChestLikeProperties::from_state_id(args.state_id);
     let connected_towards = match chest_props.r#type {
         ChestType::Single => return,
         ChestType::Left => chest_props.facing.rotate_clockwise(),
@@ -141,7 +139,7 @@ fn get_chest_comparator_output(args: &GetComparatorOutputArgs<'_>) -> Option<u8>
     let first_chest = args.world.get_block_entity(args.position);
     let first_inventory = first_chest.and_then(BlockEntity::get_inventory)?;
 
-    let chest_props = ChestLikeProperties::from_state_id(state, args.block);
+    let chest_props = ChestLikeProperties::from_state_id(state);
     let connected_towards = match chest_props.r#type {
         ChestType::Single => None,
         ChestType::Left => Some(chest_props.facing.rotate_clockwise()),
@@ -191,7 +189,7 @@ fn normal_use_chest_impl(args: &NormalUseArgs<'_>) -> BlockActionResult {
     // Unpack deferred loot table on first open (non-spectator only).
     if let Some(ref entity) = first_chest
         && let Some((loot_key, seed)) = entity.take_loot_table()
-        && let Some(table) = get_chest_loot_table(&loot_key)
+        && let Some(table) = get_loot_table(&loot_key)
         && let Some(inv) = entity.clone().get_inventory()
     {
         fill_chest_inventory(&inv, table, seed);
@@ -202,7 +200,7 @@ fn normal_use_chest_impl(args: &NormalUseArgs<'_>) -> BlockActionResult {
         return BlockActionResult::Fail;
     };
 
-    let chest_props = ChestLikeProperties::from_state_id(state, args.block);
+    let chest_props = ChestLikeProperties::from_state_id(state);
     let connected_towards = match chest_props.r#type {
         ChestType::Single => None,
         ChestType::Left => Some(chest_props.facing.rotate_clockwise()),
@@ -243,7 +241,7 @@ fn normal_use_chest_impl(args: &NormalUseArgs<'_>) -> BlockActionResult {
 }
 
 fn broken_chest_impl(args: &BrokenArgs<'_>) {
-    let chest_props = ChestLikeProperties::from_state_id(args.state.id, args.block);
+    let chest_props = ChestLikeProperties::from_state_id(args.state.id);
     let connected_towards = match chest_props.r#type {
         ChestType::Single => return,
         ChestType::Left => chest_props.facing.rotate_clockwise(),
@@ -366,7 +364,7 @@ impl BlockBehaviour for CopperChestBlock {
 
     fn random_tick(&self, args: RandomTickArgs<'_>) {
         let current_state_id = args.world.get_block_state_id(args.position);
-        let chest_props = ChestLikeProperties::from_state_id(current_state_id, args.block);
+        let chest_props = ChestLikeProperties::from_state_id(current_state_id);
 
         // Only oxidize LEFT or SINGLE chests (not RIGHT) to prevent double oxidation
         if chest_props.r#type == ChestType::Right {
@@ -478,8 +476,7 @@ fn compute_chest_props(
             world.get_block_and_state_id(&block_pos.offset(face.to_offset()));
 
         if clicked_block == block {
-            let clicked_props =
-                ChestLikeProperties::from_state_id(clicked_block_state, clicked_block);
+            let clicked_props = ChestLikeProperties::from_state_id(clicked_block_state);
 
             if clicked_props.r#type != ChestType::Single {
                 return (ChestType::Single, chest_facing);
@@ -537,7 +534,7 @@ fn get_chest_properties_if_can_connect(
         return None;
     }
 
-    let neighbor_props = ChestLikeProperties::from_state_id(neighbor_block_state, neighbor_block);
+    let neighbor_props = ChestLikeProperties::from_state_id(neighbor_block_state);
     if neighbor_props.facing == facing && neighbor_props.r#type == wanted_type {
         return Some(neighbor_props);
     }

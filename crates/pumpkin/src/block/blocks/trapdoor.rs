@@ -6,7 +6,7 @@ use crate::entity::player::Player;
 use crate::world::World;
 use pumpkin_data::BlockDirection;
 use pumpkin_data::BlockStateId;
-use pumpkin_data::block_properties::{BlockProperties, Half};
+use pumpkin_data::block_properties::Half;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::Taggable;
 use pumpkin_data::{Block, tag};
@@ -19,7 +19,7 @@ type TrapDoorProperties = pumpkin_data::block_properties::OakTrapdoorLikePropert
 
 fn toggle_trapdoor(player: &Player, world: &Arc<World>, block_pos: &BlockPos) {
     let (block, block_state) = world.get_block_and_state_id(block_pos);
-    let mut trapdoor_props = TrapDoorProperties::from_state_id(block_state, block);
+    let mut trapdoor_props = TrapDoorProperties::from_state_id(block_state);
     trapdoor_props.open = !trapdoor_props.open;
 
     world.play_block_sound_expect(
@@ -111,7 +111,7 @@ impl BlockBehaviour for TrapDoorBlock {
     fn on_neighbor_update(&self, args: OnNeighborUpdateArgs<'_>) {
         {
             let block_state = args.world.get_block_state(args.position);
-            let mut trapdoor_props = TrapDoorProperties::from_state_id(block_state.id, args.block);
+            let mut trapdoor_props = TrapDoorProperties::from_state_id(block_state.id);
             let powered = block_receives_redstone_power(args.world, args.position);
 
             if powered != trapdoor_props.powered {

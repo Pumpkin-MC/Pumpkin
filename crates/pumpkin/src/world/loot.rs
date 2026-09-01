@@ -1,16 +1,10 @@
+use pumpkin_data::BlockState;
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::entity::EntityType;
+use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
-use pumpkin_data::tag;
-use pumpkin_data::{Block, BlockState, item::Item};
-use pumpkin_util::{
-    loot_table::{
-        LootCondition, LootFunction, LootFunctionBonusParameter, LootFunctionNumberProvider,
-        LootFunctionTypes, LootPoolEntry, LootPoolEntryTypes, LootTable,
-    },
-    random::{RandomGenerator, RandomImpl, get_seed, xoroshiro128::Xoroshiro},
-};
-use rand::RngExt;
+use pumpkin_util::loot_table::{LootBonusFormula, LootCondition, LootEntry, LootTable};
+use pumpkin_util::random::{RandomImpl, xoroshiro128::Xoroshiro};
 
 #[derive(Default, Clone)]
 pub struct LootContextParameters {
@@ -32,693 +26,109 @@ pub struct LootContextParameters {
     pub is_on_fire: Option<bool>,
 }
 
-pub trait LootTableExt {
-    fn get_loot(&self, params: LootContextParameters) -> Vec<ItemStack>;
-}
-
-impl LootTableExt for LootTable {
-    fn get_loot(&self, params: LootContextParameters) -> Vec<ItemStack> {
-        let mut stacks = Vec::new();
-        let mut random = RandomGenerator::Xoroshiro(Xoroshiro::from_seed(get_seed()));
-
-        if let Some(pools) = self.pools {
-            for pool in pools {
-                if let Some(conditions) = pool.conditions
-                    && !conditions.iter().all(|cond| cond.is_fulfilled(&params))
-                {
-                    continue;
-                }
-
-                let rolls = pool.rolls.get(&mut random) as i32
-                    + (pool.bonus_rolls.get(&mut random) * params.luck).floor() as i32;
-
-                for _ in 0..rolls {
-                    let mut total_weight = 0;
-                    let mut valid_entries = Vec::new();
-
-                    for entry in pool.entries {
-                        if entry
-                            .conditions
-                            .as_ref()
-                            .is_none_or(|c| c.iter().all(|cond| cond.is_fulfilled(&params)))
-                        {
-                            let weight = (entry.weight as f32 + entry.quality as f32 * params.luck)
-                                .floor() as i32;
-                            let weight = weight.max(0);
-                            total_weight += weight;
-                            valid_entries.push((entry, weight));
-                        }
-                    }
-
-                    if total_weight == 0 || valid_entries.is_empty() {
-                        continue;
-                    }
-
-                    let mut r = random.next_bounded_i32(total_weight);
-
-                    for (entry, weight) in valid_entries {
-                        r -= weight;
-                        if r < 0 {
-                            if let Some(loot) = entry.get_loot(&params) {
-                                for stack in loot {
-                                    if stack.item_count > 0 {
-                                        stacks.push(stack);
-                                    }
-                                }
-                            }
-                            break;
-                        }
-                    }
-                }
-            }
-        }
-        stacks
-    }
-}
-
-trait LootPoolEntryExt {
-    fn get_loot(&self, params: &LootContextParameters) -> Option<Vec<ItemStack>>;
-}
-
-trait LootFunctionExt {
-    fn apply(&self, stacks: &mut Vec<ItemStack>, params: &LootContextParameters);
-}
-
-fn apply_bonus(
-    stacks: &mut [ItemStack],
-    enchantment_name: &str,
-    formula: &str,
-    parameters: Option<&LootFunctionBonusParameter>,
+fn check_condition(
+    cond: LootCondition,
+    has_silk_touch: bool,
+    has_shears: bool,
     params: &LootContextParameters,
-) {
-    let enchantment_level = params.tool.as_ref().map_or(0, |tool| {
-        pumpkin_data::Enchantment::from_name(enchantment_name)
-            .map_or(0, |enchantment| tool.get_enchantment_level(enchantment))
-    });
-    if enchantment_level > 0 {
-        for stack in stacks {
-            match formula {
-                "minecraft:binomial_with_bonus_count" => {
-                    if let Some(LootFunctionBonusParameter::Probability { extra, probability }) =
-                        parameters
-                    {
-                        let n = enchantment_level + *extra;
-                        let mut extra_items = 0;
-                        for _ in 0..n {
-                            if rand::rng().random::<f32>() < *probability {
-                                extra_items += 1;
-                            }
-                        }
-                        stack.item_count = stack.item_count.saturating_add(extra_items as u8);
-                    }
-                }
-                "minecraft:uniform_bonus_count" => {
-                    if let Some(LootFunctionBonusParameter::Multiplier { bonus_multiplier }) =
-                        parameters
-                    {
-                        let extra =
-                            rand::rng().random_range(0..=(enchantment_level * *bonus_multiplier));
-                        stack.item_count = stack.item_count.saturating_add(extra as u8);
-                    }
-                }
-                "minecraft:ore_drops" if enchantment_level > 0 => {
-                    let multiplier = rand::rng().random_range(0..=(enchantment_level + 1));
-                    if multiplier > 0 {
-                        stack.item_count = stack.item_count.saturating_mul(multiplier as u8);
-                    }
-                }
-                _ => {}
-            }
-        }
-    }
-}
-
-impl LootFunctionExt for LootFunction {
-    #[allow(clippy::too_many_lines)]
-    fn apply(&self, stacks: &mut Vec<ItemStack>, params: &LootContextParameters) {
-        if let Some(conditions) = self.conditions
-            && !conditions.iter().all(|cond| cond.is_fulfilled(params))
-        {
-            return;
-        }
-
-        match &self.content {
-            LootFunctionTypes::SetCount { count, add } => {
-                for stack in stacks {
-                    if *add {
-                        stack.item_count += count.generate().round() as u8;
-                    } else {
-                        stack.item_count = count.generate().round() as u8;
-                    }
-                }
-            }
-            LootFunctionTypes::LimitCount { min, max } => {
-                if let Some(min) = min.map(|min| min.round() as u8) {
-                    for stack in stacks.iter_mut() {
-                        if stack.item_count < min {
-                            stack.item_count = min;
-                        }
-                    }
-                }
-
-                if let Some(max) = max.map(|max| max.round() as u8) {
-                    for stack in stacks.iter_mut() {
-                        if stack.item_count > max {
-                            stack.item_count = max;
-                        }
-                    }
-                }
-            }
-            LootFunctionTypes::ExplosionDecay => {
-                if let Some(radius) = params.explosion_radius {
-                    let survival_chance = 1.0 / radius;
-                    for stack in stacks.iter_mut() {
-                        let mut survived = 0;
-                        for _ in 0..stack.item_count {
-                            if rand::rng().random::<f32>() <= survival_chance {
-                                survived += 1;
-                            }
-                        }
-                        stack.item_count = survived;
-                    }
-                    // Remove empty stacks
-                    stacks.retain(|stack| stack.item_count > 0);
-                }
-            }
-            LootFunctionTypes::ApplyBonus {
-                enchantment,
-                formula,
-                parameters,
-            } => {
-                apply_bonus(stacks, enchantment, formula, parameters.as_ref(), params);
-            }
-            LootFunctionTypes::EnchantedCountIncrease {
-                enchantment,
-                count,
-                limit,
-            } => {
-                let level = params.tool.as_ref().map_or(0.0, |tool| {
-                    pumpkin_data::Enchantment::from_name(enchantment)
-                        .map_or(0.0, |enc| tool.get_enchantment_level(enc) as f32)
-                });
-                let mut additional = (count.generate() * level).round() as u32;
-                if let Some(lim) = limit {
-                    let lim_u32 = lim.round() as u32;
-                    if additional > lim_u32 {
-                        additional = lim_u32;
-                    }
-                }
-                for stack in stacks {
-                    stack.item_count = stack.item_count.saturating_add(additional as u8);
-                }
-            }
-            LootFunctionTypes::CopyComponents { source, include } => {
-                tracing::warn!(
-                    "CopyComponents not supported from source: {} for {:?}",
-                    source,
-                    include
-                );
-            }
-            LootFunctionTypes::CopyState {
-                block: _,
-                properties,
-            } => {
-                if let Some(state) = params.block_state
-                    && let Some(props_data) =
-                        Block::properties(Block::from_state_id(state.id), state.id)
-                {
-                    let actual_props = props_data.to_props();
-                    let mut properties_to_copy = std::collections::BTreeMap::new();
-                    for &prop_name in *properties {
-                        if let Some((_, value)) = actual_props.iter().find(|(k, _)| k == &prop_name)
-                        {
-                            properties_to_copy.insert(prop_name.to_string(), value.to_string());
-                        }
-                    }
-                    if !properties_to_copy.is_empty() {
-                        for stack in stacks.iter_mut() {
-                            if let Some(block_state_comp) = stack.get_data_component_mut::<pumpkin_data::data_component_impl::BlockStateImpl>() {
-                                    let mut props = block_state_comp.properties.to_mut().clone();
-                                    for (k, v) in &properties_to_copy {
-                                        if let Some(pos) = props.iter().position(|(pk, _)| pk.as_ref() == k) {
-                                            props[pos].1 = std::borrow::Cow::Owned(v.clone());
-                                        } else {
-                                            props.push((std::borrow::Cow::Owned(k.clone()), std::borrow::Cow::Owned(v.clone())));
-                                        }
-                                    }
-                                    block_state_comp.properties = std::borrow::Cow::Owned(props);
-                                } else {
-                                    let properties: Vec<(std::borrow::Cow<'static, str>, std::borrow::Cow<'static, str>)> = properties_to_copy
-                                        .iter()
-                                        .map(|(k, v)| (std::borrow::Cow::Owned(k.clone()), std::borrow::Cow::Owned(v.clone())))
-                                        .collect();
-                                    stack.patch.push((
-                                        pumpkin_data::data_component::DataComponent::BlockState,
-                                        Some(Box::new(pumpkin_data::data_component_impl::BlockStateImpl {
-                                            properties: std::borrow::Cow::Owned(properties),
-                                        })),
-                                    ));
-                                }
-                        }
-                    }
-                }
-            }
-            LootFunctionTypes::SetOminousBottleAmplifier => {
-                let amplifier = rand::random_range(0..5); // Random 0 to 4
-                for stack in stacks.iter_mut() {
-                    if let Some(amplifier_comp) = stack.get_data_component_mut::<pumpkin_data::data_component_impl::OminousBottleAmplifierImpl>() {
-                        amplifier_comp.amplifier = amplifier;
-                    } else {
-                        stack.patch.push((
-                            pumpkin_data::data_component::DataComponent::OminousBottleAmplifier,
-                            Some(Box::new(pumpkin_data::data_component_impl::OminousBottleAmplifierImpl {
-                                amplifier,
-                            })),
-                        ));
-                    }
-                }
-            }
-            LootFunctionTypes::SetPotion { id } => {
-                let name = id.strip_prefix("minecraft:").unwrap_or(id);
-                if let Some(potion) = pumpkin_data::potion::Potion::from_name(name) {
-                    let potion_id = Some(potion.id as i32);
-                    for stack in stacks.iter_mut() {
-                        if let Some(potion_contents) = stack.get_data_component_mut::<pumpkin_data::data_component_impl::PotionContentsImpl>() {
-                            potion_contents.potion_id = potion_id;
-                        } else {
-                            stack.patch.push((
-                                pumpkin_data::data_component::DataComponent::PotionContents,
-                                Some(Box::new(pumpkin_data::data_component_impl::PotionContentsImpl {
-                                    potion_id,
-                                    custom_color: None,
-                                    custom_effects: Vec::new(),
-                                    custom_name: None,
-                                })),
-                            ));
-                        }
-                    }
-                }
-            }
-            LootFunctionTypes::FurnaceSmelt => {
-                for stack in stacks.iter_mut() {
-                    for recipe_type in pumpkin_data::recipes::RECIPES_COOKING {
-                        if let pumpkin_data::recipes::CookingRecipeType::Smelting(recipe) =
-                            recipe_type
-                            && recipe.ingredient.match_item(stack.item)
-                        {
-                            let result_key = recipe
-                                .result
-                                .id
-                                .strip_prefix("minecraft:")
-                                .unwrap_or(recipe.result.id);
-                            if let Some(smelted_item) = Item::from_registry_key(result_key) {
-                                stack.item = smelted_item;
-                            }
-                            break;
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-impl LootPoolEntryExt for LootPoolEntry {
-    fn get_loot(&self, params: &LootContextParameters) -> Option<Vec<ItemStack>> {
-        if let Some(conditions) = self.conditions
-            && !conditions.iter().all(|cond| cond.is_fulfilled(params))
-        {
-            return None;
-        }
-
-        let mut stacks = self.content.get_stacks(params);
-
-        if let Some(functions) = self.functions {
-            for function in functions {
-                function.apply(&mut stacks, params);
-            }
-        }
-
-        Some(stacks)
-    }
-}
-
-trait LootPoolEntryTypesExt {
-    fn get_stacks(&self, params: &LootContextParameters) -> Vec<ItemStack>;
-}
-
-impl LootPoolEntryTypesExt for LootPoolEntryTypes {
-    fn get_stacks(&self, params: &LootContextParameters) -> Vec<ItemStack> {
-        match self {
-            Self::Empty | Self::Dynamic(_) => Vec::new(),
-            Self::LootTable(entry) => {
-                let key = entry
-                    .value
-                    .strip_prefix("minecraft:")
-                    .unwrap_or(entry.value);
-                // First try chest loot tables.
-                pumpkin_data::chest_loot_table::get_chest_loot_table(&format!("minecraft:{key}"))
-                    .map_or_else(Vec::new, |chest_table| {
-                        // We don't have a seed here, but we can generate a random one.
-                        let seed: i64 = rand::random();
-                        generate_chest_loot(chest_table, seed)
-                    })
-            }
-            Self::Item(item_entry) => {
-                let key = item_entry
-                    .name
-                    .strip_prefix("minecraft:")
-                    .unwrap_or(item_entry.name);
-                Item::from_registry_key(key)
-                    .map_or_else(Vec::new, |item| vec![ItemStack::new(1, item)])
-            }
-            Self::Tag(tag) => {
-                let key = tag.name.strip_prefix("minecraft:").unwrap_or(tag.name);
-
-                let items = pumpkin_data::tag::get_tag_values(tag::RegistryKey::Item, key)
-                    .unwrap_or_default()
-                    .iter()
-                    .filter_map(|registry_key| {
-                        let item_key = registry_key
-                            .strip_prefix("minecraft:")
-                            .unwrap_or(registry_key);
-                        Item::from_registry_key(item_key)
-                    })
-                    .collect::<Vec<_>>();
-
-                if items.is_empty() {
-                    return Vec::new();
-                }
-
-                if tag.expand {
-                    // Pick one random item from the tag
-                    let index = rand::random_range(0..items.len() as i32) as usize;
-                    vec![ItemStack::new(1, items[index])]
-                } else {
-                    // Yield one stack of every item in the tag
-                    items.iter().map(|&item| ItemStack::new(1, item)).collect()
-                }
-            }
-            Self::Alternatives(alternative_entry) => {
-                for entry in alternative_entry.children {
-                    if let Some(loot) = entry.get_loot(params) {
-                        return loot;
-                    }
-                }
-                Vec::new()
-            }
-            Self::Sequence(sequence_entry) => {
-                let mut stacks = Vec::new();
-                for entry in sequence_entry.children {
-                    if entry
-                        .conditions
-                        .as_ref()
-                        .is_some_and(|c| !c.iter().all(|cond| cond.is_fulfilled(params)))
-                    {
-                        break;
-                    }
-
-                    match entry.get_loot(params) {
-                        Some(loot) => stacks.extend(loot),
-                        // get_loot returning None also signals failure — stop.
-                        None => break,
-                    }
-                }
-                stacks
-            }
-
-            Self::Group(group_entry) => {
-                let mut stacks = Vec::new();
-                for entry in group_entry.children {
-                    if let Some(loot) = entry.get_loot(params) {
-                        stacks.extend(loot);
-                    }
-                }
-                stacks
-            }
-        }
-    }
-}
-
-trait LootConditionExt {
-    fn is_fulfilled(&self, params: &LootContextParameters) -> bool;
-}
-
-fn compare_entity_type(expected_type: &str, actual: &EntityType) -> bool {
-    let expected = expected_type
-        .strip_prefix("minecraft:")
-        .unwrap_or(expected_type);
-    let actual = actual
-        .resource_name
-        .strip_prefix("minecraft:")
-        .unwrap_or(actual.resource_name);
-    expected == actual
-}
-
-fn check_block_state_property(state: &BlockState, properties: &[(&str, &str)]) -> bool {
-    let block_actual_properties = match Block::properties(Block::from_state_id(state.id), state.id)
-    {
-        Some(props_data) => props_data.to_props(), // Assuming to_props() returns HashMap<String, String>
-        None => {
-            return properties.is_empty();
-        }
-    };
-
-    properties.iter().all(|(expected_key, expected_value)| {
-        block_actual_properties
-            .iter()
-            .find(|(actual_key, _)| actual_key == expected_key)
-            .is_some_and(|(_, actual_value_string)| actual_value_string == expected_value)
-    })
-}
-
-fn check_damage_source_properties(
-    params: &LootContextParameters,
-    expected_source_type: Option<&str>,
-    expected_direct_type: Option<&str>,
 ) -> bool {
-    if params.damage_type.is_none() {
-        return false;
+    match cond {
+        LootCondition::None => true,
+        LootCondition::SilkTouch => has_silk_touch,
+        LootCondition::NoSilkTouch => !has_silk_touch,
+        LootCondition::Shears => has_shears,
+        LootCondition::SilkTouchOrShears => has_silk_touch || has_shears,
+        LootCondition::NoSilkTouchOrShears => !has_silk_touch && !has_shears,
+        LootCondition::KilledByPlayer => params.killed_by_player.unwrap_or(false),
+        LootCondition::SurvivesExplosion => params
+            .explosion_radius
+            .is_none_or(|radius| rand::random::<f32>() <= 1.0 / radius),
     }
-    if let Some(expected) = expected_source_type {
-        if let Some(actual) = params.killer_entity {
-            if !compare_entity_type(expected, actual) {
-                return false;
-            }
-        } else {
-            return false;
-        }
-    }
-    if let Some(expected) = expected_direct_type {
-        if let Some(actual) = params.direct_killer_entity {
-            if !compare_entity_type(expected, actual) {
-                return false;
-            }
-        } else {
-            return false;
-        }
-    }
-    true
 }
 
-impl LootConditionExt for LootCondition {
-    #[allow(clippy::too_many_lines)]
-    fn is_fulfilled(&self, params: &LootContextParameters) -> bool {
-        match self {
-            Self::SurvivesExplosion => {
-                if let Some(radius) = params.explosion_radius {
-                    return rand::rng().random::<f32>() <= 1.0 / radius;
-                }
-                true
-            }
-            Self::RandomChance { chance } => rand::rng().random::<f32>() < *chance,
-            Self::EntityProperties {
-                entity,
-                expected_type,
-                is_on_fire,
-                mainhand_enchantment_tag,
-            } => {
-                // Mirrors vanilla `EntityTarget` resolution from `LootContext.java:148-186`.
-                let target = match *entity {
-                    "this" => params.this_entity,
-                    "attacker" | "killer" | "attacking_player" => params.killer_entity,
-                    "direct_attacker" | "direct_killer" => params.direct_killer_entity,
-                    _ => None,
-                };
-                if let Some(target) = target {
-                    if let Some(expected) = expected_type
-                        && !compare_entity_type(expected, target)
-                    {
-                        return false;
-                    }
-                    // Mirrors vanilla `EntityFlagsPredicate.isOnFire` check.
-                    if let Some(expected_fire) = is_on_fire {
-                        let actual_fire = params.is_on_fire.unwrap_or(false);
-                        if actual_fire != *expected_fire {
-                            return false;
-                        }
-                    }
-                    // Mirrors vanilla enchantment tag lookup for smelts_loot.
-                    if let Some(tag_name) = mainhand_enchantment_tag {
-                        let tag = tag_name.strip_prefix('#').unwrap_or(tag_name);
-                        let has_enchant = params.tool.as_ref().is_some_and(|tool| {
-                            pumpkin_data::tag::get_tag_ids(
-                                pumpkin_data::tag::RegistryKey::Enchantment,
-                                tag,
-                            )
-                            .is_some_and(|tag_ids| {
-                                tag_ids.iter().any(|&ench_id| {
-                                    pumpkin_data::Enchantment::from_id(ench_id as u8)
-                                        .is_some_and(|enc| tool.get_enchantment_level(enc) > 0)
-                                })
-                            })
-                        });
-                        if !has_enchant {
-                            return false;
-                        }
-                    }
-                    true
-                } else {
-                    false
+fn apply_bonus_formula(
+    base_count: i32,
+    bonus: LootBonusFormula,
+    fortune_level: i32,
+    rng: &mut Xoroshiro,
+) -> i32 {
+    if fortune_level <= 0 {
+        return base_count;
+    }
+
+    match bonus {
+        LootBonusFormula::OreDrops => {
+            let r = rng.next_bounded_i32(fortune_level + 2);
+            let multiplier = (r.max(1) - 1).max(0) + 1;
+            base_count * multiplier
+        }
+        LootBonusFormula::UniformBonusCount(bonus_multiplier) => {
+            let max_bonus = fortune_level * bonus_multiplier;
+            let extra = rng.next_bounded_i32(max_bonus + 1);
+            base_count + extra
+        }
+        LootBonusFormula::BinomialWithBonusCount { extra, probability } => {
+            let n = fortune_level + extra;
+            let mut bonus_count = 0;
+            for _ in 0..n {
+                if (rng.next_bounded_i32(1000) as f32 / 1000.0) < probability {
+                    bonus_count += 1;
                 }
             }
-            Self::KilledByPlayer => params.killed_by_player.unwrap_or(false),
-            Self::BlockStateProperty {
-                block: _,
-                properties,
-            } => {
-                if let Some(state) = &params.block_state {
-                    return check_block_state_property(state, properties);
-                }
-                false
-            }
-            Self::Inverted(term) => !term.is_fulfilled(params),
-            Self::AnyOf(terms) => terms.iter().any(|cond| cond.is_fulfilled(params)),
-            Self::AllOf(terms) => terms.iter().all(|cond| cond.is_fulfilled(params)),
-            Self::RandomChanceWithEnchantedBonus {
-                enchantment,
-                chances,
-            } => chances.as_ref().is_some_and(|chances| {
-                let level = params.tool.as_ref().map_or(0, |tool| {
-                    pumpkin_data::Enchantment::from_name(enchantment)
-                        .map_or(0, |enc| tool.get_enchantment_level(enc) as usize)
-                });
-                let chance = chances.get(level).unwrap_or(chances.last().unwrap_or(&0.0));
-                rand::rng().random::<f32>() < *chance
-            }),
-            Self::TableBonus {
-                enchantment,
-                chances,
-            } => {
-                let level = params.tool.as_ref().map_or(0, |tool| {
-                    pumpkin_data::Enchantment::from_name(enchantment)
-                        .map_or(0, |enc| tool.get_enchantment_level(enc) as usize)
-                });
-                let chance = chances.get(level).unwrap_or(chances.last().unwrap_or(&0.0));
-                rand::rng().random::<f32>() < *chance
-            }
-            Self::TimeCheck { range, period } => {
-                let mut time = params.world_time;
-                if let Some(period) = period {
-                    time %= period;
-                }
-                let (min, max) = range;
-                let val = time as f32;
-                min.is_none_or(|min| val >= min) && max.is_none_or(|max| val <= max)
-            }
-            Self::ValueCheck { value, range } => {
-                let mut rng = Xoroshiro::from_seed(get_seed());
-                let val = value.get(&mut rng);
-                let (min, max) = range;
-                min.is_none_or(|min| val >= min) && max.is_none_or(|max| val <= max)
-            }
-            Self::DamageSourceProperties {
-                expected_source_type,
-                expected_direct_type,
-            } => {
-                check_damage_source_properties(params, *expected_source_type, *expected_direct_type)
-            }
-            Self::WeatherCheck {
-                raining,
-                thundering,
-            } => {
-                let r_match = raining.is_none_or(|r| params.is_raining.unwrap_or(false) == r);
-                let t_match = thundering.is_none_or(|t| params.is_thundering.unwrap_or(false) == t);
-                r_match && t_match
-            }
-            Self::MatchTool { items } => params.tool.as_ref().is_some_and(|tool| {
-                items.as_ref().map_or_else(
-                    || {
-                        pumpkin_data::Enchantment::from_name("minecraft:silk_touch")
-                            .is_some_and(|silk_touch| tool.get_enchantment_level(silk_touch) > 0)
-                    },
-                    |items| {
-                        items.iter().any(|&item_name| {
-                            let expected =
-                                item_name.strip_prefix("minecraft:").unwrap_or(item_name);
-                            let actual = tool
-                                .item
-                                .registry_key
-                                .strip_prefix("minecraft:")
-                                .unwrap_or(tool.item.registry_key);
-                            expected == actual
-                        })
-                    },
-                )
-            }),
-            Self::LocationCheck { expected_biome, .. } => expected_biome.is_none(),
-            Self::EntityScores { entity } => {
-                tracing::warn!("EntityScores check not supported for entity: {}", entity);
-                false
-            }
-            Self::Reference { name } => {
-                tracing::warn!("Loot condition reference not supported: {}", name);
-                false
-            }
-            Self::EnchantmentActiveCheck { active } => {
-                params.tool.as_ref().map_or(!*active, |tool| {
-                    let has_enchantments = tool
-                        .get_data_component::<pumpkin_data::data_component_impl::EnchantmentsImpl>()
-                        .is_some_and(|e| !e.enchantment.is_empty());
-                    has_enchantments == *active
-                })
-            }
+            base_count + bonus_count
         }
     }
 }
 
-trait LootFunctionNumberProviderExt {
-    fn generate(&self) -> f32;
-}
-
-impl LootFunctionNumberProviderExt for LootFunctionNumberProvider {
-    fn generate(&self) -> f32 {
-        match self {
-            Self::Constant { value } => *value,
-            Self::Uniform { min, max } => rand::random::<f32>() * (max - min) + min,
-            Self::Binomial { n, p } => (0..n.floor() as u32).fold(0.0, |c, _| {
-                if rand::rng().random_bool(f64::from(*p)) {
-                    c + 1.0
-                } else {
-                    c
-                }
-            }),
-        }
-    }
-}
-
-/// Generates a list of items from a `ChestLootTable` using a deterministic seed.
+/// Generates a list of items from a `LootTable` using a deterministic seed and default parameters.
 #[must_use]
-pub fn generate_chest_loot(
-    table: &pumpkin_util::chest_loot_table::ChestLootTable,
-    seed: i64,
-) -> Vec<ItemStack> {
-    use pumpkin_util::random::RandomImpl;
+pub fn generate_loot(table: &LootTable, seed: i64) -> Vec<ItemStack> {
+    generate_loot_with_context(table, seed, &LootContextParameters::default())
+}
 
+/// Generates a list of items from a `LootTable` using a deterministic seed and contextual parameters.
+#[must_use]
+pub fn generate_loot_with_context(
+    table: &LootTable,
+    seed: i64,
+    params: &LootContextParameters,
+) -> Vec<ItemStack> {
     let mut rng = Xoroshiro::from_seed(seed as u64);
     let mut items_to_place: Vec<ItemStack> = Vec::new();
 
+    let has_silk_touch = params.tool.as_ref().is_some_and(|tool| {
+        pumpkin_data::Enchantment::from_name("silk_touch")
+            .is_some_and(|e| tool.get_enchantment_level(e) > 0)
+    });
+
+    let has_shears = params.tool.as_ref().is_some_and(|tool| {
+        let name = tool
+            .item
+            .registry_key
+            .strip_prefix("minecraft:")
+            .unwrap_or(tool.item.registry_key);
+        name == "shears"
+    });
+
+    let fortune_level = params.tool.as_ref().map_or(0, |tool| {
+        pumpkin_data::Enchantment::from_name("fortune").map_or(0, |e| tool.get_enchantment_level(e))
+    });
+
     for pool in table.pools {
+        if !check_condition(pool.condition, has_silk_touch, has_shears, params) {
+            continue;
+        }
+
+        let eligible_entries: Vec<&LootEntry> = pool
+            .entries
+            .iter()
+            .filter(|e| check_condition(e.condition, has_silk_touch, has_shears, params))
+            .collect();
+
+        if eligible_entries.is_empty() && pool.empty_weight == 0 {
+            continue;
+        }
+
         let range = pool.max_rolls - pool.min_rolls;
         let rolls = pool.min_rolls
             + if range > 0 {
@@ -728,7 +138,7 @@ pub fn generate_chest_loot(
             };
 
         for _ in 0..rolls {
-            let entry_weight: i32 = pool.entries.iter().map(|e| e.weight).sum();
+            let entry_weight: i32 = eligible_entries.iter().map(|e| e.weight).sum();
             let total_weight = entry_weight + pool.empty_weight;
             if total_weight == 0 {
                 continue;
@@ -742,22 +152,30 @@ pub fn generate_chest_loot(
                 continue;
             }
 
-            for entry in pool.entries {
+            for entry in &eligible_entries {
                 pick -= entry.weight;
                 if pick < 0 {
                     let count_range = entry.max_count - entry.min_count;
-                    let count = entry.min_count
+                    let base_count = entry.min_count
                         + if count_range > 0 {
                             rng.next_bounded_i32(count_range + 1)
                         } else {
                             0
                         };
 
-                    // Strip "minecraft:" prefix because from_registry_key uses short keys.
-                    let item_key = entry.item.strip_prefix("minecraft:").unwrap_or(entry.item);
+                    let mut final_count = base_count;
+                    if let Some(bonus) = entry.bonus_formula {
+                        final_count =
+                            apply_bonus_formula(final_count, bonus, fortune_level, &mut rng);
+                    }
 
-                    if let Some(item) = Item::from_registry_key(item_key) {
-                        items_to_place.push(ItemStack::new(count as u8, item));
+                    if final_count > 0 {
+                        // Strip "minecraft:" prefix because from_registry_key uses short keys.
+                        let item_key = entry.item.strip_prefix("minecraft:").unwrap_or(entry.item);
+
+                        if let Some(item) = Item::from_registry_key(item_key) {
+                            items_to_place.push(ItemStack::new(final_count as u8, item));
+                        }
                     }
                     break;
                 }
@@ -768,13 +186,15 @@ pub fn generate_chest_loot(
     items_to_place
 }
 
+pub use generate_loot as generate_chest_loot;
+
 /// Items are scattered randomly across the 27 chest slots.
 pub fn fill_chest_inventory(
     inventory: &std::sync::Arc<dyn pumpkin_world::inventory::Inventory>,
-    table: &pumpkin_util::chest_loot_table::ChestLootTable,
+    table: &LootTable,
     seed: i64,
 ) {
-    let mut items_to_place = generate_chest_loot(table, seed);
+    let mut items_to_place = generate_loot(table, seed);
 
     if items_to_place.is_empty() {
         return;
@@ -810,8 +230,6 @@ fn shuffle_and_split_items(
     available_slots: usize,
     rng: &mut Xoroshiro,
 ) {
-    use pumpkin_util::random::RandomImpl;
-
     // Drain all items with count > 1 into a splittable list.
     let mut splittable: Vec<ItemStack> = Vec::new();
     let mut i = 0;
@@ -855,317 +273,5 @@ fn shuffle_and_split_items(
     for i in (1..n).rev() {
         let j = rng.next_bounded_i32((i + 1) as i32) as usize;
         result.swap(i, j);
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use pumpkin_data::Enchantment;
-    use pumpkin_data::damage::DamageType;
-    use pumpkin_data::entity::EntityType;
-    use pumpkin_data::item::Item;
-    use pumpkin_data::item_stack::ItemStack;
-
-    fn base_params() -> LootContextParameters {
-        LootContextParameters {
-            killed_by_player: Some(true),
-            this_entity: Some(&EntityType::PIG),
-            killer_entity: Some(&EntityType::PLAYER),
-            direct_killer_entity: Some(&EntityType::PLAYER),
-            damage_type: Some(DamageType::GENERIC),
-            ..Default::default()
-        }
-    }
-
-    fn fire_aspect_sword(level: i32) -> ItemStack {
-        let mut sword = ItemStack::new(1, &Item::DIAMOND_SWORD);
-        sword.enchant(&Enchantment::FIRE_ASPECT, level);
-        sword
-    }
-
-    #[test]
-    fn entity_properties_this_matches_expected_type() {
-        let params = base_params();
-        let cond = LootCondition::EntityProperties {
-            entity: "this",
-            expected_type: Some("minecraft:pig"),
-            is_on_fire: None,
-            mainhand_enchantment_tag: None,
-        };
-        assert!(cond.is_fulfilled(&params));
-    }
-
-    #[test]
-    fn entity_properties_this_rejects_wrong_type() {
-        let params = base_params();
-        let cond = LootCondition::EntityProperties {
-            entity: "this",
-            expected_type: Some("minecraft:cow"),
-            is_on_fire: None,
-            mainhand_enchantment_tag: None,
-        };
-        assert!(!cond.is_fulfilled(&params));
-    }
-
-    #[test]
-    fn entity_properties_direct_attacker_resolves() {
-        let params = base_params();
-        let cond = LootCondition::EntityProperties {
-            entity: "direct_attacker",
-            expected_type: None,
-            is_on_fire: None,
-            mainhand_enchantment_tag: None,
-        };
-        assert!(cond.is_fulfilled(&params));
-    }
-
-    #[test]
-    fn entity_properties_direct_attacker_no_direct_killer() {
-        let mut params = base_params();
-        params.direct_killer_entity = None;
-        let cond = LootCondition::EntityProperties {
-            entity: "direct_attacker",
-            expected_type: None,
-            is_on_fire: None,
-            mainhand_enchantment_tag: None,
-        };
-        assert!(!cond.is_fulfilled(&params));
-    }
-
-    #[test]
-    fn entity_properties_unknown_entity_returns_false() {
-        let params = base_params();
-        let cond = LootCondition::EntityProperties {
-            entity: "target_entity",
-            expected_type: None,
-            is_on_fire: None,
-            mainhand_enchantment_tag: None,
-        };
-        assert!(!cond.is_fulfilled(&params));
-    }
-
-    #[test]
-    fn is_on_fire_true_when_burning() {
-        let params = LootContextParameters {
-            is_on_fire: Some(true),
-            ..base_params()
-        };
-        let cond = LootCondition::EntityProperties {
-            entity: "this",
-            expected_type: None,
-            is_on_fire: Some(true),
-            mainhand_enchantment_tag: None,
-        };
-        assert!(cond.is_fulfilled(&params));
-    }
-
-    #[test]
-    fn is_on_fire_true_fails_when_not_burning() {
-        let params = LootContextParameters {
-            is_on_fire: Some(false),
-            ..base_params()
-        };
-        let cond = LootCondition::EntityProperties {
-            entity: "this",
-            expected_type: None,
-            is_on_fire: Some(true),
-            mainhand_enchantment_tag: None,
-        };
-        assert!(!cond.is_fulfilled(&params));
-    }
-
-    #[test]
-    fn is_on_fire_false_matches_not_burning() {
-        let params = LootContextParameters {
-            is_on_fire: Some(false),
-            ..base_params()
-        };
-        let cond = LootCondition::EntityProperties {
-            entity: "this",
-            expected_type: None,
-            is_on_fire: Some(false),
-            mainhand_enchantment_tag: None,
-        };
-        assert!(cond.is_fulfilled(&params));
-    }
-
-    #[test]
-    fn is_on_fire_true_fails_when_context_none() {
-        let params = LootContextParameters {
-            is_on_fire: None,
-            ..base_params()
-        };
-        let cond = LootCondition::EntityProperties {
-            entity: "this",
-            expected_type: None,
-            is_on_fire: Some(true),
-            mainhand_enchantment_tag: None,
-        };
-        assert!(!cond.is_fulfilled(&params));
-    }
-
-    #[test]
-    fn none_is_on_fire_skips_check() {
-        let params = LootContextParameters {
-            is_on_fire: Some(true),
-            ..base_params()
-        };
-        let cond = LootCondition::EntityProperties {
-            entity: "this",
-            expected_type: None,
-            is_on_fire: None,
-            mainhand_enchantment_tag: None,
-        };
-        assert!(cond.is_fulfilled(&params));
-    }
-
-    #[test]
-    fn enchantment_tag_matches_fire_aspect() {
-        let params = LootContextParameters {
-            tool: Some(fire_aspect_sword(1)),
-            ..base_params()
-        };
-        let cond = LootCondition::EntityProperties {
-            entity: "direct_attacker",
-            expected_type: None,
-            is_on_fire: None,
-            mainhand_enchantment_tag: Some("minecraft:smelts_loot"),
-        };
-        assert!(cond.is_fulfilled(&params));
-    }
-
-    #[test]
-    fn enchantment_tag_fails_without_enchantment() {
-        let params = LootContextParameters {
-            tool: Some(ItemStack::new(1, &Item::DIAMOND_SWORD)),
-            ..base_params()
-        };
-        let cond = LootCondition::EntityProperties {
-            entity: "direct_attacker",
-            expected_type: None,
-            is_on_fire: None,
-            mainhand_enchantment_tag: Some("minecraft:smelts_loot"),
-        };
-        assert!(!cond.is_fulfilled(&params));
-    }
-
-    #[test]
-    fn enchantment_tag_rejects_unrelated_enchantment() {
-        let mut sword = ItemStack::new(1, &Item::DIAMOND_SWORD);
-        sword.enchant(&Enchantment::SHARPNESS, 5);
-        let params = LootContextParameters {
-            tool: Some(sword),
-            ..base_params()
-        };
-        let cond = LootCondition::EntityProperties {
-            entity: "direct_attacker",
-            expected_type: None,
-            is_on_fire: None,
-            mainhand_enchantment_tag: Some("minecraft:smelts_loot"),
-        };
-        assert!(!cond.is_fulfilled(&params));
-    }
-
-    #[test]
-    fn enchantment_tag_fails_with_no_tool() {
-        let params = LootContextParameters {
-            tool: None,
-            ..base_params()
-        };
-        let cond = LootCondition::EntityProperties {
-            entity: "direct_attacker",
-            expected_type: None,
-            is_on_fire: None,
-            mainhand_enchantment_tag: Some("minecraft:smelts_loot"),
-        };
-        assert!(!cond.is_fulfilled(&params));
-    }
-
-    #[test]
-    fn none_enchantment_tag_skips_check() {
-        let params = LootContextParameters {
-            tool: Some(fire_aspect_sword(2)),
-            ..base_params()
-        };
-        let cond = LootCondition::EntityProperties {
-            entity: "direct_attacker",
-            expected_type: None,
-            is_on_fire: None,
-            mainhand_enchantment_tag: None,
-        };
-        assert!(cond.is_fulfilled(&params));
-    }
-
-    #[test]
-    fn anyof_passes_when_entity_on_fire() {
-        let params = LootContextParameters {
-            is_on_fire: Some(true),
-            tool: Some(ItemStack::new(1, &Item::DIAMOND_SWORD)),
-            ..base_params()
-        };
-        let cond = LootCondition::AnyOf(&[
-            LootCondition::EntityProperties {
-                entity: "this",
-                expected_type: None,
-                is_on_fire: Some(true),
-                mainhand_enchantment_tag: None,
-            },
-            LootCondition::EntityProperties {
-                entity: "direct_attacker",
-                expected_type: None,
-                is_on_fire: None,
-                mainhand_enchantment_tag: Some("minecraft:smelts_loot"),
-            },
-        ]);
-        assert!(cond.is_fulfilled(&params));
-    }
-
-    #[test]
-    fn anyof_passes_when_weapon_has_fire_aspect() {
-        let params = LootContextParameters {
-            is_on_fire: Some(false),
-            tool: Some(fire_aspect_sword(1)),
-            ..base_params()
-        };
-        let cond = LootCondition::AnyOf(&[
-            LootCondition::EntityProperties {
-                entity: "this",
-                expected_type: None,
-                is_on_fire: Some(true),
-                mainhand_enchantment_tag: None,
-            },
-            LootCondition::EntityProperties {
-                entity: "direct_attacker",
-                expected_type: None,
-                is_on_fire: None,
-                mainhand_enchantment_tag: Some("minecraft:smelts_loot"),
-            },
-        ]);
-        assert!(cond.is_fulfilled(&params));
-    }
-
-    #[test]
-    fn anyof_fails_without_fire_or_fire_aspect() {
-        let params = LootContextParameters {
-            is_on_fire: Some(false),
-            tool: Some(ItemStack::new(1, &Item::DIAMOND_SWORD)),
-            ..base_params()
-        };
-        let cond = LootCondition::AnyOf(&[
-            LootCondition::EntityProperties {
-                entity: "this",
-                expected_type: None,
-                is_on_fire: Some(true),
-                mainhand_enchantment_tag: None,
-            },
-            LootCondition::EntityProperties {
-                entity: "direct_attacker",
-                expected_type: None,
-                is_on_fire: None,
-                mainhand_enchantment_tag: Some("minecraft:smelts_loot"),
-            },
-        ]);
-        assert!(!cond.is_fulfilled(&params));
     }
 }

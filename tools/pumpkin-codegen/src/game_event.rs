@@ -12,6 +12,7 @@ pub fn build() -> TokenStream {
 
     let mut variants = TokenStream::new();
     let mut from_name_match = TokenStream::new();
+    let mut to_name_match = TokenStream::new();
 
     for event in &game_events {
         let ident = format_ident!("{}", event.to_pascal_case());
@@ -22,6 +23,9 @@ pub fn build() -> TokenStream {
         from_name_match.extend(quote! {
             #event | #namespaced => Some(Self::#ident),
         });
+        to_name_match.extend(quote! {
+            Self::#ident => #event,
+        });
     }
 
     quote! {
@@ -31,6 +35,13 @@ pub fn build() -> TokenStream {
         }
 
         impl GameEvent {
+            #[must_use]
+            pub const fn name(&self) -> &'static str {
+                match self {
+                    #to_name_match
+                }
+            }
+
             #[must_use]
             pub fn from_name(name: &str) -> Option<Self> {
                 match name {

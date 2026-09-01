@@ -34,7 +34,7 @@ use crate::entity::mob::equipment::DEFAULT_EQUIPMENT_DROP_CHANCE;
 use crate::entity::mob::slime::SlimeEntity;
 use crate::entity::player::statistics::{CustomStatistic, StatisticCategory};
 use crate::server::Server;
-use crate::world::loot::{LootContextParameters, LootTableExt};
+use crate::world::loot::LootContextParameters;
 use crossbeam::atomic::AtomicCell;
 use pumpkin_data::attributes::Attributes;
 use pumpkin_data::data_component_impl::Operation;
@@ -120,6 +120,9 @@ pub struct LivingEntity {
 
     water_movement_speed_multiplier: f32,
     livings_flags: AtomicU8,
+
+    /// The last block position the entity occupied, used to trigger location changed effects.
+    pub last_block_pos: AtomicCell<Option<BlockPos>>,
 
     /// The attributes of the entity
     pub attributes: RwLock<FxHashMap<u8, AttributeInstance>>,
@@ -226,6 +229,35 @@ impl LivingEntity {
             combat_tracker: std::sync::Mutex::new(CombatTracker::new()),
             movement_input: AtomicCell::new(Vector3::default()),
             water_movement_speed_multiplier,
+            last_block_pos: AtomicCell::new(None),
+        }
+    }
+
+    /// Triggers location-based enchantment effects (e.g. Frost Walker) when the entity's block position changes.
+    pub fn on_changed_block(&self, caller: &dyn EntityBase, _pos: BlockPos) {
+        let pos_f64 = self.entity.pos.load();
+        if let Some(player) = caller.get_player() {
+            let boots = player.inventory.get_slot(36);
+            if !boots.is_empty() {
+                crate::enchantment::EnchantmentHelper::on_location_changed(
+                    &self.entity,
+                    &boots,
+                    pos_f64,
+                );
+            }
+        } else {
+            let boots = self
+                .entity_equipment
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .get(&EquipmentSlot::FEET);
+            if !boots.is_empty() {
+                crate::enchantment::EnchantmentHelper::on_location_changed(
+                    &self.entity,
+                    &boots,
+                    pos_f64,
+                );
+            }
         }
     }
 
@@ -233,6 +265,23 @@ impl LivingEntity {
         if equipment.is_empty() {
             return;
         }
+
+        if equipment
+            .iter()
+            .any(|(slot, _)| *slot == EquipmentSlot::FEET)
+        {
+            let pos_f64 = self.entity.pos.load();
+            for (slot, stack) in equipment {
+                if *slot == EquipmentSlot::FEET && !stack.is_empty() {
+                    crate::enchantment::EnchantmentHelper::on_location_changed(
+                        &self.entity,
+                        stack,
+                        pos_f64,
+                    );
+                }
+            }
+        }
+
         let equipment_java: Vec<(i8, ItemStackSerializer)> = equipment
             .iter()
             .map(|(slot, stack)| {
@@ -246,6 +295,9 @@ impl LivingEntity {
 
         let mut sent_editioned = false;
         for (slot, stack) in equipment {
+            if *slot == EquipmentSlot::MAIN_HAND {
+                self.update_weapon_attributes(stack);
+            }
             if *slot == EquipmentSlot::MAIN_HAND || *slot == EquipmentSlot::OFF_HAND {
                 let window_id = if *slot == EquipmentSlot::OFF_HAND {
                     120
@@ -276,6 +328,64 @@ impl LivingEntity {
                 .world
                 .load()
                 .send_to_tracking_players(&self.entity, &je_packet);
+        }
+    }
+
+    /// Applies the held item's attack attribute modifiers to this entity's
+    /// attribute map and sends the changed attributes to clients. Without this
+    /// the client never sees the reduced attack speed and does not show the
+    /// crosshair attack indicator.
+    fn update_weapon_attributes(&self, stack: &ItemStack) {
+        let component = stack.get_data_component::<AttributeModifiersImpl>();
+
+        // Single pass over the item's modifiers, split by attribute.
+        let mut speed_modifiers: Vec<Modifier> = Vec::new();
+        let mut damage_modifiers: Vec<Modifier> = Vec::new();
+        for modifier in component
+            .into_iter()
+            .flat_map(|c| c.attribute_modifiers.iter())
+        {
+            let target = if modifier.r#type == &Attributes::ATTACK_SPEED {
+                &mut speed_modifiers
+            } else if modifier.r#type == &Attributes::ATTACK_DAMAGE {
+                &mut damage_modifiers
+            } else {
+                continue;
+            };
+            target.push(Modifier {
+                id: modifier.id.to_string(),
+                amount: modifier.amount,
+                operation: match modifier.operation {
+                    Operation::AddValue => ModifierOperation::Add,
+                    Operation::AddMultipliedBase => ModifierOperation::MultiplyBase,
+                    Operation::AddMultipliedTotal => ModifierOperation::MultiplyTotal,
+                },
+            });
+        }
+
+        let mut changed: Vec<Attributes> = Vec::new();
+        {
+            let mut attributes = self
+                .attributes
+                .write()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            for (attribute, modifiers) in [
+                (Attributes::ATTACK_SPEED, speed_modifiers),
+                (Attributes::ATTACK_DAMAGE, damage_modifiers),
+            ] {
+                let instance = attributes
+                    .entry(attribute.id)
+                    .or_insert_with(|| AttributeInstance::new(attribute.default_value));
+                if instance.modifiers == modifiers {
+                    continue;
+                }
+                instance.modifiers = modifiers;
+                instance.dirty.store(true, Ordering::Relaxed);
+                changed.push(attribute);
+            }
+        }
+        if !changed.is_empty() {
+            crate::entity::attributes::send_attribute_updates_for_living(self, changed);
         }
     }
 
@@ -1276,7 +1386,7 @@ impl LivingEntity {
         //     }
 
         //     if name == "OakTrapdoorLikeProperties" {
-        //         let trapdoor = OakTrapdoorLikeProperties::from_state_id(state.id, &block);
+        //         let trapdoor = OakTrapdoorLikeProperties::from_state_id(state.id);
 
         //         pos.0.y -= 1;
 
@@ -1287,7 +1397,7 @@ impl LivingEntity {
         //             .is_some_and(|down_props| down_props.name() == "LadderLikeProperties");
 
         //         if is_ladder {
-        //             let ladder = LadderLikeProperties::from_state_id(down_state.id, &down_block);
+        //             let ladder = LadderLikeProperties::from_state_id(down_state.id);
 
         //             if trapdoor.r#facing == ladder.r#facing {
         //                 self.climbing.store(true, Relaxed);
@@ -1408,6 +1518,9 @@ impl LivingEntity {
     ) {
         if ground {
             let fall_distance = self.fall_distance.swap(0.0);
+            if fall_distance > 0.0 {
+                self.on_changed_block(caller, self.entity.block_pos.load());
+            }
             if fall_distance <= 0.0
                 || dont_damage
                 || self.should_prevent_fall_damage()
@@ -1589,7 +1702,7 @@ impl LivingEntity {
             };
 
             // Drop loot
-            self.drop_loot(params.clone());
+            self.drop_loot(&params);
 
             // Award experience
             if params.killed_by_player.unwrap_or(false)
@@ -1770,10 +1883,13 @@ impl LivingEntity {
         }
     }
 
-    fn drop_loot(&self, params: LootContextParameters) {
-        if let Some(loot_table) = &self.get_entity().entity_type.loot_table {
+    fn drop_loot(&self, params: &LootContextParameters) {
+        let resource_name = self.get_entity().entity_type.resource_name;
+        let key = format!("minecraft:entities/{resource_name}");
+        if let Some(loot_table) = pumpkin_data::loot_table::get_loot_table(&key) {
+            let seed: i64 = rand::random();
             let pos = self.entity.block_pos.load();
-            for stack in loot_table.get_loot(params) {
+            for stack in crate::world::loot::generate_loot_with_context(loot_table, seed, params) {
                 self.entity.world.load().drop_stack(&pos, stack);
             }
         }
@@ -2755,6 +2871,12 @@ impl EntityBase for LivingEntity {
                     true, // below supporting block
                 );
             }
+        }
+
+        let current_block_pos = self.entity.block_pos.load();
+        if is_alive && self.last_block_pos.load() != Some(current_block_pos) {
+            self.last_block_pos.store(Some(current_block_pos));
+            self.on_changed_block(caller, current_block_pos);
         }
 
         self.tick_effects();

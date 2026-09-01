@@ -1563,7 +1563,7 @@ impl Entity {
                     || block == Block::SOUL_CAMPFIRE
 
 
-                        && CampfireLikeProperties::from_state_id(state.id, &block).r#signal_fire
+                        && CampfireLikeProperties::from_state_id(state.id).r#signal_fire
 
 
                 {
@@ -2122,7 +2122,7 @@ impl Entity {
                 //         && (name == "OakFenceLikeProperties"
                 //             || name == "ResinBrickWallLikeProperties"
                 //             || name == "OakFenceGateLikeProperties"
-                //                 && OakFenceGateLikeProperties::from_state_id(state.id, &block)
+                //                 && OakFenceGateLikeProperties::from_state_id(state.id)
                 //                     .r#open)
                 //     {
                 //         return (supporting_block, Some(block), Some(state));
