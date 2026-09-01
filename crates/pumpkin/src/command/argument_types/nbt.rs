@@ -35,9 +35,7 @@ impl ArgumentType for NbtTagArgumentType {
     }
 
     fn examples(&self) -> Vec<String> {
-        examples!(
-            "5", "7b", "1.6", "\"hi\"", "'bye'", "[2, 3]", "[L; 4]", "{x: 3}"
-        )
+        examples!("0", "0b", "0l", "0.0", "\"foo\"", "{foo=bar}", "[0]")
     }
 }
 
@@ -90,3 +88,5 @@ impl NbtCompoundArgumentType {
         context.get_argument(name)
     }
 }
+
+pub use super::nbt_path::{NbtPath, NbtPathArgumentType, NbtPathNode};

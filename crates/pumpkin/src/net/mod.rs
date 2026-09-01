@@ -28,6 +28,7 @@ use thiserror::Error;
 use uuid::Uuid;
 pub mod authentication;
 pub mod bedrock;
+pub mod chat;
 pub mod chunk_sender;
 pub use chunk_sender::ChunkSender;
 pub mod java;

@@ -72,7 +72,7 @@ trait CropBlockBase: PlantBlockBase {
             let f = get_available_moisture(world, pos, block);
             if rand::rng().random_range(0..=(25.0 / f).floor() as i64) == 0 {
                 let new_state_id = self.state_with_age(block, state, age + 1);
-                world.set_block_state(pos, new_state_id, BlockFlags::NOTIFY_NEIGHBORS);
+                world.set_block_state(pos, new_state_id, BlockFlags::NOTIFY_LISTENERS);
             }
         }
     }

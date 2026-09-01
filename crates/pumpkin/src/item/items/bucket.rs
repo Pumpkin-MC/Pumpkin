@@ -156,17 +156,17 @@ pub(crate) fn try_pickup_fluid_at(
 
     if is_waterlogged(block, state) {
         let state_id = set_waterlogged(block, state, false);
-        world.set_block_state(&block_pos, state_id, BlockFlags::NOTIFY_NEIGHBORS);
+        world.set_block_state(&block_pos, state_id, BlockFlags::NOTIFY_ALL);
         world.schedule_fluid_tick(&Fluid::WATER, block_pos, 5, TickPriority::Normal);
         return Some(&Item::WATER_BUCKET);
     }
 
     if state == Block::LAVA.default_state.id || state == Block::WATER.default_state.id {
-        world.break_block(&block_pos, None, BlockFlags::NOTIFY_NEIGHBORS);
+        world.break_block(&block_pos, None, BlockFlags::NOTIFY_ALL);
         world.set_block_state(
             &block_pos,
             Block::AIR.default_state.id,
-            BlockFlags::NOTIFY_NEIGHBORS,
+            BlockFlags::NOTIFY_ALL,
         );
         return Some(if state == Block::LAVA.default_state.id {
             &Item::LAVA_BUCKET
@@ -191,7 +191,7 @@ fn try_pickup_bucket_item(
     let (block, state) = world.get_block_and_state_id(&target_pos);
     if waterlogged_check(block, state).is_some() {
         let state_id = set_waterlogged(block, state, false);
-        world.set_block_state(&target_pos, state_id, BlockFlags::NOTIFY_NEIGHBORS);
+        world.set_block_state(&target_pos, state_id, BlockFlags::NOTIFY_ALL);
         world.schedule_fluid_tick(&Fluid::WATER, target_pos, 5, TickPriority::Normal);
         return Some(&Item::WATER_BUCKET);
     }
@@ -247,7 +247,7 @@ pub(crate) fn try_place_filled_bucket(
 
     if is_waterlogged(block, state.id) && item.id == Item::WATER_BUCKET.id {
         let state_id = set_waterlogged(block, state.id, true);
-        world.set_block_state(&pos, state_id, BlockFlags::NOTIFY_NEIGHBORS);
+        world.set_block_state(&pos, state_id, BlockFlags::NOTIFY_ALL);
         world.schedule_fluid_tick(&Fluid::WATER, pos, 5, TickPriority::Normal);
         return true;
     }
@@ -260,7 +260,7 @@ pub(crate) fn try_place_filled_bucket(
             return false;
         }
         let state_id = set_waterlogged(block, state.id, true);
-        world.set_block_state(&target_pos, state_id, BlockFlags::NOTIFY_NEIGHBORS);
+        world.set_block_state(&target_pos, state_id, BlockFlags::NOTIFY_ALL);
         world.schedule_fluid_tick(&Fluid::WATER, target_pos, 5, TickPriority::Normal);
         return true;
     }
@@ -273,7 +273,7 @@ pub(crate) fn try_place_filled_bucket(
             } else {
                 Block::WATER.default_state.id
             },
-            BlockFlags::NOTIFY_NEIGHBORS,
+            BlockFlags::NOTIFY_ALL,
         );
         return true;
     }

@@ -1,49 +1,37 @@
+use pumpkin_util::PermissionLvl;
+use pumpkin_util::permission::{Permission, PermissionDefault, PermissionRegistry};
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::hover::HoverEvent;
 
-use crate::command::args::bounded_num::BoundedNumArgumentConsumer;
-use crate::command::args::players::PlayersArgumentConsumer;
-use crate::command::args::resource::item::ItemArgumentConsumer;
-use crate::command::args::{ConsumedArgs, FindArg, FindArgDefaultName};
-use crate::command::tree::CommandTree;
-use crate::command::tree::builder::{argument, argument_default_name};
-use crate::command::{CommandExecutor, CommandResult, CommandSender};
+use crate::command::argument_builder::{ArgumentBuilder, argument, command};
+use crate::command::argument_types::core::integer::IntegerArgumentType;
+use crate::command::argument_types::entity::EntityArgumentType;
+use crate::command::argument_types::item::ItemStackArgumentType;
+use crate::command::context::command_context::CommandContext;
+use crate::command::node::dispatcher::CommandDispatcher;
+use crate::command::node::{CommandExecutor, CommandExecutorResult};
 use crate::entity::EntityBase;
 
-const NAMES: [&str; 1] = ["give"];
-
 const DESCRIPTION: &str = "Give items to player(s).";
+const PERMISSION: &str = "minecraft:command.give";
 
-const ARG_ITEM: &str = "item";
-
-const fn item_count_consumer() -> BoundedNumArgumentConsumer<i32> {
-    BoundedNumArgumentConsumer::new()
-        .name("count")
-        .min(1)
-        .max(i32::MAX)
+struct GiveExecutor {
+    has_count: bool,
 }
 
-struct Executor;
-
-impl CommandExecutor for Executor {
-    fn execute(
-        &self,
-        sender: &CommandSender,
-        _server: &crate::server::Server,
-        args: &ConsumedArgs,
-    ) -> CommandResult {
-        let targets = PlayersArgumentConsumer.find_arg_default_name(args)?;
-
-        let (item_name, parsed_stack) = ItemArgumentConsumer::find_arg(args, ARG_ITEM)?;
+impl CommandExecutor for GiveExecutor {
+    fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
+        let targets = EntityArgumentType::get_players(context, "targets")?;
+        let parsed_stack = ItemStackArgumentType::get(context, "item")?;
         let item = parsed_stack.item;
 
-        let item_count = match item_count_consumer().find_arg_default_name(args) {
-            Err(_) => 1,
-            Ok(Ok(count)) => count,
-            Ok(Err(err)) => return Err(err.into()),
+        let item_count = if self.has_count {
+            IntegerArgumentType::get(context, "count")?
+        } else {
+            1
         };
 
-        for target in targets {
+        for target in &targets {
             let max_stack = i32::from(parsed_stack.get_max_stack_size());
             let mut remaining = item_count;
 
@@ -59,6 +47,7 @@ impl CommandExecutor for Executor {
             }
         }
 
+        let item_name = item.registry_key;
         let msg = if targets.len() == 1 {
             TextComponent::translate_cross(
                 pumpkin_data::translation::java::COMMANDS_GIVE_SUCCESS_SINGLE,
@@ -72,7 +61,7 @@ impl CommandExecutor for Executor {
                             id: item_name.to_string().into(),
                             count: Some(item_count.min(99)),
                         }),
-                    targets[0].get_display_name(),
+                    targets[0].as_ref().get_display_name(),
                 ],
             )
         } else {
@@ -92,18 +81,29 @@ impl CommandExecutor for Executor {
                 ],
             )
         };
-        sender.send_message(msg);
+        context.source.send_feedback(msg, true);
 
         Ok(targets.len() as i32)
     }
 }
 
-pub fn init_command_tree() -> CommandTree {
-    CommandTree::new(NAMES, DESCRIPTION).then(
-        argument_default_name(PlayersArgumentConsumer).then(
-            argument(ARG_ITEM, ItemArgumentConsumer)
-                .execute(Executor)
-                .then(argument_default_name(item_count_consumer()).execute(Executor)),
+pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistry) {
+    registry.register_permission_or_panic(Permission::new(
+        PERMISSION,
+        DESCRIPTION,
+        PermissionDefault::Op(PermissionLvl::Two),
+    ));
+
+    dispatcher.register(
+        command("give", DESCRIPTION).requires(PERMISSION).then(
+            argument("targets", EntityArgumentType::Players).then(
+                argument("item", ItemStackArgumentType)
+                    .executes(GiveExecutor { has_count: false })
+                    .then(
+                        argument("count", IntegerArgumentType::with_min(1))
+                            .executes(GiveExecutor { has_count: true }),
+                    ),
+            ),
         ),
-    )
+    );
 }
