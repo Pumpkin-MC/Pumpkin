@@ -1,11 +1,13 @@
 use std::any::Any;
 use std::sync::Arc;
 
+use crate::block::entities::brushable_block::BrushableBlockBlockEntity;
 use crate::entity::item::ItemEntity;
 use crate::entity::player::Player;
 use crate::entity::{Entity, EntityBase};
 use crate::item::{ItemBehaviour, ItemMetadata};
 use crate::server::Server;
+use crate::world::World;
 use pumpkin_data::block_properties::{BlockProperties, SuspiciousSandLikeProperties};
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
@@ -129,7 +131,7 @@ impl ItemBehaviour for BrushItem {
                 &block_center,
             );
 
-            let loot_item = get_archaeology_loot(is_sand, location, world);
+            let loot_item = get_archaeology_loot(is_sand, location, &world);
             let spawn_pos = Vector3::new(
                 f64::from(location.0.x) + 0.5,
                 f64::from(location.0.y) + 1.0,
