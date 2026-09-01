@@ -1,6 +1,7 @@
+use crate::chunk::ChunkData;
 use crate::chunk::palette::BlockPalette;
 use crate::level::Level;
-use crate::lighting::chunk_access::ChunkCursor;
+use crate::lighting::chunk_access::{ChunkCursor, VerticalInChunk};
 use crate::lighting::sky_light_height::{SkyLightHeight, SkyLightHeightMigration, SkyLightTier};
 use crate::lighting::stats::{Counter, LightCounters, LightPassStats};
 use crossbeam::queue::SegQueue;
@@ -61,7 +62,7 @@ impl DynamicLightEngine {
             return false;
         };
         let min_y = chunk.section.min_y;
-        let max_y = min_y + (chunk.section.count as i32) * BlockPalette::SIZE as i32 - 1;
+        let max_y = min_y + SkyLightHeight::chunk_height(chunk) - 1;
         let (_, relative) = pos.chunk_and_chunk_relative_position();
         let (local_x, local_z) = (relative.x as usize, relative.z as usize);
 
@@ -299,63 +300,80 @@ impl DynamicLightEngine {
         self.sky_increase.push((pos, level));
     }
 
+    /// Runs `visit` for the six neighbours of `pos` that sit in a loaded chunk.
+    ///
+    /// Offset, resolve and skip stood in all four propagation loops. Vanilla treats a
+    /// missing chunk as `Blocks.BEDROCK` (opaque); skipping it here means a write that
+    /// cannot land never re-queues, stay bright or dark until the neighbour loads.
+    ///
+    /// `counter` is bumped per neighbour before the resolve, so the two light kinds keep
+    /// counting under the names they always used.
+    fn for_each_neighbor(
+        cursor: &mut ChunkCursor,
+        pos: &BlockPos,
+        counter: Counter,
+        mut visit: impl FnMut(&ChunkData, VerticalInChunk, BlockPos, BlockDirection),
+    ) {
+        for dir in BlockDirection::all() {
+            let neighbor_pos = pos.offset(dir.to_offset());
+            cursor.counters.bump(counter);
+            let Some((chunk, cell)) = cursor.resolve(&neighbor_pos) else {
+                continue;
+            };
+            visit(chunk, cell, neighbor_pos, dir);
+        }
+    }
+
+    /// Drains one queue until it runs dry or the budget is spent, and reports how many
+    /// entries it processed.
+    ///
+    /// The four `perform_*_{in,de}crease_updates` differed only in the queue, the counter
+    /// and the propagation they drove. The budget and counting bookkeeping was the same in
+    /// all of them and lives here now.
+    fn drain_queue(
+        &self,
+        queue: &SegQueue<(BlockPos, u8)>,
+        counter: Counter,
+        cursor: &mut ChunkCursor,
+        budget: &mut i32,
+        propagate: fn(&Self, &mut ChunkCursor, &BlockPos, u8),
+    ) -> i32 {
+        let mut updates = 0;
+        while *budget > 0 {
+            let Some((pos, expected_light)) = queue.pop() else {
+                break;
+            };
+            *budget -= 1;
+            self.counters.bump(counter);
+            propagate(self, cursor, &pos, expected_light);
+            updates += 1;
+        }
+        updates
+    }
+
+    /// Alternates the decrease and the increase queue until neither moves any more.
     fn perform_block_light_updates(&self, cursor: &mut ChunkCursor, budget: &mut i32) -> i32 {
         let mut updates = 0;
-
-        loop {
-            if *budget <= 0 {
+        while *budget > 0 {
+            let decreased = self.drain_queue(
+                &self.block_decrease,
+                Counter::BlockDecrease,
+                cursor,
+                budget,
+                Self::propagate_block_light_decrease,
+            );
+            let increased = self.drain_queue(
+                &self.block_increase,
+                Counter::BlockIncrease,
+                cursor,
+                budget,
+                Self::propagate_block_light_increase,
+            );
+            updates += decreased + increased;
+            if decreased == 0 && increased == 0 {
                 break;
             }
-            let decrease_updates = self.perform_block_light_decrease_updates(cursor, budget);
-            let increase_updates = self.perform_block_light_increase_updates(cursor, budget);
-
-            updates += decrease_updates + increase_updates;
-
-            if decrease_updates == 0 && increase_updates == 0 {
-                break;
-            }
         }
-
-        updates
-    }
-
-    fn perform_block_light_decrease_updates(
-        &self,
-        cursor: &mut ChunkCursor,
-        budget: &mut i32,
-    ) -> i32 {
-        let mut updates = 0;
-
-        while *budget > 0 {
-            let Some((pos, expected_light)) = self.block_decrease.pop() else {
-                break;
-            };
-            *budget -= 1;
-            self.counters.bump(Counter::BlockDecrease);
-            self.propagate_block_light_decrease(cursor, &pos, expected_light);
-            updates += 1;
-        }
-
-        updates
-    }
-
-    fn perform_block_light_increase_updates(
-        &self,
-        cursor: &mut ChunkCursor,
-        budget: &mut i32,
-    ) -> i32 {
-        let mut updates = 0;
-
-        while *budget > 0 {
-            let Some((pos, expected_light)) = self.block_increase.pop() else {
-                break;
-            };
-            *budget -= 1;
-            self.counters.bump(Counter::BlockIncrease);
-            self.propagate_block_light_increase(cursor, &pos, expected_light);
-            updates += 1;
-        }
-
         updates
     }
 
@@ -365,29 +383,28 @@ impl DynamicLightEngine {
         pos: &BlockPos,
         light_level: u8,
     ) {
-        for dir in BlockDirection::all() {
-            let neighbor_pos = pos.offset(dir.to_offset());
-
-            let counters = cursor.counters;
-            counters.bump(Counter::GetBlockLight);
-            let Some((chunk, cell)) = cursor.resolve(&neighbor_pos) else {
-                continue;
-            };
-            if let Some(neighbor_light) = ChunkCursor::block_light_at(chunk, cell) {
-                counters.bump(Counter::BlockState);
+        Self::for_each_neighbor(
+            cursor,
+            pos,
+            Counter::GetBlockLight,
+            |chunk, cell, neighbor_pos, _dir| {
+                let Some(neighbor_light) = ChunkCursor::block_light_at(chunk, cell) else {
+                    return;
+                };
+                self.counters.bump(Counter::BlockState);
                 let opacity = ChunkCursor::opacity_at(chunk, cell).max(1);
                 let new_light = light_level.saturating_sub(opacity);
 
                 // Only propagate if new light is brighter than current light
                 if new_light > neighbor_light {
-                    counters.bump(Counter::SetBlockLight);
+                    self.counters.bump(Counter::SetBlockLight);
                     let written = ChunkCursor::write_light_at(chunk, cell, new_light, true);
                     if written && new_light > 1 {
                         self.queue_block_light_increase(neighbor_pos, new_light);
                     }
                 }
-            }
-        }
+            },
+        );
     }
 
     fn propagate_block_light_decrease(
@@ -403,21 +420,19 @@ impl DynamicLightEngine {
         // This prevents positions that were intentionally set to 0 from propagating light
         if current_level == 0 && removed_light_level > 0 {
             // This position was already darkened, so propagate the darkness to neighbors
-            for dir in BlockDirection::all() {
-                let neighbor_pos = pos.offset(dir.to_offset());
-
-                let counters = cursor.counters;
-                counters.bump(Counter::GetBlockLight);
-                let Some((chunk, cell)) = cursor.resolve(&neighbor_pos) else {
-                    continue;
-                };
-
-                if let Some(neighbor_light) = ChunkCursor::block_light_at(chunk, cell) {
+            Self::for_each_neighbor(
+                cursor,
+                pos,
+                Counter::GetBlockLight,
+                |chunk, cell, neighbor_pos, _dir| {
+                    let Some(neighbor_light) = ChunkCursor::block_light_at(chunk, cell) else {
+                        return;
+                    };
                     if neighbor_light == 0 {
-                        continue; // Skip if already 0
+                        return; // Skip if already 0
                     }
 
-                    counters.bump(Counter::BlockState);
+                    self.counters.bump(Counter::BlockState);
                     let neighbor_state = ChunkCursor::block_state_at(chunk, cell);
                     let opacity = neighbor_state.opacity.max(1);
 
@@ -425,7 +440,7 @@ impl DynamicLightEngine {
 
                     if neighbor_light <= expected_from_removed_source {
                         let neighbor_luminance = neighbor_state.luminance;
-                        counters.bump(Counter::SetBlockLight);
+                        self.counters.bump(Counter::SetBlockLight);
 
                         if neighbor_luminance == 0 {
                             // No self-emission, darken it completely and continue propagation
@@ -440,8 +455,8 @@ impl DynamicLightEngine {
                         // This neighbor has brighter light from another source, re-propagate from it
                         self.queue_block_light_increase(neighbor_pos, neighbor_light);
                     }
-                }
-            }
+                },
+            );
         }
     }
 
@@ -526,56 +541,28 @@ impl DynamicLightEngine {
         }
     }
 
+    /// Alternates the decrease and the increase queue until neither moves any more.
     fn perform_sky_light_updates(&self, cursor: &mut ChunkCursor, budget: &mut i32) -> i32 {
         let mut updates = 0;
-        loop {
-            if *budget <= 0 {
+        while *budget > 0 {
+            let decreased = self.drain_queue(
+                &self.sky_decrease,
+                Counter::SkyDecrease,
+                cursor,
+                budget,
+                Self::propagate_sky_light_decrease,
+            );
+            let increased = self.drain_queue(
+                &self.sky_increase,
+                Counter::SkyIncrease,
+                cursor,
+                budget,
+                Self::propagate_sky_light_increase,
+            );
+            updates += decreased + increased;
+            if decreased == 0 && increased == 0 {
                 break;
             }
-            let decrease_updates = self.perform_sky_light_decrease_updates(cursor, budget);
-            let increase_updates = self.perform_sky_light_increase_updates(cursor, budget);
-
-            updates += decrease_updates + increase_updates;
-
-            if decrease_updates == 0 && increase_updates == 0 {
-                break;
-            }
-        }
-        updates
-    }
-
-    fn perform_sky_light_decrease_updates(
-        &self,
-        cursor: &mut ChunkCursor,
-        budget: &mut i32,
-    ) -> i32 {
-        let mut updates = 0;
-        while *budget > 0 {
-            let Some((pos, expected_light)) = self.sky_decrease.pop() else {
-                break;
-            };
-            *budget -= 1;
-            self.counters.bump(Counter::SkyDecrease);
-            self.propagate_sky_light_decrease(cursor, &pos, expected_light);
-            updates += 1;
-        }
-        updates
-    }
-
-    fn perform_sky_light_increase_updates(
-        &self,
-        cursor: &mut ChunkCursor,
-        budget: &mut i32,
-    ) -> i32 {
-        let mut updates = 0;
-        while *budget > 0 {
-            let Some((pos, expected_light)) = self.sky_increase.pop() else {
-                break;
-            };
-            *budget -= 1;
-            self.counters.bump(Counter::SkyIncrease);
-            self.propagate_sky_light_increase(cursor, &pos, expected_light);
-            updates += 1;
         }
         updates
     }
@@ -586,44 +573,37 @@ impl DynamicLightEngine {
         pos: &BlockPos,
         light_level: u8,
     ) {
-        for dir in BlockDirection::all() {
-            let neighbor_pos = pos.offset(dir.to_offset());
+        Self::for_each_neighbor(
+            cursor,
+            pos,
+            Counter::ChunkLoaded,
+            |chunk, cell, neighbor_pos, dir| {
+                self.counters.bump(Counter::GetSky);
+                let neighbor_light = ChunkCursor::sky_light_at(chunk, cell);
+                self.counters.bump(Counter::BlockState);
+                let opacity = ChunkCursor::opacity_at(chunk, cell);
 
-            // Vanilla missing chunk is `Blocks.BEDROCK` (opaque). Skip here so a
-            // dropped write cannot re-queue forever; the seam can stay bright/dark
-            // until the neighbour loads.
-            //
-            // Resolved once and reused for the read, the opacity and the write below.
-            let counters = cursor.counters;
-            counters.bump(Counter::ChunkLoaded);
-            let Some((chunk, cell)) = cursor.resolve(&neighbor_pos) else {
-                continue;
-            };
+                // Calculate new light level for neighbor
+                let new_light = if light_level == 15 && dir == BlockDirection::Down && opacity == 0
+                {
+                    // Sky light at 15 propagates down as 15 through transparent blocks
+                    15
+                } else {
+                    // Normal propagation: reduce by 1 for distance, then by opacity
+                    light_level.saturating_sub(1).saturating_sub(opacity)
+                };
 
-            counters.bump(Counter::GetSky);
-            let neighbor_light = ChunkCursor::sky_light_at(chunk, cell);
-            counters.bump(Counter::BlockState);
-            let opacity = ChunkCursor::opacity_at(chunk, cell);
-
-            // Calculate new light level for neighbor
-            let new_light = if light_level == 15 && dir == BlockDirection::Down && opacity == 0 {
-                // Special case: Sky light at 15 propagates down as 15 through transparent blocks
-                15
-            } else {
-                // Normal propagation: reduce by 1 for distance, then by opacity
-                light_level.saturating_sub(1).saturating_sub(opacity)
-            };
-
-            // Only propagate if new light is brighter than current light.
-            // `set` fails outside the chunk height; do not re-queue those.
-            if new_light > neighbor_light {
-                counters.bump(Counter::SetSky);
-                let written = ChunkCursor::write_light_at(chunk, cell, new_light, false);
-                if written && new_light > 0 {
-                    self.queue_sky_light_increase(neighbor_pos, new_light);
+                // Only propagate if new light is brighter than current light.
+                // `set` fails outside the chunk height; do not re-queue those.
+                if new_light > neighbor_light {
+                    self.counters.bump(Counter::SetSky);
+                    let written = ChunkCursor::write_light_at(chunk, cell, new_light, false);
+                    if written && new_light > 0 {
+                        self.queue_sky_light_increase(neighbor_pos, new_light);
+                    }
                 }
-            }
-        }
+            },
+        );
     }
 
     fn propagate_sky_light_decrease(
@@ -632,44 +612,42 @@ impl DynamicLightEngine {
         pos: &BlockPos,
         removed_light: u8,
     ) {
-        for dir in BlockDirection::all() {
-            let neighbor_pos = pos.offset(dir.to_offset());
-
-            let counters = cursor.counters;
-            counters.bump(Counter::ChunkLoaded);
-            let Some((chunk, cell)) = cursor.resolve(&neighbor_pos) else {
-                continue;
-            };
-
-            counters.bump(Counter::GetSky);
-            let neighbor_light = ChunkCursor::sky_light_at(chunk, cell);
-            if neighbor_light == 0 {
-                continue; // Already dark
-            }
-
-            counters.bump(Counter::BlockState);
-            let opacity = ChunkCursor::opacity_at(chunk, cell);
-
-            // Calculate what we would have given this neighbor
-            let expected = if removed_light == 15 && dir == BlockDirection::Down && opacity == 0 {
-                15
-            } else {
-                removed_light.saturating_sub(1).saturating_sub(opacity)
-            };
-
-            if neighbor_light == expected || neighbor_light < removed_light {
-                // This neighbor was lit by us, darken it. Skip if the write
-                // cannot land (below `min_y` used to stay at sky=15 and loop).
-                counters.bump(Counter::SetSky);
-                if ChunkCursor::write_light_at(chunk, cell, 0, false) {
-                    self.queue_sky_light_decrease(neighbor_pos, neighbor_light);
+        Self::for_each_neighbor(
+            cursor,
+            pos,
+            Counter::ChunkLoaded,
+            |chunk, cell, neighbor_pos, dir| {
+                self.counters.bump(Counter::GetSky);
+                let neighbor_light = ChunkCursor::sky_light_at(chunk, cell);
+                if neighbor_light == 0 {
+                    return; // Already dark
                 }
-            } else if neighbor_light > removed_light {
-                // Neighbor has brighter light from another source
-                // Re-propagate from it to fill in the gap we left
-                self.queue_sky_light_increase(neighbor_pos, neighbor_light);
-            }
-        }
+
+                self.counters.bump(Counter::BlockState);
+                let opacity = ChunkCursor::opacity_at(chunk, cell);
+
+                // Calculate what would be given this neighbor
+                let expected = if removed_light == 15 && dir == BlockDirection::Down && opacity == 0
+                {
+                    15
+                } else {
+                    removed_light.saturating_sub(1).saturating_sub(opacity)
+                };
+
+                if neighbor_light == expected || neighbor_light < removed_light {
+                    // This neighbor was lit, darken it. Skip if the write
+                    // cannot land (below `min_y` used to stay at sky=15 and loop).
+                    self.counters.bump(Counter::SetSky);
+                    if ChunkCursor::write_light_at(chunk, cell, 0, false) {
+                        self.queue_sky_light_decrease(neighbor_pos, neighbor_light);
+                    }
+                } else if neighbor_light > removed_light {
+                    // Neighbor has brighter light from another source
+                    // Re-propagate from it to fill in the gap we left
+                    self.queue_sky_light_increase(neighbor_pos, neighbor_light);
+                }
+            },
+        );
     }
 
     pub fn check_sky_light_updates(&self, level: &Arc<Level>, pos: BlockPos) {

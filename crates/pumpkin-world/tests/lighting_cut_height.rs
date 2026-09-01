@@ -281,3 +281,55 @@ async fn a_new_roof_is_not_treated_as_open_sky() {
         "the flagged value still hands out a fast answer inside the sealed room"
     );
 }
+
+/// Light spreads into all six neighbours, not only the one direction the other tests
+/// use.
+///
+/// The four propagation loops share a single neighbour walk. Every other test here is
+/// essentially one-dimensional.
+#[tokio::test]
+async fn a_point_light_reaches_all_six_neighbours() {
+    // A hollow pocket deep in the rock, so nothing but the source can light it.
+    let world = World::new(|updates| {
+        for x in 7..=9usize {
+            for z in 7..=9usize {
+                for y in 29..=31 {
+                    updates.push((x, y, z, air()));
+                }
+            }
+        }
+    });
+
+    let source = BlockPos::new(8, 30, 8);
+    world.set_block(source, Block::GLOWSTONE.default_state.id);
+    world.settle();
+
+    let luminance = Block::GLOWSTONE.default_state.luminance;
+    for (dx, dy, dz) in [
+        (1, 0, 0),
+        (-1, 0, 0),
+        (0, 1, 0),
+        (0, -1, 0),
+        (0, 0, 1),
+        (0, 0, -1),
+    ] {
+        let neighbor = BlockPos::new(8 + dx, 30 + dy, 8 + dz);
+        assert_eq!(
+            world
+                .engine
+                .get_block_light_level(&world.level, &neighbor)
+                .expect("the pocket is inside the loaded chunk"),
+            luminance - 1,
+            "no light reached the neighbour at offset ({dx}, {dy}, {dz})"
+        );
+    }
+
+    assert_eq!(
+        world
+            .engine
+            .get_block_light_level(&world.level, &BlockPos::new(7, 29, 8))
+            .expect("the pocket is inside the loaded chunk"),
+        luminance - 2,
+        "light did not carry on past the first ring"
+    );
+}
