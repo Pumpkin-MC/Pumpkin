@@ -137,69 +137,6 @@ const fn data_fs_perms(can_read: bool, can_write: bool) -> Result<Option<FsPerms
     }
 }
 
-#[derive(Clone, Copy, Default)]
-struct SocketPolicy {
-    tcp_connect: bool,
-    tcp_bind: bool,
-    udp_send: bool,
-    udp_receive: bool,
-    udp_bind: bool,
-    loopback_only: bool,
-}
-
-impl SocketPolicy {
-    const fn allows(self, addr: SocketAddr, reason: SocketAddrUse) -> bool {
-        // Wasmtime performs a wildcard bind before an outbound connect/send.
-        // Permit only that precursor here; the later destination check still
-        // enforces the actual protocol and loopback policy.
-        let implicit_outbound_bind = addr.ip().is_unspecified()
-            && addr.port() == 0
-            && match reason {
-                SocketAddrUse::TcpBind => self.tcp_connect,
-                SocketAddrUse::UdpBind => self.udp_send,
-                _ => false,
-            };
-
-        let operation_allowed = match reason {
-            SocketAddrUse::TcpConnect => self.tcp_connect,
-            SocketAddrUse::TcpBind => self.tcp_bind || implicit_outbound_bind,
-            SocketAddrUse::TcpListen | SocketAddrUse::TcpAccept => self.tcp_bind,
-            SocketAddrUse::UdpBind => self.udp_bind || implicit_outbound_bind,
-            SocketAddrUse::UdpSend => self.udp_send,
-            SocketAddrUse::UdpReceive => self.udp_receive,
-        };
-
-        operation_allowed
-            && (!self.loopback_only || addr.ip().is_loopback() || implicit_outbound_bind)
-    }
-}
-
-fn socket_policy_for_permissions(
-    has_permission: impl Fn(&str) -> bool,
-    loopback_only: bool,
-) -> SocketPolicy {
-    let network_outbound = has_permission(permissions::NETWORK_OUTBOUND);
-    let tcp_allowed = has_permission(permissions::NETWORK_TCP);
-    let udp_allowed = has_permission(permissions::NETWORK_UDP);
-    let tcp_connect =
-        tcp_allowed || network_outbound || has_permission(permissions::NETWORK_TCP_CONNECT);
-    let tcp_bind = tcp_allowed || has_permission(permissions::NETWORK_TCP_BIND);
-    let udp_connected =
-        udp_allowed || network_outbound || has_permission(permissions::NETWORK_UDP_CONNECT);
-    let udp_bind = udp_allowed || has_permission(permissions::NETWORK_UDP_BIND);
-    let udp_send = udp_connected || has_permission(permissions::NETWORK_UDP_OUTGOING_DATAGRAM);
-    let udp_receive = udp_connected || udp_bind;
-
-    SocketPolicy {
-        tcp_connect,
-        tcp_bind,
-        udp_send,
-        udp_receive,
-        udp_bind,
-        loopback_only,
-    }
-}
-
 impl PluginRuntime {
     pub fn new<P: AsRef<Path>>(
         path: P,

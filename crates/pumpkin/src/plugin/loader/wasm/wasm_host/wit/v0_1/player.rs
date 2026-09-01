@@ -1901,30 +1901,6 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         Ok(())
     }
 
-    async fn add_effect(
-        &mut self,
-        player: Resource<Player>,
-        effect: pumpkin::plugin::status_effect::StatusEffectInstance,
-    ) -> wasmtime::Result<()> {
-        let player = player_from_resource(self, &player)?;
-        let effect_type = super::status_effect::from_wasm_status_effect_type(effect.effect_type);
-        if let Some(status_effect) =
-            pumpkin_data::effect::StatusEffect::from_name(effect_type.to_name())
-        {
-            let effect_obj = pumpkin_data::potion::Effect {
-                effect_type: status_effect,
-                duration: effect.duration as i32,
-                amplifier: effect.amplifier,
-                ambient: effect.ambient,
-                show_particles: effect.show_particles,
-                show_icon: effect.show_icon,
-                blend: false,
-            };
-            player.add_effect(effect_obj);
-        }
-        Ok(())
-    }
-
     async fn remove_effect(
         &mut self,
         player: Resource<Player>,
@@ -3923,52 +3899,6 @@ impl pumpkin::plugin::player::HostJavaPlayer for PluginHostState {
                 .send_packet(&pumpkin_protocol::java::client::play::CRemoveResourcePack::new(None))
                 .await;
         }
-        Ok(())
-    }
-
-    async fn kick(
-        &mut self,
-        player: Resource<pumpkin::plugin::player::JavaPlayer>,
-        options: pumpkin::plugin::player::JavaKickOptions,
-    ) -> wasmtime::Result<()> {
-        let player = self
-            .resource_table
-            .get::<crate::plugin::loader::wasm::wasm_host::state::JavaPlayerResource>(
-                &Resource::new_own(player.rep()),
-            )
-            .map_err(|_| wasmtime::Error::msg("invalid java-player resource handle"))?
-            .provider
-            .clone();
-
-        let reason = text_component_from_resource(self, &options.reason);
-        if options.log_to_console {
-            tracing::info!(
-                "Kicking Java player {} ({}): {}",
-                player.gameprofile.name,
-                player.gameprofile.id,
-                reason.clone().to_pretty_console()
-            );
-        }
-
-        if let Some(server) = player.world().server.upgrade()
-            && let Some(player_arc) = player.world().get_player_by_uuid(player.gameprofile.id)
-        {
-            let mut event = crate::plugin::api::events::player::player_kick::PlayerKickEvent::new(
-                player_arc,
-                reason.clone().to_pretty_console(),
-            );
-            server.plugin_manager.fire(&server, &mut event).await;
-            if event.cancelled {
-                return Ok(());
-            }
-        }
-
-        let send_packet = options.teardown_policy
-            != pumpkin::plugin::player::SocketTeardownPolicy::DropConnection;
-        if let crate::net::ClientPlatform::Java(java) = player.client.as_ref() {
-            java.kick_explicit(&reason, send_packet).await;
-        }
-
         Ok(())
     }
 

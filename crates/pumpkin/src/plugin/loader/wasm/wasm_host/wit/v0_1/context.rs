@@ -1758,31 +1758,6 @@ impl pumpkin::plugin::context::HostContext for PluginHostState {
         Ok(())
     }
 
-    async fn register_command(
-        &mut self,
-        context: Resource<Context>,
-        command: Resource<Command>,
-        permission: String,
-    ) -> wasmtime::Result<()> {
-        use crate::command::argument_builder::ArgumentBuilder;
-
-        let command_res = self.take_command(&command)?;
-        let context_res = self.get_context(&context)?;
-
-        let wasm_command = command_res.provider;
-        let aliases = if wasm_command.names.len() > 1 {
-            wasm_command.names[1..].to_vec()
-        } else {
-            Vec::new()
-        };
-
-        let node = wasm_command.builder.build();
-        context_res
-            .provider
-            .register_command_with_aliases(node, &aliases, permission);
-        Ok(())
-    }
-
     async fn register_permission(
         &mut self,
         context: Resource<Context>,
@@ -1868,7 +1843,15 @@ impl pumpkin::plugin::context::HostContextWithStore<PluginHostState> for HasSelf
         plugin
             .store
             .pump_blocking(&mut host, move || {
-                context.register_command(command, permission);
+                use crate::command::argument_builder::ArgumentBuilder;
+
+                let aliases = if command.names.len() > 1 {
+                    command.names[1..].to_vec()
+                } else {
+                    Vec::new()
+                };
+                let node = command.builder.build();
+                context.register_command_with_aliases(node, &aliases, permission);
             })
             .await
     }

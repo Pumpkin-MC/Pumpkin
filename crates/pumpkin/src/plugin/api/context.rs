@@ -230,7 +230,7 @@ impl Context {
     pub fn unregister_command(&self, name: &str) {
         self.server.command_dispatcher.rcu(|dispatcher| {
             let mut new_dispatcher = (**dispatcher).clone();
-            new_dispatcher.disable_command(name.to_string());
+            new_dispatcher.deactivate_plugin_command_and_aliases(name);
             Arc::new(new_dispatcher)
         });
 
@@ -241,9 +241,7 @@ impl Context {
         let source = self.metadata.name.clone();
         self.server.command_dispatcher.rcu(|dispatcher| {
             let mut new_dispatcher = (**dispatcher).clone();
-            new_dispatcher
-                .fallback_dispatcher
-                .unregister_source(&source);
+            new_dispatcher.deactivate_commands_from_source(&source);
             Arc::new(new_dispatcher)
         });
 

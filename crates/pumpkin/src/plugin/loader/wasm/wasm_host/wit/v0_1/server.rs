@@ -244,22 +244,6 @@ impl pumpkin::plugin::server::HostServer for PluginHostState {
         Ok(world_res.provider.players.load().len() as u32)
     }
 
-    async fn broadcast(&mut self, _rep: Resource<Server>, message: String) -> wasmtime::Result<()> {
-        let server = self
-            .server
-            .as_ref()
-            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
-
-        server.broadcast_message(
-            &TextComponent::text(message),
-            &TextComponent::text("Server"),
-            0,
-            None,
-        );
-
-        Ok(())
-    }
-
     async fn delete_message_by_signature(
         &mut self,
         _rep: Resource<Server>,
