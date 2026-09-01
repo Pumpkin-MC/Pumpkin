@@ -7,7 +7,6 @@ use crate::block::{
 };
 use crate::entity::EntityBase;
 use pumpkin_data::BlockStateId;
-use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::entity::EntityPose;
 use pumpkin_data::item::Item;
 use pumpkin_data::tag::Taggable;
@@ -30,11 +29,8 @@ impl BlockBehaviour for SeaPickleBlock {
                     .world
                     .get_block(&args.position.down())
                     .has_tag(&tag::Block::MINECRAFT_CORAL_BLOCKS)
-                || !SeaPickleProperties::from_state_id(
-                    args.world.get_block_state_id(args.position),
-                    args.block,
-                )
-                .waterlogged
+                || !SeaPickleProperties::from_state_id(args.world.get_block_state_id(args.position))
+                    .waterlogged
             {
                 return BlockActionResult::Pass;
             }
@@ -101,7 +97,7 @@ impl BlockBehaviour for SeaPickleBlock {
         if args.player.get_entity().pose.load() != EntityPose::Crouching
             && let BlockIsReplacing::Itself(state_id) = args.replacing
         {
-            let mut sea_pickle_prop = SeaPickleProperties::from_state_id(state_id, args.block);
+            let mut sea_pickle_prop = SeaPickleProperties::from_state_id(state_id);
             if sea_pickle_prop.pickles < 4 {
                 sea_pickle_prop.pickles += 1;
             }
@@ -120,7 +116,7 @@ impl BlockBehaviour for SeaPickleBlock {
 
     fn can_update_at(&self, args: CanUpdateAtArgs<'_>) -> bool {
         args.player.get_entity().pose.load() != EntityPose::Crouching
-            && SeaPickleProperties::from_state_id(args.state_id, args.block).pickles < 4
+            && SeaPickleProperties::from_state_id(args.state_id).pickles < 4
     }
 
     fn get_state_for_neighbor_update(

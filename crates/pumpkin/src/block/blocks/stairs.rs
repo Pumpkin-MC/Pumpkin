@@ -1,5 +1,4 @@
 use crate::entity::EntityBase;
-use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::block_properties::Half;
 use pumpkin_data::block_properties::HorizontalFacing;
 use pumpkin_data::block_properties::StairsShape;
@@ -50,7 +49,7 @@ impl BlockBehaviour for StairBlock {
     fn on_neighbor_update(&self, args: OnNeighborUpdateArgs<'_>) {
         {
             let state_id = args.world.get_block_state_id(args.position);
-            let mut stair_props = StairsProperties::from_state_id(state_id, args.block);
+            let mut stair_props = StairsProperties::from_state_id(state_id);
 
             let new_shape = compute_stair_shape(
                 args.world,
@@ -76,13 +75,13 @@ impl BlockBehaviour for StairBlock {
         state_id: BlockStateId,
         rotation: Rotation,
     ) -> &'static BlockState {
-        let mut stair_props = StairsProperties::from_state_id(state_id, block);
+        let mut stair_props = StairsProperties::from_state_id(state_id);
         stair_props.facing = rotation.rotate_horizontal(stair_props.facing);
         BlockState::from_id(stair_props.to_state_id(block))
     }
 
     fn mirror(&self, block: &Block, state_id: BlockStateId, mirror: Mirror) -> &'static BlockState {
-        let mut stair_props = StairsProperties::from_state_id(state_id, block);
+        let mut stair_props = StairsProperties::from_state_id(state_id);
         let direction = stair_props.facing;
         let shape = stair_props.shape;
 
@@ -175,5 +174,5 @@ fn get_stair_properties_if_exists(world: &World, block_pos: &BlockPos) -> Option
     let (block, block_state) = world.get_block_and_state_id(block_pos);
     block
         .has_tag(&tag::Block::MINECRAFT_STAIRS)
-        .then(|| StairsProperties::from_state_id(block_state, block))
+        .then(|| StairsProperties::from_state_id(block_state))
 }

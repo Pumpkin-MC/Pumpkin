@@ -2,7 +2,7 @@ use crate::block::registry::BlockActionResult;
 use crate::block::{BlockBehaviour, NormalUseArgs, OnPlaceArgs};
 use crate::entity::EntityBase;
 
-use pumpkin_data::block_properties::{BlockProperties, WallTorchLikeProperties};
+use pumpkin_data::block_properties::WallTorchLikeProperties;
 use pumpkin_data::translation;
 use pumpkin_data::{BlockStateId, FacingExt};
 use pumpkin_inventory::loom_screen_handler::LoomScreenHandler;

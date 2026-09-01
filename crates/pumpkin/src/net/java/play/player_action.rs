@@ -49,7 +49,7 @@ impl JavaClient {
                     if block == &pumpkin_data::Block::NOTE_BLOCK {
                         let props =
                             pumpkin_data::block_properties::NoteBlockLikeProperties::from_state_id(
-                                state.id, block,
+                                state.id,
                             );
                         crate::block::blocks::note::NoteBlock::play_note(&props, &world, &position);
                         player.increment_stat(

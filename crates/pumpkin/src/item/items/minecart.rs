@@ -68,11 +68,11 @@ impl ItemBehaviour for MinecartItem {
         }
         let state_id = world.get_block_state_id(&location);
         let is_ascending = if PoweredRailLikeProperties::handles_block_id(block.id) {
-            PoweredRailLikeProperties::from_state_id(state_id, block)
+            PoweredRailLikeProperties::from_state_id(state_id)
                 .shape
                 .is_ascending()
         } else {
-            RailLikeProperties::from_state_id(state_id, block)
+            RailLikeProperties::from_state_id(state_id)
                 .shape
                 .is_ascending()
         };

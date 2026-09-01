@@ -16,7 +16,7 @@ use pumpkin_world::inventory::{Clearable, Inventory};
 
 use crate::entity::{Entity, player::Player};
 use crate::world::loot::fill_chest_inventory;
-use pumpkin_data::chest_loot_table::get_chest_loot_table;
+use pumpkin_data::loot_table::get_loot_table;
 
 pub(super) struct MinecartInventory {
     items: RwLock<Vec<ItemStack>>,
@@ -98,7 +98,7 @@ impl MinecartInventory {
         let Some((loot_table, seed)) = loot_table else {
             return;
         };
-        let Some(table) = get_chest_loot_table(&loot_table) else {
+        let Some(table) = get_loot_table(&loot_table) else {
             *self
                 .loot_table
                 .lock()

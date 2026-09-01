@@ -890,8 +890,8 @@ impl ProtoChunk {
         let minimum_cell_y = noise_sampler.min_y() / v_count as i8;
         let cell_height = noise_sampler.height() / v_count as u16;
 
-        let delta_y_step = 1.0 / v_count as f64;
-        let delta_x_z_step = 1.0 / h_count as f64;
+        let delta_y_step = 1.0 / v_count as f32;
+        let delta_x_z_step = 1.0 / h_count as f32;
 
         noise_sampler.sample_start_density();
         for cell_x in 0..horizontal_cells {
@@ -909,14 +909,14 @@ impl ProtoChunk {
 
                     for local_y in (0..v_count).rev() {
                         let block_y = sample_start_y + local_y;
-                        noise_sampler.interpolate_y(local_y as f64 * delta_y_step);
+                        noise_sampler.interpolate_y(local_y as f32 * delta_y_step);
 
                         for local_x in 0..h_count {
-                            noise_sampler.interpolate_x(local_x as f64 * delta_x_z_step);
+                            noise_sampler.interpolate_x(local_x as f32 * delta_x_z_step);
                             let block_x = block_x_base + local_x;
 
                             for local_z in 0..h_count {
-                                noise_sampler.interpolate_z(local_z as f64 * delta_x_z_step);
+                                noise_sampler.interpolate_z(local_z as f32 * delta_x_z_step);
                                 let block_z = block_z_base + local_z;
 
                                 let block_state = noise_sampler
@@ -1119,7 +1119,7 @@ impl ProtoChunk {
                         };
                         context.biome = Biome::from_id(biome_id).unwrap_or(&Biome::PLAINS);
                         let new_state = try_apply_material_rule(
-                            &settings.surface_rule,
+                            generator.surface_rule,
                             self,
                             &mut context,
                             surface_height_estimate_sampler,

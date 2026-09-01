@@ -3,7 +3,6 @@ use crate::block::OnPlaceArgs;
 use pumpkin_data::BlockDirection;
 use pumpkin_data::BlockStateId;
 use pumpkin_data::HorizontalFacingExt;
-use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::block_properties::HorizontalFacing;
 use pumpkin_data::tag::Taggable;
 use pumpkin_data::{Block, tag};
@@ -30,7 +29,7 @@ impl BlockBehaviour for GlassPaneBlock {
         &self,
         args: GetStateForNeighborUpdateArgs<'_>,
     ) -> BlockStateId {
-        let pane_props = GlassPaneProperties::from_state_id(args.state_id, args.block);
+        let pane_props = GlassPaneProperties::from_state_id(args.state_id);
         compute_pane_state(pane_props, args.world, args.block, args.position)
     }
 }

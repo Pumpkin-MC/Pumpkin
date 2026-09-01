@@ -10,7 +10,7 @@ use crate::block::{
 use crate::block::entities::barrel::BarrelBlockEntity;
 use crate::entity::EntityBase;
 use pumpkin_data::BlockStateId;
-use pumpkin_data::block_properties::{BarrelLikeProperties, BlockProperties};
+use pumpkin_data::block_properties::BarrelLikeProperties;
 use pumpkin_data::translation;
 use pumpkin_inventory::generic_container_screen_handler::create_generic_9x3;
 use pumpkin_inventory::player::player_inventory::PlayerInventory;

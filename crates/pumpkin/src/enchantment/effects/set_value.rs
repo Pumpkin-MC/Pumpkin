@@ -1,6 +1,5 @@
 use pumpkin_data::enchantment::LevelBasedValue;
 
-/// Matches vanilla `net.minecraft.world.item.enchantment.effects.SetValue`.
 #[derive(Clone, Debug, PartialEq)]
 pub struct SetValue {
     pub value: LevelBasedValue,

@@ -10,8 +10,8 @@ use crate::generation::noise::router::{
 pub struct FindTopSurface {
     density_index: usize,
     upper_bound_index: usize,
-    min_value: f64,
-    max_value: f64,
+    min_value: f32,
+    max_value: f32,
     data: &'static FindTopSurfaceData,
 }
 
@@ -20,8 +20,8 @@ impl FindTopSurface {
     pub const fn new(
         density_index: usize,
         upper_bound_index: usize,
-        min_value: f64,
-        max_value: f64,
+        min_value: f32,
+        max_value: f32,
         data: &'static FindTopSurfaceData,
     ) -> Self {
         Self {
@@ -51,12 +51,12 @@ impl FindTopSurface {
 
 impl NoiseFunctionComponentRange for FindTopSurface {
     #[inline]
-    fn min(&self) -> f64 {
+    fn min(&self) -> f32 {
         self.min_value
     }
 
     #[inline]
-    fn max(&self) -> f64 {
+    fn max(&self) -> f32 {
         self.max_value
     }
 }
@@ -67,7 +67,7 @@ impl StaticChunkNoiseFunctionComponentImpl for FindTopSurface {
         component_stack: &mut [ChunkNoiseFunctionComponent],
         pos: &Vector3<i32>,
         sample_options: &ChunkNoiseFunctionSampleOptions,
-    ) -> f64 {
+    ) -> f32 {
         let upper = ChunkNoiseFunctionComponent::sample_from_stack(
             &mut component_stack[..=self.upper_bound_index],
             pos,
@@ -88,10 +88,10 @@ impl StaticChunkNoiseFunctionComponentImpl for FindTopSurface {
 
         // Snap upper bound down to nearest cell boundary, matching Java:
         // int topY = Mth.floor(this.upperBound.compute(context) / this.cellHeight) * this.cellHeight
-        let top_y = (upper / cell_height as f64).floor() as i32 * cell_height;
+        let top_y = (upper / cell_height as f32).floor() as i32 * cell_height;
 
         if top_y <= lower_bound {
-            return lower_bound as f64;
+            return lower_bound as f32;
         }
 
         // Walk downward in cellHeight steps, return the first Y where density > 0.0
@@ -104,11 +104,11 @@ impl StaticChunkNoiseFunctionComponentImpl for FindTopSurface {
                 sample_options,
             );
             if density > 0.0 {
-                return y as f64;
+                return y as f32;
             }
             y -= cell_height;
         }
 
-        lower_bound as f64
+        lower_bound as f32
     }
 }

@@ -456,10 +456,20 @@ impl BlockActionResult {
     }
 }
 
-#[derive(Default)]
 pub struct BlockRegistry {
-    blocks: FxHashMap<BlockId, Arc<dyn BlockBehaviour>>,
+    block_indices: [u8; pumpkin_data::BlockId::COUNT as usize],
+    behaviours: Vec<Arc<dyn BlockBehaviour>>,
     fluids: FxHashMap<u16, Arc<dyn FluidBehaviour>>,
+}
+
+impl Default for BlockRegistry {
+    fn default() -> Self {
+        Self {
+            block_indices: [0xFF; pumpkin_data::BlockId::COUNT as usize],
+            behaviours: Vec::new(),
+            fluids: FxHashMap::default(),
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -598,9 +608,8 @@ impl BlockRegistry {
             .then_some(BlockIsReplacing::Itself(clicked_block_state.id))
         } else if clicked_block_state.replaceable() {
             if clicked_block == &Block::WATER {
-                use pumpkin_data::block_properties::{BlockProperties, WaterLikeProperties};
-                let water_props =
-                    WaterLikeProperties::from_state_id(clicked_block_state.id, clicked_block);
+                use pumpkin_data::block_properties::WaterLikeProperties;
+                let water_props = WaterLikeProperties::from_state_id(clicked_block_state.id);
                 Some(BlockIsReplacing::Water(water_props.level))
             } else {
                 Some(BlockIsReplacing::Other)
@@ -630,13 +639,9 @@ impl BlockRegistry {
                 } else {
                     previous_block_state.replaceable().then(|| {
                         if previous_block == &Block::WATER {
-                            use pumpkin_data::block_properties::{
-                                BlockProperties, WaterLikeProperties,
-                            };
-                            let water_props = WaterLikeProperties::from_state_id(
-                                previous_block_state.id,
-                                previous_block,
-                            );
+                            use pumpkin_data::block_properties::WaterLikeProperties;
+                            let water_props =
+                                WaterLikeProperties::from_state_id(previous_block_state.id);
                             BlockIsReplacing::Water(water_props.level)
                         } else {
                             BlockIsReplacing::None
@@ -736,12 +741,14 @@ impl BlockRegistry {
 
         Ok(Some((final_block_pos, new_state)))
     }
+    #[allow(clippy::expect_used)]
     pub fn register<T: BlockBehaviour + BlockMetadata + 'static>(&mut self, block: T) {
         let ids = T::ids();
-        let val = Arc::new(block);
-        self.blocks.reserve(ids.len());
+        let idx = u8::try_from(self.behaviours.len())
+            .expect("Too many block behaviours for u8 index table");
+        self.behaviours.push(Arc::new(block));
         for i in ids {
-            self.blocks.insert(i, val.clone());
+            self.block_indices[i.as_u16() as usize] = idx;
         }
     }
 
@@ -1251,9 +1258,15 @@ impl BlockRegistry {
         }
     }
 
+    #[inline]
     #[must_use]
     pub fn get_pumpkin_block(&self, block: BlockId) -> Option<&Arc<dyn BlockBehaviour>> {
-        self.blocks.get(&block)
+        let idx = self.block_indices[block.as_u16() as usize];
+        if idx == 0xFF {
+            None
+        } else {
+            self.behaviours.get(idx as usize)
+        }
     }
 
     #[must_use]

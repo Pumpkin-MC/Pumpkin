@@ -3,8 +3,8 @@ use std::sync::{Arc, Mutex};
 use pumpkin_data::{
     Block, BlockState,
     block_properties::{
-        BlockProperties, DoubleBlockHalf, HorizontalFacing, LeverLikeProperties,
-        OakDoorLikeProperties, OakFenceLikeProperties,
+        DoubleBlockHalf, HorizontalFacing, LeverLikeProperties, OakDoorLikeProperties,
+        OakFenceLikeProperties,
     },
 };
 use pumpkin_util::{

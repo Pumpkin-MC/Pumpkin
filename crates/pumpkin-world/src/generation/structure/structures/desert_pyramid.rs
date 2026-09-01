@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use pumpkin_data::{
     Block, BlockState,
-    block_properties::{BlockProperties, HorizontalFacing, OakStairsLikeProperties},
+    block_properties::{HorizontalFacing, OakStairsLikeProperties},
 };
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::{

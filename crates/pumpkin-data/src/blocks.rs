@@ -40,8 +40,6 @@ pub struct Block {
     pub states: &'static [BlockState],
     /// Fire behavior settings. If `None`, the block is not flammable.
     pub flammable: Option<Flammable>,
-    /// Defines the items dropped when this block is destroyed.
-    pub loot_table: Option<LootTable>,
     /// Defines the amount of XP dropped when the block is mined (e.g., Coal or Diamond).
     pub experience: Option<Experience>,
 }
@@ -172,37 +170,29 @@ impl Block {
         })
     }
 
-    /// Returns a new [`BlockState`] reference for the given [`BlockStateId`] with the
-    /// `waterlogged` property forced to `true` if the block supports that
-    /// property.  If the state is already waterlogged or the block does not
-    /// expose a `waterlogged` property then `None` is returned.
     #[must_use]
-    pub fn with_waterlogged(&self, id: BlockStateId) -> Option<&'static BlockState> {
-        // Check if already waterlogged
-        if self.is_waterlogged(id) {
-            return Some(BlockState::from_id(id));
-        }
+    pub fn is_waterloggable(&self) -> bool {
+        self.properties(self.default_state.id)
+            .is_some_and(|props| props.to_props().iter().any(|p| p.0 == "waterlogged"))
+    }
 
-        // Modify the property list if available
-        if let Some(props_source) = self.properties(id) {
-            let mut props: Vec<(&str, &str)> = props_source
-                .to_props()
-                .iter()
-                .map(|(k, v)| (*k, *v))
-                .collect();
-
-            // Look for an existing waterlogged key or add one
-            if let Some(idx) = props.iter().position(|(k, _)| *k == "waterlogged") {
-                props[idx] = ("waterlogged", "true");
-            } else {
-                props.push(("waterlogged", "true"));
+    /// Returns a new [`BlockStateId`] for the given [`BlockStateId`] with the
+    /// `waterlogged` property forced to `value`. If the state already has
+    /// waterlogged set to `value` or the  block does not expose a `waterlogged`
+    /// property then `None` is returned.
+    #[must_use]
+    pub fn set_waterlogged(&self, id: BlockStateId, value: bool) -> Option<BlockStateId> {
+        self.properties(id).and_then(|props| {
+            let mut props = props.to_props();
+            let waterlogged = &mut props.iter_mut().find(|p| p.0 == "waterlogged")?.1;
+            let new_waterlogged = value.to_string();
+            if new_waterlogged.as_str() == *waterlogged {
+                return None;
             }
 
-            let new_state_id = self.from_properties(&props).to_state_id(self);
-            return Some(BlockState::from_id(new_state_id));
-        }
-
-        None
+            *waterlogged = &new_waterlogged;
+            Some(self.from_properties(&props).to_state_id(self))
+        })
     }
 
     /// Returns whether this block is solid (based on default state)

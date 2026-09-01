@@ -12,7 +12,7 @@ use crate::{
 use pumpkin_data::item::Item;
 use pumpkin_data::{
     Block, BlockStateId,
-    block_properties::{BlockProperties, CakeLikeProperties},
+    block_properties::CakeLikeProperties,
     sound::{Sound, SoundCategory},
 };
 use pumpkin_macros::pumpkin_block;
@@ -48,7 +48,7 @@ impl CakeBlock {
             GameMode::Creative | GameMode::Spectator => {}
         }
 
-        let mut properties = CakeLikeProperties::from_state_id(state_id, block);
+        let mut properties = CakeLikeProperties::from_state_id(state_id);
         match properties.bites {
             0..=5 => {
                 player.increment_stat(
@@ -96,7 +96,7 @@ impl BlockBehaviour for CakeBlock {
 
     fn use_with_item(&self, args: UseWithItemArgs<'_>) -> BlockActionResult {
         let state_id = args.world.get_block_state_id(args.position);
-        let properties = CakeLikeProperties::from_state_id(state_id, args.block);
+        let properties = CakeLikeProperties::from_state_id(state_id);
         let item = args.item_stack.item;
         match item.id {
             id if (Item::CANDLE.id..=Item::BLACK_CANDLE.id).contains(&id) => {
@@ -161,7 +161,7 @@ impl BlockBehaviour for CakeBlock {
     fn get_comparator_output(&self, args: GetComparatorOutputArgs<'_>) -> Option<u8> {
         {
             let state_id = args.world.get_block_state_id(args.position);
-            let properties = CakeLikeProperties::from_state_id(state_id, args.block);
+            let properties = CakeLikeProperties::from_state_id(state_id);
             if properties.bites <= 6 {
                 Some((7 - properties.bites) * 2)
             } else {

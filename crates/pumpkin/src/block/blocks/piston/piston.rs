@@ -5,9 +5,7 @@ use crate::entity::EntityBase;
 use pumpkin_data::BlockId;
 use pumpkin_data::{
     Block, BlockDirection, BlockState, BlockStateId, FacingExt,
-    block_properties::{
-        BlockProperties, MovingPistonLikeProperties, PistonHeadLikeProperties, PistonType,
-    },
+    block_properties::{MovingPistonLikeProperties, PistonHeadLikeProperties, PistonType},
     block_state::PistonBehavior,
     sound::{Sound, SoundCategory},
 };
@@ -59,7 +57,7 @@ impl PistonBlock {
             return false;
         }
         if block == &Block::PISTON || block == &Block::STICKY_PISTON {
-            let props = PistonProps::from_state_id(state.id, block);
+            let props = PistonProps::from_state_id(state.id);
             // Extended pistons are immovable. Non-extended pistons are movable
             return !props.extended;
         }
@@ -86,14 +84,13 @@ impl BlockBehaviour for PistonBlock {
     }
 
     fn broken(&self, args: BrokenArgs<'_>) {
-        let props = PistonProps::from_state_id(args.state.id, args.block);
+        let props = PistonProps::from_state_id(args.state.id);
         let pos = args
             .position
             .offset(props.facing.to_block_direction().to_offset());
         let (block_to_check, block_to_check_state_id) = args.world.get_block_and_state_id(&pos);
         if &Block::PISTON_HEAD == block_to_check {
-            let head_props =
-                PistonHeadProperties::from_state_id(block_to_check_state_id, block_to_check);
+            let head_props = PistonHeadProperties::from_state_id(block_to_check_state_id);
 
             if (head_props.facing.to_block_direction() != props.facing.to_block_direction())
                 && &Block::PISTON_HEAD == block_to_check
@@ -136,7 +133,7 @@ impl PistonBlock {
         data: u8,
     ) -> bool {
         let state = world.get_block_state(pos);
-        let mut props = PistonProps::from_state_id(state.id, block);
+        let mut props = PistonProps::from_state_id(state.id);
         let dir = props.facing.to_block_direction();
 
         // I don't think this is optimal ?
@@ -324,9 +321,9 @@ fn should_extend(world: &World, block_pos: &BlockPos, piston_dir: BlockDirection
     false
 }
 
-pub fn try_move(world: &Arc<World>, block: &Block, block_pos: &BlockPos) {
+pub fn try_move(world: &Arc<World>, _block: &Block, block_pos: &BlockPos) {
     let state = world.get_block_state(block_pos);
-    let props = PistonProps::from_state_id(state.id, block);
+    let props = PistonProps::from_state_id(state.id);
     let dir = props.facing.to_block_direction();
     let should_extent = should_extend(world, block_pos, dir);
 
@@ -340,7 +337,7 @@ pub fn try_move(world: &Arc<World>, block: &Block, block_pos: &BlockPos) {
         let mut r#type = 1;
 
         if new_block == &Block::MOVING_PISTON {
-            let new_props = MovingPistonLikeProperties::from_state_id(new_state, new_block);
+            let new_props = MovingPistonLikeProperties::from_state_id(new_state);
             if new_props.facing == props.facing
                 && let Some(entity) = world.get_block_entity(&new_pos)
             {

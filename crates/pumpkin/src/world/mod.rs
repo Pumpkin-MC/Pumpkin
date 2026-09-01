@@ -56,12 +56,12 @@ pub use explosion::{
 use pumpkin_config::BasicConfiguration;
 use pumpkin_data::block_properties::{blocks_movement, is_air};
 use pumpkin_data::block_rotation::{Mirror, Rotation};
-use pumpkin_data::chunk_gen_settings::GenerationSettings;
 use pumpkin_data::data_component_impl::EquipmentSlot;
 use pumpkin_data::dimension::Dimension;
 use pumpkin_data::entity::MobCategory;
 use pumpkin_data::fluid::FluidState;
 use pumpkin_data::game_rules::{GameRule, GameRuleValue};
+use pumpkin_data::noise_settings::NoiseSettings;
 use pumpkin_data::{
     Block, BlockStateId,
     entity::{EntityStatus, EntityType},
@@ -74,7 +74,7 @@ use pumpkin_data::{
 };
 use pumpkin_data::{
     BlockDirection, BlockState, HorizontalFacingExt,
-    block_properties::{BlockProperties, ChestLikeProperties, ChestType},
+    block_properties::{ChestLikeProperties, ChestType},
     tag::Taggable,
     translation,
 };
@@ -193,7 +193,7 @@ fn bedrock_chest_block_actor(state_id: BlockStateId, position: BlockPos) -> Opti
     nbt.put_int("z", position.0.z);
     nbt.put_bool("isMovable", true);
 
-    let properties = ChestLikeProperties::from_state_id(state_id, block);
+    let properties = ChestLikeProperties::from_state_id(state_id);
     if properties.r#type != ChestType::Single {
         let direction = if properties.r#type == ChestType::Left {
             properties.facing.rotate_clockwise()
@@ -351,7 +351,7 @@ impl World {
         server: Weak<Server>,
     ) -> Self {
         // TODO
-        let generation_settings = GenerationSettings::from_dimension(&dimension);
+        let generation_settings = NoiseSettings::from_dimension(&dimension);
 
         // Load portal POI from disk (PoiStorage::new automatically loads from disk if files exist)
         let portal_poi = portal::PortalPoiStorage::new(level.level_folder.poi_folder.clone());
@@ -5323,20 +5323,10 @@ impl World {
                 killed_by_player: Some(cause.is_some()),
                 ..Default::default()
             };
-            crate::block::drop_loot(self, broken_block, position, true, params);
+            crate::block::drop_loot(self, broken_block, position, true, &params);
         }
 
-        let new_state_id = if broken_block
-            .properties(broken_block_state.id)
-            .and_then(|properties| {
-                properties
-                    .to_props()
-                    .into_iter()
-                    .find(|p| p.0 == "waterlogged")
-                    .map(|(_, value)| value == "true")
-            })
-            .unwrap_or(false)
-        {
+        let new_state_id = if broken_block.is_waterlogged(broken_block_state.id) {
             Block::WATER.default_state.id
         } else {
             Block::AIR.default_state.id
@@ -5442,12 +5432,16 @@ impl World {
     }
 
     pub fn drop_stack(self: &Arc<Self>, pos: &BlockPos, stack: ItemStack) {
-        let height = EntityType::ITEM.dimension[1] / 2.0;
+        if stack.is_empty() {
+            return;
+        }
+
+        let half_height = f64::from(EntityType::ITEM.dimension[1]) / 2.0;
         let spawn_pos = {
             let mut r = rand::rng();
             Vector3::new(
                 f64::from(pos.0.x) + 0.5 + r.random_range(-0.25..0.25),
-                f64::from(pos.0.y) + 0.5 + r.random_range(-0.25..0.25) - f64::from(height),
+                f64::from(pos.0.y) + 0.5 + r.random_range(-0.25..0.25) - half_height,
                 f64::from(pos.0.z) + 0.5 + r.random_range(-0.25..0.25),
             )
         };
@@ -5468,6 +5462,90 @@ impl World {
         }
 
         let item_entity = Arc::new(ItemEntity::new(entity, stack));
+        self.spawn_entity(item_entity);
+    }
+
+    pub fn drop_stack_from_face(
+        self: &Arc<Self>,
+        pos: &BlockPos,
+        face: BlockDirection,
+        stack: ItemStack,
+    ) {
+        if stack.is_empty() {
+            return;
+        }
+
+        let offset = face.to_offset();
+        let step_x = offset.x;
+        let step_y = offset.y;
+        let step_z = offset.z;
+
+        let half_width = f64::from(EntityType::ITEM.dimension[0]) / 2.0;
+        let half_height = f64::from(EntityType::ITEM.dimension[1]) / 2.0;
+
+        let (spawn_pos, velocity) = {
+            let mut r = rand::rng();
+            let x = f64::from(pos.0.x)
+                + 0.5
+                + if step_x == 0 {
+                    r.random_range(-0.25..0.25)
+                } else {
+                    f64::from(step_x) * (0.5 + half_width)
+                };
+            let y = f64::from(pos.0.y)
+                + 0.5
+                + if step_y == 0 {
+                    r.random_range(-0.25..0.25)
+                } else {
+                    f64::from(step_y) * (0.5 + half_height)
+                }
+                - half_height;
+            let z = f64::from(pos.0.z)
+                + 0.5
+                + if step_z == 0 {
+                    r.random_range(-0.25..0.25)
+                } else {
+                    f64::from(step_z) * (0.5 + half_width)
+                };
+
+            let delta_x = if step_x == 0 {
+                r.random_range(-0.1..0.1)
+            } else {
+                f64::from(step_x) * 0.1
+            };
+            let delta_y = if step_y == 0 {
+                r.random_range(0.0..0.1)
+            } else {
+                f64::from(step_y) * 0.1 + 0.1
+            };
+            let delta_z = if step_z == 0 {
+                r.random_range(-0.1..0.1)
+            } else {
+                f64::from(step_z) * 0.1
+            };
+
+            (
+                Vector3::new(x, y, z),
+                Vector3::new(delta_x, delta_y, delta_z),
+            )
+        };
+
+        let entity = Entity::new(self.clone(), spawn_pos, &EntityType::ITEM);
+        let mut item_event = crate::plugin::api::events::entity::item_spawn::ItemSpawnEvent::new(
+            entity.entity_id,
+            spawn_pos,
+            stack.item.registry_key.to_string(),
+        );
+        if let Some(server) = self.server.upgrade() {
+            server
+                .plugin_manager
+                .fire_blocking(&server, &mut item_event);
+        }
+        if item_event.cancelled {
+            return;
+        }
+
+        let item_entity = Arc::new(ItemEntity::new_with_velocity(entity, stack, velocity, 10));
         self.spawn_entity(item_entity);
     }
 
@@ -5626,29 +5704,20 @@ impl World {
         self.get_block_state_id_if_loaded(position).is_some()
     }
 
-    pub fn get_fluid(&self, position: &BlockPos) -> &'static pumpkin_data::fluid::Fluid {
-        let id = self.get_block_state_id(position);
-        let fluid = Fluid::from_state_id(id).ok_or(&Fluid::EMPTY);
-        if let Ok(fluid) = fluid {
+    fn get_fluid_from_state_id(id: BlockStateId) -> &'static pumpkin_data::fluid::Fluid {
+        if let Some(fluid) = Fluid::from_state_id(id) {
             return fluid.to_flowing();
         }
-        let block = Block::from_state_id(id);
-        block
-            .properties(id)
-            .and_then(|props| {
-                props
-                    .to_props()
-                    .into_iter()
-                    .find(|p| p.0 == "waterlogged")
-                    .map(|(_, value)| {
-                        if value == "true" {
-                            &Fluid::FLOWING_WATER
-                        } else {
-                            &Fluid::EMPTY
-                        }
-                    })
-            })
-            .unwrap_or(&Fluid::EMPTY)
+        if id.is_waterlogged() {
+            &Fluid::FLOWING_WATER
+        } else {
+            &Fluid::EMPTY
+        }
+    }
+
+    pub fn get_fluid(&self, position: &BlockPos) -> &'static pumpkin_data::fluid::Fluid {
+        let id = self.get_block_state_id(position);
+        Self::get_fluid_from_state_id(id)
     }
 
     pub fn get_block_and_fluid(
@@ -5659,30 +5728,7 @@ impl World {
         &'static pumpkin_data::fluid::Fluid,
     ) {
         let id = self.get_block_state_id(position);
-        let block = Block::from_state_id(id);
-
-        let fluid = Fluid::from_state_id(id)
-            .map(Fluid::to_flowing)
-            .ok_or(&Fluid::EMPTY)
-            .unwrap_or_else(|_| {
-                block
-                    .properties(id)
-                    .and_then(|props| {
-                        props
-                            .to_props()
-                            .into_iter()
-                            .find(|p| p.0 == "waterlogged")
-                            .map(|(_, value)| {
-                                if value == "true" {
-                                    &Fluid::FLOWING_WATER
-                                } else {
-                                    &Fluid::EMPTY
-                                }
-                            })
-                    })
-                    .unwrap_or(&Fluid::EMPTY)
-            });
-        (block, fluid)
+        (id.to_block(), Self::get_fluid_from_state_id(id))
     }
 
     pub fn get_fluid_and_fluid_state(
@@ -5690,30 +5736,8 @@ impl World {
         position: &BlockPos,
     ) -> (&'static Fluid, &'static FluidState) {
         let id = self.get_block_state_id(position);
-
-        let Some(raw_fluid) = Fluid::from_state_id(id) else {
-            let block = Block::from_state_id(id);
-            if let Some(properties) = block.properties(id) {
-                for (name, value) in properties.to_props() {
-                    if name == "waterlogged" {
-                        if value == "true" {
-                            let state = &Fluid::FLOWING_WATER.states[0];
-                            return (&Fluid::FLOWING_WATER, state);
-                        }
-
-                        break;
-                    }
-                }
-            }
-
-            let state = &Fluid::EMPTY.states[0];
-            return (&Fluid::EMPTY, state);
-        };
-
-        let fluid = raw_fluid.to_flowing();
-        let state = &fluid.states[0];
-
-        (fluid, state)
+        let fluid = Self::get_fluid_from_state_id(id);
+        (fluid, &fluid.states[0])
     }
 
     pub fn get_block_state_id(&self, position: &BlockPos) -> BlockStateId {
@@ -7070,7 +7094,7 @@ impl WorldPortalExt for WorldPortal {
 mod tests {
     use pumpkin_data::{
         Block,
-        block_properties::{BlockProperties, ChestLikeProperties, ChestType, HorizontalFacing},
+        block_properties::{ChestLikeProperties, ChestType, HorizontalFacing},
     };
     use pumpkin_util::math::position::BlockPos;
 

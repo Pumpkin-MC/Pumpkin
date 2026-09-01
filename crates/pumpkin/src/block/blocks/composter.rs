@@ -9,13 +9,9 @@ use crate::{
     world::World,
 };
 use pumpkin_data::{
-    Block, BlockStateId,
-    block_properties::{BlockProperties, ComposterLikeProperties},
-    composter_increase_chance::get_composter_increase_chance_from_item_id,
-    entity::EntityType,
-    item::Item,
-    item_stack::ItemStack,
-    world::WorldEvent,
+    Block, BlockStateId, block_properties::ComposterLikeProperties,
+    composter_increase_chance::get_composter_increase_chance_from_item_id, entity::EntityType,
+    item::Item, item_stack::ItemStack, world::WorldEvent,
 };
 use pumpkin_inventory::screen_handler::InventoryPlayer;
 use pumpkin_macros::pumpkin_block;
@@ -30,7 +26,7 @@ impl BlockBehaviour for ComposterBlock {
     fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
         {
             let state_id = args.world.get_block_state_id(args.position);
-            let props = ComposterLikeProperties::from_state_id(state_id, args.block);
+            let props = ComposterLikeProperties::from_state_id(state_id);
             if props.level == 8 {
                 self.clear_composter(args.world, args.position, state_id, args.block);
             }
@@ -42,7 +38,7 @@ impl BlockBehaviour for ComposterBlock {
     fn use_with_item(&self, args: UseWithItemArgs<'_>) -> BlockActionResult {
         {
             let state_id = args.world.get_block_state_id(args.position);
-            let props = ComposterLikeProperties::from_state_id(state_id, args.block);
+            let props = ComposterLikeProperties::from_state_id(state_id);
             let level = props.level;
 
             // Check if the composter is full
@@ -84,7 +80,7 @@ impl BlockBehaviour for ComposterBlock {
 
     fn on_scheduled_tick(&self, args: OnScheduledTickArgs<'_>) {
         let state_id = args.world.get_block_state_id(args.position);
-        let props = ComposterLikeProperties::from_state_id(state_id, args.block);
+        let props = ComposterLikeProperties::from_state_id(state_id);
         let level = props.level;
         if level == 7 {
             self.update_level_composter(args.world, args.position, state_id, args.block, level + 1);
@@ -93,7 +89,7 @@ impl BlockBehaviour for ComposterBlock {
 
     fn get_comparator_output(&self, args: GetComparatorOutputArgs<'_>) -> Option<u8> {
         {
-            let props = ComposterLikeProperties::from_state_id(args.state.id, args.block);
+            let props = ComposterLikeProperties::from_state_id(args.state.id);
             Some(props.level)
         }
     }
@@ -108,7 +104,7 @@ impl ComposterBlock {
         block: &Block,
         level: u8,
     ) {
-        let mut props = ComposterLikeProperties::from_state_id(state_id, block);
+        let mut props = ComposterLikeProperties::from_state_id(state_id);
         props.level = level;
         world.set_block_state(location, props.to_state_id(block), BlockFlags::NOTIFY_ALL);
         if level == 7 {

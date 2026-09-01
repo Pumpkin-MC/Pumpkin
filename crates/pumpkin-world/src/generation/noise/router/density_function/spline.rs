@@ -1,4 +1,4 @@
-use pumpkin_util::math::{lerp, vector3::Vector3};
+use pumpkin_util::math::vector3::Vector3;
 
 use crate::generation::noise::router::{
     chunk_density_function::ChunkNoiseFunctionSampleOptions,
@@ -83,8 +83,8 @@ impl Spline {
         let mut max = f32::NEG_INFINITY;
 
         let input_function = &component_stack[self.input_index];
-        let input_max = input_function.max() as f32;
-        let input_min = input_function.min() as f32;
+        let input_max = input_function.max();
+        let input_min = input_function.min();
 
         let Some(first_point) = self.points.first() else {
             return (0.0, 0.0);
@@ -160,7 +160,7 @@ impl Spline {
             &mut component_stack[..=self.input_index],
             pos,
             sample_options,
-        ) as f32;
+        );
 
         let n = self.points.len();
         let index_greater_than_x = self.points.partition_point(|p| location >= p.location);
@@ -168,44 +168,48 @@ impl Spline {
         if index_greater_than_x == 0 {
             let point = &self.points[0];
             let val = point.value.sample(pos, component_stack, sample_options);
-            return point.sample_outside_range(location, val);
+            return val + point.derivative * (location - point.location);
         }
 
         if index_greater_than_x == n {
             let point = &self.points[n - 1];
             let val = point.value.sample(pos, component_stack, sample_options);
-            return point.sample_outside_range(location, val);
+            return val + point.derivative * (location - point.location);
         }
 
-        let lower_point = &self.points[index_greater_than_x - 1];
-        let upper_point = &self.points[index_greater_than_x];
+        let previous = &self.points[index_greater_than_x - 1];
+        let current = &self.points[index_greater_than_x];
 
-        let lower_value = lower_point
-            .value
-            .sample(pos, component_stack, sample_options);
-        let upper_value = upper_point
-            .value
-            .sample(pos, component_stack, sample_options);
+        let start_x = previous.location;
+        let end_x = current.location;
 
-        let dist = upper_point.location - lower_point.location;
-        let x_scale = (location - lower_point.location) / dist;
+        let start_value = previous.value.sample(pos, component_stack, sample_options);
+        let end_value = current.value.sample(pos, component_stack, sample_options);
 
-        let delta = upper_value - lower_value;
-        let extrapolated_lower = lower_point.derivative * dist - delta;
-        let extrapolated_upper = -upper_point.derivative * dist + delta;
+        let start_derivative = previous.derivative;
+        let end_derivative = current.derivative;
 
-        let cubic_part =
-            (x_scale * (1.0 - x_scale)) * lerp(x_scale, extrapolated_lower, extrapolated_upper);
-        let linear_part = lerp(x_scale, lower_value, upper_value);
+        let t = (location - start_x) / (end_x - start_x);
 
-        cubic_part + linear_part
+        let h00 = (1.0 + 2.0 * t) * (1.0 - t) * (1.0 - t);
+        let h10 = t * (1.0 - t) * (1.0 - t);
+        let h01 = t * t * (3.0 - 2.0 * t);
+        let h11 = t * t * (t - 1.0);
+
+        h00.mul_add(
+            start_value,
+            h10.mul_add(
+                start_derivative * (end_x - start_x),
+                h01.mul_add(end_value, h11 * (end_derivative * (end_x - start_x))),
+            ),
+        )
     }
 }
 
 pub struct SplineFunction {
     spline: Spline,
-    min_value: f64,
-    max_value: f64,
+    min_value: f32,
+    max_value: f32,
 }
 
 impl SplineFunction {
@@ -213,8 +217,8 @@ impl SplineFunction {
         let (min_value, max_value) = spline.calculate_min_and_max(component_stack);
         Self {
             spline,
-            min_value: min_value as f64,
-            max_value: max_value as f64,
+            min_value,
+            max_value,
         }
     }
 
@@ -230,19 +234,19 @@ impl StaticChunkNoiseFunctionComponentImpl for SplineFunction {
         component_stack: &mut [ChunkNoiseFunctionComponent],
         pos: &Vector3<i32>,
         sample_options: &ChunkNoiseFunctionSampleOptions,
-    ) -> f64 {
-        self.spline.sample(pos, component_stack, sample_options) as f64
+    ) -> f32 {
+        self.spline.sample(pos, component_stack, sample_options)
     }
 }
 
 impl NoiseFunctionComponentRange for SplineFunction {
     #[inline]
-    fn min(&self) -> f64 {
+    fn min(&self) -> f32 {
         self.min_value
     }
 
     #[inline]
-    fn max(&self) -> f64 {
+    fn max(&self) -> f32 {
         self.max_value
     }
 }
