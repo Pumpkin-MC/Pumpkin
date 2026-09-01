@@ -3450,6 +3450,7 @@ dependencies = [
  "pumpkin-inventory",
  "pumpkin-macros",
  "pumpkin-nbt",
+ "pumpkin-plugin-runtime",
  "pumpkin-protocol",
  "pumpkin-util",
  "pumpkin-world",
@@ -3605,6 +3606,18 @@ dependencies = [
  "tracing",
  "tracing-serde-structured",
  "wit-bindgen",
+]
+
+[[package]]
+name = "pumpkin-plugin-runtime"
+version = "0.1.0-dev+26.2-26.40"
+dependencies = [
+ "futures",
+ "thiserror 2.0.20",
+ "tokio",
+ "tracing",
+ "wasm-encoder 0.257.1",
+ "wasmtime",
 ]
 
 [[package]]
