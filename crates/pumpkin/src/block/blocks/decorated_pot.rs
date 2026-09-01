@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use pumpkin_data::BlockStateId;
-use pumpkin_data::block_properties::{BlockProperties, DecoratedPotLikeProperties};
+use pumpkin_data::block_properties::DecoratedPotLikeProperties;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::{Sound, SoundCategory};
@@ -19,8 +19,7 @@ pub struct DecoratedPotBlock;
 
 impl BlockBehaviour for DecoratedPotBlock {
     fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
-        let mut props =
-            DecoratedPotLikeProperties::from_state_id(args.block.default_state.id, args.block);
+        let mut props = DecoratedPotLikeProperties::from_state_id(args.block.default_state.id);
         props.facing = args
             .player
             .living_entity

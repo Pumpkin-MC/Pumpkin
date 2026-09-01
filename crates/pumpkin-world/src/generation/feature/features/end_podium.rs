@@ -1,6 +1,6 @@
 use pumpkin_data::{
     Block,
-    block_properties::{BlockProperties, HorizontalFacing, WallTorchLikeProperties},
+    block_properties::{HorizontalFacing, WallTorchLikeProperties},
 };
 use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 

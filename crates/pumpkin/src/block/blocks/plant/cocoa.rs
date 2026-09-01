@@ -1,4 +1,4 @@
-use pumpkin_data::block_properties::{BlockProperties, CocoaLikeProperties, HorizontalFacing};
+use pumpkin_data::block_properties::{CocoaLikeProperties, HorizontalFacing};
 use pumpkin_data::tag::Taggable;
 use pumpkin_data::{
     Block, BlockState, BlockStateId, FacingExt, HorizontalFacingExt, Mirror, Rotation, tag,
@@ -37,7 +37,7 @@ impl BlockBehaviour for CocoaBlock {
     fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
         let state_id = args.block_accessor.get_block_state_id(args.position);
         if state_id != Block::AIR.default_state.id {
-            let props = CocoaProperties::from_state_id(state_id, args.block);
+            let props = CocoaProperties::from_state_id(state_id);
             return Self::can_survive(args.block_accessor, args.position, props.facing);
         }
         for facing in [
@@ -74,7 +74,7 @@ impl BlockBehaviour for CocoaBlock {
         &self,
         args: GetStateForNeighborUpdateArgs<'_>,
     ) -> BlockStateId {
-        let props = CocoaProperties::from_state_id(args.state_id, args.block);
+        let props = CocoaProperties::from_state_id(args.state_id);
         if args.direction == props.facing.to_block_direction()
             && !Self::can_survive(args.world, args.position, props.facing)
         {
@@ -86,7 +86,7 @@ impl BlockBehaviour for CocoaBlock {
     fn random_tick(&self, args: RandomTickArgs<'_>) {
         if rand::random::<u8>().is_multiple_of(5) {
             let state_id = args.world.get_block_state_id(args.position);
-            let mut props = CocoaProperties::from_state_id(state_id, args.block);
+            let mut props = CocoaProperties::from_state_id(state_id);
             if props.age < MAX_AGE {
                 props.age += 1;
                 args.world.set_block_state(
@@ -99,7 +99,7 @@ impl BlockBehaviour for CocoaBlock {
     }
 
     fn is_valid_bonemeal_target(&self, args: BonemealArgs<'_>) -> bool {
-        let props = CocoaProperties::from_state_id(args.state_id, args.block);
+        let props = CocoaProperties::from_state_id(args.state_id);
         props.age < MAX_AGE
     }
 
@@ -109,7 +109,7 @@ impl BlockBehaviour for CocoaBlock {
 
     fn perform_bonemeal(&self, args: BonemealArgs<'_>) {
         {
-            let mut props = CocoaProperties::from_state_id(args.state_id, args.block);
+            let mut props = CocoaProperties::from_state_id(args.state_id);
             if props.age < MAX_AGE {
                 props.age += 1;
                 args.world.set_block_state(
@@ -127,13 +127,13 @@ impl BlockBehaviour for CocoaBlock {
         state_id: BlockStateId,
         rotation: Rotation,
     ) -> &'static BlockState {
-        let mut props = CocoaProperties::from_state_id(state_id, block);
+        let mut props = CocoaProperties::from_state_id(state_id);
         props.facing = rotation.rotate_horizontal(props.facing);
         BlockState::from_id(props.to_state_id(block))
     }
 
     fn mirror(&self, block: &Block, state_id: BlockStateId, mirror: Mirror) -> &'static BlockState {
-        let mut props = CocoaProperties::from_state_id(state_id, block);
+        let mut props = CocoaProperties::from_state_id(state_id);
         props.facing = mirror.mirror_horizontal(props.facing);
         BlockState::from_id(props.to_state_id(block))
     }

@@ -1,15 +1,12 @@
 use std::sync::Arc;
-use std::sync::atomic::Ordering;
 
 use crate::block::UseWithItemArgs;
 use crate::block::entities::BlockEntity;
-use crate::block::entities::sign::SignBlockEntity;
 use crate::block::registry::BlockActionResult;
 use crate::entity::player::Player;
 use crate::item::{ItemBehaviour, ItemMetadata};
 use crate::server::Server;
 use crate::world::World;
-use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::block_properties::OakDoorLikeProperties;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
@@ -60,7 +57,7 @@ pub(crate) fn try_wax_block(world: &Arc<World>, location: BlockPos, block: &Bloc
     let new_state_id = if block.has_tag(&tag::Block::MINECRAFT_DOORS) {
         // Carry the door state over to the waxed door.
         let door_information = world.get_block_state_id(&location);
-        let door_props = OakDoorLikeProperties::from_state_id(door_information, block);
+        let door_props = OakDoorLikeProperties::from_state_id(door_information);
         let mut new_door_properties = OakDoorLikeProperties::default(new_block);
         new_door_properties.facing = door_props.facing;
         new_door_properties.open = door_props.open;
@@ -83,9 +80,12 @@ impl HoneyCombItem {
         &self,
         args: &UseWithItemArgs<'_>,
         block_entity: &Arc<dyn BlockEntity>,
-        sign_entity: &SignBlockEntity,
+        sign_entity: &crate::block::entities::sign::SignEntityRef<'_>,
     ) -> BlockActionResult {
-        sign_entity.is_waxed.store(true, Ordering::Relaxed);
+        if sign_entity.is_waxed() {
+            return BlockActionResult::PassToDefaultBlockAction;
+        }
+        sign_entity.set_waxed(true);
 
         args.world.update_block_entity(block_entity);
         args.world

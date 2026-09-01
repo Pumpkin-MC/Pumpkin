@@ -1,0 +1,39 @@
+{
+  "type": "minecraft:sequence",
+  "sequence": [
+    {
+      "type": "minecraft:condition",
+      "if_true": {
+        "type": "minecraft:noise_threshold",
+        "max_threshold": 1.7976931348623157E308,
+        "min_threshold": 0.24242424242424243,
+        "noise": "minecraft:surface"
+      },
+      "then_run": "minecraft:overworld/gravel_or_stone_if_ceiling"
+    },
+    {
+      "type": "minecraft:condition",
+      "if_true": {
+        "type": "minecraft:noise_threshold",
+        "max_threshold": 1.7976931348623157E308,
+        "min_threshold": 0.12121212121212122,
+        "noise": "minecraft:surface"
+      },
+      "then_run": {
+        "type": "minecraft:block",
+        "result_state": "minecraft:stone"
+      }
+    },
+    {
+      "type": "minecraft:condition",
+      "if_true": {
+        "type": "minecraft:noise_threshold",
+        "max_threshold": 1.7976931348623157E308,
+        "min_threshold": -0.12121212121212122,
+        "noise": "minecraft:surface"
+      },
+      "then_run": "minecraft:overworld/biome_surface/default"
+    },
+    "minecraft:overworld/gravel_or_stone_if_ceiling"
+  ]
+}

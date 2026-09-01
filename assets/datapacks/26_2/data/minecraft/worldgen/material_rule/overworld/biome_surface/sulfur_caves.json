@@ -1,0 +1,10 @@
+{
+  "type": "minecraft:sequence",
+  "sequence": [
+    "minecraft:overworld/sulfur_cave_bands",
+    {
+      "type": "minecraft:block",
+      "result_state": "minecraft:stone"
+    }
+  ]
+}

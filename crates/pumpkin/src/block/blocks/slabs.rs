@@ -1,6 +1,5 @@
 use pumpkin_data::BlockDirection;
 use pumpkin_data::BlockStateId;
-use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::block_properties::SlabType;
 use pumpkin_macros::pumpkin_block_from_tag;
 
@@ -17,7 +16,7 @@ pub struct SlabBlock;
 impl BlockBehaviour for SlabBlock {
     fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
         if let BlockIsReplacing::Itself(state_id) = args.replacing {
-            let mut slab_props = SlabProperties::from_state_id(state_id, args.block);
+            let mut slab_props = SlabProperties::from_state_id(state_id);
             slab_props.r#type = SlabType::Double;
             slab_props.waterlogged = false;
             return slab_props.to_state_id(args.block);
@@ -38,7 +37,7 @@ impl BlockBehaviour for SlabBlock {
     }
 
     fn can_update_at(&self, args: CanUpdateAtArgs<'_>) -> bool {
-        let slab_props = SlabProperties::from_state_id(args.state_id, args.block);
+        let slab_props = SlabProperties::from_state_id(args.state_id);
 
         slab_props.r#type
             == match args.direction {

@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use pumpkin_data::BlockStateId;
-use pumpkin_data::block_properties::{BambooLeaves, BambooLikeProperties, BlockProperties};
+use pumpkin_data::block_properties::{BambooLeaves, BambooLikeProperties};
 use pumpkin_data::tag::Block::MINECRAFT_SUPPORTS_BAMBOO;
 use pumpkin_data::tag::Taggable;
 use pumpkin_data::tag::{self};
@@ -26,10 +26,7 @@ impl BlockBehaviour for BambooBlock {
         let above = count_bamboo_above(args.world, args.position);
         let below = count_bamboo_below(args.world, args.position);
         let top = args.position.up_height(above as i32);
-        let props = BambooLikeProperties::from_state_id(
-            args.world.get_block_state_id(&top),
-            &Block::BAMBOO,
-        );
+        let props = BambooLikeProperties::from_state_id(args.world.get_block_state_id(&top));
         above + below + 1 < 16
             && props.stage == 0
             && args.world.is_in_height_limit(top.up().0.y)
@@ -46,12 +43,11 @@ impl BlockBehaviour for BambooBlock {
             args.world.get_block_and_state_id(&args.position.down());
 
         if block_below.has_tag(&MINECRAFT_SUPPORTS_BAMBOO) {
-            let mut props =
-                BambooLikeProperties::from_state_id(Block::BAMBOO.default_state.id, &Block::BAMBOO);
+            let mut props = BambooLikeProperties::from_state_id(Block::BAMBOO.default_state.id);
             if block_below == &Block::BAMBOO_SAPLING {
                 return Block::BAMBOO.default_state.id;
             } else if block_below == &Block::BAMBOO {
-                let props_below = BambooLikeProperties::from_state_id(state_id_below, block_below);
+                let props_below = BambooLikeProperties::from_state_id(state_id_below);
                 if props_below.age > 0 {
                     props.age = 1;
                 }
@@ -59,8 +55,7 @@ impl BlockBehaviour for BambooBlock {
                 let (block_above, state_id_above) =
                     args.world.get_block_and_state_id(&args.position.up());
                 if block_above == &Block::BAMBOO {
-                    let props_above =
-                        BambooLikeProperties::from_state_id(state_id_above, block_above);
+                    let props_above = BambooLikeProperties::from_state_id(state_id_above);
                     props.age = props_above.age;
                 } else {
                     return Block::BAMBOO_SAPLING.default_state.id;
@@ -98,9 +93,8 @@ impl BlockBehaviour for BambooBlock {
         }
         let neighbor_block = args.world.get_block(args.neighbor_position);
         if args.direction == BlockDirection::Up && neighbor_block == &Block::BAMBOO {
-            let neighbor_props =
-                BambooLikeProperties::from_state_id(args.neighbor_state_id, neighbor_block);
-            let mut props = BambooLikeProperties::from_state_id(args.state_id, args.block);
+            let neighbor_props = BambooLikeProperties::from_state_id(args.neighbor_state_id);
+            let mut props = BambooLikeProperties::from_state_id(args.state_id);
             if neighbor_props.age > props.age {
                 props.age = match props.age {
                     0 => 1,
@@ -131,7 +125,7 @@ fn update_leaves_and_grow(world: &Arc<World>, position: &BlockPos) {
         return;
     }
 
-    let mut props = BambooLikeProperties::from_state_id(state_id, block);
+    let mut props = BambooLikeProperties::from_state_id(state_id);
     if props.stage != 0 {
         return;
     }
@@ -143,7 +137,7 @@ fn update_leaves_and_grow(world: &Arc<World>, position: &BlockPos) {
     let (block_below, state_id_below) = world.get_block_and_state_id(&below_pos);
     let (block_two_below, state_id_two_below) = world.get_block_and_state_id(&two_below_pos);
 
-    let mut props_below = BambooLikeProperties::from_state_id(state_id_below, block_below);
+    let mut props_below = BambooLikeProperties::from_state_id(state_id_below);
 
     if bamboo_count >= 1 {
         let below_is_bamboo = block_below == &Block::BAMBOO;
@@ -158,8 +152,7 @@ fn update_leaves_and_grow(world: &Arc<World>, position: &BlockPos) {
         if props.leaves == BambooLeaves::Large && block_two_below == &Block::BAMBOO {
             props_below.leaves = BambooLeaves::Small;
 
-            let mut props_two_below =
-                BambooLikeProperties::from_state_id(state_id_two_below, block_two_below);
+            let mut props_two_below = BambooLikeProperties::from_state_id(state_id_two_below);
             props_two_below.leaves = BambooLeaves::None;
 
             world.set_block_state(
@@ -234,7 +227,7 @@ fn bone_meal(world: &Arc<World>, position: &BlockPos) {
             return;
         }
 
-        let next_props = BambooLikeProperties::from_state_id(next_state.id, &Block::BAMBOO);
+        let next_props = BambooLikeProperties::from_state_id(next_state.id);
         if next_props.stage == 1 {
             return;
         }

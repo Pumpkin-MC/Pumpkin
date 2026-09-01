@@ -27,7 +27,7 @@ use pumpkin_util::version::JavaMinecraftVersion;
 use rand::RngExt;
 use std::sync::Arc;
 use std::sync::atomic::Ordering::Relaxed;
-use std::sync::atomic::{AtomicI32, AtomicU8, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI32, AtomicU8, Ordering};
 use uuid::Uuid;
 
 pub mod bat;
@@ -82,6 +82,7 @@ pub struct MobEntity {
     pub love_ticks: AtomicI32,
     pub breeding_cooldown: AtomicI32,
     pub breeder: AtomicCell<Option<Uuid>>,
+    pub persistence_required: AtomicBool,
     mob_flags: AtomicU8,
     last_sent_yaw: AtomicU8,
     last_sent_pitch: AtomicU8,
@@ -178,6 +179,7 @@ impl MobEntity {
             love_ticks: AtomicI32::new(0),
             breeding_cooldown: AtomicI32::new(0),
             breeder: AtomicCell::new(None),
+            persistence_required: AtomicBool::new(false),
             mob_flags: AtomicU8::new(0),
             last_sent_yaw: AtomicU8::new(0),
             last_sent_pitch: AtomicU8::new(0),
@@ -265,6 +267,9 @@ impl MobEntity {
         if self.can_pick_up_loot() {
             nbt.put_bool("CanPickUpLoot", true);
         }
+        if self.persistence_required.load(Relaxed) {
+            nbt.put_bool("PersistenceRequired", true);
+        }
     }
 
     pub fn read_mob_nbt(&self, nbt: &NbtCompound) {
@@ -276,6 +281,10 @@ impl MobEntity {
         }
         if let Some(can_pick_up_loot) = nbt.get_bool("CanPickUpLoot") {
             self.set_can_pick_up_loot(can_pick_up_loot);
+        }
+        if let Some(persistence_required) = nbt.get_bool("PersistenceRequired") {
+            self.persistence_required
+                .store(persistence_required, Relaxed);
         }
     }
 
@@ -558,6 +567,48 @@ impl MobEntity {
         }
 
         false
+    }
+
+    pub fn check_despawn(&self, mob: &dyn Mob) {
+        let entity = &self.living_entity.entity;
+
+        if self.persistence_required.load(Relaxed) {
+            return;
+        }
+
+        if (**entity.custom_name.load()).is_some() {
+            return;
+        }
+
+        let world = entity.world.load();
+        let pos = entity.pos.load();
+        let players = world.players.load();
+
+        let nearest_dist_sq = players
+            .iter()
+            .filter(|p| p.gamemode.load() != pumpkin_util::GameMode::Spectator)
+            .map(|p| {
+                let pp = p.get_entity().pos.load();
+                let dx = pp.x - pos.x;
+                let dy = pp.y - pos.y;
+                let dz = pp.z - pos.z;
+                dx * dx + dy * dy + dz * dz
+            })
+            .fold(f64::MAX, f64::min);
+
+        if nearest_dist_sq == f64::MAX {
+            mob.get_entity().remove();
+            return;
+        }
+
+        if nearest_dist_sq > 128.0 * 128.0 {
+            mob.get_entity().remove();
+            return;
+        }
+
+        if nearest_dist_sq > 32.0 * 32.0 && rand::random::<i32>().wrapping_abs() % 800 == 0 {
+            mob.get_entity().remove();
+        }
     }
 }
 
@@ -1031,6 +1082,8 @@ impl<T: Mob + Send + 'static> EntityBase for T {
                 );
             }
         }
+
+        mob_entity.check_despawn(self);
 
         self.mob_tick(caller);
 

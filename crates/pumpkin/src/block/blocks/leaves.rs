@@ -1,7 +1,5 @@
 use pumpkin_data::{
-    Block, BlockDirection, BlockStateId,
-    block_properties::{BlockProperties, OakLeavesLikeProperties},
-    tag,
+    Block, BlockDirection, BlockStateId, block_properties::OakLeavesLikeProperties, tag,
     tag::Taggable,
 };
 use pumpkin_macros::pumpkin_block_from_tag;
@@ -25,7 +23,7 @@ pub fn get_distance_at(block: &Block, state_id: BlockStateId) -> u8 {
     if block.has_tag(&tag::Block::MINECRAFT_PREVENTS_NEARBY_LEAF_DECAY) {
         0
     } else if block.has_tag(&tag::Block::MINECRAFT_LEAVES) {
-        OakLeavesLikeProperties::from_state_id(state_id, block).distance
+        OakLeavesLikeProperties::from_state_id(state_id).distance
     } else {
         DECAY_DISTANCE
     }
@@ -53,8 +51,7 @@ pub fn update_distance(
 
 impl BlockBehaviour for LeavesBlock {
     fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
-        let mut props =
-            OakLeavesLikeProperties::from_state_id(args.block.default_state.id, args.block);
+        let mut props = OakLeavesLikeProperties::from_state_id(args.block.default_state.id);
         props.persistent = true;
         props.waterlogged = args.replacing.water_source();
         props = update_distance(args.world, args.position, props);
@@ -65,7 +62,7 @@ impl BlockBehaviour for LeavesBlock {
         &self,
         args: GetStateForNeighborUpdateArgs<'_>,
     ) -> BlockStateId {
-        let current_props = OakLeavesLikeProperties::from_state_id(args.state_id, args.block);
+        let current_props = OakLeavesLikeProperties::from_state_id(args.state_id);
         if current_props.waterlogged {
             args.world.schedule_fluid_tick(
                 &pumpkin_data::fluid::Fluid::WATER,
@@ -89,7 +86,7 @@ impl BlockBehaviour for LeavesBlock {
 
     fn on_scheduled_tick(&self, args: OnScheduledTickArgs<'_>) {
         let state_id = args.world.get_block_state_id(args.position);
-        let props = OakLeavesLikeProperties::from_state_id(state_id, args.block);
+        let props = OakLeavesLikeProperties::from_state_id(state_id);
         let updated_props = update_distance(&**args.world, args.position, props);
         let new_state_id = updated_props.to_state_id(args.block);
         if new_state_id != state_id {
@@ -100,7 +97,7 @@ impl BlockBehaviour for LeavesBlock {
 
     fn random_tick(&self, args: RandomTickArgs<'_>) {
         let state_id = args.world.get_block_state_id(args.position);
-        let props = OakLeavesLikeProperties::from_state_id(state_id, args.block);
+        let props = OakLeavesLikeProperties::from_state_id(state_id);
         if !props.persistent && props.distance == DECAY_DISTANCE {
             args.world
                 .break_block(args.position, None, BlockFlags::empty());

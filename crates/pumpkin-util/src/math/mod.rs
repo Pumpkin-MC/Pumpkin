@@ -284,10 +284,10 @@ pub fn lerp_progress<T: Float>(value: T, start: T, end: T) -> T {
 /// # Returns
 /// Interpolated value, clamped to the range [start, end].
 #[must_use]
-pub fn clamped_lerp(start: f64, end: f64, delta: f64) -> f64 {
-    if delta < 0.0 {
+pub fn clamped_lerp<T: Float>(start: T, end: T, delta: T) -> T {
+    if delta < T::zero() {
         start
-    } else if delta > 1.0 {
+    } else if delta > T::one() {
         end
     } else {
         lerp(delta, start, end)
@@ -307,7 +307,7 @@ pub fn clamped_lerp(start: f64, end: f64, delta: f64) -> f64 {
 /// Value in a new range, clamped to [`new_start`, `new_end`].
 #[inline]
 #[must_use]
-pub fn clamped_map(value: f64, old_start: f64, old_end: f64, new_start: f64, new_end: f64) -> f64 {
+pub fn clamped_map<T: Float>(value: T, old_start: T, old_end: T, new_start: T, new_end: T) -> T {
     clamped_lerp(new_start, new_end, lerp_progress(value, old_start, old_end))
 }
 
@@ -324,7 +324,7 @@ pub fn clamped_map(value: f64, old_start: f64, old_end: f64, new_start: f64, new
 /// # Returns
 /// Interpolated value.
 #[must_use]
-pub fn lerp2(delta_x: f64, delta_y: f64, x0y0: f64, x1y0: f64, x0y1: f64, x1y1: f64) -> f64 {
+pub fn lerp2<T: Float>(delta_x: T, delta_y: T, x0y0: T, x1y0: T, x0y1: T, x1y1: T) -> T {
     lerp(
         delta_y,
         lerp(delta_x, x0y0, x1y0),
@@ -351,19 +351,19 @@ pub fn lerp2(delta_x: f64, delta_y: f64, x0y0: f64, x1y0: f64, x0y1: f64, x1y1: 
 /// Interpolated value.
 #[expect(clippy::too_many_arguments)]
 #[must_use]
-pub fn lerp3(
-    delta_x: f64,
-    delta_y: f64,
-    delta_z: f64,
-    x0y0z0: f64,
-    x1y0z0: f64,
-    x0y1z0: f64,
-    x1y1z0: f64,
-    x0y0z1: f64,
-    x1y0z1: f64,
-    x0y1z1: f64,
-    x1y1z1: f64,
-) -> f64 {
+pub fn lerp3<T: Float>(
+    delta_x: T,
+    delta_y: T,
+    delta_z: T,
+    x0y0z0: T,
+    x1y0z0: T,
+    x0y1z0: T,
+    x1y1z0: T,
+    x0y0z1: T,
+    x1y0z1: T,
+    x0y1z1: T,
+    x1y1z1: T,
+) -> T {
     lerp(
         delta_z,
         lerp2(delta_x, delta_y, x0y0z0, x1y0z0, x0y1z0, x1y1z0),

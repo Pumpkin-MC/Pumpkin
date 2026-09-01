@@ -1,8 +1,5 @@
 use crate::generation::proto_chunk::GenerationCache;
-use pumpkin_data::{
-    Block, BlockState,
-    block_properties::{BlockProperties, SeaPickleLikeProperties},
-};
+use pumpkin_data::{Block, BlockState, block_properties::SeaPickleLikeProperties};
 use pumpkin_util::{
     math::{int_provider::IntProvider, position::BlockPos},
     random::{RandomGenerator, RandomImpl},

@@ -1,11 +1,10 @@
 use std::sync::Arc;
 
 use pumpkin_data::block_properties::{
-    BlockProperties, ChestLikeProperties, ChestType, CopperBulbLikeProperties,
-    CopperGolemStatueLikeProperties, DoubleBlockHalf, IronChainLikeProperties,
-    LanternLikeProperties, MangroveRootsLikeProperties, OakDoorLikeProperties,
-    OakFenceLikeProperties, OakStairsLikeProperties, OakTrapdoorLikeProperties,
-    ResinBrickSlabLikeProperties,
+    ChestLikeProperties, ChestType, CopperBulbLikeProperties, CopperGolemStatueLikeProperties,
+    DoubleBlockHalf, IronChainLikeProperties, LanternLikeProperties, MangroveRootsLikeProperties,
+    OakDoorLikeProperties, OakFenceLikeProperties, OakStairsLikeProperties,
+    OakTrapdoorLikeProperties, ResinBrickSlabLikeProperties,
 };
 use pumpkin_data::tag::Taggable;
 use pumpkin_data::{Block, BlockId, BlockState, BlockStateId, Mirror, Rotation};
@@ -328,25 +327,25 @@ pub fn with_properties_of(
 
     // 2. Stairs
     if from_block.has_tag(&pumpkin_data::tag::Block::MINECRAFT_STAIRS) {
-        let props = OakStairsLikeProperties::from_state_id(from_state_id, from_block);
+        let props = OakStairsLikeProperties::from_state_id(from_state_id);
         return props.to_state_id(to_block);
     }
 
     // 3. Slabs
     if from_block.has_tag(&pumpkin_data::tag::Block::MINECRAFT_SLABS) {
-        let props = ResinBrickSlabLikeProperties::from_state_id(from_state_id, from_block);
+        let props = ResinBrickSlabLikeProperties::from_state_id(from_state_id);
         return props.to_state_id(to_block);
     }
 
     // 4. Doors
     if from_block.has_tag(&pumpkin_data::tag::Block::MINECRAFT_DOORS) {
-        let props = OakDoorLikeProperties::from_state_id(from_state_id, from_block);
+        let props = OakDoorLikeProperties::from_state_id(from_state_id);
         return props.to_state_id(to_block);
     }
 
     // 5. Trapdoors
     if from_block.has_tag(&pumpkin_data::tag::Block::MINECRAFT_TRAPDOORS) {
-        let props = OakTrapdoorLikeProperties::from_state_id(from_state_id, from_block);
+        let props = OakTrapdoorLikeProperties::from_state_id(from_state_id);
         return props.to_state_id(to_block);
     }
 
@@ -356,7 +355,7 @@ pub fn with_properties_of(
         || from_block == &Block::WEATHERED_COPPER_BULB
         || from_block == &Block::OXIDIZED_COPPER_BULB
     {
-        let props = CopperBulbLikeProperties::from_state_id(from_state_id, from_block);
+        let props = CopperBulbLikeProperties::from_state_id(from_state_id);
         return props.to_state_id(to_block);
     }
 
@@ -366,7 +365,7 @@ pub fn with_properties_of(
         || from_block == &Block::WEATHERED_COPPER_GRATE
         || from_block == &Block::OXIDIZED_COPPER_GRATE
     {
-        let props = MangroveRootsLikeProperties::from_state_id(from_state_id, from_block);
+        let props = MangroveRootsLikeProperties::from_state_id(from_state_id);
         return props.to_state_id(to_block);
     }
 
@@ -376,7 +375,7 @@ pub fn with_properties_of(
         || from_block == &Block::WEATHERED_COPPER_LANTERN
         || from_block == &Block::OXIDIZED_COPPER_LANTERN
     {
-        let props = LanternLikeProperties::from_state_id(from_state_id, from_block);
+        let props = LanternLikeProperties::from_state_id(from_state_id);
         return props.to_state_id(to_block);
     }
 
@@ -386,7 +385,7 @@ pub fn with_properties_of(
         || from_block == &Block::WEATHERED_COPPER_CHEST
         || from_block == &Block::OXIDIZED_COPPER_CHEST
     {
-        let props = ChestLikeProperties::from_state_id(from_state_id, from_block);
+        let props = ChestLikeProperties::from_state_id(from_state_id);
         return props.to_state_id(to_block);
     }
 
@@ -396,7 +395,7 @@ pub fn with_properties_of(
         || from_block == &Block::WEATHERED_COPPER_GOLEM_STATUE
         || from_block == &Block::OXIDIZED_COPPER_GOLEM_STATUE
     {
-        let props = CopperGolemStatueLikeProperties::from_state_id(from_state_id, from_block);
+        let props = CopperGolemStatueLikeProperties::from_state_id(from_state_id);
         return props.to_state_id(to_block);
     }
 
@@ -406,7 +405,7 @@ pub fn with_properties_of(
         || from_block == &Block::WEATHERED_COPPER_BARS
         || from_block == &Block::OXIDIZED_COPPER_BARS
     {
-        let props = OakFenceLikeProperties::from_state_id(from_state_id, from_block);
+        let props = OakFenceLikeProperties::from_state_id(from_state_id);
         return props.to_state_id(to_block);
     }
 
@@ -416,7 +415,7 @@ pub fn with_properties_of(
         || from_block == &Block::WEATHERED_COPPER_CHAIN
         || from_block == &Block::OXIDIZED_COPPER_CHAIN
     {
-        let props = IronChainLikeProperties::from_state_id(from_state_id, from_block);
+        let props = IronChainLikeProperties::from_state_id(from_state_id);
         return props.to_state_id(to_block);
     }
 
@@ -543,7 +542,7 @@ pub fn change_over_time(world: &Arc<World>, position: &BlockPos, block: &Block) 
     // Special handling for multi-block structures:
     // Door: update upper half if present
     if block.has_tag(&pumpkin_data::tag::Block::MINECRAFT_DOORS) {
-        let door_props = OakDoorLikeProperties::from_state_id(current_state_id, block);
+        let door_props = OakDoorLikeProperties::from_state_id(current_state_id);
         if door_props.half == DoubleBlockHalf::Lower {
             let top_pos = position.up();
             let (top_block, top_state_id) = world.get_block_and_state_id(&top_pos);
@@ -558,7 +557,7 @@ pub fn change_over_time(world: &Arc<World>, position: &BlockPos, block: &Block) 
         || block == &Block::EXPOSED_COPPER_CHEST
         || block == &Block::WEATHERED_COPPER_CHEST
     {
-        let chest_props = ChestLikeProperties::from_state_id(current_state_id, block);
+        let chest_props = ChestLikeProperties::from_state_id(current_state_id);
         if chest_props.r#type == ChestType::Left {
             let right_dir = chest_props.facing.rotate_clockwise();
             let right_pos = position.offset(right_dir.to_offset());
@@ -903,7 +902,7 @@ impl BlockBehaviour for WeatheringCopperDoorBlock {
 
     fn random_tick(&self, args: RandomTickArgs<'_>) {
         let state_id = args.world.get_block_state_id(args.position);
-        let door_props = OakDoorLikeProperties::from_state_id(state_id, args.block);
+        let door_props = OakDoorLikeProperties::from_state_id(state_id);
         if door_props.half == DoubleBlockHalf::Lower {
             change_over_time(args.world, args.position, args.block);
         }

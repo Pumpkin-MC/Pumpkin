@@ -1,7 +1,7 @@
 use crate::generation::proto_chunk::GenerationCache;
 use pumpkin_data::{
     Block, BlockState,
-    block_properties::{BlockProperties, DoubleBlockHalf, TallSeagrassLikeProperties},
+    block_properties::{DoubleBlockHalf, TallSeagrassLikeProperties},
 };
 use pumpkin_util::{
     math::position::BlockPos,

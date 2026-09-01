@@ -144,9 +144,7 @@ impl DungeonFeature {
 
                     // Build the chest state: face away from the wall.
                     let chest_state = facing_dir.map_or(Block::CHEST.default_state, |dir| {
-                        use pumpkin_data::block_properties::{
-                            BlockProperties, ChestLikeProperties,
-                        };
+                        use pumpkin_data::block_properties::ChestLikeProperties;
                         let mut props = ChestLikeProperties::default(&Block::CHEST);
                         props.facing = dir.opposite();
                         let state_id = props.to_state_id(&Block::CHEST);

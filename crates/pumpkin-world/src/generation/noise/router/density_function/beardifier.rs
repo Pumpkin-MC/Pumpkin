@@ -10,10 +10,10 @@ use super::{NoiseFunctionComponentRange, StaticIndependentChunkNoiseFunctionComp
 const BEARD_KERNEL_RADIUS: i32 = 12;
 const BEARD_KERNEL_SIZE: i32 = 24;
 
-static BEARD_KERNEL: OnceLock<[f64; 13824]> = OnceLock::new();
+static BEARD_KERNEL: OnceLock<[f32; 13824]> = OnceLock::new();
 
 #[expect(clippy::large_stack_arrays)]
-fn get_beard_kernel() -> &'static [f64; 13824] {
+fn get_beard_kernel() -> &'static [f32; 13824] {
     BEARD_KERNEL.get_or_init(|| {
         let mut kernel = [0.0; 13824];
         for zi in 0..BEARD_KERNEL_SIZE {
@@ -21,7 +21,7 @@ fn get_beard_kernel() -> &'static [f64; 13824] {
                 for yi in 0..BEARD_KERNEL_SIZE {
                     kernel[(zi * 24 * 24 + xi * 24 + yi) as usize] = compute_beard_contribution(
                         xi - BEARD_KERNEL_RADIUS,
-                        (yi - BEARD_KERNEL_RADIUS) as f64 + 0.5,
+                        (yi - BEARD_KERNEL_RADIUS) as f32 + 0.5,
                         zi - BEARD_KERNEL_RADIUS,
                     );
                 }
@@ -31,12 +31,12 @@ fn get_beard_kernel() -> &'static [f64; 13824] {
     })
 }
 
-fn compute_beard_contribution(dx: i32, dy: f64, dz: i32) -> f64 {
-    let distance_sqr = (dx as f64).powi(2) + dy.powi(2) + (dz as f64).powi(2);
-    std::f64::consts::E.powf(-distance_sqr / 16.0)
+fn compute_beard_contribution(dx: i32, dy: f32, dz: i32) -> f32 {
+    let distance_sqr = (dx as f32).powi(2) + dy.powi(2) + (dz as f32).powi(2);
+    std::f32::consts::E.powf(-distance_sqr / 16.0)
 }
 
-fn get_bury_contribution(dx: f64, dy: f64, dz: f64) -> f64 {
+fn get_bury_contribution(dx: f32, dy: f32, dz: f32) -> f32 {
     let distance = (dx * dx + dy * dy + dz * dz).sqrt();
 
     // Equivalent to Mth.clampedMap(distance, 0.0, 6.0, 1.0, 0.0)
@@ -49,7 +49,7 @@ fn get_bury_contribution(dx: f64, dy: f64, dz: f64) -> f64 {
     }
 }
 
-fn get_beard_contribution(dx: i32, dy: i32, dz: i32, y_to_ground: i32) -> f64 {
+fn get_beard_contribution(dx: i32, dy: i32, dz: i32, y_to_ground: i32) -> f32 {
     let xi = dx + BEARD_KERNEL_RADIUS;
     let yi = dy + BEARD_KERNEL_RADIUS;
     let zi = dz + BEARD_KERNEL_RADIUS;
@@ -58,8 +58,8 @@ fn get_beard_contribution(dx: i32, dy: i32, dz: i32, y_to_ground: i32) -> f64 {
         && (0..BEARD_KERNEL_SIZE).contains(&yi)
         && (0..BEARD_KERNEL_SIZE).contains(&zi)
     {
-        let dy_with_offset = y_to_ground as f64 + 0.5;
-        let distance_sqr = (dx as f64).powi(2) + dy_with_offset.powi(2) + (dz as f64).powi(2);
+        let dy_with_offset = y_to_ground as f32 + 0.5;
+        let distance_sqr = (dx as f32).powi(2) + dy_with_offset.powi(2) + (dz as f32).powi(2);
 
         // Equivalent to: -dyWithOffset * Mth.fastInvSqrt(distanceSqr / 2.0) / 2.0
         let value = -dy_with_offset * (distance_sqr / 2.0).sqrt().recip() / 2.0;
@@ -129,7 +129,7 @@ impl Beardifier {
 }
 
 impl StaticIndependentChunkNoiseFunctionComponentImpl for Beardifier {
-    fn sample(&self, pos: &Vector3<i32>) -> f64 {
+    fn sample(&self, pos: &Vector3<i32>) -> f32 {
         let Some(affected_box) = self.affected_box else {
             return 0.0;
         };
@@ -171,13 +171,13 @@ impl StaticIndependentChunkNoiseFunctionComponentImpl for Beardifier {
             let contrib = match structure.terrain_adaptation {
                 TerrainAdaptation::None => 0.0,
                 TerrainAdaptation::Bury => {
-                    get_bury_contribution(dx as f64, dy as f64 / 2.0, dz as f64)
+                    get_bury_contribution(dx as f32, dy as f32 / 2.0, dz as f32)
                 }
                 TerrainAdaptation::BeardThin | TerrainAdaptation::BeardBox => {
                     get_beard_contribution(dx, dy, dz, dy_to_ground) * 0.8
                 }
                 TerrainAdaptation::Encapsulate => {
-                    get_bury_contribution(dx as f64 / 2.0, dy as f64 / 2.0, dz as f64 / 2.0) * 0.8
+                    get_bury_contribution(dx as f32 / 2.0, dy as f32 / 2.0, dz as f32 / 2.0) * 0.8
                 }
             };
             weight += contrib;
@@ -201,17 +201,17 @@ impl MutableChunkNoiseFunctionComponentImpl for Beardifier {
         _component_stack: &mut [ChunkNoiseFunctionComponent],
         pos: &Vector3<i32>,
         _sample_options: &ChunkNoiseFunctionSampleOptions,
-    ) -> f64 {
+    ) -> f32 {
         StaticIndependentChunkNoiseFunctionComponentImpl::sample(self, pos)
     }
 }
 
 impl NoiseFunctionComponentRange for Beardifier {
-    fn min(&self) -> f64 {
-        f64::NEG_INFINITY
+    fn min(&self) -> f32 {
+        f32::NEG_INFINITY
     }
 
-    fn max(&self) -> f64 {
-        f64::INFINITY
+    fn max(&self) -> f32 {
+        f32::INFINITY
     }
 }

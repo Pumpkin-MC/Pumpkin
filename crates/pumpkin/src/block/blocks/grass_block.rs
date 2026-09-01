@@ -1,9 +1,7 @@
 use pumpkin_data::BlockStateId;
 use pumpkin_data::{
     Block, BlockState,
-    block_properties::{
-        BlockProperties, DoubleBlockHalf, GrassBlockLikeProperties, TallSeagrassLikeProperties,
-    },
+    block_properties::{DoubleBlockHalf, GrassBlockLikeProperties, TallSeagrassLikeProperties},
     tag::{self, Taggable},
 };
 use pumpkin_macros::pumpkin_block;
@@ -111,7 +109,7 @@ impl BlockBehaviour for GrassBlock {
         args: GetStateForNeighborUpdateArgs<'_>,
     ) -> BlockStateId {
         let block_above = args.world.get_block(&args.position.up());
-        let mut props = GrassBlockLikeProperties::from_state_id(args.state_id, &Block::GRASS_BLOCK);
+        let mut props = GrassBlockLikeProperties::from_state_id(args.state_id);
         let should_be_snowy = block_above.has_tag(&tag::Block::MINECRAFT_SNOW);
         if props.snowy == should_be_snowy {
             return args.state_id;
@@ -133,7 +131,7 @@ fn place_tall_grass_upper(
     position: BlockPos,
     lower_state: BlockStateId,
 ) {
-    let mut props = TallSeagrassLikeProperties::from_state_id(lower_state, &Block::TALL_GRASS);
+    let mut props = TallSeagrassLikeProperties::from_state_id(lower_state);
     props.half = DoubleBlockHalf::Upper;
     world.set_block_state(
         &position.up(),

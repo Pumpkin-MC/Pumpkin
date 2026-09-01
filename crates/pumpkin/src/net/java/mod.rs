@@ -5,7 +5,7 @@ use pumpkin_world::level::SyncChunk;
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
-use std::{io::Write, sync::Arc};
+use std::{collections::VecDeque, io::Write, sync::Arc};
 
 use bytes::Bytes;
 use crossbeam::atomic::AtomicCell;
@@ -28,7 +28,8 @@ use pumpkin_protocol::java::server::play::{
 };
 use pumpkin_protocol::packet::MultiVersionJavaPacket;
 use pumpkin_protocol::{
-    ClientPacket, ConnectionState, PacketDecodeError, RawPacket, ServerPacket,
+    ClientPacket, ConnectionState, MAX_PACKET_SIZE, PacketDecodeError, PacketEncodeError,
+    RawPacket, ServerPacket,
     codec::var_int::VarInt,
     java::{
         client::{config::CConfigDisconnect, login::CLoginDisconnect},
@@ -131,6 +132,73 @@ pub enum OutgoingPacketType {
 struct OutgoingPacket {
     data: Bytes,
     completion: Option<oneshot::Sender<()>>,
+}
+
+const MAX_FRAME_BATCH_DATA_SIZE: usize = MAX_PACKET_SIZE as usize;
+
+fn take_frame_batch(packets: &mut VecDeque<OutgoingPacket>) -> Vec<OutgoingPacket> {
+    let mut batch = Vec::new();
+    let mut data_len = 0usize;
+
+    while let Some(packet) = packets.pop_front() {
+        let next_len = data_len.saturating_add(packet.data.len());
+        if !batch.is_empty() && next_len > MAX_FRAME_BATCH_DATA_SIZE {
+            packets.push_front(packet);
+            break;
+        }
+
+        data_len = next_len;
+        batch.push(packet);
+    }
+
+    batch
+}
+
+fn frame_packet_batch(
+    mut writer: TCPNetworkEncoder<BufWriter<OwnedWriteHalf>>,
+    batch: &[OutgoingPacket],
+) -> (
+    TCPNetworkEncoder<BufWriter<OwnedWriteHalf>>,
+    Vec<u8>,
+    Option<PacketEncodeError>,
+) {
+    let mut frame = Vec::new();
+    let mut frame_err = None;
+    for packet in batch {
+        if let Err(err) = writer.frame_packet(&packet.data, &mut frame) {
+            frame_err = Some(err);
+            break;
+        }
+    }
+    (writer, frame, frame_err)
+}
+
+async fn frame_batch_maybe_offload(
+    writer: TCPNetworkEncoder<BufWriter<OwnedWriteHalf>>,
+    packet_batch: Vec<OutgoingPacket>,
+) -> Result<
+    (
+        TCPNetworkEncoder<BufWriter<OwnedWriteHalf>>,
+        Vec<OutgoingPacket>,
+        Vec<u8>,
+        Option<PacketEncodeError>,
+    ),
+    tokio::task::JoinError,
+> {
+    let needs_offload = packet_batch
+        .iter()
+        .any(|packet| writer.is_compressing_packet(&packet.data));
+
+    if needs_offload {
+        tokio::task::spawn_blocking(move || {
+            let (writer, frame, frame_err) = frame_packet_batch(writer, &packet_batch);
+            (writer, packet_batch, frame, frame_err)
+        })
+        .await
+    } else {
+        let (writer, frame, frame_err) = frame_packet_batch(writer, &packet_batch);
+        Ok((writer, packet_batch, frame, frame_err))
+    }
 }
 
 impl OutgoingPacket {
@@ -676,27 +744,50 @@ impl JavaClient {
                     }
                 }
 
-                let send_failed = {
-                    let mut failed = false;
-                    for packet in &packet_batch {
-                        if let Err(err) = writer.write_packet(packet.data.clone()).await {
-                            failed = true;
-                            // It is expected that the packet will fail if we are closed
-                            if !close_token.is_cancelled() {
-                                warn!("Failed to send packet to client {id}: {err}");
+                let mut packets_to_frame = VecDeque::from(packet_batch);
+                let mut written_packets = Vec::with_capacity(packets_to_frame.len());
+                let mut send_failed = false;
+
+                while !packets_to_frame.is_empty() {
+                    let frame_batch = take_frame_batch(&mut packets_to_frame);
+                    let (returned_writer, returned_batch, frame, frame_err) =
+                        match frame_batch_maybe_offload(writer, frame_batch).await {
+                            Ok(result) => result,
+                            Err(err) => {
+                                if !close_token.is_cancelled() {
+                                    warn!("Packet framing task failed for client {id}: {err}");
+                                }
+                                close_token.cancel();
+                                return;
                             }
-                            break;
+                        };
+                    writer = returned_writer;
+
+                    if let Some(err) = frame_err {
+                        if !close_token.is_cancelled() {
+                            warn!("Failed to frame packet for client {id}: {err}");
                         }
+                        send_failed = true;
+                        break;
                     }
 
-                    if !failed && let Err(err) = writer.flush().await {
-                        failed = true;
+                    if let Err(err) = writer.write_frame(&frame).await {
                         if !close_token.is_cancelled() {
-                            warn!("Failed to flush packet batch for client {id}: {err}");
+                            warn!("Failed to send packet batch to client {id}: {err}");
                         }
+                        send_failed = true;
+                        break;
                     }
-                    failed
-                };
+
+                    written_packets.extend(returned_batch);
+                }
+
+                if !send_failed && let Err(err) = writer.flush().await {
+                    if !close_token.is_cancelled() {
+                        warn!("Failed to flush packet batch for client {id}: {err}");
+                    }
+                    send_failed = true;
+                }
 
                 if send_failed {
                     // We now need to close the connection to the client since the stream is in an unknown state.
@@ -704,7 +795,7 @@ impl JavaClient {
                     break;
                 }
 
-                for packet in packet_batch {
+                for packet in written_packets {
                     if let Some(completion) = packet.completion {
                         let _ = completion.send(());
                     }

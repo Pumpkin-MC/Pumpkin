@@ -4,7 +4,7 @@ use pumpkin_data::{
     Block,
     BlockDirection::{East, North, South, West},
     BlockStateId,
-    block_properties::{BlockProperties, FarmlandLikeProperties, WheatLikeProperties},
+    block_properties::{FarmlandLikeProperties, WheatLikeProperties},
 };
 use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 use pumpkin_world::world::{BlockAccessor, BlockFlags};
@@ -34,13 +34,13 @@ trait CropBlockBase: PlantBlockBase {
         7
     }
 
-    fn get_age(&self, state: BlockStateId, block: &Block) -> i32 {
-        let props = CropProperties::from_state_id(state, block);
+    fn get_age(&self, state: BlockStateId, _block: &Block) -> i32 {
+        let props = CropProperties::from_state_id(state);
         i32::from(props.age)
     }
 
     fn state_with_age(&self, block: &Block, state: BlockStateId, age: i32) -> BlockStateId {
-        let mut props = CropProperties::from_state_id(state, block);
+        let mut props = CropProperties::from_state_id(state);
         props.age = age as u8;
         props.to_state_id(block)
     }
@@ -72,7 +72,7 @@ trait CropBlockBase: PlantBlockBase {
             let f = get_available_moisture(world, pos, block);
             if rand::rng().random_range(0..=(25.0 / f).floor() as i64) == 0 {
                 let new_state_id = self.state_with_age(block, state, age + 1);
-                world.set_block_state(pos, new_state_id, BlockFlags::NOTIFY_NEIGHBORS);
+                world.set_block_state(pos, new_state_id, BlockFlags::NOTIFY_LISTENERS);
             }
         }
     }
@@ -92,7 +92,7 @@ pub fn get_available_moisture(world: &World, pos: &BlockPos, block: &Block) -> f
                 world.get_block_and_state_id(&down_pos.offset(Vector3 { x: dx, y: 0, z: dz }));
             if block == &Block::FARMLAND {
                 local_moisture = 1.0;
-                let props = FarmlandProperties::from_state_id(block_state, block);
+                let props = FarmlandProperties::from_state_id(block_state);
                 if props.moisture != 0 {
                     local_moisture = 3.0;
                 }

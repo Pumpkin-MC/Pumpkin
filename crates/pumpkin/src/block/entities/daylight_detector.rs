@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
 
@@ -55,7 +54,7 @@ impl DaylightDetectorBlockEntity {
         use std::f32::consts::PI;
 
         let (block, state) = world.get_block_and_state(block_pos);
-        let mut props = DaylightDetectorProperties::from_state_id(state.id, block);
+        let mut props = DaylightDetectorProperties::from_state_id(state.id);
 
         let level = world.level.clone();
 

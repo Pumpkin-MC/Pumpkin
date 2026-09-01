@@ -1,18 +1,15 @@
-use crate::entity::Entity;
-use crate::entity::item::ItemEntity;
 use crate::entity::player::Player;
 use crate::item::{ItemBehaviour, ItemMetadata};
 use crate::server::Server;
 use pumpkin_data::BlockDirection;
-use pumpkin_data::entity::EntityType;
-use pumpkin_data::item::Item;
+use pumpkin_data::block_transformer::{DropStrategy, HOE};
 use pumpkin_data::item_stack::ItemStack;
+use pumpkin_data::sound::SoundCategory;
 use pumpkin_data::{Block, tag};
 use pumpkin_util::GameMode;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::world::BlockFlags;
-use std::sync::Arc;
 
 pub struct HoeItem;
 
@@ -33,72 +30,41 @@ impl ItemBehaviour for HoeItem {
         block: &Block,
         _server: &Server,
     ) {
-        // Yes, Minecraft does hardcode these
-        if block == &Block::GRASS_BLOCK
-            || block == &Block::DIRT_PATH
-            || block == &Block::DIRT
-            || block == &Block::COARSE_DIRT
-            || block == &Block::ROOTED_DIRT
+        let world = player.world();
+        let get_block = |dx: i8, dy: i8, dz: i8| {
+            let check_pos = BlockPos(location.0 + Vector3::new(dx as i32, dy as i32, dz as i32));
+            world.get_block(&check_pos)
+        };
+
+        if let Some(result) =
+            HOE.transform(block, world.get_block_state_id(&location), face, &get_block)
         {
-            let mut future_block = block;
-            let world = player.world();
-            let mut changed = false;
+            if let Some(sound) = result.entry.sound {
+                world.play_sound(sound, SoundCategory::Blocks, &location.to_f64());
+            }
+            if let Some(particle) = result.entry.particle {
+                world.sync_world_event(particle, location, 0);
+            }
 
-            //Only rooted can be right-clicked on the bottom of the block
-            if face == BlockDirection::Down {
-                if block == &Block::ROOTED_DIRT {
-                    future_block = &Block::DIRT;
-                    changed = true;
-                }
-            } else {
-                // grass, dirt && dirt path become farmland
-                if (block == &Block::GRASS_BLOCK
-                    || block == &Block::DIRT_PATH
-                    || block == &Block::DIRT)
-                    && world.get_block_state(&location.up()).is_air()
-                {
-                    future_block = &Block::FARMLAND;
-                    changed = true;
-                }
-                //Coarse dirt and rooted dirt become dirt
-                else if block == &Block::COARSE_DIRT || block == &Block::ROOTED_DIRT {
-                    future_block = &Block::DIRT;
-                    changed = true;
+            world.set_block_state(&location, result.new_state_id, BlockFlags::NOTIFY_ALL);
+
+            if let Some(loot_key) = result.entry.loot
+                && let Some(loot_table) = pumpkin_data::loot_table::get_loot_table(loot_key)
+            {
+                let seed = rand::random::<i64>();
+                let drops = crate::world::loot::generate_loot(loot_table, seed);
+                for drop_stack in drops {
+                    if result.entry.drop_strategy == Some(DropStrategy::ClickedFace) {
+                        world.drop_stack_from_face(&location, face, drop_stack);
+                    } else {
+                        world.drop_stack(&location, drop_stack);
+                    }
                 }
             }
 
-            // Vanilla returns PASS without touching the block when nothing is tilled,
-            // otherwise the rewrite would reset properties such as `snowy` on grass blocks.
-            if changed {
-                world.set_block_state(
-                    &location,
-                    future_block.default_state.id,
-                    BlockFlags::NOTIFY_ALL,
-                );
-            }
-
-            //Also rooted_dirt drop a hanging_root
-            if block == &Block::ROOTED_DIRT {
-                let location = match face {
-                    BlockDirection::Up => location.up().to_f64(),
-                    BlockDirection::Down => location.down().to_f64(),
-                    BlockDirection::North => location.up().to_f64().add_raw(0.0, -0.4, -1.0),
-                    BlockDirection::South => location.up().to_f64().add_raw(0.0, -0.4, 1.0),
-                    BlockDirection::West => location.up().to_f64().add_raw(-1.0, -0.4, 0.0),
-                    BlockDirection::East => location.up().to_f64().add_raw(1.0, -0.4, 0.0),
-                };
-                let entity = Entity::new(world.clone(), location, &EntityType::ITEM);
-                // TODO: Merge stacks together
-                let item_entity = Arc::new(ItemEntity::new(
-                    entity,
-                    ItemStack::new(1, &Item::HANGING_ROOTS),
-                ));
-                world.spawn_entity(item_entity);
-            }
-
-            if changed && player.gamemode.load() != GameMode::Creative {
+            if player.gamemode.load() != GameMode::Creative {
                 // TODO: Handle DamageResult::Broken to broadcast item break and update player slot.
-                let _ = item.damage_item(1);
+                let _ = item.damage_item(i32::from(result.entry.item_damage_per_use));
             }
         }
     }

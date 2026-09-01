@@ -15,7 +15,6 @@ use syn::Ident;
 #[derive(Clone, Copy)]
 struct HashableF32(pub f32);
 
-// Normally this is bad, but we just care about checking if components are the same
 impl Hash for HashableF32 {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.0.to_le_bytes().hash(state);
@@ -48,66 +47,20 @@ impl<'de> Deserialize<'de> for HashableF32 {
     }
 }
 
-/// Wraps an `f64` to provide a bitwise-exact `Hash` implementation for use as a map key.
-#[derive(Clone, Copy)]
-struct HashableF64(pub f64);
-
-// Normally this is bad, but we just care about checking if components are the same
-impl Hash for HashableF64 {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.0.to_le_bytes().hash(state);
-    }
-}
-
-impl ToTokens for HashableF64 {
-    fn to_tokens(&self, tokens: &mut TokenStream) {
-        let value = self.0;
-        if value.is_finite() {
-            value.to_tokens(tokens);
-        } else {
-            tokens.append(Ident::new("f64", Span::call_site()));
-            tokens.append(Punct::new(':', Spacing::Joint));
-            tokens.append(Punct::new(':', Spacing::Joint));
-            if value.is_nan() {
-                tokens.append(Ident::new("NAN", Span::call_site()));
-            } else if value > 0.0 {
-                tokens.append(Ident::new("INFINITY", Span::call_site()));
-            } else {
-                tokens.append(Ident::new("NEG_INFINITY", Span::call_site()));
-            }
-        }
-    }
-}
-
-impl<'de> Deserialize<'de> for HashableF64 {
-    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        f64::deserialize(deserializer).map(Self)
-    }
-}
-
 /// Deserialized representation of a cubic spline used inside density functions.
 #[derive(Deserialize, Hash, Clone)]
 #[serde(tag = "_type", content = "value")]
 enum SplineRepr {
-    /// A standard multipoint spline evaluated against a location density function.
     #[serde(rename(deserialize = "standard"))]
     Standard {
-        /// The density function that drives the spline location axis.
         #[serde(rename(deserialize = "locationFunction"))]
         location_function: Box<DensityFunctionRepr>,
-        /// X-axis sample locations for each spline segment.
         locations: Box<[HashableF32]>,
-        /// Nested spline values at each sample location.
         values: Box<[Self]>,
-        /// Derivative (tangent) values at each sample location.
         derivatives: Box<[HashableF32]>,
     },
-    /// A spline that returns a single constant value regardless of input.
     #[serde(rename(deserialize = "fixed"))]
-    Fixed {
-        /// The constant output value.
-        value: HashableF32,
-    },
+    Fixed { value: HashableF32 },
 }
 
 impl SplineRepr {
@@ -120,7 +73,7 @@ impl SplineRepr {
         match self {
             Self::Fixed { value } => {
                 quote! {
-                    SplineRepr::Fixed {value: #value}
+                    SplineRepr::Fixed { value: #value }
                 }
             }
             Self::Standard {
@@ -170,44 +123,29 @@ impl SplineRepr {
 /// Arithmetic operation applied to two density function arguments.
 #[derive(Deserialize, Hash, Copy, Clone)]
 enum BinaryOperation {
-    /// Adds the two arguments.
     #[serde(rename(deserialize = "ADD"))]
     Add,
-    /// Multiplies the two arguments.
     #[serde(rename(deserialize = "MUL"))]
     Mul,
-    /// Takes the minimum of the two arguments.
     #[serde(rename(deserialize = "MIN"))]
     Min,
-    /// Takes the maximum of the two arguments.
     #[serde(rename(deserialize = "MAX"))]
     Max,
+    Sub,
+    Div,
+    Pow,
 }
 
 impl BinaryOperation {
-    /// Emits the token stream for this binary operation variant.
     fn get_token_stream(&self) -> TokenStream {
         match self {
-            Self::Add => {
-                quote! {
-                    BinaryOperation::Add
-                }
-            }
-            Self::Mul => {
-                quote! {
-                    BinaryOperation::Mul
-                }
-            }
-            Self::Min => {
-                quote! {
-                    BinaryOperation::Min
-                }
-            }
-            Self::Max => {
-                quote! {
-                    BinaryOperation::Max
-                }
-            }
+            Self::Add => quote! { BinaryOperation::Add },
+            Self::Mul => quote! { BinaryOperation::Mul },
+            Self::Min => quote! { BinaryOperation::Min },
+            Self::Max => quote! { BinaryOperation::Max },
+            Self::Sub => quote! { BinaryOperation::Sub },
+            Self::Div => quote! { BinaryOperation::Div },
+            Self::Pow => quote! { BinaryOperation::Pow },
         }
     }
 }
@@ -215,28 +153,17 @@ impl BinaryOperation {
 /// Arithmetic operation applied to a single density function argument and a scalar.
 #[derive(Deserialize, Hash, Copy, Clone)]
 enum LinearOperation {
-    /// Adds the scalar argument to the density value.
     #[serde(rename(deserialize = "ADD"))]
     Add,
-    /// Multiplies the density value by the scalar argument.
     #[serde(rename(deserialize = "MUL"))]
     Mul,
 }
 
 impl LinearOperation {
-    /// Emits the token stream for this linear operation variant.
     fn into_token_stream(self) -> TokenStream {
         match self {
-            Self::Add => {
-                quote! {
-                    LinearOperation::Add
-                }
-            }
-            Self::Mul => {
-                quote! {
-                    LinearOperation::Mul
-                }
-            }
+            Self::Add => quote! { LinearOperation::Add },
+            Self::Mul => quote! { LinearOperation::Mul },
         }
     }
 }
@@ -244,68 +171,116 @@ impl LinearOperation {
 /// Single-argument transformation applied to a density value.
 #[derive(Deserialize, Hash, Copy, Clone)]
 enum UnaryOperation {
-    /// Returns the reciprocal (1/x) of the value.
     #[serde(rename(deserialize = "INVERT"))]
     Invert,
-    /// Returns the absolute value.
     #[serde(rename(deserialize = "ABS"))]
     Abs,
-    /// Squares the value.
     #[serde(rename(deserialize = "SQUARE"))]
     Square,
-    /// Cubes the value.
     #[serde(rename(deserialize = "CUBE"))]
     Cube,
-    /// Halves the value only if it is negative, passes it through otherwise.
     #[serde(rename(deserialize = "HALF_NEGATIVE"))]
     HalfNegative,
-    /// Quarters the value only if it is negative, passes it through otherwise.
     #[serde(rename(deserialize = "QUARTER_NEGATIVE"))]
     QuarterNegative,
-    /// Applies a smooth cubic "squeeze" mapping to `[-1, 1]`.
     #[serde(rename(deserialize = "SQUEEZE"))]
     Squeeze,
+    Negate,
+    Sqrt,
+    Log,
+    Sign,
 }
 
 impl UnaryOperation {
-    /// Emits the token stream for this unary operation variant.
     fn into_token_stream(self) -> TokenStream {
         match self {
-            Self::Invert => {
-                quote! {
-                    UnaryOperation::Invert
-                }
-            }
-            Self::Abs => {
-                quote! {
-                    UnaryOperation::Abs
-                }
-            }
-            Self::Square => {
-                quote! {
-                    UnaryOperation::Square
-                }
-            }
-            Self::Cube => {
-                quote! {
-                    UnaryOperation::Cube
-                }
-            }
-            Self::HalfNegative => {
-                quote! {
-                    UnaryOperation::HalfNegative
-                }
-            }
-            Self::QuarterNegative => {
-                quote! {
-                    UnaryOperation::QuarterNegative
-                }
-            }
-            Self::Squeeze => {
-                quote! {
-                    UnaryOperation::Squeeze
-                }
-            }
+            Self::Invert => quote! { UnaryOperation::Invert },
+            Self::Abs => quote! { UnaryOperation::Abs },
+            Self::Square => quote! { UnaryOperation::Square },
+            Self::Cube => quote! { UnaryOperation::Cube },
+            Self::HalfNegative => quote! { UnaryOperation::HalfNegative },
+            Self::QuarterNegative => quote! { UnaryOperation::QuarterNegative },
+            Self::Squeeze => quote! { UnaryOperation::Squeeze },
+            Self::Negate => quote! { UnaryOperation::Negate },
+            Self::Sqrt => quote! { UnaryOperation::Sqrt },
+            Self::Log => quote! { UnaryOperation::Log },
+            Self::Sign => quote! { UnaryOperation::Sign },
+        }
+    }
+}
+
+/// Rounding operations.
+#[derive(Deserialize, Hash, Copy, Clone)]
+enum RoundingOperation {
+    Floor,
+    Round,
+    Ceil,
+    Truncate,
+}
+
+impl RoundingOperation {
+    fn into_token_stream(self) -> TokenStream {
+        match self {
+            Self::Floor => quote! { RoundingOperation::Floor },
+            Self::Round => quote! { RoundingOperation::Round },
+            Self::Ceil => quote! { RoundingOperation::Ceil },
+            Self::Truncate => quote! { RoundingOperation::Truncate },
+        }
+    }
+}
+
+/// Distance metric for distance_to_point.
+#[derive(Deserialize, Hash, Copy, Clone)]
+enum DistanceMetric {
+    Euclidean,
+    EuclideanSquared,
+    Manhattan,
+    Chebyshev,
+}
+
+impl DistanceMetric {
+    fn into_token_stream(self) -> TokenStream {
+        match self {
+            Self::Euclidean => quote! { DistanceMetric::Euclidean },
+            Self::EuclideanSquared => quote! { DistanceMetric::EuclideanSquared },
+            Self::Manhattan => quote! { DistanceMetric::Manhattan },
+            Self::Chebyshev => quote! { DistanceMetric::Chebyshev },
+        }
+    }
+}
+
+/// Coordinate axis.
+#[derive(Deserialize, Hash, Copy, Clone)]
+enum Axis {
+    X,
+    Y,
+    Z,
+}
+
+impl Axis {
+    fn into_token_stream(self) -> TokenStream {
+        match self {
+            Self::X => quote! { Axis::X },
+            Self::Y => quote! { Axis::Y },
+            Self::Z => quote! { Axis::Z },
+        }
+    }
+}
+
+/// Gradient tiling behavior.
+#[derive(Deserialize, Hash, Copy, Clone)]
+enum Tiling {
+    ClampToEdge,
+    Repeat,
+    MirroredRepeat,
+}
+
+impl Tiling {
+    fn into_token_stream(self) -> TokenStream {
+        match self {
+            Self::ClampToEdge => quote! { Tiling::ClampToEdge },
+            Self::Repeat => quote! { Tiling::Repeat },
+            Self::MirroredRepeat => quote! { Tiling::MirroredRepeat },
         }
     }
 }
@@ -313,372 +288,289 @@ impl UnaryOperation {
 /// Caching or interpolation wrapper applied around an inner density function.
 #[derive(Copy, Clone, Deserialize, PartialEq, Eq, Hash)]
 enum WrapperType {
-    /// Trilinear interpolation over noise cells.
     Interpolated,
-    /// Flat (2D) per-column cache.
     #[serde(rename(deserialize = "FlatCache"))]
     CacheFlat,
-    /// 2D (XZ) per-chunk cache.
     Cache2D,
-    /// Evaluate once and cache for the entire invocation.
     CacheOnce,
-    /// Per-noise-cell cache.
     CellCache,
 }
 
 impl WrapperType {
-    /// Emits the token stream for this wrapper type variant.
     fn into_token_stream(self) -> TokenStream {
         match self {
-            Self::Interpolated => {
-                quote! {
-                    WrapperType::Interpolated
-                }
-            }
-            Self::CacheFlat => {
-                quote! {
-                    WrapperType::CacheFlat
-                }
-            }
-            Self::Cache2D => {
-                quote! {
-                    WrapperType::Cache2D
-                }
-            }
-            Self::CacheOnce => {
-                quote! {
-                    WrapperType::CacheOnce
-                }
-            }
-            Self::CellCache => {
-                quote! {
-                    WrapperType::CellCache
-                }
-            }
+            Self::Interpolated => quote! { WrapperType::Interpolated },
+            Self::CacheFlat => quote! { WrapperType::CacheFlat },
+            Self::Cache2D => quote! { WrapperType::Cache2D },
+            Self::CacheOnce => quote! { WrapperType::CacheOnce },
+            Self::CellCache => quote! { WrapperType::CellCache },
         }
     }
 }
 
-/// Deserialized parameters for a simple noise density function.
 #[derive(Deserialize, Hash, Clone)]
 struct NoiseData {
-    /// Resource location ID of the noise generator.
     #[serde(rename(deserialize = "noise"))]
     noise_id: String,
-    /// Horizontal (XZ) frequency scale factor.
     #[serde(rename(deserialize = "xzScale"))]
-    xz_scale: HashableF64,
-    /// Vertical (Y) frequency scale factor.
+    xz_scale: HashableF32,
     #[serde(rename(deserialize = "yScale"))]
-    y_scale: HashableF64,
+    y_scale: HashableF32,
 }
 
-/// Deserialized parameters for a shifted-noise density function.
 #[derive(Deserialize, Hash, Clone)]
 struct ShiftedNoiseData {
-    /// Horizontal (XZ) frequency scale factor.
     #[serde(rename(deserialize = "xzScale"))]
-    xz_scale: HashableF64,
-    /// Vertical (Y) frequency scale factor.
+    xz_scale: HashableF32,
     #[serde(rename(deserialize = "yScale"))]
-    y_scale: HashableF64,
-    /// Resource location ID of the noise generator.
+    y_scale: HashableF32,
     #[serde(rename(deserialize = "noise"))]
     noise_id: String,
 }
 
-/// Deserialized parameters for the interpolated noise sampler density function.
 #[derive(Deserialize, Hash, Clone)]
 struct InterpolatedNoiseSamplerData {
-    /// XZ scale after cell-size scaling has been applied.
     #[serde(rename(deserialize = "scaledXzScale"))]
-    scaled_xz_scale: HashableF64,
-    /// Y scale after cell-size scaling has been applied.
+    scaled_xz_scale: HashableF32,
     #[serde(rename(deserialize = "scaledYScale"))]
-    scaled_y_scale: HashableF64,
-    /// Horizontal cell-size factor.
+    scaled_y_scale: HashableF32,
     #[serde(rename(deserialize = "xzFactor"))]
-    xz_factor: HashableF64,
-    /// Vertical cell-size factor.
+    xz_factor: HashableF32,
     #[serde(rename(deserialize = "yFactor"))]
-    y_factor: HashableF64,
-    /// Multiplier applied to smear-scale for blending.
+    y_factor: HashableF32,
     #[serde(rename(deserialize = "smearScaleMultiplier"))]
-    smear_scale_multiplier: HashableF64,
-    /// Maximum possible output value.
+    smear_scale_multiplier: HashableF32,
     #[serde(rename(deserialize = "maxValue"))]
-    max_value: HashableF64,
+    max_value: HashableF32,
 }
 
-/// Deserialized parameters for a clamped Y-gradient density function.
 #[derive(Deserialize, Hash, Clone)]
 struct ClampedYGradientData {
-    /// Y coordinate at which the gradient starts.
     #[serde(rename(deserialize = "fromY"))]
     from_y: i32,
-    /// Y coordinate at which the gradient ends.
     #[serde(rename(deserialize = "toY"))]
     to_y: i32,
-    /// Density value at `from_y`.
     #[serde(rename(deserialize = "fromValue"))]
-    from_value: HashableF64,
-    /// Density value at `to_y`.
+    from_value: HashableF32,
     #[serde(rename(deserialize = "toValue"))]
-    to_value: HashableF64,
+    to_value: HashableF32,
 }
 
-/// Deserialized parameters for a binary density function operation.
+#[derive(Deserialize, Hash, Clone)]
+struct GradientData {
+    axis: Axis,
+    tiling: Tiling,
+    from_coordinate: i32,
+    to_coordinate: i32,
+    from_value: HashableF32,
+    to_value: HashableF32,
+}
+
+#[derive(Deserialize, Hash, Clone)]
+struct DistanceToPointData {
+    point: [i32; 3],
+    metric: DistanceMetric,
+}
+
+#[derive(Deserialize, Hash, Clone)]
+struct RoundingData {
+    operation: RoundingOperation,
+}
+
 #[derive(Deserialize, Hash, Clone)]
 struct BinaryData {
-    /// The binary operation to apply to the two arguments.
     #[serde(rename(deserialize = "type"))]
     operation: BinaryOperation,
-    /// Minimum possible output value (informational, not enforced).
     #[serde(rename(deserialize = "minValue"))]
-    min_value: HashableF64,
-    /// Maximum possible output value (informational, not enforced).
+    min_value: HashableF32,
     #[serde(rename(deserialize = "maxValue"))]
-    max_value: HashableF64,
+    max_value: HashableF32,
 }
 
-/// Deserialized parameters for a linear density function operation.
 #[derive(Deserialize, Hash, Clone)]
 struct LinearData {
-    /// The linear operation (add or multiply) to apply with `argument`.
     #[serde(rename(deserialize = "specificType"))]
     operation: LinearOperation,
-    /// The scalar operand for the linear operation.
-    argument: HashableF64,
-    /// Minimum possible output value (informational, not enforced).
+    argument: HashableF32,
     #[serde(rename(deserialize = "minValue"))]
-    min_value: HashableF64,
-    /// Maximum possible output value (informational, not enforced).
+    min_value: HashableF32,
     #[serde(rename(deserialize = "maxValue"))]
-    max_value: HashableF64,
+    max_value: HashableF32,
 }
 
 #[derive(Deserialize, Hash, Clone)]
 struct FindTopSurfaceData {
-    /// Lower Y bound to stop searching at.
     #[serde(rename(deserialize = "lowerBound"))]
     lower_bound: i32,
-    /// Step size between Y levels when searching.
     #[serde(rename(deserialize = "cellHeight"))]
     cell_height: i32,
 }
 
-/// Deserialized parameters for a unary density function transformation.
 #[derive(Deserialize, Hash, Clone)]
 struct UnaryData {
-    /// The unary transformation to apply.
     #[serde(rename(deserialize = "type"))]
     operation: UnaryOperation,
-    /// Minimum possible output value (informational, not enforced).
     #[serde(rename(deserialize = "minValue"))]
-    min_value: HashableF64,
-    /// Maximum possible output value (informational, not enforced).
+    min_value: HashableF32,
     #[serde(rename(deserialize = "maxValue"))]
-    max_value: HashableF64,
+    max_value: HashableF32,
 }
 
-/// Deserialized parameters for a clamp density function.
 #[derive(Deserialize, Hash, Clone)]
 struct ClampData {
-    /// Lower bound of the clamp range.
     #[serde(rename(deserialize = "minValue"))]
-    min_value: HashableF64,
-    /// Upper bound of the clamp range.
+    min_value: HashableF32,
     #[serde(rename(deserialize = "maxValue"))]
-    max_value: HashableF64,
+    max_value: HashableF32,
 }
 
-/// Deserialized range bounds for the `RangeChoice` density function.
 #[derive(Deserialize, Hash, Clone)]
 struct RangeChoiceData {
-    /// Inclusive lower bound of the "in-range" interval.
     #[serde(rename(deserialize = "minInclusive"))]
-    min_inclusive: HashableF64,
-    /// Exclusive upper bound of the "in-range" interval.
+    min_inclusive: HashableF32,
     #[serde(rename(deserialize = "maxExclusive"))]
-    max_exclusive: HashableF64,
+    max_exclusive: HashableF32,
 }
 
-/// Deserialized output-range metadata for a spline density function.
 #[derive(Deserialize, Hash, Clone)]
 struct SplineData {
-    /// Minimum possible output value of the spline.
     #[serde(rename(deserialize = "minValue"))]
-    min_value: HashableF64,
-    /// Maximum possible output value of the spline.
+    min_value: HashableF32,
     #[serde(rename(deserialize = "maxValue"))]
-    max_value: HashableF64,
+    max_value: HashableF32,
 }
 
 /// Deserialized representation of any density function node in the noise router tree.
 #[derive(Deserialize, Hash, Clone)]
 #[serde(tag = "_class", content = "value")]
 enum DensityFunctionRepr {
-    /// Placeholder that leaves space for world-structure contributions at runtime.
-    // This is a placeholder for leaving space for world structures
     Beardifier,
-    /// Blending alpha factor, initialized from a world seed at runtime.
-    // These functions are initialized by a seed at runtime
     BlendAlpha,
-    /// Blending offset factor, initialized from a world seed at runtime.
     BlendOffset,
-    /// Blends the density from an inner function.
     BlendDensity {
-        /// The inner density function to blend.
         input: Box<Self>,
     },
     FindTopSurface {
-        /// The density function to test for solidity.
         density: Box<Self>,
-        /// The density function providing the upper Y bound.
         #[serde(rename(deserialize = "upperBound"))]
         upper_bound: Box<Self>,
-        /// Lower bound and step size parameters.
         #[serde(flatten)]
         data: FindTopSurfaceData,
     },
-    /// End-islands noise sampler, seeded at runtime.
     EndIslands,
-    /// A standard noise sampler.
     Noise {
-        /// Noise parameters (ID and frequency scales).
         #[serde(flatten)]
         data: NoiseData,
     },
-    /// Horizontal shift noise along the A axis.
     ShiftA {
-        /// Noise ID for the offset generator.
         #[serde(rename(deserialize = "offsetNoise"))]
         noise_id: String,
     },
-    /// Horizontal shift noise along the B axis.
     ShiftB {
-        /// Noise ID for the offset generator.
         #[serde(rename(deserialize = "offsetNoise"))]
         noise_id: String,
     },
-    /// A noise sample shifted in XYZ by three inner density functions.
     ShiftedNoise {
-        /// Density function providing the X shift.
         #[serde(rename(deserialize = "shiftX"))]
         shift_x: Box<Self>,
-        /// Density function providing the Y shift.
         #[serde(rename(deserialize = "shiftY"))]
         shift_y: Box<Self>,
-        /// Density function providing the Z shift.
         #[serde(rename(deserialize = "shiftZ"))]
         shift_z: Box<Self>,
-        /// Noise ID and frequency scales for the shifted sample.
         #[serde(flatten)]
         data: ShiftedNoiseData,
     },
-    /// A trilinearly interpolated multi-octave noise sampler.
     InterpolatedNoiseSampler {
-        /// Sampler configuration parameters.
         #[serde(flatten)]
         data: InterpolatedNoiseSamplerData,
     },
-    /// Scales an input density function by a cave/tunnel rarity curve.
     #[serde(rename(deserialize = "IntervalSelect"))]
     IntervalSelect {
         input: Box<Self>,
-        thresholds: Box<[HashableF64]>,
+        thresholds: Box<[HashableF32]>,
         functions: Box<[Self]>,
     },
-    /// Wraps an inner function with a caching or interpolation layer.
-    // The wrapped function is wrapped in a new wrapper at runtime
     #[serde(rename(deserialize = "Wrapping"))]
     Wrapper {
-        /// The inner density function to wrap.
         #[serde(rename(deserialize = "wrapped"))]
         input: Box<Self>,
-        /// The type of wrapper to apply.
         #[serde(rename(deserialize = "type"))]
         wrapper: WrapperType,
     },
-    /// Returns a constant density value.
-    // These functions are unchanged except possibly for internal functions
     Constant {
-        /// The constant output value.
-        value: HashableF64,
+        value: HashableF32,
     },
-    /// A linear gradient clamped between two Y levels.
     #[serde(rename(deserialize = "YClampedGradient"))]
     ClampedYGradient {
-        /// Gradient parameters.
         #[serde(flatten)]
         data: ClampedYGradientData,
     },
-    /// Applies a binary operation to two inner density functions.
+    Gradient {
+        data: GradientData,
+    },
+    DistanceToPoint {
+        data: DistanceToPointData,
+    },
+    Lerp {
+        alpha: Box<Self>,
+        first: Box<Self>,
+        second: Box<Self>,
+    },
+    Rounding {
+        input: Box<Self>,
+        multiple: Box<Self>,
+        data: RoundingData,
+    },
+    Slice {
+        axis: Axis,
+        coordinate: i32,
+        input: Box<Self>,
+    },
     #[serde(rename(deserialize = "BinaryOperation"))]
     Binary {
-        /// First argument density function.
         argument1: Box<Self>,
-        /// Second argument density function.
         argument2: Box<Self>,
-        /// Operation type and output range metadata.
         #[serde(flatten)]
         data: BinaryData,
     },
-    /// Applies a linear (add or multiply) operation with a scalar.
     #[serde(rename(deserialize = "LinearOperation"))]
     Linear {
-        /// The inner density function to transform.
         input: Box<Self>,
-        /// Operation type, scalar argument, and output range metadata.
         #[serde(flatten)]
         data: LinearData,
     },
-    /// Applies a unary transformation to an inner density function.
     #[serde(rename(deserialize = "UnaryOperation"))]
     Unary {
-        /// The inner density function to transform.
         input: Box<Self>,
-        /// Transformation type and output range metadata.
         #[serde(flatten)]
         data: UnaryData,
     },
-    /// Clamps an inner density function's output to a range.
     Clamp {
-        /// The inner density function to clamp.
         input: Box<Self>,
-        /// Clamp range parameters.
         #[serde(flatten)]
         data: ClampData,
     },
-    /// Selects one of two density functions based on whether the input is within a range.
     RangeChoice {
-        /// The density function to evaluate for range testing.
         input: Box<Self>,
-        /// Density function used when `input` is within the range.
         #[serde(rename(deserialize = "whenInRange"))]
         when_in_range: Box<Self>,
-        /// Density function used when `input` is outside the range.
         #[serde(rename(deserialize = "whenOutOfRange"))]
         when_out_range: Box<Self>,
-        /// Range bounds and output metadata.
         #[serde(flatten)]
         data: RangeChoiceData,
     },
-    /// Evaluates a cubic spline over a location density function.
     Spline {
-        /// The spline structure.
         spline: SplineRepr,
-        /// Output range metadata.
         #[serde(flatten)]
         data: SplineData,
     },
 }
 
 impl DensityFunctionRepr {
-    /// Simplifies and constant-folds the density function tree at codegen time.
     fn optimize(&mut self) {
         match self {
             Self::BlendDensity { input } => input.optimize(),
+            Self::Slice { input, .. } => input.optimize(),
             Self::FindTopSurface {
                 density,
                 upper_bound,
@@ -706,6 +598,21 @@ impl DensityFunctionRepr {
                 }
             }
             Self::Wrapper { input, .. } => input.optimize(),
+            Self::Lerp {
+                alpha,
+                first,
+                second,
+            } => {
+                alpha.optimize();
+                first.optimize();
+                second.optimize();
+            }
+            Self::Rounding {
+                input, multiple, ..
+            } => {
+                input.optimize();
+                multiple.optimize();
+            }
             Self::RangeChoice {
                 input,
                 when_in_range,
@@ -724,25 +631,9 @@ impl DensityFunctionRepr {
                         LinearOperation::Mul => value.0 * data.argument.0,
                     };
                     *self = Self::Constant {
-                        value: HashableF64(val),
+                        value: HashableF32((val) as f32),
                     };
                     return;
-                }
-                match data.operation {
-                    LinearOperation::Add => {
-                        if data.argument.0 == 0.0 {
-                            *self = *input.clone();
-                        }
-                    }
-                    LinearOperation::Mul => {
-                        if data.argument.0 == 1.0 {
-                            *self = *input.clone();
-                        } else if data.argument.0 == 0.0 {
-                            *self = Self::Constant {
-                                value: HashableF64(0.0),
-                            };
-                        }
-                    }
                 }
             }
             Self::Binary {
@@ -760,52 +651,20 @@ impl DensityFunctionRepr {
                         BinaryOperation::Mul => v1.0 * v2.0,
                         BinaryOperation::Min => v1.0.min(v2.0),
                         BinaryOperation::Max => v1.0.max(v2.0),
+                        BinaryOperation::Sub => v1.0 - v2.0,
+                        BinaryOperation::Div => {
+                            if v2.0 == 0.0 {
+                                0.0
+                            } else {
+                                v1.0 / v2.0
+                            }
+                        }
+                        BinaryOperation::Pow => v1.0.powf(v2.0),
                     };
                     *self = Self::Constant {
-                        value: HashableF64(res),
+                        value: HashableF32((res) as f32),
                     };
                     return;
-                }
-                match data.operation {
-                    BinaryOperation::Add => {
-                        if let Self::Constant { value } = &**argument1 {
-                            if value.0 == 0.0 {
-                                *self = *argument2.clone();
-                                return;
-                            }
-                        }
-                        if let Self::Constant { value } = &**argument2 {
-                            if value.0 == 0.0 {
-                                *self = *argument1.clone();
-                                return;
-                            }
-                        }
-                    }
-                    BinaryOperation::Mul => {
-                        if let Self::Constant { value } = &**argument1 {
-                            if value.0 == 1.0 {
-                                *self = *argument2.clone();
-                                return;
-                            } else if value.0 == 0.0 {
-                                *self = Self::Constant {
-                                    value: HashableF64(0.0),
-                                };
-                                return;
-                            }
-                        }
-                        if let Self::Constant { value } = &**argument2 {
-                            if value.0 == 1.0 {
-                                *self = *argument1.clone();
-                                return;
-                            } else if value.0 == 0.0 {
-                                *self = Self::Constant {
-                                    value: HashableF64(0.0),
-                                };
-                                return;
-                            }
-                        }
-                    }
-                    _ => {}
                 }
             }
             Self::Unary { input, data } => {
@@ -835,14 +694,26 @@ impl DensityFunctionRepr {
                         }
                         UnaryOperation::Invert => {
                             if value.0 == 0.0 {
-                                f64::INFINITY
+                                f32::INFINITY
                             } else {
                                 1.0 / value.0
                             }
                         }
+                        UnaryOperation::Negate => -value.0,
+                        UnaryOperation::Sqrt => value.0.sqrt(),
+                        UnaryOperation::Log => value.0.ln(),
+                        UnaryOperation::Sign => {
+                            if value.0 > 0.0 {
+                                1.0
+                            } else if value.0 < 0.0 {
+                                -1.0
+                            } else {
+                                0.0
+                            }
+                        }
                     };
                     *self = Self::Constant {
-                        value: HashableF64(val),
+                        value: HashableF32((val) as f32),
                     };
                 }
             }
@@ -850,7 +721,9 @@ impl DensityFunctionRepr {
                 input.optimize();
                 if let Self::Constant { value } = &**input {
                     *self = Self::Constant {
-                        value: HashableF64(value.0.clamp(data.min_value.0, data.max_value.0)),
+                        value: HashableF32(
+                            (value.0.clamp(data.min_value.0, data.max_value.0) as f32),
+                        ),
                     };
                 }
             }
@@ -874,25 +747,173 @@ impl DensityFunctionRepr {
                 let val = value.0;
                 quote! {
                     #[inline(always)]
-                    pub fn #fn_name<C: NoiseEvaluationContext>(pos: &pumpkin_util::math::vector3::Vector3<i32>, ctx: &mut C) -> f64 {
+                    pub fn #fn_name<C: NoiseEvaluationContext>(pos: &pumpkin_util::math::vector3::Vector3<i32>, ctx: &mut C) -> f32 {
                         let _ = (pos, ctx);
                         #val
                     }
                 }
             }
             Self::ClampedYGradient { data } => {
-                let from_y = f64::from(data.from_y);
-                let to_y = f64::from(data.to_y);
+                let from_y = data.from_y as f32;
+                let to_y = data.to_y as f32;
                 let from_val = data.from_value.0;
                 let to_val = data.to_value.0;
                 quote! {
                     #[inline(always)]
-                    pub fn #fn_name<C: NoiseEvaluationContext>(pos: &pumpkin_util::math::vector3::Vector3<i32>, ctx: &mut C) -> f64 {
+                    pub fn #fn_name<C: NoiseEvaluationContext>(pos: &pumpkin_util::math::vector3::Vector3<i32>, ctx: &mut C) -> f32 {
                         let _ = ctx;
-                        let y = pos.y as f64;
+                        let y = pos.y as f32;
                         let clamped = y.clamp(#from_y, #to_y);
                         let delta = (clamped - #from_y) / (#to_y - #from_y);
                         #from_val + delta * (#to_val - #from_val)
+                    }
+                }
+            }
+            Self::Gradient { data } => {
+                let from_coord = data.from_coordinate;
+                let to_coord = data.to_coordinate;
+                let from_val = data.from_value.0;
+                let to_val = data.to_value.0;
+                let coord = match data.axis {
+                    Axis::X => quote! { pos.x },
+                    Axis::Y => quote! { pos.y },
+                    Axis::Z => quote! { pos.z },
+                };
+                let range = to_coord - from_coord;
+                let factor = (to_val - from_val) / (range as f32);
+                let body = match data.tiling {
+                    Tiling::ClampToEdge => {
+                        let min_c = from_coord.min(to_coord);
+                        let max_c = from_coord.max(to_coord);
+                        quote! {
+                            let rel = coord.clamp(#min_c, #max_c) - #from_coord;
+                            #from_val + rel as f32 * #factor
+                        }
+                    }
+                    Tiling::Repeat => quote! {
+                        let rel = coord - #from_coord;
+                        #from_val + rel.rem_euclid(#range) as f32 * #factor
+                    },
+                    Tiling::MirroredRepeat => quote! {
+                        let rel = coord - #from_coord;
+                        let tile = rel.div_euclid(#range);
+                        let local = rel - tile * #range;
+                        if (tile & 1) == 0 {
+                            #from_val + local as f32 * #factor
+                        } else {
+                            #from_val + (#range - local) as f32 * #factor
+                        }
+                    },
+                };
+                quote! {
+                    #[inline(always)]
+                    pub fn #fn_name<C: NoiseEvaluationContext>(pos: &pumpkin_util::math::vector3::Vector3<i32>, ctx: &mut C) -> f32 {
+                        let _ = ctx;
+                        let coord = #coord;
+                        #body
+                    }
+                }
+            }
+            Self::DistanceToPoint { data } => {
+                let px = data.point[0];
+                let py = data.point[1];
+                let pz = data.point[2];
+                let body = match data.metric {
+                    DistanceMetric::Euclidean => quote! { (dx * dx + dy * dy + dz * dz).sqrt() },
+                    DistanceMetric::EuclideanSquared => quote! { dx * dx + dy * dy + dz * dz },
+                    DistanceMetric::Manhattan => quote! { dx.abs() + dy.abs() + dz.abs() },
+                    DistanceMetric::Chebyshev => quote! { dx.abs().max(dy.abs()).max(dz.abs()) },
+                };
+                quote! {
+                    #[inline(always)]
+                    pub fn #fn_name<C: NoiseEvaluationContext>(pos: &pumpkin_util::math::vector3::Vector3<i32>, ctx: &mut C) -> f32 {
+                        let _ = ctx;
+                        let dx = (pos.x - #px) as f32;
+                        let dy = (pos.y - #py) as f32;
+                        let dz = (pos.z - #pz) as f32;
+                        #body
+                    }
+                }
+            }
+            Self::Lerp {
+                alpha,
+                first,
+                second,
+            } => {
+                let a_idx = alpha.get_index_for_component_readonly(hash_to_index_map);
+                let f_idx = first.get_index_for_component_readonly(hash_to_index_map);
+                let s_idx = second.get_index_for_component_readonly(hash_to_index_map);
+                let a_fn = syn::Ident::new(&format!("{}_{}", fn_prefix, a_idx), Span::call_site());
+                let f_fn = syn::Ident::new(&format!("{}_{}", fn_prefix, f_idx), Span::call_site());
+                let s_fn = syn::Ident::new(&format!("{}_{}", fn_prefix, s_idx), Span::call_site());
+                quote! {
+                    #[inline(always)]
+                    pub fn #fn_name<C: NoiseEvaluationContext>(pos: &pumpkin_util::math::vector3::Vector3<i32>, ctx: &mut C) -> f32 {
+                        let a = #a_fn(pos, ctx);
+                        let f = #f_fn(pos, ctx);
+                        let s = #s_fn(pos, ctx);
+                        f + a * (s - f)
+                    }
+                }
+            }
+            Self::Rounding {
+                input,
+                multiple,
+                data,
+            } => {
+                let in_idx = input.get_index_for_component_readonly(hash_to_index_map);
+                let mul_idx = multiple.get_index_for_component_readonly(hash_to_index_map);
+                let in_fn =
+                    syn::Ident::new(&format!("{}_{}", fn_prefix, in_idx), Span::call_site());
+                let mul_fn =
+                    syn::Ident::new(&format!("{}_{}", fn_prefix, mul_idx), Span::call_site());
+                let body = match data.operation {
+                    RoundingOperation::Floor => {
+                        quote! { if m == 0.0 { v } else { (v / m).floor() * m } }
+                    }
+                    RoundingOperation::Round => {
+                        quote! { if m == 0.0 { v } else { (v / m + 0.5).floor() * m } }
+                    }
+                    RoundingOperation::Ceil => {
+                        quote! { if m == 0.0 { v } else { (v / m).ceil() * m } }
+                    }
+                    RoundingOperation::Truncate => {
+                        quote! { if m == 0.0 { v } else { let d = v / m; if d > 0.0 { d.floor() * m } else { d.ceil() * m } } }
+                    }
+                };
+                quote! {
+                    #[inline(always)]
+                    pub fn #fn_name<C: NoiseEvaluationContext>(pos: &pumpkin_util::math::vector3::Vector3<i32>, ctx: &mut C) -> f32 {
+                        let v = #in_fn(pos, ctx);
+                        let m = #mul_fn(pos, ctx);
+                        #body
+                    }
+                }
+            }
+            Self::Slice {
+                axis,
+                coordinate,
+                input,
+            } => {
+                let child_idx = input.get_index_for_component_readonly(hash_to_index_map);
+                let child_fn =
+                    syn::Ident::new(&format!("{}_{}", fn_prefix, child_idx), Span::call_site());
+                let slice_pos = match axis {
+                    Axis::X => {
+                        quote! { pumpkin_util::math::vector3::Vector3::new(#coordinate, pos.y, pos.z) }
+                    }
+                    Axis::Y => {
+                        quote! { pumpkin_util::math::vector3::Vector3::new(pos.x, #coordinate, pos.z) }
+                    }
+                    Axis::Z => {
+                        quote! { pumpkin_util::math::vector3::Vector3::new(pos.x, pos.y, #coordinate) }
+                    }
+                };
+                quote! {
+                    #[inline(always)]
+                    pub fn #fn_name<C: NoiseEvaluationContext>(pos: &pumpkin_util::math::vector3::Vector3<i32>, ctx: &mut C) -> f32 {
+                        let slice_pos = #slice_pos;
+                        #child_fn(&slice_pos, ctx)
                     }
                 }
             }
@@ -907,7 +928,7 @@ impl DensityFunctionRepr {
                 };
                 quote! {
                     #[inline(always)]
-                    pub fn #fn_name<C: NoiseEvaluationContext>(pos: &pumpkin_util::math::vector3::Vector3<i32>, ctx: &mut C) -> f64 {
+                    pub fn #fn_name<C: NoiseEvaluationContext>(pos: &pumpkin_util::math::vector3::Vector3<i32>, ctx: &mut C) -> f32 {
                         #body
                     }
                 }
@@ -930,12 +951,18 @@ impl DensityFunctionRepr {
                         quote! { let c = #child_fn(pos, ctx).clamp(-1.0, 1.0); c / 2.0 - c * c * c / 24.0 }
                     }
                     UnaryOperation::Invert => {
-                        quote! { let v = #child_fn(pos, ctx); if v == 0.0 { f64::INFINITY } else { 1.0 / v } }
+                        quote! { let v = #child_fn(pos, ctx); if v == 0.0 { f32::INFINITY } else { 1.0 / v } }
+                    }
+                    UnaryOperation::Negate => quote! { -#child_fn(pos, ctx) },
+                    UnaryOperation::Sqrt => quote! { #child_fn(pos, ctx).sqrt() },
+                    UnaryOperation::Log => quote! { #child_fn(pos, ctx).ln() },
+                    UnaryOperation::Sign => {
+                        quote! { let v = #child_fn(pos, ctx); if v > 0.0 { 1.0 } else if v < 0.0 { -1.0 } else { 0.0 } }
                     }
                 };
                 quote! {
                     #[inline(always)]
-                    pub fn #fn_name<C: NoiseEvaluationContext>(pos: &pumpkin_util::math::vector3::Vector3<i32>, ctx: &mut C) -> f64 {
+                    pub fn #fn_name<C: NoiseEvaluationContext>(pos: &pumpkin_util::math::vector3::Vector3<i32>, ctx: &mut C) -> f32 {
                         #body
                     }
                 }
@@ -948,7 +975,7 @@ impl DensityFunctionRepr {
                 let max_v = data.max_value.0;
                 quote! {
                     #[inline(always)]
-                    pub fn #fn_name<C: NoiseEvaluationContext>(pos: &pumpkin_util::math::vector3::Vector3<i32>, ctx: &mut C) -> f64 {
+                    pub fn #fn_name<C: NoiseEvaluationContext>(pos: &pumpkin_util::math::vector3::Vector3<i32>, ctx: &mut C) -> f32 {
                         #child_fn(pos, ctx).clamp(#min_v, #max_v)
                     }
                 }
@@ -973,10 +1000,17 @@ impl DensityFunctionRepr {
                     BinaryOperation::Max => {
                         quote! { #child1_fn(pos, ctx).max(#child2_fn(pos, ctx)) }
                     }
+                    BinaryOperation::Sub => quote! { #child1_fn(pos, ctx) - #child2_fn(pos, ctx) },
+                    BinaryOperation::Div => {
+                        quote! { let b = #child2_fn(pos, ctx); if b == 0.0 { 0.0 } else { #child1_fn(pos, ctx) / b } }
+                    }
+                    BinaryOperation::Pow => {
+                        quote! { #child1_fn(pos, ctx).powf(#child2_fn(pos, ctx)) }
+                    }
                 };
                 quote! {
                     #[inline(always)]
-                    pub fn #fn_name<C: NoiseEvaluationContext>(pos: &pumpkin_util::math::vector3::Vector3<i32>, ctx: &mut C) -> f64 {
+                    pub fn #fn_name<C: NoiseEvaluationContext>(pos: &pumpkin_util::math::vector3::Vector3<i32>, ctx: &mut C) -> f32 {
                         #body
                     }
                 }
@@ -1003,7 +1037,7 @@ impl DensityFunctionRepr {
                 let max_exc = data.max_exclusive.0;
                 quote! {
                     #[inline(always)]
-                    pub fn #fn_name<C: NoiseEvaluationContext>(pos: &pumpkin_util::math::vector3::Vector3<i32>, ctx: &mut C) -> f64 {
+                    pub fn #fn_name<C: NoiseEvaluationContext>(pos: &pumpkin_util::math::vector3::Vector3<i32>, ctx: &mut C) -> f32 {
                         let val = #input_fn(pos, ctx);
                         if val >= #min_inc && val < #max_exc {
                             #when_in_fn(pos, ctx)
@@ -1019,8 +1053,8 @@ impl DensityFunctionRepr {
                 let y_scale = data.y_scale.0;
                 quote! {
                     #[inline(always)]
-                    pub fn #fn_name<C: NoiseEvaluationContext>(pos: &pumpkin_util::math::vector3::Vector3<i32>, ctx: &mut C) -> f64 {
-                        ctx.sample_noise(DoublePerlinNoiseParameters::#noise_id, pos.x as f64 * #xz_scale, pos.y as f64 * #y_scale, pos.z as f64 * #xz_scale)
+                    pub fn #fn_name<C: NoiseEvaluationContext>(pos: &pumpkin_util::math::vector3::Vector3<i32>, ctx: &mut C) -> f32 {
+                        ctx.sample_noise(DoublePerlinNoiseParameters::#noise_id, pos.x as f32 * #xz_scale, pos.y as f32 * #y_scale, pos.z as f32 * #xz_scale)
                     }
                 }
             }
@@ -1028,7 +1062,7 @@ impl DensityFunctionRepr {
                 let noise_id = quote::format_ident!("{}", noise_id.to_shouty_snake_case());
                 quote! {
                     #[inline(always)]
-                    pub fn #fn_name<C: NoiseEvaluationContext>(pos: &pumpkin_util::math::vector3::Vector3<i32>, ctx: &mut C) -> f64 {
+                    pub fn #fn_name<C: NoiseEvaluationContext>(pos: &pumpkin_util::math::vector3::Vector3<i32>, ctx: &mut C) -> f32 {
                         ctx.sample_shift_a(DoublePerlinNoiseParameters::#noise_id, pos)
                     }
                 }
@@ -1037,7 +1071,7 @@ impl DensityFunctionRepr {
                 let noise_id = quote::format_ident!("{}", noise_id.to_shouty_snake_case());
                 quote! {
                     #[inline(always)]
-                    pub fn #fn_name<C: NoiseEvaluationContext>(pos: &pumpkin_util::math::vector3::Vector3<i32>, ctx: &mut C) -> f64 {
+                    pub fn #fn_name<C: NoiseEvaluationContext>(pos: &pumpkin_util::math::vector3::Vector3<i32>, ctx: &mut C) -> f32 {
                         ctx.sample_shift_b(DoublePerlinNoiseParameters::#noise_id, pos)
                     }
                 }
@@ -1062,7 +1096,7 @@ impl DensityFunctionRepr {
                 let y_scale = data.y_scale.0;
                 quote! {
                     #[inline(always)]
-                    pub fn #fn_name<C: NoiseEvaluationContext>(pos: &pumpkin_util::math::vector3::Vector3<i32>, ctx: &mut C) -> f64 {
+                    pub fn #fn_name<C: NoiseEvaluationContext>(pos: &pumpkin_util::math::vector3::Vector3<i32>, ctx: &mut C) -> f32 {
                         let sx = #sx_fn(pos, ctx);
                         let sy = #sy_fn(pos, ctx);
                         let sz = #sz_fn(pos, ctx);
@@ -1073,7 +1107,7 @@ impl DensityFunctionRepr {
             Self::BlendAlpha => {
                 quote! {
                     #[inline(always)]
-                    pub fn #fn_name<C: NoiseEvaluationContext>(pos: &pumpkin_util::math::vector3::Vector3<i32>, ctx: &mut C) -> f64 {
+                    pub fn #fn_name<C: NoiseEvaluationContext>(pos: &pumpkin_util::math::vector3::Vector3<i32>, ctx: &mut C) -> f32 {
                         ctx.sample_blend_alpha(pos)
                     }
                 }
@@ -1081,7 +1115,7 @@ impl DensityFunctionRepr {
             Self::BlendOffset => {
                 quote! {
                     #[inline(always)]
-                    pub fn #fn_name<C: NoiseEvaluationContext>(pos: &pumpkin_util::math::vector3::Vector3<i32>, ctx: &mut C) -> f64 {
+                    pub fn #fn_name<C: NoiseEvaluationContext>(pos: &pumpkin_util::math::vector3::Vector3<i32>, ctx: &mut C) -> f32 {
                         ctx.sample_blend_offset(pos)
                     }
                 }
@@ -1092,7 +1126,7 @@ impl DensityFunctionRepr {
                     syn::Ident::new(&format!("{}_{}", fn_prefix, child_idx), Span::call_site());
                 quote! {
                     #[inline(always)]
-                    pub fn #fn_name<C: NoiseEvaluationContext>(pos: &pumpkin_util::math::vector3::Vector3<i32>, ctx: &mut C) -> f64 {
+                    pub fn #fn_name<C: NoiseEvaluationContext>(pos: &pumpkin_util::math::vector3::Vector3<i32>, ctx: &mut C) -> f32 {
                         let val = #child_fn(pos, ctx);
                         ctx.sample_blend_density(val, pos)
                     }
@@ -1101,7 +1135,7 @@ impl DensityFunctionRepr {
             Self::Beardifier => {
                 quote! {
                     #[inline(always)]
-                    pub fn #fn_name<C: NoiseEvaluationContext>(pos: &pumpkin_util::math::vector3::Vector3<i32>, ctx: &mut C) -> f64 {
+                    pub fn #fn_name<C: NoiseEvaluationContext>(pos: &pumpkin_util::math::vector3::Vector3<i32>, ctx: &mut C) -> f32 {
                         ctx.sample_beardifier(pos)
                     }
                 }
@@ -1109,7 +1143,7 @@ impl DensityFunctionRepr {
             Self::EndIslands => {
                 quote! {
                     #[inline(always)]
-                    pub fn #fn_name<C: NoiseEvaluationContext>(pos: &pumpkin_util::math::vector3::Vector3<i32>, ctx: &mut C) -> f64 {
+                    pub fn #fn_name<C: NoiseEvaluationContext>(pos: &pumpkin_util::math::vector3::Vector3<i32>, ctx: &mut C) -> f32 {
                         ctx.sample_end_islands(pos)
                     }
                 }
@@ -1122,7 +1156,7 @@ impl DensityFunctionRepr {
                 let comp_idx = index;
                 quote! {
                     #[inline(always)]
-                    pub fn #fn_name<C: NoiseEvaluationContext>(pos: &pumpkin_util::math::vector3::Vector3<i32>, ctx: &mut C) -> f64 {
+                    pub fn #fn_name<C: NoiseEvaluationContext>(pos: &pumpkin_util::math::vector3::Vector3<i32>, ctx: &mut C) -> f32 {
                         ctx.sample_wrapper(#comp_idx, #wrapper_repr, pos, &#child_fn)
                     }
                 }
@@ -1152,7 +1186,7 @@ impl DensityFunctionRepr {
                 };
                 quote! {
                     #[inline(always)]
-                    pub fn #fn_name<C: NoiseEvaluationContext>(pos: &pumpkin_util::math::vector3::Vector3<i32>, ctx: &mut C) -> f64 {
+                    pub fn #fn_name<C: NoiseEvaluationContext>(pos: &pumpkin_util::math::vector3::Vector3<i32>, ctx: &mut C) -> f32 {
                         let input_val = #input_fn(pos, ctx);
                         let thresholds = &[#(#threshold_values),*];
                         let mut selected = thresholds.len();
@@ -1172,7 +1206,7 @@ impl DensityFunctionRepr {
             Self::InterpolatedNoiseSampler { .. } => {
                 quote! {
                     #[inline(always)]
-                    pub fn #fn_name<C: NoiseEvaluationContext>(pos: &pumpkin_util::math::vector3::Vector3<i32>, ctx: &mut C) -> f64 {
+                    pub fn #fn_name<C: NoiseEvaluationContext>(pos: &pumpkin_util::math::vector3::Vector3<i32>, ctx: &mut C) -> f32 {
                         ctx.sample_interpolated_noise(pos)
                     }
                 }
@@ -1191,19 +1225,19 @@ impl DensityFunctionRepr {
                         syn::Ident::new(&format!("{}_{}", fn_prefix, loc_idx), Span::call_site());
                     quote! {
                         #[inline(always)]
-                        pub fn #fn_name<C: NoiseEvaluationContext>(pos: &pumpkin_util::math::vector3::Vector3<i32>, ctx: &mut C) -> f64 {
+                        pub fn #fn_name<C: NoiseEvaluationContext>(pos: &pumpkin_util::math::vector3::Vector3<i32>, ctx: &mut C) -> f32 {
                             let location_val = #loc_fn(pos, ctx);
                             ctx.sample_spline(#index, location_val, pos)
                         }
                     }
                 } else {
                     let val = match spline {
-                        SplineRepr::Fixed { value } => value.0 as f64,
+                        SplineRepr::Fixed { value } => value.0 as f32,
                         _ => 0.0,
                     };
                     quote! {
                         #[inline(always)]
-                        pub fn #fn_name<C: NoiseEvaluationContext>(pos: &pumpkin_util::math::vector3::Vector3<i32>, ctx: &mut C) -> f64 {
+                        pub fn #fn_name<C: NoiseEvaluationContext>(pos: &pumpkin_util::math::vector3::Vector3<i32>, ctx: &mut C) -> f32 {
                             let _ = (pos, ctx);
                             #val
                         }
@@ -1223,7 +1257,7 @@ impl DensityFunctionRepr {
                 let cell_h = data.cell_height;
                 quote! {
                     #[inline(always)]
-                    pub fn #fn_name<C: NoiseEvaluationContext>(pos: &pumpkin_util::math::vector3::Vector3<i32>, ctx: &mut C) -> f64 {
+                    pub fn #fn_name<C: NoiseEvaluationContext>(pos: &pumpkin_util::math::vector3::Vector3<i32>, ctx: &mut C) -> f32 {
                         ctx.sample_find_top_surface(&#d_fn, &#u_fn, #lower, #cell_h, pos)
                     }
                 }
@@ -1231,14 +1265,12 @@ impl DensityFunctionRepr {
         }
     }
 
-    /// Computes a stable 64-bit hash for this density function node.
     fn unique_id(&self) -> u64 {
         let mut hasher = DefaultHasher::new();
         self.hash(&mut hasher);
         hasher.finish()
     }
 
-    /// Returns the index of this component in `stack`, inserting it if not yet present.
     fn get_index_for_component(
         &self,
         stack: &mut Vec<TokenStream>,
@@ -1437,8 +1469,8 @@ impl DensityFunctionRepr {
                 }
             }
             Self::ClampedYGradient { data } => {
-                let from_y = f64::from(data.from_y);
-                let to_y = f64::from(data.to_y);
+                let from_y = data.from_y as f32;
+                let to_y = data.to_y as f32;
                 let from_value = &data.from_value;
                 let to_value = &data.to_value;
 
@@ -1450,6 +1482,95 @@ impl DensityFunctionRepr {
                             from_value: #from_value,
                             to_value: #to_value,
                         }
+                    }
+                }
+            }
+            Self::Gradient { data } => {
+                let axis = data.axis.into_token_stream();
+                let tiling = data.tiling.into_token_stream();
+                let from_coordinate = data.from_coordinate;
+                let to_coordinate = data.to_coordinate;
+                let from_value = &data.from_value;
+                let to_value = &data.to_value;
+
+                quote! {
+                    BaseNoiseFunctionComponent::Gradient {
+                        data: &GradientData {
+                            axis: #axis,
+                            tiling: #tiling,
+                            from_coordinate: #from_coordinate,
+                            to_coordinate: #to_coordinate,
+                            from_value: #from_value,
+                            to_value: #to_value,
+                        }
+                    }
+                }
+            }
+            Self::DistanceToPoint { data } => {
+                let px = data.point[0];
+                let py = data.point[1];
+                let pz = data.point[2];
+                let metric = data.metric.into_token_stream();
+
+                quote! {
+                    BaseNoiseFunctionComponent::DistanceToPoint {
+                        data: &DistanceToPointData {
+                            point: [#px, #py, #pz],
+                            metric: #metric,
+                        },
+                    }
+                }
+            }
+            Self::Lerp {
+                alpha,
+                first,
+                second,
+            } => {
+                let alpha_index = alpha.get_index_for_component(stack, nodes, hash_to_index_map);
+                let first_index = first.get_index_for_component(stack, nodes, hash_to_index_map);
+                let second_index = second.get_index_for_component(stack, nodes, hash_to_index_map);
+
+                quote! {
+                    BaseNoiseFunctionComponent::Lerp {
+                        alpha_index: #alpha_index,
+                        first_index: #first_index,
+                        second_index: #second_index,
+                    }
+                }
+            }
+            Self::Rounding {
+                input,
+                multiple,
+                data,
+            } => {
+                let input_index = input.get_index_for_component(stack, nodes, hash_to_index_map);
+                let multiple_index =
+                    multiple.get_index_for_component(stack, nodes, hash_to_index_map);
+                let action = data.operation.into_token_stream();
+
+                quote! {
+                    BaseNoiseFunctionComponent::Rounding {
+                        input_index: #input_index,
+                        multiple_index: #multiple_index,
+                        data: &RoundingData {
+                            operation: #action,
+                        },
+                    }
+                }
+            }
+            Self::Slice {
+                axis,
+                coordinate,
+                input,
+            } => {
+                let input_index = input.get_index_for_component(stack, nodes, hash_to_index_map);
+                let axis_ts = axis.into_token_stream();
+
+                quote! {
+                    BaseNoiseFunctionComponent::Slice {
+                        input_index: #input_index,
+                        axis: #axis_ts,
+                        coordinate: #coordinate,
                     }
                 }
             }
@@ -1562,19 +1683,13 @@ impl DensityFunctionRepr {
 /// Top-level container for all dimension noise router representations deserialized from JSON.
 #[derive(Deserialize)]
 struct NoiseRouterReprs {
-    /// Standard overworld noise router.
     overworld: NoiseRouterRepr,
-    /// Large-biomes overworld noise router variant.
     #[serde(rename(deserialize = "large_biomes"))]
     overworld_large_biomes: NoiseRouterRepr,
-    /// Amplified overworld noise router variant.
     #[serde(rename(deserialize = "amplified"))]
     overworld_amplified: NoiseRouterRepr,
-    /// Nether dimension noise router.
     nether: NoiseRouterRepr,
-    /// End dimension noise router.
     end: NoiseRouterRepr,
-    /// Floating-islands (End) noise router variant.
     #[serde(rename(deserialize = "floating_islands"))]
     end_islands: NoiseRouterRepr,
 }
@@ -1582,43 +1697,28 @@ struct NoiseRouterReprs {
 /// Deserialized noise router for a single dimension, containing all density function roots.
 #[derive(Deserialize)]
 struct NoiseRouterRepr {
-    /// Density function controlling aquifer barrier generation.
     #[serde(rename(deserialize = "barrierNoise"))]
     barrier_noise: DensityFunctionRepr,
-    /// Density function controlling fluid-level floodedness.
     #[serde(rename(deserialize = "fluidLevelFloodednessNoise"))]
     fluid_level_floodedness_noise: DensityFunctionRepr,
-    /// Density function controlling how fluid levels spread.
     #[serde(rename(deserialize = "fluidLevelSpreadNoise"))]
     fluid_level_spread_noise: DensityFunctionRepr,
-    /// Density function controlling lava pocket generation.
     #[serde(rename(deserialize = "lavaNoise"))]
     lava_noise: DensityFunctionRepr,
-    /// Density function for biome temperature noise.
     temperature: DensityFunctionRepr,
-    /// Density function for biome vegetation noise.
     vegetation: DensityFunctionRepr,
-    /// Density function for continental-scale terrain shaping.
     continents: DensityFunctionRepr,
-    /// Density function for erosion-based terrain shaping.
     erosion: DensityFunctionRepr,
-    /// Density function encoding terrain depth below the surface.
     depth: DensityFunctionRepr,
-    /// Density function for terrain ridge shaping.
     ridges: DensityFunctionRepr,
-    /// Preliminary surface density used for above-surface checks (without jaggedness).
     #[serde(rename(deserialize = "preliminarySurfaceLevel"))]
     preliminary_surface_level: DensityFunctionRepr,
-    /// Final solid/air density used for block placement.
     #[serde(rename(deserialize = "finalDensity"))]
     final_density: DensityFunctionRepr,
-    /// Density function toggling ore-vein generation.
     #[serde(rename(deserialize = "veinToggle"))]
     vein_toggle: DensityFunctionRepr,
-    /// Density function for ridged ore-vein shaping.
     #[serde(rename(deserialize = "veinRidged"))]
     vein_ridged: DensityFunctionRepr,
-    /// Density function controlling gaps within ore veins.
     #[serde(rename(deserialize = "veinGap"))]
     vein_gap: DensityFunctionRepr,
 }
@@ -1642,14 +1742,13 @@ impl NoiseRouterRepr {
         self.vein_gap.optimize();
     }
 
-    /// Consumes this router representation and emits the `BaseNoiseRouters` token stream and compiled evaluator modules.
-    fn into_token_stream_compiled(mut self, router_name: &str) -> (TokenStream, TokenStream) {
+    fn into_token_stream_compiled(mut self, dim_name: &str) -> (TokenStream, TokenStream) {
         self.optimize();
+
         let mut noise_component_stack = Vec::new();
         let mut noise_nodes = Vec::new();
         let mut noise_lookup_map = BTreeMap::new();
 
-        // The aquifer sampler is called most often
         let final_density = self.final_density.get_index_for_component(
             &mut noise_component_stack,
             &mut noise_nodes,
@@ -1676,8 +1775,6 @@ impl NoiseRouterRepr {
             &mut noise_nodes,
             &mut noise_lookup_map,
         );
-
-        // Ore sampler is called fewer times than aquifer sampler
         let vein_toggle = self.vein_toggle.get_index_for_component(
             &mut noise_component_stack,
             &mut noise_nodes,
@@ -1693,8 +1790,6 @@ impl NoiseRouterRepr {
             &mut noise_nodes,
             &mut noise_lookup_map,
         );
-
-        // These should all be cached so it doesn't matter where their components are
         let noise_erosion = self.erosion.get_index_for_component(
             &mut noise_component_stack,
             &mut noise_nodes,
@@ -1749,6 +1844,21 @@ impl NoiseRouterRepr {
             &mut multinoise_lookup_map,
         );
 
+        let mut compiled_fns = Vec::new();
+        let fn_prefix = format!("eval_{}", dim_name);
+        for (i, node) in noise_nodes.iter().enumerate() {
+            compiled_fns.push(node.emit_compiled_eval_fn(i, &fn_prefix, &noise_lookup_map));
+        }
+
+        let compiled_mod_ident =
+            syn::Ident::new(&format!("{}_compiled", dim_name), Span::call_site());
+        let compiled_mod_ts = quote! {
+            pub mod #compiled_mod_ident {
+                use super::*;
+                #(#compiled_fns)*
+            }
+        };
+
         let base_routers_ts = quote! {
             BaseNoiseRouters {
                 noise: BaseNoiseRouter {
@@ -1779,95 +1889,8 @@ impl NoiseRouterRepr {
             }
         };
 
-        let mod_ident = quote::format_ident!("{}_noise_evaluator", router_name);
-        let prefix = format!("{}_node", router_name);
-
-        let fn_tokens = noise_nodes
-            .iter()
-            .enumerate()
-            .map(|(idx, node)| node.emit_compiled_eval_fn(idx, &prefix, &noise_lookup_map));
-
-        let final_density_fn = quote::format_ident!("{}_{}", prefix, final_density);
-        let barrier_noise_fn = quote::format_ident!("{}_{}", prefix, barrier_noise);
-        let fluid_floodedness_fn =
-            quote::format_ident!("{}_{}", prefix, fluid_level_floodedness_noise);
-        let fluid_spread_fn = quote::format_ident!("{}_{}", prefix, fluid_level_spread_noise);
-        let lava_noise_fn = quote::format_ident!("{}_{}", prefix, lava_noise);
-        let vein_toggle_fn = quote::format_ident!("{}_{}", prefix, vein_toggle);
-        let vein_ridged_fn = quote::format_ident!("{}_{}", prefix, vein_ridged);
-        let vein_gap_fn = quote::format_ident!("{}_{}", prefix, vein_gap);
-        let erosion_fn = quote::format_ident!("{}_{}", prefix, noise_erosion);
-        let depth_fn = quote::format_ident!("{}_{}", prefix, noise_depth);
-
-        let compiled_mod_ts = quote! {
-            pub mod #mod_ident {
-                use super::*;
-                #(#fn_tokens)*
-
-                #[inline(always)]
-                pub fn sample_final_density<C: NoiseEvaluationContext>(pos: &pumpkin_util::math::vector3::Vector3<i32>, ctx: &mut C) -> f64 {
-                    #final_density_fn(pos, ctx)
-                }
-                #[inline(always)]
-                pub fn sample_barrier_noise<C: NoiseEvaluationContext>(pos: &pumpkin_util::math::vector3::Vector3<i32>, ctx: &mut C) -> f64 {
-                    #barrier_noise_fn(pos, ctx)
-                }
-                #[inline(always)]
-                pub fn sample_fluid_level_floodedness_noise<C: NoiseEvaluationContext>(pos: &pumpkin_util::math::vector3::Vector3<i32>, ctx: &mut C) -> f64 {
-                    #fluid_floodedness_fn(pos, ctx)
-                }
-                #[inline(always)]
-                pub fn sample_fluid_level_spread_noise<C: NoiseEvaluationContext>(pos: &pumpkin_util::math::vector3::Vector3<i32>, ctx: &mut C) -> f64 {
-                    #fluid_spread_fn(pos, ctx)
-                }
-                #[inline(always)]
-                pub fn sample_lava_noise<C: NoiseEvaluationContext>(pos: &pumpkin_util::math::vector3::Vector3<i32>, ctx: &mut C) -> f64 {
-                    #lava_noise_fn(pos, ctx)
-                }
-                #[inline(always)]
-                pub fn sample_vein_toggle<C: NoiseEvaluationContext>(pos: &pumpkin_util::math::vector3::Vector3<i32>, ctx: &mut C) -> f64 {
-                    #vein_toggle_fn(pos, ctx)
-                }
-                #[inline(always)]
-                pub fn sample_vein_ridged<C: NoiseEvaluationContext>(pos: &pumpkin_util::math::vector3::Vector3<i32>, ctx: &mut C) -> f64 {
-                    #vein_ridged_fn(pos, ctx)
-                }
-                #[inline(always)]
-                pub fn sample_vein_gap<C: NoiseEvaluationContext>(pos: &pumpkin_util::math::vector3::Vector3<i32>, ctx: &mut C) -> f64 {
-                    #vein_gap_fn(pos, ctx)
-                }
-                #[inline(always)]
-                pub fn sample_erosion<C: NoiseEvaluationContext>(pos: &pumpkin_util::math::vector3::Vector3<i32>, ctx: &mut C) -> f64 {
-                    #erosion_fn(pos, ctx)
-                }
-                #[inline(always)]
-                pub fn sample_depth<C: NoiseEvaluationContext>(pos: &pumpkin_util::math::vector3::Vector3<i32>, ctx: &mut C) -> f64 {
-                    #depth_fn(pos, ctx)
-                }
-            }
-        };
-
         (base_routers_ts, compiled_mod_ts)
     }
-}
-
-/// Wraps `$router.final_density` in a `Beardifier`-add and `CellCache` wrapper, mirroring the
-/// Java runtime mutation applied to aquifer generators.
-macro_rules! fix_final_density {
-    ($router:expr) => {{
-        $router.final_density = DensityFunctionRepr::Wrapper {
-            input: Box::new(DensityFunctionRepr::Binary {
-                argument1: Box::new($router.final_density),
-                argument2: Box::new(DensityFunctionRepr::Beardifier),
-                data: BinaryData {
-                    operation: BinaryOperation::Add,
-                    max_value: HashableF64(f64::INFINITY),
-                    min_value: HashableF64(f64::NEG_INFINITY),
-                },
-            }),
-            wrapper: WrapperType::CellCache,
-        };
-    }};
 }
 
 fn load_df_json(base_df_dir: &std::path::Path, name: &str) -> serde_json::Value {
@@ -1891,24 +1914,54 @@ fn clean_noise_name(n: &str) -> String {
     n.strip_prefix("minecraft:").unwrap_or(n).to_string()
 }
 
+fn parse_axis(s: &str) -> Axis {
+    match s {
+        "x" | "X" => Axis::X,
+        "y" | "Y" => Axis::Y,
+        "z" | "Z" => Axis::Z,
+        other => panic!("Unknown axis: {other}"),
+    }
+}
+
+fn parse_tiling(s: &str) -> Tiling {
+    match s {
+        "clamp_to_edge" => Tiling::ClampToEdge,
+        "repeat" => Tiling::Repeat,
+        "mirrored_repeat" => Tiling::MirroredRepeat,
+        _ => Tiling::ClampToEdge,
+    }
+}
+
+fn parse_metric(s: &str) -> DistanceMetric {
+    match s {
+        "euclidean" => DistanceMetric::Euclidean,
+        "euclidean_squared" => DistanceMetric::EuclideanSquared,
+        "manhattan" => DistanceMetric::Manhattan,
+        "chebyshev" => DistanceMetric::Chebyshev,
+        other => panic!("Unknown distance metric: {other}"),
+    }
+}
+
 fn parse_vanilla_df(base_df_dir: &std::path::Path, val: &serde_json::Value) -> DensityFunctionRepr {
     match val {
         serde_json::Value::Number(n) => DensityFunctionRepr::Constant {
-            value: HashableF64(n.as_f64().unwrap_or(0.0)),
+            value: HashableF32(n.as_f64().unwrap_or(0.0) as f32),
         },
         serde_json::Value::String(s) => {
             if s == "minecraft:y" {
-                DensityFunctionRepr::ClampedYGradient {
-                    data: ClampedYGradientData {
-                        from_y: -4064,
-                        to_y: 4062,
-                        from_value: HashableF64(-4064.0),
-                        to_value: HashableF64(4062.0),
+                DensityFunctionRepr::Gradient {
+                    data: GradientData {
+                        axis: Axis::Y,
+                        tiling: Tiling::ClampToEdge,
+                        from_coordinate: -4064,
+                        to_coordinate: 4062,
+                        from_value: HashableF32((-4064.0) as f32),
+                        to_value: HashableF32((4062.0) as f32),
                     },
                 }
             } else if s == "minecraft:zero" {
                 DensityFunctionRepr::Constant {
-                    value: HashableF64(0.0),
+                    value: HashableF32((0.0) as f32),
                 }
             } else {
                 let loaded = load_df_json(base_df_dir, s);
@@ -1930,7 +1983,7 @@ fn parse_vanilla_df(base_df_dir: &std::path::Path, val: &serde_json::Value) -> D
                         .and_then(|v| v.as_f64())
                         .unwrap_or(0.0);
                     DensityFunctionRepr::Constant {
-                        value: HashableF64(num),
+                        value: HashableF32((num) as f32),
                     }
                 }
                 "y_clamped_gradient" => {
@@ -1941,13 +1994,125 @@ fn parse_vanilla_df(base_df_dir: &std::path::Path, val: &serde_json::Value) -> D
                         .and_then(|v| v.as_f64())
                         .unwrap_or(0.0);
                     let to_value = obj.get("to_value").and_then(|v| v.as_f64()).unwrap_or(0.0);
-                    DensityFunctionRepr::ClampedYGradient {
-                        data: ClampedYGradientData {
-                            from_y,
-                            to_y,
-                            from_value: HashableF64(from_value),
-                            to_value: HashableF64(to_value),
+                    DensityFunctionRepr::Gradient {
+                        data: GradientData {
+                            axis: Axis::Y,
+                            tiling: Tiling::ClampToEdge,
+                            from_coordinate: from_y,
+                            to_coordinate: to_y,
+                            from_value: HashableF32((from_value) as f32),
+                            to_value: HashableF32((to_value) as f32),
                         },
+                    }
+                }
+                "gradient" => {
+                    let axis_str = obj.get("axis").and_then(|v| v.as_str()).unwrap_or("y");
+                    let axis = parse_axis(axis_str);
+                    let tiling_str = obj
+                        .get("tiling")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("clamp_to_edge");
+                    let tiling = parse_tiling(tiling_str);
+                    let from_coordinate =
+                        obj.get("from_coordinate")
+                            .or_else(|| obj.get("from_y"))
+                            .and_then(|v| v.as_i64())
+                            .expect("Missing from_coordinate") as i32;
+                    let to_coordinate =
+                        obj.get("to_coordinate")
+                            .or_else(|| obj.get("to_y"))
+                            .and_then(|v| v.as_i64())
+                            .expect("Missing to_coordinate") as i32;
+                    let from_value = obj
+                        .get("from_value")
+                        .and_then(|v| v.as_f64())
+                        .expect("Missing from_value");
+                    let to_value = obj
+                        .get("to_value")
+                        .and_then(|v| v.as_f64())
+                        .expect("Missing to_value");
+                    DensityFunctionRepr::Gradient {
+                        data: GradientData {
+                            axis,
+                            tiling,
+                            from_coordinate,
+                            to_coordinate,
+                            from_value: HashableF32((from_value) as f32),
+                            to_value: HashableF32((to_value) as f32),
+                        },
+                    }
+                }
+                "distance_to_point" => {
+                    let point_arr = obj
+                        .get("point")
+                        .and_then(|v| v.as_array())
+                        .expect("Missing point");
+                    let point = [
+                        point_arr[0].as_i64().unwrap_or(0) as i32,
+                        point_arr[1].as_i64().unwrap_or(0) as i32,
+                        point_arr[2].as_i64().unwrap_or(0) as i32,
+                    ];
+                    let metric_str = obj
+                        .get("metric")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("euclidean");
+                    let metric = parse_metric(metric_str);
+                    DensityFunctionRepr::DistanceToPoint {
+                        data: DistanceToPointData { point, metric },
+                    }
+                }
+                "lerp" => {
+                    let alpha =
+                        parse_vanilla_df(base_df_dir, obj.get("alpha").expect("Missing alpha"));
+                    let first =
+                        parse_vanilla_df(base_df_dir, obj.get("first").expect("Missing first"));
+                    let second =
+                        parse_vanilla_df(base_df_dir, obj.get("second").expect("Missing second"));
+                    DensityFunctionRepr::Lerp {
+                        alpha: Box::new(alpha),
+                        first: Box::new(first),
+                        second: Box::new(second),
+                    }
+                }
+                "floor" | "round" | "ceil" | "truncate" => {
+                    let op = match clean_type {
+                        "floor" => RoundingOperation::Floor,
+                        "round" => RoundingOperation::Round,
+                        "ceil" => RoundingOperation::Ceil,
+                        "truncate" => RoundingOperation::Truncate,
+                        _ => unreachable!(),
+                    };
+                    let input_node = obj
+                        .get("input")
+                        .or_else(|| obj.get("argument"))
+                        .expect("Missing input");
+                    let input = parse_vanilla_df(base_df_dir, input_node);
+                    let multiple = if let Some(m) = obj.get("multiple") {
+                        parse_vanilla_df(base_df_dir, m)
+                    } else {
+                        DensityFunctionRepr::Constant {
+                            value: HashableF32((1.0) as f32),
+                        }
+                    };
+                    DensityFunctionRepr::Rounding {
+                        input: Box::new(input),
+                        multiple: Box::new(multiple),
+                        data: RoundingData { operation: op },
+                    }
+                }
+                "slice" => {
+                    let axis_str = obj.get("axis").and_then(|v| v.as_str()).unwrap_or("y");
+                    let axis = parse_axis(axis_str);
+                    let coordinate = obj
+                        .get("coordinate")
+                        .and_then(|v| v.as_i64())
+                        .expect("Missing coordinate") as i32;
+                    let input =
+                        parse_vanilla_df(base_df_dir, obj.get("input").expect("Missing input"));
+                    DensityFunctionRepr::Slice {
+                        axis,
+                        coordinate,
+                        input: Box::new(input),
                     }
                 }
                 "old_blended_noise" => {
@@ -1975,24 +2140,28 @@ fn parse_vanilla_df(base_df_dir: &std::path::Path, val: &serde_json::Value) -> D
 
                     DensityFunctionRepr::InterpolatedNoiseSampler {
                         data: InterpolatedNoiseSamplerData {
-                            scaled_xz_scale: HashableF64(scaled_xz_scale),
-                            scaled_y_scale: HashableF64(scaled_y_scale),
-                            xz_factor: HashableF64(xz_factor),
-                            y_factor: HashableF64(y_factor),
-                            smear_scale_multiplier: HashableF64(smear_scale_multiplier),
-                            max_value: HashableF64(max_value),
+                            scaled_xz_scale: HashableF32((scaled_xz_scale) as f32),
+                            scaled_y_scale: HashableF32((scaled_y_scale) as f32),
+                            xz_factor: HashableF32((xz_factor) as f32),
+                            y_factor: HashableF32((y_factor) as f32),
+                            smear_scale_multiplier: HashableF32((smear_scale_multiplier) as f32),
+                            max_value: HashableF32((max_value) as f32),
                         },
                     }
                 }
-                "add" | "mul" | "min" | "max" => {
-                    let arg1 = parse_vanilla_df(
-                        base_df_dir,
-                        obj.get("argument1").expect("Missing argument1"),
-                    );
-                    let arg2 = parse_vanilla_df(
-                        base_df_dir,
-                        obj.get("argument2").expect("Missing argument2"),
-                    );
+                "add" | "mul" | "min" | "max" | "sub" | "div" | "pow" => {
+                    let arg1_node = obj
+                        .get("left")
+                        .or_else(|| obj.get("argument1"))
+                        .or_else(|| obj.get("base"))
+                        .expect("Missing left/argument1/base");
+                    let arg2_node = obj
+                        .get("right")
+                        .or_else(|| obj.get("argument2"))
+                        .or_else(|| obj.get("exponent"))
+                        .expect("Missing right/argument2/exponent");
+                    let arg1 = parse_vanilla_df(base_df_dir, arg1_node);
+                    let arg2 = parse_vanilla_df(base_df_dir, arg2_node);
                     let min_value = obj
                         .get("min_value")
                         .and_then(|v| v.as_f64())
@@ -2015,8 +2184,8 @@ fn parse_vanilla_df(base_df_dir: &std::path::Path, val: &serde_json::Value) -> D
                                 data: LinearData {
                                     operation: linear_op,
                                     argument: c,
-                                    min_value: HashableF64(min_value),
-                                    max_value: HashableF64(max_value),
+                                    min_value: HashableF32((min_value) as f32),
+                                    max_value: HashableF32((max_value) as f32),
                                 },
                             };
                         } else if let DensityFunctionRepr::Constant { value: c } = arg2 {
@@ -2025,8 +2194,8 @@ fn parse_vanilla_df(base_df_dir: &std::path::Path, val: &serde_json::Value) -> D
                                 data: LinearData {
                                     operation: linear_op,
                                     argument: c,
-                                    min_value: HashableF64(min_value),
-                                    max_value: HashableF64(max_value),
+                                    min_value: HashableF32((min_value) as f32),
+                                    max_value: HashableF32((max_value) as f32),
                                 },
                             };
                         }
@@ -2037,6 +2206,9 @@ fn parse_vanilla_df(base_df_dir: &std::path::Path, val: &serde_json::Value) -> D
                         "mul" => BinaryOperation::Mul,
                         "min" => BinaryOperation::Min,
                         "max" => BinaryOperation::Max,
+                        "sub" => BinaryOperation::Sub,
+                        "div" => BinaryOperation::Div,
+                        "pow" => BinaryOperation::Pow,
                         _ => unreachable!(),
                     };
 
@@ -2045,13 +2217,13 @@ fn parse_vanilla_df(base_df_dir: &std::path::Path, val: &serde_json::Value) -> D
                         argument2: Box::new(arg2),
                         data: BinaryData {
                             operation: op,
-                            min_value: HashableF64(min_value),
-                            max_value: HashableF64(max_value),
+                            min_value: HashableF32((min_value) as f32),
+                            max_value: HashableF32((max_value) as f32),
                         },
                     }
                 }
                 "abs" | "square" | "cube" | "half_negative" | "quarter_negative" | "squeeze"
-                | "invert" => {
+                | "invert" | "reciprocal" | "negate" | "sqrt" | "log" | "sign" => {
                     let op = match clean_type {
                         "abs" => UnaryOperation::Abs,
                         "square" => UnaryOperation::Square,
@@ -2059,7 +2231,11 @@ fn parse_vanilla_df(base_df_dir: &std::path::Path, val: &serde_json::Value) -> D
                         "half_negative" => UnaryOperation::HalfNegative,
                         "quarter_negative" => UnaryOperation::QuarterNegative,
                         "squeeze" => UnaryOperation::Squeeze,
-                        "invert" => UnaryOperation::Invert,
+                        "invert" | "reciprocal" => UnaryOperation::Invert,
+                        "negate" => UnaryOperation::Negate,
+                        "sqrt" => UnaryOperation::Sqrt,
+                        "log" => UnaryOperation::Log,
+                        "sign" => UnaryOperation::Sign,
                         _ => unreachable!(),
                     };
                     let input_node = obj
@@ -2079,8 +2255,8 @@ fn parse_vanilla_df(base_df_dir: &std::path::Path, val: &serde_json::Value) -> D
                         input: Box::new(input),
                         data: UnaryData {
                             operation: op,
-                            min_value: HashableF64(min_value),
-                            max_value: HashableF64(max_value),
+                            min_value: HashableF32((min_value) as f32),
+                            max_value: HashableF32((max_value) as f32),
                         },
                     }
                 }
@@ -2092,17 +2268,19 @@ fn parse_vanilla_df(base_df_dir: &std::path::Path, val: &serde_json::Value) -> D
                     let input = parse_vanilla_df(base_df_dir, input_node);
                     let min_val = obj
                         .get("min")
+                        .or_else(|| obj.get("min_value"))
                         .and_then(|v| v.as_f64())
                         .unwrap_or(f64::NEG_INFINITY);
                     let max_val = obj
                         .get("max")
+                        .or_else(|| obj.get("max_value"))
                         .and_then(|v| v.as_f64())
                         .unwrap_or(f64::INFINITY);
                     DensityFunctionRepr::Clamp {
                         input: Box::new(input),
                         data: ClampData {
-                            min_value: HashableF64(min_val),
-                            max_value: HashableF64(max_val),
+                            min_value: HashableF32((min_val) as f32),
+                            max_value: HashableF32((max_val) as f32),
                         },
                     }
                 }
@@ -2131,20 +2309,20 @@ fn parse_vanilla_df(base_df_dir: &std::path::Path, val: &serde_json::Value) -> D
                         when_in_range: Box::new(when_in),
                         when_out_range: Box::new(when_out),
                         data: RangeChoiceData {
-                            min_inclusive: HashableF64(min_inc),
-                            max_exclusive: HashableF64(max_exc),
+                            min_inclusive: HashableF32((min_inc) as f32),
+                            max_exclusive: HashableF32((max_exc) as f32),
                         },
                     }
                 }
                 "interval_select" => {
                     let input =
                         parse_vanilla_df(base_df_dir, obj.get("input").expect("Missing input"));
-                    let thresholds: Vec<HashableF64> = obj
+                    let thresholds: Vec<HashableF32> = obj
                         .get("thresholds")
                         .and_then(|v| v.as_array())
                         .expect("Missing thresholds array")
                         .iter()
-                        .map(|v| HashableF64(v.as_f64().unwrap_or(0.0)))
+                        .map(|v| HashableF32(v.as_f64().unwrap_or(0.0) as f32))
                         .collect();
                     let funcs: Vec<DensityFunctionRepr> = obj
                         .get("functions")
@@ -2174,8 +2352,8 @@ fn parse_vanilla_df(base_df_dir: &std::path::Path, val: &serde_json::Value) -> D
                     DensityFunctionRepr::Spline {
                         spline,
                         data: SplineData {
-                            min_value: HashableF64(min_value),
-                            max_value: HashableF64(max_value),
+                            min_value: HashableF32((min_value) as f32),
+                            max_value: HashableF32((max_value) as f32),
                         },
                     }
                 }
@@ -2186,12 +2364,37 @@ fn parse_vanilla_df(base_df_dir: &std::path::Path, val: &serde_json::Value) -> D
                         .expect("Missing noise name");
                     let xz_scale = obj.get("xz_scale").and_then(|v| v.as_f64()).unwrap_or(1.0);
                     let y_scale = obj.get("y_scale").and_then(|v| v.as_f64()).unwrap_or(1.0);
-                    DensityFunctionRepr::Noise {
-                        data: NoiseData {
-                            noise_id: clean_noise_name(noise_name),
-                            xz_scale: HashableF64(xz_scale),
-                            y_scale: HashableF64(y_scale),
-                        },
+                    let zero =
+                        serde_json::Value::Number(serde_json::Number::from_f64(0.0).unwrap());
+
+                    if obj.contains_key("shift_x")
+                        || obj.contains_key("shift_y")
+                        || obj.contains_key("shift_z")
+                    {
+                        let shift_x =
+                            parse_vanilla_df(base_df_dir, obj.get("shift_x").unwrap_or(&zero));
+                        let shift_y =
+                            parse_vanilla_df(base_df_dir, obj.get("shift_y").unwrap_or(&zero));
+                        let shift_z =
+                            parse_vanilla_df(base_df_dir, obj.get("shift_z").unwrap_or(&zero));
+                        DensityFunctionRepr::ShiftedNoise {
+                            shift_x: Box::new(shift_x),
+                            shift_y: Box::new(shift_y),
+                            shift_z: Box::new(shift_z),
+                            data: ShiftedNoiseData {
+                                noise_id: clean_noise_name(noise_name),
+                                xz_scale: HashableF32((xz_scale) as f32),
+                                y_scale: HashableF32((y_scale) as f32),
+                            },
+                        }
+                    } else {
+                        DensityFunctionRepr::Noise {
+                            data: NoiseData {
+                                noise_id: clean_noise_name(noise_name),
+                                xz_scale: HashableF32((xz_scale) as f32),
+                                y_scale: HashableF32((y_scale) as f32),
+                            },
+                        }
                     }
                 }
                 "shifted_noise" => {
@@ -2213,34 +2416,37 @@ fn parse_vanilla_df(base_df_dir: &std::path::Path, val: &serde_json::Value) -> D
                         shift_z: Box::new(shift_z),
                         data: ShiftedNoiseData {
                             noise_id: clean_noise_name(noise_name),
-                            xz_scale: HashableF64(xz_scale),
-                            y_scale: HashableF64(y_scale),
+                            xz_scale: HashableF32((xz_scale) as f32),
+                            y_scale: HashableF32((y_scale) as f32),
                         },
                     }
                 }
                 "shift_a" => {
                     let offset_noise = obj
-                        .get("argument")
+                        .get("noise")
+                        .or_else(|| obj.get("argument"))
                         .and_then(|v| v.as_str())
-                        .expect("Missing argument");
+                        .expect("Missing noise");
                     DensityFunctionRepr::ShiftA {
                         noise_id: clean_noise_name(offset_noise),
                     }
                 }
                 "shift_b" => {
                     let offset_noise = obj
-                        .get("argument")
+                        .get("noise")
+                        .or_else(|| obj.get("argument"))
                         .and_then(|v| v.as_str())
-                        .expect("Missing argument");
+                        .expect("Missing noise");
                     DensityFunctionRepr::ShiftB {
                         noise_id: clean_noise_name(offset_noise),
                     }
                 }
                 "shift" => {
                     let offset_noise = obj
-                        .get("argument")
+                        .get("noise")
+                        .or_else(|| obj.get("argument"))
                         .and_then(|v| v.as_str())
-                        .expect("Missing argument");
+                        .expect("Missing noise");
                     DensityFunctionRepr::ShiftA {
                         noise_id: clean_noise_name(offset_noise),
                     }
@@ -2250,27 +2456,31 @@ fn parse_vanilla_df(base_df_dir: &std::path::Path, val: &serde_json::Value) -> D
                 "blend_density" => {
                     let input = parse_vanilla_df(
                         base_df_dir,
-                        obj.get("argument").expect("Missing argument"),
+                        obj.get("input")
+                            .or_else(|| obj.get("argument"))
+                            .expect("Missing input/argument"),
                     );
                     DensityFunctionRepr::BlendDensity {
                         input: Box::new(input),
                     }
                 }
-                "end_islands" => DensityFunctionRepr::EndIslands,
+                "end_islands" | "end_outer_islands" => DensityFunctionRepr::EndIslands,
                 "beardifier" => DensityFunctionRepr::Beardifier,
-                "interpolated" | "flat_cache" | "cache_flat" | "cache_2d" | "cache_once"
-                | "cache_all_in_cell" => {
+                "cache" | "interpolated" | "flat_cache" | "cache_flat" | "cache_2d"
+                | "cache_once" | "cache_all_in_cell" => {
                     let wrapper = match clean_type {
                         "interpolated" => WrapperType::Interpolated,
                         "flat_cache" | "cache_flat" => WrapperType::CacheFlat,
                         "cache_2d" => WrapperType::Cache2D,
-                        "cache_once" => WrapperType::CacheOnce,
+                        "cache_once" | "cache" => WrapperType::CacheOnce,
                         "cache_all_in_cell" => WrapperType::CellCache,
                         _ => unreachable!(),
                     };
                     let input = parse_vanilla_df(
                         base_df_dir,
-                        obj.get("argument").expect("Missing argument"),
+                        obj.get("input")
+                            .or_else(|| obj.get("argument"))
+                            .expect("Missing input/argument"),
                     );
                     DensityFunctionRepr::Wrapper {
                         input: Box::new(input),
@@ -2362,34 +2572,79 @@ fn load_vanilla_noise_router(
     let nr = val
         .get("noise_router")
         .expect("Missing noise_router in noise_settings");
+    let aquifers = val.get("aquifers");
 
     let zero = serde_json::Value::Number(serde_json::Number::from_f64(0.0).unwrap());
 
+    let barrier = nr
+        .get("barrier")
+        .or_else(|| aquifers.and_then(|a| a.get("barrier")))
+        .unwrap_or(&zero);
+    let fluid_level_floodedness = nr
+        .get("fluid_level_floodedness")
+        .or_else(|| aquifers.and_then(|a| a.get("fluid_level_floodedness")))
+        .unwrap_or(&zero);
+    let fluid_level_spread = nr
+        .get("fluid_level_spread")
+        .or_else(|| aquifers.and_then(|a| a.get("fluid_level_spread")))
+        .unwrap_or(&zero);
+    let lava = nr
+        .get("lava")
+        .or_else(|| aquifers.and_then(|a| a.get("lava")))
+        .unwrap_or(&zero);
+    let preliminary_surface_level = nr
+        .get("preliminary_surface_level")
+        .or_else(|| nr.get("chunk_surface_level"))
+        .or_else(|| aquifers.and_then(|a| a.get("surface_level")))
+        .unwrap_or(&zero);
+
+    let vein_toggle = nr.get("vein_toggle").cloned().unwrap_or_else(|| {
+        if dim_name.starts_with("overworld")
+            || dim_name == "amplified"
+            || dim_name == "large_biomes"
+        {
+            serde_json::Value::String("minecraft:overworld/ore_vein/toggle".to_string())
+        } else {
+            zero.clone()
+        }
+    });
+    let vein_ridged = nr.get("vein_ridged").cloned().unwrap_or_else(|| {
+        if dim_name.starts_with("overworld")
+            || dim_name == "amplified"
+            || dim_name == "large_biomes"
+        {
+            serde_json::Value::String("minecraft:overworld/ore_vein/mask".to_string())
+        } else {
+            zero.clone()
+        }
+    });
+    let vein_gap = nr.get("vein_gap").cloned().unwrap_or_else(|| {
+        if dim_name.starts_with("overworld")
+            || dim_name == "amplified"
+            || dim_name == "large_biomes"
+        {
+            serde_json::Value::String("minecraft:overworld/ore_vein/gap".to_string())
+        } else {
+            zero.clone()
+        }
+    });
+
     NoiseRouterRepr {
-        barrier_noise: parse_vanilla_df(base_df_dir, nr.get("barrier").unwrap_or(&zero)),
-        fluid_level_floodedness_noise: parse_vanilla_df(
-            base_df_dir,
-            nr.get("fluid_level_floodedness").unwrap_or(&zero),
-        ),
-        fluid_level_spread_noise: parse_vanilla_df(
-            base_df_dir,
-            nr.get("fluid_level_spread").unwrap_or(&zero),
-        ),
-        lava_noise: parse_vanilla_df(base_df_dir, nr.get("lava").unwrap_or(&zero)),
+        barrier_noise: parse_vanilla_df(base_df_dir, barrier),
+        fluid_level_floodedness_noise: parse_vanilla_df(base_df_dir, fluid_level_floodedness),
+        fluid_level_spread_noise: parse_vanilla_df(base_df_dir, fluid_level_spread),
+        lava_noise: parse_vanilla_df(base_df_dir, lava),
         temperature: parse_vanilla_df(base_df_dir, nr.get("temperature").unwrap_or(&zero)),
         vegetation: parse_vanilla_df(base_df_dir, nr.get("vegetation").unwrap_or(&zero)),
         continents: parse_vanilla_df(base_df_dir, nr.get("continents").unwrap_or(&zero)),
         erosion: parse_vanilla_df(base_df_dir, nr.get("erosion").unwrap_or(&zero)),
         depth: parse_vanilla_df(base_df_dir, nr.get("depth").unwrap_or(&zero)),
         ridges: parse_vanilla_df(base_df_dir, nr.get("ridges").unwrap_or(&zero)),
-        preliminary_surface_level: parse_vanilla_df(
-            base_df_dir,
-            nr.get("preliminary_surface_level").unwrap_or(&zero),
-        ),
+        preliminary_surface_level: parse_vanilla_df(base_df_dir, preliminary_surface_level),
         final_density: parse_vanilla_df(base_df_dir, nr.get("final_density").unwrap_or(&zero)),
-        vein_toggle: parse_vanilla_df(base_df_dir, nr.get("vein_toggle").unwrap_or(&zero)),
-        vein_ridged: parse_vanilla_df(base_df_dir, nr.get("vein_ridged").unwrap_or(&zero)),
-        vein_gap: parse_vanilla_df(base_df_dir, nr.get("vein_gap").unwrap_or(&zero)),
+        vein_toggle: parse_vanilla_df(base_df_dir, &vein_toggle),
+        vein_ridged: parse_vanilla_df(base_df_dir, &vein_ridged),
+        vein_gap: parse_vanilla_df(base_df_dir, &vein_gap),
     }
 }
 
@@ -2418,17 +2673,28 @@ fn load_vanilla_noise_routers() -> NoiseRouterReprs {
     }
 }
 
+macro_rules! fix_final_density {
+    ($router:expr) => {{
+        $router.final_density = DensityFunctionRepr::Wrapper {
+            input: Box::new($router.final_density),
+            wrapper: WrapperType::CellCache,
+        };
+    }};
+}
+
 /// Reads vanilla datapack noise_settings and density_function files and emits the complete noise-router constants `TokenStream`.
 pub fn build() -> TokenStream {
     let mut reprs: NoiseRouterReprs = load_vanilla_noise_routers();
 
-    // The `final_density` function is mutated at runtime for the aquifer generator in Java.
     fix_final_density!(reprs.overworld);
     fix_final_density!(reprs.overworld_amplified);
     fix_final_density!(reprs.overworld_large_biomes);
     fix_final_density!(reprs.nether);
+    fix_final_density!(reprs.end);
+    fix_final_density!(reprs.end_islands);
 
-    let _ = reprs.end;
+    let _ = reprs.overworld_amplified;
+    let _ = reprs.overworld_large_biomes;
     let _ = reprs.end_islands;
 
     let (overworld_router, overworld_compiled) =
@@ -2440,19 +2706,19 @@ pub fn build() -> TokenStream {
         use crate::chunk::DoublePerlinNoiseParameters;
 
         pub trait NoiseEvaluationContext {
-            fn sample_noise(&mut self, noise_id: DoublePerlinNoiseParameters, x: f64, y: f64, z: f64) -> f64;
-            fn sample_shift_a(&mut self, noise_id: DoublePerlinNoiseParameters, pos: &pumpkin_util::math::vector3::Vector3<i32>) -> f64;
-            fn sample_shift_b(&mut self, noise_id: DoublePerlinNoiseParameters, pos: &pumpkin_util::math::vector3::Vector3<i32>) -> f64;
-            fn sample_shifted_noise(&mut self, noise_id: DoublePerlinNoiseParameters, shift_x: f64, shift_y: f64, shift_z: f64, xz_scale: f64, y_scale: f64) -> f64;
-            fn sample_interpolated_noise(&mut self, pos: &pumpkin_util::math::vector3::Vector3<i32>) -> f64;
-            fn sample_beardifier(&mut self, pos: &pumpkin_util::math::vector3::Vector3<i32>) -> f64;
-            fn sample_blend_alpha(&mut self, pos: &pumpkin_util::math::vector3::Vector3<i32>) -> f64;
-            fn sample_blend_offset(&mut self, pos: &pumpkin_util::math::vector3::Vector3<i32>) -> f64;
-            fn sample_blend_density(&mut self, input_val: f64, pos: &pumpkin_util::math::vector3::Vector3<i32>) -> f64;
-            fn sample_end_islands(&mut self, pos: &pumpkin_util::math::vector3::Vector3<i32>) -> f64;
-            fn sample_wrapper(&mut self, wrapper_index: usize, wrapper_type: WrapperType, pos: &pumpkin_util::math::vector3::Vector3<i32>, eval_input: &dyn Fn(&pumpkin_util::math::vector3::Vector3<i32>, &mut Self) -> f64) -> f64;
-            fn sample_spline(&mut self, spline_index: usize, location_value: f64, pos: &pumpkin_util::math::vector3::Vector3<i32>) -> f64;
-            fn sample_find_top_surface(&mut self, density_fn: &dyn Fn(&pumpkin_util::math::vector3::Vector3<i32>, &mut Self) -> f64, upper_bound_fn: &dyn Fn(&pumpkin_util::math::vector3::Vector3<i32>, &mut Self) -> f64, lower_bound: i32, cell_height: i32, pos: &pumpkin_util::math::vector3::Vector3<i32>) -> f64;
+            fn sample_noise(&mut self, noise_id: DoublePerlinNoiseParameters, x: f32, y: f32, z: f32) -> f32;
+            fn sample_shift_a(&mut self, noise_id: DoublePerlinNoiseParameters, pos: &pumpkin_util::math::vector3::Vector3<i32>) -> f32;
+            fn sample_shift_b(&mut self, noise_id: DoublePerlinNoiseParameters, pos: &pumpkin_util::math::vector3::Vector3<i32>) -> f32;
+            fn sample_shifted_noise(&mut self, noise_id: DoublePerlinNoiseParameters, shift_x: f32, shift_y: f32, shift_z: f32, xz_scale: f32, y_scale: f32) -> f32;
+            fn sample_interpolated_noise(&mut self, pos: &pumpkin_util::math::vector3::Vector3<i32>) -> f32;
+            fn sample_beardifier(&mut self, pos: &pumpkin_util::math::vector3::Vector3<i32>) -> f32;
+            fn sample_blend_alpha(&mut self, pos: &pumpkin_util::math::vector3::Vector3<i32>) -> f32;
+            fn sample_blend_offset(&mut self, pos: &pumpkin_util::math::vector3::Vector3<i32>) -> f32;
+            fn sample_blend_density(&mut self, input_val: f32, pos: &pumpkin_util::math::vector3::Vector3<i32>) -> f32;
+            fn sample_end_islands(&mut self, pos: &pumpkin_util::math::vector3::Vector3<i32>) -> f32;
+            fn sample_wrapper(&mut self, wrapper_index: usize, wrapper_type: WrapperType, pos: &pumpkin_util::math::vector3::Vector3<i32>, eval_input: &dyn Fn(&pumpkin_util::math::vector3::Vector3<i32>, &mut Self) -> f32) -> f32;
+            fn sample_spline(&mut self, spline_index: usize, location_value: f32, pos: &pumpkin_util::math::vector3::Vector3<i32>) -> f32;
+            fn sample_find_top_surface(&mut self, density_fn: &dyn Fn(&pumpkin_util::math::vector3::Vector3<i32>, &mut Self) -> f32, upper_bound_fn: &dyn Fn(&pumpkin_util::math::vector3::Vector3<i32>, &mut Self) -> f32, lower_bound: i32, cell_height: i32, pos: &pumpkin_util::math::vector3::Vector3<i32>) -> f32;
         }
 
         #overworld_compiled
@@ -2461,8 +2727,8 @@ pub fn build() -> TokenStream {
 
         pub struct NoiseData {
             pub noise_id: DoublePerlinNoiseParameters,
-            pub xz_scale: f64,
-            pub y_scale: f64,
+            pub xz_scale: f32,
+            pub y_scale: f32,
         }
 
         pub struct FindTopSurfaceData {
@@ -2471,35 +2737,72 @@ pub fn build() -> TokenStream {
         }
 
         pub struct ShiftedNoiseData {
-            pub xz_scale: f64,
-            pub y_scale: f64,
+            pub xz_scale: f32,
+            pub y_scale: f32,
             pub noise_id: DoublePerlinNoiseParameters,
         }
 
-
         pub struct InterpolatedNoiseSamplerData {
-            pub scaled_xz_scale: f64,
-            pub scaled_y_scale: f64,
-            pub xz_factor: f64,
-            pub y_factor: f64,
-            pub smear_scale_multiplier: f64,
+            pub scaled_xz_scale: f32,
+            pub scaled_y_scale: f32,
+            pub xz_factor: f32,
+            pub y_factor: f32,
+            pub smear_scale_multiplier: f32,
         }
 
         pub struct ClampedYGradientData {
-            pub from_y: f64,
-            pub to_y: f64,
-            pub from_value: f64,
-            pub to_value: f64,
+            pub from_y: f32,
+            pub to_y: f32,
+            pub from_value: f32,
+            pub to_value: f32,
         }
 
-        impl ClampedYGradientData {
-            #[inline]
-            #[must_use]
-            pub fn apply_y(&self, y: f64) -> f64 {
-                let clamped = y.clamp(self.from_y, self.to_y);
-                let delta = (clamped - self.from_y) / (self.to_y - self.from_y);
-                self.from_value + delta * (self.to_value - self.from_value)
-            }
+        #[derive(Copy, Clone)]
+        pub enum Axis {
+            X,
+            Y,
+            Z,
+        }
+
+        #[derive(Copy, Clone)]
+        pub enum Tiling {
+            ClampToEdge,
+            Repeat,
+            MirroredRepeat,
+        }
+
+        pub struct GradientData {
+            pub axis: Axis,
+            pub tiling: Tiling,
+            pub from_coordinate: i32,
+            pub to_coordinate: i32,
+            pub from_value: f32,
+            pub to_value: f32,
+        }
+
+        #[derive(Copy, Clone)]
+        pub enum DistanceMetric {
+            Euclidean,
+            EuclideanSquared,
+            Manhattan,
+            Chebyshev,
+        }
+
+        pub struct DistanceToPointData {
+            pub point: [i32; 3],
+            pub metric: DistanceMetric,
+        }
+
+        #[derive(Copy, Clone)]
+        pub enum RoundingOperation {
+            Floor,
+            Round,
+            Ceil,
+            Truncate,
+        }
+
+        pub struct RoundingData {
+            pub operation: RoundingOperation,
         }
 
         #[derive(Copy, Clone)]
@@ -2508,6 +2811,9 @@ pub fn build() -> TokenStream {
             Mul,
             Min,
             Max,
+            Sub,
+            Div,
+            Pow,
         }
 
         pub struct BinaryData {
@@ -2517,12 +2823,15 @@ pub fn build() -> TokenStream {
         impl BinaryData {
             #[inline]
             #[must_use]
-            pub const fn apply_density(&self, a: f64, b: f64) -> f64 {
+            pub const fn apply_density(&self, a: f32, b: f32) -> f32 {
                 match self.operation {
                     BinaryOperation::Add => a + b,
                     BinaryOperation::Mul => a * b,
                     BinaryOperation::Min => a.min(b),
                     BinaryOperation::Max => a.max(b),
+                    BinaryOperation::Sub => a - b,
+                    BinaryOperation::Div => if b == 0.0 { 0.0 } else { a / b },
+                    BinaryOperation::Pow => a, // const evaluation fallback
                 }
             }
         }
@@ -2535,13 +2844,13 @@ pub fn build() -> TokenStream {
 
         pub struct LinearData {
             pub operation: LinearOperation,
-            pub argument: f64,
+            pub argument: f32,
         }
 
         impl LinearData {
             #[inline]
             #[must_use]
-            pub const fn apply_density(&self, density: f64) -> f64 {
+            pub const fn apply_density(&self, density: f32) -> f32 {
                 match self.operation {
                     LinearOperation::Add => density + self.argument,
                     LinearOperation::Mul => density * self.argument,
@@ -2557,7 +2866,11 @@ pub fn build() -> TokenStream {
             HalfNegative,
             QuarterNegative,
             Squeeze,
-            Invert,  // new in 26.1
+            Invert,
+            Negate,
+            Sqrt,
+            Log,
+            Sign,
         }
 
         pub struct UnaryData {
@@ -2567,8 +2880,7 @@ pub fn build() -> TokenStream {
         impl UnaryData {
             #[inline]
             #[must_use]
-            #[allow(clippy::too_many_lines)]
-            pub const fn apply_density(&self, density: f64) -> f64 {
+            pub fn apply_density(&self, density: f32) -> f32 {
                 match self.operation {
                     UnaryOperation::Abs => density.abs(),
                     UnaryOperation::Square => density * density,
@@ -2592,28 +2904,34 @@ pub fn build() -> TokenStream {
                         clamped / 2.0 - clamped * clamped * clamped / 24.0
                     }
                     UnaryOperation::Invert => {
-                        if density == 0.0 { f64::INFINITY } else { 1.0 / density }
-                    },
+                        if density == 0.0 { f32::INFINITY } else { 1.0 / density }
+                    }
+                    UnaryOperation::Negate => -density,
+                    UnaryOperation::Sqrt => density.sqrt(),
+                    UnaryOperation::Log => density.ln(),
+                    UnaryOperation::Sign => {
+                        if density > 0.0 { 1.0 } else if density < 0.0 { -1.0 } else { 0.0 }
+                    }
                 }
             }
         }
 
         pub struct ClampData {
-            pub min_value: f64,
-            pub max_value: f64,
+            pub min_value: f32,
+            pub max_value: f32,
         }
 
         impl ClampData {
             #[inline]
             #[must_use]
-            pub const fn apply_density(&self, density: f64) -> f64 {
+            pub const fn apply_density(&self, density: f32) -> f32 {
                 density.clamp(self.min_value, self.max_value)
             }
         }
 
         pub struct RangeChoiceData {
-            pub min_inclusive: f64,
-            pub max_exclusive: f64,
+            pub min_inclusive: f32,
+            pub max_exclusive: f32,
         }
 
         pub struct SplinePoint {
@@ -2640,9 +2958,7 @@ pub fn build() -> TokenStream {
         }
 
         pub enum BaseNoiseFunctionComponent {
-            // This is a placeholder for leaving space for world structures
             Beardifier,
-            // These functions are initialized by a seed at runtime
             BlendAlpha,
             BlendOffset,
             BlendDensity {
@@ -2674,20 +2990,39 @@ pub fn build() -> TokenStream {
             },
             IntervalSelect {
                 input_index: usize,
-                thresholds: &'static [f64],
+                thresholds: &'static [f32],
                 functions_indices: &'static [usize],
             },
-            // The wrapped function is wrapped in a new wrapper at runtime
             Wrapper {
                 input_index: usize,
                 wrapper: WrapperType,
             },
-            // These functions are unchanged except possibly for internal functions
             Constant {
-                value: f64,
+                value: f32,
             },
             ClampedYGradient {
                 data: &'static ClampedYGradientData,
+            },
+            Gradient {
+                data: &'static GradientData,
+            },
+            DistanceToPoint {
+                data: &'static DistanceToPointData,
+            },
+            Lerp {
+                alpha_index: usize,
+                first_index: usize,
+                second_index: usize,
+            },
+            Rounding {
+                input_index: usize,
+                multiple_index: usize,
+                data: &'static RoundingData,
+            },
+            Slice {
+                input_index: usize,
+                axis: Axis,
+                coordinate: i32,
             },
             Binary {
                 argument1_index: usize,

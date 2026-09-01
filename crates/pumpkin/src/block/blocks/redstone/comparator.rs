@@ -3,9 +3,7 @@ use std::sync::{Arc, atomic::Ordering};
 use crate::block::entities::comparator::ComparatorBlockEntity;
 use pumpkin_data::{
     Block, BlockDirection, BlockState, BlockStateId, HorizontalFacingExt,
-    block_properties::{
-        BlockProperties, ComparatorLikeProperties, HorizontalFacing, ModeComparator,
-    },
+    block_properties::{ComparatorLikeProperties, HorizontalFacing, ModeComparator},
 };
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::{boundingbox::BoundingBox, position::BlockPos};
@@ -34,7 +32,7 @@ impl BlockBehaviour for ComparatorBlock {
 
     fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
         let state = args.world.get_block_state(args.position);
-        let props = ComparatorLikeProperties::from_state_id(state.id, args.block);
+        let props = ComparatorLikeProperties::from_state_id(state.id);
         self.on_use(props, args.world, *args.position, args.block);
 
         BlockActionResult::Success
@@ -138,7 +136,7 @@ impl RedstoneGateBlock<ComparatorLikeProperties> for ComparatorBlock {
         }
         let i = self.calculate_output_signal(world, pos, state, block);
         let j = RedstoneGateBlock::get_output_level(self, world, pos);
-        let props = ComparatorLikeProperties::from_state_id(state.id, block);
+        let props = ComparatorLikeProperties::from_state_id(state.id);
 
         if i != j || props.powered != RedstoneGateBlock::has_power(self, world, pos, state, block) {
             let priority =
@@ -168,7 +166,7 @@ impl RedstoneGateBlock<ComparatorLikeProperties> for ComparatorBlock {
         if i > j {
             true
         } else {
-            let props = ComparatorLikeProperties::from_state_id(state.id, block);
+            let props = ComparatorLikeProperties::from_state_id(state.id);
             i == j && props.mode == ModeComparator::Compare
         }
     }
@@ -178,7 +176,7 @@ impl RedstoneGateBlock<ComparatorLikeProperties> for ComparatorBlock {
             world, pos, state.id, block,
         );
 
-        let props = ComparatorLikeProperties::from_state_id(state.id, block);
+        let props = ComparatorLikeProperties::from_state_id(state.id);
         let facing = props.facing;
         let source_pos = pos.offset(facing.to_offset());
         let (source_block, source_state) = world.get_block_and_state(&source_pos);
@@ -243,7 +241,7 @@ impl ComparatorBlock {
         };
 
         let state_id = props.to_state_id(block);
-        world.set_block_state(&block_pos, state_id, BlockFlags::empty());
+        world.set_block_state(&block_pos, state_id, BlockFlags::NOTIFY_ALL);
 
         self.update(world, block_pos, BlockState::from_id(state_id), block);
     }
@@ -266,7 +264,7 @@ impl ComparatorBlock {
             return 0;
         }
 
-        let props = ComparatorLikeProperties::from_state_id(state.id, block);
+        let props = ComparatorLikeProperties::from_state_id(state.id);
         if props.mode == ModeComparator::Subtract {
             power - sub_power
         } else {
@@ -310,7 +308,7 @@ impl ComparatorBlock {
                 .store(future_level as u8, Ordering::Relaxed);
         }
 
-        let mut props = ComparatorLikeProperties::from_state_id(state.id, block);
+        let mut props = ComparatorLikeProperties::from_state_id(state.id);
         if now_level != future_level || props.mode == ModeComparator::Compare {
             let future_power = self.has_power(world, pos, state, block);
             let now_power = props.powered;

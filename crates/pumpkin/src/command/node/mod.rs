@@ -182,6 +182,7 @@ pub struct CommandNodeMetadata {
     pub literal: Cow<'static, str>,
     pub literal_lowercase: String,
     pub description: Cow<'static, str>,
+    pub source: Option<String>,
 }
 
 impl CommandNodeMetadata {
@@ -194,6 +195,7 @@ impl CommandNodeMetadata {
             literal: literal.clone(),
             literal_lowercase: literal.to_lowercase(),
             description: description.into(),
+            source: None,
         }
     }
 }

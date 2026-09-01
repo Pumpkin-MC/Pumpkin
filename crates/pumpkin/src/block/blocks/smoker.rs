@@ -5,10 +5,7 @@ use crate::block::entities::{
     PropertyDelegate, furnace_like_block_entity::ExperienceContainer, smoker::SmokerBlockEntity,
 };
 use pumpkin_data::{
-    BlockStateId,
-    block_properties::{BlockProperties, FurnaceLikeProperties},
-    screen::WindowType,
-    translation,
+    BlockStateId, block_properties::FurnaceLikeProperties, screen::WindowType, translation,
 };
 use pumpkin_inventory::{
     furnace_like::furnace_like_screen_handler::FurnaceLikeScreenHandler,

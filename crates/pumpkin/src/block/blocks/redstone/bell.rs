@@ -9,7 +9,6 @@ use crate::block::{
 };
 use crate::world::World;
 use pumpkin_data::BlockStateId;
-use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::block_properties::HorizontalFacing;
 use pumpkin_data::block_properties::{AttachFace, BellAttachment, BellLikeProperties};
 use pumpkin_data::sound::Sound;
@@ -41,9 +40,9 @@ fn ring_bell(
         return false;
     }
 
-    let (block, state_id) = world.get_block_and_state_id(&position);
+    let (_block, state_id) = world.get_block_and_state_id(&position);
 
-    let props = BellLikeProperties::from_state_id(state_id, block);
+    let props = BellLikeProperties::from_state_id(state_id);
     let direction = hit_direction.unwrap_or(props.facing);
 
     if let Some(block_entity) = world.get_block_entity(&position)
@@ -97,8 +96,8 @@ fn is_single_wall(position: BlockPos, facing: HorizontalFacing, world: &World) -
 pub struct BellBlock;
 
 impl WallMountedBlock for BellBlock {
-    fn get_direction(&self, state_id: BlockStateId, block: &Block) -> BlockDirection {
-        let props = BellLikeProperties::from_state_id(state_id, block);
+    fn get_direction(&self, state_id: BlockStateId, _block: &Block) -> BlockDirection {
+        let props = BellLikeProperties::from_state_id(state_id);
         match props.attachment {
             BellAttachment::Ceiling => BlockDirection::Down,
             BellAttachment::Floor => BlockDirection::Up,
@@ -143,7 +142,7 @@ impl BlockBehaviour for BellBlock {
     fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
         let state = args.world.get_block_state(args.position);
 
-        let props = BellLikeProperties::from_state_id(state.id, args.block);
+        let props = BellLikeProperties::from_state_id(state.id);
 
         if !is_point_on_bell(args.hit, props.attachment, props.facing) {
             return BlockActionResult::Pass; // Pass if Crosshair wasn't correctly positioned
@@ -200,7 +199,7 @@ impl BlockBehaviour for BellBlock {
         let is_receiving_power = block_receives_redstone_power(world, args.position);
         let state = args.world.get_block_state(args.position);
 
-        let mut props = BellLikeProperties::from_state_id(state.id, args.block);
+        let mut props = BellLikeProperties::from_state_id(state.id);
 
         if props.powered != is_receiving_power {
             props.powered = is_receiving_power;
