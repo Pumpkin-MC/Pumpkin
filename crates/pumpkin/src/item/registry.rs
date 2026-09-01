@@ -59,6 +59,12 @@ impl ItemRegistry {
         }
     }
 
+    pub fn on_use_tick(&self, stack: &ItemStack, player: &Player, remaining_use_ticks: i32) {
+        if let Some(behaviour) = self.get_pumpkin_item(stack.item.id) {
+            behaviour.on_use_tick(stack, player, remaining_use_ticks);
+        }
+    }
+
     /// Returns the item's use duration in ticks, as defined by its registered behaviour.
     /// Returns `None` if the item has no registered behaviour or its duration is 0.
     #[must_use]
