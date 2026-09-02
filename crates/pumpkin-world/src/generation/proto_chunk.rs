@@ -578,6 +578,35 @@ impl ProtoChunk {
     }
 
     #[inline]
+    fn set_block_state_direct(
+        &mut self,
+        local_x: i32,
+        local_y: i32,
+        local_z: i32,
+        block_y: i16,
+        block_state: &BlockState,
+    ) {
+        if !block_state.is_air() {
+            let index = Self::local_position_to_height_map_index(local_x, local_z);
+            self.maybe_update_surface_height_map(index, block_y);
+            let block = BlockId::from_state_id(block_state.id);
+            let blocks_movement = blocks_movement(block_state, block);
+            if blocks_movement {
+                self.maybe_update_ocean_floor_height_map(index, block_y);
+            }
+            if blocks_movement || block_state.is_liquid() {
+                self.maybe_update_motion_blocking_height_map(index, block_y);
+                if !block.has_tag(tag::Block::MINECRAFT_LEAVES) {
+                    self.maybe_update_motion_blocking_no_leaves_height_map(index, block_y);
+                }
+            }
+        }
+
+        let index = self.local_pos_to_block_index(local_x, local_y, local_z);
+        self.flat_block_map[index] = block_state.id;
+    }
+
+    #[inline]
     #[must_use]
     pub fn get_biome(&self, x: i32, y: i32, z: i32) -> &'static Biome {
         Biome::from_id(self.get_biome_id(x, y, z)).unwrap_or(&Biome::PLAINS)
@@ -884,16 +913,16 @@ impl ProtoChunk {
 
         let delta_y_step = 1.0 / v_count as f32;
         let delta_x_z_step = 1.0 / h_count as f32;
+        let bottom_y = self.bottom_y() as i32;
+        let chunk_height = self.height() as i32;
 
         noise_sampler.sample_start_density();
         for cell_x in 0..horizontal_cells {
             noise_sampler.sample_end_density(cell_x);
             let sample_start_x = (self.start_cell_x(h_count) + cell_x) * h_count;
-            let block_x_base = self.start_block_x() + cell_x * h_count;
 
             for cell_z in 0..horizontal_cells {
                 let sample_start_z = (self.start_cell_z(h_count) + cell_z) * h_count;
-                let block_z_base = self.start_block_z() + cell_z * h_count;
 
                 for cell_y in (0..cell_height).rev() {
                     noise_sampler.on_sampled_cell_corners(cell_x, cell_y as i32, cell_z);
@@ -901,15 +930,19 @@ impl ProtoChunk {
 
                     for local_y in (0..v_count).rev() {
                         let block_y = sample_start_y + local_y;
+                        let chunk_local_y = block_y - bottom_y;
+                        if chunk_local_y < 0 || chunk_local_y >= chunk_height {
+                            continue;
+                        }
                         noise_sampler.interpolate_y(local_y as f32 * delta_y_step);
 
                         for local_x in 0..h_count {
+                            let chunk_local_x = cell_x * h_count + local_x;
                             noise_sampler.interpolate_x(local_x as f32 * delta_x_z_step);
-                            let block_x = block_x_base + local_x;
 
                             for local_z in 0..h_count {
+                                let chunk_local_z = cell_z * h_count + local_z;
                                 noise_sampler.interpolate_z(local_z as f32 * delta_x_z_step);
-                                let block_z = block_z_base + local_z;
 
                                 let block_state = noise_sampler
                                     .sample_block_state(
@@ -923,7 +956,13 @@ impl ProtoChunk {
                                         surface_height_estimate_sampler,
                                     )
                                     .unwrap_or(generator.default_block);
-                                self.set_block_state(block_x, block_y, block_z, block_state);
+                                self.set_block_state_direct(
+                                    chunk_local_x,
+                                    chunk_local_y,
+                                    chunk_local_z,
+                                    block_y as i16,
+                                    block_state,
+                                );
                             }
                         }
                     }
