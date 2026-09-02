@@ -4,6 +4,7 @@ use std::mem;
 use super::{
     chunk_noise_router::{ChunkNoiseFunctionComponent, MutableChunkNoiseFunctionComponentImpl},
     density_function::{IndexToNoisePos, NoiseFunctionComponentRange},
+    density_volume::DensityVolume,
 };
 use pumpkin_util::math::{lerp, lerp2, lerp3, vector3::Vector3};
 
@@ -827,6 +828,26 @@ impl MutableChunkNoiseFunctionComponentImpl for ChunkSpecificNoiseFunctionCompon
             Self::CacheOnce(c) => c.fill(component_stack, array, mapper, sample_options),
             Self::CellCache(c) => c.fill(component_stack, array, mapper, sample_options),
             Self::Beardifier(b) => b.fill(component_stack, array, mapper, sample_options),
+        }
+    }
+
+    #[inline]
+    fn sample_volume(
+        &mut self,
+        component_stack: &mut [ChunkNoiseFunctionComponent],
+        buffer: &mut [f32],
+        volume: &DensityVolume,
+        sample_options: &ChunkNoiseFunctionSampleOptions,
+    ) {
+        match self {
+            Self::DensityInterpolator(d) => {
+                d.sample_volume(component_stack, buffer, volume, sample_options);
+            }
+            Self::FlatCache(f) => f.sample_volume(component_stack, buffer, volume, sample_options),
+            Self::Cache2D(c) => c.sample_volume(component_stack, buffer, volume, sample_options),
+            Self::CacheOnce(c) => c.sample_volume(component_stack, buffer, volume, sample_options),
+            Self::CellCache(c) => c.sample_volume(component_stack, buffer, volume, sample_options),
+            Self::Beardifier(b) => b.sample_volume(component_stack, buffer, volume, sample_options),
         }
     }
 }
