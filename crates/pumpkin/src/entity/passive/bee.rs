@@ -8,7 +8,6 @@ use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::Sound;
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_nbt::compound::NbtCompound;
-use pumpkin_protocol::java::client::play::Metadata;
 
 use crate::entity::{
     Entity, EntityBase,
@@ -103,12 +102,9 @@ impl BeeEntity {
         let new_flags = if val { current | flag } else { current & !flag };
         self.flags.store(new_flags, Ordering::Relaxed);
         let entity = self.get_entity();
-        entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::bee::DATA_FLAGS_ID,
-                new_flags as i8,
-            )],
-            None,
+        entity.set_synced_data(
+            pumpkin_data::tracked_data::bee::DATA_FLAGS_ID,
+            new_flags as i8,
         );
     }
 
@@ -220,20 +216,11 @@ impl Mob for BeeEntity {
         let entity = self.get_entity();
         let is_baby = entity.age.load(Ordering::Relaxed) < 0;
         if is_baby {
-            entity.send_meta_data(
-                &[Metadata::new(
-                    pumpkin_data::tracked_data::bee::DATA_BABY_ID,
-                    true,
-                )],
-                None,
-            );
+            entity.set_synced_data(pumpkin_data::tracked_data::bee::DATA_BABY_ID, true);
         }
-        entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::bee::DATA_FLAGS_ID,
-                self.flags.load(Ordering::Relaxed) as i8,
-            )],
-            None,
+        entity.set_synced_data(
+            pumpkin_data::tracked_data::bee::DATA_FLAGS_ID,
+            self.flags.load(Ordering::Relaxed) as i8,
         );
     }
 

@@ -134,7 +134,7 @@ pub mod overworld_compiled {
         pos: &pumpkin_util::math::vector3::Vector3<i32>,
         ctx: &mut C,
     ) -> f32 {
-        ctx.sample_wrapper(8usize, WrapperType::CacheOnce, pos, &eval_overworld_7)
+        ctx.sample_wrapper(8usize, WrapperType::CacheFlat, pos, &eval_overworld_7)
     }
     #[inline(always)]
     pub fn eval_overworld_9<C: NoiseEvaluationContext>(
@@ -156,7 +156,7 @@ pub mod overworld_compiled {
         pos: &pumpkin_util::math::vector3::Vector3<i32>,
         ctx: &mut C,
     ) -> f32 {
-        ctx.sample_wrapper(11usize, WrapperType::CacheOnce, pos, &eval_overworld_10)
+        ctx.sample_wrapper(11usize, WrapperType::CacheFlat, pos, &eval_overworld_10)
     }
     #[inline(always)]
     pub fn eval_overworld_12<C: NoiseEvaluationContext>(
@@ -180,7 +180,7 @@ pub mod overworld_compiled {
         pos: &pumpkin_util::math::vector3::Vector3<i32>,
         ctx: &mut C,
     ) -> f32 {
-        ctx.sample_wrapper(13usize, WrapperType::CacheOnce, pos, &eval_overworld_12)
+        ctx.sample_wrapper(13usize, WrapperType::CacheFlat, pos, &eval_overworld_12)
     }
     #[inline(always)]
     pub fn eval_overworld_14<C: NoiseEvaluationContext>(
@@ -204,7 +204,7 @@ pub mod overworld_compiled {
         pos: &pumpkin_util::math::vector3::Vector3<i32>,
         ctx: &mut C,
     ) -> f32 {
-        ctx.sample_wrapper(15usize, WrapperType::CacheOnce, pos, &eval_overworld_14)
+        ctx.sample_wrapper(15usize, WrapperType::CacheFlat, pos, &eval_overworld_14)
     }
     #[inline(always)]
     pub fn eval_overworld_16<C: NoiseEvaluationContext>(
@@ -228,7 +228,7 @@ pub mod overworld_compiled {
         pos: &pumpkin_util::math::vector3::Vector3<i32>,
         ctx: &mut C,
     ) -> f32 {
-        ctx.sample_wrapper(17usize, WrapperType::CacheOnce, pos, &eval_overworld_16)
+        ctx.sample_wrapper(17usize, WrapperType::CacheFlat, pos, &eval_overworld_16)
     }
     #[inline(always)]
     pub fn eval_overworld_18<C: NoiseEvaluationContext>(
@@ -295,7 +295,7 @@ pub mod overworld_compiled {
         pos: &pumpkin_util::math::vector3::Vector3<i32>,
         ctx: &mut C,
     ) -> f32 {
-        ctx.sample_wrapper(26usize, WrapperType::CacheOnce, pos, &eval_overworld_25)
+        ctx.sample_wrapper(26usize, WrapperType::CacheFlat, pos, &eval_overworld_25)
     }
     #[inline(always)]
     pub fn eval_overworld_27<C: NoiseEvaluationContext>(
@@ -327,7 +327,7 @@ pub mod overworld_compiled {
         pos: &pumpkin_util::math::vector3::Vector3<i32>,
         ctx: &mut C,
     ) -> f32 {
-        ctx.sample_wrapper(30usize, WrapperType::CacheOnce, pos, &eval_overworld_29)
+        ctx.sample_wrapper(30usize, WrapperType::CacheFlat, pos, &eval_overworld_29)
     }
     #[inline(always)]
     pub fn eval_overworld_31<C: NoiseEvaluationContext>(
@@ -361,7 +361,7 @@ pub mod overworld_compiled {
         pos: &pumpkin_util::math::vector3::Vector3<i32>,
         ctx: &mut C,
     ) -> f32 {
-        ctx.sample_wrapper(34usize, WrapperType::CacheOnce, pos, &eval_overworld_33)
+        ctx.sample_wrapper(34usize, WrapperType::CacheFlat, pos, &eval_overworld_33)
     }
     #[inline(always)]
     pub fn eval_overworld_35<C: NoiseEvaluationContext>(
@@ -401,7 +401,7 @@ pub mod overworld_compiled {
         pos: &pumpkin_util::math::vector3::Vector3<i32>,
         ctx: &mut C,
     ) -> f32 {
-        ctx.sample_wrapper(39usize, WrapperType::CacheOnce, pos, &eval_overworld_38)
+        ctx.sample_wrapper(39usize, WrapperType::CacheFlat, pos, &eval_overworld_38)
     }
     #[inline(always)]
     pub fn eval_overworld_40<C: NoiseEvaluationContext>(
@@ -1159,7 +1159,7 @@ pub mod overworld_compiled {
         pos: &pumpkin_util::math::vector3::Vector3<i32>,
         ctx: &mut C,
     ) -> f32 {
-        ctx.sample_wrapper(124usize, WrapperType::CacheOnce, pos, &eval_overworld_123)
+        ctx.sample_wrapper(124usize, WrapperType::CacheFlat, pos, &eval_overworld_123)
     }
     #[inline(always)]
     pub fn eval_overworld_125<C: NoiseEvaluationContext>(
@@ -2180,7 +2180,7 @@ pub mod end_compiled {
         pos: &pumpkin_util::math::vector3::Vector3<i32>,
         ctx: &mut C,
     ) -> f32 {
-        ctx.sample_wrapper(14usize, WrapperType::CacheOnce, pos, &eval_end_13)
+        ctx.sample_wrapper(14usize, WrapperType::CacheFlat, pos, &eval_end_13)
     }
     #[inline(always)]
     pub fn eval_end_15<C: NoiseEvaluationContext>(
@@ -2669,7 +2669,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
             },
             BaseNoiseFunctionComponent::Wrapper {
                 input_index: 7usize,
-                wrapper: WrapperType::CacheOnce,
+                wrapper: WrapperType::CacheFlat,
             },
             BaseNoiseFunctionComponent::Constant { value: 0f32 },
             BaseNoiseFunctionComponent::ShiftB {
@@ -2677,7 +2677,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
             },
             BaseNoiseFunctionComponent::Wrapper {
                 input_index: 10usize,
-                wrapper: WrapperType::CacheOnce,
+                wrapper: WrapperType::CacheFlat,
             },
             BaseNoiseFunctionComponent::ShiftedNoise {
                 shift_x_index: 8usize,
@@ -2691,7 +2691,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
             },
             BaseNoiseFunctionComponent::Wrapper {
                 input_index: 12usize,
-                wrapper: WrapperType::CacheOnce,
+                wrapper: WrapperType::CacheFlat,
             },
             BaseNoiseFunctionComponent::ShiftedNoise {
                 shift_x_index: 8usize,
@@ -2705,7 +2705,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
             },
             BaseNoiseFunctionComponent::Wrapper {
                 input_index: 14usize,
-                wrapper: WrapperType::CacheOnce,
+                wrapper: WrapperType::CacheFlat,
             },
             BaseNoiseFunctionComponent::ShiftedNoise {
                 shift_x_index: 8usize,
@@ -2719,7 +2719,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
             },
             BaseNoiseFunctionComponent::Wrapper {
                 input_index: 16usize,
-                wrapper: WrapperType::CacheOnce,
+                wrapper: WrapperType::CacheFlat,
             },
             BaseNoiseFunctionComponent::Unary {
                 input_index: 17usize,
@@ -4366,7 +4366,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
             },
             BaseNoiseFunctionComponent::Wrapper {
                 input_index: 25usize,
-                wrapper: WrapperType::CacheOnce,
+                wrapper: WrapperType::CacheFlat,
             },
             BaseNoiseFunctionComponent::Binary {
                 argument1_index: 4usize,
@@ -4692,7 +4692,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
             },
             BaseNoiseFunctionComponent::Wrapper {
                 input_index: 29usize,
-                wrapper: WrapperType::CacheOnce,
+                wrapper: WrapperType::CacheFlat,
             },
             BaseNoiseFunctionComponent::Noise {
                 data: &NoiseData {
@@ -4716,7 +4716,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
             },
             BaseNoiseFunctionComponent::Wrapper {
                 input_index: 33usize,
-                wrapper: WrapperType::CacheOnce,
+                wrapper: WrapperType::CacheFlat,
             },
             BaseNoiseFunctionComponent::Binary {
                 argument1_index: 27usize,
@@ -5642,7 +5642,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
             },
             BaseNoiseFunctionComponent::Wrapper {
                 input_index: 38usize,
-                wrapper: WrapperType::CacheOnce,
+                wrapper: WrapperType::CacheFlat,
             },
             BaseNoiseFunctionComponent::Binary {
                 argument1_index: 35usize,
@@ -6212,7 +6212,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
             },
             BaseNoiseFunctionComponent::Wrapper {
                 input_index: 123usize,
-                wrapper: WrapperType::CacheOnce,
+                wrapper: WrapperType::CacheFlat,
             },
             BaseNoiseFunctionComponent::Gradient {
                 data: &GradientData {
@@ -6786,7 +6786,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
             },
             BaseNoiseFunctionComponent::Wrapper {
                 input_index: 7usize,
-                wrapper: WrapperType::CacheOnce,
+                wrapper: WrapperType::CacheFlat,
             },
             BaseNoiseFunctionComponent::Constant { value: 0f32 },
             BaseNoiseFunctionComponent::ShiftB {
@@ -6794,7 +6794,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
             },
             BaseNoiseFunctionComponent::Wrapper {
                 input_index: 10usize,
-                wrapper: WrapperType::CacheOnce,
+                wrapper: WrapperType::CacheFlat,
             },
             BaseNoiseFunctionComponent::ShiftedNoise {
                 shift_x_index: 8usize,
@@ -6808,7 +6808,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
             },
             BaseNoiseFunctionComponent::Wrapper {
                 input_index: 12usize,
-                wrapper: WrapperType::CacheOnce,
+                wrapper: WrapperType::CacheFlat,
             },
             BaseNoiseFunctionComponent::ShiftedNoise {
                 shift_x_index: 8usize,
@@ -6822,7 +6822,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
             },
             BaseNoiseFunctionComponent::Wrapper {
                 input_index: 14usize,
-                wrapper: WrapperType::CacheOnce,
+                wrapper: WrapperType::CacheFlat,
             },
             BaseNoiseFunctionComponent::ShiftedNoise {
                 shift_x_index: 8usize,
@@ -6836,7 +6836,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
             },
             BaseNoiseFunctionComponent::Wrapper {
                 input_index: 16usize,
-                wrapper: WrapperType::CacheOnce,
+                wrapper: WrapperType::CacheFlat,
             },
             BaseNoiseFunctionComponent::Unary {
                 input_index: 17usize,
@@ -8483,7 +8483,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
             },
             BaseNoiseFunctionComponent::Wrapper {
                 input_index: 25usize,
-                wrapper: WrapperType::CacheOnce,
+                wrapper: WrapperType::CacheFlat,
             },
             BaseNoiseFunctionComponent::Binary {
                 argument1_index: 4usize,
@@ -9409,7 +9409,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
             },
             BaseNoiseFunctionComponent::Wrapper {
                 input_index: 30usize,
-                wrapper: WrapperType::CacheOnce,
+                wrapper: WrapperType::CacheFlat,
             },
             BaseNoiseFunctionComponent::Binary {
                 argument1_index: 27usize,
@@ -9521,7 +9521,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
             },
             BaseNoiseFunctionComponent::Wrapper {
                 input_index: 0usize,
-                wrapper: WrapperType::CacheOnce,
+                wrapper: WrapperType::CacheFlat,
             },
             BaseNoiseFunctionComponent::Constant { value: 0f32 },
             BaseNoiseFunctionComponent::ShiftB {
@@ -9529,7 +9529,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
             },
             BaseNoiseFunctionComponent::Wrapper {
                 input_index: 3usize,
-                wrapper: WrapperType::CacheOnce,
+                wrapper: WrapperType::CacheFlat,
             },
             BaseNoiseFunctionComponent::ShiftedNoise {
                 shift_x_index: 1usize,
@@ -9543,7 +9543,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
             },
             BaseNoiseFunctionComponent::Wrapper {
                 input_index: 5usize,
-                wrapper: WrapperType::CacheOnce,
+                wrapper: WrapperType::CacheFlat,
             },
             BaseNoiseFunctionComponent::ShiftedNoise {
                 shift_x_index: 1usize,
@@ -9577,7 +9577,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
             },
             BaseNoiseFunctionComponent::Wrapper {
                 input_index: 9usize,
-                wrapper: WrapperType::CacheOnce,
+                wrapper: WrapperType::CacheFlat,
             },
             BaseNoiseFunctionComponent::ShiftedNoise {
                 shift_x_index: 1usize,
@@ -9591,7 +9591,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
             },
             BaseNoiseFunctionComponent::Wrapper {
                 input_index: 11usize,
-                wrapper: WrapperType::CacheOnce,
+                wrapper: WrapperType::CacheFlat,
             },
             BaseNoiseFunctionComponent::Gradient {
                 data: &GradientData {
@@ -11250,7 +11250,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
             },
             BaseNoiseFunctionComponent::Wrapper {
                 input_index: 23usize,
-                wrapper: WrapperType::CacheOnce,
+                wrapper: WrapperType::CacheFlat,
             },
             BaseNoiseFunctionComponent::Binary {
                 argument1_index: 13usize,
@@ -11464,7 +11464,7 @@ pub const END_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
             },
             BaseNoiseFunctionComponent::Wrapper {
                 input_index: 13usize,
-                wrapper: WrapperType::CacheOnce,
+                wrapper: WrapperType::CacheFlat,
             },
             BaseNoiseFunctionComponent::InterpolatedNoiseSampler {
                 data: &InterpolatedNoiseSamplerData {
@@ -11594,7 +11594,7 @@ pub const END_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
             },
             BaseNoiseFunctionComponent::Wrapper {
                 input_index: 10usize,
-                wrapper: WrapperType::CacheOnce,
+                wrapper: WrapperType::CacheFlat,
             },
         ],
         temperature: 0usize,

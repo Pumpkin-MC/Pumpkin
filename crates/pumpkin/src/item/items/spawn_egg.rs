@@ -184,13 +184,8 @@ impl ItemBehaviour for SpawnEggItem {
             mob.get_entity()
                 .age
                 .store(-24000, std::sync::atomic::Ordering::Relaxed);
-            mob.get_entity().send_meta_data(
-                &[pumpkin_protocol::java::client::play::Metadata::new(
-                    pumpkin_data::tracked_data::ageable_mob::DATA_BABY_ID,
-                    true,
-                )],
-                None,
-            );
+            mob.get_entity()
+                .set_synced_data(pumpkin_data::tracked_data::ageable_mob::DATA_BABY_ID, true);
             apply_entity_variant(item, mob.as_ref());
             world.spawn_entity(mob);
             item.decrement_unless_creative(player.gamemode.load(), 1);

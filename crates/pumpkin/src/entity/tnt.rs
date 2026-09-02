@@ -4,7 +4,7 @@ use core::f32;
 use crossbeam::atomic::AtomicCell;
 use pumpkin_data::Block;
 use pumpkin_nbt::compound::NbtCompound;
-use pumpkin_protocol::{codec::var_int::VarInt, java::client::play::Metadata};
+use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_util::math::vector3::Vector3;
 use std::{
     f64::consts::TAU,
@@ -105,12 +105,9 @@ impl EntityBase for TNTEntity {
         // Push the metadata first so `entity_data_dirty` is set before the resync check
         // below observes it. `saturating_sub` keeps the fuse from underflowing at 0.
         let fuse = self.fuse.load(Relaxed).saturating_sub(1);
-        entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::tnt::FUSE_ID,
-                VarInt(fuse as i32),
-            )],
-            None,
+        entity.set_synced_data(
+            pumpkin_data::tracked_data::tnt::FUSE_ID,
+            VarInt(fuse as i32),
         );
 
         if entity.velocity_dirty.swap(false, Ordering::SeqCst) {
@@ -141,18 +138,13 @@ impl EntityBase for TNTEntity {
     }
 
     fn init_data_tracker(&self) {
-        self.entity.send_meta_data(
-            &[
-                Metadata::new(
-                    pumpkin_data::tracked_data::tnt::FUSE_ID,
-                    VarInt(self.fuse.load(Relaxed) as i32),
-                ),
-                Metadata::new(
-                    pumpkin_data::tracked_data::tnt::BLOCK_STATE_ID,
-                    VarInt(i32::from(Block::TNT.default_state.id.as_u16())),
-                ),
-            ],
-            None,
+        self.entity.set_synced_data(
+            pumpkin_data::tracked_data::tnt::FUSE_ID,
+            VarInt(self.fuse.load(Relaxed) as i32),
+        );
+        self.entity.set_synced_data(
+            pumpkin_data::tracked_data::tnt::BLOCK_STATE_ID,
+            VarInt(i32::from(Block::TNT.default_state.id.as_u16())),
         );
     }
 

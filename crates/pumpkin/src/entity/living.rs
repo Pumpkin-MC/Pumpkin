@@ -59,7 +59,7 @@ use pumpkin_protocol::java::client::play::{
 };
 use pumpkin_protocol::{
     codec::item_stack_seralizer::ItemStackSerializer,
-    java::client::play::{CSetEquipment, Metadata, MetadataSerializer},
+    java::client::play::{CSetEquipment, MetadataSerializer},
     ser::{NetworkWriteExt, WritingError},
 };
 use pumpkin_util::math::boundingbox::BoundingBox;
@@ -129,11 +129,13 @@ pub struct LivingEntity {
     pub attributes: RwLock<FxHashMap<u8, AttributeInstance>>,
 }
 
+#[derive(Clone)]
 struct EffectParticle {
     particle_id: VarInt,
     color: i32,
 }
 
+#[derive(Clone)]
 struct EffectParticles(Vec<EffectParticle>);
 
 impl MetadataSerializer for EffectParticles {
@@ -475,13 +477,11 @@ impl LivingEntity {
             meta
         });
 
-        self.entity.send_meta_data(
-            &[Metadata::new(
-                tracked_data::living_entity::DATA_LIVING_ENTITY_FLAGS,
-                b,
-            )],
-            bedrock_meta.as_ref(),
-        );
+        self.entity
+            .set_synced_data(tracked_data::living_entity::DATA_LIVING_ENTITY_FLAGS, b);
+        if let Some(bedrock_meta) = &bedrock_meta {
+            self.entity.send_bedrock_actor_data(bedrock_meta);
+        }
     }
 
     pub fn clear_active_hand(&self) {
@@ -569,13 +569,8 @@ impl LivingEntity {
         let clamped = health.max(0.0).min(max_health);
         self.health.store(clamped);
         // tell everyone entities health changed
-        self.entity.send_meta_data(
-            &[Metadata::new(
-                tracked_data::living_entity::DATA_HEALTH_ID,
-                clamped,
-            )],
-            None,
-        );
+        self.entity
+            .set_synced_data(tracked_data::living_entity::DATA_HEALTH_ID, clamped);
     }
 
     /// Returns the current maximum health for this entity
@@ -623,13 +618,8 @@ impl LivingEntity {
 
         // Send absorption metadata for players (visual yellow hearts)
         if self.entity.entity_type == &EntityType::PLAYER {
-            self.entity.send_meta_data(
-                &[Metadata::new(
-                    tracked_data::player::DATA_PLAYER_ABSORPTION_ID,
-                    new_abs,
-                )],
-                None,
-            );
+            self.entity
+                .set_synced_data(tracked_data::player::DATA_PLAYER_ABSORPTION_ID, new_abs);
         }
     }
 
@@ -900,21 +890,11 @@ impl LivingEntity {
             .all(|effect| effect.ambient);
         drop(effects);
 
-        self.entity.send_meta_data(
-            &[Metadata::new(
-                tracked_data::living_entity::EFFECT_PARTICLES,
-                particles,
-            )],
-            None,
-        );
+        self.entity
+            .set_synced_data(tracked_data::living_entity::EFFECT_PARTICLES, particles);
         if has_effects {
-            self.entity.send_meta_data(
-                &[Metadata::new(
-                    tracked_data::living_entity::EFFECT_AMBIENCE_ID,
-                    ambient,
-                )],
-                None,
-            );
+            self.entity
+                .set_synced_data(tracked_data::living_entity::EFFECT_AMBIENCE_ID, ambient);
         }
     }
 
@@ -2191,13 +2171,8 @@ impl LivingEntity {
         // Clear any absorption
         self.absorption.store(0.0);
         // Send health metadata
-        self.entity.send_meta_data(
-            &[Metadata::new(
-                tracked_data::living_entity::DATA_HEALTH_ID,
-                max_health,
-            )],
-            None,
-        );
+        self.entity
+            .set_synced_data(tracked_data::living_entity::DATA_HEALTH_ID, max_health);
 
         self.reset_effects_and_attributes();
 
@@ -3489,7 +3464,7 @@ mod tests {
             show_icon: true,
             blend: false,
         };
-        let metadata = Metadata::new(
+        let metadata = pumpkin_protocol::java::client::play::Metadata::new(
             tracked_data::living_entity::EFFECT_PARTICLES,
             EffectParticles(vec![EffectParticle::from_effect(&effect)]),
         );

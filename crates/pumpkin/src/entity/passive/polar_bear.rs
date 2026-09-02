@@ -7,7 +7,6 @@ use pumpkin_data::entity::EntityType;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::Sound;
 use pumpkin_nbt::compound::NbtCompound;
-use pumpkin_protocol::java::client::play::Metadata;
 
 use crate::entity::{
     Entity, EntityBase,
@@ -91,12 +90,9 @@ impl PolarBearEntity {
     pub fn set_standing(&self, standing: bool) {
         self.standing.store(standing, Ordering::Relaxed);
         let entity = self.get_entity();
-        entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::polar_bear::DATA_STANDING_ID,
-                standing,
-            )],
-            None,
+        entity.set_synced_data(
+            pumpkin_data::tracked_data::polar_bear::DATA_STANDING_ID,
+            standing,
         );
     }
 }
@@ -142,20 +138,11 @@ impl Mob for PolarBearEntity {
         let entity = self.get_entity();
         let is_baby = entity.age.load(Ordering::Relaxed) < 0;
         if is_baby {
-            entity.send_meta_data(
-                &[Metadata::new(
-                    pumpkin_data::tracked_data::polar_bear::DATA_BABY_ID,
-                    true,
-                )],
-                None,
-            );
+            entity.set_synced_data(pumpkin_data::tracked_data::polar_bear::DATA_BABY_ID, true);
         }
-        entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::polar_bear::DATA_STANDING_ID,
-                self.is_standing(),
-            )],
-            None,
+        entity.set_synced_data(
+            pumpkin_data::tracked_data::polar_bear::DATA_STANDING_ID,
+            self.is_standing(),
         );
     }
 

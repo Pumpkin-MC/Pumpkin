@@ -111,14 +111,9 @@ impl EntityBase for SplashPotionEntity {
             .unwrap_or_else(std::sync::PoisonError::into_inner);
 
         // Sync the item stack
-        entity.send_meta_data(
-            &[pumpkin_protocol::java::client::play::Metadata::new(
-                pumpkin_data::tracked_data::splash_potion::ITEM_STACK,
-                &pumpkin_protocol::codec::item_stack_seralizer::ItemStackSerializer::from(
-                    stack.clone(),
-                ),
-            )],
-            None,
+        entity.set_synced_data(
+            pumpkin_data::tracked_data::splash_potion::ITEM_STACK,
+            pumpkin_protocol::codec::item_stack_seralizer::ItemStackSerializer::from(stack.clone()),
         );
     }
 

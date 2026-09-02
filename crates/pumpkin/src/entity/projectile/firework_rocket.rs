@@ -5,7 +5,7 @@ use crate::{
 };
 use pumpkin_data::entity::EntityStatus;
 use pumpkin_protocol::bedrock::server::actor_event::ActorEventID;
-use pumpkin_protocol::{codec::optional_int::OptionalInt, java::client::play::Metadata};
+use pumpkin_protocol::codec::optional_int::OptionalInt;
 use pumpkin_util::{
     math::vector3::Vector3,
     random::{RandomGenerator, RandomImpl, get_seed, xoroshiro128::Xoroshiro},
@@ -60,12 +60,9 @@ impl FireworkRocketEntity {
                 .into(),
         };
 
-        rocket.entity.entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::firework_rocket::ATTACHED_TO_TARGET,
-                OptionalInt(Some(shooter.entity_id)),
-            )],
-            None,
+        rocket.entity.entity.set_synced_data(
+            pumpkin_data::tracked_data::firework_rocket::ATTACHED_TO_TARGET,
+            OptionalInt(Some(shooter.entity_id)),
         );
 
         rocket

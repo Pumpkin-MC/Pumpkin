@@ -442,13 +442,14 @@ impl StructurePiece {
             return;
         }
 
-        // // Apply Mirror and Rotation
-        // if self.mirror != BlockMirror::None {
-        //     block = block.mirror(self.mirror);
-        // }
-        // if self.rotation != BlockRotation::None {
-        //     block = block.rotate(self.rotation);
-        // }
+        // Apply Mirror and Rotation
+        let mut block = block;
+        if self.mirror != Mirror::None {
+            block = block.mirror(self.mirror);
+        }
+        if self.rotation != Rotation::None {
+            block = block.rotate(self.rotation);
+        }
 
         // World interaction
         world.set_block_state(block_pos.x, block_pos.y, block_pos.z, block);
