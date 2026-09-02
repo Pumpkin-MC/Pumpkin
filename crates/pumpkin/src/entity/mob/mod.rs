@@ -16,7 +16,7 @@ use pumpkin_data::tag::{self, Taggable};
 use pumpkin_data::tracked_data;
 use pumpkin_data::{Block, BlockDirection};
 use pumpkin_nbt::compound::NbtCompound;
-use pumpkin_protocol::java::client::play::{CHeadRot, CUpdateEntityRot, Metadata};
+use pumpkin_protocol::java::client::play::{CHeadRot, CUpdateEntityRot};
 use pumpkin_util::Difficulty;
 use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::position::BlockPos;
@@ -330,10 +330,9 @@ impl MobEntity {
         if new_b != old_b {
             self.mob_flags.store(new_b, Ordering::Relaxed);
 
-            self.living_entity.entity.send_meta_data(
-                &[Metadata::new(tracked_data::mob::DATA_MOB_FLAGS_ID, new_b)],
-                None,
-            );
+            self.living_entity
+                .entity
+                .set_synced_data(tracked_data::mob::DATA_MOB_FLAGS_ID, new_b);
         }
     }
 
@@ -667,6 +666,14 @@ impl MobEntity {
 pub trait Mob: EntityBase + Send + Sync {
     fn get_random(&self) -> rand::rngs::ThreadRng {
         rand::rng()
+    }
+
+    fn requires_custom_persistence(&self) -> bool {
+        false
+    }
+
+    fn remove_when_far_away(&self, _distance_sq: f64) -> bool {
+        true
     }
 
     fn get_max_look_yaw_change(&self) -> f32 {
@@ -1052,10 +1059,7 @@ pub trait Mob: EntityBase + Send + Sync {
         let entity = self.get_entity();
         let is_baby = entity.age.load(std::sync::atomic::Ordering::Relaxed) < 0;
         if is_baby {
-            entity.send_meta_data(
-                &[Metadata::new(tracked_data::ageable_mob::DATA_BABY_ID, true)],
-                None,
-            );
+            entity.set_synced_data(tracked_data::ageable_mob::DATA_BABY_ID, true);
         }
     }
 

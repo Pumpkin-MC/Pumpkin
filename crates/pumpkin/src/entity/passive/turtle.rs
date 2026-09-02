@@ -9,7 +9,6 @@ use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::Sound;
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_nbt::compound::NbtCompound;
-use pumpkin_protocol::java::client::play::Metadata;
 
 use crate::entity::{
     Entity, EntityBase,
@@ -79,13 +78,7 @@ impl TurtleEntity {
     pub fn set_has_egg(&self, has_egg: bool) {
         self.has_egg.store(has_egg, Ordering::Relaxed);
         let entity = self.get_entity();
-        entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::turtle::HAS_EGG,
-                has_egg,
-            )],
-            None,
-        );
+        entity.set_synced_data(pumpkin_data::tracked_data::turtle::HAS_EGG, has_egg);
     }
 
     #[must_use]
@@ -96,13 +89,7 @@ impl TurtleEntity {
     pub fn set_laying_egg(&self, laying_egg: bool) {
         self.laying_egg.store(laying_egg, Ordering::Relaxed);
         let entity = self.get_entity();
-        entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::turtle::LAYING_EGG,
-                laying_egg,
-            )],
-            None,
-        );
+        entity.set_synced_data(pumpkin_data::tracked_data::turtle::LAYING_EGG, laying_egg);
     }
 }
 
@@ -152,27 +139,12 @@ impl Mob for TurtleEntity {
         let entity = self.get_entity();
         let is_baby = entity.age.load(Ordering::Relaxed) < 0;
         if is_baby {
-            entity.send_meta_data(
-                &[Metadata::new(
-                    pumpkin_data::tracked_data::turtle::DATA_BABY_ID,
-                    true,
-                )],
-                None,
-            );
+            entity.set_synced_data(pumpkin_data::tracked_data::turtle::DATA_BABY_ID, true);
         }
-        entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::turtle::HAS_EGG,
-                self.has_egg(),
-            )],
-            None,
-        );
-        entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::turtle::LAYING_EGG,
-                self.is_laying_egg(),
-            )],
-            None,
+        entity.set_synced_data(pumpkin_data::tracked_data::turtle::HAS_EGG, self.has_egg());
+        entity.set_synced_data(
+            pumpkin_data::tracked_data::turtle::LAYING_EGG,
+            self.is_laying_egg(),
         );
     }
 

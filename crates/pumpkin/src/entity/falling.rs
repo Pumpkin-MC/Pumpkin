@@ -2,7 +2,6 @@ use pumpkin_data::Block;
 use pumpkin_data::BlockStateId;
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::entity::EntityType;
-use pumpkin_protocol::java::client::play::Metadata;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::world::BlockFlags;
 use std::sync::{Arc, atomic::Ordering};
@@ -74,12 +73,9 @@ impl EntityBase for FallingEntity {
     }
 
     fn init_data_tracker(&self) {
-        self.entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::falling_block::START_POS,
-                self.entity.block_pos.load(),
-            )],
-            None,
+        self.entity.set_synced_data(
+            pumpkin_data::tracked_data::falling_block::START_POS,
+            self.entity.block_pos.load(),
         );
     }
 

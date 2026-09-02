@@ -2,7 +2,6 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Weak};
 
 use pumpkin_data::entity::EntityType;
-use pumpkin_protocol::java::client::play::Metadata;
 
 use crate::entity::{
     Entity, EntityBase,
@@ -74,13 +73,10 @@ impl SpiderEntity {
     pub fn set_climbing(&self, climbing: bool) {
         if self.is_climbing.swap(climbing, Ordering::Relaxed) != climbing {
             let flags = i8::from(climbing);
-            self.mob_entity.living_entity.entity.send_meta_data(
-                &[Metadata::new(
-                    pumpkin_data::tracked_data::spider::DATA_FLAGS_ID,
-                    flags,
-                )],
-                None,
-            );
+            self.mob_entity
+                .living_entity
+                .entity
+                .set_synced_data(pumpkin_data::tracked_data::spider::DATA_FLAGS_ID, flags);
         }
     }
 }

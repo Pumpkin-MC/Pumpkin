@@ -9,7 +9,6 @@ use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_nbt::compound::NbtCompound;
-use pumpkin_protocol::java::client::play::Metadata;
 
 use crate::entity::{
     Entity, EntityBase,
@@ -81,12 +80,9 @@ impl GoatEntity {
     pub fn set_screaming(&self, screaming: bool) {
         self.is_screaming.store(screaming, Ordering::Relaxed);
         let entity = self.get_entity();
-        entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::goat::DATA_IS_SCREAMING_GOAT,
-                screaming,
-            )],
-            None,
+        entity.set_synced_data(
+            pumpkin_data::tracked_data::goat::DATA_IS_SCREAMING_GOAT,
+            screaming,
         );
     }
 
@@ -98,12 +94,9 @@ impl GoatEntity {
     pub fn set_has_left_horn(&self, has_horn: bool) {
         self.has_left_horn.store(has_horn, Ordering::Relaxed);
         let entity = self.get_entity();
-        entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::goat::DATA_HAS_LEFT_HORN,
-                has_horn,
-            )],
-            None,
+        entity.set_synced_data(
+            pumpkin_data::tracked_data::goat::DATA_HAS_LEFT_HORN,
+            has_horn,
         );
     }
 
@@ -115,12 +108,9 @@ impl GoatEntity {
     pub fn set_has_right_horn(&self, has_horn: bool) {
         self.has_right_horn.store(has_horn, Ordering::Relaxed);
         let entity = self.get_entity();
-        entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::goat::DATA_HAS_RIGHT_HORN,
-                has_horn,
-            )],
-            None,
+        entity.set_synced_data(
+            pumpkin_data::tracked_data::goat::DATA_HAS_RIGHT_HORN,
+            has_horn,
         );
     }
 }
@@ -177,34 +167,19 @@ impl Mob for GoatEntity {
         let entity = self.get_entity();
         let is_baby = entity.age.load(Ordering::Relaxed) < 0;
         if is_baby {
-            entity.send_meta_data(
-                &[Metadata::new(
-                    pumpkin_data::tracked_data::goat::DATA_BABY_ID,
-                    true,
-                )],
-                None,
-            );
+            entity.set_synced_data(pumpkin_data::tracked_data::goat::DATA_BABY_ID, true);
         }
-        entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::goat::DATA_IS_SCREAMING_GOAT,
-                self.is_screaming(),
-            )],
-            None,
+        entity.set_synced_data(
+            pumpkin_data::tracked_data::goat::DATA_IS_SCREAMING_GOAT,
+            self.is_screaming(),
         );
-        entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::goat::DATA_HAS_LEFT_HORN,
-                self.has_left_horn(),
-            )],
-            None,
+        entity.set_synced_data(
+            pumpkin_data::tracked_data::goat::DATA_HAS_LEFT_HORN,
+            self.has_left_horn(),
         );
-        entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::goat::DATA_HAS_RIGHT_HORN,
-                self.has_right_horn(),
-            )],
-            None,
+        entity.set_synced_data(
+            pumpkin_data::tracked_data::goat::DATA_HAS_RIGHT_HORN,
+            self.has_right_horn(),
         );
     }
 

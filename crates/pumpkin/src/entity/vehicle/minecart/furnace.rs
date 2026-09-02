@@ -5,7 +5,6 @@ use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::particle::Particle;
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_nbt::compound::NbtCompound;
-use pumpkin_protocol::java::client::play::Metadata;
 use pumpkin_util::math::vector3::Vector3;
 use rand::RngExt;
 
@@ -28,12 +27,9 @@ impl FurnaceMinecart {
     }
 
     fn set_fueled(entity: &Entity, fueled: bool) {
-        entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::furnace_minecart::ID_FUEL,
-                fueled,
-            )],
-            None,
+        entity.set_synced_data(
+            pumpkin_data::tracked_data::furnace_minecart::ID_FUEL,
+            fueled,
         );
     }
 
