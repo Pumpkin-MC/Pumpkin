@@ -23,6 +23,7 @@ pub mod loot;
 pub mod map;
 pub mod portal;
 pub mod raid;
+pub mod random_sequences;
 pub mod stopwatches;
 pub mod time;
 pub mod villager_poi;
@@ -1181,6 +1182,27 @@ impl World {
             seed,
         );
         self.broadcast_packet_all(&packet);
+    }
+
+    pub fn play_sound_event_expect(
+        &self,
+        player: &Player,
+        sound: &pumpkin_data::data_component_impl::IdOr<
+            pumpkin_data::data_component_impl::SoundEvent,
+        >,
+        category: SoundCategory,
+        position: &Vector3<f64>,
+    ) {
+        let seed = rng().random::<f64>();
+        let packet = CSoundEffect::new(
+            data_to_proto_sound(sound),
+            category,
+            position,
+            1.0,
+            1.0,
+            seed,
+        );
+        self.broadcast_packet_except(&[player.gameprofile.id], &packet);
     }
 
     pub fn play_sound_fine(

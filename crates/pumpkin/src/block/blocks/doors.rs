@@ -7,7 +7,7 @@ use pumpkin_data::block_properties::HorizontalFacing;
 use pumpkin_data::sound::Sound;
 use pumpkin_data::sound::SoundCategory;
 use pumpkin_data::tag::Taggable;
-use pumpkin_data::{Block, tag};
+use pumpkin_data::{Block, BlockState, tag};
 use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::world::BlockAccessor;
@@ -22,6 +22,7 @@ use crate::block::NormalUseArgs;
 use crate::block::OnNeighborUpdateArgs;
 use crate::block::OnPlaceArgs;
 use crate::block::OnStateReplacedArgs;
+use crate::block::PathComputationType;
 use crate::block::PlacedArgs;
 use crate::block::blocks::redstone::block_receives_redstone_power;
 use crate::block::registry::BlockActionResult;
@@ -389,6 +390,15 @@ impl BlockBehaviour for DoorBlock {
                     BlockFlags::SKIP_DROPS | BlockFlags::NOTIFY_ALL,
                 );
             }
+        }
+    }
+
+    fn is_pathfindable(&self, state: &BlockState, computation_type: PathComputationType) -> bool {
+        match computation_type {
+            PathComputationType::Land | PathComputationType::Air => {
+                DoorProperties::from_state_id(state.id).open
+            }
+            PathComputationType::Water => false,
         }
     }
 }

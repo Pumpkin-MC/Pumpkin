@@ -9,7 +9,7 @@ use pumpkin_world::world::{BlockAccessor, BlockFlags};
 
 use crate::block::{
     BlockBehaviour, BonemealArgs, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, OnPlaceArgs,
-    RandomTickArgs,
+    PathComputationType, RandomTickArgs,
 };
 use crate::entity::EntityBase;
 
@@ -136,5 +136,9 @@ impl BlockBehaviour for CocoaBlock {
         let mut props = CocoaProperties::from_state_id(state_id);
         props.facing = mirror.mirror_horizontal(props.facing);
         BlockState::from_id(props.to_state_id(block))
+    }
+
+    fn is_pathfindable(&self, _state: &BlockState, _computation_type: PathComputationType) -> bool {
+        false
     }
 }

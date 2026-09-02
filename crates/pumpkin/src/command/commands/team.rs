@@ -21,11 +21,14 @@ use pumpkin_util::text::color::NamedColor;
 const DESCRIPTION: &str = "Manages teams.";
 const PERMISSION: &str = "minecraft:command.team";
 
-const ARG_TEAM_NAME: &str = "name";
+const ARG_TEAM_NAME: &str = "team";
 const ARG_DISPLAY_NAME: &str = "displayName";
 const ARG_TEAM: &str = "team";
 const ARG_MEMBERS: &str = "members";
 const ARG_VALUE: &str = "value";
+const ARG_PREFIX: &str = "prefix";
+const ARG_SUFFIX: &str = "suffix";
+const ARG_ALLOWED: &str = "allowed";
 
 const DUPLICATE_TEAM_ERROR: CommandErrorType<0> = CommandErrorType::new(
     translation::java::COMMANDS_TEAM_ADD_DUPLICATE,
@@ -543,7 +546,7 @@ struct TeamModifyDisplayNameExecutor;
 impl CommandExecutor for TeamModifyDisplayNameExecutor {
     fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
         let team_name = TeamArgumentType::get(context, ARG_TEAM)?;
-        let new_name_str = StringArgumentType::get(context, ARG_VALUE)?;
+        let new_name_str = StringArgumentType::get(context, ARG_DISPLAY_NAME)?;
 
         let world = context.world().clone();
         let team_name_owned = team_name.to_string();
@@ -588,7 +591,7 @@ struct TeamModifyPrefixExecutor;
 impl CommandExecutor for TeamModifyPrefixExecutor {
     fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
         let team_name = TeamArgumentType::get(context, ARG_TEAM)?;
-        let new_prefix_str = StringArgumentType::get(context, ARG_VALUE)?;
+        let new_prefix_str = StringArgumentType::get(context, ARG_PREFIX)?;
 
         let world = context.world().clone();
         let team_name_owned = team_name.to_string();
@@ -629,7 +632,7 @@ struct TeamModifySuffixExecutor;
 impl CommandExecutor for TeamModifySuffixExecutor {
     fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
         let team_name = TeamArgumentType::get(context, ARG_TEAM)?;
-        let new_suffix_str = StringArgumentType::get(context, ARG_VALUE)?;
+        let new_suffix_str = StringArgumentType::get(context, ARG_SUFFIX)?;
 
         let world = context.world().clone();
         let team_name_owned = team_name.to_string();
@@ -670,7 +673,7 @@ struct TeamModifyFriendlyFireExecutor;
 impl CommandExecutor for TeamModifyFriendlyFireExecutor {
     fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
         let team_name = TeamArgumentType::get(context, ARG_TEAM)?;
-        let value = BoolArgumentType::get(context, ARG_VALUE)?;
+        let value = BoolArgumentType::get(context, ARG_ALLOWED)?;
 
         let world = context.world().clone();
         let team_name_owned = team_name.to_string();
@@ -724,7 +727,7 @@ struct TeamModifySeeFriendlyInvisiblesExecutor;
 impl CommandExecutor for TeamModifySeeFriendlyInvisiblesExecutor {
     fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
         let team_name = TeamArgumentType::get(context, ARG_TEAM)?;
-        let value = BoolArgumentType::get(context, ARG_VALUE)?;
+        let value = BoolArgumentType::get(context, ARG_ALLOWED)?;
 
         let world = context.world().clone();
         let team_name_owned = team_name.to_string();
@@ -976,12 +979,10 @@ fn join_branch() -> LiteralArgumentBuilder {
 }
 
 fn leave_branch() -> LiteralArgumentBuilder {
-    literal("leave")
-        .executes(TeamLeaveExecutor { has_members: false })
-        .then(
-            argument(ARG_MEMBERS, EntityArgumentType::Entities)
-                .executes(TeamLeaveExecutor { has_members: true }),
-        )
+    literal("leave").then(
+        argument(ARG_MEMBERS, EntityArgumentType::Entities)
+            .executes(TeamLeaveExecutor { has_members: true }),
+    )
 }
 
 fn list_branch() -> LiteralArgumentBuilder {
@@ -1004,28 +1005,28 @@ fn modify_branch() -> LiteralArgumentBuilder {
             )
             .then(
                 literal("displayName").then(
-                    argument(ARG_VALUE, StringArgumentType::GreedyPhrase)
+                    argument(ARG_DISPLAY_NAME, StringArgumentType::GreedyPhrase)
                         .executes(TeamModifyDisplayNameExecutor),
                 ),
             )
             .then(
                 literal("prefix").then(
-                    argument(ARG_VALUE, StringArgumentType::GreedyPhrase)
+                    argument(ARG_PREFIX, StringArgumentType::GreedyPhrase)
                         .executes(TeamModifyPrefixExecutor),
                 ),
             )
             .then(
                 literal("suffix").then(
-                    argument(ARG_VALUE, StringArgumentType::GreedyPhrase)
+                    argument(ARG_SUFFIX, StringArgumentType::GreedyPhrase)
                         .executes(TeamModifySuffixExecutor),
                 ),
             )
             .then(literal("friendlyFire").then(
-                argument(ARG_VALUE, BoolArgumentType).executes(TeamModifyFriendlyFireExecutor),
+                argument(ARG_ALLOWED, BoolArgumentType).executes(TeamModifyFriendlyFireExecutor),
             ))
             .then(
                 literal("seeFriendlyInvisibles").then(
-                    argument(ARG_VALUE, BoolArgumentType)
+                    argument(ARG_ALLOWED, BoolArgumentType)
                         .executes(TeamModifySeeFriendlyInvisiblesExecutor),
                 ),
             )

@@ -121,7 +121,7 @@ impl JavaClient {
                                 player.increment_stat(StatisticCategory::Used, item_id as i32, 1);
                                 player.increment_stat(
                                     StatisticCategory::Mined,
-                                    broken_state.id.as_u16() as i32,
+                                    block.id.as_u16() as i32,
                                     1,
                                 );
                             }
@@ -214,7 +214,7 @@ impl JavaClient {
                         player.increment_stat(StatisticCategory::Used, item_id as i32, 1);
                         player.increment_stat(
                             StatisticCategory::Mined,
-                            state.id.as_u16() as i32,
+                            block.id.as_u16() as i32,
                             1,
                         );
                     }
@@ -246,7 +246,12 @@ impl JavaClient {
                     player.swap_item();
                 }
                 Status::SpearJab => {
-                    debug!("todo");
+                    if player.gamemode.load() == GameMode::Spectator {
+                        return;
+                    }
+
+                    let stack = player.inventory().held_item();
+                    server.item_registry.on_spear_jab(&stack, player);
                 }
             },
             Err(_) => self.try_kick(&TextComponent::text("Invalid status")),

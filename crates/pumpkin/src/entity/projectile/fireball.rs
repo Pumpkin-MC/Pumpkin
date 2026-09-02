@@ -172,6 +172,10 @@ impl FireballEntity {
 }
 
 impl EntityBase for FireballEntity {
+    fn get_owner_id(&self) -> Option<i32> {
+        self.thrown.owner_id
+    }
+
     fn write_custom_nbt(&self, nbt: &mut NbtCompound) {
         nbt.put_double("acceleration_power", self.get_acceleration_power());
         nbt.put_float("ExplosionPower", self.get_explosion_power());

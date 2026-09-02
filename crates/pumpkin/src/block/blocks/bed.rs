@@ -1,12 +1,11 @@
 use std::sync::Arc;
 
 use crate::block::entities::bed::BedBlockEntity;
-use pumpkin_data::Block;
-use pumpkin_data::BlockStateId;
 use pumpkin_data::block_properties::BedPart;
 use pumpkin_data::dimension::Dimension;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::translation;
+use pumpkin_data::{Block, BlockState, BlockStateId};
 use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_util::GameMode;
 use pumpkin_util::math::position::BlockPos;
@@ -18,7 +17,7 @@ use crate::block::bounce_entity_after_fall;
 use crate::block::registry::BlockActionResult;
 use crate::block::{
     BlockBehaviour, BrokenArgs, CanPlaceAtArgs, NormalUseArgs, OnPlaceArgs, OnStateReplacedArgs,
-    PlacedArgs, PlayerPlacedArgs,
+    PathComputationType, PlacedArgs, PlayerPlacedArgs,
 };
 use crate::entity::{Entity, EntityBase, player::Player};
 use crate::world::World;
@@ -187,6 +186,10 @@ impl BlockBehaviour for BedBlock {
 
     fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
         Self::use_bed(args.world, args.player, args.block, args.position)
+    }
+
+    fn is_pathfindable(&self, _state: &BlockState, _computation_type: PathComputationType) -> bool {
+        false
     }
 }
 

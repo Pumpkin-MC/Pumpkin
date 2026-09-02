@@ -352,18 +352,33 @@ impl DataComponentImpl for CustomModelDataImpl {
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct TooltipDisplayImpl;
+impl TooltipDisplayImpl {
+    pub const fn read_data(_data: &NbtTag) -> Option<Self> {
+        Some(Self)
+    }
+}
 impl DataComponentImpl for TooltipDisplayImpl {
     default_impl!(TooltipDisplay);
 }
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct CreativeSlotLockImpl;
+impl CreativeSlotLockImpl {
+    pub const fn read_data(_data: &NbtTag) -> Option<Self> {
+        Some(Self)
+    }
+}
 impl DataComponentImpl for CreativeSlotLockImpl {
     default_impl!(CreativeSlotLock);
 }
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct EnchantmentGlintOverrideImpl;
+impl EnchantmentGlintOverrideImpl {
+    pub const fn read_data(_data: &NbtTag) -> Option<Self> {
+        Some(Self)
+    }
+}
 impl DataComponentImpl for EnchantmentGlintOverrideImpl {
     default_impl!(EnchantmentGlintOverride);
 }
@@ -431,30 +446,90 @@ impl DataComponentImpl for BaseColorImpl {
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct InstrumentImpl;
+impl InstrumentImpl {
+    pub const fn read_data(_data: &NbtTag) -> Option<Self> {
+        Some(Self)
+    }
+}
 impl DataComponentImpl for InstrumentImpl {
     default_impl!(Instrument);
 }
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct ProvidesTrimMaterialImpl;
+impl ProvidesTrimMaterialImpl {
+    pub const fn read_data(_data: &NbtTag) -> Option<Self> {
+        Some(Self)
+    }
+}
 impl DataComponentImpl for ProvidesTrimMaterialImpl {
     default_impl!(ProvidesTrimMaterial);
 }
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct ProvidesBannerPatternsImpl;
+impl ProvidesBannerPatternsImpl {
+    pub const fn read_data(_data: &NbtTag) -> Option<Self> {
+        Some(Self)
+    }
+}
 impl DataComponentImpl for ProvidesBannerPatternsImpl {
     default_impl!(ProvidesBannerPatterns);
 }
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct BannerPatternsImpl;
+pub struct BannerPatternLayer {
+    pub pattern: String,
+    pub color: crate::dye_color::DyeColor,
+}
+
+#[derive(Clone, Debug, Hash, PartialEq, Eq, Default)]
+pub struct BannerPatternsImpl {
+    pub layers: Vec<BannerPatternLayer>,
+}
+
+impl BannerPatternsImpl {
+    pub const EMPTY: Self = Self { layers: Vec::new() };
+
+    #[must_use]
+    pub fn read_data(data: &NbtTag) -> Option<Self> {
+        let mut layers = Vec::new();
+        if let NbtTag::List(list) = data {
+            for tag in list {
+                if let Some(compound) = tag.extract_compound() {
+                    let pattern = compound.get_string("pattern")?.to_string();
+                    let color_str = compound.get_string("color")?;
+                    let color = crate::dye_color::DyeColor::by_name(color_str).unwrap_or_default();
+                    layers.push(BannerPatternLayer { pattern, color });
+                }
+            }
+        }
+        Some(Self { layers })
+    }
+}
+
 impl DataComponentImpl for BannerPatternsImpl {
+    fn write_data(&self) -> NbtTag {
+        let mut list = Vec::new();
+        for layer in &self.layers {
+            let mut compound = NbtCompound::new();
+            compound.put_string("pattern", layer.pattern.clone());
+            compound.put_string("color", layer.color.name().to_string());
+            list.push(NbtTag::Compound(compound));
+        }
+        NbtTag::List(list)
+    }
+
     default_impl!(BannerPatterns);
 }
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct PotDecorationsImpl;
+impl PotDecorationsImpl {
+    pub const fn read_data(_data: &NbtTag) -> Option<Self> {
+        Some(Self)
+    }
+}
 impl DataComponentImpl for PotDecorationsImpl {
     default_impl!(PotDecorations);
 }
@@ -482,6 +557,11 @@ impl DataComponentImpl for LockImpl {
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct BreakSoundImpl;
+impl BreakSoundImpl {
+    pub const fn read_data(_data: &NbtTag) -> Option<Self> {
+        Some(Self)
+    }
+}
 impl DataComponentImpl for BreakSoundImpl {
     default_impl!(BreakSound);
 }

@@ -1,8 +1,7 @@
-use pumpkin_data::BlockStateId;
 use pumpkin_data::block_properties::CactusLikeProperties;
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::tag::Taggable;
-use pumpkin_data::{Block, BlockDirection, tag};
+use pumpkin_data::{Block, BlockDirection, BlockState, BlockStateId, tag};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::tick::TickPriority;
@@ -11,7 +10,7 @@ use rand::RngExt;
 
 use crate::block::{
     BlockBehaviour, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, OnEntityCollisionArgs,
-    OnScheduledTickArgs, RandomTickArgs,
+    OnScheduledTickArgs, PathComputationType, RandomTickArgs,
 };
 
 #[pumpkin_block("minecraft:cactus")]
@@ -93,6 +92,10 @@ impl BlockBehaviour for CactusBlock {
 
     fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
         can_place_at(args.block_accessor, args.position)
+    }
+
+    fn is_pathfindable(&self, _state: &BlockState, _computation_type: PathComputationType) -> bool {
+        false
     }
 }
 

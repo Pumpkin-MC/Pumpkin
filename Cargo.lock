@@ -3596,6 +3596,7 @@ name = "pumpkin-inventory"
 version = "0.1.0-dev+26.2-26.40"
 dependencies = [
  "pumpkin-data",
+ "pumpkin-nbt",
  "pumpkin-protocol",
  "pumpkin-util",
  "pumpkin-world",
