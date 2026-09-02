@@ -1082,6 +1082,7 @@ impl Server {
 
         for world in worlds.iter() {
             world.flush_block_updates();
+            world.acknowledge_player_block_changes();
             world.flush_synced_block_events();
 
             let players = world.players.load();

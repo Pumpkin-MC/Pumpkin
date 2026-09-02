@@ -1388,6 +1388,7 @@ impl World {
         let start = std::time::Instant::now();
 
         self.flush_block_updates();
+        self.acknowledge_player_block_changes();
         self.flush_synced_block_events();
         self.update_active_chunks();
         self.tick_environment();
@@ -1559,6 +1560,18 @@ impl World {
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         for (pos, state_id) in changes {
             guard.insert(*pos, *state_id);
+        }
+    }
+
+    /// Vanilla `ServerGamePacketListenerImpl.tick`'s `ClientboundBlockChangedAckPacket`. Must
+    /// run after [`Self::flush_block_updates`]: acking a predicted sequence before the client
+    /// has actually received the corrected block-update packet for it makes the client revert
+    /// its own prediction early, then snap again once the real packet lands.
+    pub fn acknowledge_player_block_changes(&self) {
+        for player in self.players.load().iter() {
+            if let Some(client) = player.client.java() {
+                client.acknowledge_pending_block_changes();
+            }
         }
     }
 
