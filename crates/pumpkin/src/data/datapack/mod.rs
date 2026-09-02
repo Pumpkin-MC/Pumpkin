@@ -45,8 +45,17 @@ pub enum DatapackEnablePosition {
 
 pub struct DatapackManager {
     loaded_packs: RwLock<Vec<LoadedDatapack>>,
-    functions: RwLock<HashMap<String, Vec<String>>>,
+    functions: RwLock<HashMap<String, Arc<[String]>>>,
     function_tags: RwLock<HashMap<String, Vec<String>>>,
+}
+
+fn share_function_bodies(
+    functions: HashMap<String, Vec<String>>,
+) -> HashMap<String, Arc<[String]>> {
+    functions
+        .into_iter()
+        .map(|(name, lines)| (name, lines.into()))
+        .collect()
 }
 
 impl Default for DatapackManager {
@@ -178,6 +187,7 @@ impl DatapackManager {
             .loaded_packs
             .write()
             .unwrap_or_else(std::sync::PoisonError::into_inner) = loaded_packs_vec;
+        let all_functions = share_function_bodies(all_functions);
         *self
             .functions
             .write()
@@ -199,7 +209,9 @@ impl DatapackManager {
         self.functions
             .read()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .clone()
+            .iter()
+            .map(|(name, lines)| (name.clone(), lines.to_vec()))
+            .collect()
     }
 
     pub fn get_function_names(&self) -> Vec<String> {
@@ -264,15 +276,15 @@ impl DatapackManager {
                     }
                     continue;
                 };
-                functions.push(lines.clone());
+                functions.push(Arc::clone(lines));
             }
             functions
         };
 
         let mut total_executed = 0;
         for lines in functions {
-            for line in lines {
-                visit(&line);
+            for line in lines.iter() {
+                visit(line);
                 total_executed += 1;
             }
         }
@@ -652,7 +664,7 @@ mod tests {
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .insert(
                 "test:reentrant".to_string(),
-                vec!["first command".to_string(), "second command".to_string()],
+                vec!["first command".to_string(), "second command".to_string()].into(),
             );
 
         let mut visited = Vec::new();
@@ -678,7 +690,10 @@ mod tests {
             .functions
             .write()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .insert("test:known".to_string(), vec!["known command".to_string()]);
+            .insert(
+                "test:known".to_string(),
+                vec!["known command".to_string()].into(),
+            );
         manager
             .function_tags
             .write()

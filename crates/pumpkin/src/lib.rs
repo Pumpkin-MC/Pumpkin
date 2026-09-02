@@ -1,5 +1,6 @@
 #![deny(clippy::unwrap_used)]
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used, clippy::panic))]
+#![allow(clippy::significant_drop_in_scrutinee)]
 // Not warn event sending macros
 #![allow(unused_labels, deprecated)]
 

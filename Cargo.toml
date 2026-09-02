@@ -49,6 +49,7 @@ needless_pass_by_ref_mut = "deny"
 needless_collect = "deny"
 redundant_clone = "deny"
 set_contains_or_insert = "deny"
+significant_drop_in_scrutinee = "deny"
 print_stdout = "deny"
 print_stderr = "deny"
 
@@ -89,7 +90,6 @@ cast_lossless = "allow"
 while_float = "allow"
 or_fun_call = "allow"
 significant_drop_tightening = "allow"
-significant_drop_in_scrutinee = "allow"
 suspicious_operation_groupings = "allow"
 literal_string_with_formatting_args = "allow"
 future_not_send = "allow"
@@ -220,10 +220,10 @@ ordered-float = { version = "5.4", default-features = false, features = ["std"] 
 xxhash-rust = { version = "0.8", default-features = false, features = ["xxh64"] }
 
 # Temporary pin to the approved implementation of Component Model sync reentry:
-# https://github.com/bytecodealliance/wasmtime/commit/92f238b9095185fd5a9131f1718019b5cdac8329
-wasmtime = { git = "https://github.com/bytecodealliance/wasmtime", rev = "92f238b9095185fd5a9131f1718019b5cdac8329", default-features = false, features = ["runtime", "component-model", "component-model-async", "async", "cache", "cranelift", "gc", "gc-drc", "threads", "std"] }
-wasmtime-wasi = { git = "https://github.com/bytecodealliance/wasmtime", rev = "92f238b9095185fd5a9131f1718019b5cdac8329", default-features = false, features = ["p2", "p3"] }
-wasmtime-wasi-http = { git = "https://github.com/bytecodealliance/wasmtime", rev = "92f238b9095185fd5a9131f1718019b5cdac8329", default-features = false, features = ["p2", "p3", "default-send-request"] }
+# https://github.com/bytecodealliance/wasmtime/commit/f6b3140dbb1d9b436ef523d14740292c956b0364
+wasmtime = { git = "https://github.com/bytecodealliance/wasmtime", rev = "f6b3140dbb1d9b436ef523d14740292c956b0364", default-features = false, features = ["runtime", "component-model", "component-model-async", "async", "cache", "cranelift", "gc", "gc-drc", "threads", "std"] }
+wasmtime-wasi = { git = "https://github.com/bytecodealliance/wasmtime", rev = "f6b3140dbb1d9b436ef523d14740292c956b0364", default-features = false, features = ["p2", "p3"] }
+wasmtime-wasi-http = { git = "https://github.com/bytecodealliance/wasmtime", rev = "f6b3140dbb1d9b436ef523d14740292c956b0364", default-features = false, features = ["p2", "p3", "default-send-request"] }
 # needed for interacting with wasmtime-wasi-http - keep in sync
 hyper = { version = "^1.11", default-features = false }
 axum = { version = "0.8.9", default-features = false, features = ["http1", "tokio"] }

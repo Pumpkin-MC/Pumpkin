@@ -42,7 +42,7 @@
               lockFile = ./Cargo.lock;
               outputHashes = {
                 "cranelift-assembler-x64-0.136.0-dev" =
-                  "sha256-gVXFOfVem6sH2Km/6zhrBetTn/+k/MspV2HxpRWsboU=";
+                  "sha256-TZkmQ4+wWzb9x8UukZYQs1j05llI8ZmuMyHFXaDwcL0=";
               };
             };
 
