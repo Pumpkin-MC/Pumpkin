@@ -30,6 +30,26 @@ fn remove_resource<T: 'static>(state: &mut PluginHostState, rep: u32) {
         .delete::<T>(wasmtime::component::Resource::new_own(rep));
 }
 
+fn map_command_result(
+    state: &mut PluginHostState,
+    result: Result<i32, CommandErrorWit>,
+) -> CommandExecutorResult {
+    match result {
+        Ok(value) => Ok(value),
+        Err(CommandErrorWit::InvalidConsumption(value)) => Err(DISPATCHER_PARSE_EXCEPTION
+            .create_without_context(TextComponent::text(format!(
+                "Invalid consumption: {value:?}"
+            )))),
+        Err(CommandErrorWit::InvalidRequirement) => Err(DISPATCHER_PARSE_EXCEPTION
+            .create_without_context(TextComponent::text("Invalid requirement"))),
+        Err(CommandErrorWit::PermissionDenied) => Err(DISPATCHER_PARSE_EXCEPTION
+            .create_without_context(TextComponent::text("Permission denied"))),
+        Err(CommandErrorWit::CommandFailed(resource)) => {
+            Err(DISPATCHER_PARSE_EXCEPTION.create_without_context(resource.consume(state).provider))
+        }
+    }
+}
+
 pub struct WasmCommandExecutor {
     pub handler_id: u32,
     pub plugin: Arc<WasmPlugin>,
@@ -101,31 +121,8 @@ impl CommandExecutor for WasmCommandExecutor {
                                 .await;
 
                             guest.with(|mut store| {
-                                let result = result.map(|(result,)| match result {
-                                    Ok(value) => Ok(value),
-                                    Err(CommandErrorWit::InvalidConsumption(value)) => {
-                                        Err(DISPATCHER_PARSE_EXCEPTION.create_without_context(
-                                            TextComponent::text(format!(
-                                                "Invalid consumption: {value:?}"
-                                            )),
-                                        ))
-                                    }
-                                    Err(CommandErrorWit::InvalidRequirement) => {
-                                        Err(DISPATCHER_PARSE_EXCEPTION.create_without_context(
-                                            TextComponent::text("Invalid requirement"),
-                                        ))
-                                    }
-                                    Err(CommandErrorWit::PermissionDenied) => {
-                                        Err(DISPATCHER_PARSE_EXCEPTION.create_without_context(
-                                            TextComponent::text("Permission denied"),
-                                        ))
-                                    }
-                                    Err(CommandErrorWit::CommandFailed(resource)) => {
-                                        Err(DISPATCHER_PARSE_EXCEPTION.create_without_context(
-                                            resource.consume(store.data_mut()).provider,
-                                        ))
-                                    }
-                                });
+                                let result = result
+                                    .map(|(result,)| map_command_result(store.data_mut(), result));
                                 remove_resource::<CommandSenderResource>(store.data_mut(), reps.0);
                                 remove_resource::<ServerResource>(store.data_mut(), reps.1);
                                 remove_resource::<ConsumedArgsResource>(store.data_mut(), reps.2);
