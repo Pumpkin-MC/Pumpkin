@@ -1415,8 +1415,22 @@ impl ProtoChunk {
             let center_x = chunk_pos::get_center_x(self.x);
             let center_z = chunk_pos::get_center_z(self.z);
             let start_y = height_sampler.estimate_ocean_floor_height(center_x, center_z);
+            // Validate against this dimension's biomes, not a hardcoded overworld
+            // tree. Ocean monuments only list overworld biomes, so this naturally
+            // rejects them outside the overworld instead of querying the wrong tree.
+            let active_supplier = if generator.dimension == Dimension::THE_END {
+                ActiveSupplier::End(TheEndBiomeSupplier)
+            } else if generator.dimension == Dimension::THE_NETHER {
+                ActiveSupplier::Nether(MultiNoiseBiomeSupplier::NETHER)
+            } else {
+                ActiveSupplier::Overworld(MultiNoiseBiomeSupplier::OVERWORLD)
+            };
+            let biome_supplier: &dyn BiomeSupplier = match &active_supplier {
+                ActiveSupplier::End(s) => s,
+                ActiveSupplier::Nether(s) | ActiveSupplier::Overworld(s) => s,
+            };
             if !crate::generation::structure::structures::ocean_monument::has_valid_biomes(
-                &MultiNoiseBiomeSupplier::OVERWORLD,
+                biome_supplier,
                 &mut sampler,
                 self.x,
                 self.z,

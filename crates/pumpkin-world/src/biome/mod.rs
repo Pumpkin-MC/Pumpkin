@@ -17,8 +17,12 @@ pub use pumpkin_data::chunk::{
 };
 
 thread_local! {
-    /// A shortcut; check if last used biome is what we should use
-    static LAST_RESULT_NODE: RefCell<Option<&'static BiomeTree>> = const {RefCell::new(None) };
+    /// A shortcut; reuse the last matched biome-tree leaf when consecutive
+    /// lookups land nearby. Keyed by the source tree so a leaf cached for one
+    /// dimension's tree is never reused for another (which previously let an
+    /// overworld biome leak into Nether lookups and corrupt Nether decoration).
+    static LAST_RESULT_NODE: RefCell<Option<(&'static BiomeTree, &'static BiomeTree)>> =
+        const { RefCell::new(None) };
 }
 
 pub trait BiomeSupplier {
@@ -42,7 +46,16 @@ impl BiomeSupplier for MultiNoiseBiomeSupplier {
     fn biome(&self, x: i32, y: i32, z: i32, noise: &mut MultiNoiseSampler<'_>) -> &'static Biome {
         let point = noise.sample(x, y, z);
         let point_list = point.convert_to_list();
-        LAST_RESULT_NODE.with_borrow_mut(|last_result| self.source.get(&point_list, last_result))
+        LAST_RESULT_NODE.with_borrow_mut(|cache| {
+            // Only reuse a cached leaf that belongs to this supplier's tree.
+            let mut last_node = match *cache {
+                Some((source, node)) if std::ptr::eq(source, self.source) => Some(node),
+                _ => None,
+            };
+            let biome = self.source.get(&point_list, &mut last_node);
+            *cache = last_node.map(|node| (self.source, node));
+            biome
+        })
     }
 }
 

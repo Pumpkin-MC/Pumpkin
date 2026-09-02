@@ -97,6 +97,7 @@ mod tests {
     use crate::generation::get_world_gen;
     use crate::world::WorldPortalExt;
     use pumpkin_data::BlockStateId;
+    use pumpkin_data::chunk::Biome;
     use pumpkin_data::dimension::Dimension;
     use pumpkin_util::world_seed::Seed;
     use std::sync::Arc;
@@ -180,6 +181,67 @@ mod tests {
             assert!(dumped.contains(&terrain_state));
             let top_section = &dumped[dumped.len() - 16 * 16 * 16..];
             assert!(top_section.iter().all(|&state| state == BlockStateId::AIR));
+        }
+    }
+
+    /// The biome-tree leaf cache in [`crate::biome`] is a thread-local shared by
+    /// every dimension, and a leaf cached from one dimension's tree seeds the search
+    /// in another: `BiomeTree::get` only accepts nodes strictly closer than the
+    /// cached one, so a stale overworld leaf can beat every node of the Nether tree
+    /// and be returned as-is. A worker thread that generated an overworld chunk then
+    /// gave the next Nether chunk overworld biomes, and with them overworld surface
+    /// rules, features and mob spawns.
+    #[test]
+    fn nether_chunks_only_contain_nether_biomes() {
+        let nether_biomes = [
+            Biome::NETHER_WASTES.id,
+            Biome::SOUL_SAND_VALLEY.id,
+            Biome::CRIMSON_FOREST.id,
+            Biome::WARPED_FOREST.id,
+            Biome::BASALT_DELTAS.id,
+        ];
+        let seed = Seed(1_789_685_981_366_416_087);
+        let block_registry = Arc::new(BlockRegistry);
+
+        // Warm this thread's biome cache with an overworld leaf first.
+        let overworld = get_world_gen(seed, Dimension::OVERWORLD, false, Vec::new(), String::new());
+        let _ = generate_single_chunk(
+            &overworld,
+            block_registry.as_ref(),
+            0,
+            0,
+            StagedChunkEnum::Biomes,
+        );
+
+        let nether = get_world_gen(
+            seed,
+            Dimension::THE_NETHER,
+            false,
+            Vec::new(),
+            String::new(),
+        );
+        let chunk = generate_single_chunk(
+            &nether,
+            block_registry.as_ref(),
+            0,
+            0,
+            StagedChunkEnum::Biomes,
+        );
+        let Chunk::Proto(chunk) = chunk else {
+            panic!("biome generation must return a proto chunk");
+        };
+
+        for biome_x in 0..4 {
+            for biome_z in 0..4 {
+                for biome_y in 0..(Dimension::THE_NETHER.height / 4) {
+                    let biome = chunk.get_biome(biome_x, biome_y, biome_z);
+                    assert!(
+                        nether_biomes.contains(&biome.id),
+                        "cell {biome_x},{biome_y},{biome_z} generated non-Nether biome id {}",
+                        biome.id
+                    );
+                }
+            }
         }
     }
 
