@@ -16,27 +16,27 @@ thread_local! {
 }
 
 #[inline]
-fn get_buffer(len: usize) -> Box<[f32]> {
+fn get_buffer(len: usize) -> Vec<f32> {
     F64_BUFFER_POOL.with(|pool| {
         let mut buffers = pool.borrow_mut();
         buffers.pop().map_or_else(
-            || vec![0.0; len].into_boxed_slice(),
+            || vec![0.0; len],
             |mut buf| {
                 if buf.len() == len {
                     buf.fill(0.0);
                 } else {
                     buf.resize(len, 0.0);
                 }
-                buf.into_boxed_slice()
+                buf
             },
         )
     })
 }
 
 #[inline]
-fn recycle_buffer(buf: Box<[f32]>) {
+fn recycle_buffer(buf: Vec<f32>) {
     F64_BUFFER_POOL.with(|pool| {
-        pool.borrow_mut().push(Vec::from(buf));
+        pool.borrow_mut().push(buf);
     });
 }
 
@@ -198,8 +198,8 @@ pub struct DensityInterpolator {
 
     // y-z plane buffers to be interpolated together, each of these values is that of the cell, not
     // the block
-    pub(crate) start_buffer: Box<[f32]>,
-    pub(crate) end_buffer: Box<[f32]>,
+    pub(crate) start_buffer: Vec<f32>,
+    pub(crate) end_buffer: Vec<f32>,
 
     first_pass: [f32; 8],
     second_pass: [f32; 4],
@@ -261,7 +261,7 @@ impl DensityInterpolator {
         cell_z_position * (self.vertical_cell_count + 1) + cell_y_position
     }
 
-    pub(crate) const fn on_sampled_cell_corners(
+    pub(crate) fn on_sampled_cell_corners(
         &mut self,
         cell_y_position: usize,
         cell_z_position: usize,
@@ -310,14 +310,8 @@ impl DensityInterpolator {
 
 impl Drop for DensityInterpolator {
     fn drop(&mut self) {
-        recycle_buffer(std::mem::replace(
-            &mut self.start_buffer,
-            Vec::new().into_boxed_slice(),
-        ));
-        recycle_buffer(std::mem::replace(
-            &mut self.end_buffer,
-            Vec::new().into_boxed_slice(),
-        ));
+        recycle_buffer(std::mem::take(&mut self.start_buffer));
+        recycle_buffer(std::mem::take(&mut self.end_buffer));
     }
 }
 
@@ -424,7 +418,7 @@ impl MutableChunkNoiseFunctionComponentImpl for DensityInterpolator {
 pub struct FlatCache {
     pub(crate) input_index: usize,
 
-    pub(crate) cache: Box<[f32]>,
+    pub(crate) cache: Vec<f32>,
     start_biome_x: i32,
     start_biome_z: i32,
     horizontal_biome_end: usize,
@@ -480,10 +474,7 @@ impl MutableChunkNoiseFunctionComponentImpl for FlatCache {
 
 impl Drop for FlatCache {
     fn drop(&mut self) {
-        recycle_buffer(std::mem::replace(
-            &mut self.cache,
-            Vec::new().into_boxed_slice(),
-        ));
+        recycle_buffer(std::mem::take(&mut self.cache));
     }
 }
 
@@ -585,7 +576,7 @@ pub struct CacheOnce {
     cache_fill_unique_id: u64,
     last_sample_result: f32,
 
-    cache: Box<[f32]>,
+    cache: Vec<f32>,
 
     min_value: f32,
     max_value: f32,
@@ -661,7 +652,7 @@ impl MutableChunkNoiseFunctionComponentImpl for CacheOnce {
 
         // We need to make a new cache
         if self.cache.len() != array.len() {
-            self.cache = vec![0.0; array.len()].into_boxed_slice();
+            self.cache = vec![0.0; array.len()];
         }
 
         self.cache.copy_from_slice(array);
@@ -678,7 +669,7 @@ impl CacheOnce {
             cache_result_unique_id: 0,
             cache_fill_unique_id: 0,
             last_sample_result: Default::default(),
-            cache: Box::new([]),
+            cache: Vec::new(),
             min_value,
             max_value,
         }
@@ -687,7 +678,7 @@ impl CacheOnce {
 
 pub struct CellCache {
     pub(crate) input_index: usize,
-    pub(crate) cache: Box<[f32]>,
+    pub(crate) cache: Vec<f32>,
 
     min_value: f32,
     max_value: f32,
@@ -735,6 +726,12 @@ impl MutableChunkNoiseFunctionComponentImpl for CellCache {
                 sample_options,
             ),
         }
+    }
+}
+
+impl Drop for CellCache {
+    fn drop(&mut self) {
+        recycle_buffer(std::mem::take(&mut self.cache));
     }
 }
 
