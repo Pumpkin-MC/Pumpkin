@@ -30,7 +30,9 @@ fn check_condition(
     cond: LootCondition,
     has_silk_touch: bool,
     has_shears: bool,
+    fortune_level: i32,
     params: &LootContextParameters,
+    rng: &mut Xoroshiro,
 ) -> bool {
     match cond {
         LootCondition::None => true,
@@ -42,7 +44,24 @@ fn check_condition(
         LootCondition::KilledByPlayer => params.killed_by_player.unwrap_or(false),
         LootCondition::SurvivesExplosion => params
             .explosion_radius
-            .is_none_or(|radius| rand::random::<f32>() <= 1.0 / radius),
+            .is_none_or(|radius| rng.next_f32() <= 1.0 / radius),
+        LootCondition::RandomChance { chance } => rng.next_f32() < chance,
+        LootCondition::RandomChanceWithEnchantedBonus {
+            unenchanted_chance,
+            enchanted_chance_base,
+            enchanted_chance_per_level_above_first,
+        } => {
+            let chance = if fortune_level > 0 {
+                enchanted_chance_base
+                    + enchanted_chance_per_level_above_first * (fortune_level - 1) as f32
+            } else {
+                unenchanted_chance
+            };
+            rng.next_f32() < chance
+        }
+        LootCondition::AllOf(conditions) => conditions
+            .iter()
+            .all(|c| check_condition(*c, has_silk_touch, has_shears, fortune_level, params, rng)),
     }
 }
 
@@ -52,26 +71,29 @@ fn apply_bonus_formula(
     fortune_level: i32,
     rng: &mut Xoroshiro,
 ) -> i32 {
-    if fortune_level <= 0 {
-        return base_count;
-    }
-
     match bonus {
         LootBonusFormula::OreDrops => {
-            let r = rng.next_bounded_i32(fortune_level + 2);
-            let multiplier = (r.max(1) - 1).max(0) + 1;
-            base_count * multiplier
+            if fortune_level > 0 {
+                let bonus = (rng.next_bounded_i32(fortune_level + 2) - 1).max(0);
+                base_count * (bonus + 1)
+            } else {
+                base_count
+            }
         }
         LootBonusFormula::UniformBonusCount(bonus_multiplier) => {
             let max_bonus = fortune_level * bonus_multiplier;
-            let extra = rng.next_bounded_i32(max_bonus + 1);
+            let extra = if max_bonus > 0 {
+                rng.next_bounded_i32(max_bonus + 1)
+            } else {
+                0
+            };
             base_count + extra
         }
         LootBonusFormula::BinomialWithBonusCount { extra, probability } => {
             let n = fortune_level + extra;
             let mut bonus_count = 0;
             for _ in 0..n {
-                if (rng.next_bounded_i32(1000) as f32 / 1000.0) < probability {
+                if rng.next_f32() < probability {
                     bonus_count += 1;
                 }
             }
@@ -80,13 +102,11 @@ fn apply_bonus_formula(
     }
 }
 
-/// Generates a list of items from a `LootTable` using a deterministic seed and default parameters.
 #[must_use]
 pub fn generate_loot(table: &LootTable, seed: i64) -> Vec<ItemStack> {
     generate_loot_with_context(table, seed, &LootContextParameters::default())
 }
 
-/// Generates a list of items from a `LootTable` using a deterministic seed and contextual parameters.
 #[must_use]
 pub fn generate_loot_with_context(
     table: &LootTable,
@@ -111,18 +131,38 @@ pub fn generate_loot_with_context(
     });
 
     let fortune_level = params.tool.as_ref().map_or(0, |tool| {
-        pumpkin_data::Enchantment::from_name("fortune").map_or(0, |e| tool.get_enchantment_level(e))
+        let fortune = pumpkin_data::Enchantment::from_name("fortune")
+            .map_or(0, |e| tool.get_enchantment_level(e));
+        let looting = pumpkin_data::Enchantment::from_name("looting")
+            .map_or(0, |e| tool.get_enchantment_level(e));
+        fortune.max(looting)
     });
 
     for pool in table.pools {
-        if !check_condition(pool.condition, has_silk_touch, has_shears, params) {
+        if !check_condition(
+            pool.condition,
+            has_silk_touch,
+            has_shears,
+            fortune_level,
+            params,
+            &mut rng,
+        ) {
             continue;
         }
 
         let eligible_entries: Vec<&LootEntry> = pool
             .entries
             .iter()
-            .filter(|e| check_condition(e.condition, has_silk_touch, has_shears, params))
+            .filter(|e| {
+                check_condition(
+                    e.condition,
+                    has_silk_touch,
+                    has_shears,
+                    fortune_level,
+                    params,
+                    &mut rng,
+                )
+            })
             .collect();
 
         if eligible_entries.is_empty() && pool.empty_weight == 0 {
@@ -146,7 +186,6 @@ pub fn generate_loot_with_context(
 
             let mut pick = rng.next_bounded_i32(total_weight);
 
-            // Subtract empty weight first (if the pick lands here, it yields nothing).
             pick -= pool.empty_weight;
             if pick < 0 {
                 continue;
@@ -170,7 +209,6 @@ pub fn generate_loot_with_context(
                     }
 
                     if final_count > 0 {
-                        // Strip "minecraft:" prefix because from_registry_key uses short keys.
                         let item_key = entry.item.strip_prefix("minecraft:").unwrap_or(entry.item);
 
                         if let Some(item) = Item::from_registry_key(item_key) {
@@ -188,7 +226,6 @@ pub fn generate_loot_with_context(
 
 pub use generate_loot as generate_chest_loot;
 
-/// Items are scattered randomly across the 27 chest slots.
 pub fn fill_chest_inventory(
     inventory: &std::sync::Arc<dyn pumpkin_world::inventory::Inventory>,
     table: &LootTable,
@@ -200,75 +237,70 @@ pub fn fill_chest_inventory(
         return;
     }
 
-    let inv_size = inventory.size(); // 27 for a normal chest
+    let inv_size = inventory.size();
     let mut rng = Xoroshiro::from_seed(seed as u64);
-    let free_slots = inv_size;
 
-    // Split large stacks across extra slots then shuffle.
-    shuffle_and_split_items(&mut items_to_place, free_slots, &mut rng);
+    let mut available_slots: Vec<usize> = (0..inv_size)
+        .filter(|&slot| inventory.get_stack(slot).is_empty())
+        .collect();
 
-    // Pick random distinct slots and place each item.
-    let mut available_slots: Vec<usize> = (0..inv_size).collect();
-    // Shuffle available slots using Fisher-Yates so item order from above maps to random slots.
     for i in (1..available_slots.len()).rev() {
         let j = rng.next_bounded_i32((i + 1) as i32) as usize;
         available_slots.swap(i, j);
     }
 
+    shuffle_and_split_items(&mut items_to_place, available_slots.len(), &mut rng);
+
     for item in items_to_place {
         let Some(slot) = available_slots.pop() else {
-            break;
+            tracing::warn!("Tried to over-fill a container");
+            return;
         };
         inventory.set_stack(slot, item);
     }
 }
 
-/// Stacks with count > 1 are split at a random midpoint and redistributed while
-/// there are more free slots than total items. Then everything is shuffled.
 fn shuffle_and_split_items(
     result: &mut Vec<ItemStack>,
     available_slots: usize,
     rng: &mut Xoroshiro,
 ) {
-    // Drain all items with count > 1 into a splittable list.
     let mut splittable: Vec<ItemStack> = Vec::new();
     let mut i = 0;
     while i < result.len() {
-        if result[i].item_count > 1 {
+        if result[i].is_empty() {
+            result.swap_remove(i);
+        } else if result[i].item_count > 1 {
             splittable.push(result.swap_remove(i));
         } else {
             i += 1;
         }
     }
 
-    // While there are more free slots than total items, split a random stack.
     while available_slots > result.len() + splittable.len() && !splittable.is_empty() {
         let idx = rng.next_bounded_i32(splittable.len() as i32) as usize;
         let mut stack = splittable.swap_remove(idx);
 
         let count = stack.item_count as i32;
-        // Split off [1, count/2] items.
         let split_off = 1 + rng.next_bounded_i32(count / 2);
         stack.item_count = (count - split_off) as u8;
         let mut copy = stack.clone();
         copy.item_count = split_off as u8;
 
-        if stack.item_count > 1 {
+        if stack.item_count > 1 && rng.next_bool() {
             splittable.push(stack);
         } else {
             result.push(stack);
         }
-        if copy.item_count > 1 {
+        if copy.item_count > 1 && rng.next_bool() {
             splittable.push(copy);
         } else {
             result.push(copy);
         }
     }
 
-    // Remaining unsplit multis go straight into result.
     result.extend(splittable);
 
-    // Fisher-Yates shuffle with our RNG.
     let n = result.len();
     for i in (1..n).rev() {
         let j = rng.next_bounded_i32((i + 1) as i32) as usize;

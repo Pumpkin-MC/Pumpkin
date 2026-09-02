@@ -16,55 +16,70 @@ pub mod vector2;
 pub mod vector3;
 pub mod vertical_surface_type;
 
-const SIN_SCALE: f32 = 10430.378; // 65536 / 2P
-const SIN_MASK: i32 = 65535;
+const SIN_SCALE: f64 = 10430.378350470453;
+const SIN_MASK: i64 = 65535;
 
-static SIN: LazyLock<[f32; 65536]> = LazyLock::new(|| {
-    std::array::from_fn(|i| (f64::from(i as u32) / 10430.378350470453).sin() as f32)
-});
+static SIN: LazyLock<[f32; 65536]> =
+    LazyLock::new(|| std::array::from_fn(|i| (f64::from(i as u32) / SIN_SCALE).sin() as f32));
 
-/// Returns the vanilla sine table value for an angle in radians.
 #[must_use]
 pub fn sin(value: f32) -> f32 {
-    SIN[((value * SIN_SCALE) as i32 & SIN_MASK) as usize]
+    SIN[((value as f64 * SIN_SCALE) as i64 & SIN_MASK) as usize]
 }
 
-/// Returns the vanilla cosine table value for an angle in radians.
 #[must_use]
 pub fn cos(value: f32) -> f32 {
-    SIN[((value * SIN_SCALE + 16384.0) as i32 & SIN_MASK) as usize]
+    SIN[(((value as f64 * SIN_SCALE) + 16384.0) as i64 & SIN_MASK) as usize]
 }
 
-/// Wraps an angle in degrees to the range [-180, 180).
-///
-/// # Arguments
-/// - `degrees` – The angle in degrees to wrap.
-///
-/// # Returns
-/// The wrapped angle.
 #[must_use]
 pub fn wrap_degrees(degrees: f32) -> f32 {
-    let mut var1 = degrees % 360.0;
-
-    if var1 >= 180.0 {
-        var1 -= 360.0;
+    let mut normalized_angle = degrees % 360.0;
+    if normalized_angle >= 180.0 {
+        normalized_angle -= 360.0;
     }
-    if var1 < -180.0 {
-        var1 += 360.0;
+    if normalized_angle < -180.0 {
+        normalized_angle += 360.0;
     }
-
-    var1
+    normalized_angle
 }
 
-/// Clamps an angle toward a mean within a delta.
-///
-/// # Arguments
-/// - `value` – The angle to clamp.
-/// - `mean` – The reference angle.
-/// - `delta` – Maximum deviation from the mean.
-///
-/// # Returns
-/// The clamped angle.
+#[must_use]
+pub fn wrap_degrees_f64(degrees: f64) -> f64 {
+    let mut normalized_angle = degrees % 360.0;
+    if normalized_angle >= 180.0 {
+        normalized_angle -= 360.0;
+    }
+    if normalized_angle < -180.0 {
+        normalized_angle += 360.0;
+    }
+    normalized_angle
+}
+
+#[must_use]
+pub const fn wrap_degrees_i32(degrees: i32) -> i32 {
+    let mut normalized_angle = degrees % 360;
+    if normalized_angle >= 180 {
+        normalized_angle -= 360;
+    }
+    if normalized_angle < -180 {
+        normalized_angle += 360;
+    }
+    normalized_angle
+}
+
+#[must_use]
+pub fn wrap_degrees_90(angle: f32) -> f32 {
+    let mut normalized_angle = angle % 90.0;
+    if normalized_angle >= 45.0 {
+        normalized_angle -= 90.0;
+    }
+    if normalized_angle < -45.0 {
+        normalized_angle += 90.0;
+    }
+    normalized_angle
+}
+
 #[must_use]
 pub fn clamp_angle(value: f32, mean: f32, delta: f32) -> f32 {
     let i = subtract_angles(value, mean);
@@ -72,55 +87,114 @@ pub fn clamp_angle(value: f32, mean: f32, delta: f32) -> f32 {
     mean - j
 }
 
-/// Subtracts two angles, returning the difference wrapped to [-180, 180).
-///
-/// # Arguments
-/// - `start` – Starting angle.
-/// - `end` – Ending angle.
-///
-/// # Returns
-/// The wrapped difference.
 #[must_use]
 pub fn subtract_angles(start: f32, end: f32) -> f32 {
     wrap_degrees(end - start)
 }
 
-/// Returns the squared magnitude of a 3D vector.
-///
-/// # Arguments
-/// - `a` – X component.
-/// - `b` – Y component.
-/// - `c` – Z component.
-///
-/// # Returns
-/// `a² + b² + c²`
+#[must_use]
+pub fn degrees_difference(from_angle: f32, to_angle: f32) -> f32 {
+    wrap_degrees(to_angle - from_angle)
+}
+
+#[must_use]
+pub fn degrees_difference_abs(angle_a: f32, angle_b: f32) -> f32 {
+    degrees_difference(angle_a, angle_b).abs()
+}
+
+#[must_use]
+pub fn rotate_if_necessary(base_angle: f32, target_angle: f32, max_angle_diff: f32) -> f32 {
+    let delta_angle = degrees_difference(base_angle, target_angle);
+    let delta_angle_clamped = delta_angle.clamp(-max_angle_diff, max_angle_diff);
+    target_angle - delta_angle_clamped
+}
+
+#[must_use]
+pub fn approach(current: f32, target: f32, increment: f32) -> f32 {
+    let increment = increment.abs();
+    if current < target {
+        (current + increment).clamp(current, target)
+    } else {
+        (current - increment).clamp(target, current)
+    }
+}
+
+#[must_use]
+pub fn approach_degrees(current: f32, target: f32, increment: f32) -> f32 {
+    let difference = degrees_difference(current, target);
+    approach(current, current + difference, increment)
+}
+
 #[must_use]
 pub const fn squared_magnitude(a: f64, b: f64, c: f64) -> f64 {
     c.mul_add(c, a.mul_add(a, b * b))
 }
 
-/// Returns the size (length) of a 3D vector.
-///
-/// # Arguments
-/// - `a` – X component.
-/// - `b` – Y component.
-/// - `c` – Z component.
-///
-/// # Returns
-/// The Euclidean length.
+#[inline]
+#[must_use]
+pub fn fast_inv_sqrt(value: f64) -> f64 {
+    let half = 0.5 * value;
+    let bits = value.to_bits();
+    let approx_bits = 6910469410427058090u64.wrapping_sub(bits >> 1);
+    let approx = f64::from_bits(approx_bits);
+    approx * (1.5 - half * approx * approx)
+}
+
+#[inline]
+#[must_use]
+pub fn fast_inv_cube_root(x: f32) -> f32 {
+    let mut i = x.to_bits() as i32;
+    i = 1419967116i32.wrapping_sub(i / 3);
+    let mut y = f32::from_bits(i as u32);
+    y = 0.6666667 * y + 1.0 / (3.0 * y * y * x);
+    0.6666667 * y + 1.0 / (3.0 * y * y * x)
+}
+
 #[must_use]
 pub fn magnitude(a: f64, b: f64, c: f64) -> f64 {
     squared_magnitude(a, b, c).sqrt()
 }
 
-/// Converts a world coordinate to a chunk-section coordinate.
-///
-/// # Arguments
-/// - `coord` – The world coordinate.
-///
-/// # Returns
-/// The corresponding chunk-section coordinate.
-// TODO: This probably shouldn't be placed here
+#[must_use]
+pub fn length_squared_2d(x: f64, y: f64) -> f64 {
+    x * x + y * y
+}
+
+#[must_use]
+pub fn length_squared_2d_f32(x: f32, y: f32) -> f32 {
+    x * x + y * y
+}
+
+#[must_use]
+pub fn length_2d(x: f64, y: f64) -> f64 {
+    x.hypot(y)
+}
+
+#[must_use]
+pub fn length_2d_f32(x: f32, y: f32) -> f32 {
+    x.hypot(y)
+}
+
+#[must_use]
+pub fn length_squared_3d(x: f64, y: f64, z: f64) -> f64 {
+    x * x + y * y + z * z
+}
+
+#[must_use]
+pub fn length_squared_3d_f32(x: f32, y: f32, z: f32) -> f32 {
+    x * x + y * y + z * z
+}
+
+#[must_use]
+pub fn length_3d(x: f64, y: f64, z: f64) -> f64 {
+    (x * x + y * y + z * z).sqrt()
+}
+
+#[must_use]
+pub fn length_3d_f32(x: f32, y: f32, z: f32) -> f32 {
+    (x * x + y * y + z * z).sqrt()
+}
+
 #[must_use]
 pub const fn get_section_cord(coord: i32) -> i32 {
     coord >> 4
@@ -131,13 +205,6 @@ const MULTIPLY_DE_BRUIJN_BIT_POSITION: [u8; 32] = [
     12, 18, 6, 11, 5, 10, 9,
 ];
 
-/// Returns the smallest power-of-two exponent ≥ log2(value).
-///
-/// # Arguments
-/// - `value` – The input integer.
-///
-/// # Returns
-/// Maximum return value: 31
 #[must_use]
 pub const fn ceil_log2(value: u32) -> u8 {
     let value = if value.is_power_of_two() {
@@ -149,38 +216,16 @@ pub const fn ceil_log2(value: u32) -> u8 {
     MULTIPLY_DE_BRUIJN_BIT_POSITION[((((value as u64) * 125613361) >> 27) & 31) as usize]
 }
 
-/// Returns the largest power-of-two exponent ≤ log2(value).
-///
-/// # Arguments
-/// - `value` – The input integer.
-///
-/// # Returns
-/// Maximum return value: 30
 #[must_use]
 pub const fn floor_log2(value: u32) -> u8 {
     ceil_log2(value) - if value.is_power_of_two() { 0 } else { 1 }
 }
 
-/// Returns the smallest power of two greater than or equal to the input.
-///
-/// # Arguments
-/// - `value` – The input integer.
-///
-/// # Returns
-/// The next power of two.
 #[must_use]
 pub const fn smallest_encompassing_power_of_two(value: u32) -> u32 {
     value.next_power_of_two()
 }
 
-/// Computes floor division of integers.
-///
-/// # Arguments
-/// - `x` – Dividend.
-/// - `y` – Divisor.
-///
-/// # Returns
-/// The floor of x / y.
 #[inline]
 pub fn floor_div<T: PrimInt + Zero + One>(x: T, y: T) -> T {
     let div = x / y;
@@ -193,13 +238,6 @@ pub fn floor_div<T: PrimInt + Zero + One>(x: T, y: T) -> T {
     }
 }
 
-/// Squares a floating-point value.
-///
-/// # Arguments
-/// - `n` – The value to square.
-///
-/// # Returns
-/// n²
 #[inline]
 #[must_use]
 pub const fn square_f64(n: f64) -> f64 {
@@ -212,14 +250,6 @@ pub const fn square_f32(n: f32) -> f32 {
     n * n
 }
 
-/// Computes a floor modulo operation.
-///
-/// # Arguments
-/// - `x` – Dividend.
-/// - `y` – Divisor.
-///
-/// # Returns
-/// Result of x mod y.
 #[inline]
 pub fn floor_mod<T: PrimInt + Zero>(x: T, y: T) -> T {
     let rem = x % y;
@@ -230,59 +260,26 @@ pub fn floor_mod<T: PrimInt + Zero>(x: T, y: T) -> T {
     }
 }
 
-/// Maps a value from one range to another.
-///
-/// # Arguments
-/// - `value` – Value in old range.
-/// - `old_start` – Start of old range.
-/// - `old_end` – End of old range.
-/// - `new_start` – Start of new range.
-/// - `new_end` – End of new range.
-///
-/// # Returns
-/// Value in new range.
 #[inline]
 pub fn map<T: Float>(value: T, old_start: T, old_end: T, new_start: T, new_end: T) -> T {
     lerp(lerp_progress(value, old_start, old_end), new_start, new_end)
 }
 
-/// Performs linear interpolation.
-///
-/// # Arguments
-/// - `delta` – Progress factor [0,1].
-/// - `start` – Start value.
-/// - `end` – End value.
-///
-/// # Returns
-/// Interpolated value.
 #[inline]
 pub fn lerp<T: Float>(delta: T, start: T, end: T) -> T {
     start + delta * (end - start)
 }
 
-/// Returns the interpolation progress of a value in a range.
-///
-/// # Arguments
-/// - `value` – Value to map.
-/// - `start` – Start of range.
-/// - `end` – End of range.
-///
-/// # Returns
-/// Fractional progress of value between start and end.
 #[inline]
 pub fn lerp_progress<T: Float>(value: T, start: T, end: T) -> T {
     (value - start) / (end - start)
 }
 
-/// Performs a clamped linear interpolation between two values.
-///
-/// # Arguments
-/// - `start` – Start value.
-/// - `end` – End value.
-/// - `delta` – Interpolation factor; clamped to [0,1].
-///
-/// # Returns
-/// Interpolated value, clamped to the range [start, end].
+#[inline]
+pub fn inverse_lerp<T: Float>(value: T, min: T, max: T) -> T {
+    (value - min) / (max - min)
+}
+
 #[must_use]
 pub fn clamped_lerp<T: Float>(start: T, end: T, delta: T) -> T {
     if delta < T::zero() {
@@ -294,35 +291,12 @@ pub fn clamped_lerp<T: Float>(start: T, end: T, delta: T) -> T {
     }
 }
 
-/// Maps a value from one range to another with clamping.
-///
-/// # Arguments
-/// - `value` – Value in old range.
-/// - `old_start` – Start of old range.
-/// - `old_end` – End of old range.
-/// - `new_start` – Start of new range.
-/// - `new_end` – End of new range.
-///
-/// # Returns
-/// Value in a new range, clamped to [`new_start`, `new_end`].
 #[inline]
 #[must_use]
 pub fn clamped_map<T: Float>(value: T, old_start: T, old_end: T, new_start: T, new_end: T) -> T {
     clamped_lerp(new_start, new_end, lerp_progress(value, old_start, old_end))
 }
 
-/// Performs bilinear interpolation.
-///
-/// # Arguments
-/// - `delta_x` – Interpolation factor along X axis [0,1].
-/// - `delta_y` – Interpolation factor along Y axis [0,1].
-/// - `x0y0` – Value at (0,0).
-/// - `x1y0` – Value at (1,0).
-/// - `x0y1` – Value at (0,1).
-/// - `x1y1` – Value at (1,1).
-///
-/// # Returns
-/// Interpolated value.
 #[must_use]
 pub fn lerp2<T: Float>(delta_x: T, delta_y: T, x0y0: T, x1y0: T, x0y1: T, x1y1: T) -> T {
     lerp(
@@ -332,23 +306,6 @@ pub fn lerp2<T: Float>(delta_x: T, delta_y: T, x0y0: T, x1y0: T, x0y1: T, x1y1: 
     )
 }
 
-/// Performs trilinear interpolation.
-///
-/// # Arguments
-/// - `delta_x` – Interpolation factor along X axis [0,1].
-/// - `delta_y` – Interpolation factor along Y axis [0,1].
-/// - `delta_z` – Interpolation factor along Z axis [0,1].
-/// - `x0y0z0` – Value at (0,0,0).
-/// - `x1y0z0` – Value at (1,0,0).
-/// - `x0y1z0` – Value at (0,1,0).
-/// - `x1y1z0` – Value at (1,1,0).
-/// - `x0y0z1` – Value at (0,0,1).
-/// - `x1y0z1` – Value at (1,0,1).
-/// - `x0y1z1` – Value at (0,1,1).
-/// - `x1y1z1` – Value at (1,1,1).
-///
-/// # Returns
-/// Interpolated value.
 #[expect(clippy::too_many_arguments)]
 #[must_use]
 pub fn lerp3<T: Float>(
@@ -371,32 +328,99 @@ pub fn lerp3<T: Float>(
     )
 }
 
-/// Calculates a polynomial rolling hash for an array of byte slices.
-///
-/// # Arguments
-/// - `signatures` – Slice of byte arrays to hash.
-///
-/// # Returns
-/// A single-byte hash (never 0).
+#[must_use]
+pub fn catmullrom(alpha: f32, p0: f32, p1: f32, p2: f32, p3: f32) -> f32 {
+    0.5 * (2.0 * p1
+        + (p2 - p0) * alpha
+        + (2.0 * p0 - 5.0 * p1 + 4.0 * p2 - p3) * alpha * alpha
+        + (3.0 * p1 - p0 - 3.0 * p2 + p3) * alpha * alpha * alpha)
+}
+
+#[must_use]
+pub fn smoothstep(x: f32) -> f32 {
+    x * x * x * (x * (x * 6.0 - 15.0) + 10.0)
+}
+
+#[must_use]
+pub fn smoothstep_derivative(x: f32) -> f32 {
+    30.0 * x * x * (x - 1.0) * (x - 1.0)
+}
+
+#[must_use]
+pub fn triangle_wave(index: f32, period: f32) -> f32 {
+    ((index % period - period * 0.5).abs() - period * 0.25) / (period * 0.25)
+}
+
+#[must_use]
+pub fn rot_lerp(a: f32, from: f32, to: f32) -> f32 {
+    from + a * wrap_degrees(to - from)
+}
+
+#[must_use]
+pub fn rot_lerp_f64(a: f64, from: f64, to: f64) -> f64 {
+    from + a * wrap_degrees_f64(to - from)
+}
+
+#[must_use]
+pub fn rot_lerp_rad(a: f32, from: f32, to: f32) -> f32 {
+    let mut diff = to - from;
+    while diff < -std::f32::consts::PI {
+        diff += std::f32::consts::TAU;
+    }
+    while diff >= std::f32::consts::PI {
+        diff -= std::f32::consts::TAU;
+    }
+    from + a * diff
+}
+
+#[must_use]
+pub fn positive_ceil_div(input: i32, divisor: i32) -> i32 {
+    -floor_div(-input, divisor)
+}
+
+#[must_use]
+pub fn positive_ceil_div_i64(input: i64, divisor: i64) -> i64 {
+    -floor_div(-input, divisor)
+}
+
+#[must_use]
+pub fn round_toward(input: i32, multiple: i32) -> i32 {
+    positive_ceil_div(input, multiple) * multiple
+}
+
+#[must_use]
+pub fn round_toward_i64(input: i64, multiple: i64) -> i64 {
+    positive_ceil_div_i64(input, multiple) * multiple
+}
+
+#[must_use]
+pub fn quantize(value: f64, quantize_resolution: i32) -> i32 {
+    (value / quantize_resolution as f64).floor() as i32 * quantize_resolution
+}
+
+#[must_use]
+pub const fn get_seed(x: i32, y: i32, z: i32) -> i64 {
+    let mut seed =
+        ((x as i64).wrapping_mul(3129871)) ^ ((z as i64).wrapping_mul(116129781)) ^ (y as i64);
+    seed = seed
+        .wrapping_mul(seed)
+        .wrapping_mul(42317861)
+        .wrapping_add(seed.wrapping_mul(11));
+    seed >> 16
+}
+
 #[must_use]
 pub fn polynomial_rolling_hash(signatures: &[Box<[u8]>]) -> u8 {
     let mut i: i32 = 1;
 
     for signature in signatures {
-        i = i.wrapping_mul(31).wrapping_add(java_array_hash(signature)); // NOTE: Wrap to prevent multiplication overflow.
+        i = i.wrapping_mul(31).wrapping_add(java_array_hash(signature));
     }
 
-    let b = (i & 0xFF) as u8; // NOTE: Take the least significant byte.
-    if b == 0 { 1 } else { b } // NOTE: Ensure the checksum is never zero.
+    let b = (i & 0xFF) as u8;
+    if b == 0 { 1 } else { b }
 }
 
-/// Computes a Java-style hash code for a byte array.
-///
-/// # Arguments
-/// - `data` – Byte array to hash.
-///
-/// # Returns
-/// Hash code as i32.
 fn java_array_hash(data: &[u8]) -> i32 {
     let mut hash: i32 = 1;
     for &byte in data {
@@ -406,13 +430,6 @@ fn java_array_hash(data: &[u8]) -> i32 {
     hash
 }
 
-/// Computes a Java-style hash code for a string.
-///
-/// # Arguments
-/// - `string` – String to hash.
-///
-/// # Returns
-/// Hash code as i32.
 #[must_use]
 pub fn java_string_hash(string: &str) -> i32 {
     let mut result = 0i32;
@@ -462,13 +479,6 @@ macro_rules! vector_codec_impl {
 }
 pub(crate) use vector_codec_impl;
 
-/// Tests the Java-style string and array hash implementations.
-///
-/// This verifies that `java_string_hash` and `java_array_hash` produce the expected
-/// results for various strings, including ASCII, Unicode, and edge cases.
-///
-/// # Panics
-/// - If any computed hash does not match the expected value.
 #[test]
 #[expect(clippy::unicode_not_nfc)]
 fn java_hash() {
@@ -490,7 +500,6 @@ fn java_hash() {
             -1606003975i32,
         ),
         ("求同存异", 847053876, 1709557670),
-        // NOTE: This might look weird because Hebrew is text is right to left.
         (
             "אבְּרֵאשִׁ֖ית בָּרָ֣א אֱלֹהִ֑ים אֵ֥ת הַשָּׁמַ֖יִם וְאֵ֥ת הָאָֽרֶץ:",
             1372570871,

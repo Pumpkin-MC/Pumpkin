@@ -1,3 +1,5 @@
+use pumpkin_data::fluid::Fluid;
+use pumpkin_data::tag::{self, Taggable};
 use pumpkin_data::{Block, BlockId, BlockState};
 
 use pumpkin_data::BlockStateId;
@@ -23,10 +25,18 @@ use pumpkin_data::BlockDirection;
 use pumpkin_data::block_rotation::{Mirror, Rotation};
 use pumpkin_data::data_component_impl::EquipmentSlot;
 use pumpkin_data::item_stack::ItemStack;
+use pumpkin_inventory::screen_handler::ScreenHandlerFactory;
 use pumpkin_protocol::java::server::play::SUseItemOn;
 use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::world::{BlockAccessor, BlockFlags};
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PathComputationType {
+    Land,
+    Water,
+    Air,
+}
 
 pub trait BlockMetadata {
     fn ids() -> Box<[BlockId]>;
@@ -74,6 +84,13 @@ pub trait BlockBehaviour: Send + Sync {
 
     fn normal_use(&self, _args: NormalUseArgs<'_>) -> BlockActionResult {
         BlockActionResult::Pass
+    }
+
+    fn get_screen_handler_factory(
+        &self,
+        _args: GetScreenHandlerFactoryArgs<'_>,
+    ) -> Option<Box<dyn ScreenHandlerFactory>> {
+        None
     }
 
     fn use_with_item(&self, _args: UseWithItemArgs<'_>) -> BlockActionResult {
@@ -185,6 +202,17 @@ pub trait BlockBehaviour: Send + Sync {
     ) -> &'static BlockState {
         block.rotate(state_id, rotation)
     }
+
+    fn is_pathfindable(&self, state: &BlockState, computation_type: PathComputationType) -> bool {
+        match computation_type {
+            PathComputationType::Water => {
+                state.is_waterlogged()
+                    || Fluid::from_state_id(state.id)
+                        .is_some_and(|f| f.has_tag(&tag::Fluid::MINECRAFT_WATER))
+            }
+            PathComputationType::Land | PathComputationType::Air => !state.is_full_cube(),
+        }
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -202,6 +230,15 @@ pub struct NormalUseArgs<'a> {
     pub position: &'a BlockPos,
     pub player: &'a Arc<Player>,
     pub hit: &'a BlockHitResult<'a>,
+}
+
+#[derive(Clone, Copy)]
+pub struct GetScreenHandlerFactoryArgs<'a> {
+    pub server: &'a Server,
+    pub world: &'a Arc<World>,
+    pub block: &'a Block,
+    pub position: &'a BlockPos,
+    pub player: &'a Arc<Player>,
 }
 
 pub struct UseWithItemArgs<'a> {
@@ -443,10 +480,17 @@ pub fn drop_loot(
         }
     }
 
-    if experience && let Some(experience) = &block.experience {
+    let has_silk_touch = params.tool.as_ref().is_some_and(|tool| {
+        pumpkin_data::Enchantment::from_name("silk_touch")
+            .is_some_and(|e| tool.get_enchantment_level(e) > 0)
+    });
+
+    if experience
+        && !has_silk_touch
+        && let Some(experience) = &block.experience
+    {
         let mut random = RandomGenerator::Xoroshiro(Xoroshiro::from_seed(get_seed()));
         let amount = experience.experience.get(&mut random);
-        // TODO: Silk touch gives no exp
         if amount > 0 {
             let mut event = crate::plugin::block::block_exp::BlockExpEvent {
                 block_pos: *pos,

@@ -1,5 +1,5 @@
 /// Conditions required for an entry or pool to be eligible for loot generation.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+#[derive(Clone, Copy, Debug, PartialEq, Default)]
 pub enum LootCondition {
     #[default]
     None,
@@ -10,6 +10,15 @@ pub enum LootCondition {
     NoSilkTouchOrShears,
     SurvivesExplosion,
     KilledByPlayer,
+    RandomChance {
+        chance: f32,
+    },
+    RandomChanceWithEnchantedBonus {
+        unenchanted_chance: f32,
+        enchanted_chance_base: f32,
+        enchanted_chance_per_level_above_first: f32,
+    },
+    AllOf(&'static [Self]),
 }
 
 /// Bonus count formulas when tools have fortune or looting enchantments.

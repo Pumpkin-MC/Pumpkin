@@ -90,6 +90,23 @@ impl BlockEntity for CampfireBlockEntity {
         nbt.put("CookingTotalTimes", NbtTag::IntArray(total_times));
     }
 
+    fn chunk_data_nbt(&self) -> Option<NbtCompound> {
+        let mut nbt = NbtCompound::new();
+        let mut list = Vec::new();
+        for (i, item_mutex) in self.items.iter().enumerate() {
+            if let Ok(stack) = item_mutex.try_lock()
+                && !stack.is_empty()
+            {
+                let mut item_nbt = NbtCompound::new();
+                item_nbt.put_byte("Slot", i as i8);
+                stack.write_item_stack(&mut item_nbt);
+                list.push(NbtTag::Compound(item_nbt));
+            }
+        }
+        nbt.put_list("Items", list);
+        Some(nbt)
+    }
+
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
@@ -105,5 +122,18 @@ impl CampfireBlockEntity {
             cooking_times: [Mutex::new(0), Mutex::new(0), Mutex::new(0), Mutex::new(0)],
             cooking_total_times: [Mutex::new(0), Mutex::new(0), Mutex::new(0), Mutex::new(0)],
         }
+    }
+
+    pub fn add_item(&self, item: &ItemStack) -> bool {
+        for slot in &self.items {
+            if let Ok(mut stack) = slot.lock()
+                && stack.is_empty()
+            {
+                *stack = item.clone();
+                stack.item_count = 1;
+                return true;
+            }
+        }
+        false
     }
 }

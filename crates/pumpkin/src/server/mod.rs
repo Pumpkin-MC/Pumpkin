@@ -121,6 +121,8 @@ pub struct Server {
         std::sync::Mutex<std::collections::HashMap<String, pumpkin_nbt::compound::NbtCompound>>,
     /// Global server stopwatches
     pub stopwatches: std::sync::Mutex<crate::world::stopwatches::Stopwatches>,
+    /// Global server random sequences
+    pub random_sequences: std::sync::Mutex<crate::world::random_sequences::RandomSequences>,
     // Manages player advancement
     pub advancement_manager: Arc<AdvancementManager>,
     // Whether the server whitelist is on or off
@@ -299,6 +301,9 @@ impl Server {
             player_data_storage,
             command_storage: std::sync::Mutex::new(std::collections::HashMap::new()),
             stopwatches: std::sync::Mutex::new(crate::world::stopwatches::Stopwatches::new()),
+            random_sequences: std::sync::Mutex::new(
+                crate::world::random_sequences::RandomSequences::new(),
+            ),
             advancement_manager,
             white_list,
             tick_rate_manager,

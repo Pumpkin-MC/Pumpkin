@@ -3,13 +3,13 @@ use std::sync::Arc;
 use crate::{
     block::{
         BlockBehaviour, GetComparatorOutputArgs, NormalUseArgs, OnScheduledTickArgs,
-        UseWithItemArgs, registry::BlockActionResult,
+        PathComputationType, UseWithItemArgs, registry::BlockActionResult,
     },
     entity::{Entity, item::ItemEntity},
     world::World,
 };
 use pumpkin_data::{
-    Block, BlockStateId, block_properties::ComposterLikeProperties,
+    Block, BlockState, BlockStateId, block_properties::ComposterLikeProperties,
     composter_increase_chance::get_composter_increase_chance_from_item_id, entity::EntityType,
     item::Item, item_stack::ItemStack, world::WorldEvent,
 };
@@ -92,6 +92,10 @@ impl BlockBehaviour for ComposterBlock {
             let props = ComposterLikeProperties::from_state_id(args.state.id);
             Some(props.level)
         }
+    }
+
+    fn is_pathfindable(&self, _state: &BlockState, _computation_type: PathComputationType) -> bool {
+        false
     }
 }
 

@@ -22,6 +22,11 @@ impl MobEffect for RaidOmenMobEffect {
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
             raids.create_or_extend_raid(raid_pos, &world);
+            player.increment_stat(
+                pumpkin_data::statistic::StatisticCategory::Custom,
+                pumpkin_data::statistic::CustomStatistic::RaidTrigger as i32,
+                1,
+            );
             player.clear_raid_omen_position();
         }
     }

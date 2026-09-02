@@ -85,6 +85,7 @@ pub struct LivingEntity {
     pub item_use_time: AtomicI32,
     pub item_in_use: std::sync::Mutex<Option<ItemStack>>,
     pub active_hand: std::sync::Mutex<Option<Hand>>,
+    pub recent_kinetic_enemies: std::sync::Mutex<FxHashMap<i32, i32>>,
     pub death_time: AtomicU8,
     /// Indicates whether the entity is dead. (`on_death` called)
     pub dead: AtomicBool,
@@ -213,6 +214,7 @@ impl LivingEntity {
             item_use_time: AtomicI32::new(0),
             item_in_use: std::sync::Mutex::new(None),
             active_hand: std::sync::Mutex::new(None),
+            recent_kinetic_enemies: std::sync::Mutex::new(FxHashMap::default()),
             livings_flags: AtomicU8::new(0),
             active_effects: std::sync::Mutex::new(FxHashMap::default()),
             entity_equipment: Arc::new(std::sync::Mutex::new(EntityEquipment::new())),
@@ -432,6 +434,10 @@ impl LivingEntity {
             .active_hand
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(hand);
+        self.recent_kinetic_enemies
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clear();
         self.set_living_flag(Self::USING_ITEM_FLAG, true);
         self.set_living_flag(Self::OFF_HAND_ACTIVE_FLAG, hand == Hand::Left);
     }
@@ -487,9 +493,28 @@ impl LivingEntity {
             .active_hand
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
+        self.recent_kinetic_enemies
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clear();
         self.item_use_time.store(0, Ordering::Relaxed);
 
         self.set_living_flag(Self::USING_ITEM_FLAG, false);
+    }
+
+    pub fn was_recently_stabbed(&self, target_id: i32, now: i32, allowed_ticks: i32) -> bool {
+        self.recent_kinetic_enemies
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .get(&target_id)
+            .is_some_and(|stabbed_at| now - stabbed_at < allowed_ticks)
+    }
+
+    pub fn remember_stabbed_entity(&self, target_id: i32, now: i32) {
+        self.recent_kinetic_enemies
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .insert(target_id, now);
     }
 
     pub fn is_blocking(&self) -> bool {
@@ -1571,7 +1596,16 @@ impl LivingEntity {
             return;
         }
 
-        // Fetches the safe fall distance attribute
+        if fall_distance >= 2.0
+            && let Some(player) = caller.get_player()
+        {
+            player.increment_stat(
+                StatisticCategory::Custom,
+                CustomStatistic::FallOneCm as i32,
+                (fall_distance * 100.0).round() as i32,
+            );
+        }
+
         let safe_fall_distance = self.get_attribute_value(&Attributes::SAFE_FALL_DISTANCE) as f32;
         let unsafe_fall_distance = fall_distance + 1.0E-6 - safe_fall_distance;
 
@@ -1642,8 +1676,7 @@ impl LivingEntity {
             self.movement_input.store(Vector3::default());
             self.jumping.store(false, Relaxed);
 
-            // Statistics updates
-            self.update_death_stats(&*dyn_self, cause);
+            self.update_death_stats(&*dyn_self, cause.or(source));
 
             // Plays the death sound
             world.send_entity_status(&self.entity, EntityStatus::Death, Some(ActorEventID::Death));
@@ -1813,14 +1846,15 @@ impl LivingEntity {
 
     fn update_death_stats(&self, dyn_self: &dyn EntityBase, cause: Option<&dyn EntityBase>) {
         if let Some(victim_player) = dyn_self.get_player() {
-            victim_player.increment_stat(
-                StatisticCategory::Custom,
-                CustomStatistic::Deaths as i32,
-                1,
-            );
+            victim_player.increment_custom_stat(CustomStatistic::Deaths, 1);
             victim_player.set_stat(
                 StatisticCategory::Custom,
                 CustomStatistic::TimeSinceDeath as i32,
+                0,
+            );
+            victim_player.set_stat(
+                StatisticCategory::Custom,
+                CustomStatistic::TimeSinceRest as i32,
                 0,
             );
             if let Some(killer_entity) = cause.map(EntityBase::get_entity) {
@@ -1833,6 +1867,11 @@ impl LivingEntity {
         }
 
         if let Some(killer_player) = cause.and_then(|c| c.get_player()) {
+            killer_player.increment_stat(
+                StatisticCategory::Killed,
+                self.entity.entity_type.id as i32,
+                1,
+            );
             if dyn_self.get_player().is_some() {
                 killer_player.increment_stat(
                     StatisticCategory::Custom,
@@ -2060,9 +2099,17 @@ impl LivingEntity {
                 .is_none_or(|equippable| equippable.damage_on_hurt);
 
             if takes_damage {
+                let item_id = stack.item.id;
                 let slot_result = stack.damage_item(armor_damage);
                 if slot_result != pumpkin_data::item_stack::DamageResult::Untouched {
                     if slot_result == pumpkin_data::item_stack::DamageResult::Broken {
+                        if let Some(player) = caller.get_player() {
+                            player.increment_stat(
+                                pumpkin_data::statistic::StatisticCategory::Broken,
+                                item_id as i32,
+                                1,
+                            );
+                        }
                         let world = self.entity.world.load();
                         world.send_entity_status(
                             &self.entity,
@@ -2566,14 +2613,11 @@ impl LivingEntity {
                         .lock()
                         .unwrap_or_else(std::sync::PoisonError::into_inner);
                     if let Some(stack) = equipment_guard.equipment.get_mut(&slot) {
+                        let item_id = stack.item.id;
                         let durability_damage = (amount / 1.0).floor().max(1.0) as i32;
                         if stack.damage_item(durability_damage) == DamageResult::Broken {
                             if let Some(player) = caller.get_player() {
-                                player.increment_stat(
-                                    StatisticCategory::Broken,
-                                    stack.item.id as i32,
-                                    1,
-                                );
+                                player.increment_stat(StatisticCategory::Broken, item_id as i32, 1);
                             }
                             world.send_entity_status(
                                 &self.entity,
@@ -2598,9 +2642,12 @@ impl LivingEntity {
         let damage_after_armor =
             self.get_damage_after_armor_absorb(amount, &damage_type, cause.or(source));
 
-        // Vanilla parity: 2. Magic absorb (Resistance effect first, then Enchantments)
-        let effective_amount =
-            self.get_damage_after_magic_absorb(damage_after_armor, &damage_type, caller, cause);
+        let effective_amount = self.get_damage_after_magic_absorb(
+            damage_after_armor,
+            &damage_type,
+            caller,
+            cause.or(source),
+        );
 
         // These damage types bypass the hurt cooldown and death protection
         let bypasses_cooldown_protection =
@@ -2694,7 +2741,7 @@ impl LivingEntity {
                 );
             }
 
-            if let Some(attacker_player) = cause.and_then(|c| c.get_player()) {
+            if let Some(attacker_player) = cause.or(source).and_then(|c| c.get_player()) {
                 attacker_player.increment_stat(
                     StatisticCategory::Custom,
                     CustomStatistic::DamageDealtAbsorbed as i32,
@@ -2727,7 +2774,7 @@ impl LivingEntity {
 
             self.set_health(new_health);
 
-            if let Some(attacker_player) = cause.and_then(|c| c.get_player()) {
+            if let Some(attacker_player) = cause.or(source).and_then(|c| c.get_player()) {
                 attacker_player.increment_stat(
                     StatisticCategory::Custom,
                     CustomStatistic::DamageDealt as i32,
@@ -2880,6 +2927,22 @@ impl EntityBase for LivingEntity {
         }
 
         self.tick_effects();
+
+        if let Some(player) = caller.get_player() {
+            let remaining_use_ticks = self.item_use_time.load(Ordering::Relaxed);
+            if remaining_use_ticks > 0 {
+                let item_in_use = self
+                    .item_in_use
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .clone();
+                if let Some(item) = item_in_use.as_ref() {
+                    server
+                        .item_registry
+                        .on_use_tick(item, player, remaining_use_ticks);
+                }
+            }
+        }
 
         // Current active item
         if self.item_use_time.load(Ordering::Relaxed) > 0

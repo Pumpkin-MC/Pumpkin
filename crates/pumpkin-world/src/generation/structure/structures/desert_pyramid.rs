@@ -103,9 +103,19 @@ impl DesertPyramidPiece {
         true
     }
 
-    fn place_sand(&self, chunk: &mut ProtoChunk, bb: &BlockBox, x: i32, y: i32, z: i32) {
+    fn place_sand(
+        &self,
+        chunk: &mut ProtoChunk,
+        bb: &BlockBox,
+        x: i32,
+        y: i32,
+        z: i32,
+        potential_positions: &mut Vec<pumpkin_util::math::vector3::Vector3<i32>>,
+    ) {
         self.piece
             .add_block(chunk, Block::SAND.default_state, x, y, z, bb);
+        let world_pos = self.piece.offset_pos(x, y, z);
+        potential_positions.push(world_pos);
     }
 
     #[expect(clippy::too_many_arguments)]
@@ -119,11 +129,12 @@ impl DesertPyramidPiece {
         x1: i32,
         y1: i32,
         z1: i32,
+        potential_positions: &mut Vec<pumpkin_util::math::vector3::Vector3<i32>>,
     ) {
         for y in y0..=y1 {
             for x in x0..=x1 {
                 for z in z0..=z1 {
-                    self.place_sand(chunk, bb, x, y, z);
+                    self.place_sand(chunk, bb, x, y, z, potential_positions);
                 }
             }
         }
@@ -158,14 +169,17 @@ impl DesertPyramidPiece {
         z0: i32,
         x1: i32,
         z1: i32,
+        potential_positions: &mut Vec<pumpkin_util::math::vector3::Vector3<i32>>,
     ) {
         for x in x0..=x1 {
             for z in z0..=z1 {
                 self.place_collapsed_roof_piece(chunk, bb, random, x, y0, z);
             }
         }
-        // TODO: Pick a random collapsed roof position for sus sand placement in
-        // the structure-level afterPlace pass when brushable support exists.
+        let rx = x0 + random.next_bounded_i32(x1 - x0 + 1);
+        let rz = z0 + random.next_bounded_i32(z1 - z0 + 1);
+        let sus_pos = self.piece.offset_pos(rx, y0, rz);
+        potential_positions.push(sus_pos);
     }
 
     fn try_place_chest(
@@ -205,8 +219,36 @@ impl DesertPyramidPiece {
     }
 
     fn add_cellar(&self, chunk: &mut ProtoChunk, bb: &BlockBox, random: &mut RandomGenerator) {
-        self.add_cellar_stairs(chunk, bb, random);
-        self.add_cellar_room(chunk, bb, random);
+        let mut potential_positions = Vec::new();
+        self.add_cellar_stairs(chunk, bb, random, &mut potential_positions);
+        self.add_cellar_room(chunk, bb, random, &mut potential_positions);
+
+        for i in (1..potential_positions.len()).rev() {
+            let j = random.next_bounded_i32(i as i32 + 1) as usize;
+            potential_positions.swap(i, j);
+        }
+
+        let sus_count =
+            (random.next_bounded_i32(5) + 4).min(potential_positions.len() as i32) as usize;
+        for pos in potential_positions.into_iter().take(sus_count) {
+            if bb.contains_pos(&pos) {
+                chunk.set_block_state(pos.x, pos.y, pos.z, Block::SUSPICIOUS_SAND.default_state);
+                let mut nbt = NbtCompound::new();
+                nbt.put_string("id", "minecraft:brushable_block".to_string());
+                nbt.put_int("x", pos.x);
+                nbt.put_int("y", pos.y);
+                nbt.put_int("z", pos.z);
+                nbt.put_string(
+                    "LootTable",
+                    "minecraft:archaeology/desert_pyramid".to_string(),
+                );
+                nbt.put_long(
+                    "LootTableSeed",
+                    BlockPos::new(pos.x, pos.y, pos.z).as_long(),
+                );
+                chunk.add_block_entity(nbt);
+            }
+        }
     }
 
     fn add_cellar_stairs(
@@ -214,6 +256,7 @@ impl DesertPyramidPiece {
         chunk: &mut ProtoChunk,
         bb: &BlockBox,
         random: &mut RandomGenerator,
+        potential_positions: &mut Vec<pumpkin_util::math::vector3::Vector3<i32>>,
     ) {
         let west_stairs = Self::sandstone_stairs(HorizontalFacing::West);
         self.piece.add_block(chunk, west_stairs, 13, -1, 17, bb);
@@ -225,12 +268,12 @@ impl DesertPyramidPiece {
         let (x, y, z) = (16, -4, 13);
         let variant = random.next_bool();
 
-        self.piece.add_block(chunk, sand, x - 4, y + 4, z + 4, bb);
-        self.piece.add_block(chunk, sand, x - 3, y + 4, z + 4, bb);
-        self.piece.add_block(chunk, sand, x - 2, y + 4, z + 4, bb);
-        self.piece.add_block(chunk, sand, x - 1, y + 4, z + 4, bb);
-        self.piece.add_block(chunk, sand, x, y + 4, z + 4, bb);
-        self.piece.add_block(chunk, sand, x - 2, y + 3, z + 4, bb);
+        self.place_sand(chunk, bb, x - 4, y + 4, z + 4, potential_positions);
+        self.place_sand(chunk, bb, x - 3, y + 4, z + 4, potential_positions);
+        self.place_sand(chunk, bb, x - 2, y + 4, z + 4, potential_positions);
+        self.place_sand(chunk, bb, x - 1, y + 4, z + 4, potential_positions);
+        self.place_sand(chunk, bb, x, y + 4, z + 4, potential_positions);
+        self.place_sand(chunk, bb, x - 2, y + 3, z + 4, potential_positions);
         self.piece.add_block(
             chunk,
             if variant { sand } else { sandstone },
@@ -247,13 +290,19 @@ impl DesertPyramidPiece {
             z + 4,
             bb,
         );
-        self.piece.add_block(chunk, sand, x - 1, y + 2, z + 4, bb);
+        self.place_sand(chunk, bb, x - 1, y + 2, z + 4, potential_positions);
         self.piece.add_block(chunk, sandstone, x, y + 2, z + 4, bb);
-        self.piece.add_block(chunk, sand, x, y + 1, z + 4, bb);
+        self.place_sand(chunk, bb, x, y + 1, z + 4, potential_positions);
     }
 
     #[expect(clippy::too_many_lines)]
-    fn add_cellar_room(&self, chunk: &mut ProtoChunk, bb: &BlockBox, random: &mut RandomGenerator) {
+    fn add_cellar_room(
+        &self,
+        chunk: &mut ProtoChunk,
+        bb: &BlockBox,
+        random: &mut RandomGenerator,
+        potential_positions: &mut Vec<pumpkin_util::math::vector3::Vector3<i32>>,
+    ) {
         let (x, y, z) = (16, -4, 13);
         let cut = Block::CUT_SANDSTONE.default_state;
         let chiseled = Block::CHISELED_SANDSTONE.default_state;
@@ -416,8 +465,28 @@ impl DesertPyramidPiece {
             cut,
         );
 
-        self.place_sand_box(chunk, bb, x - 2, y + 1, z - 2, x + 2, y + 3, z + 2);
-        self.place_collapsed_roof(chunk, bb, random, x - 2, y + 4, z - 2, x + 2, z + 2);
+        self.place_sand_box(
+            chunk,
+            bb,
+            x - 2,
+            y + 1,
+            z - 2,
+            x + 2,
+            y + 3,
+            z + 2,
+            potential_positions,
+        );
+        self.place_collapsed_roof(
+            chunk,
+            bb,
+            random,
+            x - 2,
+            y + 4,
+            z - 2,
+            x + 2,
+            z + 2,
+            potential_positions,
+        );
         self.piece.add_block(chunk, blue, x, y, z, bb);
         self.piece.add_block(chunk, orange, x + 1, y, z - 1, bb);
         self.piece.add_block(chunk, orange, x + 1, y, z + 1, bb);
@@ -429,24 +498,24 @@ impl DesertPyramidPiece {
         self.piece.add_block(chunk, orange, x, y, z - 2, bb);
 
         self.piece.add_block(chunk, orange, x + 3, y, z, bb);
-        self.place_sand(chunk, bb, x + 3, y + 1, z);
-        self.place_sand(chunk, bb, x + 3, y + 2, z);
+        self.place_sand(chunk, bb, x + 3, y + 1, z, potential_positions);
+        self.place_sand(chunk, bb, x + 3, y + 2, z, potential_positions);
         self.piece.add_block(chunk, cut, x + 4, y + 1, z, bb);
         self.piece.add_block(chunk, chiseled, x + 4, y + 2, z, bb);
 
         self.piece.add_block(chunk, orange, x - 3, y, z, bb);
-        self.place_sand(chunk, bb, x - 3, y + 1, z);
-        self.place_sand(chunk, bb, x - 3, y + 2, z);
+        self.place_sand(chunk, bb, x - 3, y + 1, z, potential_positions);
+        self.place_sand(chunk, bb, x - 3, y + 2, z, potential_positions);
         self.piece.add_block(chunk, cut, x - 4, y + 1, z, bb);
         self.piece.add_block(chunk, chiseled, x - 4, y + 2, z, bb);
 
         self.piece.add_block(chunk, orange, x, y, z + 3, bb);
-        self.place_sand(chunk, bb, x, y + 1, z + 3);
-        self.place_sand(chunk, bb, x, y + 2, z + 3);
+        self.place_sand(chunk, bb, x, y + 1, z + 3, potential_positions);
+        self.place_sand(chunk, bb, x, y + 2, z + 3, potential_positions);
 
         self.piece.add_block(chunk, orange, x, y, z - 3, bb);
-        self.place_sand(chunk, bb, x, y + 1, z - 3);
-        self.place_sand(chunk, bb, x, y + 2, z - 3);
+        self.place_sand(chunk, bb, x, y + 1, z - 3, potential_positions);
+        self.place_sand(chunk, bb, x, y + 2, z - 3, potential_positions);
         self.piece.add_block(chunk, cut, x, y + 1, z - 4, bb);
         self.piece.add_block(chunk, chiseled, x, -2, z - 4, bb);
     }
