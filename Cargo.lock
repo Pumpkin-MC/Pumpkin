@@ -3669,7 +3669,6 @@ dependencies = [
  "cesu8",
  "cfb8",
  "flate2",
- "hybrid-array",
  "pumpkin-data",
  "pumpkin-macros",
  "pumpkin-nbt",
