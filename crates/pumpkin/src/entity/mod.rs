@@ -183,6 +183,10 @@ pub trait EntityBase: Send + Sync + std::any::Any {
         None
     }
 
+    fn get_owner_id(&self) -> Option<i32> {
+        None
+    }
+
     fn get_eye_pos(&self) -> Vector3<f64> {
         self.get_entity().get_eye_pos()
     }

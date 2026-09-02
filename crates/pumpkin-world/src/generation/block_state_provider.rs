@@ -38,8 +38,9 @@ impl BlockStateProvider {
             Self::Simple(provider) => Some(provider.get(pos)),
             Self::Weighted(provider) => Some(provider.get(random)),
             Self::DualNoise(provider) => Some(provider.get(pos)),
-            Self::Pillar(provider) => Some(provider.get(pos)),
-            Self::RandomizedInt(_) | Self::Rule(_) => None,
+            Self::Pillar(provider) => Some(provider.get_with_random(random, pos)),
+            Self::RandomizedInt(provider) => provider.get_for_bonemeal(random, pos),
+            Self::Rule(_) => None,
         }
     }
 
@@ -55,10 +56,8 @@ impl BlockStateProvider {
             Self::NoiseThreshold(provider) => provider.get(random, pos),
             Self::NoiseProvider(provider) => provider.get(pos),
             Self::DualNoise(provider) => provider.get(pos),
-            Self::Pillar(provider) => provider.get(pos),
-            Self::RandomizedInt(provider) => {
-                provider.source.get_state_for_world(world, random, pos)
-            }
+            Self::Pillar(provider) => provider.get_with_random(random, pos),
+            Self::RandomizedInt(provider) => provider.get_state_for_world(world, random, pos),
             Self::Rule(provider) => {
                 for rule in &provider.rules {
                     if rule.if_true.test_world(world, None, &pos) {
@@ -86,7 +85,7 @@ impl BlockStateProvider {
             Self::Simple(provider) => provider.get(pos),
             Self::Weighted(provider) => provider.get(random),
             Self::DualNoise(provider) => provider.get(pos),
-            Self::Pillar(provider) => provider.get(pos),
+            Self::Pillar(provider) => provider.get_with_random(random, pos),
             Self::RandomizedInt(provider) => provider.get(random, pos, chunk, block_registry),
             Self::Rule(provider) => provider.get(block_registry, chunk, random, pos),
         }
@@ -170,6 +169,63 @@ pub struct RandomizedIntBlockStateProvider {
 }
 
 impl RandomizedIntBlockStateProvider {
+    fn apply_property(
+        &self,
+        base_state: &'static BlockState,
+        random: &mut RandomGenerator,
+    ) -> &'static BlockState {
+        let value = self.values.get(random);
+        let val_str = value.to_string();
+        let block = Block::from_id(base_state.id.to_block_id());
+        block.properties(base_state.id).map_or_else(
+            || {
+                let props = [(self.property.as_str(), val_str.as_str())];
+                let new_state_id = block.from_properties(&props).to_state_id(block);
+                BlockState::from_id(new_state_id)
+            },
+            |props_source| {
+                let mut props: Vec<(&str, &str)> = props_source
+                    .to_props()
+                    .iter()
+                    .map(|(k, v)| (*k, *v))
+                    .collect();
+                let mut found = false;
+                for (k, v) in &mut props {
+                    if *k == self.property {
+                        *v = &val_str;
+                        found = true;
+                        break;
+                    }
+                }
+                if !found {
+                    props.push((&self.property, &val_str));
+                }
+                let new_state_id = block.from_properties(&props).to_state_id(block);
+                BlockState::from_id(new_state_id)
+            },
+        )
+    }
+
+    pub fn get_for_bonemeal(
+        &self,
+        random: &mut RandomGenerator,
+        pos: BlockPos,
+    ) -> Option<&'static BlockState> {
+        self.source
+            .get_for_bonemeal(random, pos)
+            .map(|state| self.apply_property(state, random))
+    }
+
+    pub fn get_state_for_world(
+        &self,
+        world: &dyn BlockAccessor,
+        random: &mut RandomGenerator,
+        pos: BlockPos,
+    ) -> &'static BlockState {
+        let state = self.source.get_state_for_world(world, random, pos);
+        self.apply_property(state, random)
+    }
+
     pub fn get<T: GenerationCache>(
         &self,
         random: &mut RandomGenerator,
@@ -177,8 +233,8 @@ impl RandomizedIntBlockStateProvider {
         chunk: &T,
         block_registry: &dyn WorldPortalExt,
     ) -> &'static BlockState {
-        // TODO
-        self.source.get(random, pos, chunk, block_registry)
+        let state = self.source.get(random, pos, chunk, block_registry);
+        self.apply_property(state, random)
     }
 }
 
@@ -189,7 +245,33 @@ pub struct PillarBlockStateProvider {
 impl PillarBlockStateProvider {
     #[must_use]
     pub const fn get(&self, _pos: BlockPos) -> &'static BlockState {
-        // TODO: random axis
+        self.state
+    }
+
+    #[must_use]
+    pub fn get_with_random(
+        &self,
+        random: &mut RandomGenerator,
+        _pos: BlockPos,
+    ) -> &'static BlockState {
+        let axis_str = match random.next_bounded_i32(3) {
+            0 => "x",
+            1 => "y",
+            _ => "z",
+        };
+        let block = Block::from_id(self.state.id.to_block_id());
+        if let Some(props_source) = block.properties(self.state.id) {
+            let prop_list = props_source.to_props();
+            if prop_list.iter().any(|(k, _)| *k == "axis") {
+                let new_props: Vec<(&str, &str)> = prop_list
+                    .iter()
+                    .map(|(k, v)| (*k, if *k == "axis" { axis_str } else { *v }))
+                    .collect();
+                let new_props_obj = block.from_properties(new_props.as_slice());
+                let new_state_id = new_props_obj.to_state_id(block);
+                return BlockState::from_id(new_state_id);
+            }
+        }
         self.state
     }
 }

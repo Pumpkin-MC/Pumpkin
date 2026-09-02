@@ -1,8 +1,8 @@
-use pumpkin_data::BlockStateId;
+use pumpkin_data::{BlockState, BlockStateId};
 use pumpkin_macros::pumpkin_block;
 
 use crate::{
-    block::{BlockBehaviour, OnPlaceArgs},
+    block::{BlockBehaviour, OnPlaceArgs, PathComputationType},
     entity::EntityBase,
 };
 
@@ -17,5 +17,9 @@ impl BlockBehaviour for EndPortalFrameBlock {
         end_portal_frame_props.facing = args.player.get_entity().get_horizontal_facing().opposite();
 
         end_portal_frame_props.to_state_id(args.block)
+    }
+
+    fn is_pathfindable(&self, _state: &BlockState, _computation_type: PathComputationType) -> bool {
+        false
     }
 }

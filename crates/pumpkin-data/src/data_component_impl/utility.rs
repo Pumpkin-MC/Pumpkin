@@ -6,6 +6,11 @@ use pumpkin_nbt::tag::NbtTag;
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct DyeImpl;
+impl DyeImpl {
+    pub const fn read_data(_data: &NbtTag) -> Option<Self> {
+        Some(Self)
+    }
+}
 impl DataComponentImpl for DyeImpl {
     default_impl!(Dye);
 }
@@ -31,6 +36,11 @@ impl DataComponentImpl for DyedColorImpl {
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct MapColorImpl;
+impl MapColorImpl {
+    pub const fn read_data(_data: &NbtTag) -> Option<Self> {
+        Some(Self)
+    }
+}
 impl DataComponentImpl for MapColorImpl {
     default_impl!(MapColor);
 }
@@ -56,6 +66,11 @@ impl DataComponentImpl for MapIdImpl {
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct MapDecorationsImpl;
+impl MapDecorationsImpl {
+    pub const fn read_data(_data: &NbtTag) -> Option<Self> {
+        Some(Self)
+    }
+}
 impl DataComponentImpl for MapDecorationsImpl {
     default_impl!(MapDecorations);
 }
@@ -590,12 +605,28 @@ impl DataComponentImpl for ProfileImpl {
 pub struct JukeboxPlayableImpl {
     pub song: &'static str,
 }
+impl JukeboxPlayableImpl {
+    pub fn read_data(data: &NbtTag) -> Option<Self> {
+        let compound = data.extract_compound()?;
+        let song = compound.get_string("song")?;
+        let static_song = crate::jukebox_song::JukeboxSong::from_name(
+            song.strip_prefix("minecraft:").unwrap_or(song),
+        )
+        .map_or("", |s| s.to_name());
+        Some(Self { song: static_song })
+    }
+}
 impl DataComponentImpl for JukeboxPlayableImpl {
     default_impl!(JukeboxPlayable);
 }
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct RecipesImpl;
+impl RecipesImpl {
+    pub const fn read_data(_data: &NbtTag) -> Option<Self> {
+        Some(Self)
+    }
+}
 impl DataComponentImpl for RecipesImpl {
     default_impl!(Recipes);
 }

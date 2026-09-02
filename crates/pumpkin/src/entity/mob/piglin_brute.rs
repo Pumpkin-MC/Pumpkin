@@ -69,7 +69,6 @@ impl PiglinBruteEntity {
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
             target_selector.add_goal(1, Box::new(RevengeGoal::new(true)));
-            // Piglin brutes are always hostile to players (even with gold armor)
             target_selector.add_goal(
                 2,
                 ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::PLAYER, true),

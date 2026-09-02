@@ -3,13 +3,13 @@ use std::sync::Arc;
 use crate::{
     block::{
         BlockBehaviour, BrokenArgs, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, OnPlaceArgs,
-        PlacedArgs,
+        PathComputationType, PlacedArgs,
     },
     entity::player::Player,
     world::World,
 };
 use pumpkin_data::{
-    Block, BlockDirection, BlockStateId,
+    Block, BlockDirection, BlockState, BlockStateId,
     block_properties::{PointedDripstoneLikeProperties, SpeleothemThickness, VerticalDirection},
 };
 use pumpkin_macros::pumpkin_block;
@@ -113,6 +113,10 @@ impl BlockBehaviour for DripstoneBlock {
             }
         }
         args.state_id
+    }
+
+    fn is_pathfindable(&self, _state: &BlockState, _computation_type: PathComputationType) -> bool {
+        false
     }
 }
 fn update_stalagmite(world: &Arc<World>, stalagmite_len: u8, tip_pos: &BlockPos) {

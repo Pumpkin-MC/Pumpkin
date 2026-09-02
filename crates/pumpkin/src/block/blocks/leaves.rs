@@ -9,8 +9,10 @@ use pumpkin_world::{
     world::{BlockAccessor, BlockFlags},
 };
 
+use crate::block::blocks::plant::mangrove_propagule::MangrovePropaguleBlock;
 use crate::block::{
-    BlockBehaviour, GetStateForNeighborUpdateArgs, OnPlaceArgs, OnScheduledTickArgs, RandomTickArgs,
+    BlockBehaviour, BonemealArgs, GetStateForNeighborUpdateArgs, OnPlaceArgs, OnScheduledTickArgs,
+    RandomTickArgs,
 };
 
 pub const DECAY_DISTANCE: u8 = 7;
@@ -101,6 +103,25 @@ impl BlockBehaviour for LeavesBlock {
         if !props.persistent && props.distance == DECAY_DISTANCE {
             args.world
                 .break_block(args.position, None, BlockFlags::empty());
+        }
+    }
+
+    fn is_valid_bonemeal_target(&self, args: BonemealArgs<'_>) -> bool {
+        args.block == &Block::MANGROVE_LEAVES
+            && args.world.get_block_state(&args.position.down()).is_air()
+    }
+
+    fn is_bonemeal_success(&self, args: BonemealArgs<'_>) -> bool {
+        args.block == &Block::MANGROVE_LEAVES
+    }
+
+    fn perform_bonemeal(&self, args: BonemealArgs<'_>) {
+        if args.block == &Block::MANGROVE_LEAVES {
+            args.world.set_block_state(
+                &args.position.down(),
+                MangrovePropaguleBlock::create_new_hanging_propagule(0),
+                BlockFlags::NOTIFY_ALL,
+            );
         }
     }
 }

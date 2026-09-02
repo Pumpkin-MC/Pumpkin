@@ -75,12 +75,20 @@ impl BlockBehaviour for ButtonBlock {
     fn on_scheduled_tick(&self, args: OnScheduledTickArgs<'_>) {
         let state = args.world.get_block_state(args.position);
         let mut props = ButtonLikeProperties::from_state_id(state.id);
-        props.powered = false;
-        args.world.set_block_state(
-            args.position,
-            props.to_state_id(args.block),
-            BlockFlags::NOTIFY_ALL,
-        );
+        if props.powered {
+            props.powered = false;
+            args.world.set_block_state(
+                args.position,
+                props.to_state_id(args.block),
+                BlockFlags::NOTIFY_ALL,
+            );
+            Self::update_neighbors(args.world, args.position, props);
+            args.world.play_block_sound(
+                get_sound(args.block, false),
+                SoundCategory::Blocks,
+                *args.position,
+            );
+        }
     }
 
     fn emits_redstone_power(&self, _args: EmitsRedstonePowerArgs<'_>) -> bool {

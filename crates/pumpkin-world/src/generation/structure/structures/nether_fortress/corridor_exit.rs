@@ -223,11 +223,14 @@ impl StructurePieceBase for CorridorExitPiece {
         p.add_block(chunk, nb, 6, 0, 6, &bb);
         p.add_block(chunk, Block::LAVA.default_state, 6, 5, 6, &bb);
 
-        // Schedule lava fluid tick
-        // TODO
-        // let lava_pos = p.offset_pos(6, 5, 6);
-        // if bb.contains_pos(&lava_pos) {
-        //     chunk.schedule_fluid_tick(&lava_pos, 0);
-        // }
+        let lava_pos = p.offset_pos(6, 5, 6);
+        if bb.contains_pos(&lava_pos) {
+            chunk.schedule_fluid_tick(
+                lava_pos.x,
+                lava_pos.y,
+                lava_pos.z,
+                &pumpkin_data::fluid::Fluid::LAVA,
+            );
+        }
     }
 }

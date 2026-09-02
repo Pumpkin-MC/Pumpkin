@@ -23,6 +23,7 @@ pub mod loot;
 pub mod map;
 pub mod portal;
 pub mod raid;
+pub mod random_sequences;
 pub mod stopwatches;
 pub mod time;
 pub mod villager_poi;

@@ -24,12 +24,36 @@ impl ClientPacket for CServerData<'_> {
         mut write: impl std::io::Write,
         version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
-        write.write_component(self.motd, version)?;
-        if let Some(icon) = self.icon_base64 {
-            write.write_bool(true)?;
-            write.write_string(icon)?;
+        if *version >= JavaMinecraftVersion::V_1_19_4 {
+            write.write_component(self.motd, version)?;
+            if let Some(icon) = self.icon_base64 {
+                write.write_bool(true)?;
+                let raw_b64 = icon.strip_prefix("data:image/png;base64,").unwrap_or(icon);
+                if let Ok(bytes) = pumpkin_util::jwt::decode_b64_standard(raw_b64) {
+                    write.write_slice(&bytes)?;
+                } else {
+                    write.write_slice(&[])?;
+                }
+            } else {
+                write.write_bool(false)?;
+            }
         } else {
-            write.write_bool(false)?;
+            write.write_bool(true)?;
+            write.write_component(self.motd, version)?;
+            if let Some(icon) = self.icon_base64 {
+                write.write_bool(true)?;
+                write.write_string(icon)?;
+            } else {
+                write.write_bool(false)?;
+            }
+            if *version < JavaMinecraftVersion::V_1_19_3 {
+                write.write_bool(false)?;
+            }
+            if *version >= JavaMinecraftVersion::V_1_19_1
+                && *version < JavaMinecraftVersion::V_1_20_5
+            {
+                write.write_bool(false)?;
+            }
         }
         Ok(())
     }

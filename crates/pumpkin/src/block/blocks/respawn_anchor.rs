@@ -2,12 +2,12 @@ use pumpkin_data::block_properties::RespawnAnchorLikeProperties;
 use pumpkin_data::dimension::Dimension;
 use pumpkin_data::item::Item;
 use pumpkin_data::sound::{Sound, SoundCategory};
-use pumpkin_data::translation;
+use pumpkin_data::{BlockState, translation};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_world::world::BlockFlags;
 
 use crate::block::registry::BlockActionResult;
-use crate::block::{BlockBehaviour, NormalUseArgs, UseWithItemArgs};
+use crate::block::{BlockBehaviour, NormalUseArgs, PathComputationType, UseWithItemArgs};
 use crate::entity::EntityBase;
 
 #[pumpkin_block("minecraft:respawn_anchor")]
@@ -90,5 +90,9 @@ impl BlockBehaviour for RespawnAnchorBlock {
         }
 
         BlockActionResult::SuccessServer
+    }
+
+    fn is_pathfindable(&self, _state: &BlockState, _computation_type: PathComputationType) -> bool {
+        false
     }
 }

@@ -135,6 +135,11 @@ pub trait InventoryPlayer: Send + Sync {
     /// Checks if the player is in creative mode.
     fn is_creative(&self) -> bool;
 
+    /// Checks if the player is in spectator mode.
+    fn is_spectator(&self) -> bool {
+        false
+    }
+
     /// Gets the player's experience level.
     fn experience_level(&self) -> i32;
 
