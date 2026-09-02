@@ -566,7 +566,115 @@ enum DensityFunctionRepr {
     },
 }
 
+const AXIS_X: u8 = 1;
+const AXIS_Y: u8 = 2;
+const AXIS_Z: u8 = 4;
+const AXES_XZ: u8 = AXIS_X | AXIS_Z;
+const AXES_ALL: u8 = AXIS_X | AXIS_Y | AXIS_Z;
+
+impl Axis {
+    const fn as_axes(self) -> u8 {
+        match self {
+            Self::X => AXIS_X,
+            Self::Y => AXIS_Y,
+            Self::Z => AXIS_Z,
+        }
+    }
+}
+
+fn noise_domain_axes(xz_scale: f32, y_scale: f32) -> u8 {
+    let mut axes = AXES_ALL;
+    if y_scale == 0.0 {
+        axes &= !AXIS_Y;
+    }
+    if xz_scale == 0.0 {
+        axes &= !AXES_XZ;
+    }
+    axes
+}
+
+impl SplineRepr {
+    fn domain_axes(&self) -> u8 {
+        match self {
+            Self::Fixed { .. } => 0,
+            Self::Standard {
+                location_function,
+                values,
+                ..
+            } => values
+                .iter()
+                .fold(location_function.domain_axes(), |axes, value| {
+                    axes | value.domain_axes()
+                }),
+        }
+    }
+}
+
 impl DensityFunctionRepr {
+    fn domain_axes(&self) -> u8 {
+        match self {
+            Self::Constant { .. } => 0,
+            Self::BlendAlpha
+            | Self::BlendOffset
+            | Self::EndIslands
+            | Self::ShiftA { .. }
+            | Self::ShiftB { .. } => AXES_XZ,
+            Self::Beardifier
+            | Self::InterpolatedNoiseSampler { .. }
+            | Self::DistanceToPoint { .. } => AXES_ALL,
+            Self::ClampedYGradient { .. } => AXIS_Y,
+            Self::Gradient { data } => data.axis.as_axes(),
+            Self::Noise { data } => noise_domain_axes(data.xz_scale.0, data.y_scale.0),
+            Self::ShiftedNoise {
+                shift_x,
+                shift_y,
+                shift_z,
+                data,
+            } => {
+                noise_domain_axes(data.xz_scale.0, data.y_scale.0)
+                    | shift_x.domain_axes()
+                    | shift_y.domain_axes()
+                    | shift_z.domain_axes()
+            }
+            Self::BlendDensity { input }
+            | Self::Wrapper { input, .. }
+            | Self::Linear { input, .. }
+            | Self::Unary { input, .. }
+            | Self::Clamp { input, .. } => input.domain_axes(),
+            Self::Slice { axis, input, .. } => input.domain_axes() & !axis.as_axes(),
+            Self::FindTopSurface {
+                density,
+                upper_bound,
+                ..
+            } => (density.domain_axes() | upper_bound.domain_axes()) & !AXIS_Y,
+            Self::IntervalSelect {
+                input, functions, ..
+            } => functions
+                .iter()
+                .fold(input.domain_axes(), |axes, f| axes | f.domain_axes()),
+            Self::Lerp {
+                alpha,
+                first,
+                second,
+            } => alpha.domain_axes() | first.domain_axes() | second.domain_axes(),
+            Self::Rounding {
+                input, multiple, ..
+            } => input.domain_axes() | multiple.domain_axes(),
+            Self::Binary {
+                argument1,
+                argument2,
+                ..
+            } => argument1.domain_axes() | argument2.domain_axes(),
+            Self::RangeChoice {
+                input,
+                when_in_range,
+                when_out_range,
+                ..
+            } => input.domain_axes() | when_in_range.domain_axes() | when_out_range.domain_axes(),
+            Self::Spline { spline, .. } => spline.domain_axes(),
+        }
+    }
+
     fn optimize(&mut self) {
         match self {
             Self::BlendDensity { input } => input.optimize(),
@@ -2468,20 +2576,22 @@ fn parse_vanilla_df(base_df_dir: &std::path::Path, val: &serde_json::Value) -> D
                 "beardifier" => DensityFunctionRepr::Beardifier,
                 "cache" | "interpolated" | "flat_cache" | "cache_flat" | "cache_2d"
                 | "cache_once" | "cache_all_in_cell" => {
-                    let wrapper = match clean_type {
-                        "interpolated" => WrapperType::Interpolated,
-                        "flat_cache" | "cache_flat" => WrapperType::CacheFlat,
-                        "cache_2d" => WrapperType::Cache2D,
-                        "cache_once" | "cache" => WrapperType::CacheOnce,
-                        "cache_all_in_cell" => WrapperType::CellCache,
-                        _ => unreachable!(),
-                    };
                     let input = parse_vanilla_df(
                         base_df_dir,
                         obj.get("input")
                             .or_else(|| obj.get("argument"))
                             .expect("Missing input/argument"),
                     );
+                    let wrapper = match clean_type {
+                        "interpolated" => WrapperType::Interpolated,
+                        "flat_cache" | "cache_flat" => WrapperType::CacheFlat,
+                        "cache_2d" => WrapperType::Cache2D,
+                        "cache_once" => WrapperType::CacheOnce,
+                        "cache" if input.domain_axes() & AXIS_Y == 0 => WrapperType::CacheFlat,
+                        "cache" => WrapperType::CacheOnce,
+                        "cache_all_in_cell" => WrapperType::CellCache,
+                        _ => unreachable!(),
+                    };
                     DensityFunctionRepr::Wrapper {
                         input: Box::new(input),
                         wrapper,
