@@ -75,7 +75,7 @@ pub struct ItemComponents {
     #[serde(rename = "minecraft:enchantable")]
     pub enchantable: Option<EnchantableComponent>,
     #[serde(rename = "minecraft:attack_range")]
-    pub attack_range: Option<serde_json::Value>,
+    pub attack_range: Option<AttackRangeComponent>,
     #[serde(rename = "minecraft:banner_patterns")]
     pub banner_patterns: Option<serde_json::Value>,
     #[serde(rename = "minecraft:bees")]
@@ -95,7 +95,7 @@ pub struct ItemComponents {
     #[serde(rename = "minecraft:container")]
     pub container: Option<serde_json::Value>,
     #[serde(rename = "minecraft:damage_type")]
-    pub damage_type: Option<serde_json::Value>,
+    pub damage_type: Option<String>,
     #[serde(rename = "minecraft:debug_stick_state")]
     pub debug_stick_state: Option<serde_json::Value>,
     #[serde(rename = "minecraft:dye")]
@@ -115,7 +115,7 @@ pub struct ItemComponents {
     #[serde(rename = "minecraft:item_model")]
     pub item_model: Option<String>,
     #[serde(rename = "minecraft:kinetic_weapon")]
-    pub kinetic_weapon: Option<serde_json::Value>,
+    pub kinetic_weapon: Option<KineticWeaponComponent>,
     #[serde(rename = "minecraft:lore")]
     pub lore: Option<serde_json::Value>,
     #[serde(rename = "minecraft:map_color")]
@@ -123,11 +123,11 @@ pub struct ItemComponents {
     #[serde(rename = "minecraft:map_decorations")]
     pub map_decorations: Option<serde_json::Value>,
     #[serde(rename = "minecraft:minimum_attack_charge")]
-    pub minimum_attack_charge: Option<serde_json::Value>,
+    pub minimum_attack_charge: Option<f32>,
     #[serde(rename = "minecraft:ominous_bottle_amplifier")]
     pub ominous_bottle_amplifier: Option<i32>,
     #[serde(rename = "minecraft:piercing_weapon")]
-    pub piercing_weapon: Option<serde_json::Value>,
+    pub piercing_weapon: Option<PiercingWeaponComponent>,
     #[serde(rename = "minecraft:pot_decorations")]
     pub pot_decorations: Option<serde_json::Value>,
     #[serde(rename = "minecraft:potion_contents")]
@@ -715,11 +715,26 @@ impl ToTokens for ItemComponents {
             tokens.extend(quote! { (Enchantable, &EnchantableImpl { value: #value }), });
         }
 
-        if self.attack_range.is_some() {
-            tokens.extend(quote! { (AttackRange, &AttackRangeImpl), });
+        if let Some(attack_range) = &self.attack_range {
+            let min_reach = float_literal(attack_range.min_reach);
+            let max_reach = float_literal(attack_range.max_reach);
+            let min_creative_reach = float_literal(attack_range.min_creative_reach);
+            let max_creative_reach = float_literal(attack_range.max_creative_reach);
+            let hitbox_margin = float_literal(attack_range.hitbox_margin);
+            let mob_factor = float_literal(attack_range.mob_factor);
+            tokens.extend(quote! {
+                (AttackRange, &AttackRangeImpl {
+                    min_reach: #min_reach,
+                    max_reach: #max_reach,
+                    min_creative_reach: #min_creative_reach,
+                    max_creative_reach: #max_creative_reach,
+                    hitbox_margin: #hitbox_margin,
+                    mob_factor: #mob_factor,
+                }),
+            });
         }
         if self.banner_patterns.is_some() {
-            tokens.extend(quote! { (BannerPatterns, &BannerPatternsImpl), });
+            tokens.extend(quote! { (BannerPatterns, &BannerPatternsImpl::EMPTY), });
         }
         if self.bees.is_some() {
             tokens.extend(quote! { (Bees, &BeesImpl), });
@@ -768,8 +783,19 @@ impl ToTokens for ItemComponents {
         if self.container.is_some() {
             tokens.extend(quote! { (Container, &ContainerImpl { items: Vec::new() }), });
         }
-        if self.damage_type.is_some() {
-            tokens.extend(quote! { (DamageType, &DamageTypeImpl), });
+        if let Some(damage_type) = &self.damage_type {
+            let damage_type = format_ident!(
+                "{}",
+                damage_type
+                    .strip_prefix("minecraft:")
+                    .unwrap_or(damage_type)
+                    .to_shouty_snake_case()
+            );
+            tokens.extend(quote! {
+                (DamageType, &DamageTypeImpl {
+                    damage_type: crate::damage::DamageType::#damage_type,
+                }),
+            });
         }
         if self.debug_stick_state.is_some() {
             tokens.extend(quote! { (DebugStickState, &DebugStickStateImpl), });
@@ -814,8 +840,36 @@ impl ToTokens for ItemComponents {
             tokens
                 .extend(quote! { (ItemModel, &ItemModelImpl { id: Cow::Borrowed(#model_lit) }), });
         }
-        if self.kinetic_weapon.is_some() {
-            tokens.extend(quote! { (KineticWeapon, &KineticWeaponImpl), });
+        if let Some(kinetic_weapon) = &self.kinetic_weapon {
+            let contact_cooldown_ticks = LitInt::new(
+                &kinetic_weapon.contact_cooldown_ticks.to_string(),
+                Span::call_site(),
+            );
+            let delay_ticks =
+                LitInt::new(&kinetic_weapon.delay_ticks.to_string(), Span::call_site());
+            let dismount_conditions =
+                kinetic_condition_tokens(kinetic_weapon.dismount_conditions.as_ref());
+            let knockback_conditions =
+                kinetic_condition_tokens(kinetic_weapon.knockback_conditions.as_ref());
+            let damage_conditions =
+                kinetic_condition_tokens(kinetic_weapon.damage_conditions.as_ref());
+            let forward_movement = float_literal(kinetic_weapon.forward_movement);
+            let damage_multiplier = float_literal(kinetic_weapon.damage_multiplier);
+            let sound = optional_sound_tokens(kinetic_weapon.sound.as_deref());
+            let hit_sound = optional_sound_tokens(kinetic_weapon.hit_sound.as_deref());
+            tokens.extend(quote! {
+                (KineticWeapon, &KineticWeaponImpl {
+                    contact_cooldown_ticks: #contact_cooldown_ticks,
+                    delay_ticks: #delay_ticks,
+                    dismount_conditions: #dismount_conditions,
+                    knockback_conditions: #knockback_conditions,
+                    damage_conditions: #damage_conditions,
+                    forward_movement: #forward_movement,
+                    damage_multiplier: #damage_multiplier,
+                    sound: #sound,
+                    hit_sound: #hit_sound,
+                }),
+            });
         }
         if self.lore.is_some() {
             tokens.extend(quote! { (Lore, &LoreImpl { lines: Vec::new() }), });
@@ -826,15 +880,29 @@ impl ToTokens for ItemComponents {
         if self.map_decorations.is_some() {
             tokens.extend(quote! { (MapDecorations, &MapDecorationsImpl), });
         }
-        if self.minimum_attack_charge.is_some() {
-            tokens.extend(quote! { (MinimumAttackCharge, &MinimumAttackChargeImpl), });
+        if let Some(charge) = self.minimum_attack_charge {
+            let charge = float_literal(charge);
+            tokens.extend(
+                quote! { (MinimumAttackCharge, &MinimumAttackChargeImpl { charge: #charge }), },
+            );
         }
         if let Some(amp) = self.ominous_bottle_amplifier {
             let amp_lit = LitInt::new(&amp.to_string(), Span::call_site());
             tokens.extend(quote! { (OminousBottleAmplifier, &OminousBottleAmplifierImpl { amplifier: #amp_lit }), });
         }
-        if self.piercing_weapon.is_some() {
-            tokens.extend(quote! { (PiercingWeapon, &PiercingWeaponImpl), });
+        if let Some(piercing_weapon) = &self.piercing_weapon {
+            let deals_knockback = LitBool::new(piercing_weapon.deals_knockback, Span::call_site());
+            let dismounts = LitBool::new(piercing_weapon.dismounts, Span::call_site());
+            let sound = optional_sound_tokens(piercing_weapon.sound.as_deref());
+            let hit_sound = optional_sound_tokens(piercing_weapon.hit_sound.as_deref());
+            tokens.extend(quote! {
+                (PiercingWeapon, &PiercingWeaponImpl {
+                    deals_knockback: #deals_knockback,
+                    dismounts: #dismounts,
+                    sound: #sound,
+                    hit_sound: #hit_sound,
+                }),
+            });
         }
         if self.pot_decorations.is_some() {
             tokens.extend(quote! { (PotDecorations, &PotDecorationsImpl), });
@@ -1078,6 +1146,113 @@ pub struct WeaponComponent {
     pub item_damage_per_attack: u32,
     // TODO: Add disable_blocking_for_seconds parsing when shield-disable mechanic is implemented.
     // This preserves round-trip fidelity for vanilla items and datapacks.
+}
+
+#[derive(Deserialize, Clone)]
+pub struct AttackRangeComponent {
+    #[serde(default)]
+    pub min_reach: f32,
+    #[serde(default = "default_max_reach")]
+    pub max_reach: f32,
+    #[serde(default)]
+    pub min_creative_reach: f32,
+    #[serde(default = "default_max_creative_reach")]
+    pub max_creative_reach: f32,
+    #[serde(default = "default_hitbox_margin")]
+    pub hitbox_margin: f32,
+    #[serde(default = "return_1f32")]
+    pub mob_factor: f32,
+}
+
+const fn default_max_reach() -> f32 {
+    3.0
+}
+
+const fn default_max_creative_reach() -> f32 {
+    5.0
+}
+
+const fn default_hitbox_margin() -> f32 {
+    0.3
+}
+
+#[derive(Deserialize, Clone)]
+pub struct KineticConditionComponent {
+    pub max_duration_ticks: i32,
+    #[serde(default)]
+    pub min_speed: f32,
+    #[serde(default)]
+    pub min_relative_speed: f32,
+}
+
+#[derive(Deserialize, Clone)]
+pub struct KineticWeaponComponent {
+    #[serde(default = "default_contact_cooldown_ticks")]
+    pub contact_cooldown_ticks: i32,
+    #[serde(default)]
+    pub delay_ticks: i32,
+    pub dismount_conditions: Option<KineticConditionComponent>,
+    pub knockback_conditions: Option<KineticConditionComponent>,
+    pub damage_conditions: Option<KineticConditionComponent>,
+    #[serde(default)]
+    pub forward_movement: f32,
+    #[serde(default = "return_1f32")]
+    pub damage_multiplier: f32,
+    pub sound: Option<String>,
+    pub hit_sound: Option<String>,
+}
+
+const fn default_contact_cooldown_ticks() -> i32 {
+    10
+}
+
+#[derive(Deserialize, Clone)]
+pub struct PiercingWeaponComponent {
+    #[serde(default = "_true")]
+    pub deals_knockback: bool,
+    #[serde(default)]
+    pub dismounts: bool,
+    pub sound: Option<String>,
+    pub hit_sound: Option<String>,
+}
+
+fn float_literal(value: f32) -> LitFloat {
+    LitFloat::new(&format!("{value:?}f32"), Span::call_site())
+}
+
+fn optional_sound_tokens(sound: Option<&str>) -> TokenStream {
+    sound.map_or_else(
+        || quote! { None },
+        |sound| {
+            let variant = format_ident!(
+                "{}",
+                sound
+                    .strip_prefix("minecraft:")
+                    .unwrap_or(sound)
+                    .to_pascal_case()
+            );
+            quote! { Some(IdOr::Id(Sound::#variant)) }
+        },
+    )
+}
+
+fn kinetic_condition_tokens(condition: Option<&KineticConditionComponent>) -> TokenStream {
+    condition.map_or_else(
+        || quote! { None },
+        |condition| {
+            let max_duration_ticks =
+                LitInt::new(&condition.max_duration_ticks.to_string(), Span::call_site());
+            let min_speed = float_literal(condition.min_speed);
+            let min_relative_speed = float_literal(condition.min_relative_speed);
+            quote! {
+                Some(KineticConditionImpl {
+                    max_duration_ticks: #max_duration_ticks,
+                    min_speed: #min_speed,
+                    min_relative_speed: #min_relative_speed,
+                })
+            }
+        },
+    )
 }
 
 #[derive(Deserialize, Clone)]

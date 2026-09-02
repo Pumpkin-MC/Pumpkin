@@ -238,7 +238,7 @@ fn serialize_consume_effect(
     Ok(())
 }
 
-trait DataComponentCodec<Impl: DataComponentImpl> {
+pub(crate) trait DataComponentCodec<Impl: DataComponentImpl> {
     fn serialize(&self, seq: &mut impl NetworkWriteExt) -> Result<(), WritingError>;
     fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Impl, ReadingError>;
 }
@@ -340,10 +340,12 @@ impl DataComponentCodec<Self> for CustomNameImpl {
     }
 
     fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
-        let name = seq.get_str()?;
-        Ok(Self {
-            name: pumpkin_util::text::TextComponent::text(String::from(name)),
-        })
+        let tag = seq.get_nbt_with_version(&pumpkin_util::version::JavaMinecraftVersion::V_26_2)?;
+        let name = tag.as_ref().map_or_else(
+            pumpkin_util::text::TextComponent::empty,
+            pumpkin_util::text::TextComponent::from_nbt,
+        );
+        Ok(Self { name })
     }
 }
 
@@ -358,10 +360,28 @@ impl DataComponentCodec<Self> for LoreImpl {
         Ok(())
     }
 
-    fn deserialize(_seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
-        Err(ReadingError::Message(
-            "Lore component decoding is not supported".into(),
-        ))
+    fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
+        // TODO: Could probably be extracted?
+        const MAX_LORE_LINES: i32 = 256;
+
+        let count = seq.get_var_int()?.0;
+        if !(0..=MAX_LORE_LINES).contains(&count) {
+            return Err(ReadingError::Message(format!(
+                "LoreImpl line count {count} is out of bounds (0-{MAX_LORE_LINES})"
+            )));
+        }
+
+        let mut lines = Vec::with_capacity(count as usize);
+        for _ in 0..count {
+            let tag =
+                seq.get_nbt_with_version(&pumpkin_util::version::JavaMinecraftVersion::V_26_2)?;
+            let text = tag.as_ref().map_or_else(
+                pumpkin_util::text::TextComponent::empty,
+                pumpkin_util::text::TextComponent::from_nbt,
+            );
+            lines.push(text);
+        }
+        Ok(Self { lines })
     }
 }
 
@@ -452,10 +472,11 @@ impl DataComponentCodec<Self> for CustomDataImpl {
         Ok(())
     }
 
-    fn deserialize(_seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
-        Err(ReadingError::Message(
-            "CustomData raw component decoding is not supported; use the custom-data item-stack API".into(),
-        ))
+    fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
+        let data = seq
+            .get_compound_nbt_with_version(&pumpkin_util::version::JavaMinecraftVersion::V_26_2)?
+            .unwrap_or_else(pumpkin_nbt::compound::NbtCompound::new);
+        Ok(Self { data })
     }
 }
 
@@ -938,6 +959,7 @@ pub fn deserialize(
         DataComponent::ItemModel => Ok(ItemModelImpl::deserialize(seq)?.to_dyn()),
         DataComponent::ItemName => Ok(ItemNameImpl::deserialize(seq)?.to_dyn()),
         DataComponent::CustomName => Ok(CustomNameImpl::deserialize(seq)?.to_dyn()),
+        DataComponent::Lore => Ok(LoreImpl::deserialize(seq)?.to_dyn()),
         DataComponent::Consumable => Ok(ConsumableImpl::deserialize(seq)?.to_dyn()),
         DataComponent::Equippable => Ok(EquippableImpl::deserialize(seq)?.to_dyn()),
         DataComponent::StoredEnchantments => Ok(StoredEnchantmentsImpl::deserialize(seq)?.to_dyn()),

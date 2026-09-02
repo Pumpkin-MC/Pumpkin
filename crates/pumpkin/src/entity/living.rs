@@ -85,6 +85,7 @@ pub struct LivingEntity {
     pub item_use_time: AtomicI32,
     pub item_in_use: std::sync::Mutex<Option<ItemStack>>,
     pub active_hand: std::sync::Mutex<Option<Hand>>,
+    pub recent_kinetic_enemies: std::sync::Mutex<FxHashMap<i32, i32>>,
     pub death_time: AtomicU8,
     /// Indicates whether the entity is dead. (`on_death` called)
     pub dead: AtomicBool,
@@ -213,6 +214,7 @@ impl LivingEntity {
             item_use_time: AtomicI32::new(0),
             item_in_use: std::sync::Mutex::new(None),
             active_hand: std::sync::Mutex::new(None),
+            recent_kinetic_enemies: std::sync::Mutex::new(FxHashMap::default()),
             livings_flags: AtomicU8::new(0),
             active_effects: std::sync::Mutex::new(FxHashMap::default()),
             entity_equipment: Arc::new(std::sync::Mutex::new(EntityEquipment::new())),
@@ -432,6 +434,10 @@ impl LivingEntity {
             .active_hand
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(hand);
+        self.recent_kinetic_enemies
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clear();
         self.set_living_flag(Self::USING_ITEM_FLAG, true);
         self.set_living_flag(Self::OFF_HAND_ACTIVE_FLAG, hand == Hand::Left);
     }
@@ -487,9 +493,28 @@ impl LivingEntity {
             .active_hand
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
+        self.recent_kinetic_enemies
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clear();
         self.item_use_time.store(0, Ordering::Relaxed);
 
         self.set_living_flag(Self::USING_ITEM_FLAG, false);
+    }
+
+    pub fn was_recently_stabbed(&self, target_id: i32, now: i32, allowed_ticks: i32) -> bool {
+        self.recent_kinetic_enemies
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .get(&target_id)
+            .is_some_and(|stabbed_at| now - stabbed_at < allowed_ticks)
+    }
+
+    pub fn remember_stabbed_entity(&self, target_id: i32, now: i32) {
+        self.recent_kinetic_enemies
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .insert(target_id, now);
     }
 
     pub fn is_blocking(&self) -> bool {
@@ -2880,6 +2905,22 @@ impl EntityBase for LivingEntity {
         }
 
         self.tick_effects();
+
+        if let Some(player) = caller.get_player() {
+            let remaining_use_ticks = self.item_use_time.load(Ordering::Relaxed);
+            if remaining_use_ticks > 0 {
+                let item_in_use = self
+                    .item_in_use
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .clone();
+                if let Some(item) = item_in_use.as_ref() {
+                    server
+                        .item_registry
+                        .on_use_tick(item, player, remaining_use_ticks);
+                }
+            }
+        }
 
         // Current active item
         if self.item_use_time.load(Ordering::Relaxed) > 0

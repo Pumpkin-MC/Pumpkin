@@ -51,6 +51,7 @@ pub mod gui_builder;
 pub mod lectern_screen_handler;
 pub mod loom_screen_handler;
 pub mod merchant;
+pub mod mount_screen_handler;
 pub mod player;
 pub mod screen_handler;
 pub mod slot;
