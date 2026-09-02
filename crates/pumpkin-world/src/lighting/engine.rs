@@ -4,8 +4,8 @@ use crate::chunk_system::Chunk;
 use crate::chunk_system::generation_cache::Cache;
 use crate::generation::height_limit::HeightLimitView;
 use crate::generation::proto_chunk::GenerationCache;
-use crate::lighting::storage::{get_block_light, get_sky_light, set_block_light, set_sky_light};
 use crate::lighting::section_flags::{self, SectionMask};
+use crate::lighting::storage::{get_block_light, get_sky_light, set_block_light, set_sky_light};
 use crate::lighting::{decayed, luminance_of, opacity_of, sky_descended};
 use pumpkin_config::lighting::LightingEngineConfig;
 use pumpkin_data::{BlockDirection, BlockStateId};
@@ -238,6 +238,10 @@ impl LightProvider for SkyLightProvider {
 #[derive(Clone, Copy)]
 pub struct PropagationEntry {
     pos: BlockPos,
+    /// The level established at `pos` when it was queued. Levels only rise and every rise
+    /// queues its own entry, so this is what should spread from here -> reading the cell
+    /// back at pop time would only repeat a lookup the pusher already did.
+    level: u8,
     skip_direction: Option<BlockDirection>,
 }
 
@@ -367,30 +371,31 @@ impl<P: LightProvider> LightPropagator<P> {
         self.decrease_queue.clear();
     }
 
-    /// Opacity and current light of one neighbour, from indices the caller already has.
-    ///
-    /// Proto and level chunks differ only in where their blocks and their light live.
-    fn neighbor_opacity_and_light(
+    /// Proto and level chunks differ only in where their light lives. Split from
+    /// [`Self::neighbor_opacity`] so the block read can be skipped when the level alone
+    /// already rules the neighbour out.
+    fn neighbor_light(
         chunk: &Chunk,
-        ny: i32,
-        min_y: i32,
         section_idx: usize,
         local_x: usize,
         local_y: usize,
         local_z: usize,
-    ) -> (u8, u8) {
+    ) -> u8 {
         match chunk {
-            Chunk::Proto(c) => (
-                opacity_of(c.get_block_state_raw(local_x as i32, ny - min_y, local_z as i32)),
-                P::get_light_proto(c, section_idx, local_x, local_y, local_z),
-            ),
-            Chunk::Level(lvl) => (
-                opacity_of(
-                    lvl.section
-                        .get_block_absolute_y(local_x, ny, local_z)
-                        .unwrap_or(BlockStateId::AIR),
-                ),
-                P::get_light_level(lvl, section_idx, local_x, local_y, local_z),
+            Chunk::Proto(c) => P::get_light_proto(c, section_idx, local_x, local_y, local_z),
+            Chunk::Level(lvl) => P::get_light_level(lvl, section_idx, local_x, local_y, local_z),
+        }
+    }
+
+    fn neighbor_opacity(chunk: &Chunk, ny: i32, min_y: i32, local_x: usize, local_z: usize) -> u8 {
+        match chunk {
+            Chunk::Proto(c) => {
+                opacity_of(c.get_block_state_raw(local_x as i32, ny - min_y, local_z as i32))
+            }
+            Chunk::Level(lvl) => opacity_of(
+                lvl.section
+                    .get_block_absolute_y(local_x, ny, local_z)
+                    .unwrap_or(BlockStateId::AIR),
             ),
         }
     }
@@ -429,7 +434,7 @@ impl<P: LightProvider> LightPropagator<P> {
         while let Some(entry) = self.queue.pop_front() {
             let pos = entry.pos;
 
-            let current_light = P::get_light(cache, pos);
+            let current_light = entry.level;
             if current_light <= 1 {
                 continue;
             }
@@ -466,16 +471,22 @@ impl<P: LightProvider> LightPropagator<P> {
                 // Deliberately not `P::get_light`/`P::set_light`: those take a `BlockPos`
                 // and re-derive the chunk index, the section and the local coordinates
                 // that are all sitting right above.
-                let (opacity, neighbor_light) = Self::neighbor_opacity_and_light(
+                let neighbor_light = Self::neighbor_light(
                     &cache.chunks[chunk_idx],
-                    ny,
-                    min_y,
                     section_idx,
                     local_x,
                     local_y,
                     local_z,
                 );
 
+                // A step never brightens, so a neighbour already this bright cannot improve.
+                // Checked before the block read, which is the expensive half.
+                if neighbor_light >= current_light {
+                    continue;
+                }
+
+                let opacity =
+                    Self::neighbor_opacity(&cache.chunks[chunk_idx], ny, min_y, local_x, local_z);
                 let new_level = P::propagate_level(current_light, opacity, dir);
 
                 if new_level > neighbor_light {
@@ -495,6 +506,7 @@ impl<P: LightProvider> LightPropagator<P> {
                     if new_level > 1 {
                         self.queue.push_back(PropagationEntry {
                             pos: neighbor_pos,
+                            level: new_level,
                             skip_direction: Some(dir.opposite()),
                         });
                     }
@@ -540,6 +552,7 @@ impl<P: LightProvider> LightPropagator<P> {
                     let nz = neighbor_pos.0.z;
                     self.queue.push_back(PropagationEntry {
                         pos: neighbor_pos,
+                        level: neighbor_light,
                         skip_direction: None,
                     });
                     self.visited.test_and_set(nx, ny, nz);
@@ -590,9 +603,11 @@ impl BlockLightPropagator {
         if emission > stored {
             container.set(col.local_x, local_y, col.local_z, emission);
         }
-        if emission.max(stored) > 1 {
+        let level = emission.max(stored);
+        if level > 1 {
             self.queue.push_back(PropagationEntry {
                 pos: BlockPos(Vector3::new(col.x, y, col.z)),
+                level,
                 skip_direction: None,
             });
         }
@@ -901,6 +916,7 @@ impl SkyLightPropagator {
 
                         self.queue.push_back(PropagationEntry {
                             pos,
+                            level: light,
                             skip_direction: skip_dir,
                         });
                     }
@@ -981,6 +997,7 @@ impl LightEngine {
             {
                 self.block_light.queue.push_back(PropagationEntry {
                     pos,
+                    level: new_luminance,
                     skip_direction: None,
                 });
             }

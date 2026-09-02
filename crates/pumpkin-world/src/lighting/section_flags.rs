@@ -80,10 +80,7 @@ fn proto_emitters(proto: &ProtoChunk) -> SectionMask {
                 continue;
             }
             let row = column + y * 16;
-            if map[row..row + 16]
-                .iter()
-                .any(|&id| luminance_of(id) > 0)
-            {
+            if map[row..row + 16].iter().any(|&id| luminance_of(id) > 0) {
                 mask.set(section);
             }
         }

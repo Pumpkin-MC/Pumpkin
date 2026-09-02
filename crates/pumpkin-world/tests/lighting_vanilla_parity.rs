@@ -5,7 +5,7 @@
 //! Reads vanilla chunks, relights them with Pumpkin's worldgen light pass and compares the
 //! result.
 //!
-//! PUMPKIN_VANILLA_SAVE="/path/to/world" cargo test -p pumpkin-world --test lighting_vanilla_parity
+//! `PUMPKIN_VANILLA_SAVE="/path/to/world" cargo test -p pumpkin-world --test lighting_vanilla_parity`
 //!
 //! Skips when the variable is unset, so a checkout without a save still passes.
 #![allow(
