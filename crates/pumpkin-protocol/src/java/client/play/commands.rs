@@ -312,7 +312,7 @@ impl ArgumentType {
             Self::Operation => ("minecraft:operation", false),
             Self::Particle => ("minecraft:particle", false),
             Self::Angle => {
-                if *version >= JavaMinecraftVersion::V_1_16 {
+                if *version >= JavaMinecraftVersion::V_1_16_2 {
                     ("minecraft:angle", false)
                 } else {
                     ("brigadier:string", true)
@@ -515,6 +515,36 @@ impl NumberCmdArg for i32 {
 impl NumberCmdArg for i64 {
     fn write(self, write: &mut impl Write) -> std::result::Result<(), WritingError> {
         write.write_i64_be(self)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn angle_parser_is_only_advertised_from_1_16_2() {
+        for version in [JavaMinecraftVersion::V_1_16, JavaMinecraftVersion::V_1_16_1] {
+            assert_eq!(
+                ArgumentType::Angle.legacy_identifier_name_for_version(&version),
+                ("brigadier:string", true)
+            );
+
+            let mut bytes = Vec::new();
+            ArgumentType::Angle
+                .write_to_buffer(&mut bytes, &version)
+                .unwrap();
+            assert_eq!(
+                bytes,
+                [&[16][..], &b"brigadier:string"[..], &[0][..]].concat()
+            );
+        }
+
+        let mut bytes = Vec::new();
+        ArgumentType::Angle
+            .write_to_buffer(&mut bytes, &JavaMinecraftVersion::V_1_16_2)
+            .unwrap();
+        assert_eq!(bytes, [&[15][..], &b"minecraft:angle"[..]].concat());
     }
 }
 
