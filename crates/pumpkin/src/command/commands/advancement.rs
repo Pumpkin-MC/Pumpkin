@@ -112,7 +112,6 @@ impl Action {
                 (true, result)
             }
             Self::Revoke => {
-                   
                 if !progress.has_progress() {
                     return (false, AdvancementAward::default());
                 }
