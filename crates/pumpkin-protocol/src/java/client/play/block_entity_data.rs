@@ -1,11 +1,9 @@
 use std::io::{Read, Write};
 
 use flate2::{Compression, read::GzDecoder, write::GzEncoder};
-#[cfg(test)]
-use pumpkin_data::block_properties::BLOCK_ENTITY_TYPES;
 use pumpkin_data::{
     block_entity_type_id_remap::remap_block_entity_type_id_for_version,
-    packet::clientbound::play::BLOCK_ENTITY_DATA,
+    block_properties::BLOCK_ENTITY_TYPES, packet::clientbound::play::BLOCK_ENTITY_DATA,
 };
 use pumpkin_macros::java_packet;
 use pumpkin_util::{math::position::BlockPos, version::JavaMinecraftVersion};
@@ -39,6 +37,28 @@ impl CBlockEntityData {
             nbt_data,
         }
     }
+}
+
+/// Returns the packet-specific Action used by the vanilla 1.7 client.
+///
+/// This byte predates block entity registry IDs. Signs are intentionally absent because 1.7
+/// updates their text through the separate Update Sign packet.
+fn block_entity_action_1_7_by_name(block_entity_type: &str) -> Option<u8> {
+    match block_entity_type {
+        "mob_spawner" => Some(1),
+        "command_block" => Some(2),
+        "beacon" => Some(3),
+        "skull" => Some(4),
+        "flower_pot" => Some(5),
+        _ => None,
+    }
+}
+
+fn block_entity_action_1_7(block_entity_type_id: i32) -> Option<u8> {
+    usize::try_from(block_entity_type_id)
+        .ok()
+        .and_then(|type_id| BLOCK_ENTITY_TYPES.get(type_id).copied())
+        .and_then(block_entity_action_1_7_by_name)
 }
 
 pub fn write_nbt_payload(
@@ -164,6 +184,15 @@ impl ClientPacket for CBlockEntityData {
         mut write: impl Write,
         version: &JavaMinecraftVersion,
     ) -> Result<(), WritingError> {
+        let wire_type = if *version < JavaMinecraftVersion::V_1_8 {
+            u32::from(
+                block_entity_action_1_7(self.r#type.0)
+                    .ok_or(WritingError::UnsupportedVersion(*version))?,
+            )
+        } else {
+            remap_block_entity_type_id_for_version(self.r#type.0 as u32, *version)
+        };
+
         if *version >= JavaMinecraftVersion::V_1_8 {
             write.write_block_pos(&self.location, version)?;
         } else {
@@ -173,11 +202,10 @@ impl ClientPacket for CBlockEntityData {
             write.write_i32_be(self.location.0.z)?;
         }
 
-        let remapped_type = remap_block_entity_type_id_for_version(self.r#type.0 as u32, *version);
         if *version >= JavaMinecraftVersion::V_1_18 {
-            write.write_var_int(&VarInt(remapped_type as i32))?;
+            write.write_var_int(&VarInt(wire_type as i32))?;
         } else {
-            write.write_u8(remapped_type as u8)?;
+            write.write_u8(wire_type as u8)?;
         }
 
         write_nbt_payload(&mut write, &self.nbt_data, version)
@@ -253,10 +281,72 @@ mod tests {
         Ok(())
     }
 
+    fn assert_legacy_action_layout(version: JavaMinecraftVersion) -> TestResult {
+        for (block_entity_type, action) in [
+            ("mob_spawner", 1),
+            ("command_block", 2),
+            ("beacon", 3),
+            ("skull", 4),
+        ] {
+            let packet = CBlockEntityData::new(
+                BlockPos::new(-28, 6, 39),
+                block_entity_type_id(block_entity_type)?,
+                Box::new([]),
+            );
+            let mut bytes = Vec::new();
+            packet.write_packet_data(&mut bytes, &version)?;
+
+            assert_eq!(
+                bytes.as_slice(),
+                &[
+                    0xff, 0xff, 0xff, 0xe4, 0x00, 0x06, 0x00, 0x00, 0x00, 0x27, action, 0xff, 0xff,
+                ],
+                "wrong 1.7 Action for {block_entity_type} in {version:?}"
+            );
+        }
+        Ok(())
+    }
+
     #[test]
     fn legacy_block_entity_positions_use_int_short_int_coordinates() -> TestResult {
         assert_legacy_position_layout(JavaMinecraftVersion::V_1_7_2)?;
         assert_legacy_position_layout(JavaMinecraftVersion::V_1_7_6)?;
+        Ok(())
+    }
+
+    #[test]
+    fn legacy_block_entity_actions_match_vanilla() -> TestResult {
+        assert_legacy_action_layout(JavaMinecraftVersion::V_1_7_2)?;
+        assert_legacy_action_layout(JavaMinecraftVersion::V_1_7_6)?;
+        Ok(())
+    }
+
+    #[test]
+    fn legacy_action_table_includes_all_vanilla_values() {
+        assert_eq!(block_entity_action_1_7_by_name("mob_spawner"), Some(1));
+        assert_eq!(block_entity_action_1_7_by_name("command_block"), Some(2));
+        assert_eq!(block_entity_action_1_7_by_name("beacon"), Some(3));
+        assert_eq!(block_entity_action_1_7_by_name("skull"), Some(4));
+        assert_eq!(block_entity_action_1_7_by_name("flower_pot"), Some(5));
+        assert_eq!(block_entity_action_1_7_by_name("sign"), None);
+    }
+
+    #[test]
+    fn legacy_block_entity_data_rejects_types_without_an_action() -> TestResult {
+        let packet = CBlockEntityData::new(
+            BlockPos::new(-28, 6, 39),
+            block_entity_type_id("sign")?,
+            Box::new([]),
+        );
+
+        for version in [JavaMinecraftVersion::V_1_7_2, JavaMinecraftVersion::V_1_7_6] {
+            let mut bytes = Vec::new();
+            assert!(matches!(
+                packet.write_packet_data(&mut bytes, &version),
+                Err(WritingError::UnsupportedVersion(error_version)) if error_version == version
+            ));
+            assert!(bytes.is_empty());
+        }
         Ok(())
     }
 }
