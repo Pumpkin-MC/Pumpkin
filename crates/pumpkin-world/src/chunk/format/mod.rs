@@ -870,6 +870,15 @@ impl LightContainer {
         matches!(self, Self::Empty(_))
     }
 
+    /// The one level every cell holds, or `None` once the section carries a real array
+    #[must_use]
+    pub const fn uniform_level(&self) -> Option<u8> {
+        match self {
+            Self::Empty(level) => Some(*level),
+            Self::Full(_) => None,
+        }
+    }
+
     #[inline]
     const fn index(x: usize, y: usize, z: usize) -> usize {
         y * 16 * 16 + z * 16 + x

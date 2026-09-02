@@ -1,3 +1,5 @@
+//! TEMPORARY -- development scaffolding for the light engine work, not meant to ship.
+//!
 //! Quick sanity-check timing comparison for the `DynamicLightEngine` runtime overhaul.
 //!
 //! `cargo test --release -p pumpkin-world --test lighting_bench -- --nocapture --ignored`

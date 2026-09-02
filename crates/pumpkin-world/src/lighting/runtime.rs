@@ -2,6 +2,7 @@ use crate::chunk::ChunkData;
 use crate::chunk::palette::BlockPalette;
 use crate::level::Level;
 use crate::lighting::chunk_access::{ChunkCursor, VerticalInChunk};
+use crate::lighting::decayed;
 use crate::lighting::sky_light_height::{SkyLightHeight, SkyLightHeightMigration, SkyLightTier};
 use crate::lighting::stats::{Counter, LightCounters, LightPassStats, LocalCounters};
 use crossbeam::queue::SegQueue;
@@ -406,8 +407,7 @@ impl DynamicLightEngine {
                     return;
                 };
                 counters.bump(Counter::BlockState);
-                let opacity = ChunkCursor::opacity_at(chunk, cell).max(1);
-                let new_light = light_level.saturating_sub(opacity);
+                let new_light = decayed(light_level, ChunkCursor::opacity_at(chunk, cell));
 
                 // Only propagate if new light is brighter than current light
                 if new_light > neighbor_light {
@@ -449,9 +449,8 @@ impl DynamicLightEngine {
 
                     counters.bump(Counter::BlockState);
                     let neighbor_state = ChunkCursor::block_state_at(chunk, cell);
-                    let opacity = neighbor_state.opacity.max(1);
-
-                    let expected_from_removed_source = removed_light_level.saturating_sub(opacity);
+                    let expected_from_removed_source =
+                        decayed(removed_light_level, neighbor_state.opacity);
 
                     if neighbor_light <= expected_from_removed_source {
                         let neighbor_luminance = neighbor_state.luminance;
@@ -601,14 +600,12 @@ impl DynamicLightEngine {
                 counters.bump(Counter::BlockState);
                 let opacity = ChunkCursor::opacity_at(chunk, cell);
 
-                // Calculate new light level for neighbor
+                // Sky light at 15 propagates down as 15 through transparent blocks
                 let new_light = if light_level == 15 && dir == BlockDirection::Down && opacity == 0
                 {
-                    // Sky light at 15 propagates down as 15 through transparent blocks
                     15
                 } else {
-                    // Normal propagation: reduce by 1 for distance, then by opacity
-                    light_level.saturating_sub(1).saturating_sub(opacity)
+                    decayed(light_level, opacity)
                 };
 
                 // Only propagate if new light is brighter than current light.
@@ -645,12 +642,12 @@ impl DynamicLightEngine {
                 counters.bump(Counter::BlockState);
                 let opacity = ChunkCursor::opacity_at(chunk, cell);
 
-                // Calculate what would be given this neighbor
+                // What the removed source would have given this neighbour
                 let expected = if removed_light == 15 && dir == BlockDirection::Down && opacity == 0
                 {
                     15
                 } else {
-                    removed_light.saturating_sub(1).saturating_sub(opacity)
+                    decayed(removed_light, opacity)
                 };
 
                 if neighbor_light == expected || neighbor_light < removed_light {
@@ -730,27 +727,26 @@ impl DynamicLightEngine {
                 // Direct sunlight, reduced by opacity
                 15u8.saturating_sub(opacity)
             } else {
-                // No direct sky, check neighbors for best light
+                // No direct sky, take the brightest neighbour
                 let mut best_light = 0;
 
                 for dir in BlockDirection::all() {
-                    let neighbor_pos = pos.offset(dir.to_offset());
-
-                    let neighbor_light = cursor.sky_light(&neighbor_pos);
-                    // Calculate potential light from this neighbor
-                    let potential = if neighbor_light == 15 && dir == BlockDirection::Up {
-                        // Sky light at 15 from above stays 15
-                        15
-                    } else {
-                        // Normal decay
-                        neighbor_light.saturating_sub(1)
-                    };
+                    let neighbor_light = cursor.sky_light(&pos.offset(dir.to_offset()));
+                    // Sky light at 15 from directly above stays 15 through transparent blocks
+                    let potential =
+                        if neighbor_light == 15 && dir == BlockDirection::Up && opacity == 0 {
+                            15
+                        } else {
+                            decayed(neighbor_light, opacity)
+                        };
 
                     best_light = best_light.max(potential);
+                    if best_light == 15 {
+                        break;
+                    }
                 }
 
-                // Apply opacity to the best incoming light
-                best_light.saturating_sub(opacity)
+                best_light
             }
         };
 

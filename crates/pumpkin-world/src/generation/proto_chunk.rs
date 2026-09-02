@@ -135,6 +135,10 @@ pub struct ProtoChunk {
     pub z: i32,
     pub default_block: &'static BlockState,
     biome_mixer_seed: i64,
+    // TODO: unlike `ChunkSections`, this has no palette, so the per-section skips in
+    // `lighting::section_flags` have to sweep the whole map instead of reading a handful of
+    // palette entries. A palette here, or a cached per-section emitter/opacity mask kept up
+    // to date by `set_block_state`, would let the light passes skip sections outright.
     pub(crate) flat_block_map: Box<[BlockStateId]>,
     pub flat_biome_map: Box<[u8]>,
     pub flat_surface_height_map: [i16; CHUNK_AREA],

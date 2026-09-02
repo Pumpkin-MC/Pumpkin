@@ -1,3 +1,5 @@
+//! TEMPORARY -- development scaffolding for the light engine work, not meant to ship.
+//!
 //! End-to-end tests for the sky light cut height inside the running light engine.
 //!
 //! The unit tests in `lighting::sky_light_height` prove the cached value is consistent
