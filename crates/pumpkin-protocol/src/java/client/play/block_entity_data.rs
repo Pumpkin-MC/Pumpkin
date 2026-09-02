@@ -1,8 +1,12 @@
 use std::io::{Read, Write};
 
 use flate2::{Compression, read::GzDecoder, write::GzEncoder};
-use pumpkin_data::block_entity_type_id_remap::remap_block_entity_type_id_for_version;
-use pumpkin_data::packet::clientbound::play::BLOCK_ENTITY_DATA;
+#[cfg(test)]
+use pumpkin_data::block_properties::BLOCK_ENTITY_TYPES;
+use pumpkin_data::{
+    block_entity_type_id_remap::remap_block_entity_type_id_for_version,
+    packet::clientbound::play::BLOCK_ENTITY_DATA,
+};
 use pumpkin_macros::java_packet;
 use pumpkin_util::{math::position::BlockPos, version::JavaMinecraftVersion};
 
@@ -160,7 +164,14 @@ impl ClientPacket for CBlockEntityData {
         mut write: impl Write,
         version: &JavaMinecraftVersion,
     ) -> Result<(), WritingError> {
-        write.write_block_pos(&self.location, version)?;
+        if *version >= JavaMinecraftVersion::V_1_8 {
+            write.write_block_pos(&self.location, version)?;
+        } else {
+            // 1.7 encodes the position as three separate fields: i32 x, i16 y, i32 z.
+            write.write_i32_be(self.location.0.x)?;
+            write.write_i16_be(self.location.0.y as i16)?;
+            write.write_i32_be(self.location.0.z)?;
+        }
 
         let remapped_type = remap_block_entity_type_id_for_version(self.r#type.0 as u32, *version);
         if *version >= JavaMinecraftVersion::V_1_18 {
@@ -175,7 +186,16 @@ impl ClientPacket for CBlockEntityData {
 
 impl<'a> ServerPacket<'a> for CBlockEntityData {
     fn read(bytebuf: &mut &'a [u8], version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
-        let location = bytebuf.get_block_pos(version)?;
+        let location = if *version >= JavaMinecraftVersion::V_1_8 {
+            bytebuf.get_block_pos(version)?
+        } else {
+            // 1.7 encodes the position as three separate fields: i32 x, i16 y, i32 z.
+            BlockPos::new(
+                bytebuf.get_i32_be()?,
+                i32::from(bytebuf.get_i16_be()?),
+                bytebuf.get_i32_be()?,
+            )
+        };
         let r#type = if *version >= JavaMinecraftVersion::V_1_18 {
             bytebuf.get_var_int()?
         } else {
@@ -187,5 +207,56 @@ impl<'a> ServerPacket<'a> for CBlockEntityData {
             r#type,
             nbt_data,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    type TestResult = Result<(), Box<dyn std::error::Error>>;
+
+    fn block_entity_type_id(block_entity_type: &str) -> Result<VarInt, Box<dyn std::error::Error>> {
+        let type_id = BLOCK_ENTITY_TYPES
+            .iter()
+            .position(|type_name| *type_name == block_entity_type)
+            .ok_or_else(|| {
+                std::io::Error::other(format!(
+                    "missing block entity type {block_entity_type} in generated data"
+                ))
+            })?;
+        Ok(VarInt(i32::try_from(type_id)?))
+    }
+
+    fn assert_legacy_position_layout(version: JavaMinecraftVersion) -> TestResult {
+        let packet = CBlockEntityData::new(
+            BlockPos::new(-28, 6, 39),
+            block_entity_type_id("mob_spawner")?,
+            Box::new([]),
+        );
+        let mut bytes = Vec::new();
+        packet.write_packet_data(&mut bytes, &version)?;
+
+        // 1.7 encodes the position as three separate fields: i32 x, i16 y, i32 z.
+        assert_eq!(
+            &bytes[..10],
+            &[0xff, 0xff, 0xff, 0xe4, 0x00, 0x06, 0x00, 0x00, 0x00, 0x27]
+        );
+        // An empty NBT payload is written as a -1 i16 length.
+        assert_eq!(&bytes[bytes.len() - 2..], &[0xff, 0xff]);
+
+        let mut input = bytes.as_slice();
+        let decoded = CBlockEntityData::read(&mut input, &version)?;
+        assert_eq!(decoded.location, packet.location);
+        assert!(decoded.nbt_data.is_empty());
+        assert!(input.is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn legacy_block_entity_positions_use_int_short_int_coordinates() -> TestResult {
+        assert_legacy_position_layout(JavaMinecraftVersion::V_1_7_2)?;
+        assert_legacy_position_layout(JavaMinecraftVersion::V_1_7_6)?;
+        Ok(())
     }
 }
