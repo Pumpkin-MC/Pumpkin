@@ -49,11 +49,9 @@
 //!
 //! Each plugin has a private data folder. To use it:
 //!
-//! 1. Request `fs.read.data` for reads, or both `fs.read.data` and
-//!    `fs.write.data` for writes
+//! 1. Request the `fs.read.data` and/or `fs.write.data` permissions
 //!    (`permissions::FS_READ_DATA` / `permissions::FS_WRITE_DATA`) in your
-//!    [`PluginMetadata`]. The current runtime rejects write-only access because
-//!    it cannot enforce that permission without also exposing file contents.
+//!    [`PluginMetadata`]. Without them the folder is not accessible.
 //! 2. Get the folder path from the context's `get_data_folder` method inside
 //!    `on_load` or `on_unload`. The returned path is the folder as seen from
 //!    inside the WASI sandbox.

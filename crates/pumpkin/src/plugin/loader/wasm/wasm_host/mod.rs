@@ -373,12 +373,18 @@ impl WasmPlugin {
             }
         }
 
-        let can_read_data = has_permission(permissions::FS_READ_DATA);
-        let can_write_data = has_permission(permissions::FS_WRITE_DATA);
-        if let Some(perms) =
-            data_fs_perms(can_read_data, can_write_data).map_err(wasmtime::Error::msg)?
-        {
-            builder.preopened_dir(context.get_data_folder(), "data", perms)?;
+        let may_write_data = has_permission(permissions::FS_WRITE_DATA);
+        let may_read_data = has_permission(permissions::FS_READ_DATA);
+        if may_read_data || may_write_data {
+            builder.preopened_dir(
+                context.get_data_folder(),
+                "data",
+                if may_write_data {
+                    FsPerms::ReadWrite
+                } else {
+                    FsPerms::ReadOnly
+                },
+            )?;
         }
 
         let max_memory_mb = plugin_override
@@ -449,7 +455,7 @@ impl WasmPlugin {
             .await?;
 
         if let Some(plugin) = loaded_plugin {
-            context.server.task_scheduler.disable_plugin(&plugin);
+            context.server.task_scheduler.cancel_all_tasks(&plugin);
         }
 
         let function = match self.plugin_instance.as_ref() {
@@ -512,9 +518,9 @@ pub trait DowncastResourceExt<E> {
 mod tests {
     use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 
-    use wasmtime_wasi::{FsPerms, sockets::SocketAddrUse};
+    use wasmtime_wasi::sockets::SocketAddrUse;
 
-    use super::{SocketPolicy, data_fs_perms, permissions, socket_policy_for_permissions};
+    use super::{SocketPolicy, permissions, socket_policy_for_permissions};
 
     const PORT: u16 = 25_565;
 
@@ -524,17 +530,6 @@ mod tests {
 
     fn implicit_addr(ip: IpAddr) -> SocketAddr {
         SocketAddr::new(ip, 0)
-    }
-
-    #[test]
-    fn data_permissions_fail_closed_for_write_only_access() {
-        assert_eq!(data_fs_perms(false, false).unwrap(), None);
-        assert_eq!(data_fs_perms(true, false).unwrap(), Some(FsPerms::ReadOnly));
-        assert_eq!(data_fs_perms(true, true).unwrap(), Some(FsPerms::ReadWrite));
-
-        let error = data_fs_perms(false, true).unwrap_err();
-        assert!(error.contains("fs.write.data"));
-        assert!(error.contains("fs.read.data"));
     }
 
     #[test]
