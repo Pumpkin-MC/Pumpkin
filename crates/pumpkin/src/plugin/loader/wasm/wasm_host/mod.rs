@@ -125,16 +125,6 @@ pub struct WasmPlugin {
     pub plugin_instance: Arc<PluginInstance>,
     pub store: concurrent_store::LegacyStore,
 }
-
-const fn data_fs_perms(can_read: bool, can_write: bool) -> Result<Option<FsPerms>, &'static str> {
-    match (can_read, can_write) {
-        (false, false) => Ok(None),
-        (true, false) => Ok(Some(FsPerms::ReadOnly)),
-        (true, true) => Ok(Some(FsPerms::ReadWrite)),
-        (false, true) => Err(
-            "`fs.write.data` without `fs.read.data` cannot be enforced by this Wasmtime version; refusing to grant broader filesystem access",
-        ),
-    }
 }
 
 impl PluginRuntime {
