@@ -125,7 +125,6 @@ pub struct WasmPlugin {
     pub plugin_instance: Arc<PluginInstance>,
     pub store: concurrent_store::LegacyStore,
 }
-}
 
 impl PluginRuntime {
     pub fn new<P: AsRef<Path>>(
