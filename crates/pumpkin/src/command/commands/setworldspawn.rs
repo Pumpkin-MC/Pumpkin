@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use pumpkin_data::dimension::Dimension;
 use pumpkin_data::translation;
 use pumpkin_util::PermissionLvl;
 use pumpkin_util::math::position::BlockPos;
@@ -8,10 +7,9 @@ use pumpkin_util::permission::{Permission, PermissionDefault, PermissionRegistry
 use pumpkin_util::text::TextComponent;
 
 use crate::command::argument_builder::{ArgumentBuilder, argument, command};
-use crate::command::argument_types::coordinates::angle::AngleArgumentType;
 use crate::command::argument_types::coordinates::block_pos::BlockPosArgumentType;
+use crate::command::argument_types::coordinates::rotation::RotationArgumentType;
 use crate::command::context::command_context::CommandContext;
-use crate::command::errors::error_types::CommandErrorType;
 use crate::command::node::dispatcher::CommandDispatcher;
 use crate::command::node::{CommandExecutor, CommandExecutorResult};
 use crate::plugin::world::spawn_change::SpawnChangeEvent;
@@ -19,43 +17,33 @@ use crate::plugin::world::spawn_change::SpawnChangeEvent;
 const DESCRIPTION: &str = "Sets the world spawn point.";
 const PERMISSION: &str = "minecraft:command.setworldspawn";
 
-const ERROR_NOT_OVERWORLD: CommandErrorType<0> = CommandErrorType::new(
-    translation::java::COMMANDS_SETWORLDSPAWN_FAILURE_NOT_OVERWORLD,
-    translation::java::COMMANDS_SETWORLDSPAWN_FAILURE_NOT_OVERWORLD,
-);
-
 enum SetWorldSpawnMode {
     SelfPos,
     PosOnly,
-    PosAndAngle,
+    PosAndRotation,
 }
 
 struct SetWorldSpawnExecutor(SetWorldSpawnMode);
 
 impl CommandExecutor for SetWorldSpawnExecutor {
     fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
-        let (pos, angle) = match self.0 {
+        let (pos, (pitch, yaw)) = match self.0 {
             SetWorldSpawnMode::SelfPos => {
                 let block_pos = BlockPos::floored_v(context.source.position);
-                (block_pos, 0.0)
+                (block_pos, (0.0, 0.0))
             }
             SetWorldSpawnMode::PosOnly => {
                 let block_pos = BlockPosArgumentType::get_block_pos(context, "pos")?;
-                (block_pos, 0.0)
+                (block_pos, (0.0, 0.0))
             }
-            SetWorldSpawnMode::PosAndAngle => {
+            SetWorldSpawnMode::PosAndRotation => {
                 let block_pos = BlockPosArgumentType::get_block_pos(context, "pos")?;
-                let angle = AngleArgumentType::get(context, "angle")?.get_angle(&context.source);
-                (block_pos, angle)
+                let rot = RotationArgumentType::get(context, "rotation")?.rotation(&context.source);
+                (block_pos, (rot.x, rot.y))
             }
         };
 
         let world = context.source.world();
-        if world.dimension != Dimension::OVERWORLD && world.dimension != Dimension::OVERWORLD_CAVES
-        {
-            return Err(ERROR_NOT_OVERWORLD.create_without_context());
-        }
-
         let server = context.source.server();
         let current_info = server.level_info.load();
         let previous_position = BlockPos::new(
@@ -66,8 +54,8 @@ impl CommandExecutor for SetWorldSpawnExecutor {
         let new_position = pos;
         let previous_yaw = current_info.spawn_yaw;
         let previous_pitch = current_info.spawn_pitch;
-        let new_yaw = angle;
-        let new_pitch = 0.0;
+        let new_yaw = yaw;
+        let new_pitch = pitch;
         let mut event = SpawnChangeEvent::new(
             world.clone(),
             previous_position,
@@ -128,8 +116,8 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
                 argument("pos", BlockPosArgumentType)
                     .executes(SetWorldSpawnExecutor(SetWorldSpawnMode::PosOnly))
                     .then(
-                        argument("angle", AngleArgumentType)
-                            .executes(SetWorldSpawnExecutor(SetWorldSpawnMode::PosAndAngle)),
+                        argument("rotation", RotationArgumentType)
+                            .executes(SetWorldSpawnExecutor(SetWorldSpawnMode::PosAndRotation)),
                     ),
             ),
     );

@@ -182,13 +182,13 @@ impl ScreenHandlerFactory for MinecartScreenFactory {
         &self,
         sync_id: u8,
         player_inventory: &Arc<PlayerInventory>,
-        _player: &dyn InventoryPlayer,
+        player: &dyn InventoryPlayer,
     ) -> Option<SharedScreenHandler> {
         let inventory: Arc<dyn Inventory> = self.inventory.clone();
         let handler = if self.hopper {
-            create_hopper(sync_id, player_inventory, inventory)
+            create_hopper(sync_id, player_inventory, inventory, player)
         } else {
-            create_generic_9x3(sync_id, player_inventory, inventory)
+            create_generic_9x3(sync_id, player_inventory, inventory, player)
         };
         Some(Arc::new(Mutex::new(handler)) as SharedScreenHandler)
     }

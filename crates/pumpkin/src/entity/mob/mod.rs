@@ -14,6 +14,7 @@ use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_data::tracked_data;
+use pumpkin_data::{Block, BlockDirection};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::java::client::play::{CHeadRot, CUpdateEntityRot, Metadata};
 use pumpkin_util::Difficulty;
@@ -395,6 +396,12 @@ impl MobEntity {
         current_brightness <= dimension.monster_spawn_light_level.get(&mut random) as u8
     }
 
+    pub fn check_mob_spawn_rules(world: &World, pos: &BlockPos) -> bool {
+        let below = pos.down();
+        let state = world.get_block_state(&below);
+        state.is_side_solid(BlockDirection::Up)
+    }
+
     pub fn check_monster_spawn_rules(world: &World, pos: &BlockPos, is_thundering: bool) -> bool {
         if world.level_info.load().difficulty == Difficulty::Peaceful {
             return false;
@@ -404,8 +411,53 @@ impl MobEntity {
             return false;
         }
 
-        //TODO:check_mob_spawn_rules(entity_type, world, spawn_reason, pos).await
-        true
+        Self::check_mob_spawn_rules(world, pos)
+    }
+
+    pub fn check_any_light_monster_spawn_rules(world: &World, pos: &BlockPos) -> bool {
+        if world.level_info.load().difficulty == Difficulty::Peaceful {
+            return false;
+        }
+
+        Self::check_mob_spawn_rules(world, pos)
+    }
+
+    pub fn check_surface_monsters_spawn_rules(
+        world: &World,
+        pos: &BlockPos,
+        is_thundering: bool,
+    ) -> bool {
+        Self::check_monster_spawn_rules(world, pos, is_thundering) && world.can_see_sky(pos)
+    }
+
+    pub fn check_animal_spawn_rules(world: &World, pos: &BlockPos) -> bool {
+        let below = pos.down();
+        world
+            .get_block(&below)
+            .has_tag(&tag::Block::MINECRAFT_ANIMALS_SPAWNABLE_ON)
+            && Self::is_bright_enough_to_spawn(world, pos)
+    }
+
+    pub fn is_bright_enough_to_spawn(world: &World, pos: &BlockPos) -> bool {
+        world.get_max_local_raw_brightness(pos) > 8
+    }
+
+    pub fn check_surface_water_animal_spawn_rules(world: &World, pos: &BlockPos) -> bool {
+        let sea_level = world.sea_level;
+        let min_spawn_level = sea_level - 13;
+        pos.0.y >= min_spawn_level
+            && pos.0.y <= sea_level
+            && world
+                .get_fluid(&pos.down())
+                .has_tag(&tag::Fluid::MINECRAFT_WATER)
+            && (world.get_block(&pos.up()) == &Block::WATER
+                || world
+                    .get_fluid(&pos.up())
+                    .has_tag(&tag::Fluid::MINECRAFT_WATER))
+    }
+
+    pub fn check_surface_ageable_water_creature_spawn_rules(world: &World, pos: &BlockPos) -> bool {
+        Self::check_surface_water_animal_spawn_rules(world, pos)
     }
 
     pub fn try_attack(&self, caller: &dyn EntityBase, target: &dyn EntityBase) {
@@ -695,6 +747,8 @@ pub trait Mob: EntityBase + Send + Sync {
     }
 
     fn on_damage(&self, _damage_type: DamageType, _source: Option<&dyn EntityBase>) {}
+
+    fn on_attack(&self, _target: &dyn EntityBase) {}
 
     fn on_eating_grass(&self) {}
 

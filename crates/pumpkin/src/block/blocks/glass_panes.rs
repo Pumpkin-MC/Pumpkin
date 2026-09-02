@@ -1,18 +1,14 @@
-use crate::block::GetStateForNeighborUpdateArgs;
-use crate::block::OnPlaceArgs;
-use pumpkin_data::BlockDirection;
-use pumpkin_data::BlockStateId;
-use pumpkin_data::HorizontalFacingExt;
+use crate::block::{
+    BlockBehaviour, GetStateForNeighborUpdateArgs, OnPlaceArgs, PathComputationType,
+};
+use crate::world::World;
 use pumpkin_data::block_properties::HorizontalFacing;
 use pumpkin_data::tag::Taggable;
-use pumpkin_data::{Block, tag};
+use pumpkin_data::{Block, BlockDirection, BlockState, BlockStateId, HorizontalFacingExt, tag};
 use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_util::math::position::BlockPos;
 
 type GlassPaneProperties = pumpkin_data::block_properties::OakFenceLikeProperties;
-
-use crate::block::BlockBehaviour;
-use crate::world::World;
 
 #[pumpkin_block_from_tag("c:glass_panes")]
 pub struct GlassPaneBlock;
@@ -31,6 +27,10 @@ impl BlockBehaviour for GlassPaneBlock {
     ) -> BlockStateId {
         let pane_props = GlassPaneProperties::from_state_id(args.state_id);
         compute_pane_state(pane_props, args.world, args.block, args.position)
+    }
+
+    fn is_pathfindable(&self, _state: &BlockState, _computation_type: PathComputationType) -> bool {
+        false
     }
 }
 

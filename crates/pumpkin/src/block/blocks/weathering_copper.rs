@@ -20,7 +20,7 @@ use crate::block::registry::BlockActionResult;
 use crate::block::{
     BlockBehaviour, BlockMetadata, BrokenArgs, CanPlaceAtArgs, CanUpdateAtArgs,
     GetStateForNeighborUpdateArgs, NormalUseArgs, OnNeighborUpdateArgs, OnPlaceArgs,
-    OnStateReplacedArgs, PlacedArgs, RandomTickArgs,
+    OnStateReplacedArgs, PathComputationType, PlacedArgs, RandomTickArgs,
 };
 use crate::world::World;
 
@@ -710,6 +710,10 @@ impl BlockBehaviour for WeatheringCopperStairBlock {
     fn random_tick(&self, args: RandomTickArgs<'_>) {
         change_over_time(args.world, args.position, args.block);
     }
+
+    fn is_pathfindable(&self, state: &BlockState, computation_type: PathComputationType) -> bool {
+        StairBlock.is_pathfindable(state, computation_type)
+    }
 }
 
 /// Weathering copper trapdoor blocks.
@@ -768,6 +772,10 @@ impl BlockBehaviour for WeatheringCopperTrapDoorBlock {
     fn random_tick(&self, args: RandomTickArgs<'_>) {
         change_over_time(args.world, args.position, args.block);
     }
+
+    fn is_pathfindable(&self, state: &BlockState, computation_type: PathComputationType) -> bool {
+        TrapDoorBlock.is_pathfindable(state, computation_type)
+    }
 }
 
 /// Weathering copper slab blocks.
@@ -821,6 +829,10 @@ impl BlockBehaviour for WeatheringCopperSlabBlock {
 
     fn random_tick(&self, args: RandomTickArgs<'_>) {
         change_over_time(args.world, args.position, args.block);
+    }
+
+    fn is_pathfindable(&self, state: &BlockState, computation_type: PathComputationType) -> bool {
+        SlabBlock.is_pathfindable(state, computation_type)
     }
 }
 
@@ -906,6 +918,10 @@ impl BlockBehaviour for WeatheringCopperDoorBlock {
         if door_props.half == DoubleBlockHalf::Lower {
             change_over_time(args.world, args.position, args.block);
         }
+    }
+
+    fn is_pathfindable(&self, state: &BlockState, computation_type: PathComputationType) -> bool {
+        DoorBlock.is_pathfindable(state, computation_type)
     }
 }
 

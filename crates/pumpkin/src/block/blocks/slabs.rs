@@ -1,12 +1,10 @@
-use pumpkin_data::BlockDirection;
-use pumpkin_data::BlockStateId;
 use pumpkin_data::block_properties::SlabType;
+use pumpkin_data::{BlockDirection, BlockState, BlockStateId};
 use pumpkin_macros::pumpkin_block_from_tag;
 
-use crate::block::BlockBehaviour;
-use crate::block::BlockIsReplacing;
-use crate::block::CanUpdateAtArgs;
-use crate::block::OnPlaceArgs;
+use crate::block::{
+    BlockBehaviour, BlockIsReplacing, CanUpdateAtArgs, OnPlaceArgs, PathComputationType,
+};
 
 type SlabProperties = pumpkin_data::block_properties::ResinBrickSlabLikeProperties;
 
@@ -48,5 +46,12 @@ impl BlockBehaviour for SlabBlock {
                     _ => SlabType::Bottom,
                 },
             }
+    }
+
+    fn is_pathfindable(&self, state: &BlockState, computation_type: PathComputationType) -> bool {
+        match computation_type {
+            PathComputationType::Water => state.is_waterlogged(),
+            PathComputationType::Land | PathComputationType::Air => false,
+        }
     }
 }

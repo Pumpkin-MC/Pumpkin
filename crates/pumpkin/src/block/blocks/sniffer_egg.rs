@@ -2,12 +2,14 @@ use pumpkin_data::block_properties::SnifferEggLikeProperties;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::{Sound, SoundCategory};
-use pumpkin_data::{BlockId, BlockStateId};
+use pumpkin_data::{BlockId, BlockState, BlockStateId};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_world::tick::TickPriority;
 use pumpkin_world::world::BlockFlags;
 
-use crate::block::{BlockBehaviour, BrokenArgs, OnPlaceArgs, OnScheduledTickArgs, PlacedArgs};
+use crate::block::{
+    BlockBehaviour, BrokenArgs, OnPlaceArgs, OnScheduledTickArgs, PathComputationType, PlacedArgs,
+};
 
 #[pumpkin_block("minecraft:sniffer_egg")]
 pub struct SnifferEggBlock;
@@ -93,5 +95,9 @@ impl BlockBehaviour for SnifferEggBlock {
             args.world
                 .drop_stack(args.position, ItemStack::new(1, &Item::SNIFFER_EGG));
         }
+    }
+
+    fn is_pathfindable(&self, _state: &BlockState, _computation_type: PathComputationType) -> bool {
+        false
     }
 }

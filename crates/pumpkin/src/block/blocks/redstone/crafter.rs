@@ -7,8 +7,8 @@ use crate::block::entities::crafter::CrafterBlockEntity;
 use crate::block::entities::hopper::HopperBlockEntity;
 use crate::block::registry::BlockActionResult;
 use crate::block::{
-    BlockBehaviour, GetComparatorOutputArgs, NormalUseArgs, OnNeighborUpdateArgs, OnPlaceArgs,
-    OnScheduledTickArgs, PlacedArgs,
+    BlockBehaviour, GetComparatorOutputArgs, GetScreenHandlerFactoryArgs, NormalUseArgs,
+    OnNeighborUpdateArgs, OnPlaceArgs, OnScheduledTickArgs, PlacedArgs,
 };
 use crate::entity::Entity;
 use crate::entity::item::ItemEntity;
@@ -42,9 +42,9 @@ impl ScreenHandlerFactory for CrafterScreenFactory {
         &self,
         sync_id: u8,
         player_inventory: &Arc<PlayerInventory>,
-        _player: &dyn InventoryPlayer,
+        player: &dyn InventoryPlayer,
     ) -> Option<SharedScreenHandler> {
-        let handler = create_crafter_3x3(sync_id, player_inventory, self.0.clone());
+        let handler = create_crafter_3x3(sync_id, player_inventory, self.0.clone(), player);
         let screen_handler_arc = Arc::new(Mutex::new(handler));
 
         Some(screen_handler_arc as SharedScreenHandler)
@@ -221,13 +221,26 @@ impl CrafterBlock {
 
 impl BlockBehaviour for CrafterBlock {
     fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
-        if let Some(block_entity) = args.world.get_block_entity(args.position)
-            && let Some(inventory) = block_entity.get_inventory()
-        {
+        if let Some(factory) = self.get_screen_handler_factory(GetScreenHandlerFactoryArgs {
+            server: args.server,
+            world: args.world,
+            block: args.block,
+            position: args.position,
+            player: args.player,
+        }) {
             args.player
-                .open_handled_screen(&CrafterScreenFactory(inventory), Some(*args.position));
+                .open_handled_screen(factory.as_ref(), Some(*args.position));
         }
         BlockActionResult::Success
+    }
+
+    fn get_screen_handler_factory(
+        &self,
+        args: GetScreenHandlerFactoryArgs<'_>,
+    ) -> Option<Box<dyn ScreenHandlerFactory>> {
+        let block_entity = args.world.get_block_entity(args.position)?;
+        let inventory = block_entity.get_inventory()?;
+        Some(Box::new(CrafterScreenFactory(inventory)))
     }
 
     fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {

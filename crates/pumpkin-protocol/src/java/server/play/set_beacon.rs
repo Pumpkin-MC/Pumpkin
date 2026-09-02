@@ -15,11 +15,22 @@ pub struct SSetBeacon {
 }
 
 impl<'a> ServerPacket<'a> for SSetBeacon {
-    fn read(bytebuf: &mut &'a [u8], _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
-        Ok(Self {
-            primary_effect: bytebuf.get_option(NetworkReadExt::get_var_int)?,
-            secondary_effect: bytebuf.get_option(NetworkReadExt::get_var_int)?,
-        })
+    fn read(bytebuf: &mut &'a [u8], version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+        if *version >= JavaMinecraftVersion::V_1_19 {
+            Ok(Self {
+                primary_effect: bytebuf.get_option(NetworkReadExt::get_var_int)?,
+                secondary_effect: bytebuf.get_option(NetworkReadExt::get_var_int)?,
+            })
+        } else {
+            let p = bytebuf.get_var_int()?;
+            let s = bytebuf.get_var_int()?;
+            let primary_effect = if p.0 == -1 { None } else { Some(p) };
+            let secondary_effect = if s.0 == -1 { None } else { Some(s) };
+            Ok(Self {
+                primary_effect,
+                secondary_effect,
+            })
+        }
     }
 }
 

@@ -74,7 +74,6 @@ pub trait StructurePieceBase: Send + Sync {
         &self,
         _start: &StructurePiece,
         _random: &mut RandomGenerator,
-        // TODO: this is only for Stronghold and should not be here
         _weights: &mut Vec<crate::generation::structure::structures::stronghold::PieceWeight>,
         _last_piece_type: &mut Option<StrongholdPieceType>,
         _has_portal_room: &mut bool,
@@ -388,15 +387,16 @@ impl StructurePiece {
         }
     }
 
+    #[must_use]
     pub const fn is_under_sea_level(
         &self,
-        chunk: &mut ProtoChunk,
+        chunk: &ProtoChunk,
         x: i32,
         y: i32,
         z: i32,
         box_limit: &BlockBox,
     ) -> bool {
-        let block_pos = self.offset_pos(x, y, z);
+        let block_pos = self.offset_pos(x, y + 1, z);
 
         if !box_limit.contains_pos(&block_pos) {
             return false;
@@ -494,6 +494,43 @@ impl StructurePiece {
 
         let mut nbt = NbtCompound::new();
         nbt.put_string("id", "minecraft:chest".to_string());
+        nbt.put_int("x", world_pos.x);
+        nbt.put_int("y", world_pos.y);
+        nbt.put_int("z", world_pos.z);
+        nbt.put_string("LootTable", loot_table.to_string());
+        nbt.put_long("LootTableSeed", random.next_i64());
+        chunk.add_block_entity(nbt);
+
+        true
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn add_dispenser(
+        &self,
+        chunk: &mut ProtoChunk,
+        bb: &BlockBox,
+        random: &mut RandomGenerator,
+        x: i32,
+        y: i32,
+        z: i32,
+        facing: pumpkin_data::block_properties::Facing,
+        loot_table: &str,
+    ) -> bool {
+        use pumpkin_data::block_properties::DispenserLikeProperties;
+        use pumpkin_nbt::compound::NbtCompound;
+
+        let world_pos = self.offset_pos(x, y, z);
+        if !bb.contains_pos(&world_pos) {
+            return false;
+        }
+
+        let mut props = DispenserLikeProperties::default(&Block::DISPENSER);
+        props.facing = facing;
+        let state = BlockState::from_id(props.to_state_id(&Block::DISPENSER));
+        chunk.set_block_state(world_pos.x, world_pos.y, world_pos.z, state);
+
+        let mut nbt = NbtCompound::new();
+        nbt.put_string("id", "minecraft:dispenser".to_string());
         nbt.put_int("x", world_pos.x);
         nbt.put_int("y", world_pos.y);
         nbt.put_int("z", world_pos.z);
@@ -623,6 +660,24 @@ impl StructurePiecesCollector {
         self.shift(k);
 
         k
+    }
+
+    pub fn move_inside_heights(
+        &mut self,
+        random: &mut RandomGenerator,
+        lowest_allowed: i32,
+        highest_allowed: i32,
+    ) {
+        let bounding_box = self.get_bounding_box();
+        let y_span = bounding_box.max.y - bounding_box.min.y + 1;
+        let height_span = highest_allowed - lowest_allowed + 1 - y_span;
+        let y0_pos = if height_span > 1 {
+            lowest_allowed + random.next_bounded_i32(height_span)
+        } else {
+            lowest_allowed
+        };
+        let dy = y0_pos - bounding_box.min.y;
+        self.shift(dy);
     }
 
     pub fn get_bounding_box(&mut self) -> BlockBox {

@@ -63,6 +63,10 @@ impl EggEntity {
 }
 
 impl EntityBase for EggEntity {
+    fn get_owner_id(&self) -> Option<i32> {
+        self.thrown.owner_id
+    }
+
     fn init_data_tracker(&self) {
         let entity = self.get_entity();
         let stack = self

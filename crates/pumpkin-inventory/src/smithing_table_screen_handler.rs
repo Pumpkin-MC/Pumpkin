@@ -152,7 +152,7 @@ impl ScreenHandler for SmithingTableScreenHandler {
         }
     }
 
-    fn quick_move(&mut self, _player: &dyn InventoryPlayer, slot_index: i32) -> ItemStack {
+    fn quick_move(&mut self, player: &dyn InventoryPlayer, slot_index: i32) -> ItemStack {
         let mut stack = ItemStack::EMPTY.clone();
         let slot = self.get_behaviour().slots.get(slot_index as usize).cloned();
 
@@ -167,9 +167,9 @@ impl ScreenHandler for SmithingTableScreenHandler {
                             return ItemStack::EMPTY.clone();
                         }
                         slot.on_quick_move_crafted(slot_stack.clone(), stack.clone());
-                        self.input_inventory.remove_stack_specific(0, 1);
-                        self.input_inventory.remove_stack_specific(1, 1);
-                        self.input_inventory.remove_stack_specific(2, 1);
+                        let mut taken_stack = stack.clone();
+                        taken_stack.set_count(stack.item_count - slot_stack.item_count);
+                        slot.on_take_item(player, &taken_stack);
                     }
                     std::cmp::Ordering::Less => {
                         // From input slots to player inventory

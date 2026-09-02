@@ -5,8 +5,8 @@ use crate::block::entities::lectern::LecternBlockEntity;
 use crate::block::registry::BlockActionResult;
 use crate::block::{
     BlockBehaviour, BrokenArgs, EmitsRedstonePowerArgs, GetComparatorOutputArgs,
-    GetRedstonePowerArgs, NormalUseArgs, OnPlaceArgs, OnScheduledTickArgs, OnStateReplacedArgs,
-    PlacedArgs, UseWithItemArgs,
+    GetRedstonePowerArgs, GetScreenHandlerFactoryArgs, NormalUseArgs, OnPlaceArgs,
+    OnScheduledTickArgs, OnStateReplacedArgs, PathComputationType, PlacedArgs, UseWithItemArgs,
 };
 use crate::entity::Entity;
 use crate::entity::item::ItemEntity;
@@ -16,7 +16,7 @@ use pumpkin_data::entity::EntityType;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::Taggable;
 use pumpkin_data::world::WorldEvent;
-use pumpkin_data::{Block, BlockDirection, BlockStateId, tag, translation};
+use pumpkin_data::{Block, BlockDirection, BlockState, BlockStateId, tag, translation};
 use pumpkin_inventory::lectern_screen_handler::{LecternController, LecternScreenHandler};
 use pumpkin_inventory::player::player_inventory::PlayerInventory;
 use pumpkin_inventory::screen_handler::{
@@ -162,39 +162,50 @@ impl BlockBehaviour for LecternBlock {
     }
 
     fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
+        self.get_screen_handler_factory(GetScreenHandlerFactoryArgs {
+            server: args.server,
+            world: args.world,
+            block: args.block,
+            position: args.position,
+            player: args.player,
+        })
+        .map_or(BlockActionResult::Pass, |factory| {
+            args.player.increment_stat(
+                pumpkin_data::statistic::StatisticCategory::Custom,
+                pumpkin_data::statistic::CustomStatistic::InteractWithLectern as i32,
+                1,
+            );
+
+            args.player
+                .open_handled_screen(factory.as_ref(), Some(*args.position));
+
+            BlockActionResult::Success
+        })
+    }
+
+    fn get_screen_handler_factory(
+        &self,
+        args: GetScreenHandlerFactoryArgs<'_>,
+    ) -> Option<Box<dyn ScreenHandlerFactory>> {
         let props =
             LecternLikeProperties::from_state_id(args.world.get_block_state(args.position).id);
         if !props.has_book {
-            return BlockActionResult::Pass;
+            return None;
         }
 
-        let Some(block_entity) = args.world.get_block_entity(args.position) else {
-            return BlockActionResult::Pass;
-        };
-        let Some(inventory) = block_entity.get_inventory() else {
-            return BlockActionResult::Pass;
-        };
-
-        args.player.increment_stat(
-            pumpkin_data::statistic::StatisticCategory::Custom,
-            pumpkin_data::statistic::CustomStatistic::InteractWithLectern as i32,
-            1,
-        );
+        let block_entity = args.world.get_block_entity(args.position)?;
+        let inventory = block_entity.get_inventory()?;
 
         let controller = Arc::new(LecternPageController {
             world: args.world.clone(),
             position: *args.position,
             inventory: inventory.clone(),
         });
-        args.player.open_handled_screen(
-            &LecternScreenFactory {
-                inventory,
-                controller,
-            },
-            Some(*args.position),
-        );
 
-        BlockActionResult::Success
+        Some(Box::new(LecternScreenFactory {
+            inventory,
+            controller,
+        }))
     }
 
     fn use_with_item(&self, args: UseWithItemArgs<'_>) -> BlockActionResult {
@@ -295,5 +306,9 @@ impl BlockBehaviour for LecternBlock {
         } else {
             Some(0)
         }
+    }
+
+    fn is_pathfindable(&self, _state: &BlockState, _computation_type: PathComputationType) -> bool {
+        false
     }
 }

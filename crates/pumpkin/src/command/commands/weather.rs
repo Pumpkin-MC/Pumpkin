@@ -33,7 +33,7 @@ impl CommandExecutor for WeatherExecutor {
         };
 
         let world = context.source.world();
-        let message = {
+        let (message, return_val) = {
             let mut weather = world
                 .weather
                 .lock()
@@ -45,10 +45,13 @@ impl CommandExecutor for WeatherExecutor {
                         duration.unwrap_or_else(|| rand::random_range(12_000..=180_000));
 
                     weather.set_weather_parameters(world, processed_duration, 0, false, false);
-                    TextComponent::translate_cross(
-                        translation::java::COMMANDS_WEATHER_SET_CLEAR,
-                        translation::bedrock::COMMANDS_WEATHER_CLEAR,
-                        [],
+                    (
+                        TextComponent::translate_cross(
+                            translation::java::COMMANDS_WEATHER_SET_CLEAR,
+                            translation::bedrock::COMMANDS_WEATHER_CLEAR,
+                            [],
+                        ),
+                        duration.unwrap_or(-1),
                     )
                 }
                 WeatherMode::Rain => {
@@ -56,10 +59,13 @@ impl CommandExecutor for WeatherExecutor {
                         duration.unwrap_or_else(|| rand::random_range(12_000..=24_000));
 
                     weather.set_weather_parameters(world, 0, processed_duration, true, false);
-                    TextComponent::translate_cross(
-                        translation::java::COMMANDS_WEATHER_SET_RAIN,
-                        translation::bedrock::COMMANDS_WEATHER_RAIN,
-                        [],
+                    (
+                        TextComponent::translate_cross(
+                            translation::java::COMMANDS_WEATHER_SET_RAIN,
+                            translation::bedrock::COMMANDS_WEATHER_RAIN,
+                            [],
+                        ),
+                        duration.unwrap_or(-1),
                     )
                 }
                 WeatherMode::Thunder => {
@@ -67,10 +73,13 @@ impl CommandExecutor for WeatherExecutor {
                         duration.unwrap_or_else(|| rand::random_range(3600..=15_600));
 
                     weather.set_weather_parameters(world, 0, processed_duration, true, true);
-                    TextComponent::translate_cross(
-                        translation::java::COMMANDS_WEATHER_SET_THUNDER,
-                        translation::bedrock::COMMANDS_WEATHER_THUNDER,
-                        [],
+                    (
+                        TextComponent::translate_cross(
+                            translation::java::COMMANDS_WEATHER_SET_THUNDER,
+                            translation::bedrock::COMMANDS_WEATHER_THUNDER,
+                            [],
+                        ),
+                        duration.unwrap_or(-1),
                     )
                 }
             }
@@ -78,7 +87,7 @@ impl CommandExecutor for WeatherExecutor {
 
         context.source.send_feedback(message, true);
 
-        Ok(1)
+        Ok(return_val)
     }
 }
 
@@ -98,7 +107,7 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
                         mode: WeatherMode::Clear,
                         has_duration: false,
                     })
-                    .then(argument("duration", TimeArgumentType::any()).executes(
+                    .then(argument("duration", TimeArgumentType::new(1)).executes(
                         WeatherExecutor {
                             mode: WeatherMode::Clear,
                             has_duration: true,
@@ -111,7 +120,7 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
                         mode: WeatherMode::Rain,
                         has_duration: false,
                     })
-                    .then(argument("duration", TimeArgumentType::any()).executes(
+                    .then(argument("duration", TimeArgumentType::new(1)).executes(
                         WeatherExecutor {
                             mode: WeatherMode::Rain,
                             has_duration: true,
@@ -124,7 +133,7 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
                         mode: WeatherMode::Thunder,
                         has_duration: false,
                     })
-                    .then(argument("duration", TimeArgumentType::any()).executes(
+                    .then(argument("duration", TimeArgumentType::new(1)).executes(
                         WeatherExecutor {
                             mode: WeatherMode::Thunder,
                             has_duration: true,
