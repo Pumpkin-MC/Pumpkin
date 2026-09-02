@@ -1,4 +1,4 @@
-use pumpkin_data::block_properties::{BlockProperties, Facing};
+use pumpkin_data::block_properties::Facing;
 use pumpkin_data::{Block, FacingExt};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_world::world::BlockFlags;
@@ -16,13 +16,13 @@ pub struct PistonHeadBlock;
 
 impl BlockBehaviour for PistonHeadBlock {
     fn broken(&self, args: BrokenArgs<'_>) {
-        let props = PistonHeadProperties::from_state_id(args.state.id, &Block::PISTON_HEAD);
+        let props = PistonHeadProperties::from_state_id(args.state.id);
         let pos = args
             .position
             .offset(props.facing.opposite().to_block_direction().to_offset());
         let (new_block, new_state) = args.world.get_block_and_state_id(&pos);
         if &Block::PISTON == new_block || &Block::STICKY_PISTON == new_block {
-            let props = PistonProps::from_state_id(new_state, new_block);
+            let props = PistonProps::from_state_id(new_state);
             if props.extended {
                 // TODO: use player
                 args.world.break_block(&pos, None, BlockFlags::SKIP_DROPS);
@@ -31,7 +31,7 @@ impl BlockBehaviour for PistonHeadBlock {
     }
     fn on_neighbor_update(&self, args: OnNeighborUpdateArgs<'_>) {
         let head_state_id = args.world.get_block_state_id(args.position);
-        let head_props = PistonHeadProperties::from_state_id(head_state_id, &Block::PISTON_HEAD);
+        let head_props = PistonHeadProperties::from_state_id(head_state_id);
         if head_props.facing != Facing::Up {
             return;
         }

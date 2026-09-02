@@ -1,9 +1,7 @@
 use rustc_hash::FxHashSet;
 use std::sync::{Arc, Mutex};
 
-use pumpkin_data::block_properties::{
-    BlockProperties, TrialSpawnerLikeProperties, TrialSpawnerState,
-};
+use pumpkin_data::block_properties::{TrialSpawnerLikeProperties, TrialSpawnerState};
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
@@ -742,7 +740,7 @@ impl TrialSpawner {
         let block_id = world.get_block_state_id(&spawner_pos);
         let block = world.get_block(&spawner_pos);
         if block.id == pumpkin_data::BlockId::TRIAL_SPAWNER {
-            TrialSpawnerLikeProperties::from_state_id(block_id, block).trial_spawner_state
+            TrialSpawnerLikeProperties::from_state_id(block_id).trial_spawner_state
         } else {
             TrialSpawnerState::Inactive
         }
@@ -752,7 +750,7 @@ impl TrialSpawner {
         let block_id = world.get_block_state_id(&spawner_pos);
         let block = world.get_block(&spawner_pos);
         if block.id == pumpkin_data::BlockId::TRIAL_SPAWNER {
-            let mut props = TrialSpawnerLikeProperties::from_state_id(block_id, block);
+            let mut props = TrialSpawnerLikeProperties::from_state_id(block_id);
             if props.trial_spawner_state != state {
                 props.trial_spawner_state = state;
                 world.set_block_state(
@@ -768,7 +766,7 @@ impl TrialSpawner {
         let block_id = world.get_block_state_id(&spawner_pos);
         let block = world.get_block(&spawner_pos);
         if block.id == pumpkin_data::BlockId::TRIAL_SPAWNER {
-            let mut props = TrialSpawnerLikeProperties::from_state_id(block_id, block);
+            let mut props = TrialSpawnerLikeProperties::from_state_id(block_id);
             if props.ominous != ominous {
                 props.ominous = ominous;
                 world.set_block_state(
@@ -1138,7 +1136,7 @@ impl BlockEntity for TrialSpawnerBlockEntity {
         let block_id = world.get_block_state_id(&self.position);
         let block = world.get_block(&self.position);
         let is_ominous = if block.id == pumpkin_data::BlockId::TRIAL_SPAWNER {
-            TrialSpawnerLikeProperties::from_state_id(block_id, block).ominous
+            TrialSpawnerLikeProperties::from_state_id(block_id).ominous
         } else {
             false
         };

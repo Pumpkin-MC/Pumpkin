@@ -1,6 +1,6 @@
 use pumpkin_data::Block;
 use pumpkin_data::BlockStateId;
-use pumpkin_data::block_properties::{BlockProperties, TntLikeProperties};
+use pumpkin_data::block_properties::TntLikeProperties;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::sound::SoundCategory;
@@ -123,7 +123,7 @@ impl BlockBehaviour for TNTBlock {
 
     fn broken(&self, args: BrokenArgs<'_>) {
         if args.player.gamemode.load() != GameMode::Creative {
-            let props = TntLikeProperties::from_state_id(args.state.id, args.block);
+            let props = TntLikeProperties::from_state_id(args.state.id);
             if props.r#unstable {
                 Self::prime(args.world, args.position);
             }

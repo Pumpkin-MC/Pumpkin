@@ -4,7 +4,7 @@ use std::sync::Mutex;
 use pumpkin_data::translation;
 use pumpkin_data::{
     Block, BlockDirection, BlockStateId, HorizontalFacingExt,
-    block_properties::{AttachFace, BlockProperties, GrindstoneLikeProperties},
+    block_properties::{AttachFace, GrindstoneLikeProperties},
 };
 use pumpkin_inventory::grindstone_screen_handler::GrindstoneScreenHandler;
 use pumpkin_inventory::player::player_inventory::PlayerInventory;
@@ -41,8 +41,7 @@ impl BlockBehaviour for GrindstoneBlock {
     }
 
     fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
-        let mut props =
-            GrindstoneLikeProperties::from_state_id(args.block.default_state.id, args.block);
+        let mut props = GrindstoneLikeProperties::from_state_id(args.block.default_state.id);
         (props.face, props.facing) =
             WallMountedBlock::get_placement_face(self, args.player, args.direction);
 
@@ -76,8 +75,8 @@ impl WallMountedBlock for GrindstoneBlock {
         true
     }
 
-    fn get_direction(&self, state_id: BlockStateId, block: &Block) -> BlockDirection {
-        let props = GrindstoneLikeProperties::from_state_id(state_id, block);
+    fn get_direction(&self, state_id: BlockStateId, _block: &Block) -> BlockDirection {
+        let props = GrindstoneLikeProperties::from_state_id(state_id);
         match props.face {
             AttachFace::Floor => BlockDirection::Up,
             AttachFace::Ceiling => BlockDirection::Down,

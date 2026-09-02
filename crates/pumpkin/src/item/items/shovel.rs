@@ -2,7 +2,7 @@ use crate::entity::player::Player;
 use crate::item::{ItemBehaviour, ItemMetadata};
 use crate::server::Server;
 use pumpkin_data::BlockDirection;
-use pumpkin_data::block_properties::{BlockProperties, CampfireLikeProperties};
+use pumpkin_data::block_properties::CampfireLikeProperties;
 use pumpkin_data::block_transformer::SHOVEL;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::{Sound, SoundCategory};
@@ -56,7 +56,7 @@ impl ItemBehaviour for ShovelItem {
             changed = true;
         } else if block == &Block::CAMPFIRE || block == &Block::SOUL_CAMPFIRE {
             let mut campfire_props =
-                CampfireLikeProperties::from_state_id(world.get_block_state(&location).id, block);
+                CampfireLikeProperties::from_state_id(world.get_block_state(&location).id);
             if campfire_props.lit {
                 world.sync_world_event(WorldEvent::SoundExtinguishFire, location, 0);
 

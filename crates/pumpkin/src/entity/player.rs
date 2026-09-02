@@ -230,7 +230,7 @@ impl BedrockPlayer<'_> {
     }
 }
 use pumpkin_data::attributes::Attributes;
-use pumpkin_data::block_properties::{BlockProperties, HorizontalFacing};
+use pumpkin_data::block_properties::HorizontalFacing;
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::data_component_impl::{AttributeModifiersImpl, EnchantmentsImpl, Operation};
 use pumpkin_data::data_component_impl::{EquipmentSlot, EquippableImpl, ToolImpl, WeaponImpl};
@@ -575,13 +575,13 @@ impl Player {
         let bytes = if let Ok(handle) = tokio::runtime::Handle::try_current() {
             tokio::task::block_in_place(|| {
                 handle.block_on(async {
-                    let client = reqwest::Client::new();
+                    let client = pumpkin_util::client();
                     client.get(&url).send().await.ok()?.bytes().await.ok()
                 })
             })?
         } else {
             tokio::runtime::Runtime::new().ok()?.block_on(async {
-                let client = reqwest::Client::new();
+                let client = pumpkin_util::client();
                 client.get(&url).send().await.ok()?.bytes().await.ok()
             })?
         };
@@ -1700,7 +1700,7 @@ impl Player {
 
         // Handle bed respawn
         if block.has_tag(&tag::Block::MINECRAFT_BEDS) {
-            let bed_props = BedProperties::from_state_id(state_id, block);
+            let bed_props = BedProperties::from_state_id(state_id);
             let facing = bed_props.facing;
 
             // Try positions around the bed based on facing direction
@@ -1718,7 +1718,7 @@ impl Player {
 
         // Handle respawn anchor (Nether)
         if block == &Block::RESPAWN_ANCHOR {
-            let anchor_props = AnchorProperties::from_state_id(state_id, block);
+            let anchor_props = AnchorProperties::from_state_id(state_id);
             let charges = anchor_props.charges;
 
             // Anchor needs at least 1 charge to work

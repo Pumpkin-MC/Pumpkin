@@ -4,7 +4,6 @@ use pumpkin_data::BlockDirection;
 use pumpkin_data::BlockState;
 use pumpkin_data::BlockStateId;
 use pumpkin_data::HorizontalFacingExt;
-use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::block_properties::HorizontalFacing;
 use pumpkin_data::tag::Taggable;
 use pumpkin_data::{Block, tag};
@@ -32,7 +31,7 @@ impl BlockBehaviour for FenceBlock {
         &self,
         args: GetStateForNeighborUpdateArgs<'_>,
     ) -> BlockStateId {
-        let fence_props = FenceProperties::from_state_id(args.state_id, args.block);
+        let fence_props = FenceProperties::from_state_id(args.state_id);
         compute_fence_state(fence_props, args.world, args.block, args.position)
     }
 }
@@ -74,7 +73,7 @@ fn connects_to(from: &Block, to: &Block, to_state: &BlockState, direction: Block
     }
 
     if to.has_tag(&tag::Block::C_FENCE_GATES) {
-        let fence_gate_props = FenceGateProperties::from_state_id(to_state.id, to);
+        let fence_gate_props = FenceGateProperties::from_state_id(to_state.id);
         if BlockDirection::from_cardinal_direction(fence_gate_props.facing).to_axis()
             == direction.rotate_clockwise().to_axis()
         {

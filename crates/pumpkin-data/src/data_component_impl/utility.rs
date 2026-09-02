@@ -60,9 +60,55 @@ impl DataComponentImpl for MapDecorationsImpl {
     default_impl!(MapDecorations);
 }
 
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct MapPostProcessingImpl;
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
+pub enum MapPostProcessing {
+    Lock = 0,
+    Scale = 1,
+}
+
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, Default)]
+pub struct MapPostProcessingImpl {
+    pub processing: Option<MapPostProcessing>,
+}
+
+impl MapPostProcessingImpl {
+    pub const SCALE: Self = Self {
+        processing: Some(MapPostProcessing::Scale),
+    };
+    pub const LOCK: Self = Self {
+        processing: Some(MapPostProcessing::Lock),
+    };
+
+    #[must_use]
+    pub fn read_data(data: &NbtTag) -> Option<Self> {
+        if let Some(val) = data.extract_int() {
+            let processing = match val {
+                0 => Some(MapPostProcessing::Lock),
+                1 => Some(MapPostProcessing::Scale),
+                _ => None,
+            };
+            Some(Self { processing })
+        } else if let Some(val) = data.extract_string() {
+            let processing = match val {
+                "lock" => Some(MapPostProcessing::Lock),
+                "scale" => Some(MapPostProcessing::Scale),
+                _ => None,
+            };
+            Some(Self { processing })
+        } else {
+            None
+        }
+    }
+}
+
 impl DataComponentImpl for MapPostProcessingImpl {
+    fn write_data(&self) -> NbtTag {
+        match self.processing {
+            Some(MapPostProcessing::Lock) => NbtTag::Int(0),
+            Some(MapPostProcessing::Scale) => NbtTag::Int(1),
+            None => NbtTag::Int(0),
+        }
+    }
     default_impl!(MapPostProcessing);
 }
 

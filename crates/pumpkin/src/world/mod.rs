@@ -74,7 +74,7 @@ use pumpkin_data::{
 };
 use pumpkin_data::{
     BlockDirection, BlockState, HorizontalFacingExt,
-    block_properties::{BlockProperties, ChestLikeProperties, ChestType},
+    block_properties::{ChestLikeProperties, ChestType},
     tag::Taggable,
     translation,
 };
@@ -193,7 +193,7 @@ fn bedrock_chest_block_actor(state_id: BlockStateId, position: BlockPos) -> Opti
     nbt.put_int("z", position.0.z);
     nbt.put_bool("isMovable", true);
 
-    let properties = ChestLikeProperties::from_state_id(state_id, block);
+    let properties = ChestLikeProperties::from_state_id(state_id);
     if properties.r#type != ChestType::Single {
         let direction = if properties.r#type == ChestType::Left {
             properties.facing.rotate_clockwise()
@@ -1181,6 +1181,27 @@ impl World {
             seed,
         );
         self.broadcast_packet_all(&packet);
+    }
+
+    pub fn play_sound_event_expect(
+        &self,
+        player: &Player,
+        sound: &pumpkin_data::data_component_impl::IdOr<
+            pumpkin_data::data_component_impl::SoundEvent,
+        >,
+        category: SoundCategory,
+        position: &Vector3<f64>,
+    ) {
+        let seed = rng().random::<f64>();
+        let packet = CSoundEffect::new(
+            data_to_proto_sound(sound),
+            category,
+            position,
+            1.0,
+            1.0,
+            seed,
+        );
+        self.broadcast_packet_except(&[player.gameprofile.id], &packet);
     }
 
     pub fn play_sound_fine(
@@ -7094,7 +7115,7 @@ impl WorldPortalExt for WorldPortal {
 mod tests {
     use pumpkin_data::{
         Block,
-        block_properties::{BlockProperties, ChestLikeProperties, ChestType, HorizontalFacing},
+        block_properties::{ChestLikeProperties, ChestType, HorizontalFacing},
     };
     use pumpkin_util::math::position::BlockPos;
 

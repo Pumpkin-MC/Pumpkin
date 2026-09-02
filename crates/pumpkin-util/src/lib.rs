@@ -32,10 +32,13 @@ pub mod version;
 pub mod world_seed;
 pub mod y_offset;
 
+pub mod client;
 pub mod identifier;
 pub mod jwt;
 pub mod resource;
 pub mod uuid;
+
+pub use client::{client, client_builder};
 
 /// Represents the different types of height maps used for terrain generation and collision checks.
 #[derive(Deserialize, Clone, Copy, Debug, PartialEq, Eq)]

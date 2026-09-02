@@ -1,7 +1,7 @@
 use crate::entity::player::Player;
 use crate::item::{ItemBehaviour, ItemMetadata};
 use crate::server::Server;
-use pumpkin_data::block_properties::{BlockProperties, DoubleBlockHalf, OakDoorLikeProperties};
+use pumpkin_data::block_properties::{DoubleBlockHalf, OakDoorLikeProperties};
 use pumpkin_data::block_transformer::AXE;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::SoundCategory;
@@ -48,7 +48,7 @@ impl ItemBehaviour for AxeItem {
             }
 
             if block.has_tag(&tag::Block::MINECRAFT_DOORS) {
-                let door_props = OakDoorLikeProperties::from_state_id(current_state_id, block);
+                let door_props = OakDoorLikeProperties::from_state_id(current_state_id);
                 let other_half_pos = match door_props.half {
                     DoubleBlockHalf::Lower => location.up(),
                     DoubleBlockHalf::Upper => location.down(),

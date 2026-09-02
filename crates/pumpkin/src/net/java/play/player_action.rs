@@ -49,7 +49,7 @@ impl JavaClient {
                     if block == &pumpkin_data::Block::NOTE_BLOCK {
                         let props =
                             pumpkin_data::block_properties::NoteBlockLikeProperties::from_state_id(
-                                state.id, block,
+                                state.id,
                             );
                         crate::block::blocks::note::NoteBlock::play_note(&props, &world, &position);
                         player.increment_stat(
@@ -246,7 +246,12 @@ impl JavaClient {
                     player.swap_item();
                 }
                 Status::SpearJab => {
-                    debug!("todo");
+                    if player.gamemode.load() == GameMode::Spectator {
+                        return;
+                    }
+
+                    let stack = player.inventory().held_item();
+                    server.item_registry.on_spear_jab(&stack, player);
                 }
             },
             Err(_) => self.try_kick(&TextComponent::text("Invalid status")),

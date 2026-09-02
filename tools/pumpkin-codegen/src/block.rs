@@ -61,6 +61,39 @@ fn property_group_name_from_derived_name(name: &str) -> String {
     format!("{name}_properties").to_upper_camel_case()
 }
 
+fn common_suffix_group_alias(blocks: &[(String, u16)]) -> Option<String> {
+    if blocks.is_empty() {
+        return None;
+    }
+    let token_lists: Vec<Vec<&str>> = blocks
+        .iter()
+        .map(|(name, _)| name.split('_').collect())
+        .collect();
+
+    let first = &token_lists[0];
+    let mut common_suffix_len = 0;
+
+    for i in 1..=first.len() {
+        let candidate_suffix = &first[first.len() - i..];
+        let all_match = token_lists
+            .iter()
+            .all(|tokens| tokens.len() >= i && &tokens[tokens.len() - i..] == candidate_suffix);
+        if all_match {
+            common_suffix_len = i;
+        } else {
+            break;
+        }
+    }
+
+    if common_suffix_len > 0 {
+        let suffix_tokens = &first[first.len() - common_suffix_len..];
+        let suffix_str = suffix_tokens.join("_");
+        Some(format!("{suffix_str}_properties").to_upper_camel_case())
+    } else {
+        None
+    }
+}
+
 /// Discriminates between the two runtime representations of a block property.
 enum PropertyType {
     /// The property is a simple boolean (`true`/`false`).
@@ -199,6 +232,8 @@ impl ToTokens for PropertyStruct {
 struct BlockPropertyStruct {
     /// The property group data used to generate the struct and its trait implementation.
     data: PropertyCollectionData,
+    /// Type aliases for this property struct.
+    aliases: Vec<Ident>,
 }
 
 impl ToTokens for BlockPropertyStruct {
@@ -359,10 +394,46 @@ impl ToTokens for BlockPropertyStruct {
             quote! { if *key == #key { #val } }
         };
 
+        let aliases = self.aliases.iter().map(|alias| {
+            quote! { pub type #alias = #name; }
+        });
+
         tokens.extend(quote! {
             #[derive(Clone, Copy, Eq, PartialEq)]
             pub struct #name {
                 #(#fields),*
+            }
+
+            #(#aliases)*
+
+            impl #name {
+                #[inline]
+                #[must_use]
+                pub fn from_index(mut index: u16) -> Self {
+                    Self {
+                        #(#from_index_body),*
+                    }
+                }
+
+                #[inline]
+                #[must_use]
+                pub fn from_state_id(id: BlockStateId) -> Self {
+                    let block = Block::from_state_id(id);
+                    let min_id = block.states[0].id.as_u16();
+                    Self::from_index(id.as_u16() - min_id)
+                }
+
+                #[inline]
+                #[must_use]
+                pub fn to_state_id(&self, block: &Block) -> BlockStateId {
+                    <Self as BlockProperties>::to_state_id(self, block)
+                }
+
+                #[inline]
+                #[must_use]
+                pub fn default(block: &Block) -> Self {
+                    <Self as BlockProperties>::default(block)
+                }
             }
 
             impl BlockProperties for #name {
@@ -374,10 +445,8 @@ impl ToTokens for BlockPropertyStruct {
                 }
 
                 #[allow(unused_assignments)]
-                fn from_index(mut index: u16) -> Self {
-                    Self {
-                        #(#from_index_body),*
-                    }
+                fn from_index(index: u16) -> Self {
+                    Self::from_index(index)
                 }
 
                 #[inline]
@@ -417,7 +486,7 @@ impl ToTokens for BlockPropertyStruct {
                     if !Self::handles_block_id(block.id) {
                         panic!("{} is not a valid block for {}", block.name, #struct_name);
                     }
-                    Self::from_state_id(block.default_state.id, block)
+                    Self::from_state_id(block.default_state.id)
                 }
 
                 fn to_props(&self) -> Vec<(&'static str, &'static str)> {
@@ -1051,11 +1120,31 @@ pub fn build() -> TokenStream {
     let mut block_properties_from_state_and_block_id_arms = Vec::new();
     let mut block_properties_from_props_and_name_arms = Vec::new();
 
+    let mut emitted_aliases = HashSet::new();
+    for property_group in property_collection_map.values() {
+        emitted_aliases.insert(property_group_name_from_derived_name(
+            &property_group.derive_name(),
+        ));
+    }
+
     for property_group in property_collection_map.into_values() {
-        let property_name = Ident::new(
-            &property_group_name_from_derived_name(&property_group.derive_name()),
-            Span::call_site(),
-        );
+        let struct_name = property_group_name_from_derived_name(&property_group.derive_name());
+        let property_name = Ident::new(&struct_name, Span::call_site());
+
+        let mut group_aliases = Vec::new();
+
+        if let Some(canonical) = common_suffix_group_alias(&property_group.blocks) {
+            if emitted_aliases.insert(canonical.clone()) {
+                group_aliases.push(Ident::new(&canonical, Span::call_site()));
+            }
+        }
+
+        for (b_name, _) in &property_group.blocks {
+            let alias_name = format!("{}_properties", b_name).to_upper_camel_case();
+            if emitted_aliases.insert(alias_name.clone()) {
+                group_aliases.push(Ident::new(&alias_name, Span::call_site()));
+            }
+        }
 
         let idents: Box<_> = property_group
             .blocks
@@ -1064,7 +1153,7 @@ pub fn build() -> TokenStream {
             .collect();
 
         block_properties_from_state_and_block_id_arms.push(quote! {
-            #(BlockId::#idents)|* => Box::new(#property_name::from_state_id(state_id, self)),
+            #(BlockId::#idents)|* => Box::new(#property_name::from_state_id(state_id)),
         });
         block_properties_from_props_and_name_arms.push(quote! {
             #(BlockId::#idents)|* => Box::new(#property_name::from_props(props, self)),
@@ -1072,6 +1161,7 @@ pub fn build() -> TokenStream {
 
         block_properties.push(BlockPropertyStruct {
             data: property_group,
+            aliases: group_aliases,
         });
     }
 

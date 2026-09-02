@@ -1,1 +1,0 @@
-{"shift_x":{"type":"minecraft:cache","input":{"type":"minecraft:shift_a","noise":"minecraft:offset"}},"shift_z":{"type":"minecraft:cache","input":{"type":"minecraft:shift_b","noise":"minecraft:offset"}},"y":{"type":"minecraft:gradient","axis":"y","from_coordinate":-4064,"from_value":-4064.0,"to_coordinate":4062,"to_value":4062.0},"zero":0.0}

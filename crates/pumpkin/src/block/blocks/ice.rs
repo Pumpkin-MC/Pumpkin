@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use pumpkin_data::block_properties::{BlockProperties, NetherWartLikeProperties, blocks_movement};
+use pumpkin_data::block_properties::{NetherWartLikeProperties, blocks_movement};
 use pumpkin_data::dimension::Dimension;
 use pumpkin_data::{Block, BlockDirection, BlockId, BlockState, BlockStateId, Enchantment};
 use pumpkin_util::math::position::BlockPos;
@@ -127,7 +127,7 @@ impl BlockBehaviour for FrostedIceBlock {
         if should_check_melt {
             let state_id = args.world.get_block_state_id(args.position);
             let state = args.world.get_block_state(args.position);
-            let props = NetherWartLikeProperties::from_state_id(state_id, args.block);
+            let props = NetherWartLikeProperties::from_state_id(state_id);
             let age = props.r#age;
 
             let brightness = if args.world.dimension == Dimension::THE_END {
@@ -143,10 +143,8 @@ impl BlockBehaviour for FrostedIceBlock {
                     let (neighbor_block, neighbor_state_id) =
                         args.world.get_block_and_state_id(&neighbor_pos);
                     if neighbor_block == &Block::FROSTED_ICE {
-                        let neighbor_props = NetherWartLikeProperties::from_state_id(
-                            neighbor_state_id,
-                            neighbor_block,
-                        );
+                        let neighbor_props =
+                            NetherWartLikeProperties::from_state_id(neighbor_state_id);
                         if !slightly_melt(
                             args.world,
                             &neighbor_pos,

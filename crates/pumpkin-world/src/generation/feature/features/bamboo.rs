@@ -1,6 +1,6 @@
 use pumpkin_data::{
     Block, BlockState,
-    block_properties::{BambooLeaves, BambooLikeProperties, BlockProperties},
+    block_properties::{BambooLeaves, BambooLikeProperties},
     tag,
 };
 use pumpkin_util::{

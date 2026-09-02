@@ -3,10 +3,10 @@ use std::sync::Arc;
 use pumpkin_data::{
     Block, BlockState,
     block_properties::{
-        AttachFace, BlockProperties, EastRedstone, Facing, HorizontalFacing, LeverLikeProperties,
-        NorthRedstone, OakStairsLikeProperties, RedstoneWireLikeProperties, RepeaterLikeProperties,
-        SouthRedstone, StickyPistonLikeProperties, TripwireHookLikeProperties,
-        TripwireLikeProperties, VineLikeProperties, WestRedstone,
+        AttachFace, EastRedstone, Facing, HorizontalFacing, LeverLikeProperties, NorthRedstone,
+        OakStairsLikeProperties, RedstoneWireLikeProperties, RepeaterLikeProperties, SouthRedstone,
+        StickyPistonLikeProperties, TripwireHookLikeProperties, TripwireLikeProperties,
+        VineLikeProperties, WestRedstone,
     },
 };
 use pumpkin_util::{

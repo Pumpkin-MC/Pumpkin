@@ -230,3 +230,4 @@ wit-bindgen = { version = "0.61", default-features = false, features = ["macros"
 postcard = { version = "1.1", default-features = false, features = ["alloc"] }
 tracing-serde-structured = { version = "0.4", default-features = false }
 wasmparser = { version = "0.258", default-features = false }
+webpki-root-certs = { version = "1.0.8", default-features = false }

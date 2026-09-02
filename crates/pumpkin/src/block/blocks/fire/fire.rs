@@ -1,6 +1,6 @@
 use pumpkin_data::BlockStateId;
 use pumpkin_data::biome::Biome;
-use pumpkin_data::block_properties::{BlockProperties, HorizontalAxis};
+use pumpkin_data::block_properties::HorizontalAxis;
 use pumpkin_data::dimension::Dimension;
 use pumpkin_data::fluid::Fluid;
 use pumpkin_data::tag::{self, Taggable};
@@ -66,7 +66,7 @@ impl FireBlock {
         if Self::is_flammable(down_state.id) || down_state.is_side_solid(BlockDirection::Up) {
             return block.default_state.id;
         }
-        let mut fire_props = FireProperties::from_state_id(block.default_state.id, block);
+        let mut fire_props = FireProperties::from_state_id(block.default_state.id);
         for direction in BlockDirection::all() {
             let neighbor_pos = pos.offset(direction.to_offset());
             let neighbor_state_id = world.get_block_state_id(&neighbor_pos);
@@ -150,7 +150,7 @@ impl FireBlock {
             {
                 let new_age = (age + (rand::rng().random_range(0..5) / 4)).min(15) as u8;
                 let state_id = self.get_state_for_position(world.as_ref(), &Block::FIRE, pos);
-                let mut fire_props = FireProperties::from_state_id(state_id, &Block::FIRE);
+                let mut fire_props = FireProperties::from_state_id(state_id);
                 fire_props.age = new_age;
                 let new_state_id = fire_props.to_state_id(&Block::FIRE);
                 world.set_block_state(pos, new_state_id, BlockFlags::NOTIFY_ALL);
@@ -272,7 +272,7 @@ impl BlockBehaviour for FireBlock {
             _ => false,
         };
 
-        let mut fire_props = FireProperties::from_state_id(block_state.id, &Block::FIRE);
+        let mut fire_props = FireProperties::from_state_id(block_state.id);
         let age = fire_props.age;
 
         // Check if rain should extinguish the fire
@@ -414,7 +414,7 @@ impl BlockBehaviour for FireBlock {
                                 let fire_state_id =
                                     self.get_state_for_position(world.as_ref(), block, &offset_pos);
                                 let mut new_fire_props =
-                                    FireProperties::from_state_id(fire_state_id, &Block::FIRE);
+                                    FireProperties::from_state_id(fire_state_id);
                                 new_fire_props.age = spread_age;
 
                                 world.set_block_state(

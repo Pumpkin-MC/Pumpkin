@@ -1,5 +1,5 @@
 use pumpkin_data::BlockStateId;
-use pumpkin_data::block_properties::{AcaciaShelfLikeProperties, BlockProperties};
+use pumpkin_data::block_properties::AcaciaShelfLikeProperties;
 use pumpkin_macros::pumpkin_block_from_tag;
 
 use crate::block::entities::shelf::ShelfBlockEntity;

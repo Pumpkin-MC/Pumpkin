@@ -5,7 +5,6 @@ use pumpkin_data::BlockDirection;
 use pumpkin_data::BlockStateId;
 use pumpkin_data::HorizontalFacingExt;
 use pumpkin_data::block_properties::AttachFace;
-use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_util::math::position::BlockPos;
@@ -44,7 +43,7 @@ fn get_sound(block: &Block, on: bool) -> Sound {
 fn click_button(world: &Arc<World>, block_pos: &BlockPos) {
     let (block, state) = world.get_block_and_state_id(block_pos);
 
-    let mut button_props = ButtonLikeProperties::from_state_id(state, block);
+    let mut button_props = ButtonLikeProperties::from_state_id(state);
     if !button_props.powered {
         button_props.powered = true;
         world.set_block_state(
@@ -75,7 +74,7 @@ impl BlockBehaviour for ButtonBlock {
 
     fn on_scheduled_tick(&self, args: OnScheduledTickArgs<'_>) {
         let state = args.world.get_block_state(args.position);
-        let mut props = ButtonLikeProperties::from_state_id(state.id, args.block);
+        let mut props = ButtonLikeProperties::from_state_id(state.id);
         props.powered = false;
         args.world.set_block_state(
             args.position,
@@ -89,12 +88,12 @@ impl BlockBehaviour for ButtonBlock {
     }
 
     fn get_weak_redstone_power(&self, args: GetRedstonePowerArgs<'_>) -> u8 {
-        let button_props = ButtonLikeProperties::from_state_id(args.state.id, args.block);
+        let button_props = ButtonLikeProperties::from_state_id(args.state.id);
         if button_props.powered { 15 } else { 0 }
     }
 
     fn get_strong_redstone_power(&self, args: GetRedstonePowerArgs<'_>) -> u8 {
-        let button_props = ButtonLikeProperties::from_state_id(args.state.id, args.block);
+        let button_props = ButtonLikeProperties::from_state_id(args.state.id);
         if button_props.powered && button_props.get_direction() == args.direction {
             15
         } else {
@@ -104,7 +103,7 @@ impl BlockBehaviour for ButtonBlock {
 
     fn on_state_replaced(&self, args: OnStateReplacedArgs<'_>) {
         if !args.moved {
-            let button_props = ButtonLikeProperties::from_state_id(args.old_state_id, args.block);
+            let button_props = ButtonLikeProperties::from_state_id(args.old_state_id);
             if button_props.powered {
                 Self::update_neighbors(args.world, args.position, button_props);
             }
@@ -112,8 +111,7 @@ impl BlockBehaviour for ButtonBlock {
     }
 
     fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
-        let mut props =
-            ButtonLikeProperties::from_state_id(args.block.default_state.id, args.block);
+        let mut props = ButtonLikeProperties::from_state_id(args.block.default_state.id);
         (props.face, props.facing) =
             WallMountedBlock::get_placement_face(self, args.player, args.direction);
 
@@ -138,8 +136,8 @@ impl BlockBehaviour for ButtonBlock {
 }
 
 impl WallMountedBlock for ButtonBlock {
-    fn get_direction(&self, state_id: BlockStateId, block: &Block) -> BlockDirection {
-        let props = ButtonLikeProperties::from_state_id(state_id, block);
+    fn get_direction(&self, state_id: BlockStateId, _block: &Block) -> BlockDirection {
+        let props = ButtonLikeProperties::from_state_id(state_id);
         match props.face {
             AttachFace::Floor => BlockDirection::Up,
             AttachFace::Ceiling => BlockDirection::Down,

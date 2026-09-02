@@ -4,7 +4,7 @@ use crate::block::{
     BlockBehaviour, EmitsRedstonePowerArgs, GetRedstonePowerArgs, OnPlaceArgs, OnScheduledTickArgs,
 };
 use crate::world::World;
-use pumpkin_data::block_properties::{BlockProperties, LightningRodLikeProperties};
+use pumpkin_data::block_properties::LightningRodLikeProperties;
 use pumpkin_data::{BlockStateId, FacingExt};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
@@ -17,7 +17,7 @@ pub struct LightningRodBlock;
 impl LightningRodBlock {
     pub fn trigger(world: &Arc<World>, pos: &BlockPos) {
         let (block, state_id) = world.get_block_and_state_id(pos);
-        let mut props = LightningRodLikeProperties::from_state_id(state_id, block);
+        let mut props = LightningRodLikeProperties::from_state_id(state_id);
         if !props.powered {
             props.powered = true;
             world.set_block_state(pos, props.to_state_id(block), BlockFlags::NOTIFY_ALL);
@@ -49,12 +49,12 @@ impl BlockBehaviour for LightningRodBlock {
     }
 
     fn get_weak_redstone_power(&self, args: GetRedstonePowerArgs<'_>) -> u8 {
-        let props = LightningRodLikeProperties::from_state_id(args.state.id, args.block);
+        let props = LightningRodLikeProperties::from_state_id(args.state.id);
         if props.powered { 15 } else { 0 }
     }
 
     fn get_strong_redstone_power(&self, args: GetRedstonePowerArgs<'_>) -> u8 {
-        let props = LightningRodLikeProperties::from_state_id(args.state.id, args.block);
+        let props = LightningRodLikeProperties::from_state_id(args.state.id);
         // It emits strong power only in its facing direction (the direction pointing outward)
         if props.powered && props.facing.to_block_direction() == args.direction {
             15
@@ -65,7 +65,7 @@ impl BlockBehaviour for LightningRodBlock {
 
     fn on_scheduled_tick(&self, args: OnScheduledTickArgs<'_>) {
         let state = args.world.get_block_state(args.position);
-        let mut props = LightningRodLikeProperties::from_state_id(state.id, args.block);
+        let mut props = LightningRodLikeProperties::from_state_id(state.id);
         if props.powered {
             props.powered = false;
             args.world.set_block_state(

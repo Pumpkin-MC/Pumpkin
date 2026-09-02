@@ -14,9 +14,7 @@ use crate::entity::EntityBase;
 use crate::entity::ai::pathfinder::node::Coordinate;
 use crate::world::World;
 use pumpkin_data::BlockStateId;
-use pumpkin_data::block_properties::{
-    BigDripleafLikeProperties, BlockProperties, HorizontalFacing, Tilt,
-};
+use pumpkin_data::block_properties::{BigDripleafLikeProperties, HorizontalFacing, Tilt};
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::Taggable;
 use pumpkin_data::{Block, tag};
@@ -32,7 +30,7 @@ pub struct BigDripleafBlock;
 impl BlockBehaviour for BigDripleafBlock {
     fn on_entity_step(&self, args: OnEntityStepArgs<'_>) {
         {
-            let props = BigDripleafLikeProperties::from_state_id(args.state.id, args.block);
+            let props = BigDripleafLikeProperties::from_state_id(args.state.id);
             if props.tilt == Tilt::None
                 && can_entity_tilt(args.position, args.entity)
                 && !block_receives_redstone_power(args.world, args.position)
@@ -49,7 +47,7 @@ impl BlockBehaviour for BigDripleafBlock {
     }
     fn on_scheduled_tick(&self, args: OnScheduledTickArgs<'_>) {
         let state = args.world.get_block_state(args.position);
-        let props = BigDripleafLikeProperties::from_state_id(state.id, &Block::BIG_DRIPLEAF);
+        let props = BigDripleafLikeProperties::from_state_id(state.id);
 
         if props.tilt == Tilt::Unstable {
             set_tilt_and_schedule_tick(
@@ -121,10 +119,7 @@ impl BlockBehaviour for BigDripleafBlock {
             let support_pos = args.position.down();
             let (support_block, support_state_id) = args.world.get_block_and_state_id(&support_pos);
             if support_block == &Block::BIG_DRIPLEAF {
-                let old_dripleaf_props = BigDripleafLikeProperties::from_state_id(
-                    support_state_id,
-                    &Block::BIG_DRIPLEAF,
-                );
+                let old_dripleaf_props = BigDripleafLikeProperties::from_state_id(support_state_id);
                 let mut dripleaf_stem_props =
                     BigDripleafStemLikeProperties::default(&Block::BIG_DRIPLEAF_STEM);
 
@@ -171,14 +166,14 @@ fn set_tilt_and_schedule_tick(
 
 fn reset_tilt(state_id: BlockStateId, world: &Arc<World>, pos: &BlockPos) {
     set_tilt(state_id, world, pos, Tilt::None);
-    let props = BigDripleafLikeProperties::from_state_id(state_id, &Block::BIG_DRIPLEAF);
+    let props = BigDripleafLikeProperties::from_state_id(state_id);
     if props.tilt != Tilt::None {
         play_tilt_sound(world, pos, Sound::BlockBigDripleafTiltUp);
     }
 }
 
 fn set_tilt(state_id: BlockStateId, world: &Arc<World>, pos: &BlockPos, new_tilt: Tilt) {
-    let mut props = BigDripleafLikeProperties::from_state_id(state_id, &Block::BIG_DRIPLEAF);
+    let mut props = BigDripleafLikeProperties::from_state_id(state_id);
     props.tilt = new_tilt;
     world.set_block_state(
         pos,
@@ -198,12 +193,12 @@ fn can_entity_tilt<T: EntityBase + ?Sized>(pos: &BlockPos, entity: &T) -> bool {
         && entity.get_entity().pos.load().y > pos.as_vector3().y as f64 + 0.6875f64
 }
 fn get_dripleaf_facing_dir(state_id: BlockStateId) -> HorizontalFacing {
-    let dripleaf_props = BigDripleafLikeProperties::from_state_id(state_id, &Block::BIG_DRIPLEAF);
+    let dripleaf_props = BigDripleafLikeProperties::from_state_id(state_id);
     dripleaf_props.facing
 }
 
 fn is_dripleaf_waterlogged(state_id: BlockStateId) -> bool {
-    let dripleaf_props = BigDripleafLikeProperties::from_state_id(state_id, &Block::BIG_DRIPLEAF);
+    let dripleaf_props = BigDripleafLikeProperties::from_state_id(state_id);
     dripleaf_props.waterlogged
 }
 impl PlantBlockBase for BigDripleafBlock {

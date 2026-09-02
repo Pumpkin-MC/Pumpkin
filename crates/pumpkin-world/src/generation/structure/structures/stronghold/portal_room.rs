@@ -1,7 +1,7 @@
 use pumpkin_data::{
     Block, BlockState,
     block_properties::{
-        BlockProperties, EndPortalFrameLikeProperties, HorizontalFacing, OakFenceLikeProperties,
+        EndPortalFrameLikeProperties, HorizontalFacing, OakFenceLikeProperties,
         OakStairsLikeProperties,
     },
 };

@@ -5,10 +5,7 @@ use crate::block::{
     OnScheduledTickArgs, OnStateReplacedArgs,
 };
 use crate::entity::EntityBase;
-use pumpkin_data::{
-    Block, BlockStateId, FacingExt,
-    block_properties::{BlockProperties, ObserverLikeProperties},
-};
+use pumpkin_data::{Block, BlockStateId, FacingExt, block_properties::ObserverLikeProperties};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::{tick::TickPriority, world::BlockFlags};
@@ -27,7 +24,7 @@ impl BlockBehaviour for ObserverBlock {
 
     fn on_scheduled_tick(&self, args: OnScheduledTickArgs<'_>) {
         let state = args.world.get_block_state(args.position);
-        let mut props = ObserverLikeProperties::from_state_id(state.id, args.block);
+        let mut props = ObserverLikeProperties::from_state_id(state.id);
 
         if props.powered {
             props.powered = false;
@@ -52,7 +49,7 @@ impl BlockBehaviour for ObserverBlock {
         &self,
         args: GetStateForNeighborUpdateArgs<'_>,
     ) -> BlockStateId {
-        let props = ObserverLikeProperties::from_state_id(args.state_id, args.block);
+        let props = ObserverLikeProperties::from_state_id(args.state_id);
 
         if props.facing.to_block_direction() == args.direction
             && !props.powered
@@ -71,7 +68,7 @@ impl BlockBehaviour for ObserverBlock {
     }
 
     fn get_weak_redstone_power(&self, args: GetRedstonePowerArgs<'_>) -> u8 {
-        let props = ObserverLikeProperties::from_state_id(args.state.id, args.block);
+        let props = ObserverLikeProperties::from_state_id(args.state.id);
         if props.facing.to_block_direction() == args.direction && props.powered {
             15
         } else {
@@ -85,7 +82,7 @@ impl BlockBehaviour for ObserverBlock {
 
     fn on_state_replaced(&self, args: OnStateReplacedArgs<'_>) {
         if !args.moved {
-            let props = ObserverLikeProperties::from_state_id(args.old_state_id, args.block);
+            let props = ObserverLikeProperties::from_state_id(args.old_state_id);
             if props.powered
                 && args
                     .world

@@ -1,5 +1,5 @@
 use pumpkin_data::BlockStateId;
-use pumpkin_data::block_properties::{BlockProperties, CactusLikeProperties};
+use pumpkin_data::block_properties::CactusLikeProperties;
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::tag::Taggable;
 use pumpkin_data::{Block, BlockDirection, tag};
@@ -29,7 +29,7 @@ impl BlockBehaviour for CactusBlock {
         let block_up = args.position.up();
         if args.world.get_block_state(&block_up).is_air() {
             let state = args.world.get_block_state(args.position);
-            let mut props = CactusLikeProperties::from_state_id(state.id, args.block);
+            let mut props = CactusLikeProperties::from_state_id(state.id);
             let age = props.age;
             let mut i = 1;
             while args.world.get_block(&args.position.down_height(i)) == &Block::CACTUS {

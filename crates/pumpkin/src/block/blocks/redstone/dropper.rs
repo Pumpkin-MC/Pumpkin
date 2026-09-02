@@ -14,7 +14,7 @@ use crate::entity::{Entity, EntityBase};
 use crate::block::entities::dropper::DropperBlockEntity;
 use crate::block::entities::hopper::HopperBlockEntity;
 use pumpkin_data::BlockStateId;
-use pumpkin_data::block_properties::{BlockProperties, Facing};
+use pumpkin_data::block_properties::Facing;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::world::WorldEvent;
 use pumpkin_data::{FacingExt, translation};
@@ -110,10 +110,8 @@ impl BlockBehaviour for DropperBlock {
         let powered = block_receives_redstone_power(args.world, args.position)
             || block_receives_redstone_power(args.world, &args.position.up());
 
-        let mut props = DispenserLikeProperties::from_state_id(
-            args.world.get_block_state(args.position).id,
-            args.block,
-        );
+        let mut props =
+            DispenserLikeProperties::from_state_id(args.world.get_block_state(args.position).id);
 
         if powered && !props.triggered {
             args.world
@@ -135,14 +133,14 @@ impl BlockBehaviour for DropperBlock {
     }
 
     fn on_scheduled_tick(&self, args: OnScheduledTickArgs<'_>) {
-        let (block, state) = args.world.get_block_and_state(args.position);
+        let (_block, state) = args.world.get_block_and_state(args.position);
         if let Some(block_entity) = args.world.get_block_entity(args.position) {
             let Some(dropper) = block_entity.as_any().downcast_ref::<DropperBlockEntity>() else {
                 return;
             };
 
             if let Some((slot_index, mut item)) = dropper.get_random_slot() {
-                let props = DispenserLikeProperties::from_state_id(state.id, block);
+                let props = DispenserLikeProperties::from_state_id(state.id);
 
                 let target_pos = args
                     .position
