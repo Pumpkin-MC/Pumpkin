@@ -6,6 +6,7 @@ use crate::codec::var_int::VarInt;
 use crate::ser::{NetworkReadExt, NetworkWriteExt, ReadingError, WritingError};
 use pumpkin_data::Enchantment;
 use pumpkin_data::data_component::DataComponent;
+use pumpkin_data::data_component_impl::*;
 use pumpkin_data::data_component_impl::{
     AxolotlVariantImpl, BlockStateImpl, BundleContentsImpl, CatCollarImpl, CatSoundVariantImpl,
     CatVariantImpl, ChickenSoundVariantImpl, ChickenVariantImpl, ConsumableImpl, ConsumeAnimation,
@@ -22,7 +23,6 @@ use pumpkin_data::data_component_impl::{
     UnbreakableImpl, UseCooldownImpl, VillagerVariantImpl, WolfCollarImpl, WolfSoundVariantImpl,
     WolfVariantImpl, ZombieNautilusVariantImpl, get,
 };
-use pumpkin_data::data_component_impl::*;
 
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::entity::EntityType;
@@ -1007,7 +1007,10 @@ pub fn deserialize(
         DataComponent::ChargedProjectiles => Ok(ChargedProjectilesImpl::deserialize(seq)?.to_dyn()),
         DataComponent::BundleContents => Ok(BundleContentsImpl::deserialize(seq)?.to_dyn()),
         DataComponent::BlockState => Ok(BlockStateImpl::deserialize(seq)?.to_dyn()),
-        _ => Err(ReadingError::Message(format!("component_id_{} (TODO)", id.to_id()))),
+        _ => Err(ReadingError::Message(format!(
+            "component_id_{} (TODO)",
+            id.to_id()
+        ))),
         DataComponent::PotionContents => Ok(PotionContentsImpl::deserialize(seq)?.to_dyn()),
         DataComponent::PotionDurationScale => {
             Ok(PotionDurationScaleImpl::deserialize(seq)?.to_dyn())
@@ -1504,6 +1507,9 @@ mod tests {
 
         let error = BlockStateImpl::deserialize(&mut encoded.as_slice());
         assert!(error.is_err());
+    }
+}
+
 impl DataComponentCodec<Self> for MaxDamageImpl {
     fn serialize(&self, seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
         seq.write_var_int(&VarInt::from(self.max_damage))
