@@ -107,7 +107,7 @@ pub mod vehicle;
 
 pub use lightning::LightningBoltEntity;
 
-mod combat;
+pub(crate) mod combat;
 pub mod predicate;
 
 /// The maximum number of scoreboard tags an entity can carry, matching Vanilla.

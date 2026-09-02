@@ -448,8 +448,48 @@ impl DataComponentImpl for ProvidesBannerPatternsImpl {
 }
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct BannerPatternsImpl;
+pub struct BannerPatternLayer {
+    pub pattern: String,
+    pub color: crate::dye_color::DyeColor,
+}
+
+#[derive(Clone, Debug, Hash, PartialEq, Eq, Default)]
+pub struct BannerPatternsImpl {
+    pub layers: Vec<BannerPatternLayer>,
+}
+
+impl BannerPatternsImpl {
+    pub const EMPTY: Self = Self { layers: Vec::new() };
+
+    #[must_use]
+    pub fn read_data(data: &NbtTag) -> Option<Self> {
+        let mut layers = Vec::new();
+        if let NbtTag::List(list) = data {
+            for tag in list {
+                if let Some(compound) = tag.extract_compound() {
+                    let pattern = compound.get_string("pattern")?.to_string();
+                    let color_str = compound.get_string("color")?;
+                    let color = crate::dye_color::DyeColor::by_name(color_str).unwrap_or_default();
+                    layers.push(BannerPatternLayer { pattern, color });
+                }
+            }
+        }
+        Some(Self { layers })
+    }
+}
+
 impl DataComponentImpl for BannerPatternsImpl {
+    fn write_data(&self) -> NbtTag {
+        let mut list = Vec::new();
+        for layer in &self.layers {
+            let mut compound = NbtCompound::new();
+            compound.put_string("pattern", layer.pattern.clone());
+            compound.put_string("color", layer.color.name().to_string());
+            list.push(NbtTag::Compound(compound));
+        }
+        NbtTag::List(list)
+    }
+
     default_impl!(BannerPatterns);
 }
 

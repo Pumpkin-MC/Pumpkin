@@ -246,7 +246,12 @@ impl JavaClient {
                     player.swap_item();
                 }
                 Status::SpearJab => {
-                    debug!("todo");
+                    if player.gamemode.load() == GameMode::Spectator {
+                        return;
+                    }
+
+                    let stack = player.inventory().held_item();
+                    server.item_registry.on_spear_jab(&stack, player);
                 }
             },
             Err(_) => self.try_kick(&TextComponent::text("Invalid status")),

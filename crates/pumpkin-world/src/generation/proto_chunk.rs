@@ -629,26 +629,10 @@ impl ProtoChunk {
 
         for (key, instance) in &self.structure_starts {
             let structure = pumpkin_data::structures::Structure::get(key);
-            let terrain_adaptation = match structure.terrain_adaptation {
-                pumpkin_data::structures::TerrainAdaptation::None => {
-                    crate::generation::noise::router::density_function::beardifier::TerrainAdaptation::None
-                }
-                pumpkin_data::structures::TerrainAdaptation::BeardThin => {
-                    crate::generation::noise::router::density_function::beardifier::TerrainAdaptation::BeardThin
-                }
-                pumpkin_data::structures::TerrainAdaptation::BeardBox => {
-                    crate::generation::noise::router::density_function::beardifier::TerrainAdaptation::BeardBox
-                }
-                pumpkin_data::structures::TerrainAdaptation::Bury => {
-                    crate::generation::noise::router::density_function::beardifier::TerrainAdaptation::Bury
-                }
-                pumpkin_data::structures::TerrainAdaptation::Encapsulate => {
-                    crate::generation::noise::router::density_function::beardifier::TerrainAdaptation::Encapsulate
-                }
-            };
+            let terrain_adaptation = structure.terrain_adaptation;
 
             // Vanilla strictly skips filtering Beardifier parts if adaptation is None early-on
-            if terrain_adaptation == crate::generation::noise::router::density_function::beardifier::TerrainAdaptation::None {
+            if terrain_adaptation == pumpkin_data::structures::TerrainAdaptation::None {
                 continue;
             }
 
@@ -681,16 +665,16 @@ impl ProtoChunk {
                     if jigsaw_piece.projection == crate::generation::structure::structures::jigsaw::JigsawProjection::Rigid {
                         ground_level_delta = jigsaw_piece.ground_level_delta;
                         any_piece_bounding_box = any_piece_bounding_box.map_or(Some(bounding_box), |mut b| {
-                                 b.encompass(&bounding_box);
-                                 Some(b)
-                             });
+                            b.encompass(&bounding_box);
+                            Some(b)
+                        });
 
                         beardifier_structures.push(
                             crate::generation::noise::router::density_function::beardifier::BeardifierStructure {
                                 bounding_box,
                                 terrain_adaptation,
                                 ground_level_delta,
-                            }
+                            },
                         );
                     }
 
@@ -708,27 +692,27 @@ impl ProtoChunk {
                                     x: j_x,
                                     ground_y: j.source_ground_y,
                                     z: j_z,
-                                }
+                                },
                             );
-                            let _junction_box = BlockBox::from_pos(BlockPos::new(j_x, j.source_ground_y, j_z));
-                     any_piece_bounding_box = any_piece_bounding_box.map_or(Some(bounding_box), |mut b| {
-                            b.encompass(&bounding_box);
-                             Some(b)
-                        });
+                            let junction_box = BlockBox::from_pos(BlockPos::new(j_x, j.source_ground_y, j_z));
+                            any_piece_bounding_box = any_piece_bounding_box.map_or(Some(junction_box), |mut b| {
+                                b.encompass(&junction_box);
+                                Some(b)
+                            });
                         }
                     }
                 } else {
-                        any_piece_bounding_box = any_piece_bounding_box.map_or(Some(bounding_box), |mut b| {
-                            b.encompass(&bounding_box);
-                             Some(b)
-                         });
+                    any_piece_bounding_box = any_piece_bounding_box.map_or(Some(bounding_box), |mut b| {
+                        b.encompass(&bounding_box);
+                        Some(b)
+                    });
 
                     beardifier_structures.push(
                         crate::generation::noise::router::density_function::beardifier::BeardifierStructure {
                             bounding_box,
                             terrain_adaptation,
                             ground_level_delta,
-                        }
+                        },
                     );
                 }
             }
