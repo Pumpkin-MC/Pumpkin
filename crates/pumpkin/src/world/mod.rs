@@ -1269,17 +1269,7 @@ impl World {
         offset: Vector3<f32>,
         max_speed: f32,
     ) {
-        let packet = CParticle::new(
-            false,
-            false,
-            pos,
-            offset,
-            max_speed,
-            count as i32,
-            (particle.to_id() as i32).into(),
-            &[],
-        );
-        self.broadcast_packet_all(&packet);
+        self.spawn_particle(pos, offset, max_speed, count as i32, particle);
     }
 
     /// Plays a Bedrock level sound for players close enough to hear it.
