@@ -1,5 +1,5 @@
-use crate::chunk::ChunkData;
 use crate::chunk::format::LightContainer;
+use crate::chunk::{ChunkData, ChunkLight};
 use crate::chunk_system::Chunk;
 use crate::chunk_system::generation_cache::Cache;
 use crate::generation::height_limit::HeightLimitView;
@@ -19,42 +19,40 @@ use crate::ProtoChunk;
 pub trait LightProvider {
     fn get_light(cache: &Cache, pos: BlockPos) -> u8;
     fn set_light(cache: &mut Cache, pos: BlockPos, level: u8);
-    fn get_light_proto(
-        chunk: &ProtoChunk,
-        section_idx: usize,
-        lx: usize,
-        ly: usize,
-        lz: usize,
-    ) -> u8;
-    fn set_light_proto(
-        chunk: &mut ProtoChunk,
-        section_idx: usize,
-        lx: usize,
-        ly: usize,
-        lz: usize,
-        level: u8,
-    );
-    /// Level-chunk counterparts of the two `*_proto` accessors above.
+    /// The layer this provider drives, so a caller can take a chunk's light guard once and
+    /// then read and write through it instead of locking per nibble.
     ///
     /// [`Self::get_light`] and [`Self::set_light`] derive chunk index, section and local
     /// coordinates from the `BlockPos` all over again. Every caller inside the propagation
     /// loop has them already, so those two exist for callers that do not.
-    fn get_light_level(
-        chunk: &ChunkData,
-        section_idx: usize,
-        lx: usize,
-        ly: usize,
-        lz: usize,
-    ) -> u8;
-    fn set_light_level(
-        chunk: &ChunkData,
-        section_idx: usize,
-        lx: usize,
-        ly: usize,
-        lz: usize,
-        level: u8,
-    );
+    fn proto_sections(chunk: &ProtoChunk) -> &[LightContainer];
+    fn proto_sections_mut(chunk: &mut ProtoChunk) -> &mut [LightContainer];
+    fn level_sections_mut(light: &mut ChunkLight) -> &mut [LightContainer];
+    /// What a proto chunk reads back where the section is not stored.
+    const PROTO_MISSING: u8;
     fn propagate_level(current_level: u8, opacity: u8, dir: BlockDirection) -> u8;
+}
+
+/// Light of one cell, with the layer's default where the section is absent.
+#[inline]
+fn light_in(sections: &[LightContainer], idx: usize, lx: usize, ly: usize, lz: usize, missing: u8) -> u8 {
+    sections.get(idx).map_or(missing, |s| s.get(lx, ly, lz))
+}
+
+/// `false` when the section is absent and the write cannot land.
+#[inline]
+fn set_light_in(
+    sections: &mut [LightContainer],
+    idx: usize,
+    lx: usize,
+    ly: usize,
+    lz: usize,
+    level: u8,
+) -> bool {
+    sections.get_mut(idx).is_some_and(|s| {
+        s.set(lx, ly, lz, level);
+        true
+    })
 }
 
 pub struct BlockLightProvider;
@@ -68,76 +66,18 @@ impl LightProvider for BlockLightProvider {
         set_block_light(cache, pos, level);
     }
     #[inline]
-    fn get_light_proto(
-        chunk: &ProtoChunk,
-        section_idx: usize,
-        lx: usize,
-        ly: usize,
-        lz: usize,
-    ) -> u8 {
-        chunk
-            .light
-            .block_light
-            .get(section_idx)
-            .map_or(0, |c| c.get(lx, ly, lz))
+    fn proto_sections(chunk: &ProtoChunk) -> &[LightContainer] {
+        &chunk.light.block_light
     }
     #[inline]
-    fn set_light_proto(
-        chunk: &mut ProtoChunk,
-        section_idx: usize,
-        lx: usize,
-        ly: usize,
-        lz: usize,
-        level: u8,
-    ) {
-        if let Some(c) = chunk.light.block_light.get_mut(section_idx) {
-            c.set(lx, ly, lz, level);
-        }
+    fn proto_sections_mut(chunk: &mut ProtoChunk) -> &mut [LightContainer] {
+        &mut chunk.light.block_light
     }
     #[inline]
-    fn get_light_level(
-        chunk: &ChunkData,
-        section_idx: usize,
-        lx: usize,
-        ly: usize,
-        lz: usize,
-    ) -> u8 {
-        chunk
-            .light_engine
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .block_light
-            .get(section_idx)
-            .map_or(0, |c| c.get(lx, ly, lz))
+    fn level_sections_mut(light: &mut ChunkLight) -> &mut [LightContainer] {
+        &mut light.block_light
     }
-    #[inline]
-    fn set_light_level(
-        chunk: &ChunkData,
-        section_idx: usize,
-        lx: usize,
-        ly: usize,
-        lz: usize,
-        level: u8,
-    ) {
-        let written = {
-            let mut light_engine = chunk
-                .light_engine
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            light_engine
-                .block_light
-                .get_mut(section_idx)
-                .is_some_and(|c| {
-                    c.set(lx, ly, lz, level);
-                    true
-                })
-        };
-        if written {
-            chunk
-                .dirty
-                .store(true, std::sync::atomic::Ordering::Relaxed);
-        }
-    }
+    const PROTO_MISSING: u8 = 0;
     #[inline]
     fn propagate_level(current_level: u8, opacity: u8, _dir: BlockDirection) -> u8 {
         decayed(current_level, opacity)
@@ -155,76 +95,19 @@ impl LightProvider for SkyLightProvider {
         set_sky_light(cache, pos, level);
     }
     #[inline]
-    fn get_light_proto(
-        chunk: &ProtoChunk,
-        section_idx: usize,
-        lx: usize,
-        ly: usize,
-        lz: usize,
-    ) -> u8 {
-        chunk
-            .light
-            .sky_light
-            .get(section_idx)
-            .map_or(15, |c| c.get(lx, ly, lz))
+    fn proto_sections(chunk: &ProtoChunk) -> &[LightContainer] {
+        &chunk.light.sky_light
     }
     #[inline]
-    fn set_light_proto(
-        chunk: &mut ProtoChunk,
-        section_idx: usize,
-        lx: usize,
-        ly: usize,
-        lz: usize,
-        level: u8,
-    ) {
-        if let Some(c) = chunk.light.sky_light.get_mut(section_idx) {
-            c.set(lx, ly, lz, level);
-        }
+    fn proto_sections_mut(chunk: &mut ProtoChunk) -> &mut [LightContainer] {
+        &mut chunk.light.sky_light
     }
     #[inline]
-    fn get_light_level(
-        chunk: &ChunkData,
-        section_idx: usize,
-        lx: usize,
-        ly: usize,
-        lz: usize,
-    ) -> u8 {
-        chunk
-            .light_engine
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .sky_light
-            .get(section_idx)
-            .map_or(0, |c| c.get(lx, ly, lz))
+    fn level_sections_mut(light: &mut ChunkLight) -> &mut [LightContainer] {
+        &mut light.sky_light
     }
-    #[inline]
-    fn set_light_level(
-        chunk: &ChunkData,
-        section_idx: usize,
-        lx: usize,
-        ly: usize,
-        lz: usize,
-        level: u8,
-    ) {
-        let written = {
-            let mut light_engine = chunk
-                .light_engine
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            light_engine
-                .sky_light
-                .get_mut(section_idx)
-                .is_some_and(|c| {
-                    c.set(lx, ly, lz, level);
-                    true
-                })
-        };
-        if written {
-            chunk
-                .dirty
-                .store(true, std::sync::atomic::Ordering::Relaxed);
-        }
-    }
+    /// A proto chunk that has not sized its sky storage yet reads as open sky.
+    const PROTO_MISSING: u8 = 15;
     #[inline]
     fn propagate_level(current_level: u8, opacity: u8, dir: BlockDirection) -> u8 {
         if dir == BlockDirection::Down {
@@ -382,8 +265,28 @@ impl<P: LightProvider> LightPropagator<P> {
         local_z: usize,
     ) -> u8 {
         match chunk {
-            Chunk::Proto(c) => P::get_light_proto(c, section_idx, local_x, local_y, local_z),
-            Chunk::Level(lvl) => P::get_light_level(lvl, section_idx, local_x, local_y, local_z),
+            Chunk::Proto(c) => light_in(
+                P::proto_sections(c),
+                section_idx,
+                local_x,
+                local_y,
+                local_z,
+                P::PROTO_MISSING,
+            ),
+            Chunk::Level(lvl) => {
+                let mut light = lvl
+                    .light_engine
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                light_in(
+                    P::level_sections_mut(&mut light),
+                    section_idx,
+                    local_x,
+                    local_y,
+                    local_z,
+                    0,
+                )
+            }
         }
     }
 
@@ -409,9 +312,34 @@ impl<P: LightProvider> LightPropagator<P> {
         level: u8,
     ) {
         match chunk {
-            Chunk::Proto(c) => P::set_light_proto(c, section_idx, local_x, local_y, local_z, level),
+            Chunk::Proto(c) => {
+                set_light_in(
+                    P::proto_sections_mut(c),
+                    section_idx,
+                    local_x,
+                    local_y,
+                    local_z,
+                    level,
+                );
+            }
             Chunk::Level(lvl) => {
-                P::set_light_level(lvl, section_idx, local_x, local_y, local_z, level);
+                let wrote = {
+                    let mut light = lvl
+                        .light_engine
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner);
+                    set_light_in(
+                        P::level_sections_mut(&mut light),
+                        section_idx,
+                        local_x,
+                        local_y,
+                        local_z,
+                        level,
+                    )
+                };
+                if wrote {
+                    lvl.dirty.store(true, std::sync::atomic::Ordering::Relaxed);
+                }
             }
         }
     }
@@ -464,7 +392,6 @@ impl<P: LightProvider> LightPropagator<P> {
                 let chunk_idx = (rel_x * cache_size + rel_z) as usize;
                 let local_x = (nx & 15) as usize;
                 let local_z = (nz & 15) as usize;
-
                 let section_idx = ((ny - min_y) >> 4) as usize;
                 let local_y = (ny & 15) as usize;
 
