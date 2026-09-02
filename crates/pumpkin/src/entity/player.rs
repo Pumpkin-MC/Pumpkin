@@ -1472,10 +1472,11 @@ impl Player {
             EquipmentSlot::Body(_) | EquipmentSlot::Saddle(_) => return false,
         };
 
-        let mut stack = self.inventory.get_slot(slot_index);
-        let result = stack.damage_item(amount);
-        let updated = (result != pumpkin_data::item_stack::DamageResult::Untouched)
-            .then_some((result, stack.clone()));
+        let updated = self
+            .inventory()
+            .damage_stack(slot_index, amount)
+            .await
+            .filter(|(result, _)| *result != pumpkin_data::item_stack::DamageResult::Untouched);
 
         if let Some((result, updated_stack)) = updated {
             self.inventory.set_slot(slot_index, updated_stack.clone());

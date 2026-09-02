@@ -12,7 +12,7 @@ use crate::screen_handler::InventoryPlayer;
 
 use pumpkin_data::data_component_impl::EquipmentSlot;
 use pumpkin_data::item::Item;
-use pumpkin_data::item_stack::ItemStack;
+use pumpkin_data::item_stack::{DamageResult, ItemStack};
 use pumpkin_protocol::java::client::play::CSetPlayerInventory;
 use pumpkin_util::Hand;
 use pumpkin_world::inventory::{Clearable, Inventory};
@@ -130,6 +130,33 @@ impl PlayerInventory {
                     .put(slot, stack);
             }
         }
+    }
+
+    /// Applies durability damage to a stack and persists the updated stack in the inventory.
+    ///
+    /// Returns `None` when `slot` is not a valid player inventory or equipment slot.
+    pub async fn damage_stack(
+        &self,
+        slot: usize,
+        amount: i32,
+    ) -> Option<(DamageResult, ItemStack)> {
+        if slot < Self::MAIN_SIZE {
+            let mut inventory = self.main_inventory.write().await;
+            let stack = &mut inventory[slot];
+            let result = stack.damage_item(amount);
+            return Some((result, stack.clone()));
+        }
+
+        let equipment_slot = self.equipment_slots.get(&slot)?;
+        let mut equipment = self.entity_equipment.lock().await;
+        let mut stack = equipment.get(equipment_slot);
+        let result = stack.damage_item(amount);
+
+        if result != DamageResult::Untouched {
+            equipment.put(equipment_slot, stack.clone());
+        }
+
+        Some((result, stack))
     }
 
     /// Gets the item in the specified hand.
@@ -617,5 +644,55 @@ impl PlayerInventory {
     /// Gets the currently selected hotbar slot index.
     pub fn get_selected_slot(&self) -> u8 {
         self.selected_slot.load(Ordering::Relaxed)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::build_equipment_slots;
+
+    fn player_inventory() -> PlayerInventory {
+        PlayerInventory::new(
+            Arc::new(Mutex::new(EntityEquipment::new())),
+            Arc::new(build_equipment_slots()),
+        )
+    }
+
+    #[tokio::test]
+    async fn damage_stack_persists_main_inventory_durability() {
+        let inventory = player_inventory();
+        inventory
+            .set_stack(0, ItemStack::new(1, &Item::IRON_PICKAXE))
+            .await;
+
+        let damaged = inventory.damage_stack(0, 1).await;
+
+        assert!(matches!(damaged, Some((DamageResult::Damaged, _))));
+        assert_eq!(inventory.get_stack(0).await.get_damage(), 1);
+    }
+
+    #[tokio::test]
+    async fn damage_stack_persists_equipment_durability() {
+        let inventory = player_inventory();
+        inventory
+            .set_stack(
+                PlayerInventory::OFF_HAND_SLOT,
+                ItemStack::new(1, &Item::SHIELD),
+            )
+            .await;
+
+        let damaged = inventory
+            .damage_stack(PlayerInventory::OFF_HAND_SLOT, 1)
+            .await;
+
+        assert!(matches!(damaged, Some((DamageResult::Damaged, _))));
+        assert_eq!(
+            inventory
+                .get_stack(PlayerInventory::OFF_HAND_SLOT)
+                .await
+                .get_damage(),
+            1
+        );
     }
 }
