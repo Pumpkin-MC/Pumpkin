@@ -236,11 +236,8 @@ impl BrewingStandBlockEntity {
                 .get_item()
                 .has_tag(&tag::Item::MINECRAFT_BREWING_FUEL)
         {
-            Some(items[4].clone())
+            items[4].clone()
         } else {
-            None
-        };
-        let Some(expected_fuel) = expected_fuel else {
             return false;
         };
 
