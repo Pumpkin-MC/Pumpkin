@@ -44,7 +44,6 @@ impl EndPodiumFeature {
         let mut oy = origin.0.y;
         let oz = origin.0.z;
 
-        // Podium spans [ox - 4, ox + 4] and [oz - 4, oz + 4]
         if ox + 4 < min_x || ox - 4 > max_x || oz + 4 < min_z || oz - 4 > max_z {
             return false;
         }
@@ -76,7 +75,7 @@ impl EndPodiumFeature {
                         if y < oy {
                             if closer_than_2_5 {
                                 chunk.set_block_state(&target, Block::BEDROCK.default_state);
-                            } else if self.active {
+                            } else {
                                 chunk.set_block_state(&target, Block::END_STONE.default_state);
                             }
                         } else if y > oy {

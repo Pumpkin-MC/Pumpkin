@@ -17,7 +17,7 @@ use rustc_hash::FxHashMap;
 use crate::{
     block::{
         BlockBehaviour, BlockMetadata, BrokenArgs, OnNeighborUpdateArgs, OnPlaceArgs,
-        OnSyncedBlockEventArgs, PlacedArgs,
+        OnSyncedBlockEventArgs, PathComputationType, PlacedArgs,
         blocks::{piston::piston_head::PistonHeadProperties, redstone::is_emitting_redstone_power},
     },
     world::World,
@@ -120,6 +120,10 @@ impl BlockBehaviour for PistonBlock {
         let block_id = args.block.id;
         let block = Block::from_id(block_id);
         Self::handle_synced_block_event(block, args.world, args.position, args.r#type, args.data)
+    }
+
+    fn is_pathfindable(&self, _state: &BlockState, _computation_type: PathComputationType) -> bool {
+        false
     }
 }
 

@@ -1,9 +1,13 @@
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Weak};
 
+use pumpkin_data::damage::DamageType;
 use pumpkin_data::entity::EntityType;
+use pumpkin_protocol::java::client::play::Metadata;
+use pumpkin_util::math::vector3::Vector3;
 
 use crate::entity::{
-    Entity,
+    Entity, EntityBase,
     ai::goal::{
         active_target::ActiveTargetGoal, look_around::RandomLookAroundGoal,
         look_at_entity::LookAtEntityGoal, swim::SwimGoal, wander_around::WanderAroundGoal,
@@ -13,13 +17,17 @@ use crate::entity::{
 
 pub struct BlazeEntity {
     pub entity: Arc<MobEntity>,
+    pub is_charged: AtomicBool,
 }
 
 impl BlazeEntity {
     pub fn new(entity: Entity) -> Arc<Self> {
         let entity = Arc::new(MobEntity::new(entity));
-        let zombie = Self { entity };
-        let mob_arc = Arc::new(zombie);
+        let blaze = Self {
+            entity,
+            is_charged: AtomicBool::new(false),
+        };
+        let mob_arc = Arc::new(blaze);
         let mob_weak: Weak<dyn Mob> = {
             let mob_arc: Arc<dyn Mob> = mob_arc.clone();
             Arc::downgrade(&mob_arc)
@@ -63,29 +71,44 @@ impl BlazeEntity {
         mob_arc
     }
 
-    pub const fn set_charged(&self, _charged: bool) {
-        // TODO:
-        // let flags = &self.entity.living_entity.entity.flags;
+    pub fn is_charged(&self) -> bool {
+        self.is_charged.load(Ordering::Relaxed)
+    }
 
-        // let new_je_flags = if charged {
-        //     flags.fetch_or(1, Ordering::Relaxed) | 1
-        // } else {
-        //     flags.fetch_and(!1, Ordering::Relaxed) & !1
-        // };
-        // self.entity
-        //     .living_entity
-        //     .entity
-        //     .send_meta_data(&[Metadata::new(
-        //         pumpkin_data::tracked_data::blaze::FLAGS_ID,
-        //         MetaDataType::BYTE,
-        //         new_je_flags,
-        //     )])
-        //     .await;
+    pub fn set_charged(&self, charged: bool) {
+        self.is_charged.store(charged, Ordering::Relaxed);
+        let flags = i8::from(charged);
+        self.entity.living_entity.entity.send_meta_data(
+            &[Metadata::new(
+                pumpkin_data::tracked_data::blaze::DATA_FLAGS_ID,
+                flags,
+            )],
+            None,
+        );
     }
 }
 
 impl Mob for BlazeEntity {
     fn get_mob_entity(&self) -> &MobEntity {
         &self.entity
+    }
+
+    fn mob_tick(&self, caller: &dyn EntityBase) {
+        let base_entity = &self.entity.living_entity.entity;
+        if !base_entity.is_alive() {
+            return;
+        }
+
+        let on_ground = base_entity.on_ground.load(Ordering::Relaxed);
+        let vel = base_entity.velocity.load();
+        if !on_ground && vel.y < 0.0 {
+            base_entity
+                .velocity
+                .store(Vector3::new(vel.x, vel.y * 0.6, vel.z));
+        }
+
+        if base_entity.touching_water.load(Ordering::Relaxed) {
+            caller.damage(caller, 1.0, DamageType::DROWN);
+        }
     }
 }

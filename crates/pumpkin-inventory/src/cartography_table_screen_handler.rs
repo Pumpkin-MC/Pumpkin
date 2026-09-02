@@ -10,6 +10,7 @@ use pumpkin_data::data_component_impl::{MapIdImpl, MapPostProcessingImpl};
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::screen::WindowType;
+use pumpkin_data::statistic::StatisticCategory;
 use pumpkin_protocol::java::server::play::SlotActionType;
 use pumpkin_world::inventory::Inventory;
 use pumpkin_world::inventory::SimpleInventory;
@@ -146,7 +147,7 @@ impl ScreenHandler for CartographyTableScreenHandler {
         }
     }
 
-    fn quick_move(&mut self, _player: &dyn InventoryPlayer, slot_index: i32) -> ItemStack {
+    fn quick_move(&mut self, player: &dyn InventoryPlayer, slot_index: i32) -> ItemStack {
         let mut clicked = ItemStack::EMPTY.clone();
         let slot = self.get_behaviour().slots.get(slot_index as usize).cloned();
 
@@ -159,8 +160,9 @@ impl ScreenHandler for CartographyTableScreenHandler {
                         return ItemStack::EMPTY.clone();
                     }
                     slot.on_quick_move_crafted(stack.clone(), clicked.clone());
-                    self.input_inventory.remove_stack_specific(0, 1);
-                    self.input_inventory.remove_stack_specific(1, 1);
+                    let mut taken_stack = clicked.clone();
+                    taken_stack.set_count(clicked.item_count - stack.item_count);
+                    slot.on_take_item(player, &taken_stack);
                 } else if slot_index != 1 && slot_index != 0 {
                     if is_map_item(&stack) {
                         if !self.insert_item(&mut stack, 0, 1, false) {
@@ -358,7 +360,12 @@ impl Slot for CartographyResultSlot {
         false
     }
 
-    fn on_take_item(&self, _player: &dyn InventoryPlayer, _stack: &ItemStack) {
+    fn on_take_item(&self, player: &dyn InventoryPlayer, stack: &ItemStack) {
+        player.increment_stat(
+            StatisticCategory::Crafted,
+            stack.item.id as i32,
+            stack.item_count as i32,
+        );
         self.input_inventory.remove_stack_specific(0, 1);
         self.input_inventory.remove_stack_specific(1, 1);
         self.mark_dirty();

@@ -1,4 +1,4 @@
-use pumpkin_data::Block;
+use pumpkin_data::{Block, BlockState, block_properties::KelpLikeProperties};
 use pumpkin_util::{
     math::position::BlockPos,
     random::{RandomGenerator, RandomImpl},
@@ -22,34 +22,31 @@ impl TwistingVinesFeature {
         random: &mut RandomGenerator,
         pos: BlockPos,
     ) -> bool {
-        if Self::is_invalid_location(chunk, &pos) {
+        if Self::is_invalid_placement_location(chunk, pos) {
             return false;
         }
 
         let mut placed = false;
 
         for _ in 0..self.spread_width * self.spread_width {
-            let offset_x = random.next_bounded_i32(self.spread_width)
-                - random.next_bounded_i32(self.spread_width);
-            let offset_y = random.next_bounded_i32(self.spread_height)
-                - random.next_bounded_i32(self.spread_height);
-            let offset_z = random.next_bounded_i32(self.spread_width)
-                - random.next_bounded_i32(self.spread_width);
+            let offset_x = random.next_inbetween_i32(-self.spread_width, self.spread_width);
+            let offset_y = random.next_inbetween_i32(-self.spread_height, self.spread_height);
+            let offset_z = random.next_inbetween_i32(-self.spread_width, self.spread_width);
 
-            let mut mutable_pos = pos.add(offset_x, offset_y, offset_z);
+            let mut place_pos = pos.add(offset_x, offset_y, offset_z);
 
-            if self.find_target_y(chunk, &mut mutable_pos)
-                && !Self::is_invalid_location(chunk, &mutable_pos)
+            if Self::find_first_air_block_above_ground(chunk, &mut place_pos)
+                && !Self::is_invalid_placement_location(chunk, place_pos)
             {
-                let mut height = random.next_bounded_i32(self.max_height) + 1;
+                let mut vine_height = random.next_inbetween_i32(1, self.max_height);
                 if random.next_bounded_i32(6) == 0 {
-                    height *= 2;
+                    vine_height *= 2;
                 }
-                if random.next_bounded_i32(10) == 0 {
-                    height = 1;
+                if random.next_bounded_i32(5) == 0 {
+                    vine_height = 1;
                 }
 
-                Self::generate_column(chunk, random, &mutable_pos, height);
+                Self::place_twisting_vines_column(chunk, random, place_pos, vine_height, 17, 25);
                 placed = true;
             }
         }
@@ -57,75 +54,59 @@ impl TwistingVinesFeature {
         placed
     }
 
-    fn generate_column<T: GenerationCache>(
+    fn find_first_air_block_above_ground<T: GenerationCache>(
+        chunk: &T,
+        place_pos: &mut BlockPos,
+    ) -> bool {
+        loop {
+            *place_pos = place_pos.down();
+            if place_pos.0.y <= chunk.bottom_y() as i32 {
+                return false;
+            }
+            if !chunk.is_air(&place_pos.0) {
+                break;
+            }
+        }
+
+        *place_pos = place_pos.up();
+        true
+    }
+
+    pub fn place_twisting_vines_column<T: GenerationCache>(
         chunk: &mut T,
         random: &mut RandomGenerator,
-        pos: &BlockPos,
-        height: i32,
+        mut place_pos: BlockPos,
+        total_height: i32,
+        min_age: i32,
+        max_age: i32,
     ) {
-        let mut current_pos = *pos;
-        for i in 0..height {
-            if !GenerationCache::get_block_state(chunk, &current_pos.0)
-                .to_state()
-                .is_air()
-            {
-                break;
+        for height in 1..=total_height {
+            if chunk.is_air(&place_pos.0) {
+                if height == total_height || !chunk.is_air(&place_pos.up().0) {
+                    let age = random.next_inbetween_i32(min_age, max_age);
+                    let mut props = KelpLikeProperties::default(&Block::TWISTING_VINES);
+                    props.age = age as u8;
+                    let state_id = props.to_state_id(&Block::TWISTING_VINES);
+                    chunk.set_block_state(&place_pos.0, BlockState::from_id(state_id));
+                    break;
+                }
+
+                chunk.set_block_state(&place_pos.0, Block::TWISTING_VINES_PLANT.default_state);
             }
 
-            if i == height - 1
-                || !GenerationCache::get_block_state(chunk, &current_pos.up().0)
-                    .to_state()
-                    .is_air()
-            {
-                // Top part
-                let _age = 17 + random.next_bounded_i32(25 - 17 + 1);
-                // We should set the age property here, but Pumpkin's BlockState might not support it easily yet or we just use default
-                // For now, let's just use the block.
-                // TODO: Set age property
-                chunk.set_block_state(&current_pos.0, Block::TWISTING_VINES.default_state);
-                break;
-            }
-            chunk.set_block_state(&current_pos.0, Block::TWISTING_VINES_PLANT.default_state);
-            current_pos = current_pos.up();
+            place_pos = place_pos.up();
         }
     }
 
-    fn is_invalid_location<T: GenerationCache>(chunk: &T, pos: &BlockPos) -> bool {
-        if !GenerationCache::get_block_state(chunk, &pos.0)
-            .to_state()
-            .is_air()
-        {
+    fn is_invalid_placement_location<T: GenerationCache>(chunk: &T, pos: BlockPos) -> bool {
+        if !chunk.is_air(&pos.0) {
             return true;
         }
 
-        let block_below = GenerationCache::get_block_state(chunk, &pos.down().0).to_state();
-        block_below != Block::WARPED_NYLIUM.default_state
-            && block_below != Block::WARPED_WART_BLOCK.default_state
-            && block_below != Block::TWISTING_VINES.default_state
-            && block_below != Block::TWISTING_VINES_PLANT.default_state
-    }
-
-    fn find_target_y<T: GenerationCache>(&self, chunk: &T, pos: &mut BlockPos) -> bool {
-        // Try to find a valid floor by looking down
-        let mut current = *pos;
-        for _ in 0..self.spread_height {
-            if GenerationCache::get_block_state(chunk, &current.0)
-                .to_state()
-                .is_air()
-            {
-                let below = current.down();
-                let block_below = GenerationCache::get_block_state(chunk, &below.0).to_state();
-                if block_below == Block::WARPED_NYLIUM.default_state
-                    || block_below == Block::WARPED_WART_BLOCK.default_state
-                    || block_below == Block::TWISTING_VINES.default_state
-                    || block_below == Block::TWISTING_VINES_PLANT.default_state
-                {
-                    *pos = current;
-                    return true;
-                }
-            }
-            current = current.down();
-        }
-        false
+        let below = pos.down();
+        let below_id = GenerationCache::get_block_state(chunk, &below.0).to_block_id();
+        below_id != Block::NETHERRACK.id
+            && below_id != Block::WARPED_NYLIUM.id
+            && below_id != Block::WARPED_WART_BLOCK.id
     }
 }

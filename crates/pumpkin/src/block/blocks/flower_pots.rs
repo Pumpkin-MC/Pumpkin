@@ -1,8 +1,8 @@
 use crate::block::registry::BlockActionResult;
-use crate::block::{BlockBehaviour, RandomTickArgs, UseWithItemArgs};
+use crate::block::{BlockBehaviour, PathComputationType, RandomTickArgs, UseWithItemArgs};
 use pumpkin_data::dimension::Dimension;
 use pumpkin_data::flower_pot_transformations::get_potted_item;
-use pumpkin_data::{Block, BlockId};
+use pumpkin_data::{Block, BlockId, BlockState};
 use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_world::world::BlockFlags;
 
@@ -21,6 +21,11 @@ impl BlockBehaviour for FlowerPotBlock {
                         args.position,
                         Block::from_id(potted_block_id).default_state.id,
                         BlockFlags::NOTIFY_ALL,
+                    );
+                    args.player.increment_stat(
+                        pumpkin_data::statistic::StatisticCategory::Custom,
+                        pumpkin_data::statistic::CustomStatistic::PotFlower as i32,
+                        1,
                     );
                 }
                 return BlockActionResult::Success;
@@ -60,5 +65,9 @@ impl BlockBehaviour for FlowerPotBlock {
                 BlockFlags::NOTIFY_ALL,
             );
         }
+    }
+
+    fn is_pathfindable(&self, _state: &BlockState, _computation_type: PathComputationType) -> bool {
+        false
     }
 }

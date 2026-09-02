@@ -1,10 +1,10 @@
 use crate::block::{
-    BlockBehaviour, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, OnPlaceArgs, OnScheduledTickArgs,
+    BlockBehaviour, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, OnPlaceArgs,
+    OnScheduledTickArgs, PathComputationType,
 };
 use crate::world::World;
-use pumpkin_data::BlockStateId;
 use pumpkin_data::tag::Taggable;
-use pumpkin_data::{BlockDirection, tag};
+use pumpkin_data::{BlockDirection, BlockState, BlockStateId, tag};
 use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::tick::TickPriority;
@@ -47,6 +47,10 @@ impl BlockBehaviour for LanternBlock {
             args.world
                 .break_block(args.position, None, BlockFlags::empty());
         }
+    }
+
+    fn is_pathfindable(&self, _state: &BlockState, _computation_type: PathComputationType) -> bool {
+        false
     }
 }
 

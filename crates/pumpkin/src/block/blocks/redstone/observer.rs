@@ -43,6 +43,7 @@ impl BlockBehaviour for ObserverBlock {
             args.world
                 .schedule_block_tick(args.block, *args.position, 2, TickPriority::Normal);
         }
+        Self::update_neighbors(args.world, args.block, args.position, props);
     }
 
     fn get_state_for_neighbor_update(

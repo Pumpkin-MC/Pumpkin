@@ -1,3 +1,4 @@
+use crate::block::PathComputationType;
 use crate::entity::EntityBase;
 use crate::entity::r#type::{check_spawn_rules, from_type};
 use crate::world::World;
@@ -938,9 +939,11 @@ pub fn adjust_spawn_position(
         SpawnLocation::OnGround
     ) {
         let below = pos.down();
-        let state = world.get_block_state(&below);
-        // Approximation of isPathfindable(LAND)
-        if !state.is_full_cube() && !state.is_liquid() {
+        let (block, state) = world.get_block_and_state(&below);
+        if world
+            .block_registry
+            .is_pathfindable(block, state, PathComputationType::Land)
+        {
             return below;
         }
     }
