@@ -328,6 +328,7 @@ impl Context {
             handler,
             priority,
             blocking,
+            source: Some(self.metadata.name.clone()),
             _phantom: std::marker::PhantomData,
         });
 
