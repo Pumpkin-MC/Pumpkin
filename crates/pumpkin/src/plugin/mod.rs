@@ -1085,6 +1085,8 @@ impl PluginManager {
             plugins.remove(index)
         };
 
+        plugin.context.unregister_commands();
+
         if let Some(instance) = plugin.instance.take() {
             instance.on_unload(plugin.context.clone()).await.ok();
         }

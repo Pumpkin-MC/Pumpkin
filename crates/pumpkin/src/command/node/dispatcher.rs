@@ -84,6 +84,11 @@ pub struct CommandDispatcher {
     /// configuration. A disabled command behaves as if it does not exist: it
     /// cannot be executed and is left out of listings and suggestions.
     disabled: FxHashSet<String>,
+
+    /// Commands whose plugin source is currently unloaded. These are kept
+    /// separate from configuration disables so loading the plugin again can
+    /// make its commands available without overriding server configuration.
+    inactive_plugin_commands: FxHashSet<String>,
 }
 
 impl Default for CommandDispatcher {
@@ -105,34 +110,82 @@ impl CommandDispatcher {
             tree,
             consumer: RESULT_DEFERRER.clone(),
             disabled: FxHashSet::default(),
+            inactive_plugin_commands: FxHashSet::default(),
         }
+    }
+
+    fn normalize_command_name(name: &str) -> String {
+        name.to_ascii_lowercase()
     }
 
     /// Turns a command off. A disabled command's primary name is recorded here
     /// so that it can no longer be executed, listed, or suggested, regardless of
     /// which internal dispatcher it lives on.
     pub fn disable_command(&mut self, name: impl Into<String>) {
-        self.disabled.insert(name.into());
+        let name = name.into();
+        self.disabled.insert(Self::normalize_command_name(&name));
     }
 
-    /// Returns `true` if the command with the given primary name has been turned
-    /// off through the server configuration.
+    /// Makes a plugin command unavailable until it is registered again.
+    fn deactivate_plugin_command(&mut self, name: impl AsRef<str>) {
+        self.inactive_plugin_commands
+            .insert(Self::normalize_command_name(name.as_ref()));
+    }
+
+    /// Makes a plugin command and its aliases unavailable until registration.
+    pub(crate) fn deactivate_plugin_command_and_aliases(&mut self, name: &str) {
+        let primary_name = self.primary_command_name(name);
+        for alias in self.tree_alias_names(&primary_name) {
+            self.deactivate_plugin_command(alias);
+        }
+        self.deactivate_plugin_command(primary_name);
+    }
+
+    /// Makes every root command registered by a plugin source unavailable.
+    pub(crate) fn deactivate_commands_from_source(&mut self, source: &str) {
+        let primary_names = self
+            .tree
+            .get_root_children()
+            .into_iter()
+            .filter_map(|node_id| {
+                let metadata = &self.tree[node_id].meta;
+                (metadata.source.as_deref() == Some(source)).then(|| metadata.literal.to_string())
+            })
+            .collect::<Vec<_>>();
+
+        for primary_name in primary_names {
+            self.deactivate_plugin_command_and_aliases(&primary_name);
+        }
+    }
+
+    /// Returns `true` if a command is disabled or its plugin is inactive.
     #[must_use]
     pub fn is_disabled(&self, name: &str) -> bool {
-        if self.disabled.contains(name) {
+        Self::contains_command_name(&self.disabled, name)
+            || Self::contains_command_name(&self.inactive_plugin_commands, name)
+    }
+
+    fn contains_command_name(commands: &FxHashSet<String>, name: &str) -> bool {
+        let name = Self::normalize_command_name(name);
+        if commands.contains(&name) {
             return true;
         }
-        if name.starts_with('/') && self.disabled.contains(name.trim_start_matches('/')) {
-            return true;
-        }
-        if !name.starts_with('/') {
-            let single = format!("/{name}");
-            let double = format!("//{name}");
-            if self.disabled.contains(&single) || self.disabled.contains(&double) {
-                return true;
-            }
-        }
-        false
+
+        let base_name = name.trim_start_matches('/');
+        commands.contains(base_name)
+            || commands.contains(&format!("/{base_name}"))
+            || commands.contains(&format!("//{base_name}"))
+    }
+
+    fn reactivate_plugin_command(&mut self, name: &str) {
+        let name = Self::normalize_command_name(name);
+        let base_name = name.trim_start_matches('/');
+        self.inactive_plugin_commands.remove(&name);
+        self.inactive_plugin_commands.remove(base_name);
+        self.inactive_plugin_commands
+            .remove(&format!("/{base_name}"));
+        self.inactive_plugin_commands
+            .remove(&format!("//{base_name}"));
     }
 
     /// Returns `true` if a command (or alias) with the given name is registered
@@ -151,7 +204,8 @@ impl CommandDispatcher {
     /// could still reach the live executor through one of them.
     #[must_use]
     pub fn tree_alias_names(&self, primary: &str) -> Vec<String> {
-        let Some(primary_id) = self.tree.get(primary) else {
+        let primary = Self::normalize_command_name(primary);
+        let Some(primary_id) = self.tree.get(&primary) else {
             return Vec::new();
         };
         let primary_node: NodeId = primary_id.into();
@@ -174,7 +228,8 @@ impl CommandDispatcher {
     /// Resolves the primary name of a command from either an alias or a primary name.
     #[must_use]
     pub fn primary_command_name(&self, name: &str) -> String {
-        if let Some(node_id) = self.tree.get(name) {
+        let name = Self::normalize_command_name(name);
+        if let Some(node_id) = self.tree.get(&name) {
             let node = &self.tree[NodeId::from(node_id)];
             if let Some(redirect) = node.redirect()
                 && let Some(resolved) = self.tree.resolve(redirect)
@@ -183,7 +238,7 @@ impl CommandDispatcher {
             }
             return node.name().to_ascii_lowercase();
         }
-        name.to_string()
+        name
     }
 
     /// Extracts the command name (the first whitespace-separated token) from a
@@ -199,8 +254,11 @@ impl CommandDispatcher {
     /// unregister a command. This is due to redirection to
     /// potentially unregistered (freed) nodes.
     pub fn register(&mut self, command_node: impl Into<CommandDetachedNode>) -> CommandNodeId {
-        let node = command_node.into();
-        let name = node.meta.literal.to_string();
+        let mut node = command_node.into();
+        let name = Self::normalize_command_name(&node.meta.literal);
+        node.meta.literal = name.clone().into();
+        node.meta.literal_lowercase.clone_from(&name);
+        self.reactivate_plugin_command(&name);
         let main_node_id = self.tree.add_child_to_root(node);
 
         // For double-slash or slash-prefixed commands (e.g. //set or /set),
@@ -995,6 +1053,64 @@ mod test {
         let source = CommandSource::dummy();
         let result = dispatcher.execute_input("simple", &source);
         assert!(result.is_err_and(|error| error.error_type == &DISPATCHER_UNKNOWN_COMMAND));
+    }
+
+    #[test]
+    fn plugin_commands_follow_unload_and_reload_lifecycle() {
+        let mut dispatcher = CommandDispatcher::new();
+        let executor: fn(&CommandContext) -> CommandExecutorResult = |_| Ok(1);
+        let command = || {
+            CommandArgumentBuilder::new("Plugin-Command", "A plugin command")
+                .with_source("test-plugin")
+                .executes(executor)
+        };
+
+        dispatcher.register_with_aliases(command(), &["Plugin-Alias"]);
+        let source = CommandSource::dummy();
+        assert_eq!(dispatcher.execute_input("plugin-command", &source), Ok(1));
+        assert_eq!(dispatcher.execute_input("plugin-alias", &source), Ok(1));
+
+        dispatcher.deactivate_commands_from_source("test-plugin");
+        assert!(
+            dispatcher
+                .execute_input("plugin-command", &source)
+                .is_err_and(|error| error.error_type == &DISPATCHER_UNKNOWN_COMMAND)
+        );
+        assert!(
+            dispatcher
+                .execute_input("plugin-alias", &source)
+                .is_err_and(|error| error.error_type == &DISPATCHER_UNKNOWN_COMMAND)
+        );
+
+        dispatcher.register_with_aliases(command(), &["Plugin-Alias"]);
+        assert_eq!(dispatcher.execute_input("plugin-command", &source), Ok(1));
+        assert_eq!(dispatcher.execute_input("plugin-alias", &source), Ok(1));
+        assert_eq!(
+            dispatcher.tree_alias_names("PLUGIN-COMMAND"),
+            vec!["plugin-alias"]
+        );
+
+        dispatcher.deactivate_plugin_command_and_aliases("PLUGIN-ALIAS");
+        assert!(
+            dispatcher
+                .execute_input("plugin-command", &source)
+                .is_err_and(|error| error.error_type == &DISPATCHER_UNKNOWN_COMMAND)
+        );
+        assert!(
+            dispatcher
+                .execute_input("plugin-alias", &source)
+                .is_err_and(|error| error.error_type == &DISPATCHER_UNKNOWN_COMMAND)
+        );
+
+        dispatcher.register_with_aliases(command(), &["Plugin-Alias"]);
+        dispatcher.disable_command("PLUGIN-COMMAND");
+        dispatcher.deactivate_commands_from_source("test-plugin");
+        dispatcher.register_with_aliases(command(), &["Plugin-Alias"]);
+        assert!(
+            dispatcher
+                .execute_input("plugin-command", &source)
+                .is_err_and(|error| error.error_type == &DISPATCHER_UNKNOWN_COMMAND)
+        );
     }
 
     #[test]
