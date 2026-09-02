@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use pumpkin_data::{Block, BlockDirection, BlockId};
+use pumpkin_data::{Block, BlockDirection, BlockId, world::WorldEvent};
 use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 use pumpkin_world::world::BlockFlags;
 
@@ -97,5 +97,7 @@ impl EndPortal {
                 );
             }
         }
+
+        world.sync_global_world_event(WorldEvent::SoundEndPortalSpawn, pos, 0);
     }
 }
