@@ -214,12 +214,12 @@ impl BlockState {
     }
 
     #[must_use]
-    pub const fn rotate(&self, rotation: crate::block_rotation::Rotation) -> &'static Self {
+    pub fn rotate(&self, rotation: crate::block_rotation::Rotation) -> &'static Self {
         Block::from_state_id(self.id).rotate(self.id, rotation)
     }
 
     #[must_use]
-    pub const fn mirror(&self, mirror: crate::block_rotation::Mirror) -> &'static Self {
+    pub fn mirror(&self, mirror: crate::block_rotation::Mirror) -> &'static Self {
         Block::from_state_id(self.id).mirror(self.id, mirror)
     }
 }
@@ -283,13 +283,13 @@ impl BlockStateId {
 
     #[inline]
     #[must_use]
-    pub const fn rotate(self, rotation: crate::block_rotation::Rotation) -> &'static BlockState {
+    pub fn rotate(self, rotation: crate::block_rotation::Rotation) -> &'static BlockState {
         Block::from_state_id(self).rotate(self, rotation)
     }
 
     #[inline]
     #[must_use]
-    pub const fn mirror(self, mirror: crate::block_rotation::Mirror) -> &'static BlockState {
+    pub fn mirror(self, mirror: crate::block_rotation::Mirror) -> &'static BlockState {
         Block::from_state_id(self).mirror(self, mirror)
     }
 }

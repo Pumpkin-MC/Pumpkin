@@ -9,7 +9,6 @@ use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::codec::var_int::VarInt;
-use pumpkin_protocol::java::client::play::Metadata;
 use rand::RngExt;
 
 use crate::entity::{
@@ -292,41 +291,23 @@ impl Mob for WolfEntity {
         let entity = self.get_entity();
         let is_baby = entity.age.load(Ordering::Relaxed) < 0;
         if is_baby {
-            entity.send_meta_data(
-                &[Metadata::new(
-                    pumpkin_data::tracked_data::wolf::BABY_ID,
-                    true,
-                )],
-                None,
-            );
+            entity.set_synced_data(pumpkin_data::tracked_data::wolf::BABY_ID, true);
         }
-        entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::wolf::TAMEABLE_FLAGS,
-                self.get_tame_flags(),
-            )],
-            None,
+        entity.set_synced_data(
+            pumpkin_data::tracked_data::wolf::TAMEABLE_FLAGS,
+            self.get_tame_flags(),
         );
-        entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::wolf::COLLAR_COLOR,
-                VarInt(self.collar_color.load(Ordering::Relaxed) as i32),
-            )],
-            None,
+        entity.set_synced_data(
+            pumpkin_data::tracked_data::wolf::COLLAR_COLOR,
+            VarInt(self.collar_color.load(Ordering::Relaxed) as i32),
         );
-        entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::wolf::WOLF_VARIANT_ID,
-                VarInt(self.variant.load(Ordering::Relaxed) as i32),
-            )],
-            None,
+        entity.set_synced_data(
+            pumpkin_data::tracked_data::wolf::WOLF_VARIANT_ID,
+            VarInt(self.variant.load(Ordering::Relaxed) as i32),
         );
-        entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::wolf::OWNER_UUID,
-                self.get_owner(),
-            )],
-            None,
+        entity.set_synced_data(
+            pumpkin_data::tracked_data::wolf::OWNER_UUID,
+            self.get_owner(),
         );
     }
 
@@ -392,12 +373,9 @@ impl WolfEntity {
     pub fn set_collar_color(&self, color: u8) {
         self.collar_color.store(color, Ordering::Relaxed);
         let entity = self.get_entity();
-        entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::wolf::COLLAR_COLOR,
-                VarInt(color as i32),
-            )],
-            None,
+        entity.set_synced_data(
+            pumpkin_data::tracked_data::wolf::COLLAR_COLOR,
+            VarInt(color as i32),
         );
     }
 }

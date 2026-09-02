@@ -9,7 +9,6 @@ use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::bedrock::server::actor_event::ActorEventID;
-use pumpkin_protocol::java::client::play::Metadata;
 use rand::RngExt;
 
 use crate::entity::{
@@ -109,13 +108,7 @@ impl OcelotEntity {
     pub fn set_trusting(&self, trusting: bool) {
         self.is_trusting.store(trusting, Ordering::Relaxed);
         let entity = self.get_entity();
-        entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::ocelot::TRUSTING,
-                trusting,
-            )],
-            None,
-        );
+        entity.set_synced_data(pumpkin_data::tracked_data::ocelot::TRUSTING, trusting);
     }
 }
 
@@ -151,20 +144,11 @@ impl Mob for OcelotEntity {
         let entity = self.get_entity();
         let is_baby = entity.age.load(Ordering::Relaxed) < 0;
         if is_baby {
-            entity.send_meta_data(
-                &[Metadata::new(
-                    pumpkin_data::tracked_data::ocelot::BABY_ID,
-                    true,
-                )],
-                None,
-            );
+            entity.set_synced_data(pumpkin_data::tracked_data::ocelot::BABY_ID, true);
         }
-        entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::ocelot::TRUSTING,
-                self.is_trusting.load(Ordering::Relaxed),
-            )],
-            None,
+        entity.set_synced_data(
+            pumpkin_data::tracked_data::ocelot::TRUSTING,
+            self.is_trusting.load(Ordering::Relaxed),
         );
     }
 

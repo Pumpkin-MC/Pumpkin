@@ -5,7 +5,6 @@ use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::tag;
 use pumpkin_data::tag::Taggable;
 use pumpkin_protocol::codec::var_int::VarInt;
-use pumpkin_protocol::java::client::play::Metadata;
 use pumpkin_util::GameMode;
 use pumpkin_util::math::position::BlockPos;
 use std::sync::atomic::{AtomicI32, Ordering};
@@ -162,13 +161,11 @@ impl BreathManager {
             pumpkin_protocol::bedrock::client::set_actor_data::MetadataValue::Short(air as i16),
         );
 
-        player.get_entity().send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::entity::DATA_AIR_SUPPLY_ID,
-                VarInt(air),
-            )],
-            Some(&bedrock_meta),
+        player.get_entity().set_synced_data(
+            pumpkin_data::tracked_data::entity::DATA_AIR_SUPPLY_ID,
+            VarInt(air),
         );
+        player.get_entity().send_bedrock_actor_data(&bedrock_meta);
     }
 
     pub fn reset(&self, player: &Player) {

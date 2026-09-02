@@ -2,7 +2,6 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use pumpkin_data::{damage::DamageType, effect::StatusEffect, potion::Effect, tracked_data};
 use pumpkin_nbt::compound::NbtCompound;
-use pumpkin_protocol::java::client::play::Metadata;
 use pumpkin_util::{Difficulty, math::vector3::Vector3};
 
 use crate::{
@@ -69,13 +68,9 @@ impl WitherSkullEntity {
 
     pub fn set_dangerous(&self, dangerous: bool) {
         self.dangerous.store(dangerous, Ordering::Relaxed);
-        self.thrown.entity.send_meta_data(
-            &[Metadata::new(
-                tracked_data::wither_skull::DATA_DANGEROUS,
-                dangerous,
-            )],
-            None,
-        );
+        self.thrown
+            .entity
+            .set_synced_data(tracked_data::wither_skull::DATA_DANGEROUS, dangerous);
     }
 }
 
@@ -96,12 +91,9 @@ impl EntityBase for WitherSkullEntity {
 
     fn init_data_tracker(&self) {
         let entity = self.get_entity();
-        entity.send_meta_data(
-            &[Metadata::new(
-                tracked_data::wither_skull::DATA_DANGEROUS,
-                self.is_dangerous(),
-            )],
-            None,
+        entity.set_synced_data(
+            tracked_data::wither_skull::DATA_DANGEROUS,
+            self.is_dangerous(),
         );
     }
 

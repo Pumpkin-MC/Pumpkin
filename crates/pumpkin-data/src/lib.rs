@@ -403,7 +403,7 @@ mod blocks;
 #[cfg(feature = "block")]
 pub use block_direction::{BlockDirection, FacingExt, HorizontalFacingExt};
 #[cfg(feature = "block")]
-pub use block_rotation::{Mirror, Rotation};
+pub use block_rotation::{Mirror, Rotation, transform_block_properties, transform_rail_shape};
 #[cfg(feature = "block")]
 pub use block_state::{BlockState, BlockStateId};
 #[cfg(feature = "block")]

@@ -10,7 +10,6 @@ use pumpkin_data::sound::Sound;
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::codec::var_int::VarInt;
-use pumpkin_protocol::java::client::play::Metadata;
 use rand::RngExt;
 
 use crate::entity::{
@@ -167,12 +166,9 @@ impl PandaEntity {
     pub fn set_main_gene(&self, gene: PandaGene) {
         self.main_gene.store(gene.id(), Ordering::Relaxed);
         let entity = self.get_entity();
-        entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::panda::MAIN_GENE_ID,
-                gene.id() as i8,
-            )],
-            None,
+        entity.set_synced_data(
+            pumpkin_data::tracked_data::panda::MAIN_GENE_ID,
+            gene.id() as i8,
         );
     }
 
@@ -184,12 +180,9 @@ impl PandaEntity {
     pub fn set_hidden_gene(&self, gene: PandaGene) {
         self.hidden_gene.store(gene.id(), Ordering::Relaxed);
         let entity = self.get_entity();
-        entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::panda::HIDDEN_GENE_ID,
-                gene.id() as i8,
-            )],
-            None,
+        entity.set_synced_data(
+            pumpkin_data::tracked_data::panda::HIDDEN_GENE_ID,
+            gene.id() as i8,
         );
     }
 
@@ -203,12 +196,9 @@ impl PandaEntity {
         let new_flags = if val { current | flag } else { current & !flag };
         self.flags.store(new_flags, Ordering::Relaxed);
         let entity = self.get_entity();
-        entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::panda::DATA_ID_FLAGS,
-                new_flags as i8,
-            )],
-            None,
+        entity.set_synced_data(
+            pumpkin_data::tracked_data::panda::DATA_ID_FLAGS,
+            new_flags as i8,
         );
     }
 
@@ -300,55 +290,31 @@ impl Mob for PandaEntity {
         let entity = self.get_entity();
         let is_baby = entity.age.load(Ordering::Relaxed) < 0;
         if is_baby {
-            entity.send_meta_data(
-                &[Metadata::new(
-                    pumpkin_data::tracked_data::panda::DATA_BABY_ID,
-                    true,
-                )],
-                None,
-            );
+            entity.set_synced_data(pumpkin_data::tracked_data::panda::DATA_BABY_ID, true);
         }
-        entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::panda::MAIN_GENE_ID,
-                self.main_gene.load(Ordering::Relaxed) as i8,
-            )],
-            None,
+        entity.set_synced_data(
+            pumpkin_data::tracked_data::panda::MAIN_GENE_ID,
+            self.main_gene.load(Ordering::Relaxed) as i8,
         );
-        entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::panda::HIDDEN_GENE_ID,
-                self.hidden_gene.load(Ordering::Relaxed) as i8,
-            )],
-            None,
+        entity.set_synced_data(
+            pumpkin_data::tracked_data::panda::HIDDEN_GENE_ID,
+            self.hidden_gene.load(Ordering::Relaxed) as i8,
         );
-        entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::panda::DATA_ID_FLAGS,
-                self.flags.load(Ordering::Relaxed) as i8,
-            )],
-            None,
+        entity.set_synced_data(
+            pumpkin_data::tracked_data::panda::DATA_ID_FLAGS,
+            self.flags.load(Ordering::Relaxed) as i8,
         );
-        entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::panda::UNHAPPY_COUNTER,
-                VarInt(self.unhappy_counter.load(Ordering::Relaxed)),
-            )],
-            None,
+        entity.set_synced_data(
+            pumpkin_data::tracked_data::panda::UNHAPPY_COUNTER,
+            VarInt(self.unhappy_counter.load(Ordering::Relaxed)),
         );
-        entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::panda::SNEEZE_COUNTER,
-                VarInt(self.sneeze_counter.load(Ordering::Relaxed)),
-            )],
-            None,
+        entity.set_synced_data(
+            pumpkin_data::tracked_data::panda::SNEEZE_COUNTER,
+            VarInt(self.sneeze_counter.load(Ordering::Relaxed)),
         );
-        entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::panda::EAT_COUNTER,
-                VarInt(self.eat_counter.load(Ordering::Relaxed)),
-            )],
-            None,
+        entity.set_synced_data(
+            pumpkin_data::tracked_data::panda::EAT_COUNTER,
+            VarInt(self.eat_counter.load(Ordering::Relaxed)),
         );
     }
 

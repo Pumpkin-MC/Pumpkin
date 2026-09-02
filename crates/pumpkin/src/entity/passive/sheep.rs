@@ -5,7 +5,6 @@ use std::sync::{
 
 use pumpkin_data::{entity::EntityType, item::Item};
 use pumpkin_nbt::compound::NbtCompound;
-use pumpkin_protocol::java::client::play::Metadata;
 use rand::RngExt;
 
 use crate::entity::{
@@ -85,13 +84,10 @@ impl SheepEntity {
 
     fn set_packed_and_sync(&self, byte: u8) {
         self.color_and_sheared.store(byte, Ordering::Relaxed);
-        self.mob_entity.living_entity.entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::sheep::WOOL_ID,
-                byte as i8,
-            )],
-            None,
-        );
+        self.mob_entity
+            .living_entity
+            .entity
+            .set_synced_data(pumpkin_data::tracked_data::sheep::WOOL_ID, byte as i8);
     }
 
     pub fn set_color(&self, color: u8) {
