@@ -28,7 +28,6 @@ const NO_COLOR: u8 = 16;
 const PEEK_PER_TICK: f32 = 0.05;
 const MAX_TELEPORT_DISTANCE: i32 = 8;
 
-/// Axis type for bullet creation (the bullet cannot start moving along this axis)
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Axis {
     X = 0,
@@ -36,7 +35,6 @@ pub enum Axis {
     Z = 2,
 }
 
-/// Local extension trait so we can add helpers to the external `BlockDirection` type.
 trait BlockDirectionExt {
     fn axis_of(self) -> Axis;
 }
@@ -56,7 +54,6 @@ pub struct ShulkerEntity {
     attach_face: AtomicU8,
     peek_amount: AtomicU8,
     color: AtomicU8,
-    /// Visual interpolation
     current_peek_amount: AtomicCell<f32>,
     prev_peek_amount: AtomicCell<f32>,
 }
@@ -153,7 +150,6 @@ impl ShulkerEntity {
         let pos = entity.pos.load();
 
         if amount == 0 {
-            // Closed from open state
             world.play_sound_fine(
                 Sound::EntityShulkerClose,
                 SoundCategory::Hostile,
@@ -162,7 +158,6 @@ impl ShulkerEntity {
                 1.0,
             );
         } else if self.peek_amount.load(Ordering::Relaxed) == 0 {
-            // Opened from closed state
             world.play_sound_fine(
                 Sound::EntityShulkerOpen,
                 SoundCategory::Hostile,
@@ -187,8 +182,6 @@ impl ShulkerEntity {
         self.peek_amount.load(Ordering::Relaxed) == 0
     }
 
-    /// Advances `current_peek_amount` toward target by `PEEK_PER_TICK`.
-    /// Returns true if the value changed.
     fn update_peek_amount(&self) -> bool {
         let current = self.current_peek_amount.load();
         self.prev_peek_amount.store(current);
@@ -208,8 +201,6 @@ impl ShulkerEntity {
         true
     }
 
-    /// Returns `Some(direction)` if the neighbour block in that direction from
-    /// `pos` is solid (the shulker can attach there).
     fn find_attachable_face(&self, pos: &BlockPos) -> Option<BlockDirection> {
         let entity = &self.mob_entity.living_entity.entity;
         let world = entity.world.load();
@@ -223,25 +214,20 @@ impl ShulkerEntity {
         None
     }
 
-    /// Check whether the shulker can stay where it is.
-    /// The block at `pos` must be free (air) and the block in the `face` direction from `pos` must be solid.
     fn can_stay_at(&self, pos: &BlockPos, face: BlockDirection) -> bool {
         let entity = &self.mob_entity.living_entity.entity;
         let world = entity.world.load();
 
-        // Shulker's own block must not be occupied
         let own_state = world.get_block_state(pos);
         if !own_state.is_air() {
             return false;
         }
 
-        // The block the shulker is attached to must still be solid
         let neighbour = pos.offset_direction(face);
         let state = world.get_block_state(&neighbour);
         state.is_solid()
     }
 
-    /// Try to find a new attachment point, cascading to a random teleport.
     fn find_new_attachment(&self) {
         let pos = self.mob_entity.living_entity.entity.block_pos.load();
         if let Some(dir) = self.find_attachable_face(&pos) {
@@ -251,15 +237,11 @@ impl ShulkerEntity {
         }
     }
 
-    /// Attempt to teleport to a random nearby location where the shulker can attach.
-    /// Returns `true` on success.
     pub fn teleport_somewhere(&self) -> bool {
         let entity = &self.mob_entity.living_entity.entity;
         let base_pos = entity.block_pos.load();
         let world = entity.world.load();
 
-        // Collect all random offsets up-front so ThreadRng (which is !Send) is
-        // dropped before any .await boundary.
         let candidates: Vec<(i32, i32, i32)> = {
             let mut rng = rand::rng();
             (0..20)
@@ -276,7 +258,6 @@ impl ShulkerEntity {
         for (dx, dy, dz) in candidates {
             let candidate = BlockPos::new(base_pos.0.x + dx, base_pos.0.y + dy, base_pos.0.z + dz);
 
-            // Target block must be air and there must be an attachable adjacent solid face.
             let candidate_state = world.get_block_state(&candidate);
             if !candidate_state.is_air() {
                 continue;
@@ -315,7 +296,6 @@ impl ShulkerEntity {
                     1.0,
                 );
 
-                // Close the shulker and drop the current target after teleport.
                 self.set_raw_peek(0);
                 self.mob_entity.set_target(None);
 
@@ -330,12 +310,9 @@ impl ShulkerEntity {
         let health = living.health.load();
         let max = living.get_max_health();
 
-        // Teleport at half-health (random 1-in-4 chance)
         if health < max * 0.5 && rand::rng().random_range(0..4) == 0 {
             self.teleport_somewhere();
         }
-
-        // pre_damage for arrow blocking below.
     }
 }
 
@@ -375,10 +352,8 @@ impl Mob for ShulkerEntity {
 
         entity.velocity.store(Vector3::new(0.0, 0.0, 0.0));
 
-        // Advance peek interpolation
         self.update_peek_amount();
 
-        // Ensure the current attachment face still has a solid block behind it.
         let pos = entity.block_pos.load();
         let face = self.get_attach_face();
         if !self.can_stay_at(&pos, face) {
@@ -390,7 +365,6 @@ impl Mob for ShulkerEntity {
         self.on_shulker_damage();
     }
 
-    /// When closed, block arrows entirely.
     fn pre_damage(&self, damage_type: DamageType, _source: Option<&dyn EntityBase>) -> bool {
         if self.is_closed() && damage_type == DamageType::ARROW {
             return false;
@@ -398,7 +372,6 @@ impl Mob for ShulkerEntity {
         true
     }
 
-    /// Apply armor modifier (20 armor) reduction when closed.
     fn modify_incoming_damage(&self, amount: f32, damage_type: DamageType) -> f32 {
         if self.is_closed() && !crate::entity::living::bypasses_armor_durability(&damage_type) {
             const ARMOR: f32 = 20.0;
@@ -473,7 +446,6 @@ impl Goal for ShulkerAttackGoal {
         let target_pos = target.get_entity().pos.load();
         let dist_sq = shulker_pos.squared_distance_to_vec(&target_pos);
 
-        // De-target if too far (>20 blocks)
         if dist_sq > 400.0 {
             mob_entity.set_target(None);
             return;
@@ -481,11 +453,9 @@ impl Goal for ShulkerAttackGoal {
 
         let cooldown = self.attack_cooldown.fetch_sub(1, Ordering::Relaxed) - 1;
         if cooldown <= 0 {
-            // Reset cooldown
             let new_cd = 20 + mob.get_random().random_range(0..5) * 10;
             self.attack_cooldown.store(new_cd, Ordering::Relaxed);
 
-            // Spawn bullet
             let world = entity.world.load();
             let target_pos = target.get_entity().pos.load();
             let bullet = ShulkerBulletEntity::new(
@@ -496,7 +466,6 @@ impl Goal for ShulkerAttackGoal {
             );
             world.spawn_entity_non_save(Arc::new(bullet));
 
-            // Shoot sound (random pitch)
             let pitch =
                 1.0 + (mob.get_random().random::<f32>() - mob.get_random().random::<f32>()) * 0.2;
             world.play_sound_fine(

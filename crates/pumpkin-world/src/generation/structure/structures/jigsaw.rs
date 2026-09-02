@@ -10,7 +10,7 @@ use crate::generation::structure::template::{
 use pumpkin_util::math::block_box::BlockBox;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
-use pumpkin_util::random::RandomImpl;
+use pumpkin_util::random::{RandomDeriverImpl, RandomImpl};
 use serde::Deserialize;
 use std::sync::Arc;
 
@@ -880,7 +880,11 @@ impl StructureGenerator for JigsawGenerator {
             &[]
         };
 
-        let pool_alias_lookup = PoolAliasLookup::from_bindings(pool_aliases, &mut context.random);
+        let mut alias_random =
+            pumpkin_util::random::legacy_rand::LegacyRand::from_seed(context.seed as u64)
+                .next_splitter()
+                .split_pos(start_pos.0.x, start_pos.0.y, start_pos.0.z);
+        let pool_alias_lookup = PoolAliasLookup::from_bindings(pool_aliases, &mut alias_random);
 
         let start_pool = if self.start_pool.is_empty() {
             structure

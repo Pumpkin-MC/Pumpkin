@@ -33,10 +33,6 @@ static ERROR_NOT_RIDING: CommandErrorType<1> = CommandErrorType::new(
     translation::java::COMMANDS_RIDE_NOT_RIDING,
     "Not riding anything",
 );
-static ERROR_GENERIC: CommandErrorType<2> = CommandErrorType::new(
-    translation::java::COMMANDS_RIDE_MOUNT_FAILURE_GENERIC,
-    "Failed to mount",
-);
 
 #[allow(clippy::assigning_clones)]
 fn is_riding_recursive(entity: &dyn EntityBase, possible_vehicle: &dyn EntityBase) -> bool {
@@ -64,79 +60,48 @@ struct RideMountExecutor;
 
 impl CommandExecutor for RideMountExecutor {
     fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
-        let targets = EntityArgumentType::get_entities(context, "target")?;
+        let target = EntityArgumentType::get_entity(context, "target")?;
         let vehicle = EntityArgumentType::get_entity(context, "vehicle")?;
+
+        let current_vehicle = target
+            .get_entity()
+            .vehicle
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone();
+        if let Some(ref curr_veh) = current_vehicle {
+            return Err(ERROR_ALREADY_RIDING
+                .create_without_context(target.get_display_name(), curr_veh.get_display_name()));
+        }
 
         if vehicle.get_player().is_some() {
             return Err(ERROR_CANT_RIDE_PLAYERS.create_without_context());
         }
 
+        if target.get_entity().entity_id == vehicle.get_entity().entity_id
+            || is_riding_recursive(target.as_ref(), vehicle.as_ref())
+        {
+            return Err(ERROR_LOOP.create_without_context());
+        }
+
+        let target_world = target.get_entity().world.load();
         let vehicle_world = vehicle.get_entity().world.load();
-
-        let mut success_count = 0;
-        let mut last_error = None;
-
-        for target in &targets {
-            let target_world = target.get_entity().world.load();
-            if target_world.dimension.minecraft_name != vehicle_world.dimension.minecraft_name {
-                last_error = Some(ERROR_WRONG_DIMENSION.create_without_context());
-                continue;
-            }
-
-            if target.get_entity().entity_id == vehicle.get_entity().entity_id {
-                last_error = Some(ERROR_LOOP.create_without_context());
-                continue;
-            }
-
-            if is_riding_recursive(target.as_ref(), vehicle.as_ref()) {
-                last_error = Some(ERROR_LOOP.create_without_context());
-                continue;
-            }
-
-            let current_vehicle = target
-                .get_entity()
-                .vehicle
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .clone();
-            if let Some(ref curr_veh) = current_vehicle {
-                if curr_veh.get_entity().entity_id == vehicle.get_entity().entity_id {
-                    last_error = Some(ERROR_ALREADY_RIDING.create_without_context(
-                        target.get_display_name(),
-                        vehicle.get_display_name(),
-                    ));
-                    continue;
-                }
-                // Dismount first
-                curr_veh
-                    .get_entity()
-                    .remove_passenger_sync(target.get_entity().entity_id);
-            }
-
-            vehicle
-                .get_entity()
-                .add_passenger(vehicle.clone(), target.clone());
-            success_count += 1;
-
-            let msg = TextComponent::translate_cross(
-                translation::java::COMMANDS_RIDE_MOUNT_SUCCESS,
-                translation::java::COMMANDS_RIDE_MOUNT_SUCCESS,
-                [target.get_display_name(), vehicle.get_display_name()],
-            );
-            context.source.send_feedback(msg, true);
+        if target_world.dimension.minecraft_name != vehicle_world.dimension.minecraft_name {
+            return Err(ERROR_WRONG_DIMENSION.create_without_context());
         }
 
-        if success_count == 0 {
-            if let Some(err) = last_error {
-                return Err(err);
-            }
-            return Err(ERROR_GENERIC.create_without_context(
-                targets[0].get_display_name(),
-                vehicle.get_display_name(),
-            ));
-        }
+        vehicle
+            .get_entity()
+            .add_passenger(vehicle.clone(), target.clone());
 
-        Ok(success_count)
+        let msg = TextComponent::translate_cross(
+            translation::java::COMMANDS_RIDE_MOUNT_SUCCESS,
+            translation::java::COMMANDS_RIDE_MOUNT_SUCCESS,
+            [target.get_display_name(), vehicle.get_display_name()],
+        );
+        context.source.send_feedback(msg, true);
+
+        Ok(1)
     }
 }
 
@@ -144,43 +109,30 @@ struct RideDismountExecutor;
 
 impl CommandExecutor for RideDismountExecutor {
     fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
-        let targets = EntityArgumentType::get_entities(context, "target")?;
+        let target = EntityArgumentType::get_entity(context, "target")?;
 
-        let mut success_count = 0;
-        let mut last_error = None;
-
-        for target in &targets {
-            let current_vehicle = target
-                .get_entity()
-                .vehicle
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .clone();
-            if let Some(vehicle) = current_vehicle {
+        let current_vehicle = target
+            .get_entity()
+            .vehicle
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone();
+        current_vehicle.map_or_else(
+            || Err(ERROR_NOT_RIDING.create_without_context(target.get_display_name())),
+            |vehicle| {
                 let target_id = target.get_entity().entity_id;
                 vehicle.get_entity().remove_passenger_sync(target_id);
-                success_count += 1;
 
                 let msg = TextComponent::translate_cross(
                     translation::java::COMMANDS_RIDE_DISMOUNT_SUCCESS,
                     translation::java::COMMANDS_RIDE_DISMOUNT_SUCCESS,
-                    [target.get_display_name()],
+                    [target.get_display_name(), vehicle.get_display_name()],
                 );
                 context.source.send_feedback(msg, true);
-            } else {
-                last_error =
-                    Some(ERROR_NOT_RIDING.create_without_context(target.get_display_name()));
-            }
-        }
 
-        if success_count == 0 {
-            if let Some(err) = last_error {
-                return Err(err);
-            }
-            return Err(ERROR_NOT_RIDING.create_without_context(targets[0].get_display_name()));
-        }
-
-        Ok(success_count)
+                Ok(1)
+            },
+        )
     }
 }
 
@@ -193,7 +145,7 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
 
     let builder =
         command("ride", DESCRIPTION).requires(PERMISSION).then(
-            argument("target", EntityArgumentType::Entities)
+            argument("target", EntityArgumentType::Entity)
                 .then(literal("mount").then(
                     argument("vehicle", EntityArgumentType::Entity).executes(RideMountExecutor),
                 ))

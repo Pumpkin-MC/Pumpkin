@@ -40,9 +40,13 @@ pub mod barrier;
 pub mod chain;
 pub mod glass_panes;
 pub mod glazed_terracotta;
+pub mod honey;
 pub mod iron_bars;
+pub mod scaffolding;
 pub mod slabs;
 pub mod stairs;
+pub mod structure_void;
+pub mod tinted_glass;
 pub mod walls;
 pub mod weathering_copper;
 
@@ -66,6 +70,7 @@ pub mod candle_cakes;
 pub mod candles;
 pub mod fire;
 pub mod lanterns;
+pub mod light;
 pub mod magma;
 pub mod torches;
 
@@ -92,10 +97,12 @@ pub mod falling;
 pub mod grass_block;
 pub mod ice;
 pub mod infested;
+pub mod mud;
 pub mod nylium;
 pub mod powder_snow;
 pub mod rooted_dirt;
 pub mod snow;
+pub mod soul_sand;
 pub mod sponge;
 
 // Entities, hazards & misc gameplay blocks
@@ -125,6 +132,7 @@ pub mod loom;
 pub mod smithing_table;
 pub mod sniffer_egg;
 pub mod structure_block;
+pub mod test_block;
 pub mod trial_spawner;
 pub mod turtle_egg;
 pub mod vault;

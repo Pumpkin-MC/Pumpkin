@@ -3,11 +3,11 @@ use pumpkin_data::{
     fluid::Fluid,
     tag::{self, Taggable},
 };
-use pumpkin_util::math::vector3::Vector3;
+use pumpkin_util::math::{boundingbox::BoundingBox, position::BlockPos, vector3::Vector3};
 
 use crate::{
     entity::ai::pathfinder::{
-        node::{Coordinate, PathType},
+        node::{Coordinate, PathComputationType, PathType},
         path_type_cache::PathTypeCache,
     },
     world::World,
@@ -20,10 +20,11 @@ pub struct PathfindingContext {
     path_type_cache: Option<PathTypeCache>,
     mob_position: Vector3<i32>,
     world: Arc<World>,
-    collision_cache: FxHashMap<Vector3<i32>, bool>,
+    collision_cache: FxHashMap<[u64; 6], bool>,
 }
 
 impl PathfindingContext {
+    #[must_use]
     pub fn new(mob_position: Vector3<i32>, world: Arc<World>) -> Self {
         Self {
             path_type_cache: Some(PathTypeCache::new()),
@@ -33,6 +34,7 @@ impl PathfindingContext {
         }
     }
 
+    #[must_use]
     pub fn with_cache(mob_position: Vector3<i32>, world: Arc<World>, cache: PathTypeCache) -> Self {
         Self {
             path_type_cache: Some(cache),
@@ -45,6 +47,21 @@ impl PathfindingContext {
     #[must_use]
     pub const fn mob_position(&self) -> Vector3<i32> {
         self.mob_position
+    }
+
+    #[must_use]
+    pub const fn world(&self) -> &Arc<World> {
+        &self.world
+    }
+
+    #[must_use]
+    pub const fn min_y(&self) -> i32 {
+        -64
+    }
+
+    #[must_use]
+    pub const fn sea_level(&self) -> i32 {
+        63
     }
 
     pub fn get_path_type_from_state(&mut self, pos: Vector3<i32>) -> PathType {
@@ -63,20 +80,14 @@ impl PathfindingContext {
         pt
     }
 
-    /// Classifies a block position into a `PathType` for pathfinding.
     #[must_use]
     pub fn compute_path_type_from_state(&self, pos: Vector3<i32>) -> PathType {
         let block_pos = pos.as_blockpos();
-
-        // Single async chunk lookup, then derive block & state from static arrays
         let state_id = self.world.get_block_state_id(&block_pos);
         let block = Block::from_state_id(state_id);
         let state = BlockState::from_id(state_id);
 
-        if block.id == Block::AIR.id
-            || block.id == Block::VOID_AIR.id
-            || block.id == Block::CAVE_AIR.id
-        {
+        if state.is_air() {
             return PathType::Open;
         }
 
@@ -148,11 +159,19 @@ impl PathfindingContext {
             return PathType::Fence;
         }
 
-        if block.has_tag(&tag::Block::MINECRAFT_FENCE_GATES) && !state.collision_shapes.is_empty() {
-            return PathType::Fence;
+        if block.has_tag(&tag::Block::MINECRAFT_FENCE_GATES) {
+            return if state.collision_shapes.is_empty() {
+                if fluid.is_some_and(|f| f.has_tag(&tag::Fluid::MINECRAFT_WATER)) {
+                    PathType::Water
+                } else {
+                    PathType::Open
+                }
+            } else {
+                PathType::Fence
+            };
         }
 
-        if state.is_full_cube() {
+        if !self.is_pathfindable(&block_pos, PathComputationType::Land) {
             return PathType::Blocked;
         }
 
@@ -163,11 +182,10 @@ impl PathfindingContext {
         PathType::Open
     }
 
-    /// Wraps the raw block type with below-check and neighbor danger scanning for OPEN nodes.
     pub fn get_land_node_type(&mut self, pos: Vector3<i32>) -> PathType {
         let raw_type = self.get_path_type_from_state(pos);
 
-        if raw_type == PathType::Open {
+        if raw_type == PathType::Open && pos.y > self.min_y() {
             let below_type = self.get_path_type_from_state(Vector3::new(pos.x, pos.y - 1, pos.z));
             return match below_type {
                 PathType::Open | PathType::Water | PathType::Lava | PathType::Walkable => {
@@ -186,7 +204,6 @@ impl PathfindingContext {
         raw_type
     }
 
-    /// Scans a 3x3x3 neighborhood for danger blocks and returns the appropriate danger type.
     pub fn get_node_type_from_neighbors(
         &mut self,
         pos: Vector3<i32>,
@@ -224,18 +241,79 @@ impl PathfindingContext {
         fallback
     }
 
-    pub fn has_collisions(&mut self, pos: Vector3<i32>) -> bool {
-        if let Some(&cached) = self.collision_cache.get(&pos) {
+    #[must_use]
+    pub fn get_floor_level(&self, pos: &BlockPos) -> f64 {
+        let target = pos.down();
+        let state = self.world.get_block_state(&target);
+        let max_y = state
+            .get_block_collision_shapes_at(&target)
+            .map(|s| s.max.y)
+            .fold(0.0f64, f64::max);
+        f64::from(target.0.y) + max_y
+    }
+
+    pub fn has_collision(&mut self, bb: &BoundingBox) -> bool {
+        let key = [
+            bb.min.x.to_bits(),
+            bb.min.y.to_bits(),
+            bb.min.z.to_bits(),
+            bb.max.x.to_bits(),
+            bb.max.y.to_bits(),
+            bb.max.z.to_bits(),
+        ];
+
+        if let Some(&cached) = self.collision_cache.get(&key) {
             return cached;
         }
 
-        let block_pos = pos.as_blockpos();
-        let state_id = self.world.get_block_state_id(&block_pos);
-        let state = BlockState::from_id(state_id);
-        let has_collision = state.is_full_cube();
+        let min = bb.min_block_pos();
+        let max = bb.max_block_pos();
+        let mut collided = false;
 
-        self.collision_cache.insert(pos, has_collision);
-        has_collision
+        for pos in BlockPos::iterate(min, max) {
+            let state = self.world.get_block_state(&pos);
+            if state.is_air() || !state.is_solid() {
+                continue;
+            }
+            for shape in state.get_block_collision_shapes_at(&pos) {
+                let world_shape = shape.at_pos(pos);
+                if world_shape.intersects(bb) {
+                    collided = true;
+                    break;
+                }
+            }
+            if collided {
+                break;
+            }
+        }
+
+        self.collision_cache.insert(key, collided);
+        collided
+    }
+
+    #[must_use]
+    pub fn is_water(&self, pos: &BlockPos) -> bool {
+        let state_id = self.world.get_block_state_id(pos);
+        let fluid = Fluid::from_state_id(state_id);
+        fluid.is_some_and(|f| f.has_tag(&tag::Fluid::MINECRAFT_WATER))
+    }
+
+    #[must_use]
+    pub fn is_air(&self, pos: &BlockPos) -> bool {
+        self.world.get_block_state(pos).is_air()
+    }
+
+    #[must_use]
+    pub fn get_block_state(&self, pos: &BlockPos) -> &'static BlockState {
+        self.world.get_block_state(pos)
+    }
+
+    #[must_use]
+    pub fn is_pathfindable(&self, pos: &BlockPos, computation_type: PathComputationType) -> bool {
+        let (block, state) = self.world.get_block_and_state(pos);
+        self.world
+            .block_registry
+            .is_pathfindable(block, state, computation_type)
     }
 
     pub fn clear_caches(&mut self) {

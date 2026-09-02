@@ -652,7 +652,41 @@ pub fn read_data(id: DataComponent, data: &NbtTag) -> Option<Box<dyn DataCompone
         DataComponent::SwingAnimation => Some(SwingAnimationImpl::read_data(data)?.to_dyn()),
         DataComponent::Rarity => Some(RarityImpl::read_data(data)?.to_dyn()),
         DataComponent::BannerPatterns => Some(BannerPatternsImpl::read_data(data)?.to_dyn()),
-        _ => None,
+        DataComponent::UseEffects => Some(UseEffectsImpl::read_data(data)?.to_dyn()),
+        DataComponent::UseRemainder => Some(UseRemainderImpl::read_data(data)?.to_dyn()),
+        DataComponent::Weapon => Some(WeaponImpl::read_data(data)?.to_dyn()),
+        DataComponent::TooltipDisplay => Some(TooltipDisplayImpl::read_data(data)?.to_dyn()),
+        DataComponent::CreativeSlotLock => Some(CreativeSlotLockImpl::read_data(data)?.to_dyn()),
+        DataComponent::EnchantmentGlintOverride => {
+            Some(EnchantmentGlintOverrideImpl::read_data(data)?.to_dyn())
+        }
+        DataComponent::DeathProtection => Some(DeathProtectionImpl::read_data(data)?.to_dyn()),
+        DataComponent::BlocksAttacks => Some(BlocksAttacksImpl::read_data(data)?.to_dyn()),
+        DataComponent::AdditionalTradeCost => {
+            Some(AdditionalTradeCostImpl::read_data(data)?.to_dyn())
+        }
+        DataComponent::Dye => Some(DyeImpl::read_data(data)?.to_dyn()),
+        DataComponent::MapColor => Some(MapColorImpl::read_data(data)?.to_dyn()),
+        DataComponent::MapDecorations => Some(MapDecorationsImpl::read_data(data)?.to_dyn()),
+        DataComponent::DebugStickState => Some(DebugStickStateImpl::read_data(data)?.to_dyn()),
+        DataComponent::EntityData => Some(EntityDataImpl::read_data(data)?.to_dyn()),
+        DataComponent::BucketEntityData => Some(BucketEntityDataImpl::read_data(data)?.to_dyn()),
+        DataComponent::Instrument => Some(InstrumentImpl::read_data(data)?.to_dyn()),
+        DataComponent::ProvidesTrimMaterial => {
+            Some(ProvidesTrimMaterialImpl::read_data(data)?.to_dyn())
+        }
+        DataComponent::JukeboxPlayable => Some(JukeboxPlayableImpl::read_data(data)?.to_dyn()),
+        DataComponent::ProvidesBannerPatterns => {
+            Some(ProvidesBannerPatternsImpl::read_data(data)?.to_dyn())
+        }
+        DataComponent::Recipes => Some(RecipesImpl::read_data(data)?.to_dyn()),
+        DataComponent::PotDecorations => Some(PotDecorationsImpl::read_data(data)?.to_dyn()),
+        DataComponent::Bees => Some(BeesImpl::read_data(data)?.to_dyn()),
+        DataComponent::SulfurCubeContent => Some(SulfurCubeContentImpl::read_data(data)?.to_dyn()),
+        DataComponent::BreakSound => Some(BreakSoundImpl::read_data(data)?.to_dyn()),
+        DataComponent::AttributeModifiers => {
+            Some(AttributeModifiersImpl::read_data(data)?.to_dyn())
+        }
     }
 }
 

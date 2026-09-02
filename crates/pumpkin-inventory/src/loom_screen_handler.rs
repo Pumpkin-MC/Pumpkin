@@ -13,6 +13,7 @@ use pumpkin_data::dye_color::DyeColor;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::screen::WindowType;
+use pumpkin_data::statistic::StatisticCategory;
 use pumpkin_data::tag::{BannerPattern, RegistryKey, get_tag_values};
 use pumpkin_protocol::java::server::play::SlotActionType;
 use pumpkin_world::block::entities::PropertyDelegate;
@@ -294,7 +295,7 @@ impl ScreenHandler for LoomScreenHandler {
         }
     }
 
-    fn quick_move(&mut self, _player: &dyn InventoryPlayer, slot_index: i32) -> ItemStack {
+    fn quick_move(&mut self, player: &dyn InventoryPlayer, slot_index: i32) -> ItemStack {
         let mut stack = ItemStack::EMPTY.clone();
         let slot = self.get_behaviour().slots.get(slot_index as usize).cloned();
 
@@ -308,8 +309,9 @@ impl ScreenHandler for LoomScreenHandler {
                             return ItemStack::EMPTY.clone();
                         }
                         slot.on_quick_move_crafted(slot_stack.clone(), stack.clone());
-                        self.input_inventory.remove_stack_specific(0, 1);
-                        self.input_inventory.remove_stack_specific(1, 1);
+                        let mut taken_stack = stack.clone();
+                        taken_stack.set_count(stack.item_count - slot_stack.item_count);
+                        slot.on_take_item(player, &taken_stack);
                     }
                     std::cmp::Ordering::Less => {
                         if !self.insert_item(&mut slot_stack, 4, 40, false) {
@@ -469,7 +471,12 @@ impl Slot for LoomResultSlot {
         false
     }
 
-    fn on_take_item(&self, _player: &dyn InventoryPlayer, _stack: &ItemStack) {
+    fn on_take_item(&self, player: &dyn InventoryPlayer, stack: &ItemStack) {
+        player.increment_stat(
+            StatisticCategory::Crafted,
+            stack.item.id as i32,
+            stack.item_count as i32,
+        );
         self.input_inventory.remove_stack_specific(0, 1);
         self.input_inventory.remove_stack_specific(1, 1);
         if self.input_inventory.get_stack(0).is_empty()

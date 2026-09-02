@@ -24,9 +24,10 @@ impl CoralFeature {
         pos: BlockPos,
     ) -> bool {
         let block = GenerationCache::get_block_state(chunk, &pos.0).to_block_id();
-        let above_block = GenerationCache::get_block_state(chunk, &pos.up().0).to_block_id();
+        let above_pos = pos.up();
+        let above_block = GenerationCache::get_block_state(chunk, &above_pos.0).to_block_id();
 
-        if block != BlockId::WATER && !block.has_tag(tag::Block::MINECRAFT_CORALS)
+        if (block != BlockId::WATER && !block.has_tag(tag::Block::MINECRAFT_CORALS))
             || above_block != BlockId::WATER
         {
             return false;
@@ -41,18 +42,22 @@ impl CoralFeature {
                 Block::from_state_id(block_to_place_state.id),
                 block_to_place_state,
                 chunk,
-                &pos,
+                &above_pos,
             ) {
-                chunk.set_block_state(&pos.0, block_to_place_state);
+                chunk.set_block_state(&above_pos.0, block_to_place_state);
             }
         } else if random.next_f32() < 0.05 {
             let mut props = SeaPickleLikeProperties::default(&Block::SEA_PICKLE);
             props.pickles = (random.next_bounded_i32(4) as u8) + 1;
             let state_id = props.to_state_id(&Block::SEA_PICKLE);
             let block_state = BlockState::from_id(state_id);
-            if block_registry.can_place_at(Block::from_state_id(state_id), block_state, chunk, &pos)
-            {
-                chunk.set_block_state(&pos.0, block_state);
+            if block_registry.can_place_at(
+                Block::from_state_id(state_id),
+                block_state,
+                chunk,
+                &above_pos,
+            ) {
+                chunk.set_block_state(&above_pos.0, block_state);
             }
         }
         for dir in BlockDirection::horizontal_worldgen() {
@@ -68,7 +73,6 @@ impl CoralFeature {
                 continue;
             };
             let original_props = &properties.to_props();
-            // Set the right Axis
             let props: Vec<(&str, &str)> = original_props
                 .iter()
                 .map(|(key, value)| {

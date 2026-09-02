@@ -1,10 +1,8 @@
-use pumpkin_data::BlockStateId;
-use pumpkin_data::{
-    Block, BlockState,
-    block_properties::{DoubleBlockHalf, GrassBlockLikeProperties, TallSeagrassLikeProperties},
-    tag::{self, Taggable},
+use pumpkin_data::block_properties::{
+    DoubleBlockHalf, GrassBlockLikeProperties, TallSeagrassLikeProperties,
 };
-use pumpkin_macros::pumpkin_block;
+use pumpkin_data::tag::{self, Taggable};
+use pumpkin_data::{Block, BlockDirection, BlockId, BlockState, BlockStateId};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::random::{RandomGenerator, RandomImpl, xoroshiro128::Xoroshiro};
 use pumpkin_world::generation::feature::{
@@ -15,13 +13,28 @@ use pumpkin_world::tick::TickPriority;
 use pumpkin_world::world::BlockFlags;
 use rand::RngExt;
 
-use crate::block::{BlockBehaviour, GetStateForNeighborUpdateArgs};
+use crate::block::{BlockBehaviour, BlockMetadata, GetStateForNeighborUpdateArgs, OnPlaceArgs};
 
-#[pumpkin_block("minecraft:grass_block")]
 pub struct GrassBlock;
 
+impl BlockMetadata for GrassBlock {
+    fn ids() -> Box<[BlockId]> {
+        [BlockId::GRASS_BLOCK, BlockId::MYCELIUM, BlockId::PODZOL].into()
+    }
+}
+
 impl BlockBehaviour for GrassBlock {
+    fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
+        let block_above = args.world.get_block(&args.position.up());
+        let mut props = GrassBlockLikeProperties::from_state_id(args.block.default_state.id);
+        props.snowy = block_above.has_tag(&tag::Block::MINECRAFT_SNOW);
+        props.to_state_id(args.block)
+    }
+
     fn is_valid_bonemeal_target(&self, args: crate::block::BonemealArgs<'_>) -> bool {
+        if args.block != &Block::GRASS_BLOCK {
+            return false;
+        }
         let above = args.position.up();
         args.world.is_in_height_limit(above.0.y)
             && args.world.is_loaded(&above)
@@ -32,6 +45,10 @@ impl BlockBehaviour for GrassBlock {
         const SPREAD_ATTEMPTS: i32 = 128;
         const ATTEMPTS_PER_STEP: i32 = 16;
         const FLOWER_CHANCE: i32 = 8;
+
+        if args.block != &Block::GRASS_BLOCK {
+            return;
+        }
 
         let origin = args.position.up();
         for attempt in 0..SPREAD_ATTEMPTS {
@@ -108,15 +125,17 @@ impl BlockBehaviour for GrassBlock {
         &self,
         args: GetStateForNeighborUpdateArgs<'_>,
     ) -> BlockStateId {
-        let block_above = args.world.get_block(&args.position.up());
-        let mut props = GrassBlockLikeProperties::from_state_id(args.state_id);
-        let should_be_snowy = block_above.has_tag(&tag::Block::MINECRAFT_SNOW);
-        if props.snowy == should_be_snowy {
-            return args.state_id;
+        if args.direction == BlockDirection::Up {
+            let block_above = args.world.get_block(args.neighbor_position);
+            let mut props = GrassBlockLikeProperties::from_state_id(args.state_id);
+            let should_be_snowy = block_above.has_tag(&tag::Block::MINECRAFT_SNOW);
+            if props.snowy == should_be_snowy {
+                return args.state_id;
+            }
+            props.snowy = should_be_snowy;
+            return props.to_state_id(args.block);
         }
-        props.snowy = should_be_snowy;
-
-        props.to_state_id(&Block::GRASS_BLOCK)
+        args.state_id
     }
 }
 

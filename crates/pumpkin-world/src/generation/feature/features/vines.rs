@@ -1,4 +1,4 @@
-use pumpkin_data::{Block, BlockDirection, BlockState};
+use pumpkin_data::{Block, BlockDirection, BlockState, block_properties::VineLikeProperties};
 use pumpkin_util::{math::position::BlockPos, random::RandomGenerator};
 
 use crate::generation::proto_chunk::GenerationCache;
@@ -19,17 +19,19 @@ impl VinesFeature {
         if !chunk.is_air(&pos.0) {
             return false;
         }
+
         for dir in BlockDirection::all() {
-            // TODO
-            if dir == BlockDirection::Down
-                || !GenerationCache::get_block_state(chunk, &pos.offset(dir.to_offset()).0)
-                    .to_state()
-                    .is_full_cube()
-            {
+            if dir == BlockDirection::Down {
                 continue;
             }
-            let mut vine =
-                pumpkin_data::block_properties::VineLikeProperties::default(&Block::VINE);
+
+            let neighbor = pos.offset(dir.to_offset());
+            let neighbor_state = GenerationCache::get_block_state(chunk, &neighbor.0);
+            if !neighbor_state.to_state().is_side_solid(dir.opposite()) {
+                continue;
+            }
+
+            let mut vine = VineLikeProperties::default(&Block::VINE);
             vine.north = dir == BlockDirection::North;
             vine.east = dir == BlockDirection::East;
             vine.south = dir == BlockDirection::South;
@@ -38,6 +40,7 @@ impl VinesFeature {
             chunk.set_block_state(&pos.0, BlockState::from_id(vine.to_state_id(&Block::VINE)));
             return true;
         }
+
         false
     }
 }

@@ -495,8 +495,7 @@ impl HostMob for PluginHostState {
                 .navigator
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .is_idle
-                .load(std::sync::atomic::Ordering::Relaxed);
+                .is_idle();
             !is_idle
         }))
     }
@@ -508,8 +507,7 @@ impl HostMob for PluginHostState {
                 .navigator
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .is_idle
-                .load(std::sync::atomic::Ordering::Relaxed)
+                .is_idle()
         }))
     }
 

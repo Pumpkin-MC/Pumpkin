@@ -19,6 +19,7 @@ pub mod beetroot;
 pub mod carrot;
 pub mod gourds;
 pub mod nether_wart;
+pub mod pitcher_crop;
 pub mod potatoes;
 pub mod sweet_berry_bush;
 pub mod torch_flower;
@@ -76,8 +77,6 @@ trait CropBlockBase: PlantBlockBase {
             }
         }
     }
-
-    //TODO add impl for light level
 }
 
 pub fn get_available_moisture(world: &World, pos: &BlockPos, block: &Block) -> f32 {

@@ -1,6 +1,6 @@
 use crate::block::entities::conduit::ConduitBlockEntity;
-use crate::block::{BlockBehaviour, OnPlaceArgs, PlacedArgs};
-use pumpkin_data::BlockStateId;
+use crate::block::{BlockBehaviour, OnPlaceArgs, PathComputationType, PlacedArgs};
+use pumpkin_data::{BlockState, BlockStateId};
 use pumpkin_macros::pumpkin_block;
 use std::sync::Arc;
 
@@ -21,5 +21,9 @@ impl BlockBehaviour for ConduitBlock {
             let entity = ConduitBlockEntity::new(*args.position);
             args.world.add_block_entity(Arc::new(entity));
         }
+    }
+
+    fn is_pathfindable(&self, _state: &BlockState, _computation_type: PathComputationType) -> bool {
+        false
     }
 }
