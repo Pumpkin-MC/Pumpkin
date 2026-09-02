@@ -1,12 +1,14 @@
 use crate::block::blocks::redstone::block_receives_redstone_power;
-use crate::block::{BlockBehaviour, BlockMetadata, OnNeighborUpdateArgs, OnPlaceArgs};
+use crate::block::entities::skull::SkullBlockEntity;
+use crate::block::{
+    BlockBehaviour, BlockMetadata, OnNeighborUpdateArgs, OnPlaceArgs, PathComputationType,
+    PlacedArgs,
+};
 use crate::entity::EntityBase;
-use pumpkin_data::BlockId;
-use pumpkin_data::BlockStateId;
-use pumpkin_data::block_properties::BlockProperties;
+use pumpkin_data::block_properties::SkeletonSkullLikeProperties;
+use pumpkin_data::{BlockId, BlockState, BlockStateId};
 use pumpkin_world::world::BlockFlags;
-
-type SkeletonSkullLikeProperties = pumpkin_data::block_properties::SkeletonSkullLikeProperties;
+use std::sync::Arc;
 
 pub struct SkullBlock;
 
@@ -23,10 +25,6 @@ impl BlockMetadata for SkullBlock {
         .into()
     }
 }
-
-use crate::block::PlacedArgs;
-use crate::block::entities::skull::SkullBlockEntity;
-use std::sync::Arc;
 
 impl BlockBehaviour for SkullBlock {
     fn placed(&self, args: PlacedArgs<'_>) {
@@ -46,7 +44,7 @@ impl BlockBehaviour for SkullBlock {
     fn on_neighbor_update(&self, args: OnNeighborUpdateArgs<'_>) {
         {
             let state = args.world.get_block_state(args.position);
-            let mut props = SkeletonSkullLikeProperties::from_state_id(state.id, args.block);
+            let mut props = SkeletonSkullLikeProperties::from_state_id(state.id);
             let is_receiving_power = block_receives_redstone_power(args.world, args.position);
             if props.powered != is_receiving_power {
                 props.powered = is_receiving_power;
@@ -57,5 +55,9 @@ impl BlockBehaviour for SkullBlock {
                 );
             }
         }
+    }
+
+    fn is_pathfindable(&self, _state: &BlockState, _computation_type: PathComputationType) -> bool {
+        false
     }
 }

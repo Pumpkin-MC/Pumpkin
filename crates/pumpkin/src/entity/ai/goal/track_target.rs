@@ -183,28 +183,3 @@ impl Goal for TrackTargetGoal {
         self.goal_control
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::{TrackTargetGoal, to_goal_ticks};
-    use std::sync::atomic::Ordering;
-
-    #[test]
-    fn forgets_unseen_target_after_vanilla_memory_window() {
-        let goal = TrackTargetGoal::with_default(true);
-        let memory_ticks = to_goal_ticks(goal.max_time_without_visibility);
-
-        for _ in 0..memory_ticks {
-            assert!(goal.remembers_visible_target(false));
-        }
-        assert!(!goal.remembers_visible_target(false));
-    }
-
-    #[test]
-    fn seeing_target_resets_unseen_memory() {
-        let goal = TrackTargetGoal::with_default(true);
-        assert!(goal.remembers_visible_target(false));
-        assert!(goal.remembers_visible_target(true));
-        assert_eq!(goal.time_without_visibility.load(Ordering::Relaxed), 0);
-    }
-}

@@ -6,9 +6,7 @@ use crate::block::{BlockBehaviour, BrokenArgs, CanPlaceAtArgs, GetStateForNeighb
 use crate::world::World;
 use pumpkin_data::Block;
 use pumpkin_data::BlockStateId;
-use pumpkin_data::block_properties::{
-    BigDripleafLikeProperties, BlockProperties, LadderLikeProperties,
-};
+use pumpkin_data::block_properties::{BigDripleafLikeProperties, LadderLikeProperties};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::world::{BlockAccessor, BlockFlags};
@@ -51,10 +49,9 @@ impl PlantBlockBase for BigDripleafStemBlock {
         block_state: BlockStateId,
     ) -> BlockStateId {
         if !<Self as PlantBlockBase>::can_place_at(self, block_accessor, block_pos) {
-            let block = block_accessor.get_block(block_pos);
+            let _block = block_accessor.get_block(block_pos);
 
-            let dripleaf_stem_props =
-                BigDripleafStemLikeProperties::from_state_id(block_state, block);
+            let dripleaf_stem_props = BigDripleafStemLikeProperties::from_state_id(block_state);
             if dripleaf_stem_props.waterlogged {
                 return Block::WATER.default_state.id;
             }
@@ -67,8 +64,7 @@ pub fn handle_big_dripleaf_breaking(world: &Arc<World>, position: &BlockPos) {
     let support_pos = position.down();
     let (support_block, support_state_id) = world.get_block_and_state_id(&support_pos);
     if support_block == &Block::BIG_DRIPLEAF_STEM {
-        let dripleaf_stem_props =
-            BigDripleafStemLikeProperties::from_state_id(support_state_id, support_block);
+        let dripleaf_stem_props = BigDripleafStemLikeProperties::from_state_id(support_state_id);
 
         let mut dripleaf_props = BigDripleafLikeProperties::default(&Block::BIG_DRIPLEAF);
         dripleaf_props.facing = dripleaf_stem_props.facing;

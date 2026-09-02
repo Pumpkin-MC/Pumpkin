@@ -873,13 +873,169 @@ fn build_configured_features()
     map.insert(
         pumpkin_data::configured_feature::ConfiguredFeature::CrimsonFungus,
         ConfiguredFeature::HugeFungus(
-            crate::generation::feature::features::huge_fungus::HugeFungusFeature {},
+            crate::generation::feature::features::huge_fungus::HugeFungusFeature {
+                valid_base_block: pumpkin_data::Block::CRIMSON_NYLIUM.default_state,
+                stem_state: {
+                    let mut props = std::collections::HashMap::new();
+                    props.insert("axis".to_string(), "y".to_string());
+                    BlockStateCodec {
+                        name: &pumpkin_data::Block::CRIMSON_STEM,
+                        properties: Some(props),
+                    }
+                    .get_state()
+                },
+                hat_state: pumpkin_data::Block::NETHER_WART_BLOCK.default_state,
+                decor_state: pumpkin_data::Block::SHROOMLIGHT.default_state,
+                replaceable_blocks: BlockPredicate::MatchingBlocks(MatchingBlocksBlockPredicate {
+                    offset: OffsetBlocksBlockPredicate { offset: None },
+                    blocks: MatchingBlocksWrapper::Multiple(vec![
+                        "minecraft:oak_sapling".to_string(),
+                        "minecraft:spruce_sapling".to_string(),
+                        "minecraft:birch_sapling".to_string(),
+                        "minecraft:jungle_sapling".to_string(),
+                        "minecraft:acacia_sapling".to_string(),
+                        "minecraft:cherry_sapling".to_string(),
+                        "minecraft:dark_oak_sapling".to_string(),
+                        "minecraft:pale_oak_sapling".to_string(),
+                        "minecraft:mangrove_propagule".to_string(),
+                        "minecraft:dandelion".to_string(),
+                        "minecraft:torchflower".to_string(),
+                        "minecraft:poppy".to_string(),
+                        "minecraft:blue_orchid".to_string(),
+                        "minecraft:allium".to_string(),
+                        "minecraft:azure_bluet".to_string(),
+                        "minecraft:red_tulip".to_string(),
+                        "minecraft:orange_tulip".to_string(),
+                        "minecraft:white_tulip".to_string(),
+                        "minecraft:pink_tulip".to_string(),
+                        "minecraft:oxeye_daisy".to_string(),
+                        "minecraft:cornflower".to_string(),
+                        "minecraft:wither_rose".to_string(),
+                        "minecraft:lily_of_the_valley".to_string(),
+                        "minecraft:brown_mushroom".to_string(),
+                        "minecraft:red_mushroom".to_string(),
+                        "minecraft:wheat".to_string(),
+                        "minecraft:sugar_cane".to_string(),
+                        "minecraft:attached_pumpkin_stem".to_string(),
+                        "minecraft:attached_melon_stem".to_string(),
+                        "minecraft:pumpkin_stem".to_string(),
+                        "minecraft:melon_stem".to_string(),
+                        "minecraft:lily_pad".to_string(),
+                        "minecraft:nether_wart".to_string(),
+                        "minecraft:cocoa".to_string(),
+                        "minecraft:carrots".to_string(),
+                        "minecraft:potatoes".to_string(),
+                        "minecraft:chorus_plant".to_string(),
+                        "minecraft:chorus_flower".to_string(),
+                        "minecraft:torchflower_crop".to_string(),
+                        "minecraft:pitcher_crop".to_string(),
+                        "minecraft:beetroots".to_string(),
+                        "minecraft:sweet_berry_bush".to_string(),
+                        "minecraft:warped_fungus".to_string(),
+                        "minecraft:crimson_fungus".to_string(),
+                        "minecraft:weeping_vines".to_string(),
+                        "minecraft:weeping_vines_plant".to_string(),
+                        "minecraft:twisting_vines".to_string(),
+                        "minecraft:twisting_vines_plant".to_string(),
+                        "minecraft:cave_vines".to_string(),
+                        "minecraft:cave_vines_plant".to_string(),
+                        "minecraft:spore_blossom".to_string(),
+                        "minecraft:azalea".to_string(),
+                        "minecraft:flowering_azalea".to_string(),
+                        "minecraft:moss_carpet".to_string(),
+                        "minecraft:pink_petals".to_string(),
+                        "minecraft:wildflowers".to_string(),
+                        "minecraft:big_dripleaf".to_string(),
+                        "minecraft:big_dripleaf_stem".to_string(),
+                        "minecraft:small_dripleaf".to_string(),
+                    ]),
+                }),
+                planted: false,
+            },
         ),
     );
     map.insert(
         pumpkin_data::configured_feature::ConfiguredFeature::CrimsonFungusPlanted,
         ConfiguredFeature::HugeFungus(
-            crate::generation::feature::features::huge_fungus::HugeFungusFeature {},
+            crate::generation::feature::features::huge_fungus::HugeFungusFeature {
+                valid_base_block: pumpkin_data::Block::CRIMSON_NYLIUM.default_state,
+                stem_state: {
+                    let mut props = std::collections::HashMap::new();
+                    props.insert("axis".to_string(), "y".to_string());
+                    BlockStateCodec {
+                        name: &pumpkin_data::Block::CRIMSON_STEM,
+                        properties: Some(props),
+                    }
+                    .get_state()
+                },
+                hat_state: pumpkin_data::Block::NETHER_WART_BLOCK.default_state,
+                decor_state: pumpkin_data::Block::SHROOMLIGHT.default_state,
+                replaceable_blocks: BlockPredicate::MatchingBlocks(MatchingBlocksBlockPredicate {
+                    offset: OffsetBlocksBlockPredicate { offset: None },
+                    blocks: MatchingBlocksWrapper::Multiple(vec![
+                        "minecraft:oak_sapling".to_string(),
+                        "minecraft:spruce_sapling".to_string(),
+                        "minecraft:birch_sapling".to_string(),
+                        "minecraft:jungle_sapling".to_string(),
+                        "minecraft:acacia_sapling".to_string(),
+                        "minecraft:cherry_sapling".to_string(),
+                        "minecraft:dark_oak_sapling".to_string(),
+                        "minecraft:pale_oak_sapling".to_string(),
+                        "minecraft:mangrove_propagule".to_string(),
+                        "minecraft:dandelion".to_string(),
+                        "minecraft:torchflower".to_string(),
+                        "minecraft:poppy".to_string(),
+                        "minecraft:blue_orchid".to_string(),
+                        "minecraft:allium".to_string(),
+                        "minecraft:azure_bluet".to_string(),
+                        "minecraft:red_tulip".to_string(),
+                        "minecraft:orange_tulip".to_string(),
+                        "minecraft:white_tulip".to_string(),
+                        "minecraft:pink_tulip".to_string(),
+                        "minecraft:oxeye_daisy".to_string(),
+                        "minecraft:cornflower".to_string(),
+                        "minecraft:wither_rose".to_string(),
+                        "minecraft:lily_of_the_valley".to_string(),
+                        "minecraft:brown_mushroom".to_string(),
+                        "minecraft:red_mushroom".to_string(),
+                        "minecraft:wheat".to_string(),
+                        "minecraft:sugar_cane".to_string(),
+                        "minecraft:attached_pumpkin_stem".to_string(),
+                        "minecraft:attached_melon_stem".to_string(),
+                        "minecraft:pumpkin_stem".to_string(),
+                        "minecraft:melon_stem".to_string(),
+                        "minecraft:lily_pad".to_string(),
+                        "minecraft:nether_wart".to_string(),
+                        "minecraft:cocoa".to_string(),
+                        "minecraft:carrots".to_string(),
+                        "minecraft:potatoes".to_string(),
+                        "minecraft:chorus_plant".to_string(),
+                        "minecraft:chorus_flower".to_string(),
+                        "minecraft:torchflower_crop".to_string(),
+                        "minecraft:pitcher_crop".to_string(),
+                        "minecraft:beetroots".to_string(),
+                        "minecraft:sweet_berry_bush".to_string(),
+                        "minecraft:warped_fungus".to_string(),
+                        "minecraft:crimson_fungus".to_string(),
+                        "minecraft:weeping_vines".to_string(),
+                        "minecraft:weeping_vines_plant".to_string(),
+                        "minecraft:twisting_vines".to_string(),
+                        "minecraft:twisting_vines_plant".to_string(),
+                        "minecraft:cave_vines".to_string(),
+                        "minecraft:cave_vines_plant".to_string(),
+                        "minecraft:spore_blossom".to_string(),
+                        "minecraft:azalea".to_string(),
+                        "minecraft:flowering_azalea".to_string(),
+                        "minecraft:moss_carpet".to_string(),
+                        "minecraft:pink_petals".to_string(),
+                        "minecraft:wildflowers".to_string(),
+                        "minecraft:big_dripleaf".to_string(),
+                        "minecraft:big_dripleaf_stem".to_string(),
+                        "minecraft:small_dripleaf".to_string(),
+                    ]),
+                }),
+                planted: true,
+            },
         ),
     );
     map.insert(
@@ -963,7 +1119,26 @@ fn build_configured_features()
     map.insert(
         pumpkin_data::configured_feature::ConfiguredFeature::Delta,
         ConfiguredFeature::DeltaFeature(
-            crate::generation::feature::features::delta_feature::DeltaFeatureFeature {},
+            crate::generation::feature::features::delta_feature::DeltaFeatureFeature {
+                contents: {
+                    let mut props = std::collections::HashMap::new();
+                    props.insert("level".to_string(), "0".to_string());
+                    BlockStateCodec {
+                        name: &pumpkin_data::Block::LAVA,
+                        properties: Some(props),
+                    }
+                    .get_state()
+                },
+                rim: pumpkin_data::Block::MAGMA_BLOCK.default_state,
+                size: IntProvider::Object(NormalIntProvider::Uniform(UniformIntProvider {
+                    min_inclusive: 3i32,
+                    max_inclusive: 7i32,
+                })),
+                rim_size: IntProvider::Object(NormalIntProvider::Uniform(UniformIntProvider {
+                    min_inclusive: 0i32,
+                    max_inclusive: 2i32,
+                })),
+            },
         ),
     );
     map.insert(
@@ -1591,6 +1766,27 @@ fn build_configured_features()
                     .get_state()
                 },
             }),
+            log_length: IntProvider::Object(NormalIntProvider::Uniform(UniformIntProvider {
+                min_inclusive: 5i32,
+                max_inclusive: 8i32,
+            })),
+            stump_decorators: vec![],
+            log_decorators: vec![TreeDecorator::AttachedToLogs(AttachedToLogsTreeDecorator {
+                probability: 0.1f32,
+                block_provider: BlockStateProvider::Weighted(WeightedBlockStateProvider {
+                    entries: vec![
+                        Weighted {
+                            data: pumpkin_data::Block::RED_MUSHROOM.default_state,
+                            weight: 2i32,
+                        },
+                        Weighted {
+                            data: pumpkin_data::Block::BROWN_MUSHROOM.default_state,
+                            weight: 1i32,
+                        },
+                    ],
+                }),
+                directions: vec![BlockDirection::Up],
+            })],
         }),
     );
     map.insert(
@@ -1607,6 +1803,27 @@ fn build_configured_features()
                     .get_state()
                 },
             }),
+            log_length: IntProvider::Object(NormalIntProvider::Uniform(UniformIntProvider {
+                min_inclusive: 4i32,
+                max_inclusive: 11i32,
+            })),
+            stump_decorators: vec![TreeDecorator::TrunkVine(TrunkVineTreeDecorator)],
+            log_decorators: vec![TreeDecorator::AttachedToLogs(AttachedToLogsTreeDecorator {
+                probability: 0.1f32,
+                block_provider: BlockStateProvider::Weighted(WeightedBlockStateProvider {
+                    entries: vec![
+                        Weighted {
+                            data: pumpkin_data::Block::RED_MUSHROOM.default_state,
+                            weight: 2i32,
+                        },
+                        Weighted {
+                            data: pumpkin_data::Block::BROWN_MUSHROOM.default_state,
+                            weight: 1i32,
+                        },
+                    ],
+                }),
+                directions: vec![BlockDirection::Up],
+            })],
         }),
     );
     map.insert(
@@ -1623,6 +1840,27 @@ fn build_configured_features()
                     .get_state()
                 },
             }),
+            log_length: IntProvider::Object(NormalIntProvider::Uniform(UniformIntProvider {
+                min_inclusive: 4i32,
+                max_inclusive: 7i32,
+            })),
+            stump_decorators: vec![TreeDecorator::TrunkVine(TrunkVineTreeDecorator)],
+            log_decorators: vec![TreeDecorator::AttachedToLogs(AttachedToLogsTreeDecorator {
+                probability: 0.1f32,
+                block_provider: BlockStateProvider::Weighted(WeightedBlockStateProvider {
+                    entries: vec![
+                        Weighted {
+                            data: pumpkin_data::Block::RED_MUSHROOM.default_state,
+                            weight: 2i32,
+                        },
+                        Weighted {
+                            data: pumpkin_data::Block::BROWN_MUSHROOM.default_state,
+                            weight: 1i32,
+                        },
+                    ],
+                }),
+                directions: vec![BlockDirection::Up],
+            })],
         }),
     );
     map.insert(
@@ -1639,6 +1877,27 @@ fn build_configured_features()
                     .get_state()
                 },
             }),
+            log_length: IntProvider::Object(NormalIntProvider::Uniform(UniformIntProvider {
+                min_inclusive: 6i32,
+                max_inclusive: 10i32,
+            })),
+            stump_decorators: vec![],
+            log_decorators: vec![TreeDecorator::AttachedToLogs(AttachedToLogsTreeDecorator {
+                probability: 0.1f32,
+                block_provider: BlockStateProvider::Weighted(WeightedBlockStateProvider {
+                    entries: vec![
+                        Weighted {
+                            data: pumpkin_data::Block::RED_MUSHROOM.default_state,
+                            weight: 2i32,
+                        },
+                        Weighted {
+                            data: pumpkin_data::Block::BROWN_MUSHROOM.default_state,
+                            weight: 1i32,
+                        },
+                    ],
+                }),
+                directions: vec![BlockDirection::Up],
+            })],
         }),
     );
     map.insert(
@@ -1655,6 +1914,27 @@ fn build_configured_features()
                     .get_state()
                 },
             }),
+            log_length: IntProvider::Object(NormalIntProvider::Uniform(UniformIntProvider {
+                min_inclusive: 5i32,
+                max_inclusive: 15i32,
+            })),
+            stump_decorators: vec![],
+            log_decorators: vec![TreeDecorator::AttachedToLogs(AttachedToLogsTreeDecorator {
+                probability: 0.1f32,
+                block_provider: BlockStateProvider::Weighted(WeightedBlockStateProvider {
+                    entries: vec![
+                        Weighted {
+                            data: pumpkin_data::Block::RED_MUSHROOM.default_state,
+                            weight: 2i32,
+                        },
+                        Weighted {
+                            data: pumpkin_data::Block::BROWN_MUSHROOM.default_state,
+                            weight: 1i32,
+                        },
+                    ],
+                }),
+                directions: vec![BlockDirection::Up],
+            })],
         }),
     );
     map . insert (pumpkin_data :: configured_feature :: ConfiguredFeature :: FancyOak , ConfiguredFeature :: Tree (Box :: new (TreeFeature { trunk_provider : BlockStateProvider :: Simple (SimpleStateProvider { state : { let mut props = std :: collections :: HashMap :: new () ; props . insert ("axis" . to_string () , "y" . to_string ()) ; BlockStateCodec { name : & pumpkin_data :: Block :: OAK_LOG , properties : Some (props) , } . get_state () } }) , trunk_placer : TrunkPlacer { base_height : 3u8 , height_rand_a : 11u8 , height_rand_b : 0u8 , r#type : TrunkType :: Fancy (FancyTrunkPlacer) , } , foliage_provider : BlockStateProvider :: Simple (SimpleStateProvider { state : { let mut props = std :: collections :: HashMap :: new () ; props . insert ("distance" . to_string () , "7" . to_string ()) ; props . insert ("persistent" . to_string () , "false" . to_string ()) ; props . insert ("waterlogged" . to_string () , "false" . to_string ()) ; BlockStateCodec { name : & pumpkin_data :: Block :: OAK_LEAVES , properties : Some (props) , } . get_state () } }) , foliage_placer : FoliagePlacer { radius : IntProvider :: Constant (2i32) , offset : IntProvider :: Constant (4i32) , r#type : FoliageType :: Fancy (LargeOakFoliagePlacer { height : 4i32 }) } , minimum_size : FeatureSize { min_clipped_height : Some (4u8) , r#type : FeatureSizeType :: TwoLayersFeatureSize (TwoLayersFeatureSize { limit : 0u8 , lower_size : 0u8 , upper_size : 0u8 , }) } , ignore_vines : true , below_trunk_provider : BlockStateProvider :: Rule (RuleBasedBlockStateProvider { fallback : None , rules : vec ! [BlockStateRule { if_true : BlockPredicate :: Not (NotBlockPredicate { predicate : Box :: new (BlockPredicate :: MatchingBlockTag (MatchingBlockTagPredicate { offset : OffsetBlocksBlockPredicate { offset : None } , tag : pumpkin_data :: tag :: Block :: MINECRAFT_CANNOT_REPLACE_BELOW_TREE_TRUNK , })) , }) , then : BlockStateProvider :: Simple (SimpleStateProvider { state : pumpkin_data :: Block :: DIRT . default_state }) }] , }) , decorators : vec ! [] , root_placer : None , }))) ;
@@ -2300,7 +2580,26 @@ fn build_configured_features()
     map.insert(
         pumpkin_data::configured_feature::ConfiguredFeature::GlowLichen,
         ConfiguredFeature::MultifaceGrowth(
-            crate::generation::feature::features::multiface_growth::MultifaceGrowthFeature {},
+            crate::generation::feature::features::multiface_growth::MultifaceGrowthFeature {
+                place_block: pumpkin_data::BlockId::GLOW_LICHEN,
+                search_range: 20i32,
+                can_place_on_floor: false,
+                can_place_on_ceiling: true,
+                can_place_on_wall: true,
+                chance_of_spreading: 0.5f32,
+                can_be_placed_on: vec![
+                    pumpkin_data::BlockId::STONE,
+                    pumpkin_data::BlockId::ANDESITE,
+                    pumpkin_data::BlockId::DIORITE,
+                    pumpkin_data::BlockId::GRANITE,
+                    pumpkin_data::BlockId::DRIPSTONE_BLOCK,
+                    pumpkin_data::BlockId::CALCITE,
+                    pumpkin_data::BlockId::TUFF,
+                    pumpkin_data::BlockId::DEEPSLATE,
+                    pumpkin_data::BlockId::SULFUR,
+                    pumpkin_data::BlockId::CINNABAR,
+                ],
+            },
         ),
     );
     map.insert(
@@ -2402,7 +2701,7 @@ fn build_configured_features()
         ),
     );
     map . insert (pumpkin_data :: configured_feature :: ConfiguredFeature :: JungleBush , ConfiguredFeature :: Tree (Box :: new (TreeFeature { trunk_provider : BlockStateProvider :: Simple (SimpleStateProvider { state : { let mut props = std :: collections :: HashMap :: new () ; props . insert ("axis" . to_string () , "y" . to_string ()) ; BlockStateCodec { name : & pumpkin_data :: Block :: JUNGLE_LOG , properties : Some (props) , } . get_state () } }) , trunk_placer : TrunkPlacer { base_height : 1u8 , height_rand_a : 0u8 , height_rand_b : 0u8 , r#type : TrunkType :: Straight (StraightTrunkPlacer) , } , foliage_provider : BlockStateProvider :: Simple (SimpleStateProvider { state : { let mut props = std :: collections :: HashMap :: new () ; props . insert ("distance" . to_string () , "7" . to_string ()) ; props . insert ("persistent" . to_string () , "false" . to_string ()) ; props . insert ("waterlogged" . to_string () , "false" . to_string ()) ; BlockStateCodec { name : & pumpkin_data :: Block :: OAK_LEAVES , properties : Some (props) , } . get_state () } }) , foliage_placer : FoliagePlacer { radius : IntProvider :: Constant (2i32) , offset : IntProvider :: Constant (1i32) , r#type : FoliageType :: Bush (BushFoliagePlacer { height : 2i32 }) } , minimum_size : FeatureSize { min_clipped_height : None , r#type : FeatureSizeType :: TwoLayersFeatureSize (TwoLayersFeatureSize { limit : 0u8 , lower_size : 0u8 , upper_size : 0u8 , }) } , ignore_vines : false , below_trunk_provider : BlockStateProvider :: Rule (RuleBasedBlockStateProvider { fallback : None , rules : vec ! [BlockStateRule { if_true : BlockPredicate :: Not (NotBlockPredicate { predicate : Box :: new (BlockPredicate :: MatchingBlockTag (MatchingBlockTagPredicate { offset : OffsetBlocksBlockPredicate { offset : None } , tag : pumpkin_data :: tag :: Block :: MINECRAFT_CANNOT_REPLACE_BELOW_TREE_TRUNK , })) , }) , then : BlockStateProvider :: Simple (SimpleStateProvider { state : pumpkin_data :: Block :: DIRT . default_state }) }] , }) , decorators : vec ! [] , root_placer : None , }))) ;
-    map . insert (pumpkin_data :: configured_feature :: ConfiguredFeature :: JungleTree , ConfiguredFeature :: Tree (Box :: new (TreeFeature { trunk_provider : BlockStateProvider :: Simple (SimpleStateProvider { state : { let mut props = std :: collections :: HashMap :: new () ; props . insert ("axis" . to_string () , "y" . to_string ()) ; BlockStateCodec { name : & pumpkin_data :: Block :: JUNGLE_LOG , properties : Some (props) , } . get_state () } }) , trunk_placer : TrunkPlacer { base_height : 4u8 , height_rand_a : 8u8 , height_rand_b : 0u8 , r#type : TrunkType :: Straight (StraightTrunkPlacer) , } , foliage_provider : BlockStateProvider :: Simple (SimpleStateProvider { state : { let mut props = std :: collections :: HashMap :: new () ; props . insert ("distance" . to_string () , "7" . to_string ()) ; props . insert ("persistent" . to_string () , "false" . to_string ()) ; props . insert ("waterlogged" . to_string () , "false" . to_string ()) ; BlockStateCodec { name : & pumpkin_data :: Block :: JUNGLE_LEAVES , properties : Some (props) , } . get_state () } }) , foliage_placer : FoliagePlacer { radius : IntProvider :: Constant (2i32) , offset : IntProvider :: Constant (0i32) , r#type : FoliageType :: Blob (BlobFoliagePlacer { height : 3i32 }) } , minimum_size : FeatureSize { min_clipped_height : None , r#type : FeatureSizeType :: TwoLayersFeatureSize (TwoLayersFeatureSize { limit : 1u8 , lower_size : 0u8 , upper_size : 1u8 , }) } , ignore_vines : true , below_trunk_provider : BlockStateProvider :: Rule (RuleBasedBlockStateProvider { fallback : None , rules : vec ! [BlockStateRule { if_true : BlockPredicate :: Not (NotBlockPredicate { predicate : Box :: new (BlockPredicate :: MatchingBlockTag (MatchingBlockTagPredicate { offset : OffsetBlocksBlockPredicate { offset : None } , tag : pumpkin_data :: tag :: Block :: MINECRAFT_CANNOT_REPLACE_BELOW_TREE_TRUNK , })) , }) , then : BlockStateProvider :: Simple (SimpleStateProvider { state : pumpkin_data :: Block :: DIRT . default_state }) }] , }) , decorators : vec ! [TreeDecorator :: Cocoa (CocoaTreeDecorator { }) , TreeDecorator :: TrunkVine (TrunkVineTreeDecorator) , TreeDecorator :: LeaveVine (LeavesVineTreeDecorator { probability : 0.25f32 })] , root_placer : None , }))) ;
+    map . insert (pumpkin_data :: configured_feature :: ConfiguredFeature :: JungleTree , ConfiguredFeature :: Tree (Box :: new (TreeFeature { trunk_provider : BlockStateProvider :: Simple (SimpleStateProvider { state : { let mut props = std :: collections :: HashMap :: new () ; props . insert ("axis" . to_string () , "y" . to_string ()) ; BlockStateCodec { name : & pumpkin_data :: Block :: JUNGLE_LOG , properties : Some (props) , } . get_state () } }) , trunk_placer : TrunkPlacer { base_height : 4u8 , height_rand_a : 8u8 , height_rand_b : 0u8 , r#type : TrunkType :: Straight (StraightTrunkPlacer) , } , foliage_provider : BlockStateProvider :: Simple (SimpleStateProvider { state : { let mut props = std :: collections :: HashMap :: new () ; props . insert ("distance" . to_string () , "7" . to_string ()) ; props . insert ("persistent" . to_string () , "false" . to_string ()) ; props . insert ("waterlogged" . to_string () , "false" . to_string ()) ; BlockStateCodec { name : & pumpkin_data :: Block :: JUNGLE_LEAVES , properties : Some (props) , } . get_state () } }) , foliage_placer : FoliagePlacer { radius : IntProvider :: Constant (2i32) , offset : IntProvider :: Constant (0i32) , r#type : FoliageType :: Blob (BlobFoliagePlacer { height : 3i32 }) } , minimum_size : FeatureSize { min_clipped_height : None , r#type : FeatureSizeType :: TwoLayersFeatureSize (TwoLayersFeatureSize { limit : 1u8 , lower_size : 0u8 , upper_size : 1u8 , }) } , ignore_vines : true , below_trunk_provider : BlockStateProvider :: Rule (RuleBasedBlockStateProvider { fallback : None , rules : vec ! [BlockStateRule { if_true : BlockPredicate :: Not (NotBlockPredicate { predicate : Box :: new (BlockPredicate :: MatchingBlockTag (MatchingBlockTagPredicate { offset : OffsetBlocksBlockPredicate { offset : None } , tag : pumpkin_data :: tag :: Block :: MINECRAFT_CANNOT_REPLACE_BELOW_TREE_TRUNK , })) , }) , then : BlockStateProvider :: Simple (SimpleStateProvider { state : pumpkin_data :: Block :: DIRT . default_state }) }] , }) , decorators : vec ! [TreeDecorator :: Cocoa (CocoaTreeDecorator { probability : 0.2f32 }) , TreeDecorator :: TrunkVine (TrunkVineTreeDecorator) , TreeDecorator :: LeaveVine (LeavesVineTreeDecorator { probability : 0.25f32 })] , root_placer : None , }))) ;
     map . insert (pumpkin_data :: configured_feature :: ConfiguredFeature :: JungleTreeNoVine , ConfiguredFeature :: Tree (Box :: new (TreeFeature { trunk_provider : BlockStateProvider :: Simple (SimpleStateProvider { state : { let mut props = std :: collections :: HashMap :: new () ; props . insert ("axis" . to_string () , "y" . to_string ()) ; BlockStateCodec { name : & pumpkin_data :: Block :: JUNGLE_LOG , properties : Some (props) , } . get_state () } }) , trunk_placer : TrunkPlacer { base_height : 4u8 , height_rand_a : 8u8 , height_rand_b : 0u8 , r#type : TrunkType :: Straight (StraightTrunkPlacer) , } , foliage_provider : BlockStateProvider :: Simple (SimpleStateProvider { state : { let mut props = std :: collections :: HashMap :: new () ; props . insert ("distance" . to_string () , "7" . to_string ()) ; props . insert ("persistent" . to_string () , "false" . to_string ()) ; props . insert ("waterlogged" . to_string () , "false" . to_string ()) ; BlockStateCodec { name : & pumpkin_data :: Block :: JUNGLE_LEAVES , properties : Some (props) , } . get_state () } }) , foliage_placer : FoliagePlacer { radius : IntProvider :: Constant (2i32) , offset : IntProvider :: Constant (0i32) , r#type : FoliageType :: Blob (BlobFoliagePlacer { height : 3i32 }) } , minimum_size : FeatureSize { min_clipped_height : None , r#type : FeatureSizeType :: TwoLayersFeatureSize (TwoLayersFeatureSize { limit : 1u8 , lower_size : 0u8 , upper_size : 1u8 , }) } , ignore_vines : true , below_trunk_provider : BlockStateProvider :: Rule (RuleBasedBlockStateProvider { fallback : None , rules : vec ! [BlockStateRule { if_true : BlockPredicate :: Not (NotBlockPredicate { predicate : Box :: new (BlockPredicate :: MatchingBlockTag (MatchingBlockTagPredicate { offset : OffsetBlocksBlockPredicate { offset : None } , tag : pumpkin_data :: tag :: Block :: MINECRAFT_CANNOT_REPLACE_BELOW_TREE_TRUNK , })) , }) , then : BlockStateProvider :: Simple (SimpleStateProvider { state : pumpkin_data :: Block :: DIRT . default_state }) }] , }) , decorators : vec ! [] , root_placer : None , }))) ;
     map.insert(
         pumpkin_data::configured_feature::ConfiguredFeature::Kelp,
@@ -2648,7 +2947,7 @@ fn build_configured_features()
             })),
         }),
     );
-    map . insert (pumpkin_data :: configured_feature :: ConfiguredFeature :: Mangrove , ConfiguredFeature :: Tree (Box :: new (TreeFeature { trunk_provider : BlockStateProvider :: Simple (SimpleStateProvider { state : { let mut props = std :: collections :: HashMap :: new () ; props . insert ("axis" . to_string () , "y" . to_string ()) ; BlockStateCodec { name : & pumpkin_data :: Block :: MANGROVE_LOG , properties : Some (props) , } . get_state () } }) , trunk_placer : TrunkPlacer { base_height : 2u8 , height_rand_a : 1u8 , height_rand_b : 4u8 , r#type : TrunkType :: UpwardsBranching (UpwardsBranchingTrunkPlacer { extra_branch_steps : IntProvider :: Object (NormalIntProvider :: Uniform (UniformIntProvider { min_inclusive : 1i32 , max_inclusive : 4i32 })) , place_branch_per_log_probability : 0.5f32 , extra_branch_length : IntProvider :: Object (NormalIntProvider :: Uniform (UniformIntProvider { min_inclusive : 0i32 , max_inclusive : 1i32 })) , can_grow_through : & pumpkin_data :: tag :: Block :: MINECRAFT_MANGROVE_LOGS_CAN_GROW_THROUGH . 1 , }) , } , foliage_provider : BlockStateProvider :: Simple (SimpleStateProvider { state : { let mut props = std :: collections :: HashMap :: new () ; props . insert ("distance" . to_string () , "7" . to_string ()) ; props . insert ("persistent" . to_string () , "false" . to_string ()) ; props . insert ("waterlogged" . to_string () , "false" . to_string ()) ; BlockStateCodec { name : & pumpkin_data :: Block :: MANGROVE_LEAVES , properties : Some (props) , } . get_state () } }) , foliage_placer : FoliagePlacer { radius : IntProvider :: Constant (3i32) , offset : IntProvider :: Constant (0i32) , r#type : FoliageType :: RandomSpread (RandomSpreadFoliagePlacer { foliage_height : IntProvider :: Constant (2i32) , leaf_placement_attempts : 70i32 , }) } , minimum_size : FeatureSize { min_clipped_height : None , r#type : FeatureSizeType :: TwoLayersFeatureSize (TwoLayersFeatureSize { limit : 2u8 , lower_size : 0u8 , upper_size : 2u8 , }) } , ignore_vines : true , below_trunk_provider : BlockStateProvider :: Rule (RuleBasedBlockStateProvider { fallback : None , rules : vec ! [BlockStateRule { if_true : BlockPredicate :: Not (NotBlockPredicate { predicate : Box :: new (BlockPredicate :: MatchingBlockTag (MatchingBlockTagPredicate { offset : OffsetBlocksBlockPredicate { offset : None } , tag : pumpkin_data :: tag :: Block :: MINECRAFT_CANNOT_REPLACE_BELOW_TREE_TRUNK , })) , }) , then : BlockStateProvider :: Simple (SimpleStateProvider { state : pumpkin_data :: Block :: DIRT . default_state }) }] , }) , decorators : vec ! [TreeDecorator :: LeaveVine (LeavesVineTreeDecorator { probability : 0.125f32 }) , TreeDecorator :: AttachedToLeaves (AttachedToLeavesTreeDecorator { }) , TreeDecorator :: Beehive (BeehiveTreeDecorator { probability : 0.01f32 })] , root_placer : Some (RootPlacer :: Mangrove (MangroveRootPlacer { trunk_offset_y : IntProvider :: Object (NormalIntProvider :: Uniform (UniformIntProvider { min_inclusive : 1i32 , max_inclusive : 3i32 })) , root_provider : BlockStateProvider :: Simple (SimpleStateProvider { state : { let mut props = std :: collections :: HashMap :: new () ; props . insert ("waterlogged" . to_string () , "false" . to_string ()) ; BlockStateCodec { name : & pumpkin_data :: Block :: MANGROVE_ROOTS , properties : Some (props) , } . get_state () } }) , above_root_placement : Some (AboveRootPlacement { above_root_provider : BlockStateProvider :: Simple (SimpleStateProvider { state : pumpkin_data :: Block :: MOSS_CARPET . default_state }) , above_root_placement_chance : 0.5f32 , }) , mangrove_root_placement : MangroveRootPlacement { can_grow_through : & pumpkin_data :: tag :: Block :: MINECRAFT_MANGROVE_ROOTS_CAN_GROW_THROUGH . 1 , muddy_roots_in : const { & [pumpkin_data :: BlockId :: MUD . as_u16 () , pumpkin_data :: BlockId :: MUDDY_MANGROVE_ROOTS . as_u16 ()] } , muddy_roots_provider : BlockStateProvider :: Simple (SimpleStateProvider { state : { let mut props = std :: collections :: HashMap :: new () ; props . insert ("axis" . to_string () , "y" . to_string ()) ; BlockStateCodec { name : & pumpkin_data :: Block :: MUDDY_MANGROVE_ROOTS , properties : Some (props) , } . get_state () } }) , max_root_width : 8i32 , max_root_length : 15i32 , random_skew_chance : 0.2f32 , } , })) , }))) ;
+    map . insert (pumpkin_data :: configured_feature :: ConfiguredFeature :: Mangrove , ConfiguredFeature :: Tree (Box :: new (TreeFeature { trunk_provider : BlockStateProvider :: Simple (SimpleStateProvider { state : { let mut props = std :: collections :: HashMap :: new () ; props . insert ("axis" . to_string () , "y" . to_string ()) ; BlockStateCodec { name : & pumpkin_data :: Block :: MANGROVE_LOG , properties : Some (props) , } . get_state () } }) , trunk_placer : TrunkPlacer { base_height : 2u8 , height_rand_a : 1u8 , height_rand_b : 4u8 , r#type : TrunkType :: UpwardsBranching (UpwardsBranchingTrunkPlacer { extra_branch_steps : IntProvider :: Object (NormalIntProvider :: Uniform (UniformIntProvider { min_inclusive : 1i32 , max_inclusive : 4i32 })) , place_branch_per_log_probability : 0.5f32 , extra_branch_length : IntProvider :: Object (NormalIntProvider :: Uniform (UniformIntProvider { min_inclusive : 0i32 , max_inclusive : 1i32 })) , can_grow_through : & pumpkin_data :: tag :: Block :: MINECRAFT_MANGROVE_LOGS_CAN_GROW_THROUGH . 1 , }) , } , foliage_provider : BlockStateProvider :: Simple (SimpleStateProvider { state : { let mut props = std :: collections :: HashMap :: new () ; props . insert ("distance" . to_string () , "7" . to_string ()) ; props . insert ("persistent" . to_string () , "false" . to_string ()) ; props . insert ("waterlogged" . to_string () , "false" . to_string ()) ; BlockStateCodec { name : & pumpkin_data :: Block :: MANGROVE_LEAVES , properties : Some (props) , } . get_state () } }) , foliage_placer : FoliagePlacer { radius : IntProvider :: Constant (3i32) , offset : IntProvider :: Constant (0i32) , r#type : FoliageType :: RandomSpread (RandomSpreadFoliagePlacer { foliage_height : IntProvider :: Constant (2i32) , leaf_placement_attempts : 70i32 , }) } , minimum_size : FeatureSize { min_clipped_height : None , r#type : FeatureSizeType :: TwoLayersFeatureSize (TwoLayersFeatureSize { limit : 2u8 , lower_size : 0u8 , upper_size : 2u8 , }) } , ignore_vines : true , below_trunk_provider : BlockStateProvider :: Rule (RuleBasedBlockStateProvider { fallback : None , rules : vec ! [BlockStateRule { if_true : BlockPredicate :: Not (NotBlockPredicate { predicate : Box :: new (BlockPredicate :: MatchingBlockTag (MatchingBlockTagPredicate { offset : OffsetBlocksBlockPredicate { offset : None } , tag : pumpkin_data :: tag :: Block :: MINECRAFT_CANNOT_REPLACE_BELOW_TREE_TRUNK , })) , }) , then : BlockStateProvider :: Simple (SimpleStateProvider { state : pumpkin_data :: Block :: DIRT . default_state }) }] , }) , decorators : vec ! [TreeDecorator :: LeaveVine (LeavesVineTreeDecorator { probability : 0.125f32 }) , TreeDecorator :: AttachedToLeaves (AttachedToLeavesTreeDecorator { probability : 0.14f32 , exclusion_radius_xz : 1i32 , exclusion_radius_y : 0i32 , block_provider : BlockStateProvider :: RandomizedInt (RandomizedIntBlockStateProvider { source : Box :: new (BlockStateProvider :: Simple (SimpleStateProvider { state : { let mut props = std :: collections :: HashMap :: new () ; props . insert ("age" . to_string () , "0" . to_string ()) ; props . insert ("hanging" . to_string () , "true" . to_string ()) ; props . insert ("stage" . to_string () , "0" . to_string ()) ; props . insert ("waterlogged" . to_string () , "false" . to_string ()) ; BlockStateCodec { name : & pumpkin_data :: Block :: MANGROVE_PROPAGULE , properties : Some (props) , } . get_state () } })) , property : "age" . to_string () , values : IntProvider :: Object (NormalIntProvider :: Uniform (UniformIntProvider { min_inclusive : 0i32 , max_inclusive : 4i32 })) , }) , required_empty_blocks : 2i32 , directions : vec ! [BlockDirection :: Down] , }) , TreeDecorator :: Beehive (BeehiveTreeDecorator { probability : 0.01f32 })] , root_placer : Some (RootPlacer :: Mangrove (MangroveRootPlacer { trunk_offset_y : IntProvider :: Object (NormalIntProvider :: Uniform (UniformIntProvider { min_inclusive : 1i32 , max_inclusive : 3i32 })) , root_provider : BlockStateProvider :: Simple (SimpleStateProvider { state : { let mut props = std :: collections :: HashMap :: new () ; props . insert ("waterlogged" . to_string () , "false" . to_string ()) ; BlockStateCodec { name : & pumpkin_data :: Block :: MANGROVE_ROOTS , properties : Some (props) , } . get_state () } }) , above_root_placement : Some (AboveRootPlacement { above_root_provider : BlockStateProvider :: Simple (SimpleStateProvider { state : pumpkin_data :: Block :: MOSS_CARPET . default_state }) , above_root_placement_chance : 0.5f32 , }) , mangrove_root_placement : MangroveRootPlacement { can_grow_through : & pumpkin_data :: tag :: Block :: MINECRAFT_MANGROVE_ROOTS_CAN_GROW_THROUGH . 1 , muddy_roots_in : const { & [pumpkin_data :: BlockId :: MUD . as_u16 () , pumpkin_data :: BlockId :: MUDDY_MANGROVE_ROOTS . as_u16 ()] } , muddy_roots_provider : BlockStateProvider :: Simple (SimpleStateProvider { state : { let mut props = std :: collections :: HashMap :: new () ; props . insert ("axis" . to_string () , "y" . to_string ()) ; BlockStateCodec { name : & pumpkin_data :: Block :: MUDDY_MANGROVE_ROOTS , properties : Some (props) , } . get_state () } }) , max_root_width : 8i32 , max_root_length : 15i32 , random_skew_chance : 0.2f32 , } , })) , }))) ;
     map.insert(
         pumpkin_data::configured_feature::ConfiguredFeature::MangroveVegetation,
         ConfiguredFeature::RandomSelector(RandomFeature {
@@ -2678,8 +2977,8 @@ fn build_configured_features()
         }),
     );
     map . insert (pumpkin_data :: configured_feature :: ConfiguredFeature :: MegaJungleTree , ConfiguredFeature :: Tree (Box :: new (TreeFeature { trunk_provider : BlockStateProvider :: Simple (SimpleStateProvider { state : { let mut props = std :: collections :: HashMap :: new () ; props . insert ("axis" . to_string () , "y" . to_string ()) ; BlockStateCodec { name : & pumpkin_data :: Block :: JUNGLE_LOG , properties : Some (props) , } . get_state () } }) , trunk_placer : TrunkPlacer { base_height : 10u8 , height_rand_a : 2u8 , height_rand_b : 19u8 , r#type : TrunkType :: MegaJungle (MegaJungleTrunkPlacer) , } , foliage_provider : BlockStateProvider :: Simple (SimpleStateProvider { state : { let mut props = std :: collections :: HashMap :: new () ; props . insert ("distance" . to_string () , "7" . to_string ()) ; props . insert ("persistent" . to_string () , "false" . to_string ()) ; props . insert ("waterlogged" . to_string () , "false" . to_string ()) ; BlockStateCodec { name : & pumpkin_data :: Block :: JUNGLE_LEAVES , properties : Some (props) , } . get_state () } }) , foliage_placer : FoliagePlacer { radius : IntProvider :: Constant (2i32) , offset : IntProvider :: Constant (0i32) , r#type : FoliageType :: Jungle (JungleFoliagePlacer { height : 2i32 }) } , minimum_size : FeatureSize { min_clipped_height : None , r#type : FeatureSizeType :: TwoLayersFeatureSize (TwoLayersFeatureSize { limit : 1u8 , lower_size : 1u8 , upper_size : 2u8 , }) } , ignore_vines : false , below_trunk_provider : BlockStateProvider :: Rule (RuleBasedBlockStateProvider { fallback : None , rules : vec ! [BlockStateRule { if_true : BlockPredicate :: Not (NotBlockPredicate { predicate : Box :: new (BlockPredicate :: MatchingBlockTag (MatchingBlockTagPredicate { offset : OffsetBlocksBlockPredicate { offset : None } , tag : pumpkin_data :: tag :: Block :: MINECRAFT_CANNOT_REPLACE_BELOW_TREE_TRUNK , })) , }) , then : BlockStateProvider :: Simple (SimpleStateProvider { state : pumpkin_data :: Block :: DIRT . default_state }) }] , }) , decorators : vec ! [TreeDecorator :: TrunkVine (TrunkVineTreeDecorator) , TreeDecorator :: LeaveVine (LeavesVineTreeDecorator { probability : 0.25f32 })] , root_placer : None , }))) ;
-    map . insert (pumpkin_data :: configured_feature :: ConfiguredFeature :: MegaPine , ConfiguredFeature :: Tree (Box :: new (TreeFeature { trunk_provider : BlockStateProvider :: Simple (SimpleStateProvider { state : { let mut props = std :: collections :: HashMap :: new () ; props . insert ("axis" . to_string () , "y" . to_string ()) ; BlockStateCodec { name : & pumpkin_data :: Block :: SPRUCE_LOG , properties : Some (props) , } . get_state () } }) , trunk_placer : TrunkPlacer { base_height : 13u8 , height_rand_a : 2u8 , height_rand_b : 14u8 , r#type : TrunkType :: Giant (GiantTrunkPlacer) , } , foliage_provider : BlockStateProvider :: Simple (SimpleStateProvider { state : { let mut props = std :: collections :: HashMap :: new () ; props . insert ("distance" . to_string () , "7" . to_string ()) ; props . insert ("persistent" . to_string () , "false" . to_string ()) ; props . insert ("waterlogged" . to_string () , "false" . to_string ()) ; BlockStateCodec { name : & pumpkin_data :: Block :: SPRUCE_LEAVES , properties : Some (props) , } . get_state () } }) , foliage_placer : FoliagePlacer { radius : IntProvider :: Constant (0i32) , offset : IntProvider :: Constant (0i32) , r#type : FoliageType :: MegaPine (MegaPineFoliagePlacer { crown_height : IntProvider :: Object (NormalIntProvider :: Uniform (UniformIntProvider { min_inclusive : 3i32 , max_inclusive : 7i32 })) }) } , minimum_size : FeatureSize { min_clipped_height : None , r#type : FeatureSizeType :: TwoLayersFeatureSize (TwoLayersFeatureSize { limit : 1u8 , lower_size : 1u8 , upper_size : 2u8 , }) } , ignore_vines : false , below_trunk_provider : BlockStateProvider :: Rule (RuleBasedBlockStateProvider { fallback : None , rules : vec ! [BlockStateRule { if_true : BlockPredicate :: Not (NotBlockPredicate { predicate : Box :: new (BlockPredicate :: MatchingBlockTag (MatchingBlockTagPredicate { offset : OffsetBlocksBlockPredicate { offset : None } , tag : pumpkin_data :: tag :: Block :: MINECRAFT_CANNOT_REPLACE_BELOW_TREE_TRUNK , })) , }) , then : BlockStateProvider :: Simple (SimpleStateProvider { state : pumpkin_data :: Block :: DIRT . default_state }) }] , }) , decorators : vec ! [TreeDecorator :: AlterGround (AlterGroundTreeDecorator { })] , root_placer : None , }))) ;
-    map . insert (pumpkin_data :: configured_feature :: ConfiguredFeature :: MegaSpruce , ConfiguredFeature :: Tree (Box :: new (TreeFeature { trunk_provider : BlockStateProvider :: Simple (SimpleStateProvider { state : { let mut props = std :: collections :: HashMap :: new () ; props . insert ("axis" . to_string () , "y" . to_string ()) ; BlockStateCodec { name : & pumpkin_data :: Block :: SPRUCE_LOG , properties : Some (props) , } . get_state () } }) , trunk_placer : TrunkPlacer { base_height : 13u8 , height_rand_a : 2u8 , height_rand_b : 14u8 , r#type : TrunkType :: Giant (GiantTrunkPlacer) , } , foliage_provider : BlockStateProvider :: Simple (SimpleStateProvider { state : { let mut props = std :: collections :: HashMap :: new () ; props . insert ("distance" . to_string () , "7" . to_string ()) ; props . insert ("persistent" . to_string () , "false" . to_string ()) ; props . insert ("waterlogged" . to_string () , "false" . to_string ()) ; BlockStateCodec { name : & pumpkin_data :: Block :: SPRUCE_LEAVES , properties : Some (props) , } . get_state () } }) , foliage_placer : FoliagePlacer { radius : IntProvider :: Constant (0i32) , offset : IntProvider :: Constant (0i32) , r#type : FoliageType :: MegaPine (MegaPineFoliagePlacer { crown_height : IntProvider :: Object (NormalIntProvider :: Uniform (UniformIntProvider { min_inclusive : 13i32 , max_inclusive : 17i32 })) }) } , minimum_size : FeatureSize { min_clipped_height : None , r#type : FeatureSizeType :: TwoLayersFeatureSize (TwoLayersFeatureSize { limit : 1u8 , lower_size : 1u8 , upper_size : 2u8 , }) } , ignore_vines : false , below_trunk_provider : BlockStateProvider :: Rule (RuleBasedBlockStateProvider { fallback : None , rules : vec ! [BlockStateRule { if_true : BlockPredicate :: Not (NotBlockPredicate { predicate : Box :: new (BlockPredicate :: MatchingBlockTag (MatchingBlockTagPredicate { offset : OffsetBlocksBlockPredicate { offset : None } , tag : pumpkin_data :: tag :: Block :: MINECRAFT_CANNOT_REPLACE_BELOW_TREE_TRUNK , })) , }) , then : BlockStateProvider :: Simple (SimpleStateProvider { state : pumpkin_data :: Block :: DIRT . default_state }) }] , }) , decorators : vec ! [TreeDecorator :: AlterGround (AlterGroundTreeDecorator { })] , root_placer : None , }))) ;
+    map . insert (pumpkin_data :: configured_feature :: ConfiguredFeature :: MegaPine , ConfiguredFeature :: Tree (Box :: new (TreeFeature { trunk_provider : BlockStateProvider :: Simple (SimpleStateProvider { state : { let mut props = std :: collections :: HashMap :: new () ; props . insert ("axis" . to_string () , "y" . to_string ()) ; BlockStateCodec { name : & pumpkin_data :: Block :: SPRUCE_LOG , properties : Some (props) , } . get_state () } }) , trunk_placer : TrunkPlacer { base_height : 13u8 , height_rand_a : 2u8 , height_rand_b : 14u8 , r#type : TrunkType :: Giant (GiantTrunkPlacer) , } , foliage_provider : BlockStateProvider :: Simple (SimpleStateProvider { state : { let mut props = std :: collections :: HashMap :: new () ; props . insert ("distance" . to_string () , "7" . to_string ()) ; props . insert ("persistent" . to_string () , "false" . to_string ()) ; props . insert ("waterlogged" . to_string () , "false" . to_string ()) ; BlockStateCodec { name : & pumpkin_data :: Block :: SPRUCE_LEAVES , properties : Some (props) , } . get_state () } }) , foliage_placer : FoliagePlacer { radius : IntProvider :: Constant (0i32) , offset : IntProvider :: Constant (0i32) , r#type : FoliageType :: MegaPine (MegaPineFoliagePlacer { crown_height : IntProvider :: Object (NormalIntProvider :: Uniform (UniformIntProvider { min_inclusive : 3i32 , max_inclusive : 7i32 })) }) } , minimum_size : FeatureSize { min_clipped_height : None , r#type : FeatureSizeType :: TwoLayersFeatureSize (TwoLayersFeatureSize { limit : 1u8 , lower_size : 1u8 , upper_size : 2u8 , }) } , ignore_vines : false , below_trunk_provider : BlockStateProvider :: Rule (RuleBasedBlockStateProvider { fallback : None , rules : vec ! [BlockStateRule { if_true : BlockPredicate :: Not (NotBlockPredicate { predicate : Box :: new (BlockPredicate :: MatchingBlockTag (MatchingBlockTagPredicate { offset : OffsetBlocksBlockPredicate { offset : None } , tag : pumpkin_data :: tag :: Block :: MINECRAFT_CANNOT_REPLACE_BELOW_TREE_TRUNK , })) , }) , then : BlockStateProvider :: Simple (SimpleStateProvider { state : pumpkin_data :: Block :: DIRT . default_state }) }] , }) , decorators : vec ! [TreeDecorator :: AlterGround (AlterGroundTreeDecorator { provider : BlockStateProvider :: Rule (RuleBasedBlockStateProvider { fallback : None , rules : vec ! [BlockStateRule { if_true : BlockPredicate :: MatchingBlockTag (MatchingBlockTagPredicate { offset : OffsetBlocksBlockPredicate { offset : None } , tag : pumpkin_data :: tag :: Block :: MINECRAFT_BENEATH_TREE_PODZOL_REPLACEABLE , }) , then : BlockStateProvider :: Simple (SimpleStateProvider { state : { let mut props = std :: collections :: HashMap :: new () ; props . insert ("snowy" . to_string () , "false" . to_string ()) ; BlockStateCodec { name : & pumpkin_data :: Block :: PODZOL , properties : Some (props) , } . get_state () } }) }] , }) })] , root_placer : None , }))) ;
+    map . insert (pumpkin_data :: configured_feature :: ConfiguredFeature :: MegaSpruce , ConfiguredFeature :: Tree (Box :: new (TreeFeature { trunk_provider : BlockStateProvider :: Simple (SimpleStateProvider { state : { let mut props = std :: collections :: HashMap :: new () ; props . insert ("axis" . to_string () , "y" . to_string ()) ; BlockStateCodec { name : & pumpkin_data :: Block :: SPRUCE_LOG , properties : Some (props) , } . get_state () } }) , trunk_placer : TrunkPlacer { base_height : 13u8 , height_rand_a : 2u8 , height_rand_b : 14u8 , r#type : TrunkType :: Giant (GiantTrunkPlacer) , } , foliage_provider : BlockStateProvider :: Simple (SimpleStateProvider { state : { let mut props = std :: collections :: HashMap :: new () ; props . insert ("distance" . to_string () , "7" . to_string ()) ; props . insert ("persistent" . to_string () , "false" . to_string ()) ; props . insert ("waterlogged" . to_string () , "false" . to_string ()) ; BlockStateCodec { name : & pumpkin_data :: Block :: SPRUCE_LEAVES , properties : Some (props) , } . get_state () } }) , foliage_placer : FoliagePlacer { radius : IntProvider :: Constant (0i32) , offset : IntProvider :: Constant (0i32) , r#type : FoliageType :: MegaPine (MegaPineFoliagePlacer { crown_height : IntProvider :: Object (NormalIntProvider :: Uniform (UniformIntProvider { min_inclusive : 13i32 , max_inclusive : 17i32 })) }) } , minimum_size : FeatureSize { min_clipped_height : None , r#type : FeatureSizeType :: TwoLayersFeatureSize (TwoLayersFeatureSize { limit : 1u8 , lower_size : 1u8 , upper_size : 2u8 , }) } , ignore_vines : false , below_trunk_provider : BlockStateProvider :: Rule (RuleBasedBlockStateProvider { fallback : None , rules : vec ! [BlockStateRule { if_true : BlockPredicate :: Not (NotBlockPredicate { predicate : Box :: new (BlockPredicate :: MatchingBlockTag (MatchingBlockTagPredicate { offset : OffsetBlocksBlockPredicate { offset : None } , tag : pumpkin_data :: tag :: Block :: MINECRAFT_CANNOT_REPLACE_BELOW_TREE_TRUNK , })) , }) , then : BlockStateProvider :: Simple (SimpleStateProvider { state : pumpkin_data :: Block :: DIRT . default_state }) }] , }) , decorators : vec ! [TreeDecorator :: AlterGround (AlterGroundTreeDecorator { provider : BlockStateProvider :: Rule (RuleBasedBlockStateProvider { fallback : None , rules : vec ! [BlockStateRule { if_true : BlockPredicate :: MatchingBlockTag (MatchingBlockTagPredicate { offset : OffsetBlocksBlockPredicate { offset : None } , tag : pumpkin_data :: tag :: Block :: MINECRAFT_BENEATH_TREE_PODZOL_REPLACEABLE , }) , then : BlockStateProvider :: Simple (SimpleStateProvider { state : { let mut props = std :: collections :: HashMap :: new () ; props . insert ("snowy" . to_string () , "false" . to_string ()) ; BlockStateCodec { name : & pumpkin_data :: Block :: PODZOL , properties : Some (props) , } . get_state () } }) }] , }) })] , root_placer : None , }))) ;
     map.insert(
         pumpkin_data::configured_feature::ConfiguredFeature::Melon,
         ConfiguredFeature::SimpleBlock(SimpleBlockFeature {
@@ -3571,9 +3870,9 @@ fn build_configured_features()
             schedule_tick: None,
         }),
     );
-    map . insert (pumpkin_data :: configured_feature :: ConfiguredFeature :: PaleOak , ConfiguredFeature :: Tree (Box :: new (TreeFeature { trunk_provider : BlockStateProvider :: Simple (SimpleStateProvider { state : { let mut props = std :: collections :: HashMap :: new () ; props . insert ("axis" . to_string () , "y" . to_string ()) ; BlockStateCodec { name : & pumpkin_data :: Block :: PALE_OAK_LOG , properties : Some (props) , } . get_state () } }) , trunk_placer : TrunkPlacer { base_height : 6u8 , height_rand_a : 2u8 , height_rand_b : 1u8 , r#type : TrunkType :: DarkOak (DarkOakTrunkPlacer) , } , foliage_provider : BlockStateProvider :: Simple (SimpleStateProvider { state : { let mut props = std :: collections :: HashMap :: new () ; props . insert ("distance" . to_string () , "7" . to_string ()) ; props . insert ("persistent" . to_string () , "false" . to_string ()) ; props . insert ("waterlogged" . to_string () , "false" . to_string ()) ; BlockStateCodec { name : & pumpkin_data :: Block :: PALE_OAK_LEAVES , properties : Some (props) , } . get_state () } }) , foliage_placer : FoliagePlacer { radius : IntProvider :: Constant (0i32) , offset : IntProvider :: Constant (0i32) , r#type : FoliageType :: DarkOak (DarkOakFoliagePlacer) } , minimum_size : FeatureSize { min_clipped_height : None , r#type : FeatureSizeType :: ThreeLayersFeatureSize (ThreeLayersFeatureSize { limit : 1u8 , upper_limit : 1u8 , lower_size : 0u8 , middle_size : 1u8 , upper_size : 2u8 , }) } , ignore_vines : true , below_trunk_provider : BlockStateProvider :: Rule (RuleBasedBlockStateProvider { fallback : None , rules : vec ! [BlockStateRule { if_true : BlockPredicate :: Not (NotBlockPredicate { predicate : Box :: new (BlockPredicate :: MatchingBlockTag (MatchingBlockTagPredicate { offset : OffsetBlocksBlockPredicate { offset : None } , tag : pumpkin_data :: tag :: Block :: MINECRAFT_CANNOT_REPLACE_BELOW_TREE_TRUNK , })) , }) , then : BlockStateProvider :: Simple (SimpleStateProvider { state : pumpkin_data :: Block :: DIRT . default_state }) }] , }) , decorators : vec ! [TreeDecorator :: PaleMoss (PaleMossTreeDecorator { })] , root_placer : None , }))) ;
+    map . insert (pumpkin_data :: configured_feature :: ConfiguredFeature :: PaleOak , ConfiguredFeature :: Tree (Box :: new (TreeFeature { trunk_provider : BlockStateProvider :: Simple (SimpleStateProvider { state : { let mut props = std :: collections :: HashMap :: new () ; props . insert ("axis" . to_string () , "y" . to_string ()) ; BlockStateCodec { name : & pumpkin_data :: Block :: PALE_OAK_LOG , properties : Some (props) , } . get_state () } }) , trunk_placer : TrunkPlacer { base_height : 6u8 , height_rand_a : 2u8 , height_rand_b : 1u8 , r#type : TrunkType :: DarkOak (DarkOakTrunkPlacer) , } , foliage_provider : BlockStateProvider :: Simple (SimpleStateProvider { state : { let mut props = std :: collections :: HashMap :: new () ; props . insert ("distance" . to_string () , "7" . to_string ()) ; props . insert ("persistent" . to_string () , "false" . to_string ()) ; props . insert ("waterlogged" . to_string () , "false" . to_string ()) ; BlockStateCodec { name : & pumpkin_data :: Block :: PALE_OAK_LEAVES , properties : Some (props) , } . get_state () } }) , foliage_placer : FoliagePlacer { radius : IntProvider :: Constant (0i32) , offset : IntProvider :: Constant (0i32) , r#type : FoliageType :: DarkOak (DarkOakFoliagePlacer) } , minimum_size : FeatureSize { min_clipped_height : None , r#type : FeatureSizeType :: ThreeLayersFeatureSize (ThreeLayersFeatureSize { limit : 1u8 , upper_limit : 1u8 , lower_size : 0u8 , middle_size : 1u8 , upper_size : 2u8 , }) } , ignore_vines : true , below_trunk_provider : BlockStateProvider :: Rule (RuleBasedBlockStateProvider { fallback : None , rules : vec ! [BlockStateRule { if_true : BlockPredicate :: Not (NotBlockPredicate { predicate : Box :: new (BlockPredicate :: MatchingBlockTag (MatchingBlockTagPredicate { offset : OffsetBlocksBlockPredicate { offset : None } , tag : pumpkin_data :: tag :: Block :: MINECRAFT_CANNOT_REPLACE_BELOW_TREE_TRUNK , })) , }) , then : BlockStateProvider :: Simple (SimpleStateProvider { state : pumpkin_data :: Block :: DIRT . default_state }) }] , }) , decorators : vec ! [TreeDecorator :: PaleMoss (PaleMossTreeDecorator { leaves_probability : 0.15f32 , trunk_probability : 0.4f32 , ground_probability : 0.8f32 , })] , root_placer : None , }))) ;
     map . insert (pumpkin_data :: configured_feature :: ConfiguredFeature :: PaleOakBonemeal , ConfiguredFeature :: Tree (Box :: new (TreeFeature { trunk_provider : BlockStateProvider :: Simple (SimpleStateProvider { state : { let mut props = std :: collections :: HashMap :: new () ; props . insert ("axis" . to_string () , "y" . to_string ()) ; BlockStateCodec { name : & pumpkin_data :: Block :: PALE_OAK_LOG , properties : Some (props) , } . get_state () } }) , trunk_placer : TrunkPlacer { base_height : 6u8 , height_rand_a : 2u8 , height_rand_b : 1u8 , r#type : TrunkType :: DarkOak (DarkOakTrunkPlacer) , } , foliage_provider : BlockStateProvider :: Simple (SimpleStateProvider { state : { let mut props = std :: collections :: HashMap :: new () ; props . insert ("distance" . to_string () , "7" . to_string ()) ; props . insert ("persistent" . to_string () , "false" . to_string ()) ; props . insert ("waterlogged" . to_string () , "false" . to_string ()) ; BlockStateCodec { name : & pumpkin_data :: Block :: PALE_OAK_LEAVES , properties : Some (props) , } . get_state () } }) , foliage_placer : FoliagePlacer { radius : IntProvider :: Constant (0i32) , offset : IntProvider :: Constant (0i32) , r#type : FoliageType :: DarkOak (DarkOakFoliagePlacer) } , minimum_size : FeatureSize { min_clipped_height : None , r#type : FeatureSizeType :: ThreeLayersFeatureSize (ThreeLayersFeatureSize { limit : 1u8 , upper_limit : 1u8 , lower_size : 0u8 , middle_size : 1u8 , upper_size : 2u8 , }) } , ignore_vines : true , below_trunk_provider : BlockStateProvider :: Rule (RuleBasedBlockStateProvider { fallback : None , rules : vec ! [BlockStateRule { if_true : BlockPredicate :: Not (NotBlockPredicate { predicate : Box :: new (BlockPredicate :: MatchingBlockTag (MatchingBlockTagPredicate { offset : OffsetBlocksBlockPredicate { offset : None } , tag : pumpkin_data :: tag :: Block :: MINECRAFT_CANNOT_REPLACE_BELOW_TREE_TRUNK , })) , }) , then : BlockStateProvider :: Simple (SimpleStateProvider { state : pumpkin_data :: Block :: DIRT . default_state }) }] , }) , decorators : vec ! [] , root_placer : None , }))) ;
-    map . insert (pumpkin_data :: configured_feature :: ConfiguredFeature :: PaleOakCreaking , ConfiguredFeature :: Tree (Box :: new (TreeFeature { trunk_provider : BlockStateProvider :: Simple (SimpleStateProvider { state : { let mut props = std :: collections :: HashMap :: new () ; props . insert ("axis" . to_string () , "y" . to_string ()) ; BlockStateCodec { name : & pumpkin_data :: Block :: PALE_OAK_LOG , properties : Some (props) , } . get_state () } }) , trunk_placer : TrunkPlacer { base_height : 6u8 , height_rand_a : 2u8 , height_rand_b : 1u8 , r#type : TrunkType :: DarkOak (DarkOakTrunkPlacer) , } , foliage_provider : BlockStateProvider :: Simple (SimpleStateProvider { state : { let mut props = std :: collections :: HashMap :: new () ; props . insert ("distance" . to_string () , "7" . to_string ()) ; props . insert ("persistent" . to_string () , "false" . to_string ()) ; props . insert ("waterlogged" . to_string () , "false" . to_string ()) ; BlockStateCodec { name : & pumpkin_data :: Block :: PALE_OAK_LEAVES , properties : Some (props) , } . get_state () } }) , foliage_placer : FoliagePlacer { radius : IntProvider :: Constant (0i32) , offset : IntProvider :: Constant (0i32) , r#type : FoliageType :: DarkOak (DarkOakFoliagePlacer) } , minimum_size : FeatureSize { min_clipped_height : None , r#type : FeatureSizeType :: ThreeLayersFeatureSize (ThreeLayersFeatureSize { limit : 1u8 , upper_limit : 1u8 , lower_size : 0u8 , middle_size : 1u8 , upper_size : 2u8 , }) } , ignore_vines : true , below_trunk_provider : BlockStateProvider :: Rule (RuleBasedBlockStateProvider { fallback : None , rules : vec ! [BlockStateRule { if_true : BlockPredicate :: Not (NotBlockPredicate { predicate : Box :: new (BlockPredicate :: MatchingBlockTag (MatchingBlockTagPredicate { offset : OffsetBlocksBlockPredicate { offset : None } , tag : pumpkin_data :: tag :: Block :: MINECRAFT_CANNOT_REPLACE_BELOW_TREE_TRUNK , })) , }) , then : BlockStateProvider :: Simple (SimpleStateProvider { state : pumpkin_data :: Block :: DIRT . default_state }) }] , }) , decorators : vec ! [TreeDecorator :: PaleMoss (PaleMossTreeDecorator { }) , TreeDecorator :: CreakingHeart (CreakingHeartTreeDecorator { })] , root_placer : None , }))) ;
+    map . insert (pumpkin_data :: configured_feature :: ConfiguredFeature :: PaleOakCreaking , ConfiguredFeature :: Tree (Box :: new (TreeFeature { trunk_provider : BlockStateProvider :: Simple (SimpleStateProvider { state : { let mut props = std :: collections :: HashMap :: new () ; props . insert ("axis" . to_string () , "y" . to_string ()) ; BlockStateCodec { name : & pumpkin_data :: Block :: PALE_OAK_LOG , properties : Some (props) , } . get_state () } }) , trunk_placer : TrunkPlacer { base_height : 6u8 , height_rand_a : 2u8 , height_rand_b : 1u8 , r#type : TrunkType :: DarkOak (DarkOakTrunkPlacer) , } , foliage_provider : BlockStateProvider :: Simple (SimpleStateProvider { state : { let mut props = std :: collections :: HashMap :: new () ; props . insert ("distance" . to_string () , "7" . to_string ()) ; props . insert ("persistent" . to_string () , "false" . to_string ()) ; props . insert ("waterlogged" . to_string () , "false" . to_string ()) ; BlockStateCodec { name : & pumpkin_data :: Block :: PALE_OAK_LEAVES , properties : Some (props) , } . get_state () } }) , foliage_placer : FoliagePlacer { radius : IntProvider :: Constant (0i32) , offset : IntProvider :: Constant (0i32) , r#type : FoliageType :: DarkOak (DarkOakFoliagePlacer) } , minimum_size : FeatureSize { min_clipped_height : None , r#type : FeatureSizeType :: ThreeLayersFeatureSize (ThreeLayersFeatureSize { limit : 1u8 , upper_limit : 1u8 , lower_size : 0u8 , middle_size : 1u8 , upper_size : 2u8 , }) } , ignore_vines : true , below_trunk_provider : BlockStateProvider :: Rule (RuleBasedBlockStateProvider { fallback : None , rules : vec ! [BlockStateRule { if_true : BlockPredicate :: Not (NotBlockPredicate { predicate : Box :: new (BlockPredicate :: MatchingBlockTag (MatchingBlockTagPredicate { offset : OffsetBlocksBlockPredicate { offset : None } , tag : pumpkin_data :: tag :: Block :: MINECRAFT_CANNOT_REPLACE_BELOW_TREE_TRUNK , })) , }) , then : BlockStateProvider :: Simple (SimpleStateProvider { state : pumpkin_data :: Block :: DIRT . default_state }) }] , }) , decorators : vec ! [TreeDecorator :: PaleMoss (PaleMossTreeDecorator { leaves_probability : 0.15f32 , trunk_probability : 0.4f32 , ground_probability : 0.8f32 , }) , TreeDecorator :: CreakingHeart (CreakingHeartTreeDecorator { probability : 1f32 })] , root_placer : None , }))) ;
     map.insert(
         pumpkin_data::configured_feature::ConfiguredFeature::PatchFire,
         ConfiguredFeature::SimpleBlock(SimpleBlockFeature {
@@ -3608,31 +3907,93 @@ fn build_configured_features()
     map.insert(
         pumpkin_data::configured_feature::ConfiguredFeature::PileHay,
         ConfiguredFeature::BlockPile(
-            crate::generation::feature::features::block_pile::BlockPileFeature {},
+            crate::generation::feature::features::block_pile::BlockPileFeature {
+                state_provider: BlockStateProvider::Pillar(PillarBlockStateProvider {
+                    state: {
+                        let mut props = std::collections::HashMap::new();
+                        props.insert("axis".to_string(), "y".to_string());
+                        BlockStateCodec {
+                            name: &pumpkin_data::Block::HAY_BLOCK,
+                            properties: Some(props),
+                        }
+                        .get_state()
+                    },
+                }),
+            },
         ),
     );
     map.insert(
         pumpkin_data::configured_feature::ConfiguredFeature::PileIce,
         ConfiguredFeature::BlockPile(
-            crate::generation::feature::features::block_pile::BlockPileFeature {},
+            crate::generation::feature::features::block_pile::BlockPileFeature {
+                state_provider: BlockStateProvider::Weighted(WeightedBlockStateProvider {
+                    entries: vec![
+                        Weighted {
+                            data: pumpkin_data::Block::BLUE_ICE.default_state,
+                            weight: 1i32,
+                        },
+                        Weighted {
+                            data: pumpkin_data::Block::PACKED_ICE.default_state,
+                            weight: 5i32,
+                        },
+                    ],
+                }),
+            },
         ),
     );
     map.insert(
         pumpkin_data::configured_feature::ConfiguredFeature::PileMelon,
         ConfiguredFeature::BlockPile(
-            crate::generation::feature::features::block_pile::BlockPileFeature {},
+            crate::generation::feature::features::block_pile::BlockPileFeature {
+                state_provider: BlockStateProvider::Simple(SimpleStateProvider {
+                    state: pumpkin_data::Block::MELON.default_state,
+                }),
+            },
         ),
     );
     map.insert(
         pumpkin_data::configured_feature::ConfiguredFeature::PilePumpkin,
         ConfiguredFeature::BlockPile(
-            crate::generation::feature::features::block_pile::BlockPileFeature {},
+            crate::generation::feature::features::block_pile::BlockPileFeature {
+                state_provider: BlockStateProvider::Weighted(WeightedBlockStateProvider {
+                    entries: vec![
+                        Weighted {
+                            data: pumpkin_data::Block::PUMPKIN.default_state,
+                            weight: 19i32,
+                        },
+                        Weighted {
+                            data: {
+                                let mut props = std::collections::HashMap::new();
+                                props.insert("facing".to_string(), "north".to_string());
+                                BlockStateCodec {
+                                    name: &pumpkin_data::Block::JACK_O_LANTERN,
+                                    properties: Some(props),
+                                }
+                                .get_state()
+                            },
+                            weight: 1i32,
+                        },
+                    ],
+                }),
+            },
         ),
     );
     map.insert(
         pumpkin_data::configured_feature::ConfiguredFeature::PileSnow,
         ConfiguredFeature::BlockPile(
-            crate::generation::feature::features::block_pile::BlockPileFeature {},
+            crate::generation::feature::features::block_pile::BlockPileFeature {
+                state_provider: BlockStateProvider::Simple(SimpleStateProvider {
+                    state: {
+                        let mut props = std::collections::HashMap::new();
+                        props.insert("layers".to_string(), "1".to_string());
+                        BlockStateCodec {
+                            name: &pumpkin_data::Block::SNOW,
+                            properties: Some(props),
+                        }
+                        .get_state()
+                    },
+                }),
+            },
         ),
     );
     map . insert (pumpkin_data :: configured_feature :: ConfiguredFeature :: Pine , ConfiguredFeature :: Tree (Box :: new (TreeFeature { trunk_provider : BlockStateProvider :: Simple (SimpleStateProvider { state : { let mut props = std :: collections :: HashMap :: new () ; props . insert ("axis" . to_string () , "y" . to_string ()) ; BlockStateCodec { name : & pumpkin_data :: Block :: SPRUCE_LOG , properties : Some (props) , } . get_state () } }) , trunk_placer : TrunkPlacer { base_height : 6u8 , height_rand_a : 4u8 , height_rand_b : 0u8 , r#type : TrunkType :: Straight (StraightTrunkPlacer) , } , foliage_provider : BlockStateProvider :: Simple (SimpleStateProvider { state : { let mut props = std :: collections :: HashMap :: new () ; props . insert ("distance" . to_string () , "7" . to_string ()) ; props . insert ("persistent" . to_string () , "false" . to_string ()) ; props . insert ("waterlogged" . to_string () , "false" . to_string ()) ; BlockStateCodec { name : & pumpkin_data :: Block :: SPRUCE_LEAVES , properties : Some (props) , } . get_state () } }) , foliage_placer : FoliagePlacer { radius : IntProvider :: Constant (1i32) , offset : IntProvider :: Constant (1i32) , r#type : FoliageType :: Pine (PineFoliagePlacer { height : IntProvider :: Object (NormalIntProvider :: Uniform (UniformIntProvider { min_inclusive : 3i32 , max_inclusive : 4i32 })) }) } , minimum_size : FeatureSize { min_clipped_height : None , r#type : FeatureSizeType :: TwoLayersFeatureSize (TwoLayersFeatureSize { limit : 2u8 , lower_size : 0u8 , upper_size : 2u8 , }) } , ignore_vines : true , below_trunk_provider : BlockStateProvider :: Rule (RuleBasedBlockStateProvider { fallback : None , rules : vec ! [BlockStateRule { if_true : BlockPredicate :: Not (NotBlockPredicate { predicate : Box :: new (BlockPredicate :: MatchingBlockTag (MatchingBlockTagPredicate { offset : OffsetBlocksBlockPredicate { offset : None } , tag : pumpkin_data :: tag :: Block :: MINECRAFT_CANNOT_REPLACE_BELOW_TREE_TRUNK , })) , }) , then : BlockStateProvider :: Simple (SimpleStateProvider { state : pumpkin_data :: Block :: DIRT . default_state }) }] , }) , decorators : vec ! [] , root_placer : None , }))) ;
@@ -3881,7 +4242,24 @@ fn build_configured_features()
     map.insert(
         pumpkin_data::configured_feature::ConfiguredFeature::SculkVein,
         ConfiguredFeature::MultifaceGrowth(
-            crate::generation::feature::features::multiface_growth::MultifaceGrowthFeature {},
+            crate::generation::feature::features::multiface_growth::MultifaceGrowthFeature {
+                place_block: pumpkin_data::BlockId::SCULK_VEIN,
+                search_range: 20i32,
+                can_place_on_floor: true,
+                can_place_on_ceiling: true,
+                can_place_on_wall: true,
+                chance_of_spreading: 1f32,
+                can_be_placed_on: vec![
+                    pumpkin_data::BlockId::STONE,
+                    pumpkin_data::BlockId::ANDESITE,
+                    pumpkin_data::BlockId::DIORITE,
+                    pumpkin_data::BlockId::GRANITE,
+                    pumpkin_data::BlockId::DRIPSTONE_BLOCK,
+                    pumpkin_data::BlockId::CALCITE,
+                    pumpkin_data::BlockId::TUFF,
+                    pumpkin_data::BlockId::DEEPSLATE,
+                ],
+            },
         ),
     );
     map.insert(
@@ -4267,7 +4645,7 @@ fn build_configured_features()
             schedule_tick: None,
         }),
     );
-    map . insert (pumpkin_data :: configured_feature :: ConfiguredFeature :: TallMangrove , ConfiguredFeature :: Tree (Box :: new (TreeFeature { trunk_provider : BlockStateProvider :: Simple (SimpleStateProvider { state : { let mut props = std :: collections :: HashMap :: new () ; props . insert ("axis" . to_string () , "y" . to_string ()) ; BlockStateCodec { name : & pumpkin_data :: Block :: MANGROVE_LOG , properties : Some (props) , } . get_state () } }) , trunk_placer : TrunkPlacer { base_height : 4u8 , height_rand_a : 1u8 , height_rand_b : 9u8 , r#type : TrunkType :: UpwardsBranching (UpwardsBranchingTrunkPlacer { extra_branch_steps : IntProvider :: Object (NormalIntProvider :: Uniform (UniformIntProvider { min_inclusive : 1i32 , max_inclusive : 6i32 })) , place_branch_per_log_probability : 0.5f32 , extra_branch_length : IntProvider :: Object (NormalIntProvider :: Uniform (UniformIntProvider { min_inclusive : 0i32 , max_inclusive : 1i32 })) , can_grow_through : & pumpkin_data :: tag :: Block :: MINECRAFT_MANGROVE_LOGS_CAN_GROW_THROUGH . 1 , }) , } , foliage_provider : BlockStateProvider :: Simple (SimpleStateProvider { state : { let mut props = std :: collections :: HashMap :: new () ; props . insert ("distance" . to_string () , "7" . to_string ()) ; props . insert ("persistent" . to_string () , "false" . to_string ()) ; props . insert ("waterlogged" . to_string () , "false" . to_string ()) ; BlockStateCodec { name : & pumpkin_data :: Block :: MANGROVE_LEAVES , properties : Some (props) , } . get_state () } }) , foliage_placer : FoliagePlacer { radius : IntProvider :: Constant (3i32) , offset : IntProvider :: Constant (0i32) , r#type : FoliageType :: RandomSpread (RandomSpreadFoliagePlacer { foliage_height : IntProvider :: Constant (2i32) , leaf_placement_attempts : 70i32 , }) } , minimum_size : FeatureSize { min_clipped_height : None , r#type : FeatureSizeType :: TwoLayersFeatureSize (TwoLayersFeatureSize { limit : 3u8 , lower_size : 0u8 , upper_size : 2u8 , }) } , ignore_vines : true , below_trunk_provider : BlockStateProvider :: Rule (RuleBasedBlockStateProvider { fallback : None , rules : vec ! [BlockStateRule { if_true : BlockPredicate :: Not (NotBlockPredicate { predicate : Box :: new (BlockPredicate :: MatchingBlockTag (MatchingBlockTagPredicate { offset : OffsetBlocksBlockPredicate { offset : None } , tag : pumpkin_data :: tag :: Block :: MINECRAFT_CANNOT_REPLACE_BELOW_TREE_TRUNK , })) , }) , then : BlockStateProvider :: Simple (SimpleStateProvider { state : pumpkin_data :: Block :: DIRT . default_state }) }] , }) , decorators : vec ! [TreeDecorator :: LeaveVine (LeavesVineTreeDecorator { probability : 0.125f32 }) , TreeDecorator :: AttachedToLeaves (AttachedToLeavesTreeDecorator { }) , TreeDecorator :: Beehive (BeehiveTreeDecorator { probability : 0.01f32 })] , root_placer : Some (RootPlacer :: Mangrove (MangroveRootPlacer { trunk_offset_y : IntProvider :: Object (NormalIntProvider :: Uniform (UniformIntProvider { min_inclusive : 3i32 , max_inclusive : 7i32 })) , root_provider : BlockStateProvider :: Simple (SimpleStateProvider { state : { let mut props = std :: collections :: HashMap :: new () ; props . insert ("waterlogged" . to_string () , "false" . to_string ()) ; BlockStateCodec { name : & pumpkin_data :: Block :: MANGROVE_ROOTS , properties : Some (props) , } . get_state () } }) , above_root_placement : Some (AboveRootPlacement { above_root_provider : BlockStateProvider :: Simple (SimpleStateProvider { state : pumpkin_data :: Block :: MOSS_CARPET . default_state }) , above_root_placement_chance : 0.5f32 , }) , mangrove_root_placement : MangroveRootPlacement { can_grow_through : & pumpkin_data :: tag :: Block :: MINECRAFT_MANGROVE_ROOTS_CAN_GROW_THROUGH . 1 , muddy_roots_in : const { & [pumpkin_data :: BlockId :: MUD . as_u16 () , pumpkin_data :: BlockId :: MUDDY_MANGROVE_ROOTS . as_u16 ()] } , muddy_roots_provider : BlockStateProvider :: Simple (SimpleStateProvider { state : { let mut props = std :: collections :: HashMap :: new () ; props . insert ("axis" . to_string () , "y" . to_string ()) ; BlockStateCodec { name : & pumpkin_data :: Block :: MUDDY_MANGROVE_ROOTS , properties : Some (props) , } . get_state () } }) , max_root_width : 8i32 , max_root_length : 15i32 , random_skew_chance : 0.2f32 , } , })) , }))) ;
+    map . insert (pumpkin_data :: configured_feature :: ConfiguredFeature :: TallMangrove , ConfiguredFeature :: Tree (Box :: new (TreeFeature { trunk_provider : BlockStateProvider :: Simple (SimpleStateProvider { state : { let mut props = std :: collections :: HashMap :: new () ; props . insert ("axis" . to_string () , "y" . to_string ()) ; BlockStateCodec { name : & pumpkin_data :: Block :: MANGROVE_LOG , properties : Some (props) , } . get_state () } }) , trunk_placer : TrunkPlacer { base_height : 4u8 , height_rand_a : 1u8 , height_rand_b : 9u8 , r#type : TrunkType :: UpwardsBranching (UpwardsBranchingTrunkPlacer { extra_branch_steps : IntProvider :: Object (NormalIntProvider :: Uniform (UniformIntProvider { min_inclusive : 1i32 , max_inclusive : 6i32 })) , place_branch_per_log_probability : 0.5f32 , extra_branch_length : IntProvider :: Object (NormalIntProvider :: Uniform (UniformIntProvider { min_inclusive : 0i32 , max_inclusive : 1i32 })) , can_grow_through : & pumpkin_data :: tag :: Block :: MINECRAFT_MANGROVE_LOGS_CAN_GROW_THROUGH . 1 , }) , } , foliage_provider : BlockStateProvider :: Simple (SimpleStateProvider { state : { let mut props = std :: collections :: HashMap :: new () ; props . insert ("distance" . to_string () , "7" . to_string ()) ; props . insert ("persistent" . to_string () , "false" . to_string ()) ; props . insert ("waterlogged" . to_string () , "false" . to_string ()) ; BlockStateCodec { name : & pumpkin_data :: Block :: MANGROVE_LEAVES , properties : Some (props) , } . get_state () } }) , foliage_placer : FoliagePlacer { radius : IntProvider :: Constant (3i32) , offset : IntProvider :: Constant (0i32) , r#type : FoliageType :: RandomSpread (RandomSpreadFoliagePlacer { foliage_height : IntProvider :: Constant (2i32) , leaf_placement_attempts : 70i32 , }) } , minimum_size : FeatureSize { min_clipped_height : None , r#type : FeatureSizeType :: TwoLayersFeatureSize (TwoLayersFeatureSize { limit : 3u8 , lower_size : 0u8 , upper_size : 2u8 , }) } , ignore_vines : true , below_trunk_provider : BlockStateProvider :: Rule (RuleBasedBlockStateProvider { fallback : None , rules : vec ! [BlockStateRule { if_true : BlockPredicate :: Not (NotBlockPredicate { predicate : Box :: new (BlockPredicate :: MatchingBlockTag (MatchingBlockTagPredicate { offset : OffsetBlocksBlockPredicate { offset : None } , tag : pumpkin_data :: tag :: Block :: MINECRAFT_CANNOT_REPLACE_BELOW_TREE_TRUNK , })) , }) , then : BlockStateProvider :: Simple (SimpleStateProvider { state : pumpkin_data :: Block :: DIRT . default_state }) }] , }) , decorators : vec ! [TreeDecorator :: LeaveVine (LeavesVineTreeDecorator { probability : 0.125f32 }) , TreeDecorator :: AttachedToLeaves (AttachedToLeavesTreeDecorator { probability : 0.14f32 , exclusion_radius_xz : 1i32 , exclusion_radius_y : 0i32 , block_provider : BlockStateProvider :: RandomizedInt (RandomizedIntBlockStateProvider { source : Box :: new (BlockStateProvider :: Simple (SimpleStateProvider { state : { let mut props = std :: collections :: HashMap :: new () ; props . insert ("age" . to_string () , "0" . to_string ()) ; props . insert ("hanging" . to_string () , "true" . to_string ()) ; props . insert ("stage" . to_string () , "0" . to_string ()) ; props . insert ("waterlogged" . to_string () , "false" . to_string ()) ; BlockStateCodec { name : & pumpkin_data :: Block :: MANGROVE_PROPAGULE , properties : Some (props) , } . get_state () } })) , property : "age" . to_string () , values : IntProvider :: Object (NormalIntProvider :: Uniform (UniformIntProvider { min_inclusive : 0i32 , max_inclusive : 4i32 })) , }) , required_empty_blocks : 2i32 , directions : vec ! [BlockDirection :: Down] , }) , TreeDecorator :: Beehive (BeehiveTreeDecorator { probability : 0.01f32 })] , root_placer : Some (RootPlacer :: Mangrove (MangroveRootPlacer { trunk_offset_y : IntProvider :: Object (NormalIntProvider :: Uniform (UniformIntProvider { min_inclusive : 3i32 , max_inclusive : 7i32 })) , root_provider : BlockStateProvider :: Simple (SimpleStateProvider { state : { let mut props = std :: collections :: HashMap :: new () ; props . insert ("waterlogged" . to_string () , "false" . to_string ()) ; BlockStateCodec { name : & pumpkin_data :: Block :: MANGROVE_ROOTS , properties : Some (props) , } . get_state () } }) , above_root_placement : Some (AboveRootPlacement { above_root_provider : BlockStateProvider :: Simple (SimpleStateProvider { state : pumpkin_data :: Block :: MOSS_CARPET . default_state }) , above_root_placement_chance : 0.5f32 , }) , mangrove_root_placement : MangroveRootPlacement { can_grow_through : & pumpkin_data :: tag :: Block :: MINECRAFT_MANGROVE_ROOTS_CAN_GROW_THROUGH . 1 , muddy_roots_in : const { & [pumpkin_data :: BlockId :: MUD . as_u16 () , pumpkin_data :: BlockId :: MUDDY_MANGROVE_ROOTS . as_u16 ()] } , muddy_roots_provider : BlockStateProvider :: Simple (SimpleStateProvider { state : { let mut props = std :: collections :: HashMap :: new () ; props . insert ("axis" . to_string () , "y" . to_string ()) ; BlockStateCodec { name : & pumpkin_data :: Block :: MUDDY_MANGROVE_ROOTS , properties : Some (props) , } . get_state () } }) , max_root_width : 8i32 , max_root_length : 15i32 , random_skew_chance : 0.2f32 , } , })) , }))) ;
     map.insert(
         pumpkin_data::configured_feature::ConfiguredFeature::TreesBadlands,
         ConfiguredFeature::RandomSelector(RandomFeature {
@@ -4728,13 +5106,169 @@ fn build_configured_features()
     map.insert(
         pumpkin_data::configured_feature::ConfiguredFeature::WarpedFungus,
         ConfiguredFeature::HugeFungus(
-            crate::generation::feature::features::huge_fungus::HugeFungusFeature {},
+            crate::generation::feature::features::huge_fungus::HugeFungusFeature {
+                valid_base_block: pumpkin_data::Block::WARPED_NYLIUM.default_state,
+                stem_state: {
+                    let mut props = std::collections::HashMap::new();
+                    props.insert("axis".to_string(), "y".to_string());
+                    BlockStateCodec {
+                        name: &pumpkin_data::Block::WARPED_STEM,
+                        properties: Some(props),
+                    }
+                    .get_state()
+                },
+                hat_state: pumpkin_data::Block::WARPED_WART_BLOCK.default_state,
+                decor_state: pumpkin_data::Block::SHROOMLIGHT.default_state,
+                replaceable_blocks: BlockPredicate::MatchingBlocks(MatchingBlocksBlockPredicate {
+                    offset: OffsetBlocksBlockPredicate { offset: None },
+                    blocks: MatchingBlocksWrapper::Multiple(vec![
+                        "minecraft:oak_sapling".to_string(),
+                        "minecraft:spruce_sapling".to_string(),
+                        "minecraft:birch_sapling".to_string(),
+                        "minecraft:jungle_sapling".to_string(),
+                        "minecraft:acacia_sapling".to_string(),
+                        "minecraft:cherry_sapling".to_string(),
+                        "minecraft:dark_oak_sapling".to_string(),
+                        "minecraft:pale_oak_sapling".to_string(),
+                        "minecraft:mangrove_propagule".to_string(),
+                        "minecraft:dandelion".to_string(),
+                        "minecraft:torchflower".to_string(),
+                        "minecraft:poppy".to_string(),
+                        "minecraft:blue_orchid".to_string(),
+                        "minecraft:allium".to_string(),
+                        "minecraft:azure_bluet".to_string(),
+                        "minecraft:red_tulip".to_string(),
+                        "minecraft:orange_tulip".to_string(),
+                        "minecraft:white_tulip".to_string(),
+                        "minecraft:pink_tulip".to_string(),
+                        "minecraft:oxeye_daisy".to_string(),
+                        "minecraft:cornflower".to_string(),
+                        "minecraft:wither_rose".to_string(),
+                        "minecraft:lily_of_the_valley".to_string(),
+                        "minecraft:brown_mushroom".to_string(),
+                        "minecraft:red_mushroom".to_string(),
+                        "minecraft:wheat".to_string(),
+                        "minecraft:sugar_cane".to_string(),
+                        "minecraft:attached_pumpkin_stem".to_string(),
+                        "minecraft:attached_melon_stem".to_string(),
+                        "minecraft:pumpkin_stem".to_string(),
+                        "minecraft:melon_stem".to_string(),
+                        "minecraft:lily_pad".to_string(),
+                        "minecraft:nether_wart".to_string(),
+                        "minecraft:cocoa".to_string(),
+                        "minecraft:carrots".to_string(),
+                        "minecraft:potatoes".to_string(),
+                        "minecraft:chorus_plant".to_string(),
+                        "minecraft:chorus_flower".to_string(),
+                        "minecraft:torchflower_crop".to_string(),
+                        "minecraft:pitcher_crop".to_string(),
+                        "minecraft:beetroots".to_string(),
+                        "minecraft:sweet_berry_bush".to_string(),
+                        "minecraft:warped_fungus".to_string(),
+                        "minecraft:crimson_fungus".to_string(),
+                        "minecraft:weeping_vines".to_string(),
+                        "minecraft:weeping_vines_plant".to_string(),
+                        "minecraft:twisting_vines".to_string(),
+                        "minecraft:twisting_vines_plant".to_string(),
+                        "minecraft:cave_vines".to_string(),
+                        "minecraft:cave_vines_plant".to_string(),
+                        "minecraft:spore_blossom".to_string(),
+                        "minecraft:azalea".to_string(),
+                        "minecraft:flowering_azalea".to_string(),
+                        "minecraft:moss_carpet".to_string(),
+                        "minecraft:pink_petals".to_string(),
+                        "minecraft:wildflowers".to_string(),
+                        "minecraft:big_dripleaf".to_string(),
+                        "minecraft:big_dripleaf_stem".to_string(),
+                        "minecraft:small_dripleaf".to_string(),
+                    ]),
+                }),
+                planted: false,
+            },
         ),
     );
     map.insert(
         pumpkin_data::configured_feature::ConfiguredFeature::WarpedFungusPlanted,
         ConfiguredFeature::HugeFungus(
-            crate::generation::feature::features::huge_fungus::HugeFungusFeature {},
+            crate::generation::feature::features::huge_fungus::HugeFungusFeature {
+                valid_base_block: pumpkin_data::Block::WARPED_NYLIUM.default_state,
+                stem_state: {
+                    let mut props = std::collections::HashMap::new();
+                    props.insert("axis".to_string(), "y".to_string());
+                    BlockStateCodec {
+                        name: &pumpkin_data::Block::WARPED_STEM,
+                        properties: Some(props),
+                    }
+                    .get_state()
+                },
+                hat_state: pumpkin_data::Block::WARPED_WART_BLOCK.default_state,
+                decor_state: pumpkin_data::Block::SHROOMLIGHT.default_state,
+                replaceable_blocks: BlockPredicate::MatchingBlocks(MatchingBlocksBlockPredicate {
+                    offset: OffsetBlocksBlockPredicate { offset: None },
+                    blocks: MatchingBlocksWrapper::Multiple(vec![
+                        "minecraft:oak_sapling".to_string(),
+                        "minecraft:spruce_sapling".to_string(),
+                        "minecraft:birch_sapling".to_string(),
+                        "minecraft:jungle_sapling".to_string(),
+                        "minecraft:acacia_sapling".to_string(),
+                        "minecraft:cherry_sapling".to_string(),
+                        "minecraft:dark_oak_sapling".to_string(),
+                        "minecraft:pale_oak_sapling".to_string(),
+                        "minecraft:mangrove_propagule".to_string(),
+                        "minecraft:dandelion".to_string(),
+                        "minecraft:torchflower".to_string(),
+                        "minecraft:poppy".to_string(),
+                        "minecraft:blue_orchid".to_string(),
+                        "minecraft:allium".to_string(),
+                        "minecraft:azure_bluet".to_string(),
+                        "minecraft:red_tulip".to_string(),
+                        "minecraft:orange_tulip".to_string(),
+                        "minecraft:white_tulip".to_string(),
+                        "minecraft:pink_tulip".to_string(),
+                        "minecraft:oxeye_daisy".to_string(),
+                        "minecraft:cornflower".to_string(),
+                        "minecraft:wither_rose".to_string(),
+                        "minecraft:lily_of_the_valley".to_string(),
+                        "minecraft:brown_mushroom".to_string(),
+                        "minecraft:red_mushroom".to_string(),
+                        "minecraft:wheat".to_string(),
+                        "minecraft:sugar_cane".to_string(),
+                        "minecraft:attached_pumpkin_stem".to_string(),
+                        "minecraft:attached_melon_stem".to_string(),
+                        "minecraft:pumpkin_stem".to_string(),
+                        "minecraft:melon_stem".to_string(),
+                        "minecraft:lily_pad".to_string(),
+                        "minecraft:nether_wart".to_string(),
+                        "minecraft:cocoa".to_string(),
+                        "minecraft:carrots".to_string(),
+                        "minecraft:potatoes".to_string(),
+                        "minecraft:chorus_plant".to_string(),
+                        "minecraft:chorus_flower".to_string(),
+                        "minecraft:torchflower_crop".to_string(),
+                        "minecraft:pitcher_crop".to_string(),
+                        "minecraft:beetroots".to_string(),
+                        "minecraft:sweet_berry_bush".to_string(),
+                        "minecraft:warped_fungus".to_string(),
+                        "minecraft:crimson_fungus".to_string(),
+                        "minecraft:weeping_vines".to_string(),
+                        "minecraft:weeping_vines_plant".to_string(),
+                        "minecraft:twisting_vines".to_string(),
+                        "minecraft:twisting_vines_plant".to_string(),
+                        "minecraft:cave_vines".to_string(),
+                        "minecraft:cave_vines_plant".to_string(),
+                        "minecraft:spore_blossom".to_string(),
+                        "minecraft:azalea".to_string(),
+                        "minecraft:flowering_azalea".to_string(),
+                        "minecraft:moss_carpet".to_string(),
+                        "minecraft:pink_petals".to_string(),
+                        "minecraft:wildflowers".to_string(),
+                        "minecraft:big_dripleaf".to_string(),
+                        "minecraft:big_dripleaf_stem".to_string(),
+                        "minecraft:small_dripleaf".to_string(),
+                    ]),
+                }),
+                planted: true,
+            },
         ),
     );
     map.insert(

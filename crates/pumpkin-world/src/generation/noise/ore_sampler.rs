@@ -19,7 +19,7 @@ impl OreVeinSampler {
         sample_options: &ChunkNoiseFunctionSampleOptions,
     ) -> Option<&'static BlockState> {
         let vein_toggle = router.vein_toggle(pos, sample_options);
-        let vein_type: &VeinType = if vein_toggle > 0f64 {
+        let vein_type: &VeinType = if vein_toggle > 0.0 {
             &vein_type::COPPER
         } else {
             &vein_type::IRON
@@ -30,26 +30,18 @@ impl OreVeinSampler {
         let y_to_min = block_y - vein_type.min_y;
         if (max_to_y >= 0) && (y_to_min >= 0) {
             let closest_to_bound = max_to_y.min(y_to_min);
-            let mapped_diff = clamped_map(closest_to_bound as f64, 0f64, 20f64, -0.2f64, 0f64);
+            let mapped_diff = clamped_map(closest_to_bound as f32, 0.0, 20.0, -0.2, 0.0);
             let abs_sample = vein_toggle.abs();
-            if abs_sample + mapped_diff >= 0.4f32 as f64 {
+            if abs_sample + mapped_diff >= 0.4 {
                 let mut random = ore_random_deriver.split_pos(pos.x, block_y, pos.z);
 
                 let vein_ridged_sample = router.vein_ridged(pos, sample_options);
-                if random.next_f32() <= 0.7f32 && vein_ridged_sample < 0f64 {
-                    let clamped_sample = clamped_map(
-                        abs_sample,
-                        0.4f32 as f64,
-                        0.6f32 as f64,
-                        0.1f32 as f64,
-                        0.3f32 as f64,
-                    );
+                if random.next_f32() <= 0.7 && vein_ridged_sample < 0.0 {
+                    let clamped_sample = clamped_map(abs_sample, 0.4, 0.6, 0.1, 0.3);
 
                     let vein_gap = router.vein_gap(pos, sample_options);
-                    return if (random.next_f32() as f64) < clamped_sample
-                        && vein_gap > (-0.3f32 as f64)
-                    {
-                        Some(if random.next_f32() < 0.02f32 {
+                    return if random.next_f32() < clamped_sample && vein_gap > -0.3 {
+                        Some(if random.next_f32() < 0.02 {
                             vein_type.raw_ore.default_state
                         } else {
                             vein_type.ore.default_state

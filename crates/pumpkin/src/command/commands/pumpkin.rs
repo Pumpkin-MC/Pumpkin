@@ -81,7 +81,7 @@ fn fetch_all_contributors_cached() -> Vec<Contributor> {
 }
 
 async fn fetch_all_contributors() -> Vec<Contributor> {
-    let client = reqwest::Client::builder()
+    let client = pumpkin_util::client_builder()
         .user_agent("Pumpkin-MC")
         .build()
         .unwrap_or_default();
@@ -196,7 +196,7 @@ fn tier_color(tier_slug: &str, tier_name: &str) -> NamedColor {
 
 async fn fetch_donators_hover() -> TextComponent {
     let url = "https://market.pumpkinmc.org/api/v1/rest/donators";
-    let client = reqwest::Client::builder()
+    let client = pumpkin_util::client_builder()
         .user_agent("Pumpkin-MC")
         .build()
         .unwrap_or_default();

@@ -1,10 +1,7 @@
 use pumpkin_data::{
-    Block, BlockDirection, BlockStateId, Enchantment,
-    block_properties::{BlockProperties, CampfireLikeProperties},
-    damage::DamageType,
-    data_component_impl::EquipmentSlot,
-    effect::StatusEffect,
-    fluid::Fluid,
+    Block, BlockDirection, BlockState, BlockStateId, Enchantment,
+    block_properties::CampfireLikeProperties, damage::DamageType,
+    data_component_impl::EquipmentSlot, effect::StatusEffect, fluid::Fluid,
 };
 use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_world::tick::TickPriority;
@@ -13,7 +10,7 @@ use crate::block::entities::campfire::CampfireBlockEntity;
 use crate::{
     block::{
         BlockBehaviour, BlockIsReplacing, GetStateForNeighborUpdateArgs, OnEntityCollisionArgs,
-        OnPlaceArgs, PlacedArgs,
+        OnPlaceArgs, PathComputationType, PlacedArgs, UseWithItemArgs, registry::BlockActionResult,
     },
     entity::EntityBase,
 };
@@ -30,10 +27,38 @@ impl BlockBehaviour for CampfireBlock {
         }
     }
 
+    fn use_with_item(&self, args: UseWithItemArgs<'_>) -> BlockActionResult {
+        let state = args.world.get_block_state(args.position);
+        if !CampfireLikeProperties::from_state_id(state.id).lit {
+            return BlockActionResult::PassToDefaultBlockAction;
+        }
+
+        if let Some(block_entity) = args.world.get_block_entity(args.position)
+            && let Some(campfire) = block_entity.as_any().downcast_ref::<CampfireBlockEntity>()
+        {
+            let is_food = args
+                .item_stack
+                .get_data_component::<pumpkin_data::data_component_impl::FoodImpl>()
+                .is_some();
+            if is_food && campfire.add_item(args.item_stack) {
+                args.player.increment_stat(
+                    pumpkin_data::statistic::StatisticCategory::Custom,
+                    pumpkin_data::statistic::CustomStatistic::InteractWithCampfire as i32,
+                    1,
+                );
+                args.item_stack
+                    .decrement_unless_creative(args.player.gamemode.load(), 1);
+                return BlockActionResult::Success;
+            }
+        }
+
+        BlockActionResult::PassToDefaultBlockAction
+    }
+
     // TODO: cooking food on campfire (CampfireBlockEntity)
     fn on_entity_collision(&self, args: OnEntityCollisionArgs<'_>) {
         {
-            if CampfireLikeProperties::from_state_id(args.state.id, args.block).lit
+            if CampfireLikeProperties::from_state_id(args.state.id).lit
                 && let Some(living_entity) = args.entity.get_living_entity()
             {
                 let has_frost_walker_enchantment = {
@@ -68,8 +93,7 @@ impl BlockBehaviour for CampfireBlock {
 
     fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
         let is_replacing_water = matches!(args.replacing, BlockIsReplacing::Water(_));
-        let mut props =
-            CampfireLikeProperties::from_state_id(args.block.default_state.id, args.block);
+        let mut props = CampfireLikeProperties::from_state_id(args.block.default_state.id);
         props.waterlogged = is_replacing_water;
         props.signal_fire = is_signal_fire_base_block(args.world.get_block(&args.position.down()));
         props.lit = !is_replacing_water;
@@ -81,7 +105,7 @@ impl BlockBehaviour for CampfireBlock {
         &self,
         args: GetStateForNeighborUpdateArgs<'_>,
     ) -> BlockStateId {
-        let mut props = CampfireLikeProperties::from_state_id(args.state_id, args.block);
+        let mut props = CampfireLikeProperties::from_state_id(args.state_id);
         if props.waterlogged {
             props.lit = false;
             args.world.schedule_fluid_tick(
@@ -98,6 +122,10 @@ impl BlockBehaviour for CampfireBlock {
         }
 
         props.to_state_id(args.block)
+    }
+
+    fn is_pathfindable(&self, _state: &BlockState, _computation_type: PathComputationType) -> bool {
+        false
     }
 
     // TODO: onProjectileHit

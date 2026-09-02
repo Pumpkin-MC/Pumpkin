@@ -1,6 +1,6 @@
 use pumpkin_data::{
     chunk::Biome,
-    chunk_gen_settings::{
+    material_rule::{
         AboveYMaterialCondition, MaterialCondition, NoiseThresholdMaterialCondition,
         NotMaterialCondition, StoneDepthMaterialCondition, VerticalGradientMaterialCondition,
         WaterMaterialCondition,
@@ -39,7 +39,7 @@ pub struct MaterialRuleContext<'a> {
     pub block_pos_z: i32,
     pub biome: &'a Biome,
     pub run_depth: i32,
-    pub secondary_depth: f64,
+    pub secondary_depth: f32,
     packed_chunk_pos: i64,
     estimated_surface_heights: [i32; 4],
     last_unique_horizontal_pos_value: i64,
@@ -96,14 +96,14 @@ impl<'a> MaterialRuleContext<'a> {
     fn sample_run_depth(&self) -> i32 {
         let noise =
             self.surface_noise
-                .sample(self.block_pos_x as f64, 0.0, self.block_pos_z as f64);
+                .sample(self.block_pos_x as f32, 0.0, self.block_pos_z as f32);
         (noise * 2.75
             + 3.0
-            + self
+            + (self
                 .random_deriver
                 .split_pos(self.block_pos_x, 0, self.block_pos_z)
                 .next_f64()
-                * 0.25) as i32
+                * 0.25) as f32) as i32
     }
 
     pub fn init_horizontal(&mut self, x: i32, z: i32) {
@@ -126,12 +126,12 @@ impl<'a> MaterialRuleContext<'a> {
         self.stone_depth_above = stone_depth_above;
     }
 
-    pub fn get_secondary_depth(&mut self) -> f64 {
+    pub fn get_secondary_depth(&mut self) -> f32 {
         if self.last_unique_horizontal_pos_value != self.unique_horizontal_pos_value {
             self.last_unique_horizontal_pos_value = self.unique_horizontal_pos_value;
             self.secondary_depth =
                 self.secondary_noise
-                    .sample(self.block_pos_x as f64, 0.0, self.block_pos_z as f64);
+                    .sample(self.block_pos_x as f32, 0.0, self.block_pos_z as f32);
         }
         self.secondary_depth
     }
@@ -310,8 +310,8 @@ pub fn test_noise_threshold(
         context.random_deriver,
         &condition.noise,
     );
-    let value = sampler.sample(context.block_pos_x as f64, 0.0, context.block_pos_z as f64);
-    value >= condition.min_threshold && value <= condition.max_threshold
+    let value = sampler.sample(context.block_pos_x as f32, 0.0, context.block_pos_z as f32);
+    value >= condition.min_threshold as f32 && value <= condition.max_threshold as f32
 }
 
 pub fn test_stone_depth(
@@ -335,7 +335,7 @@ pub fn test_stone_depth(
             -1.0,
             1.0,
             0.0,
-            condition.secondary_depth_range as f64,
+            condition.secondary_depth_range as f32,
         ) as i32
     };
     stone_depth <= 1 + condition.offset + depth + depth_range

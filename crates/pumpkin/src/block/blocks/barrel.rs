@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::sync::Mutex;
 
-use crate::block::{GetComparatorOutputArgs, OnPlaceArgs, PlacedArgs};
+use crate::block::{GetComparatorOutputArgs, GetScreenHandlerFactoryArgs, OnPlaceArgs, PlacedArgs};
 use crate::block::{
     registry::BlockActionResult,
     {BlockBehaviour, NormalUseArgs},
@@ -10,7 +10,7 @@ use crate::block::{
 use crate::block::entities::barrel::BarrelBlockEntity;
 use crate::entity::EntityBase;
 use pumpkin_data::BlockStateId;
-use pumpkin_data::block_properties::{BarrelLikeProperties, BlockProperties};
+use pumpkin_data::block_properties::BarrelLikeProperties;
 use pumpkin_data::translation;
 use pumpkin_inventory::generic_container_screen_handler::create_generic_9x3;
 use pumpkin_inventory::player::player_inventory::PlayerInventory;
@@ -28,9 +28,9 @@ impl ScreenHandlerFactory for BarrelScreenFactory {
         &self,
         sync_id: u8,
         player_inventory: &Arc<PlayerInventory>,
-        _player: &dyn InventoryPlayer,
+        player: &dyn InventoryPlayer,
     ) -> Option<SharedScreenHandler> {
-        let handler = create_generic_9x3(sync_id, player_inventory, self.0.clone());
+        let handler = create_generic_9x3(sync_id, player_inventory, self.0.clone(), player);
         let concrete_arc = Arc::new(Mutex::new(handler));
 
         Some(concrete_arc as SharedScreenHandler)
@@ -55,19 +55,32 @@ impl BlockBehaviour for BarrelBlock {
     }
 
     fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
-        if let Some(block_entity) = args.world.get_block_entity(args.position)
-            && let Some(inventory) = block_entity.get_inventory()
-        {
+        if let Some(factory) = self.get_screen_handler_factory(GetScreenHandlerFactoryArgs {
+            server: args.server,
+            world: args.world,
+            block: args.block,
+            position: args.position,
+            player: args.player,
+        }) {
             args.player.increment_stat(
                 pumpkin_data::statistic::StatisticCategory::Custom,
                 pumpkin_data::statistic::CustomStatistic::OpenBarrel as i32,
                 1,
             );
             args.player
-                .open_handled_screen(&BarrelScreenFactory(inventory), Some(*args.position));
+                .open_handled_screen(factory.as_ref(), Some(*args.position));
         }
 
         BlockActionResult::Success
+    }
+
+    fn get_screen_handler_factory(
+        &self,
+        args: GetScreenHandlerFactoryArgs<'_>,
+    ) -> Option<Box<dyn ScreenHandlerFactory>> {
+        let block_entity = args.world.get_block_entity(args.position)?;
+        let inventory = block_entity.get_inventory()?;
+        Some(Box::new(BarrelScreenFactory(inventory)))
     }
 
     fn placed(&self, args: PlacedArgs<'_>) {

@@ -7,7 +7,6 @@ use crate::entity::player::Player;
 use crate::item::{ItemBehaviour, ItemMetadata};
 use crate::server::Server;
 use crate::world::World;
-use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::block_properties::OakDoorLikeProperties;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
@@ -30,7 +29,7 @@ impl ItemMetadata for HoneyCombItem {
 impl ItemBehaviour for HoneyCombItem {
     fn use_on_block(
         &self,
-        _item: &mut ItemStack,
+        item: &mut ItemStack,
         player: &Player,
         location: BlockPos,
         _face: BlockDirection,
@@ -39,7 +38,9 @@ impl ItemBehaviour for HoneyCombItem {
         _server: &Server,
     ) {
         let world = player.world();
-        try_wax_block(&world, location, block);
+        if try_wax_block(&world, location, block) {
+            item.decrement_unless_creative(player.gamemode.load(), 1);
+        }
     }
 
     fn as_any(&self) -> &dyn std::any::Any {
@@ -58,7 +59,7 @@ pub(crate) fn try_wax_block(world: &Arc<World>, location: BlockPos, block: &Bloc
     let new_state_id = if block.has_tag(&tag::Block::MINECRAFT_DOORS) {
         // Carry the door state over to the waxed door.
         let door_information = world.get_block_state_id(&location);
-        let door_props = OakDoorLikeProperties::from_state_id(door_information, block);
+        let door_props = OakDoorLikeProperties::from_state_id(door_information);
         let mut new_door_properties = OakDoorLikeProperties::default(new_block);
         new_door_properties.facing = door_props.facing;
         new_door_properties.open = door_props.open;

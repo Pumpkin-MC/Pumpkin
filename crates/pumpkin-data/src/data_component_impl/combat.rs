@@ -1,10 +1,11 @@
 use crate::Block;
 use crate::Enchantment;
 use crate::attributes::Attributes;
+use crate::damage::DamageType;
 use crate::data_component_impl::basic::SoundEvent;
 use crate::data_component_impl::{
-    DataComponentImpl, EquipmentSlot, IDSet, IdOr, get_i32_hash, get_idor, get_idor_hash,
-    get_idset_hash, get_str_hash, put_idor,
+    DataComponentImpl, EquipmentSlot, IDSet, IdOr, get_f32_hash, get_i32_hash, get_idor,
+    get_idor_hash, get_idset_hash, get_str_hash, put_idor,
 };
 use crate::entity_type::EntityType;
 use crate::item::Item;
@@ -46,6 +47,13 @@ impl Hash for Modifier {
 #[derive(Clone, Debug, Hash, PartialEq)]
 pub struct AttributeModifiersImpl {
     pub attribute_modifiers: Cow<'static, [Modifier]>,
+}
+impl AttributeModifiersImpl {
+    pub const fn read_data(_data: &NbtTag) -> Option<Self> {
+        Some(Self {
+            attribute_modifiers: Cow::Borrowed(&[]),
+        })
+    }
 }
 impl DataComponentImpl for AttributeModifiersImpl {
     default_impl!(AttributeModifiers);
@@ -498,10 +506,64 @@ impl DataComponentImpl for WeaponImpl {
     default_impl!(Weapon);
 }
 
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct AttackRangeImpl;
+#[derive(Clone, Debug, PartialEq)]
+pub struct AttackRangeImpl {
+    pub min_reach: f32,
+    pub max_reach: f32,
+    pub min_creative_reach: f32,
+    pub max_creative_reach: f32,
+    pub hitbox_margin: f32,
+    pub mob_factor: f32,
+}
+impl AttackRangeImpl {
+    pub fn read_data(data: &NbtTag) -> Option<Self> {
+        let compound = data.extract_compound()?;
+        Some(Self {
+            min_reach: compound.get_float("min_reach").unwrap_or(0.0),
+            max_reach: compound.get_float("max_reach").unwrap_or(3.0),
+            min_creative_reach: compound.get_float("min_creative_reach").unwrap_or(0.0),
+            max_creative_reach: compound.get_float("max_creative_reach").unwrap_or(5.0),
+            hitbox_margin: compound.get_float("hitbox_margin").unwrap_or(0.3),
+            mob_factor: compound.get_float("mob_factor").unwrap_or(1.0),
+        })
+    }
+    fn values(&self) -> [f32; 6] {
+        [
+            self.min_reach,
+            self.max_reach,
+            self.min_creative_reach,
+            self.max_creative_reach,
+            self.hitbox_margin,
+            self.mob_factor,
+        ]
+    }
+}
 impl DataComponentImpl for AttackRangeImpl {
+    fn write_data(&self) -> NbtTag {
+        let mut compound = NbtCompound::new();
+        compound.put_float("min_reach", self.min_reach);
+        compound.put_float("max_reach", self.max_reach);
+        compound.put_float("min_creative_reach", self.min_creative_reach);
+        compound.put_float("max_creative_reach", self.max_creative_reach);
+        compound.put_float("hitbox_margin", self.hitbox_margin);
+        compound.put_float("mob_factor", self.mob_factor);
+        NbtTag::Compound(compound)
+    }
+    fn get_hash(&self) -> i32 {
+        let mut digest = Digest::new(Crc32Iscsi);
+        for value in self.values() {
+            digest.update(&get_f32_hash(value).to_le_bytes());
+        }
+        digest.finalize() as i32
+    }
     default_impl!(AttackRange);
+}
+impl Hash for AttackRangeImpl {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        for value in self.values() {
+            value.to_bits().hash(state);
+        }
+    }
 }
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
@@ -687,26 +749,208 @@ impl DataComponentImpl for GliderImpl {
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct DeathProtectionImpl;
+impl DeathProtectionImpl {
+    pub const fn read_data(_data: &NbtTag) -> Option<Self> {
+        Some(Self)
+    }
+}
 impl DataComponentImpl for DeathProtectionImpl {
     default_impl!(DeathProtection);
 }
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct BlocksAttacksImpl;
+impl BlocksAttacksImpl {
+    pub const fn read_data(_data: &NbtTag) -> Option<Self> {
+        Some(Self)
+    }
+}
 impl DataComponentImpl for BlocksAttacksImpl {
     default_impl!(BlocksAttacks);
 }
 
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct PiercingWeaponImpl;
+fn get_optional_idor(compound: &NbtCompound, key: &str) -> Option<IdOr<SoundEvent>> {
+    compound
+        .get(key)
+        .map(|_| get_idor(compound, key, Sound::IntentionallyEmpty))
+}
+
+fn put_optional_idor(compound: &mut NbtCompound, key: &str, sound: Option<&IdOr<SoundEvent>>) {
+    if let Some(sound) = sound {
+        put_idor(compound, key, sound);
+    }
+}
+
+fn update_optional_idor(digest: &mut Digest, sound: Option<&IdOr<SoundEvent>>) {
+    if let Some(sound) = sound {
+        digest.update(&[1u8]);
+        digest.update(&get_idor_hash(sound).to_le_bytes());
+    } else {
+        digest.update(&[0u8]);
+    }
+}
+
+#[derive(Clone, Debug, Hash, PartialEq)]
+pub struct PiercingWeaponImpl {
+    pub deals_knockback: bool,
+    pub dismounts: bool,
+    pub sound: Option<IdOr<SoundEvent>>,
+    pub hit_sound: Option<IdOr<SoundEvent>>,
+}
+impl PiercingWeaponImpl {
+    pub fn read_data(data: &NbtTag) -> Option<Self> {
+        let compound = data.extract_compound()?;
+        Some(Self {
+            deals_knockback: compound.get_bool("deals_knockback").unwrap_or(true),
+            dismounts: compound.get_bool("dismounts").unwrap_or(false),
+            sound: get_optional_idor(compound, "sound"),
+            hit_sound: get_optional_idor(compound, "hit_sound"),
+        })
+    }
+}
 impl DataComponentImpl for PiercingWeaponImpl {
+    fn write_data(&self) -> NbtTag {
+        let mut compound = NbtCompound::new();
+        compound.put_bool("deals_knockback", self.deals_knockback);
+        compound.put_bool("dismounts", self.dismounts);
+        put_optional_idor(&mut compound, "sound", self.sound.as_ref());
+        put_optional_idor(&mut compound, "hit_sound", self.hit_sound.as_ref());
+        NbtTag::Compound(compound)
+    }
+    fn get_hash(&self) -> i32 {
+        let mut digest = Digest::new(Crc32Iscsi);
+        digest.update(&[self.deals_knockback as u8, self.dismounts as u8]);
+        update_optional_idor(&mut digest, self.sound.as_ref());
+        update_optional_idor(&mut digest, self.hit_sound.as_ref());
+        digest.finalize() as i32
+    }
     default_impl!(PiercingWeapon);
 }
 
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct KineticWeaponImpl;
+#[derive(Clone, Debug, PartialEq)]
+pub struct KineticConditionImpl {
+    pub max_duration_ticks: i32,
+    pub min_speed: f32,
+    pub min_relative_speed: f32,
+}
+impl KineticConditionImpl {
+    pub fn test(&self, ticks_used: i32, attacker_speed: f64, relative_speed: f64) -> bool {
+        ticks_used <= self.max_duration_ticks
+            && attacker_speed >= f64::from(self.min_speed)
+            && relative_speed >= f64::from(self.min_relative_speed)
+    }
+    fn read(compound: &NbtCompound, key: &str) -> Option<Self> {
+        let condition = compound.get_compound(key)?;
+        Some(Self {
+            max_duration_ticks: condition.get_int("max_duration_ticks")?,
+            min_speed: condition.get_float("min_speed").unwrap_or(0.0),
+            min_relative_speed: condition.get_float("min_relative_speed").unwrap_or(0.0),
+        })
+    }
+    fn write(&self, compound: &mut NbtCompound, key: &str) {
+        let mut condition = NbtCompound::new();
+        condition.put_int("max_duration_ticks", self.max_duration_ticks);
+        condition.put_float("min_speed", self.min_speed);
+        condition.put_float("min_relative_speed", self.min_relative_speed);
+        compound.put(key, NbtTag::Compound(condition));
+    }
+    fn update_digest(&self, digest: &mut Digest) {
+        digest.update(&get_i32_hash(self.max_duration_ticks).to_le_bytes());
+        digest.update(&get_f32_hash(self.min_speed).to_le_bytes());
+        digest.update(&get_f32_hash(self.min_relative_speed).to_le_bytes());
+    }
+}
+impl Hash for KineticConditionImpl {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.max_duration_ticks.hash(state);
+        self.min_speed.to_bits().hash(state);
+        self.min_relative_speed.to_bits().hash(state);
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct KineticWeaponImpl {
+    pub contact_cooldown_ticks: i32,
+    pub delay_ticks: i32,
+    pub dismount_conditions: Option<KineticConditionImpl>,
+    pub knockback_conditions: Option<KineticConditionImpl>,
+    pub damage_conditions: Option<KineticConditionImpl>,
+    pub forward_movement: f32,
+    pub damage_multiplier: f32,
+    pub sound: Option<IdOr<SoundEvent>>,
+    pub hit_sound: Option<IdOr<SoundEvent>>,
+}
+impl KineticWeaponImpl {
+    pub fn read_data(data: &NbtTag) -> Option<Self> {
+        let compound = data.extract_compound()?;
+        Some(Self {
+            contact_cooldown_ticks: compound.get_int("contact_cooldown_ticks").unwrap_or(10),
+            delay_ticks: compound.get_int("delay_ticks").unwrap_or(0),
+            dismount_conditions: KineticConditionImpl::read(compound, "dismount_conditions"),
+            knockback_conditions: KineticConditionImpl::read(compound, "knockback_conditions"),
+            damage_conditions: KineticConditionImpl::read(compound, "damage_conditions"),
+            forward_movement: compound.get_float("forward_movement").unwrap_or(0.0),
+            damage_multiplier: compound.get_float("damage_multiplier").unwrap_or(1.0),
+            sound: get_optional_idor(compound, "sound"),
+            hit_sound: get_optional_idor(compound, "hit_sound"),
+        })
+    }
+    fn conditions(&self) -> [(&str, Option<&KineticConditionImpl>); 3] {
+        [
+            ("dismount_conditions", self.dismount_conditions.as_ref()),
+            ("knockback_conditions", self.knockback_conditions.as_ref()),
+            ("damage_conditions", self.damage_conditions.as_ref()),
+        ]
+    }
+}
 impl DataComponentImpl for KineticWeaponImpl {
+    fn write_data(&self) -> NbtTag {
+        let mut compound = NbtCompound::new();
+        compound.put_int("contact_cooldown_ticks", self.contact_cooldown_ticks);
+        compound.put_int("delay_ticks", self.delay_ticks);
+        for (key, condition) in self.conditions() {
+            if let Some(condition) = condition {
+                condition.write(&mut compound, key);
+            }
+        }
+        compound.put_float("forward_movement", self.forward_movement);
+        compound.put_float("damage_multiplier", self.damage_multiplier);
+        put_optional_idor(&mut compound, "sound", self.sound.as_ref());
+        put_optional_idor(&mut compound, "hit_sound", self.hit_sound.as_ref());
+        NbtTag::Compound(compound)
+    }
+    fn get_hash(&self) -> i32 {
+        let mut digest = Digest::new(Crc32Iscsi);
+        digest.update(&get_i32_hash(self.contact_cooldown_ticks).to_le_bytes());
+        digest.update(&get_i32_hash(self.delay_ticks).to_le_bytes());
+        for (_, condition) in self.conditions() {
+            if let Some(condition) = condition {
+                digest.update(&[1u8]);
+                condition.update_digest(&mut digest);
+            } else {
+                digest.update(&[0u8]);
+            }
+        }
+        digest.update(&get_f32_hash(self.forward_movement).to_le_bytes());
+        digest.update(&get_f32_hash(self.damage_multiplier).to_le_bytes());
+        update_optional_idor(&mut digest, self.sound.as_ref());
+        update_optional_idor(&mut digest, self.hit_sound.as_ref());
+        digest.finalize() as i32
+    }
     default_impl!(KineticWeapon);
+}
+impl Hash for KineticWeaponImpl {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.contact_cooldown_ticks.hash(state);
+        self.delay_ticks.hash(state);
+        self.dismount_conditions.hash(state);
+        self.knockback_conditions.hash(state);
+        self.damage_conditions.hash(state);
+        self.forward_movement.to_bits().hash(state);
+        self.damage_multiplier.to_bits().hash(state);
+        self.sound.hash(state);
+        self.hit_sound.hash(state);
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Default)]
@@ -810,6 +1054,11 @@ impl DataComponentImpl for SwingAnimationImpl {
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct AdditionalTradeCostImpl;
+impl AdditionalTradeCostImpl {
+    pub const fn read_data(_data: &NbtTag) -> Option<Self> {
+        Some(Self)
+    }
+}
 impl DataComponentImpl for AdditionalTradeCostImpl {
     default_impl!(AdditionalTradeCost);
 }
@@ -904,14 +1153,52 @@ impl DataComponentImpl for TrimImpl {
     default_impl!(Trim);
 }
 
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct MinimumAttackChargeImpl;
+#[derive(Clone, Debug, PartialEq)]
+pub struct MinimumAttackChargeImpl {
+    pub charge: f32,
+}
+impl MinimumAttackChargeImpl {
+    pub fn read_data(data: &NbtTag) -> Option<Self> {
+        data.extract_float().map(|charge| Self { charge })
+    }
+}
 impl DataComponentImpl for MinimumAttackChargeImpl {
+    fn write_data(&self) -> NbtTag {
+        NbtTag::Float(self.charge)
+    }
+    fn get_hash(&self) -> i32 {
+        get_f32_hash(self.charge) as i32
+    }
     default_impl!(MinimumAttackCharge);
 }
+impl Hash for MinimumAttackChargeImpl {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.charge.to_bits().hash(state);
+    }
+}
 
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct DamageTypeImpl;
+#[derive(Clone, Debug, PartialEq)]
+pub struct DamageTypeImpl {
+    pub damage_type: DamageType,
+}
+impl DamageTypeImpl {
+    pub fn read_data(data: &NbtTag) -> Option<Self> {
+        let name = data.extract_string()?;
+        let damage_type = DamageType::from_name(name.strip_prefix("minecraft:").unwrap_or(name))?;
+        Some(Self { damage_type })
+    }
+}
 impl DataComponentImpl for DamageTypeImpl {
+    fn write_data(&self) -> NbtTag {
+        NbtTag::String(format!("minecraft:{}", self.damage_type.registry_key()).into())
+    }
+    fn get_hash(&self) -> i32 {
+        get_str_hash(self.damage_type.registry_key()) as i32
+    }
     default_impl!(DamageType);
+}
+impl Hash for DamageTypeImpl {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.damage_type.id.hash(state);
+    }
 }

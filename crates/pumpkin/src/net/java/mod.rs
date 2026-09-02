@@ -299,11 +299,12 @@ impl JavaClient {
                         break;
                     }
 
-                    // Generate a unique ID (current timestamp in ms)
-                    let keep_alive_id = SystemTime::now()
-                        .duration_since(UNIX_EPOCH)
-                        .unwrap_or_default()
-                        .as_millis() as i64;
+                    let keep_alive_id = i64::from(
+                        SystemTime::now()
+                            .duration_since(UNIX_EPOCH)
+                            .unwrap_or_default()
+                            .as_millis() as i32,
+                    );
 
                     self.keep_alive_id.store(keep_alive_id);
                     self.wait_for_keep_alive.store(true, Ordering::Relaxed);

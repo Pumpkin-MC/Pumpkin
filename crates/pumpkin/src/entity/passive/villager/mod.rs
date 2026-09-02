@@ -6,9 +6,7 @@ use uuid::Uuid;
 use crate::block::blocks::bed::BedBlock;
 use pumpkin_data::Enchantment;
 use pumpkin_data::attributes::Attributes;
-use pumpkin_data::block_properties::{
-    BedPart, BlockProperties, WhiteBedLikeProperties as BedProperties,
-};
+use pumpkin_data::block_properties::{BedPart, WhiteBedLikeProperties as BedProperties};
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::entity::{EntityPose, EntityType};
 use pumpkin_data::item::{Item, JavaToBedrockItemMapping};
@@ -1638,7 +1636,7 @@ impl VillagerEntity {
         if let Some(current_home) = self.get_home_pos() {
             let (block, state) = world.get_block_and_state(&current_home);
             let valid = if block.has_tag(&pumpkin_data::tag::Block::MINECRAFT_BEDS) {
-                let bed_props = BedProperties::from_state_id(state.id, block);
+                let bed_props = BedProperties::from_state_id(state.id);
                 bed_props.part == BedPart::Head
             } else {
                 false
@@ -1700,7 +1698,7 @@ impl VillagerEntity {
             for p in BlockPos::iterate(start, end) {
                 let (block, state) = world.get_block_and_state(&p);
                 if block.has_tag(&pumpkin_data::tag::Block::MINECRAFT_BEDS) {
-                    let bed_props = BedProperties::from_state_id(state.id, block);
+                    let bed_props = BedProperties::from_state_id(state.id);
                     let bed_head_pos = if bed_props.part == BedPart::Head {
                         p
                     } else {
@@ -1745,7 +1743,7 @@ impl VillagerEntity {
                         // Within 2 blocks (squared distance 4.0)
                         let (block, state) = world.get_block_and_state(&home_pos);
                         if block.has_tag(&pumpkin_data::tag::Block::MINECRAFT_BEDS) {
-                            let bed_props = BedProperties::from_state_id(state.id, block);
+                            let bed_props = BedProperties::from_state_id(state.id);
                             if !bed_props.occupied {
                                 // Make bed occupied
                                 BedBlock::set_occupied(true, &world, block, &home_pos, state.id);
@@ -1766,7 +1764,7 @@ impl VillagerEntity {
                 // It is day, wake up!
                 let (block, state) = world.get_block_and_state(&home_pos);
                 if block.has_tag(&pumpkin_data::tag::Block::MINECRAFT_BEDS) {
-                    let bed_props = BedProperties::from_state_id(state.id, block);
+                    let bed_props = BedProperties::from_state_id(state.id);
                     if bed_props.occupied {
                         BedBlock::set_occupied(false, &world, block, &home_pos, state.id);
                     }

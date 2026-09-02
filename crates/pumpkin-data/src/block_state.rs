@@ -152,23 +152,18 @@ impl BlockState {
 
     #[must_use]
     pub fn is_waterlogged(&self) -> bool {
-        let block = Block::from_state_id(self.id);
-
-        block.properties(self.id).is_some_and(|props| {
-            props
-                .to_props()
-                .iter()
-                .any(|(k, v)| k == &"waterlogged" && v == &"true")
-        })
+        self.id.is_waterlogged()
     }
 
     /// Produce a new state identical to `self` except the waterlogged property
-    /// is set to `true`.  If the block type does not support waterlogging or
-    /// the state was already waterlogged, `None` is returned.
+    /// is set to `value`. If the block type does not support waterlogging or
+    /// the state already had waterlogged set to `value`, `None` is returned.
     #[must_use]
-    pub fn with_waterlogged(&self) -> Option<&'static BlockState> {
-        let block = Block::from_state_id(self.id);
-        block.with_waterlogged(self.id)
+    pub fn set_waterlogged(&self, value: bool) -> Option<&'static BlockState> {
+        self.id
+            .to_block()
+            .set_waterlogged(self.id, value)
+            .map(BlockStateId::to_state)
     }
 
     pub fn get_block_collision_shapes(&self) -> impl Iterator<Item = BoundingBox> + '_ {
@@ -278,6 +273,12 @@ impl BlockStateId {
     #[must_use]
     pub const fn to_block(self) -> &'static Block {
         Block::from_state_id(self)
+    }
+
+    #[inline]
+    #[must_use]
+    pub fn is_waterlogged(self) -> bool {
+        self.to_block().is_waterlogged(self)
     }
 
     #[inline]

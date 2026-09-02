@@ -1,19 +1,14 @@
 use std::sync::Arc;
 
-use crate::block::BlockBehaviour;
-use crate::block::CanPlaceAtArgs;
-use crate::block::GetStateForNeighborUpdateArgs;
-use crate::block::OnPlaceArgs;
-use crate::block::OnScheduledTickArgs;
-use crate::block::RandomTickArgs;
+use crate::block::{
+    BlockBehaviour, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, OnPlaceArgs,
+    OnScheduledTickArgs, PathComputationType, RandomTickArgs,
+};
 use crate::world::World;
-use pumpkin_data::Block;
-use pumpkin_data::BlockDirection;
-use pumpkin_data::BlockStateId;
-use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::block_properties::FarmlandLikeProperties;
 use pumpkin_data::tag;
 use pumpkin_data::tag::Taggable;
+use pumpkin_data::{Block, BlockDirection, BlockState, BlockStateId};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
@@ -70,7 +65,7 @@ impl BlockBehaviour for FarmlandBlock {
             );
         } else {
             let state_id = args.world.get_block_state_id(args.position);
-            let mut props = FarmlandProperties::from_state_id(state_id, args.block);
+            let mut props = FarmlandProperties::from_state_id(state_id);
             if props.moisture == 0 {
                 if !args
                     .world
@@ -93,6 +88,10 @@ impl BlockBehaviour for FarmlandBlock {
                 );
             }
         }
+    }
+
+    fn is_pathfindable(&self, _state: &BlockState, _computation_type: PathComputationType) -> bool {
+        false
     }
 }
 

@@ -107,7 +107,7 @@ pub mod vehicle;
 
 pub use lightning::LightningBoltEntity;
 
-mod combat;
+pub(crate) mod combat;
 pub mod predicate;
 
 /// The maximum number of scoreboard tags an entity can carry, matching Vanilla.
@@ -180,6 +180,10 @@ pub trait EntityBase: Send + Sync + std::any::Any {
     }
 
     fn get_item_steerable(&self) -> Option<&dyn crate::entity::item_steerable::ItemSteerable> {
+        None
+    }
+
+    fn get_owner_id(&self) -> Option<i32> {
         None
     }
 
@@ -1563,7 +1567,7 @@ impl Entity {
                     || block == Block::SOUL_CAMPFIRE
 
 
-                        && CampfireLikeProperties::from_state_id(state.id, &block).r#signal_fire
+                        && CampfireLikeProperties::from_state_id(state.id).r#signal_fire
 
 
                 {
@@ -2122,7 +2126,7 @@ impl Entity {
                 //         && (name == "OakFenceLikeProperties"
                 //             || name == "ResinBrickWallLikeProperties"
                 //             || name == "OakFenceGateLikeProperties"
-                //                 && OakFenceGateLikeProperties::from_state_id(state.id, &block)
+                //                 && OakFenceGateLikeProperties::from_state_id(state.id)
                 //                     .r#open)
                 //     {
                 //         return (supporting_block, Some(block), Some(state));

@@ -413,6 +413,10 @@ impl ArrowEntity {
 }
 
 impl EntityBase for ArrowEntity {
+    fn get_owner_id(&self) -> Option<i32> {
+        self.owner_id
+    }
+
     fn write_custom_nbt(&self, nbt: &mut pumpkin_nbt::compound::NbtCompound) {
         let item_stack = self
             .item_stack
@@ -1063,6 +1067,11 @@ impl EntityBase for ArrowEntity {
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         let mut stack = Self::pickup_item_stack(&item_stack);
         if player.is_creative() || player.inventory.insert_stack_anywhere(&mut stack) {
+            player.increment_stat(
+                pumpkin_data::statistic::StatisticCategory::PickedUp,
+                stack.item.id as i32,
+                1,
+            );
             player.living_entity.pickup(&self.entity, 1);
 
             // Remove arrow entity after pickup

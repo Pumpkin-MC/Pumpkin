@@ -1,9 +1,10 @@
 use pumpkin_data::BlockState;
-use pumpkin_data::chunk_gen_settings::GenerationSettings;
 use pumpkin_data::dimension::Dimension;
+use pumpkin_data::material_rule::MaterialRule;
 use pumpkin_data::noise_router::{
     END_BASE_NOISE_ROUTER, NETHER_BASE_NOISE_ROUTER, OVERWORLD_BASE_NOISE_ROUTER,
 };
+use pumpkin_data::noise_settings::NoiseSettings;
 
 use super::noise::router::proto_noise_router::ProtoNoiseRouters;
 use crate::generation::proto_chunk::TerrainCache;
@@ -125,7 +126,8 @@ pub struct VanillaGenerator {
     pub random_config: GlobalRandomConfig,
     pub base_router: ProtoNoiseRouters,
     pub dimension: Dimension,
-    pub settings: &'static GenerationSettings,
+    pub settings: &'static NoiseSettings,
+    pub surface_rule: &'static MaterialRule,
     pub biome_mixer_seed: i64,
 
     pub terrain_cache: TerrainCache,
@@ -158,7 +160,8 @@ impl VanillaGenerator {
 
 impl GeneratorInit for VanillaGenerator {
     fn new(seed: Seed, dimension: Dimension) -> Self {
-        let settings = GenerationSettings::from_dimension(&dimension);
+        let settings = NoiseSettings::from_dimension(&dimension);
+        let surface_rule = MaterialRule::from_dimension(&dimension);
         let random_config = GlobalRandomConfig::new(seed.0, settings.legacy_random_source);
 
         // TODO: The generation settings contains (part of?) the noise routers too; do we keep the separate or
@@ -192,6 +195,7 @@ impl GeneratorInit for VanillaGenerator {
             base_router,
             dimension,
             settings,
+            surface_rule,
             biome_mixer_seed,
             terrain_cache,
             default_block,

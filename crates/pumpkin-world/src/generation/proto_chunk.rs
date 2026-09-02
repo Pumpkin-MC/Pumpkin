@@ -96,6 +96,9 @@ pub trait GenerationCache: HeightLimitView + BlockAccessor {
         chunk_x: i32,
         chunk_z: i32,
     ) -> Option<&crate::generation::blender::blending_data::BlendingData>;
+    fn get_sea_level(&self) -> i32 {
+        63
+    }
 }
 
 const AIR_BLOCK: Block = Block::AIR;
@@ -184,6 +187,11 @@ impl TerrainCache {
 }
 
 impl ProtoChunk {
+    #[must_use]
+    pub const fn get_sea_level(&self) -> i32 {
+        63
+    }
+
     #[cfg(test)]
     pub(crate) fn has_structure(&self, key: StructureKeys) -> bool {
         self.structure_starts.contains_key(&key)
@@ -629,26 +637,10 @@ impl ProtoChunk {
 
         for (key, instance) in &self.structure_starts {
             let structure = pumpkin_data::structures::Structure::get(key);
-            let terrain_adaptation = match structure.terrain_adaptation {
-                pumpkin_data::structures::TerrainAdaptation::None => {
-                    crate::generation::noise::router::density_function::beardifier::TerrainAdaptation::None
-                }
-                pumpkin_data::structures::TerrainAdaptation::BeardThin => {
-                    crate::generation::noise::router::density_function::beardifier::TerrainAdaptation::BeardThin
-                }
-                pumpkin_data::structures::TerrainAdaptation::BeardBox => {
-                    crate::generation::noise::router::density_function::beardifier::TerrainAdaptation::BeardBox
-                }
-                pumpkin_data::structures::TerrainAdaptation::Bury => {
-                    crate::generation::noise::router::density_function::beardifier::TerrainAdaptation::Bury
-                }
-                pumpkin_data::structures::TerrainAdaptation::Encapsulate => {
-                    crate::generation::noise::router::density_function::beardifier::TerrainAdaptation::Encapsulate
-                }
-            };
+            let terrain_adaptation = structure.terrain_adaptation;
 
             // Vanilla strictly skips filtering Beardifier parts if adaptation is None early-on
-            if terrain_adaptation == crate::generation::noise::router::density_function::beardifier::TerrainAdaptation::None {
+            if terrain_adaptation == pumpkin_data::structures::TerrainAdaptation::None {
                 continue;
             }
 
@@ -681,16 +673,16 @@ impl ProtoChunk {
                     if jigsaw_piece.projection == crate::generation::structure::structures::jigsaw::JigsawProjection::Rigid {
                         ground_level_delta = jigsaw_piece.ground_level_delta;
                         any_piece_bounding_box = any_piece_bounding_box.map_or(Some(bounding_box), |mut b| {
-                                 b.encompass(&bounding_box);
-                                 Some(b)
-                             });
+                            b.encompass(&bounding_box);
+                            Some(b)
+                        });
 
                         beardifier_structures.push(
                             crate::generation::noise::router::density_function::beardifier::BeardifierStructure {
                                 bounding_box,
                                 terrain_adaptation,
                                 ground_level_delta,
-                            }
+                            },
                         );
                     }
 
@@ -708,27 +700,27 @@ impl ProtoChunk {
                                     x: j_x,
                                     ground_y: j.source_ground_y,
                                     z: j_z,
-                                }
+                                },
                             );
-                            let _junction_box = BlockBox::from_pos(BlockPos::new(j_x, j.source_ground_y, j_z));
-                     any_piece_bounding_box = any_piece_bounding_box.map_or(Some(bounding_box), |mut b| {
-                            b.encompass(&bounding_box);
-                             Some(b)
-                        });
+                            let junction_box = BlockBox::from_pos(BlockPos::new(j_x, j.source_ground_y, j_z));
+                            any_piece_bounding_box = any_piece_bounding_box.map_or(Some(junction_box), |mut b| {
+                                b.encompass(&junction_box);
+                                Some(b)
+                            });
                         }
                     }
                 } else {
-                        any_piece_bounding_box = any_piece_bounding_box.map_or(Some(bounding_box), |mut b| {
-                            b.encompass(&bounding_box);
-                             Some(b)
-                         });
+                    any_piece_bounding_box = any_piece_bounding_box.map_or(Some(bounding_box), |mut b| {
+                        b.encompass(&bounding_box);
+                        Some(b)
+                    });
 
                     beardifier_structures.push(
                         crate::generation::noise::router::density_function::beardifier::BeardifierStructure {
                             bounding_box,
                             terrain_adaptation,
                             ground_level_delta,
-                        }
+                        },
                     );
                 }
             }
@@ -890,8 +882,8 @@ impl ProtoChunk {
         let minimum_cell_y = noise_sampler.min_y() / v_count as i8;
         let cell_height = noise_sampler.height() / v_count as u16;
 
-        let delta_y_step = 1.0 / v_count as f64;
-        let delta_x_z_step = 1.0 / h_count as f64;
+        let delta_y_step = 1.0 / v_count as f32;
+        let delta_x_z_step = 1.0 / h_count as f32;
 
         noise_sampler.sample_start_density();
         for cell_x in 0..horizontal_cells {
@@ -909,14 +901,14 @@ impl ProtoChunk {
 
                     for local_y in (0..v_count).rev() {
                         let block_y = sample_start_y + local_y;
-                        noise_sampler.interpolate_y(local_y as f64 * delta_y_step);
+                        noise_sampler.interpolate_y(local_y as f32 * delta_y_step);
 
                         for local_x in 0..h_count {
-                            noise_sampler.interpolate_x(local_x as f64 * delta_x_z_step);
+                            noise_sampler.interpolate_x(local_x as f32 * delta_x_z_step);
                             let block_x = block_x_base + local_x;
 
                             for local_z in 0..h_count {
-                                noise_sampler.interpolate_z(local_z as f64 * delta_x_z_step);
+                                noise_sampler.interpolate_z(local_z as f32 * delta_x_z_step);
                                 let block_z = block_z_base + local_z;
 
                                 let block_state = noise_sampler
@@ -1119,7 +1111,7 @@ impl ProtoChunk {
                         };
                         context.biome = Biome::from_id(biome_id).unwrap_or(&Biome::PLAINS);
                         let new_state = try_apply_material_rule(
-                            &settings.surface_rule,
+                            generator.surface_rule,
                             self,
                             &mut context,
                             surface_height_estimate_sampler,
@@ -1732,5 +1724,8 @@ impl GenerationCache for ProtoChunk {
         _cz: i32,
     ) -> Option<&crate::generation::blender::blending_data::BlendingData> {
         None
+    }
+    fn get_sea_level(&self) -> i32 {
+        Self::get_sea_level(self)
     }
 }

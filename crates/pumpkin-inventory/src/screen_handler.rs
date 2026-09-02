@@ -135,6 +135,11 @@ pub trait InventoryPlayer: Send + Sync {
     /// Checks if the player is in creative mode.
     fn is_creative(&self) -> bool;
 
+    /// Checks if the player is in spectator mode.
+    fn is_spectator(&self) -> bool {
+        false
+    }
+
     /// Gets the player's experience level.
     fn experience_level(&self) -> i32;
 
@@ -211,6 +216,9 @@ pub trait InventoryPlayer: Send + Sync {
 
     /// Performs anvil block damage and plays anvil sound events.
     fn use_anvil(&self) {}
+
+    /// Performs grindstone experience drop and plays grindstone sound events.
+    fn use_grindstone(&self, _xp_amount: i32) {}
 }
 
 /// Gives a stack to the player or drops it if inventory is full.

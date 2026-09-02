@@ -14,8 +14,8 @@ impl DoublePerlinNoiseSampler {
     }
 
     #[must_use]
-    pub const fn max_value(&self) -> f64 {
-        self.max_value
+    pub const fn max_value(&self) -> f32 {
+        self.max_value as f32
     }
 
     pub fn from_params(
@@ -68,7 +68,20 @@ impl DoublePerlinNoiseSampler {
     }
 
     #[must_use]
-    pub fn sample(&self, x: f64, y: f64, z: f64) -> f64 {
+    pub fn sample(&self, x: f32, y: f32, z: f32) -> f32 {
+        let x_d = x as f64;
+        let y_d = y as f64;
+        let z_d = z as f64;
+        let d = x_d * 1.0181268882175227f64;
+        let e = y_d * 1.0181268882175227f64;
+        let f = z_d * 1.0181268882175227f64;
+
+        ((self.first_sampler.sample(x_d, y_d, z_d) + self.second_sampler.sample(d, e, f))
+            * self.amplitude) as f32
+    }
+
+    #[must_use]
+    pub fn sample_f64(&self, x: f64, y: f64, z: f64) -> f64 {
         let d = x * 1.0181268882175227f64;
         let e = y * 1.0181268882175227f64;
         let f = z * 1.0181268882175227f64;
@@ -185,7 +198,7 @@ mod double_perlin_noise_sampler_test {
         ];
 
         for ((x, y, z), sample) in values {
-            assert_eq!(sampler.sample(x, y, z), sample);
+            assert_eq!(sampler.sample_f64(x, y, z), sample);
         }
     }
 
@@ -291,7 +304,7 @@ mod double_perlin_noise_sampler_test {
         ];
 
         for ((x, y, z), sample) in values {
-            assert_eq!(sampler.sample(x, y, z), sample);
+            assert_eq!(sampler.sample_f64(x, y, z), sample);
         }
     }
 }
