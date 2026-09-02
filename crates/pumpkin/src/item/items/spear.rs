@@ -11,13 +11,14 @@ use crate::world::World;
 use pumpkin_data::attributes::Attributes;
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::data_component_impl::{
-    AttributeModifiersImpl, EnchantmentsImpl, EquipmentSlot, Operation, WeaponImpl,
+    AttackRangeImpl, AttributeModifiersImpl, EnchantmentsImpl, EquipmentSlot, KineticWeaponImpl,
+    Operation, PiercingWeaponImpl, WeaponImpl,
 };
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::entity::{EntityStatus, EntityType};
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
-use pumpkin_data::sound::{Sound, SoundCategory};
+use pumpkin_data::sound::SoundCategory;
 use pumpkin_data::tag::Taggable;
 use pumpkin_data::{Enchantment, tag};
 use pumpkin_util::math::boundingbox::BoundingBox;
@@ -52,18 +53,26 @@ impl ItemBehaviour for SpearItem {
             Hand::Left
         };
         let stack = inventory.get_stack_in_hand(hand);
+        let sound = stack
+            .get_data_component::<KineticWeaponImpl>()
+            .and_then(|weapon| weapon.sound.clone());
         player
             .living_entity
             .set_active_hand(hand, stack, Self::USE_DURATION);
-        player.world().play_sound_expect(
-            player,
-            Self::use_sound(item),
-            SoundCategory::Players,
-            &player.position(),
-        );
+        if let Some(sound) = sound {
+            player.world().play_sound_event_expect(
+                player,
+                &sound,
+                SoundCategory::Players,
+                &player.position(),
+            );
+        }
     }
 
     fn on_spear_jab(&self, stack: &ItemStack, player: &Player) {
+        let Some(piercing) = stack.get_data_component::<PiercingWeaponImpl>() else {
+            return;
+        };
         let world = player.world();
         let Some(server) = world.server.upgrade() else {
             return;
@@ -78,7 +87,7 @@ impl ItemBehaviour for SpearItem {
 
         let damage = Self::attack_damage(player, stack) as f32;
         let mut hit_something = false;
-        for target in Self::targets_in_range(player, &server) {
+        for target in Self::targets_in_range(player, &server, stack) {
             hit_something |= Self::stab_attack(
                 player,
                 &server,
@@ -88,27 +97,20 @@ impl ItemBehaviour for SpearItem {
                 damage,
                 StabEffects {
                     damage: true,
-                    knockback: true,
-                    dismount: false,
+                    knockback: piercing.deals_knockback,
+                    dismount: piercing.dismounts,
                 },
             );
         }
         player.last_attacked_ticks.store(0, Ordering::Relaxed);
 
         let position = player.position();
-        if hit_something {
-            world.play_sound(
-                Self::hit_sound(stack.item),
-                SoundCategory::Players,
-                &position,
-            );
+        if hit_something && let Some(sound) = piercing.hit_sound.as_ref() {
+            world.play_sound_event(sound, SoundCategory::Players, &position);
         }
-        world.play_sound_expect(
-            player,
-            Self::attack_sound(stack.item),
-            SoundCategory::Players,
-            &position,
-        );
+        if let Some(sound) = piercing.sound.as_ref() {
+            world.play_sound_event_expect(player, sound, SoundCategory::Players, &position);
+        }
         player.swing_hand(Hand::Right, false);
     }
 
@@ -147,11 +149,6 @@ struct StabEffects {
 
 impl SpearItem {
     const USE_DURATION: i32 = 72_000;
-    const MIN_REACH: f64 = 2.0;
-    const MAX_REACH: f64 = 4.5;
-    const MIN_CREATIVE_REACH: f64 = 2.0;
-    const MAX_CREATIVE_REACH: f64 = 6.5;
-    const HITBOX_MARGIN: f64 = 0.125;
 
     fn stab_attack(
         player: &Player,
@@ -240,7 +237,7 @@ impl SpearItem {
     }
 
     fn kinetic_attack(stack: &ItemStack, player: &Player, hand: Hand, remaining_use_ticks: i32) {
-        let Some(weapon) = KineticWeapon::for_item(stack.item) else {
+        let Some(weapon) = stack.get_data_component::<KineticWeaponImpl>() else {
             return;
         };
         let ticks_used = Self::USE_DURATION - remaining_use_ticks - weapon.delay_ticks;
@@ -260,12 +257,12 @@ impl SpearItem {
         let now = player.get_entity().age.load(Ordering::Relaxed);
         let mut affected = false;
 
-        for target in Self::targets_in_range(player, &server) {
+        for target in Self::targets_in_range(player, &server, stack) {
             let target_entity = target.get_entity();
             if player.living_entity.was_recently_stabbed(
                 target_entity.entity_id,
                 now,
-                KineticWeapon::CONTACT_COOLDOWN_TICKS,
+                weapon.contact_cooldown_ticks,
             ) {
                 continue;
             }
@@ -276,15 +273,21 @@ impl SpearItem {
             let target_speed = look.dot(&Self::known_speed(target_entity));
             let relative_speed = (attacker_speed - target_speed).max(0.0);
             let effects = StabEffects {
-                damage: weapon
-                    .damage
-                    .test(ticks_used, attacker_speed, relative_speed),
+                damage: weapon.damage_conditions.as_ref().is_some_and(|condition| {
+                    condition.test(ticks_used, attacker_speed, relative_speed)
+                }),
                 knockback: weapon
-                    .knockback
-                    .test(ticks_used, attacker_speed, relative_speed),
+                    .knockback_conditions
+                    .as_ref()
+                    .is_some_and(|condition| {
+                        condition.test(ticks_used, attacker_speed, relative_speed)
+                    }),
                 dismount: weapon
-                    .dismount
-                    .test(ticks_used, attacker_speed, relative_speed),
+                    .dismount_conditions
+                    .as_ref()
+                    .is_some_and(|condition| {
+                        condition.test(ticks_used, attacker_speed, relative_speed)
+                    }),
             };
             if !effects.damage && !effects.knockback && !effects.dismount {
                 continue;
@@ -443,14 +446,24 @@ impl SpearItem {
         }
     }
 
-    fn targets_in_range(player: &Player, server: &Server) -> Vec<Arc<dyn EntityBase>> {
+    fn targets_in_range(
+        player: &Player,
+        server: &Server,
+        stack: &ItemStack,
+    ) -> Vec<Arc<dyn EntityBase>> {
+        let Some(range) = stack.get_data_component::<AttackRangeImpl>() else {
+            return Vec::new();
+        };
         let world = player.world();
         let look = Self::look_vector(player);
         let eye = player.eye_position();
         let (min_reach, max_reach) = if player.gamemode.load() == GameMode::Creative {
-            (Self::MIN_CREATIVE_REACH, Self::MAX_CREATIVE_REACH)
+            (
+                f64::from(range.min_creative_reach),
+                f64::from(range.max_creative_reach),
+            )
         } else {
-            (Self::MIN_REACH, Self::MAX_REACH)
+            (f64::from(range.min_reach), f64::from(range.max_reach))
         };
         let from = eye.add(&(look * min_reach));
         let forward = player.get_entity().movement.load().dot(&look).max(0.0);
@@ -462,11 +475,8 @@ impl SpearItem {
             to = block_hit;
         }
 
-        let half_margin = Vector3::new(
-            Self::HITBOX_MARGIN / 2.0,
-            Self::HITBOX_MARGIN / 2.0,
-            Self::HITBOX_MARGIN / 2.0,
-        );
+        let margin = f64::from(range.hitbox_margin);
+        let half_margin = Vector3::new(margin / 2.0, margin / 2.0, margin / 2.0);
         let delta = to.sub(&from);
         let search_box = BoundingBox::new(from.sub(&half_margin), from.add(&half_margin))
             .expand_towards(delta.x, delta.y, delta.z)
@@ -477,7 +487,13 @@ impl SpearItem {
             .into_iter()
             .filter(|target| {
                 Self::can_hit(player, server, target.as_ref())
-                    && Self::hits_entity(&world, &target.get_entity().bounding_box.load(), from, to)
+                    && Self::hits_entity(
+                        &world,
+                        &target.get_entity().bounding_box.load(),
+                        from,
+                        to,
+                        margin,
+                    )
             })
             .collect()
     }
@@ -487,12 +503,12 @@ impl SpearItem {
         bounding_box: &BoundingBox,
         from: Vector3<f64>,
         to: Vector3<f64>,
+        margin: f64,
     ) -> bool {
         if contains(bounding_box, from) || clip(bounding_box, from, to).is_some() {
             return true;
         }
-        let Some(outside_hit) = clip(&bounding_box.expand_all(Self::HITBOX_MARGIN), from, to)
-        else {
+        let Some(outside_hit) = clip(&bounding_box.expand_all(margin), from, to) else {
             return false;
         };
         let mut towards_target = bounding_box.min.add(&bounding_box.max) * 0.5;
@@ -622,107 +638,6 @@ impl SpearItem {
         }
         id
     }
-
-    const fn use_sound(item: &Item) -> Sound {
-        if item.id == Item::WOODEN_SPEAR.id {
-            Sound::ItemSpearWoodUse
-        } else {
-            Sound::ItemSpearUse
-        }
-    }
-
-    const fn hit_sound(item: &Item) -> Sound {
-        if item.id == Item::WOODEN_SPEAR.id {
-            Sound::ItemSpearWoodHit
-        } else {
-            Sound::ItemSpearHit
-        }
-    }
-
-    const fn attack_sound(item: &Item) -> Sound {
-        if item.id == Item::WOODEN_SPEAR.id {
-            Sound::ItemSpearWoodAttack
-        } else {
-            Sound::ItemSpearAttack
-        }
-    }
-}
-
-#[derive(Clone, Copy)]
-struct KineticCondition {
-    max_duration_ticks: i32,
-    min_speed: f32,
-    min_relative_speed: f32,
-}
-
-impl KineticCondition {
-    fn of_attacker_speed(until_seconds: f32, min_speed: f32) -> Self {
-        Self {
-            max_duration_ticks: ticks(until_seconds),
-            min_speed,
-            min_relative_speed: 0.0,
-        }
-    }
-
-    fn of_relative_speed(until_seconds: f32, min_relative_speed: f32) -> Self {
-        Self {
-            max_duration_ticks: ticks(until_seconds),
-            min_speed: 0.0,
-            min_relative_speed,
-        }
-    }
-
-    fn test(self, ticks_used: i32, attacker_speed: f64, relative_speed: f64) -> bool {
-        ticks_used <= self.max_duration_ticks
-            && attacker_speed >= f64::from(self.min_speed)
-            && relative_speed >= f64::from(self.min_relative_speed)
-    }
-}
-
-#[derive(Clone, Copy)]
-struct KineticWeapon {
-    delay_ticks: i32,
-    damage_multiplier: f32,
-    dismount: KineticCondition,
-    knockback: KineticCondition,
-    damage: KineticCondition,
-}
-
-impl KineticWeapon {
-    const CONTACT_COOLDOWN_TICKS: i32 = 10;
-
-    fn for_item(item: &Item) -> Option<Self> {
-        let (
-            damage_multiplier,
-            delay,
-            dismount_time,
-            dismount_threshold,
-            knockback_time,
-            knockback_threshold,
-            damage_time,
-            damage_threshold,
-        ) = match item.id {
-            id if id == Item::WOODEN_SPEAR.id => (0.7, 0.75, 5.0, 14.0, 10.0, 5.1, 15.0, 4.6),
-            id if id == Item::STONE_SPEAR.id => (0.82, 0.7, 4.5, 13.0, 9.0, 5.1, 13.75, 4.6),
-            id if id == Item::COPPER_SPEAR.id => (0.82, 0.65, 4.0, 12.0, 8.25, 5.1, 12.5, 4.6),
-            id if id == Item::IRON_SPEAR.id => (0.95, 0.6, 2.5, 11.0, 6.75, 5.1, 11.25, 4.6),
-            id if id == Item::GOLDEN_SPEAR.id => (0.7, 0.7, 3.5, 13.0, 8.5, 5.1, 13.75, 4.6),
-            id if id == Item::DIAMOND_SPEAR.id => (1.075, 0.5, 3.0, 10.0, 6.5, 5.1, 10.0, 4.6),
-            id if id == Item::NETHERITE_SPEAR.id => (1.2, 0.4, 2.5, 9.0, 5.5, 5.1, 8.75, 4.6),
-            _ => return None,
-        };
-        Some(Self {
-            delay_ticks: ticks(delay),
-            damage_multiplier,
-            dismount: KineticCondition::of_attacker_speed(dismount_time, dismount_threshold),
-            knockback: KineticCondition::of_attacker_speed(knockback_time, knockback_threshold),
-            damage: KineticCondition::of_relative_speed(damage_time, damage_threshold),
-        })
-    }
-}
-
-fn ticks(seconds: f32) -> i32 {
-    (seconds * 20.0) as i32
 }
 
 fn contains(bounding_box: &BoundingBox, point: Vector3<f64>) -> bool {
