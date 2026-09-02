@@ -7,7 +7,6 @@ use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_nbt::compound::NbtCompound;
-use pumpkin_protocol::java::client::play::Metadata;
 
 use crate::entity::{
     Entity, EntityBase,
@@ -80,12 +79,9 @@ impl StriderEntity {
     pub fn set_suffocating(&self, suffocating: bool) {
         self.suffocating.store(suffocating, Ordering::Relaxed);
         let entity = self.get_entity();
-        entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::strider::DATA_SUFFOCATING,
-                suffocating,
-            )],
-            None,
+        entity.set_synced_data(
+            pumpkin_data::tracked_data::strider::DATA_SUFFOCATING,
+            suffocating,
         );
     }
 }
@@ -154,20 +150,11 @@ impl Mob for StriderEntity {
         let entity = self.get_entity();
         let is_baby = entity.age.load(Ordering::Relaxed) < 0;
         if is_baby {
-            entity.send_meta_data(
-                &[Metadata::new(
-                    pumpkin_data::tracked_data::strider::DATA_BABY_ID,
-                    true,
-                )],
-                None,
-            );
+            entity.set_synced_data(pumpkin_data::tracked_data::strider::DATA_BABY_ID, true);
         }
-        entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::strider::DATA_SUFFOCATING,
-                self.is_suffocating(),
-            )],
-            None,
+        entity.set_synced_data(
+            pumpkin_data::tracked_data::strider::DATA_SUFFOCATING,
+            self.is_suffocating(),
         );
     }
 

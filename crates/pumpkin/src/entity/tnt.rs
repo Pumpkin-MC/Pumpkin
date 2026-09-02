@@ -2,7 +2,7 @@ use super::{Entity, EntityBase, living::LivingEntity};
 use crate::server::Server;
 use core::f32;
 use pumpkin_data::Block;
-use pumpkin_protocol::{codec::var_int::VarInt, java::client::play::Metadata};
+use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_util::math::vector3::Vector3;
 use std::{
     f64::consts::TAU,
@@ -78,18 +78,13 @@ impl EntityBase for TNTEntity {
         self.entity
             .set_velocity(Vector3::new(-pos.sin() * 0.02, 0.2, -pos.cos() * 0.02));
 
-        self.entity.send_meta_data(
-            &[
-                Metadata::new(
-                    pumpkin_data::tracked_data::tnt::FUSE_ID,
-                    VarInt(self.fuse.load(Relaxed) as i32),
-                ),
-                Metadata::new(
-                    pumpkin_data::tracked_data::tnt::BLOCK_STATE_ID,
-                    VarInt(i32::from(Block::TNT.default_state.id.as_u16())),
-                ),
-            ],
-            None,
+        self.entity.set_synced_data(
+            pumpkin_data::tracked_data::tnt::FUSE_ID,
+            VarInt(self.fuse.load(Relaxed) as i32),
+        );
+        self.entity.set_synced_data(
+            pumpkin_data::tracked_data::tnt::BLOCK_STATE_ID,
+            VarInt(i32::from(Block::TNT.default_state.id.as_u16())),
         );
     }
 

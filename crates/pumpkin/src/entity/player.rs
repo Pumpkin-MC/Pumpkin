@@ -269,8 +269,8 @@ use pumpkin_protocol::java::client::play::{
     CSetContainerContent, CSetContainerProperty, CSetContainerSlot, CSetCursorItem, CSetExperience,
     CSetHealth, CSetPlayerInventory, CSetSelectedSlot, CSoundEffect, CStopSound, CSubtitle,
     CSystemChatMessage, CTabList, CTitleAnimation, CTitleText, CUnloadChunk, CUpdateMobEffect,
-    CUpdateTime, GameEvent, MapIcon, MapPatch, Metadata, PlayerAction, PlayerInfoFlags,
-    PlayerSpawnData, PreviousMessage, Statistic,
+    CUpdateTime, GameEvent, MapIcon, MapPatch, PlayerAction, PlayerInfoFlags, PlayerSpawnData,
+    PreviousMessage, Statistic,
 };
 use pumpkin_protocol::java::server::play::{
     SClickSlot, SContainerButtonClick, SRenameItem, SlotActionType,
@@ -487,7 +487,7 @@ pub struct Player {
     pub experience_pick_up_delay: Mutex<u32>,
     pub chunk_sender: Mutex<crate::net::ChunkSender>,
     pub chunk_listener: Mutex<Receiver<(Vector2<i32>, Weak<ChunkData>)>>,
-    pub held_chunk_tickets: Mutex<Option<(i8, i8)>>,
+    pub held_chunk_tickets: Mutex<Option<(Option<i8>, Option<i8>)>>,
     pub chunk_send_epoch: AtomicU32,
     pub has_played_before: AtomicBool,
     root_vehicle_uuid: AtomicCell<Option<Uuid>>,
@@ -1107,12 +1107,20 @@ impl Player {
             .take();
         if let Some((view_level, sim_level)) = held {
             let center = self.get_entity().chunk_pos.load();
-            lock.remove_ticket(center, view_level);
-            lock.remove_ticket(center, sim_level);
+            if let Some(view) = view_level {
+                lock.remove_ticket(center, view);
+            }
+            if let Some(sim) = sim_level {
+                lock.remove_ticket(center, sim);
+            }
         }
         lock.send_change();
         level.should_unload.store(true, Ordering::Relaxed);
         level.level_channel.notify();
+    }
+
+    pub fn update_chunk_tickets_for_gamemode(self: &Arc<Self>) {
+        crate::world::chunker::update_position(self);
     }
 
     pub fn change_world_chunks(
@@ -1919,12 +1927,9 @@ impl Player {
         self.living_entity
             .entity
             .set_pos(bed_head_pos.to_f64().add_raw(0.5, 0.6875, 0.5));
-        self.get_entity().send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::player::SLEEPING_POS_ID,
-                Some(bed_head_pos),
-            )],
-            None,
+        self.get_entity().set_synced_data(
+            pumpkin_data::tracked_data::player::SLEEPING_POS_ID,
+            Some(bed_head_pos),
         );
         self.get_entity().set_velocity(Vector3::default());
 
@@ -2083,12 +2088,9 @@ impl Player {
 
         self.living_entity.entity.set_pose(EntityPose::Standing);
         self.living_entity.entity.set_pos(self.position());
-        self.living_entity.entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::player::SLEEPING_POS_ID,
-                None::<BlockPos>,
-            )],
-            None,
+        self.living_entity.entity.set_synced_data(
+            pumpkin_data::tracked_data::player::SLEEPING_POS_ID,
+            None::<BlockPos>,
         );
 
         self.set_stat(
@@ -4512,28 +4514,21 @@ impl Player {
     /// Send the player's skin layers and used hand to all players.
     pub fn send_client_information(&self) {
         let config = self.config.load();
-        self.living_entity.entity.send_meta_data(
-            &[
-                // v26.x
-                Metadata::new(
-                    pumpkin_data::tracked_data::player::PLAYER_MODE_CUSTOMISATION,
-                    config.skin_parts,
-                ),
-                Metadata::new(
-                    pumpkin_data::tracked_data::player::PLAYER_MAIN_HAND,
-                    config.main_hand as u8,
-                ),
-                // v1.21.x
-                Metadata::new(
-                    pumpkin_data::tracked_data::player::PLAYER_MODE_CUSTOMIZATION_ID,
-                    config.skin_parts,
-                ),
-                Metadata::new(
-                    pumpkin_data::tracked_data::player::MAIN_ARM_ID,
-                    config.main_hand as u8,
-                ),
-            ],
-            None,
+        self.living_entity.entity.set_synced_data(
+            pumpkin_data::tracked_data::player::PLAYER_MODE_CUSTOMISATION,
+            config.skin_parts,
+        );
+        self.living_entity.entity.set_synced_data(
+            pumpkin_data::tracked_data::player::PLAYER_MAIN_HAND,
+            config.main_hand as u8,
+        );
+        self.living_entity.entity.set_synced_data(
+            pumpkin_data::tracked_data::player::PLAYER_MODE_CUSTOMIZATION_ID,
+            config.skin_parts,
+        );
+        self.living_entity.entity.set_synced_data(
+            pumpkin_data::tracked_data::player::MAIN_ARM_ID,
+            config.main_hand as u8,
         );
     }
 
