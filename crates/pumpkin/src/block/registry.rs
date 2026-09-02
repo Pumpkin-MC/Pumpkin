@@ -1455,7 +1455,7 @@ impl BlockRegistry {
 mod tests {
     use std::borrow::Cow;
 
-    use pumpkin_data::block_properties::{BlockProperties, LightLikeProperties};
+    use pumpkin_data::block_properties::LightLikeProperties;
 
     use super::*;
 
@@ -1467,7 +1467,7 @@ mod tests {
 
         let state_id =
             apply_block_state_properties(&Block::LIGHT, Block::LIGHT.default_state.id, &component);
-        let properties = LightLikeProperties::from_state_id(state_id, &Block::LIGHT);
+        let properties = LightLikeProperties::from_state_id(state_id);
 
         assert_eq!(properties.level, 7);
         assert!(!properties.waterlogged);
