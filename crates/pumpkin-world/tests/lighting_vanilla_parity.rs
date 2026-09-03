@@ -241,11 +241,24 @@ fn wipe(light: &mut [LightContainer]) {
     }
 }
 
+/// What the eight chunks around the center are while the pass runs.
+///
+/// Correctness is judged against `Loaded`: their stored light is what lets the rim seed a cell
+/// lit from deep inside a neighbour. Cost is reported for `Proto`, which is what the generation
+/// pipeline actually hands the pass -- proto chunks answer the per-section skips from a mask
+/// they maintain, loaded ones from their block palette, and neither has been lit yet.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Neighbours {
+    Loaded,
+    Proto,
+}
+
 /// Rebuilds `center` as a `ProtoChunk` from its stored blocks and runs the worldgen light
-/// pass over it with its eight loaded neighbours.
+/// pass over it with its eight neighbours in the requested shape.
 fn relight(
     chunks: &HashMap<Vector2<i32>, Arc<ChunkData>>,
     center: Vector2<i32>,
+    neighbours: Neighbours,
 ) -> (ProtoChunk, std::time::Duration) {
     // Only the blocks are taken from the chunk, so the generator behind the proto chunk is
     // never asked for terrain.
@@ -259,16 +272,18 @@ fn relight(
         for dz in 0..3 {
             let pos = Vector2::new(cache.x + dx, cache.z + dz);
             let chunk = &chunks[&pos];
-            cache.chunks.push(if pos == center {
-                let mut proto = ProtoChunk::from_chunk_data(chunk, &world_gen);
-                // A `full` chunk is past the lighting stage and would be skipped.
-                proto.stage = StagedChunkEnum::Features;
-                wipe(&mut proto.light.sky_light);
-                wipe(&mut proto.light.block_light);
-                Chunk::Proto(Box::new(proto))
-            } else {
-                Chunk::Level(chunk.clone())
-            });
+            cache.chunks.push(
+                if pos == center || neighbours == Neighbours::Proto {
+                    let mut proto = ProtoChunk::from_chunk_data(chunk, &world_gen);
+                    // A `full` chunk is past the lighting stage and would be skipped.
+                    proto.stage = StagedChunkEnum::Features;
+                    wipe(&mut proto.light.sky_light);
+                    wipe(&mut proto.light.block_light);
+                    Chunk::Proto(Box::new(proto))
+                } else {
+                    Chunk::Level(chunk.clone())
+                },
+            );
         }
     }
 
@@ -421,6 +436,28 @@ fn load_chunks(region_dir: &Path) -> HashMap<Vector2<i32>, (Arc<ChunkData>, Vani
     out
 }
 
+/// The light pass reads a 1 chunk rim, so only centers with all eight neighbours present can be
+/// judged. Ordered so a run picks the same chunks every time.
+fn eligible_centers(loaded: &HashMap<Vector2<i32>, (Arc<ChunkData>, VanillaLight)>) -> Vec<Vector2<i32>> {
+    let mut centers: Vec<Vector2<i32>> = loaded
+        .keys()
+        .copied()
+        .filter(|pos| {
+            (-1..=1).all(|dx| {
+                (-1..=1).all(|dz| loaded.contains_key(&Vector2::new(pos.x + dx, pos.y + dz)))
+            })
+        })
+        .collect();
+    centers.sort_by_key(|pos| (pos.x, pos.y));
+    centers.truncate(
+        std::env::var(CENTERS_ENV)
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(MAX_CENTERS),
+    );
+    centers
+}
+
 fn save_dir() -> Option<PathBuf> {
     let root = PathBuf::from(std::env::var_os(SAVE_ENV)?);
     let region = root.join("dimensions/minecraft/overworld/region");
@@ -446,28 +483,11 @@ fn pumpkin_reproduces_the_light_vanilla_stored() {
         region_dir.display()
     );
 
-    // The light pass reads a 1 chunk rim, so only centers with all eight neighbours present
-    // can be judged.
-    let mut centers: Vec<Vector2<i32>> = loaded
-        .keys()
-        .copied()
-        .filter(|pos| {
-            (-1..=1).all(|dx| {
-                (-1..=1).all(|dz| loaded.contains_key(&Vector2::new(pos.x + dx, pos.y + dz)))
-            })
-        })
-        .collect();
+    let centers = eligible_centers(&loaded);
     assert!(
         !centers.is_empty(),
         "no chunk in {} has all eight neighbours saved",
         region_dir.display()
-    );
-    centers.sort_by_key(|pos| (pos.x, pos.y));
-    centers.truncate(
-        std::env::var(CENTERS_ENV)
-            .ok()
-            .and_then(|v| v.parse().ok())
-            .unwrap_or(MAX_CENTERS),
     );
 
     let blocks: HashMap<_, _> = loaded
@@ -477,9 +497,12 @@ fn pumpkin_reproduces_the_light_vanilla_stored() {
 
     let mut report = Report::default();
     let mut relight_time = std::time::Duration::ZERO;
+    let mut worldgen_time = std::time::Duration::ZERO;
     for center in &centers {
-        let (proto, elapsed) = relight(&blocks, *center);
+        let (proto, elapsed) = relight(&blocks, *center, Neighbours::Loaded);
         relight_time += elapsed;
+        // Timed separately, because judging the result needs the neighbours' stored light.
+        worldgen_time += relight(&blocks, *center, Neighbours::Proto).1;
         let (chunk, vanilla) = &loaded[center];
         compare(LightKind::Sky, *center, &proto, vanilla, chunk, &mut report);
         compare(
@@ -498,9 +521,14 @@ fn pumpkin_reproduces_the_light_vanilla_stored() {
         centers.len(),
         report.skipped_sections,
     );
+    let chunks_timed = centers.len() as u32;
     println!(
-        "light pass: {relight_time:?} total, {:?} per chunk",
-        relight_time / centers.len() as u32,
+        "light pass, proto neighbours (what worldgen runs): {:?} per chunk",
+        worldgen_time / chunks_timed,
+    );
+    println!(
+        "light pass, loaded neighbours (what this comparison runs): {:?} per chunk",
+        relight_time / chunks_timed,
     );
 
     let diverged = report.sky.total() + report.block.total();
@@ -549,25 +577,12 @@ fn uniform_sections_do_not_hold_a_nibble_array() {
     };
 
     let loaded = load_chunks(&region_dir);
+    let centers = eligible_centers(&loaded);
     let chunks: HashMap<_, _> = loaded.iter().map(|(p, (c, _))| (*p, c.clone())).collect();
-
-    let centers: Vec<_> = chunks
-        .keys()
-        .copied()
-        .filter(|pos| {
-            (-1..=1).all(|dx| (-1..=1).all(|dz| chunks.contains_key(&Vector2::new(pos.x + dx, pos.y + dz))))
-        })
-        .take(
-            std::env::var(CENTERS_ENV)
-                .ok()
-                .and_then(|v| v.parse().ok())
-                .unwrap_or(MAX_CENTERS),
-        )
-        .collect();
 
     let mut counts = [[0u64; 3]; 2];
     for center in &centers {
-        let (proto, _) = relight(&chunks, *center);
+        let (proto, _) = relight(&chunks, *center, Neighbours::Proto);
         for (layer, containers) in [proto.light.sky_light, proto.light.block_light]
             .into_iter()
             .enumerate()
@@ -598,66 +613,4 @@ fn uniform_sections_do_not_hold_a_nibble_array() {
             counts[layer][2] as f64 / n,
         );
     }
-}
-
-/// TEMPORARY -- why the `chunk_gen` bench reports ~4.4 ms for a light pass the parity harness
-/// times at ~0.34 ms: the harness hands the pass eight *loaded* neighbours, real worldgen hands
-/// it eight proto chunks. Proto chunks have no palette, so `section_flags` sweeps all 98 304
-/// blocks of each one instead of reading a few palette entries.
-#[test]
-fn proto_neighbours_cost_more_than_loaded_ones() {
-    let Some(region_dir) = save_dir() else {
-        eprintln!("{SAVE_ENV} not set or has no overworld region directory, skipping");
-        return;
-    };
-
-    let loaded = load_chunks(&region_dir);
-    let chunks: HashMap<_, _> = loaded.iter().map(|(p, (c, _))| (*p, c.clone())).collect();
-
-    let centers: Vec<_> = chunks
-        .keys()
-        .copied()
-        .filter(|pos| {
-            (-1..=1).all(|dx| (-1..=1).all(|dz| chunks.contains_key(&Vector2::new(pos.x + dx, pos.y + dz))))
-        })
-        .take(50)
-        .collect();
-
-    let world_gen = WorldGenerator::Noise(Box::new(VanillaGenerator::new(
-        Seed(0),
-        Dimension::OVERWORLD,
-    )));
-
-    let mut totals = [std::time::Duration::ZERO; 2];
-    for center in &centers {
-        for (slot, proto_neighbours) in [(0usize, false), (1usize, true)] {
-            let mut cache = Cache::new(center.x - 1, center.y - 1, 3);
-            for dx in 0..3 {
-                for dz in 0..3 {
-                    let pos = Vector2::new(cache.x + dx, cache.z + dz);
-                    let chunk = &chunks[&pos];
-                    cache.chunks.push(if pos == *center || proto_neighbours {
-                        let mut proto = ProtoChunk::from_chunk_data(chunk, &world_gen);
-                        proto.stage = StagedChunkEnum::Features;
-                        wipe(&mut proto.light.sky_light);
-                        wipe(&mut proto.light.block_light);
-                        Chunk::Proto(Box::new(proto))
-                    } else {
-                        Chunk::Level(chunk.clone())
-                    });
-                }
-            }
-
-            let started = std::time::Instant::now();
-            LightEngine::new().initialize_light(&mut cache, &LightingEngineConfig::Default);
-            totals[slot] += started.elapsed();
-        }
-    }
-
-    let n = centers.len() as u32;
-    println!(
-        "loaded neighbours: {:?}/chunk\nproto  neighbours: {:?}/chunk",
-        totals[0] / n,
-        totals[1] / n,
-    );
 }
