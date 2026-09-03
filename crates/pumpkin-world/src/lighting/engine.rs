@@ -146,112 +146,8 @@ pub struct PropagationEntry {
     skip_direction: Option<BlockDirection>,
 }
 
-pub struct VisitedBitSet {
-    bits: Vec<u64>,
-    min_x: i32,
-    min_y: i32,
-    min_z: i32,
-    size_x: usize,
-    size_y: usize,
-    size_z: usize,
-}
-
-impl Default for VisitedBitSet {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl VisitedBitSet {
-    #[must_use]
-    pub const fn new() -> Self {
-        Self {
-            bits: Vec::new(),
-            min_x: 0,
-            min_y: 0,
-            min_z: 0,
-            size_x: 0,
-            size_y: 0,
-            size_z: 0,
-        }
-    }
-
-    pub fn ensure_capacity(
-        &mut self,
-        min_x: i32,
-        min_y: i32,
-        min_z: i32,
-        size_x: usize,
-        size_y: usize,
-        size_z: usize,
-    ) {
-        self.min_x = min_x;
-        self.min_y = min_y;
-        self.min_z = min_z;
-        self.size_x = size_x;
-        self.size_y = size_y;
-        self.size_z = size_z;
-        let total = size_x * size_y * size_z;
-        let words = total.div_ceil(64);
-        if self.bits.len() == words {
-            self.bits.fill(0);
-        } else {
-            self.bits.resize(words, 0);
-        }
-    }
-
-    #[inline]
-    pub fn clear(&mut self) {
-        self.bits.fill(0);
-    }
-
-    #[inline]
-    pub fn test_and_set(&mut self, x: i32, y: i32, z: i32) -> bool {
-        let lx = (x - self.min_x) as usize;
-        let ly = (y - self.min_y) as usize;
-        let lz = (z - self.min_z) as usize;
-        if lx >= self.size_x || ly >= self.size_y || lz >= self.size_z {
-            return false;
-        }
-        let idx = (ly * self.size_z + lz) * self.size_x + lx;
-        let word = idx >> 6;
-        let mask = 1u64 << (idx & 63);
-        if let Some(w) = self.bits.get_mut(word) {
-            let prev = *w;
-            if prev & mask != 0 {
-                return false;
-            }
-            *w = prev | mask;
-            true
-        } else {
-            false
-        }
-    }
-
-    #[inline]
-    #[must_use]
-    pub fn is_visited(&self, x: i32, y: i32, z: i32) -> bool {
-        let lx = (x - self.min_x) as usize;
-        let ly = (y - self.min_y) as usize;
-        let lz = (z - self.min_z) as usize;
-        if lx >= self.size_x || ly >= self.size_y || lz >= self.size_z {
-            return true;
-        }
-        let idx = (ly * self.size_z + lz) * self.size_x + lx;
-        let word = idx >> 6;
-        let mask = 1u64 << (idx & 63);
-        if let Some(&w) = self.bits.get(word) {
-            (w & mask) != 0
-        } else {
-            true
-        }
-    }
-}
-
 pub struct LightPropagator<P: LightProvider> {
     pub(crate) queue: VecDeque<PropagationEntry>,
-    pub(crate) visited: VisitedBitSet,
-    pub(crate) decrease_queue: VecDeque<(BlockPos, u8)>,
     _marker: std::marker::PhantomData<P>,
 }
 
@@ -260,16 +156,12 @@ impl<P: LightProvider> LightPropagator<P> {
     pub fn new() -> Self {
         Self {
             queue: VecDeque::with_capacity(8192),
-            visited: VisitedBitSet::new(),
-            decrease_queue: VecDeque::new(),
             _marker: std::marker::PhantomData,
         }
     }
 
     pub fn clear(&mut self) {
         self.queue.clear();
-        self.visited.clear();
-        self.decrease_queue.clear();
     }
 
     /// Proto and level chunks differ only in where their light lives. Split from
@@ -369,13 +261,6 @@ impl<P: LightProvider> LightPropagator<P> {
         let min_y = cache.bottom_y() as i32;
         let max_y = min_y + cache.height() as i32;
 
-        let min_x = cache_x * 16;
-        let min_z = cache_z * 16;
-        let size_x = (cache_size * 16) as usize;
-        let size_z = (cache_size * 16) as usize;
-        let size_y = (max_y - min_y) as usize;
-        self.visited
-            .ensure_capacity(min_x, min_y, min_z, size_x, size_y, size_z);
 
         while let Some(entry) = self.queue.pop_front() {
             let pos = entry.pos;
@@ -418,23 +303,21 @@ impl<P: LightProvider> LightPropagator<P> {
 
                 // Deliberately not `P::get_light`/`P::set_light`: those take a `BlockPos`
                 // and re-derive the chunk index, the section and the local coordinates
-                // that are all sitting right above.
-                let neighbor_light = Self::neighbor_light(
-                    &cache.chunks[chunk_idx],
-                    section_idx,
-                    local_x,
-                    local_y,
-                    local_z,
-                );
+                // that are all sitting right above. One borrow serves both reads.
+                let (neighbor_light, opacity) = {
+                    let chunk = &cache.chunks[chunk_idx];
+                    let light =
+                        Self::neighbor_light(chunk, section_idx, local_x, local_y, local_z);
 
-                // Nothing this step could hand over beats what the neighbour already has.
-                // Checked before the block read, which is the expensive half.
-                if neighbor_light >= P::max_possible(current_light, dir) {
-                    continue;
-                }
+                    if light >= P::max_possible(current_light, dir) {
+                        continue;
+                    }
 
-                let opacity =
-                    Self::neighbor_opacity(&cache.chunks[chunk_idx], ny, min_y, local_x, local_z);
+                    (
+                        light,
+                        Self::neighbor_opacity(chunk, ny, min_y, local_x, local_z),
+                    )
+                };
                 let new_level = P::propagate_level(current_light, opacity, dir);
 
                 if new_level > neighbor_light {
@@ -463,53 +346,6 @@ impl<P: LightProvider> LightPropagator<P> {
         }
     }
 
-    pub fn process_decrease_queue(&mut self, cache: &mut Cache) {
-        let cache_x = cache.x;
-        let cache_z = cache.z;
-        let cache_size = cache.size;
-
-        while let Some((pos, old_val)) = self.decrease_queue.pop_front() {
-            for dir in BlockDirection::all() {
-                let neighbor_pos = pos.offset(dir.to_offset());
-
-                let (cx, _rel) = neighbor_pos.chunk_and_chunk_relative_position();
-                let rel_x = cx.x - cache_x;
-                let rel_z = cx.y - cache_z;
-
-                if rel_x < 0 || rel_x >= cache_size || rel_z < 0 || rel_z >= cache_size {
-                    continue;
-                }
-
-                let neighbor_light = P::get_light(cache, neighbor_pos);
-                if neighbor_light == 0 {
-                    continue;
-                }
-
-                let state = cache.get_block_state(&neighbor_pos.0);
-                let opacity = state.to_state().opacity;
-
-                let predicted = P::propagate_level(old_val, opacity, dir);
-
-                if neighbor_light == predicted || neighbor_light < old_val {
-                    P::set_light(cache, neighbor_pos, 0);
-                    self.decrease_queue
-                        .push_back((neighbor_pos, neighbor_light));
-                } else if neighbor_light >= old_val {
-                    let nx = neighbor_pos.0.x;
-                    let ny = neighbor_pos.0.y;
-                    let nz = neighbor_pos.0.z;
-                    self.queue.push_back(PropagationEntry {
-                        pos: neighbor_pos,
-                        level: neighbor_light,
-                        skip_direction: None,
-                    });
-                    self.visited.test_and_set(nx, ny, nz);
-                }
-            }
-        }
-
-        self.propagate(cache);
-    }
 }
 
 pub type BlockLightPropagator = LightPropagator<BlockLightProvider>;
@@ -622,13 +458,6 @@ impl BlockLightPropagator {
         let end_x = start_x + 18;
         let end_z = start_z + 18;
 
-        let min_x = cache.x * 16;
-        let min_z = cache.z * 16;
-        let size_x = (cache.size * 16) as usize;
-        let size_z = (cache.size * 16) as usize;
-        let size_y = (max_y - min_y) as usize;
-        self.visited
-            .ensure_capacity(min_x, min_y, min_z, size_x, size_y, size_z);
 
         // One mask per chunk, not per column: the seeds of a section are a property of the
         // chunk, and all 256 of its columns ask the same question.
@@ -695,13 +524,6 @@ impl SkyLightPropagator {
         let bottom_y = cache.bottom_y() as i32;
         let max_y = bottom_y + cache.height() as i32;
 
-        let min_x = cache.x * 16;
-        let min_z = cache.z * 16;
-        let size_x = (cache.size * 16) as usize;
-        let size_z = (cache.size * 16) as usize;
-        let size_y = (max_y - bottom_y) as usize;
-        self.visited
-            .ensure_capacity(min_x, bottom_y, min_z, size_x, size_y, size_z);
 
         let mut surface_heights = [0i32; 18 * 18];
 
@@ -898,11 +720,11 @@ impl SkyLightPropagator {
                         continue;
                     }
 
-                    let is_at_surface = y == top_y;
+                    // Only a column shadowed by a taller neighbour seeds.
                     let below_neighbor =
                         y < north_top || y < south_top || y < west_top || y < east_top;
 
-                    if is_at_surface || below_neighbor {
+                    if below_neighbor {
                         let skip_dir = (y >= top_y).then_some(BlockDirection::Up);
 
                         self.queue.push_back(PropagationEntry {
@@ -962,55 +784,6 @@ impl LightEngine {
         center.sky_light_height = crate::lighting::SkyLightHeight::compute_from_proto(center).raw();
     }
 
-    pub fn update_block_light(
-        &mut self,
-        cache: &mut Cache,
-        pos: BlockPos,
-        old_luminance: u8,
-        new_luminance: u8,
-    ) {
-        if old_luminance > new_luminance {
-            let current_light = get_block_light(cache, pos);
-            if current_light > 0 {
-                self.block_light
-                    .decrease_queue
-                    .push_back((pos, current_light));
-                set_block_light(cache, pos, 0);
-            }
-        }
-
-        if new_luminance > 0 {
-            set_block_light(cache, pos, new_luminance);
-            if self
-                .block_light
-                .visited
-                .test_and_set(pos.0.x, pos.0.y, pos.0.z)
-            {
-                self.block_light.queue.push_back(PropagationEntry {
-                    pos,
-                    level: new_luminance,
-                    skip_direction: None,
-                });
-            }
-        }
-    }
-
-    pub fn run_light_updates(&mut self, cache: &mut Cache) {
-        if !self.block_light.decrease_queue.is_empty() {
-            self.block_light.process_decrease_queue(cache);
-        }
-        if !self.block_light.queue.is_empty() {
-            self.block_light.propagate(cache);
-            self.block_light.visited.clear();
-        }
-        if !self.sky_light.decrease_queue.is_empty() {
-            self.sky_light.process_decrease_queue(cache);
-        }
-        if !self.sky_light.queue.is_empty() {
-            self.sky_light.propagate(cache);
-            self.sky_light.visited.clear();
-        }
-    }
 }
 
 impl Default for LightEngine {
