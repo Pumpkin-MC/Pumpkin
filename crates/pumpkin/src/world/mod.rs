@@ -5336,6 +5336,18 @@ impl World {
             return None;
         }
 
+        // Vanilla `Level.destroyBlock`: `levelEvent(2001)` unless `BaseFireBlock`.
+        // Player mine is `spawnDestroyParticles` -> `levelEvent(player, 2001)`: the breaker
+        // already plays the particles locally, so omit them here.
+        if broken_block != &Block::FIRE && broken_block != &Block::SOUL_FIRE {
+            self.sync_world_event_except(
+                cause,
+                WorldEvent::ParticlesDestroyBlock,
+                *position,
+                i32::from(broken_block_state.id.as_u16()),
+            );
+        }
+
         if !flags.contains(BlockFlags::SKIP_DROPS) {
             let tool = cause.and_then(|p| {
                 let item = p.inventory().held_item();
@@ -5657,11 +5669,25 @@ impl World {
     /* End ItemScatterer.java */
 
     pub fn sync_world_event(&self, world_event: WorldEvent, position: BlockPos, data: i32) {
+        self.sync_world_event_except(None, world_event, position, data);
+    }
+
+    /// Vanilla `Level.levelEvent(@Nullable Player, type, pos, data)`.
+    /// `except` already played the effect locally (e.g. `spawnDestroyParticles`).
+    pub fn sync_world_event_except(
+        &self,
+        except: Option<&Player>,
+        world_event: WorldEvent,
+        position: BlockPos,
+        data: i32,
+    ) {
         let chunk_pos = position.chunk_position();
-        self.broadcast_to_chunk(
-            chunk_pos,
-            &CWorldEvent::new(world_event as i32, position, data, false),
-        );
+        let packet = CWorldEvent::new(world_event as i32, position, data, false);
+        if let Some(player) = except {
+            self.broadcast_to_chunk_except(chunk_pos, &[player.get_entity().entity_uuid], &packet);
+        } else {
+            self.broadcast_to_chunk(chunk_pos, &packet);
+        }
     }
 
     pub fn set_block_destroy_stage(&self, entity_id: i32, location: BlockPos, stage: i8) {
