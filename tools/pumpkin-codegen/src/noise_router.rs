@@ -288,22 +288,23 @@ impl Tiling {
 /// Caching or interpolation wrapper applied around an inner density function.
 #[derive(Copy, Clone, Deserialize, PartialEq, Eq, Hash)]
 enum WrapperType {
-    Interpolated,
-    #[serde(rename(deserialize = "FlatCache"))]
-    CacheFlat,
-    Cache2D,
-    CacheOnce,
-    CellCache,
+    Interpolated { cell_size_xz: i32, cell_size_y: i32 },
+    Cache,
 }
 
 impl WrapperType {
     fn into_token_stream(self) -> TokenStream {
         match self {
-            Self::Interpolated => quote! { WrapperType::Interpolated },
-            Self::CacheFlat => quote! { WrapperType::CacheFlat },
-            Self::Cache2D => quote! { WrapperType::Cache2D },
-            Self::CacheOnce => quote! { WrapperType::CacheOnce },
-            Self::CellCache => quote! { WrapperType::CellCache },
+            Self::Interpolated {
+                cell_size_xz,
+                cell_size_y,
+            } => quote! {
+                WrapperType::Interpolated {
+                    cell_size_xz: #cell_size_xz,
+                    cell_size_y: #cell_size_y,
+                }
+            },
+            Self::Cache => quote! { WrapperType::Cache },
         }
     }
 }
@@ -693,7 +694,7 @@ impl DensityFunctionRepr {
         matches!(
             self,
             Self::Wrapper {
-                wrapper: WrapperType::CacheFlat | WrapperType::Cache2D | WrapperType::CacheOnce,
+                wrapper: WrapperType::Cache,
                 ..
             }
         )
@@ -2753,15 +2754,21 @@ fn parse_vanilla_df(base_df_dir: &std::path::Path, val: &serde_json::Value) -> D
                             .or_else(|| obj.get("argument"))
                             .expect("Missing input/argument"),
                     );
-                    let wrapper = match clean_type {
-                        "interpolated" => WrapperType::Interpolated,
-                        "flat_cache" | "cache_flat" => WrapperType::CacheFlat,
-                        "cache_2d" => WrapperType::Cache2D,
-                        "cache_once" => WrapperType::CacheOnce,
-                        "cache" if input.domain_axes() & AXIS_Y == 0 => WrapperType::CacheFlat,
-                        "cache" => WrapperType::CacheOnce,
-                        "cache_all_in_cell" => WrapperType::CellCache,
-                        _ => unreachable!(),
+                    let wrapper = if clean_type == "interpolated" {
+                        let cell_size_xz =
+                            obj.get("cell_size_xz")
+                                .and_then(|v| v.as_i64())
+                                .expect("Missing cell_size_xz") as i32;
+                        let cell_size_y =
+                            obj.get("cell_size_y")
+                                .and_then(|v| v.as_i64())
+                                .expect("Missing cell_size_y") as i32;
+                        WrapperType::Interpolated {
+                            cell_size_xz,
+                            cell_size_y,
+                        }
+                    } else {
+                        WrapperType::Cache
                     };
                     DensityFunctionRepr::Wrapper {
                         input: Box::new(input),
@@ -2954,25 +2961,9 @@ fn load_vanilla_noise_routers() -> NoiseRouterReprs {
     }
 }
 
-macro_rules! fix_final_density {
-    ($router:expr) => {{
-        $router.final_density = DensityFunctionRepr::Wrapper {
-            input: Box::new($router.final_density),
-            wrapper: WrapperType::CellCache,
-        };
-    }};
-}
-
 /// Reads vanilla datapack noise_settings and density_function files and emits the complete noise-router constants `TokenStream`.
 pub fn build() -> TokenStream {
     let mut reprs: NoiseRouterReprs = load_vanilla_noise_routers();
-
-    fix_final_density!(reprs.overworld);
-    fix_final_density!(reprs.overworld_amplified);
-    fix_final_density!(reprs.overworld_large_biomes);
-    fix_final_density!(reprs.nether);
-    fix_final_density!(reprs.end);
-    fix_final_density!(reprs.end_islands);
 
     let _ = reprs.overworld_amplified;
     let _ = reprs.overworld_large_biomes;
@@ -3229,13 +3220,10 @@ pub fn build() -> TokenStream {
             Fixed { value: f32 },
         }
 
-        #[derive(Copy, Clone)]
+        #[derive(Copy, Clone, PartialEq, Eq)]
         pub enum WrapperType {
-            Interpolated,
-            CacheFlat,
-            Cache2D,
-            CacheOnce,
-            CellCache,
+            Interpolated { cell_size_xz: i32, cell_size_y: i32 },
+            Cache,
         }
 
         pub enum BaseNoiseFunctionComponent {

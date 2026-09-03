@@ -181,7 +181,7 @@ impl DensityVolume {
 
 const BUFFER_SIZE_INCREMENT: usize = 16;
 const MAX_REUSE_SIZE_FACTOR: usize = 2;
-const MAX_POOLED_BUFFERS: usize = 64;
+const MAX_POOLED_BUFFERS: usize = 1024;
 
 thread_local! {
     static DENSITY_BUFFER_POOL: RefCell<Vec<Box<[f32]>>> = const { RefCell::new(Vec::new()) };

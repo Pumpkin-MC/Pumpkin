@@ -128,18 +128,8 @@ pub fn carve(chunk: &mut ProtoChunk, generator: &VanillaGenerator) {
 
     let carvers_to_use = carvers_for_dimension(&generator.dimension);
 
-    let start_x = crate::generation::positions::chunk_pos::start_block_x(chunk_x);
-    let start_z = crate::generation::positions::chunk_pos::start_block_z(chunk_z);
     let generation_shape = &generator.settings.shape;
-    let horizontal_cell_count = 16 / generation_shape.horizontal_cell_block_count();
-
-    let horizontal_biome_end = crate::generation::biome_coords::from_block(
-        horizontal_cell_count as i32 * generation_shape.horizontal_cell_block_count() as i32,
-    );
     let surface_config = SurfaceHeightSamplerBuilderOptions::new(
-        crate::generation::biome_coords::from_block(start_x),
-        crate::generation::biome_coords::from_block(start_z),
-        horizontal_biome_end as usize,
         generation_shape.min_y as i32,
         generation_shape.max_y() as i32,
         generation_shape.vertical_cell_block_count() as usize,
@@ -367,17 +357,8 @@ fn with_carve_run_options<F>(
     };
     let mut chunk = ProtoChunk::new(0, 0, &world_gen);
 
-    let start_x = crate::generation::positions::chunk_pos::start_block_x(chunk.x);
-    let start_z = crate::generation::positions::chunk_pos::start_block_z(chunk.z);
     let generation_shape = &generator.settings.shape;
-    let horizontal_cell_count = 16 / generation_shape.horizontal_cell_block_count();
-    let horizontal_biome_end = crate::generation::biome_coords::from_block(
-        horizontal_cell_count as i32 * generation_shape.horizontal_cell_block_count() as i32,
-    );
     let surface_config = SurfaceHeightSamplerBuilderOptions::new(
-        crate::generation::biome_coords::from_block(start_x),
-        crate::generation::biome_coords::from_block(start_z),
-        horizontal_biome_end as usize,
         generation_shape.min_y as i32,
         generation_shape.max_y() as i32,
         generation_shape.vertical_cell_block_count() as usize,
