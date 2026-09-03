@@ -1,6 +1,8 @@
 #[allow(clippy::wildcard_imports)]
 use super::*;
 
+const INCOMPATIBLE_PROTOCOL_FLUSH_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(1);
+
 fn incompatible_protocol_status(client_network_version: i32) -> Option<CPlayStatus> {
     match client_network_version.cmp(&(CURRENT_BEDROCK_MC_PROTOCOL as i32)) {
         std::cmp::Ordering::Less => Some(CPlayStatus::OutdatedClient),
@@ -18,6 +20,17 @@ impl BedrockClient {
         let status = incompatible_protocol_status(packet.client_network_version);
         if let Some(status) = status {
             self.send_packet(&status).await;
+            if let Err(error) = self
+                .session
+                .flush_reliable(INCOMPATIBLE_PROTOCOL_FLUSH_TIMEOUT)
+                .await
+            {
+                debug!(
+                    address = %self.address,
+                    %error,
+                    "Failed to flush Bedrock version rejection"
+                );
+            }
             self.close().await;
             return false;
         }
