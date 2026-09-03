@@ -49,6 +49,10 @@ static MAIN_THREAD: OnceLock<ThreadId> = OnceLock::new();
 async fn main() {
     let _ = MAIN_THREAD.set(thread::current().id());
 
+    // reqwest is built with `rustls-no-provider`, so pick the ring provider (the one
+    // wasmtime-wasi-http/rtc already force) before any client can be constructed.
+    let _ = rustls::crypto::ring::default_provider().install_default();
+
     // Initialize global Rayon thread pool with named worker threads
     let _ = rayon::ThreadPoolBuilder::new()
         .thread_name(|i| format!("Rayon-Worker-{i}"))
