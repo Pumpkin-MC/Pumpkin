@@ -13,6 +13,7 @@ use super::{
         IndexToNoisePos, NoiseFunctionComponentRange, PassThrough,
         StaticIndependentChunkNoiseFunctionComponentImpl,
     },
+    density_volume::DensityVolume,
     proto_noise_router::{
         DependentProtoNoiseFunctionComponent, IndependentProtoNoiseFunctionComponent,
         ProtoNoiseFunctionComponent, ProtoNoiseRouter,
@@ -26,6 +27,18 @@ pub trait StaticChunkNoiseFunctionComponentImpl {
         pos: &Vector3<i32>,
         sample_options: &ChunkNoiseFunctionSampleOptions,
     ) -> f32;
+
+    fn sample_volume(
+        &self,
+        component_stack: &mut [ChunkNoiseFunctionComponent],
+        buffer: &mut [f32],
+        volume: &DensityVolume,
+        sample_options: &ChunkNoiseFunctionSampleOptions,
+    ) {
+        volume.fill_with(buffer, |pos| {
+            self.sample(component_stack, pos, sample_options)
+        });
+    }
 
     fn fill(
         &self,
@@ -48,6 +61,18 @@ pub trait MutableChunkNoiseFunctionComponentImpl {
         pos: &Vector3<i32>,
         sample_options: &ChunkNoiseFunctionSampleOptions,
     ) -> f32;
+
+    fn sample_volume(
+        &mut self,
+        component_stack: &mut [ChunkNoiseFunctionComponent],
+        buffer: &mut [f32],
+        volume: &DensityVolume,
+        sample_options: &ChunkNoiseFunctionSampleOptions,
+    ) {
+        volume.fill_with(buffer, |pos| {
+            self.sample(component_stack, pos, sample_options)
+        });
+    }
 
     fn fill(
         &mut self,
@@ -134,6 +159,33 @@ impl MutableChunkNoiseFunctionComponentImpl for ChunkNoiseFunctionComponent<'_> 
             ),
         }
     }
+
+    #[inline]
+    fn sample_volume(
+        &mut self,
+        component_stack: &mut [ChunkNoiseFunctionComponent],
+        buffer: &mut [f32],
+        volume: &DensityVolume,
+        sample_options: &ChunkNoiseFunctionSampleOptions,
+    ) {
+        match self {
+            Self::Independent(independent) => independent.sample_volume(buffer, volume),
+            Self::Dependent(dependent) => {
+                dependent.sample_volume(component_stack, buffer, volume, sample_options);
+            }
+            Self::Chunk(chunk) => {
+                chunk.sample_volume(component_stack, buffer, volume, sample_options);
+            }
+            Self::PassThrough(pass_through) => {
+                ChunkNoiseFunctionComponent::sample_volume_from_stack(
+                    &mut component_stack[..=pass_through.input_index()],
+                    buffer,
+                    volume,
+                    sample_options,
+                );
+            }
+        }
+    }
 }
 
 impl ChunkNoiseFunctionComponent<'_> {
@@ -166,6 +218,17 @@ impl ChunkNoiseFunctionComponent<'_> {
             top_component.fill(component_stack, array, mapper, sample_options);
         }
     }
+
+    pub fn sample_volume_from_stack(
+        component_stack: &mut [ChunkNoiseFunctionComponent],
+        buffer: &mut [f32],
+        volume: &DensityVolume,
+        sample_options: &ChunkNoiseFunctionSampleOptions,
+    ) {
+        if let Some((top_component, component_stack)) = component_stack.split_last_mut() {
+            top_component.sample_volume(component_stack, buffer, volume, sample_options);
+        }
+    }
 }
 
 pub struct ChunkNoiseDensityFunction<'a> {
@@ -196,10 +259,25 @@ impl ChunkNoiseDensityFunction<'_> {
             sample_options,
         );
     }
+
+    #[inline]
+    pub fn sample_volume(
+        &mut self,
+        buffer: &mut [f32],
+        volume: &DensityVolume,
+        sample_options: &ChunkNoiseFunctionSampleOptions,
+    ) {
+        ChunkNoiseFunctionComponent::sample_volume_from_stack(
+            self.component_stack,
+            buffer,
+            volume,
+            sample_options,
+        );
+    }
 }
 
 macro_rules! sample_function {
-    ($name:ident) => {
+    ($name:ident, $volume_name:ident) => {
         #[inline]
         pub fn $name(
             &mut self,
@@ -211,6 +289,21 @@ macro_rules! sample_function {
                 pos,
                 sample_options,
             )
+        }
+
+        #[inline]
+        pub fn $volume_name(
+            &mut self,
+            buffer: &mut [f32],
+            volume: &DensityVolume,
+            sample_options: &ChunkNoiseFunctionSampleOptions,
+        ) {
+            ChunkNoiseFunctionComponent::sample_volume_from_stack(
+                &mut self.component_stack[..=self.$name],
+                buffer,
+                volume,
+                sample_options,
+            );
         }
     };
 }
@@ -232,16 +325,19 @@ pub struct ChunkNoiseRouter<'a> {
 }
 
 impl ChunkNoiseRouter<'_> {
-    sample_function!(barrier_noise);
-    sample_function!(fluid_level_floodedness_noise);
-    sample_function!(fluid_level_spread_noise);
-    sample_function!(lava_noise);
-    sample_function!(erosion);
-    sample_function!(depth);
-    sample_function!(final_density);
-    sample_function!(vein_toggle);
-    sample_function!(vein_ridged);
-    sample_function!(vein_gap);
+    sample_function!(barrier_noise, barrier_noise_volume);
+    sample_function!(
+        fluid_level_floodedness_noise,
+        fluid_level_floodedness_noise_volume
+    );
+    sample_function!(fluid_level_spread_noise, fluid_level_spread_noise_volume);
+    sample_function!(lava_noise, lava_noise_volume);
+    sample_function!(erosion, erosion_volume);
+    sample_function!(depth, depth_volume);
+    sample_function!(final_density, final_density_volume);
+    sample_function!(vein_toggle, vein_toggle_volume);
+    sample_function!(vein_ridged, vein_ridged_volume);
+    sample_function!(vein_gap, vein_gap_volume);
 }
 
 impl<'a> ChunkNoiseRouter<'a> {

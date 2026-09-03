@@ -2,6 +2,7 @@ use pumpkin_data::noise_router::WrapperType;
 use pumpkin_util::math::vector3::Vector3;
 
 use super::chunk_density_function::ChunkNoiseFunctionSampleOptions;
+use super::density_volume::DensityVolume;
 
 pub(crate) mod beardifier;
 pub(crate) mod math;
@@ -30,6 +31,10 @@ pub trait NoiseFunctionComponentRange {
 
 pub trait StaticIndependentChunkNoiseFunctionComponentImpl: NoiseFunctionComponentRange {
     fn sample(&self, pos: &Vector3<i32>) -> f32;
+
+    fn sample_volume(&self, buffer: &mut [f32], volume: &DensityVolume) {
+        volume.fill_with(buffer, |pos| self.sample(pos));
+    }
     fn fill(&self, array: &mut [f32], mapper: &impl IndexToNoisePos) {
         array.iter_mut().enumerate().for_each(|(index, value)| {
             let pos = mapper.at(index, None);
