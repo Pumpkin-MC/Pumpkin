@@ -10,8 +10,8 @@ use pumpkin_util::{
 use crate::generation::{
     noise::perlin::DoublePerlinNoiseSampler,
     noise::router::{
-        chunk_density_function::ChunkNoiseFunctionSampleOptions,
         chunk_noise_router::{ChunkNoiseFunctionComponent, StaticChunkNoiseFunctionComponentImpl},
+        density_volume::{DensityBuffer, DensityVolume},
     },
 };
 
@@ -48,6 +48,21 @@ impl StaticIndependentChunkNoiseFunctionComponentImpl for Noise {
             pos.z as f32 * self.data.xz_scale,
         )
     }
+
+    fn sample_volume(&self, buffer: &mut [f32], volume: &DensityVolume) {
+        let mut index = 0;
+        for z in 0..volume.size_z {
+            let noise_z = volume.block_z(z) as f32 * self.data.xz_scale;
+            for x in 0..volume.size_x {
+                let noise_x = volume.block_x(x) as f32 * self.data.xz_scale;
+                for y in 0..volume.size_y {
+                    let noise_y = volume.block_y(y) as f32 * self.data.y_scale;
+                    buffer[index] = self.sampler.sample(noise_x, noise_y, noise_z);
+                    index += 1;
+                }
+            }
+        }
+    }
 }
 
 #[inline]
@@ -81,6 +96,18 @@ impl StaticIndependentChunkNoiseFunctionComponentImpl for ShiftA {
     fn sample(&self, pos: &Vector3<i32>) -> f32 {
         shift_sample_3d(&self.sampler, pos.x as f32, 0.0, pos.z as f32)
     }
+
+    fn sample_volume(&self, buffer: &mut [f32], volume: &DensityVolume) {
+        for z in 0..volume.size_z {
+            let block_z = volume.block_z(z);
+            for x in 0..volume.size_x {
+                let value =
+                    shift_sample_3d(&self.sampler, volume.block_x(x) as f32, 0.0, block_z as f32);
+                let index = volume.index_unchecked(x, 0, z);
+                buffer[index..index + volume.size_y].fill(value);
+            }
+        }
+    }
 }
 
 pub struct ShiftB {
@@ -108,6 +135,18 @@ impl NoiseFunctionComponentRange for ShiftB {
 impl StaticIndependentChunkNoiseFunctionComponentImpl for ShiftB {
     fn sample(&self, pos: &Vector3<i32>) -> f32 {
         shift_sample_3d(&self.sampler, pos.z as f32, pos.x as f32, 0.0)
+    }
+
+    fn sample_volume(&self, buffer: &mut [f32], volume: &DensityVolume) {
+        for z in 0..volume.size_z {
+            let block_z = volume.block_z(z);
+            for x in 0..volume.size_x {
+                let value =
+                    shift_sample_3d(&self.sampler, block_z as f32, volume.block_x(x) as f32, 0.0);
+                let index = volume.index_unchecked(x, 0, z);
+                buffer[index..index + volume.size_y].fill(value);
+            }
+        }
     }
 }
 
@@ -153,25 +192,63 @@ impl StaticChunkNoiseFunctionComponentImpl for ShiftedNoise {
         &self,
         component_stack: &mut [ChunkNoiseFunctionComponent],
         pos: &Vector3<i32>,
-        sample_options: &ChunkNoiseFunctionSampleOptions,
     ) -> f32 {
         let x_shift = ChunkNoiseFunctionComponent::sample_from_stack(
             &mut component_stack[..=self.input_x_index],
             pos,
-            sample_options,
         );
         let y_shift = ChunkNoiseFunctionComponent::sample_from_stack(
             &mut component_stack[..=self.input_y_index],
             pos,
-            sample_options,
         );
         let z_shift = ChunkNoiseFunctionComponent::sample_from_stack(
             &mut component_stack[..=self.input_z_index],
             pos,
-            sample_options,
         );
 
         self.sample_with_shifts(pos, x_shift, y_shift, z_shift)
+    }
+
+    fn sample_volume(
+        &self,
+        component_stack: &mut [ChunkNoiseFunctionComponent],
+        buffer: &mut [f32],
+        volume: &DensityVolume,
+    ) {
+        ChunkNoiseFunctionComponent::sample_volume_from_stack(
+            &mut component_stack[..=self.input_x_index],
+            buffer,
+            volume,
+        );
+        let mut y_shifts = DensityBuffer::acquire(volume);
+        ChunkNoiseFunctionComponent::sample_volume_from_stack(
+            &mut component_stack[..=self.input_y_index],
+            &mut y_shifts,
+            volume,
+        );
+        let mut z_shifts = DensityBuffer::acquire(volume);
+        ChunkNoiseFunctionComponent::sample_volume_from_stack(
+            &mut component_stack[..=self.input_z_index],
+            &mut z_shifts,
+            volume,
+        );
+        let mut index = 0;
+        for z in 0..volume.size_z {
+            let block_z = volume.block_z(z);
+            for x in 0..volume.size_x {
+                let block_x = volume.block_x(x);
+                for y in 0..volume.size_y {
+                    let pos = Vector3::new(block_x, volume.block_y(y), block_z);
+                    buffer[index] = self.sample_with_shifts(
+                        &pos,
+                        buffer[index],
+                        y_shifts[index],
+                        z_shifts[index],
+                    );
+                    index += 1;
+                }
+            }
+        }
     }
 }
 

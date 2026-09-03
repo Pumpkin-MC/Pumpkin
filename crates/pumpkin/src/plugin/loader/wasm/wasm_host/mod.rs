@@ -403,7 +403,7 @@ impl WasmPlugin {
         if let Some(weak_plugin) = &store.data().plugin
             && let Some(plugin) = weak_plugin.upgrade()
         {
-            context.server.task_scheduler.cancel_all_tasks(&plugin);
+            context.server.task_scheduler.disable_plugin(&plugin);
         }
 
         match self.plugin_instance {

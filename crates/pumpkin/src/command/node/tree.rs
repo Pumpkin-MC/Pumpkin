@@ -182,7 +182,7 @@ impl Tree {
         let node = node.into();
         let name = node.meta.literal.to_string();
         let node = self.attach(node.into());
-        self.add_attached_child(ROOT_NODE_ID, node);
+        let node = self.add_attached_child(ROOT_NODE_ID, node);
 
         // This is safe as the node ID now points to a `CommandAttachedNode`.
         let node = CommandNodeId(node.0);
@@ -208,8 +208,7 @@ impl Tree {
 
         // First, attach the node to this tree.
         let node = self.attach(node);
-        self.add_attached_child(parent, node);
-        node
+        self.add_attached_child(parent, node)
     }
 
     /// Adds an already-attached child to a given node.
@@ -221,7 +220,7 @@ impl Tree {
     ///
     /// Essentially, this means that a [`CommandAttachedNode`] must have the root node
     /// of the tree *as its parent*, and [`RootAttachedNode`] cannot have a parent.
-    fn add_attached_child(&mut self, parent: NodeId, node: NodeId) {
+    fn add_attached_child(&mut self, parent: NodeId, node: NodeId) -> NodeId {
         assert!(
             parent == ROOT_NODE_ID || self[node].classification() != NodeClassification::Command,
             "Cannot add a CommandAttachedNode as a child of a non-root node"
@@ -242,8 +241,10 @@ impl Tree {
             for grandchild in node_children {
                 self.add_attached_child(child, grandchild);
             }
+            child
         } else {
             self[parent].children_mut_ref().insert(node_name, node);
+            node
         }
     }
 
