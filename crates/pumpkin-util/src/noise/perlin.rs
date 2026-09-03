@@ -498,7 +498,7 @@ struct OctaveInfo {
     amplitude: f64,
 }
 
-fn amplitude_modifier(modifiers: &[f64], index: usize) -> f64 {
+const fn amplitude_modifier(modifiers: &[f64], index: usize) -> f64 {
     if modifiers.is_empty() {
         1.0
     } else {
