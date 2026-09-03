@@ -89,22 +89,7 @@ impl HostEntity for PluginHostState {
     ) -> wasmtime::Result<entity_types::EntityType> {
         let entity = entity_from_resource(self, &entity)?;
         let original_name = entity.get_entity().entity_type.resource_name;
-
-        let mut names: Vec<String> = serde_json::from_str::<
-            std::collections::BTreeMap<String, serde_json::Value>,
-        >(&std::fs::read_to_string("assets/entities.json")?)?
-        .keys()
-        .cloned()
-        .collect();
-        names.sort();
-
-        let index = names
-            .iter()
-            .position(|n| n == original_name)
-            .ok_or_else(|| wasmtime::Error::msg(format!("Unknown entity type: {original_name}")))?;
-
-        // SAFETY: The WIT enum is generated from the sorted keys of assets/entities.json.
-        Ok(unsafe { std::mem::transmute::<u8, entity_types::EntityType>(index as u8) })
+        to_wit_entity_type(original_name)
     }
 
     async fn get_position(&mut self, entity: Resource<Entity>) -> wasmtime::Result<Position> {
@@ -988,4 +973,24 @@ impl
             })
             .await
     }
+}
+
+pub(crate) fn to_wit_entity_type(name: &str) -> wasmtime::Result<entity_types::EntityType> {
+    let name = name.strip_prefix("minecraft:").unwrap_or(name);
+    let index = pumpkin_data::entity::EntityType::ALL
+        .binary_search_by_key(&name, |e| e.resource_name)
+        .map_err(|_| wasmtime::Error::msg(format!("Unknown entity type: {name}")))?;
+
+    // SAFETY: The WIT enum is generated with variants matching EntityType::ALL in alphabetical order.
+    Ok(unsafe { std::mem::transmute::<u8, entity_types::EntityType>(index as u8) })
+}
+
+pub(crate) fn from_wit_entity_type(
+    entity_type: entity_types::EntityType,
+) -> wasmtime::Result<&'static pumpkin_data::entity::EntityType> {
+    let index = entity_type as usize;
+    pumpkin_data::entity::EntityType::ALL
+        .get(index)
+        .copied()
+        .ok_or_else(|| wasmtime::Error::msg(format!("Invalid entity type index: {index}")))
 }

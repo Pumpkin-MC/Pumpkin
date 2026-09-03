@@ -290,7 +290,6 @@ impl DualNoiseBlockStateProvider {
             &mut RandomGenerator::Legacy(LegacyRand::from_seed(self.base.base.seed as u64)),
             self.slow_noise.first_octave,
             &self.slow_noise.amplitudes,
-            self.slow_noise.amplitude,
             false,
         );
         let slow_noise =
@@ -315,11 +314,11 @@ impl DualNoiseBlockStateProvider {
     }
 
     fn get_slow_noise(&self, x: f64, y: f64, z: f64, sampler: &DoublePerlinNoiseSampler) -> f64 {
-        sampler.sample(
-            (x * self.slow_scale) as f32,
-            (y * self.slow_scale) as f32,
-            (z * self.slow_scale) as f32,
-        ) as f64
+        f64::from(sampler.sample(
+            x * self.slow_scale,
+            y * self.slow_scale,
+            z * self.slow_scale,
+        ))
     }
 }
 
@@ -359,14 +358,13 @@ impl NoiseBlockStateProviderBase {
             &mut RandomGenerator::Legacy(LegacyRand::from_seed(self.seed as u64)),
             self.noise.first_octave,
             &self.noise.amplitudes,
-            self.noise.amplitude,
             false,
         );
-        sampler.sample(
-            pos.0.x as f32 * self.scale,
-            pos.0.y as f32 * self.scale,
-            pos.0.z as f32 * self.scale,
-        ) as f64
+        f64::from(sampler.sample(
+            pos.0.x as f64 * f64::from(self.scale),
+            pos.0.y as f64 * f64::from(self.scale),
+            pos.0.z as f64 * f64::from(self.scale),
+        ))
     }
 }
 
