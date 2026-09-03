@@ -12,9 +12,7 @@ use tracing::info;
 
 use crate::command::CommandSender;
 use crate::command::argument_builder::{ArgumentBuilder, argument, command, literal};
-use crate::command::argument_types::argument_type::{
-    ArgumentType, JavaClientArgumentType,
-};
+use crate::command::argument_types::argument_type::{ArgumentType, JavaClientArgumentType};
 use crate::command::argument_types::core::bool::BoolArgumentType;
 use crate::command::argument_types::core::integer::IntegerArgumentType;
 use crate::command::context::command_context::CommandContext;
@@ -65,7 +63,16 @@ impl ArgumentType for TestInstanceArgumentType {
     type Item = String;
 
     fn parse(&self, reader: &mut StringReader) -> Result<Self::Item, CommandSyntaxError> {
-        Ok(reader.read_unquoted_string())
+        let start = reader.cursor();
+        while let Some(character) = reader.peek() {
+            if is_allowed_in_test_selector(character) {
+                reader.skip();
+            } else {
+                break;
+            }
+        }
+
+        Ok(reader.string()[start..reader.cursor()].to_string())
     }
 
     fn list_suggestions(
@@ -102,10 +109,7 @@ impl ArgumentType for TestInstanceArgumentType {
 }
 
 impl TestInstanceArgumentType {
-    fn get<'a>(
-        context: &'a CommandContext,
-        name: &str,
-    ) -> Result<&'a str, CommandSyntaxError> {
+    fn get<'a>(context: &'a CommandContext, name: &str) -> Result<&'a str, CommandSyntaxError> {
         Ok(context.get_argument::<String>(name)?.as_str())
     }
 }
@@ -165,14 +169,15 @@ impl CommandExecutor for RunExecutor {
 
         let world = context.world().clone();
         let base_x = context.source.position.x.floor() as i32;
-        let base_z =
-            context.source.position.z.floor() as i32 + TEST_POS_Z_OFFSET_FROM_PLAYER;
+        let base_z = context.source.position.z.floor() as i32 + TEST_POS_Z_OFFSET_FROM_PLAYER;
 
-        context.source.send_message(pumpkin_macros::translate_cross!(
-            java::COMMANDS_TEST_RUN_RUNNING,
-            java::COMMANDS_TEST_RUN_RUNNING,
-            TextComponent::text(selected.len().to_string()),
-        ));
+        context
+            .source
+            .send_message(pumpkin_macros::translate_cross!(
+                java::COMMANDS_TEST_RUN_RUNNING,
+                java::COMMANDS_TEST_RUN_RUNNING,
+                TextComponent::text(selected.len().to_string()),
+            ));
 
         let report = Arc::new(GameTestBatchReport::new(
             Arc::new(CommandTestReporter {
@@ -232,8 +237,8 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
         PermissionDefault::Op(PermissionLvl::Two),
     ));
 
-    let tests_per_row = argument(ARG_TESTS_PER_ROW, IntegerArgumentType::any())
-        .executes(RunExecutor);
+    let tests_per_row =
+        argument(ARG_TESTS_PER_ROW, IntegerArgumentType::any()).executes(RunExecutor);
 
     let rotation_steps = argument(ARG_ROTATION_STEPS, IntegerArgumentType::any())
         .executes(RunExecutor)
@@ -243,12 +248,9 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
         .executes(RunExecutor)
         .then(rotation_steps);
 
-    let number_of_times = argument(
-        ARG_NUMBER_OF_TIMES,
-        IntegerArgumentType::with_min(0),
-    )
-    .executes(RunExecutor)
-    .then(until_failed);
+    let number_of_times = argument(ARG_NUMBER_OF_TIMES, IntegerArgumentType::with_min(0))
+        .executes(RunExecutor)
+        .then(until_failed);
 
     let tests = argument(ARG_TESTS, TestInstanceArgumentType)
         .executes(RunExecutor)
@@ -260,6 +262,13 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
             .then(literal("run").then(tests))
             .then(literal("stop").executes(StopExecutor)),
     );
+}
+
+const fn is_allowed_in_test_selector(character: char) -> bool {
+    matches!(
+        character,
+        '0'..='9' | 'a'..='z' | '_' | '-' | '.' | '/' | ':' | '*' | '?'
+    )
 }
 
 fn resource_suggestion_matches(input: &str, candidate: &str) -> bool {

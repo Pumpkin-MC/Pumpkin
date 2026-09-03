@@ -177,6 +177,70 @@ impl TestInstanceBlockBlockEntity {
         }
     }
 
+    pub fn set_running(&self) {
+        let mut data = self
+            .data
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let data = data.get_or_insert_with(NbtCompound::new);
+        data.put_string(
+            "status",
+            TestInstanceStatus::Running.serialized_name().to_string(),
+        );
+        data.child_tags.remove("error_message");
+    }
+
+    pub fn set_success(&self) {
+        let mut data = self
+            .data
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let data = data.get_or_insert_with(NbtCompound::new);
+        data.put_string(
+            "status",
+            TestInstanceStatus::Finished.serialized_name().to_string(),
+        );
+        data.child_tags.remove("error_message");
+    }
+
+    pub fn set_error_message(&self, message: String) {
+        let mut data = self
+            .data
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let data = data.get_or_insert_with(NbtCompound::new);
+        data.put_string(
+            "status",
+            TestInstanceStatus::Finished.serialized_name().to_string(),
+        );
+        data.put_string("error_message", message);
+    }
+
+    pub fn mark_error(&self, position: BlockPos, text: String) {
+        let mut marker = NbtCompound::new();
+        marker.put(
+            "pos",
+            NbtTag::IntArray(vec![position.0.x, position.0.y, position.0.z]),
+        );
+        marker.put_string("text", text);
+
+        let mut errors = self
+            .errors
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        errors
+            .get_or_insert_with(Vec::new)
+            .push(NbtTag::Compound(marker));
+    }
+
+    pub fn clear_error_markers(&self) {
+        let mut errors = self
+            .errors
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        *errors = None;
+    }
+
     fn get_int_array(nbt: &NbtCompound, name: &str) -> Option<[i32; 3]> {
         let values = nbt.get_list(name)?;
         let [x, y, z] = values else {
