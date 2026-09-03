@@ -1,6 +1,7 @@
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::entity::EntityType;
-use pumpkin_data::{Block, BlockState, BlockStateId, item::Item, item_stack::ItemStack};
+use pumpkin_data::world::WorldEvent;
+use pumpkin_data::{Block, BlockId, BlockState, BlockStateId, item::Item, item_stack::ItemStack};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::world::BlockFlags;
 use std::sync::{Arc, atomic::Ordering};
@@ -20,6 +21,15 @@ pub struct FallingEntity {
 /// there; anything else (torches, slabs, stairs, ...) makes it drop as an item.
 const fn can_replace_landing_block(state: &BlockState) -> bool {
     state.replaceable()
+}
+
+/// Suspicious sand and gravel keep their loot in a block entity that cannot ride
+/// along with the falling entity, so vanilla breaks them where they land.
+const fn breaks_on_landing(state_id: BlockStateId) -> bool {
+    matches!(
+        Block::from_state_id(state_id).id,
+        BlockId::SUSPICIOUS_SAND | BlockId::SUSPICIOUS_GRAVEL
+    )
 }
 
 impl FallingEntity {
@@ -53,6 +63,17 @@ impl FallingEntity {
     fn land(&self) {
         let world = self.entity.world.load();
         let position = self.entity.block_pos.load();
+
+        if breaks_on_landing(self.block_state_id) {
+            // Vanilla `BrushableBlock::onBrokenAfterFall`: break particles and
+            // sound, and the block (with its loot) is gone.
+            world.sync_world_event(
+                WorldEvent::ParticlesDestroyBlock,
+                position,
+                i32::from(self.block_state_id.as_u16()),
+            );
+            return;
+        }
 
         if can_replace_landing_block(world.get_block_state(&position)) {
             world.set_block_state(&position, self.block_state_id, BlockFlags::NOTIFY_ALL);
@@ -126,5 +147,13 @@ mod tests {
         assert!(!can_replace_landing_block(Block::TORCH.default_state));
         assert!(!can_replace_landing_block(Block::STONE_SLAB.default_state));
         assert!(!can_replace_landing_block(Block::OAK_STAIRS.default_state));
+    }
+
+    #[test]
+    fn suspicious_blocks_break_when_they_fall() {
+        assert!(breaks_on_landing(Block::SUSPICIOUS_SAND.default_state.id));
+        assert!(breaks_on_landing(Block::SUSPICIOUS_GRAVEL.default_state.id));
+        assert!(!breaks_on_landing(Block::SAND.default_state.id));
+        assert!(!breaks_on_landing(Block::GRAVEL.default_state.id));
     }
 }
