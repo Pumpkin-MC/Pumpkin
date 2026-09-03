@@ -10,13 +10,14 @@ use pumpkin_protocol::codec::data_component::data_to_proto_sound;
 use pumpkin_world::generation::proto_chunk::GenerationCache;
 use rayon::prelude::*;
 use std::sync::atomic::Ordering::Relaxed;
-use std::sync::{Arc, Weak};
+use std::sync::{Arc, RwLock, Weak};
 use std::{
     collections::{BTreeMap, HashMap},
     sync::atomic::Ordering,
 };
 use tracing::{debug, error, info, trace, warn};
 
+mod active_chunks;
 pub mod chunker;
 pub mod explosion;
 pub mod loot;
@@ -50,6 +51,7 @@ use crate::{
     },
     server::Server,
 };
+use active_chunks::{ActiveChunkTracker, ActivePlayerArea};
 use arc_swap::ArcSwap;
 use border::Worldborder;
 use bytes::BufMut;
@@ -278,11 +280,13 @@ pub struct World {
     /// End Dragon fight manager (only present in `THE_END` dimension).
     pub dragon_fight: Option<std::sync::Mutex<dragon_fight::DragonFight>>,
     pub spawn_state: ArcSwap<SpawnState>,
-    pub active_chunks: ArcSwap<FxHashSet<Vector2<i32>>>,
+    pub active_chunks: RwLock<FxHashSet<Vector2<i32>>>,
+    active_chunk_tracker: std::sync::Mutex<ActiveChunkTracker>,
     pub forced_chunks: std::sync::Mutex<FxHashSet<Vector2<i32>>>,
     /// Block entities indexed by chunk, so ticking only visits the currently
     /// active chunks instead of scanning every loaded block entity each tick.
     pub block_entities: DashMap<Vector2<i32>, FxHashMap<BlockPos, Arc<dyn BlockEntity>>>,
+    pending_block_entity_migrations: crossbeam::queue::SegQueue<Vector2<i32>>,
     /// Persistent custom data for the world (matching Bukkit's `PersistentDataHolder`)
     pub custom_data: std::sync::Mutex<NbtCompound>,
     /// Persistent custom data for block entities at specific positions
@@ -406,10 +410,12 @@ impl World {
             raids: std::sync::Mutex::new(raid::Raids::default()),
             dragon_fight,
             spawn_state: ArcSwap::new(Arc::new(SpawnState::empty())),
-            active_chunks: ArcSwap::new(Arc::new(FxHashSet::default())),
+            active_chunks: RwLock::new(FxHashSet::default()),
+            active_chunk_tracker: std::sync::Mutex::new(ActiveChunkTracker::default()),
             forced_chunks: std::sync::Mutex::new(FxHashSet::default()),
             server,
             block_entities: DashMap::new(),
+            pending_block_entity_migrations: crossbeam::queue::SegQueue::new(),
             custom_data: std::sync::Mutex::new(custom_data),
             custom_block_entity_data: DashMap::new(),
             entity_tracker: entity_tracker::EntityTracker::new(),
@@ -417,34 +423,87 @@ impl World {
     }
 
     pub fn update_active_chunks(&self) {
-        let mut active_chunks = FxHashSet::default();
         let sim_dist = self.server.upgrade().map_or(10, |s| {
             s.advanced_config.networking.java.simulation_distance.get()
         }) as i32;
-        for player in self.players.load().iter() {
+        let players = self.players.load();
+        let forced_chunks = self
+            .forced_chunks
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone();
+        let mut tracker = self
+            .active_chunk_tracker
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut active_chunks = self
+            .active_chunks
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut newly_active = Vec::new();
+        let mut current_players = FxHashSet::default();
+
+        for player in players.iter() {
             if player.is_spectator() {
                 continue;
             }
-            let center = player.get_entity().chunk_pos.load();
-            for dx in -sim_dist..=sim_dist {
-                for dy in -sim_dist..=sim_dist {
-                    active_chunks.insert(center.add_raw(dx, dy));
+            let id = player.gameprofile.id;
+            current_players.insert(id);
+            tracker.update_player(
+                id,
+                ActivePlayerArea {
+                    center: player.get_entity().chunk_pos.load(),
+                    simulation_distance: sim_dist,
+                },
+                &mut active_chunks,
+                &mut newly_active,
+            );
+        }
+        let removed_players: Vec<_> = tracker
+            .players
+            .keys()
+            .filter(|id| !current_players.contains(id))
+            .copied()
+            .collect();
+        for id in removed_players {
+            tracker.remove_player(id, &mut active_chunks);
+        }
+        tracker.sync_forced_chunks(&forced_chunks, &mut active_chunks, &mut newly_active);
+
+        for pos in newly_active {
+            if self.level.is_chunk_loaded(&pos) && tracker.loaded_active_chunks.insert(pos) {
+                self.migrate_pending_block_entities(pos);
+            }
+        }
+        for change in self.level.loaded_chunk_changes() {
+            match change {
+                pumpkin_world::level::LoadedChunkChange::Loaded(pos) => {
+                    if active_chunks.contains(&pos)
+                        && self.level.is_chunk_loaded(&pos)
+                        && tracker.loaded_active_chunks.insert(pos)
+                    {
+                        self.migrate_pending_block_entities(pos);
+                    }
+                }
+                pumpkin_world::level::LoadedChunkChange::Unloaded(pos) => {
+                    if !self.level.is_chunk_loaded(&pos) {
+                        tracker.loaded_active_chunks.remove(&pos);
+                    }
                 }
             }
         }
-        if let Ok(forced) = self.forced_chunks.lock() {
-            active_chunks.extend(forced.iter().copied());
+        let mut pending_migrations = FxHashSet::default();
+        while let Some(pos) = self.pending_block_entity_migrations.pop() {
+            pending_migrations.insert(pos);
         }
-
-        let mut spawnable_chunks = 0;
-        for pos in &active_chunks {
-            if self.level.is_chunk_loaded(pos) {
-                spawnable_chunks += 1;
-                self.migrate_pending_block_entities(*pos);
+        for pos in pending_migrations {
+            if active_chunks.contains(&pos) && self.level.is_chunk_loaded(&pos) {
+                self.migrate_pending_block_entities(pos);
             }
         }
-
-        self.active_chunks.store(Arc::new(active_chunks));
+        let spawnable_chunks = tracker.loaded_active_chunks.len() as i32;
+        drop(active_chunks);
+        drop(tracker);
 
         self.spawn_state.store(Arc::new(SpawnState::new(
             spawnable_chunks,
@@ -1449,7 +1508,10 @@ impl World {
 
         let entities_to_tick = self.entities.load();
         let entity_count = entities_to_tick.len();
-        let active_chunks = self.active_chunks.load();
+        let active_chunks = self
+            .active_chunks
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let level_for_entities = self.level.clone();
         let entity_handle = handle.clone();
 
@@ -1505,9 +1567,17 @@ impl World {
         self.entity_tracker.update_all(self);
 
         let mut block_entities: Vec<Arc<dyn BlockEntity>> = Vec::new();
-        for chunk_pos in active_chunks.iter() {
-            if let Some(chunk_block_entities) = self.block_entities.get(chunk_pos) {
-                block_entities.extend(chunk_block_entities.values().cloned());
+        if self.block_entities.len() < active_chunks.len() {
+            for chunk_block_entities in &self.block_entities {
+                if active_chunks.contains(chunk_block_entities.key()) {
+                    block_entities.extend(chunk_block_entities.values().cloned());
+                }
+            }
+        } else {
+            for chunk_pos in active_chunks.iter() {
+                if let Some(chunk_block_entities) = self.block_entities.get(chunk_pos) {
+                    block_entities.extend(chunk_block_entities.values().cloned());
+                }
             }
         }
         let block_entity_count = block_entities.len();
@@ -1823,7 +1893,10 @@ impl World {
         const BATCH_SIZE: usize = 32;
         let random_tick_speed = self.level_info.load().game_rules.random_tick_speed;
 
-        let active_chunks = self.active_chunks.load();
+        let active_chunks = self
+            .active_chunks
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let tick_data = self.level.get_tick_data(&active_chunks, random_tick_speed);
         let handle = server.runtime.clone();
 
@@ -6093,7 +6166,8 @@ impl World {
     }
 
     pub(crate) fn add_block_entity_nbt(&self, block_pos: BlockPos, nbt: &NbtCompound) {
-        self.level
+        if self
+            .level
             .read_chunk_sync(&block_pos.chunk_position(), |chunk| {
                 chunk
                     .pending_block_entities
@@ -6101,7 +6175,12 @@ impl World {
                     .unwrap_or_else(std::sync::PoisonError::into_inner)
                     .insert(block_pos, nbt.clone());
                 chunk.mark_dirty(true);
-            });
+            })
+            .is_some()
+        {
+            self.pending_block_entity_migrations
+                .push(block_pos.chunk_position());
+        }
     }
 
     pub fn remove_block_entity(&self, block_pos: &BlockPos) {
