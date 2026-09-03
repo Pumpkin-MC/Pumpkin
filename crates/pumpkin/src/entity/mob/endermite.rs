@@ -1,9 +1,11 @@
+use std::sync::atomic::{AtomicI32, Ordering};
 use std::sync::{Arc, Weak};
 
 use pumpkin_data::entity::EntityType;
+use pumpkin_nbt::compound::NbtCompound;
 
 use crate::entity::{
-    Entity,
+    Entity, EntityBase,
     ai::goal::{
         active_target::ActiveTargetGoal, look_around::RandomLookAroundGoal,
         look_at_entity::LookAtEntityGoal, melee_attack::MeleeAttackGoal, swim::SwimGoal,
@@ -14,12 +16,16 @@ use crate::entity::{
 
 pub struct EndermiteEntity {
     pub mob_entity: MobEntity,
+    pub lifetime: AtomicI32,
 }
 
 impl EndermiteEntity {
     pub fn new(entity: Entity) -> Arc<Self> {
         let mob_entity = MobEntity::new(entity);
-        let endermite = Self { mob_entity };
+        let endermite = Self {
+            mob_entity,
+            lifetime: AtomicI32::new(0),
+        };
         let mob_arc = Arc::new(endermite);
         let mob_weak: Weak<dyn Mob> = {
             let mob_arc: Arc<dyn Mob> = mob_arc.clone();
@@ -60,5 +66,27 @@ impl EndermiteEntity {
 impl Mob for EndermiteEntity {
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
+    }
+
+    fn mob_write_nbt(&self, nbt: &mut NbtCompound) {
+        nbt.put_int("Lifetime", self.lifetime.load(Ordering::Relaxed));
+    }
+
+    fn mob_read_nbt(&self, nbt: &NbtCompound) {
+        if let Some(life) = nbt.get_int("Lifetime") {
+            self.lifetime.store(life, Ordering::Relaxed);
+        }
+    }
+
+    fn mob_tick(&self, _caller: &dyn EntityBase) {
+        let entity = &self.mob_entity.living_entity.entity;
+        if !entity.is_alive() {
+            return;
+        }
+
+        let life = self.lifetime.fetch_add(1, Ordering::Relaxed) + 1;
+        if life >= 2400 {
+            entity.remove();
+        }
     }
 }

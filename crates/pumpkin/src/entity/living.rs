@@ -34,7 +34,7 @@ use crate::entity::mob::equipment::DEFAULT_EQUIPMENT_DROP_CHANCE;
 use crate::entity::mob::slime::SlimeEntity;
 use crate::entity::player::statistics::{CustomStatistic, StatisticCategory};
 use crate::server::Server;
-use crate::world::loot::{LootContextParameters, LootTableExt};
+use crate::world::loot::LootContextParameters;
 use crossbeam::atomic::AtomicCell;
 use pumpkin_data::attributes::Attributes;
 use pumpkin_data::data_component_impl::Operation;
@@ -59,7 +59,7 @@ use pumpkin_protocol::java::client::play::{
 };
 use pumpkin_protocol::{
     codec::item_stack_seralizer::ItemStackSerializer,
-    java::client::play::{CSetEquipment, Metadata, MetadataSerializer},
+    java::client::play::{CSetEquipment, MetadataSerializer},
     ser::{NetworkWriteExt, WritingError},
 };
 use pumpkin_util::math::boundingbox::BoundingBox;
@@ -85,6 +85,7 @@ pub struct LivingEntity {
     pub item_use_time: AtomicI32,
     pub item_in_use: std::sync::Mutex<Option<ItemStack>>,
     pub active_hand: std::sync::Mutex<Option<Hand>>,
+    pub recent_kinetic_enemies: std::sync::Mutex<FxHashMap<i32, i32>>,
     pub death_time: AtomicU8,
     /// Indicates whether the entity is dead. (`on_death` called)
     pub dead: AtomicBool,
@@ -121,15 +122,20 @@ pub struct LivingEntity {
     water_movement_speed_multiplier: f32,
     livings_flags: AtomicU8,
 
+    /// The last block position the entity occupied, used to trigger location changed effects.
+    pub last_block_pos: AtomicCell<Option<BlockPos>>,
+
     /// The attributes of the entity
     pub attributes: RwLock<FxHashMap<u8, AttributeInstance>>,
 }
 
+#[derive(Clone)]
 struct EffectParticle {
     particle_id: VarInt,
     color: i32,
 }
 
+#[derive(Clone)]
 struct EffectParticles(Vec<EffectParticle>);
 
 impl MetadataSerializer for EffectParticles {
@@ -210,6 +216,7 @@ impl LivingEntity {
             item_use_time: AtomicI32::new(0),
             item_in_use: std::sync::Mutex::new(None),
             active_hand: std::sync::Mutex::new(None),
+            recent_kinetic_enemies: std::sync::Mutex::new(FxHashMap::default()),
             livings_flags: AtomicU8::new(0),
             active_effects: std::sync::Mutex::new(FxHashMap::default()),
             entity_equipment: Arc::new(std::sync::Mutex::new(EntityEquipment::new())),
@@ -226,6 +233,35 @@ impl LivingEntity {
             combat_tracker: std::sync::Mutex::new(CombatTracker::new()),
             movement_input: AtomicCell::new(Vector3::default()),
             water_movement_speed_multiplier,
+            last_block_pos: AtomicCell::new(None),
+        }
+    }
+
+    /// Triggers location-based enchantment effects (e.g. Frost Walker) when the entity's block position changes.
+    pub fn on_changed_block(&self, caller: &dyn EntityBase, _pos: BlockPos) {
+        let pos_f64 = self.entity.pos.load();
+        if let Some(player) = caller.get_player() {
+            let boots = player.inventory.get_slot(36);
+            if !boots.is_empty() {
+                crate::enchantment::EnchantmentHelper::on_location_changed(
+                    &self.entity,
+                    &boots,
+                    pos_f64,
+                );
+            }
+        } else {
+            let boots = self
+                .entity_equipment
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .get(&EquipmentSlot::FEET);
+            if !boots.is_empty() {
+                crate::enchantment::EnchantmentHelper::on_location_changed(
+                    &self.entity,
+                    &boots,
+                    pos_f64,
+                );
+            }
         }
     }
 
@@ -233,6 +269,23 @@ impl LivingEntity {
         if equipment.is_empty() {
             return;
         }
+
+        if equipment
+            .iter()
+            .any(|(slot, _)| *slot == EquipmentSlot::FEET)
+        {
+            let pos_f64 = self.entity.pos.load();
+            for (slot, stack) in equipment {
+                if *slot == EquipmentSlot::FEET && !stack.is_empty() {
+                    crate::enchantment::EnchantmentHelper::on_location_changed(
+                        &self.entity,
+                        stack,
+                        pos_f64,
+                    );
+                }
+            }
+        }
+
         let equipment_java: Vec<(i8, ItemStackSerializer)> = equipment
             .iter()
             .map(|(slot, stack)| {
@@ -246,6 +299,9 @@ impl LivingEntity {
 
         let mut sent_editioned = false;
         for (slot, stack) in equipment {
+            if *slot == EquipmentSlot::MAIN_HAND {
+                self.update_weapon_attributes(stack);
+            }
             if *slot == EquipmentSlot::MAIN_HAND || *slot == EquipmentSlot::OFF_HAND {
                 let window_id = if *slot == EquipmentSlot::OFF_HAND {
                     120
@@ -276,6 +332,64 @@ impl LivingEntity {
                 .world
                 .load()
                 .send_to_tracking_players(&self.entity, &je_packet);
+        }
+    }
+
+    /// Applies the held item's attack attribute modifiers to this entity's
+    /// attribute map and sends the changed attributes to clients. Without this
+    /// the client never sees the reduced attack speed and does not show the
+    /// crosshair attack indicator.
+    fn update_weapon_attributes(&self, stack: &ItemStack) {
+        let component = stack.get_data_component::<AttributeModifiersImpl>();
+
+        // Single pass over the item's modifiers, split by attribute.
+        let mut speed_modifiers: Vec<Modifier> = Vec::new();
+        let mut damage_modifiers: Vec<Modifier> = Vec::new();
+        for modifier in component
+            .into_iter()
+            .flat_map(|c| c.attribute_modifiers.iter())
+        {
+            let target = if modifier.r#type == &Attributes::ATTACK_SPEED {
+                &mut speed_modifiers
+            } else if modifier.r#type == &Attributes::ATTACK_DAMAGE {
+                &mut damage_modifiers
+            } else {
+                continue;
+            };
+            target.push(Modifier {
+                id: modifier.id.to_string(),
+                amount: modifier.amount,
+                operation: match modifier.operation {
+                    Operation::AddValue => ModifierOperation::Add,
+                    Operation::AddMultipliedBase => ModifierOperation::MultiplyBase,
+                    Operation::AddMultipliedTotal => ModifierOperation::MultiplyTotal,
+                },
+            });
+        }
+
+        let mut changed: Vec<Attributes> = Vec::new();
+        {
+            let mut attributes = self
+                .attributes
+                .write()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            for (attribute, modifiers) in [
+                (Attributes::ATTACK_SPEED, speed_modifiers),
+                (Attributes::ATTACK_DAMAGE, damage_modifiers),
+            ] {
+                let instance = attributes
+                    .entry(attribute.id)
+                    .or_insert_with(|| AttributeInstance::new(attribute.default_value));
+                if instance.modifiers == modifiers {
+                    continue;
+                }
+                instance.modifiers = modifiers;
+                instance.dirty.store(true, Ordering::Relaxed);
+                changed.push(attribute);
+            }
+        }
+        if !changed.is_empty() {
+            crate::entity::attributes::send_attribute_updates_for_living(self, changed);
         }
     }
 
@@ -322,6 +436,10 @@ impl LivingEntity {
             .active_hand
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(hand);
+        self.recent_kinetic_enemies
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clear();
         self.set_living_flag(Self::USING_ITEM_FLAG, true);
         self.set_living_flag(Self::OFF_HAND_ACTIVE_FLAG, hand == Hand::Left);
     }
@@ -359,13 +477,11 @@ impl LivingEntity {
             meta
         });
 
-        self.entity.send_meta_data(
-            &[Metadata::new(
-                tracked_data::living_entity::DATA_LIVING_ENTITY_FLAGS,
-                b,
-            )],
-            bedrock_meta.as_ref(),
-        );
+        self.entity
+            .set_synced_data(tracked_data::living_entity::DATA_LIVING_ENTITY_FLAGS, b);
+        if let Some(bedrock_meta) = &bedrock_meta {
+            self.entity.send_bedrock_actor_data(bedrock_meta);
+        }
     }
 
     pub fn clear_active_hand(&self) {
@@ -377,9 +493,28 @@ impl LivingEntity {
             .active_hand
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
+        self.recent_kinetic_enemies
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clear();
         self.item_use_time.store(0, Ordering::Relaxed);
 
         self.set_living_flag(Self::USING_ITEM_FLAG, false);
+    }
+
+    pub fn was_recently_stabbed(&self, target_id: i32, now: i32, allowed_ticks: i32) -> bool {
+        self.recent_kinetic_enemies
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .get(&target_id)
+            .is_some_and(|stabbed_at| now - stabbed_at < allowed_ticks)
+    }
+
+    pub fn remember_stabbed_entity(&self, target_id: i32, now: i32) {
+        self.recent_kinetic_enemies
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .insert(target_id, now);
     }
 
     pub fn is_blocking(&self) -> bool {
@@ -434,13 +569,8 @@ impl LivingEntity {
         let clamped = health.max(0.0).min(max_health);
         self.health.store(clamped);
         // tell everyone entities health changed
-        self.entity.send_meta_data(
-            &[Metadata::new(
-                tracked_data::living_entity::DATA_HEALTH_ID,
-                clamped,
-            )],
-            None,
-        );
+        self.entity
+            .set_synced_data(tracked_data::living_entity::DATA_HEALTH_ID, clamped);
     }
 
     /// Returns the current maximum health for this entity
@@ -488,13 +618,8 @@ impl LivingEntity {
 
         // Send absorption metadata for players (visual yellow hearts)
         if self.entity.entity_type == &EntityType::PLAYER {
-            self.entity.send_meta_data(
-                &[Metadata::new(
-                    tracked_data::player::DATA_PLAYER_ABSORPTION_ID,
-                    new_abs,
-                )],
-                None,
-            );
+            self.entity
+                .set_synced_data(tracked_data::player::DATA_PLAYER_ABSORPTION_ID, new_abs);
         }
     }
 
@@ -765,21 +890,11 @@ impl LivingEntity {
             .all(|effect| effect.ambient);
         drop(effects);
 
-        self.entity.send_meta_data(
-            &[Metadata::new(
-                tracked_data::living_entity::EFFECT_PARTICLES,
-                particles,
-            )],
-            None,
-        );
+        self.entity
+            .set_synced_data(tracked_data::living_entity::EFFECT_PARTICLES, particles);
         if has_effects {
-            self.entity.send_meta_data(
-                &[Metadata::new(
-                    tracked_data::living_entity::EFFECT_AMBIENCE_ID,
-                    ambient,
-                )],
-                None,
-            );
+            self.entity
+                .set_synced_data(tracked_data::living_entity::EFFECT_AMBIENCE_ID, ambient);
         }
     }
 
@@ -1276,7 +1391,7 @@ impl LivingEntity {
         //     }
 
         //     if name == "OakTrapdoorLikeProperties" {
-        //         let trapdoor = OakTrapdoorLikeProperties::from_state_id(state.id, &block);
+        //         let trapdoor = OakTrapdoorLikeProperties::from_state_id(state.id);
 
         //         pos.0.y -= 1;
 
@@ -1287,7 +1402,7 @@ impl LivingEntity {
         //             .is_some_and(|down_props| down_props.name() == "LadderLikeProperties");
 
         //         if is_ladder {
-        //             let ladder = LadderLikeProperties::from_state_id(down_state.id, &down_block);
+        //             let ladder = LadderLikeProperties::from_state_id(down_state.id);
 
         //             if trapdoor.r#facing == ladder.r#facing {
         //                 self.climbing.store(true, Relaxed);
@@ -1408,6 +1523,9 @@ impl LivingEntity {
     ) {
         if ground {
             let fall_distance = self.fall_distance.swap(0.0);
+            if fall_distance > 0.0 {
+                self.on_changed_block(caller, self.entity.block_pos.load());
+            }
             if fall_distance <= 0.0
                 || dont_damage
                 || self.should_prevent_fall_damage()
@@ -1458,7 +1576,16 @@ impl LivingEntity {
             return;
         }
 
-        // Fetches the safe fall distance attribute
+        if fall_distance >= 2.0
+            && let Some(player) = caller.get_player()
+        {
+            player.increment_stat(
+                StatisticCategory::Custom,
+                CustomStatistic::FallOneCm as i32,
+                (fall_distance * 100.0).round() as i32,
+            );
+        }
+
         let safe_fall_distance = self.get_attribute_value(&Attributes::SAFE_FALL_DISTANCE) as f32;
         let unsafe_fall_distance = fall_distance + 1.0E-6 - safe_fall_distance;
 
@@ -1529,8 +1656,7 @@ impl LivingEntity {
             self.movement_input.store(Vector3::default());
             self.jumping.store(false, Relaxed);
 
-            // Statistics updates
-            self.update_death_stats(&*dyn_self, cause);
+            self.update_death_stats(&*dyn_self, cause.or(source));
 
             // Plays the death sound
             world.send_entity_status(&self.entity, EntityStatus::Death, Some(ActorEventID::Death));
@@ -1589,7 +1715,7 @@ impl LivingEntity {
             };
 
             // Drop loot
-            self.drop_loot(params.clone());
+            self.drop_loot(&params);
 
             // Award experience
             if params.killed_by_player.unwrap_or(false)
@@ -1700,14 +1826,15 @@ impl LivingEntity {
 
     fn update_death_stats(&self, dyn_self: &dyn EntityBase, cause: Option<&dyn EntityBase>) {
         if let Some(victim_player) = dyn_self.get_player() {
-            victim_player.increment_stat(
-                StatisticCategory::Custom,
-                CustomStatistic::Deaths as i32,
-                1,
-            );
+            victim_player.increment_custom_stat(CustomStatistic::Deaths, 1);
             victim_player.set_stat(
                 StatisticCategory::Custom,
                 CustomStatistic::TimeSinceDeath as i32,
+                0,
+            );
+            victim_player.set_stat(
+                StatisticCategory::Custom,
+                CustomStatistic::TimeSinceRest as i32,
                 0,
             );
             if let Some(killer_entity) = cause.map(EntityBase::get_entity) {
@@ -1720,6 +1847,11 @@ impl LivingEntity {
         }
 
         if let Some(killer_player) = cause.and_then(|c| c.get_player()) {
+            killer_player.increment_stat(
+                StatisticCategory::Killed,
+                self.entity.entity_type.id as i32,
+                1,
+            );
             if dyn_self.get_player().is_some() {
                 killer_player.increment_stat(
                     StatisticCategory::Custom,
@@ -1770,10 +1902,13 @@ impl LivingEntity {
         }
     }
 
-    fn drop_loot(&self, params: LootContextParameters) {
-        if let Some(loot_table) = &self.get_entity().entity_type.loot_table {
+    fn drop_loot(&self, params: &LootContextParameters) {
+        let resource_name = self.get_entity().entity_type.resource_name;
+        let key = format!("minecraft:entities/{resource_name}");
+        if let Some(loot_table) = pumpkin_data::loot_table::get_loot_table(&key) {
+            let seed: i64 = rand::random();
             let pos = self.entity.block_pos.load();
-            for stack in loot_table.get_loot(params) {
+            for stack in crate::world::loot::generate_loot_with_context(loot_table, seed, params) {
                 self.entity.world.load().drop_stack(&pos, stack);
             }
         }
@@ -1944,9 +2079,17 @@ impl LivingEntity {
                 .is_none_or(|equippable| equippable.damage_on_hurt);
 
             if takes_damage {
+                let item_id = stack.item.id;
                 let slot_result = stack.damage_item(armor_damage);
                 if slot_result != pumpkin_data::item_stack::DamageResult::Untouched {
                     if slot_result == pumpkin_data::item_stack::DamageResult::Broken {
+                        if let Some(player) = caller.get_player() {
+                            player.increment_stat(
+                                pumpkin_data::statistic::StatisticCategory::Broken,
+                                item_id as i32,
+                                1,
+                            );
+                        }
                         let world = self.entity.world.load();
                         world.send_entity_status(
                             &self.entity,
@@ -2028,13 +2171,8 @@ impl LivingEntity {
         // Clear any absorption
         self.absorption.store(0.0);
         // Send health metadata
-        self.entity.send_meta_data(
-            &[Metadata::new(
-                tracked_data::living_entity::DATA_HEALTH_ID,
-                max_health,
-            )],
-            None,
-        );
+        self.entity
+            .set_synced_data(tracked_data::living_entity::DATA_HEALTH_ID, max_health);
 
         self.reset_effects_and_attributes();
 
@@ -2450,14 +2588,11 @@ impl LivingEntity {
                         .lock()
                         .unwrap_or_else(std::sync::PoisonError::into_inner);
                     if let Some(stack) = equipment_guard.equipment.get_mut(&slot) {
+                        let item_id = stack.item.id;
                         let durability_damage = (amount / 1.0).floor().max(1.0) as i32;
                         if stack.damage_item(durability_damage) == DamageResult::Broken {
                             if let Some(player) = caller.get_player() {
-                                player.increment_stat(
-                                    StatisticCategory::Broken,
-                                    stack.item.id as i32,
-                                    1,
-                                );
+                                player.increment_stat(StatisticCategory::Broken, item_id as i32, 1);
                             }
                             world.send_entity_status(
                                 &self.entity,
@@ -2482,9 +2617,12 @@ impl LivingEntity {
         let damage_after_armor =
             self.get_damage_after_armor_absorb(amount, &damage_type, cause.or(source));
 
-        // Vanilla parity: 2. Magic absorb (Resistance effect first, then Enchantments)
-        let effective_amount =
-            self.get_damage_after_magic_absorb(damage_after_armor, &damage_type, caller, cause);
+        let effective_amount = self.get_damage_after_magic_absorb(
+            damage_after_armor,
+            &damage_type,
+            caller,
+            cause.or(source),
+        );
 
         // These damage types bypass the hurt cooldown and death protection
         let bypasses_cooldown_protection =
@@ -2578,7 +2716,7 @@ impl LivingEntity {
                 );
             }
 
-            if let Some(attacker_player) = cause.and_then(|c| c.get_player()) {
+            if let Some(attacker_player) = cause.or(source).and_then(|c| c.get_player()) {
                 attacker_player.increment_stat(
                     StatisticCategory::Custom,
                     CustomStatistic::DamageDealtAbsorbed as i32,
@@ -2611,7 +2749,7 @@ impl LivingEntity {
 
             self.set_health(new_health);
 
-            if let Some(attacker_player) = cause.and_then(|c| c.get_player()) {
+            if let Some(attacker_player) = cause.or(source).and_then(|c| c.get_player()) {
                 attacker_player.increment_stat(
                     StatisticCategory::Custom,
                     CustomStatistic::DamageDealt as i32,
@@ -2757,7 +2895,29 @@ impl EntityBase for LivingEntity {
             }
         }
 
+        let current_block_pos = self.entity.block_pos.load();
+        if is_alive && self.last_block_pos.load() != Some(current_block_pos) {
+            self.last_block_pos.store(Some(current_block_pos));
+            self.on_changed_block(caller, current_block_pos);
+        }
+
         self.tick_effects();
+
+        if let Some(player) = caller.get_player() {
+            let remaining_use_ticks = self.item_use_time.load(Ordering::Relaxed);
+            if remaining_use_ticks > 0 {
+                let item_in_use = self
+                    .item_in_use
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .clone();
+                if let Some(item) = item_in_use.as_ref() {
+                    server
+                        .item_registry
+                        .on_use_tick(item, player, remaining_use_ticks);
+                }
+            }
+        }
 
         // Current active item
         if self.item_use_time.load(Ordering::Relaxed) > 0
@@ -3304,7 +3464,7 @@ mod tests {
             show_icon: true,
             blend: false,
         };
-        let metadata = Metadata::new(
+        let metadata = pumpkin_protocol::java::client::play::Metadata::new(
             tracked_data::living_entity::EFFECT_PARTICLES,
             EffectParticles(vec![EffectParticle::from_effect(&effect)]),
         );

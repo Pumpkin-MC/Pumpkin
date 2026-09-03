@@ -290,21 +290,15 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
         PermissionDefault::Op(PermissionLvl::Two),
     ));
 
-    let block_node = literal("block").then(
-        argument("pos", BlockPosArgumentType).then(
-            argument("slot", SlotArgumentType)
-                .then(block_item_node())
-                .then(literal("with").then(block_item_node())),
-        ),
-    );
+    let block_node = literal("block")
+        .then(argument("pos", BlockPosArgumentType).then(
+            argument("slot", SlotArgumentType).then(literal("with").then(block_item_node())),
+        ));
 
-    let entity_node = literal("entity").then(
-        argument("targets", EntityArgumentType::Entities).then(
-            argument("slot", SlotArgumentType)
-                .then(entity_item_node())
-                .then(literal("with").then(entity_item_node())),
-        ),
-    );
+    let entity_node =
+        literal("entity").then(argument("targets", EntityArgumentType::Entities).then(
+            argument("slot", SlotArgumentType).then(literal("with").then(entity_item_node())),
+        ));
 
     dispatcher.register(
         command("item", DESCRIPTION)

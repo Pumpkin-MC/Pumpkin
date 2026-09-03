@@ -26,12 +26,22 @@ impl DataComponentImpl for BlockEntityDataImpl {
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct EntityDataImpl;
+impl EntityDataImpl {
+    pub const fn read_data(_data: &NbtTag) -> Option<Self> {
+        Some(Self)
+    }
+}
 impl DataComponentImpl for EntityDataImpl {
     default_impl!(EntityData);
 }
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct BucketEntityDataImpl;
+impl BucketEntityDataImpl {
+    pub const fn read_data(_data: &NbtTag) -> Option<Self> {
+        Some(Self)
+    }
+}
 impl DataComponentImpl for BucketEntityDataImpl {
     default_impl!(BucketEntityData);
 }
@@ -148,6 +158,11 @@ impl DataComponentImpl for BlockStateImpl {
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct BeesImpl;
+impl BeesImpl {
+    pub const fn read_data(_data: &NbtTag) -> Option<Self> {
+        Some(Self)
+    }
+}
 impl DataComponentImpl for BeesImpl {
     default_impl!(Bees);
 }
@@ -177,6 +192,11 @@ impl DataComponentImpl for ContainerLootImpl {
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct SulfurCubeContentImpl;
+impl SulfurCubeContentImpl {
+    pub const fn read_data(_data: &NbtTag) -> Option<Self> {
+        Some(Self)
+    }
+}
 impl DataComponentImpl for SulfurCubeContentImpl {
     default_impl!(SulfurCubeContent);
 }

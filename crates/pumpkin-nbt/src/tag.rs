@@ -396,12 +396,7 @@ impl NbtTag {
                     return Err(Error::LargeLength(len));
                 }
 
-                let mut int_array = Vec::with_capacity(len.min(4096));
-                for _ in 0..len {
-                    let int = reader.get_i32()?;
-                    int_array.push(int);
-                }
-                Ok(Self::IntArray(int_array))
+                Ok(Self::IntArray(reader.get_i32_array(len)?))
             }
             LONG_ARRAY_ID => {
                 let len = reader.get_i32()?;
@@ -414,12 +409,7 @@ impl NbtTag {
                     return Err(Error::LargeLength(len));
                 }
 
-                let mut long_array = Vec::with_capacity(len.min(4096));
-                for _ in 0..len {
-                    let long = reader.get_i64()?;
-                    long_array.push(long);
-                }
-                Ok(Self::LongArray(long_array))
+                Ok(Self::LongArray(reader.get_i64_array(len)?))
             }
             _ => Err(Error::UnknownTagId(tag_id)),
         }

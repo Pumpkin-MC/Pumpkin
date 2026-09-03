@@ -10,7 +10,6 @@ use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::codec::var_int::VarInt;
-use pumpkin_protocol::java::client::play::Metadata;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 
@@ -122,12 +121,9 @@ impl SnifferEntity {
     pub fn set_state(&self, state: SnifferState) {
         self.state.store(state.id(), Ordering::Relaxed);
         let entity = self.get_entity();
-        entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::sniffer::STATE,
-                VarInt(state.id()),
-            )],
-            None,
+        entity.set_synced_data(
+            pumpkin_data::tracked_data::sniffer::STATE,
+            VarInt(state.id()),
         );
     }
 
@@ -190,12 +186,9 @@ impl SnifferEntity {
         let current_ticks = world.level_time.try_lock().map_or(0, |t| t.world_age);
         let drop_tick = current_ticks as i32 + DIGGING_DROP_SEED_OFFSET_TICKS;
         self.drop_seed_at_tick.store(drop_tick, Ordering::Relaxed);
-        entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::sniffer::DROP_SEED_AT_TICK,
-                VarInt(drop_tick),
-            )],
-            None,
+        entity.set_synced_data(
+            pumpkin_data::tracked_data::sniffer::DROP_SEED_AT_TICK,
+            VarInt(drop_tick),
         );
         world.send_entity_status(entity, EntityStatus::SnifferDiggingSound, None);
     }
@@ -384,26 +377,15 @@ impl Mob for SnifferEntity {
         let entity = self.get_entity();
         let is_baby = entity.age.load(Ordering::Relaxed) < 0;
         if is_baby {
-            entity.send_meta_data(
-                &[Metadata::new(
-                    pumpkin_data::tracked_data::sniffer::BABY_ID,
-                    true,
-                )],
-                None,
-            );
+            entity.set_synced_data(pumpkin_data::tracked_data::sniffer::BABY_ID, true);
         }
-        entity.send_meta_data(
-            &[
-                Metadata::new(
-                    pumpkin_data::tracked_data::sniffer::STATE,
-                    VarInt(self.get_state().id()),
-                ),
-                Metadata::new(
-                    pumpkin_data::tracked_data::sniffer::DROP_SEED_AT_TICK,
-                    VarInt(self.drop_seed_at_tick.load(Ordering::Relaxed)),
-                ),
-            ],
-            None,
+        entity.set_synced_data(
+            pumpkin_data::tracked_data::sniffer::STATE,
+            VarInt(self.get_state().id()),
+        );
+        entity.set_synced_data(
+            pumpkin_data::tracked_data::sniffer::DROP_SEED_AT_TICK,
+            VarInt(self.drop_seed_at_tick.load(Ordering::Relaxed)),
         );
     }
 

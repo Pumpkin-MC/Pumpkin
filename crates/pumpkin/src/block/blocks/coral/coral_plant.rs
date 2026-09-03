@@ -1,7 +1,5 @@
 use pumpkin_data::{
-    BlockDirection, BlockId, BlockStateId,
-    block_properties::{BlockProperties, MangroveRootsLikeProperties},
-    tag,
+    BlockDirection, BlockId, BlockStateId, block_properties::MangroveRootsLikeProperties, tag,
 };
 use pumpkin_world::world::BlockFlags;
 
@@ -42,11 +40,11 @@ impl BlockBehaviour for CoralPlantBlock {
         if !scan_for_water(args.world, args.position) && !is_dead_coral(args.block) {
             let current_state = args.world.get_block_state(args.position);
             let dead_block_state_id = {
-                let props = CoralPlantLikeProperties::from_state_id(current_state.id, args.block);
+                let props = CoralPlantLikeProperties::from_state_id(current_state.id);
                 props.to_state_id(get_dead_type(args.block.id).unwrap_or_default().to_block())
             };
             args.world
-                .set_block_state(args.position, dead_block_state_id, BlockFlags::empty());
+                .set_block_state(args.position, dead_block_state_id, BlockFlags::NOTIFY_ALL);
         }
     }
     fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {

@@ -55,7 +55,7 @@ const MOJANG_PROFILE_BY_UUID_URL: &str =
     "https://sessionserver.mojang.com/session/minecraft/profile/{uuid}?unsigned=false";
 
 fn create_client(auth_config: &AuthenticationConfig) -> reqwest::Client {
-    reqwest::Client::builder()
+    pumpkin_util::client_builder()
         .connect_timeout(std::time::Duration::from_millis(
             auth_config.connect_timeout as u64,
         ))

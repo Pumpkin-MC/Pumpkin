@@ -1,7 +1,7 @@
 use crate::block::BlockIsReplacing;
 use crate::entity::EntityBase;
 use pumpkin_data::BlockStateId;
-use pumpkin_data::block_properties::{BlockProperties, Facing};
+use pumpkin_data::block_properties::Facing;
 use pumpkin_data::{Block, FacingExt, HorizontalFacingExt};
 use pumpkin_data::{BlockDirection, BlockId};
 use pumpkin_util::math::position::BlockPos;
@@ -109,7 +109,7 @@ impl BlockBehaviour for TorchBlock {
             || args.block == &Block::SOUL_WALL_TORCH
             || args.block == &Block::COPPER_WALL_TORCH
         {
-            let props = WallTorchProps::from_state_id(args.state_id, args.block);
+            let props = WallTorchProps::from_state_id(args.state_id);
             if props.facing.to_block_direction().opposite() == args.direction
                 && !can_place_at(
                     args.world,
