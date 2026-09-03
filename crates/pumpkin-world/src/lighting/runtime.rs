@@ -80,12 +80,13 @@ impl DynamicLightEngine {
                 let rel_y = (y - min_y) as usize;
                 let opacity = sections
                     .get(rel_y / BlockPalette::SIZE)
-                    .map(|section| {
-                        section
-                            .get(local_x, rel_y % BlockPalette::SIZE, local_z)
-                            .to_state()
-                    })
-                    .map_or(0, |state| state.opacity);
+                    .map_or(0, |section| {
+                        crate::lighting::opacity_of(section.get(
+                            local_x,
+                            rel_y % BlockPalette::SIZE,
+                            local_z,
+                        ))
+                    });
                 if opacity > 0 {
                     return (true, reads);
                 }

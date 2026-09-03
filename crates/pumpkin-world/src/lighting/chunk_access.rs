@@ -166,8 +166,24 @@ impl<'a> ChunkCursor<'a> {
         })
     }
 
+    /// Opacity without materialising the state: `opacity_of` answers air from the id alone,
+    /// where `block_state_at` always pays the state table lookup and its dereference.
     pub(super) fn opacity_at(chunk: &ChunkData, cell: VerticalInChunk) -> u8 {
-        Self::block_state_at(chunk, cell).opacity
+        let VerticalInChunk::Inside {
+            section_index,
+            y_in_section,
+            local_x,
+            local_z,
+        } = cell
+        else {
+            return pumpkin_data::Block::VOID_AIR.default_state.opacity;
+        };
+        chunk.section.with_blocks(|sections| {
+            sections.get(section_index).map_or(
+                pumpkin_data::Block::VOID_AIR.default_state.opacity,
+                |section| crate::lighting::opacity_of(section.get(local_x, y_in_section, local_z)),
+            )
+        })
     }
 
     pub(super) fn sky_light_at(chunk: &ChunkData, cell: VerticalInChunk) -> u8 {

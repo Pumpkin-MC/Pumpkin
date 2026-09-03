@@ -709,9 +709,42 @@ impl SkyLightPropagator {
                     .max(west_top)
                     .max(east_top);
 
+                // One chunk resolution for the whole column instead of one per cell, and for
+                // a loaded chunk one light guard instead of one per cell.
+                let rel_x = (x >> 4) - cache.x;
+                let rel_z = (z >> 4) - cache.z;
+                if rel_x < 0 || rel_x >= cache.size || rel_z < 0 || rel_z >= cache.size {
+                    continue;
+                }
+                let chunk_idx = (rel_x * cache.size + rel_z) as usize;
+                let local_x = (x & 15) as usize;
+                let local_z = (z & 15) as usize;
+
+                let mut level_guard = match &cache.chunks[chunk_idx] {
+                    Chunk::Proto(_) => None,
+                    Chunk::Level(c) => Some(
+                        c.light_engine
+                            .lock()
+                            .unwrap_or_else(std::sync::PoisonError::into_inner),
+                    ),
+                };
+                let column: &[LightContainer] = match (&cache.chunks[chunk_idx], &mut level_guard) {
+                    (Chunk::Proto(c), _) => &c.light.sky_light,
+                    (Chunk::Level(_), Some(guard)) => &guard.sky_light,
+                    (Chunk::Level(_), None) => unreachable!("guard taken for every level chunk"),
+                };
+
                 for y in (bottom_y..=max_check_y).rev() {
-                    let pos = BlockPos(Vector3::new(x, y, z));
-                    let light = get_sky_light(cache, pos);
+                    // `get_sky_light` answers 0 for a section the chunk does not store, for
+                    // both chunk kinds; not `PROTO_MISSING`.
+                    let light = light_in(
+                        column,
+                        ((y - bottom_y) >> 4) as usize,
+                        local_x,
+                        (y & 15) as usize,
+                        local_z,
+                        0,
+                    );
 
                     if light == 0 {
                         if y <= top_y {
@@ -719,6 +752,7 @@ impl SkyLightPropagator {
                         }
                         continue;
                     }
+                    let pos = BlockPos(Vector3::new(x, y, z));
 
                     // Only a column shadowed by a taller neighbour seeds.
                     let below_neighbor =
