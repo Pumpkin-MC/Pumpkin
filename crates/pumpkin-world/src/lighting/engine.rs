@@ -31,6 +31,10 @@ pub trait LightProvider {
     /// What a proto chunk reads back where the section is not stored.
     const PROTO_MISSING: u8;
     fn propagate_level(current_level: u8, opacity: u8, dir: BlockDirection) -> u8;
+    /// Brightest level a step in `dir` could possibly hand a neighbour, i.e.
+    /// [`Self::propagate_level`] at opacity 0. Lets the flood reject a neighbour before
+    /// reading its block state. Vanilla: `maxPossibleNewToLevel`.
+    fn max_possible(current_level: u8, dir: BlockDirection) -> u8;
 }
 
 /// Light of one cell, with the layer's default where the section is absent.
@@ -82,6 +86,10 @@ impl LightProvider for BlockLightProvider {
     fn propagate_level(current_level: u8, opacity: u8, _dir: BlockDirection) -> u8 {
         decayed(current_level, opacity)
     }
+    #[inline]
+    fn max_possible(current_level: u8, _dir: BlockDirection) -> u8 {
+        current_level.saturating_sub(1)
+    }
 }
 
 pub struct SkyLightProvider;
@@ -114,6 +122,15 @@ impl LightProvider for SkyLightProvider {
             sky_descended(current_level, opacity)
         } else {
             decayed(current_level, opacity)
+        }
+    }
+    #[inline]
+    fn max_possible(current_level: u8, dir: BlockDirection) -> u8 {
+        // Straight down, a full 15 passes through transparent blocks undimmed.
+        if dir == BlockDirection::Down {
+            current_level
+        } else {
+            current_level.saturating_sub(1)
         }
     }
 }
@@ -367,6 +384,9 @@ impl<P: LightProvider> LightPropagator<P> {
                 continue;
             }
 
+            // TODO: Once level reads are performant enough, skip entries whose cell is already
+            // brighter than the queued level.
+
             for dir in BlockDirection::all() {
                 if let Some(skip_dir) = entry.skip_direction
                     && dir == skip_dir
@@ -406,9 +426,9 @@ impl<P: LightProvider> LightPropagator<P> {
                     local_z,
                 );
 
-                // A step never brightens, so a neighbour already this bright cannot improve.
+                // Nothing this step could hand over beats what the neighbour already has.
                 // Checked before the block read, which is the expensive half.
-                if neighbor_light >= current_light {
+                if neighbor_light >= P::max_possible(current_light, dir) {
                     continue;
                 }
 
