@@ -2197,7 +2197,6 @@ fn build_configured_features()
                     noise: DoublePerlinNoiseParametersCodec {
                         first_octave: 0i32,
                         amplitudes: vec![1f64],
-                        amplitude: 0.8333333333333333f64,
                     },
                     scale: 0.020833334f32,
                 },
@@ -2228,7 +2227,6 @@ fn build_configured_features()
                         noise: DoublePerlinNoiseParametersCodec {
                             first_octave: -3i32,
                             amplitudes: vec![1f64],
-                            amplitude: 0.8333333333333333f64,
                         },
                         scale: 1f32,
                     },
@@ -2255,7 +2253,6 @@ fn build_configured_features()
                 slow_noise: DoublePerlinNoiseParametersCodec {
                     first_octave: -10i32,
                     amplitudes: vec![1f64],
-                    amplitude: 0.8333333333333333f64,
                 },
                 slow_scale: 1f64,
             }),
@@ -2280,7 +2277,6 @@ fn build_configured_features()
                     noise: DoublePerlinNoiseParametersCodec {
                         first_octave: 0i32,
                         amplitudes: vec![1f64],
-                        amplitude: 0.8333333333333333f64,
                     },
                     scale: 0.005f32,
                 },

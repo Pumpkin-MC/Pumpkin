@@ -4,9 +4,9 @@ pub trait NoiseEvaluationContext {
     fn sample_noise(
         &mut self,
         noise_id: DoublePerlinNoiseParameters,
-        x: f32,
-        y: f32,
-        z: f32,
+        x: f64,
+        y: f64,
+        z: f64,
     ) -> f32;
     fn sample_shift_a(
         &mut self,
@@ -24,8 +24,8 @@ pub trait NoiseEvaluationContext {
         shift_x: f32,
         shift_y: f32,
         shift_z: f32,
-        xz_scale: f32,
-        y_scale: f32,
+        xz_scale: f64,
+        y_scale: f64,
     ) -> f32;
     fn sample_interpolated_noise(&mut self, pos: &pumpkin_util::math::vector3::Vector3<i32>)
     -> f32;
@@ -187,8 +187,8 @@ pub mod overworld_compiled {
             sx,
             sy,
             sz,
-            0.25f32,
-            0f32,
+            0.25f64,
+            0f64,
         )
     }
     #[inline(always)]
@@ -219,8 +219,8 @@ pub mod overworld_compiled {
             sx,
             sy,
             sz,
-            0.25f32,
-            0f32,
+            0.25f64,
+            0f64,
         )
     }
     #[inline(always)]
@@ -251,8 +251,8 @@ pub mod overworld_compiled {
             sx,
             sy,
             sz,
-            0.25f32,
-            0f32,
+            0.25f64,
+            0f64,
         )
     }
     #[inline(always)]
@@ -400,9 +400,9 @@ pub mod overworld_compiled {
     ) -> f32 {
         ctx.sample_noise(
             DoublePerlinNoiseParameters::JAGGED,
-            pos.x as f32 * 1500f32,
-            pos.y as f32 * 0f32,
-            pos.z as f32 * 1500f32,
+            f64::from(pos.x) * 1500f64,
+            f64::from(pos.y) * 0f64,
+            f64::from(pos.z) * 1500f64,
         )
     }
     #[inline(always)]
@@ -549,9 +549,9 @@ pub mod overworld_compiled {
     ) -> f32 {
         ctx.sample_noise(
             DoublePerlinNoiseParameters::CAVE_ENTRANCE,
-            pos.x as f32 * 0.75f32,
-            pos.y as f32 * 0.5f32,
-            pos.z as f32 * 0.75f32,
+            f64::from(pos.x) * 0.75f64,
+            f64::from(pos.y) * 0.5f64,
+            f64::from(pos.z) * 0.75f64,
         )
     }
     #[inline(always)]
@@ -585,9 +585,9 @@ pub mod overworld_compiled {
     ) -> f32 {
         ctx.sample_noise(
             DoublePerlinNoiseParameters::SPAGHETTI_ROUGHNESS_MODULATOR,
-            pos.x as f32 * 1f32,
-            pos.y as f32 * 1f32,
-            pos.z as f32 * 1f32,
+            f64::from(pos.x) * 1f64,
+            f64::from(pos.y) * 1f64,
+            f64::from(pos.z) * 1f64,
         )
     }
     #[inline(always)]
@@ -611,9 +611,9 @@ pub mod overworld_compiled {
     ) -> f32 {
         ctx.sample_noise(
             DoublePerlinNoiseParameters::SPAGHETTI_ROUGHNESS,
-            pos.x as f32 * 1f32,
-            pos.y as f32 * 1f32,
-            pos.z as f32 * 1f32,
+            f64::from(pos.x) * 1f64,
+            f64::from(pos.y) * 1f64,
+            f64::from(pos.z) * 1f64,
         )
     }
     #[inline(always)]
@@ -651,9 +651,9 @@ pub mod overworld_compiled {
     ) -> f32 {
         ctx.sample_noise(
             DoublePerlinNoiseParameters::SPAGHETTI_3D_RARITY,
-            pos.x as f32 * 2f32,
-            pos.y as f32 * 1f32,
-            pos.z as f32 * 2f32,
+            f64::from(pos.x) * 2f64,
+            f64::from(pos.y) * 1f64,
+            f64::from(pos.z) * 2f64,
         )
     }
     #[inline(always)]
@@ -670,9 +670,9 @@ pub mod overworld_compiled {
     ) -> f32 {
         ctx.sample_noise(
             DoublePerlinNoiseParameters::SPAGHETTI_3D_1,
-            pos.x as f32 * 1.3333334f32,
-            pos.y as f32 * 1.3333334f32,
-            pos.z as f32 * 1.3333334f32,
+            f64::from(pos.x) * 1.3333333333333333f64,
+            f64::from(pos.y) * 1.3333333333333333f64,
+            f64::from(pos.z) * 1.3333333333333333f64,
         )
     }
     #[inline(always)]
@@ -689,9 +689,9 @@ pub mod overworld_compiled {
     ) -> f32 {
         ctx.sample_noise(
             DoublePerlinNoiseParameters::SPAGHETTI_3D_1,
-            pos.x as f32 * 1f32,
-            pos.y as f32 * 1f32,
-            pos.z as f32 * 1f32,
+            f64::from(pos.x) * 1f64,
+            f64::from(pos.y) * 1f64,
+            f64::from(pos.z) * 1f64,
         )
     }
     #[inline(always)]
@@ -708,9 +708,9 @@ pub mod overworld_compiled {
     ) -> f32 {
         ctx.sample_noise(
             DoublePerlinNoiseParameters::SPAGHETTI_3D_1,
-            pos.x as f32 * 0.6666667f32,
-            pos.y as f32 * 0.6666667f32,
-            pos.z as f32 * 0.6666667f32,
+            f64::from(pos.x) * 0.6666666666666666f64,
+            f64::from(pos.y) * 0.6666666666666666f64,
+            f64::from(pos.z) * 0.6666666666666666f64,
         )
     }
     #[inline(always)]
@@ -727,9 +727,9 @@ pub mod overworld_compiled {
     ) -> f32 {
         ctx.sample_noise(
             DoublePerlinNoiseParameters::SPAGHETTI_3D_1,
-            pos.x as f32 * 0.5f32,
-            pos.y as f32 * 0.5f32,
-            pos.z as f32 * 0.5f32,
+            f64::from(pos.x) * 0.5f64,
+            f64::from(pos.y) * 0.5f64,
+            f64::from(pos.z) * 0.5f64,
         )
     }
     #[inline(always)]
@@ -774,9 +774,9 @@ pub mod overworld_compiled {
     ) -> f32 {
         ctx.sample_noise(
             DoublePerlinNoiseParameters::SPAGHETTI_3D_2,
-            pos.x as f32 * 1.3333334f32,
-            pos.y as f32 * 1.3333334f32,
-            pos.z as f32 * 1.3333334f32,
+            f64::from(pos.x) * 1.3333333333333333f64,
+            f64::from(pos.y) * 1.3333333333333333f64,
+            f64::from(pos.z) * 1.3333333333333333f64,
         )
     }
     #[inline(always)]
@@ -793,9 +793,9 @@ pub mod overworld_compiled {
     ) -> f32 {
         ctx.sample_noise(
             DoublePerlinNoiseParameters::SPAGHETTI_3D_2,
-            pos.x as f32 * 1f32,
-            pos.y as f32 * 1f32,
-            pos.z as f32 * 1f32,
+            f64::from(pos.x) * 1f64,
+            f64::from(pos.y) * 1f64,
+            f64::from(pos.z) * 1f64,
         )
     }
     #[inline(always)]
@@ -812,9 +812,9 @@ pub mod overworld_compiled {
     ) -> f32 {
         ctx.sample_noise(
             DoublePerlinNoiseParameters::SPAGHETTI_3D_2,
-            pos.x as f32 * 0.6666667f32,
-            pos.y as f32 * 0.6666667f32,
-            pos.z as f32 * 0.6666667f32,
+            f64::from(pos.x) * 0.6666666666666666f64,
+            f64::from(pos.y) * 0.6666666666666666f64,
+            f64::from(pos.z) * 0.6666666666666666f64,
         )
     }
     #[inline(always)]
@@ -831,9 +831,9 @@ pub mod overworld_compiled {
     ) -> f32 {
         ctx.sample_noise(
             DoublePerlinNoiseParameters::SPAGHETTI_3D_2,
-            pos.x as f32 * 0.5f32,
-            pos.y as f32 * 0.5f32,
-            pos.z as f32 * 0.5f32,
+            f64::from(pos.x) * 0.5f64,
+            f64::from(pos.y) * 0.5f64,
+            f64::from(pos.z) * 0.5f64,
         )
     }
     #[inline(always)]
@@ -885,9 +885,9 @@ pub mod overworld_compiled {
     ) -> f32 {
         ctx.sample_noise(
             DoublePerlinNoiseParameters::SPAGHETTI_3D_THICKNESS,
-            pos.x as f32 * 1f32,
-            pos.y as f32 * 1f32,
-            pos.z as f32 * 1f32,
+            f64::from(pos.x) * 1f64,
+            f64::from(pos.y) * 1f64,
+            f64::from(pos.z) * 1f64,
         )
     }
     #[inline(always)]
@@ -960,9 +960,9 @@ pub mod overworld_compiled {
     ) -> f32 {
         ctx.sample_noise(
             DoublePerlinNoiseParameters::CAVE_LAYER,
-            pos.x as f32 * 1f32,
-            pos.y as f32 * 8f32,
-            pos.z as f32 * 1f32,
+            f64::from(pos.x) * 1f64,
+            f64::from(pos.y) * 8f64,
+            f64::from(pos.z) * 1f64,
         )
     }
     #[inline(always)]
@@ -987,9 +987,9 @@ pub mod overworld_compiled {
     ) -> f32 {
         ctx.sample_noise(
             DoublePerlinNoiseParameters::CAVE_CHEESE,
-            pos.x as f32 * 1f32,
-            pos.y as f32 * 0.6666667f32,
-            pos.z as f32 * 1f32,
+            f64::from(pos.x) * 1f64,
+            f64::from(pos.y) * 0.6666666666666666f64,
+            f64::from(pos.z) * 1f64,
         )
     }
     #[inline(always)]
@@ -1055,9 +1055,9 @@ pub mod overworld_compiled {
     ) -> f32 {
         ctx.sample_noise(
             DoublePerlinNoiseParameters::SPAGHETTI_2D_MODULATOR,
-            pos.x as f32 * 2f32,
-            pos.y as f32 * 1f32,
-            pos.z as f32 * 2f32,
+            f64::from(pos.x) * 2f64,
+            f64::from(pos.y) * 1f64,
+            f64::from(pos.z) * 2f64,
         )
     }
     #[inline(always)]
@@ -1067,9 +1067,9 @@ pub mod overworld_compiled {
     ) -> f32 {
         ctx.sample_noise(
             DoublePerlinNoiseParameters::SPAGHETTI_2D,
-            pos.x as f32 * 2f32,
-            pos.y as f32 * 2f32,
-            pos.z as f32 * 2f32,
+            f64::from(pos.x) * 2f64,
+            f64::from(pos.y) * 2f64,
+            f64::from(pos.z) * 2f64,
         )
     }
     #[inline(always)]
@@ -1086,9 +1086,9 @@ pub mod overworld_compiled {
     ) -> f32 {
         ctx.sample_noise(
             DoublePerlinNoiseParameters::SPAGHETTI_2D,
-            pos.x as f32 * 1.3333334f32,
-            pos.y as f32 * 1.3333334f32,
-            pos.z as f32 * 1.3333334f32,
+            f64::from(pos.x) * 1.3333333333333333f64,
+            f64::from(pos.y) * 1.3333333333333333f64,
+            f64::from(pos.z) * 1.3333333333333333f64,
         )
     }
     #[inline(always)]
@@ -1105,9 +1105,9 @@ pub mod overworld_compiled {
     ) -> f32 {
         ctx.sample_noise(
             DoublePerlinNoiseParameters::SPAGHETTI_2D,
-            pos.x as f32 * 1f32,
-            pos.y as f32 * 1f32,
-            pos.z as f32 * 1f32,
+            f64::from(pos.x) * 1f64,
+            f64::from(pos.y) * 1f64,
+            f64::from(pos.z) * 1f64,
         )
     }
     #[inline(always)]
@@ -1124,9 +1124,9 @@ pub mod overworld_compiled {
     ) -> f32 {
         ctx.sample_noise(
             DoublePerlinNoiseParameters::SPAGHETTI_2D,
-            pos.x as f32 * 0.5f32,
-            pos.y as f32 * 0.5f32,
-            pos.z as f32 * 0.5f32,
+            f64::from(pos.x) * 0.5f64,
+            f64::from(pos.y) * 0.5f64,
+            f64::from(pos.z) * 0.5f64,
         )
     }
     #[inline(always)]
@@ -1143,9 +1143,9 @@ pub mod overworld_compiled {
     ) -> f32 {
         ctx.sample_noise(
             DoublePerlinNoiseParameters::SPAGHETTI_2D,
-            pos.x as f32 * 0.33333334f32,
-            pos.y as f32 * 0.33333334f32,
-            pos.z as f32 * 0.33333334f32,
+            f64::from(pos.x) * 0.3333333333333333f64,
+            f64::from(pos.y) * 0.3333333333333333f64,
+            f64::from(pos.z) * 0.3333333333333333f64,
         )
     }
     #[inline(always)]
@@ -1191,9 +1191,9 @@ pub mod overworld_compiled {
     ) -> f32 {
         ctx.sample_noise(
             DoublePerlinNoiseParameters::SPAGHETTI_2D_THICKNESS,
-            pos.x as f32 * 2f32,
-            pos.y as f32 * 1f32,
-            pos.z as f32 * 2f32,
+            f64::from(pos.x) * 2f64,
+            f64::from(pos.y) * 1f64,
+            f64::from(pos.z) * 2f64,
         )
     }
     #[inline(always)]
@@ -1238,9 +1238,9 @@ pub mod overworld_compiled {
     ) -> f32 {
         ctx.sample_noise(
             DoublePerlinNoiseParameters::SPAGHETTI_2D_ELEVATION,
-            pos.x as f32 * 1f32,
-            pos.y as f32 * 0f32,
-            pos.z as f32 * 1f32,
+            f64::from(pos.x) * 1f64,
+            f64::from(pos.y) * 0f64,
+            f64::from(pos.z) * 1f64,
         )
     }
     #[inline(always)]
@@ -1347,9 +1347,9 @@ pub mod overworld_compiled {
     ) -> f32 {
         ctx.sample_noise(
             DoublePerlinNoiseParameters::PILLAR,
-            pos.x as f32 * 25f32,
-            pos.y as f32 * 0.3f32,
-            pos.z as f32 * 25f32,
+            f64::from(pos.x) * 25f64,
+            f64::from(pos.y) * 0.3f64,
+            f64::from(pos.z) * 25f64,
         )
     }
     #[inline(always)]
@@ -1366,9 +1366,9 @@ pub mod overworld_compiled {
     ) -> f32 {
         ctx.sample_noise(
             DoublePerlinNoiseParameters::PILLAR_RARENESS,
-            pos.x as f32 * 1f32,
-            pos.y as f32 * 1f32,
-            pos.z as f32 * 1f32,
+            f64::from(pos.x) * 1f64,
+            f64::from(pos.y) * 1f64,
+            f64::from(pos.z) * 1f64,
         )
     }
     #[inline(always)]
@@ -1399,9 +1399,9 @@ pub mod overworld_compiled {
     ) -> f32 {
         ctx.sample_noise(
             DoublePerlinNoiseParameters::PILLAR_THICKNESS,
-            pos.x as f32 * 1f32,
-            pos.y as f32 * 1f32,
-            pos.z as f32 * 1f32,
+            f64::from(pos.x) * 1f64,
+            f64::from(pos.y) * 1f64,
+            f64::from(pos.z) * 1f64,
         )
     }
     #[inline(always)]
@@ -1554,9 +1554,9 @@ pub mod overworld_compiled {
     ) -> f32 {
         ctx.sample_noise(
             DoublePerlinNoiseParameters::NOODLE,
-            pos.x as f32 * 1f32,
-            pos.y as f32 * 1f32,
-            pos.z as f32 * 1f32,
+            f64::from(pos.x) * 1f64,
+            f64::from(pos.y) * 1f64,
+            f64::from(pos.z) * 1f64,
         )
     }
     #[inline(always)]
@@ -1609,9 +1609,9 @@ pub mod overworld_compiled {
     ) -> f32 {
         ctx.sample_noise(
             DoublePerlinNoiseParameters::NOODLE_THICKNESS,
-            pos.x as f32 * 1f32,
-            pos.y as f32 * 1f32,
-            pos.z as f32 * 1f32,
+            f64::from(pos.x) * 1f64,
+            f64::from(pos.y) * 1f64,
+            f64::from(pos.z) * 1f64,
         )
     }
     #[inline(always)]
@@ -1662,9 +1662,9 @@ pub mod overworld_compiled {
     ) -> f32 {
         ctx.sample_noise(
             DoublePerlinNoiseParameters::NOODLE_RIDGE_A,
-            pos.x as f32 * 2.6666667f32,
-            pos.y as f32 * 2.6666667f32,
-            pos.z as f32 * 2.6666667f32,
+            f64::from(pos.x) * 2.6666666666666665f64,
+            f64::from(pos.y) * 2.6666666666666665f64,
+            f64::from(pos.z) * 2.6666666666666665f64,
         )
     }
     #[inline(always)]
@@ -1708,9 +1708,9 @@ pub mod overworld_compiled {
     ) -> f32 {
         ctx.sample_noise(
             DoublePerlinNoiseParameters::NOODLE_RIDGE_B,
-            pos.x as f32 * 2.6666667f32,
-            pos.y as f32 * 2.6666667f32,
-            pos.z as f32 * 2.6666667f32,
+            f64::from(pos.x) * 2.6666666666666665f64,
+            f64::from(pos.y) * 2.6666666666666665f64,
+            f64::from(pos.z) * 2.6666666666666665f64,
         )
     }
     #[inline(always)]
@@ -1808,9 +1808,9 @@ pub mod overworld_compiled {
     ) -> f32 {
         ctx.sample_noise(
             DoublePerlinNoiseParameters::AQUIFER_BARRIER,
-            pos.x as f32 * 1f32,
-            pos.y as f32 * 0.5f32,
-            pos.z as f32 * 1f32,
+            f64::from(pos.x) * 1f64,
+            f64::from(pos.y) * 0.5f64,
+            f64::from(pos.z) * 1f64,
         )
     }
     #[inline(always)]
@@ -1820,9 +1820,9 @@ pub mod overworld_compiled {
     ) -> f32 {
         ctx.sample_noise(
             DoublePerlinNoiseParameters::AQUIFER_FLUID_LEVEL_FLOODEDNESS,
-            pos.x as f32 * 1f32,
-            pos.y as f32 * 0.67f32,
-            pos.z as f32 * 1f32,
+            f64::from(pos.x) * 1f64,
+            f64::from(pos.y) * 0.67f64,
+            f64::from(pos.z) * 1f64,
         )
     }
     #[inline(always)]
@@ -1832,9 +1832,9 @@ pub mod overworld_compiled {
     ) -> f32 {
         ctx.sample_noise(
             DoublePerlinNoiseParameters::AQUIFER_FLUID_LEVEL_SPREAD,
-            pos.x as f32 * 1f32,
-            pos.y as f32 * 0.71428573f32,
-            pos.z as f32 * 1f32,
+            f64::from(pos.x) * 1f64,
+            f64::from(pos.y) * 0.7142857142857143f64,
+            f64::from(pos.z) * 1f64,
         )
     }
     #[inline(always)]
@@ -1844,9 +1844,9 @@ pub mod overworld_compiled {
     ) -> f32 {
         ctx.sample_noise(
             DoublePerlinNoiseParameters::AQUIFER_LAVA,
-            pos.x as f32 * 1f32,
-            pos.y as f32 * 1f32,
-            pos.z as f32 * 1f32,
+            f64::from(pos.x) * 1f64,
+            f64::from(pos.y) * 1f64,
+            f64::from(pos.z) * 1f64,
         )
     }
     #[inline(always)]
@@ -1856,9 +1856,9 @@ pub mod overworld_compiled {
     ) -> f32 {
         ctx.sample_noise(
             DoublePerlinNoiseParameters::ORE_VEININESS,
-            pos.x as f32 * 1.5f32,
-            pos.y as f32 * 1.5f32,
-            pos.z as f32 * 1.5f32,
+            f64::from(pos.x) * 1.5f64,
+            f64::from(pos.y) * 1.5f64,
+            f64::from(pos.z) * 1.5f64,
         )
     }
     #[inline(always)]
@@ -1910,9 +1910,9 @@ pub mod overworld_compiled {
     ) -> f32 {
         ctx.sample_noise(
             DoublePerlinNoiseParameters::ORE_VEIN_A,
-            pos.x as f32 * 4f32,
-            pos.y as f32 * 4f32,
-            pos.z as f32 * 4f32,
+            f64::from(pos.x) * 4f64,
+            f64::from(pos.y) * 4f64,
+            f64::from(pos.z) * 4f64,
         )
     }
     #[inline(always)]
@@ -1964,9 +1964,9 @@ pub mod overworld_compiled {
     ) -> f32 {
         ctx.sample_noise(
             DoublePerlinNoiseParameters::ORE_VEIN_B,
-            pos.x as f32 * 4f32,
-            pos.y as f32 * 4f32,
-            pos.z as f32 * 4f32,
+            f64::from(pos.x) * 4f64,
+            f64::from(pos.y) * 4f64,
+            f64::from(pos.z) * 4f64,
         )
     }
     #[inline(always)]
@@ -2051,9 +2051,9 @@ pub mod overworld_compiled {
     ) -> f32 {
         ctx.sample_noise(
             DoublePerlinNoiseParameters::ORE_GAP,
-            pos.x as f32 * 1f32,
-            pos.y as f32 * 1f32,
-            pos.z as f32 * 1f32,
+            f64::from(pos.x) * 1f64,
+            f64::from(pos.y) * 1f64,
+            f64::from(pos.z) * 1f64,
         )
     }
     #[inline(always)]
@@ -2433,24 +2433,24 @@ pub mod end_compiled {
 }
 pub struct NoiseData {
     pub noise_id: DoublePerlinNoiseParameters,
-    pub xz_scale: f32,
-    pub y_scale: f32,
+    pub xz_scale: f64,
+    pub y_scale: f64,
 }
 pub struct FindTopSurfaceData {
     pub lower_bound: i32,
     pub cell_height: i32,
 }
 pub struct ShiftedNoiseData {
-    pub xz_scale: f32,
-    pub y_scale: f32,
+    pub xz_scale: f64,
+    pub y_scale: f64,
     pub noise_id: DoublePerlinNoiseParameters,
 }
 pub struct InterpolatedNoiseSamplerData {
-    pub scaled_xz_scale: f32,
-    pub scaled_y_scale: f32,
-    pub xz_factor: f32,
-    pub y_factor: f32,
-    pub smear_scale_multiplier: f32,
+    pub xz_scale: f64,
+    pub y_scale: f64,
+    pub xz_factor: f64,
+    pub y_factor: f64,
+    pub smear_scale_multiplier: f64,
 }
 pub struct ClampedYGradientData {
     pub from_y: f32,
@@ -2846,8 +2846,8 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                 shift_y_index: 10usize,
                 shift_z_index: 13usize,
                 data: &ShiftedNoiseData {
-                    xz_scale: 0.25f32,
-                    y_scale: 0f32,
+                    xz_scale: 0.25f64,
+                    y_scale: 0f64,
                     noise_id: DoublePerlinNoiseParameters::CONTINENTALNESS,
                 },
             },
@@ -2865,8 +2865,8 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                 shift_y_index: 10usize,
                 shift_z_index: 13usize,
                 data: &ShiftedNoiseData {
-                    xz_scale: 0.25f32,
-                    y_scale: 0f32,
+                    xz_scale: 0.25f64,
+                    y_scale: 0f64,
                     noise_id: DoublePerlinNoiseParameters::EROSION,
                 },
             },
@@ -2884,8 +2884,8 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                 shift_y_index: 10usize,
                 shift_z_index: 13usize,
                 data: &ShiftedNoiseData {
-                    xz_scale: 0.25f32,
-                    y_scale: 0f32,
+                    xz_scale: 0.25f64,
+                    y_scale: 0f64,
                     noise_id: DoublePerlinNoiseParameters::RIDGE,
                 },
             },
@@ -4889,8 +4889,8 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
             BaseNoiseFunctionComponent::Noise {
                 data: &NoiseData {
                     noise_id: DoublePerlinNoiseParameters::JAGGED,
-                    xz_scale: 1500f32,
-                    y_scale: 0f32,
+                    xz_scale: 1500f64,
+                    y_scale: 0f64,
                 },
             },
             BaseNoiseFunctionComponent::Unary {
@@ -5878,11 +5878,11 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
             },
             BaseNoiseFunctionComponent::InterpolatedNoiseSampler {
                 data: &InterpolatedNoiseSamplerData {
-                    scaled_xz_scale: 0.25f32,
-                    scaled_y_scale: 0.25f32,
-                    xz_factor: 80f32,
-                    y_factor: 160f32,
-                    smear_scale_multiplier: 8f32,
+                    xz_scale: 0.25f64,
+                    y_scale: 0.125f64,
+                    xz_factor: 80f64,
+                    y_factor: 160f64,
+                    smear_scale_multiplier: 8f64,
                 },
             },
             BaseNoiseFunctionComponent::Binary {
@@ -5899,8 +5899,8 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
             BaseNoiseFunctionComponent::Noise {
                 data: &NoiseData {
                     noise_id: DoublePerlinNoiseParameters::CAVE_ENTRANCE,
-                    xz_scale: 0.75f32,
-                    y_scale: 0.5f32,
+                    xz_scale: 0.75f64,
+                    y_scale: 0.5f64,
                 },
             },
             BaseNoiseFunctionComponent::Linear {
@@ -5930,8 +5930,8 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
             BaseNoiseFunctionComponent::Noise {
                 data: &NoiseData {
                     noise_id: DoublePerlinNoiseParameters::SPAGHETTI_ROUGHNESS_MODULATOR,
-                    xz_scale: 1f32,
-                    y_scale: 1f32,
+                    xz_scale: 1f64,
+                    y_scale: 1f64,
                 },
             },
             BaseNoiseFunctionComponent::Linear {
@@ -5951,8 +5951,8 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
             BaseNoiseFunctionComponent::Noise {
                 data: &NoiseData {
                     noise_id: DoublePerlinNoiseParameters::SPAGHETTI_ROUGHNESS,
-                    xz_scale: 1f32,
-                    y_scale: 1f32,
+                    xz_scale: 1f64,
+                    y_scale: 1f64,
                 },
             },
             BaseNoiseFunctionComponent::Unary {
@@ -5982,8 +5982,8 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
             BaseNoiseFunctionComponent::Noise {
                 data: &NoiseData {
                     noise_id: DoublePerlinNoiseParameters::SPAGHETTI_3D_RARITY,
-                    xz_scale: 2f32,
-                    y_scale: 1f32,
+                    xz_scale: 2f64,
+                    y_scale: 1f64,
                 },
             },
             BaseNoiseFunctionComponent::Wrapper {
@@ -5993,8 +5993,8 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
             BaseNoiseFunctionComponent::Noise {
                 data: &NoiseData {
                     noise_id: DoublePerlinNoiseParameters::SPAGHETTI_3D_1,
-                    xz_scale: 1.3333334f32,
-                    y_scale: 1.3333334f32,
+                    xz_scale: 1.3333333333333333f64,
+                    y_scale: 1.3333333333333333f64,
                 },
             },
             BaseNoiseFunctionComponent::Linear {
@@ -6007,8 +6007,8 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
             BaseNoiseFunctionComponent::Noise {
                 data: &NoiseData {
                     noise_id: DoublePerlinNoiseParameters::SPAGHETTI_3D_1,
-                    xz_scale: 1f32,
-                    y_scale: 1f32,
+                    xz_scale: 1f64,
+                    y_scale: 1f64,
                 },
             },
             BaseNoiseFunctionComponent::Linear {
@@ -6021,8 +6021,8 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
             BaseNoiseFunctionComponent::Noise {
                 data: &NoiseData {
                     noise_id: DoublePerlinNoiseParameters::SPAGHETTI_3D_1,
-                    xz_scale: 0.6666667f32,
-                    y_scale: 0.6666667f32,
+                    xz_scale: 0.6666666666666666f64,
+                    y_scale: 0.6666666666666666f64,
                 },
             },
             BaseNoiseFunctionComponent::Linear {
@@ -6035,8 +6035,8 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
             BaseNoiseFunctionComponent::Noise {
                 data: &NoiseData {
                     noise_id: DoublePerlinNoiseParameters::SPAGHETTI_3D_1,
-                    xz_scale: 0.5f32,
-                    y_scale: 0.5f32,
+                    xz_scale: 0.5f64,
+                    y_scale: 0.5f64,
                 },
             },
             BaseNoiseFunctionComponent::Linear {
@@ -6060,8 +6060,8 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
             BaseNoiseFunctionComponent::Noise {
                 data: &NoiseData {
                     noise_id: DoublePerlinNoiseParameters::SPAGHETTI_3D_2,
-                    xz_scale: 1.3333334f32,
-                    y_scale: 1.3333334f32,
+                    xz_scale: 1.3333333333333333f64,
+                    y_scale: 1.3333333333333333f64,
                 },
             },
             BaseNoiseFunctionComponent::Linear {
@@ -6074,8 +6074,8 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
             BaseNoiseFunctionComponent::Noise {
                 data: &NoiseData {
                     noise_id: DoublePerlinNoiseParameters::SPAGHETTI_3D_2,
-                    xz_scale: 1f32,
-                    y_scale: 1f32,
+                    xz_scale: 1f64,
+                    y_scale: 1f64,
                 },
             },
             BaseNoiseFunctionComponent::Linear {
@@ -6088,8 +6088,8 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
             BaseNoiseFunctionComponent::Noise {
                 data: &NoiseData {
                     noise_id: DoublePerlinNoiseParameters::SPAGHETTI_3D_2,
-                    xz_scale: 0.6666667f32,
-                    y_scale: 0.6666667f32,
+                    xz_scale: 0.6666666666666666f64,
+                    y_scale: 0.6666666666666666f64,
                 },
             },
             BaseNoiseFunctionComponent::Linear {
@@ -6102,8 +6102,8 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
             BaseNoiseFunctionComponent::Noise {
                 data: &NoiseData {
                     noise_id: DoublePerlinNoiseParameters::SPAGHETTI_3D_2,
-                    xz_scale: 0.5f32,
-                    y_scale: 0.5f32,
+                    xz_scale: 0.5f64,
+                    y_scale: 0.5f64,
                 },
             },
             BaseNoiseFunctionComponent::Linear {
@@ -6134,8 +6134,8 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
             BaseNoiseFunctionComponent::Noise {
                 data: &NoiseData {
                     noise_id: DoublePerlinNoiseParameters::SPAGHETTI_3D_THICKNESS,
-                    xz_scale: 1f32,
-                    y_scale: 1f32,
+                    xz_scale: 1f64,
+                    y_scale: 1f64,
                 },
             },
             BaseNoiseFunctionComponent::Linear {
@@ -6201,8 +6201,8 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
             BaseNoiseFunctionComponent::Noise {
                 data: &NoiseData {
                     noise_id: DoublePerlinNoiseParameters::CAVE_LAYER,
-                    xz_scale: 1f32,
-                    y_scale: 8f32,
+                    xz_scale: 1f64,
+                    y_scale: 8f64,
                 },
             },
             BaseNoiseFunctionComponent::Unary {
@@ -6221,8 +6221,8 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
             BaseNoiseFunctionComponent::Noise {
                 data: &NoiseData {
                     noise_id: DoublePerlinNoiseParameters::CAVE_CHEESE,
-                    xz_scale: 1f32,
-                    y_scale: 0.6666667f32,
+                    xz_scale: 1f64,
+                    y_scale: 0.6666666666666666f64,
                 },
             },
             BaseNoiseFunctionComponent::Linear {
@@ -6284,15 +6284,15 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
             BaseNoiseFunctionComponent::Noise {
                 data: &NoiseData {
                     noise_id: DoublePerlinNoiseParameters::SPAGHETTI_2D_MODULATOR,
-                    xz_scale: 2f32,
-                    y_scale: 1f32,
+                    xz_scale: 2f64,
+                    y_scale: 1f64,
                 },
             },
             BaseNoiseFunctionComponent::Noise {
                 data: &NoiseData {
                     noise_id: DoublePerlinNoiseParameters::SPAGHETTI_2D,
-                    xz_scale: 2f32,
-                    y_scale: 2f32,
+                    xz_scale: 2f64,
+                    y_scale: 2f64,
                 },
             },
             BaseNoiseFunctionComponent::Linear {
@@ -6305,8 +6305,8 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
             BaseNoiseFunctionComponent::Noise {
                 data: &NoiseData {
                     noise_id: DoublePerlinNoiseParameters::SPAGHETTI_2D,
-                    xz_scale: 1.3333334f32,
-                    y_scale: 1.3333334f32,
+                    xz_scale: 1.3333333333333333f64,
+                    y_scale: 1.3333333333333333f64,
                 },
             },
             BaseNoiseFunctionComponent::Linear {
@@ -6319,8 +6319,8 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
             BaseNoiseFunctionComponent::Noise {
                 data: &NoiseData {
                     noise_id: DoublePerlinNoiseParameters::SPAGHETTI_2D,
-                    xz_scale: 1f32,
-                    y_scale: 1f32,
+                    xz_scale: 1f64,
+                    y_scale: 1f64,
                 },
             },
             BaseNoiseFunctionComponent::Linear {
@@ -6333,8 +6333,8 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
             BaseNoiseFunctionComponent::Noise {
                 data: &NoiseData {
                     noise_id: DoublePerlinNoiseParameters::SPAGHETTI_2D,
-                    xz_scale: 0.5f32,
-                    y_scale: 0.5f32,
+                    xz_scale: 0.5f64,
+                    y_scale: 0.5f64,
                 },
             },
             BaseNoiseFunctionComponent::Linear {
@@ -6347,8 +6347,8 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
             BaseNoiseFunctionComponent::Noise {
                 data: &NoiseData {
                     noise_id: DoublePerlinNoiseParameters::SPAGHETTI_2D,
-                    xz_scale: 0.33333334f32,
-                    y_scale: 0.33333334f32,
+                    xz_scale: 0.3333333333333333f64,
+                    y_scale: 0.3333333333333333f64,
                 },
             },
             BaseNoiseFunctionComponent::Linear {
@@ -6372,8 +6372,8 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
             BaseNoiseFunctionComponent::Noise {
                 data: &NoiseData {
                     noise_id: DoublePerlinNoiseParameters::SPAGHETTI_2D_THICKNESS,
-                    xz_scale: 2f32,
-                    y_scale: 1f32,
+                    xz_scale: 2f64,
+                    y_scale: 1f64,
                 },
             },
             BaseNoiseFunctionComponent::Linear {
@@ -6411,8 +6411,8 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
             BaseNoiseFunctionComponent::Noise {
                 data: &NoiseData {
                     noise_id: DoublePerlinNoiseParameters::SPAGHETTI_2D_ELEVATION,
-                    xz_scale: 1f32,
-                    y_scale: 0f32,
+                    xz_scale: 1f64,
+                    y_scale: 0f64,
                 },
             },
             BaseNoiseFunctionComponent::Linear {
@@ -6503,8 +6503,8 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
             BaseNoiseFunctionComponent::Noise {
                 data: &NoiseData {
                     noise_id: DoublePerlinNoiseParameters::PILLAR,
-                    xz_scale: 25f32,
-                    y_scale: 0.3f32,
+                    xz_scale: 25f64,
+                    y_scale: 0.3f64,
                 },
             },
             BaseNoiseFunctionComponent::Linear {
@@ -6517,8 +6517,8 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
             BaseNoiseFunctionComponent::Noise {
                 data: &NoiseData {
                     noise_id: DoublePerlinNoiseParameters::PILLAR_RARENESS,
-                    xz_scale: 1f32,
-                    y_scale: 1f32,
+                    xz_scale: 1f64,
+                    y_scale: 1f64,
                 },
             },
             BaseNoiseFunctionComponent::Linear {
@@ -6545,8 +6545,8 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
             BaseNoiseFunctionComponent::Noise {
                 data: &NoiseData {
                     noise_id: DoublePerlinNoiseParameters::PILLAR_THICKNESS,
-                    xz_scale: 1f32,
-                    y_scale: 1f32,
+                    xz_scale: 1f64,
+                    y_scale: 1f64,
                 },
             },
             BaseNoiseFunctionComponent::Linear {
@@ -6652,8 +6652,8 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
             BaseNoiseFunctionComponent::Noise {
                 data: &NoiseData {
                     noise_id: DoublePerlinNoiseParameters::NOODLE,
-                    xz_scale: 1f32,
-                    y_scale: 1f32,
+                    xz_scale: 1f64,
+                    y_scale: 1f64,
                 },
             },
             BaseNoiseFunctionComponent::Constant { value: -1f32 },
@@ -6677,8 +6677,8 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
             BaseNoiseFunctionComponent::Noise {
                 data: &NoiseData {
                     noise_id: DoublePerlinNoiseParameters::NOODLE_THICKNESS,
-                    xz_scale: 1f32,
-                    y_scale: 1f32,
+                    xz_scale: 1f64,
+                    y_scale: 1f64,
                 },
             },
             BaseNoiseFunctionComponent::Linear {
@@ -6714,8 +6714,8 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
             BaseNoiseFunctionComponent::Noise {
                 data: &NoiseData {
                     noise_id: DoublePerlinNoiseParameters::NOODLE_RIDGE_A,
-                    xz_scale: 2.6666667f32,
-                    y_scale: 2.6666667f32,
+                    xz_scale: 2.6666666666666665f64,
+                    y_scale: 2.6666666666666665f64,
                 },
             },
             BaseNoiseFunctionComponent::RangeChoice {
@@ -6743,8 +6743,8 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
             BaseNoiseFunctionComponent::Noise {
                 data: &NoiseData {
                     noise_id: DoublePerlinNoiseParameters::NOODLE_RIDGE_B,
-                    xz_scale: 2.6666667f32,
-                    y_scale: 2.6666667f32,
+                    xz_scale: 2.6666666666666665f64,
+                    y_scale: 2.6666666666666665f64,
                 },
             },
             BaseNoiseFunctionComponent::RangeChoice {
@@ -6817,36 +6817,36 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
             BaseNoiseFunctionComponent::Noise {
                 data: &NoiseData {
                     noise_id: DoublePerlinNoiseParameters::AQUIFER_BARRIER,
-                    xz_scale: 1f32,
-                    y_scale: 0.5f32,
+                    xz_scale: 1f64,
+                    y_scale: 0.5f64,
                 },
             },
             BaseNoiseFunctionComponent::Noise {
                 data: &NoiseData {
                     noise_id: DoublePerlinNoiseParameters::AQUIFER_FLUID_LEVEL_FLOODEDNESS,
-                    xz_scale: 1f32,
-                    y_scale: 0.67f32,
+                    xz_scale: 1f64,
+                    y_scale: 0.67f64,
                 },
             },
             BaseNoiseFunctionComponent::Noise {
                 data: &NoiseData {
                     noise_id: DoublePerlinNoiseParameters::AQUIFER_FLUID_LEVEL_SPREAD,
-                    xz_scale: 1f32,
-                    y_scale: 0.71428573f32,
+                    xz_scale: 1f64,
+                    y_scale: 0.7142857142857143f64,
                 },
             },
             BaseNoiseFunctionComponent::Noise {
                 data: &NoiseData {
                     noise_id: DoublePerlinNoiseParameters::AQUIFER_LAVA,
-                    xz_scale: 1f32,
-                    y_scale: 1f32,
+                    xz_scale: 1f64,
+                    y_scale: 1f64,
                 },
             },
             BaseNoiseFunctionComponent::Noise {
                 data: &NoiseData {
                     noise_id: DoublePerlinNoiseParameters::ORE_VEININESS,
-                    xz_scale: 1.5f32,
-                    y_scale: 1.5f32,
+                    xz_scale: 1.5f64,
+                    y_scale: 1.5f64,
                 },
             },
             BaseNoiseFunctionComponent::RangeChoice {
@@ -6873,8 +6873,8 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
             BaseNoiseFunctionComponent::Noise {
                 data: &NoiseData {
                     noise_id: DoublePerlinNoiseParameters::ORE_VEIN_A,
-                    xz_scale: 4f32,
-                    y_scale: 4f32,
+                    xz_scale: 4f64,
+                    y_scale: 4f64,
                 },
             },
             BaseNoiseFunctionComponent::Constant { value: 1f32 },
@@ -6903,8 +6903,8 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
             BaseNoiseFunctionComponent::Noise {
                 data: &NoiseData {
                     noise_id: DoublePerlinNoiseParameters::ORE_VEIN_B,
-                    xz_scale: 4f32,
-                    y_scale: 4f32,
+                    xz_scale: 4f64,
+                    y_scale: 4f64,
                 },
             },
             BaseNoiseFunctionComponent::RangeChoice {
@@ -6960,8 +6960,8 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
             BaseNoiseFunctionComponent::Noise {
                 data: &NoiseData {
                     noise_id: DoublePerlinNoiseParameters::ORE_GAP,
-                    xz_scale: 1f32,
-                    y_scale: 1f32,
+                    xz_scale: 1f64,
+                    y_scale: 1f64,
                 },
             },
             BaseNoiseFunctionComponent::Binary {
@@ -7058,8 +7058,8 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                 shift_y_index: 10usize,
                 shift_z_index: 13usize,
                 data: &ShiftedNoiseData {
-                    xz_scale: 0.25f32,
-                    y_scale: 0f32,
+                    xz_scale: 0.25f64,
+                    y_scale: 0f64,
                     noise_id: DoublePerlinNoiseParameters::CONTINENTALNESS,
                 },
             },
@@ -7077,8 +7077,8 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                 shift_y_index: 10usize,
                 shift_z_index: 13usize,
                 data: &ShiftedNoiseData {
-                    xz_scale: 0.25f32,
-                    y_scale: 0f32,
+                    xz_scale: 0.25f64,
+                    y_scale: 0f64,
                     noise_id: DoublePerlinNoiseParameters::EROSION,
                 },
             },
@@ -7096,8 +7096,8 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                 shift_y_index: 10usize,
                 shift_z_index: 13usize,
                 data: &ShiftedNoiseData {
-                    xz_scale: 0.25f32,
-                    y_scale: 0f32,
+                    xz_scale: 0.25f64,
+                    y_scale: 0f64,
                     noise_id: DoublePerlinNoiseParameters::RIDGE,
                 },
             },
@@ -9846,8 +9846,8 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                 shift_y_index: 3usize,
                 shift_z_index: 6usize,
                 data: &ShiftedNoiseData {
-                    xz_scale: 0.25f32,
-                    y_scale: 0f32,
+                    xz_scale: 0.25f64,
+                    y_scale: 0f64,
                     noise_id: DoublePerlinNoiseParameters::RIDGE,
                 },
             },
@@ -9870,8 +9870,8 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                 shift_y_index: 3usize,
                 shift_z_index: 6usize,
                 data: &ShiftedNoiseData {
-                    xz_scale: 0.25f32,
-                    y_scale: 0f32,
+                    xz_scale: 0.25f64,
+                    y_scale: 0f64,
                     noise_id: DoublePerlinNoiseParameters::TEMPERATURE,
                 },
             },
@@ -9885,8 +9885,8 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                 shift_y_index: 3usize,
                 shift_z_index: 6usize,
                 data: &ShiftedNoiseData {
-                    xz_scale: 0.25f32,
-                    y_scale: 0f32,
+                    xz_scale: 0.25f64,
+                    y_scale: 0f64,
                     noise_id: DoublePerlinNoiseParameters::VEGETATION,
                 },
             },
@@ -9900,8 +9900,8 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                 shift_y_index: 3usize,
                 shift_z_index: 6usize,
                 data: &ShiftedNoiseData {
-                    xz_scale: 0.25f32,
-                    y_scale: 0f32,
+                    xz_scale: 0.25f64,
+                    y_scale: 0f64,
                     noise_id: DoublePerlinNoiseParameters::CONTINENTALNESS,
                 },
             },
@@ -9924,8 +9924,8 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                 shift_y_index: 3usize,
                 shift_z_index: 6usize,
                 data: &ShiftedNoiseData {
-                    xz_scale: 0.25f32,
-                    y_scale: 0f32,
+                    xz_scale: 0.25f64,
+                    y_scale: 0f64,
                     noise_id: DoublePerlinNoiseParameters::EROSION,
                 },
             },
@@ -11655,11 +11655,11 @@ pub const NETHER_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
             BaseNoiseFunctionComponent::Constant { value: 0.9375f32 },
             BaseNoiseFunctionComponent::InterpolatedNoiseSampler {
                 data: &InterpolatedNoiseSamplerData {
-                    scaled_xz_scale: 0.25f32,
-                    scaled_y_scale: 0.28125f32,
-                    xz_factor: 80f32,
-                    y_factor: 60f32,
-                    smear_scale_multiplier: 8f32,
+                    xz_scale: 0.25f64,
+                    y_scale: 0.375f64,
+                    xz_factor: 80f64,
+                    y_factor: 60f64,
+                    smear_scale_multiplier: 8f64,
                 },
             },
             BaseNoiseFunctionComponent::Lerp {
@@ -11725,8 +11725,8 @@ pub const NETHER_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
             BaseNoiseFunctionComponent::Noise {
                 data: &NoiseData {
                     noise_id: DoublePerlinNoiseParameters::NETHER_TEMPERATURE,
-                    xz_scale: 0.25f32,
-                    y_scale: 0f32,
+                    xz_scale: 0.25f64,
+                    y_scale: 0f64,
                 },
             },
             BaseNoiseFunctionComponent::Slice {
@@ -11737,8 +11737,8 @@ pub const NETHER_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
             BaseNoiseFunctionComponent::Noise {
                 data: &NoiseData {
                     noise_id: DoublePerlinNoiseParameters::NETHER_VEGETATION,
-                    xz_scale: 0.25f32,
-                    y_scale: 0f32,
+                    xz_scale: 0.25f64,
+                    y_scale: 0f64,
                 },
             },
             BaseNoiseFunctionComponent::Slice {
@@ -11847,11 +11847,11 @@ pub const END_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
             },
             BaseNoiseFunctionComponent::InterpolatedNoiseSampler {
                 data: &InterpolatedNoiseSamplerData {
-                    scaled_xz_scale: 0.25f32,
-                    scaled_y_scale: 0.5f32,
-                    xz_factor: 80f32,
-                    y_factor: 160f32,
-                    smear_scale_multiplier: 4f32,
+                    xz_scale: 0.25f64,
+                    y_scale: 0.25f64,
+                    xz_factor: 80f64,
+                    y_factor: 160f64,
+                    smear_scale_multiplier: 4f64,
                 },
             },
             BaseNoiseFunctionComponent::Binary {

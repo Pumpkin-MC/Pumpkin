@@ -96,7 +96,7 @@ impl<'a> MaterialRuleContext<'a> {
     fn sample_run_depth(&self) -> i32 {
         let noise =
             self.surface_noise
-                .sample(self.block_pos_x as f32, 0.0, self.block_pos_z as f32);
+                .sample(self.block_pos_x as f64, 0.0, self.block_pos_z as f64);
         (noise * 2.75
             + 3.0
             + (self
@@ -131,7 +131,7 @@ impl<'a> MaterialRuleContext<'a> {
             self.last_unique_horizontal_pos_value = self.unique_horizontal_pos_value;
             self.secondary_depth =
                 self.secondary_noise
-                    .sample(self.block_pos_x as f32, 0.0, self.block_pos_z as f32);
+                    .sample(self.block_pos_x as f64, 0.0, self.block_pos_z as f64);
         }
         self.secondary_depth
     }
@@ -310,8 +310,9 @@ pub fn test_noise_threshold(
         context.random_deriver,
         &condition.noise,
     );
-    let value = sampler.sample(context.block_pos_x as f32, 0.0, context.block_pos_z as f32);
-    value >= condition.min_threshold as f32 && value <= condition.max_threshold as f32
+    let value =
+        f64::from(sampler.sample(context.block_pos_x as f64, 0.0, context.block_pos_z as f64));
+    value >= condition.min_threshold && value <= condition.max_threshold
 }
 
 pub fn test_stone_depth(

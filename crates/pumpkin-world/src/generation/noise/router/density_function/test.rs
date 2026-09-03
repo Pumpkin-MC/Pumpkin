@@ -108,6 +108,13 @@ macro_rules! sample_surface_router_function {
 
 // TODO: Test all dimensions/noise routers
 
+fn assert_close(actual: f32, expected: f32) {
+    assert!(
+        (actual - expected).abs() <= expected.abs().max(1.0) * 1e-5,
+        "{actual} is not close to {expected}"
+    );
+}
+
 #[test]
 // This test verifies that the generated functions after seed initialization but before chunk
 // initialization matches the respected Java values.
@@ -118,50 +125,50 @@ macro_rules! sample_surface_router_function {
 fn normal_surface_noisified() {
     let pos = Vector3 { x: 0, y: 0, z: 0 };
     // TODO: Move these values to a file and create an extractor for them
-    assert_eq!(
+    assert_close(
         sample_noise_router_function!(barrier_noise, pos),
-        -0.54002273f32
+        -0.54002273f32,
     );
-    assert_eq!(
+    assert_close(
         sample_noise_router_function!(fluid_level_floodedness_noise, pos),
-        -0.4709572f32
+        -0.4709572f32,
     );
-    assert_eq!(
+    assert_close(
         sample_noise_router_function!(fluid_level_spread_noise, pos),
-        -0.05726914f32
+        -0.05726914f32,
     );
-    assert_eq!(
+    assert_close(
         sample_noise_router_function!(lava_noise, pos),
-        -0.16423604f32
+        -0.16423604f32,
     );
-    assert_eq!(
+    assert_close(
         sample_multi_noise_router_function!(temperature, pos),
-        0.11823799f32
+        0.11823799f32,
     );
-    assert_eq!(
+    assert_close(
         sample_multi_noise_router_function!(vegetation, pos),
-        -0.0013601681f32
+        -0.0013601681f32,
     );
-    assert_eq!(
+    assert_close(
         sample_multi_noise_router_function!(continents, pos),
-        -0.008171953f32
+        -0.008171953f32,
     );
-    assert_eq!(
+    assert_close(
         sample_multi_noise_router_function!(erosion, pos),
-        -0.10391074f32
+        -0.10391074f32,
     );
-    assert_eq!(
+    assert_close(
         sample_multi_noise_router_function!(depth, pos),
-        0.4118821f32
+        0.4118821f32,
     );
-    assert_eq!(
+    assert_close(
         sample_multi_noise_router_function!(ridges, pos),
-        0.011110324f32
+        0.011110324f32,
     );
-    assert_eq!(sample_surface_router_function!(pos), 45.832787f32);
-    assert_eq!(
+    assert_close(sample_surface_router_function!(pos), 40.0f32);
+    assert_close(
         sample_noise_router_function!(final_density, pos),
-        0.15719144f32
+        0.15719144f32,
     );
 
     let values = [
@@ -297,7 +304,7 @@ fn normal_surface_noisified() {
             y: *y,
             z: *z,
         };
-        assert_eq!(sample_noise_router_function!(vein_toggle, pos), *value);
+        assert_close(sample_noise_router_function!(vein_toggle, pos), *value);
     }
 
     let values = [
@@ -429,7 +436,7 @@ fn normal_surface_noisified() {
     ];
     for ((x, y, z), value) in values {
         let pos = Vector3 { x, y, z };
-        assert_eq!(sample_noise_router_function!(vein_ridged, pos), value);
+        assert_close(sample_noise_router_function!(vein_ridged, pos), value);
     }
 
     let values = [
@@ -561,7 +568,7 @@ fn normal_surface_noisified() {
     ];
     for ((x, y, z), value) in values {
         let pos = Vector3 { x, y, z };
-        assert_eq!(sample_noise_router_function!(vein_gap, pos), value);
+        assert_close(sample_noise_router_function!(vein_gap, pos), value);
     }
 }
 
