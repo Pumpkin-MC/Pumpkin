@@ -108,6 +108,19 @@ edition = "2024"
 rust-version = "1.95"
 license = "GPL-3.0"
 
+[profile.dev]
+# `line-tables-only` keeps file:line in panics, backtraces and crash-reports,
+# and only drops local-variable inspection in a step debugger.
+debug = "line-tables-only"
+
+[profile.dev.package."*"]
+opt-level = 2
+debug = false
+
+[profile.dev.build-override]
+opt-level = 2
+debug = false
+
 [profile.release]
 lto = true
 strip = "debuginfo"
