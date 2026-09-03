@@ -106,11 +106,7 @@ impl FlowingLava {
                 } else {
                     Block::COBBLESTONE
                 };
-                world.set_block_state(
-                    block_pos,
-                    block.default_state.id,
-                    BlockFlags::NOTIFY_NEIGHBORS,
-                );
+                world.set_block_state(block_pos, block.default_state.id, BlockFlags::NOTIFY_ALL);
                 world.sync_world_event(WorldEvent::LavaFizz, *block_pos, 0);
                 return false;
             }
@@ -129,7 +125,7 @@ impl FlowingLava {
                 world.set_block_state(
                     block_pos,
                     Block::BASALT.default_state.id,
-                    BlockFlags::NOTIFY_NEIGHBORS,
+                    BlockFlags::NOTIFY_ALL,
                 );
                 world.sync_world_event(WorldEvent::LavaFizz, *block_pos, 0);
                 return false;
