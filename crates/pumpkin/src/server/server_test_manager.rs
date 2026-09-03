@@ -39,9 +39,13 @@ struct ForcedGameTestChunk {
 /// `TestInstanceBlockEntity::forceLoadChunks`. Keep a small reference count so
 /// overlapping tests share the same force-load lease and pre-existing `/forceload`
 /// chunks are never released by the `GameTest` runtime.
-
+/// Key uniquely identifying a force-loaded chunk requested by a `GameTest`.
 type ForcedGameTestChunkKey = (uuid::Uuid, i32, i32);
+
+/// Reference-counted map of chunks force-loaded by active `GameTest`s.
 type ForcedGameTestChunkMap = StdMutex<HashMap<ForcedGameTestChunkKey, ForcedGameTestChunk>>;
+
+/// Global registry of chunks force-loaded by the `GameTest` runtime.
 static FORCED_GAME_TEST_CHUNKS: LazyLock<ForcedGameTestChunkMap> =
     LazyLock::new(|| StdMutex::new(HashMap::new()));
 

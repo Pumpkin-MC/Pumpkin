@@ -5,7 +5,6 @@ use std::sync::Mutex;
 
 use super::BlockEntity;
 
-
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub enum TestInstanceRotation {
     #[default]
@@ -239,5 +238,4 @@ impl TestInstanceBlockBlockEntity {
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         *errors = None;
     }
-
 }
