@@ -510,14 +510,14 @@ impl EntityTracker {
 
         let players = world.players.load();
         tracked.update_players(players.as_ref(), world);
+    }
 
-        if let Some(player) = entity.get_player()
-            && let Some(player_arc) = world.get_player_by_uuid(player.gameprofile.id)
-        {
-            for entry in &self.entity_map {
-                if *entry.key() != entity_id {
-                    entry.value().update_player(&player_arc, world);
-                }
+    /// Must only be called after the player's own `CLogin` packet has been sent.
+    pub fn pair_new_player_with_tracked_entities(&self, player_arc: &Arc<Player>, world: &World) {
+        let entity_id = player_arc.get_entity().entity_id;
+        for entry in &self.entity_map {
+            if *entry.key() != entity_id {
+                entry.value().update_player(player_arc, world);
             }
         }
     }

@@ -28,6 +28,7 @@ pub mod jigsaw;
 pub mod note;
 pub mod piston;
 pub mod redstone;
+pub mod test_block;
 
 // Doors, gates & openings
 pub mod doors;
@@ -132,7 +133,6 @@ pub mod loom;
 pub mod smithing_table;
 pub mod sniffer_egg;
 pub mod structure_block;
-pub mod test_block;
 pub mod trial_spawner;
 pub mod turtle_egg;
 pub mod vault;

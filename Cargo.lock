@@ -3424,6 +3424,7 @@ dependencies = [
  "pumpkin-codecs",
  "pumpkin-config",
  "pumpkin-data",
+ "pumpkin-gametest",
  "pumpkin-inventory",
  "pumpkin-macros",
  "pumpkin-nbt",
@@ -3531,6 +3532,21 @@ dependencies = [
  "colored",
  "rand",
  "tokio",
+]
+
+[[package]]
+name = "pumpkin-gametest"
+version = "0.1.0-dev+26.2-26.40"
+dependencies = [
+ "async-trait",
+ "pumpkin-data",
+ "pumpkin-macros",
+ "pumpkin-nbt",
+ "pumpkin-util",
+ "pumpkin-world",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.20",
 ]
 
 [[package]]
