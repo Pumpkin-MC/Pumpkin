@@ -93,6 +93,10 @@ impl BlockEntity for TestBlockBlockEntity {
         self.dirty.load(Ordering::Relaxed)
     }
 
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+}
 impl TestBlockBlockEntity {
     pub const ID: &'static str = "minecraft:test_block";
     #[must_use]

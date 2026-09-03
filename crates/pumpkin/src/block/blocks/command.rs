@@ -12,12 +12,12 @@ use crate::{
     server::Server,
     world::World,
 };
-use pumpkin_data::{
 use crate::{
-    Block, BlockId, BlockState, BlockStateId, FacingExt,
     block_properties::{BlockProperties, CommandBlockLikeProperties, Facing},
     block_rotation::Rotation,
 };
+use pumpkin_data::{Block, BlockId, BlockState, BlockStateId, FacingExt};
+
 use pumpkin_util::{GameMode, PermissionLvl, math::position::BlockPos};
 use pumpkin_world::tick::TickPriority;
 use tracing::warn;

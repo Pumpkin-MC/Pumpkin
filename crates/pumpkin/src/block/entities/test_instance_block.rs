@@ -177,9 +177,11 @@ impl TestInstanceBlockBlockEntity {
         }
     }
 
-    let values = nbt.get_list(name)?;
-    let [x, y, z] = values else {
-        return None;
-    };
-    Some([x.extract_int()?, y.extract_int()?, z.extract_int()?])
+    fn get_int_array(nbt: &NbtCompound, name: &str) -> Option<[i32; 3]> {
+        let values = nbt.get_list(name)?;
+        let [x, y, z] = values else {
+            return None;
+        };
+        Some([x.extract_int()?, y.extract_int()?, z.extract_int()?])
+    }
 }
