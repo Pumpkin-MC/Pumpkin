@@ -864,7 +864,7 @@ impl pumpkin::plugin::world::HostWorld for PluginHostState {
         &mut self,
         world: Resource<World>,
         sound: pumpkin::plugin::sounds::Sound,
-        category: pumpkin::plugin::world::SoundCategory,
+        category: pumpkin::plugin::sounds::SoundCategory,
         pos: pumpkin::plugin::common::Position,
         volume: f32,
         pitch: f32,
@@ -874,41 +874,31 @@ impl pumpkin::plugin::world::HostWorld for PluginHostState {
         let sound_data = pumpkin_data::sound::Sound::from_name(&sound_name)
             .ok_or_else(|| wasmtime::Error::msg(format!("Unknown sound: {sound_name}")))?;
 
-        let internal_category = match category {
-            pumpkin::plugin::world::SoundCategory::Master => {
-                pumpkin_data::sound::SoundCategory::Master
-            }
-            pumpkin::plugin::world::SoundCategory::Music => {
-                pumpkin_data::sound::SoundCategory::Music
-            }
-            pumpkin::plugin::world::SoundCategory::Records => {
-                pumpkin_data::sound::SoundCategory::Records
-            }
-            pumpkin::plugin::world::SoundCategory::Weather => {
-                pumpkin_data::sound::SoundCategory::Weather
-            }
-            pumpkin::plugin::world::SoundCategory::Blocks => {
-                pumpkin_data::sound::SoundCategory::Blocks
-            }
-            pumpkin::plugin::world::SoundCategory::Hostile => {
-                pumpkin_data::sound::SoundCategory::Hostile
-            }
-            pumpkin::plugin::world::SoundCategory::Neutral => {
-                pumpkin_data::sound::SoundCategory::Neutral
-            }
-            pumpkin::plugin::world::SoundCategory::Players => {
-                pumpkin_data::sound::SoundCategory::Players
-            }
-            pumpkin::plugin::world::SoundCategory::Ambient => {
-                pumpkin_data::sound::SoundCategory::Ambient
-            }
-            pumpkin::plugin::world::SoundCategory::Voice => {
-                pumpkin_data::sound::SoundCategory::Voice
-            }
-        };
+        let internal_category = from_wit_sound_category(category);
 
         world_ref.provider.play_sound_raw(
             sound_data as u16,
+            internal_category,
+            &pumpkin_util::math::vector3::Vector3::new(pos.0, pos.1, pos.2),
+            volume,
+            pitch,
+        );
+        Ok(())
+    }
+
+    async fn play_custom_sound(
+        &mut self,
+        world: Resource<World>,
+        sound_name: String,
+        category: pumpkin::plugin::sounds::SoundCategory,
+        pos: pumpkin::plugin::common::Position,
+        volume: f32,
+        pitch: f32,
+    ) -> wasmtime::Result<()> {
+        let world_ref = self.get_world_res(&world)?;
+        let internal_category = from_wit_sound_category(category);
+        world_ref.provider.play_custom_sound(
+            &sound_name,
             internal_category,
             &pumpkin_util::math::vector3::Vector3::new(pos.0, pos.1, pos.2),
             volume,
@@ -1272,12 +1262,16 @@ impl pumpkin::plugin::world::HostWorld for PluginHostState {
         let Some(plugin) = plugin_weak.upgrade() else {
             return Ok(());
         };
+        let Some(server) = self.server.clone() else {
+            return Ok(());
+        };
 
         let wasm_gen = Arc::new(WasmChunkGenerator {
             generator_id,
             plugin,
             dimension: world_ref.dimension.clone(),
             seed: world_ref.level.seed.0,
+            server,
         });
 
         world_ref.level.set_world_gen(Arc::new(
@@ -2215,6 +2209,7 @@ pub struct WasmChunkGenerator {
     pub plugin: Arc<crate::plugin::loader::wasm::wasm_host::WasmPlugin>,
     pub dimension: pumpkin_data::dimension::Dimension,
     pub seed: u64,
+    pub server: Arc<crate::server::Server>,
 }
 
 impl WasmChunkGenerator {
@@ -2259,10 +2254,13 @@ impl WasmChunkGenerator {
             }
         };
 
-        if let Ok(handle) = tokio::runtime::Handle::try_current() {
+        // Tokio runtime probably won't be available since chunk gen happens on rayon
+        if tokio::runtime::Handle::try_current().is_ok() {
             tokio::task::block_in_place(|| {
-                handle.block_on(run);
+                self.server.runtime.block_on(run);
             });
+        } else {
+            self.server.runtime.block_on(run);
         }
     }
 }
@@ -2304,6 +2302,41 @@ impl pumpkin_world::generation::generator::CustomChunkGenerator for WasmChunkGen
         let chunk = cache.chunks[mid].get_proto_chunk_mut();
         self.invoke_phase(pumpkin::plugin::world::GenerationPhase::Features, chunk);
         chunk.stage = pumpkin_world::chunk_system::StagedChunkEnum::Features;
+    }
+}
+
+#[must_use]
+pub const fn from_wit_sound_category(
+    category: pumpkin::plugin::sounds::SoundCategory,
+) -> pumpkin_data::sound::SoundCategory {
+    match category {
+        pumpkin::plugin::sounds::SoundCategory::Master => {
+            pumpkin_data::sound::SoundCategory::Master
+        }
+        pumpkin::plugin::sounds::SoundCategory::Music => pumpkin_data::sound::SoundCategory::Music,
+        pumpkin::plugin::sounds::SoundCategory::Records => {
+            pumpkin_data::sound::SoundCategory::Records
+        }
+        pumpkin::plugin::sounds::SoundCategory::Weather => {
+            pumpkin_data::sound::SoundCategory::Weather
+        }
+        pumpkin::plugin::sounds::SoundCategory::Blocks => {
+            pumpkin_data::sound::SoundCategory::Blocks
+        }
+        pumpkin::plugin::sounds::SoundCategory::Hostile => {
+            pumpkin_data::sound::SoundCategory::Hostile
+        }
+        pumpkin::plugin::sounds::SoundCategory::Neutral => {
+            pumpkin_data::sound::SoundCategory::Neutral
+        }
+        pumpkin::plugin::sounds::SoundCategory::Players => {
+            pumpkin_data::sound::SoundCategory::Players
+        }
+        pumpkin::plugin::sounds::SoundCategory::Ambient => {
+            pumpkin_data::sound::SoundCategory::Ambient
+        }
+        pumpkin::plugin::sounds::SoundCategory::Voice => pumpkin_data::sound::SoundCategory::Voice,
+        pumpkin::plugin::sounds::SoundCategory::Ui => pumpkin_data::sound::SoundCategory::Ui,
     }
 }
 

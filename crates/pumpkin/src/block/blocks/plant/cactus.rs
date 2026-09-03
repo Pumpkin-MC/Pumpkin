@@ -1,8 +1,7 @@
-use pumpkin_data::BlockStateId;
-use pumpkin_data::block_properties::{BlockProperties, CactusLikeProperties};
+use pumpkin_data::block_properties::CactusLikeProperties;
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::tag::Taggable;
-use pumpkin_data::{Block, BlockDirection, tag};
+use pumpkin_data::{Block, BlockDirection, BlockState, BlockStateId, tag};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::tick::TickPriority;
@@ -11,7 +10,7 @@ use rand::RngExt;
 
 use crate::block::{
     BlockBehaviour, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, OnEntityCollisionArgs,
-    OnScheduledTickArgs, RandomTickArgs,
+    OnScheduledTickArgs, PathComputationType, RandomTickArgs,
 };
 
 #[pumpkin_block("minecraft:cactus")]
@@ -29,7 +28,7 @@ impl BlockBehaviour for CactusBlock {
         let block_up = args.position.up();
         if args.world.get_block_state(&block_up).is_air() {
             let state = args.world.get_block_state(args.position);
-            let mut props = CactusLikeProperties::from_state_id(state.id, args.block);
+            let mut props = CactusLikeProperties::from_state_id(state.id);
             let age = props.age;
             let mut i = 1;
             while args.world.get_block(&args.position.down_height(i)) == &Block::CACTUS {
@@ -93,6 +92,10 @@ impl BlockBehaviour for CactusBlock {
 
     fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
         can_place_at(args.block_accessor, args.position)
+    }
+
+    fn is_pathfindable(&self, _state: &BlockState, _computation_type: PathComputationType) -> bool {
+        false
     }
 }
 

@@ -600,8 +600,7 @@ impl HostMob for PluginHostState {
                 .navigator
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .is_idle
-                .load(std::sync::atomic::Ordering::Relaxed);
+                .is_idle();
             !is_idle
         }))
     }
@@ -613,8 +612,7 @@ impl HostMob for PluginHostState {
                 .navigator
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .is_idle
-                .load(std::sync::atomic::Ordering::Relaxed)
+                .is_idle()
         }))
     }
 
@@ -978,6 +976,21 @@ impl HostMob for PluginHostState {
         }
 
         Ok(false)
+    }
+
+    async fn set_freeze_ticks(
+        &mut self,
+        this: Resource<WitMob>,
+        ticks: i32,
+    ) -> wasmtime::Result<()> {
+        let entity = mob_from_resource(self, &this)?;
+        entity.get_entity().set_frozen_ticks(ticks);
+        Ok(())
+    }
+
+    async fn get_freeze_ticks(&mut self, this: Resource<WitMob>) -> wasmtime::Result<i32> {
+        let entity = mob_from_resource(self, &this)?;
+        Ok(entity.get_entity().get_frozen_ticks())
     }
 
     async fn drop(&mut self, rep: Resource<WitMob>) -> wasmtime::Result<()> {

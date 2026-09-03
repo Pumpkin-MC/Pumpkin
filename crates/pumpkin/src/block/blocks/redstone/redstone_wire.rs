@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use pumpkin_data::BlockStateId;
 use pumpkin_data::block_properties::{
-    BlockProperties, EastRedstone, HorizontalFacing, NorthRedstone, ObserverLikeProperties,
+    EastRedstone, HorizontalFacing, NorthRedstone, ObserverLikeProperties,
     RedstoneWireLikeProperties, RepeaterLikeProperties, SouthRedstone, WestRedstone,
 };
 use pumpkin_data::block_rotation::{Mirror, Rotation};
@@ -70,7 +70,7 @@ impl BlockBehaviour for RedstoneWireBlock {
             return args.state_id;
         }
 
-        let wire = RedstoneWireProperties::from_state_id(args.state_id, args.block);
+        let wire = RedstoneWireProperties::from_state_id(args.state_id);
 
         if args.direction == BlockDirection::Up {
             let new_wire = get_connection_state(args.world, wire, args.position);
@@ -104,7 +104,7 @@ impl BlockBehaviour for RedstoneWireBlock {
     }
 
     fn prepare(&self, args: PrepareArgs<'_>) {
-        let wire = RedstoneWireProperties::from_state_id(args.state_id, args.block);
+        let wire = RedstoneWireProperties::from_state_id(args.state_id);
 
         for direction in BlockDirection::horizontal() {
             if is_side_connected_prop(wire, direction) {
@@ -134,7 +134,7 @@ impl BlockBehaviour for RedstoneWireBlock {
 
     fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
         let state = args.world.get_block_state(args.position);
-        let wire = RedstoneWireProperties::from_state_id(state.id, args.block);
+        let wire = RedstoneWireProperties::from_state_id(state.id);
 
         if is_cross(wire) || is_dot(wire) {
             let mut new_wire = if is_cross(wire) {
@@ -184,7 +184,7 @@ impl BlockBehaviour for RedstoneWireBlock {
     }
 
     fn get_weak_redstone_power(&self, args: GetRedstonePowerArgs<'_>) -> u8 {
-        let wire = RedstoneWireProperties::from_state_id(args.state.id, args.block);
+        let wire = RedstoneWireProperties::from_state_id(args.state.id);
         if wire.power == 0 || args.direction == BlockDirection::Down {
             return 0;
         }
@@ -200,7 +200,7 @@ impl BlockBehaviour for RedstoneWireBlock {
     }
 
     fn get_strong_redstone_power(&self, args: GetRedstonePowerArgs<'_>) -> u8 {
-        let wire = RedstoneWireProperties::from_state_id(args.state.id, args.block);
+        let wire = RedstoneWireProperties::from_state_id(args.state.id);
         if wire.power == 0 || args.direction == BlockDirection::Down {
             return 0;
         }
@@ -221,7 +221,7 @@ impl BlockBehaviour for RedstoneWireBlock {
         state_id: BlockStateId,
         rotation: Rotation,
     ) -> &'static BlockState {
-        let wire = RedstoneWireProperties::from_state_id(state_id, block);
+        let wire = RedstoneWireProperties::from_state_id(state_id);
         let new_wire = match rotation {
             Rotation::Rotate180 => RedstoneWireProperties {
                 north: wire.south.to_wire_connection().to_north(),
@@ -250,7 +250,7 @@ impl BlockBehaviour for RedstoneWireBlock {
     }
 
     fn mirror(&self, block: &Block, state_id: BlockStateId, mirror: Mirror) -> &'static BlockState {
-        let wire = RedstoneWireProperties::from_state_id(state_id, block);
+        let wire = RedstoneWireProperties::from_state_id(state_id);
         let new_wire = match mirror {
             Mirror::LeftRight => RedstoneWireProperties {
                 north: wire.south.to_wire_connection().to_north(),
@@ -282,14 +282,14 @@ pub fn update_power_strength(world: &Arc<World>, pos: &BlockPos) {
         return;
     }
 
-    let mut wire = RedstoneWireProperties::from_state_id(state.id, block);
+    let mut wire = RedstoneWireProperties::from_state_id(state.id);
     let target_strength = calculate_target_strength(world, pos);
 
     if wire.power != target_strength {
         wire.power = target_strength;
         let new_state_id = wire.to_state_id(&Block::REDSTONE_WIRE);
 
-        world.set_block_state(pos, new_state_id, BlockFlags::empty());
+        world.set_block_state(pos, new_state_id, BlockFlags::NOTIFY_LISTENERS);
 
         let mut to_update = Vec::with_capacity(7);
         to_update.push(*pos);
@@ -338,7 +338,7 @@ fn get_incoming_wire_signal(world: &World, pos: &BlockPos) -> u8 {
 
         // Same level
         if neighbor_block == &Block::REDSTONE_WIRE {
-            let wire = RedstoneWireProperties::from_state_id(neighbor_state.id, neighbor_block);
+            let wire = RedstoneWireProperties::from_state_id(neighbor_state.id);
             max_wire_signal = max_wire_signal.max(wire.power);
         }
 
@@ -347,7 +347,7 @@ fn get_incoming_wire_signal(world: &World, pos: &BlockPos) -> u8 {
             let neighbor_up_pos = neighbor_pos.up();
             let (up_block, up_state) = world.get_block_and_state(&neighbor_up_pos);
             if up_block == &Block::REDSTONE_WIRE {
-                let wire = RedstoneWireProperties::from_state_id(up_state.id, up_block);
+                let wire = RedstoneWireProperties::from_state_id(up_state.id);
                 max_wire_signal = max_wire_signal.max(wire.power);
             }
         } else if !neighbor_state.is_solid_block() {
@@ -355,7 +355,7 @@ fn get_incoming_wire_signal(world: &World, pos: &BlockPos) -> u8 {
             let neighbor_down_pos = neighbor_pos.down();
             let (down_block, down_state) = world.get_block_and_state(&neighbor_down_pos);
             if down_block == &Block::REDSTONE_WIRE {
-                let wire = RedstoneWireProperties::from_state_id(down_state.id, down_block);
+                let wire = RedstoneWireProperties::from_state_id(down_state.id);
                 max_wire_signal = max_wire_signal.max(wire.power);
             }
         }
@@ -500,13 +500,13 @@ fn should_connect_to(
         return true;
     }
     if block == &Block::REPEATER {
-        let repeater_props = RepeaterLikeProperties::from_state_id(state.id, block);
+        let repeater_props = RepeaterLikeProperties::from_state_id(state.id);
         let repeater_facing = repeater_props.facing.to_block_direction();
         return direction
             .is_some_and(|dir| repeater_facing == dir || repeater_facing == dir.opposite());
     }
     if block == &Block::OBSERVER {
-        let observer_props = ObserverLikeProperties::from_state_id(state.id, block);
+        let observer_props = ObserverLikeProperties::from_state_id(state.id);
         let observer_facing = observer_props.facing;
         return direction.is_some_and(|dir| dir.to_facing() == observer_facing);
     }

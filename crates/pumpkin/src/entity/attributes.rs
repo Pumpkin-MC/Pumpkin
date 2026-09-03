@@ -1,11 +1,11 @@
 use pumpkin_data::attributes::Attributes;
 use pumpkin_data::entity::EntityType;
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 
-#[derive(Clone, Debug, Copy)]
+#[derive(Clone, Debug, Copy, PartialEq, Eq)]
 #[repr(i8)]
 pub enum ModifierOperation {
     Add = 0,           // add value
@@ -13,7 +13,7 @@ pub enum ModifierOperation {
     MultiplyTotal = 2, // multiply total (applied last)
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Modifier {
     pub id: String,
     pub amount: f64,
@@ -134,15 +134,18 @@ pub fn send_attribute_updates_for_living(
         ));
 
         let name = match attribute.id {
-            22 => "minecraft:movement".to_string(),
-            19 => "minecraft:health".to_string(),
-            18 => "minecraft:absorption".to_string(),
-            2 => "minecraft:attack_damage".to_string(),
-            0 => "minecraft:armor".to_string(),
-            16 => "minecraft:knockback_resistance".to_string(),
-            17 => "minecraft:luck".to_string(),
-            13 => "minecraft:follow_range".to_string(),
-            15 => "minecraft:horse.jump_strength".to_string(),
+            id if id == Attributes::MOVEMENT_SPEED.id => "minecraft:movement".to_string(),
+            id if id == Attributes::MAX_HEALTH.id => "minecraft:health".to_string(),
+            id if id == Attributes::MAX_ABSORPTION.id => "minecraft:absorption".to_string(),
+            id if id == Attributes::ATTACK_DAMAGE.id => "minecraft:attack_damage".to_string(),
+            id if id == Attributes::ATTACK_SPEED.id => "minecraft:attack_speed".to_string(),
+            id if id == Attributes::ARMOR.id => "minecraft:armor".to_string(),
+            id if id == Attributes::KNOCKBACK_RESISTANCE.id => {
+                "minecraft:knockback_resistance".to_string()
+            }
+            id if id == Attributes::LUCK.id => "minecraft:luck".to_string(),
+            id if id == Attributes::FOLLOW_RANGE.id => "minecraft:follow_range".to_string(),
+            id if id == Attributes::JUMP_STRENGTH.id => "minecraft:horse.jump_strength".to_string(),
             // Fallback for others
             _ => format!("minecraft:attribute.{}", attribute.id),
         };
@@ -191,10 +194,10 @@ impl Clone for AttributeInstance {
 }
 
 /// Registry storing per-entity-type base attribute overrides.
-/// Internally stores a map from `entity_type.id` -> `HashMap`<attribute.id, f64> for O(1) lookup.
+/// Internally stores a map from `entity_type.id` -> `FxHashMap`<attribute.id, f64> for O(1) lookup.
 #[derive(Default)]
 pub struct AttributeRegistry {
-    map: HashMap<u16, HashMap<u8, f64>>,
+    map: FxHashMap<u16, FxHashMap<u8, f64>>,
 }
 
 impl AttributeRegistry {
@@ -259,5 +262,87 @@ impl AttributeRegistry {
         for (attr, val) in builder.build() {
             inner.insert(attr.id, val);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pumpkin_data::attributes::Attributes;
+    use pumpkin_data::entity::EntityType;
+
+    #[test]
+    fn player_base_attributes() {
+        let speed_attr = EntityType::PLAYER
+            .attributes
+            .iter()
+            .find(|(attr, _)| attr.id == Attributes::MOVEMENT_SPEED.id);
+        assert!(speed_attr.is_some());
+        let (_, base_speed) = speed_attr.unwrap();
+        assert!((base_speed - 0.1).abs() < 1e-4);
+    }
+
+    #[test]
+    fn sprinting_modifier_calculation() {
+        let mut instance = AttributeInstance::new(0.1);
+        assert!((instance.value() - 0.1).abs() < f64::EPSILON);
+
+        let sprinting_mod = Modifier {
+            id: "minecraft:sprinting".to_string(),
+            amount: 0.300_000_011_920_928_96,
+            operation: ModifierOperation::MultiplyTotal,
+        };
+
+        instance.add_or_replace_modifier(sprinting_mod);
+        let sprinting_value = instance.value();
+        // 0.1 * (1.0 + 0.30000001192092896) = 0.1300000011920929
+        assert!((sprinting_value - 0.130_000_001_192_092_9).abs() < 1e-9);
+
+        instance.remove_modifier("minecraft:sprinting");
+        assert!((instance.value() - 0.1).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn attribute_modifier_operations() {
+        let mut instance = AttributeInstance::new(10.0);
+
+        // ADD: 10.0 + 2.0 + 3.0 = 15.0
+        instance.add_or_replace_modifier(Modifier {
+            id: "add_1".to_string(),
+            amount: 2.0,
+            operation: ModifierOperation::Add,
+        });
+        instance.add_or_replace_modifier(Modifier {
+            id: "add_2".to_string(),
+            amount: 3.0,
+            operation: ModifierOperation::Add,
+        });
+        assert!((instance.value() - 15.0).abs() < f64::EPSILON);
+
+        // MULTIPLY_BASE: 15.0 * (1.0 + 0.5 + 0.2) = 15.0 * 1.7 = 25.5
+        instance.add_or_replace_modifier(Modifier {
+            id: "mul_base_1".to_string(),
+            amount: 0.5,
+            operation: ModifierOperation::MultiplyBase,
+        });
+        instance.add_or_replace_modifier(Modifier {
+            id: "mul_base_2".to_string(),
+            amount: 0.2,
+            operation: ModifierOperation::MultiplyBase,
+        });
+        assert!((instance.value() - 25.5).abs() < f64::EPSILON);
+
+        // MULTIPLY_TOTAL: 25.5 * (1.0 + 0.1) * (1.0 + 0.2) = 25.5 * 1.1 * 1.2 = 33.66
+        instance.add_or_replace_modifier(Modifier {
+            id: "mul_total_1".to_string(),
+            amount: 0.1,
+            operation: ModifierOperation::MultiplyTotal,
+        });
+        instance.add_or_replace_modifier(Modifier {
+            id: "mul_total_2".to_string(),
+            amount: 0.2,
+            operation: ModifierOperation::MultiplyTotal,
+        });
+        assert!((instance.value() - 33.66).abs() < 1e-9);
     }
 }

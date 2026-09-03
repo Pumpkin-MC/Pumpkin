@@ -1,10 +1,7 @@
-use std::sync::{
-    RwLock,
-    atomic::{AtomicBool, Ordering},
-};
-
-use pumpkin_nbt::{compound::NbtCompound, tag::NbtTag};
+use pumpkin_nbt::compound::NbtCompound;
+use pumpkin_nbt::tag::NbtTag;
 use pumpkin_util::math::position::BlockPos;
+use std::sync::Mutex;
 
 use super::BlockEntity;
 
@@ -110,122 +107,8 @@ pub struct TestInstanceErrorMarker {
 
 pub struct TestInstanceBlockBlockEntity {
     pub position: BlockPos,
-    data: RwLock<TestInstanceData>,
-    error_markers: RwLock<Vec<TestInstanceErrorMarker>>,
-    dirty: AtomicBool,
-}
-
-impl TestInstanceBlockBlockEntity {
-    pub const ID: &'static str = "minecraft:test_instance_block";
-
-    #[must_use]
-    pub fn new(position: BlockPos) -> Self {
-        Self {
-            position,
-            data: RwLock::new(TestInstanceData::default()),
-            error_markers: RwLock::new(Vec::new()),
-            dirty: AtomicBool::new(false),
-        }
-    }
-
-    pub fn data(&self) -> TestInstanceData {
-        self.data
-            .read()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .clone()
-    }
-
-    pub fn error_markers(&self) -> Vec<TestInstanceErrorMarker> {
-        self.error_markers
-            .read()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .clone()
-    }
-
-    pub fn set_running(&self) {
-        let mut data = self
-            .data
-            .write()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        data.status = TestInstanceStatus::Running;
-        data.error_message = None;
-        self.dirty.store(true, Ordering::Release);
-    }
-
-    pub fn set_success(&self) {
-        let mut data = self
-            .data
-            .write()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        data.status = TestInstanceStatus::Finished;
-        data.error_message = None;
-        self.dirty.store(true, Ordering::Release);
-    }
-
-    pub fn set_error_message(&self, message: String) {
-        let mut data = self
-            .data
-            .write()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        data.status = TestInstanceStatus::Finished;
-        data.error_message = Some(message);
-        self.dirty.store(true, Ordering::Release);
-    }
-
-    pub fn mark_error(&self, position: BlockPos, text: String) {
-        self.error_markers
-            .write()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .push(TestInstanceErrorMarker { position, text });
-        self.dirty.store(true, Ordering::Release);
-    }
-
-    pub fn clear_error_markers(&self) {
-        let mut markers = self
-            .error_markers
-            .write()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if !markers.is_empty() {
-            markers.clear();
-            self.dirty.store(true, Ordering::Release);
-        }
-    }
-
-    /// Vanilla's client derives the beacon beam from status, error state, and the
-    /// test definition's `required` flag. These ARGB values match 26.2.
-    pub fn beam_argb(&self, required: bool) -> Option<u32> {
-        let data = self
-            .data
-            .read()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        match data.status {
-            TestInstanceStatus::Cleared => None,
-            TestInstanceStatus::Running => Some(0xFF80_8080),
-            TestInstanceStatus::Finished if data.error_message.is_none() => Some(0xFF00_FF00),
-            TestInstanceStatus::Finished if required => Some(0xFFFF_0000),
-            TestInstanceStatus::Finished => Some(0xFFFF_8000),
-        }
-    }
-
-    /// Returns the controller-relative box used by the vanilla client renderer.
-    /// `effective_rotation` is the test definition rotation combined with the
-    /// controller's extra rotation.
-    #[must_use]
-    pub const fn renderable_box(
-        &self,
-        padding: i32,
-        effective_rotation: TestInstanceRotation,
-        size: [i32; 3],
-    ) -> ([i32; 3], [i32; 3]) {
-        (
-            [
-                STRUCTURE_OFFSET[0] + padding,
-                STRUCTURE_OFFSET[1] + padding,
-                STRUCTURE_OFFSET[2] + padding,
-            ],
-            effective_rotation.transform_size(size),
-        )
-    }
+    pub data: Mutex<Option<NbtCompound>>,
+    pub errors: Mutex<Option<Vec<NbtTag>>>,
 }
 
 impl BlockEntity for TestInstanceBlockBlockEntity {
@@ -237,57 +120,45 @@ impl BlockEntity for TestInstanceBlockBlockEntity {
         self.position
     }
 
-    fn from_nbt(nbt: &NbtCompound, position: BlockPos) -> Self
+    fn from_nbt(nbt: &pumpkin_nbt::compound::NbtCompound, position: BlockPos) -> Self
     where
         Self: Sized,
     {
-        let data = nbt.get_compound("data").map(parse_data).unwrap_or_default();
-        let error_markers = nbt
-            .get_list("errors")
-            .map(parse_error_markers)
-            .unwrap_or_default();
-
+        let data = nbt.get_compound("data").cloned();
+        let errors = nbt.get_list("errors").map(<[_]>::to_vec);
         Self {
             position,
-            data: RwLock::new(data),
-            error_markers: RwLock::new(error_markers),
-            dirty: AtomicBool::new(false),
+            data: Mutex::new(data),
+            errors: Mutex::new(errors),
         }
     }
 
     fn write_nbt(&self, nbt: &mut NbtCompound) {
-        let data = self
-            .data
-            .read()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .clone();
-        nbt.put_compound("data", encode_data(&data));
-
-        let markers = self
-            .error_markers
-            .read()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .clone();
-        if !markers.is_empty() {
-            nbt.put(
-                "errors",
-                NbtTag::List(markers.iter().map(encode_error_marker).collect()),
-            );
+        if let Ok(data) = self.data.lock()
+            && let Some(d) = data.as_ref()
+        {
+            nbt.put_compound("data", d.clone());
+        }
+        if let Ok(errors) = self.errors.lock()
+            && let Some(errs) = errors.as_ref()
+        {
+            nbt.put_list("errors", errs.clone());
         }
     }
 
     fn chunk_data_nbt(&self) -> Option<NbtCompound> {
         let mut nbt = NbtCompound::new();
-        self.write_nbt(&mut nbt);
+        if let Ok(data) = self.data.try_lock()
+            && let Some(ref d) = *data
+        {
+            nbt.put_compound("data", d.clone());
+        }
+        if let Ok(errors) = self.errors.try_lock()
+            && let Some(ref errs) = *errors
+        {
+            nbt.put_list("errors", errs.clone());
+        }
         Some(nbt)
-    }
-
-    fn is_dirty(&self) -> bool {
-        self.dirty.load(Ordering::Acquire)
-    }
-
-    fn clear_dirty(&self) {
-        self.dirty.store(false, Ordering::Release);
     }
 
     fn as_any(&self) -> &dyn std::any::Any {
@@ -295,75 +166,15 @@ impl BlockEntity for TestInstanceBlockBlockEntity {
     }
 }
 
-fn parse_data(nbt: &NbtCompound) -> TestInstanceData {
-    TestInstanceData {
-        test: nbt.get_string("test").map(ToString::to_string),
-        size: read_vec3(nbt, "size").unwrap_or([0, 0, 0]),
-        rotation: nbt
-            .get_string("rotation")
-            .and_then(TestInstanceRotation::from_serialized_name)
-            .unwrap_or_default(),
-        ignore_entities: nbt.get_bool("ignore_entities").unwrap_or(false),
-        status: nbt
-            .get_string("status")
-            .and_then(TestInstanceStatus::from_serialized_name)
-            .unwrap_or_default(),
-        error_message: nbt.get_string("error_message").map(ToString::to_string),
-    }
-}
-
-fn encode_data(data: &TestInstanceData) -> NbtCompound {
-    let mut nbt = NbtCompound::new();
-    if let Some(test) = &data.test {
-        nbt.put_string("test", test.clone());
-    }
-    nbt.put("size", NbtTag::IntArray(data.size.to_vec()));
-    nbt.put_string("rotation", data.rotation.serialized_name().to_string());
-    nbt.put_bool("ignore_entities", data.ignore_entities);
-    nbt.put_string("status", data.status.serialized_name().to_string());
-    if let Some(error_message) = &data.error_message {
-        // ComponentSerialization.CODEC accepts a string as a literal component.
-        nbt.put_string("error_message", error_message.clone());
-    }
-    nbt
-}
-
-fn parse_error_markers(tags: &[NbtTag]) -> Vec<TestInstanceErrorMarker> {
-    tags.iter()
-        .filter_map(NbtTag::extract_compound)
-        .filter_map(|marker| {
-            Some(TestInstanceErrorMarker {
-                position: {
-                    let [x, y, z] = read_vec3(marker, "pos")?;
-                    BlockPos::new(x, y, z)
-                },
-                text: marker.get_string("text")?.to_string(),
-            })
-        })
-        .collect()
-}
-
-fn encode_error_marker(marker: &TestInstanceErrorMarker) -> NbtTag {
-    let mut nbt = NbtCompound::new();
-    nbt.put(
-        "pos",
-        NbtTag::IntArray(vec![
-            marker.position.0.x,
-            marker.position.0.y,
-            marker.position.0.z,
-        ]),
-    );
-    // ComponentSerialization.CODEC accepts a string as a literal component.
-    nbt.put_string("text", marker.text.clone());
-    NbtTag::Compound(nbt)
-}
-
-fn read_vec3(nbt: &NbtCompound, name: &str) -> Option<[i32; 3]> {
-    if let Some(values) = nbt.get_int_array(name) {
-        let [x, y, z] = values else {
-            return None;
-        };
-        return Some([*x, *y, *z]);
+impl TestInstanceBlockBlockEntity {
+    pub const ID: &'static str = "minecraft:test_instance_block";
+    #[must_use]
+    pub const fn new(position: BlockPos) -> Self {
+        Self {
+            position,
+            data: Mutex::new(None),
+            errors: Mutex::new(None),
+        }
     }
 
     let values = nbt.get_list(name)?;

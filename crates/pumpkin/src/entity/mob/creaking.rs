@@ -12,7 +12,7 @@ use pumpkin_data::item::Item;
 use pumpkin_data::particle::Particle;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_nbt::compound::NbtCompound;
-use pumpkin_protocol::java::client::play::{CEntityStatus, Metadata};
+use pumpkin_protocol::java::client::play::CEntityStatus;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 
@@ -155,13 +155,10 @@ impl CreakingEntity {
 
     pub fn set_can_move(&self, can_move: bool) {
         self.can_move.store(can_move, Ordering::Relaxed);
-        self.mob_entity.living_entity.entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::creaking::CAN_MOVE,
-                can_move,
-            )],
-            None,
-        );
+        self.mob_entity
+            .living_entity
+            .entity
+            .set_synced_data(pumpkin_data::tracked_data::creaking::CAN_MOVE, can_move);
     }
 
     pub fn is_active(&self) -> bool {
@@ -170,13 +167,10 @@ impl CreakingEntity {
 
     pub fn set_is_active(&self, active: bool) {
         self.is_active.store(active, Ordering::Relaxed);
-        self.mob_entity.living_entity.entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::creaking::IS_ACTIVE,
-                active,
-            )],
-            None,
-        );
+        self.mob_entity
+            .living_entity
+            .entity
+            .set_synced_data(pumpkin_data::tracked_data::creaking::IS_ACTIVE, active);
     }
 
     pub fn is_tearing_down(&self) -> bool {
@@ -185,13 +179,10 @@ impl CreakingEntity {
 
     pub fn set_tearing_down(&self) {
         self.is_tearing_down.store(true, Ordering::Relaxed);
-        self.mob_entity.living_entity.entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::creaking::IS_TEARING_DOWN,
-                true,
-            )],
-            None,
-        );
+        self.mob_entity
+            .living_entity
+            .entity
+            .set_synced_data(pumpkin_data::tracked_data::creaking::IS_TEARING_DOWN, true);
     }
 
     pub fn get_home_pos(&self) -> Option<BlockPos> {
@@ -210,13 +201,10 @@ impl CreakingEntity {
                 .position_target_range
                 .store(-1, Ordering::Relaxed);
         }
-        self.mob_entity.living_entity.entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::creaking::HOME_POS,
-                pos,
-            )],
-            None,
-        );
+        self.mob_entity
+            .living_entity
+            .entity
+            .set_synced_data(pumpkin_data::tracked_data::creaking::HOME_POS, pos);
     }
 
     pub fn stop_in_place(&self) {

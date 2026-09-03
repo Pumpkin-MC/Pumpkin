@@ -32,9 +32,8 @@ mod bedrock_creative;
 mod biome;
 mod bitsets;
 mod block;
+mod block_transformer;
 mod carver;
-pub mod chest_loot;
-mod chunk_gen_settings;
 mod chunk_status;
 mod chunk_view_lut;
 mod composter_increase_chance;
@@ -55,13 +54,15 @@ mod game_event;
 mod game_rules;
 mod item;
 mod jukebox_song;
-pub mod loot;
+pub mod loot_table;
 mod map_color;
 mod map_decoration;
+mod material_rule;
 mod message_type;
 mod meta_data_type;
 mod noise_parameter;
 mod noise_router;
+mod noise_settings;
 mod packet;
 mod particle;
 mod placed_feature;
@@ -73,6 +74,7 @@ mod registry;
 mod remap;
 mod scoreboard_slot;
 mod screen;
+mod sdk;
 mod sound;
 mod sound_category;
 mod spawn_egg;
@@ -131,7 +133,8 @@ pub fn main() {
         (block::build, "block.rs"),
         (item::build, "item.rs"),
         (structures::build, "structures.rs"),
-        (chunk_gen_settings::build, "chunk_gen_settings.rs"),
+        (material_rule::build, "material_rule.rs"),
+        (noise_settings::build, "noise_settings.rs"),
         (fluid::build, "fluid.rs"),
         (entity_status::build, "entity_status.rs"),
         (tag::build, "tag.rs"),
@@ -162,10 +165,11 @@ pub fn main() {
             "configured_features_generated.rs",
         ),
         (carver::build, "carver.rs"),
-        (chest_loot::build, "chest_loot.rs"),
+        (loot_table::build, "loot_table.rs"),
         (map_color::build, "map_color.rs"),
         (map_decoration::build, "map_decoration.rs"),
         (dye_color::build, "dye_color.rs"),
+        (block_transformer::build, "block_transformer.rs"),
     ];
     build_functions.extend(remap::build());
 
@@ -174,6 +178,7 @@ pub fn main() {
     let filters: Vec<String> = std::env::args().skip(1).collect();
     let build_functions: Vec<_> = if filters.is_empty() {
         wit::main();
+        sdk::main();
         build_functions
     } else {
         build_functions

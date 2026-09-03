@@ -147,21 +147,21 @@ impl SurfaceTerrainBuilder {
         let surface_noise =
             (self
                 .badlands_surface_noise
-                .sample(global_x as f64, 0.0, global_z as f64)
+                .sample(global_x as f32, 0.0, global_z as f32)
                 * 8.25)
                 .abs();
         let pillar_noise =
             self.badlands_pillar_noise
-                .sample(global_x as f64 * 0.2, 0.0, global_z as f64 * 0.2)
+                .sample(global_x as f32 * 0.2, 0.0, global_z as f32 * 0.2)
                 * 15.0;
 
         let threshold = surface_noise.min(pillar_noise);
 
         if threshold > 0.0 {
             let pillar_roof_noise = (self.badlands_pillar_roof_noise.sample(
-                global_x as f64 * 0.75,
+                global_x as f32 * 0.75,
                 0.0,
-                global_z as f64 * 0.75,
+                global_z as f32 * 0.75,
             ) * 1.5)
                 .abs();
 
@@ -212,11 +212,11 @@ impl SurfaceTerrainBuilder {
         random_deriver: &XoroshiroSplitter,
     ) {
         let iceburg_surface_noise =
-            (self.iceberg_surface_noise.sample(x as f64, 0.0, z as f64) * 8.25).abs();
+            (self.iceberg_surface_noise.sample(x as f32, 0.0, z as f32) * 8.25).abs();
 
         let iceburg_pillar_noise =
             self.iceberg_pillar_noise
-                .sample(x as f64 * 1.28, 0.0, z as f64 * 1.28)
+                .sample(x as f32 * 1.28, 0.0, z as f32 * 1.28)
                 * 15.0;
 
         let threshold = iceburg_surface_noise.min(iceburg_pillar_noise);
@@ -224,7 +224,7 @@ impl SurfaceTerrainBuilder {
             let iceburg_pillar_roof_noise =
                 (self
                     .iceberg_pillar_roof_noise
-                    .sample(x as f64 * 1.17, 0.0, z as f64 * 1.17)
+                    .sample(x as f32 * 1.17, 0.0, z as f32 * 1.17)
                     * 1.5)
                     .abs();
 
@@ -242,7 +242,7 @@ impl SurfaceTerrainBuilder {
             }
 
             let (top_block, bottom_block) = if block_threshold > 2.0 {
-                let value = sea_level as f64 - block_threshold - 7.0;
+                let value = sea_level as f32 - block_threshold - 7.0;
                 (block_threshold as i32 + sea_level, value as i32)
             } else {
                 (0, 0)
@@ -279,7 +279,7 @@ impl SurfaceTerrainBuilder {
     pub fn get_terracotta_block(&self, x: i32, y: i32, z: i32) -> &'static BlockState {
         let offset = (self
             .terracotta_bands_offset_noise
-            .sample(x as f64, 0.0, z as f64)
+            .sample(x as f32, 0.0, z as f32)
             * 4.0)
             .round() as i32;
         let offset = y + offset;

@@ -18,7 +18,7 @@ pub enum HttpError {
 
 /// Helper client for querying Pumpkin marketplace REST APIs.
 pub struct HttpClient {
-    user_agent: String,
+    client: reqwest::blocking::Client,
 }
 
 impl Default for HttpClient {
@@ -31,9 +31,16 @@ impl HttpClient {
     /// Creates a new HTTP client with the specified User-Agent header.
     #[must_use]
     pub fn new(user_agent: &str) -> Self {
-        Self {
-            user_agent: user_agent.to_string(),
-        }
+        let builder = reqwest::blocking::Client::builder().user_agent(user_agent);
+        #[cfg(target_os = "android")]
+        let builder = {
+            let certs = webpki_root_certs::TLS_SERVER_ROOT_CERTS
+                .iter()
+                .filter_map(|c| reqwest::Certificate::from_der(c.as_ref()).ok());
+            builder.tls_certs_only(certs)
+        };
+        let client = builder.build().unwrap_or_default();
+        Self { client }
     }
 
     /// Performs an HTTP GET request and returns the response body as a string.
@@ -42,24 +49,23 @@ impl HttpClient {
     ///
     /// Returns `HttpError` if the request fails or returns a non-2xx status code.
     pub fn get(&self, url: &str) -> Result<String, HttpError> {
-        let mut response = ureq::get(url)
-            .header("User-Agent", &self.user_agent)
+        let response = self
+            .client
+            .get(url)
             .header("Accept", "application/json")
-            .call()
+            .send()
             .map_err(|e| HttpError::RequestFailed(e.to_string()))?;
 
         let status = response.status().as_u16();
         if status < 200 || status >= 300 {
             let body = response
-                .body_mut()
-                .read_to_string()
+                .text()
                 .unwrap_or_else(|_| "Unknown error".to_string());
             return Err(HttpError::BadStatus(status, body));
         }
 
         response
-            .body_mut()
-            .read_to_string()
+            .text()
             .map_err(|e| HttpError::BodyRead(e.to_string()))
     }
 
@@ -69,25 +75,25 @@ impl HttpClient {
     ///
     /// Returns `HttpError` if the request fails or returns a non-2xx status code.
     pub fn post_json(&self, url: &str, json_payload: &str) -> Result<String, HttpError> {
-        let mut response = ureq::post(url)
-            .header("User-Agent", &self.user_agent)
+        let response = self
+            .client
+            .post(url)
             .header("Content-Type", "application/json")
             .header("Accept", "application/json")
-            .send(json_payload)
+            .body(json_payload.to_string())
+            .send()
             .map_err(|e| HttpError::RequestFailed(e.to_string()))?;
 
         let status = response.status().as_u16();
         if status < 200 || status >= 300 {
             let body = response
-                .body_mut()
-                .read_to_string()
+                .text()
                 .unwrap_or_else(|_| "Unknown error".to_string());
             return Err(HttpError::BadStatus(status, body));
         }
 
         response
-            .body_mut()
-            .read_to_string()
+            .text()
             .map_err(|e| HttpError::BodyRead(e.to_string()))
     }
 }

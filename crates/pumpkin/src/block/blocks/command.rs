@@ -13,6 +13,7 @@ use crate::{
     world::World,
 };
 use pumpkin_data::{
+use crate::{
     Block, BlockId, BlockState, BlockStateId, FacingExt,
     block_properties::{BlockProperties, CommandBlockLikeProperties, Facing},
     block_rotation::Rotation,
@@ -40,14 +41,14 @@ impl CommandBlock {
             return None;
         }
 
-        let props = CommandBlockLikeProperties::from_state_id(state_id, block);
+        let props = CommandBlockLikeProperties::from_state_id(state_id);
 
         Some((target_pos, props))
     }
 
     fn conditions_met(world: &Arc<World>, pos: &BlockPos, facing: Facing) -> bool {
-        let (block, state_id) = world.get_block_and_state_id(pos);
-        let props = CommandBlockLikeProperties::from_state_id(state_id, block);
+        let (_block, state_id) = world.get_block_and_state_id(pos);
+        let props = CommandBlockLikeProperties::from_state_id(state_id);
 
         if !props.conditional {
             return true;
@@ -87,7 +88,7 @@ impl CommandBlock {
         }
 
         let state_id = world.get_block_state_id(pos);
-        let props = CommandBlockLikeProperties::from_state_id(state_id, block);
+        let props = CommandBlockLikeProperties::from_state_id(state_id);
 
         if !props.conditional {
             world.schedule_block_tick(block, *pos, 1, TickPriority::Normal);
@@ -168,7 +169,7 @@ impl CommandBlock {
             };
             let powered = command_entity.powered.load(Ordering::Relaxed);
             let auto = command_entity.auto.load(Ordering::Relaxed);
-            let props = CommandBlockLikeProperties::from_state_id(state_id, block);
+            let props = CommandBlockLikeProperties::from_state_id(state_id);
 
             if powered || auto {
                 let conditions_met = Self::conditions_met(world, &pos, direction);
@@ -281,10 +282,8 @@ impl BlockBehaviour for CommandBlock {
         let Some(server) = args.world.server.upgrade() else {
             return;
         };
-        let props = CommandBlockLikeProperties::from_state_id(
-            args.world.get_block_state_id(args.position),
-            args.block,
-        );
+        let props =
+            CommandBlockLikeProperties::from_state_id(args.world.get_block_state_id(args.position));
 
         let world = args.world.clone();
         let entity_clone = block_entity.clone();

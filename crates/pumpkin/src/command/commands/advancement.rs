@@ -28,7 +28,6 @@ const ARG_TARGETS: &str = "targets";
 const ARG_ADVANCEMENT: &str = "advancement";
 const ARG_CRITERION: &str = "criterion";
 
-#[allow(unused)]
 const ERROR_CRITERION_NOT_FOUND: CommandErrorType<2> = CommandErrorType::new(
     translation::java::COMMANDS_ADVANCEMENT_CRITERIONNOTFOUND,
     translation::java::COMMANDS_ADVANCEMENT_CRITERIONNOTFOUND,
@@ -112,7 +111,7 @@ impl Action {
                 true
             }
             Self::Revoke => {
-                if !progress.is_done() {
+                if !progress.has_progress() {
                     return false;
                 }
                 let criteria: Vec<Arc<str>> = progress.get_completed_criteria().collect();
@@ -306,11 +305,16 @@ fn perform(
     advancements: &[&'static Advancement],
     show_advancement: bool,
 ) -> Result<i32, CommandSyntaxError> {
-    let mut i = 0;
+    let mut advancement_count = 0;
+    let mut player_count = 0;
     for player in targets {
-        i += action.perform(player, advancements, show_advancement);
+        let changed = action.perform(player, advancements, show_advancement);
+        if changed > 0 {
+            player_count += 1;
+        }
+        advancement_count += changed;
     }
-    if i == 0 {
+    if advancement_count == 0 {
         return if let [first_advancement] = advancements[..] {
             if let [first_player] = targets {
                 Err(match action {
@@ -362,7 +366,7 @@ fn perform(
                 format!("{}.one.to.many.success", action.get_key()),
                 [
                     first_advancement.name(),
-                    TextComponent::text(targets.len().to_string()),
+                    TextComponent::text(player_count.to_string()),
                 ],
             )
         }
@@ -370,7 +374,7 @@ fn perform(
         TextComponent::translate(
             format!("{}.many.to.one.success", action.get_key()),
             [
-                TextComponent::text(advancements.len().to_string()),
+                TextComponent::text(advancement_count.to_string()),
                 first.get_display_name(),
             ],
         )
@@ -378,13 +382,13 @@ fn perform(
         TextComponent::translate(
             format!("{}.many.to.many.success", action.get_key()),
             [
-                TextComponent::text(advancements.len().to_string()),
-                TextComponent::text(targets.len().to_string()),
+                TextComponent::text(advancement_count.to_string()),
+                TextComponent::text(player_count.to_string()),
             ],
         )
     };
     context.send_feedback(translate, true);
-    Ok(i)
+    Ok(advancement_count)
 }
 
 /// Performs an action (grant or revoke) on a specific advancement criterion for multiple players.
@@ -414,64 +418,65 @@ pub fn perform_criterion(
     advancement: &'static Advancement,
     criterion: &str,
 ) -> Result<i32, CommandSyntaxError> {
-    if advancement.criteria.contains(&criterion) {
-        let count = targets
-            .iter()
-            .map(|player| action.perform_criterion(player, advancement, criterion))
-            .filter(|&success| success)
-            .count() as i32;
-        if count == 0 {
-            if let [first_player] = targets {
-                Err(match action {
-                    Action::Grant => &ERROR_GRANT_CRITERION_TO_ONE_FAILURE,
-                    Action::Revoke => &ERROR_REVOKE_CRITERION_TO_ONE_FAILURE,
-                }
-                .create_without_context_args_slice(&[
-                    TextComponent::text(criterion.to_owned()),
-                    advancement.name(),
-                    first_player.get_display_name(),
-                ]))
-            } else {
-                Err(match action {
-                    Action::Grant => &ERROR_GRANT_CRITERION_TO_MANY_FAILURE,
-                    Action::Revoke => &ERROR_REVOKE_CRITERION_TO_MANY_FAILURE,
-                }
-                .create_without_context_args_slice(&[
-                    TextComponent::text(criterion.to_owned()),
-                    advancement.name(),
-                    TextComponent::text(targets.len().to_string()),
-                ]))
-            }
-        } else {
-            let translate = if let [first_player] = targets {
-                TextComponent::translate(
-                    format!("{}.criterion.to.one.success", action.get_key()),
-                    [
-                        TextComponent::text(criterion.to_owned()),
-                        advancement.name(),
-                        first_player.get_display_name(),
-                    ],
-                )
-            } else {
-                TextComponent::translate(
-                    format!("{}.criterion.to.many.success", action.get_key()),
-                    [
-                        TextComponent::text(criterion.to_owned()),
-                        advancement.name(),
-                        TextComponent::text(targets.len().to_string()),
-                    ],
-                )
-            };
-            context.send_feedback(translate, true);
-            Ok(count)
-        }
-    } else {
-        Err(
+    if !advancement.criteria.contains(&criterion) {
+        return Err(
             ERROR_CRITERION_NOT_FOUND.create_without_context_args_slice(&[
                 advancement.name(),
                 TextComponent::text(criterion.to_owned()),
             ]),
-        )
+        );
+    }
+
+    let count = targets
+        .iter()
+        .map(|player| action.perform_criterion(player, advancement, criterion))
+        .filter(|&success| success)
+        .count() as i32;
+
+    if count == 0 {
+        if let [first_player] = targets {
+            Err(match action {
+                Action::Grant => &ERROR_GRANT_CRITERION_TO_ONE_FAILURE,
+                Action::Revoke => &ERROR_REVOKE_CRITERION_TO_ONE_FAILURE,
+            }
+            .create_without_context_args_slice(&[
+                TextComponent::text(criterion.to_owned()),
+                advancement.name(),
+                first_player.get_display_name(),
+            ]))
+        } else {
+            Err(match action {
+                Action::Grant => &ERROR_GRANT_CRITERION_TO_MANY_FAILURE,
+                Action::Revoke => &ERROR_REVOKE_CRITERION_TO_MANY_FAILURE,
+            }
+            .create_without_context_args_slice(&[
+                TextComponent::text(criterion.to_owned()),
+                advancement.name(),
+                TextComponent::text(targets.len().to_string()),
+            ]))
+        }
+    } else {
+        let translate = if let [first_player] = targets {
+            TextComponent::translate(
+                format!("{}.criterion.to.one.success", action.get_key()),
+                [
+                    TextComponent::text(criterion.to_owned()),
+                    advancement.name(),
+                    first_player.get_display_name(),
+                ],
+            )
+        } else {
+            TextComponent::translate(
+                format!("{}.criterion.to.many.success", action.get_key()),
+                [
+                    TextComponent::text(criterion.to_owned()),
+                    advancement.name(),
+                    TextComponent::text(count.to_string()),
+                ],
+            )
+        };
+        context.send_feedback(translate, true);
+        Ok(count)
     }
 }
 
@@ -537,17 +542,19 @@ impl SuggestionProvider for CriterionSuggestionProvider {
 /// executor to grant/revoke every advancement to specified players
 struct EveryAdvancementExecutor {
     action: Action,
+    show_advancement: bool,
 }
 
 impl CommandExecutor for EveryAdvancementExecutor {
     fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
         let action = self.action;
+        let show_advancement = self.show_advancement;
         perform(
             &context.source,
             &EntityArgumentType::get_players(context, ARG_TARGETS)?,
             action,
             &Advancement::get_advancements_list(),
-            false,
+            show_advancement,
         )
     }
 }
@@ -607,10 +614,10 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
                                 }),
                         ),
                     )
-                    .then(
-                        literal("everything")
-                            .executes(EveryAdvancementExecutor { action: $action }),
-                    ),
+                    .then(literal("everything").executes(EveryAdvancementExecutor {
+                        action: $action,
+                        show_advancement: matches!($action, Action::Revoke),
+                    })),
             )
         };
     }

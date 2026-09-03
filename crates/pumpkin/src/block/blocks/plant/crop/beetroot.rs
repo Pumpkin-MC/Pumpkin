@@ -1,6 +1,6 @@
 use pumpkin_data::Block;
 use pumpkin_data::BlockStateId;
-use pumpkin_data::block_properties::{BlockProperties, NetherWartLikeProperties};
+use pumpkin_data::block_properties::NetherWartLikeProperties;
 use pumpkin_macros::pumpkin_block;
 use rand::RngExt;
 
@@ -56,13 +56,13 @@ impl CropBlockBase for BeetrootBlock {
         3
     }
 
-    fn get_age(&self, state: BlockStateId, block: &Block) -> i32 {
-        let props = BeetrootProperties::from_state_id(state, block);
+    fn get_age(&self, state: BlockStateId, _block: &Block) -> i32 {
+        let props = BeetrootProperties::from_state_id(state);
         i32::from(props.age)
     }
 
     fn state_with_age(&self, block: &Block, state: BlockStateId, age: i32) -> BlockStateId {
-        let mut props = BeetrootProperties::from_state_id(state, block);
+        let mut props = BeetrootProperties::from_state_id(state);
         props.age = age as u8;
         props.to_state_id(block)
     }

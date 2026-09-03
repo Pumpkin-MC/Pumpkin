@@ -101,13 +101,14 @@ pub mod passive;
 pub mod player;
 pub mod projectile;
 pub mod projectile_deflection;
+pub mod synched_entity_data;
 pub mod tnt;
 pub mod r#type;
 pub mod vehicle;
 
 pub use lightning::LightningBoltEntity;
 
-mod combat;
+pub(crate) mod combat;
 pub mod predicate;
 
 /// The maximum number of scoreboard tags an entity can carry, matching Vanilla.
@@ -183,6 +184,10 @@ pub trait EntityBase: Send + Sync + std::any::Any {
         None
     }
 
+    fn get_owner_id(&self) -> Option<i32> {
+        None
+    }
+
     fn get_eye_pos(&self) -> Vector3<f64> {
         self.get_entity().get_eye_pos()
     }
@@ -201,10 +206,8 @@ pub trait EntityBase: Send + Sync + std::any::Any {
         if is_baby {
             let mut bedrock_meta = SyncedActorDataList::new();
             bedrock_meta.set_flag(entity_data_key::FLAGS, entity_data_flag::BABY as u8, true);
-            entity.send_meta_data(
-                &[Metadata::new(tracked_data::ageable_mob::DATA_BABY_ID, true)],
-                Some(&bedrock_meta),
-            );
+            entity.set_synced_data(tracked_data::ageable_mob::DATA_BABY_ID, true);
+            entity.send_bedrock_actor_data(&bedrock_meta);
         }
     }
     fn set_variant_name(&self, _name: &str) {}
@@ -280,10 +283,45 @@ pub trait EntityBase: Send + Sync + std::any::Any {
         false
     }
 
+    fn set_sprinting(&self, is_sprinting: bool) {
+        if let Some(living) = self.get_living_entity() {
+            living.set_sprinting(is_sprinting);
+        } else {
+            self.get_entity().set_sprinting(is_sprinting);
+        }
+    }
+
+    fn get_block_speed_factor(&self) -> f32 {
+        self.get_living_entity().map_or_else(
+            || self.get_entity().get_block_speed_factor(),
+            LivingEntity::get_block_speed_factor,
+        )
+    }
+
     /// Custom Y-axis velocity drag multiplier applied during `travel_in_air`.
     /// Bats return `Some(0.6)` to match vanilla's `travel()` override.
     fn get_y_velocity_drag(&self) -> Option<f64> {
         None
+    }
+
+    fn java_spawn_metadata(&self, version: JavaMinecraftVersion) -> Option<Box<[u8]>> {
+        self.get_mob().map_or_else(
+            || {
+                let entity = self.get_entity();
+                let shared_flags = entity.flags.load(Ordering::Relaxed);
+                (shared_flags != 0).then(|| {
+                    let mut buf = Vec::new();
+                    let _ = Metadata::new(
+                        pumpkin_data::tracked_data::entity::DATA_SHARED_FLAGS_ID,
+                        shared_flags,
+                    )
+                    .write(&mut buf, &version);
+                    buf.put_u8(255);
+                    buf.into_boxed_slice()
+                })
+            },
+            |mob| mob.mob_java_spawn_metadata(version),
+        )
     }
 
     fn send_bedrock_spawn_packet(&self, client: &BedrockClient) {
@@ -325,10 +363,8 @@ pub trait EntityBase: Send + Sync + std::any::Any {
         let entity = self.get_entity();
         let version = client.version.load();
         let is_mob = entity.entity_type.mob || self.get_mob().is_some();
+        let metadata = self.java_spawn_metadata(version);
         if version < JavaMinecraftVersion::V_1_19 && is_mob {
-            let metadata = self
-                .get_mob()
-                .and_then(|mob| mob.mob_java_spawn_metadata(version));
             let spawn_packet = entity.create_spawn_living_packet(metadata.clone());
             if let Ok(data) = client.serialize_packet(&spawn_packet) {
                 client.try_enqueue_packet(data);
@@ -346,10 +382,8 @@ pub trait EntityBase: Send + Sync + std::any::Any {
             if let Ok(data) = client.serialize_packet(&spawn_packet) {
                 client.try_enqueue_packet(data);
             }
-            if let Some(mob) = self.get_mob()
-                && let Some(metadata) = mob.mob_java_spawn_metadata(version)
-            {
-                let meta_packet = CSetEntityMetadata::new(entity.entity_id.into(), metadata);
+            if let Some(meta) = metadata {
+                let meta_packet = CSetEntityMetadata::new(entity.entity_id.into(), meta);
                 if let Ok(meta_data) = client.serialize_packet(&meta_packet) {
                     client.try_enqueue_packet(meta_data);
                 }
@@ -843,6 +877,7 @@ pub struct Entity {
     pub bedrock_flags_two: std::sync::atomic::AtomicI64,
     /// If true, the entity bypasses physics, collisions, and block effects (e.g. spectator, markers, display entities)
     pub no_physics: AtomicBool,
+    pub synched_data: synched_entity_data::SynchedEntityData,
     /// Multiplies movement for one tick before being reset
     pub movement_multiplier: AtomicCell<Vector3<f64>>,
     /// Determines whether the entity's velocity needs to be sent
@@ -978,6 +1013,7 @@ impl Entity {
             has_no_gravity: AtomicBool::new(false),
             scoreboard_tags: std::sync::Mutex::new(HashSet::new()),
             no_physics: AtomicBool::new(false),
+            synched_data: synched_entity_data::SynchedEntityData::new(),
             movement_multiplier: AtomicCell::new(Vector3::default()),
             velocity_dirty: AtomicBool::new(true),
             removed: AtomicBool::new(false),
@@ -1107,13 +1143,8 @@ impl Entity {
             entity_data_flag::ALWAYS_SHOW_NAME as u8,
             visible,
         );
-        self.send_meta_data(
-            &[Metadata::new(
-                tracked_data::entity::DATA_CUSTOM_NAME,
-                Some(name),
-            )],
-            Some(&bedrock_meta),
-        );
+        self.set_synced_data(tracked_data::entity::DATA_CUSTOM_NAME, Some(name));
+        self.send_bedrock_actor_data(&bedrock_meta);
     }
 
     pub fn set_custom_name_visible(&self, visible: bool) {
@@ -1135,13 +1166,8 @@ impl Entity {
             entity_data_flag::ALWAYS_SHOW_NAME as u8,
             visible,
         );
-        self.send_meta_data(
-            &[Metadata::new(
-                tracked_data::entity::DATA_CUSTOM_NAME_VISIBLE,
-                visible,
-            )],
-            Some(&bedrock_meta),
-        );
+        self.set_synced_data(tracked_data::entity::DATA_CUSTOM_NAME_VISIBLE, visible);
+        self.send_bedrock_actor_data(&bedrock_meta);
     }
 
     pub fn is_silent(&self) -> bool {
@@ -1150,10 +1176,7 @@ impl Entity {
 
     pub fn set_silent(&self, silent: bool) {
         self.silent.store(silent, Ordering::Relaxed);
-        self.send_meta_data(
-            &[Metadata::new(tracked_data::entity::DATA_SILENT, silent)],
-            None,
-        );
+        self.set_synced_data(tracked_data::entity::DATA_SILENT, silent);
     }
 
     pub fn has_no_gravity(&self) -> bool {
@@ -1162,13 +1185,7 @@ impl Entity {
 
     pub fn set_has_no_gravity(&self, no_gravity: bool) {
         self.has_no_gravity.store(no_gravity, Ordering::Relaxed);
-        self.send_meta_data(
-            &[Metadata::new(
-                tracked_data::entity::DATA_NO_GRAVITY,
-                no_gravity,
-            )],
-            None,
-        );
+        self.set_synced_data(tracked_data::entity::DATA_NO_GRAVITY, no_gravity);
     }
 
     pub fn send_velocity(&self) {
@@ -1532,7 +1549,7 @@ impl Entity {
                     || block == Block::SOUL_CAMPFIRE
 
 
-                        && CampfireLikeProperties::from_state_id(state.id, &block).r#signal_fire
+                        && CampfireLikeProperties::from_state_id(state.id).r#signal_fire
 
 
                 {
@@ -1577,7 +1594,14 @@ impl Entity {
         let max = aabb.max_block_pos();
 
         let eye_height = self.get_eye_height();
+        let eye_width = f64::from(self.width()) * 0.8;
         let mut eye_level_box = aabb;
+        let shrink_x = (aabb.max.x - aabb.min.x - eye_width) / 2.0;
+        let shrink_z = (aabb.max.z - aabb.min.z - eye_width) / 2.0;
+        eye_level_box.min.x += shrink_x;
+        eye_level_box.max.x -= shrink_x;
+        eye_level_box.min.z += shrink_z;
+        eye_level_box.max.z -= shrink_z;
         eye_level_box.min.y += eye_height;
         eye_level_box.max.y = eye_level_box.min.y;
 
@@ -2084,7 +2108,7 @@ impl Entity {
                 //         && (name == "OakFenceLikeProperties"
                 //             || name == "ResinBrickWallLikeProperties"
                 //             || name == "OakFenceGateLikeProperties"
-                //                 && OakFenceGateLikeProperties::from_state_id(state.id, &block)
+                //                 && OakFenceGateLikeProperties::from_state_id(state.id)
                 //                     .r#open)
                 //     {
                 //         return (supporting_block, Some(block), Some(state));
@@ -2157,18 +2181,27 @@ impl Entity {
         )
     }
 
+    #[must_use]
+    pub fn get_block_pos_below_that_affects_my_movement(&self) -> BlockPos {
+        self.get_pos_with_y_offset(0.500_001).0
+    }
+
+    #[must_use]
     #[expect(clippy::float_cmp)]
-    fn get_velocity_multiplier(&self) -> f32 {
-        let block = self.world.load().get_block(&self.block_pos.load());
-
-        let multiplier = block.velocity_multiplier;
-
-        if multiplier != 1.0 || block == &Block::WATER || block == &Block::BUBBLE_COLUMN {
-            multiplier
+    pub fn get_block_speed_factor(&self) -> f32 {
+        let world = self.world.load();
+        let (block, _state) = world.get_block_and_state(&self.block_pos.load());
+        let speed_factor_here = block.get_speed_factor();
+        if block != &Block::WATER && block != &Block::BUBBLE_COLUMN {
+            if speed_factor_here == 1.0 {
+                let below_pos = self.get_block_pos_below_that_affects_my_movement();
+                let (below_block, _below_state) = world.get_block_and_state(&below_pos);
+                below_block.get_speed_factor()
+            } else {
+                speed_factor_here
+            }
         } else {
-            let (_pos, block, _state) = self.get_block_with_y_offset(0.500_001);
-
-            block.velocity_multiplier
+            speed_factor_here
         }
     }
 
@@ -2224,7 +2257,7 @@ impl Entity {
 
         self.move_pos(final_move);
 
-        let velocity_multiplier = f64::from(self.get_velocity_multiplier());
+        let velocity_multiplier = f64::from(caller.get_block_speed_factor());
 
         self.velocity.store(final_move * velocity_multiplier);
 
@@ -2317,7 +2350,9 @@ impl Entity {
                 let entity_id = self.entity_id;
                 let yaw = self.yaw.load();
 
+                let rt_handle = world_clone.server.upgrade().map(|s| s.runtime.clone());
                 rayon::spawn(move || {
+                    let _guard = rt_handle.as_ref().map(tokio::runtime::Handle::enter);
                     let Some(entity_arc) = world_clone.get_entity_by_id(entity_id) else {
                         return;
                     };
@@ -2445,23 +2480,15 @@ impl Entity {
 
             let mut new_manager = PortalProcessor::new(portal_type, pos, portal_world);
 
-            if let Some(portal) = NetherPortal::get_on_axis(
-                &world,
-                &pos,
-                pumpkin_data::block_properties::HorizontalAxis::X,
-            ) && portal.was_already_valid()
-            {
-                new_manager.set_source_portal(SourcePortalInfo {
-                    lower_corner: portal.lower_corner(),
-                    axis: portal.axis(),
-                    width: portal.width(),
-                    height: portal.height(),
-                });
-            } else if let Some(portal) = NetherPortal::get_on_axis(
-                &world,
-                &pos,
-                pumpkin_data::block_properties::HorizontalAxis::Z,
-            ) && portal.was_already_valid()
+            let (block, state) = world.get_block_and_state(&pos);
+            let source_axis = (block == &pumpkin_data::Block::NETHER_PORTAL).then(|| {
+                let props = <pumpkin_data::block_properties::NetherPortalLikeProperties as pumpkin_data::block_properties::BlockProperties>::from_state_id(state.id, block);
+                props.axis
+            });
+
+            if let Some(axis) = source_axis
+                && let Some(portal) = NetherPortal::get_on_axis(&world, &pos, axis)
+                && portal.was_already_valid()
             {
                 new_manager.set_source_portal(SourcePortalInfo {
                     lower_corner: portal.lower_corner(),
@@ -2475,6 +2502,22 @@ impl Entity {
         } else if let Some(manager) = manager.as_mut() {
             manager.entry_position = pos;
             manager.inside_portal_this_tick = true;
+            if manager.source_portal.is_none() {
+                let (block, state) = world.get_block_and_state(&pos);
+                if block == &pumpkin_data::Block::NETHER_PORTAL {
+                    let props = <pumpkin_data::block_properties::NetherPortalLikeProperties as pumpkin_data::block_properties::BlockProperties>::from_state_id(state.id, block);
+                    if let Some(portal) = NetherPortal::get_on_axis(&world, &pos, props.axis)
+                        && portal.was_already_valid()
+                    {
+                        manager.set_source_portal(SourcePortalInfo {
+                            lower_corner: portal.lower_corner(),
+                            axis: portal.axis(),
+                            width: portal.width(),
+                            height: portal.height(),
+                        });
+                    }
+                }
+            }
         }
     }
 
@@ -2557,13 +2600,11 @@ impl Entity {
                 entity_data_key::FREEZING_EFFECT_STRENGTH,
                 MetadataValue::Float(new_frozen_ticks as f32),
             );
-            self.send_meta_data(
-                &[Metadata::new(
-                    tracked_data::entity::DATA_TICKS_FROZEN,
-                    VarInt(new_frozen_ticks),
-                )],
-                Some(&bedrock_meta),
+            self.set_synced_data(
+                tracked_data::entity::DATA_TICKS_FROZEN,
+                VarInt(new_frozen_ticks),
             );
+            self.send_bedrock_actor_data(&bedrock_meta);
         }
 
         // Vanilla parity: full-freeze damage is tick-phase based.
@@ -2576,6 +2617,27 @@ impl Entity {
                 entity.damage(entity.as_ref(), 1.0, DamageType::FREEZE);
             }
         }
+    }
+
+    /// Sets the number of ticks the entity has been frozen.
+    pub fn set_frozen_ticks(&self, ticks: i32) {
+        let new_frozen_ticks = ticks.clamp(0, Self::MAX_FROZEN_TICKS);
+        self.frozen_ticks.store(new_frozen_ticks, Ordering::Relaxed);
+        let mut bedrock_meta = SyncedActorDataList::new();
+        bedrock_meta.set(
+            entity_data_key::FREEZING_EFFECT_STRENGTH,
+            MetadataValue::Float(new_frozen_ticks as f32),
+        );
+        self.set_synced_data(
+            tracked_data::entity::DATA_TICKS_FROZEN,
+            VarInt(new_frozen_ticks),
+        );
+        self.send_bedrock_actor_data(&bedrock_meta);
+    }
+
+    /// Returns the number of ticks the entity has been frozen.
+    pub fn get_frozen_ticks(&self) -> i32 {
+        self.frozen_ticks.load(Ordering::Relaxed)
     }
 
     /// Sets the `Entity` yaw & pitch rotation
@@ -2667,6 +2729,41 @@ impl Entity {
         self.sneaking.load(Ordering::Relaxed)
     }
 
+    #[must_use]
+    pub fn is_swimming(&self) -> bool {
+        self.swimming.load(Ordering::Relaxed)
+    }
+
+    #[must_use]
+    pub fn is_visually_swimming(&self) -> bool {
+        self.pose.load() == EntityPose::Swimming
+    }
+
+    #[must_use]
+    pub fn is_in_water(&self) -> bool {
+        self.touching_water.load(Ordering::Relaxed)
+    }
+
+    #[must_use]
+    pub fn is_submerged_in_water(&self) -> bool {
+        let pos = self.pos.load();
+        let eye_height = self.get_eye_height();
+        let eye_pos = BlockPos::floored(pos.x, pos.y + eye_height - 0.111_111_11, pos.z);
+        let world = self.world.load();
+        let (fluid, _) = world.get_fluid_and_fluid_state(&eye_pos);
+        fluid.id == Fluid::WATER.id || fluid.id == Fluid::FLOWING_WATER.id
+    }
+
+    #[must_use]
+    pub fn is_under_water(&self) -> bool {
+        self.is_in_water() && self.is_submerged_in_water()
+    }
+
+    #[must_use]
+    pub fn is_visually_crawling(&self) -> bool {
+        self.is_visually_swimming() && !self.is_in_water()
+    }
+
     pub fn set_swimming(&self, swimming: bool) {
         if self.swimming.load(Ordering::Relaxed) != swimming {
             let mut event =
@@ -2707,6 +2804,11 @@ impl Entity {
             self.has_visual_fire.store(on_fire, Ordering::Relaxed);
             self.set_flag(Flag::OnFire, on_fire);
         }
+    }
+
+    #[must_use]
+    pub fn is_on_fire(&self) -> bool {
+        self.fire_ticks.load(Ordering::Relaxed) > 0 || self.has_visual_fire.load(Ordering::Relaxed)
     }
 
     pub fn get_horizontal_facing(&self) -> HorizontalFacing {
@@ -2845,13 +2947,7 @@ impl Entity {
             self.flags.fetch_and(!mask, Ordering::Relaxed) & !mask
         };
 
-        self.send_meta_data(
-            &[Metadata::new(
-                tracked_data::entity::DATA_SHARED_FLAGS_ID,
-                new_je_flags,
-            )],
-            None,
-        );
+        self.set_synced_data(tracked_data::entity::DATA_SHARED_FLAGS_ID, new_je_flags);
 
         if let Some(bedrock_flag) = flag.to_bedrock() {
             let (key, index) = if bedrock_flag >= 64 {
@@ -2907,69 +3003,126 @@ impl Entity {
             .play_sound(sound, SoundCategory::Neutral, &self.pos.load());
     }
 
-    pub fn send_meta_data<T: MetadataSerializer>(
+    pub fn set_synced_data<T: MetadataSerializer + Clone + Send + Sync + 'static>(
         &self,
-        meta: &[Metadata<T>],
-        bedrock_meta: Option<&SyncedActorDataList>,
-    ) {
+        tracked: pumpkin_data::tracked_data::TrackedData,
+        value: T,
+    ) -> bool {
+        if self.synched_data.set(tracked, value) {
+            self.send_dirty_entity_data();
+            true
+        } else {
+            false
+        }
+    }
+
+    pub fn send_bedrock_actor_data(&self, bedrock_meta: &SyncedActorDataList) {
         let world = self.world.load();
-        let chunk_pos = self.chunk_pos.load();
+        let players = world.players.load();
+        let mut bedrock_recipients = Vec::new();
+
+        if let Some(tracked) = world.entity_tracker.get_tracked_entity(self.entity_id) {
+            for player in players.iter() {
+                if (tracked.seen_by.contains(&player.gameprofile.id)
+                    || player.entity_id() == self.entity_id)
+                    && let ClientPlatform::Bedrock(client) = player.client.as_ref()
+                {
+                    bedrock_recipients.push(client);
+                }
+            }
+        } else {
+            let chunk_pos = self.chunk_pos.load();
+            for player in players.iter() {
+                let center = player.get_entity().chunk_pos.load();
+                let view_distance = crate::world::chunker::get_view_distance(player).get() as i32;
+
+                if is_within_view_distance(chunk_pos, center, view_distance)
+                    && let ClientPlatform::Bedrock(client) = player.client.as_ref()
+                {
+                    bedrock_recipients.push(client);
+                }
+            }
+        }
+
+        let packet = CSetActorData {
+            target_runtime_id: VarULong(self.entity_id as u64),
+            actor_data: SyncedActorDataList(bedrock_meta.0.clone()),
+            synced_properties: PropertySyncData {
+                int_entries_list: std::collections::HashMap::new(),
+                float_entries_list: std::collections::HashMap::new(),
+            },
+            tick: VarULong(0),
+        };
+        for recipient in bedrock_recipients {
+            if let Ok(packet_data) = recipient.serialize_packet(&packet) {
+                recipient.try_enqueue_packet(packet_data);
+            }
+        }
+    }
+
+    pub fn send_dirty_entity_data(&self) {
+        if !self.synched_data.is_dirty() {
+            return;
+        }
+
+        let world = self.world.load();
         let players = world.players.load();
 
         let mut java_recipients = Vec::new();
-        let mut bedrock_recipients = Vec::new();
 
-        for player in players.iter() {
-            let center = player.get_entity().chunk_pos.load();
-            let view_distance = crate::world::chunker::get_view_distance(player).get() as i32;
-
-            if is_within_view_distance(chunk_pos, center, view_distance) {
-                match player.client.as_ref() {
-                    ClientPlatform::Java(_) => java_recipients.push(player),
-                    ClientPlatform::Bedrock(client) => bedrock_recipients.push(client),
+        if let Some(tracked) = world.entity_tracker.get_tracked_entity(self.entity_id) {
+            for player in players.iter() {
+                if (tracked.seen_by.contains(&player.gameprofile.id)
+                    || player.entity_id() == self.entity_id)
+                    && let ClientPlatform::Java(_) = player.client.as_ref()
+                {
+                    java_recipients.push(player);
                 }
             }
+        } else {
+            let chunk_pos = self.chunk_pos.load();
+            for player in players.iter() {
+                let center = player.get_entity().chunk_pos.load();
+                let view_distance = crate::world::chunker::get_view_distance(player).get() as i32;
+
+                if is_within_view_distance(chunk_pos, center, view_distance)
+                    && let ClientPlatform::Java(_) = player.client.as_ref()
+                {
+                    java_recipients.push(player);
+                }
+            }
+        }
+
+        if java_recipients.is_empty() {
+            return;
         }
 
         let recipients_by_version =
             World::collect_java_recipients_by_version(java_recipients.into_iter());
 
         for (version, recipients) in recipients_by_version {
-            if version < JavaMinecraftVersion::V_1_21 {
+            // TODO: Support older versions
+            if version < JavaMinecraftVersion::V_26_2 {
                 continue;
             }
-            let mut buf = Vec::new();
-            for m in meta {
-                let _ = m.write(&mut buf, &version);
-            }
-            buf.put_u8(255);
-            let packet = CSetEntityMetadata::new(self.entity_id.into(), buf.into());
-            if let Ok(packet_data) = JavaClient::serialize_packet_for_version(&packet, version) {
-                for recipient in recipients {
-                    recipient.try_enqueue_packet(packet_data.clone());
+            if let Some(buf) = self.synched_data.pack_dirty_for_version(&version) {
+                let packet = CSetEntityMetadata::new(self.entity_id.into(), buf);
+                if let Ok(packet_data) = JavaClient::serialize_packet_for_version(&packet, version)
+                {
+                    for recipient in recipients {
+                        recipient.try_enqueue_packet(packet_data.clone());
+                    }
                 }
             }
         }
-
-        if let Some(bedrock_meta) = bedrock_meta {
-            let packet = CSetActorData {
-                target_runtime_id: VarULong(self.entity_id as u64),
-                actor_data: SyncedActorDataList(bedrock_meta.0.clone()),
-                synced_properties: PropertySyncData {
-                    int_entries_list: std::collections::HashMap::new(),
-                    float_entries_list: std::collections::HashMap::new(),
-                },
-                tick: VarULong(0),
-            };
-            for recipient in bedrock_recipients {
-                if let Ok(packet_data) = recipient.serialize_packet(&packet) {
-                    recipient.try_enqueue_packet(packet_data);
-                }
-            }
-        }
+        self.synched_data.clear_dirty();
     }
 
     pub fn set_pose(&self, pose: EntityPose) {
+        if self.pose.load() == pose {
+            return;
+        }
+
         let mut pose_event =
             crate::plugin::api::events::entity::entity_pose_change::EntityPoseChangeEvent::new(
                 self.entity_id,
@@ -2987,27 +3140,22 @@ impl Entity {
         let dimension = Self::get_entity_dimensions(pose);
         let position = self.pos.load();
         let aabb = BoundingBox::new_from_pos(position.x, position.y, position.z, &dimension);
-        if self.world.load().is_space_empty(aabb.contract_all(1.0E-7)) {
-            self.pose.store(pose);
-            let dimension = Self::get_entity_dimensions(pose);
-            self.bounding_box.store(aabb);
-            self.entity_dimension.store(dimension);
-            let pose = pose as i32;
-            let mut bedrock_meta = SyncedActorDataList::new();
-            bedrock_meta.set(entity_data_key::POSE_INDEX, MetadataValue::Int(pose));
-            bedrock_meta.set(
-                entity_data_key::WIDTH,
-                MetadataValue::Float(dimension.width),
-            );
-            bedrock_meta.set(
-                entity_data_key::HEIGHT,
-                MetadataValue::Float(dimension.height),
-            );
-            self.send_meta_data(
-                &[Metadata::new(tracked_data::entity::DATA_POSE, VarInt(pose))],
-                Some(&bedrock_meta),
-            );
-        }
+        self.pose.store(pose);
+        self.bounding_box.store(aabb);
+        self.entity_dimension.store(dimension);
+        let pose = pose as i32;
+        let mut bedrock_meta = SyncedActorDataList::new();
+        bedrock_meta.set(entity_data_key::POSE_INDEX, MetadataValue::Int(pose));
+        bedrock_meta.set(
+            entity_data_key::WIDTH,
+            MetadataValue::Float(dimension.width),
+        );
+        bedrock_meta.set(
+            entity_data_key::HEIGHT,
+            MetadataValue::Float(dimension.height),
+        );
+        self.set_synced_data(tracked_data::entity::DATA_POSE, VarInt(pose));
+        self.send_bedrock_actor_data(&bedrock_meta);
     }
 
     /// Checks if the entity is invulnerable to the given damage type, considering both general invulnerability and specific immunities.
@@ -3135,7 +3283,7 @@ impl Entity {
             &CEntityPositionSync::new(
                 self.entity_id.into(),
                 position,
-                Vector3::new(0.0, 0.0, 0.0),
+                self.velocity.load(),
                 yaw.unwrap_or(self.yaw.load()),
                 pitch.unwrap_or(self.pitch.load()),
                 self.on_ground.load(Ordering::SeqCst),

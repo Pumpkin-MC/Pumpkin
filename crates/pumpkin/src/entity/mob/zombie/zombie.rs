@@ -86,12 +86,10 @@ impl ZombieEntity {
             .entity
             .age
             .store(age, std::sync::atomic::Ordering::Relaxed);
-        self.entity.mob_entity.living_entity.entity.send_meta_data(
-            &[pumpkin_protocol::java::client::play::Metadata::new(
-                pumpkin_data::tracked_data::zombie::BABY,
-                baby,
-            )],
-            None,
-        );
+        self.entity
+            .mob_entity
+            .living_entity
+            .entity
+            .set_synced_data(pumpkin_data::tracked_data::zombie::BABY, baby);
     }
 }

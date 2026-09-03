@@ -3,7 +3,7 @@ use pumpkin_data::tag::Block::MINECRAFT_SCULK_REPLACEABLE_WORLD_GEN;
 
 use pumpkin_data::{
     Block, BlockId, BlockState,
-    block_properties::{BlockProperties, GlowLichenLikeProperties, SculkShriekerLikeProperties},
+    block_properties::{GlowLichenLikeProperties, SculkShriekerLikeProperties},
 };
 
 use pumpkin_util::{
@@ -199,7 +199,7 @@ fn sculk_vein_state_with_face(
     }
 
     let mut properties = if is_vein {
-        GlowLichenLikeProperties::from_state_id(existing, &Block::SCULK_VEIN)
+        GlowLichenLikeProperties::from_state_id(existing)
     } else {
         let mut properties = GlowLichenLikeProperties::default(&Block::SCULK_VEIN);
         properties.r#waterlogged = existing_block_id == BlockId::WATER;

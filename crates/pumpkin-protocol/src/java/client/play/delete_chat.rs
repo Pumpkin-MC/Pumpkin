@@ -11,6 +11,7 @@ pub struct CDeleteChat<'a> {
 }
 
 impl<'a> CDeleteChat<'a> {
+    /// Creates a new `CDeleteChat` packet using a raw signature ID `VarInt`.
     #[must_use]
     pub const fn from_id(signature_id: VarInt) -> Self {
         Self {
@@ -19,6 +20,21 @@ impl<'a> CDeleteChat<'a> {
         }
     }
 
+    /// Creates a new `CDeleteChat` packet using a 0-indexed signature cache ID.
+    ///
+    /// In Minecraft's `MessageSignature.Packed`, cached signatures are written as `cache_id + 1`.
+    #[must_use]
+    pub const fn from_cache_id(cache_id: i32) -> Self {
+        Self {
+            signature_id: VarInt(cache_id + 1),
+            signature: None,
+        }
+    }
+
+    /// Creates a new `CDeleteChat` packet using a full 256-byte message signature.
+    ///
+    /// In Minecraft's `MessageSignature.Packed`, a full signature is written as `VarInt(0)`
+    /// followed by the 256 raw signature bytes.
     #[must_use]
     pub const fn from_signature(signature: &'a [u8]) -> Self {
         Self {

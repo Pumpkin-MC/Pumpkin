@@ -29,11 +29,13 @@ impl Ticker {
             manager.tick();
 
             let tick_number = server.tick_count.load(Ordering::Relaxed);
-            server.runtime.block_on(
-                server
-                    .plugin_manager
-                    .fire(server, &mut ServerTickStartEvent::new(tick_number)),
-            );
+            if server.plugin_manager.has_handlers::<ServerTickStartEvent>() {
+                server.runtime.block_on(
+                    server
+                        .plugin_manager
+                        .fire(server, &mut ServerTickStartEvent::new(tick_number)),
+                );
+            }
 
             let should_tick_game_tests = manager.runs_normally() || manager.is_sprinting();
 
@@ -58,10 +60,12 @@ impl Ticker {
             let tick_duration_nanos = tick_start_time.elapsed().as_nanos() as i64;
 
             let tick_number = server.tick_count.load(Ordering::Relaxed);
-            server.runtime.block_on(server.plugin_manager.fire(
-                server,
-                &mut ServerTickEndEvent::new(tick_number, tick_duration_nanos),
-            ));
+            if server.plugin_manager.has_handlers::<ServerTickEndEvent>() {
+                server.runtime.block_on(server.plugin_manager.fire(
+                    server,
+                    &mut ServerTickEndEvent::new(tick_number, tick_duration_nanos),
+                ));
+            }
 
             server.update_tick_times(tick_duration_nanos);
 

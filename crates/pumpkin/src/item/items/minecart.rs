@@ -68,11 +68,11 @@ impl ItemBehaviour for MinecartItem {
         }
         let state_id = world.get_block_state_id(&location);
         let is_ascending = if PoweredRailLikeProperties::handles_block_id(block.id) {
-            PoweredRailLikeProperties::from_state_id(state_id, block)
+            PoweredRailLikeProperties::from_state_id(state_id)
                 .shape
                 .is_ascending()
         } else {
-            RailLikeProperties::from_state_id(state_id, block)
+            RailLikeProperties::from_state_id(state_id)
                 .shape
                 .is_ascending()
         };
@@ -81,7 +81,7 @@ impl ItemBehaviour for MinecartItem {
         let pos = location.to_f64();
         let entity = Entity::new(
             world.clone(),
-            Vector3::new(pos.x, pos.y + 0.0625 + height, pos.z),
+            Vector3::new(pos.x + 0.5, pos.y + 0.0625 + height, pos.z + 0.5),
             entity_type,
         );
         let minecart_entity = Arc::new(MinecartEntity::new(entity));

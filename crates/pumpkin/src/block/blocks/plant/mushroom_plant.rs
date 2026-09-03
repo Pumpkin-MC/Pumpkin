@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use pumpkin_data::block_properties::{BlockProperties, BrownMushroomBlockLikeProperties};
+use pumpkin_data::block_properties::BrownMushroomBlockLikeProperties;
 use pumpkin_data::tag::Taggable;
 use pumpkin_data::{Block, BlockId, BlockState, BlockStateId, tag};
 use pumpkin_util::math::position::BlockPos;

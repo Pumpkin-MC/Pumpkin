@@ -322,6 +322,7 @@ impl ToFromWasmEvent for PlayerChatEvent {
             player,
             message: self.message.clone(),
             recipients,
+            signature: self.signature.clone(),
             cancelled: self.cancelled,
         })
     }
@@ -336,6 +337,7 @@ impl ToFromWasmEvent for PlayerChatEvent {
                     .into_iter()
                     .map(|recipient| consume_player(state, &recipient))
                     .collect(),
+                signature: data.signature,
                 cancelled: data.cancelled,
             },
             _ => panic!("unexpected event type"),

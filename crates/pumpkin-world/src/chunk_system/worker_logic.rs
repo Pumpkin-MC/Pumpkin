@@ -4,7 +4,7 @@ use super::{ChunkPos, IOLock};
 use crate::ProtoChunk;
 use crate::chunk::format::LightContainer;
 use crate::chunk::io::LoadedData::Loaded;
-use crate::chunk::io::{FileIO, LoadedData};
+use crate::chunk::io::{FileIO, LoadedData, run_blocking};
 use crate::level::Level;
 use pumpkin_config::lighting::LightingEngineConfig;
 use pumpkin_data::chunk::ChunkStatus;
@@ -141,8 +141,17 @@ pub async fn io_read_work(
             match data {
                 Loaded(chunk) => {
                     let pos = ChunkPos::new(chunk.x, chunk.z);
-                    let processed = process_loaded_chunk(chunk, &level);
-                    if send.send((pos, RecvChunk::IO(processed))).is_err() {
+                    let level = level.clone();
+                    let result = run_blocking(move || process_loaded_chunk(chunk, &level)).await;
+                    let received = match result {
+                        Ok(processed) => RecvChunk::IO(processed),
+                        Err(err) => RecvChunk::GenerationFailure {
+                            pos,
+                            stage: StagedChunkEnum::Empty,
+                            error: err.to_string(),
+                        },
+                    };
+                    if send.send((pos, received)).is_err() {
                         break;
                     }
                 }
@@ -177,31 +186,40 @@ pub async fn io_write_work(
         // Don't check cancel_token here (keep saving chunks)
         let Some(data) = recv.recv().await else { break };
         // debug!("io write thread receive chunks size {}", data.len());
-        let mut vec = Vec::with_capacity(data.len());
-        let mut positions = Vec::with_capacity(data.len());
-        for (pos, chunk) in data {
-            positions.push(pos);
-
-            match chunk {
-                Chunk::Level(chunk) => vec.push((pos, chunk)),
-                Chunk::Proto(chunk) => {
-                    let mut temp = Chunk::Proto(chunk);
-                    temp.upgrade_to_level_chunk(
-                        level.world_gen.load().dimension(),
-                        &level.lighting_config,
-                    );
-                    let Chunk::Level(chunk) = temp else { panic!() };
-                    vec.push((pos, chunk));
+        let positions = data.iter().map(|(pos, _)| *pos).collect::<Vec<_>>();
+        let level_for_upgrade = level.clone();
+        let upgrade_result = run_blocking(move || {
+            let mut vec = Vec::with_capacity(data.len());
+            for (pos, chunk) in data {
+                match chunk {
+                    Chunk::Level(chunk) => vec.push((pos, chunk)),
+                    Chunk::Proto(chunk) => {
+                        let mut temp = Chunk::Proto(chunk);
+                        temp.upgrade_to_level_chunk(
+                            level_for_upgrade.world_gen.load().dimension(),
+                            &level_for_upgrade.lighting_config,
+                        );
+                        let Chunk::Level(chunk) = temp else { panic!() };
+                        vec.push((pos, chunk));
+                    }
                 }
             }
-        }
-        if let Err(e) = level
-            .chunk_saver
-            .save_chunks(&level.level_folder, vec)
-            .await
-        {
-            error!("Failed to save chunks: {:?}", e);
-        }
+            vec
+        })
+        .await;
+        let upgrade_failed = match upgrade_result {
+            Ok(vec) => {
+                if let Err(e) = level
+                    .chunk_saver
+                    .save_chunks(&level.level_folder, vec)
+                    .await
+                {
+                    error!("Failed to save chunks: {:?}", e);
+                }
+                false
+            }
+            Err(_) => true,
+        };
 
         {
             let mut data = lock
@@ -228,6 +246,11 @@ pub async fn io_write_work(
             }
         }
         lock.1.notify_waiters();
+
+        if upgrade_failed {
+            error!("Failed to upgrade chunks for saving");
+            break;
+        }
     }
 }
 
