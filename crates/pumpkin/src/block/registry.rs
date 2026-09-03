@@ -487,8 +487,11 @@ impl BlockActionResult {
     }
 }
 
+/// Marks a block with no registered behaviour. Never handed out as a real index.
+const NO_BEHAVIOUR: u16 = u16::MAX;
+
 pub struct BlockRegistry {
-    block_indices: [u8; pumpkin_data::BlockId::COUNT as usize],
+    block_indices: [u16; pumpkin_data::BlockId::COUNT as usize],
     behaviours: Vec<Arc<dyn BlockBehaviour>>,
     fluids: FxHashMap<u16, Arc<dyn FluidBehaviour>>,
 }
@@ -496,7 +499,7 @@ pub struct BlockRegistry {
 impl Default for BlockRegistry {
     fn default() -> Self {
         Self {
-            block_indices: [0xFF; pumpkin_data::BlockId::COUNT as usize],
+            block_indices: [NO_BEHAVIOUR; pumpkin_data::BlockId::COUNT as usize],
             behaviours: Vec::new(),
             fluids: FxHashMap::default(),
         }
@@ -788,8 +791,10 @@ impl BlockRegistry {
     #[allow(clippy::expect_used)]
     pub fn register<T: BlockBehaviour + BlockMetadata + 'static>(&mut self, block: T) {
         let ids = T::ids();
-        let idx = u8::try_from(self.behaviours.len())
-            .expect("Too many block behaviours for u8 index table");
+        let idx = u16::try_from(self.behaviours.len())
+            .ok()
+            .filter(|idx| *idx != NO_BEHAVIOUR)
+            .expect("Too many block behaviours for the index table");
         self.behaviours.push(Arc::new(block));
         for i in ids {
             self.block_indices[i.as_u16() as usize] = idx;
@@ -1327,7 +1332,7 @@ impl BlockRegistry {
     #[must_use]
     pub fn get_pumpkin_block(&self, block: BlockId) -> Option<&Arc<dyn BlockBehaviour>> {
         let idx = self.block_indices[block.as_u16() as usize];
-        if idx == 0xFF {
+        if idx == NO_BEHAVIOUR {
             None
         } else {
             self.behaviours.get(idx as usize)
