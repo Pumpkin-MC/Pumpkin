@@ -5331,7 +5331,7 @@ impl World {
     pub fn break_block(
         self: &Arc<Self>,
         position: &BlockPos,
-        cause: Option<Arc<Player>>,
+        cause: Option<&Arc<Player>>,
         flags: BlockFlags,
     ) -> Option<BlockStateId> {
         let (broken_block, broken_block_state) = self.get_block_and_state(position);
@@ -5340,7 +5340,7 @@ impl World {
         }
 
         let mut event = BlockBreakEvent::new(
-            cause.clone(),
+            cause.cloned(),
             broken_block,
             *position,
             0,
