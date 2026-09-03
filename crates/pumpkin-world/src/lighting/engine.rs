@@ -1160,4 +1160,57 @@ mod tests {
             "the light source did not propagate into the pocket beside it"
         );
     }
+
+    /// The emitter mask replaces a sweep over the block map, so it may name a section that no
+    /// longer emits, but never miss one that does -> a missed section is light that never
+    /// gets seeded.
+    #[test]
+    fn the_emitter_mask_names_every_section_that_emits() {
+        let mut proto = proto_chunk(0, 0);
+        let bottom_y = proto.bottom_y() as i32;
+
+        for (index, y) in [bottom_y + 5, bottom_y + 100, bottom_y + 200]
+            .into_iter()
+            .enumerate()
+        {
+            proto.set_block_state(
+                index as i32,
+                y,
+                0,
+                Block::GLOWSTONE.default_state,
+            );
+        }
+
+        for local_y in 0..proto.height() as i32 {
+            for local_x in 0..16 {
+                for local_z in 0..16 {
+                    let state = proto.get_block_state_raw(local_x, local_y, local_z);
+                    assert!(
+                        super::luminance_of(state) == 0
+                            || proto.emitter_sections.contains((local_y >> 4) as usize),
+                        "section {} emits but is not in the mask",
+                        local_y >> 4
+                    );
+                }
+            }
+        }
+    }
+
+    /// Replacing the only emitter leaves the bit set; the pass then scans a section that turns
+    /// out to be dark, which costs a scan and never light.
+    #[test]
+    fn the_emitter_mask_is_allowed_to_go_stale_upwards() {
+        let mut proto = proto_chunk(0, 0);
+        let y = proto.bottom_y() as i32 + 5;
+        let section = ((y - proto.bottom_y() as i32) >> 4) as usize;
+
+        proto.set_block_state(0, y, 0, Block::GLOWSTONE.default_state);
+        assert!(proto.emitter_sections.contains(section));
+
+        proto.set_block_state(0, y, 0, Block::AIR.default_state);
+        assert!(
+            proto.emitter_sections.contains(section),
+            "clearing the bit would need a count, and over-reporting is the safe direction"
+        );
+    }
 }

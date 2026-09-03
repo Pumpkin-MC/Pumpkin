@@ -48,6 +48,7 @@ use crate::generation::noise::router::surface_height_sampler::SurfaceHeightSampl
 use crate::generation::noise::{CHUNK_DIM, ChunkNoiseGenerator, LAVA_BLOCK, WATER_BLOCK};
 use crate::generation::section_coords::section_to_block;
 use crate::generation::structure::lazily_generate_structure;
+use crate::lighting::section_flags::SectionMask;
 use crate::generation::structure::placement::should_generate_structure;
 use crate::generation::structure::structures::{
     StructureGeneratorContext, StructureInstance, create_chunk_random,
@@ -138,11 +139,10 @@ pub struct ProtoChunk {
     pub z: i32,
     pub default_block: &'static BlockState,
     biome_mixer_seed: i64,
-    // TODO: unlike `ChunkSections`, this has no palette, so the per-section skips in
-    // `lighting::section_flags` have to sweep the whole map instead of reading a handful of
-    // palette entries. A palette here, or a cached per-section emitter/opacity mask kept up
-    // to date by `set_block_state`, would let the light passes skip sections outright.
     pub(crate) flat_block_map: Box<[BlockStateId]>,
+    /// Sections holding a light emitting block. Set as blocks are written and never cleared, so
+    /// it can name a section that no longer emits, but never miss one that does.
+    pub(crate) emitter_sections: SectionMask,
     pub flat_biome_map: Box<[u8]>,
     pub flat_surface_height_map: [i16; CHUNK_AREA],
     pub flat_ocean_floor_height_map: [i16; CHUNK_AREA],
@@ -246,6 +246,7 @@ impl ProtoChunk {
             biome_mixer_seed,
             flat_block_map: vec![BlockStateId::AIR; CHUNK_AREA * height as usize]
                 .into_boxed_slice(),
+            emitter_sections: SectionMask::default(),
             flat_biome_map: vec![
                 Biome::PLAINS.id;
                 biome_coords::from_block(CHUNK_DIM as i32) as usize
@@ -587,6 +588,10 @@ impl ProtoChunk {
                     }
                 }
             }
+        }
+
+        if block_state.luminance > 0 {
+            self.emitter_sections.set((local_y >> 4) as usize);
         }
 
         let index = self.local_pos_to_block_index(local_x, local_y, local_z);

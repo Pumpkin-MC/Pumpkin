@@ -599,3 +599,65 @@ fn uniform_sections_do_not_hold_a_nibble_array() {
         );
     }
 }
+
+/// TEMPORARY -- why the `chunk_gen` bench reports ~4.4 ms for a light pass the parity harness
+/// times at ~0.34 ms: the harness hands the pass eight *loaded* neighbours, real worldgen hands
+/// it eight proto chunks. Proto chunks have no palette, so `section_flags` sweeps all 98 304
+/// blocks of each one instead of reading a few palette entries.
+#[test]
+fn proto_neighbours_cost_more_than_loaded_ones() {
+    let Some(region_dir) = save_dir() else {
+        eprintln!("{SAVE_ENV} not set or has no overworld region directory, skipping");
+        return;
+    };
+
+    let loaded = load_chunks(&region_dir);
+    let chunks: HashMap<_, _> = loaded.iter().map(|(p, (c, _))| (*p, c.clone())).collect();
+
+    let centers: Vec<_> = chunks
+        .keys()
+        .copied()
+        .filter(|pos| {
+            (-1..=1).all(|dx| (-1..=1).all(|dz| chunks.contains_key(&Vector2::new(pos.x + dx, pos.y + dz))))
+        })
+        .take(50)
+        .collect();
+
+    let world_gen = WorldGenerator::Noise(Box::new(VanillaGenerator::new(
+        Seed(0),
+        Dimension::OVERWORLD,
+    )));
+
+    let mut totals = [std::time::Duration::ZERO; 2];
+    for center in &centers {
+        for (slot, proto_neighbours) in [(0usize, false), (1usize, true)] {
+            let mut cache = Cache::new(center.x - 1, center.y - 1, 3);
+            for dx in 0..3 {
+                for dz in 0..3 {
+                    let pos = Vector2::new(cache.x + dx, cache.z + dz);
+                    let chunk = &chunks[&pos];
+                    cache.chunks.push(if pos == *center || proto_neighbours {
+                        let mut proto = ProtoChunk::from_chunk_data(chunk, &world_gen);
+                        proto.stage = StagedChunkEnum::Features;
+                        wipe(&mut proto.light.sky_light);
+                        wipe(&mut proto.light.block_light);
+                        Chunk::Proto(Box::new(proto))
+                    } else {
+                        Chunk::Level(chunk.clone())
+                    });
+                }
+            }
+
+            let started = std::time::Instant::now();
+            LightEngine::new().initialize_light(&mut cache, &LightingEngineConfig::Default);
+            totals[slot] += started.elapsed();
+        }
+    }
+
+    let n = centers.len() as u32;
+    println!(
+        "loaded neighbours: {:?}/chunk\nproto  neighbours: {:?}/chunk",
+        totals[0] / n,
+        totals[1] / n,
+    );
+}

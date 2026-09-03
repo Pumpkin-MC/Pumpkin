@@ -1,28 +1,26 @@
 //! Per-section dirty masks for the light passes.
 //!
-//! A column walk that runs the full world height Level
-//! chunks answer from their block palette, which holds a handful of states
-//! instead of 4096 blocks, proto chunks have no palette and are
-//! swept once per chunk rather than once per column.
+//! Level chunks answer from their block palette, which holds a handful of states instead of
+//! 4096 blocks. Proto chunks have no palette and instead track the mask as blocks are written.
 
-use super::luminance_of;
 use crate::ProtoChunk;
 use crate::chunk_system::Chunk;
 
 /// One bit per section, set when the section can seed a light pass.
 #[derive(Clone, Copy, Default)]
-pub(super) struct SectionMask(u32);
+pub struct SectionMask(u32);
 
 impl SectionMask {
     /// Sections beyond bit 31 are never skipped: a mask cannot describe them, and claiming
     /// they are empty would drop light.
     #[inline]
-    pub(super) const fn contains(self, section: usize) -> bool {
+    #[must_use]
+    pub const fn contains(self, section: usize) -> bool {
         section >= 32 || (self.0 >> section) & 1 != 0
     }
 
     #[inline]
-    const fn set(&mut self, section: usize) {
+    pub const fn set(&mut self, section: usize) {
         if section < 32 {
             self.0 |= 1 << section;
         }
@@ -63,27 +61,8 @@ pub(super) fn block_light_seeds(chunk: &Chunk, on_rim: bool) -> SectionMask {
     }
 }
 
-/// One sweep over the flat block map instead of one per column.
-///
-/// The map is `x` major, then `y`, with `z` contiguous, so a section is 16 runs of 16 per
-/// column of `x`.
-fn proto_emitters(proto: &ProtoChunk) -> SectionMask {
-    let mut mask = SectionMask::default();
-    let height = proto.height() as usize;
-    let map = &proto.flat_block_map;
-
-    for x in 0..16usize {
-        let column = x * height * 16;
-        for y in 0..height {
-            let section = y >> 4;
-            if mask.contains(section) {
-                continue;
-            }
-            let row = column + y * 16;
-            if map[row..row + 16].iter().any(|&id| luminance_of(id) > 0) {
-                mask.set(section);
-            }
-        }
-    }
-    mask
+/// Proto chunks keep the mask up to date as blocks are written, so there is nothing to scan.
+#[inline]
+const fn proto_emitters(proto: &ProtoChunk) -> SectionMask {
+    proto.emitter_sections
 }
