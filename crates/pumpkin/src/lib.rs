@@ -251,6 +251,9 @@ impl PumpkinServer {
     ) -> Self {
         let server = Server::new(basic_config, advanced_config, vanilla_data).await;
 
+        #[cfg(target_family = "unix")]
+        adjust_file_descriptor_limit();
+
         let rcon = server.advanced_config.networking.rcon.clone();
 
         if rcon.enabled {
@@ -615,6 +618,15 @@ impl PumpkinServer {
                         });
                     }
                     Err(e) => {
+                        #[cfg(target_family = "unix")]
+                        if e.raw_os_error() == Some(libc::EMFILE) {
+                            error!(
+                                "Too many open files! Server reached file descriptor limit. \
+                                New connections cannot be accepted until existing connections close or `ulimit -n` is increased."
+                            );
+                            sleep(Duration::from_millis(500)).await;
+                            return true;
+                        }
                         error!("Failed to accept Java client connection: {e}");
                         sleep(Duration::from_millis(50)).await;
                     }
@@ -825,4 +837,59 @@ fn scrub_address(ip: &str) -> String {
     ip.chars()
         .map(|ch| if ch == '.' || ch == ':' { ch } else { 'x' })
         .collect()
+}
+
+#[cfg(target_family = "unix")]
+fn adjust_file_descriptor_limit() {
+    let mut rlim = libc::rlimit {
+        rlim_cur: 0,
+        rlim_max: 0,
+    };
+
+    // SAFETY: Passing a valid mutable pointer to a stack-allocated `rlimit` struct.
+    if unsafe { libc::getrlimit(libc::RLIMIT_NOFILE, &raw mut rlim) } != 0 {
+        return;
+    }
+
+    let max_target = if rlim.rlim_max == libc::RLIM_INFINITY {
+        1_048_576
+    } else {
+        rlim.rlim_max
+    };
+
+    if rlim.rlim_cur < max_target {
+        let old_limit = rlim.rlim_cur;
+        rlim.rlim_cur = max_target;
+
+        // SAFETY: Calling `setrlimit` with a valid resource and valid pointer to initialized `rlimit`.
+        let res = unsafe { libc::setrlimit(libc::RLIMIT_NOFILE, &raw const rlim) };
+        if res == 0 {
+            debug!("Increased open file descriptor limit from {old_limit} to {max_target}");
+        } else {
+            // Fallback: try setting to a reasonable high value (65,536) if max_target was rejected by the OS.
+            let fallback = 65_536.min(max_target);
+            if fallback > old_limit {
+                rlim.rlim_cur = fallback;
+                // SAFETY: Calling `setrlimit` with a valid resource and valid pointer to initialized `rlimit`.
+                if unsafe { libc::setrlimit(libc::RLIMIT_NOFILE, &raw const rlim) } == 0 {
+                    debug!("Increased open file descriptor limit from {old_limit} to {fallback}");
+                }
+            }
+        }
+    }
+
+    let mut current_rlim = libc::rlimit {
+        rlim_cur: 0,
+        rlim_max: 0,
+    };
+    // SAFETY: Passing a valid mutable pointer to a stack-allocated `rlimit` struct.
+    if unsafe { libc::getrlimit(libc::RLIMIT_NOFILE, &raw mut current_rlim) } == 0
+        && current_rlim.rlim_cur < 4096
+    {
+        warn!(
+            "Open file descriptor limit is low ({}). Supporting >1000 concurrent players may fail with 'Too many open files'. \
+            Consider increasing the limit with `ulimit -n 65535` or setting `LimitNOFILE=65535` in systemd.",
+            current_rlim.rlim_cur
+        );
+    }
 }
