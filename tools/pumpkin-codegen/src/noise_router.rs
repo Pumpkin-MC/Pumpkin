@@ -288,22 +288,23 @@ impl Tiling {
 /// Caching or interpolation wrapper applied around an inner density function.
 #[derive(Copy, Clone, Deserialize, PartialEq, Eq, Hash)]
 enum WrapperType {
-    Interpolated,
-    #[serde(rename(deserialize = "FlatCache"))]
-    CacheFlat,
-    Cache2D,
-    CacheOnce,
-    CellCache,
+    Interpolated { cell_size_xz: i32, cell_size_y: i32 },
+    Cache,
 }
 
 impl WrapperType {
     fn into_token_stream(self) -> TokenStream {
         match self {
-            Self::Interpolated => quote! { WrapperType::Interpolated },
-            Self::CacheFlat => quote! { WrapperType::CacheFlat },
-            Self::Cache2D => quote! { WrapperType::Cache2D },
-            Self::CacheOnce => quote! { WrapperType::CacheOnce },
-            Self::CellCache => quote! { WrapperType::CellCache },
+            Self::Interpolated {
+                cell_size_xz,
+                cell_size_y,
+            } => quote! {
+                WrapperType::Interpolated {
+                    cell_size_xz: #cell_size_xz,
+                    cell_size_y: #cell_size_y,
+                }
+            },
+            Self::Cache => quote! { WrapperType::Cache },
         }
     }
 }
@@ -594,6 +595,20 @@ fn noise_domain_axes(xz_scale: f32, y_scale: f32) -> u8 {
 }
 
 impl SplineRepr {
+    fn for_each_function(&mut self, f: &mut dyn FnMut(&mut DensityFunctionRepr)) {
+        if let Self::Standard {
+            location_function,
+            values,
+            ..
+        } = self
+        {
+            f(location_function);
+            for value in values.iter_mut() {
+                value.for_each_function(f);
+            }
+        }
+    }
+
     fn domain_axes(&self) -> u8 {
         match self {
             Self::Fixed { .. } => 0,
@@ -672,6 +687,143 @@ impl DensityFunctionRepr {
                 ..
             } => input.domain_axes() | when_in_range.domain_axes() | when_out_range.domain_axes(),
             Self::Spline { spline, .. } => spline.domain_axes(),
+        }
+    }
+
+    fn is_cache(&self) -> bool {
+        matches!(
+            self,
+            Self::Wrapper {
+                wrapper: WrapperType::Cache,
+                ..
+            }
+        )
+    }
+
+    fn for_each_child(&mut self, f: &mut dyn FnMut(&mut Self)) {
+        match self {
+            Self::Beardifier
+            | Self::BlendAlpha
+            | Self::BlendOffset
+            | Self::EndIslands
+            | Self::Noise { .. }
+            | Self::ShiftA { .. }
+            | Self::ShiftB { .. }
+            | Self::InterpolatedNoiseSampler { .. }
+            | Self::Constant { .. }
+            | Self::ClampedYGradient { .. }
+            | Self::Gradient { .. }
+            | Self::DistanceToPoint { .. } => {}
+            Self::BlendDensity { input }
+            | Self::Wrapper { input, .. }
+            | Self::Linear { input, .. }
+            | Self::Unary { input, .. }
+            | Self::Clamp { input, .. }
+            | Self::Slice { input, .. } => f(input),
+            Self::FindTopSurface {
+                density,
+                upper_bound,
+                ..
+            } => {
+                f(density);
+                f(upper_bound);
+            }
+            Self::ShiftedNoise {
+                shift_x,
+                shift_y,
+                shift_z,
+                ..
+            } => {
+                f(shift_x);
+                f(shift_y);
+                f(shift_z);
+            }
+            Self::IntervalSelect {
+                input, functions, ..
+            } => {
+                f(input);
+                for function in functions.iter_mut() {
+                    f(function);
+                }
+            }
+            Self::Lerp {
+                alpha,
+                first,
+                second,
+            } => {
+                f(alpha);
+                f(first);
+                f(second);
+            }
+            Self::Rounding {
+                input, multiple, ..
+            } => {
+                f(input);
+                f(multiple);
+            }
+            Self::Binary {
+                argument1,
+                argument2,
+                ..
+            } => {
+                f(argument1);
+                f(argument2);
+            }
+            Self::RangeChoice {
+                input,
+                when_in_range,
+                when_out_range,
+                ..
+            } => {
+                f(input);
+                f(when_in_range);
+                f(when_out_range);
+            }
+            Self::Spline { spline, .. } => spline.for_each_function(f),
+        }
+    }
+
+    fn existing_removed_axes(&self) -> u8 {
+        let mut axes = 0;
+        let mut function = self;
+        while let Self::Slice { axis, input, .. } = function {
+            axes |= axis.as_axes();
+            function = input;
+        }
+        axes
+    }
+
+    fn remove_axes(&mut self, axes: u8) {
+        let filtered = axes & !self.existing_removed_axes();
+        for (bit, axis) in [(AXIS_X, Axis::X), (AXIS_Z, Axis::Z), (AXIS_Y, Axis::Y)] {
+            if filtered & bit != 0 {
+                let input = std::mem::replace(
+                    self,
+                    Self::Constant {
+                        value: HashableF32(0.0),
+                    },
+                );
+                *self = Self::Slice {
+                    axis,
+                    coordinate: 0,
+                    input: Box::new(input),
+                };
+            }
+        }
+    }
+
+    fn slice_uniform_axes(&mut self, parent_axes: u8) {
+        if matches!(
+            self,
+            Self::Constant { .. } | Self::Gradient { .. } | Self::ClampedYGradient { .. }
+        ) {
+            return;
+        }
+        let axes = self.domain_axes();
+        let child_parent_axes = if self.is_cache() { AXES_ALL } else { axes };
+        self.for_each_child(&mut |child| child.slice_uniform_axes(child_parent_axes));
+        if parent_axes != axes {
+            self.remove_axes(parent_axes & !axes);
         }
     }
 
@@ -1832,6 +1984,25 @@ struct NoiseRouterRepr {
 }
 
 impl NoiseRouterRepr {
+    fn slice_uniform_axes(&mut self) {
+        self.barrier_noise.slice_uniform_axes(AXES_ALL);
+        self.fluid_level_floodedness_noise
+            .slice_uniform_axes(AXES_ALL);
+        self.fluid_level_spread_noise.slice_uniform_axes(AXES_ALL);
+        self.lava_noise.slice_uniform_axes(AXES_ALL);
+        self.temperature.slice_uniform_axes(AXES_ALL);
+        self.vegetation.slice_uniform_axes(AXES_ALL);
+        self.continents.slice_uniform_axes(AXES_ALL);
+        self.erosion.slice_uniform_axes(AXES_ALL);
+        self.depth.slice_uniform_axes(AXES_ALL);
+        self.ridges.slice_uniform_axes(AXES_ALL);
+        self.preliminary_surface_level.slice_uniform_axes(AXES_ALL);
+        self.final_density.slice_uniform_axes(AXES_ALL);
+        self.vein_toggle.slice_uniform_axes(AXES_ALL);
+        self.vein_ridged.slice_uniform_axes(AXES_ALL);
+        self.vein_gap.slice_uniform_axes(AXES_ALL);
+    }
+
     fn optimize(&mut self) {
         self.barrier_noise.optimize();
         self.fluid_level_floodedness_noise.optimize();
@@ -1852,6 +2023,7 @@ impl NoiseRouterRepr {
 
     fn into_token_stream_compiled(mut self, dim_name: &str) -> (TokenStream, TokenStream) {
         self.optimize();
+        self.slice_uniform_axes();
 
         let mut noise_component_stack = Vec::new();
         let mut noise_nodes = Vec::new();
@@ -2582,15 +2754,21 @@ fn parse_vanilla_df(base_df_dir: &std::path::Path, val: &serde_json::Value) -> D
                             .or_else(|| obj.get("argument"))
                             .expect("Missing input/argument"),
                     );
-                    let wrapper = match clean_type {
-                        "interpolated" => WrapperType::Interpolated,
-                        "flat_cache" | "cache_flat" => WrapperType::CacheFlat,
-                        "cache_2d" => WrapperType::Cache2D,
-                        "cache_once" => WrapperType::CacheOnce,
-                        "cache" if input.domain_axes() & AXIS_Y == 0 => WrapperType::CacheFlat,
-                        "cache" => WrapperType::CacheOnce,
-                        "cache_all_in_cell" => WrapperType::CellCache,
-                        _ => unreachable!(),
+                    let wrapper = if clean_type == "interpolated" {
+                        let cell_size_xz =
+                            obj.get("cell_size_xz")
+                                .and_then(|v| v.as_i64())
+                                .expect("Missing cell_size_xz") as i32;
+                        let cell_size_y =
+                            obj.get("cell_size_y")
+                                .and_then(|v| v.as_i64())
+                                .expect("Missing cell_size_y") as i32;
+                        WrapperType::Interpolated {
+                            cell_size_xz,
+                            cell_size_y,
+                        }
+                    } else {
+                        WrapperType::Cache
                     };
                     DensityFunctionRepr::Wrapper {
                         input: Box::new(input),
@@ -2783,25 +2961,9 @@ fn load_vanilla_noise_routers() -> NoiseRouterReprs {
     }
 }
 
-macro_rules! fix_final_density {
-    ($router:expr) => {{
-        $router.final_density = DensityFunctionRepr::Wrapper {
-            input: Box::new($router.final_density),
-            wrapper: WrapperType::CellCache,
-        };
-    }};
-}
-
 /// Reads vanilla datapack noise_settings and density_function files and emits the complete noise-router constants `TokenStream`.
 pub fn build() -> TokenStream {
     let mut reprs: NoiseRouterReprs = load_vanilla_noise_routers();
-
-    fix_final_density!(reprs.overworld);
-    fix_final_density!(reprs.overworld_amplified);
-    fix_final_density!(reprs.overworld_large_biomes);
-    fix_final_density!(reprs.nether);
-    fix_final_density!(reprs.end);
-    fix_final_density!(reprs.end_islands);
 
     let _ = reprs.overworld_amplified;
     let _ = reprs.overworld_large_biomes;
@@ -3058,13 +3220,10 @@ pub fn build() -> TokenStream {
             Fixed { value: f32 },
         }
 
-        #[derive(Copy, Clone)]
+        #[derive(Copy, Clone, PartialEq, Eq)]
         pub enum WrapperType {
-            Interpolated,
-            CacheFlat,
-            Cache2D,
-            CacheOnce,
-            CellCache,
+            Interpolated { cell_size_xz: i32, cell_size_y: i32 },
+            Cache,
         }
 
         pub enum BaseNoiseFunctionComponent {

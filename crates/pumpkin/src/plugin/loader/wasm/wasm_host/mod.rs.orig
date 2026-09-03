@@ -454,8 +454,15 @@ impl WasmPlugin {
             })
             .await?;
 
+<<<<<<< HEAD
         if let Some(plugin) = loaded_plugin {
+            context.server.task_scheduler.cancel_all_tasks(&plugin);
+=======
+        if let Some(weak_plugin) = &store.data().plugin
+            && let Some(plugin) = weak_plugin.upgrade()
+        {
             context.server.task_scheduler.disable_plugin(&plugin);
+>>>>>>> refs/rewritten/onto
         }
 
         let function = match self.plugin_instance.as_ref() {

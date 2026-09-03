@@ -41,9 +41,12 @@ use crate::{
     entity::{Entity, EntityBase, RemovalReason, player::Player, r#type::from_type},
     error::PumpkinError,
     net::{ClientPlatform, bedrock::BedrockClient, java::JavaClient},
-    plugin::player::{
-        player_change_world::PlayerChangeWorldEvent, player_join::PlayerJoinEvent,
-        player_leave::PlayerLeaveEvent, player_respawn::PlayerRespawnEvent,
+    plugin::{
+        block::block_break::BlockBreakEvent,
+        player::{
+            player_change_world::PlayerChangeWorldEvent, player_join::PlayerJoinEvent,
+            player_leave::PlayerLeaveEvent, player_respawn::PlayerRespawnEvent,
+        },
     },
     server::Server,
 };
@@ -5328,7 +5331,7 @@ impl World {
     pub fn break_block(
         self: &Arc<Self>,
         position: &BlockPos,
-        cause: Option<&Player>,
+        cause: Option<&Arc<Player>>,
         flags: BlockFlags,
     ) -> Option<BlockStateId> {
         let (broken_block, broken_block_state) = self.get_block_and_state(position);
@@ -5336,8 +5339,29 @@ impl World {
             return None;
         }
 
+        let mut event = BlockBreakEvent::new(
+            cause.cloned(),
+            broken_block,
+            *position,
+            0,
+            !flags.contains(BlockFlags::SKIP_DROPS),
+        );
+        if let Some(server) = self.server.upgrade() {
+            server.plugin_manager.fire_blocking(&server, &mut event);
+        }
+        if event.cancelled {
+            return None;
+        }
+
+        let mut flags = flags;
+        if event.drop {
+            flags.remove(BlockFlags::SKIP_DROPS);
+        } else {
+            flags.insert(BlockFlags::SKIP_DROPS);
+        }
+
         if !flags.contains(BlockFlags::SKIP_DROPS) {
-            let tool = cause.and_then(|p| {
+            let tool = cause.as_ref().and_then(|p| {
                 let item = p.inventory().held_item();
                 if item.is_empty() { None } else { Some(item) }
             });
