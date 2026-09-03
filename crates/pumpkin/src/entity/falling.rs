@@ -1,7 +1,6 @@
-use pumpkin_data::Block;
-use pumpkin_data::BlockStateId;
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::entity::EntityType;
+use pumpkin_data::{Block, BlockState, BlockStateId, item::Item, item_stack::ItemStack};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::world::BlockFlags;
 use std::sync::{Arc, atomic::Ordering};
@@ -15,6 +14,12 @@ use crate::{
 pub struct FallingEntity {
     entity: Entity,
     block_state_id: BlockStateId,
+}
+
+/// Vanilla only lets a falling block settle where it can replace what is already
+/// there; anything else (torches, slabs, stairs, ...) makes it drop as an item.
+const fn can_replace_landing_block(state: &BlockState) -> bool {
+    state.replaceable()
 }
 
 impl FallingEntity {
@@ -42,6 +47,22 @@ impl FallingEntity {
         let entity = Arc::new(Self::new(entity, block_state));
         world.spawn_entity_non_save(entity);
     }
+
+    /// Vanilla `FallingBlockEntity` landing branch: place the block back when the
+    /// landing position is replaceable, otherwise drop it as an item.
+    fn land(&self) {
+        let world = self.entity.world.load();
+        let position = self.entity.block_pos.load();
+
+        if can_replace_landing_block(world.get_block_state(&position)) {
+            world.set_block_state(&position, self.block_state_id, BlockFlags::NOTIFY_ALL);
+        } else if world.level_info.load().game_rules.entity_drops {
+            let block = Block::from_state_id(self.block_state_id);
+            if let Some(item) = Item::from_id(block.item_id) {
+                world.drop_stack(&position, ItemStack::new(1, item));
+            }
+        }
+    }
 }
 
 impl EntityBase for FallingEntity {
@@ -56,11 +77,7 @@ impl EntityBase for FallingEntity {
         entity.tick_block_collisions(caller);
         if entity.on_ground.load(Ordering::Relaxed) {
             entity.velocity.store(velo.multiply(0.7, -0.5, 0.7));
-            entity.world.load().set_block_state(
-                &self.entity.block_pos.load(),
-                self.block_state_id,
-                BlockFlags::NOTIFY_ALL,
-            );
+            self.land();
             self.entity.remove();
         }
 
@@ -96,5 +113,18 @@ impl EntityBase for FallingEntity {
 
     fn cast_any(&self) -> &dyn std::any::Any {
         self
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn falling_blocks_do_not_replace_partial_blocks() {
+        assert!(can_replace_landing_block(Block::AIR.default_state));
+        assert!(!can_replace_landing_block(Block::TORCH.default_state));
+        assert!(!can_replace_landing_block(Block::STONE_SLAB.default_state));
+        assert!(!can_replace_landing_block(Block::OAK_STAIRS.default_state));
     }
 }
