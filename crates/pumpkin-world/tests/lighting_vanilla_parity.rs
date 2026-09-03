@@ -614,3 +614,213 @@ fn uniform_sections_do_not_hold_a_nibble_array() {
         );
     }
 }
+
+/// TEMPORARY -- dumps one column so an underwater divergence can be read off directly:
+/// blocks, opacity, what vanilla stored and what the pass produced.
+///
+/// `PUMPKIN_DUMP_COLUMN="-261,16"` picks the column; the chunk containing it must be saved.
+#[test]
+fn dump_a_column() {
+    let (Some(region_dir), Some(spec)) = (save_dir(), std::env::var_os("PUMPKIN_DUMP_COLUMN"))
+    else {
+        eprintln!("PUMPKIN_DUMP_COLUMN not set, skipping");
+        return;
+    };
+    let spec = spec.to_string_lossy().to_string();
+    let (bx, bz) = spec.split_once(',').expect("expected \"x,z\"");
+    let (bx, bz): (i32, i32) = (bx.trim().parse().unwrap(), bz.trim().parse().unwrap());
+    let center = Vector2::new(bx >> 4, bz >> 4);
+
+    let loaded = load_chunks(&region_dir);
+    let chunks: HashMap<_, _> = loaded.iter().map(|(p, (c, _))| (*p, c.clone())).collect();
+    assert!(chunks.contains_key(&center), "chunk {center:?} is not saved");
+
+    let (proto, _) = relight(&chunks, center, Neighbours::Loaded);
+    let (chunk, vanilla) = &loaded[&center];
+    let min_y_section = chunk.section.min_y / 16;
+    let (lx, lz) = ((bx & 15) as usize, (bz & 15) as usize);
+
+    println!("column x={bx} z={bz} in chunk {center:?}  (local {lx},{lz})");
+    println!("   y | block                         op | vanilla | pumpkin");
+    for y in (30..=75).rev() {
+        let section = (y >> 4) - min_y_section;
+        let Ok(section) = usize::try_from(section) else {
+            continue;
+        };
+        let state = chunk
+            .section
+            .get_block_absolute_y(lx, y, lz)
+            .unwrap_or(BlockStateId::AIR);
+        let block = pumpkin_data::Block::from_state_id(state);
+        let opacity = pumpkin_data::BlockState::from_id(state).opacity;
+
+        let van = vanilla.layer(LightKind::Sky)[section]
+            .as_ref()
+            .map(|data| nibble_at(data, lx, (y & 15) as usize, lz));
+        let ours = proto.light.sky_light[section].get(lx, (y & 15) as usize, lz);
+
+        let flag = match van {
+            Some(v) if v != ours => "  <-- diverges",
+            Some(_) => "",
+            None => "  (section not stored)",
+        };
+        println!(
+            "{y:>5} | {:<28} {opacity:>2} | {:>7} | {ours:>7}{flag}",
+            block.name,
+            van.map_or("-".to_string(), |v| v.to_string()),
+        );
+    }
+}
+
+/// TEMPORARY -- a horizontal slice of one chunk at one Y, vanilla against ours, so a
+/// horizontal propagation failure can be located.
+///
+/// `PUMPKIN_DUMP_SLICE="-261,54,16"`
+#[test]
+fn dump_a_slice() {
+    let (Some(region_dir), Some(spec)) = (save_dir(), std::env::var_os("PUMPKIN_DUMP_SLICE")) else {
+        eprintln!("PUMPKIN_DUMP_SLICE not set, skipping");
+        return;
+    };
+    let spec = spec.to_string_lossy().to_string();
+    let parts: Vec<i32> = spec.split(',').map(|p| p.trim().parse().unwrap()).collect();
+    let (bx, by, bz) = (parts[0], parts[1], parts[2]);
+    let center = Vector2::new(bx >> 4, bz >> 4);
+
+    let loaded = load_chunks(&region_dir);
+    let chunks: HashMap<_, _> = loaded.iter().map(|(p, (c, _))| (*p, c.clone())).collect();
+    let (proto, _) = relight(&chunks, center, Neighbours::Loaded);
+    let (chunk, vanilla) = &loaded[&center];
+    let section = ((by >> 4) - chunk.section.min_y / 16) as usize;
+    let ly = (by & 15) as usize;
+
+    for (title, pick) in [
+        ("vanilla", true),
+        ("pumpkin", false),
+    ] {
+        println!("\n{title} sky at y={by}, chunk {center:?}   (rows = local z, cols = local x)");
+        print!("     ");
+        for lx in 0..16 {
+            print!("{lx:>3}");
+        }
+        println!();
+        for lz in 0..16usize {
+            print!("z{lz:>3} ");
+            for lx in 0..16usize {
+                let value = if pick {
+                    vanilla.layer(LightKind::Sky)[section]
+                        .as_ref()
+                        .map_or(-1i32, |d| i32::from(nibble_at(d, lx, ly, lz)))
+                } else {
+                    i32::from(proto.light.sky_light[section].get(lx, ly, lz))
+                };
+                let solid = pumpkin_data::BlockState::from_id(
+                    chunk
+                        .section
+                        .get_block_absolute_y(lx, by, lz)
+                        .unwrap_or(BlockStateId::AIR),
+                )
+                .opacity
+                    >= 15;
+                if solid {
+                    print!("  #");
+                } else {
+                    print!("{value:>3}");
+                }
+            }
+            println!();
+        }
+    }
+    println!("\n(# = opaque block, numbers = sky light; target was x={bx} z={bz})");
+}
+
+/// TEMPORARY -- every block whose states would be treated as shape occluding by the proposed
+/// rule, so the set can be checked against vanilla's 15 `useShapeForLightOcclusion` classes.
+#[test]
+fn dump_shape_occluding_candidates() {
+    let mut hits: std::collections::BTreeMap<String, std::collections::BTreeSet<String>> =
+        std::collections::BTreeMap::new();
+    for raw in 0..32366u16 {
+        let Some(state_id) = pumpkin_data::BlockStateId::new(raw) else {
+            continue;
+        };
+        let state = pumpkin_data::BlockState::from_id(state_id);
+        if !state.sided_transparency() || state.is_full_cube() {
+            continue;
+        }
+        let block = pumpkin_data::Block::from_state_id(state_id);
+        for dir in pumpkin_data::BlockDirection::all() {
+            if state.is_side_solid(dir) {
+                hits.entry(block.name.to_string())
+                    .or_default()
+                    .insert(format!("{dir:?}"));
+            }
+        }
+    }
+    let hits: Vec<String> = hits
+        .into_iter()
+        .map(|(name, faces)| format!("{name} [{}]", faces.into_iter().collect::<Vec<_>>().join(",")))
+        .collect();
+    println!("{} blocks would occlude by shape:", hits.len());
+    for h in &hits {
+        println!("  {h}");
+    }
+}
+
+/// TEMPORARY -- what the block data actually says about shape based light occlusion, which is
+/// the remaining divergence class.
+#[test]
+fn dump_occlusion_properties() {
+    for name in [
+        "jungle_stairs",
+        "spruce_stairs",
+        "oak_slab",
+        "oak_leaves",
+        "stone",
+        "water",
+        "glass",
+        "glass_pane",
+        "oak_fence",
+        "cobblestone_wall",
+        "iron_bars",
+        "dirt",
+        // vanilla overrides useShapeForLightOcclusion in exactly these classes
+        "farmland",
+        "dirt_path",
+        "snow",
+        "lectern",
+        "daylight_detector",
+        "stonecutter",
+        "enchanting_table",
+        "end_portal_frame",
+        "sculk_sensor",
+    ] {
+        let Some(block) = pumpkin_data::Block::from_name(name) else {
+            println!("{name}: unknown");
+            continue;
+        };
+        let state = block.default_state;
+        let sides: Vec<&str> = pumpkin_data::BlockDirection::all()
+            .into_iter()
+            .filter(|d| state.is_side_solid(*d))
+            .map(|d| match d {
+                pumpkin_data::BlockDirection::Down => "down",
+                pumpkin_data::BlockDirection::Up => "up",
+                pumpkin_data::BlockDirection::North => "north",
+                pumpkin_data::BlockDirection::South => "south",
+                pumpkin_data::BlockDirection::West => "west",
+                pumpkin_data::BlockDirection::East => "east",
+            })
+            .collect();
+        println!(
+            "{name:15} op={:2} sided_tr={:5} full_cube={:5} solid_block={:5} solid={:5} air={:5} side_solid=[{}]",
+            state.opacity,
+            state.sided_transparency(),
+            state.is_full_cube(),
+            state.is_solid_block(),
+            state.is_solid(),
+            state.is_air(),
+            sides.join(","),
+        );
+    }
+}

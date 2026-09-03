@@ -4,6 +4,7 @@ use crate::chunk_system::Chunk;
 use crate::chunk_system::generation_cache::Cache;
 use crate::generation::height_limit::HeightLimitView;
 use crate::generation::proto_chunk::GenerationCache;
+use crate::lighting::occlusion;
 use crate::lighting::section_flags::{self, SectionMask};
 use crate::lighting::sky_fill::SkyFill;
 use crate::lighting::storage::{get_block_light, get_sky_light, set_block_light, set_sky_light};
@@ -200,16 +201,21 @@ impl<P: LightProvider> LightPropagator<P> {
         }
     }
 
-    fn neighbor_opacity(chunk: &Chunk, ny: i32, min_y: i32, local_x: usize, local_z: usize) -> u8 {
+    /// The neighbour's block state. Returned rather than just its opacity so the caller can
+    /// also ask whether the face it is entering occludes, from the one fetch.
+    fn neighbor_state(
+        chunk: &Chunk,
+        ny: i32,
+        min_y: i32,
+        local_x: usize,
+        local_z: usize,
+    ) -> BlockStateId {
         match chunk {
-            Chunk::Proto(c) => {
-                opacity_of(c.get_block_state_raw(local_x as i32, ny - min_y, local_z as i32))
-            }
-            Chunk::Level(lvl) => opacity_of(
-                lvl.section
-                    .get_block_absolute_y(local_x, ny, local_z)
-                    .unwrap_or(BlockStateId::AIR),
-            ),
+            Chunk::Proto(c) => c.get_block_state_raw(local_x as i32, ny - min_y, local_z as i32),
+            Chunk::Level(lvl) => lvl
+                .section
+                .get_block_absolute_y(local_x, ny, local_z)
+                .unwrap_or(BlockStateId::AIR),
         }
     }
 
@@ -304,7 +310,7 @@ impl<P: LightProvider> LightPropagator<P> {
                 // Deliberately not `P::get_light`/`P::set_light`: those take a `BlockPos`
                 // and re-derive the chunk index, the section and the local coordinates
                 // that are all sitting right above. One borrow serves both reads.
-                let (neighbor_light, opacity) = {
+                let (neighbor_light, state_id) = {
                     let chunk = &cache.chunks[chunk_idx];
                     let light =
                         Self::neighbor_light(chunk, section_idx, local_x, local_y, local_z);
@@ -315,10 +321,16 @@ impl<P: LightProvider> LightPropagator<P> {
 
                     (
                         light,
-                        Self::neighbor_opacity(chunk, ny, min_y, local_x, local_z),
+                        Self::neighbor_state(chunk, ny, min_y, local_x, local_z),
                     )
                 };
-                let new_level = P::propagate_level(current_light, opacity, dir);
+
+                // A fully covered face stops light outright, whatever the opacity says.
+                if occlusion::face_occludes(state_id, dir.opposite()) {
+                    continue;
+                }
+
+                let new_level = P::propagate_level(current_light, opacity_of(state_id), dir);
 
                 if new_level > neighbor_light {
                     Self::set_neighbor_light(
@@ -747,7 +759,11 @@ impl SkyLightPropagator {
                     );
 
                     if light == 0 {
-                        if y <= top_y {
+                        // The centre's columns were just descended, so a dark cell there has
+                        // only dark cells under it. A neighbour's light came from disk and is
+                        // not monotonic: an opaque block reads 0 with lit water below it, and
+                        // stopping at it would drop the seed that lights the far side.
+                        if y <= top_y && chunk_idx == center_idx {
                             break;
                         }
                         continue;

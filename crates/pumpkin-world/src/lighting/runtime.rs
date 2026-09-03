@@ -3,6 +3,7 @@ use crate::chunk::palette::BlockPalette;
 use crate::level::Level;
 use crate::lighting::chunk_access::{ChunkCursor, VerticalInChunk};
 use crate::lighting::decayed;
+use crate::lighting::occlusion;
 use crate::lighting::sky_light_height::{SkyLightHeight, SkyLightHeightMigration, SkyLightTier};
 use crate::lighting::stats::{Counter, LightCounters, LightPassStats, LocalCounters};
 use crossbeam::queue::SegQueue;
@@ -415,12 +416,17 @@ impl DynamicLightEngine {
             cursor,
             pos,
             Counter::GetBlockLight,
-            |chunk, cell, neighbor_pos, _dir| {
+            |chunk, cell, neighbor_pos, dir| {
                 let Some(neighbor_light) = ChunkCursor::block_light_at(chunk, cell) else {
                     return;
                 };
                 counters.bump(Counter::BlockState);
-                let new_light = decayed(light_level, ChunkCursor::opacity_at(chunk, cell));
+                let state_id = ChunkCursor::state_id_at(chunk, cell);
+                // A fully covered face stops light outright, whatever the opacity says.
+                if occlusion::face_occludes(state_id, dir.opposite()) {
+                    return;
+                }
+                let new_light = decayed(light_level, crate::lighting::opacity_of(state_id));
 
                 // Only propagate if new light is brighter than current light
                 if new_light > neighbor_light {
@@ -611,7 +617,11 @@ impl DynamicLightEngine {
                 counters.bump(Counter::GetSky);
                 let neighbor_light = ChunkCursor::sky_light_at(chunk, cell);
                 counters.bump(Counter::BlockState);
-                let opacity = ChunkCursor::opacity_at(chunk, cell);
+                let state_id = ChunkCursor::state_id_at(chunk, cell);
+                if occlusion::face_occludes(state_id, dir.opposite()) {
+                    return;
+                }
+                let opacity = crate::lighting::opacity_of(state_id);
 
                 // Sky light at 15 propagates down as 15 through transparent blocks
                 let new_light = if light_level == 15 && dir == BlockDirection::Down && opacity == 0
@@ -653,7 +663,12 @@ impl DynamicLightEngine {
                 }
 
                 counters.bump(Counter::BlockState);
-                let opacity = ChunkCursor::opacity_at(chunk, cell);
+                let state_id = ChunkCursor::state_id_at(chunk, cell);
+                // Occluded neighbours never took light from this source, so nothing to undo.
+                if occlusion::face_occludes(state_id, dir.opposite()) {
+                    return;
+                }
+                let opacity = crate::lighting::opacity_of(state_id);
 
                 // What the removed source would have given this neighbour
                 let expected = if removed_light == 15 && dir == BlockDirection::Down && opacity == 0

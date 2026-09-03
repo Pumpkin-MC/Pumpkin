@@ -8,6 +8,7 @@
 
 use super::stats::{Counter, LocalCounters};
 use crate::chunk::ChunkData;
+use pumpkin_data::BlockStateId;
 use crate::chunk::io::Dirtiable;
 use crate::chunk::palette::BlockPalette;
 use crate::level::Level;
@@ -166,9 +167,8 @@ impl<'a> ChunkCursor<'a> {
         })
     }
 
-    /// Opacity without materialising the state: `opacity_of` answers air from the id alone,
-    /// where `block_state_at` always pays the state table lookup and its dereference.
-    pub(super) fn opacity_at(chunk: &ChunkData, cell: VerticalInChunk) -> u8 {
+    /// The raw state id, so a caller can ask for both opacity and face occlusion from one read.
+    pub(super) fn state_id_at(chunk: &ChunkData, cell: VerticalInChunk) -> BlockStateId {
         let VerticalInChunk::Inside {
             section_index,
             y_in_section,
@@ -176,12 +176,12 @@ impl<'a> ChunkCursor<'a> {
             local_z,
         } = cell
         else {
-            return pumpkin_data::Block::VOID_AIR.default_state.opacity;
+            return pumpkin_data::Block::VOID_AIR.default_state.id;
         };
         chunk.section.with_blocks(|sections| {
             sections.get(section_index).map_or(
-                pumpkin_data::Block::VOID_AIR.default_state.opacity,
-                |section| crate::lighting::opacity_of(section.get(local_x, y_in_section, local_z)),
+                pumpkin_data::Block::VOID_AIR.default_state.id,
+                |section| section.get(local_x, y_in_section, local_z),
             )
         })
     }
