@@ -18,7 +18,7 @@ use crate::world::World;
 /// values cover the same physical box, because the nether is 8x the overworld's
 /// coordinate scale. Vanilla cut the nether radius from 128 to 16 in 1.16.2
 /// "in order to correctly account for the 1:8 position scale"; do not "fix"
-/// this back to matching SEARCH_RADIUS_OVERWORLD.
+/// this back to matching `SEARCH_RADIUS_OVERWORLD`.
 const SEARCH_RADIUS_NETHER: i32 = 16;
 const SEARCH_RADIUS_OVERWORLD: i32 = 128;
 
