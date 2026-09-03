@@ -49,7 +49,7 @@ impl JavaClient {
                     if block == &pumpkin_data::Block::NOTE_BLOCK {
                         let props =
                             pumpkin_data::block_properties::NoteBlockLikeProperties::from_state_id(
-                                state.id, block,
+                                state.id,
                             );
                         crate::block::blocks::note::NoteBlock::play_note(&props, &world, &position);
                         player.increment_stat(
@@ -77,7 +77,7 @@ impl JavaClient {
                         let new_state = world.break_block(
                             &position,
                             Some(player),
-                            BlockFlags::NOTIFY_NEIGHBORS | BlockFlags::SKIP_DROPS,
+                            BlockFlags::NOTIFY_ALL | BlockFlags::SKIP_DROPS,
                         );
                         if new_state.is_some() {
                             server
@@ -99,9 +99,9 @@ impl JavaClient {
                             let broken_state = world.get_block_state(&position);
                             let can_harvest = player.can_harvest(broken_state, block);
                             let flags = if can_harvest {
-                                BlockFlags::NOTIFY_NEIGHBORS
+                                BlockFlags::NOTIFY_ALL
                             } else {
-                                BlockFlags::SKIP_DROPS | BlockFlags::NOTIFY_NEIGHBORS
+                                BlockFlags::SKIP_DROPS | BlockFlags::NOTIFY_ALL
                             };
                             let new_state = world.break_block(&position, Some(player), flags);
                             if new_state.is_some() {
@@ -121,7 +121,7 @@ impl JavaClient {
                                 player.increment_stat(StatisticCategory::Used, item_id as i32, 1);
                                 player.increment_stat(
                                     StatisticCategory::Mined,
-                                    broken_state.id.as_u16() as i32,
+                                    block.id.as_u16() as i32,
                                     1,
                                 );
                             }
@@ -196,9 +196,9 @@ impl JavaClient {
                         &location,
                         Some(player),
                         if block_drop {
-                            BlockFlags::NOTIFY_NEIGHBORS
+                            BlockFlags::NOTIFY_ALL
                         } else {
-                            BlockFlags::SKIP_DROPS | BlockFlags::NOTIFY_NEIGHBORS
+                            BlockFlags::SKIP_DROPS | BlockFlags::NOTIFY_ALL
                         },
                     );
                     if new_state.is_some() {
@@ -214,7 +214,7 @@ impl JavaClient {
                         player.increment_stat(StatisticCategory::Used, item_id as i32, 1);
                         player.increment_stat(
                             StatisticCategory::Mined,
-                            state.id.as_u16() as i32,
+                            block.id.as_u16() as i32,
                             1,
                         );
                     }
@@ -246,7 +246,12 @@ impl JavaClient {
                     player.swap_item();
                 }
                 Status::SpearJab => {
-                    debug!("todo");
+                    if player.gamemode.load() == GameMode::Spectator {
+                        return;
+                    }
+
+                    let stack = player.inventory().held_item();
+                    server.item_registry.on_spear_jab(&stack, player);
                 }
             },
             Err(_) => self.try_kick(&TextComponent::text("Invalid status")),

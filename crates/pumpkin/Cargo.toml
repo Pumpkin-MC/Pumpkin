@@ -73,10 +73,10 @@ rsa.workspace = true
 ed25519-dalek.workspace = true
 hex.workspace = true
 wasmparser.workspace = true
-wasm-encoder = "0.257"
+wasm-encoder = "0.258"
 
 # authentication
-ureq = { workspace = true, features = ["json"] }
+reqwest = { workspace = true, features = ["json"] }
 
 sha1.workspace = true
 

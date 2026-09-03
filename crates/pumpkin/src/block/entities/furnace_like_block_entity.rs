@@ -481,10 +481,7 @@ macro_rules! impl_block_entity_for_cooking {
                     let (furnace_block, furnace_block_state) =
                         world.get_block_and_state(&self.position);
                     let mut props =
-                        pumpkin_data::block_properties::FurnaceLikeProperties::from_state_id(
-                            furnace_block_state.id,
-                            furnace_block,
-                        );
+                        pumpkin_data::block_properties::FurnaceLikeProperties::from_state_id(furnace_block_state.id);
 
                     props.lit = self.is_burning();
                     world.set_block_state(

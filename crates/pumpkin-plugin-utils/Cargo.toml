@@ -11,7 +11,8 @@ serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 tracing = { workspace = true }
 thiserror = { workspace = true }
-ureq = { workspace = true, features = ["json"] }
+reqwest = { workspace = true, features = ["blocking", "json"] }
+webpki-root-certs = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }

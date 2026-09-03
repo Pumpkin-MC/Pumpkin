@@ -1,13 +1,13 @@
-use pumpkin_data::block_properties::{BlockProperties, RespawnAnchorLikeProperties};
+use pumpkin_data::block_properties::RespawnAnchorLikeProperties;
 use pumpkin_data::dimension::Dimension;
 use pumpkin_data::item::Item;
 use pumpkin_data::sound::{Sound, SoundCategory};
-use pumpkin_data::translation;
+use pumpkin_data::{BlockState, translation};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_world::world::BlockFlags;
 
 use crate::block::registry::BlockActionResult;
-use crate::block::{BlockBehaviour, NormalUseArgs, UseWithItemArgs};
+use crate::block::{BlockBehaviour, NormalUseArgs, PathComputationType, UseWithItemArgs};
 use crate::entity::EntityBase;
 
 #[pumpkin_block("minecraft:respawn_anchor")]
@@ -20,7 +20,7 @@ impl BlockBehaviour for RespawnAnchorBlock {
         }
 
         let state_id = args.world.get_block_state_id(args.position);
-        let mut props = RespawnAnchorLikeProperties::from_state_id(state_id, args.block);
+        let mut props = RespawnAnchorLikeProperties::from_state_id(state_id);
 
         if props.charges >= 4 {
             return BlockActionResult::Pass;
@@ -47,7 +47,7 @@ impl BlockBehaviour for RespawnAnchorBlock {
 
     fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
         let state_id = args.world.get_block_state_id(args.position);
-        let props = RespawnAnchorLikeProperties::from_state_id(state_id, args.block);
+        let props = RespawnAnchorLikeProperties::from_state_id(state_id);
 
         if args.world.dimension != Dimension::THE_NETHER {
             args.world
@@ -90,5 +90,9 @@ impl BlockBehaviour for RespawnAnchorBlock {
         }
 
         BlockActionResult::SuccessServer
+    }
+
+    fn is_pathfindable(&self, _state: &BlockState, _computation_type: PathComputationType) -> bool {
+        false
     }
 }

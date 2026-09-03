@@ -9,7 +9,6 @@ use pumpkin_data::sound::Sound;
 use pumpkin_data::tracked_data;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
-use pumpkin_protocol::java::client::play::Metadata;
 
 use crate::entity::{
     Entity, EntityBase,
@@ -105,13 +104,10 @@ impl PillagerEntity {
     pub fn set_charging_crossbow(&self, is_charging: bool) {
         self.is_charging_crossbow
             .store(is_charging, Ordering::Relaxed);
-        self.mob_entity.living_entity.entity.send_meta_data(
-            &[Metadata::new(
-                tracked_data::pillager::IS_CHARGING_CROSSBOW,
-                is_charging,
-            )],
-            None,
-        );
+        self.mob_entity
+            .living_entity
+            .entity
+            .set_synced_data(tracked_data::pillager::IS_CHARGING_CROSSBOW, is_charging);
     }
 
     pub fn add_to_inventory(&self, item: ItemStack) -> Option<ItemStack> {

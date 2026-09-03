@@ -17,7 +17,6 @@ use pumpkin_data::BlockId;
 use pumpkin_data::BlockStateId;
 use pumpkin_data::FacingExt;
 use pumpkin_data::HorizontalFacingExt;
-use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::block_properties::Facing;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::tick::TickPriority;
@@ -111,7 +110,7 @@ impl BlockBehaviour for RedstoneTorchBlock {
         args: GetStateForNeighborUpdateArgs<'_>,
     ) -> BlockStateId {
         if args.block == &Block::REDSTONE_WALL_TORCH {
-            let props = RWallTorchProps::from_state_id(args.state_id, args.block);
+            let props = RWallTorchProps::from_state_id(args.state_id);
             if props.facing.to_block_direction().opposite() == args.direction
                 && !can_place_at(
                     args.world,
@@ -142,7 +141,7 @@ impl BlockBehaviour for RedstoneTorchBlock {
             }
 
             if args.block == &Block::REDSTONE_WALL_TORCH {
-                let props = RWallTorchProps::from_state_id(state.id, args.block);
+                let props = RWallTorchProps::from_state_id(state.id);
                 if props.lit
                     != should_be_lit(
                         args.world,
@@ -158,7 +157,7 @@ impl BlockBehaviour for RedstoneTorchBlock {
                     );
                 }
             } else if args.block == &Block::REDSTONE_TORCH {
-                let props = RTorchProps::from_state_id(state.id, args.block);
+                let props = RTorchProps::from_state_id(state.id);
                 if props.lit != should_be_lit(args.world, args.position, BlockDirection::Down) {
                     args.world.schedule_block_tick(
                         args.block,
@@ -177,12 +176,12 @@ impl BlockBehaviour for RedstoneTorchBlock {
 
     fn get_weak_redstone_power(&self, args: GetRedstonePowerArgs<'_>) -> u8 {
         if args.block == &Block::REDSTONE_WALL_TORCH {
-            let props = RWallTorchProps::from_state_id(args.state.id, args.block);
+            let props = RWallTorchProps::from_state_id(args.state.id);
             if props.lit && args.direction != props.facing.to_block_direction() {
                 return 15;
             }
         } else if args.block == &Block::REDSTONE_TORCH {
-            let props = RTorchProps::from_state_id(args.state.id, args.block);
+            let props = RTorchProps::from_state_id(args.state.id);
             if props.lit && args.direction != BlockDirection::Up {
                 return 15;
             }
@@ -193,12 +192,12 @@ impl BlockBehaviour for RedstoneTorchBlock {
     fn get_strong_redstone_power(&self, args: GetRedstonePowerArgs<'_>) -> u8 {
         if args.direction == BlockDirection::Down {
             if args.block == &Block::REDSTONE_WALL_TORCH {
-                let props = RWallTorchProps::from_state_id(args.state.id, args.block);
+                let props = RWallTorchProps::from_state_id(args.state.id);
                 if props.lit {
                     return 15;
                 }
             } else if args.block == &Block::REDSTONE_TORCH {
-                let props = RTorchProps::from_state_id(args.state.id, args.block);
+                let props = RTorchProps::from_state_id(args.state.id);
                 if props.lit {
                     return 15;
                 }
@@ -210,7 +209,7 @@ impl BlockBehaviour for RedstoneTorchBlock {
     fn on_scheduled_tick(&self, args: OnScheduledTickArgs<'_>) {
         let (block, state) = args.world.get_block_and_state(args.position);
         if block == &Block::REDSTONE_WALL_TORCH {
-            let mut props = RWallTorchProps::from_state_id(state.id, block);
+            let mut props = RWallTorchProps::from_state_id(state.id);
             let should_be_lit_now = should_be_lit(
                 args.world,
                 args.position,
@@ -226,7 +225,7 @@ impl BlockBehaviour for RedstoneTorchBlock {
                 update_neighbors(args.world, args.position);
             }
         } else if block == &Block::REDSTONE_TORCH {
-            let mut props = RTorchProps::from_state_id(state.id, block);
+            let mut props = RTorchProps::from_state_id(state.id);
             let should_be_lit_now = should_be_lit(args.world, args.position, BlockDirection::Down);
             if props.lit != should_be_lit_now {
                 props.lit = should_be_lit_now;

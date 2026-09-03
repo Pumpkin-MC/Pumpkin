@@ -3,20 +3,15 @@ use pumpkin_util::version::JavaMinecraftVersion;
 use pumpkin_world::chunk::format::LightContainer;
 use std::io::Write;
 
+use crate::ser::NetworkWriteExt;
+
 /// Writes an NBT compound tag to the writer, formatted appropriately for the target Minecraft version.
 pub fn write_compound_nbt(
     mut write: impl Write,
-    comp: pumpkin_nbt::compound::NbtCompound,
+    comp: &pumpkin_nbt::compound::NbtCompound,
     version: JavaMinecraftVersion,
 ) -> Result<(), WritingError> {
-    if version >= JavaMinecraftVersion::V_1_20_2 {
-        let bytes = pumpkin_nbt::Nbt::from(comp).write_unnamed();
-        write.write_all(&bytes)?;
-    } else {
-        let bytes = pumpkin_nbt::Nbt::from(comp).write();
-        write.write_all(&bytes)?;
-    }
-    Ok(())
+    write.write_compound_nbt_with_version(Some(comp), &version)
 }
 
 /// Retrieves the 2048-byte nibble array from a light container, filling with `default_val` if empty.

@@ -372,9 +372,21 @@ pub fn value_to_configured_feature(v: &Value) -> TokenStream {
         }
         "minecraft:fallen_tree" => {
             let trunk = value_to_block_state_provider(&config["trunk_provider"]);
+            let log_length = value_to_int_provider(&config["log_length"]);
+            let stump_decorators: Vec<TokenStream> = config["stump_decorators"]
+                .as_array()
+                .map(|arr| arr.iter().map(value_to_tree_decorator).collect())
+                .unwrap_or_default();
+            let log_decorators: Vec<TokenStream> = config["log_decorators"]
+                .as_array()
+                .map(|arr| arr.iter().map(value_to_tree_decorator).collect())
+                .unwrap_or_default();
             quote! {
                 ConfiguredFeature::FallenTree(FallenTreeFeature {
                     trunk_provider: #trunk,
+                    log_length: #log_length,
+                    stump_decorators: vec![#(#stump_decorators),*],
+                    log_decorators: vec![#(#log_decorators),*],
                 })
             }
         }
@@ -691,6 +703,13 @@ pub fn value_to_configured_feature(v: &Value) -> TokenStream {
         "minecraft:end_platform" => {
             quote! { ConfiguredFeature::EndPlatform(crate::generation::feature::features::end_platform::EndPlatformFeature) }
         }
+        "minecraft:end_podium" => {
+            let active = config
+                .get("active")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
+            quote! { ConfiguredFeature::EndPodium(crate::generation::feature::features::end_podium::EndPodiumFeature::new(#active)) }
+        }
         "minecraft:end_island" => {
             quote! { ConfiguredFeature::EndIsland(crate::generation::feature::features::end_island::EndIslandFeature {}) }
         }
@@ -803,13 +822,62 @@ pub fn value_to_configured_feature(v: &Value) -> TokenStream {
             }
         }
         "minecraft:multiface_growth" => {
-            quote! { ConfiguredFeature::MultifaceGrowth(crate::generation::feature::features::multiface_growth::MultifaceGrowthFeature {}) }
+            let block_name = config["block"].as_str().unwrap_or("minecraft:glow_lichen");
+            let stripped = block_name.strip_prefix("minecraft:").unwrap_or(block_name);
+            let block_ident =
+                quote::format_ident!("{}", stripped.to_uppercase().replace([':', '-'], "_"));
+            let search_range = config["search_range"].as_i64().unwrap_or(10) as i32;
+            let can_place_on_floor = config["can_place_on_floor"].as_bool().unwrap_or(false);
+            let can_place_on_ceiling = config["can_place_on_ceiling"].as_bool().unwrap_or(false);
+            let can_place_on_wall = config["can_place_on_wall"].as_bool().unwrap_or(false);
+            let chance_of_spreading = config["chance_of_spreading"].as_f64().unwrap_or(0.5) as f32;
+            let can_be_placed_on: Vec<TokenStream> = config["can_be_placed_on"]
+                .as_array()
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|v| v.as_str())
+                        .map(|name| {
+                            let stripped = name.strip_prefix("minecraft:").unwrap_or(name);
+                            let ident = quote::format_ident!(
+                                "{}",
+                                stripped.to_uppercase().replace([':', '-'], "_")
+                            );
+                            quote! { pumpkin_data::BlockId::#ident }
+                        })
+                        .collect()
+                })
+                .unwrap_or_default();
+            quote! {
+                ConfiguredFeature::MultifaceGrowth(crate::generation::feature::features::multiface_growth::MultifaceGrowthFeature {
+                    place_block: pumpkin_data::BlockId::#block_ident,
+                    search_range: #search_range,
+                    can_place_on_floor: #can_place_on_floor,
+                    can_place_on_ceiling: #can_place_on_ceiling,
+                    can_place_on_wall: #can_place_on_wall,
+                    chance_of_spreading: #chance_of_spreading,
+                    can_be_placed_on: vec![#(#can_be_placed_on),*],
+                })
+            }
         }
         "minecraft:blue_ice" => {
             quote! { ConfiguredFeature::BlueIce(crate::generation::feature::features::blue_ice::BlueIceFeature {}) }
         }
         "minecraft:end_gateway" => {
-            quote! { ConfiguredFeature::EndGateway(crate::generation::feature::features::end_gateway::EndGatewayFeature {}) }
+            let exit = if let Some(exit_arr) = config["exit"].as_array() {
+                let x = exit_arr[0].as_i64().unwrap_or(0) as i32;
+                let y = exit_arr[1].as_i64().unwrap_or(0) as i32;
+                let z = exit_arr[2].as_i64().unwrap_or(0) as i32;
+                quote! { Some(pumpkin_util::math::position::BlockPos::new(#x, #y, #z)) }
+            } else {
+                quote! { None }
+            };
+            let exact = config["exact"].as_bool().unwrap_or(false);
+            quote! {
+                ConfiguredFeature::EndGateway(crate::generation::feature::features::end_gateway::EndGatewayFeature {
+                    exit: #exit,
+                    exact: #exact,
+                })
+            }
         }
         "minecraft:coral_tree" => {
             quote! { ConfiguredFeature::CoralTree(crate::generation::feature::features::coral::coral_tree::CoralTreeFeature) }
@@ -821,7 +889,22 @@ pub fn value_to_configured_feature(v: &Value) -> TokenStream {
             quote! { ConfiguredFeature::CoralClaw(crate::generation::feature::features::coral::coral_claw::CoralClawFeature) }
         }
         "minecraft:huge_fungus" => {
-            quote! { ConfiguredFeature::HugeFungus(crate::generation::feature::features::huge_fungus::HugeFungusFeature {}) }
+            let valid_base_block = value_to_block_state(&config["valid_base_block"]);
+            let stem_state = value_to_block_state(&config["stem_state"]);
+            let hat_state = value_to_block_state(&config["hat_state"]);
+            let decor_state = value_to_block_state(&config["decor_state"]);
+            let replaceable_blocks = value_to_block_predicate(&config["replaceable_blocks"]);
+            let planted = config["planted"].as_bool().unwrap_or(false);
+            quote! {
+                ConfiguredFeature::HugeFungus(crate::generation::feature::features::huge_fungus::HugeFungusFeature {
+                    valid_base_block: #valid_base_block,
+                    stem_state: #stem_state,
+                    hat_state: #hat_state,
+                    decor_state: #decor_state,
+                    replaceable_blocks: #replaceable_blocks,
+                    planted: #planted,
+                })
+            }
         }
         "minecraft:weeping_vines" => {
             quote! { ConfiguredFeature::WeepingVines(crate::generation::feature::features::weeping_vines::WeepingVinesFeature {}) }
@@ -839,10 +922,28 @@ pub fn value_to_configured_feature(v: &Value) -> TokenStream {
             }
         }
         "minecraft:delta_feature" => {
-            quote! { ConfiguredFeature::DeltaFeature(crate::generation::feature::features::delta_feature::DeltaFeatureFeature {}) }
+            let contents = value_to_block_state(&config["contents"]);
+            let rim = value_to_block_state(&config["rim"]);
+            let size = value_to_int_provider(&config["size"]);
+            let rim_size = value_to_int_provider(&config["rim_size"]);
+            quote! {
+                ConfiguredFeature::DeltaFeature(crate::generation::feature::features::delta_feature::DeltaFeatureFeature {
+                    contents: #contents,
+                    rim: #rim,
+                    size: #size,
+                    rim_size: #rim_size,
+                })
+            }
         }
         "minecraft:fill_layer" => {
-            quote! { ConfiguredFeature::FillLayer(crate::generation::feature::features::fill_layer::FillLayerFeature {}) }
+            let height = config["height"].as_i64().unwrap_or(0) as i32;
+            let state = value_to_block_state(&config["state"]);
+            quote! {
+                ConfiguredFeature::FillLayer(crate::generation::feature::features::fill_layer::FillLayerFeature {
+                    height: #height,
+                    state: #state,
+                })
+            }
         }
         "minecraft:bonus_chest" => {
             quote! { ConfiguredFeature::BonusChest(crate::generation::feature::features::bonus_chest::BonusChestFeature {}) }
@@ -877,10 +978,31 @@ pub fn value_to_configured_feature(v: &Value) -> TokenStream {
             }
         }
         "minecraft:block_pile" => {
-            quote! { ConfiguredFeature::BlockPile(crate::generation::feature::features::block_pile::BlockPileFeature {}) }
+            let provider = value_to_block_state_provider(&config["state_provider"]);
+            quote! {
+                ConfiguredFeature::BlockPile(crate::generation::feature::features::block_pile::BlockPileFeature {
+                    state_provider: #provider,
+                })
+            }
         }
         "minecraft:replace_single_block" => {
-            quote! { ConfiguredFeature::ReplaceSingleBlock(crate::generation::feature::features::replace_single_block::ReplaceSingleBlockFeature {}) }
+            let targets: Vec<TokenStream> = config["targets"]
+                .as_array()
+                .map(|arr| {
+                    arr.iter()
+                        .map(|t| {
+                            let rule = value_to_rule_test(&t["target"]);
+                            let state = value_to_block_state(&t["state"]);
+                            quote! { OreTarget { target: #rule, state: #state } }
+                        })
+                        .collect()
+                })
+                .unwrap_or_default();
+            quote! {
+                ConfiguredFeature::ReplaceSingleBlock(crate::generation::feature::features::replace_single_block::ReplaceSingleBlockFeature {
+                    targets: vec![#(#targets),*],
+                })
+            }
         }
         "minecraft:void_start_platform" => {
             quote! { ConfiguredFeature::VoidStartPlatform(crate::generation::feature::features::void_start_platform::VoidStartPlatformFeature {}) }
@@ -1485,13 +1607,17 @@ fn value_to_tree_decorator(v: &Value) -> TokenStream {
             let prob = v["probability"].as_f64().unwrap_or(0.0) as f32;
             quote! { TreeDecorator::LeaveVine(LeavesVineTreeDecorator { probability: #prob }) }
         }
-        "minecraft:cocoa" => quote! { TreeDecorator::Cocoa(CocoaTreeDecorator {}) },
+        "minecraft:cocoa" => {
+            let prob = v["probability"].as_f64().unwrap_or(0.0) as f32;
+            quote! { TreeDecorator::Cocoa(CocoaTreeDecorator { probability: #prob }) }
+        }
         "minecraft:beehive" => {
             let prob = v["probability"].as_f64().unwrap_or(0.0) as f32;
             quote! { TreeDecorator::Beehive(BeehiveTreeDecorator { probability: #prob }) }
         }
         "minecraft:alter_ground" => {
-            quote! { TreeDecorator::AlterGround(AlterGroundTreeDecorator {}) }
+            let provider = value_to_block_state_provider(&v["provider"]);
+            quote! { TreeDecorator::AlterGround(AlterGroundTreeDecorator { provider: #provider }) }
         }
         "minecraft:attached_to_logs" => {
             let prob = v["probability"].as_f64().unwrap_or(0.0) as f32;
@@ -1513,7 +1639,29 @@ fn value_to_tree_decorator(v: &Value) -> TokenStream {
             }
         }
         "minecraft:attached_to_leaves" => {
-            quote! { TreeDecorator::AttachedToLeaves(AttachedToLeavesTreeDecorator {}) }
+            let prob = v["probability"].as_f64().unwrap_or(0.0) as f32;
+            let exclusion_radius_xz = v["exclusion_radius_xz"].as_i64().unwrap_or(0) as i32;
+            let exclusion_radius_y = v["exclusion_radius_y"].as_i64().unwrap_or(0) as i32;
+            let bp = value_to_block_state_provider(&v["block_provider"]);
+            let required_empty_blocks = v["required_empty_blocks"].as_i64().unwrap_or(1) as i32;
+            let dirs: Vec<TokenStream> = v["directions"]
+                .as_array()
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|d| d.as_str().map(value_to_block_direction))
+                        .collect()
+                })
+                .unwrap_or_default();
+            quote! {
+                TreeDecorator::AttachedToLeaves(AttachedToLeavesTreeDecorator {
+                    probability: #prob,
+                    exclusion_radius_xz: #exclusion_radius_xz,
+                    exclusion_radius_y: #exclusion_radius_y,
+                    block_provider: #bp,
+                    required_empty_blocks: #required_empty_blocks,
+                    directions: vec![#(#dirs),*],
+                })
+            }
         }
         "minecraft:place_on_ground" => {
             let tries = v["tries"].as_i64().unwrap_or(1) as i32;
@@ -1530,10 +1678,20 @@ fn value_to_tree_decorator(v: &Value) -> TokenStream {
             }
         }
         "minecraft:creaking_heart" => {
-            quote! { TreeDecorator::CreakingHeart(CreakingHeartTreeDecorator {}) }
+            let prob = v["probability"].as_f64().unwrap_or(0.0) as f32;
+            quote! { TreeDecorator::CreakingHeart(CreakingHeartTreeDecorator { probability: #prob }) }
         }
         "minecraft:pale_moss" => {
-            quote! { TreeDecorator::PaleMoss(PaleMossTreeDecorator {}) }
+            let leaves_probability = v["leaves_probability"].as_f64().unwrap_or(0.0) as f32;
+            let trunk_probability = v["trunk_probability"].as_f64().unwrap_or(0.0) as f32;
+            let ground_probability = v["ground_probability"].as_f64().unwrap_or(0.0) as f32;
+            quote! {
+                TreeDecorator::PaleMoss(PaleMossTreeDecorator {
+                    leaves_probability: #leaves_probability,
+                    trunk_probability: #trunk_probability,
+                    ground_probability: #ground_probability,
+                })
+            }
         }
         other => {
             let msg = format!("unknown tree decorator: {other}");

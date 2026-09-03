@@ -303,15 +303,7 @@ impl Explosion {
 
                         let (_fluid, fluid_state) = Fluid::from_state_id(state_id).map_or_else(
                             || {
-                                let is_waterlogged =
-                                    block.properties(state_id).is_some_and(|props| {
-                                        props
-                                            .to_props()
-                                            .into_iter()
-                                            .any(|(k, v)| k == "waterlogged" && v == "true")
-                                    });
-
-                                if is_waterlogged {
+                                if block.is_waterlogged(state_id) {
                                     (&Fluid::FLOWING_WATER, &Fluid::FLOWING_WATER.states[0])
                                 } else {
                                     (&Fluid::EMPTY, &Fluid::EMPTY.states[0])
@@ -562,7 +554,7 @@ impl Explosion {
                             is_thundering: Some(is_thundering),
                             ..Default::default()
                         };
-                        drop_loot(world, block, pos, false, params);
+                        drop_loot(world, block, pos, false, &params);
                     }
                     if let Some(pumpkin_block) = pumpkin_block {
                         pumpkin_block.explode(ExplodeArgs {

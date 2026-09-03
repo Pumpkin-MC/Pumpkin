@@ -145,6 +145,7 @@ impl BedrockClient {
 
             if pos_changed {
                 chunker::update_position(player);
+                player.check_location_enchantments(new_pos, on_ground);
                 player.progress_motion(delta);
             }
         }
@@ -152,9 +153,9 @@ impl BedrockClient {
         let input_data = packet.input_data;
 
         if input_data.get(InputData::StartSprinting as usize) {
-            entity.set_sprinting(true);
+            player.set_sprinting(true);
         } else if input_data.get(InputData::StopSprinting as usize) {
-            entity.set_sprinting(false);
+            player.set_sprinting(false);
         }
 
         if input_data.get(InputData::StartSneaking as usize) {

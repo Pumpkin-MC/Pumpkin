@@ -1,0 +1,17 @@
+{
+  "type": "minecraft:add",
+  "left": {
+    "type": "minecraft:mul",
+    "left": {
+      "type": "minecraft:clamp",
+      "input": {
+        "type": "minecraft:abs",
+        "input": "minecraft:overworld/ore_vein/toggle"
+      },
+      "max": 0.6,
+      "min": 0.4
+    },
+    "right": 1.0
+  },
+  "right": -0.3
+}

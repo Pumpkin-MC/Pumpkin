@@ -1,0 +1,6 @@
+{
+  "type": "minecraft:water",
+  "add_stone_depth": false,
+  "offset": -1,
+  "surface_depth_multiplier": 0
+}

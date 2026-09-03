@@ -1,3 +1,4 @@
+use pumpkin_data::BlockState;
 use pumpkin_data::data_component_impl::EquipmentSlot;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
@@ -9,7 +10,7 @@ use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::world::BlockFlags;
 
-use crate::block::{BlockBehaviour, OnEntityCollisionArgs, OnLandedUponArgs};
+use crate::block::{BlockBehaviour, OnEntityCollisionArgs, OnLandedUponArgs, PathComputationType};
 use crate::entity::EntityBase;
 
 #[pumpkin_block("minecraft:powder_snow")]
@@ -116,5 +117,9 @@ impl BlockBehaviour for PowderSnowBlock {
         }
 
         entity.extinguish();
+    }
+
+    fn is_pathfindable(&self, _state: &BlockState, _computation_type: PathComputationType) -> bool {
+        true
     }
 }
